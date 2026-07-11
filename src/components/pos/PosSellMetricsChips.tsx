@@ -52,7 +52,7 @@ export function PosSellMetricsChips({
           icon: Clock,
           label: t(lang, "pendingSalesLink"),
           value: String(pendingCount),
-          accent: pendingCount > 0 ? "text-amber-800" : "text-stone-600",
+          accent: pendingCount > 0 ? "text-amber-800" : "text-muted-foreground",
         },
       ]
     : [
@@ -72,7 +72,7 @@ export function PosSellMetricsChips({
           icon: Clock,
           label: t(lang, "pendingSalesLink"),
           value: String(pendingCount),
-          accent: pendingCount > 0 ? "text-amber-800" : "text-stone-600",
+          accent: pendingCount > 0 ? "text-amber-800" : "text-muted-foreground",
         },
       ];
 
@@ -84,13 +84,13 @@ export function PosSellMetricsChips({
           return (
             <div
               key={i}
-              className="flex min-w-[5.5rem] shrink-0 items-center gap-1.5 rounded-xl border border-stone-200/90 bg-white px-2.5 py-1.5 shadow-sm"
+              className="flex min-w-[5.5rem] shrink-0 items-center gap-1.5 rounded-xl border border-border/90 bg-card px-2.5 py-1.5 shadow-sm"
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-stone-100">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-muted">
                 <Icon className={clsx("h-3.5 w-3.5", chip.accent)} aria-hidden />
               </span>
               <div className="min-w-0">
-                <p className="truncate text-[9px] font-bold uppercase tracking-wide text-stone-500">{chip.label}</p>
+                <p className="truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{chip.label}</p>
                 <p className={clsx("truncate text-xs font-black leading-tight", chip.accent)}>{chip.value}</p>
               </div>
             </div>

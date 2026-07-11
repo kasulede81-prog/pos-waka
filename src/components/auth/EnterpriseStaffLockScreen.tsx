@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Capacitor } from "@capacitor/core";
 import { Fingerprint, LogOut, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import type { Language, ShopPreferences, UserRole } from "../../types";
-import { t, tTemplate } from "../../lib/i18n";
+import { t } from "../../lib/i18n";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
-import { EnterprisePinKeypad } from "./EnterprisePinKeypad";
+import { EnterprisePinPad } from "./EnterprisePinPad";
+import { formatUnlockLockoutMessage } from "./EnterpriseLockoutBanner";
 import { AppShellSyncLabel } from "../layout/AppShellSyncLabel";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { getOrCreateDeviceId } from "../../lib/deviceId";
@@ -70,13 +71,13 @@ export function EnterpriseStaffLockScreen({
   onSetupPin,
   showSetupPin = false,
 }: Props) {
-  const [pin, setPin] = useState("");
   const [staffId, setStaffId] = useState(preferences.activeStaffId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [fadeIn, setFadeIn] = useState(false);
+  const [pinResetSignal, setPinResetSignal] = useState(0);
   const clock = useLiveClock(lang);
   const { isOnline } = useOfflineStatus();
   const isDesktop = usePosDesktopLayout();
@@ -100,8 +101,8 @@ export function EnterpriseStaffLockScreen({
   }, []);
 
   useEffect(() => {
-    setPin("");
     setError(null);
+    setPinResetSignal((n) => n + 1);
   }, [staffId]);
 
   useEffect(() => {
@@ -117,26 +118,35 @@ export function EnterpriseStaffLockScreen({
   }, [biometricEnabled, onBiometricUnlock]);
 
   const lockout = getUnlockLockoutStatus(unlockLimiterScope(staffId || preferences.activeStaffId));
+  const lockoutMessage = lockout.locked ? formatUnlockLockoutMessage(lang, lockout.waitSeconds) : null;
 
-  const submit = async () => {
-    if (busy || lockout.locked) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await onUnlock({
-        staffId: staffId === "__owner__" ? null : staffId || null,
-        selectingOwner: staffId === "__owner__",
-        secret: pin,
-      });
-      if (!result.ok) {
-        setError(t(lang, result.errorKey));
+  const tryUnlock = useCallback(
+    async (secret: string) => {
+      if (busy || lockout.locked) return false;
+      setBusy(true);
+      setError(null);
+      try {
+        const result = await onUnlock({
+          staffId: staffId === "__owner__" ? null : staffId || null,
+          selectingOwner: staffId === "__owner__",
+          secret,
+        });
+        if (!result.ok) {
+          setError(t(lang, result.errorKey));
+          setPinResetSignal((n) => n + 1);
+          return false;
+        }
+        return true;
+      } catch {
+        setError(t(lang, "saleError"));
+        setPinResetSignal((n) => n + 1);
+        return false;
+      } finally {
+        setBusy(false);
       }
-    } catch {
-      setError(t(lang, "saleError"));
-    } finally {
-      setBusy(false);
-    }
-  };
+    },
+    [busy, lang, lockout.locked, onUnlock, staffId],
+  );
 
   const runBiometric = async () => {
     if (!onBiometricUnlock || biometricBusy || lockout.locked) return;
@@ -180,41 +190,41 @@ export function EnterpriseStaffLockScreen({
   return (
     <div
       className={clsx(
-        "fixed inset-0 z-[120] flex h-dvh max-h-dvh flex-col overflow-hidden bg-stone-950 transition-opacity duration-300",
+        "fixed inset-0 z-[120] flex h-dvh max-h-dvh flex-col overflow-hidden bg-foreground transition-opacity duration-300",
         fadeIn ? "opacity-100" : "opacity-0",
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col lg:mx-auto lg:grid lg:w-full lg:max-w-5xl lg:grid-cols-[1fr,380px] lg:items-stretch lg:gap-6 lg:p-4">
-        <section className="flex shrink-0 flex-col justify-between bg-gradient-to-br from-stone-900 via-stone-950 to-black px-4 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))] text-white lg:rounded-3xl lg:p-8 lg:shadow-2xl">
+        <section className="flex shrink-0 flex-col justify-between bg-gradient-to-br from-foreground via-foreground to-black px-4 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))] text-white lg:rounded-3xl lg:p-8 lg:shadow-2xl">
           <div>
             <div className="flex items-center gap-3">
               <WakaSymbolIcon size="md" className="!h-9 !w-9 lg:!h-10 lg:!w-10" />
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-stone-300">{businessName || t(lang, "appName")}</p>
-                <p className="text-xs text-stone-500">{t(lang, "enterpriseLockScreenTag")}</p>
+                <p className="truncate text-sm font-bold text-muted-foreground">{businessName || t(lang, "appName")}</p>
+                <p className="text-xs text-muted-foreground">{t(lang, "enterpriseLockScreenTag")}</p>
               </div>
             </div>
             <p className="mt-4 font-mono text-5xl font-black tracking-tight sm:text-6xl lg:mt-10 lg:text-7xl">{clock}</p>
           </div>
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur lg:mt-8 lg:p-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-stone-400">{t(lang, "enterpriseLockSignedInAs")}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t(lang, "enterpriseLockSignedInAs")}</p>
             <p className="mt-1 text-xl font-black lg:text-2xl">{actorName}</p>
             <p className="mt-1 inline-flex rounded-full bg-waka-600/30 px-3 py-1 text-xs font-black text-waka-200">
               {t(lang, `role_${actorRole}`)}
             </p>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-stone-400 lg:mt-6">{statusPills}</div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground lg:mt-6">{statusPills}</div>
         </section>
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-4 shadow-2xl dark:bg-stone-900 sm:p-6 lg:max-h-full lg:flex-none lg:overflow-visible lg:rounded-3xl lg:p-7">
+        <section className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain rounded-t-3xl bg-card p-4 shadow-2xl dark:bg-foreground sm:p-6 lg:max-h-full lg:flex-none lg:overflow-visible lg:rounded-3xl lg:p-7">
           <div className="mx-auto flex w-full max-w-md flex-1 flex-col lg:max-w-none">
-            <h2 className="text-xl font-black text-stone-900 dark:text-stone-50 sm:text-2xl">{t(lang, "lockPosTitle")}</h2>
-            <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{t(lang, "lockPosSub")}</p>
+            <h2 className="text-xl font-black text-foreground dark:text-background sm:text-2xl">{t(lang, "lockPosTitle")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">{t(lang, "lockPosSub")}</p>
 
             {allowSwitch && activeStaff.length > 0 ? (
-              <label className="mt-3 block text-sm font-bold text-stone-700 dark:text-stone-300 sm:mt-4">
+              <label className="mt-3 block text-sm font-bold text-muted-foreground dark:text-muted-foreground sm:mt-4">
                 {t(lang, "switchUser")}
                 <select
                   value={staffId}
@@ -222,7 +232,7 @@ export function EnterpriseStaffLockScreen({
                     setStaffId(e.target.value);
                     setError(null);
                   }}
-                  className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 dark:border-stone-700 dark:bg-stone-950"
+                  className="mt-1 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
                 >
                   <option value="">{t(lang, "staffPickAccount")}</option>
                   <option value="__owner__">{t(lang, "role_owner")}</option>
@@ -248,22 +258,17 @@ export function EnterpriseStaffLockScreen({
             ) : null}
 
             <div className="mt-4 sm:mt-5">
-              <EnterprisePinKeypad
+              <EnterprisePinPad
                 lang={lang}
-                value={pin}
                 size={useCompactKeypad ? "mobile" : "tablet"}
-                onChange={setPin}
-                onSubmit={() => void submit()}
                 disabled={busy || lockout.locked || biometricBusy}
+                verifying={busy}
+                lockoutMessage={lockoutMessage}
+                errorMessage={error}
+                resetSignal={`${staffId}-${pinResetSignal}`}
+                onComplete={(secret) => tryUnlock(secret)}
               />
             </div>
-
-            {lockout.locked ? (
-              <p className="mt-3 text-sm font-bold text-amber-700 dark:text-amber-300">
-                {tTemplate(lang, "staffUnlockBruteForceLock", { seconds: String(lockout.waitSeconds) })}
-              </p>
-            ) : null}
-            {error ? <p className="mt-3 text-sm font-bold text-rose-700">{error}</p> : null}
 
             {showSetupPin && onSetupPin ? (
               <button
@@ -280,7 +285,7 @@ export function EnterpriseStaffLockScreen({
                 <button
                   type="button"
                   onClick={onSwitchUser}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-stone-200 font-bold dark:border-stone-700"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-border font-bold"
                 >
                   <RefreshCw className="h-4 w-4" />
                   {t(lang, "switchUser")}

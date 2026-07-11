@@ -45,17 +45,17 @@ export function PharmacyExpiredWriteOffPanel({ lang, products, canWriteOff }: Pr
       <h2 className="text-lg font-black text-red-950">{t(lang, "pharmacyWriteOffTitle")}</h2>
       <p className="mt-1 text-sm font-medium text-red-900/90">{t(lang, "pharmacyWriteOffSub")}</p>
       {toast ? (
-        <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-bold text-stone-900">{toast}</p>
+        <p className="mt-3 rounded-xl bg-card px-3 py-2 text-sm font-bold text-foreground">{toast}</p>
       ) : null}
       <ul className="mt-3 space-y-2">
         {expiredWithStock.map((p) => (
           <li
             key={p.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-red-100 bg-white px-3 py-2.5"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-red-100 bg-card px-3 py-2.5"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-black text-stone-900">{formatMedicineFullLabel(p)}</p>
-              <p className="text-xs font-semibold text-stone-600">
+              <p className="truncate text-sm font-black text-foreground">{formatMedicineFullLabel(p)}</p>
+              <p className="text-xs font-semibold text-muted-foreground">
                 {p.stockOnHand} {p.baseUnit} · {p.expiryDate}
               </p>
             </div>

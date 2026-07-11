@@ -50,7 +50,7 @@ export function ActivityActionsSheet({
       onClose={onClose}
       title={auditActionLabel(lang, entry.action)}
       footer={
-        <button type="button" onClick={onClose} className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 text-sm font-black text-stone-700">
+        <button type="button" onClick={onClose} className="min-h-[48px] w-full rounded-2xl border-2 border-border text-sm font-black text-muted-foreground">
           {t(lang, "cancel")}
         </button>
       }
@@ -64,8 +64,8 @@ export function ActivityActionsSheet({
                 item.action();
                 if (item.label !== t(lang, "icViewDetails")) onClose();
               }}
-              className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-2 text-left text-sm font-bold active:bg-stone-50 ${
-                item.danger ? "text-rose-700" : "text-stone-800"
+              className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-2 text-left text-sm font-bold active:bg-muted ${
+                item.danger ? "text-rose-700" : "text-foreground"
               }`}
             >
               <item.icon className="h-4 w-4 shrink-0 opacity-70" aria-hidden />

@@ -22,6 +22,7 @@ import { AdminGrowthCampaignPage } from "../components/internal-admin/v2/pages/A
 import { AdminPricingCampaignsPage } from "../components/internal-admin/v2/pages/AdminPricingCampaignsPage";
 import { AdminAiSettingsPage } from "../components/internal-admin/v2/pages/AdminAiSettingsPage";
 import { AdminReleaseManagementPage } from "../components/internal-admin/v2/pages/AdminReleaseManagementPage";
+import { AdminPlatformSubscriptionSettingsPage } from "../components/internal-admin/v2/pages/AdminPlatformSubscriptionSettingsPage";
 import { AdminPosDisplayScalePage } from "../components/internal-admin/v2/pages/AdminPosDisplayScalePage";
 
 type Props = {
@@ -44,6 +45,7 @@ function sectionFromPath(pathname: string): AdminSectionId {
   if (pathname === "/internal/waka/business-types") return "business_types";
   if (pathname === "/internal/waka/growth-campaign") return "growth_campaign";
   if (pathname === "/internal/waka/ai-settings") return "ai_settings";
+  if (pathname === "/internal/waka/subscription-settings") return "subscription_settings";
   if (pathname === "/internal/waka/releases") return "releases";
   if (pathname === "/internal/waka/display-scale") return "display_scale";
   return "overview";
@@ -99,7 +101,7 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   } else if (section === "admins") {
     if (!previewMode && adminRow?.role !== "super_admin") {
       body = (
-        <div className="rounded-2xl border border-rose-200 bg-white p-6 text-center text-sm font-bold text-rose-800">
+        <div className="rounded-2xl border border-rose-200 bg-card p-6 text-center text-sm font-bold text-rose-800">
           Super admin only.
         </div>
       );
@@ -112,6 +114,8 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     body = <AdminGrowthCampaignPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "ai_settings") {
     body = <AdminAiSettingsPage adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "subscription_settings") {
+    body = <AdminPlatformSubscriptionSettingsPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "releases") {
     body = <AdminReleaseManagementPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "display_scale") {

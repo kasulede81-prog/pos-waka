@@ -13,6 +13,24 @@ export type HospitalityDashboardStats = {
   paymentPendingCount: number;
 };
 
+/** Average minutes open tables have been active. */
+export function averageOpenTableMinutes(floor: HospitalityFloorState, nowMs = Date.now()): number | null {
+  const active = tableSessions(floor).filter((s) => s.status === "open");
+  if (active.length === 0) return null;
+  const totalMs = active.reduce((sum, s) => sum + Math.max(0, nowMs - new Date(s.openedAt).getTime()), 0);
+  return Math.round(totalMs / active.length / 60_000);
+}
+
+export function activeReservationCount(floor: HospitalityFloorState, todayKey: string): number {
+  return (floor.reservations ?? []).filter(
+    (r) => r.reservationDate === todayKey && r.status !== "cancelled" && r.status !== "completed" && r.status !== "no_show",
+  ).length;
+}
+
+export function activeWaitlistCount(floor: HospitalityFloorState): number {
+  return (floor.waitlist ?? []).filter((w) => w.status === "waiting").length;
+}
+
 export function activeSessions(floor: HospitalityFloorState): TableSession[] {
   return floor.sessions.filter((s) => s.status === "open" || s.status === "payment_pending");
 }

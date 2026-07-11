@@ -71,17 +71,17 @@ export function EnterpriseBranchCenterPage({ lang }: { lang: Language }) {
 
       <ul className="grid gap-3 lg:grid-cols-2">
         {branches.map((b) => (
-          <li key={b.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+          <li key={b.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="text-lg font-black text-stone-950">{b.name}</p>
-                <p className="text-xs font-semibold text-stone-500">
+                <p className="text-lg font-black text-foreground">{b.name}</p>
+                <p className="text-xs font-semibold text-muted-foreground">
                   {b.code ?? b.shopNumber ?? b.id.slice(0, 8)} · {b.status}
                 </p>
-                <p className="mt-1 text-sm font-medium text-stone-600">
+                <p className="mt-1 text-sm font-medium text-muted-foreground">
                   {[b.city, b.district].filter(Boolean).join(", ") || "—"}
                 </p>
-                <p className="text-xs font-medium text-stone-500">
+                <p className="text-xs font-medium text-muted-foreground">
                   {b.businessTypes.join(", ")} · {b.currency}
                 </p>
               </div>
@@ -108,7 +108,7 @@ function ActionBtn({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="min-h-[36px] rounded-lg border border-stone-200 px-3 text-xs font-black text-stone-800"
+      className="min-h-[36px] rounded-lg border border-border px-3 text-xs font-black text-foreground"
     >
       {label}
     </button>

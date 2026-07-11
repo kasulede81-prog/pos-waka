@@ -18,8 +18,8 @@ export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect
     <section className="min-w-0 max-w-full">
       <div className="mb-2 flex items-end justify-between gap-2 px-0.5">
         <div>
-          <h2 className="text-sm font-black text-stone-950">{t(lang, "baSnapshotTitle")}</h2>
-          {compareLabel ? <p className="text-[11px] font-semibold text-stone-500">{compareLabel}</p> : null}
+          <h2 className="text-sm font-black text-foreground">{t(lang, "baSnapshotTitle")}</h2>
+          {compareLabel ? <p className="text-[11px] font-semibold text-muted-foreground">{compareLabel}</p> : null}
         </div>
       </div>
       <div className="w-full min-w-0 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible">
@@ -35,11 +35,11 @@ export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect
                 "flex min-h-[108px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-all active:scale-[0.98]",
                 active
                   ? "border-waka-400 bg-gradient-to-br from-waka-50 to-waka-50/70 ring-2 ring-waka-200"
-                  : "border-stone-200/90 bg-white/90 backdrop-blur-sm hover:border-stone-300",
+                  : "border-border/90 bg-white/90 backdrop-blur-sm hover:border-border",
               )}
             >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{t(lang, card.labelKey)}</p>
-              <p className={clsx("truncate text-lg font-black sm:text-xl", KPI_VALUE_CLASS, card.valueClass ?? "text-stone-950")}>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{t(lang, card.labelKey)}</p>
+              <p className={clsx("truncate text-lg font-black sm:text-xl", KPI_VALUE_CLASS, card.valueClass ?? "text-foreground")}>
                 {card.value}
               </p>
               <div className="mt-1 flex items-end justify-between gap-1">
@@ -48,7 +48,7 @@ export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect
                     {card.pctChange} {t(lang, "baVsPriorPeriod")}
                   </span>
                 ) : (
-                  <span className="text-[10px] font-semibold text-stone-400">&nbsp;</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground">&nbsp;</span>
                 )}
                 <MiniSparkline points={card.sparkline} strokeClass={active ? "stroke-waka-600" : "stroke-stone-400"} />
               </div>

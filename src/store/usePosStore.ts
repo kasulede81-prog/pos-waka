@@ -271,7 +271,7 @@ import {
   authorizeStaffAccountMutationWithDevice,
   StaffAccountAuthorizationError,
 } from "../lib/staffAccountAuthorization";
-import { isPrimaryDeviceCachedSync } from "../lib/deviceAuthority";
+import { isDeviceAuthorizedForManagementSync } from "../lib/deviceAuthority";
 import { isCompletedSale } from "../lib/saleStatus";
 import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
 import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
@@ -1945,12 +1945,12 @@ export const usePosStore = create<PosState>((set, get) => {
       throw e;
     }
     const { authMode } = getStoreSubscriptionContext();
-    if (authMode === "supabase" && !isPrimaryDeviceCachedSync()) {
-      pushAudit("auth_forbidden", "Denied updateStaffAccount (not primary device)", {
+    if (authMode === "supabase" && !isDeviceAuthorizedForManagementSync()) {
+      pushAudit("auth_forbidden", "Denied updateStaffAccount (device not authorized)", {
         permission: "settings.shop",
         action: "updateStaffAccount",
         attemptedRole: get().sessionActor?.role ?? null,
-        errorKey: "notPrimaryDevice",
+        errorKey: "deviceNotAuthorized",
       });
       return;
     }
@@ -2208,12 +2208,12 @@ export const usePosStore = create<PosState>((set, get) => {
       throw e;
     }
     const { authMode } = getStoreSubscriptionContext();
-    if (authMode === "supabase" && !isPrimaryDeviceCachedSync()) {
-      pushAudit("auth_forbidden", "Denied removeStaffAccount (not primary device)", {
+    if (authMode === "supabase" && !isDeviceAuthorizedForManagementSync()) {
+      pushAudit("auth_forbidden", "Denied removeStaffAccount (device not authorized)", {
         permission: "settings.shop",
         action: "removeStaffAccount",
         attemptedRole: get().sessionActor?.role ?? null,
-        errorKey: "notPrimaryDevice",
+        errorKey: "deviceNotAuthorized",
       });
       return;
     }
@@ -2253,12 +2253,12 @@ export const usePosStore = create<PosState>((set, get) => {
       throw e;
     }
     const { authMode } = getStoreSubscriptionContext();
-    if (authMode === "supabase" && !isPrimaryDeviceCachedSync()) {
-      pushAudit("auth_forbidden", "Denied resetStaffSecret (not primary device)", {
+    if (authMode === "supabase" && !isDeviceAuthorizedForManagementSync()) {
+      pushAudit("auth_forbidden", "Denied resetStaffSecret (device not authorized)", {
         permission: "settings.shop",
         action: "resetStaffSecret",
         attemptedRole: get().sessionActor?.role ?? null,
-        errorKey: "notPrimaryDevice",
+        errorKey: "deviceNotAuthorized",
       });
       return;
     }
@@ -2322,8 +2322,8 @@ export const usePosStore = create<PosState>((set, get) => {
       throw e;
     }
     const { authMode } = getStoreSubscriptionContext();
-    if (authMode === "supabase" && !isPrimaryDeviceCachedSync()) {
-      return { ok: false, errorKey: "notPrimaryDevice" };
+    if (authMode === "supabase" && !isDeviceAuthorizedForManagementSync()) {
+      return { ok: false, errorKey: "deviceNotAuthorized" };
     }
     const staffRow = get().preferences.staffAccounts?.find((a) => a.id === id);
     if (!staffRow) return { ok: false, errorKey: "staffCreateFail" };

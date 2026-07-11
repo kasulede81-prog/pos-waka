@@ -64,26 +64,26 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5">
-      <article className="rounded-3xl border-2 border-stone-200 bg-white p-5 shadow-waka-sm">
+      <article className="rounded-3xl border-2 border-border bg-card p-5 shadow-waka-sm">
         <div className="flex items-center gap-2">
-          <Printer className="h-5 w-5 text-stone-800" aria-hidden />
-          <p className="text-lg font-black text-stone-900">{t(lang, "hardwarePrintersTitle")}</p>
+          <Printer className="h-5 w-5 text-foreground" aria-hidden />
+          <p className="text-lg font-black text-foreground">{t(lang, "hardwarePrintersTitle")}</p>
         </div>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "hardwarePrintersSub")}</p>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "hardwarePrintersSub")}</p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "hardwarePrinterName")}
             <input
-              className="mt-1 w-full rounded-xl border-2 border-stone-200 px-3 py-2 font-semibold"
+              className="mt-1 w-full rounded-xl border-2 border-border px-3 py-2 font-semibold"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "hardwarePrinterConnection")}
             <select
-              className="mt-1 w-full rounded-xl border-2 border-stone-200 px-3 py-2 font-semibold"
+              className="mt-1 w-full rounded-xl border-2 border-border px-3 py-2 font-semibold"
               value={connectionType}
               onChange={(e) => setConnectionType(e.target.value as PrinterConnectionType)}
             >
@@ -94,10 +94,10 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
               ))}
             </select>
           </label>
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "hardwarePrinterPaper")}
             <select
-              className="mt-1 w-full rounded-xl border-2 border-stone-200 px-3 py-2 font-semibold"
+              className="mt-1 w-full rounded-xl border-2 border-border px-3 py-2 font-semibold"
               value={paperWidth}
               onChange={(e) => setPaperWidth(e.target.value as "58mm" | "80mm")}
             >
@@ -107,19 +107,19 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
           </label>
           {connectionType === "network" ? (
             <>
-              <label className="block text-sm font-bold text-stone-800">
+              <label className="block text-sm font-bold text-foreground">
                 {t(lang, "hardwarePrinterHost")}
                 <input
-                  className="mt-1 w-full rounded-xl border-2 border-stone-200 px-3 py-2 font-semibold"
+                  className="mt-1 w-full rounded-xl border-2 border-border px-3 py-2 font-semibold"
                   value={networkHost}
                   onChange={(e) => setNetworkHost(e.target.value)}
                   placeholder="192.168.1.50"
                 />
               </label>
-              <label className="block text-sm font-bold text-stone-800">
+              <label className="block text-sm font-bold text-foreground">
                 {t(lang, "hardwarePrinterPort")}
                 <input
-                  className="mt-1 w-full rounded-xl border-2 border-stone-200 px-3 py-2 font-semibold"
+                  className="mt-1 w-full rounded-xl border-2 border-border px-3 py-2 font-semibold"
                   value={networkPort}
                   onChange={(e) => setNetworkPort(e.target.value)}
                 />
@@ -128,7 +128,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
           ) : null}
         </div>
 
-        <p className="mt-3 text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "hardwarePrinterRoles")}</p>
+        <p className="mt-3 text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "hardwarePrinterRoles")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {ROLE_OPTIONS.map((role) => (
             <button
@@ -136,7 +136,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
               type="button"
               onClick={() => toggleRole(role)}
               className={`rounded-full px-3 py-1 text-xs font-black uppercase ${
-                roles.includes(role) ? "bg-emerald-600 text-white" : "bg-stone-100 text-stone-700"
+                roles.includes(role) ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"
               }`}
             >
               {role}
@@ -148,13 +148,13 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
           checked={isDefaultReceipt}
           onCheckedChange={setIsDefaultReceipt}
           label={t(lang, "hardwarePrinterDefaultReceipt")}
-          className="mt-3 text-sm font-bold text-stone-800"
+          className="mt-3 text-sm font-bold text-foreground"
         />
 
         <button
           type="button"
           onClick={addPrinter}
-          className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-stone-900 px-4 py-2.5 text-sm font-black text-white"
+          className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-foreground px-4 py-2.5 text-sm font-black text-background"
         >
           <Plus className="h-4 w-4" aria-hidden />
           {t(lang, "hardwarePrinterAdd")}
@@ -164,11 +164,11 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       {hw.printers.length > 0 ? (
         <ul className="space-y-3">
           {hw.printers.map((p) => (
-            <li key={p.id} className="rounded-2xl border-2 border-stone-200 bg-stone-50 p-4">
+            <li key={p.id} className="rounded-2xl border-2 border-border bg-muted p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-black text-stone-900">{p.name}</p>
-                  <p className="text-xs font-semibold text-stone-600">
+                  <p className="font-black text-foreground">{p.name}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">
                     {p.connectionType} · {p.paperWidth} · {p.stationRoles.join(", ")}
                   </p>
                   {p.lastError ? <p className="mt-1 text-xs font-bold text-red-700">{p.lastError}</p> : null}
@@ -176,7 +176,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="rounded-xl border-2 border-stone-300 px-3 py-1 text-xs font-black"
+                    className="rounded-xl border-2 border-border px-3 py-1 text-xs font-black"
                     onClick={() => {
                       setStatus(t(lang, "hardwarePrinterTesting"));
                       void testConfiguredPrinter(p.id).then((r) =>
@@ -200,7 +200,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
           ))}
         </ul>
       ) : (
-        <p className="text-sm font-semibold text-stone-600">{t(lang, "hardwarePrintersEmpty")}</p>
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "hardwarePrintersEmpty")}</p>
       )}
 
       {floor?.stations?.length ? (
@@ -229,9 +229,9 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
         </article>
       ) : null}
 
-      <article className="rounded-3xl border-2 border-stone-200 bg-white p-5">
-        <p className="text-lg font-black text-stone-900">{t(lang, "hardwarePrintBehaviorTitle")}</p>
-        <div className="mt-3 space-y-2 text-sm font-bold text-stone-800">
+      <article className="rounded-3xl border-2 border-border bg-card p-5">
+        <p className="text-lg font-black text-foreground">{t(lang, "hardwarePrintBehaviorTitle")}</p>
+        <div className="mt-3 space-y-2 text-sm font-bold text-foreground">
           <WakaSwitch
             checked={hw.autoPrintKitchen}
             onCheckedChange={(checked) => setHospitalityHardwarePrefs({ autoPrintKitchen: checked })}
@@ -256,7 +256,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            className="rounded-2xl border-2 border-stone-300 px-4 py-2 text-sm font-black"
+            className="rounded-2xl border-2 border-border px-4 py-2 text-sm font-black"
             onClick={() => {
               retryFailedPrintJobs();
               setStatus(t(lang, "hardwareRetryFailed"));
@@ -266,7 +266,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
           </button>
           <button
             type="button"
-            className="rounded-2xl border-2 border-stone-300 px-4 py-2 text-sm font-black"
+            className="rounded-2xl border-2 border-border px-4 py-2 text-sm font-black"
             onClick={() => {
               processPendingPrintQueue();
               setStatus(t(lang, "hardwareQueueProcessing"));
@@ -276,7 +276,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
           </button>
           <button
             type="button"
-            className="rounded-2xl border-2 border-stone-300 px-4 py-2 text-sm font-black"
+            className="rounded-2xl border-2 border-border px-4 py-2 text-sm font-black"
             onClick={() => void openCashDrawerManual().then((r) => setStatus(r.ok ? t(lang, "hardwareDrawerOpened") : (r.error ?? "")))}
           >
             {t(lang, "hardwareOpenDrawer")}
@@ -316,9 +316,9 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       ) : null}
 
       {hw.printHistory.length > 0 ? (
-        <article className="rounded-3xl border-2 border-stone-200 bg-stone-50 p-5">
-          <p className="text-sm font-black uppercase tracking-wide text-stone-600">{t(lang, "hardwarePrintHistory")}</p>
-          <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-xs font-semibold text-stone-700">
+        <article className="rounded-3xl border-2 border-border bg-muted p-5">
+          <p className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "hardwarePrintHistory")}</p>
+          <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-xs font-semibold text-muted-foreground">
             {hw.printHistory.slice(0, 20).map((job) => (
               <li key={job.id}>
                 {job.status} · {job.payloadSummary} · {new Date(job.createdAt).toLocaleTimeString("en-UG")}
@@ -328,7 +328,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
         </article>
       ) : null}
 
-      {status ? <p className="text-sm font-bold text-stone-700">{status}</p> : null}
+      {status ? <p className="text-sm font-bold text-muted-foreground">{status}</p> : null}
     </div>
   );
 }

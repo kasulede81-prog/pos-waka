@@ -151,7 +151,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
             <button
               type="button"
               onClick={() => navigate(POS_HOME_ROUTE)}
-              className="min-h-[52px] w-full rounded-2xl border-2 border-stone-200 font-bold"
+              className="min-h-[52px] w-full rounded-2xl border-2 border-border font-bold"
             >
               {t(lang, "cancel")}
             </button>
@@ -160,8 +160,8 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
       >
         {canOpenDay ? (
           <>
-            <p className="text-sm font-medium text-stone-600">{t(lang, "dayOpenSub")}</p>
-            <label className="mt-5 block text-sm font-bold text-stone-800">
+            <p className="text-sm font-medium text-muted-foreground">{t(lang, "dayOpenSub")}</p>
+            <label className="mt-5 block text-sm font-bold text-foreground">
               {t(lang, "dayOpenAmountLabel")}
               <input
                 value={dayOpenAmount}
@@ -172,7 +172,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
                 inputMode="numeric"
                 placeholder="0"
                 autoFocus
-                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black outline-none ring-waka-300 focus:border-waka-400 focus:ring"
+                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-border px-4 text-2xl font-black outline-none ring-waka-300 focus:border-waka-400 focus:ring"
               />
             </label>
             {needsPriorDayClose ? (
@@ -222,7 +222,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
               <button
                 type="button"
                 onClick={() => navigate(POS_HOME_ROUTE)}
-                className="min-h-[52px] rounded-2xl border-2 border-stone-200 font-bold text-stone-800"
+                className="min-h-[52px] rounded-2xl border-2 border-border font-bold text-foreground"
               >
                 {t(lang, "cancel")}
               </button>
@@ -247,7 +247,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
           </div>
         }
       >
-        <p className="text-sm font-medium text-stone-600">{t(lang, "shiftOpenBody")}</p>
+        <p className="text-sm font-medium text-muted-foreground">{t(lang, "shiftOpenBody")}</p>
 
         {v2 ? (
           <>
@@ -260,7 +260,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
                 {t(lang, "shiftVerifyOfficialFloat")}: UGX {(dayOpen?.openingFloatUgx ?? 0).toLocaleString()}
               </p>
             )}
-            <label className="mt-5 block text-sm font-bold text-stone-800">
+            <label className="mt-5 block text-sm font-bold text-foreground">
               {t(lang, "shiftVerifyCountLabel")}
               <input
                 value={floatInput}
@@ -270,7 +270,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
                 }}
                 inputMode="numeric"
                 placeholder="0"
-                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black outline-none ring-waka-300 focus:border-waka-400 focus:ring"
+                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-border px-4 text-2xl font-black outline-none ring-waka-300 focus:border-waka-400 focus:ring"
               />
             </label>
             {floatInput.length > 0 && !matched ? (
@@ -278,15 +278,15 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
             ) : null}
           </>
         ) : (
-          <label className="mt-5 block text-sm font-bold text-stone-800">
+          <label className="mt-5 block text-sm font-bold text-foreground">
             {t(lang, "shiftOpenFloatLabel")}
-            <span className="ml-1 font-medium text-stone-500">({t(lang, "optional")})</span>
+            <span className="ml-1 font-medium text-muted-foreground">({t(lang, "optional")})</span>
             <input
               value={floatInput}
               onChange={(e) => setFloatInput(e.target.value.replace(/\D/g, "").slice(0, 12))}
               inputMode="numeric"
               placeholder="0"
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black outline-none ring-waka-300 focus:border-waka-400 focus:ring"
+              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-border px-4 text-2xl font-black outline-none ring-waka-300 focus:border-waka-400 focus:ring"
             />
           </label>
         )}

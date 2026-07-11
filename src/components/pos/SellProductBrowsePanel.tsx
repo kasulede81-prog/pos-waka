@@ -71,7 +71,7 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
     <div className={clsx("flex h-full min-h-0 flex-1 flex-col", className)}>
       <div className="shrink-0 space-y-1.5">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={browse.searchQuery}
             onChange={(e) => browse.setSearchQuery(e.target.value)}
@@ -81,11 +81,11 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
             }}
             placeholder={placeholder}
             aria-label={placeholder}
-            className="pos-ds-input h-12 w-full rounded-2xl border border-stone-200 bg-white pl-9 pr-10 text-base font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 focus:border-teal-400 focus:ring-2 focus:ring-teal-200/80"
+            className="pos-ds-input h-12 w-full rounded-2xl border border-border bg-card pl-9 pr-10 text-base font-semibold text-foreground outline-none ring-waka-200 placeholder:text-muted-foreground focus:border-teal-400 focus:ring-2 focus:ring-teal-200/80"
           />
           <button
             type="button"
-            className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-stone-500 active:bg-stone-100"
+            className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
             onClick={() => {
               if (browse.searchQuery.trim()) browse.setSearchQuery("");
               else barcode.openCameraScan();
@@ -123,7 +123,7 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
               </button>
             ) : null}
             {browse.filteredProducts.length === 0 ? (
-              <p className="py-10 text-center text-sm font-semibold text-stone-500">{t(lang, "posSellNoMatch")}</p>
+              <p className="py-10 text-center text-sm font-semibold text-muted-foreground">{t(lang, "posSellNoMatch")}</p>
             ) : (
               <VirtualizedProductGrid
                 products={browse.filteredProducts}
@@ -143,14 +143,14 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
       </div>
 
       {barcode.cameraScanOpen ? (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-stone-950/80 p-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-4 shadow-2xl">
-            <video ref={barcode.cameraVideoRef} className="aspect-video w-full rounded-2xl bg-stone-900 object-cover" playsInline muted />
-            <p className="mt-2 text-xs font-semibold text-stone-600">{barcode.cameraScanStatus || t(lang, "posBarcodeSoon")}</p>
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-foreground/80 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-card p-4 shadow-2xl">
+            <video ref={barcode.cameraVideoRef} className="aspect-video w-full rounded-2xl bg-foreground object-cover" playsInline muted />
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">{barcode.cameraScanStatus || t(lang, "posBarcodeSoon")}</p>
             <button
               type="button"
               onClick={barcode.closeCameraScan}
-              className="mt-3 min-h-[48px] w-full rounded-2xl border border-stone-200 font-black"
+              className="mt-3 min-h-[48px] w-full rounded-2xl border border-border font-black"
             >
               {t(lang, "cancel")}
             </button>

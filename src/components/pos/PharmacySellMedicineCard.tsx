@@ -47,25 +47,25 @@ export function PharmacySellMedicineCard({
         "relative flex w-full flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-waka touch-manipulation",
         compact ? "min-h-[148px]" : "min-h-[168px]",
         locked
-          ? "border-stone-200/80 bg-stone-50/90 opacity-55"
-          : "border-stone-200 bg-white hover:border-teal-300 hover:shadow-md active:scale-[0.98] motion-reduce:active:scale-100",
+          ? "border-border/80 bg-muted/90 opacity-55"
+          : "border-border bg-card hover:border-teal-300 hover:shadow-md active:scale-[0.98] motion-reduce:active:scale-100",
       )}
       style={{ contentVisibility: "auto" }}
     >
       {locked && lockedBadge ? (
-        <span className="absolute right-2 top-2 rounded-full bg-stone-800/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
+        <span className="absolute right-2 top-2 rounded-full bg-foreground/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-background">
           {lockedBadge}
         </span>
       ) : null}
       <span className="min-w-0 pr-1">
-        <span className="line-clamp-2 text-base font-black leading-tight text-stone-950">
+        <span className="line-clamp-2 text-base font-black leading-tight text-foreground">
           {brand || formatMedicineListPrimary(p)}
         </span>
         {generic ? (
-          <span className="mt-0.5 block truncate text-[11px] font-semibold text-stone-500">{generic}</span>
+          <span className="mt-0.5 block truncate text-[11px] font-semibold text-muted-foreground">{generic}</span>
         ) : null}
         {detail ? (
-          <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-600">{detail}</span>
+          <span className="mt-0.5 block truncate text-[11px] font-bold text-muted-foreground">{detail}</span>
         ) : null}
         <span className="mt-1.5 flex flex-wrap items-center gap-1">
           <ExpiryStatusBadge lang={lang} product={p} compact />
@@ -80,7 +80,7 @@ export function PharmacySellMedicineCard({
             </span>
           ) : null}
         </span>
-        <span className="mt-1.5 block text-[11px] font-bold text-stone-600">
+        <span className="mt-1.5 block text-[11px] font-bold text-muted-foreground">
           {t(lang, "pharmacySellStock")}: {stockText}
         </span>
         {batchSummary ? (

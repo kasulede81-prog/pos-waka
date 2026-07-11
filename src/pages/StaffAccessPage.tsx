@@ -16,7 +16,8 @@ import { syncStaffAccountsWithCloud } from "../lib/shopStaffCloud";
 import { supabase } from "../lib/supabase";
 import { StaffCreateWizard } from "../components/staff/StaffCreateWizard";
 import { StaffTeamList } from "../components/staff/StaffTeamList";
-import { PrimaryDeviceGate } from "../components/device/ManagedByPrimaryDevice";
+import { StaffPinResetDialog, StaffPasswordResetDialog } from "../components/auth/StaffCredentialResetDialog";
+import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
 import type { StaffCreateRole } from "../lib/staffRoleCatalog";
 
 export function StaffAccessPage({ lang }: { lang: Language }) {
@@ -37,6 +38,8 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const activeStaffId = usePosStore((s) => s.preferences.activeStaffId);
 
   const [creating, setCreating] = useState(false);
+  const [resetPinStaffId, setResetPinStaffId] = useState<string | null>(null);
+  const [resetPasswordStaffId, setResetPasswordStaffId] = useState<string | null>(null);
 
   useEffect(() => {
     if (authMode !== "supabase" || !supabase) return;
@@ -68,7 +71,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
   if (creating) {
     return (
-      <PrimaryDeviceGate lang={lang}>
+      <DeviceApprovedGate lang={lang}>
         <div className="pb-8">
           <StaffCreateWizard
           lang={lang}
@@ -112,12 +115,12 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           }}
         />
         </div>
-      </PrimaryDeviceGate>
+      </DeviceApprovedGate>
     );
   }
 
   return (
-    <PrimaryDeviceGate lang={lang}>
+    <DeviceApprovedGate lang={lang}>
       <div className="space-y-5 pb-8">
       <PageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
 
@@ -128,11 +131,11 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           { key: "staffHighlightRoles", Icon: ShieldCheck },
           { key: "staffHighlightFast", Icon: Zap },
         ].map(({ key, Icon }) => (
-          <article key={key} className="flex gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+          <article key={key} className="flex gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-waka-50 text-waka-700">
               <Icon className="h-4 w-4" aria-hidden />
             </div>
-            <p className="text-sm font-bold text-stone-800">{t(lang, key)}</p>
+            <p className="text-sm font-bold text-foreground">{t(lang, key)}</p>
           </article>
         ))}
       </div>
@@ -152,16 +155,8 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           if (!custom) return;
           updateStaffAccount(id, { role: custom.inheritsFrom, customRoleId, roleTemplateId: null });
         }}
-        onResetPin={(id) => {
-          const nextPin = window.prompt(t(lang, "staffPinResetPrompt")) ?? "";
-          if (nextPin.replace(/\D/g, "").length < 4) return;
-          resetStaffSecret(id, { pin: nextPin.replace(/\D/g, "").slice(0, 4), password: null });
-        }}
-        onResetPassword={(id) => {
-          const nextPass = window.prompt(t(lang, "staffPasswordResetPrompt")) ?? "";
-          if (!nextPass) return;
-          resetStaffSecret(id, { password: nextPass });
-        }}
+        onResetPin={(id) => setResetPinStaffId(id)}
+        onResetPassword={(id) => setResetPasswordStaffId(id)}
         onUnlock={(id) => {
           void unlockStaffAccount(id);
         }}
@@ -180,14 +175,14 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         }}
       />
 
-      <section className="space-y-3 rounded-3xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black uppercase tracking-wide text-stone-600">{t(lang, "staffPermissionsTitle")}</h2>
+      <section className="space-y-3 rounded-3xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffPermissionsTitle")}</h2>
         <WakaSwitch
           checked={preferences.staffCanRecordCashExpenses === true}
           onCheckedChange={(checked) => setPreferences({ staffCanRecordCashExpenses: checked })}
           label={t(lang, "staffAllowCashierExpenses")}
           description={t(lang, "staffAllowCashierExpensesSub")}
-          className="rounded-2xl bg-stone-50 px-4 py-3"
+          className="rounded-2xl bg-muted px-4 py-3"
         />
         <WakaSwitch
           checked={preferences.requireCashierExpenseApproval === true}
@@ -195,14 +190,37 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           onCheckedChange={(checked) => setPreferences({ requireCashierExpenseApproval: checked })}
           label={t(lang, "staffRequireExpenseApproval")}
           description={t(lang, "staffRequireExpenseApprovalSub")}
-          className="rounded-2xl bg-stone-50 px-4 py-3"
+          className="rounded-2xl bg-muted px-4 py-3"
         />
       </section>
 
       <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
         {t(lang, "staffDeviceLocalTrust")}
       </p>
+
+      <StaffPinResetDialog
+        lang={lang}
+        open={resetPinStaffId != null}
+        staffName={staff.find((s) => s.id === resetPinStaffId)?.name ?? ""}
+        onClose={() => setResetPinStaffId(null)}
+        onConfirm={(pin) => {
+          if (resetPinStaffId) {
+            resetStaffSecret(resetPinStaffId, { pin, password: null });
+          }
+        }}
+      />
+      <StaffPasswordResetDialog
+        lang={lang}
+        open={resetPasswordStaffId != null}
+        staffName={staff.find((s) => s.id === resetPasswordStaffId)?.name ?? ""}
+        onClose={() => setResetPasswordStaffId(null)}
+        onConfirm={(password) => {
+          if (resetPasswordStaffId) {
+            resetStaffSecret(resetPasswordStaffId, { password });
+          }
+        }}
+      />
       </div>
-    </PrimaryDeviceGate>
+    </DeviceApprovedGate>
   );
 }

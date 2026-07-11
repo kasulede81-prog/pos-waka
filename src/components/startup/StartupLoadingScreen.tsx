@@ -10,7 +10,7 @@ import {
 import { WakaStartupBrand } from "../brand/WakaStartupBrand";
 import { StartupProgressBar } from "./StartupProgressBar";
 
-export const STARTUP_SCREEN_BG = "bg-white";
+export const STARTUP_SCREEN_BG = "bg-card";
 
 type Props = {
   lang: Language;
@@ -51,7 +51,7 @@ export function StartupLoadingScreen({
 
         <div className="w-full space-y-4">
           <StartupProgressBar value={progress} />
-          <p className="text-center text-sm font-semibold tracking-wide text-stone-700">{t(lang, labelKey)}</p>
+          <p className="text-center text-sm font-semibold tracking-wide text-muted-foreground">{t(lang, labelKey)}</p>
         </div>
       </div>
     </div>

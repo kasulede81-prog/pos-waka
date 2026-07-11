@@ -130,12 +130,12 @@ export function StaffRolesCenter({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t(lang, "enterpriseRolesSearchPh")}
-            className="w-full rounded-2xl border-2 border-stone-200 bg-white py-3 pl-10 pr-4 text-sm font-semibold dark:border-stone-700 dark:bg-stone-900"
+            className="w-full rounded-2xl border-2 border-border bg-card py-3 pl-10 pr-4 text-sm font-semibold dark:bg-foreground"
           />
         </label>
         <button
@@ -149,20 +149,20 @@ export function StaffRolesCenter({
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-stone-500">{t(lang, "enterpriseRolesSystemSection")}</h2>
+        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "enterpriseRolesSystemSection")}</h2>
         <ul className="grid gap-3 sm:grid-cols-2">
           {filteredSystem.map((tpl) => (
-            <li key={tpl.id} className="rounded-3xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+            <li key={tpl.id} className="rounded-3xl border border-border bg-card p-4 shadow-sm dark:bg-foreground">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-base font-black text-stone-950 dark:text-stone-50">{t(lang, tpl.labelKey)}</p>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                  <p className="text-base font-black text-foreground dark:text-background">{t(lang, tpl.labelKey)}</p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {t(lang, `role_${tpl.baseRole}`)}
                   </p>
                 </div>
-                <Shield className="h-5 w-5 shrink-0 text-stone-400" aria-hidden />
+                <Shield className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
               </div>
-              <p className="mt-2 text-sm font-medium text-stone-600 dark:text-stone-400">
+              <p className="mt-2 text-sm font-medium text-muted-foreground dark:text-muted-foreground">
                 {permissionsFromTemplate(tpl).length} {t(lang, "enterpriseRolesPermissionsLabel")}
               </p>
               <button
@@ -174,7 +174,7 @@ export function StaffRolesCenter({
                   const res = onCloneTemplate(tpl.id, name);
                   if (!res.ok) window.alert(t(lang, (res.errorKey ?? "saleError") as "saleError"));
                 }}
-                className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-xl border-2 border-stone-200 px-3 text-xs font-black dark:border-stone-700"
+                className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-xl border-2 border-border px-3 text-xs font-black"
               >
                 <Copy className="h-3.5 w-3.5" />
                 {t(lang, "enterpriseRolesClone")}
@@ -185,9 +185,9 @@ export function StaffRolesCenter({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-stone-500">{t(lang, "enterpriseRolesCustomSection")}</h2>
+        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "enterpriseRolesCustomSection")}</h2>
         {filteredCustom.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-semibold text-stone-500">
+          <p className="rounded-2xl border border-dashed border-border bg-muted px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
             {t(lang, "enterpriseRolesEmpty")}
           </p>
         ) : (
@@ -198,12 +198,12 @@ export function StaffRolesCenter({
               return (
                 <li
                   key={role.id}
-                  className="rounded-3xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900"
+                  className="rounded-3xl border border-border bg-card p-4 shadow-sm dark:bg-foreground"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-lg font-black text-stone-950 dark:text-stone-50">{role.name}</p>
-                      <p className="mt-1 text-sm font-semibold text-stone-500">
+                      <p className="text-lg font-black text-foreground dark:text-background">{role.name}</p>
+                      <p className="mt-1 text-sm font-semibold text-muted-foreground">
                         {role.permissions.length} {t(lang, "enterpriseRolesPermissionsLabel")} · {t(lang, `role_${role.inheritsFrom}`)}
                       </p>
                     </div>
@@ -212,13 +212,13 @@ export function StaffRolesCenter({
                         "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide",
                         status === "active" && "bg-emerald-100 text-emerald-800",
                         status === "disabled" && "bg-amber-100 text-amber-900",
-                        status === "archived" && "bg-stone-200 text-stone-700",
+                        status === "archived" && "bg-muted text-muted-foreground",
                       )}
                     >
                       {t(lang, `enterpriseRolesStatus_${status}` as "enterpriseRolesStatus_active")}
                     </span>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-stone-600 dark:text-stone-400">
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <Users className="h-3.5 w-3.5" />
                       {tTemplate(lang, "enterpriseRolesUsersCount", { count: String(users) })}
@@ -229,7 +229,7 @@ export function StaffRolesCenter({
                     <button
                       type="button"
                       onClick={() => setEditor({ kind: "edit", roleId: role.id })}
-                      className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border-2 border-stone-200 px-3 text-xs font-black dark:border-stone-700"
+                      className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border-2 border-border px-3 text-xs font-black"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       {t(lang, "enterpriseRolesEditPermissions")}
@@ -243,7 +243,7 @@ export function StaffRolesCenter({
                         const res = onCloneRole(role.id, name);
                         if (!res.ok) window.alert(t(lang, (res.errorKey ?? "saleError") as "saleError"));
                       }}
-                      className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border-2 border-stone-200 px-3 text-xs font-black disabled:opacity-50 dark:border-stone-700"
+                      className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border-2 border-border px-3 text-xs font-black disabled:opacity-50"
                     >
                       <Copy className="h-3.5 w-3.5" />
                       {t(lang, "enterpriseRolesClone")}
@@ -324,7 +324,7 @@ function RoleEditorPanel({
   return (
     <div className="space-y-5 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-black text-stone-950 dark:text-stone-50">
+        <h2 className="text-xl font-black text-foreground dark:text-background">
           {mode.kind === "create" ? t(lang, "enterpriseRolesCreateCustom") : t(lang, "enterpriseRolesEditPermissions")}
         </h2>
         <button type="button" onClick={onCancel} className="min-h-[40px] rounded-xl border-2 px-4 text-sm font-bold">
@@ -334,17 +334,17 @@ function RoleEditorPanel({
 
       {error ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</p> : null}
 
-      <label className="block text-sm font-bold text-stone-800 dark:text-stone-200">
+      <label className="block text-sm font-bold text-foreground dark:text-muted-foreground">
         {t(lang, "enterpriseRolesNameLabel")}
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="mt-1.5 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 dark:border-stone-700 dark:bg-stone-950"
+          className="mt-1.5 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
         />
       </label>
 
       {mode.kind === "create" ? (
-        <label className="block text-sm font-bold text-stone-800 dark:text-stone-200">
+        <label className="block text-sm font-bold text-foreground dark:text-muted-foreground">
           {t(lang, "enterpriseRolesBaseTemplate")}
           <select
             value={templateId}
@@ -353,7 +353,7 @@ function RoleEditorPanel({
               const tpl = findRoleTemplate(e.target.value);
               if (tpl) setPermissions(permissionsFromTemplate(tpl));
             }}
-            className="mt-1.5 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 dark:border-stone-700 dark:bg-stone-950"
+            className="mt-1.5 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
           >
             {systemTemplates.map((tpl) => (
               <option key={tpl.id} value={tpl.id}>
@@ -363,12 +363,12 @@ function RoleEditorPanel({
           </select>
         </label>
       ) : (
-        <label className="block text-sm font-bold text-stone-800 dark:text-stone-200">
+        <label className="block text-sm font-bold text-foreground dark:text-muted-foreground">
           {t(lang, "enterpriseRolesStatusLabel")}
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as CustomStaffRoleStatus)}
-            className="mt-1.5 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 dark:border-stone-700 dark:bg-stone-950"
+            className="mt-1.5 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
           >
             <option value="active">{t(lang, "enterpriseRolesStatus_active")}</option>
             <option value="disabled">{t(lang, "enterpriseRolesStatus_disabled")}</option>

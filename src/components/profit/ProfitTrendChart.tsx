@@ -1,6 +1,7 @@
 import type { DailyProfitPoint } from "../../lib/profitPageView";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { chartFill, chartShellClass, chartStroke } from "../../lib/chartTokens";
 
 type Props = {
   lang: Language;
@@ -34,14 +35,14 @@ export function ProfitTrendChart({ lang, points }: Props) {
   const labelStep = Math.max(1, Math.ceil(points.length / 7));
 
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm">
-      <h3 className="text-xs font-black text-stone-800">{t(lang, "profitTrendTitle")}</h3>
+    <section className={chartShellClass}>
+      <h3 className="text-xs font-black text-foreground">{t(lang, "profitTrendTitle")}</h3>
       <div className="mt-2 overflow-x-auto">
         <svg viewBox={`0 0 ${w} ${h + (showLabels ? 18 : 0)}`} className="h-auto w-full min-w-[280px]" aria-hidden>
           <defs>
             <linearGradient id="profitTrendFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgb(249 115 22)" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="rgb(249 115 22)" stopOpacity="0" />
+              <stop offset="0%" stopColor={chartFill.areaStart} />
+              <stop offset="100%" stopColor={chartFill.areaEnd} />
             </linearGradient>
           </defs>
           {[0.25, 0.5, 0.75].map((pct) => (
@@ -51,7 +52,7 @@ export function ProfitTrendChart({ lang, points }: Props) {
               x2={w - padX}
               y1={padY + innerH * (1 - pct)}
               y2={padY + innerH * (1 - pct)}
-              stroke="rgb(231 229 228)"
+              stroke={chartStroke.grid}
               strokeWidth="1"
               strokeDasharray="4 4"
             />
@@ -59,14 +60,14 @@ export function ProfitTrendChart({ lang, points }: Props) {
           <path d={area} fill="url(#profitTrendFill)" />
           <polyline
             fill="none"
-            stroke="rgb(234 88 12)"
+            stroke={chartStroke.secondary}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             points={line}
           />
           {coords.map((c) => (
-            <circle key={c.dayKey} cx={c.x} cy={c.y} r="3.5" fill="rgb(234 88 12)" />
+            <circle key={c.dayKey} cx={c.x} cy={c.y} r="3.5" fill={chartStroke.secondary} />
           ))}
           {showLabels
             ? coords.map((c, i) =>
@@ -76,7 +77,7 @@ export function ProfitTrendChart({ lang, points }: Props) {
                     x={c.x}
                     y={h + 14}
                     textAnchor="middle"
-                    className="fill-stone-500 text-[9px] font-semibold"
+                    fill={chartStroke.label}
                   >
                     {c.label}
                   </text>

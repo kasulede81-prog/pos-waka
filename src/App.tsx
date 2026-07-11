@@ -12,7 +12,6 @@ import { useAuth } from "./hooks/useAuth";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthRecoveryPage } from "./pages/AuthRecoveryPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
-import { CustomersPage } from "./pages/CustomersPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -65,8 +64,6 @@ import { SensitiveActionAuthProvider } from "./context/SensitiveActionAuthContex
 import { SensitiveActionGate } from "./components/security/SensitiveActionGate";
 import { SettingsChangeGate } from "./components/security/SettingsChangeGate";
 import { SettingsBiometricPage } from "./pages/SettingsBiometricPage";
-import { ProfitPage } from "./pages/ProfitPage";
-import { PharmacyMarginReportPage } from "./pages/PharmacyMarginReportPage";
 import { InventoryPurchasingPage } from "./pages/InventoryPurchasingPage";
 import { InventoryPurchasingProtectedRoute } from "./components/InventoryPurchasingProtectedRoute";
 import { PharmacyProtectedRoute, PharmacyPosRedirect, PharmacyBusinessRoute } from "./components/pharmacy/PharmacyProtectedRoute";
@@ -79,17 +76,13 @@ import { CloseDayPage } from "./pages/CloseDayPage";
 import { XReportPage } from "./pages/XReportPage";
 import { CashPositionPage } from "./pages/CashPositionPage";
 import { DayOpenPage } from "./pages/DayOpenPage";
-import { ReportsPage } from "./pages/ReportsPage";
 import { CashExpensesPage } from "./pages/CashExpensesPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
 import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
 import { PilotSupportCenterPage } from "./pages/PilotSupportCenterPage";
 import { LegalPolicyPage } from "./pages/LegalPolicyPage";
-import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
 import { InternalAdminOutlet } from "./components/routing/InternalAdminOutlet";
-import { InternalShopOpsPage } from "./pages/InternalShopOpsPage";
-import { ShopRescueConsolePage } from "./pages/ShopRescueConsolePage";
 import { ShopOnboardingPage } from "./pages/ShopOnboardingPage";
 import { OnboardingRouteGate } from "./components/onboarding/OnboardingRouteGate";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
@@ -104,6 +97,7 @@ import { EmailVerificationGateOutlet } from "./components/EmailVerificationGateO
 import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
 import { StartupBootstrapGate } from "./components/startup/StartupBootstrapGate";
+import { ToastProvider } from "./context/ToastProvider";
 import { DisplayScaleProvider } from "./context/DisplayScaleProvider";
 import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
 import { SettingsAppearancePage } from "./pages/SettingsAppearancePage";
@@ -199,10 +193,25 @@ const EnterpriseHealthPage = lazy(() =>
 const EnterpriseBackupPage = lazy(() =>
   import("./pages/enterprise/EnterpriseBackupPage").then((m) => ({ default: m.EnterpriseBackupPage })),
 );
+const InternalWakaAdminPage = lazy(() =>
+  import("./pages/InternalWakaAdminPage").then((m) => ({ default: m.InternalWakaAdminPage })),
+);
+const InternalShopOpsPage = lazy(() =>
+  import("./pages/InternalShopOpsPage").then((m) => ({ default: m.InternalShopOpsPage })),
+);
+const ShopRescueConsolePage = lazy(() =>
+  import("./pages/ShopRescueConsolePage").then((m) => ({ default: m.ShopRescueConsolePage })),
+);
+const CustomersPage = lazy(() => import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage })));
+const ProfitPage = lazy(() => import("./pages/ProfitPage").then((m) => ({ default: m.ProfitPage })));
+const ReportsPage = lazy(() => import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const PharmacyMarginReportPage = lazy(() =>
+  import("./pages/PharmacyMarginReportPage").then((m) => ({ default: m.PharmacyMarginReportPage })),
+);
 
 function LazyWait() {
   return (
-    <div className="flex min-h-[40vh] items-center justify-center text-sm font-medium text-stone-600">Loading…</div>
+    <div className="flex min-h-[40vh] items-center justify-center text-sm font-medium text-muted-foreground">Loading…</div>
   );
 }
 
@@ -216,6 +225,7 @@ function AppRoutes() {
   }, [showDiagnostics]);
 
   return (
+    <ToastProvider lang={lang}>
     <StartupBootstrapGate
       lang={lang}
       langReady={langReady}
@@ -391,6 +401,10 @@ function AppRoutes() {
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
                   <Route
+                    path="internal/waka/subscription-settings"
+                    element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
+                  />
+                  <Route
                     path="internal/waka/releases"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
@@ -470,7 +484,9 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="reports.profit">
                   <SensitiveActionGate lang={lang} kind="access_reports">
-                    <ProfitPage lang={lang} />
+                    <Suspense fallback={<LazyWait />}>
+                      <ProfitPage lang={lang} />
+                    </Suspense>
                   </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
@@ -522,7 +538,9 @@ function AppRoutes() {
               path="office/pharmacy-margins"
               element={
                 <RoleProtectedRoute permission="reports.profit">
-                  <PharmacyMarginReportPage lang={lang} />
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyMarginReportPage lang={lang} />
+                  </Suspense>
                 </RoleProtectedRoute>
               }
             />
@@ -777,7 +795,9 @@ function AppRoutes() {
               element={
                 <PharmacyProtectedRoute permission="reports.view">
                   <SensitiveActionGate lang={lang} kind="access_reports">
-                    <ReportsPage lang={lang} />
+                    <Suspense fallback={<LazyWait />}>
+                      <ReportsPage lang={lang} />
+                    </Suspense>
                   </SensitiveActionGate>
                 </PharmacyProtectedRoute>
               }
@@ -845,7 +865,9 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="reports.view">
                   <SensitiveActionGate lang={lang} kind="access_reports">
-                    <ReportsPage lang={lang} />
+                    <Suspense fallback={<LazyWait />}>
+                      <ReportsPage lang={lang} />
+                    </Suspense>
                   </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
@@ -990,8 +1012,8 @@ function AppRoutes() {
                 </RoleProtectedRoute>
               }
             />
-            <Route path="customers" element={<CustomersPage lang={lang} />} />
-            <Route path="debts" element={<CustomersPage lang={lang} />} />
+            <Route path="customers" element={<Suspense fallback={<LazyWait />}><CustomersPage lang={lang} /></Suspense>} />
+            <Route path="debts" element={<Suspense fallback={<LazyWait />}><CustomersPage lang={lang} /></Suspense>} />
             <Route
               path="receipts"
               element={
@@ -1300,6 +1322,7 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : unauthenticatedEntryPath()} replace />} />
       </Routes>
     </StartupBootstrapGate>
+    </ToastProvider>
   );
 }
 

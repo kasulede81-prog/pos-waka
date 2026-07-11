@@ -36,22 +36,22 @@ export function OfficeRestockSuggestionsCard({ lang }: { lang: Language }) {
         <Package className="h-7 w-7 shrink-0 text-waka-700" aria-hidden />
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-black text-waka-950">{t(lang, "officeRestockSuggestionsTitle")}</h2>
-          <p className="mt-0.5 text-sm font-medium text-stone-600">{t(lang, "officeRestockSuggestionsSub")}</p>
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">{t(lang, "officeRestockSuggestionsSub")}</p>
         </div>
       </div>
       {suggestions.length === 0 ? (
-        <p className="mt-3 text-sm font-medium text-stone-600">{t(lang, "officeRestockSuggestionsEmpty")}</p>
+        <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "officeRestockSuggestionsEmpty")}</p>
       ) : null}
       <ul className="mt-4 space-y-2">
         {suggestions.map((row) => (
           <li key={row.productId}>
             <Link
               to="/restock"
-              className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100 transition-colors hover:bg-waka-50"
+              className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 ring-1 ring-waka-100 transition-colors hover:bg-waka-50"
             >
               <div className="min-w-0">
-                <p className="truncate font-bold text-stone-900">{row.name}</p>
-                <p className="mt-0.5 text-xs font-semibold text-stone-500">
+                <p className="truncate font-bold text-foreground">{row.name}</p>
+                <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
                   {t(lang, "officeRestockSuggestionsStock")}: {row.stockOnHand} · {t(lang, "officeRestockSuggestionsMin")}:{" "}
                   {row.minimumStock} · {t(lang, "officeRestockSuggestionsSuggest")}: {row.suggestedQty}
                 </p>
@@ -68,7 +68,7 @@ export function OfficeRestockSuggestionsCard({ lang }: { lang: Language }) {
       {hintLines.length > 0 ? (
         <ul className="mt-3 space-y-1 border-t border-waka-100 pt-3">
           {hintLines.map((line) => (
-            <li key={line} className="text-xs font-semibold text-stone-600">
+            <li key={line} className="text-xs font-semibold text-muted-foreground">
               {line}
             </li>
           ))}

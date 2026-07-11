@@ -12,7 +12,7 @@ type Props = {
 export function HistoryListCard({ children, className, empty, isEmpty }: Props) {
   if (isEmpty && empty) {
     return (
-      <div className={clsx("rounded-[1.35rem] border border-stone-200 bg-white p-6 text-center shadow-sm", className)}>
+      <div className={clsx("rounded-[1.35rem] border border-border bg-card p-6 text-center shadow-sm", className)}>
         {empty}
       </div>
     );
@@ -21,7 +21,7 @@ export function HistoryListCard({ children, className, empty, isEmpty }: Props) 
   return (
     <div
       className={clsx(
-        "overflow-hidden rounded-[1.35rem] border border-stone-200 bg-white shadow-sm",
+        "overflow-hidden rounded-[1.35rem] border border-border bg-card shadow-sm",
         className,
       )}
     >

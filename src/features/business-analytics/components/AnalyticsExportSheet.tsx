@@ -46,7 +46,7 @@ export function AnalyticsExportSheet({
                 item.action();
                 onClose();
               }}
-              className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl px-2 text-left text-sm font-bold text-stone-800 active:bg-stone-50"
+              className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl px-2 text-left text-sm font-bold text-foreground active:bg-muted"
             >
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-waka-50 text-waka-700">
                 <item.icon className="h-5 w-5" aria-hidden />

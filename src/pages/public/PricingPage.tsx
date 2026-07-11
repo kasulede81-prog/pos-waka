@@ -151,9 +151,9 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
       <article className="space-y-10">
         <header className="space-y-4">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">Pricing</p>
-          <h1 className="text-4xl font-black leading-tight text-stone-950 sm:text-5xl">Waka POS Pricing</h1>
+          <h1 className="text-4xl font-black leading-tight text-foreground sm:text-5xl">Waka POS Pricing</h1>
           <p className="text-2xl font-black text-waka-800">Complete Business Control for Every Shop</p>
-          <p className="max-w-3xl text-base font-medium leading-relaxed text-stone-600">
+          <p className="max-w-3xl text-base font-medium leading-relaxed text-muted-foreground">
             Sales · Inventory · Staff · Cash Control · Suppliers · Debt Tracking · Reports · Cloud Sync · Business
             Intelligence
           </p>
@@ -173,12 +173,12 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
             <section
               key={plan.name}
               className={`rounded-3xl border p-6 shadow-waka-sm sm:p-8 ${
-                plan.popular ? "border-waka-400 bg-gradient-to-br from-waka-50 to-white" : "border-stone-100 bg-white"
+                plan.popular ? "border-waka-400 bg-gradient-to-br from-waka-50 to-card" : "border-border bg-card"
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-2xl font-black text-stone-950">
+                  <h2 className="text-2xl font-black text-foreground">
                     {plan.name}
                     {plan.popular ? <span className="ml-2 text-base text-waka-600">★ Most Popular</span> : null}
                   </h2>
@@ -194,16 +194,16 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
                   ) : (
                     <p className="mt-2 text-3xl font-black text-waka-700">—</p>
                   )}
-                  <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-stone-700">{plan.blurb}</p>
+                  <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-muted-foreground">{plan.blurb}</p>
                 </div>
               </div>
 
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Standout Features</h3>
+                  <h3 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Standout Features</h3>
                   <ul className="mt-3 space-y-2">
                     {plan.features.map((feature) => (
-                      <li key={feature} className="flex gap-2 text-sm font-semibold text-stone-700">
+                      <li key={feature} className="flex gap-2 text-sm font-semibold text-muted-foreground">
                         <span className="text-waka-600">✓</span>
                         <span>{feature}</span>
                       </li>
@@ -211,14 +211,14 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
                   </ul>
                 </div>
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Limits</h3>
-                  <ul className="mt-3 list-inside list-disc space-y-1 text-sm font-semibold text-stone-700">
+                  <h3 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Limits</h3>
+                  <ul className="mt-3 list-inside list-disc space-y-1 text-sm font-semibold text-muted-foreground">
                     {plan.limits.map((limit) => (
                       <li key={limit}>{limit}</li>
                     ))}
                   </ul>
-                  <p className="mt-4 text-sm font-medium text-stone-600">
-                    <span className="font-black text-stone-800">Good for:</span> {plan.goodFor}
+                  <p className="mt-4 text-sm font-medium text-muted-foreground">
+                    <span className="font-black text-foreground">Good for:</span> {plan.goodFor}
                   </p>
                 </div>
               </div>
@@ -227,11 +227,11 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
           })}
         </div>
 
-        <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">
-          <h2 className="text-xl font-black text-stone-950">Why Businesses Choose Waka POS</h2>
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-waka-sm sm:p-8">
+          <h2 className="text-xl font-black text-foreground">Why Businesses Choose Waka POS</h2>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {WHY_CHOOSE.map((item) => (
-              <li key={item} className="flex gap-2 text-sm font-semibold text-stone-700">
+              <li key={item} className="flex gap-2 text-sm font-semibold text-muted-foreground">
                 <span className="text-waka-600">✓</span>
                 <span>{item}</span>
               </li>
@@ -247,7 +247,7 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               to="/register"
-              className="inline-flex min-h-[48px] items-center rounded-2xl bg-white px-6 py-3 text-sm font-black text-waka-700"
+              className="inline-flex min-h-[48px] items-center rounded-2xl bg-card px-6 py-3 text-sm font-black text-waka-700"
             >
               Create free account
             </Link>

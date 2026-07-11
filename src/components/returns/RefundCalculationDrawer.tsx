@@ -18,37 +18,37 @@ function TraceBody({ lang, trace }: { lang: Language; trace: ReturnRefundTrace }
   const disc = trace.saleDiscountBreakdown;
   return (
     <div className="space-y-3">
-      <div className="rounded-xl bg-stone-50 px-3 py-2">
-        <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+      <div className="rounded-xl bg-muted px-3 py-2">
+        <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
           {t(lang, "refundTraceOriginalSaleTotal")}
         </p>
-        <p className="mt-0.5 text-sm font-black text-stone-900">
+        <p className="mt-0.5 text-sm font-black text-foreground">
           UGX {trace.originalSaleTotalUgx.toLocaleString()}
         </p>
       </div>
 
       {(disc.lineDiscountsUgx > 0 || disc.cartDiscountUgx > 0) && (
-        <div className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs">
-          <p className="font-black uppercase tracking-wide text-stone-500">{t(lang, "refundTraceDiscounts")}</p>
+        <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs">
+          <p className="font-black uppercase tracking-wide text-muted-foreground">{t(lang, "refundTraceDiscounts")}</p>
           <dl className="mt-1 space-y-0.5">
             <div className="flex justify-between gap-2">
-              <dt className="text-stone-600">{t(lang, "checkoutSubtotalLabel")}</dt>
+              <dt className="text-muted-foreground">{t(lang, "checkoutSubtotalLabel")}</dt>
               <dd className="font-bold">UGX {disc.listSubtotalUgx.toLocaleString()}</dd>
             </div>
             {disc.lineDiscountsUgx > 0 ? (
               <div className="flex justify-between gap-2">
-                <dt className="text-stone-600">{t(lang, "checkoutLineDiscountsLabel")}</dt>
+                <dt className="text-muted-foreground">{t(lang, "checkoutLineDiscountsLabel")}</dt>
                 <dd className="font-bold">− UGX {disc.lineDiscountsUgx.toLocaleString()}</dd>
               </div>
             ) : null}
             {disc.cartDiscountUgx > 0 ? (
               <div className="flex justify-between gap-2">
-                <dt className="text-stone-600">{t(lang, "checkoutCartDiscountLabel")}</dt>
+                <dt className="text-muted-foreground">{t(lang, "checkoutCartDiscountLabel")}</dt>
                 <dd className="font-bold">− UGX {disc.cartDiscountUgx.toLocaleString()}</dd>
               </div>
             ) : null}
-            <div className="flex justify-between gap-2 border-t border-stone-100 pt-1">
-              <dt className="font-semibold text-stone-800">{t(lang, "refundTraceFinalPaid")}</dt>
+            <div className="flex justify-between gap-2 border-t border-border pt-1">
+              <dt className="font-semibold text-foreground">{t(lang, "refundTraceFinalPaid")}</dt>
               <dd className="font-black">UGX {disc.finalTotalUgx.toLocaleString()}</dd>
             </div>
           </dl>
@@ -56,9 +56,9 @@ function TraceBody({ lang, trace }: { lang: Language; trace: ReturnRefundTrace }
       )}
 
       {trace.priorRefundsUgx > 0 ? (
-        <div className="rounded-xl bg-stone-50 px-3 py-2 text-xs">
-          <p className="font-black uppercase tracking-wide text-stone-500">{t(lang, "refundTracePriorRefunds")}</p>
-          <p className="mt-0.5 font-bold text-stone-900">UGX {trace.priorRefundsUgx.toLocaleString()}</p>
+        <div className="rounded-xl bg-muted px-3 py-2 text-xs">
+          <p className="font-black uppercase tracking-wide text-muted-foreground">{t(lang, "refundTracePriorRefunds")}</p>
+          <p className="mt-0.5 font-bold text-foreground">UGX {trace.priorRefundsUgx.toLocaleString()}</p>
         </div>
       ) : null}
 
@@ -67,7 +67,7 @@ function TraceBody({ lang, trace }: { lang: Language; trace: ReturnRefundTrace }
         <p className="mt-0.5 text-lg font-black text-amber-950">
           UGX {trace.currentRefundUgx.toLocaleString()}
         </p>
-        <p className="mt-1 text-stone-700">
+        <p className="mt-1 text-muted-foreground">
           {trace.productName} · {t(lang, `returnReason_${trace.reason}` as Parameters<typeof t>[1])}
         </p>
       </div>
@@ -76,15 +76,15 @@ function TraceBody({ lang, trace }: { lang: Language; trace: ReturnRefundTrace }
         <RefundBreakdownPanel lang={lang} breakdown={trace.lineBreakdown} compact />
       ) : null}
 
-      <div className="rounded-xl bg-stone-50 px-3 py-2 text-xs">
-        <p className="font-black uppercase tracking-wide text-stone-500">{t(lang, "refundTraceRemainingBalance")}</p>
-        <p className="mt-0.5 font-bold text-stone-900">UGX {trace.remainingBalanceUgx.toLocaleString()}</p>
+      <div className="rounded-xl bg-muted px-3 py-2 text-xs">
+        <p className="font-black uppercase tracking-wide text-muted-foreground">{t(lang, "refundTraceRemainingBalance")}</p>
+        <p className="mt-0.5 font-bold text-foreground">UGX {trace.remainingBalanceUgx.toLocaleString()}</p>
       </div>
 
-      <div className="rounded-xl bg-stone-50 px-3 py-2 text-xs">
-        <p className="font-black uppercase tracking-wide text-stone-500">{t(lang, "refundTraceIssuedBy")}</p>
-        <p className="mt-0.5 font-semibold text-stone-900">{trace.actorLabel}</p>
-        <p className="mt-0.5 text-stone-600">{new Date(trace.createdAt).toLocaleString()}</p>
+      <div className="rounded-xl bg-muted px-3 py-2 text-xs">
+        <p className="font-black uppercase tracking-wide text-muted-foreground">{t(lang, "refundTraceIssuedBy")}</p>
+        <p className="mt-0.5 font-semibold text-foreground">{trace.actorLabel}</p>
+        <p className="mt-0.5 text-muted-foreground">{new Date(trace.createdAt).toLocaleString()}</p>
       </div>
     </div>
   );
@@ -109,18 +109,18 @@ export function RefundCalculationDrawer({
   return (
     <AppModalOverlay className="z-[70] flex justify-end bg-black/40 p-0" role="dialog" aria-modal onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+        className="flex h-full w-full max-w-md flex-col bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex shrink-0 items-center justify-between border-b border-stone-100 px-4 py-3">
-          <h2 className="text-lg font-black text-stone-900">{t(lang, "refundTraceTitle")}</h2>
-          <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-stone-600" onClick={onClose}>
+        <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="text-lg font-black text-foreground">{t(lang, "refundTraceTitle")}</h2>
+          <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-muted-foreground" onClick={onClose}>
             {t(lang, "cancel")}
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {!sale ? (
-            <p className="text-sm text-stone-600">{t(lang, "refundTraceUnlinked")}</p>
+            <p className="text-sm text-muted-foreground">{t(lang, "refundTraceUnlinked")}</p>
           ) : trace ? (
             <TraceBody lang={lang} trace={trace} />
           ) : null}

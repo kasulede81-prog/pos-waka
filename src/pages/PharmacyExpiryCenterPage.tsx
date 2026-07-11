@@ -165,14 +165,14 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
     <EnterprisePageContainer>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-stone-950">{t(lang, "pharmacyExpiryCenterTitle")}</h1>
-          <p className="mt-1 text-base font-medium text-stone-500">{t(lang, "pharmacyExpiryCenterSub")}</p>
+          <h1 className="text-3xl font-black tracking-tight text-foreground">{t(lang, "pharmacyExpiryCenterTitle")}</h1>
+          <p className="mt-1 text-base font-medium text-muted-foreground">{t(lang, "pharmacyExpiryCenterSub")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex min-h-[48px] items-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-black text-stone-800 touch-manipulation"
+            className="inline-flex min-h-[48px] items-center rounded-2xl border border-border bg-card px-4 text-sm font-black text-foreground touch-manipulation"
           >
             {t(lang, "pharmacyExpiryPrint")}
           </button>
@@ -196,7 +196,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
         <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-950">{toast}</p>
       ) : null}
 
-      <div className="grid gap-3 rounded-2xl border border-stone-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
         <FilterSelect
           label={t(lang, "pharmacyExpiryFilterSupplier")}
           value={supplierFilter}
@@ -215,7 +215,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
           onChange={setManufacturerFilter}
           options={filterOptions.manufacturers}
         />
-        <div className="rounded-2xl border border-stone-200 px-4 touch-manipulation">
+        <div className="rounded-2xl border border-border px-4 touch-manipulation">
           <WakaSwitch
             checked={controlledOnly}
             onCheckedChange={setControlledOnly}
@@ -237,7 +237,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
                   ? bucket === "expired"
                     ? "border-rose-400 bg-rose-600 text-white"
                     : "border-teal-400 bg-teal-600 text-white"
-                  : "border-stone-200 bg-white text-stone-800"
+                  : "border-border bg-card text-foreground"
               }`}
             >
               <span>{t(lang, BUCKET_LABEL[bucket])}</span>
@@ -248,9 +248,9 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-black uppercase text-stone-500">{t(lang, "pharmacyExpiryQty")}</p>
-          <p className="mt-1 text-3xl font-black text-stone-950">{totalQty}</p>
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs font-black uppercase text-muted-foreground">{t(lang, "pharmacyExpiryQty")}</p>
+          <p className="mt-1 text-3xl font-black text-foreground">{totalQty}</p>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-black uppercase text-amber-800">{t(lang, "pharmacyExpiryValue")}</p>
@@ -265,19 +265,19 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
           {rows.map((row) => (
             <li
               key={`${row.productId}-${row.batchId}`}
-              className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm touch-manipulation"
+              className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm touch-manipulation"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-lg font-black text-stone-950">
+                  <p className="text-lg font-black text-foreground">
                     {products.find((p) => p.id === row.productId)
                       ? formatMedicineFullLabel(products.find((p) => p.id === row.productId)!)
                       : row.productName}
                   </p>
-                  <p className="text-sm font-semibold text-stone-600">
+                  <p className="text-sm font-semibold text-muted-foreground">
                     {t(lang, "pharmacyBatchNumber")}: {row.batchNumber} · {row.expiryDate}
                   </p>
-                  <p className="text-xs font-medium text-stone-500">
+                  <p className="text-xs font-medium text-muted-foreground">
                     {row.quantity} {t(lang, "pharmacyTerm_medicine").toLowerCase()} · {formatUgx(row.valueUgx)}
                     {row.supplierName ? ` · ${row.supplierName}` : ""}
                     {row.location ? ` · ${row.location}` : ""}
@@ -308,7 +308,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
                     <button
                       type="button"
                       onClick={() => queueReturn(row)}
-                      className="min-h-[48px] rounded-2xl border border-stone-300 bg-white px-4 text-sm font-black text-stone-800 touch-manipulation"
+                      className="min-h-[48px] rounded-2xl border border-border bg-card px-4 text-sm font-black text-foreground touch-manipulation"
                     >
                       {t(lang, "pharmacyReturnSupplier")}
                     </button>
@@ -385,12 +385,12 @@ function FilterSelect({
   options: string[];
 }) {
   return (
-    <label className="block text-sm font-bold text-stone-700">
+    <label className="block text-sm font-bold text-muted-foreground">
       {label}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-3 text-base font-semibold touch-manipulation"
+        className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-border px-3 text-base font-semibold touch-manipulation"
       >
         <option value="">—</option>
         {options.map((o) => (

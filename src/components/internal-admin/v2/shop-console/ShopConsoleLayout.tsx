@@ -43,7 +43,7 @@ export function ShopConsoleTabBar({ activeTab, onTabChange }: Pick<Props, "activ
   return (
     <nav
       ref={scrollRef}
-      className="sticky top-0 z-20 -mx-4 border-b border-stone-200 bg-stone-50/95 px-4 backdrop-blur-sm"
+      className="sticky top-0 z-20 -mx-4 border-b border-border bg-muted/95 px-4 backdrop-blur-sm"
       aria-label="Shop console sections"
     >
       <div className="flex gap-1 overflow-x-auto py-2 [-webkit-overflow-scrolling:touch]">
@@ -55,7 +55,7 @@ export function ShopConsoleTabBar({ activeTab, onTabChange }: Pick<Props, "activ
             onClick={() => onTabChange(tab)}
             className={clsx(
               "shrink-0 rounded-xl px-3 py-2 text-xs font-black transition min-h-[40px]",
-              activeTab === tab ? "bg-waka-600 text-white shadow-sm" : "bg-white text-stone-700 ring-1 ring-stone-200",
+              activeTab === tab ? "bg-waka-600 text-white shadow-sm" : "bg-card text-muted-foreground ring-1 ring-border",
             )}
           >
             {TAB_LABELS[tab]}
@@ -79,7 +79,7 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
   const suspendLabel = detail.shop.is_active ? "Suspend Shop" : "Reactivate Shop";
 
   return (
-    <div className="sticky top-[52px] z-10 -mx-4 border-b border-stone-200 bg-white px-4 py-2 shadow-sm">
+    <div className="sticky top-[52px] z-10 -mx-4 border-b border-border bg-card px-4 py-2 shadow-sm">
       <div className="flex flex-wrap items-center gap-1.5">
         {canSupport ? (
           <button
@@ -96,7 +96,7 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
             type="button"
             disabled={busy}
             onClick={quickHandlers.onForceSync}
-            className="min-h-[36px] rounded-xl border border-stone-300 px-3 text-[11px] font-black disabled:opacity-40"
+            className="min-h-[36px] rounded-xl border border-border px-3 text-[11px] font-black disabled:opacity-40"
           >
             Force Sync
           </button>
@@ -119,21 +119,21 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
         <button
           type="button"
           onClick={() => go("devices")}
-          className="min-h-[36px] rounded-xl border border-stone-300 px-3 text-[11px] font-black"
+          className="min-h-[36px] rounded-xl border border-border px-3 text-[11px] font-black"
         >
           Open Devices
         </button>
         <button
           type="button"
           onClick={() => go("support")}
-          className="min-h-[36px] rounded-xl border border-stone-300 px-3 text-[11px] font-black"
+          className="min-h-[36px] rounded-xl border border-border px-3 text-[11px] font-black"
         >
           Open Support
         </button>
         <button
           type="button"
           onClick={() => go("audit")}
-          className="min-h-[36px] rounded-xl border border-stone-300 px-3 text-[11px] font-black"
+          className="min-h-[36px] rounded-xl border border-border px-3 text-[11px] font-black"
         >
           Open Audit
         </button>
@@ -141,17 +141,17 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
           <button
             type="button"
             onClick={() => setMoreOpen((v) => !v)}
-            className="flex min-h-[36px] items-center gap-1 rounded-xl border border-stone-300 px-3 text-[11px] font-black"
+            className="flex min-h-[36px] items-center gap-1 rounded-xl border border-border px-3 text-[11px] font-black"
           >
             More <ChevronDown className="h-3.5 w-3.5" />
           </button>
           {moreOpen ? (
-            <div className="absolute right-0 top-full z-30 mt-1 min-w-[160px] rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+            <div className="absolute right-0 top-full z-30 mt-1 min-w-[160px] rounded-xl border border-border bg-card py-1 shadow-lg">
               {SHOP_CONSOLE_TABS.filter((t) => t !== activeTab).map((tab) => (
                 <button
                   key={tab}
                   type="button"
-                  className="block w-full px-3 py-2 text-left text-xs font-bold text-stone-800 hover:bg-waka-50"
+                  className="block w-full px-3 py-2 text-left text-xs font-bold text-foreground hover:bg-waka-50"
                   onClick={() => go(tab)}
                 >
                   {TAB_LABELS[tab]}
@@ -159,7 +159,7 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
               ))}
               <button
                 type="button"
-                className="block w-full border-t border-stone-100 px-3 py-2 text-left text-xs font-bold text-stone-800 hover:bg-waka-50"
+                className="block w-full border-t border-border px-3 py-2 text-left text-xs font-bold text-foreground hover:bg-waka-50"
                 onClick={() => {
                   setMoreOpen(false);
                   onOpenActions();

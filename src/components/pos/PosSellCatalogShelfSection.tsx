@@ -21,10 +21,10 @@ export function PosSellCatalogShelfSection({
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-0.5">
-        <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+        <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
           {t(lang, "posSellCategoryHeading")}
         </p>
-        <p className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-black text-stone-600">
+        <p className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-black text-muted-foreground">
           {shelves.length}
         </p>
       </div>

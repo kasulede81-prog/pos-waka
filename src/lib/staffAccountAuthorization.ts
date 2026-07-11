@@ -1,16 +1,16 @@
 /**
  * Store-layer authorization for staff account CRUD.
- * Staff management requires owner/manager role AND primary device (cloud shops).
+ * Staff management requires owner role and an approved operational device (cloud shops).
  */
 
 import type { SessionActor } from "./sessionActor";
 import { checkStorePermission, type StoreAuthResult } from "./storeAuthorization";
-import { ENFORCE_PRIMARY_DEVICE } from "./deviceAuthorityPolicy";
+import { isDeviceAuthorizedForManagementSync } from "./deviceAuthority";
 
 export class StaffAccountAuthorizationError extends Error {
   readonly errorKey: import("./storeAuthorization").StoreAuthErrorKey;
 
-  constructor(errorKey: "forbidden" | "noSelection" | "notPrimaryDevice") {
+  constructor(errorKey: "forbidden" | "noSelection" | "deviceNotAuthorized") {
     super(errorKey);
     this.name = "StaffAccountAuthorizationError";
     this.errorKey = errorKey;
@@ -28,10 +28,10 @@ export async function authorizeStaffAccountMutationWithDevice(
 ): Promise<StoreAuthResult> {
   const roleAuth = authorizeStaffAccountMutation(actor);
   if (!roleAuth.ok) return roleAuth;
-  if (opts?.skipDeviceCheck || opts?.authMode === "local" || !ENFORCE_PRIMARY_DEVICE) return { ok: true };
-  const { isCurrentDevicePrimaryForStaffManagement } = await import("./primaryDevice");
-  const isPrimary = await isCurrentDevicePrimaryForStaffManagement();
-  if (!isPrimary) return { ok: false, errorKey: "notPrimaryDevice" };
+  if (opts?.skipDeviceCheck || opts?.authMode === "local") return { ok: true };
+  if (!isDeviceAuthorizedForManagementSync()) {
+    return { ok: false, errorKey: "deviceNotAuthorized" };
+  }
   return { ok: true };
 }
 
@@ -49,7 +49,7 @@ export async function assertStaffAccountMutationAllowedAsync(
   const auth = await authorizeStaffAccountMutationWithDevice(actor, opts);
   if (!auth.ok) {
     throw new StaffAccountAuthorizationError(
-      auth.errorKey as "forbidden" | "noSelection" | "notPrimaryDevice",
+      auth.errorKey as "forbidden" | "noSelection" | "deviceNotAuthorized",
     );
   }
 }

@@ -9,20 +9,21 @@ import {
 } from "react";
 import {
   fetchDeviceAuthorityContext,
+  isDeviceAuthorizedForManagement,
   type DeviceAuthorityContext,
-  type PrimaryOnlyAction,
+  type DeviceAuthorizedAction,
 } from "../lib/deviceAuthority";
-import { ENFORCE_PRIMARY_DEVICE } from "../lib/deviceAuthorityPolicy";
 
 type DeviceAuthorityState = {
   loading: boolean;
   ctx: DeviceAuthorityContext | null;
-  isPrimary: boolean;
+  /** Approved operational device — can perform owner management actions. */
+  isDeviceAuthorized: boolean;
   isApproved: boolean;
   isOperational: boolean;
   pendingApproval: boolean;
   refresh: () => Promise<void>;
-  canPrimary: (action: PrimaryOnlyAction) => boolean;
+  canPerformAuthorizedAction: (action: DeviceAuthorizedAction) => boolean;
 };
 
 const DeviceAuthorityCtx = createContext<DeviceAuthorityState | null>(null);
@@ -57,31 +58,21 @@ export function DeviceAuthorityProvider({ shopId, authMode, children }: Props) {
 
   const value = useMemo((): DeviceAuthorityState => {
     const hasCtx = ctx != null;
-    const isPrimary =
-      authMode === "local" || !ENFORCE_PRIMARY_DEVICE || (hasCtx && ctx.isPrimary);
+    const deviceAuthorized =
+      authMode === "local" || (hasCtx && isDeviceAuthorizedForManagement(ctx));
     const isApproved = authMode === "local" || (hasCtx && ctx.isApproved);
     const isOperational = authMode === "local" || (hasCtx && ctx.isOperational);
     const pendingApproval =
-      ENFORCE_PRIMARY_DEVICE &&
-      authMode === "supabase" &&
-      hasCtx &&
-      ctx.approvalStatus === "pending";
+      authMode === "supabase" && hasCtx && ctx.approvalStatus === "pending";
     return {
       loading,
       ctx,
-      isPrimary,
+      isDeviceAuthorized: deviceAuthorized,
       isApproved,
       isOperational,
       pendingApproval,
       refresh,
-      canPrimary: (action: PrimaryOnlyAction) => {
-        if (authMode === "local") return true;
-        if (!hasCtx) return false;
-        if (!ENFORCE_PRIMARY_DEVICE) return ctx.isApproved && ctx.approvalStatus !== "pending";
-        if (!ctx.primaryDeviceFingerprint) return ctx.isPrimary && ctx.isApproved;
-        if (action === "device_approve") return ctx.isPrimary && ctx.isApproved;
-        return ctx.isPrimary && ctx.isApproved;
-      },
+      canPerformAuthorizedAction: () => deviceAuthorized,
     };
   }, [authMode, ctx, loading]);
 
@@ -94,28 +85,28 @@ export function useDeviceAuthority(): DeviceAuthorityState {
     return {
       loading: false,
       ctx: null,
-      isPrimary: false,
+      isDeviceAuthorized: false,
       isApproved: false,
       isOperational: false,
       pendingApproval: false,
       refresh: async () => {},
-      canPrimary: () => false,
+      canPerformAuthorizedAction: () => false,
     };
   }
   return ctx;
 }
 
-export async function assertPrimaryDeviceAction(
-  action: PrimaryOnlyAction,
+export async function assertDeviceAuthorizedAction(
+  action: DeviceAuthorizedAction,
   shopId?: string,
-): Promise<{ ok: true } | { ok: false; errorKey: "notPrimaryDevice" | "devicePendingApproval" }> {
+): Promise<{ ok: true } | { ok: false; errorKey: "deviceNotAuthorized" | "devicePendingApproval" }> {
   const deviceCtx = await fetchDeviceAuthorityContext(shopId);
   if (!deviceCtx) return { ok: true };
   if (deviceCtx.approvalStatus === "pending") {
     return { ok: false, errorKey: "devicePendingApproval" };
   }
-  if (ENFORCE_PRIMARY_DEVICE && deviceCtx.primaryDeviceFingerprint && !deviceCtx.isPrimary) {
-    return { ok: false, errorKey: "notPrimaryDevice" };
+  if (!isDeviceAuthorizedForManagement(deviceCtx)) {
+    return { ok: false, errorKey: "deviceNotAuthorized" };
   }
   void action;
   return { ok: true };

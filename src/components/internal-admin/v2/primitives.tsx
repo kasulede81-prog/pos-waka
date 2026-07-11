@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
 import { ChevronRight, RefreshCw, X } from "lucide-react";
 import { WakaCheckbox } from "../../enterprise/WakaCheckbox";
+import { themeUi } from "../../../lib/themeTokens";
 
 export function RoleGate({ show, children }: { show: boolean; children: ReactNode }) {
   if (!show) return null;
@@ -14,7 +15,7 @@ export function EmptyState({ children, className }: { children: ReactNode; class
   return (
     <div
       className={clsx(
-        "rounded-2xl border border-dashed border-stone-200 bg-white/80 px-4 py-10 text-center text-sm font-semibold text-stone-600",
+        "rounded-2xl border border-dashed border-border bg-card/80 px-4 py-10 text-center text-sm font-semibold text-muted-foreground",
         className,
       )}
     >
@@ -36,9 +37,9 @@ export function KpiPulseCard({
 }) {
   const inner = (
     <>
-      <span className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
       <motion.span
-        className={clsx("mt-1 font-mono text-xl font-black", accent ? "text-waka-700" : "text-stone-900")}
+        className={clsx("mt-1 font-mono text-xl font-black", accent ? "text-waka-700" : "text-foreground")}
         animate={{ opacity: [0.85, 1, 0.85] }}
         transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
       >
@@ -52,8 +53,10 @@ export function KpiPulseCard({
     </>
   );
 
-  const className =
-    "flex min-h-[88px] flex-col rounded-2xl border border-stone-200/80 bg-white p-3.5 text-left shadow-sm transition active:scale-[0.98]";
+  const className = clsx(
+    "flex min-h-[88px] flex-col p-3.5 text-left transition active:scale-[0.98]",
+    themeUi.adminSurface,
+  );
 
   if (!onOpen) {
     return <div className={className}>{inner}</div>;
@@ -106,7 +109,7 @@ export function BottomSheet({
           onClick={onClose}
         >
           <motion.div
-            className="absolute inset-0 bg-stone-950/50 backdrop-blur-[2px]"
+            className={clsx("absolute inset-0 backdrop-blur-[2px]", themeUi.overlay)}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -116,7 +119,7 @@ export function BottomSheet({
             aria-modal
             aria-labelledby="admin-sheet-title"
             className={clsx(
-              "relative mx-auto flex max-h-[min(92dvh,900px)] w-full flex-col overflow-hidden rounded-t-3xl bg-stone-50 shadow-2xl sm:max-h-[85dvh] sm:rounded-3xl",
+              "relative mx-auto flex max-h-[min(92dvh,900px)] w-full flex-col overflow-hidden rounded-t-3xl bg-dialog shadow-2xl sm:max-h-[85dvh] sm:rounded-3xl",
               wide ? "sm:max-w-3xl" : "sm:max-w-lg",
             )}
             initial={{ y: "100%" }}
@@ -126,19 +129,19 @@ export function BottomSheet({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-center pt-2 sm:hidden">
-              <span className="h-1 w-10 rounded-full bg-stone-300" aria-hidden />
+              <span className="h-1 w-10 rounded-full bg-border" aria-hidden />
             </div>
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-stone-200/80 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-top))]">
+            <div className={clsx("flex shrink-0 items-start justify-between gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-top))]", themeUi.dialogHeader)}>
               <div className="min-w-0">
-                <h2 id="admin-sheet-title" className="text-base font-black text-stone-900">
+                <h2 id="admin-sheet-title" className="text-base font-black text-foreground">
                   {title}
                 </h2>
-                {subtitle ? <p className="mt-0.5 text-xs font-medium text-stone-500">{subtitle}</p> : null}
+                {subtitle ? <p className="mt-0.5 text-xs font-medium text-muted-foreground">{subtitle}</p> : null}
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-stone-600 hover:bg-stone-100"
+                className={clsx("flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-muted-foreground hover:bg-muted", themeUi.focusRing)}
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -255,8 +258,8 @@ export function ShopCard({
   return (
     <motion.div
       className={clsx(
-        "w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition",
-        selected ? "border-waka-400 ring-2 ring-waka-200" : "border-stone-200/90 hover:border-waka-300/60",
+        "w-full rounded-2xl border bg-card p-4 text-left shadow-sm transition",
+        selected ? "border-waka-400 ring-2 ring-waka-200" : "border-border/90 hover:border-waka-300/60",
       )}
       whileTap={{ scale: 0.99 }}
     >
@@ -273,13 +276,13 @@ export function ShopCard({
           <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
             <div className="flex flex-wrap items-center gap-2">
               {shopNumber ? (
-                <span className="rounded-md bg-stone-900 px-2 py-0.5 font-mono text-[11px] font-black text-white">
+                <span className="rounded-md bg-foreground px-2 py-0.5 font-mono text-[11px] font-black text-background">
                   {shopNumber}
                 </span>
               ) : null}
-              <p className="truncate text-base font-black text-stone-900">{name}</p>
+              <p className="truncate text-base font-black text-foreground">{name}</p>
             </div>
-            {ownerLabel ? <p className="mt-0.5 truncate text-xs font-medium text-stone-500">{ownerLabel}</p> : null}
+            {ownerLabel ? <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground">{ownerLabel}</p> : null}
           </button>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
@@ -291,7 +294,7 @@ export function ShopCard({
           <span
             className={clsx(
               "rounded-full px-2 py-0.5 text-[10px] font-black uppercase",
-              isActive ? "bg-emerald-100 text-emerald-800" : "bg-stone-100 text-stone-600",
+              isActive ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground",
             )}
           >
             {isActive ? "Active" : "Inactive"}
@@ -299,10 +302,10 @@ export function ShopCard({
         </div>
       </div>
       <button type="button" onClick={onOpen} className="w-full text-left">
-      <p className="mt-2 text-xs font-semibold text-stone-600">
-        <span className="text-stone-400">📍</span> {district || "—"} · <span className="uppercase text-waka-800">{planCode}</span>
+      <p className="mt-2 text-xs font-semibold text-muted-foreground">
+        <span className="text-muted-foreground">📍</span> {district || "—"} · <span className="uppercase text-waka-800">{planCode}</span>
       </p>
-      <p className="mt-1 text-xs text-stone-500">
+      <p className="mt-1 text-xs text-muted-foreground">
         {productCount != null ? `${productCount} products` : null}
         {productCount != null && salesHint ? " · " : null}
         {salesHint ?? null}
@@ -339,17 +342,17 @@ export function SupportTicketCard({
   showActions: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <p className="font-black text-stone-900">{title}</p>
-        <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold uppercase text-stone-600">
+        <p className="font-black text-foreground">{title}</p>
+        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
           {status}
         </span>
       </div>
-      <p className="mt-1 text-sm font-semibold text-stone-700">{shopName}</p>
-      {ownerEmail ? <p className="font-mono text-xs text-stone-600">{ownerEmail}</p> : null}
-      {phone ? <p className="text-xs text-stone-500">{phone}</p> : null}
-      <p className="mt-1 text-[11px] text-stone-400">{timeLabel}</p>
+      <p className="mt-1 text-sm font-semibold text-muted-foreground">{shopName}</p>
+      {ownerEmail ? <p className="font-mono text-xs text-muted-foreground">{ownerEmail}</p> : null}
+      {phone ? <p className="text-xs text-muted-foreground">{phone}</p> : null}
+      <p className="mt-1 text-[11px] text-muted-foreground">{timeLabel}</p>
       {showActions ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {onWhatsApp ? (
@@ -367,7 +370,7 @@ export function SupportTicketCard({
             </button>
           ) : null}
           {onOpenShop ? (
-            <button type="button" onClick={onOpenShop} className="min-h-[44px] rounded-xl border border-stone-200 px-3 text-xs font-black">
+            <button type="button" onClick={onOpenShop} className="min-h-[44px] rounded-xl border border-border px-3 text-xs font-black">
               Open shop
             </button>
           ) : null}
@@ -396,24 +399,24 @@ export function PlanCardV2({
   mrrUgx: number;
 }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Plan</p>
-      <h3 className="text-lg font-black text-stone-900">{name}</h3>
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Plan</p>
+      <h3 className="text-lg font-black text-foreground">{name}</h3>
       <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">Active</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">Active</dt>
           <dd className="font-mono font-black">{activeCount}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">Trials</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">Trials</dt>
           <dd className="font-mono font-black">{trialCount}</dd>
         </div>
         <div className="rounded-xl bg-waka-50 px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-waka-700">Expiring</dt>
           <dd className="font-mono font-black text-waka-800">{expiringCount}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">Est. MRR</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">Est. MRR</dt>
           <dd className="font-mono text-xs font-black">UGX {mrrUgx.toLocaleString("en-UG")}</dd>
         </div>
       </dl>

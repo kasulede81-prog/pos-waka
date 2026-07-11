@@ -20,8 +20,8 @@ export function AdminAnalyticsPage({ adminRow, previewMode }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-black text-stone-900">Platform analytics</h1>
-        <p className="text-sm text-stone-500">Growth & health trends · see Dashboard for live ops status</p>
+        <h1 className="text-xl font-black text-foreground">Platform analytics</h1>
+        <p className="text-sm text-muted-foreground">Growth & health trends · see Dashboard for live ops status</p>
       </div>
 
       <div className={adminKpiGridClass()}>
@@ -33,8 +33,8 @@ export function AdminAnalyticsPage({ adminRow, previewMode }: Props) {
 
       {data.opsLoading && data.signups7.length === 0 ? (
         <div className="space-y-3">
-          <div className="h-36 animate-pulse rounded-2xl bg-stone-200" />
-          <div className="h-28 animate-pulse rounded-2xl bg-stone-200" />
+          <div className="h-36 animate-pulse rounded-2xl bg-muted" />
+          <div className="h-28 animate-pulse rounded-2xl bg-muted" />
         </div>
       ) : null}
 

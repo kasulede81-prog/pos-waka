@@ -36,22 +36,22 @@ export function CashPositionCollapsibleCard({ id, title, icon, defaultOpen = tru
   }, [id, open]);
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-waka-sm">
+    <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-waka-sm">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors active:bg-stone-50 sm:px-5"
+        className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors active:bg-muted sm:px-5"
         aria-expanded={open}
       >
         {icon ? <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-waka-50 text-lg">{icon}</span> : null}
-        <span className="min-w-0 flex-1 text-base font-black text-stone-900">{title}</span>
+        <span className="min-w-0 flex-1 text-base font-black text-foreground">{title}</span>
         {badge}
         <ChevronDown
-          className={clsx("h-5 w-5 shrink-0 text-stone-400 transition-transform", open && "rotate-180")}
+          className={clsx("h-5 w-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
           aria-hidden
         />
       </button>
-      {open ? <div className="border-t border-stone-100 px-4 pb-5 pt-4 sm:px-5">{children}</div> : null}
+      {open ? <div className="border-t border-border px-4 pb-5 pt-4 sm:px-5">{children}</div> : null}
     </section>
   );
 }

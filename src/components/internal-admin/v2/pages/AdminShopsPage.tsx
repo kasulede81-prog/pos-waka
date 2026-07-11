@@ -98,8 +98,8 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
   return (
     <div className="space-y-4 pb-20">
       <div>
-        <h1 className="text-xl font-black text-stone-900">Shops</h1>
-        <p className="text-sm text-stone-500">
+        <h1 className="text-xl font-black text-foreground">Shops</h1>
+        <p className="text-sm text-muted-foreground">
           {filtered.length} of {data.shopOpenings.length} · {sort === "health" ? "health sorted" : "recent sorted"}
         </p>
         <p className="mt-1 text-xs font-semibold text-amber-900">
@@ -112,7 +112,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search name, owner, district…"
-        className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+        className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
       />
 
       <div className="flex flex-wrap gap-2">
@@ -122,7 +122,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
             type="button"
             onClick={() => setStatus(s)}
             className={`min-h-[44px] rounded-full px-3 text-xs font-black uppercase ${
-              status === s ? "bg-waka-600 text-white" : "bg-white text-stone-600 ring-1 ring-stone-200"
+              status === s ? "bg-waka-600 text-white" : "bg-card text-muted-foreground ring-1 ring-border"
             }`}
           >
             {s}
@@ -131,7 +131,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
         <button
           type="button"
           onClick={() => setSort(sort === "health" ? "recent" : "health")}
-          className="min-h-[44px] rounded-full bg-stone-100 px-3 text-xs font-black uppercase text-stone-700"
+          className="min-h-[44px] rounded-full bg-muted px-3 text-xs font-black uppercase text-muted-foreground"
         >
           Sort: {sort}
         </button>
@@ -142,7 +142,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           <button
             type="button"
             onClick={() => setPlan("")}
-            className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase ${!plan ? "bg-waka-100 text-waka-800" : "bg-stone-100"}`}
+            className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase ${!plan ? "bg-waka-100 text-waka-800" : "bg-muted"}`}
           >
             All plans
           </button>
@@ -151,7 +151,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
               key={p}
               type="button"
               onClick={() => setPlan(p)}
-              className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase ${plan === p ? "bg-waka-100 text-waka-800" : "bg-stone-100"}`}
+              className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase ${plan === p ? "bg-waka-100 text-waka-800" : "bg-muted"}`}
             >
               {p}
             </button>
@@ -164,7 +164,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           <button
             type="button"
             onClick={() => setDistrict("")}
-            className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${!district ? "bg-waka-100 text-waka-800" : "bg-stone-100"}`}
+            className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${!district ? "bg-waka-100 text-waka-800" : "bg-muted"}`}
           >
             All districts
           </button>
@@ -173,7 +173,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
               key={d}
               type="button"
               onClick={() => setDistrict(d)}
-              className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${district === d ? "bg-waka-100 text-waka-800" : "bg-stone-100"}`}
+              className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${district === d ? "bg-waka-100 text-waka-800" : "bg-muted"}`}
             >
               {d}
             </button>
@@ -184,7 +184,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
       {data.opsLoading && !filtered.length ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-2xl bg-stone-200" />
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
           ))}
         </div>
       ) : filtered.length === 0 ? (

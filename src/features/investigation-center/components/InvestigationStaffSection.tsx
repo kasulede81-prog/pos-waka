@@ -37,8 +37,8 @@ export function InvestigationStaffSection({
 
   if (staffGroups.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-stone-200 bg-white px-4 py-10 text-center">
-        <p className="text-sm font-semibold text-stone-600">{t(lang, "staffActivityEmpty")}</p>
+      <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center">
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "staffActivityEmpty")}</p>
       </div>
     );
   }
@@ -47,19 +47,19 @@ export function InvestigationStaffSection({
     <div className="space-y-6">
       {shifts.length > 0 ? (
         <section>
-          <h2 className="text-xs font-black uppercase tracking-widest text-stone-500">{t(lang, "shiftsTodayTitle")}</h2>
+          <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "shiftsTodayTitle")}</h2>
           <ul className="mt-3 space-y-2">
             {shifts.map((s) => (
-              <li key={s.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+              <li key={s.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-black text-stone-900">{s.actorName ?? s.actorUserId}</p>
-                  <p className="text-xs font-semibold text-stone-500">{s.endAt ? t(lang, "shiftClosed") : t(lang, "shiftOpen")}</p>
+                  <p className="font-black text-foreground">{s.actorName ?? s.actorUserId}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{s.endAt ? t(lang, "shiftClosed") : t(lang, "shiftOpen")}</p>
                 </div>
-                <p className="mt-1 text-xs text-stone-600">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {new Date(s.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} –{" "}
                   {s.endAt ? new Date(s.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
                 </p>
-                <p className="mt-2 text-sm font-semibold text-stone-800">
+                <p className="mt-2 text-sm font-semibold text-foreground">
                   UGX {s.salesTotalUgx.toLocaleString()} · {t(lang, "cardDebtToday")} UGX {s.debtTotalUgx.toLocaleString()}
                 </p>
               </li>
@@ -70,7 +70,7 @@ export function InvestigationStaffSection({
 
       {staffGroups.map((group) => (
         <section key={group.actorId}>
-          <h2 className="mb-2 text-xs font-black uppercase tracking-widest text-stone-500">{group.actorLabel}</h2>
+          <h2 className="mb-2 text-xs font-black uppercase tracking-widest text-muted-foreground">{group.actorLabel}</h2>
           <VirtualizedActivityTimeline
             lang={lang}
             entries={group.entries}

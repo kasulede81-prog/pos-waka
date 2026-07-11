@@ -89,7 +89,7 @@ export function AdminPermanentDeletePanel({ detail, busy, previewMode, onBusy, o
         <input
           value={confirmText}
           onChange={(e) => setConfirmText(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm"
+          className="mt-1 w-full rounded-lg border border-rose-300 bg-card px-3 py-2 text-sm"
           autoComplete="off"
         />
       </label>

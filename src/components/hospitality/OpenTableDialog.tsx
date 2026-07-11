@@ -58,9 +58,9 @@ export function OpenTableDialog({
       clearNav
       title={
         <div className="text-center">
-          <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "openTableTitle")}</p>
-          <p className="mt-1 text-2xl font-black text-stone-950">{tableLabel}</p>
-          {areaName ? <p className="text-sm font-semibold text-stone-500">{areaName}</p> : null}
+          <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "openTableTitle")}</p>
+          <p className="mt-1 text-2xl font-black text-foreground">{tableLabel}</p>
+          {areaName ? <p className="text-sm font-semibold text-muted-foreground">{areaName}</p> : null}
         </div>
       }
       footer={
@@ -68,7 +68,7 @@ export function OpenTableDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="min-h-[44px] rounded-xl border border-stone-200 bg-white text-sm font-black uppercase text-stone-700"
+            className="min-h-[44px] rounded-xl border border-border bg-card text-sm font-black uppercase text-muted-foreground"
           >
             {t(lang, "cancel")}
           </button>
@@ -94,34 +94,34 @@ export function OpenTableDialog({
     >
       <div className="space-y-5">
         <div>
-          <p className="mb-3 text-center text-sm font-bold text-stone-700">{t(lang, "openTableGuests")}</p>
+          <p className="mb-3 text-center text-sm font-bold text-muted-foreground">{t(lang, "openTableGuests")}</p>
           <div className="flex items-center justify-center gap-6">
             <button
               type="button"
               onClick={() => stepGuest(-1)}
-              className="flex h-14 w-14 items-center justify-center rounded-lg border-2 border-stone-400 bg-white text-stone-800 shadow-sm"
+              className="flex h-14 w-14 items-center justify-center rounded-lg border-2 border-stone-400 bg-card text-foreground shadow-sm"
             >
               <Minus className="h-7 w-7" />
             </button>
-            <span className="min-w-[3rem] text-center text-5xl font-black tabular-nums text-stone-950">
+            <span className="min-w-[3rem] text-center text-5xl font-black tabular-nums text-foreground">
               {guestCount}
             </span>
             <button
               type="button"
               onClick={() => stepGuest(1)}
-              className="flex h-14 w-14 items-center justify-center rounded-lg border-2 border-stone-400 bg-white text-stone-800 shadow-sm"
+              className="flex h-14 w-14 items-center justify-center rounded-lg border-2 border-stone-400 bg-card text-foreground shadow-sm"
             >
               <Plus className="h-7 w-7" />
             </button>
           </div>
         </div>
 
-        <div className="rounded-lg border border-stone-300 bg-stone-50 p-3">
+        <div className="rounded-lg border border-border bg-muted p-3">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-bold text-stone-700">{t(lang, "openTableCoverCharge")}</span>
-            <span className="text-lg font-black text-stone-400">—</span>
+            <span className="text-sm font-bold text-muted-foreground">{t(lang, "openTableCoverCharge")}</span>
+            <span className="text-lg font-black text-muted-foreground">—</span>
           </div>
-          <p className="mt-1 text-[10px] font-medium text-stone-400">{t(lang, "openTableCoverChargeHint")}</p>
+          <p className="mt-1 text-[10px] font-medium text-muted-foreground">{t(lang, "openTableCoverChargeHint")}</p>
         </div>
 
         <button
@@ -133,31 +133,31 @@ export function OpenTableDialog({
         </button>
 
         {advancedOpen ? (
-          <div className="space-y-2 rounded-lg border border-stone-300 bg-white p-3">
+          <div className="space-y-2 rounded-lg border border-border bg-card p-3">
             <input
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder={t(lang, "openTableCustomerNamePh")}
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm"
+              className="w-full rounded border border-border px-3 py-2 text-sm"
             />
             <input
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
               placeholder="+256..."
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm"
+              className="w-full rounded border border-border px-3 py-2 text-sm"
             />
             <textarea
               value={specialNotes}
               onChange={(e) => setSpecialNotes(e.target.value)}
               rows={2}
               placeholder={t(lang, "openTableNotesPh")}
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm"
+              className="w-full rounded border border-border px-3 py-2 text-sm"
             />
           </div>
         ) : null}
 
         {waiterLabel ? (
-          <p className="text-center text-xs font-semibold text-stone-500">
+          <p className="text-center text-xs font-semibold text-muted-foreground">
             {t(lang, "openTableWaiter")}: {waiterLabel}
           </p>
         ) : null}

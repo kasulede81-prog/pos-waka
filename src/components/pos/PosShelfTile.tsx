@@ -138,7 +138,7 @@ export function PosShelfTile({
         className={clsx(
           "mt-1.5 line-clamp-2 w-full text-center font-black leading-tight",
           sellCatalogGridDesktop ? "text-xs" : "text-[10px]",
-          selected ? "text-waka-600" : "text-stone-950",
+          selected ? "text-waka-600" : "text-foreground",
         )}
       >
         {shelf.label}
@@ -151,7 +151,7 @@ export function PosShelfTile({
             ? "font-black text-rose-700"
             : selected
               ? "text-waka-500/90"
-              : "text-stone-500",
+              : "text-muted-foreground",
         )}
       >
         {countLabel}
@@ -168,7 +168,7 @@ export function PosShelfTile({
           className={clsx(
             "absolute right-2 top-2 max-w-[46%] truncate rounded-full px-1.5 py-0.5 font-black uppercase tracking-wide",
             layoutSize === "large" ? "text-[10px] sm:text-xs" : "text-[9px]",
-            isBold ? "bg-white/20 text-white" : "bg-black/10 text-stone-800",
+            isBold ? "bg-white/20 text-white" : "bg-black/10 text-foreground",
           )}
         >
           {badge}
@@ -188,7 +188,7 @@ export function PosShelfTile({
         <span
           className={clsx(
             "absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-lg",
-            isBold ? "bg-white/20 text-white" : "bg-black/5 text-stone-500",
+            isBold ? "bg-white/20 text-white" : "bg-black/5 text-muted-foreground",
           )}
           aria-hidden
         >
@@ -205,10 +205,10 @@ export function PosShelfTile({
           "flex flex-col items-center justify-center rounded-xl border shadow-sm transition-[border-color,box-shadow,transform] duration-150",
           heightClass,
           selected
-            ? "border-waka-500 bg-white text-stone-950 shadow-md ring-1 ring-waka-500/30"
+            ? "border-waka-500 bg-card text-foreground shadow-md ring-1 ring-waka-500/30"
             : showEmptyWarning
-              ? "border-rose-200/90 bg-rose-50/30 text-stone-950 active:border-rose-300"
-              : "border-stone-200/90 bg-white text-stone-950 active:scale-[0.97] active:border-waka-300 active:shadow-md motion-reduce:active:scale-100",
+              ? "border-rose-200/90 bg-rose-50/30 text-foreground active:border-rose-300"
+              : "border-border/90 bg-card text-foreground active:scale-[0.97] active:border-waka-300 active:shadow-md motion-reduce:active:scale-100",
         )
       : clsx(
           "rounded-2xl border shadow-sm",

@@ -29,20 +29,20 @@ export function PharmacyBatchIntegrityBanner({ lang, product }: Props) {
           <button
             type="button"
             onClick={() => computeBatchIntegrity(product)}
-            className="min-h-[44px] rounded-xl border border-amber-300 bg-white px-4 text-sm font-black text-amber-950 touch-manipulation"
+            className="min-h-[44px] rounded-xl border border-amber-300 bg-card px-4 text-sm font-black text-amber-950 touch-manipulation"
           >
             {t(lang, "pharmacyBatchRecalculate")}
           </button>
           <button
             type="button"
             onClick={() => setShowDiff(true)}
-            className="min-h-[44px] rounded-xl border border-amber-300 bg-white px-4 text-sm font-black text-amber-950 touch-manipulation"
+            className="min-h-[44px] rounded-xl border border-amber-300 bg-card px-4 text-sm font-black text-amber-950 touch-manipulation"
           >
             {t(lang, "pharmacyBatchViewDiff")}
           </button>
           <Link
             to={`/settings/diagnostics?auditProduct=${product.id}`}
-            className="inline-flex min-h-[44px] items-center rounded-xl border border-amber-300 bg-white px-4 text-sm font-black text-amber-950 touch-manipulation"
+            className="inline-flex min-h-[44px] items-center rounded-xl border border-amber-300 bg-card px-4 text-sm font-black text-amber-950 touch-manipulation"
           >
             {t(lang, "pharmacyBatchViewAudit")}
           </Link>
@@ -51,16 +51,16 @@ export function PharmacyBatchIntegrityBanner({ lang, product }: Props) {
 
       {showDiff ? (
         <AppModalOverlay className="z-[80] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-lg rounded-t-3xl bg-white p-4 shadow-2xl sm:rounded-3xl sm:p-6">
-            <h3 className="text-lg font-black text-stone-950">{t(lang, "pharmacyBatchViewDiff")}</h3>
+          <div className="w-full max-w-lg rounded-t-3xl bg-card p-4 shadow-2xl sm:rounded-3xl sm:p-6">
+            <h3 className="text-lg font-black text-foreground">{t(lang, "pharmacyBatchViewDiff")}</h3>
             <dl className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between font-bold">
-                <dt className="text-stone-500">{t(lang, "stockTitle")}</dt>
-                <dd className="tabular-nums text-stone-950">{integrity.stockOnHand}</dd>
+                <dt className="text-muted-foreground">{t(lang, "stockTitle")}</dt>
+                <dd className="tabular-nums text-foreground">{integrity.stockOnHand}</dd>
               </div>
               <div className="flex justify-between font-bold">
-                <dt className="text-stone-500">{t(lang, "pharmacyBatches")}</dt>
-                <dd className="tabular-nums text-stone-950">{integrity.batchSum}</dd>
+                <dt className="text-muted-foreground">{t(lang, "pharmacyBatches")}</dt>
+                <dd className="tabular-nums text-foreground">{integrity.batchSum}</dd>
               </div>
               <div className="flex justify-between font-black text-amber-900">
                 <dt>{t(lang, "pharmacyBatchIntegrityDelta")}</dt>
@@ -70,7 +70,7 @@ export function PharmacyBatchIntegrityBanner({ lang, product }: Props) {
                 </dd>
               </div>
             </dl>
-            <ul className="mt-4 max-h-48 space-y-1 overflow-y-auto text-xs font-semibold text-stone-700">
+            <ul className="mt-4 max-h-48 space-y-1 overflow-y-auto text-xs font-semibold text-muted-foreground">
               {integrity.batches.map((b) => (
                 <li key={b.id} className="flex justify-between gap-2">
                   <span>{b.batchNumber}</span>

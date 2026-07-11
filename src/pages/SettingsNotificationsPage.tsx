@@ -13,7 +13,7 @@ function NotificationsSettingsBody({ lang }: { lang: Language }) {
   const savePreferences = usePreferencesPatch();
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <WakaSwitch
         checked={preferences.hapticsOn !== false}
         onCheckedChange={(checked) => savePreferences({ hapticsOn: checked })}
@@ -23,7 +23,7 @@ function NotificationsSettingsBody({ lang }: { lang: Language }) {
         checked={preferences.saleSoundOn !== false}
         onCheckedChange={(checked) => savePreferences({ saleSoundOn: checked })}
         label={t(lang, "saleSoundSetting")}
-        className="mt-4 border-t border-stone-100 pt-4"
+        className="mt-4 border-t border-border pt-4"
       />
     </article>
   );

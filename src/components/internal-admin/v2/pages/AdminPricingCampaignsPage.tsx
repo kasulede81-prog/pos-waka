@@ -88,8 +88,8 @@ function fromDatetimeLocal(value: string): string | null {
 }
 
 const inputCls =
-  "w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm font-semibold text-stone-900 outline-none focus:border-waka-500";
-const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-stone-500";
+  "w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground outline-none focus:border-waka-500";
+const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-muted-foreground";
 
 export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Props) {
   const perms = adminPermissions(adminRow);
@@ -242,7 +242,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm font-semibold text-stone-500">
+      <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" /> Loading pricing campaigns…
       </div>
     );
@@ -254,19 +254,19 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
         <div>
           <Link
             to="/internal/waka/billing"
-            className="mb-2 inline-flex items-center gap-1 text-xs font-bold text-stone-500 hover:text-waka-700"
+            className="mb-2 inline-flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-waka-700"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Billing
           </Link>
-          <h1 className="text-xl font-black text-stone-900">Pricing Campaigns</h1>
-          <p className="text-sm text-stone-500">
+          <h1 className="text-xl font-black text-foreground">Pricing Campaigns</h1>
+          <p className="text-sm text-muted-foreground">
             Temporary discounts without changing canonical plan prices.
           </p>
         </div>
         <button
           type="button"
           onClick={() => void load()}
-          className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700"
+          className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-bold text-muted-foreground"
         >
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
@@ -284,10 +284,10 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
         </p>
       ) : null}
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">Active campaigns</h2>
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Active campaigns</h2>
         {activeCampaigns.length === 0 ? (
-          <p className="mt-2 text-sm font-semibold text-stone-500">No active campaigns — canonical prices shown on marketing pages.</p>
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">No active campaigns — canonical prices shown on marketing pages.</p>
         ) : (
           <ul className="mt-3 space-y-2">
             {activeCampaigns.map((c) => (
@@ -311,7 +311,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
                 computePlanDisplayPrice(p.planCode, { monthlyDiscountType: "none", monthlyDiscountValue: 0 }),
               ));
             }}
-            className="flex w-full min-h-[40px] items-center justify-center gap-2 rounded-xl border border-dashed border-stone-300 text-sm font-black text-stone-600"
+            className="flex w-full min-h-[40px] items-center justify-center gap-2 rounded-xl border border-dashed border-border text-sm font-black text-muted-foreground"
           >
             <Tag className="h-4 w-4" /> New campaign
           </button>
@@ -323,7 +323,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
               className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm font-bold ${
                 draft.id === c.id
                   ? "border-waka-400 bg-waka-50 text-waka-950"
-                  : "border-stone-200 bg-white text-stone-800"
+                  : "border-border bg-card text-foreground"
               }`}
             >
               {c.name}
@@ -335,8 +335,8 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
         </aside>
 
         <div className="space-y-5">
-          <section className="rounded-2xl border border-stone-200 bg-white p-5">
-            <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">Campaign settings</h2>
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Campaign settings</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className={labelCls}>Name</label>
@@ -382,7 +382,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
                 disabled={!canEdit}
                 onCheckedChange={(checked) => setDraft((d) => ({ ...d, enabled: checked }))}
                 label="Enable campaign"
-                className="text-sm font-bold text-stone-800"
+                className="text-sm font-bold text-foreground"
               />
             </div>
             {canEdit ? (
@@ -399,24 +399,24 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
 
           {draft.id ? (
             <section className="space-y-4">
-              <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">Plan discounts</h2>
+              <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Plan discounts</h2>
               {PAID_PLANS.map((plan) => {
                 const pd = planDrafts[plan];
                 const canonical = CANONICAL_PLAN_PRICES.find((p) => p.planCode === plan)!;
                 const computed = previewFromDrafts.find((p) => p.planCode === plan)!;
                 return (
-                  <div key={plan} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                  <div key={plan} className="rounded-2xl border border-border bg-muted p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <h3 className="text-base font-black text-stone-900">{PLAN_LABELS[plan]}</h3>
+                      <h3 className="text-base font-black text-foreground">{PLAN_LABELS[plan]}</h3>
                       <div className="text-right text-sm">
-                        <p className="font-semibold text-stone-500">
-                          Original: <span className="font-black text-stone-800">{formatUgx(canonical.monthlyPriceUgx)}</span>
+                        <p className="font-semibold text-muted-foreground">
+                          Original: <span className="font-black text-foreground">{formatUgx(canonical.monthlyPriceUgx)}</span>
                         </p>
-                        <p className="font-semibold text-stone-500">
+                        <p className="font-semibold text-muted-foreground">
                           Discount:{" "}
                           <span className="font-black text-waka-700">{formatUgx(computed.monthlyDiscountUgx)}</span>
                         </p>
-                        <p className="font-semibold text-stone-500">
+                        <p className="font-semibold text-muted-foreground">
                           Final: <span className="font-black text-emerald-700">{formatUgx(computed.finalMonthlyUgx)}</span>
                         </p>
                       </div>
@@ -497,7 +497,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
                         type="button"
                         onClick={() => void savePlanDiscount(plan)}
                         disabled={savingPlan === plan}
-                        className="mt-3 min-h-[40px] rounded-xl border border-waka-300 bg-white px-4 text-sm font-black text-waka-800 disabled:opacity-60"
+                        className="mt-3 min-h-[40px] rounded-xl border border-waka-300 bg-card px-4 text-sm font-black text-waka-800 disabled:opacity-60"
                       >
                         {savingPlan === plan ? "Saving…" : `Save ${PLAN_LABELS[plan]} discount`}
                       </button>
@@ -512,17 +512,17 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
             <h2 className="text-sm font-black uppercase tracking-wide text-waka-800">Marketing preview</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               {(draft.id ? previewPlans : previewFromDrafts).map((p) => (
-                <div key={p.planCode} className="rounded-xl bg-white p-4 shadow-sm">
-                  <p className="text-xs font-black uppercase text-stone-500">{PLAN_LABELS[p.planCode]}</p>
+                <div key={p.planCode} className="rounded-xl bg-card p-4 shadow-sm">
+                  <p className="text-xs font-black uppercase text-muted-foreground">{PLAN_LABELS[p.planCode]}</p>
                   {p.hasMonthlyDiscount ? (
-                    <p className="mt-1 text-sm font-bold text-stone-400 line-through">{formatUgx(p.originalMonthlyUgx)}</p>
+                    <p className="mt-1 text-sm font-bold text-muted-foreground line-through">{formatUgx(p.originalMonthlyUgx)}</p>
                   ) : null}
                   <p className="text-xl font-black text-waka-700">{formatUgx(p.finalMonthlyUgx)} / month</p>
                   {p.hasMonthlyDiscount ? (
                     <p className="text-xs font-black text-emerald-700">Save {formatUgx(p.monthlyDiscountUgx)}</p>
                   ) : null}
-                  <p className="mt-2 text-sm font-bold text-stone-500 line-through">{formatUgx(p.originalAnnualFullUgx)}</p>
-                  <p className="text-sm font-black text-stone-800">{formatUgx(p.finalAnnualUgx)} / year</p>
+                  <p className="mt-2 text-sm font-bold text-muted-foreground line-through">{formatUgx(p.originalAnnualFullUgx)}</p>
+                  <p className="text-sm font-black text-foreground">{formatUgx(p.finalAnnualUgx)} / year</p>
                   <p className="text-xs font-black text-emerald-700">Save {p.annualDiscountPercent}%</p>
                 </div>
               ))}
@@ -530,24 +530,24 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
           </section>
 
           {metrics ? (
-            <section className="rounded-2xl border border-stone-200 bg-white p-5">
-              <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">Campaign reporting</h2>
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Campaign reporting</h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl bg-stone-50 p-3">
-                  <p className="text-xs font-bold text-stone-500">New subscribers</p>
-                  <p className="text-2xl font-black text-stone-900">{metrics.newSubscribers}</p>
+                <div className="rounded-xl bg-muted p-3">
+                  <p className="text-xs font-bold text-muted-foreground">New subscribers</p>
+                  <p className="text-2xl font-black text-foreground">{metrics.newSubscribers}</p>
                 </div>
-                <div className="rounded-xl bg-stone-50 p-3">
-                  <p className="text-xs font-bold text-stone-500">Revenue recorded</p>
-                  <p className="text-2xl font-black text-stone-900">{formatUgx(metrics.revenueRecordedUgx)}</p>
+                <div className="rounded-xl bg-muted p-3">
+                  <p className="text-xs font-bold text-muted-foreground">Revenue recorded</p>
+                  <p className="text-2xl font-black text-foreground">{formatUgx(metrics.revenueRecordedUgx)}</p>
                 </div>
-                <div className="rounded-xl bg-stone-50 p-3">
-                  <p className="text-xs font-bold text-stone-500">Conversion rate</p>
-                  <p className="text-2xl font-black text-stone-900">{metrics.conversionRatePercent}%</p>
+                <div className="rounded-xl bg-muted p-3">
+                  <p className="text-xs font-bold text-muted-foreground">Conversion rate</p>
+                  <p className="text-2xl font-black text-foreground">{metrics.conversionRatePercent}%</p>
                 </div>
-                <div className="rounded-xl bg-stone-50 p-3">
-                  <p className="text-xs font-bold text-stone-500">By plan</p>
-                  <p className="text-sm font-bold text-stone-700">
+                <div className="rounded-xl bg-muted p-3">
+                  <p className="text-xs font-bold text-muted-foreground">By plan</p>
+                  <p className="text-sm font-bold text-muted-foreground">
                     {Object.entries(metrics.newSubscribersByPlan)
                       .map(([k, v]) => `${k}: ${v}`)
                       .join(" · ") || "—"}
@@ -557,21 +557,21 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
             </section>
           ) : null}
 
-          <section className="rounded-2xl border border-stone-200 bg-white p-5">
-            <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">Audit history</h2>
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Audit history</h2>
             {audit.length === 0 ? (
-              <p className="mt-2 text-sm font-semibold text-stone-500">No discount changes recorded yet.</p>
+              <p className="mt-2 text-sm font-semibold text-muted-foreground">No discount changes recorded yet.</p>
             ) : (
               <ul className="mt-3 max-h-80 space-y-2 overflow-y-auto">
                 {audit.map((row) => (
-                  <li key={row.id} className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2 text-sm">
-                    <p className="font-black text-stone-900">
+                  <li key={row.id} className="rounded-xl border border-border bg-muted px-3 py-2 text-sm">
+                    <p className="font-black text-foreground">
                       {row.actorName || "Admin"} · {row.planCode ?? "campaign"}
                     </p>
-                    <p className="text-xs font-semibold text-stone-500">
+                    <p className="text-xs font-semibold text-muted-foreground">
                       {new Date(row.createdAt).toLocaleString()}
                     </p>
-                    <p className="mt-1 font-semibold text-stone-700">{row.reason}</p>
+                    <p className="mt-1 font-semibold text-muted-foreground">{row.reason}</p>
                   </li>
                 ))}
               </ul>

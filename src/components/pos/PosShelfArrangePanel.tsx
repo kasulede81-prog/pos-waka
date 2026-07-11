@@ -160,9 +160,9 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   const content = (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-stone-200 bg-white p-3">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posShelfDefaultScaleTitle")}</p>
-        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "posShelfDefaultScaleSub")}</p>
+      <section className="rounded-2xl border border-border bg-card p-3">
+        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posShelfDefaultScaleTitle")}</p>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "posShelfDefaultScaleSub")}</p>
         <div className="mt-3">
           <ShelfScaleSlider
             lang={lang}
@@ -185,15 +185,15 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
         </button>
       </section>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-3">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posShelfPresetHeading")}</p>
+      <section className="rounded-2xl border border-border bg-card p-3">
+        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posShelfPresetHeading")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {POS_SHELF_PRESET_IDS.map((id) => (
             <button
               key={id}
               type="button"
               onClick={() => applyPreset(id)}
-              className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-bold text-stone-800 active:bg-waka-50"
+              className="rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-bold text-foreground active:bg-waka-50"
             >
               {t(lang, PRESET_LABEL_KEY[id])}
             </button>
@@ -201,7 +201,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
         </div>
       </section>
 
-      <p className="text-sm font-medium text-stone-600">{t(lang, "stockShelfArrangeSub")}</p>
+      <p className="text-sm font-medium text-muted-foreground">{t(lang, "stockShelfArrangeSub")}</p>
 
       <div className={shelfMasonryGridClass()}>
         {shelfCards.map((shelf) => (
@@ -225,23 +225,23 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
       </div>
 
       {selectedKey && selectedConfig ? (
-        <section className="space-y-3 rounded-2xl border-2 border-waka-200 bg-white p-4">
-          <p className="text-sm font-black text-stone-950">{t(lang, "posShelfEditHeading")}</p>
+        <section className="space-y-3 rounded-2xl border-2 border-waka-200 bg-card p-4">
+          <p className="text-sm font-black text-foreground">{t(lang, "posShelfEditHeading")}</p>
 
           <label className="block space-y-1">
-            <span className="text-xs font-bold text-stone-600">{t(lang, "posShelfEditName")}</span>
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditName")}</span>
             <input
               type="text"
               value={selectedConfig.displayName ?? ""}
               placeholder={shelfCards.find((c) => c.key === selectedKey)?.label ?? ""}
               onChange={(e) => patchSelected({ displayName: e.target.value })}
-              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold"
+              className="w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold"
             />
           </label>
 
           <div>
-            <p className="text-xs font-bold text-stone-600">{t(lang, "posShelfEditColor")}</p>
-            <p className="mt-0.5 text-[11px] font-medium text-stone-500">{t(lang, "posShelfColorWheelHint")}</p>
+            <p className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditColor")}</p>
+            <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{t(lang, "posShelfColorWheelHint")}</p>
             <div className="mt-2 flex flex-col items-center gap-3 sm:flex-row sm:items-start">
               <ShelfColorWheel
                 value={selectedPreviewHex}
@@ -276,7 +276,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
           </div>
 
           <div>
-            <p className="text-xs font-bold text-stone-600">{t(lang, "posShelfEditIcon")}</p>
+            <p className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditIcon")}</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {SHELF_ICON_OPTIONS.map((icon) => (
                 <button
@@ -286,7 +286,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
                   onClick={() => patchSelected({ icon })}
                   className={clsx(
                     "flex h-9 w-9 items-center justify-center rounded-xl border text-lg",
-                    selectedConfig.icon === icon ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white",
+                    selectedConfig.icon === icon ? "border-waka-500 bg-waka-50" : "border-border bg-card",
                   )}
                 >
                   {icon}
@@ -306,11 +306,11 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
             checked={Boolean(selectedConfig.featured)}
             onCheckedChange={(checked) => patchSelected({ featured: checked })}
             label={t(lang, "posShelfEditFeatured")}
-            className="text-sm font-bold text-stone-800"
+            className="text-sm font-bold text-foreground"
           />
 
           <div>
-            <p className="text-xs font-bold text-stone-600">{t(lang, "posShelfEditBadge")}</p>
+            <p className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditBadge")}</p>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {(["none", "fast_moving", "promotion"] as const).map((badge) => (
                 <button
@@ -322,7 +322,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
                     "rounded-full border px-3 py-1 text-xs font-black",
                     (badge === "none" ? !selectedConfig.badge : selectedConfig.badge === badge)
                       ? "border-waka-500 bg-waka-50 text-waka-900"
-                      : "border-stone-200 bg-white text-stone-700",
+                      : "border-border bg-card text-muted-foreground",
                   )}
                 >
                   {t(
@@ -348,14 +348,14 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
                 {quickPickerOpen ? t(lang, "posQuickSellHideProducts") : t(lang, "posQuickSellPickProducts")}
               </button>
               {quickPickerOpen ? (
-                <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-stone-200 p-2">
+                <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
                   {products.slice(0, 80).map((p) => (
                     <li key={p.id}>
                       <WakaCheckbox
                         checked={quickSellIds.includes(p.id)}
                         onCheckedChange={() => toggleQuickProduct(p.id)}
-                        label={<span className="truncate text-sm font-semibold text-stone-800">{p.name}</span>}
-                        className="rounded-lg px-2 py-1.5 hover:bg-stone-50"
+                        label={<span className="truncate text-sm font-semibold text-foreground">{p.name}</span>}
+                        className="rounded-lg px-2 py-1.5 hover:bg-muted"
                       />
                     </li>
                   ))}
@@ -373,7 +373,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   return (
     <article className="space-y-3 rounded-2xl border-2 border-waka-200 bg-waka-50/60 p-4">
       <div>
-        <p className="text-base font-black text-stone-950">{t(lang, "stockShelfArrangeTitle")}</p>
+        <p className="text-base font-black text-foreground">{t(lang, "stockShelfArrangeTitle")}</p>
       </div>
       {content}
     </article>

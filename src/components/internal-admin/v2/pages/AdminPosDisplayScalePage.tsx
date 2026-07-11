@@ -54,8 +54,8 @@ export function AdminPosDisplayScalePage({ adminRow, previewMode = false }: Prop
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-black text-stone-900">POS Display Scale</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-xl font-black text-foreground">POS Display Scale</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Enterprise density control for the Sell screen — not browser zoom. Each device keeps its own size in local
           storage.
         </p>
@@ -68,18 +68,18 @@ export function AdminPosDisplayScalePage({ adminRow, previewMode = false }: Prop
       ) : null}
 
       {loading ? (
-        <p className="flex items-center gap-2 text-sm font-semibold text-stone-600">
+        <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading…
         </p>
       ) : (
-        <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+        <div className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
           <WakaSwitch
             checked={enabled}
             disabled={!canEdit || saving || previewMode}
             onCheckedChange={(checked) => void onToggle(checked)}
             label={
-              <span className="flex items-center gap-2 text-sm font-black text-stone-900">
+              <span className="flex items-center gap-2 text-sm font-black text-foreground">
                 <MonitorSmartphone className="h-4 w-4 text-waka-600" aria-hidden />
                 Enable Display Scale on Sell
               </span>
@@ -95,23 +95,23 @@ export function AdminPosDisplayScalePage({ adminRow, previewMode = false }: Prop
         </p>
       ) : null}
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black text-stone-900">Scale levels</h2>
-        <p className="mt-1 text-xs text-stone-500">Cashiers pick one of four densities; preview below uses token multipliers.</p>
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black text-foreground">Scale levels</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Cashiers pick one of four densities; preview below uses token multipliers.</p>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {DISPLAY_SCALE_LEVELS.map((level) => {
             const meta = DISPLAY_SCALE_META[level];
             return (
               <li
                 key={level}
-                className="rounded-xl border border-stone-100 bg-stone-50/80 px-3 py-2.5"
+                className="rounded-xl border border-border bg-muted/80 px-3 py-2.5"
                 style={{
                   fontSize: `calc(0.875rem * ${meta.multiplier})`,
                   padding: `calc(0.5rem * ${meta.multiplier})`,
                 }}
               >
-                <p className="font-black capitalize text-stone-900">{level.replace("_", " ")}</p>
-                <p className="text-stone-600">{meta.percent}% · grid Δ {meta.columnDelta >= 0 ? "+" : ""}{meta.columnDelta} cols</p>
+                <p className="font-black capitalize text-foreground">{level.replace("_", " ")}</p>
+                <p className="text-muted-foreground">{meta.percent}% · grid Δ {meta.columnDelta >= 0 ? "+" : ""}{meta.columnDelta} cols</p>
               </li>
             );
           })}
@@ -119,7 +119,7 @@ export function AdminPosDisplayScalePage({ adminRow, previewMode = false }: Prop
       </section>
 
       {!canEdit ? (
-        <p className="text-xs font-semibold text-stone-500">Operations admin or super admin required to change the platform switch.</p>
+        <p className="text-xs font-semibold text-muted-foreground">Operations admin or super admin required to change the platform switch.</p>
       ) : null}
     </div>
   );

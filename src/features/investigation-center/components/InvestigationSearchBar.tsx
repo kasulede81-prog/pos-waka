@@ -20,22 +20,22 @@ export function InvestigationSearchBar({
   resultCount,
 }: Props) {
   return (
-    <div className="sticky top-0 z-20 -mx-1 space-y-2 rounded-2xl border border-stone-200/80 bg-white/95 p-3 shadow-sm backdrop-blur-sm">
+    <div className="sticky top-0 z-20 -mx-1 space-y-2 rounded-2xl border border-border/80 bg-card/95 p-3 shadow-sm backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <input
             type="search"
             value={searchText}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t(lang, "icSearchPlaceholder")}
-            className="min-h-[44px] w-full rounded-2xl border-2 border-stone-200 bg-stone-50/50 pl-10 pr-3 text-sm font-semibold outline-none focus:border-waka-500"
+            className="min-h-[44px] w-full rounded-2xl border-2 border-border bg-muted/50 pl-10 pr-3 text-sm font-semibold outline-none focus:border-waka-500"
           />
         </div>
         <button
           type="button"
           onClick={onOpenFilters}
-          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-2xl border-2 border-stone-200 bg-white text-stone-700 active:bg-stone-50"
+          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-2xl border-2 border-border bg-card text-muted-foreground active:bg-muted"
           aria-label={t(lang, "icFiltersTitle")}
         >
           <SlidersHorizontal className="h-5 w-5" aria-hidden />
@@ -49,7 +49,7 @@ export function InvestigationSearchBar({
           <Download className="h-5 w-5" aria-hidden />
         </button>
       </div>
-      <p className="px-1 text-[11px] font-semibold text-stone-500">
+      <p className="px-1 text-[11px] font-semibold text-muted-foreground">
         {t(lang, "auditResultCount")}: {resultCount.toLocaleString()}
       </p>
     </div>

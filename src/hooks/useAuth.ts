@@ -160,8 +160,8 @@ export function useAuth() {
       console.warn("[waka-auth] ensure_referral_attribution", res.error);
     }
     // Growth campaign: idempotent automatic/referral promotional grant for new shops.
-    const { applyGrowthCampaignGrantForSession } = await import("../lib/growthCampaignsAdmin");
-    void applyGrowthCampaignGrantForSession(metaReferralCode || null);
+    const { subscriptionEngine } = await import("../lib/subscriptionEngine");
+    void subscriptionEngine.onSignup({ referralCode: metaReferralCode || null });
   }, []);
 
   const markWorkspaceEnsured = useCallback((uid: string) => {

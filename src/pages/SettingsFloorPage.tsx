@@ -61,8 +61,8 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
 
   if (!hospitality) {
     return (
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center">
-        <p className="text-sm font-medium text-stone-600">{t(lang, "hospitalityNotEnabled")}</p>
+      <div className="rounded-2xl border border-border bg-card p-6 text-center">
+        <p className="text-sm font-medium text-muted-foreground">{t(lang, "hospitalityNotEnabled")}</p>
       </div>
     );
   }
@@ -71,18 +71,18 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
     <div className="space-y-6 pb-8">
       <PageBackBar lang={lang} fallbackTo="/settings" label={t(lang, "settingsHubTitle")} />
       <div>
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "floorSetupTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "floorSetupSub")}</p>
+        <h1 className="text-2xl font-black text-foreground">{t(lang, "floorSetupTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "floorSetupSub")}</p>
       </div>
 
       {err ? <p className="text-sm font-bold text-rose-700">{err}</p> : null}
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "floorDisplayTitle")}</p>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "floorDisplaySub")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "floorDisplayTitle")}</p>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "floorDisplaySub")}</p>
         <div className="mt-4 space-y-4">
           <div>
-            <p className="mb-2 text-sm font-bold text-stone-800">{t(lang, "floorDisplayShape")}</p>
+            <p className="mb-2 text-sm font-bold text-foreground">{t(lang, "floorDisplayShape")}</p>
             <div className="flex flex-wrap gap-2">
               {(["classic", "round", "square"] as HospitalityTableShape[]).map((shape) => (
                 <button
@@ -97,7 +97,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
                     "rounded-xl border-2 px-4 py-2 text-sm font-black capitalize",
                     floorDisplay.tableShape === shape
                       ? "border-waka-500 bg-waka-50 text-waka-900"
-                      : "border-stone-200 bg-white text-stone-700",
+                      : "border-border bg-card text-muted-foreground",
                   )}
                 >
                   {t(lang, `floorDisplayShape_${shape}` as "floorDisplayShape_classic")}
@@ -106,7 +106,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
             </div>
           </div>
           <div>
-            <p className="mb-2 text-sm font-bold text-stone-800">{t(lang, "floorDisplaySize")}</p>
+            <p className="mb-2 text-sm font-bold text-foreground">{t(lang, "floorDisplaySize")}</p>
             <div className="flex flex-wrap gap-2">
               {(["sm", "md", "lg", "xl"] as HospitalityTableSize[]).map((size) => (
                 <button
@@ -121,7 +121,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
                     "rounded-xl border-2 px-4 py-2 text-sm font-black uppercase",
                     floorDisplay.tableSize === size
                       ? "border-waka-500 bg-waka-50 text-waka-900"
-                      : "border-stone-200 bg-white text-stone-700",
+                      : "border-border bg-card text-muted-foreground",
                   )}
                 >
                   {t(lang, `floorDisplaySize_${size}` as "floorDisplaySize_md")}
@@ -130,7 +130,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
             </div>
           </div>
           <div>
-            <p className="mb-2 text-sm font-bold text-stone-800">{t(lang, "floorDisplayDensity")}</p>
+            <p className="mb-2 text-sm font-bold text-foreground">{t(lang, "floorDisplayDensity")}</p>
             <div className="flex flex-wrap gap-2">
               {(["compact", "normal", "spacious"] as HospitalityFloorGridDensity[]).map((density) => (
                 <button
@@ -145,7 +145,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
                     "rounded-xl border-2 px-4 py-2 text-sm font-black capitalize",
                     floorDisplay.gridDensity === density
                       ? "border-waka-500 bg-waka-50 text-waka-900"
-                      : "border-stone-200 bg-white text-stone-700",
+                      : "border-border bg-card text-muted-foreground",
                   )}
                 >
                   {t(lang, `floorDisplayDensity_${density}` as "floorDisplayDensity_normal")}
@@ -160,17 +160,17 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         checked={manualKitchenFire}
         onCheckedChange={setHospitalityManualKitchenFire}
         label={t(lang, "floorManualKitchenFire")}
-        className="rounded-2xl border border-stone-200 bg-white p-4"
+        className="rounded-2xl border border-border bg-card p-4"
       />
 
-      <div className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="text-lg font-black text-stone-950">{t(lang, "floorEditorAreas")}</h2>
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "floorEditorAreas")}</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <input
             value={newAreaName}
             onChange={(e) => setNewAreaName(e.target.value)}
             placeholder={t(lang, "floorEditorAreaPh")}
-            className="min-h-11 flex-1 rounded-xl border border-stone-200 px-3 text-sm"
+            className="min-h-11 flex-1 rounded-xl border border-border px-3 text-sm"
           />
           <button
             type="button"
@@ -186,11 +186,11 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         </div>
         <ul className="mt-4 space-y-2">
           {areas.map((area) => (
-            <li key={area.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-stone-50 p-3">
+            <li key={area.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-muted p-3">
               <input
                 defaultValue={area.name}
                 onBlur={(e) => renameDiningArea(area.id, e.target.value)}
-                className="min-h-10 flex-1 rounded-lg border border-stone-200 px-3 text-sm font-bold"
+                className="min-h-10 flex-1 rounded-lg border border-border px-3 text-sm font-bold"
               />
               <button
                 type="button"
@@ -208,13 +208,13 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         </ul>
       </div>
 
-      <div className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="text-lg font-black text-stone-950">{t(lang, "floorEditorTables")}</h2>
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "floorEditorTables")}</h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <select
             value={newTableAreaId}
             onChange={(e) => setNewTableAreaId(e.target.value)}
-            className="min-h-11 rounded-xl border border-stone-200 px-3 text-sm font-bold"
+            className="min-h-11 rounded-xl border border-border px-3 text-sm font-bold"
           >
             {areas.map((a) => (
               <option key={a.id} value={a.id}>
@@ -226,7 +226,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
             value={newTableLabel}
             onChange={(e) => setNewTableLabel(e.target.value)}
             placeholder={t(lang, "floorEditorTablePh")}
-            className="min-h-11 rounded-xl border border-stone-200 px-3 text-sm"
+            className="min-h-11 rounded-xl border border-border px-3 text-sm"
           />
           <button
             type="button"
@@ -247,11 +247,11 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
               <h3 className="text-sm font-black text-waka-900">{area.name}</h3>
               <ul className="mt-2 space-y-2">
                 {areaTables.map((tbl) => (
-                  <li key={tbl.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-stone-100 p-2">
+                  <li key={tbl.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-2">
                     <input
                       defaultValue={tbl.label}
                       onBlur={(e) => updateDiningTable(tbl.id, { label: e.target.value })}
-                      className="min-h-10 w-28 rounded-lg border border-stone-200 px-2 text-sm font-bold"
+                      className="min-h-10 w-28 rounded-lg border border-border px-2 text-sm font-bold"
                     />
                     <input
                       type="number"
@@ -259,7 +259,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
                       onBlur={(e) =>
                         updateDiningTable(tbl.id, { capacity: Math.max(1, Number(e.target.value) || 4) })
                       }
-                      className="min-h-10 w-16 rounded-lg border border-stone-200 px-2 text-sm"
+                      className="min-h-10 w-16 rounded-lg border border-border px-2 text-sm"
                       aria-label={t(lang, "openTableGuests")}
                     />
                     <button
@@ -281,20 +281,20 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         })}
       </div>
 
-      <div className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="text-lg font-black text-stone-950">{t(lang, "floorSetupStations")}</h2>
-        <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "floorSetupStationsSub")}</p>
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "floorSetupStations")}</h2>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "floorSetupStationsSub")}</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <input
             value={newStationName}
             onChange={(e) => setNewStationName(e.target.value)}
             placeholder={t(lang, "floorEditorStationPh")}
-            className="min-h-11 rounded-xl border border-stone-200 px-3 text-sm"
+            className="min-h-11 rounded-xl border border-border px-3 text-sm"
           />
           <select
             value={newStationType}
             onChange={(e) => setNewStationType(e.target.value as KitchenStationType)}
-            className="min-h-11 rounded-xl border border-stone-200 px-3 text-sm font-bold"
+            className="min-h-11 rounded-xl border border-border px-3 text-sm font-bold"
           >
             {KITCHEN_STATION_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -316,16 +316,16 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         </div>
         <ul className="mt-4 space-y-2">
           {stations.map((st) => (
-            <li key={st.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-stone-50 p-3">
+            <li key={st.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-muted p-3">
               <input
                 defaultValue={st.name}
                 onBlur={(e) => updateKitchenStation(st.id, { name: e.target.value })}
-                className="min-h-10 flex-1 rounded-lg border border-stone-200 px-3 text-sm font-bold"
+                className="min-h-10 flex-1 rounded-lg border border-border px-3 text-sm font-bold"
               />
               <select
                 defaultValue={st.stationType}
                 onChange={(e) => updateKitchenStation(st.id, { stationType: e.target.value as KitchenStationType })}
-                className="min-h-10 rounded-lg border border-stone-200 px-2 text-sm font-bold"
+                className="min-h-10 rounded-lg border border-border px-2 text-sm font-bold"
               >
                 {KITCHEN_STATION_TYPES.map((type) => (
                   <option key={type} value={type}>
@@ -356,21 +356,21 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         </ul>
       </div>
 
-      <div className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="text-lg font-black text-stone-950">{t(lang, "waiterSectionsTitle")}</h2>
-        <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "waiterSectionsSub")}</p>
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "waiterSectionsTitle")}</h2>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "waiterSectionsSub")}</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <input
             value={newSectionName}
             onChange={(e) => setNewSectionName(e.target.value)}
             placeholder={t(lang, "waiterSectionNamePh")}
-            className="min-h-11 rounded-xl border border-stone-200 px-3 text-sm"
+            className="min-h-11 rounded-xl border border-border px-3 text-sm"
           />
           <input
             value={newSectionWaiter}
             onChange={(e) => setNewSectionWaiter(e.target.value)}
             placeholder={t(lang, "waiterSectionWaiterPh")}
-            className="min-h-11 rounded-xl border border-stone-200 px-3 text-sm"
+            className="min-h-11 rounded-xl border border-border px-3 text-sm"
           />
           <button
             type="button"
@@ -394,7 +394,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         </div>
         <ul className="mt-4 space-y-2">
           {waiterSections.map((sec) => (
-            <li key={sec.id} className="rounded-xl bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700">
+            <li key={sec.id} className="rounded-xl bg-muted px-3 py-2 text-sm font-semibold text-muted-foreground">
               {sec.name} · {sec.waiterLabel} · {sec.tableIds.length} tables
             </li>
           ))}

@@ -139,12 +139,12 @@ export function MonthlyReportsPanel({ lang }: Props) {
     <div className="space-y-6">
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      <label className="block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <span className="text-sm font-bold text-stone-700">{t(lang, "monthlyReportPickMonth")}</span>
+      <label className="block rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <span className="text-sm font-bold text-muted-foreground">{t(lang, "monthlyReportPickMonth")}</span>
         <select
           value={monthKey}
           onChange={(e) => setMonthKey(e.target.value)}
-          className="mt-2 min-h-[48px] w-full rounded-xl border-2 border-stone-200 px-3 text-base font-bold"
+          className="mt-2 min-h-[48px] w-full rounded-xl border-2 border-border px-3 text-base font-bold"
         >
           {months.map((m) => (
             <option key={m} value={m}>
@@ -155,9 +155,9 @@ export function MonthlyReportsPanel({ lang }: Props) {
       </label>
 
       <section className="rounded-3xl border border-waka-100 bg-waka-50/50 p-5">
-        <p className="text-sm font-bold text-stone-600">{t(lang, "monthlyReportPreview")}</p>
+        <p className="text-sm font-bold text-muted-foreground">{t(lang, "monthlyReportPreview")}</p>
         <p className="mt-2 text-2xl font-black text-waka-950">UGX {report.totalSalesUgx.toLocaleString()}</p>
-        <p className="text-sm font-semibold text-stone-700">
+        <p className="text-sm font-semibold text-muted-foreground">
           {t(lang, "monthlyReportTransactions")}: {report.transactionCount}
           {canProfit ? (
             <>
@@ -180,7 +180,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
         <button
           type="button"
           onClick={printReport}
-          className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-white py-3 text-sm font-black text-waka-900"
+          className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-card py-3 text-sm font-black text-waka-900"
         >
           {t(lang, "monthlyReportPrint")}
         </button>
@@ -188,7 +188,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
           type="button"
           disabled={busy}
           onClick={() => void downloadExcel()}
-          className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-white py-3 text-sm font-black text-waka-900 disabled:opacity-50"
+          className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-card py-3 text-sm font-black text-waka-900 disabled:opacity-50"
         >
           {t(lang, "monthlyReportDownloadExcel")}
         </button>
@@ -196,7 +196,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
           type="button"
           disabled={busy}
           onClick={() => void downloadWord()}
-          className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800 disabled:opacity-50"
+          className="min-h-[48px] rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground disabled:opacity-50"
         >
           {t(lang, "monthlyReportDownloadWord")}
         </button>
@@ -204,7 +204,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
           type="button"
           disabled={busy}
           onClick={() => void downloadCsv()}
-          className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800 sm:col-span-2 disabled:opacity-50"
+          className="min-h-[48px] rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground sm:col-span-2 disabled:opacity-50"
         >
           {t(lang, "monthlyReportDownloadCsv")}
         </button>
@@ -213,13 +213,13 @@ export function MonthlyReportsPanel({ lang }: Props) {
       <button
         type="button"
         onClick={() => void shareText()}
-        className="min-h-[44px] w-full rounded-2xl border border-stone-200 py-2.5 text-sm font-bold text-stone-700"
+        className="min-h-[44px] w-full rounded-2xl border border-border py-2.5 text-sm font-bold text-muted-foreground"
       >
         {t(lang, "monthlyReportCopyText")}
       </button>
 
       {toast ? (
-        <p className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-4 right-4 z-50 rounded-2xl bg-stone-900 px-4 py-3 text-center text-sm font-semibold text-white shadow-lg">
+        <p className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-4 right-4 z-50 rounded-2xl bg-foreground px-4 py-3 text-center text-sm font-semibold text-background shadow-lg">
           {toast}
         </p>
       ) : null}

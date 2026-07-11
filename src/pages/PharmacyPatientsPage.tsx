@@ -56,8 +56,8 @@ export function PharmacyPatientsPage({ lang }: { lang: Language }) {
     <EnterprisePageContainer className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyTerm_patients")}</h1>
-          <p className="mt-1 text-base font-medium text-stone-500">{t(lang, "pharmacyPatientListSub")}</p>
+          <h1 className="text-3xl font-black text-foreground">{t(lang, "pharmacyTerm_patients")}</h1>
+          <p className="mt-1 text-base font-medium text-muted-foreground">{t(lang, "pharmacyPatientListSub")}</p>
         </div>
         <button
           type="button"
@@ -123,18 +123,18 @@ export function PharmacyPatientsPage({ lang }: { lang: Language }) {
               <li key={c.id}>
                 <Link
                   to={`/pharmacy/patients/${c.id}`}
-                  className="flex min-h-[120px] flex-col justify-between rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm transition-waka hover:border-teal-300 touch-manipulation"
+                  className="flex min-h-[120px] flex-col justify-between rounded-3xl border border-border bg-card p-4 shadow-waka-sm transition-waka hover:border-teal-300 touch-manipulation"
                 >
                   <div>
-                    <p className="text-lg font-black text-stone-950">{c.name}</p>
-                    <p className="text-xs font-bold text-stone-500">
+                    <p className="text-lg font-black text-foreground">{c.name}</p>
+                    <p className="text-xs font-bold text-muted-foreground">
                       {patientDisplayId(c)}
                       {c.phone ? ` · ${c.phone}` : ""}
                     </p>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs font-black">
                     {age != null ? (
-                      <span className="rounded-full bg-stone-100 px-2 py-0.5 text-stone-700">{age} yrs</span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{age} yrs</span>
                     ) : null}
                     {(c.rxCount ?? 0) > 0 ? (
                       <span className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-900">{c.rxCount} Rx</span>

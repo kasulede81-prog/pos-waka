@@ -79,20 +79,20 @@ export function ShopConsoleDeveloperTab({ ctx }: Props) {
         >
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-2">
-              <dt className="font-bold text-stone-500">{t(lang, "internalShopProfileSyncPending")}</dt>
+              <dt className="font-bold text-muted-foreground">{t(lang, "internalShopProfileSyncPending")}</dt>
               <dd className="font-mono font-black">{detail.sync_health.pending_outbound}</dd>
             </div>
             <div className="flex justify-between gap-2">
-              <dt className="font-bold text-stone-500">{t(lang, "internalShopProfileSyncLastPull")}</dt>
-              <dd className="font-mono text-xs text-stone-700">
+              <dt className="font-bold text-muted-foreground">{t(lang, "internalShopProfileSyncLastPull")}</dt>
+              <dd className="font-mono text-xs text-muted-foreground">
                 {detail.sync_health.last_pull_at
                   ? new Date(detail.sync_health.last_pull_at).toLocaleString("en-GB")
                   : "—"}
               </dd>
             </div>
             <div className="flex justify-between gap-2">
-              <dt className="font-bold text-stone-500">{t(lang, "internalShopProfileSyncLastPush")}</dt>
-              <dd className="font-mono text-xs text-stone-700">
+              <dt className="font-bold text-muted-foreground">{t(lang, "internalShopProfileSyncLastPush")}</dt>
+              <dd className="font-mono text-xs text-muted-foreground">
                 {detail.sync_health.last_push_ok_at
                   ? new Date(detail.sync_health.last_push_ok_at).toLocaleString("en-GB")
                   : "—"}
@@ -208,7 +208,7 @@ export function ShopConsoleDeveloperTab({ ctx }: Props) {
               </ResponsiveDataTable>
             </div>
           ) : (
-            <p className="mt-3 text-xs text-stone-500">
+            <p className="mt-3 text-xs text-muted-foreground">
               No mismatches in imported diagnostics. Table vs snapshot: {detail.product_count_table ?? "—"} /{" "}
               {detail.product_count_snapshot ?? "—"}
             </p>
@@ -222,7 +222,7 @@ export function ShopConsoleDeveloperTab({ ctx }: Props) {
           onChange={(e) => loadImport(e.target.value)}
           rows={5}
           placeholder="Paste owner JSON export (pilot, cloud trust, production certification, startup, recovery, sync health…)"
-          className="w-full rounded-xl border border-stone-200 px-3 py-2 font-mono text-xs"
+          className="w-full rounded-xl border border-border px-3 py-2 font-mono text-xs"
         />
         <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-bold text-teal-900">
           <Upload className="h-4 w-4" aria-hidden />
@@ -263,7 +263,7 @@ export function ShopConsoleDeveloperTab({ ctx }: Props) {
             <button
               type="button"
               disabled={busy}
-              className="min-h-[44px] rounded-xl bg-stone-900 px-4 text-xs font-black text-white disabled:opacity-40"
+              className="min-h-[44px] rounded-xl bg-foreground px-4 text-xs font-black text-background disabled:opacity-40"
               onClick={() =>
                 void executeAction("admin_force_sync", () => adminShopResetSync(detail.shop.id), {
                   permitted: canSupport,
@@ -275,7 +275,7 @@ export function ShopConsoleDeveloperTab({ ctx }: Props) {
             <button
               type="button"
               disabled={busy}
-              className="min-h-[44px] rounded-xl border border-stone-300 px-4 text-xs font-black disabled:opacity-40"
+              className="min-h-[44px] rounded-xl border border-border px-4 text-xs font-black disabled:opacity-40"
               onClick={() =>
                 void executeAction("admin_force_logout", () => adminShopForceLogoutDevices(detail.shop.id), {
                   permitted: canSupport,

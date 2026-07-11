@@ -22,7 +22,7 @@ export function PosMinimizedCheckoutFab({
 }: Props) {
   if (variant === "mobile") {
     return (
-      <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[48] border-t border-stone-200/90 bg-white/98 px-3 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur-md">
+      <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[48] border-t border-border/90 bg-white/98 px-3 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-800">
@@ -34,7 +34,7 @@ export function PosMinimizedCheckoutFab({
               ) : null}
             </span>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-stone-600">
+              <p className="text-xs font-bold text-muted-foreground">
                 {productCount} {t(lang, "posCartProductsShort").toLowerCase()}
               </p>
               <p className="truncate text-lg font-black leading-tight text-teal-900">
@@ -60,7 +60,7 @@ export function PosMinimizedCheckoutFab({
       <button
         type="button"
         onClick={onOpen}
-        className="pointer-events-auto flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-2xl border border-teal-300 bg-white px-4 py-2.5 text-sm font-black text-teal-900 shadow-lg active:bg-teal-50"
+        className="pointer-events-auto flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-2xl border border-teal-300 bg-card px-4 py-2.5 text-sm font-black text-teal-900 shadow-lg active:bg-teal-50"
       >
         <span className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-teal-700 px-2 text-xs font-black text-white">
           {productCount}

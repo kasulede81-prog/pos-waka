@@ -50,11 +50,11 @@ export function RefundBreakdownPanel({ lang, breakdown, compact = false, details
   }
 
   return (
-    <div className={`rounded-2xl border border-stone-200 bg-stone-50/90 p-3 text-sm ${detailsOnly ? "mt-2" : "mt-3"}`}>
+    <div className={`rounded-2xl border border-border bg-muted/90 p-3 text-sm ${detailsOnly ? "mt-2" : "mt-3"}`}>
       {!detailsOnly ? (
         <>
-          <p className="font-black text-stone-900">{breakdown.productName}</p>
-          <p className="mt-0.5 text-xs font-semibold text-stone-600">
+          <p className="font-black text-foreground">{breakdown.productName}</p>
+          <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
             {tTemplate(lang, "refundBreakdownQtyReturning", {
               sold: breakdown.quantitySoldLabel ?? String(breakdown.quantitySold),
               returning: breakdown.quantityReturningLabel ?? String(breakdown.quantityReturning),
@@ -65,13 +65,13 @@ export function RefundBreakdownPanel({ lang, breakdown, compact = false, details
       <dl className={`space-y-1 ${detailsOnly ? "" : "mt-2"}`}>
         {rows.map((row) => (
           <div key={row.label} className="flex justify-between gap-2 text-xs">
-            <dt className="font-semibold text-stone-600">{row.label}</dt>
-            <dd className={row.bold ? "font-black text-stone-900" : "font-bold text-stone-800"}>{row.value}</dd>
+            <dt className="font-semibold text-muted-foreground">{row.label}</dt>
+            <dd className={row.bold ? "font-black text-foreground" : "font-bold text-foreground"}>{row.value}</dd>
           </div>
         ))}
       </dl>
       {!detailsOnly && !compact ? (
-        <div className="mt-2 border-t border-stone-200 pt-2">
+        <div className="mt-2 border-t border-border pt-2">
           <div className="flex justify-between gap-2">
             <span className="text-xs font-black uppercase tracking-wide text-amber-900">
               {t(lang, "refundBreakdownRefundAmount")}

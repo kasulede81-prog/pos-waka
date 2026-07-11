@@ -19,9 +19,9 @@ function fmt(iso: string | null, lang: Language): string {
 
 function Row({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className={`flex flex-wrap justify-between gap-2 rounded-xl px-3 py-2 ${warn ? "bg-amber-50" : "bg-stone-50"}`}>
-      <dt className="font-semibold text-stone-600">{label}</dt>
-      <dd className={`text-right font-black ${warn ? "text-amber-950" : "text-stone-900"}`}>{value}</dd>
+    <div className={`flex flex-wrap justify-between gap-2 rounded-xl px-3 py-2 ${warn ? "bg-amber-50" : "bg-muted"}`}>
+      <dt className="font-semibold text-muted-foreground">{label}</dt>
+      <dd className={`text-right font-black ${warn ? "text-amber-950" : "text-foreground"}`}>{value}</dd>
     </div>
   );
 }
@@ -64,15 +64,15 @@ export function SyncHealthDashboard({ lang, lazy = false, defaultExpanded = !laz
 
   if (lazy && !expanded) {
     return (
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
         <button
           type="button"
           onClick={() => setExpanded(true)}
           className="flex w-full items-center justify-between gap-3 text-left"
         >
           <div>
-            <h2 className="text-lg font-black text-stone-950">{t(lang, "syncDiagnosticsTitle")}</h2>
-            <p className="mt-1 text-sm text-stone-500">Tap to load queue and pull diagnostics.</p>
+            <h2 className="text-lg font-black text-foreground">{t(lang, "syncDiagnosticsTitle")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Tap to load queue and pull diagnostics.</p>
           </div>
           <span className="text-xs font-black uppercase text-waka-700">{t(lang, "systemHealthSectionShow")}</span>
         </button>
@@ -81,24 +81,24 @@ export function SyncHealthDashboard({ lang, lazy = false, defaultExpanded = !laz
   }
 
   return (
-    <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+    <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-black text-stone-950">{t(lang, "syncDiagnosticsTitle")}</h2>
-          <p className="mt-1 text-sm text-stone-500">Queue, inventory, audit, recovery, and pull diagnostics.</p>
+          <h2 className="text-lg font-black text-foreground">{t(lang, "syncDiagnosticsTitle")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Queue, inventory, audit, recovery, and pull diagnostics.</p>
         </div>
         <button
           type="button"
           disabled={busy}
           onClick={() => void refresh()}
-          className="rounded-xl border border-stone-300 px-3 py-2 text-xs font-black text-stone-800 disabled:opacity-50"
+          className="rounded-xl border border-border px-3 py-2 text-xs font-black text-foreground disabled:opacity-50"
         >
           {busy ? "…" : "Refresh"}
         </button>
       </div>
 
       {!snap ? (
-        <p className="mt-4 text-sm text-stone-500">Loading…</p>
+        <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
       ) : (
         <dl className="mt-4 space-y-2 text-sm">
           <Row label="Queue size" value={String(snap.queueSize)} warn={snap.queueSize > 0} />

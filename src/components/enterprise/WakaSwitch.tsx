@@ -1,19 +1,15 @@
 import clsx from "clsx";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { themeUi } from "../../lib/themeTokens";
 
 type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "role" | "type" | "onChange"> & {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   label?: ReactNode;
   description?: ReactNode;
-  /** Full-row tap target (default true). */
   row?: boolean;
 };
 
-/**
- * Accessible enterprise toggle — replaces raw checkbox switches in settings.
- * Touch target ≥44px when `row` is true.
- */
 export function WakaSwitch({
   checked,
   onCheckedChange,
@@ -37,8 +33,8 @@ export function WakaSwitch({
       onClick={() => onCheckedChange(!checked)}
       className={clsx(
         "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-400 focus-visible:ring-offset-2",
-        checked ? "bg-waka-600" : "bg-stone-300",
+        themeUi.focusRing,
+        checked ? themeUi.switchTrackOn : themeUi.switchTrackOff,
         disabled && "cursor-not-allowed opacity-50",
         !row && className,
       )}
@@ -46,7 +42,8 @@ export function WakaSwitch({
     >
       <span
         className={clsx(
-          "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200",
+          "inline-block h-5 w-5 transform rounded-full transition-transform duration-200",
+          themeUi.switchThumb,
           checked ? "translate-x-[1.35rem]" : "translate-x-1",
         )}
         aria-hidden
@@ -65,8 +62,8 @@ export function WakaSwitch({
       )}
     >
       <span className="min-w-0 flex-1">
-        {label ? <span className="block text-sm font-bold text-stone-900">{label}</span> : null}
-        {description ? <span className="mt-0.5 block text-xs font-medium text-stone-500">{description}</span> : null}
+        {label ? <span className="block text-sm font-bold text-foreground">{label}</span> : null}
+        {description ? <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{description}</span> : null}
       </span>
       {track}
     </label>

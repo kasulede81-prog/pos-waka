@@ -61,13 +61,13 @@ export function VerifyAgentPage({ lang }: Props) {
   const inactive = result != null && !result.isActive;
 
   return (
-    <div className="min-h-dvh bg-gradient-to-b from-waka-50 via-stone-50 to-white text-stone-900">
-      <header className="border-b border-stone-200/80 bg-white/90 px-4 py-4 backdrop-blur">
+    <div className="min-h-dvh bg-gradient-to-b from-waka-50 via-stone-50 to-card text-foreground">
+      <header className="border-b border-border/80 bg-white/90 px-4 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-md items-center gap-3">
           <WakaSymbolIcon size="xs" className="h-10 w-10 shrink-0" />
           <div>
             <p className="text-xs font-black uppercase tracking-widest text-waka-700">{WAKA_MAIN_PRODUCT}</p>
-            <p className="text-sm font-bold text-stone-600">{t(lang, "agentVerifyPageTitle")}</p>
+            <p className="text-sm font-bold text-muted-foreground">{t(lang, "agentVerifyPageTitle")}</p>
           </div>
         </div>
       </header>
@@ -75,21 +75,21 @@ export function VerifyAgentPage({ lang }: Props) {
       <main className="mx-auto max-w-md px-4 py-6 pb-12">
         {loading ? (
           <div className="flex min-h-[40vh] items-center justify-center">
-            <p className="text-sm font-semibold text-stone-500">{t(lang, "agentVerifyLoading")}</p>
+            <p className="text-sm font-semibold text-muted-foreground">{t(lang, "agentVerifyLoading")}</p>
           </div>
         ) : null}
 
         {notFound ? (
-          <article className="rounded-3xl border border-rose-200 bg-white p-6 text-center shadow-waka-sm">
+          <article className="rounded-3xl border border-rose-200 bg-card p-6 text-center shadow-waka-sm">
             <ShieldAlert className="mx-auto h-12 w-12 text-rose-600" aria-hidden />
-            <h1 className="mt-4 text-xl font-black text-stone-950">{t(lang, "agentVerifyNotFoundTitle")}</h1>
-            <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "agentVerifyNotFoundSub")}</p>
-            <p className="mt-4 font-mono text-sm font-bold uppercase tracking-widest text-stone-400">{agentId}</p>
+            <h1 className="mt-4 text-xl font-black text-foreground">{t(lang, "agentVerifyNotFoundTitle")}</h1>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "agentVerifyNotFoundSub")}</p>
+            <p className="mt-4 font-mono text-sm font-bold uppercase tracking-widest text-muted-foreground">{agentId}</p>
           </article>
         ) : null}
 
         {result ? (
-          <article className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-waka-sm">
+          <article className="overflow-hidden rounded-3xl border border-border bg-card shadow-waka-sm">
             {inactive ? (
               <div className="border-b border-rose-200 bg-rose-600 px-5 py-4 text-center">
                 <p className="text-base font-black text-white">{t(lang, "agentVerifyNotActive")}</p>
@@ -103,18 +103,18 @@ export function VerifyAgentPage({ lang }: Props) {
 
             <div className="space-y-5 p-5">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-stone-400">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                   {t(lang, "agentVerifyAgentName")}
                 </p>
-                <p className="mt-1 text-2xl font-black text-stone-950">{result.agentName}</p>
+                <p className="mt-1 text-2xl font-black text-foreground">{result.agentName}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-stone-100 bg-stone-50 px-3 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+                <div className="rounded-2xl border border-border bg-muted px-3 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
                     {t(lang, "agentVerifyAgentId")}
                   </p>
-                  <p className="mt-1 font-mono text-sm font-black uppercase tracking-wider text-stone-900">
+                  <p className="mt-1 font-mono text-sm font-black uppercase tracking-wider text-foreground">
                     {result.referralCode}
                   </p>
                 </div>
@@ -134,17 +134,17 @@ export function VerifyAgentPage({ lang }: Props) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-stone-100 bg-stone-50 px-3 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+                <div className="rounded-2xl border border-border bg-muted px-3 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
                     {t(lang, "agentVerifyIssueDate")}
                   </p>
-                  <p className="mt-1 text-sm font-bold text-stone-900">{formatVerifyDate(result.issuedAt, lang)}</p>
+                  <p className="mt-1 text-sm font-bold text-foreground">{formatVerifyDate(result.issuedAt, lang)}</p>
                 </div>
-                <div className="rounded-2xl border border-stone-100 bg-stone-50 px-3 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+                <div className="rounded-2xl border border-border bg-muted px-3 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
                     {t(lang, "agentVerifyExpiryDate")}
                   </p>
-                  <p className="mt-1 text-sm font-bold text-stone-900">{formatVerifyDate(result.expiresAt, lang)}</p>
+                  <p className="mt-1 text-sm font-bold text-foreground">{formatVerifyDate(result.expiresAt, lang)}</p>
                 </div>
               </div>
 
@@ -172,7 +172,7 @@ export function VerifyAgentPage({ lang }: Props) {
           </article>
         ) : null}
 
-        <p className="mt-8 text-center text-xs font-medium text-stone-500">
+        <p className="mt-8 text-center text-xs font-medium text-muted-foreground">
           {t(lang, "agentVerifyFooter")}{" "}
           <Link to="/home" className="font-bold text-waka-700 underline">
             {WAKA_MAIN_PRODUCT}

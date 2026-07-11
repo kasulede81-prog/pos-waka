@@ -46,7 +46,7 @@ export function OfficeHubSectionTile({
         <span
           className={clsx(
             "absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide",
-            isBold ? "bg-white/20 text-white" : "bg-stone-900/10 text-stone-600",
+            isBold ? "bg-white/20 text-white" : "bg-foreground/10 text-muted-foreground",
           )}
           aria-hidden
         >
@@ -54,7 +54,7 @@ export function OfficeHubSectionTile({
         </span>
       ) : null}
       {section.hidden && isArrange ? (
-        <span className="absolute left-1.5 top-1.5 rounded-full bg-stone-800/80 px-1.5 py-0.5 text-[9px] font-bold text-white">
+        <span className="absolute left-1.5 top-1.5 rounded-full bg-foreground/80 px-1.5 py-0.5 text-[9px] font-bold text-background">
           {t(lang, "homeMenuTileHidden")}
         </span>
       ) : null}

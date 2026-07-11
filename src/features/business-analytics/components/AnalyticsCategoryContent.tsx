@@ -43,10 +43,10 @@ export type AnalyticsSectionProps = {
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <article className="min-w-0 rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{label}</p>
-      <p className={clsx("mt-1 text-xl font-black text-stone-950", KPI_VALUE_CLASS)}>{value}</p>
-      {hint ? <p className="mt-1 text-[11px] font-semibold text-stone-500">{hint}</p> : null}
+    <article className="min-w-0 rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={clsx("mt-1 text-xl font-black text-foreground", KPI_VALUE_CLASS)}>{value}</p>
+      {hint ? <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{hint}</p> : null}
     </article>
   );
 }
@@ -141,11 +141,11 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
             rows={props.weakProducts.map((p, i) => ({ id: `w-${i}`, label: p.name, value: formatShortUgx(p.revenueUgx) }))}
           />
         ) : null}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-black text-stone-950">{t(lang, "stockRemainingHint")}</h3>
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <h3 className="text-sm font-black text-foreground">{t(lang, "stockRemainingHint")}</h3>
           <ul className="mt-3 space-y-2">
             {props.products.slice(0, 12).map((p) => (
-              <li key={p.id} className="flex justify-between text-sm font-medium text-stone-700">
+              <li key={p.id} className="flex justify-between text-sm font-medium text-muted-foreground">
                 <span className="truncate">{p.name}</span>
                 <span className="shrink-0 tabular-nums">
                   {p.stockOnHand} {p.baseUnit}

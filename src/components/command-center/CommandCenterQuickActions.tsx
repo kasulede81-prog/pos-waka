@@ -35,8 +35,8 @@ const ACTIONS: Action[] = [
 
 export function CommandCenterQuickActions({ lang }: Props) {
   return (
-    <section className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "cmdCenterQuickActionsTitle")}</h2>
+    <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm">
+      <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterQuickActionsTitle")}</h2>
       <ul className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-4">
         {ACTIONS.map((action) => (
           <li key={action.labelKey}>
@@ -47,7 +47,7 @@ export function CommandCenterQuickActions({ lang }: Props) {
               <span className={clsx("flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm", action.bg)}>
                 <action.icon className="h-5 w-5" aria-hidden />
               </span>
-              <span className="text-center text-[10px] font-bold leading-tight text-stone-700">{t(lang, action.labelKey)}</span>
+              <span className="text-center text-[10px] font-bold leading-tight text-muted-foreground">{t(lang, action.labelKey)}</span>
             </Link>
           </li>
         ))}

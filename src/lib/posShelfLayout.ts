@@ -326,7 +326,7 @@ export function shelfColorClasses(color: PosShelfColor, featured: boolean): stri
     case "purple":
       return `${bold} bg-gradient-to-br from-violet-500 to-violet-700 shadow-[0_6px_20px_rgba(124,58,237,0.38)] ${ring}`;
     default:
-      return `border-stone-200/90 bg-gradient-to-br from-white to-stone-50 text-stone-950 shadow-sm ${featured ? "ring-2 ring-stone-200/80" : ""}`;
+      return `border-border/90 bg-gradient-to-br from-white to-muted text-foreground shadow-sm ${featured ? "ring-2 ring-border/80" : ""}`;
   }
 }
 
@@ -388,7 +388,7 @@ export function shelfIconCircleClass(color: PosShelfColor): string {
     case "purple":
       return "bg-violet-100 text-violet-700";
     default:
-      return "bg-stone-100 text-stone-700";
+      return "bg-muted text-muted-foreground";
   }
 }
 

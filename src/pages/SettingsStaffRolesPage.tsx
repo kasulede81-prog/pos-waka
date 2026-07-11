@@ -6,7 +6,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { usePosStore } from "../store/usePosStore";
 import { StaffRolesCenter, countStaffWithCustomRole } from "../components/staff/StaffRolesCenter";
-import { PrimaryDeviceGate } from "../components/device/ManagedByPrimaryDevice";
+import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
 
 export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -21,7 +21,7 @@ export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <PrimaryDeviceGate lang={lang}>
+    <DeviceApprovedGate lang={lang}>
       <div className="space-y-5 pb-8">
         <SettingsPageHeader
           lang={lang}
@@ -40,6 +40,6 @@ export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
           onCloneRole={(roleId, name) => cloneCustomStaffRole({ kind: "custom", id: roleId }, name)}
         />
       </div>
-    </PrimaryDeviceGate>
+    </DeviceApprovedGate>
   );
 }

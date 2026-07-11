@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { themeUi } from "../../lib/themeTokens";
 
 export type EnterpriseListToolbarProps = {
   lang: Language;
@@ -57,8 +58,8 @@ function ToolbarButton({
         primary
           ? "border-waka-600 bg-waka-600 text-white shadow-sm"
           : active
-            ? "border-waka-300 bg-waka-50 text-waka-800"
-            : "border-stone-200 bg-white text-stone-700",
+            ? "border-waka-300 bg-business-muted text-waka-800"
+            : "border-border bg-card text-foreground",
         className,
       )}
     >
@@ -107,20 +108,20 @@ export function EnterpriseListToolbar({
   return (
     <div
       className={clsx(
-        "space-y-2 rounded-2xl border border-stone-200/80 bg-white/95 p-3 shadow-sm backdrop-blur-sm",
+        "space-y-2 rounded-2xl border border-border/80 bg-card/95 p-3 shadow-sm backdrop-blur-sm",
         sticky && "sticky top-0 z-20",
         className,
       )}
     >
       {showSearch ? (
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <input
             type="search"
             value={searchQuery ?? ""}
             onChange={(e) => onSearchChange?.(e.target.value)}
             placeholder={searchPlaceholder ?? t(lang, "enterpriseSearch")}
-            className="min-h-[44px] w-full rounded-2xl border-2 border-stone-200 bg-stone-50/50 pl-10 pr-3 text-sm font-semibold outline-none focus:border-waka-500"
+            className={clsx("min-h-[44px] w-full rounded-2xl border-2 pl-10 pr-3 text-sm font-semibold", themeUi.input)}
           />
         </div>
       ) : null}

@@ -35,7 +35,7 @@ function HeaderWidget({ ctx }: DashboardWidgetProps) {
         <button
           type="button"
           onClick={ctx.exportDashboard}
-          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800 shadow-sm"
+          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground shadow-sm"
         >
           <FileDown className="h-3.5 w-3.5" aria-hidden />
           {t(ctx.lang, "cmdCenterExport")}
@@ -73,7 +73,7 @@ function ArchiveStatusWidget({ ctx }: DashboardWidgetProps) {
         />
       ) : null}
       {ctx.needsArchive && ctx.includeArchived && (ctx.archivedSalesCount ?? 0) > 0 ? (
-        <p className="text-xs font-semibold text-stone-600">{t(ctx.lang, "dateFilterArchiveIncluded")}</p>
+        <p className="text-xs font-semibold text-muted-foreground">{t(ctx.lang, "dateFilterArchiveIncluded")}</p>
       ) : null}
     </>
   );

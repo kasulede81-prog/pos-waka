@@ -28,7 +28,7 @@ export function ProtectedRoute({ initializing, isAuthenticated }: Props) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-brand-cream px-6 text-center">
         <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-waka-200 border-t-orange-600" aria-hidden />
-        <p className="text-sm font-semibold text-stone-700">Loading…</p>
+        <p className="text-sm font-semibold text-muted-foreground">Loading…</p>
       </div>
     );
   }

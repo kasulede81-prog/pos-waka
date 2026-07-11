@@ -16,7 +16,7 @@ function statusLabel(lang: Language, status: SelfDeleteHealthSnapshot["rpcStatus
 function statusClass(status: SelfDeleteHealthSnapshot["rpcStatus"]): string {
   if (status === "ok") return "text-emerald-700";
   if (status === "fail") return "text-rose-700";
-  return "text-stone-600";
+  return "text-muted-foreground";
 }
 
 type Props = {
@@ -49,17 +49,17 @@ export function SelfDeleteHealthPanel({ lang, user }: Props) {
   if (actor.role !== "owner") return null;
 
   return (
-    <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+    <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-black text-stone-950">{t(lang, "selfDeleteHealthTitle")}</h2>
-          <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "selfDeleteHealthSub")}</p>
+          <h2 className="text-lg font-black text-foreground">{t(lang, "selfDeleteHealthTitle")}</h2>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "selfDeleteHealthSub")}</p>
         </div>
         <button
           type="button"
           disabled={busy}
           onClick={() => void refresh()}
-          className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-700 disabled:opacity-50"
+          className="rounded-xl border border-border px-3 py-2 text-xs font-bold text-muted-foreground disabled:opacity-50"
         >
           {busy ? t(lang, "selfDeleteHealthChecking") : t(lang, "selfDeleteHealthRefresh")}
         </button>
@@ -67,13 +67,13 @@ export function SelfDeleteHealthPanel({ lang, user }: Props) {
 
       <dl className="mt-4 space-y-3 text-sm">
         <div className="flex flex-wrap justify-between gap-2">
-          <dt className="font-bold text-stone-600">{t(lang, "selfDeleteHealthRoute")}</dt>
+          <dt className="font-bold text-muted-foreground">{t(lang, "selfDeleteHealthRoute")}</dt>
           <dd className={`font-semibold ${snap?.routeAccessOk ? "text-emerald-700" : "text-rose-700"}`}>
             {snap?.routeAccessOk ? t(lang, "selfDeleteHealthOk") : t(lang, "selfDeleteHealthFail")}
           </dd>
         </div>
         <div className="flex flex-wrap justify-between gap-2">
-          <dt className="font-bold text-stone-600">{t(lang, "selfDeleteHealthRpc")}</dt>
+          <dt className="font-bold text-muted-foreground">{t(lang, "selfDeleteHealthRpc")}</dt>
           <dd className={`font-semibold ${statusClass(snap?.rpcStatus ?? "unknown")}`}>
             {statusLabel(lang, snap?.rpcStatus ?? "unknown")}
           </dd>
@@ -84,7 +84,7 @@ export function SelfDeleteHealthPanel({ lang, user }: Props) {
           </dd>
         ) : null}
         <div className="flex flex-wrap justify-between gap-2">
-          <dt className="font-bold text-stone-600">{t(lang, "selfDeleteHealthEdge")}</dt>
+          <dt className="font-bold text-muted-foreground">{t(lang, "selfDeleteHealthEdge")}</dt>
           <dd className={`font-semibold ${statusClass(snap?.edgeStatus ?? "unknown")}`}>
             {statusLabel(lang, snap?.edgeStatus ?? "unknown")}
           </dd>
@@ -95,7 +95,7 @@ export function SelfDeleteHealthPanel({ lang, user }: Props) {
           </dd>
         ) : null}
         <div className="flex flex-wrap justify-between gap-2">
-          <dt className="font-bold text-stone-600">{t(lang, "selfDeleteHealthReauth")}</dt>
+          <dt className="font-bold text-muted-foreground">{t(lang, "selfDeleteHealthReauth")}</dt>
           <dd className={`font-semibold ${hasRecentOwnerDeleteReauth() || snap?.reauthRecent ? "text-emerald-700" : "text-amber-700"}`}>
             {hasRecentOwnerDeleteReauth() || snap?.reauthRecent
               ? t(lang, "selfDeleteHealthReauthRecent")
@@ -103,8 +103,8 @@ export function SelfDeleteHealthPanel({ lang, user }: Props) {
           </dd>
         </div>
         <div className="flex flex-wrap justify-between gap-2">
-          <dt className="font-bold text-stone-600">{t(lang, "selfDeleteHealthDevices")}</dt>
-          <dd className={`font-semibold ${snap?.deviceCleanupReady ? "text-emerald-700" : "text-stone-600"}`}>
+          <dt className="font-bold text-muted-foreground">{t(lang, "selfDeleteHealthDevices")}</dt>
+          <dd className={`font-semibold ${snap?.deviceCleanupReady ? "text-emerald-700" : "text-muted-foreground"}`}>
             {snap?.deviceCleanupReady ? t(lang, "selfDeleteHealthReady") : t(lang, "selfDeleteHealthNotReady")}
           </dd>
         </div>

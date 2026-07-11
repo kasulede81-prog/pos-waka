@@ -52,24 +52,24 @@ export function ShopConsoleAuditTab({ ctx }: Props) {
           placeholder="Search events…"
           value={auditFilters.query}
           onChange={(e) => setRescueField("auditFilters", { ...auditFilters, query: e.target.value })}
-          className="min-h-[44px] rounded-xl border border-stone-200 px-3 text-sm"
+          className="min-h-[44px] rounded-xl border border-border px-3 text-sm"
         />
         <input
           type="date"
           value={auditFilters.dateFrom}
           onChange={(e) => setRescueField("auditFilters", { ...auditFilters, dateFrom: e.target.value })}
-          className="min-h-[44px] rounded-xl border border-stone-200 px-3 text-sm"
+          className="min-h-[44px] rounded-xl border border-border px-3 text-sm"
         />
         <input
           type="date"
           value={auditFilters.dateTo}
           onChange={(e) => setRescueField("auditFilters", { ...auditFilters, dateTo: e.target.value })}
-          className="min-h-[44px] rounded-xl border border-stone-200 px-3 text-sm"
+          className="min-h-[44px] rounded-xl border border-border px-3 text-sm"
         />
         <select
           value={auditFilters.category}
           onChange={(e) => setRescueField("auditFilters", { ...auditFilters, category: e.target.value })}
-          className="min-h-[44px] rounded-xl border border-stone-200 px-3 text-sm"
+          className="min-h-[44px] rounded-xl border border-border px-3 text-sm"
         >
           <option value="all">All categories</option>
           {["account", "sync", "billing", "support", "shop", "admin"].map((c) => (
@@ -81,7 +81,7 @@ export function ShopConsoleAuditTab({ ctx }: Props) {
         <select
           value={auditFilters.severity}
           onChange={(e) => setRescueField("auditFilters", { ...auditFilters, severity: e.target.value })}
-          className="min-h-[44px] rounded-xl border border-stone-200 px-3 text-sm"
+          className="min-h-[44px] rounded-xl border border-border px-3 text-sm"
         >
           <option value="all">All severity</option>
           {["info", "warning", "critical"].map((s) => (
@@ -92,7 +92,7 @@ export function ShopConsoleAuditTab({ ctx }: Props) {
         </select>
       </div>
       {filteredAudit.length === 0 ? (
-        <p className="text-sm font-semibold text-stone-500">No audit events match filters.</p>
+        <p className="text-sm font-semibold text-muted-foreground">No audit events match filters.</p>
       ) : (
         <ResponsiveDataTable minWidthPx={640}>
           <thead>

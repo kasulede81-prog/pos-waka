@@ -322,7 +322,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   if (isAuthenticated && !busy) {
     return (
       <BusinessBuilderShell lang={lang} setLang={setLang} funnelStep="account" unlocks={unlocks}>
-        <p className="py-12 text-center text-sm font-semibold text-stone-600">…</p>
+        <p className="py-12 text-center text-sm font-semibold text-muted-foreground">…</p>
       </BusinessBuilderShell>
     );
   }
@@ -336,18 +336,18 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
 
   return (
     <BusinessBuilderShell lang={lang} setLang={setLang} funnelStep="account" unlocks={unlocks}>
-      <div className="rounded-[28px] border border-white/80 bg-white/95 p-5 shadow-[0_16px_48px_-24px_rgba(0,0,0,0.2)] backdrop-blur-sm sm:rounded-[32px] sm:p-6">
-        <h1 className="text-2xl font-black tracking-tight text-stone-900 sm:text-3xl">
+      <div className="rounded-[28px] border border-white/80 bg-card/95 p-5 shadow-[0_16px_48px_-24px_rgba(0,0,0,0.2)] backdrop-blur-sm sm:rounded-[32px] sm:p-6">
+        <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-3xl">
           {t(lang, "registerQuickTitle")}
         </h1>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "registerQuickSub")}</p>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "registerQuickSub")}</p>
 
         {!hasSupabaseConfig ? (
           <div className="mt-6 space-y-3">
             <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
               {t(lang, "supabaseMissing")}
             </p>
-            <p className="text-sm text-stone-600">{t(lang, "supabaseRegisterHint")}</p>
+            <p className="text-sm text-muted-foreground">{t(lang, "supabaseRegisterHint")}</p>
           </div>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
@@ -355,9 +355,9 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
               <>
                 <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
                 <div className="flex items-center gap-3 py-0.5" aria-hidden>
-                  <span className="h-px flex-1 bg-stone-200" />
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-stone-400">or</span>
-                  <span className="h-px flex-1 bg-stone-200" />
+                  <span className="h-px flex-1 bg-muted" />
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">or</span>
+                  <span className="h-px flex-1 bg-muted" />
                 </div>
               </>
             ) : null}
@@ -421,7 +421,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
               ))}
             </BuilderField>
             {districts.length === 0 ? (
-              <p className="text-xs font-semibold text-stone-600">
+              <p className="text-xs font-semibold text-muted-foreground">
                 {districtsError
                   ? `${t(lang, "registerDistrictsLoadFailed")} ${districtsError}`
                   : t(lang, "registerDistrictsLoading")}
@@ -445,7 +445,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
               />
               {password ? (
                 <div className="mt-2 flex items-center gap-2">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-stone-200">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                     <div
                       className={`h-full rounded-full transition-all ${
                         pwStrength === "strong"
@@ -456,7 +456,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
                       }`}
                     />
                   </div>
-                  <span className="text-xs font-bold text-stone-500">{pwLabel}</span>
+                  <span className="text-xs font-bold text-muted-foreground">{pwLabel}</span>
                 </div>
               ) : null}
             </div>
@@ -476,7 +476,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
               complete={fieldComplete.referral && Boolean(referralCode.trim())}
               hint={t(lang, "registerReferralHint")}
             />
-            {referralValidating ? <p className="text-xs font-semibold text-stone-500">…</p> : null}
+            {referralValidating ? <p className="text-xs font-semibold text-muted-foreground">…</p> : null}
             {referralHint ? (
               <p
                 className={`text-xs font-semibold ${referralHint === t(lang, "registerReferralInvalid") ? "text-red-600" : "text-emerald-800"}`}
@@ -496,7 +496,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
           </form>
         )}
 
-        <p className="mt-6 text-center text-sm text-stone-600">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           <Link to="/login" className="font-bold text-waka-700 underline underline-offset-2">
             {t(lang, "backToLogin")}
           </Link>

@@ -30,15 +30,15 @@ export function OwnerShiftAccountabilitySection({ lang, rows, periodLabel }: Pro
   return (
     <HistoryListCard
       isEmpty={rows.length === 0}
-      empty={<p className="text-sm font-semibold text-stone-500">{t(lang, "ownerShiftEmpty")}</p>}
+      empty={<p className="text-sm font-semibold text-muted-foreground">{t(lang, "ownerShiftEmpty")}</p>}
     >
-      <div className="border-b border-stone-100 px-3 py-2.5 sm:px-4 sm:py-3">
-        <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "ownerShiftTitle")}</h2>
-        <p className="text-[11px] font-semibold text-stone-500">{periodLabel}</p>
+      <div className="border-b border-border px-3 py-2.5 sm:px-4 sm:py-3">
+        <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "ownerShiftTitle")}</h2>
+        <p className="text-[11px] font-semibold text-muted-foreground">{periodLabel}</p>
       </div>
 
       {offenders.length > 0 ? (
-        <div className="border-b border-stone-100 px-3 py-2 sm:px-4">
+        <div className="border-b border-border px-3 py-2 sm:px-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-rose-700">{t(lang, "ownerStaffRepeatOffenders")}</p>
           <ul className="mt-1 space-y-1">
             {offenders.map((row) => (
@@ -57,7 +57,7 @@ export function OwnerShiftAccountabilitySection({ lang, rows, periodLabel }: Pro
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <p className="font-black text-stone-950">{row.label}</p>
+                  <p className="font-black text-foreground">{row.label}</p>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${riskClass(row.riskTier)}`}>
                     {riskBadge(lang, row.riskTier, row.riskScore)}
                   </span>
@@ -68,35 +68,35 @@ export function OwnerShiftAccountabilitySection({ lang, rows, periodLabel }: Pro
                   ) : null}
                 </div>
               </div>
-              <p className="text-xs font-black tabular-nums text-stone-800">UGX {row.salesUgx.toLocaleString()}</p>
+              <p className="text-xs font-black tabular-nums text-foreground">UGX {row.salesUgx.toLocaleString()}</p>
             </div>
             <dl className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1 text-[11px] sm:grid-cols-4">
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffDebtCollected")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffDebtCollected")}</dt>
                 <dd className="font-black tabular-nums">{row.debtCollectedUgx.toLocaleString()}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffVoids")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffVoids")}</dt>
                 <dd className="font-black">{row.voidCount}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffReturns")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffReturns")}</dt>
                 <dd className="font-black">{row.returnCount}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffDiscounts")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffDiscounts")}</dt>
                 <dd className="font-black">{row.discountCount}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerShiftShortages")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerShiftShortages")}</dt>
                 <dd className="font-black tabular-nums text-rose-700">{row.cumulativeShortageUgx.toLocaleString()}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffFloatMismatch")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffFloatMismatch")}</dt>
                 <dd className="font-black">{row.floatMismatchCount}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffStockAdj")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffStockAdj")}</dt>
                 <dd className="font-black">{row.stockAdjustCount}</dd>
               </div>
             </dl>
@@ -105,20 +105,20 @@ export function OwnerShiftAccountabilitySection({ lang, rows, periodLabel }: Pro
       </ul>
 
       {trusted.length > 0 ? (
-        <p className="border-t border-stone-100 px-3 py-2 text-[11px] font-semibold text-emerald-800 sm:px-4">
+        <p className="border-t border-border px-3 py-2 text-[11px] font-semibold text-emerald-800 sm:px-4">
           {t(lang, "ownerStaffTopTrusted")}: {trusted.map((r) => r.label).join(", ")}
         </p>
       ) : null}
       {review.length > 0 ? (
-        <p className="border-t border-stone-100 px-3 py-2 text-[11px] font-semibold text-amber-800 sm:px-4">
+        <p className="border-t border-border px-3 py-2 text-[11px] font-semibold text-amber-800 sm:px-4">
           {t(lang, "ownerStaffNeedsReview")}: {review.map((r) => r.label).join(", ")}
         </p>
       ) : null}
 
-      <div className="border-t border-stone-100 p-3 sm:p-4">
+      <div className="border-t border-border p-3 sm:p-4">
         <Link
           to="/office/open-shifts"
-          className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-stone-200 bg-white px-4 text-xs font-black text-stone-900 sm:text-sm"
+          className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border bg-card px-4 text-xs font-black text-foreground sm:text-sm"
         >
           {t(lang, "ownerShiftViewAll")} →
         </Link>

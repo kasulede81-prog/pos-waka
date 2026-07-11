@@ -38,8 +38,8 @@ export function HorizontalTabBar({ tabs, activeId, onChange, ariaLabel, classNam
                 "touch-manipulation shrink-0 rounded-2xl border-2 px-4 py-2.5 text-sm font-black transition-colors",
                 "min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-400 focus-visible:ring-offset-2",
                 active
-                  ? "border-stone-900 bg-stone-900 text-white shadow-sm"
-                  : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50",
+                  ? "border-stone-900 bg-foreground text-background shadow-sm"
+                  : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted",
                 tab.disabled && "cursor-not-allowed opacity-40",
               )}
             >

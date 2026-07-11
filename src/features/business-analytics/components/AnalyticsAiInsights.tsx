@@ -21,12 +21,12 @@ export function AnalyticsAiInsights({ lang, insights }: Props) {
   if (insights.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-gradient-to-br from-white to-stone-50 p-4 shadow-sm">
+    <section className="rounded-2xl border border-border/90 bg-gradient-to-br from-white to-muted p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-waka-600 text-white">
           <Sparkles className="h-4 w-4" aria-hidden />
         </span>
-        <h2 className="text-sm font-black text-stone-950">{t(lang, "baAiInsightsTitle")}</h2>
+        <h2 className="text-sm font-black text-foreground">{t(lang, "baAiInsightsTitle")}</h2>
       </div>
       <div className="-mx-0.5 flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
         {insights.map((insight) => (

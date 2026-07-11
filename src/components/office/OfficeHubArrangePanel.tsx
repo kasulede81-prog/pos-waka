@@ -94,7 +94,7 @@ export function OfficeHubArrangePanel({ lang, embedded = false }: Props) {
 
   const content = (
     <div className="space-y-4">
-      <p className="text-sm font-medium text-stone-600">{t(lang, "officeMenuArrangeSub")}</p>
+      <p className="text-sm font-medium text-muted-foreground">{t(lang, "officeMenuArrangeSub")}</p>
 
       <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
         {sections.map((section, index) => (
@@ -114,8 +114,8 @@ export function OfficeHubArrangePanel({ lang, embedded = false }: Props) {
       </div>
 
       {selectedId && selectedSection && selectedDef ? (
-        <section className="space-y-3 rounded-2xl border-2 border-waka-200 bg-white p-4">
-          <p className="text-sm font-black text-stone-950">
+        <section className="space-y-3 rounded-2xl border-2 border-waka-200 bg-card p-4">
+          <p className="text-sm font-black text-foreground">
             {t(lang, "officeMenuEditHeading")}: {t(lang, selectedSection.titleKey)}
           </p>
 
@@ -123,11 +123,11 @@ export function OfficeHubArrangePanel({ lang, embedded = false }: Props) {
             checked={!selectedSection.hidden}
             onCheckedChange={(checked) => patchSelected({ hidden: !checked })}
             label={selectedSection.hidden ? t(lang, "homeMenuShowTile") : t(lang, "homeMenuHideTile")}
-            className="text-sm font-bold text-stone-800"
+            className="text-sm font-bold text-foreground"
           />
 
           <div>
-            <p className="text-xs font-bold text-stone-600">{t(lang, "homeMenuColorLabel")}</p>
+            <p className="text-xs font-bold text-muted-foreground">{t(lang, "homeMenuColorLabel")}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {COLORS.map((color) => (
                 <button
@@ -138,7 +138,7 @@ export function OfficeHubArrangePanel({ lang, embedded = false }: Props) {
                     "h-9 min-w-[3rem] rounded-xl border-2 px-2 text-xs font-black capitalize",
                     (selectedConfig?.color ?? "orange") === color && !selectedConfig?.customColor
                       ? "border-waka-600 ring-2 ring-waka-200"
-                      : "border-stone-200",
+                      : "border-border",
                   )}
                   style={{ backgroundColor: PRESET_SHELF_HEX[color === "default" ? "default" : color] }}
                 >
@@ -163,8 +163,8 @@ export function OfficeHubArrangePanel({ lang, embedded = false }: Props) {
   if (embedded) return content;
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-950">{t(lang, "officeMenuArrangeTitle")}</p>
+    <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "officeMenuArrangeTitle")}</p>
       <div className="mt-4">{content}</div>
     </article>
   );

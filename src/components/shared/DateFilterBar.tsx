@@ -24,7 +24,7 @@ export function DateFilterBar({
   onChange,
   showCustomDate = true,
   activeClassName = "border-waka-400 bg-waka-600 text-white shadow-sm",
-  inactiveClassName = "border-stone-200 bg-white text-stone-700 hover:border-waka-200 hover:bg-waka-50",
+  inactiveClassName = "border-border bg-card text-muted-foreground hover:border-waka-200 hover:bg-waka-50",
 }: Props) {
   const dateInputId = useId();
   const presetActive = value.kind === "preset" ? value.preset : null;

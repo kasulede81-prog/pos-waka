@@ -37,8 +37,8 @@ export async function processPendingStaffSync(payload: PendingStaffSyncPayload):
   const ok = await pushStaffToCloud(payload.staff);
   if (!ok) return false;
 
-  const { refreshStaffCacheAfterPrimaryMutation } = await import("./staffCacheSync");
-  await refreshStaffCacheAfterPrimaryMutation();
+  const { refreshStaffCacheAfterOwnerMutation } = await import("./staffCacheSync");
+  await refreshStaffCacheAfterOwnerMutation();
 
   const { usePosStore } = await import("../store/usePosStore");
   const staffId = payload.staff.id;
@@ -86,8 +86,8 @@ export async function createStaffInCloudFirst(
     return { ok: false, queued: true, errorKey: "staffCreateCloudRequired" };
   }
 
-  const { refreshStaffCacheAfterPrimaryMutation } = await import("./staffCacheSync");
-  await refreshStaffCacheAfterPrimaryMutation();
+  const { refreshStaffCacheAfterOwnerMutation } = await import("./staffCacheSync");
+  await refreshStaffCacheAfterOwnerMutation();
 
   const { usePosStore } = await import("../store/usePosStore");
   const confirmed = (usePosStore.getState().preferences.staffAccounts ?? []).find((a) => a.id === row.id);

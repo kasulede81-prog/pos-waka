@@ -21,10 +21,10 @@ export function OfficeNavCard({ to, title, subtitle, Icon, highlight, deemphasiz
         className={clsx(
           "relative flex min-h-[80px] flex-col justify-between gap-1 rounded-xl border p-2.5 transition active:scale-[0.99] motion-reduce:active:scale-100",
           highlight
-            ? "border-waka-300 bg-gradient-to-br from-waka-50 to-white shadow-sm"
+            ? "border-waka-300 bg-gradient-to-br from-waka-50 to-card shadow-sm"
             : deemphasized
-              ? "border-stone-100 bg-stone-50/80 shadow-none"
-              : "border-stone-200/90 bg-white shadow-sm",
+              ? "border-border bg-muted/80 shadow-none"
+              : "border-border/90 bg-card shadow-sm",
         )}
       >
         {trailing ? (
@@ -33,15 +33,15 @@ export function OfficeNavCard({ to, title, subtitle, Icon, highlight, deemphasiz
         <span
           className={clsx(
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-            highlight ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
+            highlight ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
           )}
         >
           <Icon className="h-4 w-4" strokeWidth={2.25} aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="line-clamp-2 text-xs font-black leading-tight text-stone-950">{title}</span>
+          <span className="line-clamp-2 text-xs font-black leading-tight text-foreground">{title}</span>
           {subtitle ? (
-            <span className="mt-0.5 line-clamp-1 text-[10px] font-semibold leading-snug text-stone-500">{subtitle}</span>
+            <span className="mt-0.5 line-clamp-1 text-[10px] font-semibold leading-snug text-muted-foreground">{subtitle}</span>
           ) : null}
         </span>
       </Link>

@@ -57,7 +57,7 @@ function StatCard({
       onClick={onClick}
       className={clsx(
         "flex min-h-[88px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-all",
-        highlight ? "border-waka-200 bg-gradient-to-br from-waka-50 to-waka-50/60" : "border-stone-200/90 bg-white",
+        highlight ? "border-waka-200 bg-gradient-to-br from-waka-50 to-waka-50/60" : "border-border/90 bg-card",
         warn && !highlight && "border-rose-100 bg-rose-50/40",
         onClick && "active:scale-[0.98] motion-reduce:active:scale-100",
       )}
@@ -66,18 +66,18 @@ function StatCard({
         <span
           className={clsx(
             "flex h-8 w-8 items-center justify-center rounded-xl",
-            highlight ? "bg-waka-600 text-white" : warn ? "bg-rose-100 text-rose-700" : "bg-stone-100 text-stone-600",
+            highlight ? "bg-waka-600 text-white" : warn ? "bg-rose-100 text-rose-700" : "bg-muted text-muted-foreground",
           )}
         >
           <Icon className="h-4 w-4" aria-hidden />
         </span>
-        <span className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{label}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
       </div>
       <div>
-        <p className={clsx("text-lg font-black tabular-nums", warn ? "text-rose-800" : highlight ? "text-waka-800" : "text-stone-950")}>
+        <p className={clsx("text-lg font-black tabular-nums", warn ? "text-rose-800" : highlight ? "text-waka-800" : "text-foreground")}>
           {value}
         </p>
-        {hint ? <p className="text-[10px] font-semibold text-stone-500">{hint}</p> : null}
+        {hint ? <p className="text-[10px] font-semibold text-muted-foreground">{hint}</p> : null}
       </div>
     </Tag>
   );
@@ -196,7 +196,7 @@ export function InventoryDashboardCards({
 
   return (
     <section className="space-y-2">
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-stone-500">
+      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, "iwSectionDashboard")}
       </h3>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">

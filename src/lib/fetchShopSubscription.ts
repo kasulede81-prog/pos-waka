@@ -77,7 +77,7 @@ export async function fetchActivePromotionalGrant(organizationId: string): Promi
 
 /**
  * Full snapshot for the signed-in user: real subscription row + any active
- * promotional grant. Grant priority is applied by `resolveEffectivePlanTier`.
+ * promotional grant. Effective resolution via resolveEffectiveSubscription (Phase 16.4).
  */
 export async function fetchSubscriptionSnapshotForUser(userId: string): Promise<SubscriptionSnapshot> {
   if (!supabase) return { kind: "none" };

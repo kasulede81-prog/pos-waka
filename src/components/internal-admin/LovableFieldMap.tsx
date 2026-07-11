@@ -68,17 +68,17 @@ export function LovableFieldMap({ pins }: Props) {
 
   if (!TOKEN) {
     return (
-      <div className="grid h-64 place-items-center rounded-xl border border-dashed border-stone-300 bg-stone-50 p-6 text-center text-sm text-stone-600">
-        Set <code className="rounded bg-white px-1.5 py-0.5">VITE_MAPBOX_TOKEN</code> to enable the field map.
+      <div className="grid h-64 place-items-center rounded-xl border border-dashed border-border bg-muted p-6 text-center text-sm text-muted-foreground">
+        Set <code className="rounded bg-card px-1.5 py-0.5">VITE_MAPBOX_TOKEN</code> to enable the field map.
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      <div ref={ref} className="h-96 w-full overflow-hidden rounded-xl border border-stone-200" />
+      <div ref={ref} className="h-96 w-full overflow-hidden rounded-xl border border-border" />
       {pins.length > 0 ? (
-        <p className="text-xs font-semibold text-stone-500">{pins.length} shops with GPS · tap a pin for details.</p>
+        <p className="text-xs font-semibold text-muted-foreground">{pins.length} shops with GPS · tap a pin for details.</p>
       ) : (
         <p className="text-xs font-semibold text-amber-800">No GPS pins yet — shops need location from onboarding.</p>
       )}

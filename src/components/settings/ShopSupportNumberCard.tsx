@@ -46,8 +46,8 @@ export function ShopSupportNumberCard({ lang }: Props) {
 
   if (loading) {
     return (
-      <footer className="rounded-xl border border-stone-200/80 bg-stone-50 px-4 py-3">
-        <p className="text-xs font-medium text-stone-500">{t(lang, "settingsShopIdLoading")}</p>
+      <footer className="rounded-xl border border-border/80 bg-muted px-4 py-3">
+        <p className="text-xs font-medium text-muted-foreground">{t(lang, "settingsShopIdLoading")}</p>
       </footer>
     );
   }
@@ -55,16 +55,16 @@ export function ShopSupportNumberCard({ lang }: Props) {
   if (!shopId) return null;
 
   return (
-    <footer className="rounded-xl border border-stone-200/80 bg-stone-50 px-4 py-3">
-      <p className="text-xs font-bold text-stone-700">{t(lang, "shopProfileSupportFooterTitle")}</p>
-      <p className="mt-0.5 text-xs font-medium text-stone-500">{t(lang, "shopProfileSupportFooterHint")}</p>
+    <footer className="rounded-xl border border-border/80 bg-muted px-4 py-3">
+      <p className="text-xs font-bold text-muted-foreground">{t(lang, "shopProfileSupportFooterTitle")}</p>
+      <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "shopProfileSupportFooterHint")}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-stone-600">{t(lang, "settingsShopIdTitle")}:</span>
-        <span className="font-mono text-lg font-black text-stone-900">{shopId}</span>
+        <span className="text-xs font-semibold text-muted-foreground">{t(lang, "settingsShopIdTitle")}:</span>
+        <span className="font-mono text-lg font-black text-foreground">{shopId}</span>
         <button
           type="button"
           onClick={copy}
-          className="min-h-[36px] rounded-lg border border-stone-300 bg-white px-3 text-xs font-bold text-stone-800"
+          className="min-h-[36px] rounded-lg border border-border bg-card px-3 text-xs font-bold text-foreground"
         >
           {copied ? t(lang, "settingsShopIdCopied") : t(lang, "settingsShopIdCopy")}
         </button>

@@ -57,16 +57,16 @@ export function RestockLineCard({ lang, product: p, row, onChange, onRemove }: P
       });
 
   return (
-    <li className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
+    <li className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-lg font-black text-stone-900">{p.name}</p>
-          <p className="mt-1 text-xs font-semibold text-stone-600">{buyUnitLabel}</p>
+          <p className="text-lg font-black text-foreground">{p.name}</p>
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">{buyUnitLabel}</p>
         </div>
         <button
           type="button"
           onClick={onRemove}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-stone-400 active:bg-stone-100"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
           aria-label={t(lang, "removeLine")}
         >
           <X className="h-5 w-5" />
@@ -75,18 +75,18 @@ export function RestockLineCard({ lang, product: p, row, onChange, onRemove }: P
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="text-xs font-bold uppercase tracking-wide text-stone-500">
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
             {tTemplate(lang, "restockQtyBoughtLabel", { unitPlural: buyUnitPlural })}
           </span>
           <input
             value={row.qtyBuyingStr}
             onChange={(e) => onChange({ qtyBuyingStr: e.target.value.replace(/[^\d.]/g, "").slice(0, 8) })}
             inputMode="decimal"
-            className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-stone-200 px-3 text-xl font-black text-stone-900"
+            className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-border px-3 text-xl font-black text-foreground"
           />
         </label>
         <label className="block">
-          <span className="text-xs font-bold uppercase tracking-wide text-stone-500">
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
             {tTemplate(lang, "restockPricePerBuyingUnitLabel", { buyUnit })}
           </span>
           <input
@@ -94,13 +94,13 @@ export function RestockLineCard({ lang, product: p, row, onChange, onRemove }: P
             onChange={(e) => onChange({ costPerBuyingStr: e.target.value.replace(/\D/g, "").slice(0, 12) })}
             inputMode="numeric"
             placeholder="0"
-            className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-stone-200 px-3 text-xl font-black text-stone-900"
+            className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-border px-3 text-xl font-black text-foreground"
           />
         </label>
       </div>
 
       {qty > 0 ? (
-        <p className="mt-2 text-xs font-semibold text-stone-500">
+        <p className="mt-2 text-xs font-semibold text-muted-foreground">
           {tTemplate(lang, "restockAddedPreview", {
             adds: addsShown,
             baseUnitPlural,

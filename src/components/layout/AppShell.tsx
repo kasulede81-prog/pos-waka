@@ -64,6 +64,7 @@ import { resolveTerminalHomePath } from "../../lib/terminalHome";
 import { isPosSellPath } from "../../lib/posSellExit";
 import { AppThemeToggle } from "../ui/AppThemeToggle";
 import { EnterpriseScrollControls } from "../enterprise/EnterpriseScrollControls";
+import { PwaUpdateBanner } from "../app-update/AppUpdateControls";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -109,7 +110,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const setPosLocked = usePosStore((s) => s.setPosLocked);
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const shifts = usePosStore((s) => s.preferences.shifts);
-  const [pwaUpdate, setPwaUpdate] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useAndroidBackHandler("app-menu-drawer", ANDROID_BACK_PRIORITY.menuDrawer, menuOpen, () => setMenuOpen(false));
   const [lockSetupHint, setLockSetupHint] = useState<string | null>(null);
@@ -123,12 +123,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const [shopMemberRole, setShopMemberRole] = useState<UserRole | null>(null);
   const [roleReady, setRoleReady] = useState(() => authMode !== "supabase" || !user?.id);
   const userMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onUp = () => setPwaUpdate(true);
-    window.addEventListener("waka:pwa-update", onUp);
-    return () => window.removeEventListener("waka:pwa-update", onUp);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -301,8 +295,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     <SessionActorProvider value={actor}>
       <div
         className={clsx(
-          "app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden text-stone-900 transition-colors duration-300",
-          isLauncherHome ? "bg-gradient-to-b from-waka-500 via-waka-50 to-white" : "bg-stone-50",
+          "app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden text-foreground transition-colors duration-300",
+          isLauncherHome ? "bg-gradient-to-b from-waka-500 via-waka-50 to-card" : "bg-muted",
           onSellScreen && "app-shell--sell-focus",
           fullDesktopSell && "app-shell--pos-enterprise",
           isLauncherHome && "app-shell--launcher",
@@ -310,18 +304,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           bottomChrome.shellClass,
         )}
       >
-        {pwaUpdate ? (
-          <div className="z-40 shrink-0 border-b border-waka-200 bg-waka-50 px-3 py-2 text-center shadow-sm">
-            <p className="text-sm font-bold text-waka-950">{t(lang, "pwaUpdateTitle")}</p>
-            <button
-              type="button"
-              className="mt-1 rounded-full bg-waka-600 px-4 py-1.5 text-xs font-black text-white"
-              onClick={() => window.location.reload()}
-            >
-              {t(lang, "pwaUpdateCta")}
-            </button>
-          </div>
-        ) : null}
+        <PwaUpdateBanner lang={lang} />
         {pilotActive ? <PilotModeBanner lang={lang} /> : null}
         {!fullDesktopSell ? (
         <header
@@ -330,8 +313,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             isLauncherHome
               ? "border-waka-700/30 bg-waka-600/95 text-white supports-[backdrop-filter]:bg-waka-600/90"
               : onSellScreen && !isDesktopLayout
-                ? "border-stone-200/80 bg-gradient-to-b from-waka-50/90 via-white to-white supports-[backdrop-filter]:from-waka-50/80"
-                : "border-stone-200/90 bg-white/95 supports-[backdrop-filter]:bg-white/90",
+                ? "border-border/80 bg-gradient-to-b from-waka-50/90 via-card to-card supports-[backdrop-filter]:from-waka-50/80"
+                : "border-border/90 bg-card/95 supports-[backdrop-filter]:bg-card/90",
           )}
         >
           <div
@@ -351,7 +334,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               {onSellScreen && !isDesktopLayout ? null : <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />}
               <div className="min-w-0">
                 {onSellScreen && !isDesktopLayout ? (
-                  <h1 className="truncate text-base font-black tracking-tight text-stone-950 sm:text-lg">
+                  <h1 className="truncate text-base font-black tracking-tight text-foreground sm:text-lg">
                     {t(lang, sellNavLabelKey)}
                   </h1>
                 ) : (
@@ -374,14 +357,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     "flex min-h-[38px] max-w-[12rem] touch-manipulation items-center gap-1.5 truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm sm:max-w-[14rem]",
                     isLauncherHome
                       ? "border-waka-400/50 bg-waka-700/50 text-white active:bg-waka-700"
-                      : "border-stone-200 bg-white text-stone-800 active:bg-stone-50",
+                      : "border-border bg-card text-foreground active:bg-muted",
                   )}
                 >
                   <span className="truncate">{actor.displayName ?? actor.role}</span>
                   <ChevronDown
                     className={clsx(
                       "h-3.5 w-3.5 shrink-0 transition-transform",
-                      isLauncherHome ? "text-waka-100" : "text-stone-500",
+                      isLauncherHome ? "text-waka-100" : "text-muted-foreground",
                       menuOpen && "rotate-180",
                     )}
                     aria-hidden
@@ -390,7 +373,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 {menuOpen ? (
                   <div
                     role="menu"
-                    className="absolute right-0 top-[calc(100%+0.35rem)] z-50 w-52 origin-top-right rounded-xl border border-stone-200 bg-white py-1 shadow-lg ring-1 ring-stone-900/5"
+                    className="absolute right-0 top-[calc(100%+0.35rem)] z-50 w-52 origin-top-right rounded-xl border border-border bg-card py-1 shadow-lg ring-1 ring-foreground/5"
                   >
                     <button
                       type="button"
@@ -400,8 +383,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       className={clsx(
                         "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold",
                         canSwitchUser
-                          ? "text-stone-800 hover:bg-stone-50"
-                          : "cursor-not-allowed text-stone-400",
+                          ? "text-foreground hover:bg-muted"
+                          : "cursor-not-allowed text-muted-foreground",
                       )}
                       onClick={() => {
                         if (!canSwitchUser) return;
@@ -411,7 +394,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     >
                       {t(lang, "userMenuSwitchUser")}
                       {!canSwitchUser ? (
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                           {t(lang, "userMenuComingSoon")}
                         </span>
                       ) : null}
@@ -419,7 +402,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     <button
                       type="button"
                       role="menuitem"
-                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
                       onClick={() => {
                         requestPosLock();
                         setMenuOpen(false);
@@ -430,7 +413,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     <button
                       type="button"
                       role="menuitem"
-                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
                       onClick={() => {
                         setMenuOpen(false);
                         navigate("/office/account", { preventScrollReset: true });
@@ -441,7 +424,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     <button
                       type="button"
                       role="menuitem"
-                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
                       onClick={() => {
                         setMenuOpen(false);
                         navigate("/settings/appearance", { preventScrollReset: true });
@@ -462,7 +445,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                         {t(lang, "userMenuDeleteAccount")}
                       </button>
                     ) : null}
-                    <div className="my-1 border-t border-stone-100" />
+                    <div className="my-1 border-t border-border" />
                     <button
                       type="button"
                       role="menuitem"
@@ -470,7 +453,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                         setMenuOpen(false);
                         void onSignOut();
                       }}
-                      className="mx-2 mb-1 block w-[calc(100%-1rem)] rounded-lg bg-stone-900 px-3 py-2.5 text-center text-sm font-semibold text-white hover:bg-stone-800"
+                      className="mx-2 mb-1 block w-[calc(100%-1rem)] rounded-lg bg-foreground px-3 py-2.5 text-center text-sm font-semibold text-background hover:bg-foreground"
                     >
                       {t(lang, "userMenuLogout")}
                     </button>
@@ -484,7 +467,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   "min-h-[38px] max-w-[7.5rem] truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm",
                   isLauncherHome
                     ? "border-waka-400/50 bg-waka-700/50 text-white active:bg-waka-700"
-                    : "border-stone-200 bg-white text-stone-800 active:bg-stone-50",
+                    : "border-border bg-card text-foreground active:bg-muted",
                 )}
                 aria-label={t(lang, "langEnglish")}
               >
@@ -497,7 +480,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         {showBackOfficeSearch ? (
           <div
             className={clsx(
-              "relative z-10 shrink-0 border-b border-stone-200/80 bg-white/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-white/90 sm:px-4",
+              "relative z-10 shrink-0 border-b border-border/80 bg-card/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/90 sm:px-4",
               desktopTerminalMode || desktopTerminalHome || independentModule || isLauncherHome ? "lg:px-8 xl:px-10" : "",
             )}
           >
@@ -604,10 +587,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           />
         ) : null}
         {staffSwitchShiftOpen ? (
-          <AppModalOverlay className="z-[125] flex items-center justify-center bg-stone-950/85 p-4">
-            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-              <p className="text-xl font-black text-stone-900">{t(lang, "staffSwitchShiftTitle")}</p>
-              <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "staffSwitchShiftBody")}</p>
+          <AppModalOverlay className="z-[125] flex items-center justify-center bg-overlay/85 p-4">
+            <div className="w-full max-w-md rounded-3xl bg-card p-6 shadow-2xl">
+              <p className="text-xl font-black text-foreground">{t(lang, "staffSwitchShiftTitle")}</p>
+              <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "staffSwitchShiftBody")}</p>
               <div className="mt-5 grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -652,10 +635,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           }}
         />
         {lockSetupHint ? (
-          <AppModalOverlay className="z-[115] flex items-center justify-center bg-stone-950/70 p-4">
-            <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
-              <p className="text-lg font-black text-stone-900">{t(lang, "lockPos")}</p>
-              <p className="mt-2 text-sm font-medium text-stone-600">{lockSetupHint}</p>
+          <AppModalOverlay className="z-[115] flex items-center justify-center bg-overlay/70 p-4">
+            <div className="w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
+              <p className="text-lg font-black text-foreground">{t(lang, "lockPos")}</p>
+              <p className="mt-2 text-sm font-medium text-muted-foreground">{lockSetupHint}</p>
               <button
                 type="button"
                 className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"

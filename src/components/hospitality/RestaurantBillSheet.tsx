@@ -157,18 +157,18 @@ export function RestaurantBillSheet({
       title={
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-xl font-black text-stone-950">{t(lang, "restaurantBillTitle")}</h2>
+            <h2 className="text-xl font-black text-foreground">{t(lang, "restaurantBillTitle")}</h2>
             <p className="mt-1 text-lg font-black text-waka-700">{tableLabel}</p>
-            <p className="text-xs font-bold text-stone-500">
+            <p className="text-xs font-bold text-muted-foreground">
               {areaName ? `${areaName} · ` : ""}
               {session.guestCount} {t(lang, "tableOrderGuests")}
               {session.waiterLabel ? ` · ${session.waiterLabel}` : ""}
             </p>
-            <p className="text-xs font-medium text-stone-400">
+            <p className="text-xs font-medium text-muted-foreground">
               {t(lang, "restaurantBillOpened")}: {openedAt}
             </p>
           </div>
-          <button type="button" className="min-h-[44px] shrink-0 px-2 text-sm font-bold text-stone-500" onClick={onClose} disabled={busy || localBusy}>
+          <button type="button" className="min-h-[44px] shrink-0 px-2 text-sm font-bold text-muted-foreground" onClick={onClose} disabled={busy || localBusy}>
             {t(lang, "cancel")}
           </button>
         </div>
@@ -197,11 +197,11 @@ export function RestaurantBillSheet({
         </div>
       }
     >
-      <section className="mb-4 rounded-2xl border border-stone-100 bg-stone-50 p-3">
-        <p className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "restaurantBillItems")}</p>
+      <section className="mb-4 rounded-2xl border border-border bg-muted p-3">
+        <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "restaurantBillItems")}</p>
         <ul className="max-h-40 space-y-2 overflow-y-auto">
           {lines.map((line) => (
-            <li key={line.id ?? line.productId} className="flex justify-between gap-2 text-sm font-bold text-stone-800">
+            <li key={line.id ?? line.productId} className="flex justify-between gap-2 text-sm font-bold text-foreground">
               <span className="min-w-0 truncate">
                 {line.name}
                 {line.seatNumber ? ` · ${t(lang, "restaurantBillSeat")} ${line.seatNumber}` : ""}
@@ -214,8 +214,8 @@ export function RestaurantBillSheet({
         </ul>
       </section>
 
-      <div className="mb-4 space-y-1 rounded-2xl border border-stone-100 bg-white p-3 text-sm font-bold">
-        <div className="flex justify-between text-stone-600">
+      <div className="mb-4 space-y-1 rounded-2xl border border-border bg-card p-3 text-sm font-bold">
+        <div className="flex justify-between text-muted-foreground">
           <span>{t(lang, "subtotal")}</span>
           <span>{formatUgx(totals.listSubtotalUgx)}</span>
         </div>
@@ -226,7 +226,7 @@ export function RestaurantBillSheet({
           </div>
         ) : null}
         {totals.serviceChargeUgx > 0 ? (
-          <div className="flex justify-between text-stone-600">
+          <div className="flex justify-between text-muted-foreground">
             <span>
               {t(lang, "restaurantBillServiceCharge")} ({totals.serviceChargePercent}%)
             </span>
@@ -234,18 +234,18 @@ export function RestaurantBillSheet({
           </div>
         ) : null}
         {totals.taxUgx > 0 ? (
-          <div className="flex justify-between text-stone-600">
+          <div className="flex justify-between text-muted-foreground">
             <span>{t(lang, "restaurantBillTax")}</span>
             <span>{formatUgx(totals.taxUgx)}</span>
           </div>
         ) : null}
         {totals.tipUgx > 0 ? (
-          <div className="flex justify-between text-stone-600">
+          <div className="flex justify-between text-muted-foreground">
             <span>{t(lang, "restaurantBillTip")}</span>
             <span>{formatUgx(totals.tipUgx)}</span>
           </div>
         ) : null}
-        <div className="flex justify-between border-t border-stone-100 pt-2 text-base font-black text-stone-950">
+        <div className="flex justify-between border-t border-border pt-2 text-base font-black text-foreground">
           <span>{t(lang, "grandTotal")}</span>
           <span>{formatUgx(totals.grandTotalUgx)}</span>
         </div>
@@ -262,10 +262,10 @@ export function RestaurantBillSheet({
       </div>
 
       <div className="mb-4 grid grid-cols-3 gap-2">
-        <button type="button" onClick={onSplit} className="min-h-11 rounded-xl border border-stone-200 bg-white text-xs font-black text-stone-800">
+        <button type="button" onClick={onSplit} className="min-h-11 rounded-xl border border-border bg-card text-xs font-black text-foreground">
           {t(lang, "splitBillBtn")}
         </button>
-        <button type="button" onClick={onPreview} className="min-h-11 rounded-xl border border-stone-200 bg-white text-xs font-black text-stone-800">
+        <button type="button" onClick={onPreview} className="min-h-11 rounded-xl border border-border bg-card text-xs font-black text-foreground">
           {t(lang, "restaurantBillPreview")}
         </button>
         <button
@@ -273,7 +273,7 @@ export function RestaurantBillSheet({
           onClick={() => {
             setPayAmount(String(totals.remainingBalanceUgx || ""));
           }}
-          className="min-h-11 rounded-xl border border-stone-200 bg-white text-xs font-black text-stone-800"
+          className="min-h-11 rounded-xl border border-border bg-card text-xs font-black text-foreground"
         >
           {t(lang, "restaurantBillPayFull")}
         </button>
@@ -281,7 +281,7 @@ export function RestaurantBillSheet({
 
       {billDraft.splits.length > 0 ? (
         <div className="mb-4 space-y-2">
-          <p className="text-xs font-black uppercase text-stone-500">{t(lang, "restaurantBillPaySplit")}</p>
+          <p className="text-xs font-black uppercase text-muted-foreground">{t(lang, "restaurantBillPaySplit")}</p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -291,7 +291,7 @@ export function RestaurantBillSheet({
               }}
               className={clsx(
                 "min-h-10 rounded-lg border px-3 text-xs font-black",
-                !selectedSplitId ? "border-waka-500 bg-waka-50" : "border-stone-200",
+                !selectedSplitId ? "border-waka-500 bg-waka-50" : "border-border",
               )}
             >
               {t(lang, "restaurantBillPayMaster")}
@@ -308,7 +308,7 @@ export function RestaurantBillSheet({
                   }}
                   className={clsx(
                     "min-h-10 rounded-lg border px-3 text-xs font-black",
-                    selectedSplitId === s.id ? "border-waka-500 bg-waka-50" : "border-stone-200",
+                    selectedSplitId === s.id ? "border-waka-500 bg-waka-50" : "border-border",
                     owed <= 0 && "opacity-50",
                   )}
                   disabled={owed <= 0}
@@ -318,7 +318,7 @@ export function RestaurantBillSheet({
               );
             })}
           </div>
-          <ul className="space-y-1 rounded-xl bg-waka-50 px-3 py-2 text-xs font-bold text-stone-700">
+          <ul className="space-y-1 rounded-xl bg-waka-50 px-3 py-2 text-xs font-bold text-muted-foreground">
             {billDraft.splits.map((s) => (
               <li key={s.id ?? s.label} className="flex justify-between">
                 <span>{s.label}</span>
@@ -331,15 +331,15 @@ export function RestaurantBillSheet({
         </div>
       ) : null}
 
-      <section className="mb-4 rounded-2xl border border-stone-100 p-3">
-        <p className="mb-2 text-sm font-black text-stone-800">{t(lang, "restaurantBillAdjustments")}</p>
+      <section className="mb-4 rounded-2xl border border-border p-3">
+        <p className="mb-2 text-sm font-black text-foreground">{t(lang, "restaurantBillAdjustments")}</p>
         <label className="mb-2 block">
-          <span className="text-xs font-bold text-stone-600">{t(lang, "restaurantBillServiceCharge")} %</span>
+          <span className="text-xs font-bold text-muted-foreground">{t(lang, "restaurantBillServiceCharge")} %</span>
           <input
             value={serviceChargePct}
             onChange={(e) => setServiceChargePct(e.target.value.replace(/[^\d.]/g, ""))}
             onBlur={applyBillAdjustments}
-            className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 px-3 text-sm font-black"
+            className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-black"
           />
         </label>
         <div className="mb-2 grid grid-cols-4 gap-1">
@@ -353,7 +353,7 @@ export function RestaurantBillSheet({
               }}
               className={clsx(
                 "min-h-10 rounded-lg border text-[10px] font-black sm:text-xs",
-                tipMode === m ? "border-waka-500 bg-waka-50" : "border-stone-200",
+                tipMode === m ? "border-waka-500 bg-waka-50" : "border-border",
               )}
             >
               {t(lang, `restaurantBillTip_${m}`)}
@@ -366,13 +366,13 @@ export function RestaurantBillSheet({
             onChange={(e) => setTipValue(e.target.value.replace(/[^\d.]/g, ""))}
             onBlur={applyBillAdjustments}
             placeholder={tipMode === "percent" ? "%" : "UGX"}
-            className="min-h-[44px] w-full rounded-xl border border-stone-200 px-3 text-sm font-black"
+            className="min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-black"
           />
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-stone-100 p-3">
-        <p className="mb-2 text-sm font-black text-stone-800">{t(lang, "restaurantBillPayment")}</p>
+      <section className="rounded-2xl border border-border p-3">
+        <p className="mb-2 text-sm font-black text-foreground">{t(lang, "restaurantBillPayment")}</p>
         <div className="mb-3 grid grid-cols-3 gap-1">
           {PAYMENT_METHODS.map((m) => (
             <button
@@ -381,7 +381,7 @@ export function RestaurantBillSheet({
               onClick={() => setPayMethod(m)}
               className={clsx(
                 "min-h-10 rounded-lg border text-[10px] font-black sm:text-xs",
-                payMethod === m ? "border-waka-500 bg-waka-50 text-waka-950" : "border-stone-200 text-stone-700",
+                payMethod === m ? "border-waka-500 bg-waka-50 text-waka-950" : "border-border text-muted-foreground",
               )}
             >
               {t(lang, `paymentMethod_${m}`)}
@@ -389,27 +389,27 @@ export function RestaurantBillSheet({
           ))}
         </div>
         <label className="mb-2 block">
-          <span className="text-xs font-bold text-stone-600">{t(lang, "restaurantBillPayAmount")}</span>
+          <span className="text-xs font-bold text-muted-foreground">{t(lang, "restaurantBillPayAmount")}</span>
           <input
             value={payAmount}
             onChange={(e) => setPayAmount(e.target.value.replace(/[^\d]/g, ""))}
             inputMode="numeric"
             placeholder={formatUgx(splitOwedUgx)}
-            className="mt-1 min-h-[48px] w-full rounded-xl border border-stone-200 px-4 text-xl font-black"
+            className="mt-1 min-h-[48px] w-full rounded-xl border border-border px-4 text-xl font-black"
           />
         </label>
         {(payMethod === "mobile_money" || payMethod === "voucher" || payMethod === "atm" || payMethod === "card") && (
           <label className="block">
-            <span className="text-xs font-bold text-stone-600">{t(lang, "restaurantBillReference")}</span>
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "restaurantBillReference")}</span>
             <input
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 px-3 text-sm font-bold"
+              className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-bold"
             />
           </label>
         )}
         {billDraft.payments.length > 0 ? (
-          <ul className="mt-3 space-y-1 text-xs font-bold text-stone-600">
+          <ul className="mt-3 space-y-1 text-xs font-bold text-muted-foreground">
             {billDraft.payments.map((p) => (
               <li key={p.id} className="flex justify-between">
                 <span>{t(lang, `paymentMethod_${p.method}`)}</span>

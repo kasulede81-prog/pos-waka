@@ -321,8 +321,8 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     return (
       <div className={`flex min-h-dvh flex-col items-center justify-center gap-4 ${STARTUP_SCREEN_BG} px-6 py-[max(2rem,env(safe-area-inset-top))]`}>
         <div className="max-w-sm space-y-4 rounded-3xl border-2 border-amber-100 bg-amber-50/90 p-8 shadow-waka-sm">
-          <p className="text-xl font-black text-stone-900">{t(lang, "localDataError")}</p>
-          <p className="text-base font-medium leading-relaxed text-stone-700">{t(lang, "localDataErrorHint")}</p>
+          <p className="text-xl font-black text-foreground">{t(lang, "localDataError")}</p>
+          <p className="text-base font-medium leading-relaxed text-muted-foreground">{t(lang, "localDataErrorHint")}</p>
           <StartupEscapeActions
             lang={lang}
             onRetry={handleRetryStartup}

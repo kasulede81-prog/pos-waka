@@ -27,8 +27,8 @@ export function LineNotesSheet({ lang, open, lineName, initialNotes, initialCour
       zIndexClass="z-[66]"
       title={
         <div>
-          <h2 className="text-lg font-black text-stone-950">{t(lang, "lineNotesTitle")}</h2>
-          <p className="text-sm font-bold text-stone-600">{lineName}</p>
+          <h2 className="text-lg font-black text-foreground">{t(lang, "lineNotesTitle")}</h2>
+          <p className="text-sm font-bold text-muted-foreground">{lineName}</p>
         </div>
       }
       footer={
@@ -42,21 +42,21 @@ export function LineNotesSheet({ lang, open, lineName, initialNotes, initialCour
       }
     >
       <label className="mb-4 block">
-        <span className="text-sm font-bold text-stone-700">{t(lang, "lineNotesLabel")}</span>
+        <span className="text-sm font-bold text-muted-foreground">{t(lang, "lineNotesLabel")}</span>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
           placeholder={t(lang, "lineNotesPlaceholder")}
-          className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-medium"
+          className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm font-medium"
         />
       </label>
-      <p className="mb-2 text-sm font-black text-stone-800">{t(lang, "lineNotesCourse")}</p>
+      <p className="mb-2 text-sm font-black text-foreground">{t(lang, "lineNotesCourse")}</p>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setCourse(null)}
-          className={`min-h-10 rounded-xl border px-3 text-xs font-black ${course === null ? "border-waka-500 bg-waka-50" : "border-stone-200"}`}
+          className={`min-h-10 rounded-xl border px-3 text-xs font-black ${course === null ? "border-waka-500 bg-waka-50" : "border-border"}`}
         >
           {t(lang, "lineNotesCourseDefault")}
         </button>
@@ -65,7 +65,7 @@ export function LineNotesSheet({ lang, open, lineName, initialNotes, initialCour
             key={c}
             type="button"
             onClick={() => setCourse(c)}
-            className={`min-h-10 rounded-xl border px-3 text-xs font-black ${course === c ? "border-waka-500 bg-waka-50" : "border-stone-200"}`}
+            className={`min-h-10 rounded-xl border px-3 text-xs font-black ${course === c ? "border-waka-500 bg-waka-50" : "border-border"}`}
           >
             {t(lang, hospitalityCourseLabelKey(c))}
           </button>

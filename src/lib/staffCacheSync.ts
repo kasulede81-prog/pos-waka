@@ -1,6 +1,6 @@
 /**
  * Phase 3 — versioned staff distribution from cloud to encrypted offline cache.
- * Secondary devices: download-only terminals. Primary: cache mirrors cloud after mutations.
+ * Approved devices download and refresh staff cache after cloud mutations.
  */
 
 import type { Permission, StaffAccount, UserRole } from "../types";
@@ -17,7 +17,6 @@ import {
 } from "./offlineStaffCache";
 import { logStaffCacheEvent } from "./staffCacheDiagnostics";
 import type { CloudStaffRow } from "./shopStaffCloud";
-import type { DeviceAuthorityContext } from "./deviceAuthority";
 
 export type StaffDownloadResult = {
   unchanged: boolean;
@@ -161,21 +160,9 @@ export async function isStaffCacheUpToDate(shopId: string): Promise<boolean> {
   return cloudVersion != null && localVersion >= cloudVersion;
 }
 
-export async function isSecondaryStaffTerminal(
-  deviceAuthority?: DeviceAuthorityContext | null,
-): Promise<boolean> {
-  const { ENFORCE_PRIMARY_DEVICE } = await import("./deviceAuthorityPolicy");
-  if (!ENFORCE_PRIMARY_DEVICE) return false;
-  const device =
-    deviceAuthority ??
-    (await (async () => {
-      const { fetchDeviceAuthorityContext } = await import("./deviceAuthority");
-      const ctx = await resolveShopCtx();
-      if (!ctx) return null;
-      return fetchDeviceAuthorityContext(ctx.shopId);
-    })());
-  if (!device?.primaryDeviceFingerprint) return false;
-  return !device.isPrimary;
+/** After cloud staff mutation, force cache refresh. */
+export async function refreshStaffCacheAfterOwnerMutation(): Promise<void> {
+  await refreshStaffCacheBackground({ force: true });
 }
 
 /**
@@ -244,11 +231,4 @@ export function scheduleStaffCacheProvisioning(): void {
       void refreshStaffCacheBackground({ force: false });
     }, 500);
   });
-}
-
-/** Primary-only: after cloud staff mutation, force cache refresh. */
-export async function refreshStaffCacheAfterPrimaryMutation(): Promise<void> {
-  const secondary = await isSecondaryStaffTerminal();
-  if (secondary) return;
-  await refreshStaffCacheBackground({ force: true });
 }

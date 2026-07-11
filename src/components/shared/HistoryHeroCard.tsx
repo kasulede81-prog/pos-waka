@@ -112,7 +112,7 @@ export function HistoryHeroCard({
         />
       ) : null}
       {bottomSection ? (
-        <div className="border-t border-white/20 bg-white text-stone-900">{bottomSection}</div>
+        <div className="border-t border-white/20 bg-card text-foreground">{bottomSection}</div>
       ) : null}
     </div>
   );

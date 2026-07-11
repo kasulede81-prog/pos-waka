@@ -143,8 +143,8 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
 
   if (!hospitality) {
     return (
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center">
-        <p className="text-sm font-medium text-stone-600">{t(lang, "hospitalityNotEnabled")}</p>
+      <div className="rounded-2xl border border-border bg-card p-6 text-center">
+        <p className="text-sm font-medium text-muted-foreground">{t(lang, "hospitalityNotEnabled")}</p>
       </div>
     );
   }
@@ -258,11 +258,11 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-stone-200">
-      <div className="shrink-0 border-b border-stone-300 bg-stone-100 px-2 py-1.5">
+    <div className="flex min-h-0 flex-1 flex-col bg-muted">
+      <div className="shrink-0 border-b border-border bg-muted px-2 py-1.5">
         <HospitalityOpsStatusStrip lang={lang} />
       </div>
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-stone-400 bg-stone-300 px-2 py-1.5">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-stone-400 bg-border px-2 py-1.5">
         <div className="flex min-w-0 flex-1 gap-0 overflow-x-auto">
           {areas.map((area) => (
             <button
@@ -275,8 +275,8 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
               className={clsx(
                 "shrink-0 border border-stone-400 px-4 py-2 text-xs font-black uppercase tracking-wide sm:px-6 sm:text-sm",
                 activeAreaId === area.id
-                  ? "bg-white text-stone-900 shadow-sm"
-                  : "bg-stone-200 text-stone-600 hover:bg-stone-100",
+                  ? "bg-card text-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted",
               )}
             >
               {area.name}
@@ -288,7 +288,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             <button
               type="button"
               onClick={() => navigate("/settings/floor")}
-              className="flex min-h-9 min-w-9 items-center justify-center rounded border border-stone-400 bg-white text-stone-700"
+              className="flex min-h-9 min-w-9 items-center justify-center rounded border border-stone-400 bg-card text-muted-foreground"
               aria-label={t(lang, "floorSetupTitle")}
             >
               <Settings className="h-4 w-4" />
@@ -298,7 +298,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             <button
               type="button"
               onClick={() => setManagerToolsOpen(true)}
-              className="flex min-h-9 items-center gap-1 rounded border border-stone-400 bg-white px-2 text-xs font-bold text-stone-700"
+              className="flex min-h-9 items-center gap-1 rounded border border-stone-400 bg-card px-2 text-xs font-bold text-muted-foreground"
             >
               <Wrench className="h-3.5 w-3.5" />
             </button>
@@ -316,7 +316,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         </ul>
       ) : null}
 
-      <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-stone-300 bg-white px-2 py-2 lg:hidden">
+      <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-card px-2 py-2 lg:hidden">
         {(
           [
             { id: "all" as const, labelKey: "floorFilterAll" },
@@ -331,7 +331,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             onClick={() => setViewFilter(f.id)}
             className={clsx(
               "min-h-[44px] shrink-0 rounded-lg px-3 text-xs font-bold",
-              viewFilter === f.id ? "bg-sky-700 text-white" : "bg-stone-100 text-stone-700",
+              viewFilter === f.id ? "bg-sky-700 text-white" : "bg-muted text-muted-foreground",
             )}
           >
             {t(lang, f.labelKey)}
@@ -340,7 +340,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-stone-100 p-3 sm:p-4">
+        <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-muted p-3 sm:p-4">
           <div className={clsx("grid gap-2 sm:gap-3", FLOOR_GRID_CLASS[floorDisplayPrefs.gridDensity])}>
             {tables.map((table) => {
               const session = floor ? activeSessionForTable(floor, table.id) : undefined;
@@ -385,12 +385,12 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         onStats={() => navigate("/owner-dashboard")}
       />
 
-      <div className="flex shrink-0 flex-col gap-2 border-t border-stone-300 bg-white px-3 py-2">
+      <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-black text-stone-950">{t(lang, "floorNamedTabsTitle")}</h2>
+            <h2 className="text-sm font-black text-foreground">{t(lang, "floorNamedTabsTitle")}</h2>
             {pendingTotal > 0 ? (
-              <p className="text-xs font-medium text-stone-500">
+              <p className="text-xs font-medium text-muted-foreground">
                 {t(lang, "floorOpenTotal").replace("{amount}", formatUgx(pendingTotal))}
               </p>
             ) : null}
@@ -409,7 +409,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
               <button
                 type="button"
                 onClick={() => navigate("/kitchen")}
-                className="min-h-9 rounded border border-stone-300 px-3 text-xs font-bold"
+                className="min-h-9 rounded border border-border px-3 text-xs font-bold"
               >
                 {t(lang, "floorKitchenLink")}
               </button>
@@ -417,7 +417,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             <button
               type="button"
               onClick={() => navigate("/pos")}
-              className="min-h-9 rounded border border-stone-300 px-3 text-xs font-bold"
+              className="min-h-9 rounded border border-border px-3 text-xs font-bold"
             >
               {t(lang, "floorTakeaway")}
             </button>
@@ -561,15 +561,15 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
 
       {seatWaitlistEntry && !openSheetTable ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-xl">
             <h2 className="text-lg font-black">{t(lang, "waitlistSeatTitle")}</h2>
-            <p className="mt-1 text-sm text-stone-600">{seatWaitlistEntry.name} · {seatWaitlistEntry.guestCount} guests</p>
+            <p className="mt-1 text-sm text-muted-foreground">{seatWaitlistEntry.name} · {seatWaitlistEntry.guestCount} guests</p>
             <ul className="mt-3 space-y-2">
               {suggestTablesForGuests({ guestCount: seatWaitlistEntry.guestCount, isVip: seatWaitlistEntry.priority === "vip" }).map((s) => (
                 <li key={s.tableIds.join("-")}>
                   <button
                     type="button"
-                    className="w-full rounded-xl border border-stone-200 px-3 py-2 text-left text-sm font-bold"
+                    className="w-full rounded-xl border border-border px-3 py-2 text-left text-sm font-bold"
                     onClick={() => {
                       setOpenSheetTableId(s.tableIds[0]!);
                     }}
@@ -589,22 +589,22 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
 
       {newTabOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-md rounded-3xl bg-card p-5 shadow-xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-xl font-black text-stone-950">{t(lang, "floorNewTabTitle")}</h2>
-                <p className="text-sm font-medium text-stone-500">{t(lang, "floorNamedTabsSub")}</p>
+                <h2 className="text-xl font-black text-foreground">{t(lang, "floorNewTabTitle")}</h2>
+                <p className="text-sm font-medium text-muted-foreground">{t(lang, "floorNamedTabsSub")}</p>
               </div>
-              <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setNewTabOpen(false)}>
+              <button type="button" className="text-sm font-bold text-muted-foreground" onClick={() => setNewTabOpen(false)}>
                 {t(lang, "cancel")}
               </button>
             </div>
             <label className="mb-4 block">
-              <span className="mb-1 block text-sm font-bold text-stone-700">{t(lang, "floorTabLabel")}</span>
+              <span className="mb-1 block text-sm font-bold text-muted-foreground">{t(lang, "floorTabLabel")}</span>
               <input
                 value={tabLabel}
                 onChange={(e) => setTabLabel(e.target.value)}
-                className="w-full rounded-xl border border-stone-200 px-3 py-3 text-base"
+                className="w-full rounded-xl border border-border px-3 py-3 text-base"
                 placeholder={t(lang, "floorTabLabelPh")}
                 autoFocus
               />

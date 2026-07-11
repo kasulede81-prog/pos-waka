@@ -13,11 +13,7 @@ function HospitalityOperationsWidget({ ctx }: ReportWidgetProps) {
   );
 }
 
-function HospitalityPlaceholderWidget() {
-  return null;
-}
-
-/** Hospitality report extensions — kitchen, tables, reservations, waiters. */
+/** Hospitality reports — operations overview uses existing analytics section. */
 export const HOSPITALITY_REPORT_WIDGETS: ReportWidgetDef[] = [
   {
     id: "hospitality-operations-overview",
@@ -26,45 +22,5 @@ export const HOSPITALITY_REPORT_WIDGETS: ReportWidgetDef[] = [
     businessTypes: ["hospitality"],
     visible: (ctx) => ctx.category === "overview",
     Component: HospitalityOperationsWidget,
-  },
-  {
-    id: "hospitality-kitchen",
-    slot: "operations",
-    priority: 900,
-    businessTypes: ["hospitality"],
-    visible: () => false,
-    Component: HospitalityPlaceholderWidget,
-  },
-  {
-    id: "hospitality-tables",
-    slot: "reports",
-    priority: 900,
-    businessTypes: ["hospitality"],
-    visible: () => false,
-    Component: HospitalityPlaceholderWidget,
-  },
-  {
-    id: "hospitality-reservations",
-    slot: "operations",
-    priority: 910,
-    businessTypes: ["hospitality"],
-    visible: () => false,
-    Component: HospitalityPlaceholderWidget,
-  },
-  {
-    id: "hospitality-menu",
-    slot: "sales",
-    priority: 900,
-    businessTypes: ["hospitality"],
-    visible: () => false,
-    Component: HospitalityPlaceholderWidget,
-  },
-  {
-    id: "hospitality-waiters",
-    slot: "employees",
-    priority: 900,
-    businessTypes: ["hospitality"],
-    visible: () => false,
-    Component: HospitalityPlaceholderWidget,
   },
 ];

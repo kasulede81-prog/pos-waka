@@ -83,18 +83,11 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
 
   const {
     refreshStaffCacheBackground,
-    isSecondaryStaffTerminal,
     isStaffCacheUpToDate,
   } = await import("./staffCacheSync");
 
   const updated = await refreshStaffCacheBackground();
   if (updated) {
-    lastStaffSyncAt = now;
-    return;
-  }
-
-  const secondary = await isSecondaryStaffTerminal(opts?.deviceAuthority);
-  if (secondary) {
     lastStaffSyncAt = now;
     return;
   }

@@ -34,25 +34,25 @@ export function SyncConflictCenterPage({ lang }: Props) {
     <div className="space-y-6 pb-8">
       <PageBackBar lang={lang} fallbackTo="/settings/health" label={t(lang, "systemHealthPageTitle")} />
       <div>
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "syncConflictCenterTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "syncConflictCenterSub")}</p>
+        <h1 className="text-2xl font-black text-foreground">{t(lang, "syncConflictCenterTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "syncConflictCenterSub")}</p>
       </div>
 
       {conflicts.length === 0 ? (
-        <p className="rounded-2xl border border-stone-200 bg-white p-4 text-sm font-medium text-stone-600">
+        <p className="rounded-2xl border border-border bg-card p-4 text-sm font-medium text-muted-foreground">
           {t(lang, "syncConflictCenterEmpty")}
         </p>
       ) : (
         <ul className="space-y-3">
           {conflicts.map((row) => (
-            <li key={row.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <li key={row.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-stone-500">
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     {domainLabel(lang, row.domain)}
                   </p>
-                  <p className="mt-1 text-sm font-bold text-stone-900">{row.summary}</p>
-                  <p className="mt-1 text-xs font-medium text-stone-500">
+                  <p className="mt-1 text-sm font-bold text-foreground">{row.summary}</p>
+                  <p className="mt-1 text-xs font-medium text-muted-foreground">
                     {new Date(row.at).toLocaleString()} · {row.resolution}
                   </p>
                 </div>
@@ -60,12 +60,12 @@ export function SyncConflictCenterPage({ lang }: Props) {
                   <button
                     type="button"
                     onClick={() => handleAck(row.id)}
-                    className="min-h-[40px] rounded-xl bg-stone-900 px-4 text-sm font-bold text-white"
+                    className="min-h-[40px] rounded-xl bg-foreground px-4 text-sm font-bold text-background"
                   >
                     {t(lang, "syncConflictAcknowledge")}
                   </button>
                 ) : (
-                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-600">
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">
                     {t(lang, "syncConflictAcknowledged")}
                   </span>
                 )}
@@ -78,7 +78,7 @@ export function SyncConflictCenterPage({ lang }: Props) {
       <button
         type="button"
         onClick={handleClear}
-        className="text-sm font-bold text-stone-500 underline"
+        className="text-sm font-bold text-muted-foreground underline"
       >
         {t(lang, "syncConflictClearAcknowledged")}
       </button>

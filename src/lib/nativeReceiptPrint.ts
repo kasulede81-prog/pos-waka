@@ -1,12 +1,15 @@
-import { Capacitor } from "@capacitor/core";
-import { jsPDF } from "jspdf";
 import type { ReceiptPaperSize } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { saveExportedFile } from "./fileDownload";
 import { sanitizePdfStem } from "./pdfLayout";
 
-export function isNativePrintPlatform(): boolean {
-  return typeof Capacitor !== "undefined" && Capacitor.isNativePlatform();
+export { isNativePrintPlatform } from "./nativePrintPlatform";
+
+let jsPdfModule: Promise<typeof import("jspdf")> | undefined;
+
+async function loadJsPdf(): Promise<typeof import("jspdf").jsPDF> {
+  jsPdfModule ??= import("jspdf");
+  return (await jsPdfModule).jsPDF;
 }
 
 function thermalWidthMm(paper: ReceiptPaperSize): number {
@@ -26,7 +29,8 @@ function estimatePlainReceiptHeightMm(lineCount: number, paper: ReceiptPaperSize
 }
 
 /** Plain-text receipt as a narrow thermal PDF for Android/iOS share → Print. */
-export function buildPlainReceiptPdfBlob(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): Blob {
+export async function buildPlainReceiptPdfBlob(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): Promise<Blob> {
+  const jsPDF = await loadJsPdf();
   const widthMm = thermalWidthMm(paper);
   const marginMm = paper === "a4" ? 12 : 3;
   const lines = receiptPlain.split("\n");
@@ -70,7 +74,7 @@ export async function sharePlainReceiptForPrint(
   paper: ReceiptPaperSize = "80mm",
   filenameStem = "waka-receipt",
 ): Promise<boolean> {
-  const blob = buildPlainReceiptPdfBlob(receiptPlain, paper);
+  const blob = await buildPlainReceiptPdfBlob(receiptPlain, paper);
   return saveExportedFile(plainReceiptPdfFilename(filenameStem), blob, "application/pdf", {
     shareDialogTitle: "Share receipt",
   });

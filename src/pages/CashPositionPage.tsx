@@ -151,9 +151,9 @@ export function CashPositionPage({ lang }: { lang: Language }) {
       />
 
       <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
-      <p className="text-sm font-semibold text-stone-600">
+      <p className="text-sm font-semibold text-muted-foreground">
         {t(lang, "cashPositionPeriod")}:{" "}
-        <span className="font-black text-stone-900">{dashboard.rangeLabel}</span>
+        <span className="font-black text-foreground">{dashboard.rangeLabel}</span>
         {isStale ? (
           <span className="ml-2 text-xs font-bold text-waka-700">{t(lang, "loading")}</span>
         ) : null}

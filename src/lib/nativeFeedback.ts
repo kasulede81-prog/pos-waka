@@ -15,6 +15,20 @@ export async function hapticTap(): Promise<void> {
   }
 }
 
+/** Wrong PIN / auth failure — native only */
+export async function hapticPinError(): Promise<void> {
+  if (!native()) return;
+  try {
+    await Haptics.notification({ type: NotificationType.Error });
+  } catch {
+    try {
+      await Haptics.impact({ style: ImpactStyle.Heavy });
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 /** Stronger feedback — sale saved */
 export async function hapticSaleComplete(): Promise<void> {
   if (!native()) return;

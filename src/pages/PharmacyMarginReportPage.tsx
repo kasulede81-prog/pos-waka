@@ -63,7 +63,7 @@ export function PharmacyMarginReportPage({ lang }: Props) {
         </button>
         <button
           type="button"
-          className="min-h-[44px] rounded-2xl border-2 border-emerald-300 bg-white px-4 text-sm font-black text-emerald-900"
+          className="min-h-[44px] rounded-2xl border-2 border-emerald-300 bg-card px-4 text-sm font-black text-emerald-900"
           onClick={() => void downloadPharmacyMarginCsv(products)}
         >
           {t(lang, "pharmacyMarginExportCsv")}
@@ -77,7 +77,7 @@ export function PharmacyMarginReportPage({ lang }: Props) {
             type="button"
             onClick={() => setSort(opt.id)}
             className={`min-h-[44px] rounded-2xl px-4 text-sm font-black ${
-              sort === opt.id ? "bg-waka-600 text-white" : "border-2 border-stone-200 bg-white text-stone-800"
+              sort === opt.id ? "bg-waka-600 text-white" : "border-2 border-border bg-card text-foreground"
             }`}
           >
             {t(lang, opt.labelKey)}
@@ -86,7 +86,7 @@ export function PharmacyMarginReportPage({ lang }: Props) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-2xl bg-stone-50 px-4 py-10 text-center text-sm font-semibold text-stone-500">
+        <p className="rounded-2xl bg-muted px-4 py-10 text-center text-sm font-semibold text-muted-foreground">
           {t(lang, "pharmacyMarginReportEmpty")}
         </p>
       ) : (
@@ -94,54 +94,54 @@ export function PharmacyMarginReportPage({ lang }: Props) {
           {rows.map((row) => {
             const product = products.find((p) => p.id === row.productId);
             return (
-              <li key={row.productId} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-                <p className="text-base font-black text-stone-950">
+              <li key={row.productId} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <p className="text-base font-black text-foreground">
                   {product ? formatMedicineFullLabel(product) : row.name}
                 </p>
-                <p className="mt-1 text-xs font-semibold text-stone-500">{row.category}</p>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">{row.category}</p>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   <div>
-                    <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColCost")}</dt>
-                    <dd className="font-black text-stone-900">UGX {row.costPerUnitUgx.toLocaleString()}</dd>
+                    <dt className="text-xs font-bold text-muted-foreground">{t(lang, "pharmacyMarginColCost")}</dt>
+                    <dd className="font-black text-foreground">UGX {row.costPerUnitUgx.toLocaleString()}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColSell")}</dt>
-                    <dd className="font-black text-stone-900">UGX {row.sellingPricePerUnitUgx.toLocaleString()}</dd>
+                    <dt className="text-xs font-bold text-muted-foreground">{t(lang, "pharmacyMarginColSell")}</dt>
+                    <dd className="font-black text-foreground">UGX {row.sellingPricePerUnitUgx.toLocaleString()}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColMarginUgx")}</dt>
+                    <dt className="text-xs font-bold text-muted-foreground">{t(lang, "pharmacyMarginColMarginUgx")}</dt>
                     <dd className={`font-black ${row.marginUgx < 0 ? "text-rose-700" : "text-emerald-800"}`}>
                       UGX {row.marginUgx.toLocaleString()}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColMarginPct")}</dt>
-                    <dd className="font-black text-stone-900">
+                    <dt className="text-xs font-bold text-muted-foreground">{t(lang, "pharmacyMarginColMarginPct")}</dt>
+                    <dd className="font-black text-foreground">
                       {row.marginPercent != null ? `${row.marginPercent}%` : "—"}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColInventory")}</dt>
-                    <dd className="font-black text-stone-900">UGX {row.inventoryValueUgx.toLocaleString()}</dd>
+                    <dt className="text-xs font-bold text-muted-foreground">{t(lang, "pharmacyMarginColInventory")}</dt>
+                    <dd className="font-black text-foreground">UGX {row.inventoryValueUgx.toLocaleString()}</dd>
                   </div>
                   {row.packagingEnabled ? (
                     <>
                       <div>
-                        <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColStockTablets")}</dt>
-                        <dd className="font-black text-stone-900">{Math.round(row.stockTablets).toLocaleString()}</dd>
+                        <dt className="text-xs font-bold text-muted-foreground">{t(lang, "pharmacyMarginColStockTablets")}</dt>
+                        <dd className="font-black text-foreground">{Math.round(row.stockTablets).toLocaleString()}</dd>
                       </div>
                       {row.stockStrips != null ? (
                         <div>
-                          <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColStockStrips")}</dt>
-                          <dd className="font-black text-stone-900">
+                          <dt className="text-xs font-bold text-muted-foreground">{t(lang, "pharmacyMarginColStockStrips")}</dt>
+                          <dd className="font-black text-foreground">
                             {row.stockStrips % 1 === 0 ? row.stockStrips.toLocaleString() : row.stockStrips.toFixed(1)}
                           </dd>
                         </div>
                       ) : null}
                       {row.stockBoxes != null ? (
                         <div>
-                          <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColStockBoxes")}</dt>
-                          <dd className="font-black text-stone-900">
+                          <dt className="text-xs font-bold text-muted-foreground">{t(lang, "pharmacyMarginColStockBoxes")}</dt>
+                          <dd className="font-black text-foreground">
                             {row.stockBoxes % 1 === 0 ? row.stockBoxes.toLocaleString() : row.stockBoxes.toFixed(1)}
                           </dd>
                         </div>

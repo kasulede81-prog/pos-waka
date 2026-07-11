@@ -100,19 +100,19 @@ export function BulkInventoryAiModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[94vh] w-full max-w-2xl flex-col rounded-t-[1.75rem] bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-3xl"
+        className="flex max-h-[94vh] w-full max-w-2xl flex-col rounded-t-[1.75rem] bg-card shadow-2xl sm:max-h-[90vh] sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-stone-100 px-5 pb-4 pt-5">
+        <div className="shrink-0 border-b border-border px-5 pb-4 pt-5">
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
               <Sparkles className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-lg font-black text-stone-900">{t(lang, "aiBulkTitle")}</p>
-              <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "aiBulkSub")}</p>
+              <p className="text-lg font-black text-foreground">{t(lang, "aiBulkTitle")}</p>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">{t(lang, "aiBulkSub")}</p>
             </div>
-            <button type="button" onClick={onClose} className="shrink-0 rounded-xl px-2 py-1 text-sm font-bold text-stone-500">
+            <button type="button" onClick={onClose} className="shrink-0 rounded-xl px-2 py-1 text-sm font-bold text-muted-foreground">
               {t(lang, "cancel")}
             </button>
           </div>
@@ -121,13 +121,13 @@ export function BulkInventoryAiModal({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {rows.length === 0 ? (
             <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "aiBulkDescriptionLabel")}</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "aiBulkDescriptionLabel")}</span>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 disabled={loading}
-                className="mt-2 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base font-semibold outline-none ring-violet-300 focus:ring disabled:opacity-60"
+                className="mt-2 w-full rounded-2xl border-2 border-border px-4 py-3 text-base font-semibold outline-none ring-violet-300 focus:ring disabled:opacity-60"
               />
             </label>
           ) : null}
@@ -150,7 +150,7 @@ export function BulkInventoryAiModal({
 
           {rows.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-sm font-bold text-stone-700">
+              <p className="text-sm font-bold text-muted-foreground">
                 {tTemplate(lang, "aiBulkPreviewCount", { count: String(selectedCount) })}
               </p>
               {productSlotsLeft !== null ? (
@@ -158,9 +158,9 @@ export function BulkInventoryAiModal({
                   {tTemplate(lang, "aiBulkSlotsLeft", { count: String(productSlotsLeft) })}
                 </p>
               ) : null}
-              <div className="overflow-x-auto rounded-2xl border border-stone-200">
+              <div className="overflow-x-auto rounded-2xl border border-border">
                 <table className="min-w-full text-left text-sm">
-                  <thead className="bg-stone-50 text-xs font-bold uppercase text-stone-500">
+                  <thead className="bg-muted text-xs font-bold uppercase text-muted-foreground">
                     <tr>
                       <th className="px-2 py-2">✓</th>
                       <th className="px-2 py-2">{t(lang, "stockEditNameLabel")}</th>
@@ -171,7 +171,7 @@ export function BulkInventoryAiModal({
                   </thead>
                   <tbody>
                     {rows.map((row, i) => (
-                      <tr key={`${row.name}-${i}`} className="border-t border-stone-100">
+                      <tr key={`${row.name}-${i}`} className="border-t border-border">
                         <td className="px-2 py-2">
                           <WakaCheckbox
                             checked={row.enabled}
@@ -183,14 +183,14 @@ export function BulkInventoryAiModal({
                           <input
                             value={row.name}
                             onChange={(e) => updateRow(i, { name: e.target.value })}
-                            className="min-w-[120px] w-full rounded-lg border border-stone-200 px-2 py-1 font-semibold"
+                            className="min-w-[120px] w-full rounded-lg border border-border px-2 py-1 font-semibold"
                           />
                         </td>
                         <td className="px-2 py-2">
                           <input
                             value={row.category}
                             onChange={(e) => updateRow(i, { category: e.target.value })}
-                            className="min-w-[90px] w-full rounded-lg border border-stone-200 px-2 py-1"
+                            className="min-w-[90px] w-full rounded-lg border border-border px-2 py-1"
                           />
                         </td>
                         <td className="px-2 py-2">
@@ -198,7 +198,7 @@ export function BulkInventoryAiModal({
                             value={String(row.priceUgx)}
                             onChange={(e) => updateRow(i, { priceUgx: Math.floor(Number(e.target.value.replace(/\D/g, "")) || 0) })}
                             inputMode="numeric"
-                            className="w-24 rounded-lg border border-stone-200 px-2 py-1 font-semibold"
+                            className="w-24 rounded-lg border border-border px-2 py-1 font-semibold"
                           />
                         </td>
                         <td className="px-2 py-2">
@@ -206,7 +206,7 @@ export function BulkInventoryAiModal({
                             value={String(row.stockQty)}
                             onChange={(e) => updateRow(i, { stockQty: Math.max(0, Math.floor(Number(e.target.value.replace(/[^\d.]/g, "")) || 0)) })}
                             inputMode="numeric"
-                            className="w-20 rounded-lg border border-stone-200 px-2 py-1"
+                            className="w-20 rounded-lg border border-border px-2 py-1"
                           />
                         </td>
                       </tr>
@@ -218,7 +218,7 @@ export function BulkInventoryAiModal({
           ) : null}
         </div>
 
-        <div className="shrink-0 space-y-2 border-t border-stone-100 p-5">
+        <div className="shrink-0 space-y-2 border-t border-border p-5">
           {rows.length === 0 ? (
             <button
               type="button"

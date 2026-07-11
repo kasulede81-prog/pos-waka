@@ -56,7 +56,7 @@ function businessTrialSnapshot(): SubscriptionSnapshot {
       shop_id: "s1",
       plan_code: "business",
       status: "trial",
-      trial_ends_at: "2026-07-01T00:00:00.000Z",
+      trial_ends_at: "2026-08-15T00:00:00.000Z",
       current_period_start: null,
       current_period_end: null,
       max_pos_users: 3,

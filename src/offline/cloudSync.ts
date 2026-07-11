@@ -1182,6 +1182,9 @@ export async function syncCashExpenseImmediately(expenseId: string): Promise<boo
   const ctx = await resolveShopCtx();
   if (!ctx) return false;
   const ok = await pushCashExpenseToCloud(row, ctx, Boolean(row.deletedAt));
+  if (!ok) {
+    reportSyncIssue("cash_expense_push_failed", { expenseId });
+  }
   if (ok) {
     usePosStore.setState((s) => ({
       cashExpenses: s.cashExpenses.map((e) =>
@@ -1591,6 +1594,9 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       if (!row) return true;
       const voided = Boolean(payload.void);
       const ok = await pushCashExpenseToCloud(row, ctx, voided);
+      if (!ok) {
+        reportSyncIssue("cash_expense_push_failed", { expenseId });
+      }
       if (ok) {
         usePosStore.setState((s) => ({
           cashExpenses: s.cashExpenses.map((e) =>

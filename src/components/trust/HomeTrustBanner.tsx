@@ -15,8 +15,8 @@ export function HomeTrustBanner({ lang }: Props) {
       <p className="text-sm font-bold text-emerald-950">{t(lang, "syncTrustSavedOnPhone")}</p>
       {!sync.isOnline ? (
         <>
-          <p className="text-sm font-semibold text-stone-800">{t(lang, "homeTrustOfflineSell")}</p>
-          <p className="text-xs font-medium text-stone-600">{t(lang, "syncTrustKeepUsing")}</p>
+          <p className="text-sm font-semibold text-foreground">{t(lang, "homeTrustOfflineSell")}</p>
+          <p className="text-xs font-medium text-muted-foreground">{t(lang, "syncTrustKeepUsing")}</p>
         </>
       ) : null}
       {sync.syncing ? (

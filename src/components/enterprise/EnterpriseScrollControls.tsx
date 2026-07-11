@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import type { RefObject } from "react";
+import { themeUi } from "../../lib/themeTokens";
 import {
   scrollEnterpriseContainer,
   useEnterpriseScrollContainer,
@@ -8,17 +9,11 @@ import {
 } from "./useEnterpriseScrollContainer";
 
 type Props = {
-  /** Optional explicit scroll container; defaults to `.scroll-main-chrome`. */
   scrollRef?: RefObject<HTMLElement | null>;
-  /** Hide when parent uses viewport-locked internal scroll (e.g. POS sell). */
   enabled?: boolean;
   className?: string;
 };
 
-/**
- * Floating scroll-to-top / scroll-to-bottom controls.
- * Mobile: bottom-right FAB stack. Desktop: compact floaters.
- */
 export function EnterpriseScrollControls({ scrollRef, enabled = true, className }: Props) {
   const container = useEnterpriseScrollContainer(scrollRef, enabled);
   const { canScrollUp, canScrollDown } = useEnterpriseScrollMetrics(container);
@@ -40,7 +35,7 @@ export function EnterpriseScrollControls({ scrollRef, enabled = true, className 
           type="button"
           aria-label="Scroll to top"
           onClick={() => scrollEnterpriseContainer(container, "top")}
-          className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200/90 bg-white/95 text-stone-800 shadow-lg backdrop-blur transition-waka hover:bg-stone-50 active:scale-95 md:h-9 md:w-9"
+          className={clsx(themeUi.fab, themeUi.focusRing, "pointer-events-auto")}
         >
           <ArrowUp className="h-5 w-5 md:h-4 md:w-4" aria-hidden />
         </button>
@@ -50,7 +45,7 @@ export function EnterpriseScrollControls({ scrollRef, enabled = true, className 
           type="button"
           aria-label="Scroll to bottom"
           onClick={() => scrollEnterpriseContainer(container, "bottom")}
-          className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200/90 bg-white/95 text-stone-800 shadow-lg backdrop-blur transition-waka hover:bg-stone-50 active:scale-95 md:h-9 md:w-9"
+          className={clsx(themeUi.fab, themeUi.focusRing, "pointer-events-auto")}
         >
           <ArrowDown className="h-5 w-5 md:h-4 md:w-4" aria-hidden />
         </button>

@@ -16,22 +16,22 @@ function ExpoSection({
   tickets: ReturnType<typeof expoTickets>;
 }) {
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4">
-      <h2 className="text-sm font-black uppercase tracking-wide text-stone-600">{title}</h2>
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{title}</h2>
       {tickets.length === 0 ? (
-        <p className="mt-3 text-sm font-medium text-stone-400">{t(lang, "expoSectionEmpty")}</p>
+        <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "expoSectionEmpty")}</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {tickets.map((ticket) => (
-            <li key={ticket.id} className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
-              <p className="font-black text-stone-950">
+            <li key={ticket.id} className="rounded-xl border border-border bg-muted px-3 py-2">
+              <p className="font-black text-foreground">
                 {ticket.tableLabel}
                 {ticket.areaName ? ` · ${ticket.areaName}` : ""}
               </p>
-              <p className="text-xs font-bold text-stone-500">
+              <p className="text-xs font-bold text-muted-foreground">
                 #{ticket.ticketNumber} · {ticket.waiterLabel ?? "—"}
               </p>
-              <ul className="mt-1 text-sm font-semibold text-stone-700">
+              <ul className="mt-1 text-sm font-semibold text-muted-foreground">
                 {ticket.items
                   .filter((i) => i.itemStatus !== "cancelled")
                   .map((item) => (
@@ -63,8 +63,8 @@ export function ExpoDisplayPage({ lang }: { lang: Language }) {
     <div className="space-y-4 pb-8">
       <PageBackBar lang={lang} fallbackTo="/floor" label={t(lang, "navFloor")} />
       <div>
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "expoDisplayTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "expoDisplaySub")}</p>
+        <h1 className="text-2xl font-black text-foreground">{t(lang, "expoDisplayTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "expoDisplaySub")}</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

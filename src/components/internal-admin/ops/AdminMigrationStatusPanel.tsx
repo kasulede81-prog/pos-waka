@@ -13,16 +13,16 @@ export function AdminMigrationStatusPanel() {
   }, []);
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-black text-stone-900">Migration visibility</h2>
-      <p className="mt-0.5 text-xs text-stone-500">Server-side markers for pilot-critical migrations.</p>
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <h2 className="text-sm font-black text-foreground">Migration visibility</h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">Server-side markers for pilot-critical migrations.</p>
       {loading ? (
-        <p className="mt-3 text-sm text-stone-500">Checking…</p>
+        <p className="mt-3 text-sm text-muted-foreground">Checking…</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {rows.map((m) => (
-            <li key={m.id} className="flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2">
-              <span className="font-mono text-xs font-bold text-stone-800">{m.id}</span>
+            <li key={m.id} className="flex items-center justify-between rounded-xl bg-muted px-3 py-2">
+              <span className="font-mono text-xs font-bold text-foreground">{m.id}</span>
               <StatusBadge status={m.status} />
             </li>
           ))}
@@ -38,6 +38,6 @@ function StatusBadge({ status }: { status: string }) {
       ? "bg-emerald-100 text-emerald-900"
       : status === "missing"
         ? "bg-rose-100 text-rose-900"
-        : "bg-stone-200 text-stone-700";
+        : "bg-muted text-muted-foreground";
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${cls}`}>{status}</span>;
 }

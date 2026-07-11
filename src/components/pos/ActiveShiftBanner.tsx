@@ -70,7 +70,7 @@ export function ActiveShiftBanner({ lang, shift, cashierName, onCloseShift }: Pr
   const fmt = (n: number) => `UGX ${n.toLocaleString()}`;
 
   return (
-    <div className="rounded-2xl border border-teal-200/80 bg-gradient-to-br from-teal-50 to-white px-3 py-2 shadow-sm">
+    <div className="rounded-2xl border border-teal-200/80 bg-gradient-to-br from-teal-50 to-card px-3 py-2 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-800">

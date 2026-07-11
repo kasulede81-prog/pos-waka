@@ -94,25 +94,25 @@ export function SystemHealthSummaryStrip({ lang }: { lang: Language }) {
   }, [refreshQueue]);
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "systemHealthSummaryTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "systemHealthSummarySub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "systemHealthSummaryTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "systemHealthSummarySub")}</p>
       <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-bold uppercase text-stone-500">{t(lang, "systemHealthSummaryProducts")}</dt>
-          <dd className="font-black text-stone-900">{products.toLocaleString()}</dd>
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <dt className="text-xs font-bold uppercase text-muted-foreground">{t(lang, "systemHealthSummaryProducts")}</dt>
+          <dd className="font-black text-foreground">{products.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-bold uppercase text-stone-500">{t(lang, "systemHealthSummarySales")}</dt>
-          <dd className="font-black text-stone-900">{sales.toLocaleString()}</dd>
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <dt className="text-xs font-bold uppercase text-muted-foreground">{t(lang, "systemHealthSummarySales")}</dt>
+          <dd className="font-black text-foreground">{sales.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-bold uppercase text-stone-500">{t(lang, "systemHealthSummaryCustomers")}</dt>
-          <dd className="font-black text-stone-900">{customers.toLocaleString()}</dd>
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <dt className="text-xs font-bold uppercase text-muted-foreground">{t(lang, "systemHealthSummaryCustomers")}</dt>
+          <dd className="font-black text-foreground">{customers.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-bold uppercase text-stone-500">{t(lang, "systemHealthSummaryPending")}</dt>
-          <dd className="font-black text-stone-900">
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <dt className="text-xs font-bold uppercase text-muted-foreground">{t(lang, "systemHealthSummaryPending")}</dt>
+          <dd className="font-black text-foreground">
             {queue ? queue.queuedCount.toLocaleString() : loadingShared ? "…" : "—"}
           </dd>
         </div>
@@ -143,17 +143,17 @@ export function LazyDiagnosticsSection({
   };
 
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-white shadow-sm">
+    <section className="rounded-2xl border border-border/90 bg-card shadow-sm">
       <button
         type="button"
         onClick={toggle}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
         aria-expanded={open}
       >
-        <span className="text-base font-black text-stone-900">{title}</span>
-        <span className="text-sm font-bold text-stone-500">{open ? t(lang, "systemHealthSectionHide") : t(lang, "systemHealthSectionShow")}</span>
+        <span className="text-base font-black text-foreground">{title}</span>
+        <span className="text-sm font-bold text-muted-foreground">{open ? t(lang, "systemHealthSectionHide") : t(lang, "systemHealthSectionShow")}</span>
       </button>
-      {open ? <div className="border-t border-stone-100 px-1 pb-1 pt-0">{children}</div> : null}
+      {open ? <div className="border-t border-border px-1 pb-1 pt-0">{children}</div> : null}
     </section>
   );
 }

@@ -41,7 +41,7 @@ function statusBadge(
     return { label: t(lang, "salesHistoryStatusPending"), className: "bg-amber-100 text-amber-900" };
   }
   if (status === "cancelled") {
-    return { label: t(lang, "salesHistoryStatusCancelled"), className: "bg-stone-200 text-stone-700" };
+    return { label: t(lang, "salesHistoryStatusCancelled"), className: "bg-muted text-muted-foreground" };
   }
   if (hasReturns) {
     return { label: t(lang, "salesHistoryStatusReturned"), className: "bg-sky-100 text-sky-800" };
@@ -116,17 +116,17 @@ function SaleActionSheet({
   ];
 
   return (
-    <AppModalOverlay className="z-[54] flex items-end bg-stone-900/40 backdrop-blur-[2px]" clearNav={false}>
+    <AppModalOverlay className="z-[54] flex items-end bg-foreground/40 backdrop-blur-[2px]" clearNav={false}>
       <button type="button" className="absolute inset-0" aria-label={t(lang, "cancel")} onClick={onClose} />
-      <div className="relative z-[55] max-h-[min(80dvh,36rem)] w-full overflow-y-auto rounded-t-[1.75rem] border border-stone-200 bg-white px-4 pb-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+1rem)] pt-3 shadow-2xl">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-stone-200" aria-hidden />
-        <p className="text-sm font-black text-stone-950">{customerName}</p>
-        <p className="text-xs font-semibold text-stone-500">
+      <div className="relative z-[55] max-h-[min(80dvh,36rem)] w-full overflow-y-auto rounded-t-[1.75rem] border border-border bg-card px-4 pb-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+1rem)] pt-3 shadow-2xl">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" aria-hidden />
+        <p className="text-sm font-black text-foreground">{customerName}</p>
+        <p className="text-xs font-semibold text-muted-foreground">
           {t(lang, "receiptCashier")}: {cashierLabel}
         </p>
 
-        <div className="mt-3 rounded-xl bg-stone-50 p-3">
-          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+        <div className="mt-3 rounded-xl bg-muted p-3">
+          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
             {t(lang, "salesHistoryItemsSold")}
           </p>
           {discountBreakdown ? (
@@ -142,11 +142,11 @@ function SaleActionSheet({
                   <span className={clsx("min-w-0 font-semibold", line.voided && "text-rose-700 line-through")}>
                     <span className="block truncate">{line.name}</span>
                     {!line.voided ? (
-                      <span className="block text-[10px] font-medium text-stone-500">{qtyLabel}</span>
+                      <span className="block text-[10px] font-medium text-muted-foreground">{qtyLabel}</span>
                     ) : null}
                   </span>
                   {!line.voided ? (
-                    <span className="shrink-0 font-bold tabular-nums text-stone-700">
+                    <span className="shrink-0 font-bold tabular-nums text-muted-foreground">
                       UGX {(paid.showPaidBreakdown ? paid.customerPaidUgx : line.lineTotalUgx).toLocaleString()}
                     </span>
                   ) : null}
@@ -171,7 +171,7 @@ function SaleActionSheet({
                     ? "bg-waka-600 text-white"
                     : warn
                       ? "bg-amber-50 text-amber-950"
-                      : "text-stone-800 active:bg-stone-50",
+                      : "text-foreground active:bg-muted",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden />
@@ -198,7 +198,7 @@ function SaleActionSheet({
         <button
           type="button"
           onClick={onClose}
-          className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-xl border border-stone-200 text-sm font-bold text-stone-600 active:bg-stone-50"
+          className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-xl border border-border text-sm font-bold text-muted-foreground active:bg-muted"
         >
           {t(lang, "cancel")}
         </button>
@@ -257,20 +257,20 @@ export function SalesHistoryRow({
 
   return (
     <>
-      <article className="rounded-xl border border-stone-200/90 bg-white p-2.5 shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100">
+      <article className="rounded-xl border border-border/90 bg-card p-2.5 shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100">
         <div className="flex items-start gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-600">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
             <FileText className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <p className="truncate text-sm font-black text-stone-950">{invoice}</p>
-              <p className="shrink-0 text-sm font-black tabular-nums text-stone-950">
+              <p className="truncate text-sm font-black text-foreground">{invoice}</p>
+              <p className="shrink-0 text-sm font-black tabular-nums text-foreground">
                 UGX {sale.totalUgx.toLocaleString()}
               </p>
             </div>
-            <p className="truncate text-xs font-semibold text-stone-600">{customerName}</p>
-            <p className="mt-0.5 text-[10px] font-medium text-stone-500">
+            <p className="truncate text-xs font-semibold text-muted-foreground">{customerName}</p>
+            <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">
               {day} · {time} · {cashierLabel}
             </p>
             <span className={clsx("mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase", badge.className)}>
@@ -281,7 +281,7 @@ export function SalesHistoryRow({
             type="button"
             aria-expanded={sheetOpen}
             onClick={() => setSheetOpen(true)}
-            className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 active:bg-stone-50"
+            className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground active:bg-muted"
           >
             <MoreHorizontal className="h-4 w-4" />
             <span className="sr-only">{t(lang, "salesHistoryMoreActions")}</span>

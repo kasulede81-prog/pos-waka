@@ -109,15 +109,15 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
 
   const content = (
     <div className="space-y-4">
-      <p className="text-sm font-medium text-stone-600">{t(lang, "homeMenuArrangeSub")}</p>
+      <p className="text-sm font-medium text-muted-foreground">{t(lang, "homeMenuArrangeSub")}</p>
 
-      <section className="space-y-3 rounded-2xl border-2 border-stone-200 bg-white p-4">
+      <section className="space-y-3 rounded-2xl border-2 border-border bg-card p-4">
         <div>
-          <p className="text-sm font-black text-stone-950">{t(lang, "homeMenuPreviewBgTitle")}</p>
-          <p className="mt-0.5 text-xs font-medium text-stone-500">{t(lang, "homeMenuPreviewBgSub")}</p>
+          <p className="text-sm font-black text-foreground">{t(lang, "homeMenuPreviewBgTitle")}</p>
+          <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "homeMenuPreviewBgSub")}</p>
         </div>
         <div>
-          <p className="text-xs font-bold text-stone-600">{t(lang, "homeMenuColorLabel")}</p>
+          <p className="text-xs font-bold text-muted-foreground">{t(lang, "homeMenuColorLabel")}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {HOME_HERO_PREVIEW_BG_PRESETS.map((preset) => (
               <button
@@ -126,7 +126,7 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
                 onClick={() => setPreferences({ homeHeroPreviewBgColor: preset.hex })}
                 className={clsx(
                   "h-9 min-w-[3rem] rounded-xl border-2 px-2 text-xs font-black capitalize",
-                  previewBgHex === preset.hex ? "border-waka-600 ring-2 ring-waka-200" : "border-stone-200",
+                  previewBgHex === preset.hex ? "border-waka-600 ring-2 ring-waka-200" : "border-border",
                 )}
                 style={{ backgroundColor: preset.hex }}
                 aria-label={preset.id}
@@ -143,7 +143,7 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
 
       {hero ? (
         <section className="space-y-2">
-          <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "homeMenuSellLocked")}</p>
+          <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "homeMenuSellLocked")}</p>
           <HomeLauncherTile tile={hero} lang={lang} mode="arrange" variant="sell" />
         </section>
       ) : null}
@@ -166,8 +166,8 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
       </div>
 
       {selectedId && selectedTile && selectedDef?.hideable ? (
-        <section className="space-y-3 rounded-2xl border-2 border-waka-200 bg-white p-4">
-          <p className="text-sm font-black text-stone-950">
+        <section className="space-y-3 rounded-2xl border-2 border-waka-200 bg-card p-4">
+          <p className="text-sm font-black text-foreground">
             {t(lang, "homeMenuEditHeading")}: {t(lang, selectedTile.labelKey)}
           </p>
 
@@ -175,11 +175,11 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
             checked={!selectedTile.hidden}
             onCheckedChange={(checked) => patchSelected({ hidden: !checked })}
             label={selectedTile.hidden ? t(lang, "homeMenuShowTile") : t(lang, "homeMenuHideTile")}
-            className="text-sm font-bold text-stone-800"
+            className="text-sm font-bold text-foreground"
           />
 
           <div>
-            <p className="text-xs font-bold text-stone-600">{t(lang, "homeMenuColorLabel")}</p>
+            <p className="text-xs font-bold text-muted-foreground">{t(lang, "homeMenuColorLabel")}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {COLORS.map((color) => (
                 <button
@@ -190,7 +190,7 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
                     "h-9 min-w-[3rem] rounded-xl border-2 px-2 text-xs font-black capitalize",
                     (selectedConfig?.color ?? "default") === color && !selectedConfig?.customColor
                       ? "border-waka-600 ring-2 ring-waka-200"
-                      : "border-stone-200",
+                      : "border-border",
                   )}
                   style={{ backgroundColor: PRESET_SHELF_HEX[color] }}
                 >
@@ -222,8 +222,8 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
   if (embedded) return content;
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-950">{t(lang, "homeMenuArrangeTitle")}</p>
+    <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "homeMenuArrangeTitle")}</p>
       <div className="mt-4">{content}</div>
     </article>
   );

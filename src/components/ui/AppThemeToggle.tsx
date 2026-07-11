@@ -29,7 +29,7 @@ export function AppThemeToggle({ lang, className, variant = "icon", inverted = f
           "inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm transition-colors",
           inverted
             ? "border-waka-400/50 bg-waka-700/50 text-white hover:bg-waka-700"
-            : "border-stone-200 bg-white text-stone-800 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800",
+            : "border-border bg-card text-foreground hover:bg-muted dark:bg-foreground dark:text-background dark:hover:bg-foreground",
           className,
         )}
       >
@@ -49,7 +49,7 @@ export function AppThemeToggle({ lang, className, variant = "icon", inverted = f
         "relative flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition-colors",
         inverted
           ? "border-waka-400/50 bg-waka-700/50 text-white hover:bg-waka-700"
-          : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800",
+          : "border-border bg-card text-muted-foreground hover:bg-muted dark:bg-foreground dark:text-muted-foreground dark:hover:bg-foreground",
         className,
       )}
     >

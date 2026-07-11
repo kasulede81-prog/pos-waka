@@ -38,14 +38,14 @@ export function TableActionSheet({ lang, open, mode, floor, fromSessionId, onClo
       title={
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-black text-stone-950">
+            <h2 className="text-xl font-black text-foreground">
               {mode === "transfer" ? t(lang, "tableTransferTitle") : t(lang, "tableMergeTitle")}
             </h2>
-            <p className="text-sm font-medium text-stone-500">
+            <p className="text-sm font-medium text-muted-foreground">
               {fromTable?.label ?? "—"} → {t(lang, mode === "transfer" ? "tableTransferPick" : "tableMergePick")}
             </p>
           </div>
-          <button type="button" className="min-h-[44px] px-2 text-sm font-bold text-stone-500" onClick={onClose}>
+          <button type="button" className="min-h-[44px] px-2 text-sm font-bold text-muted-foreground" onClick={onClose}>
             {t(lang, "cancel")}
           </button>
         </div>
@@ -58,7 +58,7 @@ export function TableActionSheet({ lang, open, mode, floor, fromSessionId, onClo
             type="button"
             onClick={() => onSelectTable(table.id)}
             className={clsx(
-              "min-h-14 rounded-2xl border-2 border-stone-200 bg-stone-50 text-sm font-black text-stone-900 active:bg-waka-50",
+              "min-h-14 rounded-2xl border-2 border-border bg-muted text-sm font-black text-foreground active:bg-waka-50",
             )}
           >
             {table.label}
@@ -66,7 +66,7 @@ export function TableActionSheet({ lang, open, mode, floor, fromSessionId, onClo
         ))}
       </div>
       {selectable.length === 0 ? (
-        <p className="mt-4 text-center text-sm font-medium text-stone-500">{t(lang, "tableActionNone")}</p>
+        <p className="mt-4 text-center text-sm font-medium text-muted-foreground">{t(lang, "tableActionNone")}</p>
       ) : null}
     </ModalSheet>
   );

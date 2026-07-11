@@ -22,7 +22,7 @@ export function PosCompactCheckoutSlideover({ open, onClose, checkoutBottomPad, 
       >
         <button
           type="button"
-          className="absolute inset-0 bg-stone-900/40"
+          className="absolute inset-0 bg-foreground/40"
           onClick={onClose}
           aria-label="Close checkout"
         />

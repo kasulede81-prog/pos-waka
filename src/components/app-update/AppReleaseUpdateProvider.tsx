@@ -1,70 +1,58 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
-import { App } from "@capacitor/app";
-import {
-  completeFlexibleAppUpdate,
-  evaluateAppReleaseUpdate,
-  logDownloadCompleted,
-  logUpdateSkipped,
-  markWhatsNewSeen,
-  startFlexibleAppUpdate,
-  startImmediateAppUpdate,
-  type AppReleaseUpdateState,
-} from "../../lib/appReleaseUpdate";
-import { WakaAppUpdate } from "../../lib/nativeAppUpdate";
+import { t, tTemplate } from "../../lib/i18n";
+import { readUiLanguageCacheSync, loadPersistedUiLanguage } from "../../lib/uiLanguage";
+import type { Language } from "../../types";
+import { EnterpriseUpdateEngine } from "../../lib/updateEngine/EnterpriseUpdateEngine";
+import { shouldShowOverlay } from "../../lib/updateEngine/UpdateNotifications";
+import { useUpdateEngine, useUpdateEngineInit } from "../../lib/updateEngine/useUpdateEngine";
 
 type Props = { children: ReactNode };
 
 export function AppReleaseUpdateProvider({ children }: Props) {
-  const [state, setState] = useState<AppReleaseUpdateState | null>(null);
+  useUpdateEngineInit();
+  const state = useUpdateEngine();
+  const [lang, setLang] = useState<Language>(() => readUiLanguageCacheSync() ?? "en");
   const [busy, setBusy] = useState(false);
-  const policyRef = useRef(state?.policy);
-
-  policyRef.current = state?.policy;
-
-  const refresh = useCallback(async () => {
-    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "android") return;
-    const next = await evaluateAppReleaseUpdate();
-    setState(next);
-  }, []);
 
   useEffect(() => {
-    void refresh();
-    const sub = App.addListener("appStateChange", ({ isActive }) => {
-      if (isActive) void refresh();
-    });
-    let flexHandle: { remove: () => void } | undefined;
-    void WakaAppUpdate.addListener("flexibleUpdateDownloaded", () => {
-      const p = policyRef.current;
-      if (p) void logDownloadCompleted(p);
-      void refresh();
-    }).then((h) => {
-      flexHandle = h;
+    let cancelled = false;
+    void loadPersistedUiLanguage().then((loaded) => {
+      if (!cancelled) setLang(loaded);
     });
     return () => {
-      void sub.then((s) => s.remove());
-      flexHandle?.remove();
+      cancelled = true;
     };
-  }, [refresh]);
+  }, []);
 
-  const policy = state?.policy;
-  const blockForForce = state?.phase === "force_block" && policy != null;
-  const showFlexiblePrompt = state?.phase === "flexible_prompt" && policy != null;
-  const showFlexibleReady = state?.phase === "flexible_ready" && policy != null;
-  const showWhatsNew = state?.phase === "whats_new" && policy != null;
+  const policy = state.policy;
+  const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+  const showAndroidOverlay =
+    isAndroid &&
+    (shouldShowOverlay(state.phase) || state.phase === "update_failed") &&
+    state.phase !== "pwa_update" &&
+    (state.phase === "update_failed" || policy != null);
+
+  const versionLabel = policy?.versionNumber ? `v${policy.versionNumber}` : "";
+
+  const handleRetry = useCallback(() => {
+    void EnterpriseUpdateEngine.checkForUpdates();
+  }, []);
 
   return (
     <>
       {children}
 
-      {blockForForce ? (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-stone-950/90 p-4">
-          <article className="w-full max-w-md rounded-3xl border border-stone-700 bg-stone-900 p-6 text-white shadow-2xl">
-            <h2 className="text-xl font-black">Update required</h2>
-            <p className="mt-2 text-sm font-medium text-stone-300">
-              A newer version of WakaPOS is required before continuing.
+      {showAndroidOverlay && policy && state.phase === "force_block" ? (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-foreground/90 p-4">
+          <article className="w-full max-w-md rounded-3xl border border-stone-700 bg-foreground p-6 text-background shadow-2xl">
+            <h2 className="text-xl font-black">{t(lang, "updateRequiredTitle")}</h2>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
+              {t(lang, "updateRequiredBody")}
               {policy.minimumSupportedVersion ? (
-                <span className="mt-1 block">Minimum version: {policy.minimumSupportedVersion}</span>
+                <span className="mt-1 block">
+                  {tTemplate(lang, "updateMinimumVersion", { version: policy.minimumSupportedVersion })}
+                </span>
               ) : null}
             </p>
             <button
@@ -72,96 +60,118 @@ export function AppReleaseUpdateProvider({ children }: Props) {
               disabled={busy}
               onClick={() => {
                 setBusy(true);
-                void startImmediateAppUpdate(policy)
+                void EnterpriseUpdateEngine.startImmediateUpdate()
                   .catch(() => undefined)
                   .finally(() => setBusy(false));
               }}
               className="mt-5 min-h-[48px] w-full rounded-2xl bg-waka-500 text-sm font-black text-white disabled:opacity-50"
             >
-              Update now
+              {t(lang, "updateNow")}
             </button>
           </article>
         </div>
       ) : null}
 
-      {showFlexiblePrompt ? (
-        <div className="fixed inset-0 z-[190] flex items-end justify-center bg-stone-950/50 p-4 sm:items-center">
-          <article className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl">
-            <h2 className="text-lg font-black text-stone-950">Update available</h2>
-            <p className="mt-2 text-sm font-medium text-stone-600">
-              A new version of WakaPOS is available.
-              {policy.versionNumber ? ` (v${policy.versionNumber})` : ""}
+      {showAndroidOverlay && policy && state.phase === "flexible_prompt" ? (
+        <div className="fixed inset-0 z-[190] flex items-end justify-center bg-foreground/50 p-4 sm:items-center">
+          <article className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
+            <h2 className="text-lg font-black text-foreground">{t(lang, "updateAvailableTitle")}</h2>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
+              {versionLabel
+                ? tTemplate(lang, "updateAvailableBodyVersioned", { version: versionLabel })
+                : t(lang, "updateAvailableBody")}
             </p>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => {
-                  void logUpdateSkipped(policy);
-                  setState((s) => (s ? { ...s, phase: "idle" } : s));
-                }}
-                className="min-h-[48px] rounded-2xl border border-stone-200 text-sm font-bold text-stone-700"
+                onClick={() => void EnterpriseUpdateEngine.skipUpdate()}
+                className="min-h-[48px] rounded-2xl border border-border text-sm font-bold text-muted-foreground"
               >
-                Later
+                {t(lang, "updateLater")}
               </button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => {
                   setBusy(true);
-                  void startFlexibleAppUpdate(policy)
-                    .then(() => setState((s) => (s ? { ...s, phase: "flexible_downloading" } : s)))
+                  void EnterpriseUpdateEngine.startFlexibleUpdate()
                     .catch(() => undefined)
                     .finally(() => setBusy(false));
                 }}
                 className="min-h-[48px] rounded-2xl bg-waka-600 text-sm font-black text-white disabled:opacity-50"
               >
-                Update now
+                {t(lang, "updateNow")}
               </button>
             </div>
           </article>
         </div>
       ) : null}
 
-      {showFlexibleReady ? (
+      {showAndroidOverlay && state.phase === "flexible_downloading" ? (
+        <div className="fixed inset-x-0 bottom-0 z-[185] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <article className="mx-auto flex max-w-lg items-center gap-3 rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 shadow-lg">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-waka-600 border-t-transparent" />
+            <p className="text-sm font-bold text-waka-950">{t(lang, "updateDownloadingBody")}</p>
+          </article>
+        </div>
+      ) : null}
+
+      {showAndroidOverlay && policy && state.phase === "flexible_ready" ? (
         <div className="fixed inset-x-0 bottom-0 z-[185] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <article className="mx-auto flex max-w-lg items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg">
-            <p className="text-sm font-bold text-emerald-950">Update ready.</p>
+            <p className="text-sm font-bold text-emerald-950">{t(lang, "updateReadyTitle")}</p>
             <button
               type="button"
               disabled={busy}
               onClick={() => {
                 setBusy(true);
-                void completeFlexibleAppUpdate(policy).finally(() => setBusy(false));
+                void EnterpriseUpdateEngine.completeFlexibleUpdate().finally(() => setBusy(false));
               }}
               className="min-h-[40px] shrink-0 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white"
             >
-              Restart
+              {t(lang, "updateRestart")}
             </button>
           </article>
         </div>
       ) : null}
 
-      {showWhatsNew ? (
-        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-stone-950/60 p-4">
-          <article className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl">
-            <h2 className="text-xl font-black text-stone-950">What&apos;s New</h2>
+      {showAndroidOverlay && policy && state.phase === "whats_new" ? (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-foreground/60 p-4">
+          <article className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-2xl">
+            <h2 className="text-xl font-black text-foreground">{t(lang, "updateWhatsNewTitle")}</h2>
             {policy.versionNumber ? (
-              <p className="mt-1 text-sm font-semibold text-stone-500">Version {policy.versionNumber}</p>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                {tTemplate(lang, "updateWhatsNewVersion", { version: policy.versionNumber })}
+              </p>
             ) : null}
             <div
-              className="prose prose-sm mt-4 max-w-none text-stone-800"
-              dangerouslySetInnerHTML={{ __html: policy.publicNotesHtml || "<p>Thanks for updating WakaPOS!</p>" }}
+              className="prose prose-sm mt-4 max-w-none text-foreground"
+              dangerouslySetInnerHTML={{
+                __html: policy.publicNotesHtml || `<p>${t(lang, "updateWhatsNewFallback")}</p>`,
+              }}
             />
             <button
               type="button"
-              onClick={() => {
-                void markWhatsNewSeen(state!.currentVersionCode);
-                setState((s) => (s ? { ...s, phase: "idle" } : s));
-              }}
-              className="mt-6 min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-black text-white"
+              onClick={() => void EnterpriseUpdateEngine.dismissWhatsNew()}
+              className="mt-6 min-h-[48px] w-full rounded-2xl bg-foreground text-sm font-black text-background"
             >
-              Continue
+              {t(lang, "updateContinue")}
+            </button>
+          </article>
+        </div>
+      ) : null}
+
+      {showAndroidOverlay && state.phase === "update_failed" ? (
+        <div className="fixed inset-x-0 bottom-0 z-[185] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <article className="mx-auto flex max-w-lg items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 shadow-lg">
+            <p className="text-sm font-bold text-rose-950">{t(lang, "updateFailedBody")}</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="min-h-[40px] shrink-0 rounded-xl bg-rose-700 px-4 text-sm font-black text-white"
+            >
+              {t(lang, "updateRetry")}
             </button>
           </article>
         </div>
@@ -169,3 +179,5 @@ export function AppReleaseUpdateProvider({ children }: Props) {
     </>
   );
 }
+
+export { EnterpriseUpdateEngine };

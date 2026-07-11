@@ -143,6 +143,7 @@ export async function fetchEnterpriseDashboardMetrics(
   return {
     ...empty,
     ...j,
+    ok: j.ok !== false,
     recentAudits: Array.isArray(j.recentAudits) ? j.recentAudits : [],
     topBranches: Array.isArray(j.topBranches) ? j.topBranches : [],
   };

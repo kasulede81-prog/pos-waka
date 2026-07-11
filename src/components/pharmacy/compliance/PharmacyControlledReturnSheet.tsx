@@ -10,6 +10,7 @@ import { AdjustmentMovementPreview } from "../../inventory/adjustments/Adjustmen
 import { AdjustmentSummaryPanel } from "../../inventory/adjustments/AdjustmentSummaryPanel";
 import { AdjustmentFooter } from "../../inventory/adjustments/AdjustmentFooter";
 import { AdjustmentStatusStrip } from "../../inventory/adjustments/AdjustmentStatusStrip";
+import { EnterpriseApprovalPinPad } from "../../auth/EnterpriseApprovalPinPad";
 import { wizardChoiceButtonClass } from "../../inventory/adjustments/adjustmentTokens";
 import clsx from "clsx";
 import { dateKeyKampala } from "../../../lib/datesUg";
@@ -27,6 +28,7 @@ type Props = {
 export function PharmacyControlledReturnSheet({ lang, open, onClose, onDone }: Props) {
   const actor = useSessionActor();
   const products = usePosStore((s) => s.products);
+  const preferences = usePosStore((s) => s.preferences);
   const recordControlledReturn = usePosStore((s) => s.recordControlledReturn);
 
   const controlledProducts = useMemo(
@@ -152,16 +154,16 @@ export function PharmacyControlledReturnSheet({ lang, open, onClose, onDone }: P
         />
       </label>
 
-      <label className="block">
-        <span className="text-sm font-bold text-foreground">{t(lang, "pharmacyRxManagerPin")}</span>
-        <input
-          type="password"
-          inputMode="numeric"
-          value={managerPin}
-          onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
-          className="mt-2 min-h-[52px] w-full rounded-2xl border border-violet-200 bg-card px-4 font-mono text-base"
-        />
-      </label>
+      <p className="text-sm font-bold text-foreground">{t(lang, "pharmacyRxManagerPin")}</p>
+      <EnterpriseApprovalPinPad
+        lang={lang}
+        preferences={preferences}
+        disabled={!reason.trim() || !productId}
+        className="mt-2"
+        onApproved={(pin) => {
+          setManagerPin(pin);
+        }}
+      />
 
       {product && qtyN > 0 ? (
         <>

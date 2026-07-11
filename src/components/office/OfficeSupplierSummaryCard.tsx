@@ -13,7 +13,7 @@ export function OfficeSupplierSummaryCard({ lang }: { lang: Language }) {
   if (summary.totalSuppliers === 0) return null;
 
   return (
-    <section className="rounded-3xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 shadow-waka-sm">
+    <section className="rounded-3xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-card p-5 shadow-waka-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-amber-800">{t(lang, "officeSupplierSummaryTitle")}</p>
@@ -23,18 +23,18 @@ export function OfficeSupplierSummaryCard({ lang }: { lang: Language }) {
         <Truck className="h-8 w-8 text-amber-700/60" aria-hidden />
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-amber-100">
-          <dt className="text-[10px] font-black uppercase text-stone-500">{t(lang, "officeSupplierSummaryTotal")}</dt>
-          <dd className="mt-0.5 text-lg font-black text-stone-900">{summary.totalSuppliers}</dd>
+        <div className="rounded-2xl bg-card px-3 py-2 ring-1 ring-amber-100">
+          <dt className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "officeSupplierSummaryTotal")}</dt>
+          <dd className="mt-0.5 text-lg font-black text-foreground">{summary.totalSuppliers}</dd>
         </div>
-        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-amber-100">
-          <dt className="text-[10px] font-black uppercase text-stone-500">{t(lang, "officeSupplierSummaryWithBalance")}</dt>
-          <dd className="mt-0.5 text-lg font-black text-stone-900">{summary.suppliersWithBalance}</dd>
+        <div className="rounded-2xl bg-card px-3 py-2 ring-1 ring-amber-100">
+          <dt className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "officeSupplierSummaryWithBalance")}</dt>
+          <dd className="mt-0.5 text-lg font-black text-foreground">{summary.suppliersWithBalance}</dd>
         </div>
         {summary.largestBalanceUgx > 0 ? (
-          <div className="col-span-2 rounded-2xl bg-white px-3 py-2 ring-1 ring-amber-100">
-            <dt className="text-[10px] font-black uppercase text-stone-500">{t(lang, "officeSupplierSummaryLargest")}</dt>
-            <dd className="mt-0.5 font-bold text-stone-900">
+          <div className="col-span-2 rounded-2xl bg-card px-3 py-2 ring-1 ring-amber-100">
+            <dt className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "officeSupplierSummaryLargest")}</dt>
+            <dd className="mt-0.5 font-bold text-foreground">
               {summary.largestBalanceSupplierName} · UGX {summary.largestBalanceUgx.toLocaleString()}
             </dd>
           </div>

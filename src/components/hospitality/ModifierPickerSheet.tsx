@@ -93,7 +93,7 @@ export function ModifierPickerSheet({ lang, open, product, products, onClose, on
       zIndexClass="z-[65]"
       title={
         <div>
-          <h2 className="text-xl font-black text-stone-950">{product.name}</h2>
+          <h2 className="text-xl font-black text-foreground">{product.name}</h2>
           <p className="text-lg font-black text-waka-700">{formatUgx(previewTotal)}</p>
         </div>
       }
@@ -109,7 +109,7 @@ export function ModifierPickerSheet({ lang, open, product, products, onClose, on
     >
       {variants.length > 0 ? (
         <section className="mb-4">
-          <p className="mb-2 text-sm font-black text-stone-700">{t(lang, "modifierPickerVariant")}</p>
+          <p className="mb-2 text-sm font-black text-muted-foreground">{t(lang, "modifierPickerVariant")}</p>
           <div className="flex flex-wrap gap-2">
             {variants.map((v: ProductVariant) => (
               <button
@@ -118,7 +118,7 @@ export function ModifierPickerSheet({ lang, open, product, products, onClose, on
                 onClick={() => setVariantId(v.id)}
                 className={clsx(
                   "min-h-10 rounded-xl border px-3 text-sm font-black",
-                  variantId === v.id ? "border-waka-500 bg-waka-50" : "border-stone-200",
+                  variantId === v.id ? "border-waka-500 bg-waka-50" : "border-border",
                 )}
               >
                 {v.label}
@@ -131,12 +131,12 @@ export function ModifierPickerSheet({ lang, open, product, products, onClose, on
 
       {combo ? (
         <section className="mb-4">
-          <p className="mb-2 text-sm font-black text-stone-700">{t(lang, "modifierPickerCombo")}</p>
+          <p className="mb-2 text-sm font-black text-muted-foreground">{t(lang, "modifierPickerCombo")}</p>
           {combo.slots.map((slot) => (
             <label key={slot.id} className="mb-2 block">
-              <span className="text-xs font-bold text-stone-600">{slot.label}</span>
+              <span className="text-xs font-bold text-muted-foreground">{slot.label}</span>
               <select
-                className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 px-3 text-sm font-bold"
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-bold"
                 value={comboSelections.find((s) => s.slotId === slot.id)?.productId ?? ""}
                 onChange={(e) => {
                   const choice = slot.choices.find((c) => c.productId === e.target.value);
@@ -170,7 +170,7 @@ export function ModifierPickerSheet({ lang, open, product, products, onClose, on
 
       {groups.map((group) => (
         <section key={group.id} className="mb-4">
-          <p className="mb-2 text-sm font-black text-stone-800">
+          <p className="mb-2 text-sm font-black text-foreground">
             {group.label}
             {group.required ? <span className="text-rose-600"> *</span> : null}
           </p>
@@ -182,7 +182,7 @@ export function ModifierPickerSheet({ lang, open, product, products, onClose, on
                 onClick={() => toggleOption(group, opt.id)}
                 className={clsx(
                   "flex min-h-11 w-full items-center justify-between rounded-xl border px-3 text-sm font-bold",
-                  isSelected(group.id, opt.id) ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white",
+                  isSelected(group.id, opt.id) ? "border-waka-500 bg-waka-50" : "border-border bg-card",
                 )}
               >
                 <span>{opt.label}</span>
@@ -194,12 +194,12 @@ export function ModifierPickerSheet({ lang, open, product, products, onClose, on
       ))}
 
       <label className="block">
-        <span className="text-sm font-bold text-stone-700">{t(lang, "lineNotesLabel")}</span>
+        <span className="text-sm font-bold text-muted-foreground">{t(lang, "lineNotesLabel")}</span>
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder={t(lang, "lineNotesPlaceholder")}
-          className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 px-3 text-sm font-medium"
+          className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-medium"
         />
       </label>
     </ModalSheet>

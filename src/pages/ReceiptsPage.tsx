@@ -373,7 +373,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             <button
               type="button"
               onClick={() => void runProtected("export_data", onDownloadAll)}
-              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-stone-50"
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-muted"
               title={t(lang, "receiptsDownloadPdf")}
             >
               <FileDown className="h-4 w-4 shrink-0" aria-hidden />
@@ -383,7 +383,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           {showShopSummaries ? (
             <Link
               to="/reports"
-              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-50"
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm active:bg-muted"
             >
               <BarChart3 className="h-4 w-4 shrink-0" aria-hidden />
               <span className="hidden sm:inline">{t(lang, "salesHistoryReports")}</span>
@@ -415,7 +415,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             <SalesHistorySecondaryChips chips={secondaryChips} />
           ) : null}
 
-          <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-stone-50/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
+          <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-muted/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
             <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
             <SalesHistorySearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} />
 
@@ -427,7 +427,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
               />
             ) : null}
             {needsArchive && includeArchived && archivedSalesCount > 0 ? (
-              <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
+              <p className="text-xs font-semibold text-muted-foreground">{t(lang, "dateFilterArchiveIncluded")}</p>
             ) : null}
             {needsArchive && archivedSalesCount === 0 ? (
               <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
@@ -441,7 +441,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {sales.length > 0 && !hasAnyInRange ? (
-        <p className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm font-bold text-stone-600">
+        <p className="rounded-xl border border-border bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
           {t(lang, "receiptsNoSalesInRange")}
         </p>
       ) : null}
@@ -470,7 +470,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           />
         </section>
       ) : hasAnyInRange && searchQuery.trim() ? (
-        <p className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-bold text-stone-600">
+        <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">
           {t(lang, "posSellNoMatch")}
         </p>
       ) : null}
@@ -480,7 +480,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           <button
             type="button"
             onClick={() => setShowCancelled((v) => !v)}
-            className="px-1 text-sm font-bold text-stone-500 underline-offset-2 hover:underline"
+            className="px-1 text-sm font-bold text-muted-foreground underline-offset-2 hover:underline"
           >
             {showCancelled ? t(lang, "receiptsHideCancelled") : t(lang, "receiptsShowCancelled")} (
             {partitioned.cancelled.length})

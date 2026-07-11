@@ -48,7 +48,7 @@ export function AdminRightDrawer({ open, onClose, title, subtitle, wide, childre
               onClick={onClose}
             >
               <motion.div
-                className="absolute inset-0 bg-stone-950/45 backdrop-blur-[1px]"
+                className="absolute inset-0 bg-foreground/45 backdrop-blur-[1px]"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -58,7 +58,7 @@ export function AdminRightDrawer({ open, onClose, title, subtitle, wide, childre
                 aria-modal
                 aria-labelledby="admin-drawer-title"
                 className={clsx(
-                  "relative ml-auto flex h-full max-h-[100dvh] flex-col overflow-hidden border-l border-stone-200 bg-stone-50 shadow-2xl",
+                  "relative ml-auto flex h-full max-h-[100dvh] flex-col overflow-hidden border-l border-border bg-muted shadow-2xl",
                   wide ? "w-full max-w-2xl" : "w-full max-w-md lg:max-w-lg",
                 )}
                 initial={{ x: "100%" }}
@@ -67,17 +67,17 @@ export function AdminRightDrawer({ open, onClose, title, subtitle, wide, childre
                 transition={{ type: "spring", damping: 32, stiffness: 360 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3">
+                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-card px-4 py-3">
                   <div className="min-w-0">
-                    <h2 id="admin-drawer-title" className="text-base font-black text-stone-900">
+                    <h2 id="admin-drawer-title" className="text-base font-black text-foreground">
                       {title}
                     </h2>
-                    {subtitle ? <p className="mt-0.5 text-xs font-medium text-stone-500">{subtitle}</p> : null}
+                    {subtitle ? <p className="mt-0.5 text-xs font-medium text-muted-foreground">{subtitle}</p> : null}
                   </div>
                   <button
                     type="button"
                     onClick={onClose}
-                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-stone-600 hover:bg-stone-100"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
                     aria-label="Close"
                   >
                     <X className="h-5 w-5" />

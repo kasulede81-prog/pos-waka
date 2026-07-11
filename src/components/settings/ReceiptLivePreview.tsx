@@ -64,12 +64,12 @@ export function ReceiptLivePreview({ lang, preferences, planTier }: Props) {
   const html = useMemo(() => buildSaleReceiptHtml(display), [display]);
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-stone-50 p-4 shadow-inner">
-      <p className="text-center text-xs font-black uppercase tracking-wide text-stone-500">
+    <article className="rounded-2xl border border-border bg-muted p-4 shadow-inner">
+      <p className="text-center text-xs font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, "settingsReceiptPreviewTitle")}
       </p>
       <div
-        className="mx-auto mt-3 max-w-[320px] overflow-hidden rounded-xl border border-stone-200 bg-white p-3 shadow-sm"
+        className="mx-auto mt-3 max-w-[320px] overflow-hidden rounded-xl border border-border bg-card p-3 shadow-sm"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </article>

@@ -22,9 +22,9 @@ export function AdminDeviceForensicsPanel({ previewMode = false }: Props) {
   };
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-black text-stone-900">Device forensics</h2>
-      <p className="mt-0.5 text-xs text-stone-500">Search device UUID, fingerprint, or installation ID.</p>
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <h2 className="text-sm font-black text-foreground">Device forensics</h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">Search device UUID, fingerprint, or installation ID.</p>
 
       <div className="mt-3 flex gap-2">
         <input
@@ -32,7 +32,7 @@ export function AdminDeviceForensicsPanel({ previewMode = false }: Props) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && runSearch()}
           placeholder="Device ID or fingerprint…"
-          className="min-h-[44px] flex-1 rounded-xl border border-stone-200 px-3 font-mono text-xs"
+          className="min-h-[44px] flex-1 rounded-xl border border-border px-3 font-mono text-xs"
         />
         <button
           type="button"
@@ -47,21 +47,21 @@ export function AdminDeviceForensicsPanel({ previewMode = false }: Props) {
 
       <ul className="mt-3 space-y-2">
         {hits.length === 0 && query.trim().length >= 2 && !busy ? (
-          <li className="text-sm font-semibold text-stone-500">No devices found.</li>
+          <li className="text-sm font-semibold text-muted-foreground">No devices found.</li>
         ) : null}
         {hits.map((d) => (
-          <li key={d.device_id} className="rounded-xl border border-stone-100 bg-stone-50 p-3 text-sm">
-            <p className="font-black text-stone-900">{d.shop_name}</p>
-            <p className="font-mono text-[10px] text-stone-500">{d.device_id}</p>
-            <p className="mt-1 text-xs text-stone-600">
+          <li key={d.device_id} className="rounded-xl border border-border bg-muted p-3 text-sm">
+            <p className="font-black text-foreground">{d.shop_name}</p>
+            <p className="font-mono text-[10px] text-muted-foreground">{d.device_id}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
               {d.platform ?? "—"} · v{d.app_version ?? "—"} · {d.owner_email ?? "—"}
             </p>
-            <p className="mt-1 font-mono text-[10px] text-stone-500">FP {d.device_fingerprint.slice(0, 24)}…</p>
+            <p className="mt-1 font-mono text-[10px] text-muted-foreground">FP {d.device_fingerprint.slice(0, 24)}…</p>
             <p className="mt-1 text-xs">
               Last seen: {d.last_seen_at ? new Date(d.last_seen_at).toLocaleString("en-GB") : "—"}
             </p>
             {d.last_error ? <p className="mt-1 text-xs font-semibold text-rose-800">Error: {d.last_error}</p> : null}
-            <p className="text-xs text-stone-600">Pending: {d.pending_outbound ?? 0}</p>
+            <p className="text-xs text-muted-foreground">Pending: {d.pending_outbound ?? 0}</p>
             <Link
               to={internalAdminShopHref(d.shop_id, previewMode)}
               className="mt-2 inline-block text-xs font-black text-waka-700 underline"

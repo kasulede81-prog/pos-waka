@@ -42,14 +42,14 @@ function TypeRow({
   onToggle: (next: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
       <div className="min-w-0">
-        <p className="text-sm font-black text-stone-900">{displayName(id)}</p>
-        <p className="font-mono text-xs text-stone-500">{id}</p>
+        <p className="text-sm font-black text-foreground">{displayName(id)}</p>
+        <p className="font-mono text-xs text-muted-foreground">{id}</p>
         <div className="mt-1 flex flex-wrap gap-1">
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
-              enabled ? "bg-emerald-100 text-emerald-900" : "bg-stone-200 text-stone-700"
+              enabled ? "bg-emerald-100 text-emerald-900" : "bg-muted text-muted-foreground"
             }`}
           >
             {statusLabel}
@@ -65,7 +65,7 @@ function TypeRow({
         checked={enabled}
         disabled={busy}
         onCheckedChange={onToggle}
-        label={<span className="text-xs font-bold text-stone-600">{enabled ? "On" : "Off"}</span>}
+        label={<span className="text-xs font-bold text-muted-foreground">{enabled ? "On" : "Off"}</span>}
         row={false}
         className="flex shrink-0 items-center gap-2"
       />
@@ -144,7 +144,7 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
 
   if (!superOk) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-white p-6 text-center text-sm font-bold text-rose-800">
+      <div className="rounded-2xl border border-rose-200 bg-card p-6 text-center text-sm font-bold text-rose-800">
         Super admin only — Business Types settings.
       </div>
     );
@@ -155,8 +155,8 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
   return (
     <div className="space-y-5 pb-16">
       <div>
-        <h1 className="text-2xl font-black text-stone-900">Business Types</h1>
-        <p className="mt-1 text-sm text-stone-600">
+        <h1 className="text-2xl font-black text-foreground">Business Types</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Controls which types appear in registration and onboarding. Existing shops are not changed.
         </p>
       </div>
@@ -166,7 +166,7 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
       ) : null}
 
       {loading || !settings ? (
-        <p className="text-sm text-stone-500">Loading business type settings…</p>
+        <p className="text-sm text-muted-foreground">Loading business type settings…</p>
       ) : (
         <>
           <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
@@ -179,7 +179,7 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
           </div>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">Standard business types</h2>
+            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Standard business types</h2>
             {standardIds.map((id) => {
               const enabled = settings.enabled.includes(id);
               const row = visiblePreview.find((v) => v.id === id);
@@ -201,7 +201,7 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
             <h2 className="text-sm font-black uppercase tracking-wide text-violet-700">
               Optional / experimental (registration)
             </h2>
-            <p className="text-xs text-stone-600">
+            <p className="text-xs text-muted-foreground">
               Turn <strong>Off</strong> to hide from signup and onboarding (e.g. hardware, electronics). These toggles
               always apply — not hidden when the highlight option above is off.
             </p>
@@ -222,7 +222,7 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
             })}
           </section>
 
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-muted-foreground">
             Audit: <code className="font-mono">business_type_enabled</code> /{" "}
             <code className="font-mono">business_type_disabled</code> in internal ops audit log.
           </p>

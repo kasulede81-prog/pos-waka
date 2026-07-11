@@ -53,17 +53,17 @@ export function BiometricAuthSettingsForm({ lang }: { lang: Language }) {
   };
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "biometricSettingsTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "biometricSettingsSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "biometricSettingsTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "biometricSettingsSub")}</p>
 
       {loading ? (
-        <p className="mt-3 text-sm font-semibold text-stone-500">{t(lang, "biometricCheckingDevice")}</p>
+        <p className="mt-3 text-sm font-semibold text-muted-foreground">{t(lang, "biometricCheckingDevice")}</p>
       ) : capability ? (
         <dl className="mt-3 space-y-2 text-sm">
-          <div className="flex justify-between rounded-xl bg-stone-50 px-3 py-2">
-            <dt className="font-semibold text-stone-600">{t(lang, "biometricDeviceStatus")}</dt>
-            <dd className="font-black text-stone-900">
+          <div className="flex justify-between rounded-xl bg-muted px-3 py-2">
+            <dt className="font-semibold text-muted-foreground">{t(lang, "biometricDeviceStatus")}</dt>
+            <dd className="font-black text-foreground">
               {capability.isAvailable || capability.deviceIsSecure
                 ? t(lang, "biometricDeviceReady")
                 : t(lang, "biometricDeviceUnavailable")}
@@ -79,7 +79,7 @@ export function BiometricAuthSettingsForm({ lang }: { lang: Language }) {
       ) : null}
 
       {!isOwner ? (
-        <p className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700">
+        <p className="mt-3 rounded-xl border border-border bg-muted px-3 py-2 text-sm font-semibold text-muted-foreground">
           {t(lang, "biometricOwnerOnly")}
         </p>
       ) : null}
@@ -97,15 +97,15 @@ export function BiometricAuthSettingsForm({ lang }: { lang: Language }) {
           type="button"
           disabled={!isOwner || !enabled}
           onClick={() => setEnabled(false)}
-          className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white px-4 py-3 text-sm font-black text-stone-900 disabled:opacity-40"
+          className="min-h-[48px] rounded-2xl border-2 border-border bg-card px-4 py-3 text-sm font-black text-foreground disabled:opacity-40"
         >
           {t(lang, "biometricDisableButton")}
         </button>
       </div>
 
-      <p className="mt-3 text-xs font-medium text-stone-500">{t(lang, "biometricPrivacyNote")}</p>
+      <p className="mt-3 text-xs font-medium text-muted-foreground">{t(lang, "biometricPrivacyNote")}</p>
 
-      {msg ? <p className="mt-3 text-sm font-bold text-stone-800">{msg}</p> : null}
+      {msg ? <p className="mt-3 text-sm font-bold text-foreground">{msg}</p> : null}
     </article>
   );
 }

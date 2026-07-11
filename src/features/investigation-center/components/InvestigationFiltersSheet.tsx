@@ -35,7 +35,7 @@ const PRESETS: DateFilterValue[] = [
 ];
 
 const inputClass =
-  "mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 px-3 text-sm font-semibold outline-none focus:border-waka-500";
+  "mt-1 min-h-[44px] w-full rounded-xl border-2 border-border px-3 text-sm font-semibold outline-none focus:border-waka-500";
 
 export function InvestigationFiltersSheet({
   lang,
@@ -100,7 +100,7 @@ export function InvestigationFiltersSheet({
                 supplierId: "",
               })
             }
-            className="min-h-[48px] flex-1 rounded-2xl border-2 border-stone-200 text-sm font-black text-stone-700"
+            className="min-h-[48px] flex-1 rounded-2xl border-2 border-border text-sm font-black text-muted-foreground"
           >
             {t(lang, "icResetFilters")}
           </button>
@@ -116,7 +116,7 @@ export function InvestigationFiltersSheet({
     >
       <div className="space-y-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-widest text-stone-500">{t(lang, "icDateRange")}</p>
+          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "icDateRange")}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {PRESETS.map((preset) => {
               const key =
@@ -137,7 +137,7 @@ export function InvestigationFiltersSheet({
                   type="button"
                   onClick={() => applyPreset(preset)}
                   className={`rounded-full px-3 py-1.5 text-xs font-black ${
-                    active ? "bg-waka-600 text-white" : "border border-stone-200 bg-white text-stone-700"
+                    active ? "bg-waka-600 text-white" : "border border-border bg-card text-muted-foreground"
                   }`}
                 >
                   {t(lang, key)}
@@ -148,17 +148,17 @@ export function InvestigationFiltersSheet({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "auditFilterDateFrom")}
             <input type="date" className={inputClass} value={draftFrom} onChange={(e) => applyPatch({ dateFrom: e.target.value, quickDate: { kind: "range", fromKey: e.target.value, toKey: draftTo } })} />
           </label>
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "auditFilterDateTo")}
             <input type="date" className={inputClass} value={draftTo} onChange={(e) => applyPatch({ dateTo: e.target.value, quickDate: { kind: "range", fromKey: draftFrom, toKey: e.target.value } })} />
           </label>
         </div>
 
-        <label className="block text-sm font-bold text-stone-800">
+        <label className="block text-sm font-bold text-foreground">
           {t(lang, "auditFilterStaff")}
           <select className={inputClass} value={filters.actorUserId ?? "all"} onChange={(e) => applyPatch({ actorUserId: e.target.value })}>
             <option value="all">{t(lang, "auditFilterAll")}</option>
@@ -170,7 +170,7 @@ export function InvestigationFiltersSheet({
           </select>
         </label>
 
-        <label className="block text-sm font-bold text-stone-800">
+        <label className="block text-sm font-bold text-foreground">
           {t(lang, "auditFilterAction")}
           <select className={inputClass} value={filters.action ?? "all"} onChange={(e) => applyPatch({ action: e.target.value as AuditAction | "all" })}>
             <option value="all">{t(lang, "auditFilterAll")}</option>
@@ -182,7 +182,7 @@ export function InvestigationFiltersSheet({
           </select>
         </label>
 
-        <label className="block text-sm font-bold text-stone-800">
+        <label className="block text-sm font-bold text-foreground">
           {t(lang, "auditFilterProduct")}
           <select className={inputClass} value={filters.productId ?? ""} onChange={(e) => applyPatch({ productId: e.target.value })}>
             <option value="">{t(lang, "auditFilterAll")}</option>
@@ -196,7 +196,7 @@ export function InvestigationFiltersSheet({
           </select>
         </label>
 
-        <label className="block text-sm font-bold text-stone-800">
+        <label className="block text-sm font-bold text-foreground">
           {t(lang, "auditFilterCustomer")}
           <select className={inputClass} value={filters.customerId ?? ""} onChange={(e) => applyPatch({ customerId: e.target.value })}>
             <option value="">{t(lang, "auditFilterAll")}</option>
@@ -210,7 +210,7 @@ export function InvestigationFiltersSheet({
           </select>
         </label>
 
-        <label className="block text-sm font-bold text-stone-800">
+        <label className="block text-sm font-bold text-foreground">
           {t(lang, "auditFilterSupplier")}
           <select className={inputClass} value={filters.supplierId ?? ""} onChange={(e) => applyPatch({ supplierId: e.target.value })}>
             <option value="">{t(lang, "auditFilterAll")}</option>

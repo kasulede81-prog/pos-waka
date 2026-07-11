@@ -100,7 +100,7 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-4 text-sm font-semibold text-stone-600">
+      <div className="flex items-center gap-2 py-4 text-sm font-semibold text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin text-waka-600" />
         Loading AI settings…
       </div>
@@ -108,7 +108,7 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
   }
 
   if (!draft || !bundle) {
-    return <p className="text-sm font-semibold text-stone-600">Could not load shop AI settings.</p>;
+    return <p className="text-sm font-semibold text-muted-foreground">Could not load shop AI settings.</p>;
   }
 
   const masterOff = !draft.ai_enabled;
@@ -117,19 +117,19 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
   return (
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
-          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Current usage</p>
-          <p className="mt-1 text-lg font-black text-stone-900">
+        <div className="rounded-xl border border-border bg-muted px-3 py-3">
+          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Current usage</p>
+          <p className="mt-1 text-lg font-black text-foreground">
             {usage.requests_this_month} / {draft.monthly_request_limit}
           </p>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
-          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Last AI activity</p>
-          <p className="mt-1 text-sm font-bold text-stone-900">{formatActivity(usage.last_activity_at)}</p>
+        <div className="rounded-xl border border-border bg-muted px-3 py-3">
+          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Last AI activity</p>
+          <p className="mt-1 text-sm font-bold text-foreground">{formatActivity(usage.last_activity_at)}</p>
         </div>
       </div>
 
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
+      <div className="rounded-xl border border-border bg-card px-4 py-3">
         <WakaSwitch
           checked={draft.ai_enabled}
           disabled={!canManage || previewMode}
@@ -142,7 +142,7 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
         {FEATURE_FIELDS.map(({ key, label }) => (
           <div
             key={key}
-            className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3"
+            className="rounded-xl border border-border bg-muted px-4 py-3"
           >
             <WakaSwitch
               checked={draft[key] === true}
@@ -154,12 +154,12 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
         ))}
       </div>
 
-      <label className="block text-[11px] font-black uppercase tracking-wide text-stone-500">
+      <label className="block text-[11px] font-black uppercase tracking-wide text-muted-foreground">
         Monthly request limit
         <input
           type="number"
           min={0}
-          className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-semibold"
+          className="mt-1 min-h-[44px] w-full rounded-xl border border-border bg-card px-3 text-sm font-semibold"
           value={draft.monthly_request_limit}
           disabled={!canManage || previewMode}
           onChange={(e) =>
@@ -172,7 +172,7 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
       </label>
 
       {message ? (
-        <p className="rounded-xl bg-stone-100 px-3 py-2 text-sm font-semibold text-stone-800">{message}</p>
+        <p className="rounded-xl bg-muted px-3 py-2 text-sm font-semibold text-foreground">{message}</p>
       ) : null}
 
       {canManage ? (
@@ -186,7 +186,7 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
           Save shop AI settings
         </button>
       ) : (
-        <p className="text-xs font-semibold text-stone-500">Super admin or operations admin required to edit.</p>
+        <p className="text-xs font-semibold text-muted-foreground">Super admin or operations admin required to edit.</p>
       )}
     </div>
   );

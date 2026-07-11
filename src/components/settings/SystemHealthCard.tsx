@@ -64,12 +64,12 @@ export function SystemHealthCard({ lang, lazy = false }: { lang: Language; lazy?
   }, lazy ? [queue?.checkedAt] : [customers, sales, debtPayments, products, stockMovements, auditLogs, queue?.checkedAt]);
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "systemHealthTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "systemHealthSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "systemHealthTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "systemHealthSub")}</p>
 
       {loading ? (
-        <p className="mt-3 text-sm font-semibold text-stone-500">{t(lang, "systemHealthLoading")}</p>
+        <p className="mt-3 text-sm font-semibold text-muted-foreground">{t(lang, "systemHealthLoading")}</p>
       ) : offline ? (
         <p className="mt-3 text-sm font-bold text-amber-900">{t(lang, "systemHealthOffline")}</p>
       ) : error ? (
@@ -93,9 +93,9 @@ export function SystemHealthCard({ lang, lazy = false }: { lang: Language; lazy?
         {checks.map((c) => (
           <li
             key={c.id}
-            className="flex items-start justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2 text-sm"
+            className="flex items-start justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm"
           >
-            <span className="font-mono font-bold text-stone-800">{c.id}</span>
+            <span className="font-mono font-bold text-foreground">{c.id}</span>
             <span className={c.pass ? "font-black text-emerald-700" : "font-black text-red-700"}>
               {c.pass ? t(lang, "systemHealthPass") : t(lang, "systemHealthFail")}
             </span>
@@ -103,7 +103,7 @@ export function SystemHealthCard({ lang, lazy = false }: { lang: Language; lazy?
         ))}
       </ul>
       {!loading && checks.length > 0 ? (
-        <ul className="mt-2 space-y-1 text-xs font-medium text-stone-500">
+        <ul className="mt-2 space-y-1 text-xs font-medium text-muted-foreground">
           {checks.map((c) => (
             <li key={`${c.id}-detail`}>{c.detail}</li>
           ))}

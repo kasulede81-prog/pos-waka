@@ -35,21 +35,21 @@ export function AuditDetailDrawer({ lang, entry, productById, customerById, onCl
 
   const row = (label: string, value: string | null) =>
     value ? (
-      <div className="rounded-xl bg-stone-50 px-3 py-2">
-        <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{label}</p>
-        <p className="mt-0.5 text-sm font-semibold text-stone-900 break-words">{value}</p>
+      <div className="rounded-xl bg-muted px-3 py-2">
+        <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="mt-0.5 text-sm font-semibold text-foreground break-words">{value}</p>
       </div>
     ) : null;
 
   return (
     <AppModalOverlay className="z-[70] flex justify-end bg-black/40 p-0" role="dialog" aria-modal onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+        className="flex h-full w-full max-w-md flex-col bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex shrink-0 items-center justify-between border-b border-stone-100 px-4 py-3">
-          <h2 className="text-lg font-black text-stone-900">{t(lang, "auditDetailTitle")}</h2>
-          <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-stone-600" onClick={onClose}>
+        <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="text-lg font-black text-foreground">{t(lang, "auditDetailTitle")}</h2>
+          <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-muted-foreground" onClick={onClose}>
             {t(lang, "cancel")}
           </button>
         </header>
@@ -71,10 +71,10 @@ export function AuditDetailDrawer({ lang, entry, productById, customerById, onCl
           {row(t(lang, "auditColWhen"), when)}
           {row(t(lang, "auditColAction"), auditActionLabel(lang, entry.action))}
 
-          <div className="rounded-xl border border-stone-200 bg-stone-50/80">
+          <div className="rounded-xl border border-border bg-muted/80">
             <button
               type="button"
-              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-black uppercase tracking-wide text-stone-600"
+              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-black uppercase tracking-wide text-muted-foreground"
               onClick={() => setShowTechnical((v) => !v)}
               aria-expanded={showTechnical}
             >
@@ -82,7 +82,7 @@ export function AuditDetailDrawer({ lang, entry, productById, customerById, onCl
               <span aria-hidden>{showTechnical ? "−" : "+"}</span>
             </button>
             {showTechnical ? (
-              <pre className="max-h-64 overflow-auto border-t border-stone-200 px-3 py-2 text-xs font-mono text-stone-800">
+              <pre className="max-h-64 overflow-auto border-t border-border px-3 py-2 text-xs font-mono text-foreground">
                 {detail.payloadJson}
               </pre>
             ) : null}

@@ -64,7 +64,7 @@ export function AnalyticsDateFilterSheet({ lang, open, onClose, currentFilter, o
                 onClose();
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-black ${
-                isPresetActive(currentFilter, preset) ? "bg-waka-600 text-white" : "border border-stone-200 bg-white text-stone-700"
+                isPresetActive(currentFilter, preset) ? "bg-waka-600 text-white" : "border border-border bg-card text-muted-foreground"
               }`}
             >
               {t(lang, presetLabelKey(preset))}
@@ -72,20 +72,20 @@ export function AnalyticsDateFilterSheet({ lang, open, onClose, currentFilter, o
           ))}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "auditFilterDateFrom")}
             <input
               type="date"
-              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 px-3 text-sm font-semibold"
+              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-border px-3 text-sm font-semibold"
               value={customFrom}
               onChange={(e) => onApply({ kind: "range", fromKey: e.target.value, toKey: customTo || e.target.value })}
             />
           </label>
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "auditFilterDateTo")}
             <input
               type="date"
-              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 px-3 text-sm font-semibold"
+              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-border px-3 text-sm font-semibold"
               value={customTo}
               onChange={(e) => onApply({ kind: "range", fromKey: customFrom || e.target.value, toKey: e.target.value })}
             />

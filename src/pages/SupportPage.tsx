@@ -40,9 +40,9 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
         path="/support"
         structuredData="contact"
       />
-      <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-waka-sm">
-        <h1 className="text-2xl font-black text-stone-900">{t(lang, "supportPageTitle")}</h1>
-        <p className="mt-2 text-base font-medium text-stone-600">{t(lang, "supportPageSub")}</p>
+      <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-waka-sm">
+        <h1 className="text-2xl font-black text-foreground">{t(lang, "supportPageTitle")}</h1>
+        <p className="mt-2 text-base font-medium text-muted-foreground">{t(lang, "supportPageSub")}</p>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <a
@@ -63,9 +63,9 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
           </a>
         </div>
 
-        <p className="mt-2 text-center text-xs font-semibold text-stone-500">{WAKA_SUPPORT_EMAILS.join(" · ")}</p>
+        <p className="mt-2 text-center text-xs font-semibold text-muted-foreground">{WAKA_SUPPORT_EMAILS.join(" · ")}</p>
 
-        <p className="mt-6 rounded-2xl bg-stone-50 px-4 py-3 text-sm font-medium text-stone-700">{t(lang, "supportHoursNote")}</p>
+        <p className="mt-6 rounded-2xl bg-muted px-4 py-3 text-sm font-medium text-muted-foreground">{t(lang, "supportHoursNote")}</p>
 
         <div className="mt-8">
           <p className="text-sm font-black uppercase tracking-wide text-waka-800/90">{t(lang, "supportTopicsTitle")}</p>
@@ -73,13 +73,13 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
             {TOPIC_KEYS.map((key) => (
               <li
                 key={key}
-                className="rounded-2xl border border-stone-100 bg-stone-50/80 px-4 py-3 text-sm font-semibold text-stone-800"
+                className="rounded-2xl border border-border bg-muted/80 px-4 py-3 text-sm font-semibold text-foreground"
               >
                 · {t(lang, key)}
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-sm text-stone-600">{t(lang, "supportTopicHint")}</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t(lang, "supportTopicHint")}</p>
         </div>
 
         {isAuthenticated ? (
@@ -92,7 +92,7 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
           <WakaSupportCard />
         </div>
 
-        <div className="mt-8 flex flex-col gap-2 border-t border-stone-100 pt-6">
+        <div className="mt-8 flex flex-col gap-2 border-t border-border pt-6">
           {isAuthenticated ? (
             <Link to="/" className="text-center text-sm font-bold text-waka-800 underline">
               ← {t(lang, "upgradeBack")}

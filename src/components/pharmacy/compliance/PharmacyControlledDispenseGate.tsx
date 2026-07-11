@@ -3,7 +3,8 @@ import type { Language, PharmacyPrescription } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { AppModalOverlay } from "../../layout/AppModalOverlay";
 import { usePosStore } from "../../../store/usePosStore";
-import { verifyOwnerPin } from "../../../lib/sensitiveActionAuth";
+import { EnterpriseApprovalPinPad } from "../../auth/EnterpriseApprovalPinPad";
+import { verifyManagerApprovalPinSync } from "../../../lib/enterpriseSecurity/EnterpriseSecurityService";
 import type { ControlledDispenseValidation, ControlledLineInfo } from "../../../lib/pharmacyControlledMedicine";
 import { compliancePrefs } from "../../../lib/pharmacyControlledMedicine";
 import { buildControlledComplianceApproval } from "../../../lib/pharmacyControlledCheckout";
@@ -48,6 +49,8 @@ export function PharmacyControlledDispenseGate({
   const [patientVerified, setPatientVerified] = useState(false);
   const [prescriptionVerified, setPrescriptionVerified] = useState(false);
   const [managerPin, setManagerPin] = useState("");
+  const [managerPinReady, setManagerPinReady] = useState(false);
+  const [pinResetSignal, setPinResetSignal] = useState(0);
   const [managerReason, setManagerReason] = useState("");
   const [witnessId, setWitnessId] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +75,12 @@ export function PharmacyControlledDispenseGate({
         setError(t(lang, "pharmacyRxControlledReasonRequired"));
         return;
       }
-      if (!verifyOwnerPin(managerPin, preferences)) {
+      if (!managerPinReady || !managerPin) {
+        setError(t(lang, "pinIncorrect"));
+        setPinResetSignal((n) => n + 1);
+        return;
+      }
+      if (!verifyManagerApprovalPinSync(managerPin, preferences)) {
         logAuditAction("sensitive_action_auth_denied", "Controlled dispense manager PIN denied", {
           context: "controlled_dispense_gate",
           actorUserId: actor.userId,
@@ -122,6 +130,7 @@ export function PharmacyControlledDispenseGate({
     setPatientVerified(false);
     setPrescriptionVerified(false);
     setManagerPin("");
+    setManagerPinReady(false);
     setManagerReason("");
     setWitnessId("");
     setError(null);
@@ -131,18 +140,18 @@ export function PharmacyControlledDispenseGate({
 
   return (
     <AppModalOverlay className="z-[80] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-card p-5 shadow-2xl sm:rounded-3xl">
         <h2 className="text-xl font-black text-violet-950">{t(lang, "pharmacyComplianceGateTitle")}</h2>
-        <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "pharmacyComplianceGateSub")}</p>
+        <p className="mt-1 text-sm font-semibold text-muted-foreground">{t(lang, "pharmacyComplianceGateSub")}</p>
 
         <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-3">
           <p className="text-xs font-black uppercase text-violet-800">{t(lang, "pharmacyComplianceControlledLines")}</p>
           <ul className="mt-2 space-y-2">
             {validation.controlledLines.map((line: ControlledLineInfo) => (
-              <li key={line.productId} className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-stone-900">
+              <li key={line.productId} className="rounded-xl bg-card px-3 py-2 text-sm font-bold text-foreground">
                 <span>{line.productName}</span>
                 <span className="ml-2 text-violet-800">×{line.quantity}</span>
-                <span className="mt-0.5 block text-xs font-semibold text-stone-500">
+                <span className="mt-0.5 block text-xs font-semibold text-muted-foreground">
                   {scheduleLabel(lang, line.schedule)}
                   {line.regulatoryCategory ? ` · ${line.regulatoryCategory}` : ""}
                 </span>
@@ -155,17 +164,17 @@ export function PharmacyControlledDispenseGate({
         </div>
 
         {patientName ? (
-          <p className="mt-3 text-sm font-bold text-stone-800">
+          <p className="mt-3 text-sm font-bold text-foreground">
             {t(lang, "pharmacyCompliancePatient")}: {patientName}
           </p>
         ) : null}
         {prescription ? (
-          <p className="text-sm font-bold text-stone-800">
+          <p className="text-sm font-bold text-foreground">
             {t(lang, "pharmacyRxNumber")}: {prescription.prescriptionNumber}
           </p>
         ) : null}
 
-        <div className="mt-4 rounded-2xl border-2 border-stone-200 px-4 touch-manipulation">
+        <div className="mt-4 rounded-2xl border-2 border-border px-4 touch-manipulation">
           <WakaCheckbox
             checked={patientVerified}
             onCheckedChange={setPatientVerified}
@@ -174,7 +183,7 @@ export function PharmacyControlledDispenseGate({
         </div>
 
         {needsRxVerify ? (
-          <div className="mt-2 rounded-2xl border-2 border-stone-200 px-4 touch-manipulation">
+          <div className="mt-2 rounded-2xl border-2 border-border px-4 touch-manipulation">
             <WakaCheckbox
               checked={prescriptionVerified}
               onCheckedChange={setPrescriptionVerified}
@@ -184,7 +193,7 @@ export function PharmacyControlledDispenseGate({
         ) : null}
 
         {needsWitness ? (
-          <label className="mt-3 block text-sm font-bold text-stone-800">
+          <label className="mt-3 block text-sm font-bold text-foreground">
             {t(lang, "pharmacyComplianceWitness")}
             <select
               value={witnessId}
@@ -203,7 +212,7 @@ export function PharmacyControlledDispenseGate({
 
         {needsManager ? (
           <>
-            <label className="mt-3 block text-sm font-bold text-stone-800">
+            <label className="mt-3 block text-sm font-bold text-foreground">
               {t(lang, "pharmacyRxControlledReason")}
               <input
                 value={managerReason}
@@ -211,16 +220,18 @@ export function PharmacyControlledDispenseGate({
                 className="mt-1 min-h-[52px] w-full rounded-2xl border-2 border-violet-200 px-4 text-base"
               />
             </label>
-            <label className="mt-3 block text-sm font-bold text-stone-800">
-              {t(lang, "pharmacyRxManagerPin")}
-              <input
-                type="password"
-                inputMode="numeric"
-                value={managerPin}
-                onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                className="mt-1 min-h-[52px] w-full rounded-2xl border-2 border-violet-200 px-4 font-mono text-base"
-              />
-            </label>
+            <p className="mt-3 text-sm font-bold text-foreground">{t(lang, "pharmacyRxManagerPin")}</p>
+            <EnterpriseApprovalPinPad
+              lang={lang}
+              preferences={preferences}
+              disabled={!managerReason.trim()}
+              resetSignal={pinResetSignal}
+              className="mt-2"
+              onApproved={(pin) => {
+                setManagerPin(pin);
+                setManagerPinReady(true);
+              }}
+            />
           </>
         ) : null}
 

@@ -70,8 +70,8 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
     <div className="space-y-5 pb-8">
       <PageBackBar lang={lang} fallbackTo="/settings" />
       <div>
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "financeDiagnosticsTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "financeDiagnosticsSub")}</p>
+        <h1 className="text-2xl font-black text-foreground">{t(lang, "financeDiagnosticsTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "financeDiagnosticsSub")}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
@@ -84,11 +84,11 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
               "rounded-2xl border p-3 text-left transition",
               filter === key
                 ? "border-waka-500 bg-waka-50 shadow-waka-sm"
-                : "border-stone-200 bg-white hover:border-stone-300",
+                : "border-border bg-card hover:border-border",
             )}
           >
-            <p className="text-2xl font-black tabular-nums text-stone-900">{count}</p>
-            <p className="mt-1 text-[11px] font-bold leading-tight text-stone-600">{t(lang, labelKey)}</p>
+            <p className="text-2xl font-black tabular-nums text-foreground">{count}</p>
+            <p className="mt-1 text-[11px] font-bold leading-tight text-muted-foreground">{t(lang, labelKey)}</p>
           </button>
         ))}
       </div>
@@ -103,7 +103,7 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
               "rounded-full border px-2.5 py-1 text-xs font-bold",
               filter === key
                 ? "border-waka-500 bg-waka-600 text-white"
-                : "border-stone-200 bg-white text-stone-700",
+                : "border-border bg-card text-muted-foreground",
             )}
           >
             {t(lang, labelKey)}
@@ -125,8 +125,8 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
             className={clsx(
               "rounded-full border px-3 py-1.5 text-sm font-bold",
               sort === mode
-                ? "border-stone-400 bg-stone-800 text-white"
-                : "border-stone-200 bg-white text-stone-700",
+                ? "border-stone-400 bg-foreground text-background"
+                : "border-border bg-card text-muted-foreground",
             )}
           >
             {t(lang, labelKey)}
@@ -135,13 +135,13 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-semibold text-stone-600">
+        <p className="rounded-2xl border border-dashed border-border bg-muted px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
           {t(lang, "financeDiagnosticsEmpty")}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-stone-200 bg-white shadow-waka-sm">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-waka-sm">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-stone-100 bg-stone-50 text-[11px] font-black uppercase tracking-wide text-stone-500">
+            <thead className="border-b border-border bg-muted text-[11px] font-black uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-3 py-2.5">{t(lang, "financeDiagnosticsColProduct")}</th>
                 <th className="px-3 py-2.5">{t(lang, "financeDiagnosticsColStatus")}</th>
@@ -154,8 +154,8 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.productId} className="border-b border-stone-50 last:border-0">
-                  <td className="max-w-[10rem] truncate px-3 py-2.5 font-bold text-stone-900">{row.name}</td>
+                <tr key={row.productId} className="border-b border-border last:border-0">
+                  <td className="max-w-[10rem] truncate px-3 py-2.5 font-bold text-foreground">{row.name}</td>
                   <td className="px-3 py-2.5">
                     <span
                       className={clsx(
@@ -166,19 +166,19 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
                       {severityLabel(lang, row.severity)}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-stone-700">
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-muted-foreground">
                     {row.stockOnHand}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-stone-700">
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-muted-foreground">
                     {row.unitCostUgx.toLocaleString()}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-stone-700">
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-muted-foreground">
                     {row.sellPriceUgx.toLocaleString()}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums font-bold text-violet-800">
                     {row.stockValueUgx.toLocaleString()}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-bold text-stone-800">
+                  <td className="px-3 py-2.5 text-right tabular-nums font-bold text-foreground">
                     {row.marginPct != null ? `${row.marginPct}%` : "—"}
                   </td>
                 </tr>

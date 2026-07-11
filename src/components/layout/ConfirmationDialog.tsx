@@ -47,7 +47,7 @@ export function ConfirmationDialog({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-bold text-stone-800"
+            className="min-h-[44px] rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold text-foreground"
           >
             {t(lang, cancelLabelKey)}
           </button>
@@ -65,7 +65,7 @@ export function ConfirmationDialog({
         </div>
       }
     >
-      {children ? <div className="text-sm font-medium text-stone-600">{children}</div> : null}
+      {children ? <div className="text-sm font-medium text-muted-foreground">{children}</div> : null}
     </ModalSheet>
   );
 }

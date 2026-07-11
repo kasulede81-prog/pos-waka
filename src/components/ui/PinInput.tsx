@@ -12,8 +12,7 @@ function isAndroid(): boolean {
 }
 
 /**
- * PIN / numeric secret — `inputMode="numeric"` for the number pad on mobile.
- * On Android, avoid `-webkit-text-security` and `one-time-code` autocomplete; both can force the full QWERTY keyboard.
+ * @deprecated Authentication flows must use EnterprisePinPad. Non-auth numeric entry only.
  */
 export const PinInput = forwardRef<HTMLInputElement, PinInputProps>(function PinInput(
   { className, masked = true, autoComplete = "off", ...rest },

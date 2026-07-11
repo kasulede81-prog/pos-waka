@@ -89,9 +89,9 @@ export function PurchaseSyncDiagnosticsCard({ lang }: { lang: Language }) {
         : "warning";
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "purchaseSyncDiagnosticsTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "purchaseSyncDiagnosticsSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "purchaseSyncDiagnosticsTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "purchaseSyncDiagnosticsSub")}</p>
 
       <p
         className={`mt-3 rounded-xl px-3 py-2 text-sm font-bold ${
@@ -108,14 +108,14 @@ export function PurchaseSyncDiagnosticsCard({ lang }: { lang: Language }) {
           : null}
       </p>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-stone-600 sm:grid-cols-4">
+      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
         <span>{t(lang, "purchaseSyncUnsyncedVoids")}: {snapshot.unsyncedVoidCount}</span>
         <span>{t(lang, "purchaseSyncMissingStock")}: {snapshot.missingStockReversalCount}</span>
         <span>{t(lang, "purchaseSyncBaseUnitWarnings")}: {snapshot.baseUnitWarningCount}</span>
         <span>{t(lang, "purchaseSyncConflicts")}: {snapshot.supplierConflictCount}</span>
       </div>
 
-      <p className="mt-2 text-xs text-stone-500">
+      <p className="mt-2 text-xs text-muted-foreground">
         {t(lang, "purchaseSyncLastChecked")}: {new Date(snapshot.checkedAt).toLocaleString()}
         {snapshot.lastSyncAt
           ? ` · ${t(lang, "purchaseSyncLastSync")}: ${new Date(snapshot.lastSyncAt).toLocaleString()}`
@@ -129,7 +129,7 @@ export function PurchaseSyncDiagnosticsCard({ lang }: { lang: Language }) {
             type="button"
             onClick={() => setFilter(f)}
             className={`rounded-full px-3 py-1 text-xs font-bold ${
-              filter === f ? "bg-stone-900 text-white" : "border border-stone-200 bg-stone-50 text-stone-700"
+              filter === f ? "bg-foreground text-background" : "border border-border bg-muted text-muted-foreground"
             }`}
           >
             {filterLabel(lang, f)}
@@ -138,16 +138,16 @@ export function PurchaseSyncDiagnosticsCard({ lang }: { lang: Language }) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="mt-4 text-sm text-stone-500">{t(lang, "purchaseSyncNoRows")}</p>
+        <p className="mt-4 text-sm text-muted-foreground">{t(lang, "purchaseSyncNoRows")}</p>
       ) : (
         <>
           <div className="mt-4 space-y-2 md:hidden">
             {rows.slice(0, 50).map((row, idx) => (
-              <div key={`${row.purchaseId}-${row.kind}-${idx}`} className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs">
-                <p className="font-black text-stone-900">{kindLabel(lang, row.kind)}</p>
-                <p className="mt-1 font-mono text-[10px] text-stone-600">{row.purchaseId.slice(0, 8)}…</p>
-                <p className="mt-1 font-semibold text-stone-800">{row.supplierName}</p>
-                {row.detail ? <p className="mt-1 text-stone-600">{row.detail}</p> : null}
+              <div key={`${row.purchaseId}-${row.kind}-${idx}`} className="rounded-xl border border-border bg-muted p-3 text-xs">
+                <p className="font-black text-foreground">{kindLabel(lang, row.kind)}</p>
+                <p className="mt-1 font-mono text-[10px] text-muted-foreground">{row.purchaseId.slice(0, 8)}…</p>
+                <p className="mt-1 font-semibold text-foreground">{row.supplierName}</p>
+                {row.detail ? <p className="mt-1 text-muted-foreground">{row.detail}</p> : null}
                 <p className="mt-2 font-bold">{statusLabel(lang, row.status)}</p>
               </div>
             ))}
@@ -155,7 +155,7 @@ export function PurchaseSyncDiagnosticsCard({ lang }: { lang: Language }) {
           <div className="mt-4 hidden md:block">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-stone-200 text-stone-500">
+                <tr className="border-b border-border text-muted-foreground">
                   <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColKind")}</th>
                   <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColPurchase")}</th>
                   <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColSupplier")}</th>
@@ -165,11 +165,11 @@ export function PurchaseSyncDiagnosticsCard({ lang }: { lang: Language }) {
               </thead>
               <tbody>
                 {rows.slice(0, 50).map((row, idx) => (
-                  <tr key={`${row.purchaseId}-${row.kind}-${idx}`} className="border-b border-stone-100">
-                    <td className="py-2 pr-2 font-semibold text-stone-900">{kindLabel(lang, row.kind)}</td>
-                    <td className="py-2 pr-2 font-mono text-[10px] text-stone-600">{row.purchaseId.slice(0, 8)}…</td>
+                  <tr key={`${row.purchaseId}-${row.kind}-${idx}`} className="border-b border-border">
+                    <td className="py-2 pr-2 font-semibold text-foreground">{kindLabel(lang, row.kind)}</td>
+                    <td className="py-2 pr-2 font-mono text-[10px] text-muted-foreground">{row.purchaseId.slice(0, 8)}…</td>
                     <td className="py-2 pr-2">{row.supplierName}</td>
-                    <td className="py-2 pr-2 text-stone-600">{row.detail || "—"}</td>
+                    <td className="py-2 pr-2 text-muted-foreground">{row.detail || "—"}</td>
                     <td className="py-2 font-bold">{statusLabel(lang, row.status)}</td>
                   </tr>
                 ))}

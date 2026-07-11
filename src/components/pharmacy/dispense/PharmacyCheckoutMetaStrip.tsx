@@ -21,8 +21,8 @@ export function PharmacyCheckoutMetaStrip({ lang, selectedRx, products, draftLin
   ).length;
 
   return (
-    <div className="flex flex-wrap gap-1.5 border-b border-stone-100 bg-stone-50 px-2 py-1.5 text-[10px] font-bold text-stone-700">
-      <span className="rounded-md bg-white px-2 py-1 ring-1 ring-stone-200">
+    <div className="flex flex-wrap gap-1.5 border-b border-border bg-muted px-2 py-1.5 text-[10px] font-bold text-muted-foreground">
+      <span className="rounded-md bg-card px-2 py-1 ring-1 ring-border">
         {t(lang, "pharmacyDispenseType")}:{" "}
         {dispenseMode === "prescription"
           ? t(lang, "pharmacyDispenseTypeRx")
@@ -30,13 +30,13 @@ export function PharmacyCheckoutMetaStrip({ lang, selectedRx, products, draftLin
       </span>
       {selectedRx ? (
         <>
-          <span className="rounded-md bg-white px-2 py-1 ring-1 ring-stone-200">
+          <span className="rounded-md bg-card px-2 py-1 ring-1 ring-border">
             {t(lang, "pharmacyDispenseRxNumber")}: {selectedRx.prescriptionNumber}
           </span>
-          <span className="rounded-md bg-white px-2 py-1 ring-1 ring-stone-200">
+          <span className="rounded-md bg-card px-2 py-1 ring-1 ring-border">
             {t(lang, "pharmacyDispenseVerifyStatus")}: {t(lang, prescriptionStatusLabelKey(selectedRx.status))}
           </span>
-          <span className="rounded-md bg-white px-2 py-1 ring-1 ring-stone-200">
+          <span className="rounded-md bg-card px-2 py-1 ring-1 ring-border">
             {t(lang, "pharmacyRxType")}: {t(lang, prescriptionTypeLabelKey(selectedRx.type))}
           </span>
         </>

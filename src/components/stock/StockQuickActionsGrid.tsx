@@ -72,20 +72,20 @@ export function StockQuickActionsGrid({
 
   return (
     <section className="space-y-2">
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-stone-500">
+      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, "ownerSectionQuickActions")}
       </h3>
       <div className="grid grid-cols-2 gap-2">
         {actions.map((action) => {
           const Icon = action.icon;
           const className =
-            "flex min-h-[72px] flex-col items-start justify-between rounded-xl border border-stone-200/90 bg-white p-3 text-left shadow-sm transition-all active:scale-[0.98] active:border-waka-300 active:shadow-md disabled:opacity-50 motion-reduce:active:scale-100";
+            "flex min-h-[72px] flex-col items-start justify-between rounded-xl border border-border/90 bg-card p-3 text-left shadow-sm transition-all active:scale-[0.98] active:border-waka-300 active:shadow-md disabled:opacity-50 motion-reduce:active:scale-100";
           const inner = (
             <>
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-stone-100 text-stone-700">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                 <Icon className="h-[18px] w-[18px]" aria-hidden />
               </span>
-              <span className="text-xs font-black leading-tight text-stone-950">{action.label}</span>
+              <span className="text-xs font-black leading-tight text-foreground">{action.label}</span>
             </>
           );
           if (action.href) {

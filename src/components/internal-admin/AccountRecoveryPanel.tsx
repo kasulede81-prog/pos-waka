@@ -61,12 +61,12 @@ export function AccountRecoveryPanel({
   return (
     <section className="rounded-2xl border-2 border-amber-200 bg-amber-50/90 p-4 shadow-sm">
       <p className="text-[10px] font-black uppercase tracking-wide text-amber-900">Account recovery</p>
-      <h2 className="mt-0.5 text-base font-black text-stone-900">Reset login &amp; back office PIN</h2>
-      <p className="mt-1 text-xs font-medium text-stone-700">
+      <h2 className="mt-0.5 text-base font-black text-foreground">Reset login &amp; back office PIN</h2>
+      <p className="mt-1 text-xs font-medium text-muted-foreground">
         Use when the shop owner forgot their sign-in password or back office / lock PIN.
       </p>
       {ownerEmail ? (
-        <p className="mt-2 font-mono text-xs text-stone-800">
+        <p className="mt-2 font-mono text-xs text-foreground">
           Owner: <span className="font-bold">{ownerEmail}</span>
         </p>
       ) : (
@@ -76,7 +76,7 @@ export function AccountRecoveryPanel({
         <button
           type="button"
           disabled={busy || !ownerEmail}
-          className="min-h-[48px] flex-1 rounded-xl border-2 border-stone-300 bg-white px-4 text-sm font-black text-stone-900 disabled:opacity-40"
+          className="min-h-[48px] flex-1 rounded-xl border-2 border-border bg-card px-4 text-sm font-black text-foreground disabled:opacity-40"
           onClick={() =>
             void run(
               "admin_password_reset_email",
@@ -125,7 +125,7 @@ export function AccountRecoveryPanel({
       </div>
       <div className="mt-4 rounded-xl border border-violet-200 bg-white/90 p-3">
         <p className="text-xs font-black text-violet-950">Set password now (no email link)</p>
-        <p className="mt-1 text-[11px] font-medium text-stone-600">
+        <p className="mt-1 text-[11px] font-medium text-muted-foreground">
           Owner signs in with this password immediately. Share it by phone or WhatsApp only.
         </p>
         <input
@@ -134,7 +134,7 @@ export function AccountRecoveryPanel({
           value={directPassword}
           onChange={(e) => setDirectPassword(e.target.value)}
           placeholder="New password (8+ characters)"
-          className="mt-2 w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
+          className="mt-2 w-full rounded-lg border border-border px-3 py-2 text-sm"
         />
         <input
           type="password"
@@ -142,7 +142,7 @@ export function AccountRecoveryPanel({
           value={directConfirm}
           onChange={(e) => setDirectConfirm(e.target.value)}
           placeholder="Confirm password"
-          className="mt-2 w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
+          className="mt-2 w-full rounded-lg border border-border px-3 py-2 text-sm"
         />
         <button
           type="button"
@@ -170,7 +170,7 @@ export function AccountRecoveryPanel({
         </button>
       </div>
 
-      <ul className="mt-3 list-disc space-y-1 pl-4 text-[11px] font-medium text-stone-600">
+      <ul className="mt-3 list-disc space-y-1 pl-4 text-[11px] font-medium text-muted-foreground">
         <li>Email reset sends a link only if the owner has a real email on file (not a phone-only login).</li>
         <li>Back office PIN is cleared on the server; the owner must open Waka POS while online.</li>
         <li>Staff switch-user PINs are reset in Settings → Staff on the owner device.</li>

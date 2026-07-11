@@ -126,8 +126,8 @@ export function CloudRecoveryScreen({
         <WakaStartupBrand compact className="mb-6 mt-2" />
         <div className="mx-auto w-full max-w-md space-y-5">
           <div className="text-center">
-            <p className="text-base font-black text-stone-900">{t(lang, "recoveryProbeTitle")}</p>
-            <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "recoveryProbeSub")}</p>
+            <p className="text-base font-black text-foreground">{t(lang, "recoveryProbeTitle")}</p>
+            <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "recoveryProbeSub")}</p>
           </div>
 
           <StartupProgressBar />
@@ -159,18 +159,18 @@ export function CloudRecoveryScreen({
       <WakaStartupBrand compact className="mb-5 mt-2" />
       <div className="mx-auto w-full max-w-md space-y-5">
         <div className="text-center">
-          <p className="text-base font-black text-stone-900">
+          <p className="text-base font-black text-foreground">
             {failed ? t(lang, "recoveryFailedTitle") : t(lang, "recoveryTitle")}
           </p>
-          <p className="mt-1 text-sm font-medium text-stone-600">
+          <p className="mt-1 text-sm font-medium text-muted-foreground">
             {failed ? t(lang, "recoveryFailedSub") : t(lang, "recoverySub")}
           </p>
         </div>
 
         <StartupProgressBar value={progressPct} />
-        <p className="text-center text-xs font-bold tabular-nums text-stone-500">{progressPct}%</p>
+        <p className="text-center text-xs font-bold tabular-nums text-muted-foreground">{progressPct}%</p>
 
-        <ul className="space-y-2 rounded-2xl border border-stone-100 bg-white/95 p-4 shadow-waka-sm">
+        <ul className="space-y-2 rounded-2xl border border-border bg-card/95 p-4 shadow-waka-sm">
           {DISPLAY_STEPS.map((step) => {
             const idx = stepIndex(step);
             const done = lastIdx >= idx;
@@ -188,13 +188,13 @@ export function CloudRecoveryScreen({
               <li
                 key={step}
                 className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm ${
-                  active ? "bg-waka-50 font-bold text-waka-950" : done ? "text-stone-800" : "text-stone-400"
+                  active ? "bg-waka-50 font-bold text-waka-950" : done ? "text-foreground" : "text-muted-foreground"
                 }`}
               >
                 <span className="flex items-center gap-2">
                   <span
                     className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${
-                      done ? "bg-emerald-100 text-emerald-800" : active ? "bg-waka-200 text-waka-900" : "bg-stone-100"
+                      done ? "bg-emerald-100 text-emerald-800" : active ? "bg-waka-200 text-waka-900" : "bg-muted"
                     }`}
                   >
                     {done ? "✓" : active ? "…" : ""}
@@ -202,7 +202,7 @@ export function CloudRecoveryScreen({
                   {t(lang, stepLabelKey(step))}
                 </span>
                 {done && countLabel !== "0" ? (
-                  <span className="tabular-nums text-xs font-black text-stone-600">{countLabel}</span>
+                  <span className="tabular-nums text-xs font-black text-muted-foreground">{countLabel}</span>
                 ) : null}
               </li>
             );
@@ -210,27 +210,27 @@ export function CloudRecoveryScreen({
         </ul>
 
         {session.lastCompletedStep ? (
-          <p className="text-center text-xs font-semibold text-stone-500">
+          <p className="text-center text-xs font-semibold text-muted-foreground">
             {t(lang, "recoveryLastStep")}: {t(lang, stepLabelKey(session.lastCompletedStep))}
           </p>
         ) : null}
 
-        <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold uppercase tracking-wide text-stone-500">
-          <div className="rounded-xl bg-stone-50 px-2 py-2">
+        <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          <div className="rounded-xl bg-muted px-2 py-2">
             <p>{t(lang, "recoveryCountProducts")}</p>
-            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">
+            <p className="mt-0.5 text-base font-black tabular-nums text-foreground">
               {hasRestoredCounts ? restored.products : "—"}
             </p>
           </div>
-          <div className="rounded-xl bg-stone-50 px-2 py-2">
+          <div className="rounded-xl bg-muted px-2 py-2">
             <p>{t(lang, "recoveryCountSales")}</p>
-            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">
+            <p className="mt-0.5 text-base font-black tabular-nums text-foreground">
               {hasRestoredCounts ? restored.sales : "—"}
             </p>
           </div>
-          <div className="rounded-xl bg-stone-50 px-2 py-2">
+          <div className="rounded-xl bg-muted px-2 py-2">
             <p>{t(lang, "recoveryCountCustomers")}</p>
-            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">
+            <p className="mt-0.5 text-base font-black tabular-nums text-foreground">
               {hasRestoredCounts ? restored.customers : "—"}
             </p>
           </div>
@@ -239,7 +239,7 @@ export function CloudRecoveryScreen({
         {hasRestoredCounts ? (
           <p className="text-center text-xs font-semibold text-emerald-800">{t(lang, "recoveryRestoredToDevice")}</p>
         ) : downloaded.products > 0 || downloaded.sales > 0 ? (
-          <p className="text-center text-xs font-semibold text-stone-500">{t(lang, "recoveryDownloadedFromCloud")}</p>
+          <p className="text-center text-xs font-semibold text-muted-foreground">{t(lang, "recoveryDownloadedFromCloud")}</p>
         ) : null}
 
         {showEscape ? (
@@ -280,8 +280,8 @@ export function CloudRecoveryScreen({
               </div>
             ) : null}
             {session.integrityDiagnostics.inventoryReconciliation ? (
-              <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800">
-                <p className="font-black uppercase text-stone-600">
+              <div className="rounded-xl border border-border bg-muted px-3 py-2 text-xs text-foreground">
+                <p className="font-black uppercase text-muted-foreground">
                   {t(lang, "recoveryInventoryReconciliationTitle")}
                 </p>
                 <p className="mt-1">

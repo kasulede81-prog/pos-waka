@@ -7,10 +7,8 @@ import {
   type PromotionalGrant,
   type PromotionalPlanCode,
 } from "../../../lib/growthCampaigns";
+import { subscriptionEngine } from "../../../lib/subscriptionEngine";
 import {
-  adminExtendPromotionalAccess,
-  adminGrantPromotionalAccess,
-  adminRevokePromotionalAccess,
   fetchPromotionalGrantsForShop,
 } from "../../../lib/growthCampaignsAdmin";
 
@@ -55,14 +53,13 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
     void load();
   }, [load]);
 
-  const after = async (res: { ok: boolean; error?: string }, okText: string) => {
+  const after = async (res: { ok: boolean; message?: string }, okText: string) => {
     setBusy(false);
     if (!res.ok) {
-      setMessage(`Failed: ${res.error ?? "unknown error"}`);
+      setMessage(`Failed: ${res.message ?? "unknown error"}`);
       return;
     }
     setMessage(okText);
-    window.dispatchEvent(new Event("waka:subscription-updated"));
     await load();
   };
 
@@ -70,7 +67,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
     if (busy || previewMode) return;
     setBusy(true);
     setMessage(null);
-    const res = await adminGrantPromotionalAccess({ shopId, planCode: plan, days, reason });
+    const res = await subscriptionEngine.grantPromotionalAccess({ shopId, planCode: plan, days, reason });
     await after(res, "Promotional access granted.");
   };
 
@@ -78,7 +75,12 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
     if (busy || previewMode) return;
     setBusy(true);
     setMessage(null);
-    const res = await adminExtendPromotionalAccess(grantId, extendDays, reason || undefined);
+    const res = await subscriptionEngine.extendPromotionalAccess({
+      grantId,
+      shopId,
+      extraDays: extendDays,
+      reason: reason || undefined,
+    });
     await after(res, "Grant extended.");
   };
 
@@ -87,7 +89,11 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
     if (!window.confirm("Revoke this promotional grant? The shop falls back to its real subscription.")) return;
     setBusy(true);
     setMessage(null);
-    const res = await adminRevokePromotionalAccess(grantId, reason || undefined);
+    const res = await subscriptionEngine.revokePromotionalGrant({
+      grantId,
+      shopId,
+      reason: reason || undefined,
+    });
     await after(res, "Grant revoked.");
   };
 
@@ -101,7 +107,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-stone-600">
+      <p className="text-xs text-muted-foreground">
         Temporary premium access for growth campaigns. The paid subscription stays untouched — on expiry or
         revoke the shop falls back to it (or to Free).
       </p>
@@ -115,10 +121,10 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
           {grants.map((g) => {
             const active = isGrantActive(g);
             return (
-              <li key={g.id} className="rounded-xl border border-stone-200 bg-stone-50/70 p-3">
+              <li key={g.id} className="rounded-xl border border-border bg-muted/70 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-black text-stone-900">
+                    <p className="text-sm font-black text-foreground">
                       {promotionalPlanLabel(g.planCode as PromotionalPlanCode)}
                       <span
                         className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
@@ -126,13 +132,13 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
                             ? "bg-emerald-100 text-emerald-800"
                             : g.revokedAt
                               ? "bg-rose-100 text-rose-800"
-                              : "bg-stone-200 text-stone-600"
+                              : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {active ? "Active" : g.revokedAt ? "Revoked" : "Expired"}
                       </span>
                     </p>
-                    <p className="text-[11px] font-semibold text-stone-500">
+                    <p className="text-[11px] font-semibold text-muted-foreground">
                       {SOURCE_LABELS[g.grantedBy] ?? g.grantedBy} · expires{" "}
                       {new Date(g.expiresAt).toLocaleDateString("en-GB")}
                       {g.reason ? ` · ${g.reason}` : ""}
@@ -144,7 +150,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
                         type="button"
                         disabled={busy}
                         onClick={() => void handleExtend(g.id)}
-                        className="min-h-[40px] rounded-xl bg-stone-900 px-3 text-xs font-black text-white disabled:opacity-40"
+                        className="min-h-[40px] rounded-xl bg-foreground px-3 text-xs font-black text-background disabled:opacity-40"
                       >
                         Extend +{extendDays}d
                       </button>
@@ -164,18 +170,18 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
           })}
         </ul>
       ) : (
-        <p className="text-sm font-semibold text-stone-500">No promotional grants for this shop.</p>
+        <p className="text-sm font-semibold text-muted-foreground">No promotional grants for this shop.</p>
       )}
 
       {canManage ? (
-        <div className="rounded-xl border border-stone-200 bg-white p-3">
-          <p className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">Grant Promotional Access</p>
+        <div className="rounded-xl border border-border bg-card p-3">
+          <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">Grant Promotional Access</p>
           <div className="grid gap-2 sm:grid-cols-3">
             <select
               value={plan}
               onChange={(e) => setPlan(e.target.value as PromotionalPlanCode)}
               disabled={busy}
-              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-waka-200"
+              className="min-h-[44px] rounded-xl border border-border bg-card px-3 text-sm font-black text-foreground outline-none focus:ring-2 focus:ring-waka-200"
             >
               {PROMOTIONAL_PLAN_CODES.map((p) => (
                 <option key={p} value={p}>
@@ -190,7 +196,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
               value={days}
               onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 30))}
               disabled={busy}
-              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-waka-200"
+              className="min-h-[44px] rounded-xl border border-border bg-card px-3 text-sm font-black text-foreground outline-none focus:ring-2 focus:ring-waka-200"
               placeholder="Days"
             />
             <input
@@ -200,7 +206,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
               value={extendDays}
               onChange={(e) => setExtendDays(Math.max(1, Number(e.target.value) || 30))}
               disabled={busy}
-              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-waka-200"
+              className="min-h-[44px] rounded-xl border border-border bg-card px-3 text-sm font-black text-foreground outline-none focus:ring-2 focus:ring-waka-200"
               placeholder="Extend days"
               title="Days used by the Extend button"
             />
@@ -209,7 +215,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={busy}
-            className="mt-2 min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 outline-none focus:ring-2 focus:ring-waka-200"
+            className="mt-2 min-h-[44px] w-full rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-waka-200"
             placeholder="Reason (e.g. launch promo, support goodwill)"
           />
           <button
@@ -223,7 +229,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
           </button>
         </div>
       ) : (
-        <p className="text-xs font-semibold text-stone-500">You don't have permission to manage grants.</p>
+        <p className="text-xs font-semibold text-muted-foreground">You don't have permission to manage grants.</p>
       )}
     </div>
   );

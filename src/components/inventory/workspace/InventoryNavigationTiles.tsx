@@ -19,7 +19,7 @@ export function InventoryNavigationTiles({ lang, tiles, titleKey = "iwSectionNav
 
   return (
     <section className="space-y-2">
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-stone-500">
+      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, titleKey)}
       </h3>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -30,12 +30,12 @@ export function InventoryNavigationTiles({ lang, tiles, titleKey = "iwSectionNav
               key={tile.id}
               to={tile.href}
               className={clsx(
-                "group relative flex min-h-[88px] flex-col justify-between rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm",
+                "group relative flex min-h-[88px] flex-col justify-between rounded-2xl border border-border/90 bg-card p-3 shadow-sm",
                 "transition-all hover:-translate-y-0.5 hover:border-waka-200 hover:shadow-md active:scale-[0.98] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
               )}
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100 text-stone-700 transition-colors group-hover:bg-waka-100 group-hover:text-waka-800">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:bg-waka-100 group-hover:text-waka-800">
                   <Icon className="h-5 w-5" aria-hidden />
                 </span>
                 {tile.badge != null && tile.badge > 0 ? (
@@ -44,7 +44,7 @@ export function InventoryNavigationTiles({ lang, tiles, titleKey = "iwSectionNav
                   </span>
                 ) : null}
               </div>
-              <span className="text-sm font-black leading-tight text-stone-950">{t(lang, tile.labelKey)}</span>
+              <span className="text-sm font-black leading-tight text-foreground">{t(lang, tile.labelKey)}</span>
             </Link>
           );
         })}

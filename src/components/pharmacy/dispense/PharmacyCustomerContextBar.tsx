@@ -33,9 +33,9 @@ function modeLabelKey(mode: PharmacyCustomerContextMode): string {
 
 export function PharmacyCustomerContextBar({ lang, mode, displayLabel, onModeChange }: Props) {
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-stone-200 bg-white px-2 py-2 sm:px-3">
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card px-2 py-2 sm:px-3">
       <label className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-md">
-        <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-stone-500">
+        <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
           {t(lang, "pharmacyDispenseContextLabel")}
         </span>
         <span className="relative min-w-0 flex-1">
@@ -43,8 +43,8 @@ export function PharmacyCustomerContextBar({ lang, mode, displayLabel, onModeCha
             value={mode}
             onChange={(e) => onModeChange(e.target.value as PharmacyCustomerContextMode)}
             className={clsx(
-              "w-full appearance-none rounded-xl border-2 border-stone-200 bg-stone-50 py-2.5 pl-3 pr-9",
-              "text-sm font-black text-stone-950 touch-manipulation",
+              "w-full appearance-none rounded-xl border-2 border-border bg-muted py-2.5 pl-3 pr-9",
+              "text-sm font-black text-foreground touch-manipulation",
               "focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-200/80",
             )}
           >
@@ -55,7 +55,7 @@ export function PharmacyCustomerContextBar({ lang, mode, displayLabel, onModeCha
             ))}
           </select>
           <ChevronDown
-            className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500"
+            className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden
           />
         </span>

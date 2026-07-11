@@ -23,10 +23,10 @@ export function CommandCenterRecommendations({ lang, recommendations, sectionId 
   if (recommendations.length === 0) return null;
 
   return (
-    <section id={sectionId} className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm sm:p-5">
+    <section id={sectionId} className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
       <div className="flex items-center gap-2">
         <Lightbulb className="h-4 w-4 text-amber-500" aria-hidden />
-        <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "cmdCenterRecommendationsTitle")}</h2>
+        <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterRecommendationsTitle")}</h2>
       </div>
       <ul className="mt-3 space-y-2">
         {recommendations.map((rec) => (
@@ -37,12 +37,12 @@ export function CommandCenterRecommendations({ lang, recommendations, sectionId 
               toneClass[rec.tone],
             )}
           >
-            <p className="min-w-0 flex-1 text-sm font-bold text-stone-900">
+            <p className="min-w-0 flex-1 text-sm font-bold text-foreground">
               {rec.titleVars ? tTemplate(lang, rec.titleKey, rec.titleVars) : t(lang, rec.titleKey)}
             </p>
             <Link
               to={rec.actionTo}
-              className="shrink-0 rounded-xl bg-white/90 px-3 py-2 text-xs font-black text-stone-900 shadow-sm ring-1 ring-stone-200/80"
+              className="shrink-0 rounded-xl bg-white/90 px-3 py-2 text-xs font-black text-foreground shadow-sm ring-1 ring-border/80"
             >
               {t(lang, rec.actionLabelKey)}
             </Link>

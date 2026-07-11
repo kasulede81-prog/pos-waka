@@ -56,8 +56,10 @@ vi.mock("./offlineStaffCache", async () => {
 
 vi.mock("./deviceAuthority", () => ({
   fetchDeviceAuthorityContext: vi.fn(async () => ({
-    isPrimary: false,
-    primaryDeviceFingerprint: "fp-primary",
+    isDeviceAuthorized: true,
+    isApproved: true,
+    isOperational: true,
+    approvalStatus: "approved",
   })),
 }));
 

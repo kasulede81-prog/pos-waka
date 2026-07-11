@@ -47,6 +47,15 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            if (id.includes("node_modules/jspdf")) return "jspdf";
+            if (id.includes("node_modules/html2canvas")) return "html2canvas";
+            if (id.includes("node_modules/lottie-react") || id.includes("node_modules/lottie-web")) return "lottie";
+            if (id.includes("node_modules/leaflet") || id.includes("node_modules/react-leaflet")) return "maps";
+            if (id.includes("node_modules/xlsx")) return "xlsx";
+            if (id.includes("node_modules/recharts")) return "charts";
+            if (id.includes("/src/pages/InternalWakaAdminPage") || id.includes("/src/components/internal-admin/")) {
+              return "internal-admin";
+            }
             if (id.includes("node_modules/@supabase")) return "supabase";
             if (id.includes("node_modules/@capacitor")) return "capacitor";
             if (id.includes("node_modules/@tanstack/react-query")) return "rq";
@@ -83,6 +92,8 @@ export default defineConfig(({ mode }) => {
           clientsClaim: true,
           skipWaiting: true,
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
+          /** Internal admin bundle is online-only; exclude from SW precache (exceeds 2 MiB default). */
+          globIgnores: ["**/internal-admin-*.js"],
           navigateFallback: "/index.html",
           navigateFallbackDenylist: [
             /^\/auth\/callback/,

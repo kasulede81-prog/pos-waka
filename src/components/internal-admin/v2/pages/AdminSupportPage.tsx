@@ -40,8 +40,8 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-black text-stone-900">{t(lang, "internalSupportTitle")}</h1>
-        <p className="text-sm text-stone-500">Helpdesk inbox</p>
+        <h1 className="text-xl font-black text-foreground">{t(lang, "internalSupportTitle")}</h1>
+        <p className="text-sm text-muted-foreground">Helpdesk inbox</p>
         {perms.canShopSupport ? (
           <p className="mt-1 text-xs font-semibold text-amber-900">
             Reset owner login or back office PIN: Shops → open shop → <strong>Account recovery</strong> card, or use the
@@ -52,6 +52,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
 
       {perms.canShopSupport && (perms.role === "super_admin" || perms.role === "support_admin") ? (
         <SupportPasswordResetPanel
+          lang={lang}
           previewMode={previewMode}
           onSuccess={() => setPasswordLogKey((k) => k + 1)}
           onToast={(toast) => {
@@ -74,7 +75,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
             type="button"
             onClick={() => setFilter(f)}
             className={`min-h-[44px] rounded-full px-4 text-xs font-black uppercase ${
-              filter === f ? "bg-waka-600 text-white" : "bg-white ring-1 ring-stone-200"
+              filter === f ? "bg-waka-600 text-white" : "bg-card ring-1 ring-border"
             }`}
           >
             {f}
@@ -85,7 +86,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
       {data.opsLoading && list.length === 0 ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-2xl bg-stone-200" />
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
           ))}
         </div>
       ) : list.length === 0 ? (
@@ -143,18 +144,18 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
                 {tk.issue_type === "pilot_support" && tk.diagnostics_json ? (
                   <details className="mt-2 rounded-xl border border-teal-200 bg-teal-50/50 p-2 text-xs">
                     <summary className="cursor-pointer font-black text-teal-900">Pilot diagnostics</summary>
-                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-stone-700">
+                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-muted-foreground">
                       {JSON.stringify(tk.diagnostics_json, null, 2)}
                     </pre>
                     {tk.app_version ? <p className="mt-1">App v{tk.app_version}</p> : null}
                     {tk.screenshot_meta ? (
-                      <p className="text-stone-600">Screenshot: {JSON.stringify(tk.screenshot_meta)}</p>
+                      <p className="text-muted-foreground">Screenshot: {JSON.stringify(tk.screenshot_meta)}</p>
                     ) : null}
                   </details>
                 ) : null}
                 <TicketInternalNotesPanel ticketId={tk.id} />
                 {busyId === tk.id ? (
-                  <p className="mt-1 text-center text-xs font-bold text-stone-500">Updating…</p>
+                  <p className="mt-1 text-center text-xs font-bold text-muted-foreground">Updating…</p>
                 ) : null}
               </li>
             );

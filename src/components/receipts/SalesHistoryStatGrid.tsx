@@ -33,16 +33,16 @@ function StatCard({
         ? "bg-teal-100 text-teal-700"
         : accent === "rose"
           ? "bg-rose-100 text-rose-700"
-          : "bg-stone-100 text-stone-600";
-  const valueClass = accent === "orange" ? "text-waka-700" : accent === "teal" ? "text-teal-800" : "text-stone-950";
+          : "bg-muted text-muted-foreground";
+  const valueClass = accent === "orange" ? "text-waka-700" : accent === "teal" ? "text-teal-800" : "text-foreground";
 
   return (
-    <div className="flex min-h-[76px] flex-col justify-between rounded-xl border border-stone-200/90 bg-white p-2.5 shadow-sm">
+    <div className="flex min-h-[76px] flex-col justify-between rounded-xl border border-border/90 bg-card p-2.5 shadow-sm">
       <div className="flex items-center gap-1.5">
         <span className={clsx("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", iconBg)}>
           <Icon className="h-3.5 w-3.5" aria-hidden />
         </span>
-        <span className="line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wide text-stone-500">
+        <span className="line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wide text-muted-foreground">
           {label}
         </span>
       </div>

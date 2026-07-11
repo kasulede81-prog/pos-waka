@@ -334,7 +334,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   if (!pharmacy || !canDispense) return null;
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-stone-100">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-muted">
       <PosOfflineBanner lang={lang} compact />
       {isFullDesktopPos ? (
         <PosDesktopCompactHeader
@@ -456,7 +456,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
       {mountMobileCheckoutOverlay ? (
         <PosScreenPortal>
           <div
-            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)] md:hidden"
+            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-card pt-[env(safe-area-inset-top,0px)] md:hidden"
             role="dialog"
             aria-modal
           >
@@ -630,31 +630,31 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
       {receiptSale && receiptCtx && receiptHtmlPreview ? (
         <PosScreenPortal>
           <div
-            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top,0px))]"
+            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-card pt-[max(0.5rem,env(safe-area-inset-top,0px))]"
             role="dialog"
             aria-modal
             aria-labelledby="pharmacy-receipt-title"
           >
-            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
-              <h2 id="pharmacy-receipt-title" className="text-xl font-black text-stone-900">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <h2 id="pharmacy-receipt-title" className="text-xl font-black text-foreground">
                 {t(lang, "receiptTitle")}
               </h2>
               <button
                 type="button"
                 onClick={() => checkout.setReceiptSaleId(null)}
-                className="min-h-[44px] rounded-xl border-2 border-stone-200 px-4 py-2 text-sm font-bold text-stone-700 active:bg-stone-50"
+                className="min-h-[44px] rounded-xl border-2 border-border px-4 py-2 text-sm font-bold text-muted-foreground active:bg-muted"
               >
                 {t(lang, "receiptClose")}
               </button>
             </header>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8fafc] px-4 py-4 pb-6 [-webkit-overflow-scrolling:touch]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-background px-4 py-4 pb-6 [-webkit-overflow-scrolling:touch]">
               <p className="mb-3 text-center text-sm font-semibold text-emerald-700">{t(lang, "pharmacyRxDispensed")}</p>
               <div
-                className="mx-auto w-full max-w-md rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+                className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-sm"
                 dangerouslySetInnerHTML={{ __html: receiptHtmlPreview }}
               />
             </div>
-            <footer className="shrink-0 space-y-2 border-t border-stone-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+            <footer className="shrink-0 space-y-2 border-t border-border bg-card px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
               <DocumentActionsBar
                 lang={lang}
                 compact

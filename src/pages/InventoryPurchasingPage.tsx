@@ -80,8 +80,8 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
 
       <div
         className={clsx(
-          "sticky top-0 z-20 -mx-3 border-b border-stone-200/80 bg-stone-50/95 px-3 py-2 backdrop-blur-md",
-          "supports-[backdrop-filter]:bg-stone-50/88 md:-mx-6 md:px-6",
+          "sticky top-0 z-20 -mx-3 border-b border-border/80 bg-muted/95 px-3 py-2 backdrop-blur-md",
+          "supports-[backdrop-filter]:bg-muted/88 md:-mx-6 md:px-6",
         )}
       >
         <InventoryPurchasingTabs lang={lang} active={tab} onChange={setTab} visibleTabs={visibleTabs} />

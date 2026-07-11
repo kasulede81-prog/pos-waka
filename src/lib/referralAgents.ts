@@ -518,23 +518,6 @@ export async function internalGrantMarketingAgentByShopWithRoles(
   };
 }
 
-export async function marketingAgentUpgradeReferralPlan(input: {
-  referralId: string;
-  planCode: "starter" | "business" | "waka_plus";
-  days?: number;
-}): Promise<{ ok: boolean; error?: string; planCode?: string }> {
-  if (!supabase) return { ok: false, error: "offline" };
-  const { data, error } = await supabase.rpc("marketing_agent_upgrade_referral_plan", {
-    p_referral_id: input.referralId,
-    p_plan_code: input.planCode,
-    p_days: input.days ?? 30,
-  });
-  if (error) return { ok: false, error: error.message };
-  const row = (data ?? {}) as { ok?: boolean; error?: string; plan_code?: string };
-  if (!row.ok) return { ok: false, error: row.error ?? "unknown" };
-  return { ok: true, planCode: row.plan_code };
-}
-
 export async function internalCreateMarketingAgent(input: {
   referralCode: string;
   fullName?: string;

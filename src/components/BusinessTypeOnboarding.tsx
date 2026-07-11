@@ -148,12 +148,12 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
 
   return (
     <AppModalOverlay className="z-[56] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl sm:rounded-[2rem] sm:p-6">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-card p-5 shadow-2xl sm:rounded-[2rem] sm:p-6">
         <p className="text-center text-xs font-black uppercase tracking-[0.24em] text-waka-700">{t(lang, "wakaSlogan")}</p>
-        <p className="mt-3 text-center text-3xl font-black leading-tight text-stone-900">{t(lang, "onboardTitle")}</p>
-        <p className="mt-2 text-center text-base font-medium text-stone-600">{t(lang, "onboardSubtitle")}</p>
+        <p className="mt-3 text-center text-3xl font-black leading-tight text-foreground">{t(lang, "onboardTitle")}</p>
+        <p className="mt-2 text-center text-base font-medium text-muted-foreground">{t(lang, "onboardSubtitle")}</p>
         <div className="mt-6 space-y-4">
-          <label className="block text-sm font-bold text-stone-700">
+          <label className="block text-sm font-bold text-muted-foreground">
             {t(lang, "businessName")}
             <input
               value={shopName}
@@ -162,13 +162,13 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                 setShopName(v);
                 persistDraft({ shopName: v, businessType, phone, address });
               }}
-              className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg"
+              className="mt-1 w-full rounded-2xl border-2 border-border px-4 py-3 text-lg"
               placeholder={t(lang, "businessName")}
             />
           </label>
-          <p className="text-sm font-bold text-stone-700">{t(lang, "registerBusinessTypeLabel")}</p>
+          <p className="text-sm font-bold text-muted-foreground">{t(lang, "registerBusinessTypeLabel")}</p>
           {bizTypeSettingsLoading ? (
-            <p className="text-sm font-semibold text-stone-500">{t(lang, "onboardBizLoading")}</p>
+            <p className="text-sm font-semibold text-muted-foreground">{t(lang, "onboardBizLoading")}</p>
           ) : visibleNonHospitalityIds.length === 0 && !showHospitalityGroup ? (
             <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
               {t(lang, "onboardBizNoneEnabled")}
@@ -184,7 +184,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                 className={`rounded-2xl border-2 px-4 py-4 text-left text-base font-bold ${
                   !hospitalityFlow && businessType === id
                     ? "border-waka-500 bg-waka-50 text-waka-900"
-                    : "border-stone-200 bg-stone-50 text-stone-900"
+                    : "border-border bg-muted text-foreground"
                 }`}
               >
                 {t(lang, `businessType_${id}`)}
@@ -197,7 +197,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                 className={`rounded-2xl border-2 px-4 py-4 text-left text-base font-bold sm:col-span-2 ${
                   hospitalityFlow
                     ? "border-waka-500 bg-waka-50 text-waka-900"
-                    : "border-stone-200 bg-stone-50 text-stone-900"
+                    : "border-border bg-muted text-foreground"
                 }`}
               >
                 {t(lang, "onboardBiz_hospitality")}
@@ -205,9 +205,9 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
             ) : null}
           </div>
           {hospitalityFlow ? (
-            <div className="rounded-3xl border border-stone-200 bg-stone-50 p-4">
-              <p className="text-sm font-black text-stone-900">{t(lang, "onboardHospitalityStyleTitle")}</p>
-              <p className="mt-1 text-xs font-medium text-stone-600">{t(lang, "onboardHospitalityStyleSub")}</p>
+            <div className="rounded-3xl border border-border bg-muted p-4">
+              <p className="text-sm font-black text-foreground">{t(lang, "onboardHospitalityStyleTitle")}</p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "onboardHospitalityStyleSub")}</p>
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {visibleHospitalityStyles.map((style) => (
                   <button
@@ -217,7 +217,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                     className={`rounded-2xl border-2 px-3 py-3 text-left text-sm font-bold ${
                       hospitalityStyleId === style.id
                         ? "border-waka-500 bg-waka-50 text-waka-900"
-                        : "border-stone-200 bg-white text-stone-900"
+                        : "border-border bg-card text-foreground"
                     }`}
                   >
                     <span className="mr-1">{style.emoji}</span>
@@ -233,17 +233,17 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
               {t(lang, featureKeyForBusinessType(businessType))
                 .split("|")
                 .map((feature) => (
-                  <span key={feature} className="rounded-full bg-white px-3 py-2 text-xs font-black text-waka-900 shadow-sm">
+                  <span key={feature} className="rounded-full bg-card px-3 py-2 text-xs font-black text-waka-900 shadow-sm">
                     {feature}
                   </span>
                 ))}
             </div>
           </div>
-          <details className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-            <summary className="cursor-pointer text-sm font-black text-stone-800">{t(lang, "onboardOptionalDetails")}</summary>
+          <details className="rounded-2xl border border-border bg-muted p-4">
+            <summary className="cursor-pointer text-sm font-black text-foreground">{t(lang, "onboardOptionalDetails")}</summary>
             <div className="mt-4 space-y-4">
-              <p className="text-sm font-semibold text-stone-600">{t(lang, "currencyUgxOnly")}</p>
-              <label className="block text-sm font-bold text-stone-700">
+              <p className="text-sm font-semibold text-muted-foreground">{t(lang, "currencyUgxOnly")}</p>
+              <label className="block text-sm font-bold text-muted-foreground">
                 {t(lang, "personPhonePh")}
                 <input
                   value={phone}
@@ -252,10 +252,10 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                     setPhone(v);
                     persistDraft({ shopName, businessType, phone: v, address });
                   }}
-                  className="mt-1 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-lg"
+                  className="mt-1 w-full rounded-2xl border-2 border-border bg-card px-4 py-3 text-lg"
                 />
               </label>
-              <label className="block text-sm font-bold text-stone-700">
+              <label className="block text-sm font-bold text-muted-foreground">
                 {t(lang, "shopAddress")}
                 <input
                   value={address}
@@ -264,7 +264,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                     setAddress(v);
                     persistDraft({ shopName, businessType, phone, address: v });
                   }}
-                  className="mt-1 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-lg"
+                  className="mt-1 w-full rounded-2xl border-2 border-border bg-card px-4 py-3 text-lg"
                 />
               </label>
             </div>

@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import clsx from "clsx";
 import { MonitorSmartphone } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
+import { themeUi } from "../lib/themeTokens";
+import { statusTokens } from "../lib/statusTokens";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
@@ -31,9 +34,9 @@ function statusBadgeLabel(lang: Language, status: ShopDeviceStatus): string {
 }
 
 function statusBadgeClass(status: ShopDeviceStatus): string {
-  if (status === "active") return "bg-emerald-100 text-emerald-800";
-  if (status === "revoked") return "bg-red-100 text-red-800";
-  return "bg-stone-200 text-stone-700";
+  if (status === "active") return statusTokens.active.badge;
+  if (status === "revoked") return statusTokens.danger.badge;
+  return statusTokens.offline.badge;
 }
 
 function lastActiveLabel(lang: Language, iso: string | null, nowMs: number): string {
@@ -147,22 +150,22 @@ export function ConnectedDevicesPage({ lang }: Props) {
     <div className="space-y-6 pb-8">
       <PageBackBar lang={lang} fallbackTo="/settings" label={t(lang, "settingsHubTitle")} />
       <div>
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "connectedDevicesTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "connectedDevicesSub")}</p>
+        <h1 className={clsx("text-2xl", themeUi.heading)}>{t(lang, "connectedDevicesTitle")}</h1>
+        <p className={clsx("mt-1 text-sm", themeUi.subheading)}>{t(lang, "connectedDevicesSub")}</p>
       </div>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <section className={clsx(themeUi.surface, "p-4")}>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-bold text-stone-800">{usageLine}</p>
+          <p className="text-sm font-bold text-foreground">{usageLine}</p>
           {usage.atPlanLimit && usage.planLimit != null ? (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">
+            <span className={statusTokens.warning.badge}>
               {t(lang, "connectedDevicesAtLimitBadge")}
             </span>
           ) : null}
         </div>
-        <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "connectedDevicesUsageHint")}</p>
+        <p className={clsx("mt-1 text-xs", themeUi.caption)}>{t(lang, "connectedDevicesUsageHint")}</p>
         {usage.overPlanLimit && usage.planLimit != null ? (
-          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900" role="alert">
+          <p className={clsx("mt-3", statusTokens.danger.banner)} role="alert">
             {tTemplate(lang, "connectedDevicesOverLimitWarning", {
               used: String(usage.activeCount),
               limit: String(usage.planLimit),
@@ -180,17 +183,17 @@ export function ConnectedDevicesPage({ lang }: Props) {
       </section>
 
       {error ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
+        <p className={statusTokens.danger.banner} role="alert">
           {error}
         </p>
       ) : null}
 
       {loading ? (
-        <p className="text-sm font-medium text-stone-500">{t(lang, "connectedDevicesLoading")}</p>
+        <p className={clsx("text-sm", themeUi.subheading)}>{t(lang, "connectedDevicesLoading")}</p>
       ) : !shopId ? (
-        <p className="text-sm font-medium text-stone-500">{t(lang, "connectedDevicesNoShop")}</p>
+        <p className={clsx("text-sm", themeUi.subheading)}>{t(lang, "connectedDevicesNoShop")}</p>
       ) : devices.length === 0 ? (
-        <p className="text-sm font-medium text-stone-500">{t(lang, "connectedDevicesEmpty")}</p>
+        <p className={clsx("text-sm", themeUi.subheading)}>{t(lang, "connectedDevicesEmpty")}</p>
       ) : (
         <ul className="space-y-3">
           {devices.map((device) => {
@@ -203,28 +206,28 @@ export function ConnectedDevicesPage({ lang }: Props) {
             return (
               <li
                 key={device.id}
-                className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+                className={clsx(themeUi.surface, "p-4")}
               >
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-700">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                     <MonitorSmartphone className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-base font-black text-stone-950">{name}</h2>
+                      <h2 className="text-base font-black text-foreground">{name}</h2>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-bold ${statusBadgeClass(device.status)}`}
                       >
                         {statusBadgeLabel(lang, device.status)}
                       </span>
                       {isCurrent ? (
-                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800">
+                        <span className={statusTokens.info.badge}>
                           {t(lang, "connectedDevicesCurrentBadge")}
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-0.5 text-sm font-medium text-stone-600">{platform}</p>
-                    <p className="mt-1 text-sm font-medium text-stone-500">
+                    <p className="mt-0.5 text-sm font-medium text-muted-foreground">{platform}</p>
+                    <p className="mt-1 text-sm font-medium text-muted-foreground">
                       {t(lang, "connectedDevicesLastActivePrefix")}: {lastActive}
                     </p>
                   </div>
@@ -234,7 +237,7 @@ export function ConnectedDevicesPage({ lang }: Props) {
                     type="button"
                     disabled={busy}
                     onClick={() => void handleDisconnect(device)}
-                    className="mt-4 min-h-[44px] w-full rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-800 disabled:opacity-50"
+                    className={clsx("mt-4 min-h-[44px] w-full rounded-xl px-4 text-sm font-bold disabled:opacity-50", statusTokens.danger.banner)}
                   >
                     {busy ? t(lang, "connectedDevicesDisconnecting") : t(lang, "connectedDevicesDisconnect")}
                   </button>

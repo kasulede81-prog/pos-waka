@@ -15,7 +15,7 @@ export function IncludeArchivedFilter({ lang, checked, onChange, className = "" 
 
   return (
     <div
-      className={`rounded-xl border border-stone-200/90 bg-stone-50/90 px-3 py-2 ${isPending ? "opacity-80" : ""} ${className}`}
+      className={`rounded-xl border border-border/90 bg-muted/90 px-3 py-2 ${isPending ? "opacity-80" : ""} ${className}`}
     >
       <WakaSwitch
         checked={checked}
@@ -24,7 +24,7 @@ export function IncludeArchivedFilter({ lang, checked, onChange, className = "" 
           startTransition(() => onChange(value));
         }}
         label={
-          <span className="flex flex-wrap items-center gap-2 text-xs font-semibold text-stone-700 sm:text-sm">
+          <span className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground sm:text-sm">
             {t(lang, "includeArchivedRecords")}
             {isPending ? (
               <span className="text-[10px] font-bold uppercase tracking-wide text-waka-700">

@@ -22,6 +22,8 @@ import type { AttentionItem } from "../../../lib/ownerCommandCenter";
 import type { CloudRecoverySnapshot } from "../../../lib/cloudAuthorityAudit";
 import type { DashboardWidgetSlot } from "./dashboardWidgetSlots";
 import type { ActivityTimelineItem } from "../../pharmacy/dashboard/pharmacyDashboardPresentation";
+import type { HospitalityDashboardStats } from "../../../lib/hospitalityStats";
+import type { HospitalityFloorState } from "../../../types";
 
 export type DashboardBusinessMode = "retail" | "pharmacy" | "hospitality" | "wholesale";
 
@@ -93,6 +95,8 @@ export type DashboardCenterContext = {
   canProfit?: boolean;
   showRevenue?: boolean;
   showActivityFeed?: boolean;
+  hospitalityStats?: HospitalityDashboardStats | null;
+  hospitalityFloor?: HospitalityFloorState | null;
 };
 
 export type DashboardWidgetProps = {

@@ -66,7 +66,7 @@ export function XReportPage({ lang }: { lang: Language }) {
     return (
       <div className="space-y-4 pb-8">
         <PageHeader lang={lang} title={t(lang, "xReportTitle")} backFallback="/office/cash-drawer" />
-        <p className="text-lg text-stone-700">{t(lang, "noPermission")}</p>
+        <p className="text-lg text-muted-foreground">{t(lang, "noPermission")}</p>
       </div>
     );
   }
@@ -85,7 +85,7 @@ export function XReportPage({ lang }: { lang: Language }) {
         {t(lang, "xReportTitle")} — {t(lang, "closeDay")} {todayKey}. {t(lang, "closeDayTrustNote")}
       </p>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
+      <section className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm">
         <DocumentActionsBar
           lang={lang}
           onPrint={() => void printXReport(lang, snapshot)}
@@ -99,18 +99,18 @@ export function XReportPage({ lang }: { lang: Language }) {
         <button
           type="button"
           onClick={() => downloadXReportCsv(snapshot)}
-          className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 font-bold text-stone-800"
+          className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-border font-bold text-foreground"
         >
           {t(lang, "xReportExportCsv")}
         </button>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="col-span-2 rounded-2xl bg-stone-50 px-3 py-3">
-            <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "totalSales")}</p>
+          <div className="col-span-2 rounded-2xl bg-muted px-3 py-3">
+            <p className="text-[11px] font-black uppercase text-muted-foreground">{t(lang, "totalSales")}</p>
             <p className="mt-1 text-xl font-black">UGX {snapshot.totalSalesUgx.toLocaleString()}</p>
           </div>
-          <div className="rounded-2xl bg-stone-50 px-3 py-3">
-            <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "xReportCash")}</p>
+          <div className="rounded-2xl bg-muted px-3 py-3">
+            <p className="text-[11px] font-black uppercase text-muted-foreground">{t(lang, "xReportCash")}</p>
             <p className="mt-1 text-lg font-black">UGX {snapshot.payments.cashUgx.toLocaleString()}</p>
           </div>
           <div className="rounded-2xl bg-teal-50 px-3 py-3">

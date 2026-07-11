@@ -34,8 +34,8 @@ export function SettingsPageHeader({ lang, title, subtitle, backTo, backLabel }:
         {backLabel ?? t(lang, "settingsHubBack")}
       </button>
       <div>
-        <h1 className="text-2xl font-black text-stone-950">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm font-medium text-stone-500">{subtitle}</p> : null}
+        <h1 className="text-2xl font-black text-foreground">{title}</h1>
+        {subtitle ? <p className="mt-1 text-sm font-medium text-muted-foreground">{subtitle}</p> : null}
       </div>
     </header>
   );

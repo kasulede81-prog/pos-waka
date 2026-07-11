@@ -8,10 +8,6 @@ import {
 } from "./staffAccountAuthorization";
 import { setStoreSubscriptionContext } from "./storeSubscriptionContext";
 
-vi.mock("./primaryDevice", () => ({
-  isCurrentDevicePrimaryForStaffManagement: vi.fn(async () => true),
-}));
-
 vi.mock("./staffSyncQueue", () => ({
   createStaffInCloudFirst: vi.fn(async (row: { id: string }) => ({ ok: true as const, id: row.id })),
 }));

@@ -147,6 +147,9 @@ export async function runPosPushOnlyUpload(opts?: {
   source?: string;
   force?: boolean;
 }): Promise<PosPushUploadResult> {
+  if (pushInFlight) {
+    return { ran: false, skipped: true, skipReason: "sync_busy", pushOk: 0, pushFail: 0, queueFailed: 0 };
+  }
   const now = Date.now();
   if (!opts?.force && now - lastPushStartedAt < MIN_POS_PUSH_GAP_MS) {
     return { ran: false, skipped: true, skipReason: "sync_busy", pushOk: 0, pushFail: 0, queueFailed: 0 };

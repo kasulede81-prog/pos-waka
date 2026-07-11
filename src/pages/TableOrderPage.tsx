@@ -254,8 +254,8 @@ export function TableOrderPage({ lang }: { lang: Language }) {
 
   return (
     <ShiftSellGateway lang={lang}>
-      <div className="flex h-full min-h-0 flex-1 flex-col bg-stone-200">
-        <header className="flex shrink-0 items-center gap-2 border-b border-stone-400 bg-stone-100 px-2 py-2 sm:px-3">
+      <div className="flex h-full min-h-0 flex-1 flex-col bg-muted">
+        <header className="flex shrink-0 items-center gap-2 border-b border-stone-400 bg-muted px-2 py-2 sm:px-3">
           <button
             type="button"
             onClick={handleSaveAndReturn}
@@ -265,8 +265,8 @@ export function TableOrderPage({ lang }: { lang: Language }) {
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="min-w-0 flex-1 text-center">
-            <h1 className="truncate text-lg font-black text-stone-950">{orderTitle}</h1>
-            <p className="text-xs font-bold text-stone-600">
+            <h1 className="truncate text-lg font-black text-foreground">{orderTitle}</h1>
+            <p className="text-xs font-bold text-muted-foreground">
               {session.guestCount} {t(lang, "tableOrderGuests")}
               {session.waiterLabel ? ` · ${session.waiterLabel}` : ""}
             </p>
@@ -282,7 +282,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {!reviewMode ? (
-            <nav className="hidden w-24 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-stone-300 bg-stone-100 p-1 sm:flex sm:w-28">
+            <nav className="hidden w-24 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border bg-muted p-1 sm:flex sm:w-28">
               <button
                 type="button"
                 onClick={() => {
@@ -307,7 +307,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
                   "rounded px-2 py-3 text-left text-[10px] font-black sm:text-xs",
                   !showFavorites && categoryFilter === CATEGORY_FILTER_ALL
                     ? "bg-stone-700 text-white"
-                    : "bg-white text-stone-800",
+                    : "bg-card text-foreground",
                 )}
               >
                 {t(lang, "posCategoryAll")}
@@ -335,17 +335,17 @@ export function TableOrderPage({ lang }: { lang: Language }) {
             </nav>
           ) : null}
 
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
             {!reviewMode ? (
               <>
-                <div className="shrink-0 border-b border-stone-200 p-2">
+                <div className="shrink-0 border-b border-border p-2">
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder={t(lang, "restaurantSearchMenu")}
-                      className="w-full rounded border border-stone-300 py-2 pl-9 pr-3 text-sm"
+                      className="w-full rounded border border-border py-2 pl-9 pr-3 text-sm"
                     />
                   </div>
                   <div className="mt-2 flex gap-1 overflow-x-auto sm:hidden">
@@ -357,7 +357,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
                       }}
                       className={clsx(
                         "min-h-[44px] shrink-0 rounded px-3 text-xs font-black",
-                        showFavorites ? "bg-amber-500 text-white" : "bg-stone-100 text-stone-800",
+                        showFavorites ? "bg-amber-500 text-white" : "bg-muted text-foreground",
                       )}
                     >
                       {t(lang, "restaurantFavorites")}
@@ -372,7 +372,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
                         "min-h-[44px] shrink-0 rounded px-3 text-xs font-black",
                         !showFavorites && categoryFilter === CATEGORY_FILTER_ALL
                           ? "bg-stone-700 text-white"
-                          : "bg-stone-100 text-stone-800",
+                          : "bg-muted text-foreground",
                       )}
                     >
                       {t(lang, "posCategoryAll")}
@@ -406,13 +406,13 @@ export function TableOrderPage({ lang }: { lang: Language }) {
                         key={product.id}
                         type="button"
                         onClick={() => addProduct(product)}
-                        className="flex flex-col overflow-hidden rounded border border-stone-300 bg-white text-left shadow-sm active:scale-[0.98]"
+                        className="flex flex-col overflow-hidden rounded border border-border bg-card text-left shadow-sm active:scale-[0.98]"
                       >
                         <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-stone-100 to-stone-200">
-                          <UtensilsCrossed className="h-8 w-8 text-stone-400" />
+                          <UtensilsCrossed className="h-8 w-8 text-muted-foreground" />
                         </div>
-                        <div className="border-t border-stone-200 p-2">
-                          <p className="line-clamp-2 text-xs font-black leading-snug text-stone-900">{product.name}</p>
+                        <div className="border-t border-border p-2">
+                          <p className="line-clamp-2 text-xs font-black leading-snug text-foreground">{product.name}</p>
                           <p className="mt-1 text-sm font-black text-sky-800">{formatProductPriceLabel(product)}</p>
                         </div>
                       </button>
@@ -422,7 +422,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
               </>
             ) : (
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <div className="grid grid-cols-[2rem_3rem_1fr_auto] gap-x-2 border-b border-stone-300 bg-stone-50 px-3 py-2 text-[10px] font-black uppercase text-stone-500">
+                <div className="grid grid-cols-[2rem_3rem_1fr_auto] gap-x-2 border-b border-border bg-muted px-3 py-2 text-[10px] font-black uppercase text-muted-foreground">
                   <span>Q</span>
                   <span />
                   <span>{t(lang, "restaurantBillItems")}</span>
@@ -434,17 +434,17 @@ export function TableOrderPage({ lang }: { lang: Language }) {
                   return (
                     <div
                       key={line.id ?? line.productId}
-                      className="grid grid-cols-[2rem_3rem_1fr_auto] items-center gap-x-2 border-b border-stone-200 px-3 py-3"
+                      className="grid grid-cols-[2rem_3rem_1fr_auto] items-center gap-x-2 border-b border-border px-3 py-3"
                     >
                       <span className="text-lg font-black">{qtyLabel}</span>
-                      <span className="flex h-10 w-10 items-center justify-center rounded bg-stone-200">
-                        <UtensilsCrossed className="h-5 w-5 text-stone-500" />
+                      <span className="flex h-10 w-10 items-center justify-center rounded bg-muted">
+                        <UtensilsCrossed className="h-5 w-5 text-muted-foreground" />
                       </span>
                       <div className="min-w-0">
-                        <p className="font-black text-stone-900">{line.name}</p>
+                        <p className="font-black text-foreground">{line.name}</p>
                         {line.notes ? <p className="text-sm font-bold text-rose-600">{line.notes}</p> : null}
                         {line.selectedModifiers?.length ? (
-                          <p className="text-xs text-stone-500">
+                          <p className="text-xs text-muted-foreground">
                             {line.selectedModifiers.map((m) => m.optionLabel).join(", ")}
                           </p>
                         ) : null}
@@ -478,7 +478,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-stone-300 lg:hidden">
+        <div className="shrink-0 border-t border-border lg:hidden">
           <RestaurantRunningOrderPanel
             lang={lang}
             lines={draftLines}

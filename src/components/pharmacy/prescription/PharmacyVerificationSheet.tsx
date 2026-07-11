@@ -21,10 +21,10 @@ export function PharmacyVerificationSheet({ lang, prescription, products, patien
 
   return (
     <AppModalOverlay className="z-[78] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-      <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
-        <div className="shrink-0 border-b border-stone-100 px-4 py-4 sm:px-6">
-          <h2 className="text-xl font-black text-stone-950">{t(lang, "pharmacyRxVerifyTitle")}</h2>
-          <p className="mt-1 text-sm font-semibold text-stone-600">
+      <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
+        <div className="shrink-0 border-b border-border px-4 py-4 sm:px-6">
+          <h2 className="text-xl font-black text-foreground">{t(lang, "pharmacyRxVerifyTitle")}</h2>
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">
             {prescription.prescriptionNumber} · {prescription.patientName ?? t(lang, "pharmacyRxWalkIn")}
           </p>
         </div>
@@ -34,14 +34,14 @@ export function PharmacyVerificationSheet({ lang, prescription, products, patien
             patient={patient}
             productIds={prescription.lines.map((l) => l.productId)}
           />
-          <dl className="mb-4 grid gap-2 rounded-2xl bg-stone-50 p-3 text-sm sm:grid-cols-2">
+          <dl className="mb-4 grid gap-2 rounded-2xl bg-muted p-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="font-bold text-stone-500">{t(lang, "pharmacyRxDoctor")}</dt>
-              <dd className="font-black text-stone-900">{prescription.doctorName ?? "—"}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "pharmacyRxDoctor")}</dt>
+              <dd className="font-black text-foreground">{prescription.doctorName ?? "—"}</dd>
             </div>
             <div>
-              <dt className="font-bold text-stone-500">{t(lang, "pharmacyRxDate")}</dt>
-              <dd className="font-black text-stone-900">{prescription.prescriptionDate}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "pharmacyRxDate")}</dt>
+              <dd className="font-black text-foreground">{prescription.prescriptionDate}</dd>
             </div>
           </dl>
           <ul className="space-y-3">
@@ -51,16 +51,16 @@ export function PharmacyVerificationSheet({ lang, prescription, products, patien
               const expiry = line.batchExpiry ?? product?.expiryDate;
               const nearExpiry = expiry ? daysUntilExpiry(expiry) <= 30 : false;
               return (
-                <li key={line.id} className="rounded-2xl border-2 border-stone-200 p-4">
-                  <p className="text-base font-black text-stone-950">
+                <li key={line.id} className="rounded-2xl border-2 border-border p-4">
+                  <p className="text-base font-black text-foreground">
                     {product ? formatMedicineFullLabel(product) : line.productName}
                   </p>
-                  <p className="text-sm font-semibold text-stone-600">
+                  <p className="text-sm font-semibold text-muted-foreground">
                     {line.strength ?? product?.medicineStrength ?? "—"} · {line.quantityPrescribed}{" "}
                     {product?.baseUnit ?? "units"}
                   </p>
                   {line.directions ? (
-                    <p className="mt-1 text-xs font-medium text-stone-500">{line.directions}</p>
+                    <p className="mt-1 text-xs font-medium text-muted-foreground">{line.directions}</p>
                   ) : null}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {line.batchNumber ? (
@@ -85,7 +85,7 @@ export function PharmacyVerificationSheet({ lang, prescription, products, patien
             })}
           </ul>
         </div>
-        <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-stone-100 p-4">
+        <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-border p-4">
           <button type="button" onClick={onClose} className="min-h-[52px] rounded-2xl border-2 font-bold">
             {t(lang, "cancel")}
           </button>

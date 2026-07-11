@@ -45,14 +45,14 @@ export function ReservationDetailDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-5 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-card p-5 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase text-violet-700">
               #{reservation.reservationNumber} · {t(lang, `reservationStatus_${reservation.status}` as "reservationStatus_confirmed")}
             </p>
-            <h2 className="text-xl font-black text-stone-950">{reservation.guestName}</h2>
-            <p className="text-sm font-medium text-stone-500">
+            <h2 className="text-xl font-black text-foreground">{reservation.guestName}</h2>
+            <p className="text-sm font-medium text-muted-foreground">
               {reservation.reservationDate} · {reservation.reservationTime} · {reservation.guestCount}{" "}
               {t(lang, "tableOrderGuests")}
             </p>
@@ -64,41 +64,41 @@ export function ReservationDetailDialog({
 
         <dl className="mt-4 space-y-2 text-sm">
           <div>
-            <dt className="font-bold text-stone-500">{t(lang, "reservationPhone")}</dt>
-            <dd className="font-semibold text-stone-900">{reservation.phone}</dd>
+            <dt className="font-bold text-muted-foreground">{t(lang, "reservationPhone")}</dt>
+            <dd className="font-semibold text-foreground">{reservation.phone}</dd>
           </div>
           {reservation.email ? (
             <div>
-              <dt className="font-bold text-stone-500">{t(lang, "reservationEmail")}</dt>
-              <dd className="font-semibold text-stone-900">{reservation.email}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "reservationEmail")}</dt>
+              <dd className="font-semibold text-foreground">{reservation.email}</dd>
             </div>
           ) : null}
           {table ? (
             <div>
-              <dt className="font-bold text-stone-500">{t(lang, "reservationTable")}</dt>
-              <dd className="font-semibold text-stone-900">{table.label}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "reservationTable")}</dt>
+              <dd className="font-semibold text-foreground">{table.label}</dd>
             </div>
           ) : null}
           {reservation.notes ? (
             <div>
-              <dt className="font-bold text-stone-500">{t(lang, "reservationNotes")}</dt>
-              <dd className="font-semibold text-stone-900">{reservation.notes}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "reservationNotes")}</dt>
+              <dd className="font-semibold text-foreground">{reservation.notes}</dd>
             </div>
           ) : null}
         </dl>
 
         {profile ? (
-          <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs">
-            <p className="font-black uppercase text-stone-500">{t(lang, "customerHistoryTitle")}</p>
-            <p className="mt-1 font-semibold text-stone-800">
+          <div className="mt-4 rounded-xl border border-border bg-muted p-3 text-xs">
+            <p className="font-black uppercase text-muted-foreground">{t(lang, "customerHistoryTitle")}</p>
+            <p className="mt-1 font-semibold text-foreground">
               {profile.visitCount} {t(lang, "customerHistoryVisits")} · avg UGX {profile.averageSpendUgx.toLocaleString()}
             </p>
             {profile.preferredWaiterLabel ? (
-              <p className="mt-0.5 text-stone-600">
+              <p className="mt-0.5 text-muted-foreground">
                 {t(lang, "customerHistoryPreferredWaiter")}: {profile.preferredWaiterLabel}
               </p>
             ) : null}
-            {profile.specialNotes ? <p className="mt-0.5 text-stone-600">{profile.specialNotes}</p> : null}
+            {profile.specialNotes ? <p className="mt-0.5 text-muted-foreground">{profile.specialNotes}</p> : null}
           </div>
         ) : null}
 
@@ -107,7 +107,7 @@ export function ReservationDetailDialog({
             value={cancelReason}
             onChange={(e) => setCancelReason(e.target.value)}
             placeholder={t(lang, "reservationCancelReasonPh")}
-            className="mt-4 min-h-20 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+            className="mt-4 min-h-20 w-full rounded-xl border border-border px-3 py-2 text-sm"
           />
         ) : null}
 
@@ -122,7 +122,7 @@ export function ReservationDetailDialog({
               <button type="button" onClick={onSeat} className="min-h-12 rounded-xl bg-waka-600 font-black text-white">
                 {t(lang, "reservationSeat")}
               </button>
-              <button type="button" onClick={onNoShow} className="min-h-11 rounded-xl border border-stone-200 font-bold text-stone-700">
+              <button type="button" onClick={onNoShow} className="min-h-11 rounded-xl border border-border font-bold text-muted-foreground">
                 {t(lang, "reservationNoShow")}
               </button>
               <button type="button" onClick={() => setShowCancel(true)} className="min-h-11 rounded-xl border border-rose-200 font-bold text-rose-800">
@@ -143,7 +143,7 @@ export function ReservationDetailDialog({
               {t(lang, "reservationCancelConfirm")}
             </button>
           ) : null}
-          <button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-stone-200 font-bold text-stone-600">
+          <button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-border font-bold text-muted-foreground">
             {t(lang, "cancel")}
           </button>
         </div>
@@ -195,44 +195,44 @@ export function ReservationFormDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-xl">
-        <h2 className="text-xl font-black text-stone-950">{t(lang, "reservationNewTitle")}</h2>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-card p-5 shadow-xl">
+        <h2 className="text-xl font-black text-foreground">{t(lang, "reservationNewTitle")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="sm:col-span-2">
-            <span className="text-xs font-bold text-stone-600">{t(lang, "reservationGuestName")}</span>
-            <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "reservationGuestName")}</span>
+            <input value={guestName} onChange={(e) => setGuestName(e.target.value)} className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm" />
           </label>
           <label>
-            <span className="text-xs font-bold text-stone-600">{t(lang, "reservationPhone")}</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "reservationPhone")}</span>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm" />
           </label>
           <label>
-            <span className="text-xs font-bold text-stone-600">{t(lang, "reservationEmail")}</span>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "reservationEmail")}</span>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm" />
           </label>
           <label>
-            <span className="text-xs font-bold text-stone-600">{t(lang, "openTableGuests")}</span>
-            <input type="number" min={1} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value) || 1)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "openTableGuests")}</span>
+            <input type="number" min={1} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value) || 1)} className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm" />
           </label>
           <label>
-            <span className="text-xs font-bold text-stone-600">{t(lang, "reservationDate")}</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "reservationDate")}</span>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm" />
           </label>
           <label>
-            <span className="text-xs font-bold text-stone-600">{t(lang, "reservationTime")}</span>
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "reservationTime")}</span>
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm" />
           </label>
           <label>
-            <span className="text-xs font-bold text-stone-600">{t(lang, "reservationArea")}</span>
-            <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-bold">
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "reservationArea")}</span>
+            <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm font-bold">
               {areas.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
           </label>
           <label>
-            <span className="text-xs font-bold text-stone-600">{t(lang, "reservationTable")}</span>
-            <select value={tableId} onChange={(e) => setTableId(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-bold">
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "reservationTable")}</span>
+            <select value={tableId} onChange={(e) => setTableId(e.target.value)} className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm font-bold">
               <option value="">{t(lang, "reservationAnyTable")}</option>
               {areaTables.map((tble) => (
                 <option key={tble.id} value={tble.id}>{tble.label} ({tble.capacity ?? 4})</option>
@@ -246,12 +246,12 @@ export function ReservationFormDialog({
             className="sm:col-span-2"
           />
           <label className="sm:col-span-2">
-            <span className="text-xs font-bold text-stone-600">{t(lang, "reservationNotes")}</span>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "reservationNotes")}</span>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 min-h-16 w-full rounded-xl border border-border px-3 py-2 text-sm" />
           </label>
         </div>
         <div className="mt-4 flex gap-2">
-          <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl border border-stone-200 font-bold">{t(lang, "cancel")}</button>
+          <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl border border-border font-bold">{t(lang, "cancel")}</button>
           <button
             type="button"
             disabled={!guestName.trim() || !phone.trim()}

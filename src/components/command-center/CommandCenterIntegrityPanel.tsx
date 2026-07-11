@@ -23,11 +23,11 @@ function statusClass(status: IntegritySignal["status"]): string {
 
 export function CommandCenterIntegrityPanel({ lang, signals }: Props) {
   return (
-    <section className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "cmdCenterIntegrityTitle")}</h2>
-          <p className="text-[11px] font-semibold text-stone-500">{t(lang, "ownerIntegritySub")}</p>
+          <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterIntegrityTitle")}</h2>
+          <p className="text-[11px] font-semibold text-muted-foreground">{t(lang, "ownerIntegritySub")}</p>
         </div>
         <Link to="/office/audit-center" className="text-[11px] font-black text-waka-700">
           {t(lang, "cmdCenterInvestigation")} →
@@ -47,8 +47,8 @@ export function CommandCenterIntegrityPanel({ lang, signals }: Props) {
                 {statusEmoji(sig.status)}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-black text-stone-900">{t(lang, sig.labelKey)}</p>
-                <p className="truncate text-xs font-semibold text-stone-600">
+                <p className="text-sm font-black text-foreground">{t(lang, sig.labelKey)}</p>
+                <p className="truncate text-xs font-semibold text-muted-foreground">
                   {sig.detailVars ? tTemplate(lang, sig.detailKey, sig.detailVars) : t(lang, sig.detailKey)}
                 </p>
               </div>

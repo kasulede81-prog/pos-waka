@@ -130,7 +130,7 @@ export function SupplierDetailPage({
   }
 
   if (!supplier || isWalkInSupplierId(supplier.id)) {
-    if (embedded) return <p className="text-sm text-stone-600">{t(lang, "suppliersEmpty")}</p>;
+    if (embedded) return <p className="text-sm text-muted-foreground">{t(lang, "suppliersEmpty")}</p>;
     return <Navigate to="/stock?tab=suppliers" replace />;
   }
 
@@ -174,7 +174,7 @@ export function SupplierDetailPage({
         </button>
       ) : null}
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
         {editSaved ? (
           <p className="mb-3 text-sm font-bold text-emerald-800">{t(lang, "supplierEditSave")}</p>
         ) : null}
@@ -182,7 +182,7 @@ export function SupplierDetailPage({
           <button
             type="button"
             onClick={openEdit}
-            className="mb-4 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 py-2.5 text-sm font-black text-stone-800"
+            className="mb-4 w-full rounded-2xl border-2 border-border bg-muted py-2.5 text-sm font-black text-foreground"
           >
             {t(lang, "supplierEditTitle")}
           </button>
@@ -194,33 +194,33 @@ export function SupplierDetailPage({
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               placeholder={t(lang, "supplierNamePh")}
-              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border px-3 py-2 text-sm"
               required
             />
             <input
               value={editPhone}
               onChange={(e) => setEditPhone(e.target.value)}
               placeholder={t(lang, "supplierPhonePh")}
-              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border px-3 py-2 text-sm"
             />
             <input
               value={editLocation}
               onChange={(e) => setEditLocation(e.target.value)}
               placeholder={t(lang, "supplierLocationPh")}
-              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border px-3 py-2 text-sm"
             />
             <textarea
               value={editNotes}
               onChange={(e) => setEditNotes(e.target.value)}
               placeholder={t(lang, "supplierNotesPh")}
               rows={2}
-              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border px-3 py-2 text-sm"
             />
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setEditOpen(false)}
-                className="flex-1 rounded-xl border border-stone-200 bg-white py-2 text-sm font-bold"
+                className="flex-1 rounded-xl border border-border bg-card py-2 text-sm font-bold"
               >
                 {t(lang, "pendingSalesCancel")}
               </button>
@@ -233,20 +233,20 @@ export function SupplierDetailPage({
         <dl className="space-y-2 text-sm">
           {supplier.phone ? (
             <div>
-              <dt className="font-bold text-stone-500">Phone</dt>
-              <dd className="font-semibold text-stone-900">{supplier.phone}</dd>
+              <dt className="font-bold text-muted-foreground">Phone</dt>
+              <dd className="font-semibold text-foreground">{supplier.phone}</dd>
             </div>
           ) : null}
           {supplier.location ? (
             <div>
-              <dt className="font-bold text-stone-500">Location</dt>
-              <dd className="font-semibold text-stone-900">{supplier.location}</dd>
+              <dt className="font-bold text-muted-foreground">Location</dt>
+              <dd className="font-semibold text-foreground">{supplier.location}</dd>
             </div>
           ) : null}
           {supplier.notes ? (
             <div>
-              <dt className="font-bold text-stone-500">Notes</dt>
-              <dd className="font-semibold text-stone-900">{supplier.notes}</dd>
+              <dt className="font-bold text-muted-foreground">Notes</dt>
+              <dd className="font-semibold text-foreground">{supplier.notes}</dd>
             </div>
           ) : null}
         </dl>
@@ -255,14 +255,14 @@ export function SupplierDetailPage({
             <p className="text-[10px] font-black uppercase text-amber-800">{t(lang, "supplierBalanceLabel")}</p>
             <p className="mt-1 text-xl font-black text-amber-950">UGX {supplier.balanceOwedUgx.toLocaleString()}</p>
           </div>
-          <div className="rounded-2xl bg-stone-50 px-3 py-3">
-            <p className="text-[10px] font-black uppercase text-stone-500">{t(lang, "supplierTotalBuy")}</p>
-            <p className="mt-1 text-xl font-black text-stone-900">UGX {supplier.totalPurchasesUgx.toLocaleString()}</p>
+          <div className="rounded-2xl bg-muted px-3 py-3">
+            <p className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "supplierTotalBuy")}</p>
+            <p className="mt-1 text-xl font-black text-foreground">UGX {supplier.totalPurchasesUgx.toLocaleString()}</p>
           </div>
           {supplier.lastSupplyAt ? (
-            <div className="col-span-2 rounded-2xl bg-stone-50 px-3 py-3">
-              <p className="text-[10px] font-black uppercase text-stone-500">{t(lang, "supplierLastSupply")}</p>
-              <p className="mt-1 font-bold text-stone-900">{dateKeyKampala(supplier.lastSupplyAt)}</p>
+            <div className="col-span-2 rounded-2xl bg-muted px-3 py-3">
+              <p className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "supplierLastSupply")}</p>
+              <p className="mt-1 font-bold text-foreground">{dateKeyKampala(supplier.lastSupplyAt)}</p>
             </div>
           ) : null}
         </div>
@@ -276,7 +276,7 @@ export function SupplierDetailPage({
               type="button"
               disabled={exportBusy || filteredStatement.length === 0}
               onClick={() => void runPrint()}
-              className="min-h-[40px] rounded-2xl bg-stone-900 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+              className="min-h-[40px] rounded-2xl bg-foreground px-3 py-2 text-xs font-black text-background disabled:opacity-50"
             >
               {receiptPrintActionLabel(lang)}
             </button>
@@ -284,7 +284,7 @@ export function SupplierDetailPage({
               type="button"
               disabled={exportBusy || filteredStatement.length === 0}
               onClick={() => void runExport("csv")}
-              className="min-h-[40px] rounded-2xl border-2 border-stone-300 bg-white px-3 py-2 text-xs font-black disabled:opacity-50"
+              className="min-h-[40px] rounded-2xl border-2 border-border bg-card px-3 py-2 text-xs font-black disabled:opacity-50"
             >
               {t(lang, "purchasesExportCsv")}
             </button>
@@ -324,16 +324,16 @@ export function SupplierDetailPage({
           />
         </div>
         {filteredStatement.length === 0 ? (
-          <p className="mt-3 text-sm text-stone-600">{t(lang, "purchasesEmpty")}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t(lang, "purchasesEmpty")}</p>
         ) : (
           <HistoryListCard className="mt-4">
             <ul>
             {filteredStatement.map((entry) => (
-              <li key={`${entry.kind}-${entry.id}`} className="border-b border-stone-100 last:border-b-0">
+              <li key={`${entry.kind}-${entry.id}`} className="border-b border-border last:border-b-0">
                 <div className="flex items-start justify-between gap-3 px-3 py-3 sm:px-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-bold uppercase text-stone-500">{entry.dayKey}</p>
-                    <p className="mt-0.5 text-sm font-black text-stone-950">
+                    <p className="text-[11px] font-bold uppercase text-muted-foreground">{entry.dayKey}</p>
+                    <p className="mt-0.5 text-sm font-black text-foreground">
                       {entry.kind === "purchase"
                         ? t(lang, "supplierStatementPurchase")
                         : t(lang, "supplierStatementPayment")}
@@ -346,7 +346,7 @@ export function SupplierDetailPage({
                         UGX {entry.amountUgx.toLocaleString()}
                       </Link>
                     ) : (
-                      <p className="text-xs font-semibold text-stone-800">UGX {entry.amountUgx.toLocaleString()}</p>
+                      <p className="text-xs font-semibold text-foreground">UGX {entry.amountUgx.toLocaleString()}</p>
                     )}
                   </div>
                   <div className="shrink-0 text-right">
@@ -354,7 +354,7 @@ export function SupplierDetailPage({
                       {entry.deltaUgx >= 0 ? "+" : ""}
                       UGX {entry.deltaUgx.toLocaleString()}
                     </p>
-                    <p className="mt-0.5 text-[11px] font-bold text-stone-500">
+                    <p className="mt-0.5 text-[11px] font-bold text-muted-foreground">
                       {t(lang, "supplierStatementBalance")}: UGX {entry.runningBalanceUgx.toLocaleString()}
                     </p>
                   </div>
@@ -366,20 +366,20 @@ export function SupplierDetailPage({
         )}
       </section>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
-        <h2 className="text-lg font-black text-stone-900">{t(lang, "supplierPaymentHistory")}</h2>
-        <p className="mt-1 text-sm font-semibold text-stone-600">
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "supplierPaymentHistory")}</h2>
+        <p className="mt-1 text-sm font-semibold text-muted-foreground">
           {t(lang, "purchasesColTotal")}: UGX {sumSupplierPaymentsUgx(payments).toLocaleString()}
         </p>
         {payments.length === 0 ? (
-          <p className="mt-3 text-sm text-stone-500">{t(lang, "supplierPaymentEmpty")}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t(lang, "supplierPaymentEmpty")}</p>
         ) : (
           <ul className="mt-4 space-y-2">
             {payments.map((pay) => (
-              <li key={pay.id} className="flex justify-between gap-3 rounded-2xl bg-stone-50 px-4 py-3">
+              <li key={pay.id} className="flex justify-between gap-3 rounded-2xl bg-muted px-4 py-3">
                 <div>
-                  <p className="text-xs font-semibold text-stone-500">{dateKeyKampala(pay.createdAt)}</p>
-                  <p className="text-xs font-semibold text-stone-600">
+                  <p className="text-xs font-semibold text-muted-foreground">{dateKeyKampala(pay.createdAt)}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">
                     {t(lang, "supplierPaymentCreatedBy")}:{" "}
                     {supplierPaymentCreatedByLabel(
                       pay,
@@ -389,12 +389,12 @@ export function SupplierDetailPage({
                     )}
                   </p>
                   {pay.paymentMethod ? (
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-muted-foreground">
                       {t(lang, "supplierPaymentMethod")}: {pay.paymentMethod}
                     </p>
                   ) : null}
                   {pay.reference ? (
-                    <p className="text-xs text-stone-500">
+                    <p className="text-xs text-muted-foreground">
                       {t(lang, "supplierPaymentReference")}: {pay.reference}
                     </p>
                   ) : null}

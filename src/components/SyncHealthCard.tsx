@@ -44,18 +44,18 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
         : null;
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
       <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-950">
         {t(lang, "syncTrustSavedOnPhone")}
       </p>
-      <p className="mt-3 text-base font-black text-stone-900">
+      <p className="mt-3 text-base font-black text-foreground">
         {simple ? t(lang, "backupSyncOnlineTitle") : t(lang, "syncDiagnosticsTitle")}
       </p>
-      {!simple ? <p className="mt-1 text-sm text-stone-600">{t(lang, "syncDiagnosticsSub")}</p> : null}
-      <p className="mt-2 text-sm font-semibold text-stone-600">
+      {!simple ? <p className="mt-1 text-sm text-muted-foreground">{t(lang, "syncDiagnosticsSub")}</p> : null}
+      <p className="mt-2 text-sm font-semibold text-muted-foreground">
         {isOnline ? t(lang, "backupSyncOnlineActive") : t(lang, "syncTrustOfflineSell")}
       </p>
-      {!isOnline ? <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "syncTrustKeepUsing")}</p> : null}
+      {!isOnline ? <p className="mt-1 text-sm font-semibold text-muted-foreground">{t(lang, "syncTrustKeepUsing")}</p> : null}
 
       {h.queueHealth !== "healthy" && isOnline ? (
         <p className="mt-2 text-xs font-semibold text-amber-900">
@@ -79,42 +79,42 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
       ) : null}
 
       <dl className="mt-3 grid gap-2 text-sm">
-        <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="font-semibold text-stone-600">{t(lang, "backupSyncPendingLabel")}</dt>
-          <dd className="font-black text-stone-900">{sync.pendingCount}</dd>
+        <div className="flex justify-between gap-2 rounded-xl bg-muted px-3 py-2">
+          <dt className="font-semibold text-muted-foreground">{t(lang, "backupSyncPendingLabel")}</dt>
+          <dd className="font-black text-foreground">{sync.pendingCount}</dd>
         </div>
         {!simple ? (
-          <div className="rounded-xl bg-stone-50 px-3 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t(lang, "backupSyncQueueBreakdown")}</p>
-            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs font-semibold text-stone-700">
-              <p className="flex items-center justify-between rounded-lg bg-white px-2 py-1">
+          <div className="rounded-xl bg-muted px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(lang, "backupSyncQueueBreakdown")}</p>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs font-semibold text-muted-foreground">
+              <p className="flex items-center justify-between rounded-lg bg-card px-2 py-1">
                 <span>{t(lang, "backupSyncQueueSales")}</span>
-                <span className="font-black text-stone-900">{sync.pendingBreakdown.sales}</span>
+                <span className="font-black text-foreground">{sync.pendingBreakdown.sales}</span>
               </p>
-              <p className="flex items-center justify-between rounded-lg bg-white px-2 py-1">
+              <p className="flex items-center justify-between rounded-lg bg-card px-2 py-1">
                 <span>{t(lang, "backupSyncQueueStock")}</span>
-                <span className="font-black text-stone-900">{sync.pendingBreakdown.stock}</span>
+                <span className="font-black text-foreground">{sync.pendingBreakdown.stock}</span>
               </p>
-              <p className="flex items-center justify-between rounded-lg bg-white px-2 py-1">
+              <p className="flex items-center justify-between rounded-lg bg-card px-2 py-1">
                 <span>{t(lang, "backupSyncQueueReturns")}</span>
-                <span className="font-black text-stone-900">{sync.pendingBreakdown.returns}</span>
+                <span className="font-black text-foreground">{sync.pendingBreakdown.returns}</span>
               </p>
-              <p className="flex items-center justify-between rounded-lg bg-white px-2 py-1">
+              <p className="flex items-center justify-between rounded-lg bg-card px-2 py-1">
                 <span>{t(lang, "backupSyncQueueExpenses")}</span>
-                <span className="font-black text-stone-900">{sync.pendingBreakdown.expenses}</span>
+                <span className="font-black text-foreground">{sync.pendingBreakdown.expenses}</span>
               </p>
             </div>
           </div>
         ) : null}
-        <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="font-semibold text-stone-600">{t(lang, "backupSyncLastUpload")}</dt>
-          <dd className="text-right font-medium text-stone-800">{fmtShort(h.lastSuccessAt, lang)}</dd>
+        <div className="flex justify-between gap-2 rounded-xl bg-muted px-3 py-2">
+          <dt className="font-semibold text-muted-foreground">{t(lang, "backupSyncLastUpload")}</dt>
+          <dd className="text-right font-medium text-foreground">{fmtShort(h.lastSuccessAt, lang)}</dd>
         </div>
         {!simple ? (
           <>
-            <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
-              <dt className="font-semibold text-stone-600">{t(lang, "syncLastSuccess")}</dt>
-              <dd className="text-right font-medium text-stone-800">{fmtShort(h.lastSuccessAt, lang)}</dd>
+            <div className="flex justify-between gap-2 rounded-xl bg-muted px-3 py-2">
+              <dt className="font-semibold text-muted-foreground">{t(lang, "syncLastSuccess")}</dt>
+              <dd className="text-right font-medium text-foreground">{fmtShort(h.lastSuccessAt, lang)}</dd>
             </div>
             {issueLabel ? (
               <div className="rounded-xl bg-amber-50 px-3 py-2">
@@ -122,9 +122,9 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
                 <p className="mt-0.5 text-sm font-black text-amber-950">{issueLabel}</p>
               </div>
             ) : null}
-            <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
-              <dt className="font-semibold text-stone-600">{t(lang, "syncFailedCount")}</dt>
-              <dd className="font-black text-stone-900">{syncErrorCount}</dd>
+            <div className="flex justify-between gap-2 rounded-xl bg-muted px-3 py-2">
+              <dt className="font-semibold text-muted-foreground">{t(lang, "syncFailedCount")}</dt>
+              <dd className="font-black text-foreground">{syncErrorCount}</dd>
             </div>
           </>
         ) : null}
@@ -161,7 +161,7 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
 
       {!simple ? (
         <>
-          <p className="mt-2 text-xs text-stone-500">{t(lang, "backupSyncForceFullHint")}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{t(lang, "backupSyncForceFullHint")}</p>
           <button
             type="button"
             disabled={!isOnline || sync.syncing}
@@ -171,7 +171,7 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
               setMsg(t(lang, "backupSyncForceFullDone"));
               window.setTimeout(() => setMsg(null), 5000);
             }}
-            className="mt-2 w-full rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800 disabled:opacity-50"
+            className="mt-2 w-full rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground disabled:opacity-50"
           >
             {sync.syncing ? t(lang, "syncingShort") : t(lang, "backupSyncForceFull")}
           </button>

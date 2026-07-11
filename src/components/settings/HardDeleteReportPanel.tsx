@@ -19,7 +19,7 @@ export function HardDeleteReportPanel({ lang, report, title }: Props) {
         passed ? "border-emerald-200 bg-emerald-50/80" : "border-amber-200 bg-amber-50/80"
       }`}
     >
-      <p className="text-sm font-black text-stone-950">
+      <p className="text-sm font-black text-foreground">
         {title ?? t(lang, passed ? "hardDeleteReportPassed" : "hardDeleteReportFailed")}
       </p>
       <dl className="mt-3 space-y-1.5 text-xs">
@@ -27,7 +27,7 @@ export function HardDeleteReportPanel({ lang, report, title }: Props) {
           const count = report.counts?.[key] ?? 0;
           return (
             <div key={key} className="flex justify-between gap-3 font-semibold">
-              <dt className="text-stone-700">{label}</dt>
+              <dt className="text-muted-foreground">{label}</dt>
               <dd className={count === 0 ? "text-emerald-800" : "text-rose-800"}>{count}</dd>
             </div>
           );

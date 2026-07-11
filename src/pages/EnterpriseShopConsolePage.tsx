@@ -27,19 +27,18 @@ import { t } from "../lib/i18n";
 import { sendOwnerPasswordResetEmail } from "../lib/shopRecoverySignals";
 import {
   ADMIN_PLAN_CODES,
-  adminExtendSubscriptionTrial,
+  subscriptionEngine,
+  type AdminPlanCode,
+} from "../lib/subscriptionEngine";
+import {
   adminSetShopActive,
-  adminShopSetSubscriptionPlan,
   adminShopForceLogoutDevices,
   adminShopResetBackOfficePin,
   adminShopResetSync,
   adminShopSendOwnerPasswordReset,
-  adminSubscriptionMarkPayment,
-  adminSubscriptionSetStatus,
   formatDisplayEmail,
   formatLastActive,
   formatOwnerDisplayLabel,
-  type AdminPlanCode,
 } from "../lib/wakaInternalAdmin";
 import type { Language } from "../types";
 import clsx from "clsx";
@@ -78,7 +77,7 @@ const PLAN_AMOUNTS: Record<string, number> = {
 
 function TabFallback() {
   return (
-    <p className="rounded-2xl border border-stone-200 bg-white px-4 py-8 text-center text-sm font-semibold text-stone-600">
+    <p className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
       Loading…
     </p>
   );
@@ -109,7 +108,6 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     shopConsoleTabFromLocation(location.search, location.hash, shopId),
   );
   const [actionSheet, setActionSheet] = useState(false);
-  const [planControlCode, setPlanControlCode] = useState<AdminPlanCode>("business");
   const [planControlDays, setPlanControlDays] = useState(30);
 
   useEffect(() => {
@@ -126,11 +124,6 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     },
     [navigate, previewMode, shopId],
   );
-
-  useEffect(() => {
-    const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "free").toLowerCase();
-    if (ADMIN_PLAN_CODES.includes(code as AdminPlanCode)) setPlanControlCode(code as AdminPlanCode);
-  }, [detail?.plan_code, detail?.subscription?.plan_code]);
 
   const suggestedPaymentUgx = useMemo(() => {
     const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "business").toLowerCase();
@@ -149,7 +142,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     await executeAction(
       "admin_shop_set_subscription_plan",
       () =>
-        adminShopSetSubscriptionPlan({
+        subscriptionEngine.grant({
           shopId: detail.shop.id,
           planCode,
           days: effectiveDays,
@@ -281,25 +274,33 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
         break;
       case "extend_trial":
         if (subId)
-          void executeAction("admin_extend_trial", () => adminExtendSubscriptionTrial(subId, 7), { permitted: canSubs });
+          void executeAction(
+            "admin_extend_trial",
+            () => subscriptionEngine.extend({ subscriptionId: subId, shopId: detail.shop.id, extraDays: 7 }),
+            { permitted: canSubs },
+          );
         break;
       case "pause_sub":
         if (subId)
-          void executeAction("admin_pause_subscription", () => adminSubscriptionSetStatus(subId, "paused"), {
-            permitted: canSubs,
-          });
+          void executeAction(
+            "admin_pause_subscription",
+            () => subscriptionEngine.pause({ subscriptionId: subId, shopId: detail.shop.id }),
+            { permitted: canSubs },
+          );
         break;
       case "active_sub":
         if (subId)
-          void executeAction("admin_reactivate_subscription", () => adminSubscriptionSetStatus(subId, "active"), {
-            permitted: canSubs,
-          });
+          void executeAction(
+            "admin_reactivate_subscription",
+            () => subscriptionEngine.resume({ subscriptionId: subId, shopId: detail.shop.id }),
+            { permitted: canSubs },
+          );
         break;
       case "cancel_sub":
         if (subId)
           void executeAction(
             "admin_cancel_subscription",
-            () => adminSubscriptionSetStatus(subId, "cancelled"),
+            () => subscriptionEngine.cancel({ subscriptionId: subId, shopId: detail.shop.id }),
             { permitted: canSubs, confirm: t(lang, "internalShopActionConfirmCancelSub") },
           );
         break;
@@ -308,7 +309,12 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
           void executeAction(
             "admin_mark_subscription_paid",
             () =>
-              adminSubscriptionMarkPayment(subId, suggestedPaymentUgx, `Recorded ${suggestedPaymentUgx} UGX`),
+              subscriptionEngine.markPaid({
+                subscriptionId: subId,
+                shopId: detail.shop.id,
+                amountUgx: suggestedPaymentUgx,
+                note: `Recorded ${suggestedPaymentUgx} UGX`,
+              }),
             { permitted: canSubs },
           );
         }
@@ -345,16 +351,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
       case "devices":
         return <ShopConsoleDevicesTab ctx={ctx} />;
       case "subscriptions":
-        return (
-          <ShopConsoleSubscriptionsTab
-            ctx={ctx}
-            planControlCode={planControlCode}
-            setPlanControlCode={setPlanControlCode}
-            planControlDays={planControlDays}
-            setPlanControlDays={setPlanControlDays}
-            onApplyPlan={() => void setAdminPlan(planControlCode)}
-          />
-        );
+        return <ShopConsoleSubscriptionsTab ctx={ctx} />;
       case "activity":
         return (
           <Suspense fallback={<TabFallback />}>
@@ -398,7 +395,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
         ) : null}
 
         {loadingShop ? (
-          <p className="rounded-2xl border border-stone-200 bg-white px-4 py-8 text-center text-sm font-semibold text-stone-600">
+          <p className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
             {t(lang, "internalShopProfileLoading")}
           </p>
         ) : !detail ? (
@@ -407,12 +404,12 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
           </p>
         ) : (
           <>
-            <header className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <header className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-waka-800">Shop Console</p>
-                  <h1 className="mt-1 truncate text-xl font-black text-stone-900">{detail.shop.name}</h1>
-                  <p className="mt-1 text-xs font-semibold text-stone-600">
+                  <h1 className="mt-1 truncate text-xl font-black text-foreground">{detail.shop.name}</h1>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">
                     {formatOwnerDisplayLabel({
                       ownerFullName: detail.owner_full_name,
                       ownerLabel: detail.owner_label,
@@ -427,7 +424,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
                       className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${
                         formatLastActive(detail.shop.last_seen_at) === "Active now"
                           ? "bg-emerald-100 text-emerald-900"
-                          : "bg-stone-100 text-stone-700"
+                          : "bg-muted text-muted-foreground"
                       }`}
                     >
                       {formatLastActive(detail.shop.last_seen_at)}
@@ -486,14 +483,14 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
                 <div className="space-y-4">
                   {actionGroups.map(([group, actions]) => (
                     <div key={group}>
-                      <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-stone-500">{group}</p>
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{group}</p>
                       <ul className="space-y-2">
                         {actions.map((a) => (
                           <li key={a.id}>
                             <button
                               type="button"
                               disabled={busy}
-                              className="min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold text-stone-900 disabled:opacity-40"
+                              className="min-h-[44px] w-full rounded-xl border border-border bg-card px-4 py-3 text-left text-sm font-bold text-foreground disabled:opacity-40"
                               onClick={() => {
                                 if (a.confirm && !window.confirm(a.confirm)) return;
                                 runShopAction(a.id);

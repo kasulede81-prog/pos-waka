@@ -21,7 +21,7 @@ export function ShopConsoleActivityTab({ ctx }: Props) {
   }, [detail, auditRows]);
 
   if (!detail || !shopIntel || shopIntel.timeline.length === 0) {
-    return <p className="text-sm font-semibold text-stone-500">No activity events yet.</p>;
+    return <p className="text-sm font-semibold text-muted-foreground">No activity events yet.</p>;
   }
 
   return (

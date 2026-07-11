@@ -15,6 +15,7 @@ import {
   readAdminNavGroupsExpanded,
   type AdminNavGroupId,
 } from "../../../lib/adminNavState";
+import { themeUi } from "../../../lib/themeTokens";
 
 function useLockUnderlyingAppScroll(active: boolean) {
   useEffect(() => {
@@ -47,6 +48,7 @@ export type AdminSectionId =
   | "business_types"
   | "growth_campaign"
   | "ai_settings"
+  | "subscription_settings"
   | "releases"
   | "display_scale"
   | "shop";
@@ -90,6 +92,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Platform",
     tabs: [
       { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI", superOnly: true },
+      { id: "subscription_settings", path: "/internal/waka/subscription-settings", label: "Subscriptions", superOnly: true },
       { id: "releases", path: "/internal/waka/releases", label: "Releases", superOnly: true },
       { id: "business_types", path: "/internal/waka/business-types", label: "Business Types", superOnly: true },
       { id: "display_scale", path: "/internal/waka/display-scale", label: "Display" },
@@ -166,9 +169,9 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
 
   if (loading) {
     return createPortal(
-      <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] flex-col items-center justify-center bg-stone-100 font-admin">
+      <div className={clsx("waka-internal-admin-root fixed inset-0 flex h-[100dvh] flex-col items-center justify-center font-admin", themeUi.adminPage)}>
         <Loader2 className="h-8 w-8 animate-spin text-waka-600" />
-        <p className="mt-3 text-sm font-semibold text-stone-600">Loading admin…</p>
+        <p className="mt-3 text-sm font-semibold text-muted-foreground">Loading admin…</p>
       </div>,
       document.body,
     );
@@ -205,8 +208,8 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
               ? "bg-waka-600 text-white shadow-sm"
               : "bg-waka-50 text-waka-800 ring-1 ring-waka-200"
             : compact
-              ? "bg-stone-100 text-stone-700"
-              : "text-stone-600 hover:bg-stone-50",
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground hover:bg-muted/60",
         )}
       >
         {tab.label}
@@ -215,7 +218,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
   };
 
   return createPortal(
-    <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-stone-100 font-admin text-stone-900">
+    <div className={clsx("waka-internal-admin-root fixed inset-0 flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden font-admin", themeUi.adminPage)}>
       <header className="shrink-0 bg-gradient-to-r from-waka-600 to-waka-500 text-white shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 sm:px-4">
           {showBack ? (
@@ -228,7 +231,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
               <ArrowLeft className="h-5 w-5" />
             </button>
           ) : (
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm" aria-hidden>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-card p-1.5 shadow-sm" aria-hidden>
               <WakaSymbolIcon size="sm" className="h-full w-full" />
             </span>
           )}
@@ -273,7 +276,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {showNav ? (
-          <nav className="shrink-0 border-b border-stone-200 bg-white px-2 py-2 md:hidden">
+          <nav className="shrink-0 border-b border-border bg-card px-2 py-2 md:hidden">
             <div className="flex gap-1 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
               {flatMobileTabs.map((tab) => renderNavButton(tab, true))}
             </div>
@@ -281,7 +284,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
         ) : null}
 
         {showNav ? (
-          <aside className="hidden min-h-0 w-52 shrink-0 overflow-y-auto overscroll-y-contain border-r border-stone-200 bg-white md:block xl:w-56">
+          <aside className="hidden min-h-0 w-52 shrink-0 overflow-y-auto overscroll-y-contain border-r border-border bg-card md:block xl:w-56">
             <nav className="flex flex-col gap-1 p-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {visibleGroups.map((group) => {
                 const expanded = expandedGroups[group.id];
@@ -290,7 +293,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
                     <button
                       type="button"
                       onClick={() => toggleGroup(group.id)}
-                      className="flex min-h-[36px] w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[10px] font-black uppercase tracking-widest text-stone-500 hover:bg-stone-50"
+                      className="flex min-h-[36px] w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-muted"
                     >
                       {group.label}
                       {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -305,7 +308,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
           </aside>
         ) : null}
 
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-stone-50/90 [-webkit-overflow-scrolling:touch]">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-muted/90 [-webkit-overflow-scrolling:touch]">
           <div className="mx-auto w-full min-w-0 max-w-2xl p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl">
             {children}
           </div>

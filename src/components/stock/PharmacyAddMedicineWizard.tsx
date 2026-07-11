@@ -436,7 +436,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
             <WizardStepHeading title={t(lang, "pharmacyPackStepStockTitle")} />
 
-            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+            <div className="rounded-2xl border border-border bg-muted p-4">
               <WakaSwitch
                 checked={packagingEnabled}
                 onCheckedChange={setPackagingEnabled}
@@ -482,7 +482,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                   checked={level1Enabled}
                   onCheckedChange={setLevel1Enabled}
                   label={t(lang, "pharmacyPackLevel1Optional")}
-                  className="text-sm font-bold text-stone-800"
+                  className="text-sm font-bold text-foreground"
                 />
                 {level1Enabled ? (
                   <div className="grid grid-cols-2 gap-2">
@@ -507,7 +507,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                   checked={level2Enabled}
                   onCheckedChange={setLevel2Enabled}
                   label={t(lang, "pharmacyPackLevel2Optional")}
-                  className="text-sm font-bold text-stone-800"
+                  className="text-sm font-bold text-foreground"
                 />
                 {level2Enabled ? (
                   <div className="grid grid-cols-2 gap-2">

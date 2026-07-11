@@ -26,15 +26,15 @@ export function AnalyticsPageToolbar({
   onOpenExport,
 }: Props) {
   return (
-    <div className="sticky top-0 z-20 space-y-2 rounded-2xl border border-stone-200/80 bg-white/95 p-3 shadow-sm backdrop-blur-sm">
+    <div className="sticky top-0 z-20 space-y-2 rounded-2xl border border-border/80 bg-card/95 p-3 shadow-sm backdrop-blur-sm">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <input
           type="search"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={t(lang, "baSearchReports")}
-          className="min-h-[44px] w-full rounded-2xl border-2 border-stone-200 bg-stone-50/50 pl-10 pr-3 text-sm font-semibold outline-none focus:border-waka-500"
+          className="min-h-[44px] w-full rounded-2xl border-2 border-border bg-muted/50 pl-10 pr-3 text-sm font-semibold outline-none focus:border-waka-500"
         />
       </div>
       <div className="w-full min-w-0 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible">
@@ -42,7 +42,7 @@ export function AnalyticsPageToolbar({
         <button
           type="button"
           onClick={onOpenDateFilter}
-          className="inline-flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800 sm:flex-none"
+          className="inline-flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground sm:flex-none"
         >
           <Calendar className="h-4 w-4 shrink-0" aria-hidden />
           <span className="truncate">{periodLabel}</span>
@@ -51,7 +51,7 @@ export function AnalyticsPageToolbar({
           type="button"
           onClick={onToggleCompare}
           className={`inline-flex min-h-[40px] items-center rounded-xl border px-3 text-xs font-black ${
-            compareEnabled ? "border-waka-300 bg-waka-50 text-waka-800" : "border-stone-200 bg-white text-stone-700"
+            compareEnabled ? "border-waka-300 bg-waka-50 text-waka-800" : "border-border bg-card text-muted-foreground"
           }`}
         >
           {t(lang, "baComparePrior")}
@@ -59,7 +59,7 @@ export function AnalyticsPageToolbar({
         <button
           type="button"
           onClick={onOpenFilters}
-          className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700"
+          className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-border bg-card text-muted-foreground"
           aria-label={t(lang, "baFilters")}
         >
           <SlidersHorizontal className="h-4 w-4" aria-hidden />

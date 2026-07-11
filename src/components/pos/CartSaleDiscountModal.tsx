@@ -55,7 +55,7 @@ export function CartSaleDiscountModal({ lang, open, lineSubtotalUgx, currentDisc
                 onApply(0);
                 onClose();
               }}
-              className="min-h-[52px] rounded-2xl border-2 border-stone-200 text-base font-bold text-stone-700"
+              className="min-h-[52px] rounded-2xl border-2 border-border text-base font-bold text-muted-foreground"
             >
               {t(lang, "cartDiscountClear")}
             </button>
@@ -72,9 +72,9 @@ export function CartSaleDiscountModal({ lang, open, lineSubtotalUgx, currentDisc
           </div>
         }
       >
-        <p className="text-sm font-semibold text-stone-600">
+        <p className="text-sm font-semibold text-muted-foreground">
           {t(lang, "cartDiscountOriginal")}:{" "}
-          <span className="font-black text-stone-900">UGX {lineSubtotalUgx.toLocaleString()}</span>
+          <span className="font-black text-foreground">UGX {lineSubtotalUgx.toLocaleString()}</span>
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
@@ -82,7 +82,7 @@ export function CartSaleDiscountModal({ lang, open, lineSubtotalUgx, currentDisc
             type="button"
             onClick={() => setMode("fixed")}
             className={`min-h-[44px] rounded-2xl border-2 text-sm font-black ${
-              mode === "fixed" ? "border-waka-500 bg-waka-100 text-waka-950" : "border-stone-200 text-stone-700"
+              mode === "fixed" ? "border-waka-500 bg-waka-100 text-waka-950" : "border-border text-muted-foreground"
             }`}
           >
             {t(lang, "cartDiscountFixed")}
@@ -91,7 +91,7 @@ export function CartSaleDiscountModal({ lang, open, lineSubtotalUgx, currentDisc
             type="button"
             onClick={() => setMode("percent")}
             className={`min-h-[44px] rounded-2xl border-2 text-sm font-black ${
-              mode === "percent" ? "border-waka-500 bg-waka-100 text-waka-950" : "border-stone-200 text-stone-700"
+              mode === "percent" ? "border-waka-500 bg-waka-100 text-waka-950" : "border-border text-muted-foreground"
             }`}
           >
             {t(lang, "cartDiscountPercent")}
@@ -100,23 +100,23 @@ export function CartSaleDiscountModal({ lang, open, lineSubtotalUgx, currentDisc
 
         {mode === "fixed" ? (
           <label className="mt-4 block">
-            <span className="text-sm font-bold text-stone-700">{t(lang, "cartDiscountAmountLabel")}</span>
+            <span className="text-sm font-bold text-muted-foreground">{t(lang, "cartDiscountAmountLabel")}</span>
             <MoneyInput
               value={fixedInput}
               onChange={(e) => setFixedInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
               autoFocus
-              className="mt-2 min-h-[56px] w-full rounded-2xl border-2 border-stone-200 px-4 text-center text-2xl font-black"
+              className="mt-2 min-h-[56px] w-full rounded-2xl border-2 border-border px-4 text-center text-2xl font-black"
             />
           </label>
         ) : (
           <label className="mt-4 block">
-            <span className="text-sm font-bold text-stone-700">{t(lang, "cartDiscountPercentLabel")}</span>
+            <span className="text-sm font-bold text-muted-foreground">{t(lang, "cartDiscountPercentLabel")}</span>
             <input
               type="text"
               inputMode="numeric"
               value={percentInput}
               onChange={(e) => setPercentInput(e.target.value.replace(/\D/g, "").slice(0, 3))}
-              className="mt-2 min-h-[56px] w-full rounded-2xl border-2 border-stone-200 px-4 text-center text-2xl font-black"
+              className="mt-2 min-h-[56px] w-full rounded-2xl border-2 border-border px-4 text-center text-2xl font-black"
             />
           </label>
         )}

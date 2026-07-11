@@ -96,10 +96,10 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
   };
 
   const card = lovableUi
-    ? "rounded-2xl border border-stone-200 bg-white shadow-sm"
+    ? "rounded-2xl border border-border bg-card shadow-sm"
     : "rounded-xl border border-border bg-card";
-  const muted = lovableUi ? "text-stone-500" : "text-muted-foreground";
-  const fg = lovableUi ? "text-stone-900" : "text-card-foreground";
+  const muted = lovableUi ? "text-muted-foreground" : "text-muted-foreground";
+  const fg = lovableUi ? "text-foreground" : "text-card-foreground";
 
   return (
     <div className={lovableUi ? "space-y-6 pb-6" : "space-y-4 pb-6"}>
@@ -110,7 +110,7 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
       ) : null}
       {lovableUi ? (
         <AdminSection title={t(lang, "internalActivationsTitle")} count={rows.length}>
-          <p className="mb-3 text-sm font-medium text-stone-600">{t(lang, "internalActivationsSub")}</p>
+          <p className="mb-3 text-sm font-medium text-muted-foreground">{t(lang, "internalActivationsSub")}</p>
         </AdminSection>
       ) : null}
       <div className={clsx(card, "p-4")}>
@@ -141,7 +141,7 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
             onClick={() => void load()}
             className={clsx(
               "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-black",
-              lovableUi ? "border-stone-200 bg-white text-stone-900" : "border-border bg-card text-foreground",
+              lovableUi ? "border-border bg-card text-foreground" : "border-border bg-card text-foreground",
             )}
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -196,7 +196,7 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
       ) : rows.length === 0 ? (
         lovableUi ? (
           <AdminEmpty>
-            <WalletCards className="mx-auto mb-2 h-6 w-6 text-stone-400" />
+            <WalletCards className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
             <p>{t(lang, "internalActivationsEmpty")}</p>
           </AdminEmpty>
         ) : (
@@ -207,7 +207,7 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
         )
       ) : (
         <div className={clsx("overflow-hidden", card)}>
-          <div className={clsx("border-b px-4 py-3", lovableUi ? "border-stone-100" : "border-border")}>
+          <div className={clsx("border-b px-4 py-3", lovableUi ? "border-border" : "border-border")}>
             <p className={clsx("text-[10px] font-black uppercase tracking-wider", muted)}>
               {rows.length} activation requests
             </p>

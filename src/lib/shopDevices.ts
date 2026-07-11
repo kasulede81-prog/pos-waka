@@ -2,12 +2,8 @@ import { getOrCreateDeviceId } from "./deviceId";
 import { appendDeviceAuditEntry } from "./deviceAudit";
 import { isActiveDeviceStatus, normalizeShopDeviceStatus, type ShopDeviceStatus } from "./deviceLifecycle";
 import { supabase } from "./supabase";
+import { resolveEffectiveDeviceLimit } from "./effectiveSubscription";
 import type { SubscriptionSnapshot } from "./subscriptionEntitlements";
-import {
-  normalizePlanCode,
-  planDeviceLimitForTier,
-  resolveEffectivePlanTier,
-} from "./subscriptionEntitlements";
 
 export type ShopDeviceRow = {
   id: string;
@@ -45,17 +41,9 @@ export type DeviceUsageSummary = {
   overPlanLimit: boolean;
 };
 
-/** Plan device cap — subscription row, features JSON, or tier defaults (never unlimited on cloud). */
+/** Plan device cap — uses enterprise effective subscription resolver (Phase 16.4). */
 export function parsePlanDeviceLimit(snapshot: SubscriptionSnapshot, authMode: "supabase" | "local"): number | null {
-  if (authMode === "local") return null;
-  const tier = resolveEffectivePlanTier(snapshot);
-  if (snapshot.kind === "remote") {
-    const fromRow = snapshot.row.max_devices;
-    if (fromRow != null && fromRow > 0) return fromRow;
-    const fromCode = planDeviceLimitForTier(normalizePlanCode(snapshot.row.plan_code));
-    if (snapshot.row.plan_code) return fromCode;
-  }
-  return planDeviceLimitForTier(tier);
+  return resolveEffectiveDeviceLimit(snapshot, authMode);
 }
 
 /** Licensed slot: approved and active (consumes subscription device limit). */

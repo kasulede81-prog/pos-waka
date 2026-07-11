@@ -62,8 +62,18 @@ export function reportMonitoringEvent(payload: MonitoringPayload): void {
   });
 }
 
+const USER_FACING_SYNC_CODES = new Set([
+  "debt_payment_push_failed",
+  "debt_payment_rpc_failed",
+  "cash_expense_push_failed",
+  "sync_flush_error",
+]);
+
 export function reportSyncIssue(code: string, meta?: MonitoringPayload["meta"]): void {
   reportMonitoringEvent({ category: "sync", code, meta });
+  if (USER_FACING_SYNC_CODES.has(code) && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("waka:sync-issue", { detail: { code, meta } }));
+  }
 }
 
 export function reportAuthIssue(code: string, meta?: MonitoringPayload["meta"]): void {

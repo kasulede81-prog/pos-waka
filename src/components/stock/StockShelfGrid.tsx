@@ -48,13 +48,13 @@ export function StockShelfGrid({
           <ArrowLeft className="h-4 w-4" aria-hidden />
           {t(lang, "stockShelfBack")}
         </button>
-        <div className="flex items-center gap-2.5 rounded-xl border border-stone-200/90 bg-white px-3 py-2.5 shadow-sm">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xl leading-none">
+        <div className="flex items-center gap-2.5 rounded-xl border border-border/90 bg-card px-3 py-2.5 shadow-sm">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-xl leading-none">
             {icon}
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-base font-black text-stone-950">{label}</h2>
-            <p className="text-xs font-semibold text-stone-500">
+            <h2 className="truncate text-base font-black text-foreground">{label}</h2>
+            <p className="text-xs font-semibold text-muted-foreground">
               {tTemplate(lang, "stockShelfProductCount", {
                 count: String(shelves.find((s) => s.key === selectedShelf)?.count ?? 0),
               })}
@@ -70,7 +70,7 @@ export function StockShelfGrid({
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-0.5">
-        <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+        <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
           {t(lang, "stockTabShelves")}
         </p>
         {canArrangeShelves ? (
@@ -96,19 +96,19 @@ export function StockShelfGrid({
                 "transition-all active:scale-[0.97] motion-reduce:active:scale-100",
                 empty
                   ? "border-rose-200/90 bg-rose-50/30 active:border-rose-300 active:shadow-md"
-                  : "border-stone-200/90 bg-white active:border-waka-300 active:shadow-md",
+                  : "border-border/90 bg-card active:border-waka-300 active:shadow-md",
               )}
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-lg leading-none">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-lg leading-none">
                 {icon}
               </span>
-              <span className="mt-1.5 line-clamp-2 w-full text-xs font-black leading-tight text-stone-950">
+              <span className="mt-1.5 line-clamp-2 w-full text-xs font-black leading-tight text-foreground">
                 {shelf.label}
               </span>
               <span
                 className={clsx(
                   "mt-0.5 text-[10px] font-semibold",
-                  empty ? "font-black text-rose-700" : "text-stone-500",
+                  empty ? "font-black text-rose-700" : "text-muted-foreground",
                 )}
               >
                 {empty

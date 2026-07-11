@@ -31,7 +31,7 @@ export function StockSectionTabs({ lang, active, onChange }: Props) {
               "min-h-[40px] shrink-0 rounded-full px-3.5 py-1.5 text-xs font-black transition-all duration-150",
               active === tab.id
                 ? "bg-waka-600 text-white shadow-sm"
-                : "border border-stone-200 bg-white text-stone-700 active:bg-stone-50",
+                : "border border-border bg-card text-muted-foreground active:bg-muted",
             )}
           >
             {t(lang, tab.labelKey as "stockTabOverview")}

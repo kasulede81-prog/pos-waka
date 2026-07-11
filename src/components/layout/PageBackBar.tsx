@@ -1,15 +1,16 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { labelKeyForBackFallback, shouldHidePageBackBar } from "../../lib/headerBack";
 import { getBackFallbackPath, historyCanGoBack } from "../../lib/navigationBack";
+import { themeUi } from "../../lib/themeTokens";
 
 type Props = {
   lang: Language;
-  /** Override fallback when history cannot go back */
   fallbackTo?: string;
   label?: string;
   className?: string;
@@ -43,7 +44,7 @@ export function PageBackBar({ lang, fallbackTo, label, className = "" }: Props) 
     <button
       type="button"
       onClick={handleBack}
-      className={`inline-flex min-h-[44px] items-center gap-1.5 text-sm font-bold text-waka-800 active:opacity-70 ${className}`}
+      className={clsx(themeUi.backLink, themeUi.focusRing, className)}
     >
       <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
       {displayLabel}

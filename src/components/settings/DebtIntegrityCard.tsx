@@ -49,9 +49,9 @@ export function DebtIntegrityCard({ lang, lazy = false }: { lang: Language; lazy
   const warn = !healthy && status.mismatches.length > 0;
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "debtIntegrityTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "debtIntegritySub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "debtIntegrityTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "debtIntegritySub")}</p>
 
       <p
         className={`mt-3 rounded-xl px-3 py-2 text-sm font-bold ${
@@ -75,12 +75,12 @@ export function DebtIntegrityCard({ lang, lazy = false }: { lang: Language; lazy
         <button
           type="button"
           onClick={runRepair}
-          className="mt-4 min-h-[44px] w-full rounded-2xl border-2 border-stone-300 bg-white font-bold text-stone-900"
+          className="mt-4 min-h-[44px] w-full rounded-2xl border-2 border-border bg-card font-bold text-foreground"
         >
           {t(lang, "debtIntegrityRepairButton")}
         </button>
       ) : null}
-      {repairMsg ? <p className="mt-2 text-center text-sm font-bold text-stone-700">{repairMsg}</p> : null}
+      {repairMsg ? <p className="mt-2 text-center text-sm font-bold text-muted-foreground">{repairMsg}</p> : null}
     </article>
   );
 }

@@ -13,11 +13,11 @@ export function RescueSection({ id, title, summary, children, className }: Props
   return (
     <section
       id={id}
-      className={clsx("scroll-mt-24 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm lg:p-5", className)}
+      className={clsx("scroll-mt-24 rounded-2xl border border-border bg-card p-4 shadow-sm lg:p-5", className)}
     >
-      <header className="mb-3 border-b border-stone-100 pb-3">
-        <h2 className="text-base font-black text-stone-900">{title}</h2>
-        {summary ? <p className="mt-0.5 text-xs font-medium text-stone-500">{summary}</p> : null}
+      <header className="mb-3 border-b border-border pb-3">
+        <h2 className="text-base font-black text-foreground">{title}</h2>
+        {summary ? <p className="mt-0.5 text-xs font-medium text-muted-foreground">{summary}</p> : null}
       </header>
       {children}
     </section>
@@ -46,7 +46,7 @@ export function RescueMetric({
         ? "bg-amber-50 text-amber-950"
         : tone === "bad"
           ? "bg-rose-50 text-rose-950"
-          : "bg-stone-50 text-stone-900";
+          : "bg-muted text-foreground";
   return (
     <div className={clsx("rounded-xl px-3 py-2.5", toneClass)}>
       <dt className="text-[10px] font-bold uppercase tracking-wide opacity-70">{label}</dt>
@@ -57,9 +57,9 @@ export function RescueMetric({
 
 export function RescueRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2 text-sm">
-      <dt className="font-semibold text-stone-600">{label}</dt>
-      <dd className="max-w-[65%] text-right font-mono text-xs font-black text-stone-900">{value}</dd>
+    <div className="flex flex-wrap items-start justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+      <dt className="font-semibold text-muted-foreground">{label}</dt>
+      <dd className="max-w-[65%] text-right font-mono text-xs font-black text-foreground">{value}</dd>
     </div>
   );
 }
@@ -79,8 +79,8 @@ export function RescueActionButton({
     variant === "danger"
       ? "border-rose-300 bg-rose-50 text-rose-900"
       : variant === "secondary"
-        ? "border-stone-300 bg-white text-stone-900"
-        : "border-stone-900 bg-stone-900 text-white";
+        ? "border-border bg-card text-foreground"
+        : "border-stone-900 bg-foreground text-background";
   return (
     <button
       type="button"

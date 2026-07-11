@@ -73,8 +73,8 @@ export type PharmacyOpsDashboardProps = {
 };
 
 const PANEL =
-  "rounded-[22px] border border-stone-200/90 bg-white shadow-[0_2px_16px_rgba(15,23,42,0.05)]";
-const SECTION_TITLE = "text-xl font-black tracking-tight text-stone-950 sm:text-[1.35rem]";
+  "rounded-[22px] border border-border/90 bg-card shadow-[0_2px_16px_rgba(15,23,42,0.05)]";
+const SECTION_TITLE = "text-xl font-black tracking-tight text-foreground sm:text-[1.35rem]";
 
 type WorkflowCardProps = {
   title: string;
@@ -87,35 +87,35 @@ type WorkflowCardProps = {
 
 const WORKFLOW_TONES = {
   sky: {
-    wrap: "border-sky-200/90 bg-gradient-to-br from-sky-50 to-white",
+    wrap: "border-sky-200/90 bg-gradient-to-br from-sky-50 to-card",
     icon: "bg-sky-100 text-sky-700",
     metric: "text-sky-950",
     sub: "text-sky-800/80",
     link: "text-sky-800 hover:text-sky-950",
   },
   amber: {
-    wrap: "border-amber-200/90 bg-gradient-to-br from-amber-50 to-white",
+    wrap: "border-amber-200/90 bg-gradient-to-br from-amber-50 to-card",
     icon: "bg-amber-100 text-amber-800",
     metric: "text-amber-950",
     sub: "text-amber-900/75",
     link: "text-amber-900 hover:text-amber-950",
   },
   emerald: {
-    wrap: "border-emerald-200/90 bg-gradient-to-br from-emerald-50 to-white",
+    wrap: "border-emerald-200/90 bg-gradient-to-br from-emerald-50 to-card",
     icon: "bg-emerald-100 text-emerald-700",
     metric: "text-emerald-950",
     sub: "text-emerald-900/75",
     link: "text-emerald-900 hover:text-emerald-950",
   },
   violet: {
-    wrap: "border-violet-200/90 bg-gradient-to-br from-violet-50 to-white",
+    wrap: "border-violet-200/90 bg-gradient-to-br from-violet-50 to-card",
     icon: "bg-violet-100 text-violet-700",
     metric: "text-violet-950",
     sub: "text-violet-900/75",
     link: "text-violet-800 hover:text-violet-950",
   },
   rose: {
-    wrap: "border-rose-200/90 bg-gradient-to-br from-rose-50 to-white",
+    wrap: "border-rose-200/90 bg-gradient-to-br from-rose-50 to-card",
     icon: "bg-rose-100 text-rose-700",
     metric: "text-rose-950",
     sub: "text-rose-900/75",
@@ -141,7 +141,7 @@ const WorkflowCard = memo(function WorkflowCard({
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-base font-black leading-snug text-stone-900 sm:text-lg">{title}</p>
+        <p className="text-base font-black leading-snug text-foreground sm:text-lg">{title}</p>
         <span className={clsx("inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", styles.icon)}>
           <Icon className="h-5 w-5" strokeWidth={2.25} aria-hidden />
         </span>
@@ -180,7 +180,7 @@ function AlertRow({
       ? "text-rose-800"
       : tone === "warn"
         ? "text-amber-900"
-        : "text-stone-800";
+        : "text-foreground";
   const iconClass =
     tone === "danger" ? "text-rose-600" : tone === "warn" ? "text-amber-600" : "text-teal-600";
   return (
@@ -193,9 +193,9 @@ function AlertRow({
 
 function PerformanceRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-h-[44px] items-center justify-between gap-3 border-b border-stone-100 py-2.5 last:border-0">
-      <span className="text-sm font-semibold text-stone-600">{label}</span>
-      <span className="text-right text-sm font-black text-stone-950">{value}</span>
+    <div className="flex min-h-[44px] items-center justify-between gap-3 border-b border-border py-2.5 last:border-0">
+      <span className="text-sm font-semibold text-muted-foreground">{label}</span>
+      <span className="text-right text-sm font-black text-foreground">{value}</span>
     </div>
   );
 }
@@ -206,7 +206,7 @@ const TAG_TONES: Record<ActivityTimelineItem["tagTone"], string> = {
   amber: "bg-amber-100 text-amber-950",
   rose: "bg-rose-100 text-rose-900",
   violet: "bg-violet-100 text-violet-900",
-  stone: "bg-stone-100 text-stone-800",
+  stone: "bg-muted text-foreground",
 };
 
 function usePharmacyDerived(ctx: DashboardCenterContext) {
@@ -332,27 +332,27 @@ export function PharmacyOpsHeaderSection({ ctx }: { ctx: DashboardCenterContext 
   return (
     <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="min-w-0">
-        <h1 className="text-xl font-black leading-tight tracking-tight text-stone-950 sm:text-[2rem] lg:text-[2.35rem]">
+        <h1 className="text-xl font-black leading-tight tracking-tight text-foreground sm:text-[2rem] lg:text-[2.35rem]">
           {t(ctx.lang, greetingKey).replace("{name}", firstName)} 👋
         </h1>
-        <p className="mt-1 max-w-2xl text-base font-medium text-stone-500 sm:text-lg">
+        <p className="mt-1 max-w-2xl text-base font-medium text-muted-foreground sm:text-lg">
           {t(ctx.lang, "pharmacyDashGreetingSub")}
         </p>
       </div>
       <div className="flex flex-wrap items-stretch gap-2 lg:max-w-md lg:justify-end">
         <div className={clsx(PANEL, "min-h-[48px] px-4 py-3")}>
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">{t(ctx.lang, "pharmacyDashBusinessDate")}</p>
-          <p className="mt-0.5 text-sm font-black text-stone-900">{formatPharmacyBusinessDate(ctx.todayKey ?? "")}</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t(ctx.lang, "pharmacyDashBusinessDate")}</p>
+          <p className="mt-0.5 text-sm font-black text-foreground">{formatPharmacyBusinessDate(ctx.todayKey ?? "")}</p>
         </div>
         <div className={clsx(PANEL, "min-h-[48px] px-4 py-3")}>
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">{t(ctx.lang, "pharmacyDashShiftLabel")}</p>
-          <p className="mt-0.5 text-sm font-black text-stone-900">
+          <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t(ctx.lang, "pharmacyDashShiftLabel")}</p>
+          <p className="mt-0.5 text-sm font-black text-foreground">
             {ctx.activeShift ? formatShiftTimeLabel(ctx.activeShift.startAt) : t(ctx.lang, "shiftClosed")}
           </p>
         </div>
         <div className={clsx(PANEL, "min-h-[48px] px-4 py-3")}>
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">{t(ctx.lang, "pharmacyDashPharmacist")}</p>
-          <p className="mt-0.5 truncate text-sm font-black text-stone-900">{ctx.actorName}</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t(ctx.lang, "pharmacyDashPharmacist")}</p>
+          <p className="mt-0.5 truncate text-sm font-black text-foreground">{ctx.actorName}</p>
         </div>
       </div>
     </header>
@@ -386,7 +386,7 @@ export function PharmacyOpsStatusStripSection({ ctx }: { ctx: DashboardCenterCon
       <span
         className={clsx(
           "inline-flex min-h-[40px] items-center gap-2 rounded-full px-3.5 py-2 text-xs font-black",
-          (ctx.failedPrints ?? 0) > 0 ? "bg-rose-100 text-rose-900" : "bg-stone-100 text-stone-800",
+          (ctx.failedPrints ?? 0) > 0 ? "bg-rose-100 text-rose-900" : "bg-muted text-foreground",
         )}
       >
         <Printer className="h-3.5 w-3.5" aria-hidden />
@@ -522,13 +522,13 @@ export function PharmacyOpsPatientsSection({ ctx }: { ctx: DashboardCenterContex
         />
       </ul>
       {patientStats.topChronicPatients.length > 0 ? (
-        <div className="mt-4 border-t border-stone-100 pt-4">
-          <p className="text-xs font-black uppercase tracking-wider text-stone-400">{t(ctx.lang, "pharmacyDashTopChronic")}</p>
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">{t(ctx.lang, "pharmacyDashTopChronic")}</p>
           <ul className="mt-2 space-y-1.5">
             {patientStats.topChronicPatients.slice(0, 3).map((p) => (
-              <li key={p.patientId} className="flex justify-between gap-2 text-sm font-bold text-stone-800">
+              <li key={p.patientId} className="flex justify-between gap-2 text-sm font-bold text-foreground">
                 <span className="truncate">{p.name}</span>
-                <span className="shrink-0 text-stone-500">{p.chronicCount}</span>
+                <span className="shrink-0 text-muted-foreground">{p.chronicCount}</span>
               </li>
             ))}
           </ul>
@@ -600,25 +600,25 @@ export function PharmacyOpsActivitySection({ ctx }: { ctx: DashboardCenterContex
     <section className={clsx(PANEL, "p-5 sm:p-6 xl:col-span-2")}>
       <h2 className={SECTION_TITLE}>{t(ctx.lang, "pharmacyDashRecentActivity")}</h2>
       {activityItems.length === 0 ? (
-        <p className="mt-4 text-sm font-medium text-stone-500">{t(ctx.lang, "pharmacyDashNoActivity")}</p>
+        <p className="mt-4 text-sm font-medium text-muted-foreground">{t(ctx.lang, "pharmacyDashNoActivity")}</p>
       ) : (
         <ol className="relative mt-5 space-y-0">
           {activityItems.map((item, idx) => (
             <li key={item.id} className="relative flex gap-4 pb-6 last:pb-0">
               {idx < activityItems.length - 1 ? (
-                <span className="absolute left-[1.15rem] top-10 h-[calc(100%-1.5rem)] w-px bg-stone-200" aria-hidden />
+                <span className="absolute left-[1.15rem] top-10 h-[calc(100%-1.5rem)] w-px bg-muted" aria-hidden />
               ) : null}
-              <div className="relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-white bg-stone-100 text-xs font-black text-stone-700 shadow-sm">
+              <div className="relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-white bg-muted text-xs font-black text-muted-foreground shadow-sm">
                 {item.timeLabel.replace(/\s/g, "").slice(0, 5)}
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-black text-stone-950">{item.title}</p>
+                  <p className="text-sm font-black text-foreground">{item.title}</p>
                   <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide", TAG_TONES[item.tagTone])}>
                     {t(ctx.lang, item.tagKey)}
                   </span>
                 </div>
-                <p className="mt-1 text-sm font-semibold text-stone-600">{item.subtitle}</p>
+                <p className="mt-1 text-sm font-semibold text-muted-foreground">{item.subtitle}</p>
               </div>
             </li>
           ))}
@@ -697,7 +697,7 @@ export function PharmacyOpsQuickActionsSection({ ctx }: { ctx: DashboardCenterCo
             <a
               key={action.labelKey}
               href={action.to}
-              className="inline-flex min-h-[52px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-stone-200 bg-stone-50 px-2 py-3 text-center text-xs font-black text-stone-900 transition-waka hover:border-teal-200 hover:bg-teal-50/60"
+              className="inline-flex min-h-[52px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border bg-muted px-2 py-3 text-center text-xs font-black text-foreground transition-waka hover:border-teal-200 hover:bg-teal-50/60"
             >
               <action.Icon className="h-5 w-5 text-teal-700" aria-hidden />
               {t(ctx.lang, action.labelKey)}
@@ -706,7 +706,7 @@ export function PharmacyOpsQuickActionsSection({ ctx }: { ctx: DashboardCenterCo
             <Link
               key={action.labelKey}
               to={action.to}
-              className="inline-flex min-h-[52px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-stone-200 bg-stone-50 px-2 py-3 text-center text-xs font-black text-stone-900 transition-waka hover:border-teal-200 hover:bg-teal-50/60"
+              className="inline-flex min-h-[52px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border bg-muted px-2 py-3 text-center text-xs font-black text-foreground transition-waka hover:border-teal-200 hover:bg-teal-50/60"
             >
               <action.Icon className="h-5 w-5 text-teal-700" aria-hidden />
               {t(ctx.lang, action.labelKey)}
@@ -734,7 +734,7 @@ export function PharmacyOpsFooterSection({ ctx }: { ctx: DashboardCenterContext 
         {t(ctx.lang, "pharmacyDashTip")}
       </p>
       {sync && !sync.isOnline ? (
-        <p className="text-center text-xs font-semibold text-stone-500">{t(ctx.lang, "pharmacyDashOfflineNote")}</p>
+        <p className="text-center text-xs font-semibold text-muted-foreground">{t(ctx.lang, "pharmacyDashOfflineNote")}</p>
       ) : null}
     </>
   );

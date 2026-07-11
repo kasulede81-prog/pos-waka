@@ -62,11 +62,11 @@ export function CloudTrustCenter({ lang }: Props) {
   const cp = readSyncCheckpoints();
 
   return (
-    <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+    <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-base font-black text-stone-900">{t(lang, "cloudTrustCenterTitle")}</p>
-          <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "cloudTrustCenterSub")}</p>
+          <p className="text-base font-black text-foreground">{t(lang, "cloudTrustCenterTitle")}</p>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "cloudTrustCenterSub")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {report ? (
@@ -74,14 +74,14 @@ export function CloudTrustCenter({ lang }: Props) {
               <button
                 type="button"
                 onClick={exportJson}
-                className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-800 shadow-waka-sm"
+                className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-bold text-foreground shadow-waka-sm"
               >
                 {t(lang, "cloudTrustExportJson")}
               </button>
               <button
                 type="button"
                 onClick={exportMarkdown}
-                className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-800 shadow-waka-sm"
+                className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-bold text-foreground shadow-waka-sm"
               >
                 {t(lang, "cloudTrustExportReport")}
               </button>
@@ -105,21 +105,21 @@ export function CloudTrustCenter({ lang }: Props) {
       ) : null}
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <p className="font-bold text-stone-500">{t(lang, "cloudTrustBootstrap")}</p>
-          <p className="mt-0.5 text-sm font-black text-stone-900">
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustBootstrap")}</p>
+          <p className="mt-0.5 text-sm font-black text-foreground">
             {cp.bootstrapComplete ? t(lang, "diagnosticsSupported") : t(lang, "diagnosticsNotSupported")}
           </p>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <p className="font-bold text-stone-500">{t(lang, "cloudTrustVerdict")}</p>
-          <p className="mt-0.5 text-sm font-black text-stone-900">
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustVerdict")}</p>
+          <p className="mt-0.5 text-sm font-black text-foreground">
             {report ? (report.verdict === "PASS" ? t(lang, "cloudTrustPass") : t(lang, "cloudTrustFail")) : "—"}
           </p>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <p className="font-bold text-stone-500">{t(lang, "cloudTrustInventory")}</p>
-          <p className="mt-0.5 text-sm font-black text-stone-900">
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustInventory")}</p>
+          <p className="mt-0.5 text-sm font-black text-foreground">
             {report
               ? report.inventoryIntegrityStatus === "healthy"
                 ? t(lang, "cloudTrustPass")
@@ -129,21 +129,21 @@ export function CloudTrustCenter({ lang }: Props) {
               : "—"}
           </p>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <p className="font-bold text-stone-500">{t(lang, "cloudTrustInvariant")}</p>
-          <p className="mt-0.5 text-sm font-black text-stone-900">
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustInvariant")}</p>
+          <p className="mt-0.5 text-sm font-black text-foreground">
             {report ? (report.recoveryInvariantPassed ? t(lang, "cloudTrustPass") : t(lang, "cloudTrustFail")) : "—"}
           </p>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <p className="font-bold text-stone-500">{t(lang, "cloudTrustPendingSync")}</p>
-          <p className="mt-0.5 text-sm font-black text-stone-900">
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustPendingSync")}</p>
+          <p className="mt-0.5 text-sm font-black text-foreground">
             {report ? report.pendingSync.totalPending : "—"}
           </p>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <p className="font-bold text-stone-500">{t(lang, "cloudTrustFingerprint")}</p>
-          <p className="mt-0.5 text-xs font-black tabular-nums text-stone-900">
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustFingerprint")}</p>
+          <p className="mt-0.5 text-xs font-black tabular-nums text-foreground">
             {report ? report.operationalFingerprint.hash : "—"}
           </p>
         </div>
@@ -151,9 +151,9 @@ export function CloudTrustCenter({ lang }: Props) {
 
       {report ? (
         <>
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-stone-100">
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-border">
             <table className="min-w-full text-left text-xs">
-              <thead className="bg-stone-50 text-[10px] font-black uppercase tracking-wide text-stone-500">
+              <thead className="bg-muted text-[10px] font-black uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2">{t(lang, "cloudTrustEntity")}</th>
                   <th className="px-3 py-2">{t(lang, "cloudTrustCloudCount")}</th>
@@ -163,12 +163,12 @@ export function CloudTrustCenter({ lang }: Props) {
               </thead>
               <tbody>
                 {report.rows.map((row) => (
-                  <tr key={row.id} className="border-t border-stone-100">
-                    <td className="px-3 py-2 font-semibold text-stone-800">{t(lang, row.labelKey)}</td>
-                    <td className="px-3 py-2 tabular-nums text-stone-700">
+                  <tr key={row.id} className="border-t border-border">
+                    <td className="px-3 py-2 font-semibold text-foreground">{t(lang, row.labelKey)}</td>
+                    <td className="px-3 py-2 tabular-nums text-muted-foreground">
                       {row.cloudCount ?? (row.cloudError ? "!" : "—")}
                     </td>
-                    <td className="px-3 py-2 tabular-nums text-stone-900">{row.localCount}</td>
+                    <td className="px-3 py-2 tabular-nums text-foreground">{row.localCount}</td>
                     <td className="px-3 py-2 font-bold">
                       {row.match ? (
                         <span className="text-emerald-700">{t(lang, "cloudTrustPass")}</span>
@@ -183,51 +183,51 @@ export function CloudTrustCenter({ lang }: Props) {
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-            <div className="rounded-xl bg-stone-50 px-3 py-2">
-              <p className="font-bold text-stone-500">{t(lang, "cloudTrustRevenue")}</p>
-              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+            <div className="rounded-xl bg-muted px-3 py-2">
+              <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustRevenue")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-foreground">
                 {report.financial.revenueUgx.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-xl bg-stone-50 px-3 py-2">
-              <p className="font-bold text-stone-500">{t(lang, "cloudTrustProfit")}</p>
-              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+            <div className="rounded-xl bg-muted px-3 py-2">
+              <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustProfit")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-foreground">
                 {report.financial.profitUgx.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-xl bg-stone-50 px-3 py-2">
-              <p className="font-bold text-stone-500">{t(lang, "cloudTrustExpectedCash")}</p>
-              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+            <div className="rounded-xl bg-muted px-3 py-2">
+              <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustExpectedCash")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-foreground">
                 {report.financial.expectedCashTodayUgx.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-xl bg-stone-50 px-3 py-2">
-              <p className="font-bold text-stone-500">{t(lang, "cloudTrustInventoryValue")}</p>
-              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+            <div className="rounded-xl bg-muted px-3 py-2">
+              <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustInventoryValue")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-foreground">
                 {report.financial.inventoryValueUgx.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-xl bg-stone-50 px-3 py-2">
-              <p className="font-bold text-stone-500">{t(lang, "cloudTrustStockQty")}</p>
-              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+            <div className="rounded-xl bg-muted px-3 py-2">
+              <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustStockQty")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-foreground">
                 {report.financial.totalStockQuantity.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-xl bg-stone-50 px-3 py-2">
-              <p className="font-bold text-stone-500">{t(lang, "cloudTrustDebt")}</p>
-              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+            <div className="rounded-xl bg-muted px-3 py-2">
+              <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustDebt")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-foreground">
                 {report.financial.totalCustomerDebtUgx.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-xl bg-stone-50 px-3 py-2">
-              <p className="font-bold text-stone-500">{t(lang, "cloudTrustSupplierBalance")}</p>
-              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+            <div className="rounded-xl bg-muted px-3 py-2">
+              <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustSupplierBalance")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-foreground">
                 {report.financial.totalSupplierBalanceUgx.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-xl bg-stone-50 px-3 py-2">
-              <p className="font-bold text-stone-500">{t(lang, "cloudTrustMovements")}</p>
-              <p className="mt-0.5 font-black tabular-nums text-stone-900">{report.stockMovementCount}</p>
+            <div className="rounded-xl bg-muted px-3 py-2">
+              <p className="font-bold text-muted-foreground">{t(lang, "cloudTrustMovements")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-foreground">{report.stockMovementCount}</p>
             </div>
           </div>
 
@@ -253,7 +253,7 @@ export function CloudTrustCenter({ lang }: Props) {
           ) : null}
         </>
       ) : (
-        <p className="mt-4 text-sm font-medium text-stone-500">{t(lang, "cloudTrustNoReport")}</p>
+        <p className="mt-4 text-sm font-medium text-muted-foreground">{t(lang, "cloudTrustNoReport")}</p>
       )}
     </section>
   );

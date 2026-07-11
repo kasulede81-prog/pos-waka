@@ -28,11 +28,11 @@ export function AiStatusCard({ report, loading, onRefresh }: Props) {
   const hasFails = report?.components.some((c) => c.status === "fail") ?? false;
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4">
+    <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-black text-stone-800">AI Status</h2>
-          <p className="mt-1 text-xs font-semibold text-stone-500">
+          <h2 className="text-sm font-black text-foreground">AI Status</h2>
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">
             Infrastructure check — edge functions, secrets, and database RPCs.
           </p>
         </div>
@@ -40,7 +40,7 @@ export function AiStatusCard({ report, loading, onRefresh }: Props) {
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="flex min-h-[36px] items-center gap-1 rounded-lg border border-stone-200 px-3 text-xs font-bold text-stone-700 disabled:opacity-50"
+          className="flex min-h-[36px] items-center gap-1 rounded-lg border border-border px-3 text-xs font-bold text-muted-foreground disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh
@@ -48,7 +48,7 @@ export function AiStatusCard({ report, loading, onRefresh }: Props) {
       </div>
 
       {loading && !report ? (
-        <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-stone-600">
+        <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin text-waka-600" />
           Running health check…
         </div>
@@ -61,7 +61,7 @@ export function AiStatusCard({ report, loading, onRefresh }: Props) {
               healthy ? "border border-emerald-200 bg-emerald-50" : "border border-rose-200 bg-rose-50"
             }`}
           >
-            <p className="text-base font-black text-stone-900">
+            <p className="text-base font-black text-foreground">
               {healthy ? "🟢 AI Healthy" : hasFails ? "🔴 Deployment Required" : "🟡 AI Degraded"}
             </p>
             {!healthy && failingSummary(report) ? (
@@ -69,7 +69,7 @@ export function AiStatusCard({ report, loading, onRefresh }: Props) {
                 Failing: {failingSummary(report)}
               </p>
             ) : null}
-            <p className="mt-1 text-[11px] font-semibold text-stone-500">
+            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
               Last checked {new Date(report.checkedAt).toLocaleString()}
             </p>
           </div>
@@ -78,21 +78,21 @@ export function AiStatusCard({ report, loading, onRefresh }: Props) {
             {report.components.map((c) => (
               <li
                 key={c.id}
-                className="flex items-start justify-between gap-2 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2 text-sm"
+                className="flex items-start justify-between gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm"
               >
-                <span className="font-semibold text-stone-800">
+                <span className="font-semibold text-foreground">
                   {statusIcon(c.status)} {c.label}
                 </span>
                 {c.detail ? (
-                  <span className="max-w-[55%] text-right text-xs font-medium text-stone-600">{c.detail}</span>
+                  <span className="max-w-[55%] text-right text-xs font-medium text-muted-foreground">{c.detail}</span>
                 ) : null}
               </li>
             ))}
           </ul>
 
           {hasFails ? (
-            <p className="text-xs font-semibold text-stone-600">
-              Deploy AI functions: <code className="rounded bg-stone-100 px-1">npm run supabase:deploy:ai</code>
+            <p className="text-xs font-semibold text-muted-foreground">
+              Deploy AI functions: <code className="rounded bg-muted px-1">npm run supabase:deploy:ai</code>
             </p>
           ) : null}
         </div>

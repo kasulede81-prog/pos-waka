@@ -42,12 +42,12 @@ export function MultiDeviceHealthCard({ lang }: { lang: Language }) {
 
   if (authMode === "local") {
     return (
-      <p className="text-sm font-medium text-stone-500">{t(lang, "multiDeviceHealthLocalOnly")}</p>
+      <p className="text-sm font-medium text-muted-foreground">{t(lang, "multiDeviceHealthLocalOnly")}</p>
     );
   }
 
   if (loading) {
-    return <p className="text-sm font-medium text-stone-500">{t(lang, "multiDeviceHealthLoading")}</p>;
+    return <p className="text-sm font-medium text-muted-foreground">{t(lang, "multiDeviceHealthLoading")}</p>;
   }
 
   if (error) {
@@ -55,45 +55,45 @@ export function MultiDeviceHealthCard({ lang }: { lang: Language }) {
   }
 
   if (!snapshot) {
-    return <p className="text-sm font-medium text-stone-500">{t(lang, "multiDeviceHealthNoShop")}</p>;
+    return <p className="text-sm font-medium text-muted-foreground">{t(lang, "multiDeviceHealthNoShop")}</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-          <p className="text-xs font-bold text-stone-500">{t(lang, "multiDeviceHealthActiveDevices")}</p>
-          <p className="text-lg font-black text-stone-900">{snapshot.activeDevices}</p>
+        <div className="rounded-xl border border-border bg-muted px-3 py-2">
+          <p className="text-xs font-bold text-muted-foreground">{t(lang, "multiDeviceHealthActiveDevices")}</p>
+          <p className="text-lg font-black text-foreground">{snapshot.activeDevices}</p>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-          <p className="text-xs font-bold text-stone-500">{t(lang, "multiDeviceHealthPendingUploads")}</p>
-          <p className="text-lg font-black text-stone-900">{snapshot.pendingQueueOps}</p>
+        <div className="rounded-xl border border-border bg-muted px-3 py-2">
+          <p className="text-xs font-bold text-muted-foreground">{t(lang, "multiDeviceHealthPendingUploads")}</p>
+          <p className="text-lg font-black text-foreground">{snapshot.pendingQueueOps}</p>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-          <p className="text-xs font-bold text-stone-500">{t(lang, "multiDeviceHealthConflicts")}</p>
-          <p className="text-lg font-black text-stone-900">{snapshot.unacknowledgedConflicts}</p>
+        <div className="rounded-xl border border-border bg-muted px-3 py-2">
+          <p className="text-xs font-bold text-muted-foreground">{t(lang, "multiDeviceHealthConflicts")}</p>
+          <p className="text-lg font-black text-foreground">{snapshot.unacknowledgedConflicts}</p>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-          <p className="text-xs font-bold text-stone-500">{t(lang, "multiDeviceHealthStaleDevices")}</p>
-          <p className="text-lg font-black text-stone-900">{snapshot.staleDeviceCount}</p>
+        <div className="rounded-xl border border-border bg-muted px-3 py-2">
+          <p className="text-xs font-bold text-muted-foreground">{t(lang, "multiDeviceHealthStaleDevices")}</p>
+          <p className="text-lg font-black text-foreground">{snapshot.staleDeviceCount}</p>
         </div>
       </div>
-      <p className="text-xs font-medium text-stone-500">
+      <p className="text-xs font-medium text-muted-foreground">
         {t(lang, "multiDeviceHealthLastSalesSync")}: {snapshot.lastSalesSyncAt ?? t(lang, "multiDeviceHealthNever")}
       </p>
-      <p className="text-xs font-medium text-stone-500">
+      <p className="text-xs font-medium text-muted-foreground">
         {t(lang, "multiDeviceHealthLastProductsSync")}: {snapshot.lastProductsSyncAt ?? t(lang, "multiDeviceHealthNever")}
       </p>
       <div className="flex flex-wrap gap-2">
         <Link
           to="/settings/devices"
-          className="inline-flex min-h-[40px] items-center rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-800"
+          className="inline-flex min-h-[40px] items-center rounded-xl border border-border bg-card px-4 text-sm font-bold text-foreground"
         >
           {t(lang, "multiDeviceHealthDevicesLink")}
         </Link>
         <Link
           to="/settings/sync-conflicts"
-          className="inline-flex min-h-[40px] items-center rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-800"
+          className="inline-flex min-h-[40px] items-center rounded-xl border border-border bg-card px-4 text-sm font-bold text-foreground"
         >
           {t(lang, "multiDeviceHealthConflictsLink")}
         </Link>

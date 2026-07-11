@@ -96,8 +96,8 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       header={
         <div className="space-y-1.5">
           <div>
-            <h1 className="text-xl font-black tracking-tight text-stone-950 sm:text-2xl">{t(lang, "officeHubTitle")}</h1>
-            <p className="text-xs font-medium text-stone-500">{t(lang, "officeHubSub")}</p>
+            <h1 className="text-xl font-black tracking-tight text-foreground sm:text-2xl">{t(lang, "officeHubTitle")}</h1>
+            <p className="text-xs font-medium text-muted-foreground">{t(lang, "officeHubSub")}</p>
           </div>
           <OfficeSyncStatusChip lang={lang} />
         </div>
@@ -130,7 +130,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       )}
 
       {(showInternalAdmin || showAgentPortal || isInternalAdminPreviewEnabled()) && (
-        <div className="space-y-2 border-t border-stone-100 pt-3">
+        <div className="space-y-2 border-t border-border pt-3">
           {showAgentPortal ? (
             <Link
               to="/agent"
@@ -143,7 +143,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
           {showInternalAdmin ? (
             <Link
               to="/internal/waka"
-              className="inline-flex min-h-[36px] items-center text-xs font-bold text-stone-500 underline decoration-stone-300"
+              className="inline-flex min-h-[36px] items-center text-xs font-bold text-muted-foreground underline decoration-stone-300"
             >
               {t(lang, "internalAdminFooterLink")}
             </Link>

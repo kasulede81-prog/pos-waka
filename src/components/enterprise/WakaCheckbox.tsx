@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import type { InputHTMLAttributes, ReactNode } from "react";
+import { themeUi } from "../../lib/themeTokens";
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "checked" | "onChange"> & {
   checked: boolean;
@@ -36,8 +37,8 @@ export function WakaCheckbox({
       disabled={disabled}
       onChange={(e) => onCheckedChange(e.target.checked)}
       className={clsx(
-        "h-5 w-5 shrink-0 rounded border-2 border-stone-300 accent-waka-600",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-400 focus-visible:ring-offset-2",
+        "h-5 w-5 shrink-0 rounded border-2 border-input accent-waka-600",
+        themeUi.focusRing,
         disabled && "cursor-not-allowed opacity-50",
         !row && className,
       )}
@@ -57,8 +58,8 @@ export function WakaCheckbox({
     >
       <span className="mt-0.5">{box}</span>
       <span className="min-w-0 flex-1">
-        {label ? <span className="block text-sm font-bold text-stone-900">{label}</span> : null}
-        {description ? <span className="mt-0.5 block text-xs font-medium text-stone-500">{description}</span> : null}
+        {label ? <span className="block text-sm font-bold text-foreground">{label}</span> : null}
+        {description ? <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{description}</span> : null}
       </span>
     </label>
   );

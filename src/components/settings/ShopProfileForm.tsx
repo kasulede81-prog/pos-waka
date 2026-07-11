@@ -35,7 +35,7 @@ type Props = {
 };
 
 const fieldClass =
-  "mt-1.5 w-full min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2 disabled:bg-stone-50 disabled:text-stone-600";
+  "mt-1.5 w-full min-h-[44px] rounded-xl border border-border bg-card px-3 py-2.5 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2 disabled:bg-muted disabled:text-muted-foreground";
 
 function ProfileSection({
   title,
@@ -47,9 +47,9 @@ function ProfileSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-white px-4 py-3.5 shadow-sm">
-      <h2 className="text-sm font-black text-stone-900">{title}</h2>
-      {hint ? <p className="mt-0.5 text-xs font-medium text-stone-500">{hint}</p> : null}
+    <section className="rounded-2xl border border-border/90 bg-card px-4 py-3.5 shadow-sm">
+      <h2 className="text-sm font-black text-foreground">{title}</h2>
+      {hint ? <p className="mt-0.5 text-xs font-medium text-muted-foreground">{hint}</p> : null}
       <div className="mt-2.5 space-y-2.5">{children}</div>
     </section>
   );
@@ -274,9 +274,9 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
       ) : null}
 
       {profileLocked ? (
-        <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-3 py-3 text-sm text-stone-800">
-          <p className="font-semibold text-stone-900">{t(lang, "shopProfileProtectedTitle")}</p>
-          <p className="mt-1 text-xs font-medium leading-relaxed text-stone-600">
+        <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-3 py-3 text-sm text-foreground">
+          <p className="font-semibold text-foreground">{t(lang, "shopProfileProtectedTitle")}</p>
+          <p className="mt-1 text-xs font-medium leading-relaxed text-muted-foreground">
             {t(lang, "shopProfileProtectedBody")}
           </p>
           <a
@@ -327,7 +327,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
 
       {authMode === "supabase" ? (
         <ProfileSection title={t(lang, "shopProfileLocationTitle")} hint={t(lang, "shopLocationSectionHelp")}>
-          <label className="block text-xs font-bold text-stone-700">{t(lang, "shopDistrictLabel")}</label>
+          <label className="block text-xs font-bold text-muted-foreground">{t(lang, "shopDistrictLabel")}</label>
           <select
             value={districtIdSel}
             onChange={(e) => setDistrictIdSel(e.target.value)}
@@ -341,7 +341,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
               </option>
             ))}
           </select>
-          <label className="block text-xs font-bold text-stone-700">{t(lang, "shopCityLabel")}</label>
+          <label className="block text-xs font-bold text-muted-foreground">{t(lang, "shopCityLabel")}</label>
           <input
             value={shopCityField}
             onChange={(e) => setShopCityField(e.target.value)}
@@ -349,7 +349,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
             disabled={profileLocked}
             className={fieldClass}
           />
-          <label className="block text-xs font-bold text-stone-700">{t(lang, "shopAreaLabel")}</label>
+          <label className="block text-xs font-bold text-muted-foreground">{t(lang, "shopAreaLabel")}</label>
           <input
             value={shopAreaField}
             onChange={(e) => setShopAreaField(e.target.value)}
@@ -357,7 +357,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
             disabled={profileLocked}
             className={fieldClass}
           />
-          <label className="block text-xs font-bold text-stone-700">{t(lang, "shopProfileLandmarkLabel")}</label>
+          <label className="block text-xs font-bold text-muted-foreground">{t(lang, "shopProfileLandmarkLabel")}</label>
           <input
             value={shopAddressInput}
             onChange={(e) => setShopAddressInput(e.target.value)}
@@ -395,7 +395,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
               </button>
               <button
                 type="button"
-                className="min-h-[40px] rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
+                className="min-h-[40px] rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground"
                 onClick={() => {
                   setShopLat(null);
                   setShopLng(null);
@@ -407,7 +407,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
               </button>
             </div>
           ) : null}
-          {gpsHint ? <p className="text-xs font-semibold text-stone-600">{gpsHint}</p> : null}
+          {gpsHint ? <p className="text-xs font-semibold text-muted-foreground">{gpsHint}</p> : null}
         </ProfileSection>
       ) : (
         <ProfileSection title={t(lang, "shopProfileLocationTitle")}>
@@ -422,13 +422,13 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
       )}
 
       <ProfileSection title={t(lang, "shopProfileBusinessTypeLabel")} hint={t(lang, "businessTypeLockedMessage")}>
-        <p className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2.5 text-sm font-semibold text-stone-800">
+        <p className="rounded-xl border border-border bg-muted px-3 py-2.5 text-sm font-semibold text-foreground">
           {t(lang, `businessType_${preferences.businessType}`)}
         </p>
       </ProfileSection>
 
       <ProfileSection title={t(lang, "businessCurrency")}>
-        <p className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2.5 text-sm font-black text-stone-800">
+        <p className="rounded-xl border border-border bg-muted px-3 py-2.5 text-sm font-black text-foreground">
           {t(lang, "currencyUgxOnly")} ({shopCurrencyLabel})
         </p>
       </ProfileSection>

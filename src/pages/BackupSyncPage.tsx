@@ -10,7 +10,9 @@ import { canUseBackupRestore } from "../lib/subscriptionEntitlements";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
-import { PrimaryDeviceGate } from "../components/device/ManagedByPrimaryDevice";
+import { AppUpdateCheckButton } from "../components/app-update/AppUpdateControls";
+import { useToast } from "../context/ToastProvider";
+import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
 import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
 
 export function BackupSyncPage({ lang }: { lang: Language }) {
@@ -20,7 +22,8 @@ export function BackupSyncPage({ lang }: { lang: Language }) {
   const canBackupRole = actorHasPermission(actor, "settings.shop");
   const canBackupPlan = canUseBackupRestore(snapshot, authMode);
   const canBackup = canBackupRole && canBackupPlan;
-  const { isPrimary } = useDeviceAuthority();
+  const { isDeviceAuthorized } = useDeviceAuthority();
+  const toast = useToast();
 
   if (!canView) {
     return <Navigate to="/office" replace />;
@@ -42,19 +45,19 @@ export function BackupSyncPage({ lang }: { lang: Language }) {
       />
 
       <section className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "backupSyncOnlineTitle")}</h2>
+        <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{t(lang, "backupSyncOnlineTitle")}</h2>
         <SyncHealthCard lang={lang} variant="simple" />
       </section>
 
-      {canBackup && isPrimary ? (
+      {canBackup && isDeviceAuthorized ? (
         <section className="space-y-3">
-          <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "backupSyncPhoneTitle")}</h2>
-          <PrimaryDeviceGate lang={lang}>
+          <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{t(lang, "backupSyncPhoneTitle")}</h2>
+          <DeviceApprovedGate lang={lang}>
             <BackupSettingsCard lang={lang} compact actionsEnabled />
-          </PrimaryDeviceGate>
+          </DeviceApprovedGate>
         </section>
-      ) : canBackupRole && !isPrimary ? (
-        <PrimaryDeviceGate lang={lang}>{null}</PrimaryDeviceGate>
+      ) : canBackupRole && !isDeviceAuthorized ? (
+        <DeviceApprovedGate lang={lang}>{null}</DeviceApprovedGate>
       ) : canBackupRole ? (
         <section className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-4">
           <p className="text-sm font-semibold text-waka-950">{t(lang, "backupUpgradeRequired")}</p>
@@ -65,10 +68,19 @@ export function BackupSyncPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      <section className="space-y-2 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "backupSyncAccountTitle")}</h2>
-        <p className="text-sm font-bold text-stone-800">{onlineAccount}</p>
-        <p className="text-xs font-semibold text-stone-500">{t(lang, "backupSyncAccountHint")}</p>
+      <section className="space-y-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{t(lang, "updateCheckForUpdates")}</h2>
+        <p className="text-xs font-semibold text-muted-foreground">{t(lang, "appVersionLabel")}: {import.meta.env.VITE_APP_VERSION}</p>
+        <AppUpdateCheckButton
+          lang={lang}
+          onResult={(message) => toast.success(message)}
+        />
+      </section>
+
+      <section className="space-y-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{t(lang, "backupSyncAccountTitle")}</h2>
+        <p className="text-sm font-bold text-foreground">{onlineAccount}</p>
+        <p className="text-xs font-semibold text-muted-foreground">{t(lang, "backupSyncAccountHint")}</p>
       </section>
     </div>
   );

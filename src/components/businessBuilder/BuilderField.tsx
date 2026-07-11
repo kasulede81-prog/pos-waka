@@ -27,12 +27,12 @@ export function BuilderField(props: InputProps | SelectProps) {
     "mt-1.5 w-full min-h-[48px] rounded-2xl border px-4 py-3 pr-12 text-base outline-none transition-all",
     complete
       ? "border-emerald-300 bg-emerald-50/50 ring-emerald-200 focus:border-emerald-400 focus:ring-2"
-      : "border-stone-200 bg-white ring-waka-200 focus:border-waka-400 focus:ring-2",
+      : "border-border bg-card ring-waka-200 focus:border-waka-400 focus:ring-2",
     className,
   );
 
   return (
-    <label className="relative block text-sm font-bold text-stone-800">
+    <label className="relative block text-sm font-bold text-foreground">
       {label}
       <div className="relative">
         {props.as === "select" ? (
@@ -51,7 +51,7 @@ export function BuilderField(props: InputProps | SelectProps) {
           </span>
         ) : null}
       </div>
-      {hint ? <p className="mt-1 text-xs font-medium text-stone-500">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-xs font-medium text-muted-foreground">{hint}</p> : null}
       {error ? <p className="mt-1 text-xs font-semibold text-red-600">{error}</p> : null}
     </label>
   );
@@ -89,7 +89,7 @@ export function BuilderCard({
         "min-h-[80px] w-full rounded-[24px] border-2 px-4 py-3 text-left transition active:scale-[0.99]",
         selected
           ? "border-waka-500 bg-waka-50 shadow-md"
-          : "border-stone-200 bg-white hover:border-stone-300",
+          : "border-border bg-card hover:border-border",
         className,
       )}
       {...rest}

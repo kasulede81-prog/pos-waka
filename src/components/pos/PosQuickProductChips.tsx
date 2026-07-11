@@ -16,7 +16,7 @@ export function PosQuickProductChips({ lang, products, onTap, className }: Props
 
   return (
     <section className={clsx("space-y-1", className)}>
-      <p className="px-0.5 text-[10px] font-black uppercase tracking-wide text-stone-500">
+      <p className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, "posFrequentToday")}
       </p>
       <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
@@ -25,7 +25,7 @@ export function PosQuickProductChips({ lang, products, onTap, className }: Props
             key={p.id}
             type="button"
             onClick={() => onTap(p)}
-            className="shrink-0 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-900 shadow-sm transition-all active:scale-[0.97] active:border-waka-300 active:bg-waka-50 motion-reduce:active:scale-100"
+            className="shrink-0 rounded-full border border-border bg-card px-3 py-2 text-xs font-bold text-foreground shadow-sm transition-all active:scale-[0.97] active:border-waka-300 active:bg-waka-50 motion-reduce:active:scale-100"
           >
             {p.name}
           </button>

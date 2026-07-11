@@ -97,7 +97,7 @@ export function HomeLauncherTile({
         <span
           className={clsx(
             "absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide",
-            isBoldSecondary ? "bg-white/20 text-white" : "bg-stone-900/10 text-stone-600",
+            isBoldSecondary ? "bg-white/20 text-white" : "bg-foreground/10 text-muted-foreground",
           )}
           aria-hidden
         >
@@ -110,7 +110,7 @@ export function HomeLauncherTile({
         </span>
       ) : null}
       {tile.hidden && isArrange ? (
-        <span className="absolute left-2 top-2 rounded-full bg-stone-800/80 px-2 py-0.5 text-[10px] font-bold text-white">
+        <span className="absolute left-2 top-2 rounded-full bg-foreground/80 px-2 py-0.5 text-[10px] font-bold text-background">
           {t(lang, "homeMenuTileHidden")}
         </span>
       ) : null}

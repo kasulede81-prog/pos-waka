@@ -125,10 +125,10 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
       <article className="space-y-8">
         <header className="space-y-4">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">About us</p>
-          <h1 className="text-4xl font-black leading-tight text-stone-950 sm:text-5xl">
+          <h1 className="text-4xl font-black leading-tight text-foreground sm:text-5xl">
             Built in Uganda. Built for African Business.
           </h1>
-          <div className="max-w-3xl space-y-3 text-base font-medium leading-relaxed text-stone-600">
+          <div className="max-w-3xl space-y-3 text-base font-medium leading-relaxed text-muted-foreground">
             <p>
               {WAKA_MAIN_PRODUCT} is an all-in-one business management platform designed for shops, supermarkets,
               pharmacies, restaurants, salons, wholesalers, and growing businesses across Africa.
@@ -161,7 +161,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
         </ContentSection>
 
         <section className="space-y-4">
-          <h2 className="text-2xl font-black text-stone-950">What Makes Waka Different</h2>
+          <h2 className="text-2xl font-black text-foreground">What Makes Waka Different</h2>
           <div className="space-y-4">
             {DIFFERENTIATORS.map((block) => (
               <FeatureCard key={block.title} block={block} />
@@ -181,16 +181,16 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
           </p>
         </ContentSection>
 
-        <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">
-          <h2 className="text-xl font-black text-stone-950">{WAKA_LEGAL_COMPANY_NAME}</h2>
-          <p className="mt-3 text-sm font-medium leading-relaxed text-stone-700">
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-waka-sm sm:p-8">
+          <h2 className="text-xl font-black text-foreground">{WAKA_LEGAL_COMPANY_NAME}</h2>
+          <p className="mt-3 text-sm font-medium leading-relaxed text-muted-foreground">
             Waka POS is operated by {WAKA_LEGAL_COMPANY_NAME}, a Ugandan technology company building business software
             for Africa.
           </p>
 
           <div className="mt-6 grid gap-6 sm:grid-cols-2">
             <div>
-              <h3 className="text-[11px] font-black uppercase tracking-wide text-stone-500">Email</h3>
+              <h3 className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">Email</h3>
               <ul className="mt-2 space-y-1 text-sm font-semibold text-waka-800">
                 {WAKA_SUPPORT_EMAILS.map((email) => (
                   <li key={email}>
@@ -202,7 +202,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
               </ul>
             </div>
             <div>
-              <h3 className="text-[11px] font-black uppercase tracking-wide text-stone-500">Website</h3>
+              <h3 className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">Website</h3>
               <p className="mt-2 text-sm font-semibold text-waka-800">
                 <a href={WAKA_POS_URL} className="hover:underline">
                   pos.waka.ug
@@ -212,8 +212,8 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
           </div>
 
           <div className="mt-6">
-            <h3 className="text-[11px] font-black uppercase tracking-wide text-stone-500">Location</h3>
-            <p className="mt-2 text-sm font-medium leading-relaxed text-stone-700">
+            <h3 className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">Location</h3>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-muted-foreground">
               {WAKA_OFFICE_STREET},
               <br />
               {WAKA_OFFICE_CITY}, {WAKA_OFFICE_COUNTRY}
@@ -227,9 +227,9 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
 
 function ContentSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">
-      <h2 className="text-xl font-black text-stone-950">{title}</h2>
-      <div className="mt-4 space-y-3 text-sm font-medium leading-relaxed text-stone-700">{children}</div>
+    <section className="rounded-3xl border border-border bg-card p-6 shadow-waka-sm sm:p-8">
+      <h2 className="text-xl font-black text-foreground">{title}</h2>
+      <div className="mt-4 space-y-3 text-sm font-medium leading-relaxed text-muted-foreground">{children}</div>
     </section>
   );
 }
@@ -237,24 +237,24 @@ function ContentSection({ title, children }: { title: string; children: ReactNod
 function FeatureCard({ block }: { block: FeatureBlock }) {
   return (
     <article className="rounded-2xl border border-waka-100 bg-waka-50/40 p-5 sm:p-6">
-      <h3 className="text-lg font-black text-stone-950">{block.title}</h3>
+      <h3 className="text-lg font-black text-foreground">{block.title}</h3>
       {block.intro?.map((paragraph) => (
-        <p key={paragraph} className="mt-2 text-sm font-medium leading-relaxed text-stone-700">
+        <p key={paragraph} className="mt-2 text-sm font-medium leading-relaxed text-muted-foreground">
           {paragraph}
         </p>
       ))}
       {block.bulletsLabel ? (
-        <p className="mt-2 text-sm font-medium text-stone-700">{block.bulletsLabel}</p>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{block.bulletsLabel}</p>
       ) : null}
       {block.bullets && block.bullets.length > 0 ? (
-        <ul className="mt-2 list-inside list-disc space-y-1 text-sm font-medium text-stone-700">
+        <ul className="mt-2 list-inside list-disc space-y-1 text-sm font-medium text-muted-foreground">
           {block.bullets.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
       ) : null}
       {block.outro?.map((paragraph) => (
-        <p key={paragraph} className="mt-2 text-sm font-medium leading-relaxed text-stone-700">
+        <p key={paragraph} className="mt-2 text-sm font-medium leading-relaxed text-muted-foreground">
           {paragraph}
         </p>
       ))}

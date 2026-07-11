@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Phone, MessageCircle } from "lucide-react";
 import type { Language, Supplier } from "../../../types";
 import { t } from "../../../lib/i18n";
+import { useShopAction } from "../../../hooks/useShopAction";
 import { usePosStore } from "../../../store/usePosStore";
 import { useSessionActor } from "../../../context/SessionActorContext";
 
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export function SuppliersTab({ lang, onOpenSupplier }: Props) {
+  const { run: runShopAction } = useShopAction();
   const actor = useSessionActor();
   const canManage = actorHasPermission(actor, "suppliers.manage");
   const suppliers = usePosStore((s) => s.suppliers);
@@ -75,11 +77,14 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
     setAddOpen(false);
   };
 
-  const submitPay = (e: FormEvent) => {
+  const submitPay = async (e: FormEvent) => {
     e.preventDefault();
     if (!paySupplier) return;
     const n = Math.floor(Number(payAmount) || 0);
-    const r = addSupplierPayment(paySupplier.id, n);
+    const r = await runShopAction(
+      { lang, action: "supplier.payment", permitted: canManage },
+      () => addSupplierPayment(paySupplier.id, n),
+    );
     if (r.ok) {
       setPaySupplier(null);
       setPayAmount("");
@@ -99,7 +104,7 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
           onClick={() => setOutstandingOnly((v) => !v)}
           className={clsx(
             "rounded-xl px-3 py-2 text-xs font-black",
-            outstandingOnly ? "bg-rose-100 text-rose-900" : "border border-stone-200 bg-white text-stone-800",
+            outstandingOnly ? "bg-rose-100 text-rose-900" : "border border-border bg-card text-foreground",
           )}
         >
           {t(lang, "ipFilterOutstanding")}
@@ -110,34 +115,34 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
         value={searchQ}
         onChange={(e) => setSearchQ(e.target.value)}
         placeholder={t(lang, "ipSuppliersSearchPh")}
-        className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-semibold shadow-sm"
+        className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold shadow-sm"
       />
 
       <div className="flex gap-1 overflow-x-auto pb-1">
-        <button type="button" onClick={() => setAlpha("all")} className={clsx("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black", alpha === "all" ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700")}>
+        <button type="button" onClick={() => setAlpha("all")} className={clsx("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black", alpha === "all" ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground")}>
           {t(lang, "ipFilterAll")}
         </button>
         {letters.map((l) => (
-          <button key={l} type="button" onClick={() => setAlpha(l)} className={clsx("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black", alpha === l ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700")}>
+          <button key={l} type="button" onClick={() => setAlpha(l)} className={clsx("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black", alpha === l ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground")}>
             {l}
           </button>
         ))}
       </div>
 
       {filtered.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-10 text-center text-sm font-semibold text-stone-500">
+        <p className="rounded-2xl border border-dashed border-border bg-muted px-4 py-10 text-center text-sm font-semibold text-muted-foreground">
           {t(lang, "suppliersEmpty")}
         </p>
       ) : (
         <ul className="space-y-2">
           {filtered.map((s) => (
             <li key={s.id}>
-              <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
+              <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
                   <button type="button" onClick={() => onOpenSupplier(s.id)} className="min-w-0 text-left">
-                    <p className="text-base font-black text-stone-950">{s.name}</p>
-                    <p className="text-sm text-stone-600">{s.phone || "—"}</p>
-                    {s.location ? <p className="text-xs text-stone-500">{s.location}</p> : null}
+                    <p className="text-base font-black text-foreground">{s.name}</p>
+                    <p className="text-sm text-muted-foreground">{s.phone || "—"}</p>
+                    {s.location ? <p className="text-xs text-muted-foreground">{s.location}</p> : null}
                   </button>
                   <div className="text-right">
                     <p className="text-[10px] font-bold uppercase text-amber-800">{t(lang, "supplierBalanceLabel")}</p>
@@ -146,18 +151,18 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
                 </div>
                 <dl className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
                   <div>
-                    <dt className="font-semibold text-stone-500">{t(lang, "supplierTotalBuy")}</dt>
+                    <dt className="font-semibold text-muted-foreground">{t(lang, "supplierTotalBuy")}</dt>
                     <dd className="font-black">{formatShortUgx(s.totalPurchasesUgx)}</dd>
                   </div>
                   <div>
-                    <dt className="font-semibold text-stone-500">{t(lang, "ipLastPurchase")}</dt>
+                    <dt className="font-semibold text-muted-foreground">{t(lang, "ipLastPurchase")}</dt>
                     <dd className="font-black">{lastPurchaseBySupplier.get(s.id)?.slice(0, 10) ?? "—"}</dd>
                   </div>
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {s.phone ? (
                     <>
-                      <a href={`tel:${s.phone}`} className="inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-stone-200 px-3 text-xs font-black text-stone-800">
+                      <a href={`tel:${s.phone}`} className="inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-border px-3 text-xs font-black text-foreground">
                         <Phone className="h-3.5 w-3.5" aria-hidden />
                         {t(lang, "debtsCall")}
                       </a>
@@ -167,7 +172,7 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
                       </a>
                     </>
                   ) : null}
-                  <button type="button" onClick={() => onOpenSupplier(s.id)} className="inline-flex min-h-[36px] items-center rounded-xl bg-stone-900 px-3 text-xs font-black text-white">
+                  <button type="button" onClick={() => onOpenSupplier(s.id)} className="inline-flex min-h-[36px] items-center rounded-xl bg-foreground px-3 text-xs font-black text-background">
                     {t(lang, "supplierViewDetail")}
                   </button>
                   {canManage && s.balanceOwedUgx > 0 ? (
@@ -184,10 +189,10 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
 
       <ModalSheet open={addOpen} onClose={() => setAddOpen(false)} title={t(lang, "supplierAddTitle")}>
         <form onSubmit={submitAdd} className="space-y-3">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t(lang, "supplierNamePh")} required className="w-full rounded-xl border border-stone-200 px-3 py-3 text-sm font-semibold" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t(lang, "supplierPhonePh")} className="w-full rounded-xl border border-stone-200 px-3 py-3 text-sm font-semibold" />
-          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t(lang, "supplierLocationPh")} className="w-full rounded-xl border border-stone-200 px-3 py-3 text-sm font-semibold" />
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t(lang, "supplierNotesPh")} className="w-full rounded-xl border border-stone-200 px-3 py-3 text-sm font-semibold" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t(lang, "supplierNamePh")} required className="w-full rounded-xl border border-border px-3 py-3 text-sm font-semibold" />
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t(lang, "supplierPhonePh")} className="w-full rounded-xl border border-border px-3 py-3 text-sm font-semibold" />
+          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t(lang, "supplierLocationPh")} className="w-full rounded-xl border border-border px-3 py-3 text-sm font-semibold" />
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t(lang, "supplierNotesPh")} className="w-full rounded-xl border border-border px-3 py-3 text-sm font-semibold" />
           <button type="submit" className="w-full rounded-xl bg-waka-600 py-3 text-sm font-black text-white">{t(lang, "supplierSave")}</button>
         </form>
       </ModalSheet>
@@ -195,8 +200,8 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
       {paySupplier ? (
         <ModalSheet open onClose={() => setPaySupplier(null)} title={t(lang, "supplierPayTitle")}>
           <form onSubmit={submitPay} className="space-y-3">
-            <p className="text-sm font-bold text-stone-800">{paySupplier.name}</p>
-            <input value={payAmount} onChange={(e) => setPayAmount(e.target.value)} inputMode="numeric" className="w-full rounded-xl border border-stone-200 px-3 py-3 text-lg font-bold" />
+            <p className="text-sm font-bold text-foreground">{paySupplier.name}</p>
+            <input value={payAmount} onChange={(e) => setPayAmount(e.target.value)} inputMode="numeric" className="w-full rounded-xl border border-border px-3 py-3 text-lg font-bold" />
             <button type="submit" className="w-full rounded-xl bg-waka-600 py-3 font-black text-white">{t(lang, "supplierPaySave")}</button>
           </form>
         </ModalSheet>

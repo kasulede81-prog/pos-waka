@@ -28,8 +28,8 @@ export function PharmacyComplianceRegisterPanel({ lang, register, embedded = fal
       {!embedded ? (
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyComplianceRegisterTitle")}</h1>
-            <p className="mt-1 text-base font-medium text-stone-500">{t(lang, "pharmacyComplianceRegisterSub")}</p>
+            <h1 className="text-3xl font-black text-foreground">{t(lang, "pharmacyComplianceRegisterTitle")}</h1>
+            <p className="mt-1 text-base font-medium text-muted-foreground">{t(lang, "pharmacyComplianceRegisterSub")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -49,11 +49,11 @@ export function PharmacyComplianceRegisterPanel({ lang, register, embedded = fal
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-stone-600">{t(lang, "icPharmacyComplianceTabHint")}</p>
+          <p className="text-sm font-semibold text-muted-foreground">{t(lang, "icPharmacyComplianceTabHint")}</p>
           <div className="flex flex-wrap gap-2">
             <Link
               to="/pharmacy/compliance/reports"
-              className="min-h-[40px] rounded-xl border border-stone-200 px-3 text-xs font-black touch-manipulation"
+              className="min-h-[40px] rounded-xl border border-border px-3 text-xs font-black touch-manipulation"
             >
               {t(lang, "pharmacyComplianceReportsLink")}
             </Link>
@@ -72,13 +72,13 @@ export function PharmacyComplianceRegisterPanel({ lang, register, embedded = fal
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={t(lang, "pharmacyComplianceRegisterSearchPh")}
-        className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 text-base font-semibold"
+        className="min-h-[48px] w-full rounded-2xl border-2 border-border px-4 text-base font-semibold"
       />
 
-      <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-waka-sm">
+      <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-waka-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-stone-100 bg-stone-50 text-xs font-black uppercase text-stone-500">
+            <thead className="border-b border-border bg-muted text-xs font-black uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">{t(lang, "pharmacyComplianceColWhen")}</th>
                 <th className="px-4 py-3">{t(lang, "pharmacyComplianceColKind")}</th>
@@ -91,19 +91,19 @@ export function PharmacyComplianceRegisterPanel({ lang, register, embedded = fal
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center font-semibold text-stone-500">
+                  <td colSpan={6} className="px-4 py-8 text-center font-semibold text-muted-foreground">
                     {t(lang, "pharmacyComplianceRegisterEmpty")}
                   </td>
                 </tr>
               ) : (
                 rows.slice(0, 200).map((row) => (
-                  <tr key={row.id} className="border-b border-stone-50">
-                    <td className="px-4 py-3 font-semibold text-stone-700">
+                  <tr key={row.id} className="border-b border-border">
+                    <td className="px-4 py-3 font-semibold text-muted-foreground">
                       <span className="block">{row.businessDate}</span>
-                      <span className="text-xs text-stone-400">{new Date(row.at).toLocaleTimeString()}</span>
+                      <span className="text-xs text-muted-foreground">{new Date(row.at).toLocaleTimeString()}</span>
                     </td>
                     <td className="px-4 py-3 font-black text-violet-800">{kindLabel(lang, row.kind)}</td>
-                    <td className="px-4 py-3 font-bold text-stone-900">{row.productName}</td>
+                    <td className="px-4 py-3 font-bold text-foreground">{row.productName}</td>
                     <td className="px-4 py-3 font-black">{row.quantity}</td>
                     <td className="px-4 py-3 font-semibold">{row.patientName ?? "—"}</td>
                     <td className="px-4 py-3 font-semibold">{row.pharmacistName ?? "—"}</td>

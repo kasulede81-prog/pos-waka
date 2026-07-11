@@ -213,25 +213,25 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
       : t(lang, "deviceLimitSub");
 
   return (
-    <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-waka-50 to-stone-50 dark:from-stone-950 dark:to-stone-900">
+    <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-waka-50 to-muted dark:from-foreground dark:to-foreground">
       <div className="auth-scroll-pane min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
         <div className="mx-auto w-full max-w-lg space-y-6 px-4 py-8">
           <div className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
               <MonitorSmartphone className="h-7 w-7" aria-hidden />
             </div>
-            <h1 className="mt-4 text-2xl font-black text-stone-950 dark:text-stone-50">{title}</h1>
-            <p className="mt-2 text-sm font-medium text-stone-600 dark:text-stone-400">{intro}</p>
+            <h1 className="mt-4 text-2xl font-black text-foreground dark:text-background">{title}</h1>
+            <p className="mt-2 text-sm font-medium text-muted-foreground dark:text-muted-foreground">{intro}</p>
           </div>
 
-          <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-700 dark:bg-stone-900">
-            <p className="text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+          <section className="rounded-2xl border border-border bg-card p-4 shadow-sm dark:bg-foreground">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
               {t(lang, "deviceLimitPackageLabel")}
             </p>
-            <p className="mt-1 text-lg font-black text-stone-950 dark:text-stone-50">
+            <p className="mt-1 text-lg font-black text-foreground dark:text-background">
               {planDisplayName(ctx, block?.result.plan_name)}
             </p>
-            <p className="mt-2 text-sm font-bold text-stone-800 dark:text-stone-200">{usageLine}</p>
+            <p className="mt-2 text-sm font-bold text-foreground dark:text-muted-foreground">{usageLine}</p>
             {slotAvailable ? (
               <p className="mt-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                 {t(lang, "deviceLimitSlotAvailableHint")}
@@ -250,16 +250,16 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
 
           {isOwner && (atLimit || (slotAvailable && replaceableDevices.length > 0)) ? (
             <section>
-              <h2 className="text-sm font-black text-stone-800 dark:text-stone-200">{t(lang, "deviceLimitDevicesHeading")}</h2>
+              <h2 className="text-sm font-black text-foreground dark:text-muted-foreground">{t(lang, "deviceLimitDevicesHeading")}</h2>
               {!atLimit && replaceableDevices.length > 0 ? (
-                <p className="mt-1 text-xs font-semibold text-stone-500 dark:text-stone-400">
+                <p className="mt-1 text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                   {t(lang, "deviceLimitStaleDevicesHint")}
                 </p>
               ) : null}
               {loading ? (
-                <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{t(lang, "connectedDevicesLoading")}</p>
+                <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">{t(lang, "connectedDevicesLoading")}</p>
               ) : replaceableDevices.length === 0 ? (
-                <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{t(lang, "connectedDevicesEmpty")}</p>
+                <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">{t(lang, "connectedDevicesEmpty")}</p>
               ) : (
                 <ul className="mt-3 space-y-3" role="radiogroup" aria-label={t(lang, "deviceLimitDevicesHeading")}>
                   {replaceableDevices.map((device) => {
@@ -268,10 +268,10 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
                     return (
                       <li key={device.id}>
                         <label
-                          className={`flex cursor-pointer gap-3 rounded-2xl border bg-white p-4 shadow-sm dark:bg-stone-900 ${
+                          className={`flex cursor-pointer gap-3 rounded-2xl border bg-card p-4 shadow-sm dark:bg-foreground ${
                             selected
                               ? "border-amber-400 ring-2 ring-amber-200 dark:border-amber-500 dark:ring-amber-500/30"
-                              : "border-stone-200 dark:border-stone-700"
+                              : "border-border"
                           }`}
                         >
                           <input
@@ -282,11 +282,11 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
                             onChange={() => setSelectedId(device.id)}
                           />
                           <span className="min-w-0 flex-1">
-                            <span className="block text-base font-black text-stone-950 dark:text-stone-50">{name}</span>
-                            <span className="block text-sm font-medium text-stone-600 dark:text-stone-400">
+                            <span className="block text-base font-black text-foreground dark:text-background">{name}</span>
+                            <span className="block text-sm font-medium text-muted-foreground dark:text-muted-foreground">
                               {formatDevicePlatformLabel(device.platform)}
                             </span>
-                            <span className="mt-1 block text-sm font-medium text-stone-500 dark:text-stone-500">
+                            <span className="mt-1 block text-sm font-medium text-muted-foreground dark:text-muted-foreground">
                               {t(lang, "connectedDevicesLastActivePrefix")}:{" "}
                               {lastActiveLabel(lang, device.last_seen_at, nowMs)}
                             </span>
@@ -311,7 +311,7 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
         </div>
       </div>
 
-      <footer className="shrink-0 border-t border-stone-200/80 bg-white/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md dark:border-stone-700 dark:bg-stone-900/95">
+      <footer className="shrink-0 border-t border-border/80 bg-card/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md dark:bg-foreground/95">
         <div className="mx-auto flex w-full max-w-lg flex-col gap-3">
           {isOwner ? (
             <>
@@ -360,7 +360,7 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
                   if (onSignOut) onSignOut();
                   else navigate("/login", { replace: true });
                 }}
-                className="min-h-[48px] rounded-xl border border-stone-300 bg-white px-4 text-sm font-bold text-stone-800 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                className="min-h-[48px] rounded-xl border border-border bg-card px-4 text-sm font-bold text-foreground dark:border-border dark:bg-foreground dark:text-background"
               >
                 {t(lang, "deviceLimitCancel")}
               </button>
@@ -379,7 +379,7 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
                   if (onSignOut) onSignOut();
                   else navigate("/login", { replace: true });
                 }}
-                className="min-h-[48px] rounded-xl border border-stone-300 bg-white px-4 text-sm font-bold text-stone-800 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                className="min-h-[48px] rounded-xl border border-border bg-card px-4 text-sm font-bold text-foreground dark:border-border dark:bg-foreground dark:text-background"
               >
                 {t(lang, "deviceLimitClose")}
               </button>

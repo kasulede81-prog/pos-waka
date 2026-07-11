@@ -1,13 +1,12 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
-  canPerformPrimaryActionSync,
+  canPerformDeviceAuthorizedActionSync,
   clearDeviceAuthorityCache,
   isDeviceApprovedCachedSync,
-  isPrimaryDeviceCachedSync,
+  isDeviceAuthorizedForManagementSync,
   seedDeviceAuthorityCacheForTests,
   type DeviceAuthorityContext,
 } from "./deviceAuthority";
-import { ENFORCE_PRIMARY_DEVICE } from "./deviceAuthorityPolicy";
 
 beforeEach(() => {
   clearDeviceAuthorityCache();
@@ -17,129 +16,79 @@ function seedCache(ctx: DeviceAuthorityContext): void {
   seedDeviceAuthorityCacheForTests(ctx);
 }
 
+const approvedDevice: DeviceAuthorityContext = {
+  shopId: "shop-1",
+  deviceFingerprint: "fp-approved",
+  deviceId: "dev-2",
+  formFactor: "tablet",
+  approvalStatus: "approved",
+  isDeviceAuthorized: true,
+  isApproved: true,
+  isOperational: true,
+  status: "active",
+  lastSyncAt: null,
+  lastLoginAt: null,
+  lastSeenAt: null,
+  currentStaffClientId: null,
+  appVersion: null,
+  label: null,
+  platform: null,
+  pendingUploads: 0,
+  pendingDownloads: 0,
+  cloudStatus: null,
+  recoveryStatus: null,
+};
+
 describe("deviceAuthority cache", () => {
   it("defaults permissive when cache is cold", () => {
-    expect(isPrimaryDeviceCachedSync()).toBe(true);
+    expect(isDeviceAuthorizedForManagementSync()).toBe(true);
     expect(isDeviceApprovedCachedSync()).toBe(true);
-    expect(canPerformPrimaryActionSync("staff_manage")).toBe(true);
+    expect(canPerformDeviceAuthorizedActionSync("staff_manage")).toBe(true);
   });
 
-  it("secondary device cannot perform primary actions when cached", () => {
-    if (!ENFORCE_PRIMARY_DEVICE) {
-      seedCache({
-        shopId: "shop-1",
-        deviceFingerprint: "fp-secondary",
-        deviceId: "dev-2",
-        deviceAuthority: "secondary",
-        formFactor: "tablet",
-        approvalStatus: "approved",
-        isPrimary: false,
-        isApproved: true,
-        isOperational: true,
-        primaryDeviceFingerprint: "fp-primary",
-        primaryDeviceId: "dev-1",
-        status: "active",
-        lastSyncAt: null,
-        lastLoginAt: null,
-        lastSeenAt: null,
-        currentStaffClientId: null,
-        appVersion: null,
-        label: null,
-        platform: null,
-        pendingUploads: 0,
-        pendingDownloads: 0,
-        cloudStatus: null,
-        recoveryStatus: null,
-      });
-      expect(isPrimaryDeviceCachedSync()).toBe(true);
-      expect(canPerformPrimaryActionSync("staff_manage")).toBe(true);
-      return;
-    }
-    seedCache({
-      shopId: "shop-1",
-      deviceFingerprint: "fp-secondary",
-      deviceId: "dev-2",
-      deviceAuthority: "secondary",
-      formFactor: "tablet",
-      approvalStatus: "approved",
-      isPrimary: false,
-      isApproved: true,
-      isOperational: true,
-      primaryDeviceFingerprint: "fp-primary",
-      primaryDeviceId: "dev-1",
-      status: "active",
-      lastSyncAt: null,
-      lastLoginAt: null,
-      lastSeenAt: null,
-      currentStaffClientId: null,
-      appVersion: null,
-      label: null,
-      platform: null,
-      pendingUploads: 0,
-      pendingDownloads: 0,
-      cloudStatus: null,
-      recoveryStatus: null,
-    });
-    expect(isPrimaryDeviceCachedSync()).toBe(false);
-    expect(canPerformPrimaryActionSync("staff_manage")).toBe(false);
+  it("approved device can manage staff", () => {
+    seedCache(approvedDevice);
+    expect(isDeviceAuthorizedForManagementSync()).toBe(true);
+    expect(canPerformDeviceAuthorizedActionSync("staff_manage")).toBe(true);
   });
 
   it("pending approval blocks operational access", () => {
     seedCache({
-      shopId: "shop-1",
-      deviceFingerprint: "fp-new",
-      deviceId: "dev-3",
-      deviceAuthority: "secondary",
-      formFactor: "tablet",
+      ...approvedDevice,
       approvalStatus: "pending",
-      isPrimary: false,
+      isDeviceAuthorized: false,
       isApproved: false,
       isOperational: false,
-      primaryDeviceFingerprint: "fp-primary",
-      primaryDeviceId: "dev-1",
       status: "disconnected",
-      lastSyncAt: null,
-      lastLoginAt: null,
-      lastSeenAt: null,
-      currentStaffClientId: null,
-      appVersion: null,
-      label: null,
-      platform: null,
-      pendingUploads: 0,
-      pendingDownloads: 0,
-      cloudStatus: null,
-      recoveryStatus: null,
     });
     expect(isDeviceApprovedCachedSync()).toBe(false);
+    expect(isDeviceAuthorizedForManagementSync()).toBe(false);
   });
 });
 
-describe("authorizeBackupRestore primary gate", () => {
-  it("blocks user import on secondary when primary exists in cache", async () => {
+describe("authorizeBackupRestore device gate", () => {
+  it("allows user import on any approved device", async () => {
+    seedCache(approvedDevice);
+    const { authorizeBackupRestore } = await import("./backupRestoreAuthorization");
+    const r = authorizeBackupRestore({
+      actor: { userId: "u1", role: "owner", displayName: "Owner" },
+      snapshot: {
+        kind: "remote",
+        row: { plan_code: "business", max_devices: 5 },
+      } as import("./subscriptionEntitlements").SubscriptionSnapshot,
+      authMode: "supabase",
+      purpose: "user_import",
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("blocks user import when device is pending approval", async () => {
     seedCache({
-      shopId: "shop-1",
-      deviceFingerprint: "fp-secondary",
-      deviceId: "dev-2",
-      deviceAuthority: "secondary",
-      formFactor: "tablet",
-      approvalStatus: "approved",
-      isPrimary: false,
-      isApproved: true,
-      isOperational: true,
-      primaryDeviceFingerprint: "fp-primary",
-      primaryDeviceId: "dev-1",
-      status: "active",
-      lastSyncAt: null,
-      lastLoginAt: null,
-      lastSeenAt: null,
-      currentStaffClientId: null,
-      appVersion: null,
-      label: null,
-      platform: null,
-      pendingUploads: 0,
-      pendingDownloads: 0,
-      cloudStatus: null,
-      recoveryStatus: null,
+      ...approvedDevice,
+      approvalStatus: "pending",
+      isDeviceAuthorized: false,
+      isApproved: false,
+      isOperational: false,
     });
     const { authorizeBackupRestore } = await import("./backupRestoreAuthorization");
     const r = authorizeBackupRestore({
@@ -151,7 +100,7 @@ describe("authorizeBackupRestore primary gate", () => {
       authMode: "supabase",
       purpose: "user_import",
     });
-    expect(r.ok).toBe(ENFORCE_PRIMARY_DEVICE ? false : true);
-    if (!r.ok && ENFORCE_PRIMARY_DEVICE) expect(r.errorKey).toBe("notPrimaryDevice");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errorKey).toBe("deviceNotAuthorized");
   });
 });

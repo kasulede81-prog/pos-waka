@@ -30,6 +30,8 @@ type Props = {
   canRestock: boolean;
   isOnlyProduct?: boolean;
   variant?: "default" | "lowStock";
+  /** Phase 19.1A — slightly tighter card spacing when `comfortable`. */
+  density?: "default" | "comfortable";
   onAction: (action: RowAction) => void;
   onOpenDetail?: () => void;
 };
@@ -45,6 +47,7 @@ export function StockProductCard({
   canRestock,
   isOnlyProduct: _isOnlyProduct,
   variant = "default",
+  density = "default",
   onAction,
   onOpenDetail,
 }: Props) {
@@ -65,8 +68,9 @@ export function StockProductCard({
     <>
       <div
         className={clsx(
-          "rounded-xl border bg-white p-2.5 shadow-sm transition-all",
-          locked ? "border-stone-200/80 opacity-55" : "border-stone-200/90",
+          "rounded-xl border bg-card shadow-sm transition-all",
+          density === "comfortable" ? "p-2" : "p-2.5",
+          locked ? "border-border/80 opacity-55" : "border-border/90",
           low && !locked && lowStockFocus && "border-rose-200/90 bg-rose-50/30",
         )}
       >
@@ -79,16 +83,16 @@ export function StockProductCard({
             onOpenDetail && "active:opacity-90",
           )}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-lg leading-none">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-lg leading-none">
             {shelfIcon ?? "📦"}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <p className="line-clamp-1 text-sm font-black text-stone-950">
+              <p className="line-clamp-1 text-sm font-black text-foreground">
                 {pharmacyMode ? medicineDisplayBrand(p) : formatMedicineListPrimary(p)}
               </p>
               {pharmacyMode && medicineDisplayGeneric(p) ? (
-                <span className="truncate text-[10px] font-semibold text-stone-500">{medicineDisplayGeneric(p)}</span>
+                <span className="truncate text-[10px] font-semibold text-muted-foreground">{medicineDisplayGeneric(p)}</span>
               ) : null}
               {pharmacyMode ? <ExpiryStatusBadge lang={lang} product={p} compact /> : null}
               {pharmacyMode && p.pharmacyMaster?.controlledDrug ? (
@@ -102,7 +106,7 @@ export function StockProductCard({
                 </span>
               ) : null}
               {locked ? (
-                <span className="rounded-full bg-stone-800 px-1.5 py-0.5 text-[8px] font-black uppercase text-white">
+                <span className="rounded-full bg-foreground px-1.5 py-0.5 text-[8px] font-black uppercase text-background">
                   {t(lang, "productLockedBadge")}
                 </span>
               ) : null}
@@ -112,19 +116,19 @@ export function StockProductCard({
                 </span>
               ) : null}
             </div>
-            {detail ? <p className="truncate text-[10px] font-semibold text-stone-600">{detail}</p> : null}
-            <p className="mt-0.5 truncate text-[10px] font-semibold text-stone-500">{shelf}</p>
+            {detail ? <p className="truncate text-[10px] font-semibold text-muted-foreground">{detail}</p> : null}
+            <p className="mt-0.5 truncate text-[10px] font-semibold text-muted-foreground">{shelf}</p>
             <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span
                 className={clsx(
                   "text-[10px] font-bold",
-                  low && !locked ? "text-rose-700" : "text-stone-600",
+                  low && !locked ? "text-rose-700" : "text-muted-foreground",
                 )}
               >
                 {t(lang, "stockLabel")}: {stockText}
               </span>
               {batchSummary && batchSummary.batchCount > 0 ? (
-                <span className="text-[10px] font-bold text-stone-500">
+                <span className="text-[10px] font-bold text-muted-foreground">
                   · {batchSummary.batchCount} {t(lang, "pharmacyBatches").toLowerCase()}
                   {batchSummary.nearestExpiry ? ` · ${batchSummary.nearestExpiry}` : ""}
                 </span>
@@ -135,7 +139,7 @@ export function StockProductCard({
         </button>
 
         {!locked ? (
-          <div className="mt-2 flex gap-1.5">
+          <div className={clsx("flex gap-1.5", density === "comfortable" ? "mt-1.5" : "mt-2")}>
             {lowStockFocus && canRestock ? (
               <button
                 type="button"
@@ -159,7 +163,7 @@ export function StockProductCard({
                   <button
                     type="button"
                     onClick={() => onAction("edit")}
-                    className="min-h-[36px] flex-1 rounded-lg border border-stone-200 bg-white px-2 text-xs font-black text-stone-800 active:bg-stone-50"
+                    className="min-h-[36px] flex-1 rounded-lg border border-border bg-card px-2 text-xs font-black text-foreground active:bg-muted"
                   >
                     {t(lang, "stockCardEdit")}
                   </button>
@@ -171,7 +175,7 @@ export function StockProductCard({
                 type="button"
                 aria-expanded={sheetOpen}
                 onClick={() => setSheetOpen(true)}
-                className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 active:bg-stone-50"
+                className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg border border-border bg-card text-muted-foreground active:bg-muted"
               >
                 <MoreHorizontal className="h-4 w-4" />
                 <span className="sr-only">{t(lang, "stockMoreActions")}</span>

@@ -5,6 +5,7 @@ import { ChevronDown, FileDown, UserPlus, Users } from "lucide-react";
 import clsx from "clsx";
 import type { Customer, Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
+import { useShopAction } from "../hooks/useShopAction";
 import {
   buildCreditActivityIndex,
   creditActivityTimelineFromIndex,
@@ -60,6 +61,7 @@ import { shareText } from "../lib/reportExport";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 
 export function CustomersPage({ lang }: { lang: Language }) {
+  const { run: runShopAction } = useShopAction();
   const actor = useSessionActor();
   const canView = actorHasPermission(actor, "customers.view");
   const canDebt = actorHasPermission(actor, "customers.debt");
@@ -156,16 +158,24 @@ export function CustomersPage({ lang }: { lang: Language }) {
     [orphanDebts, bounds],
   );
 
-  const submitPay = (customerId: string, amountUgx: number) => {
-    const r = addDebtPayment(customerId, amountUgx);
-    if (r.ok && r.payment) {
+  const submitPay = async (customerId: string, amountUgx: number): Promise<boolean> => {
+    let savedPayment: ReturnType<typeof addDebtPayment>["payment"];
+    const r = await runShopAction(
+      { lang, action: "customer.debt_payment", permitted: canDebt },
+      () => {
+        const result = addDebtPayment(customerId, amountUgx);
+        if (result.ok && result.payment) savedPayment = result.payment;
+        return { ok: result.ok, errorKey: result.errorKey };
+      },
+    );
+    if (r.ok && savedPayment) {
       const customer = usePosStore.getState().customers.find((c) => c.id === customerId);
       if (customer) {
-        const branding = brandingFromDebtPayment(r.payment, preferences, receiptPlanTier);
+        const branding = brandingFromDebtPayment(savedPayment, preferences, receiptPlanTier);
         setDebtReceiptCtx({
           shopName,
-          receiptNumber: documentReceiptNumber("DEBT", r.payment.id, r.payment.createdAt),
-          payment: r.payment,
+          receiptNumber: documentReceiptNumber("DEBT", savedPayment.id, savedPayment.createdAt),
+          payment: savedPayment,
           customer,
           cashier: actor.displayName?.trim() || t(lang, "role_owner"),
           balanceAfterUgx: customer.debtBalanceUgx,
@@ -176,6 +186,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
         });
       }
     }
+    return r.ok;
   };
 
   const submitAssignOrphan = (saleId: string) => {
@@ -232,14 +243,14 @@ export function CustomersPage({ lang }: { lang: Language }) {
           <button
             type="button"
             onClick={() => document.getElementById(debtsSearchId)?.focus()}
-            className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-50"
+            className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm active:bg-muted"
           >
             {t(lang, "debtsActionSearch")}
           </button>
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-50"
+            className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm active:bg-muted"
           >
             <UserPlus className="h-4 w-4" aria-hidden />
             <span className="hidden sm:inline">{t(lang, "debtsAddPerson")}</span>
@@ -248,7 +259,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
             <button
               type="button"
               onClick={() => void exportDebts()}
-              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-stone-50"
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-muted"
             >
               <FileDown className="h-4 w-4 shrink-0" aria-hidden />
               <span className="hidden sm:inline">{t(lang, "salesHistoryExport")}</span>
@@ -273,7 +284,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
         }
       />
 
-      <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-stone-50/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
+      <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-muted/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
         <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
         <DebtsFilterChips lang={lang} active={quickFilter} onChange={setQuickFilter} />
         <DebtsSearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} inputId={debtsSearchId} />
@@ -300,7 +311,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
             {assignMessage ? <p className="text-xs font-bold text-rose-900">{assignMessage}</p> : null}
             <ul className="space-y-2">
               {(orphanInRange.length > 0 ? orphanInRange : orphanDebts).map((o) => (
-                <li key={o.saleId} className="rounded-xl border border-rose-200 bg-white p-3">
+                <li key={o.saleId} className="rounded-xl border border-rose-200 bg-card p-3">
                   <p className="text-xs font-semibold text-rose-950">
                     {new Date(o.createdAt).toLocaleString()}
                     {o.receiptSeq != null ? ` · #${String(o.receiptSeq).padStart(3, "0")}` : ""}
@@ -313,7 +324,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
                         onChange={(e) =>
                           setAssignCustomerBySale((prev) => ({ ...prev, [o.saleId]: e.target.value }))
                         }
-                        className="min-h-[44px] flex-1 rounded-xl border border-rose-200 bg-white px-3 text-sm font-semibold"
+                        className="min-h-[44px] flex-1 rounded-xl border border-rose-200 bg-card px-3 text-sm font-semibold"
                         aria-label={t(lang, "orphanDebtAssignCustomer")}
                       >
                         <option value="">{t(lang, "orphanDebtAssignCustomer")}</option>
@@ -351,13 +362,13 @@ export function CustomersPage({ lang }: { lang: Language }) {
       {filteredCustomers.length > 0 ? (
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-0.5">
-            <h2 className="text-xs font-black text-stone-800">
+            <h2 className="text-xs font-black text-foreground">
               {tTemplate(lang, "debtsCustomerListTitle", { count: String(filteredCustomers.length) })}
             </h2>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[10px] font-bold text-stone-700"
+              className="rounded-lg border border-border bg-card px-2 py-1 text-[10px] font-bold text-muted-foreground"
               aria-label={t(lang, "debtsSortBy")}
             >
               <option value="balance_desc">{t(lang, "debtsSortBalanceDesc")}</option>
@@ -375,7 +386,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
           />
         </section>
       ) : customers.length > 0 ? (
-        <p className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-bold text-stone-600">
+        <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">
           {t(lang, "posSellNoMatch")}
         </p>
       ) : null}
@@ -385,7 +396,14 @@ export function CustomersPage({ lang }: { lang: Language }) {
         open={addOpen}
         addLabel={modeTerm("addCustomer")}
         onClose={() => setAddOpen(false)}
-        onSubmit={(name, phone) => addCustomer({ name, phone, location: "Uganda" })}
+        onSubmit={async (name, phone) => {
+          const r = await runShopAction({ lang, action: "customer.add", permitted: canView }, () => {
+            const row = addCustomer({ name, phone, location: "Uganda" });
+            if (row.id === "denied") return { ok: false, errorKey: "forbidden" };
+            return { ok: true };
+          });
+          return r.ok;
+        }}
       />
 
       <DebtReceivePaymentSheet
@@ -393,7 +411,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
         open={payCustomer !== null}
         customer={payCustomer}
         onClose={() => setPayCustomer(null)}
-        onSubmit={(amount) => payCustomer && submitPay(payCustomer.id, amount)}
+        onSubmit={async (amount) => (payCustomer ? submitPay(payCustomer.id, amount) : false)}
       />
 
       <DebtCustomerDetailSheet
@@ -416,14 +434,14 @@ export function CustomersPage({ lang }: { lang: Language }) {
           footer={
             <button
               type="button"
-              className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 py-3 font-bold"
+              className="min-h-[48px] w-full rounded-2xl border-2 border-border py-3 font-bold"
               onClick={() => setDebtReceiptCtx(null)}
             >
               {t(lang, "receiptClose")}
             </button>
           }
         >
-          <p className="text-sm text-stone-600">{debtReceiptCtx.customer.name}</p>
+          <p className="text-sm text-muted-foreground">{debtReceiptCtx.customer.name}</p>
           <div className="mt-4">
             <DocumentActionsBar
               lang={lang}

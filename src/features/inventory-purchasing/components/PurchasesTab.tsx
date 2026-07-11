@@ -70,7 +70,7 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
     if (kind === "paid") return "bg-emerald-100 text-emerald-800";
     if (kind === "partial") return "bg-amber-100 text-amber-900";
     if (kind === "unpaid") return "bg-rose-100 text-rose-800";
-    return "bg-stone-100 text-stone-600";
+    return "bg-muted text-muted-foreground";
   };
 
   const statusLabel = (kind: ReturnType<typeof purchaseStatusKind>) => {
@@ -97,7 +97,7 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
         value={searchQ}
         onChange={(e) => setSearchQ(e.target.value)}
         placeholder={t(lang, "ipPurchasesSearchPh")}
-        className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-semibold shadow-sm outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200/50"
+        className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold shadow-sm outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200/50"
       />
 
       <div className="flex flex-wrap gap-1.5">
@@ -108,7 +108,7 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
             onClick={() => setStatusFilter(s)}
             className={clsx(
               "rounded-full px-3 py-1.5 text-[11px] font-black",
-              statusFilter === s ? "bg-waka-600 text-white" : "border border-stone-200 bg-white text-stone-700",
+              statusFilter === s ? "bg-waka-600 text-white" : "border border-border bg-card text-muted-foreground",
             )}
           >
             {s === "all" ? t(lang, "ipFilterAll") : statusLabel(s as ReturnType<typeof purchaseStatusKind>)}
@@ -117,10 +117,10 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={exportBusy || rows.length === 0} onClick={() => void printPurchasesReport(lang, shopName, rows, exportStem)} className="min-h-[40px] rounded-xl bg-stone-900 px-3 text-xs font-black text-white disabled:opacity-50">
+        <button type="button" disabled={exportBusy || rows.length === 0} onClick={() => void printPurchasesReport(lang, shopName, rows, exportStem)} className="min-h-[40px] rounded-xl bg-foreground px-3 text-xs font-black text-background disabled:opacity-50">
           {receiptPrintActionLabel(lang)}
         </button>
-        <button type="button" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("csv")} className="min-h-[40px] rounded-xl border border-stone-200 px-3 text-xs font-black disabled:opacity-50">
+        <button type="button" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("csv")} className="min-h-[40px] rounded-xl border border-border px-3 text-xs font-black disabled:opacity-50">
           CSV
         </button>
         <button type="button" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("pdf")} className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50">
@@ -130,7 +130,7 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-10 text-center text-sm font-semibold text-stone-500">
+        <p className="rounded-2xl border border-dashed border-border bg-muted px-4 py-10 text-center text-sm font-semibold text-muted-foreground">
           {t(lang, "purchasesEmpty")}
         </p>
       ) : (
@@ -143,12 +143,12 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
                 <button
                   type="button"
                   onClick={() => onOpenPurchase(row.purchase.id)}
-                  className="w-full rounded-2xl border border-stone-200/90 bg-white p-3 text-left shadow-sm transition active:scale-[0.99]"
+                  className="w-full rounded-2xl border border-border/90 bg-card p-3 text-left shadow-sm transition active:scale-[0.99]"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-stone-950">{row.purchase.supplierName}</p>
-                      <p className="text-[11px] font-semibold text-stone-500">
+                      <p className="truncate text-sm font-black text-foreground">{row.purchase.supplierName}</p>
+                      <p className="text-[11px] font-semibold text-muted-foreground">
                         {dateKeyKampala(row.purchase.createdAt)} · {row.productCount} {t(lang, "purchasesColProducts").toLowerCase()}
                       </p>
                     </div>
@@ -158,16 +158,16 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
                   </div>
                   <dl className="mt-2 grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-3">
                     <div>
-                      <dt className="font-semibold text-stone-500">{t(lang, "purchasesColTotal")}</dt>
+                      <dt className="font-semibold text-muted-foreground">{t(lang, "purchasesColTotal")}</dt>
                       <dd className="font-black tabular-nums">{formatShortUgx(row.purchase.totalCostUgx)}</dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-stone-500">{t(lang, "purchasesColPaid")}</dt>
+                      <dt className="font-semibold text-muted-foreground">{t(lang, "purchasesColPaid")}</dt>
                       <dd className="font-black tabular-nums text-teal-800">{formatShortUgx(row.purchase.amountPaidUgx)}</dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-stone-500">{t(lang, "ipBalance")}</dt>
-                      <dd className={clsx("font-black tabular-nums", balance > 0 ? "text-rose-700" : "text-stone-800")}>
+                      <dt className="font-semibold text-muted-foreground">{t(lang, "ipBalance")}</dt>
+                      <dd className={clsx("font-black tabular-nums", balance > 0 ? "text-rose-700" : "text-foreground")}>
                         {formatShortUgx(balance)}
                       </dd>
                     </div>

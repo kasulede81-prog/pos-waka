@@ -12,7 +12,7 @@ export function DayDrawerOpenAlert({ lang }: Props) {
   return (
     <Link
       to="/office/day-open"
-      className="flex min-h-[72px] items-center gap-3 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-white px-4 py-3 shadow-sm transition active:scale-[0.99] motion-reduce:active:scale-100"
+      className="flex min-h-[72px] items-center gap-3 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-card px-4 py-3 shadow-sm transition active:scale-[0.99] motion-reduce:active:scale-100"
     >
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
         <Sun className="h-5 w-5" strokeWidth={2.25} aria-hidden />

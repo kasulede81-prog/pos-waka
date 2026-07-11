@@ -69,22 +69,22 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
 
       {canSupport ? (
         <AdminCollapsible title={t(lang, "internalShopProfileSupportTitle")} summary={t(lang, "internalShopProfileSupportSub")}>
-          <label className="block text-xs font-bold text-stone-600">
+          <label className="block text-xs font-bold text-muted-foreground">
             {t(lang, "internalShopProfileSupportSubject")}
             <input
               value={supportSubject}
               onChange={(e) => setSupportSubject(e.target.value)}
-              className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 px-3 text-sm font-semibold text-stone-900"
+              className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-semibold text-foreground"
               placeholder="…"
             />
           </label>
-          <label className="mt-3 block text-xs font-bold text-stone-600">
+          <label className="mt-3 block text-xs font-bold text-muted-foreground">
             {t(lang, "internalShopProfileSupportBody")}
             <textarea
               value={supportBody}
               onChange={(e) => setSupportBody(e.target.value)}
               rows={3}
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold text-stone-900"
+              className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold text-foreground"
               placeholder="…"
             />
           </label>
@@ -184,7 +184,7 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
             ) : null}
           </div>
           {rescue.recoverySignals.passwordResetRequestedAt || rescue.recoverySignals.clearBackOfficePinAt ? (
-            <dl className="mt-3 grid gap-2 text-xs text-stone-600">
+            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground">
               {rescue.recoverySignals.passwordResetRequestedAt ? (
                 <div>Password reset signal: {new Date(rescue.recoverySignals.passwordResetRequestedAt).toLocaleString("en-GB")}</div>
               ) : null}
@@ -198,6 +198,7 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
 
       {canSupport ? (
         <SupportPasswordResetPanel
+          lang={lang}
           previewMode={previewMode}
           onToast={setToast}
         />

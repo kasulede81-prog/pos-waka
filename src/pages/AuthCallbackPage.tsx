@@ -171,10 +171,10 @@ export function AuthCallbackPage() {
   if (state === "success") return <Navigate to={destination} replace />;
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-waka-50 via-white to-stone-50 px-4 py-10">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-waka-50 via-card to-muted px-4 py-10">
       <WakaPosLogo size="lg" className="mx-auto" />
-      <p className="mt-4 text-lg font-black text-stone-900">Waka POS</p>
-      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{WAKA_LEGAL_COMPANY_NAME}</p>
+      <p className="mt-4 text-lg font-black text-foreground">Waka POS</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{WAKA_LEGAL_COMPANY_NAME}</p>
 
       {state === "loading" ? (
         <div className="mt-8 flex flex-col items-center gap-3 text-center">
@@ -182,15 +182,15 @@ export function AuthCallbackPage() {
             className="h-10 w-10 animate-spin rounded-full border-[3px] border-waka-200 border-t-orange-600"
             aria-hidden
           />
-          <p className="text-sm font-semibold text-stone-700">Finishing sign-in…</p>
-          <p className="max-w-xs text-xs text-stone-500">Please wait while we secure your session.</p>
+          <p className="text-sm font-semibold text-muted-foreground">Finishing sign-in…</p>
+          <p className="max-w-xs text-xs text-muted-foreground">Please wait while we secure your session.</p>
         </div>
       ) : null}
 
       {state === "error" ? (
-        <div className="mt-8 max-w-sm rounded-2xl border border-red-100 bg-white p-5 text-center shadow-sm">
+        <div className="mt-8 max-w-sm rounded-2xl border border-red-100 bg-card p-5 text-center shadow-sm">
           <p className="text-sm font-bold text-red-700">Could not complete sign-in</p>
-          <p className="mt-2 text-sm text-stone-600">{errorMessage ?? "Unknown error"}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{errorMessage ?? "Unknown error"}</p>
           <button
             type="button"
             disabled={signingOut}

@@ -1,17 +1,23 @@
+import { Link } from "react-router-dom";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { EnterpriseShell } from "../../components/enterprise/EnterpriseShell";
+import { EnterpriseComingSoonPanel } from "../../components/enterprise/EnterpriseComingSoonPanel";
 
 export function EnterprisePurchasingPage({ lang }: { lang: Language }) {
   return (
     <EnterpriseShell lang={lang} title={t(lang, "enterpriseNav_purchasing")} subtitle={t(lang, "enterprisePurchasingSub")}>
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-        <ul className="space-y-2 text-sm font-semibold text-stone-700">
-          {(["pending", "approved", "ordered", "partially_received", "received", "cancelled"] as const).map((s) => (
-            <li key={s}>{t(lang, `enterprisePoStatus_${s}` as never)}</li>
-          ))}
-        </ul>
-      </div>
+      <EnterpriseComingSoonPanel
+        lang={lang}
+        titleKey="enterpriseComingSoonPurchasing"
+        bodyKey="enterpriseComingSoonPurchasingBody"
+      />
+      <p className="mt-4 text-sm font-medium text-muted-foreground">
+        {t(lang, "enterprisePurchasingShopHint")}{" "}
+        <Link to="/stock?tab=purchases" className="font-bold text-waka-700">
+          {t(lang, "navStock")} → {t(lang, "ipTabPurchases")}
+        </Link>
+      </p>
     </EnterpriseShell>
   );
 }

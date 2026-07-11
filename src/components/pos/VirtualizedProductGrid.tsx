@@ -153,24 +153,24 @@ function VirtualizedProductGridInner({
                     className={clsx(
                       "relative flex min-h-[132px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm motion-reduce:transition-none",
                       locked
-                        ? "border-stone-200/80 bg-stone-50/90 opacity-55"
-                        : "border-stone-200 bg-white shadow-md active:scale-[0.98] active:border-waka-500 active:shadow-sm",
+                        ? "border-border/80 bg-muted/90 opacity-55"
+                        : "border-border bg-card shadow-md active:scale-[0.98] active:border-waka-500 active:shadow-sm",
                     )}
                     style={{ contentVisibility: "auto" }}
                   >
                     {locked && lockedBadge ? (
-                      <span className="absolute right-2 top-2 rounded-full bg-stone-800/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
+                      <span className="absolute right-2 top-2 rounded-full bg-foreground/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-background">
                         {lockedBadge}
                       </span>
                     ) : null}
                     <span>
-                      <span className="line-clamp-2 text-base font-black leading-tight text-stone-950">
+                      <span className="line-clamp-2 text-base font-black leading-tight text-foreground">
                         {formatMedicineListPrimary(p)}
                       </span>
                       {detail ? (
-                        <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-600">{detail}</span>
+                        <span className="mt-0.5 block truncate text-[11px] font-bold text-muted-foreground">{detail}</span>
                       ) : null}
-                      <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-500">
+                      <span className="mt-0.5 block truncate text-[11px] font-bold text-muted-foreground">
                         {shelfIconFor(p.category ?? "") ? (
                           <span className="mr-1" aria-hidden>
                             {shelfIconFor(p.category ?? "")}
@@ -178,7 +178,7 @@ function VirtualizedProductGridInner({
                         ) : null}
                         {(p.category ?? "").trim() || noShelfLabel}
                       </span>
-                      <span className="mt-0.5 block line-clamp-2 text-xs font-bold leading-snug text-stone-600">
+                      <span className="mt-0.5 block line-clamp-2 text-xs font-bold leading-snug text-muted-foreground">
                         {stockLabel}: {formatStockLabel(p)}
                       </span>
                     </span>

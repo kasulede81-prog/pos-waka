@@ -49,8 +49,8 @@ function AlertGroup({
 }) {
   if (items.length === 0) return null;
   return (
-    <div className="border-t border-stone-100 first:border-t-0">
-      <p className="px-4 pb-1 pt-3 text-[10px] font-black uppercase tracking-widest text-stone-500">{title}</p>
+    <div className="border-t border-border first:border-t-0">
+      <p className="px-4 pb-1 pt-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{title}</p>
       <ul className="divide-y divide-stone-100">
         {items.map((item) => (
           <li key={item.id}>
@@ -81,7 +81,7 @@ function AlertGroup({
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link
                   to={item.actionTo}
-                  className="inline-flex min-h-[40px] flex-1 items-center justify-center rounded-xl bg-white/80 px-3 text-xs font-black text-stone-900 shadow-sm"
+                  className="inline-flex min-h-[40px] flex-1 items-center justify-center rounded-xl bg-white/80 px-3 text-xs font-black text-foreground shadow-sm"
                 >
                   {t(lang, item.actionLabelKey)} →
                 </Link>
@@ -89,7 +89,7 @@ function AlertGroup({
                   <button
                     type="button"
                     onClick={() => onAcknowledge(item.id)}
-                    className="inline-flex min-h-[40px] flex-1 items-center justify-center rounded-xl border border-white/60 bg-white/40 px-3 text-xs font-black text-stone-900"
+                    className="inline-flex min-h-[40px] flex-1 items-center justify-center rounded-xl border border-white/60 bg-white/40 px-3 text-xs font-black text-foreground"
                   >
                     {t(lang, "ownerAttentionAcknowledge")}
                   </button>
@@ -122,10 +122,10 @@ export function OwnerAttentionCenterSection({
       isEmpty={activeTotal === 0 && reviewedTotal === 0}
       empty={<p className="text-sm font-semibold text-emerald-900">{t(lang, "ownerAttentionAllClear")}</p>}
     >
-      <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
-          <h2 className="text-base font-black text-stone-950">{t(lang, "ownerAttentionTitle")}</h2>
-          <p className="text-xs font-semibold text-stone-500">
+          <h2 className="text-base font-black text-foreground">{t(lang, "ownerAttentionTitle")}</h2>
+          <p className="text-xs font-semibold text-muted-foreground">
             {tTemplate(lang, "ownerAttentionPeriod", { label: periodLabel })}
           </p>
         </div>
@@ -137,11 +137,11 @@ export function OwnerAttentionCenterSection({
       <AlertGroup lang={lang} title={t(lang, "ownerAttentionWarnings")} items={warnings} onAcknowledge={onAcknowledge} />
       <AlertGroup lang={lang} title={t(lang, "ownerAttentionInfo")} items={information} />
       {reviewedTotal > 0 ? (
-        <div className="border-t border-stone-100">
+        <div className="border-t border-border">
           <button
             type="button"
             onClick={() => setShowReviewed((v) => !v)}
-            className="flex w-full items-center justify-between px-4 py-3 text-left text-xs font-black text-stone-600"
+            className="flex w-full items-center justify-between px-4 py-3 text-left text-xs font-black text-muted-foreground"
           >
             <span>{tTemplate(lang, "ownerAttentionReviewed", { count: reviewedTotal })}</span>
             <span>{showReviewed ? "−" : "+"}</span>

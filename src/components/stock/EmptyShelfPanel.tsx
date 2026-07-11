@@ -41,7 +41,7 @@ export function EmptyShelfPanel({ lang, shelfLabel, canAdd, onAddProduct, compac
               {t(lang, "shelfEmptyAddProduct")}
             </button>
           ) : (
-            <p className="mt-2 text-xs font-semibold text-stone-600">{t(lang, "posEmptyAskOwner")}</p>
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">{t(lang, "posEmptyAskOwner")}</p>
           )}
         </div>
       </div>

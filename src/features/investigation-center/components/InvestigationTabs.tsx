@@ -20,7 +20,7 @@ function labelFor(lang: Language, tab: InvestigationTab): string {
 
 export function InvestigationTabs({ lang, active, onChange, tabs }: Props) {
   return (
-    <div className="-mx-0.5 flex gap-1 overflow-x-auto rounded-2xl border border-stone-200 bg-stone-50/80 p-1 [-webkit-overflow-scrolling:touch]">
+    <div className="-mx-0.5 flex gap-1 overflow-x-auto rounded-2xl border border-border bg-muted/80 p-1 [-webkit-overflow-scrolling:touch]">
       {tabs.map((tab) => (
         <button
           key={tab}
@@ -28,7 +28,7 @@ export function InvestigationTabs({ lang, active, onChange, tabs }: Props) {
           onClick={() => onChange(tab)}
           className={clsx(
             "min-h-[40px] flex-1 shrink-0 rounded-xl px-3 text-xs font-black transition-all sm:text-sm",
-            active === tab ? "bg-white text-waka-700 shadow-sm" : "text-stone-600 active:bg-white/70",
+            active === tab ? "bg-card text-waka-700 shadow-sm" : "text-muted-foreground active:bg-white/70",
           )}
         >
           {labelFor(lang, tab)}

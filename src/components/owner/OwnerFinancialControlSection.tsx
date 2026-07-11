@@ -20,54 +20,54 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
     mix.cashUgx + mix.mobileMoneyUgx + mix.atmUgx + mix.creditUgx + mix.mixedUgx + mix.otherUgx;
 
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm sm:p-4">
-      <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "ownerFinancialTitle")}</h2>
-      <p className="text-[11px] font-semibold text-stone-500">{periodLabel}</p>
+    <section className="rounded-2xl border border-border/90 bg-card p-3 shadow-sm sm:p-4">
+      <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "ownerFinancialTitle")}</h2>
+      <p className="text-[11px] font-semibold text-muted-foreground">{periodLabel}</p>
 
       <dl className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:grid-cols-4">
-        <div className="min-w-0 rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialRevenue")}</dt>
+        <div className="min-w-0 rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialRevenue")}</dt>
           <dd className="break-words text-sm font-black tabular-nums [overflow-wrap:anywhere]">UGX {financial.revenueUgx.toLocaleString()}</dd>
           {financial.trendVsPriorDay?.pctRevenue != null ? (
-            <dd className="text-[10px] font-bold text-stone-600">{trendLabel(financial.trendVsPriorDay.pctRevenue)} vs day</dd>
+            <dd className="text-[10px] font-bold text-muted-foreground">{trendLabel(financial.trendVsPriorDay.pctRevenue)} vs day</dd>
           ) : null}
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialProfit")}</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialProfit")}</dt>
           <dd className="text-sm font-black tabular-nums">UGX {financial.profitUgx.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialTransactions")}</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialTransactions")}</dt>
           <dd className="text-sm font-black">{financial.transactionCount}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialPurchases")}</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialPurchases")}</dt>
           <dd className="text-sm font-black tabular-nums">UGX {financial.purchasesUgx.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialDebtCollected")}</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialDebtCollected")}</dt>
           <dd className="text-sm font-black tabular-nums">UGX {financial.debtCollectedUgx.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialDebtIssued")}</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialDebtIssued")}</dt>
           <dd className="text-sm font-black tabular-nums">UGX {financial.debtIssuedUgx.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialReceivables")}</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialReceivables")}</dt>
           <dd className="text-sm font-black tabular-nums">UGX {financial.receivablesUgx.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialPayables")}</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialPayables")}</dt>
           <dd className="text-sm font-black tabular-nums">UGX {financial.payablesUgx.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialExpensesPeriod")}</dt>
+        <div className="rounded-xl bg-muted px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialExpensesPeriod")}</dt>
           <dd className="text-sm font-black tabular-nums">UGX {financial.expensesPeriodUgx.toLocaleString()}</dd>
         </div>
       </dl>
 
       {financial.trendVsPriorWeek?.pctRevenue != null || financial.trendVsPriorMonth?.pctRevenue != null ? (
-        <p className="mt-2 text-[11px] font-semibold text-stone-600">
+        <p className="mt-2 text-[11px] font-semibold text-muted-foreground">
           {financial.trendVsPriorWeek?.pctRevenue != null
             ? `${t(lang, "ownerFinancialTrendWeek")}: ${trendLabel(financial.trendVsPriorWeek.pctRevenue)}`
             : ""}
@@ -79,8 +79,8 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
 
       {mixTotal > 0 ? (
         <div className="mt-3">
-          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "ownerFinancialPaymentMix")}</p>
-          <ul className="mt-1 space-y-0.5 text-[11px] font-semibold text-stone-700">
+          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "ownerFinancialPaymentMix")}</p>
+          <ul className="mt-1 space-y-0.5 text-[11px] font-semibold text-muted-foreground">
             {mix.cashUgx > 0 ? (
               <li className="flex justify-between"><span>{t(lang, "ownerFinancialCash")}</span><span className="font-black">UGX {mix.cashUgx.toLocaleString()}</span></li>
             ) : null}
@@ -95,10 +95,10 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
       ) : null}
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <Link to="/office/audit-center" className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-stone-200 px-3 text-xs font-black text-stone-900">
+        <Link to="/office/audit-center" className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-border px-3 text-xs font-black text-foreground">
           {t(lang, "ownerFinancialDrillDown")}
         </Link>
-        <Link to="/purchases" className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-stone-200 px-3 text-xs font-black text-stone-900">
+        <Link to="/purchases" className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-border px-3 text-xs font-black text-foreground">
           {t(lang, "ownerFinancialViewPurchases")}
         </Link>
       </div>

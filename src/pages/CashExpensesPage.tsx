@@ -103,7 +103,7 @@ export function CashExpensesPage({ lang }: Props) {
     return (
       <div className="space-y-4 pb-8">
         <PageHeader lang={lang} title={t(lang, "cashExpensesTitle")} backLabel={t(lang, "backToSell")} backFallback="/pos" />
-        <p className="text-sm font-semibold text-stone-600">{t(lang, "noPermission")}</p>
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "noPermission")}</p>
       </div>
     );
   }
@@ -120,14 +120,14 @@ export function CashExpensesPage({ lang }: Props) {
 
       <section className="rounded-3xl border border-waka-200 bg-waka-50 p-4 shadow-waka-sm">
         <p className="text-[11px] font-black uppercase tracking-wide text-waka-800">{t(lang, "cashExpensesToday")}</p>
-        <p className="mt-1 text-2xl font-black text-stone-950">UGX {todayExpenseTotal.toLocaleString()}</p>
+        <p className="mt-1 text-2xl font-black text-foreground">UGX {todayExpenseTotal.toLocaleString()}</p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <div className="rounded-2xl bg-white/80 px-3 py-2">
-            <p className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "cashExpensesCashSales")}</p>
-            <p className="font-black text-stone-900">UGX {drawer.cashFromSalesUgx.toLocaleString()}</p>
+            <p className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "cashExpensesCashSales")}</p>
+            <p className="font-black text-foreground">UGX {drawer.cashFromSalesUgx.toLocaleString()}</p>
           </div>
           <div className="rounded-2xl bg-white/80 px-3 py-2">
-            <p className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "cashExpensesExpectedDrawer")}</p>
+            <p className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "cashExpensesExpectedDrawer")}</p>
             <p className="font-black text-emerald-900">UGX {drawer.expectedDrawerCashUgx.toLocaleString()}</p>
           </div>
         </div>
@@ -138,11 +138,11 @@ export function CashExpensesPage({ lang }: Props) {
           <h2 className="text-sm font-black uppercase tracking-wide text-amber-900">{t(lang, "expensePendingApprovalTitle")}</h2>
           <ul className="mt-3 space-y-2">
             {pendingExpenses.map((e) => (
-              <li key={e.id} className="rounded-2xl border border-amber-100 bg-white px-4 py-3">
-                <p className="font-bold text-stone-900">
+              <li key={e.id} className="rounded-2xl border border-amber-100 bg-card px-4 py-3">
+                <p className="font-bold text-foreground">
                   {e.category} · UGX {e.amountUgx.toLocaleString()}
                 </p>
-                <p className="text-xs text-stone-500">
+                <p className="text-xs text-muted-foreground">
                   {e.createdByLabel ?? e.createdByUserId} · {new Date(e.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </p>
                 <div className="mt-2 flex gap-2">
@@ -179,24 +179,24 @@ export function CashExpensesPage({ lang }: Props) {
       ) : null}
 
       {showForm ? (
-        <form onSubmit={submit} className="space-y-4 rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
-          <h2 className="text-lg font-black text-stone-900">{t(lang, "cashExpenseRecordBtn")}</h2>
-          <label className="block text-sm font-bold text-stone-800">
+        <form onSubmit={submit} className="space-y-4 rounded-3xl border border-border bg-card p-4 shadow-waka-sm">
+          <h2 className="text-lg font-black text-foreground">{t(lang, "cashExpenseRecordBtn")}</h2>
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "cashExpenseAmount")} *
             <input
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
               inputMode="numeric"
-              className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base"
+              className="mt-1.5 w-full min-h-[48px] rounded-xl border border-border px-4 py-3 text-base"
               autoFocus
             />
           </label>
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "cashExpenseCategory")} *
             <select
               value={categoryKey}
               onChange={(e) => setCategoryKey(e.target.value)}
-              className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base"
+              className="mt-1.5 w-full min-h-[48px] rounded-xl border border-border px-4 py-3 text-base"
             >
               {CASH_EXPENSE_CATEGORY_KEYS.map((k) => (
                 <option key={k} value={k}>
@@ -207,27 +207,27 @@ export function CashExpensesPage({ lang }: Props) {
             </select>
           </label>
           {categoryKey === "custom" ? (
-            <label className="block text-sm font-bold text-stone-800">
+            <label className="block text-sm font-bold text-foreground">
               {t(lang, "cashExpenseCustomName")}
               <input
                 value={customCategory}
                 onChange={(e) => setCustomCategory(e.target.value)}
-                className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base"
+                className="mt-1.5 w-full min-h-[48px] rounded-xl border border-border px-4 py-3 text-base"
                 placeholder={t(lang, "cashExpenseCustomPlaceholder")}
               />
             </label>
           ) : null}
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "cashExpenseDescription")}
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="mt-1.5 w-full rounded-xl border border-stone-200 px-4 py-3 text-base"
+              className="mt-1.5 w-full rounded-xl border border-border px-4 py-3 text-base"
               placeholder={t(lang, "cashExpenseDescriptionPlaceholder")}
             />
           </label>
-          <p className="text-xs font-medium text-stone-500">
+          <p className="text-xs font-medium text-muted-foreground">
             {t(lang, "cashExpenseRecordedBy")}: {actor.displayName ?? actor.role}
           </p>
           {err ? <p className="text-sm font-medium text-red-600">{err}</p> : null}
@@ -242,7 +242,7 @@ export function CashExpensesPage({ lang }: Props) {
                 setShowForm(false);
                 setErr(null);
               }}
-              className="min-h-[48px] rounded-2xl border-2 border-stone-200 px-4 text-sm font-black text-stone-800"
+              className="min-h-[48px] rounded-2xl border-2 border-border px-4 text-sm font-black text-foreground"
             >
               {t(lang, "cancel")}
             </button>
@@ -251,17 +251,17 @@ export function CashExpensesPage({ lang }: Props) {
       ) : null}
 
       <section>
-        <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "cashExpensesListToday")}</h2>
+        <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "cashExpensesListToday")}</h2>
         {todayExpenses.length === 0 ? (
-          <p className="mt-3 text-sm font-medium text-stone-500">{t(lang, "cashExpensesEmpty")}</p>
+          <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "cashExpensesEmpty")}</p>
         ) : (
           <ul className="mt-3 space-y-2">
             {todayExpenses.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-3 rounded-2xl border border-stone-100 bg-white px-4 py-3">
+              <li key={e.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
                 <div className="min-w-0">
-                  <p className="font-bold text-stone-900">{e.category}</p>
-                  {e.description ? <p className="text-xs text-stone-500">{e.description}</p> : null}
-                  <p className="text-[10px] font-bold uppercase text-stone-400">
+                  <p className="font-bold text-foreground">{e.category}</p>
+                  {e.description ? <p className="text-xs text-muted-foreground">{e.description}</p> : null}
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground">
                     {e.createdByLabel ?? e.createdByUserId}
                     {(e.approvalStatus ?? "approved") === "pending"
                       ? ` · ${t(lang, "expenseStatusPending")}`
@@ -273,7 +273,7 @@ export function CashExpensesPage({ lang }: Props) {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <p className="font-black text-stone-900">UGX {e.amountUgx.toLocaleString()}</p>
+                  <p className="font-black text-foreground">UGX {e.amountUgx.toLocaleString()}</p>
                   {canDelete ? (
                     <button
                       type="button"
@@ -328,11 +328,11 @@ export function CashExpensesPage({ lang }: Props) {
           }
         >
           <label className="block">
-            <span className="text-sm font-bold text-stone-800">{t(lang, "auditReasonLabel")}</span>
+            <span className="text-sm font-bold text-foreground">{t(lang, "auditReasonLabel")}</span>
             <textarea
               value={voidReason}
               onChange={(e) => setVoidReason(e.target.value)}
-              className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+              className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-border px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
               placeholder={t(lang, "auditReasonPlaceholder")}
             />
           </label>

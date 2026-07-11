@@ -66,7 +66,7 @@ function ArchiveStatusWidget({ ctx }: ReportWidgetProps) {
         />
       ) : null}
       {ctx.needsArchive && ctx.includeArchived && ctx.archivedSalesCount > 0 ? (
-        <p className="text-xs font-semibold text-stone-600">{t(ctx.lang, "dateFilterArchiveIncluded")}</p>
+        <p className="text-xs font-semibold text-muted-foreground">{t(ctx.lang, "dateFilterArchiveIncluded")}</p>
       ) : null}
     </>
   );
@@ -94,7 +94,7 @@ function CategoryFiltersWidget({ ctx }: ReportWidgetProps) {
 
 function ReportHintWidget({ ctx }: ReportWidgetProps) {
   if (!ctx.reportHint) return null;
-  return <p className="text-sm font-medium text-stone-600">{ctx.reportHint}</p>;
+  return <p className="text-sm font-medium text-muted-foreground">{ctx.reportHint}</p>;
 }
 
 function CategoryContentWidget({ ctx }: ReportWidgetProps) {

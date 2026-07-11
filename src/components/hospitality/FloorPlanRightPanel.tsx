@@ -37,8 +37,8 @@ export function FloorPlanRightPanel({
   ];
 
   return (
-    <aside className="hidden shrink-0 flex-col border-l border-stone-300 bg-stone-100 lg:flex lg:w-56 xl:w-64">
-      <div className="border-b border-stone-300 bg-white p-2">
+    <aside className="hidden shrink-0 flex-col border-l border-border bg-muted lg:flex lg:w-56 xl:w-64">
+      <div className="border-b border-border bg-card p-2">
         {filters.map((f, i) => (
           <button
             key={f.id}
@@ -46,7 +46,7 @@ export function FloorPlanRightPanel({
             onClick={() => onViewFilterChange(f.id)}
             className={clsx(
               "flex w-full items-center justify-between rounded px-2 py-2 text-left text-xs font-bold",
-              viewFilter === f.id ? "bg-sky-100 text-sky-900" : "text-stone-700 hover:bg-stone-50",
+              viewFilter === f.id ? "bg-sky-100 text-sky-900" : "text-muted-foreground hover:bg-muted",
             )}
           >
             <span>{t(lang, f.labelKey as "floorFilterAll")}</span>
@@ -55,7 +55,7 @@ export function FloorPlanRightPanel({
         ))}
       </div>
 
-      <div className="grid grid-cols-4 gap-1 border-b border-stone-300 p-2">
+      <div className="grid grid-cols-4 gap-1 border-b border-border p-2">
         {(Object.keys(TABLE_STATUS_COLORS) as Array<keyof typeof TABLE_STATUS_COLORS>).map((key) => {
           const count =
             key === "available"
@@ -72,7 +72,7 @@ export function FloorPlanRightPanel({
           if (key === "disabled" && count === 0) return null;
           const colors = TABLE_STATUS_COLORS[key];
           return (
-            <div key={key} className="flex flex-col items-center rounded bg-white py-1.5 shadow-sm">
+            <div key={key} className="flex flex-col items-center rounded bg-card py-1.5 shadow-sm">
               <span className={clsx("mb-0.5 h-2 w-2 rounded-full", colors.dot)} />
               <span className="text-sm font-black tabular-nums">{count}</span>
             </div>
@@ -80,9 +80,9 @@ export function FloorPlanRightPanel({
         })}
       </div>
 
-      <div className="mt-auto border-t border-stone-300 p-2">
-        <p className="mb-1 text-center text-[10px] font-bold uppercase text-stone-500">{t(lang, "floorTableLookup")}</p>
-        <div className="mb-2 rounded border border-stone-300 bg-white px-2 py-2 text-center text-lg font-black tabular-nums">
+      <div className="mt-auto border-t border-border p-2">
+        <p className="mb-1 text-center text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "floorTableLookup")}</p>
+        <div className="mb-2 rounded border border-border bg-card px-2 py-2 text-center text-lg font-black tabular-nums">
           {tableLookup || "—"}
         </div>
         <NumericKeypad

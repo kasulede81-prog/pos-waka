@@ -78,22 +78,22 @@ export function PharmacyBatchDetailSheet({
 
   return (
     <AppModalOverlay className="z-[70] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-      <div className="flex max-h-[92dvh] w-full max-w-3xl flex-col rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl landscape:max-h-[96dvh]">
-        <div className="shrink-0 border-b border-stone-100 px-4 py-4 sm:px-6">
+      <div className="flex max-h-[92dvh] w-full max-w-3xl flex-col rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl landscape:max-h-[96dvh]">
+        <div className="shrink-0 border-b border-border px-4 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-xl font-black text-stone-950 sm:text-2xl">{formatMedicineFullLabel(product)}</h2>
+              <h2 className="text-xl font-black text-foreground sm:text-2xl">{formatMedicineFullLabel(product)}</h2>
               {product.pharmacyMaster?.genericName ? (
-                <p className="text-sm font-semibold text-stone-600">{product.pharmacyMaster.genericName}</p>
+                <p className="text-sm font-semibold text-muted-foreground">{product.pharmacyMaster.genericName}</p>
               ) : null}
               {product.pharmacyMaster?.manufacturer ? (
-                <p className="text-xs font-medium text-stone-500">
+                <p className="text-xs font-medium text-muted-foreground">
                   {product.pharmacyMaster.manufacturer}
                   {product.pharmacyMaster.country ? ` · ${product.pharmacyMaster.country}` : ""}
                 </p>
               ) : null}
             </div>
-            <button type="button" onClick={onClose} className="min-h-[48px] rounded-xl px-3 text-sm font-black text-stone-600 touch-manipulation">
+            <button type="button" onClick={onClose} className="min-h-[48px] rounded-xl px-3 text-sm font-black text-muted-foreground touch-manipulation">
               {t(lang, "cancel")}
             </button>
           </div>
@@ -134,43 +134,43 @@ export function PharmacyBatchDetailSheet({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-6">
           {tab === "batches" ? (
             batches.length === 0 ? (
-              <p className="py-8 text-center text-sm font-semibold text-stone-500">{t(lang, "pharmacyNoBatches")}</p>
+              <p className="py-8 text-center text-sm font-semibold text-muted-foreground">{t(lang, "pharmacyNoBatches")}</p>
             ) : (
               <ul className="space-y-3">
                 {batches.map((batch) => (
-                  <li key={batch.id} className="rounded-2xl border-2 border-stone-200 bg-stone-50/50 p-4 touch-manipulation">
+                  <li key={batch.id} className="rounded-2xl border-2 border-border bg-muted/50 p-4 touch-manipulation">
                     <button
                       type="button"
                       className="flex w-full items-start justify-between gap-2 text-left"
                       onClick={() => setExpandedId(expandedId === batch.id ? null : batch.id)}
                     >
                       <div>
-                        <p className="text-lg font-black text-stone-950">{batch.batchNumber}</p>
-                        <p className="text-sm font-semibold text-stone-600">
+                        <p className="text-lg font-black text-foreground">{batch.batchNumber}</p>
+                        <p className="text-sm font-semibold text-muted-foreground">
                           {batch.quantityRemaining}/{batch.quantityReceived} · {batch.expiryDate}
                         </p>
-                        <p className="text-xs text-stone-500">
+                        <p className="text-xs text-muted-foreground">
                           {batch.supplierName ?? "—"} · {formatUgx(batch.quantityRemaining * batch.unitCostUgx)}
                           {batch.location ? ` · ${batch.location}` : ""}
                         </p>
                       </div>
-                      <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-stone-600">
+                      <span className="rounded-full bg-card px-2 py-1 text-[10px] font-black uppercase text-muted-foreground">
                         {batch.status}
                       </span>
                     </button>
                     {expandedId === batch.id ? (
-                      <ul className="mt-3 space-y-2 border-t border-stone-200 pt-3">
+                      <ul className="mt-3 space-y-2 border-t border-border pt-3">
                         {batch.timeline.map((ev) => (
-                          <li key={ev.id} className="rounded-xl bg-white px-3 py-2 text-xs">
-                            <p className="font-black text-stone-800">{t(lang, BATCH_EVENT_I18N[ev.type] ?? ev.type)}</p>
-                            <p className="font-semibold text-stone-600">
+                          <li key={ev.id} className="rounded-xl bg-card px-3 py-2 text-xs">
+                            <p className="font-black text-foreground">{t(lang, BATCH_EVENT_I18N[ev.type] ?? ev.type)}</p>
+                            <p className="font-semibold text-muted-foreground">
                               {ev.at.slice(0, 16).replace("T", " ")}
                               {ev.quantityDelta != null ? ` · ${ev.quantityDelta > 0 ? "+" : ""}${ev.quantityDelta}` : ""}
                             </p>
                             {formatBatchEventMeta(ev, lang) ? (
-                              <p className="text-stone-500">{formatBatchEventMeta(ev, lang)}</p>
+                              <p className="text-muted-foreground">{formatBatchEventMeta(ev, lang)}</p>
                             ) : null}
-                            {ev.note ? <p className="text-stone-500">{ev.note}</p> : null}
+                            {ev.note ? <p className="text-muted-foreground">{ev.note}</p> : null}
                           </li>
                         ))}
                       </ul>
@@ -182,23 +182,23 @@ export function PharmacyBatchDetailSheet({
           ) : (
             <ul className="space-y-2">
               {allEvents.length === 0 ? (
-                <p className="py-8 text-center text-sm font-semibold text-stone-500">{t(lang, "pharmacyBatchTimelineEmpty")}</p>
+                <p className="py-8 text-center text-sm font-semibold text-muted-foreground">{t(lang, "pharmacyBatchTimelineEmpty")}</p>
               ) : (
                 allEvents.map((ev) => (
-                  <li key={ev.id} className="rounded-2xl border border-stone-200 bg-white px-4 py-3">
+                  <li key={ev.id} className="rounded-2xl border border-border bg-card px-4 py-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p className="text-sm font-black text-stone-900">
+                        <p className="text-sm font-black text-foreground">
                           {t(lang, BATCH_EVENT_I18N[ev.type] ?? ev.type)} · {ev.batchNumber}
                         </p>
-                        <p className="text-xs font-semibold text-stone-600">
+                        <p className="text-xs font-semibold text-muted-foreground">
                           {ev.at.slice(0, 16).replace("T", " ")}
                           {ev.quantityDelta != null ? ` · ${ev.quantityDelta > 0 ? "+" : ""}${ev.quantityDelta}` : ""}
                         </p>
                         {formatBatchEventMeta(ev, lang) ? (
-                          <p className="text-xs text-stone-500">{formatBatchEventMeta(ev, lang)}</p>
+                          <p className="text-xs text-muted-foreground">{formatBatchEventMeta(ev, lang)}</p>
                         ) : null}
-                        {ev.note ? <p className="text-xs text-stone-500">{ev.note}</p> : null}
+                        {ev.note ? <p className="text-xs text-muted-foreground">{ev.note}</p> : null}
                       </div>
                     </div>
                   </li>
@@ -208,7 +208,7 @@ export function PharmacyBatchDetailSheet({
           )}
         </div>
 
-        <div className="shrink-0 border-t border-stone-100 p-4">
+        <div className="shrink-0 border-t border-border p-4">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {actions
               .filter((a) => a.show)
@@ -217,7 +217,7 @@ export function PharmacyBatchDetailSheet({
                   key={a.id}
                   type="button"
                   onClick={() => onAction?.(a.id)}
-                  className={`min-h-[52px] rounded-2xl border-2 border-stone-200 text-sm font-black touch-manipulation active:scale-[0.98] ${a.className ?? "bg-white text-stone-900"}`}
+                  className={`min-h-[52px] rounded-2xl border-2 border-border text-sm font-black touch-manipulation active:scale-[0.98] ${a.className ?? "bg-card text-foreground"}`}
                 >
                   {a.label}
                 </button>
@@ -234,9 +234,9 @@ export function PharmacyBatchDetailSheet({
 
 function Stat({ label, value, large }: { label: string; value: string; large?: boolean }) {
   return (
-    <div className="rounded-xl border border-stone-100 bg-white px-2 py-2 sm:px-3 sm:py-3">
-      <p className="text-[10px] font-black uppercase text-stone-400">{label}</p>
-      <p className={`font-black text-stone-900 ${large ? "text-xl sm:text-2xl" : "text-sm"}`}>{value}</p>
+    <div className="rounded-xl border border-border bg-card px-2 py-2 sm:px-3 sm:py-3">
+      <p className="text-[10px] font-black uppercase text-muted-foreground">{label}</p>
+      <p className={`font-black text-foreground ${large ? "text-xl sm:text-2xl" : "text-sm"}`}>{value}</p>
     </div>
   );
 }
@@ -247,7 +247,7 @@ function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => vo
       type="button"
       onClick={onClick}
       className={`min-h-[44px] rounded-xl px-4 text-sm font-black touch-manipulation ${
-        active ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700"
+        active ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground"
       }`}
     >
       {label}

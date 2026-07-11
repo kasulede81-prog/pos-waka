@@ -55,7 +55,7 @@ export function CashDenominationCountField({
           onClick={() => setMode("total")}
           className={clsx(
             "min-h-[40px] flex-1 rounded-xl px-3 text-xs font-black",
-            mode === "total" ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
+            mode === "total" ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
           )}
         >
           {t(lang, "cashPositionCountManual")}
@@ -65,7 +65,7 @@ export function CashDenominationCountField({
           onClick={() => setMode("denominations")}
           className={clsx(
             "min-h-[40px] flex-1 rounded-xl px-3 text-xs font-black",
-            mode === "denominations" ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
+            mode === "denominations" ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
           )}
         >
           {t(lang, "cashPositionCountDenominations")}
@@ -80,17 +80,17 @@ export function CashDenominationCountField({
           placeholder="0"
           className={
             inputClassName ??
-            "w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-4 text-3xl font-black tabular-nums"
+            "w-full rounded-2xl border-2 border-border bg-muted px-4 py-4 text-3xl font-black tabular-nums"
           }
         />
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
           {UGX_DENOMINATIONS.map((denom) => (
-            <li key={denom} className="flex items-center gap-2 rounded-xl bg-stone-50 px-3 py-2">
-              <span className="w-20 text-sm font-black tabular-nums text-stone-800">
+            <li key={denom} className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2">
+              <span className="w-20 text-sm font-black tabular-nums text-foreground">
                 {formatDenominationLabel(denom)}
               </span>
-              <span className="text-stone-400">×</span>
+              <span className="text-muted-foreground">×</span>
               <input
                 type="number"
                 min={0}
@@ -100,9 +100,9 @@ export function CashDenominationCountField({
                   const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
                   setDenomCount(denom, v);
                 }}
-                className="min-w-0 flex-1 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-sm font-bold"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-bold"
               />
-              <span className="w-24 text-right text-xs font-bold tabular-nums text-stone-600">
+              <span className="w-24 text-right text-xs font-bold tabular-nums text-muted-foreground">
                 UGX {((counts[denom] ?? 0) * denom).toLocaleString()}
               </span>
             </li>
@@ -111,23 +111,23 @@ export function CashDenominationCountField({
       )}
 
       {mode === "denominations" ? (
-        <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+        <div className="rounded-2xl border border-border bg-muted px-4 py-3">
           <div className="flex justify-between text-sm">
-            <span className="font-bold text-stone-600">{t(lang, "cashPositionCountTotal")}</span>
-            <span className="font-black tabular-nums text-stone-900">UGX {activeTotal.toLocaleString()}</span>
+            <span className="font-bold text-muted-foreground">{t(lang, "cashPositionCountTotal")}</span>
+            <span className="font-black tabular-nums text-foreground">UGX {activeTotal.toLocaleString()}</span>
           </div>
         </div>
       ) : null}
 
       {showVariance && expectedUgx != null ? (
-        <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+        <div className="rounded-2xl border border-border bg-muted px-4 py-3">
           <div className="flex justify-between text-sm">
-            <span className="font-bold text-stone-600">{t(lang, "cashPositionExpectedLabel")}</span>
+            <span className="font-bold text-muted-foreground">{t(lang, "cashPositionExpectedLabel")}</span>
             <span className="font-black tabular-nums">UGX {expectedUgx.toLocaleString()}</span>
           </div>
           {activeTotal > 0 ? (
             <div className="mt-1 flex justify-between text-sm">
-              <span className="font-bold text-stone-600">{t(lang, "cashPositionVariance")}</span>
+              <span className="font-bold text-muted-foreground">{t(lang, "cashPositionVariance")}</span>
               <span
                 className={clsx(
                   "font-black tabular-nums",

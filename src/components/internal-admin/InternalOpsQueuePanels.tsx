@@ -4,13 +4,12 @@ import { Trash2 } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { internalAdminShopHref } from "../../lib/internalAdminPreview";
+import { subscriptionEngine } from "../../lib/subscriptionEngine";
 import {
   deleteSubscriptionRequest,
   deleteSupportTicket,
   googleMapsDirectionsUrl,
-  internalOpsOrgBillingOfferFulfill,
   internalOpsOrgBillingOfferSend,
-  internalOpsSetSubscriptionRequestStatus,
   markFieldVisitCompleted,
   updateSupportTicketStatus,
   whatsappUrlFromPhone,
@@ -102,23 +101,23 @@ export function InternalOpsQueuePanels({
       >
         <ul className="space-y-2">
           {opsLoading && !pendingTrials.length ? (
-            [...Array(3)].map((_, i) => <li key={i} className="h-14 animate-pulse rounded-xl bg-stone-100" />)
+            [...Array(3)].map((_, i) => <li key={i} className="h-14 animate-pulse rounded-xl bg-muted" />)
           ) : pendingTrials.length === 0 ? (
-            <li className="rounded-xl border border-dashed border-stone-200 px-4 py-6 text-center text-sm font-semibold text-stone-600">
+            <li className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
               {t(lang, "internalPendingTrialsEmpty")}
             </li>
           ) : (
             pendingTrials.map((req) => (
               <li
                 key={req.id}
-                className="flex flex-col gap-2 rounded-xl border border-stone-100 bg-stone-50/80 p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-xl border border-border bg-muted/80 p-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0 text-sm">
-                  <p className="font-black text-stone-900">
+                  <p className="font-black text-foreground">
                     {t(lang, "internalTrialPlanLabel")}:{" "}
                     <span className="uppercase text-waka-800">{req.requested_plan}</span>
                   </p>
-                  <p className="font-mono text-xs text-stone-500">
+                  <p className="font-mono text-xs text-muted-foreground">
                     org {req.organization_id.slice(0, 8)}… · {new Date(req.created_at).toLocaleString("en-GB")}
                   </p>
                   {req.shop_id ? (
@@ -139,12 +138,12 @@ export function InternalOpsQueuePanels({
                         disabled={trialBusyId === `${req.id}-ok`}
                         onClick={async () => {
                           setTrialBusyId(`${req.id}-ok`);
-                          const r = await internalOpsSetSubscriptionRequestStatus(req.id, "approved", null);
+                          const r = await subscriptionEngine.approveTrialRequest({
+                            requestId: req.id,
+                            shopId: req.shop_id,
+                          });
                           setTrialBusyId(null);
-                          if (r.ok) {
-                            window.dispatchEvent(new Event("waka:subscription-updated"));
-                            void loadAll();
-                          }
+                          if (r.ok) void loadAll();
                         }}
                         className="h-7 rounded-lg bg-secondary px-3 text-xs font-black text-secondary-foreground disabled:opacity-40"
                       >
@@ -155,7 +154,11 @@ export function InternalOpsQueuePanels({
                         disabled={trialBusyId === `${req.id}-no`}
                         onClick={async () => {
                           setTrialBusyId(`${req.id}-no`);
-                          const r = await internalOpsSetSubscriptionRequestStatus(req.id, "rejected", "Rejected from dashboard");
+                          const r = await subscriptionEngine.rejectTrialRequest({
+                            requestId: req.id,
+                            shopId: req.shop_id,
+                            note: "Rejected from dashboard",
+                          });
                           setTrialBusyId(null);
                           if (r.ok) void loadAll();
                         }}
@@ -198,26 +201,26 @@ export function InternalOpsQueuePanels({
       >
         <ul className="space-y-2">
           {pendingAnnualTickets.length === 0 ? (
-            <li className="rounded-xl border border-dashed border-amber-200 px-4 py-6 text-center text-sm font-semibold text-stone-600">
+            <li className="rounded-xl border border-dashed border-amber-200 px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
               {t(lang, "internalAnnualQueueEmpty")}
             </li>
           ) : (
             pendingAnnualTickets.map((tk) => (
               <li key={tk.id} className="rounded-xl border border-amber-100 bg-amber-50/40 p-3 text-sm">
-                <p className="font-black text-stone-900">{tk.shop_name ?? "—"}</p>
-                <p className="text-xs text-stone-600">
+                <p className="font-black text-foreground">{tk.shop_name ?? "—"}</p>
+                <p className="text-xs text-muted-foreground">
                   {tk.owner_email ?? "—"} · {tk.shop_phone_e164 ?? tk.contact_phone_e164 ?? "—"}
                 </p>
-                <p className="mt-1 line-clamp-2 text-xs text-stone-600">{tk.body ?? tk.subject}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{tk.body ?? tk.subject}</p>
                 <div className="mt-2 flex flex-wrap items-end gap-2">
-                  <label className="text-[10px] font-black uppercase text-stone-500">
+                  <label className="text-[10px] font-black uppercase text-muted-foreground">
                     {t(lang, "internalAnnualAmountUgx")}
                     <input
                       type="number"
                       min={1}
                       value={annualAmountByTicket[tk.id] ?? ""}
                       onChange={(e) => setAnnualAmountByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))}
-                      className="mt-1 block w-32 rounded-lg border border-stone-200 px-2 py-1 text-sm font-bold"
+                      className="mt-1 block w-32 rounded-lg border border-border px-2 py-1 text-sm font-bold"
                     />
                   </label>
                   {canSendAnnualOffer && tk.organization_id ? (
@@ -256,7 +259,7 @@ export function InternalOpsQueuePanels({
                           setAnnualBusyId(null);
                           if (r.ok) void loadAll();
                         }}
-                        className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-black"
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-black"
                       >
                         {t(lang, "internalAnnualQueueClose")}
                       </button>
@@ -282,11 +285,11 @@ export function InternalOpsQueuePanels({
           )}
         </ul>
         {billingOfferRows.length > 0 ? (
-          <div className="mt-4 border-t border-stone-100 pt-4">
-            <h3 className="text-sm font-black text-stone-900">{t(lang, "internalBillingOffersQueueTitle")}</h3>
+          <div className="mt-4 border-t border-border pt-4">
+            <h3 className="text-sm font-black text-foreground">{t(lang, "internalBillingOffersQueueTitle")}</h3>
             <ul className="mt-2 space-y-2">
               {billingOfferRows.map((o) => (
-                <li key={o.id} className="flex items-center justify-between gap-2 rounded-lg bg-stone-50 px-3 py-2 text-sm">
+                <li key={o.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
                   <span className="font-mono text-xs">
                     UGX {Number(o.amount_ugx).toLocaleString("en-UG")} · {o.status}
                   </span>
@@ -296,12 +299,12 @@ export function InternalOpsQueuePanels({
                       disabled={billingFulfillBusy === o.id}
                       onClick={async () => {
                         setBillingFulfillBusy(o.id);
-                        const r = await internalOpsOrgBillingOfferFulfill(o.id, null);
+                        const r = await subscriptionEngine.fulfillAnnualOffer({
+                          offerId: o.id,
+                          shopId: o.shop_id ?? null,
+                        });
                         setBillingFulfillBusy(null);
-                        if (r.ok) {
-                          window.dispatchEvent(new Event("waka:subscription-updated"));
-                          void loadAll();
-                        }
+                        if (r.ok) void loadAll();
                       }}
                       className="rounded-lg bg-emerald-700 px-2 py-1 text-xs font-black text-white disabled:opacity-40"
                     >
@@ -324,18 +327,18 @@ export function InternalOpsQueuePanels({
       >
         <ul className="space-y-2">
           {opsLoading && !tickets.length ? (
-            [...Array(4)].map((_, i) => <li key={i} className="h-16 animate-pulse rounded-xl bg-stone-100" />)
+            [...Array(4)].map((_, i) => <li key={i} className="h-16 animate-pulse rounded-xl bg-muted" />)
           ) : tickets.length === 0 ? (
-            <li className="rounded-xl border border-dashed border-stone-200 px-4 py-6 text-center text-sm font-semibold text-stone-600">
+            <li className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
               {t(lang, "internalSupportEmpty")}
             </li>
           ) : (
             tickets.map((tk) => {
               const waUrl = whatsappUrlFromPhone(tk.contact_phone_e164 ?? tk.shop_phone_e164);
               return (
-                <li key={tk.id} className="rounded-xl border border-stone-100 bg-stone-50/60 p-3 text-sm">
-                  <p className="font-black text-stone-900">{tk.subject || t(lang, "internalSupportNoSubject")}</p>
-                  <p className="text-xs text-stone-500">
+                <li key={tk.id} className="rounded-xl border border-border bg-muted/60 p-3 text-sm">
+                  <p className="font-black text-foreground">{tk.subject || t(lang, "internalSupportNoSubject")}</p>
+                  <p className="text-xs text-muted-foreground">
                     {[tk.shop_name, tk.shop_district].filter(Boolean).join(" · ")} · {tk.status} · {tk.priority}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -364,7 +367,7 @@ export function InternalOpsQueuePanels({
                             setTicketBusyId(null);
                             if (r.ok) void loadAll();
                           }}
-                          className="rounded-lg bg-stone-900 px-2 py-1 text-xs font-black text-white disabled:opacity-40"
+                          className="rounded-lg bg-foreground px-2 py-1 text-xs font-black text-background disabled:opacity-40"
                         >
                           {t(lang, "internalSupportMarkResolved")}
                         </button>
@@ -400,7 +403,7 @@ export function InternalOpsQueuePanels({
         {visitMsg ? <p className="mb-2 text-sm font-bold text-rose-600">{visitMsg}</p> : null}
         <ul className="space-y-2">
           {visits.length === 0 ? (
-            <li className="rounded-xl border border-dashed border-stone-200 px-4 py-6 text-center text-sm font-semibold text-stone-600">
+            <li className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
               {t(lang, "internalVisitNoOpen")}
             </li>
           ) : (
@@ -410,9 +413,9 @@ export function InternalOpsQueuePanels({
               const lng = shop?.longitude ?? null;
               const canDir = lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng);
               return (
-                <li key={v.id} className="rounded-xl border border-stone-100 bg-stone-50/60 p-3">
-                  <p className="font-black text-stone-900">{shop?.name ?? v.shop_id}</p>
-                  <p className="text-xs text-stone-500">{[shop?.district, shop?.city].filter(Boolean).join(" · ") || "—"}</p>
+                <li key={v.id} className="rounded-xl border border-border bg-muted/60 p-3">
+                  <p className="font-black text-foreground">{shop?.name ?? v.shop_id}</p>
+                  <p className="text-xs text-muted-foreground">{[shop?.district, shop?.city].filter(Boolean).join(" · ") || "—"}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {canDir ? (
                       <a
@@ -435,7 +438,7 @@ export function InternalOpsQueuePanels({
                         if (!r.ok) setVisitMsg(r.message ?? t(lang, "internalVisitDoneError"));
                         else void loadAll();
                       }}
-                      className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-black disabled:opacity-50"
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-black disabled:opacity-50"
                     >
                       {visitBusyId === v.id ? "…" : t(lang, "internalVisitDone")}
                     </button>

@@ -51,26 +51,26 @@ export function AdminRichTextEditor({
   return (
     <div
       className={clsx(
-        "rounded-2xl border bg-white shadow-sm",
-        variant === "internal" ? "border-amber-200" : "border-stone-200",
+        "rounded-2xl border bg-card shadow-sm",
+        variant === "internal" ? "border-amber-200" : "border-border",
       )}
     >
       <div
         className={clsx(
           "flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2",
-          variant === "internal" ? "border-amber-100 bg-amber-50/80" : "border-stone-100 bg-stone-50/80",
+          variant === "internal" ? "border-amber-100 bg-amber-50/80" : "border-border bg-muted/80",
         )}
       >
         <div>
-          <p className="text-sm font-black text-stone-900">{label}</p>
-          {hint ? <p className="text-xs font-medium text-stone-500">{hint}</p> : null}
+          <p className="text-sm font-black text-foreground">{label}</p>
+          {hint ? <p className="text-xs font-medium text-muted-foreground">{hint}</p> : null}
         </div>
         <div className="flex gap-1">
           <button
             type="button"
             disabled={disabled}
             onClick={() => exec("bold")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted disabled:opacity-50"
             aria-label="Bold"
           >
             <Bold className="h-4 w-4" />
@@ -79,7 +79,7 @@ export function AdminRichTextEditor({
             type="button"
             disabled={disabled}
             onClick={() => exec("italic")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted disabled:opacity-50"
             aria-label="Italic"
           >
             <Italic className="h-4 w-4" />
@@ -88,7 +88,7 @@ export function AdminRichTextEditor({
             type="button"
             disabled={disabled}
             onClick={() => exec("insertUnorderedList")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted disabled:opacity-50"
             aria-label="Bullet list"
           >
             <List className="h-4 w-4" />
@@ -101,7 +101,7 @@ export function AdminRichTextEditor({
         suppressContentEditableWarning
         onInput={handleInput}
         className={clsx(
-          "prose prose-sm max-w-none px-4 py-3 text-sm font-medium text-stone-800 outline-none focus:ring-2 focus:ring-waka-200",
+          "prose prose-sm max-w-none px-4 py-3 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-waka-200",
           minHeightClass,
           disabled && "opacity-60",
         )}

@@ -244,7 +244,7 @@ export function BusinessBuilderScene({ className, lang = "en" }: Props) {
       </svg>
 
       {scene.emailPending ? (
-        <p className="absolute bottom-2 left-2 right-2 rounded-xl bg-white/90 px-2 py-1.5 text-center text-[10px] font-semibold text-stone-700 backdrop-blur-sm">
+        <p className="absolute bottom-2 left-2 right-2 rounded-xl bg-white/90 px-2 py-1.5 text-center text-[10px] font-semibold text-muted-foreground backdrop-blur-sm">
           {t(lang, "builderEmailWaiting")}
         </p>
       ) : null}

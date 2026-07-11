@@ -47,7 +47,7 @@ export function DisplayScaleControl({
   const btnClass = clsx(
     "flex items-center justify-center rounded-lg transition disabled:opacity-40",
     compact ? "h-8 w-8" : "h-9 w-9",
-    inverted ? "text-white active:bg-white/15" : "text-stone-700 active:bg-stone-100",
+    inverted ? "text-white active:bg-white/15" : "text-muted-foreground active:bg-muted",
   );
 
   return (
@@ -58,7 +58,7 @@ export function DisplayScaleControl({
           compact ? "gap-0" : "gap-0.5",
           inverted
             ? "border-white/25 bg-white/10"
-            : "border-stone-200/90 bg-white shadow-sm",
+            : "border-border/90 bg-card shadow-sm",
         )}
         role="group"
         aria-label={t(lang, "displayScaleControlLabel")}
@@ -78,7 +78,7 @@ export function DisplayScaleControl({
           className={clsx(
             "rounded-lg px-1.5 text-center font-black tabular-nums",
             compact ? "min-h-[32px] min-w-[2.75rem] text-[10px]" : "min-h-[36px] min-w-[4.5rem] text-xs",
-            inverted ? "text-white active:bg-white/10" : "text-stone-800 active:bg-stone-50",
+            inverted ? "text-white active:bg-white/10" : "text-foreground active:bg-muted",
           )}
           title={t(lang, "displayScaleDoubleTapHint")}
         >
@@ -104,26 +104,26 @@ export function DisplayScaleControl({
           onClick={() => setSheetOpen(false)}
         >
           <div
-            className="max-h-[min(85dvh,28rem)] w-full overflow-y-auto rounded-t-3xl bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl transition-transform duration-200"
+            className="max-h-[min(85dvh,28rem)] w-full overflow-y-auto rounded-t-3xl bg-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl transition-transform duration-200"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal
             aria-labelledby="display-scale-sheet-title"
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 id="display-scale-sheet-title" className="text-lg font-black text-stone-950">
+              <h2 id="display-scale-sheet-title" className="text-lg font-black text-foreground">
                 {t(lang, "displayScaleSheetTitle")}
               </h2>
               <button
                 type="button"
                 onClick={() => setSheetOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-700"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
                 aria-label={t(lang, "cancel")}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className="mb-3 text-xs font-semibold text-stone-600">{t(lang, "displayScaleSheetSub")}</p>
+            <p className="mb-3 text-xs font-semibold text-muted-foreground">{t(lang, "displayScaleSheetSub")}</p>
             <ul className="space-y-2">
               {DISPLAY_SCALE_LEVELS.map((opt) => {
                 const meta = DISPLAY_SCALE_META[opt];
@@ -140,21 +140,21 @@ export function DisplayScaleControl({
                         "flex w-full min-h-[48px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition duration-200",
                         selected
                           ? "border-waka-500 bg-waka-50 ring-1 ring-waka-200"
-                          : "border-stone-200 bg-white active:bg-stone-50",
+                          : "border-border bg-card active:bg-muted",
                       )}
                     >
                       <span
                         className={clsx(
                           "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
-                          selected ? "border-waka-600" : "border-stone-300",
+                          selected ? "border-waka-600" : "border-border",
                         )}
                         aria-hidden
                       >
                         {selected ? <span className="h-2.5 w-2.5 rounded-full bg-waka-600" /> : null}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-black text-stone-950">{t(lang, meta.labelKey)}</span>
-                        <span className="text-xs font-semibold text-stone-500">
+                        <span className="block text-sm font-black text-foreground">{t(lang, meta.labelKey)}</span>
+                        <span className="text-xs font-semibold text-muted-foreground">
                           {t(lang, "displayScalePercentLabel").replace("{{percent}}", String(meta.percent))}
                         </span>
                       </span>
@@ -163,7 +163,7 @@ export function DisplayScaleControl({
                 );
               })}
             </ul>
-            <p className="mt-4 flex items-center gap-2 text-[11px] font-semibold text-stone-500">
+            <p className="mt-4 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
               <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" aria-hidden />
               {t(lang, "displayScaleDoubleTapHint")}
             </p>

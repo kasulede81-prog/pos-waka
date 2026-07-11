@@ -26,7 +26,7 @@ export function AnalyticsCategoryChips({ lang, active, canProfit, onChange }: Pr
             "min-h-[36px] shrink-0 rounded-full px-3.5 py-1.5 text-xs font-black transition-all",
             active === id
               ? "bg-waka-600 text-white shadow-sm"
-              : "border border-stone-200 bg-white text-stone-700 active:bg-stone-50",
+              : "border border-border bg-card text-muted-foreground active:bg-muted",
           )}
         >
           {t(lang, categoryLabelKey(id))}

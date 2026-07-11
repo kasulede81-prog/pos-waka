@@ -67,7 +67,7 @@ export function PurchaseDetailPage({
     return (
       <div className="space-y-4 pb-12">
         {!embedded ? <PageHeader lang={lang} title={t(lang, "purchaseDetailTitle")} backFallback="/stock?tab=purchases" /> : null}
-        <p className="text-stone-600">{t(lang, "purchaseNotFound")}</p>
+        <p className="text-muted-foreground">{t(lang, "purchaseNotFound")}</p>
       </div>
     );
   }
@@ -104,12 +104,12 @@ export function PurchaseDetailPage({
         </button>
       ) : null}
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
-        <h2 className="text-sm font-black uppercase text-stone-500">{t(lang, "purchaseAuditMeta")}</h2>
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
+        <h2 className="text-sm font-black uppercase text-muted-foreground">{t(lang, "purchaseAuditMeta")}</h2>
         <dl className="mt-3 space-y-2 text-sm">
           <div className="flex justify-between gap-3">
-            <dt className="font-bold text-stone-600">{t(lang, "purchasesColSupplier")}</dt>
-            <dd className="font-black text-stone-900">
+            <dt className="font-bold text-muted-foreground">{t(lang, "purchasesColSupplier")}</dt>
+            <dd className="font-black text-foreground">
               {supplierLink ? (
                 <Link to={supplierLink} className="text-waka-700 underline">
                   {purchase.supplierName}
@@ -120,55 +120,55 @@ export function PurchaseDetailPage({
             </dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="font-bold text-stone-600">{t(lang, "purchasesColDate")}</dt>
-            <dd className="font-black text-stone-900">{dateKeyKampala(purchase.createdAt)}</dd>
+            <dt className="font-bold text-muted-foreground">{t(lang, "purchasesColDate")}</dt>
+            <dd className="font-black text-foreground">{dateKeyKampala(purchase.createdAt)}</dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="font-bold text-stone-600">{t(lang, "purchaseCreatedBy")}</dt>
-            <dd className="font-black text-stone-900">{audit?.actorName ?? audit?.actorUserId ?? "—"}</dd>
+            <dt className="font-bold text-muted-foreground">{t(lang, "purchaseCreatedBy")}</dt>
+            <dd className="font-black text-foreground">{audit?.actorName ?? audit?.actorUserId ?? "—"}</dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="font-bold text-stone-600">Status</dt>
+            <dt className="font-bold text-muted-foreground">Status</dt>
             <dd className={`font-black ${voided ? "text-rose-800" : "text-emerald-800"}`}>
               {voided ? t(lang, "purchaseStatusVoided") : t(lang, "purchaseStatusCompleted")}
             </dd>
           </div>
           {voided && purchase.voidReason ? (
             <div>
-              <dt className="font-bold text-stone-600">{t(lang, "purchaseVoidReason")}</dt>
-              <dd className="mt-1 font-medium text-stone-800">{purchase.voidReason}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "purchaseVoidReason")}</dt>
+              <dd className="mt-1 font-medium text-foreground">{purchase.voidReason}</dd>
             </div>
           ) : null}
           {voidAudit ? (
             <>
               <div className="flex justify-between gap-3">
-                <dt className="font-bold text-stone-600">{t(lang, "purchaseVoidedBy")}</dt>
-                <dd className="font-black text-stone-900">{voidAudit.actorName ?? voidAudit.actorUserId ?? "—"}</dd>
+                <dt className="font-bold text-muted-foreground">{t(lang, "purchaseVoidedBy")}</dt>
+                <dd className="font-black text-foreground">{voidAudit.actorName ?? voidAudit.actorUserId ?? "—"}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="font-bold text-stone-600">{t(lang, "purchaseVoidedAt")}</dt>
-                <dd className="font-black text-stone-900">{dateKeyKampala(voidAudit.at)}</dd>
+                <dt className="font-bold text-muted-foreground">{t(lang, "purchaseVoidedAt")}</dt>
+                <dd className="font-black text-foreground">{dateKeyKampala(voidAudit.at)}</dd>
               </div>
             </>
           ) : null}
           {purchase.invoiceNumber ? (
             <div className="flex justify-between gap-3">
-              <dt className="font-bold text-stone-600">{t(lang, "purchaseInvoiceNumber")}</dt>
-              <dd className="font-black text-stone-900">{purchase.invoiceNumber}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "purchaseInvoiceNumber")}</dt>
+              <dd className="font-black text-foreground">{purchase.invoiceNumber}</dd>
             </div>
           ) : null}
           {purchase.notes ? (
             <div>
-              <dt className="font-bold text-stone-600">{t(lang, "purchaseNotes")}</dt>
-              <dd className="mt-1 font-medium text-stone-800">{purchase.notes}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "purchaseNotes")}</dt>
+              <dd className="mt-1 font-medium text-foreground">{purchase.notes}</dd>
             </div>
           ) : null}
         </dl>
       </section>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
-        <h2 className="text-lg font-black text-stone-900">{t(lang, "purchaseProductsReceived")}</h2>
-        <p className="mt-1 text-xs font-semibold text-stone-500">
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "purchaseProductsReceived")}</h2>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">
           {t(lang, "purchasesColQty")}: {qtyReceived.toLocaleString()}
         </p>
         <ul className="mt-4 space-y-2">
@@ -176,16 +176,16 @@ export function PurchaseDetailPage({
             const product = productById.get(line.productId);
             const unit = product?.baseUnit ?? "";
             return (
-              <li key={`${line.productId}-${idx}`} className="rounded-2xl bg-stone-50 px-4 py-3">
-                <p className="font-bold text-stone-900">{line.name}</p>
-                <div className="mt-2 grid grid-cols-3 gap-2 text-xs font-semibold text-stone-600">
+              <li key={`${line.productId}-${idx}`} className="rounded-2xl bg-muted px-4 py-3">
+                <p className="font-bold text-foreground">{line.name}</p>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs font-semibold text-muted-foreground">
                   <span>
                     {t(lang, "purchaseLineQty")}: {line.qtyBuyingUnits} {unit}
                   </span>
                   <span>
                     {t(lang, "purchaseLineUnitCost")}: UGX {line.costPerBuyingUnitUgx.toLocaleString()}
                   </span>
-                  <span className="text-right font-black text-stone-900">
+                  <span className="text-right font-black text-foreground">
                     UGX {purchaseLineTotalUgx(line).toLocaleString()}
                   </span>
                 </div>
@@ -198,24 +198,24 @@ export function PurchaseDetailPage({
       <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/60 p-5">
         <h2 className="text-lg font-black text-waka-950">{t(lang, "purchaseFinancialSummary")}</h2>
         <dl className="mt-4 space-y-3">
-          <div className="flex justify-between rounded-2xl bg-white px-4 py-3">
-            <dt className="font-bold text-stone-700">{t(lang, "purchaseTotalCost")}</dt>
+          <div className="flex justify-between rounded-2xl bg-card px-4 py-3">
+            <dt className="font-bold text-muted-foreground">{t(lang, "purchaseTotalCost")}</dt>
             <dd className="text-lg font-black">UGX {purchase.totalCostUgx.toLocaleString()}</dd>
           </div>
-          <div className="flex justify-between rounded-2xl bg-white px-4 py-3">
-            <dt className="font-bold text-stone-700">{t(lang, "purchaseAmountPaid")}</dt>
+          <div className="flex justify-between rounded-2xl bg-card px-4 py-3">
+            <dt className="font-bold text-muted-foreground">{t(lang, "purchaseAmountPaid")}</dt>
             <dd className="text-lg font-black text-teal-800">UGX {purchase.amountPaidUgx.toLocaleString()}</dd>
           </div>
-          <div className="flex justify-between rounded-2xl bg-white px-4 py-3">
-            <dt className="font-bold text-stone-700">{t(lang, "purchaseBalanceImpact")}</dt>
-            <dd className={`text-lg font-black ${voided ? "text-stone-500 line-through" : "text-amber-900"}`}>
+          <div className="flex justify-between rounded-2xl bg-card px-4 py-3">
+            <dt className="font-bold text-muted-foreground">{t(lang, "purchaseBalanceImpact")}</dt>
+            <dd className={`text-lg font-black ${voided ? "text-muted-foreground line-through" : "text-amber-900"}`}>
               {purchase.balanceDeltaUgx >= 0 ? "+" : ""}
               UGX {purchase.balanceDeltaUgx.toLocaleString()}
             </dd>
           </div>
         </dl>
         {audit ? (
-          <p className="mt-4 text-xs font-medium text-stone-500">{audit.payloadSummary}</p>
+          <p className="mt-4 text-xs font-medium text-muted-foreground">{audit.payloadSummary}</p>
         ) : null}
       </section>
 
@@ -225,7 +225,7 @@ export function PurchaseDetailPage({
             <button
               type="button"
               onClick={() => setVoidOpen(true)}
-              className="w-full rounded-2xl border-2 border-rose-300 bg-white py-3 text-sm font-black text-rose-900"
+              className="w-full rounded-2xl border-2 border-rose-300 bg-card py-3 text-sm font-black text-rose-900"
             >
               {t(lang, "purchaseVoidTitle")}
             </button>
@@ -233,12 +233,12 @@ export function PurchaseDetailPage({
             <div className="space-y-3">
               <h3 className="text-sm font-black text-rose-950">{t(lang, "purchaseVoidTitle")}</h3>
               <p className="text-xs font-semibold text-rose-800">{t(lang, "purchaseVoidHint")}</p>
-              <label className="block text-xs font-bold text-stone-700">{t(lang, "purchaseVoidReason")}</label>
+              <label className="block text-xs font-bold text-muted-foreground">{t(lang, "purchaseVoidReason")}</label>
               <textarea
                 value={voidReason}
                 onChange={(e) => setVoidReason(e.target.value)}
                 rows={3}
-                className="w-full rounded-2xl border border-stone-200 px-3 py-2 text-sm"
+                className="w-full rounded-2xl border border-border px-3 py-2 text-sm"
               />
               {voidError ? (
                 <p className="text-xs font-bold text-rose-800">{voidError}</p>
@@ -251,7 +251,7 @@ export function PurchaseDetailPage({
                     setVoidReason("");
                     setVoidError(null);
                   }}
-                  className="flex-1 rounded-2xl border border-stone-200 bg-white py-3 text-sm font-bold text-stone-700"
+                  className="flex-1 rounded-2xl border border-border bg-card py-3 text-sm font-bold text-muted-foreground"
                 >
                   {t(lang, "pendingSalesCancel")}
                 </button>

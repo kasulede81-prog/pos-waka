@@ -15,15 +15,15 @@ export function SettingsSystemHealthPage({ lang }: { lang: Language }) {
       <div className="space-y-6 pb-8">
         <PageBackBar lang={lang} fallbackTo="/settings" label={t(lang, "settingsHubTitle")} />
         <div>
-          <h1 className="text-2xl font-black text-stone-950">{t(lang, "systemHealthPageTitle")}</h1>
-          <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "systemHealthPageSub")}</p>
+          <h1 className="text-2xl font-black text-foreground">{t(lang, "systemHealthPageTitle")}</h1>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "systemHealthPageSub")}</p>
         </div>
 
         <SystemHealthSummaryStrip lang={lang} />
 
-        <section className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-          <p className="text-base font-black text-stone-900">{t(lang, "multiDeviceHealthTitle")}</p>
-          <p className="mt-1 text-sm text-stone-600">{t(lang, "multiDeviceHealthUserSub")}</p>
+        <section className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+          <p className="text-base font-black text-foreground">{t(lang, "multiDeviceHealthTitle")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t(lang, "multiDeviceHealthUserSub")}</p>
           <div className="mt-3">
             <MultiDeviceHealthCard lang={lang} />
           </div>
@@ -33,7 +33,7 @@ export function SettingsSystemHealthPage({ lang }: { lang: Language }) {
 
         <UserCloudBackupStatusCard lang={lang} />
 
-        <p className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-600">
+        <p className="rounded-2xl border border-border bg-muted px-4 py-3 text-sm font-medium text-muted-foreground">
           {t(lang, "systemHealthSupportHint")}
         </p>
       </div>

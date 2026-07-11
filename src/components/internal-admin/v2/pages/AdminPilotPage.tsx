@@ -26,9 +26,9 @@ const HEALTH_CLS: Record<string, string> = {
   healthy: "bg-emerald-100 text-emerald-900",
   sync_failure: "bg-rose-100 text-rose-900",
   queue_overload: "bg-amber-100 text-amber-900",
-  offline: "bg-stone-200 text-stone-800",
+  offline: "bg-muted text-foreground",
   outdated_version: "bg-violet-100 text-violet-900",
-  suspended: "bg-stone-300 text-stone-800",
+  suspended: "bg-border text-foreground",
 };
 
 export function AdminPilotPage({ adminRow, previewMode }: Props) {
@@ -98,14 +98,14 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
   return (
     <div className="space-y-5 pb-16">
       <div>
-        <h1 className="text-2xl font-black text-stone-900">Pilot operations</h1>
-        <p className="mt-1 text-sm text-stone-600">Cohort-only metrics · mark shops on their profile.</p>
+        <h1 className="text-2xl font-black text-foreground">Pilot operations</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Cohort-only metrics · mark shops on their profile.</p>
       </div>
 
       <AdminOperationalAlertsPanel previewMode={previewMode} />
 
       {loading && !metrics ? (
-        <p className="text-sm text-stone-500">Loading pilot metrics…</p>
+        <p className="text-sm text-muted-foreground">Loading pilot metrics…</p>
       ) : metrics ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -122,7 +122,7 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
             />
             <KpiPulseCard label="Crashes today" value={String(metrics.pilot_crashes_today)} />
           </div>
-          <p className="text-xs font-semibold text-stone-500">Target version: {metrics.target_app_version}</p>
+          <p className="text-xs font-semibold text-muted-foreground">Target version: {metrics.target_app_version}</p>
         </>
       ) : (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -135,9 +135,9 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
         <AdminMigrationStatusPanel />
       </div>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="text-sm font-black text-stone-900">Shop device diagnostics</h2>
-        <p className="mt-0.5 text-xs text-stone-500">
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-sm font-black text-foreground">Shop device diagnostics</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
           Engineering panels (migrations, sync queue, recovery) — not shown to shop owners.
         </p>
         <div className="mt-4">
@@ -147,13 +147,13 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
 
       <AdminDiagnosticsImportPanel previewMode={previewMode} />
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
+      <section className="rounded-2xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-black text-stone-900">Pilot shops</h2>
+          <h2 className="text-sm font-black text-foreground">Pilot shops</h2>
           <button
             type="button"
             onClick={() => void load()}
-            className="rounded-xl bg-stone-100 px-3 py-1.5 text-xs font-black text-stone-700"
+            className="rounded-xl bg-muted px-3 py-1.5 text-xs font-black text-muted-foreground"
           >
             Refresh
           </button>
@@ -163,7 +163,7 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
           <select
             value={businessType}
             onChange={(e) => setBusinessType(e.target.value)}
-            className="rounded-xl border border-stone-200 px-2 py-2 text-xs font-bold"
+            className="rounded-xl border border-border px-2 py-2 text-xs font-bold"
           >
             <option value="">All business types</option>
             {businessTypes.map((t) => (
@@ -175,7 +175,7 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
           <select
             value={planCode}
             onChange={(e) => setPlanCode(e.target.value)}
-            className="rounded-xl border border-stone-200 px-2 py-2 text-xs font-bold"
+            className="rounded-xl border border-border px-2 py-2 text-xs font-bold"
           >
             <option value="">All plans</option>
             {plans.map((p) => (
@@ -187,7 +187,7 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
           <select
             value={activeFilter}
             onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}
-            className="rounded-xl border border-stone-200 px-2 py-2 text-xs font-bold"
+            className="rounded-xl border border-border px-2 py-2 text-xs font-bold"
           >
             <option value="all">All status</option>
             <option value="active">Active only</option>
@@ -196,7 +196,7 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
           <select
             value={syncFilter}
             onChange={(e) => setSyncFilter(e.target.value)}
-            className="rounded-xl border border-stone-200 px-2 py-2 text-xs font-bold"
+            className="rounded-xl border border-border px-2 py-2 text-xs font-bold"
           >
             <option value="">All sync health</option>
             <option value="failure">Sync failure</option>
@@ -208,7 +208,7 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
 
         <ul className="mt-4 max-h-[28rem] space-y-2 overflow-y-auto">
           {shops.length === 0 ? (
-            <li className="py-6 text-center text-sm font-semibold text-stone-500">
+            <li className="py-6 text-center text-sm font-semibold text-muted-foreground">
               No pilot shops match. Enable pilot cohort on shop profiles.
             </li>
           ) : (
@@ -217,15 +217,15 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
                 <button
                   type="button"
                   onClick={() => navigate(internalAdminShopHref(s.id, previewMode))}
-                  className="flex w-full flex-col gap-1 rounded-xl border border-stone-100 bg-stone-50 px-3 py-3 text-left active:bg-stone-100"
+                  className="flex w-full flex-col gap-1 rounded-xl border border-border bg-muted px-3 py-3 text-left active:bg-muted"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-black text-stone-900">{s.name}</span>
+                    <span className="font-black text-foreground">{s.name}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${HEALTH_CLS[s.health_status] ?? HEALTH_CLS.healthy}`}>
                       {s.health_status.replace(/_/g, " ")}
                     </span>
                   </div>
-                  <p className="text-xs text-stone-600">
+                  <p className="text-xs text-muted-foreground">
                     {s.business_type ?? "—"} · {s.plan_code ?? "free"} · risk {s.risk_score}
                     {s.pending_outbound > 0 ? ` · pending ${s.pending_outbound}` : ""}
                   </p>

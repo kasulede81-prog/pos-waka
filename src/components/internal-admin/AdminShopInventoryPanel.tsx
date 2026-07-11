@@ -18,7 +18,7 @@ export function AdminShopInventoryPanel({
   loading,
 }: Props) {
   if (loading) {
-    return <p className="text-sm font-semibold text-stone-500">Loading inventory…</p>;
+    return <p className="text-sm font-semibold text-muted-foreground">Loading inventory…</p>;
   }
 
   const onlyOnPhone = productCountSnapshot > productCountTable && productCountTable === 0;
@@ -26,9 +26,9 @@ export function AdminShopInventoryPanel({
   return (
     <div className="space-y-3">
       <dl className="grid grid-cols-2 gap-2 text-xs">
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="font-bold text-stone-500">In cloud (products table)</dt>
-          <dd className="font-mono text-lg font-black text-stone-900">{productCountTable}</dd>
+        <div className="rounded-xl bg-muted px-3 py-2">
+          <dt className="font-bold text-muted-foreground">In cloud (products table)</dt>
+          <dd className="font-mono text-lg font-black text-foreground">{productCountTable}</dd>
         </div>
         <div className="rounded-xl bg-waka-50 px-3 py-2">
           <dt className="font-bold text-waka-800">In cloud backup</dt>
@@ -44,32 +44,32 @@ export function AdminShopInventoryPanel({
       ) : null}
 
       {cloudSnapshotAt ? (
-        <p className="text-[11px] font-medium text-stone-600">
+        <p className="text-[11px] font-medium text-muted-foreground">
           Last cloud backup: {new Date(cloudSnapshotAt).toLocaleString("en-GB")}
           {salesInSnapshot > 0 ? ` · ${salesInSnapshot.toLocaleString()} sales in backup` : null}
         </p>
       ) : (
-        <p className="text-[11px] font-medium text-stone-500">No cloud backup snapshot on file yet.</p>
+        <p className="text-[11px] font-medium text-muted-foreground">No cloud backup snapshot on file yet.</p>
       )}
 
       {products.length === 0 ? (
-        <p className="text-sm font-semibold text-stone-500">No products in cloud for this shop.</p>
+        <p className="text-sm font-semibold text-muted-foreground">No products in cloud for this shop.</p>
       ) : (
         <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
           {products.map((p) => (
-            <li key={p.id} className="rounded-xl border border-stone-100 bg-stone-50/80 px-3 py-2">
+            <li key={p.id} className="rounded-xl border border-border bg-muted/80 px-3 py-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-stone-900">{p.name}</p>
-                  <p className="text-[10px] font-semibold text-stone-500">
+                  <p className="truncate text-sm font-black text-foreground">{p.name}</p>
+                  <p className="text-[10px] font-semibold text-muted-foreground">
                     {[p.category, p.is_active ? null : "inactive"].filter(Boolean).join(" · ") || "—"}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-xs font-black text-stone-900">
+                  <p className="text-xs font-black text-foreground">
                     {p.selling_price_ugx != null ? `UGX ${p.selling_price_ugx.toLocaleString("en-UG")}` : "—"}
                   </p>
-                  <p className="text-[10px] font-bold text-stone-500">Stock {p.stock_quantity ?? 0}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground">Stock {p.stock_quantity ?? 0}</p>
                 </div>
               </div>
             </li>

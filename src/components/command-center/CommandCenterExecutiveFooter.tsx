@@ -24,26 +24,26 @@ export function CommandCenterExecutiveFooter({
   const stars = starCountFromScore(score);
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-stone-200/60 bg-gradient-to-br from-white/90 via-stone-50/80 to-waka-50/40 p-4 shadow-sm backdrop-blur-md sm:p-5">
+    <section className="overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-white/90 via-stone-50/80 to-waka-50/40 p-4 shadow-sm backdrop-blur-md sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">{t(lang, "cmdCenterExecutiveTitle")}</p>
-          <p className="mt-1 text-lg font-black text-stone-950" aria-label={`${stars} stars`}>
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t(lang, "cmdCenterExecutiveTitle")}</p>
+          <p className="mt-1 text-lg font-black text-foreground" aria-label={`${stars} stars`}>
             {"⭐".repeat(stars)}
             {"☆".repeat(5 - stars)}
           </p>
           <p className="mt-0.5 text-2xl font-black tabular-nums text-waka-700">
-            {score} <span className="text-base font-bold text-stone-500">/ 100</span>
+            {score} <span className="text-base font-bold text-muted-foreground">/ 100</span>
           </p>
         </div>
       </div>
-      <p className="mt-3 text-sm font-semibold leading-relaxed text-stone-700">
+      <p className="mt-3 text-sm font-semibold leading-relaxed text-muted-foreground">
         {summaryVars ? tTemplate(lang, summaryKey, summaryVars) : t(lang, summaryKey)}
       </p>
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
         <Link
           to="/settings/health"
-          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-stone-200 bg-white/80 px-4 text-sm font-black text-stone-900"
+          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-white/80 px-4 text-sm font-black text-foreground"
         >
           {t(lang, "cmdCenterViewFullReport")}
         </Link>
@@ -57,7 +57,7 @@ export function CommandCenterExecutiveFooter({
         <button
           type="button"
           onClick={onShare}
-          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border-2 border-stone-200 bg-white/80 px-4 text-sm font-black text-stone-900"
+          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border-2 border-border bg-white/80 px-4 text-sm font-black text-foreground"
         >
           <Share2 className="h-4 w-4" aria-hidden />
           {t(lang, "cmdCenterShareReport")}

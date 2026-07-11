@@ -34,8 +34,8 @@ type Props = {
 function MetricCell({ label, value, emphasize }: { label: string; value: string; emphasize?: boolean }) {
   return (
     <div className="hidden min-w-0 xl:block">
-      <p className="truncate text-[9px] font-bold uppercase tracking-wide text-stone-500">{label}</p>
-      <p className={clsx("truncate text-xs font-black leading-tight", emphasize ? "text-waka-800" : "text-stone-800")}>
+      <p className="truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={clsx("truncate text-xs font-black leading-tight", emphasize ? "text-waka-800" : "text-foreground")}>
         {value}
       </p>
     </div>
@@ -96,11 +96,11 @@ export function PosDesktopCompactHeader({
   };
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-stone-200/90 bg-white px-2 shadow-sm sm:gap-3 sm:px-3">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/90 bg-card px-2 shadow-sm sm:gap-3 sm:px-3">
       <button
         type="button"
         onClick={handleExit}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 text-stone-600 active:bg-stone-100"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground active:bg-muted"
         aria-label={t(lang, "posNavExit")}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -108,21 +108,21 @@ export function PosDesktopCompactHeader({
 
       <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
       <div className="hidden min-w-0 sm:block">
-        <p className="truncate text-sm font-black text-stone-950">Waka POS</p>
+        <p className="truncate text-sm font-black text-foreground">Waka POS</p>
         <p className="truncate text-[10px] font-bold text-waka-700">{t(lang, sellLabelKey)}</p>
       </div>
 
-      <div className="mx-1 hidden h-8 w-px shrink-0 bg-stone-200 lg:block" aria-hidden />
+      <div className="mx-1 hidden h-8 w-px shrink-0 bg-muted lg:block" aria-hidden />
 
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
         <div className="min-w-0 shrink">
-          <p className="truncate text-[9px] font-bold uppercase tracking-wide text-stone-500">
+          <p className="truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
             {t(lang, "activeShiftCashier")}
           </p>
-          <p className="truncate text-xs font-black text-stone-900">{cashierName}</p>
+          <p className="truncate text-xs font-black text-foreground">{cashierName}</p>
         </div>
 
-        <div className="hidden min-w-0 shrink items-center gap-1 text-stone-700 md:flex">
+        <div className="hidden min-w-0 shrink items-center gap-1 text-muted-foreground md:flex">
           <Clock className="h-3.5 w-3.5 shrink-0 text-waka-600" aria-hidden />
           <span className="truncate text-xs font-bold">{duration}</span>
         </div>
@@ -159,7 +159,7 @@ export function PosDesktopCompactHeader({
         <button
           type="button"
           onClick={() => setLang(nextLanguage(lang))}
-          className="hidden h-9 items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 text-[10px] font-bold text-stone-700 active:bg-stone-50 sm:inline-flex"
+          className="hidden h-9 items-center gap-1 rounded-lg border border-border bg-card px-2 text-[10px] font-bold text-muted-foreground active:bg-muted sm:inline-flex"
           aria-label={languageToggleLabel(lang)}
         >
           <Languages className="h-3.5 w-3.5" aria-hidden />

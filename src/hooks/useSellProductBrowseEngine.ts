@@ -2,12 +2,11 @@ import { useCallback, useMemo, useState } from "react";
 import type { Language, Product, ShopPreferences } from "../types";
 import {
   CATEGORY_FILTER_ALL,
-  productMatchesCategoryFilter,
-  productMatchesSellSearch,
   UNCATEGORIZED_SENTINEL,
 } from "../lib/productCategories";
 import { buildPosShelfDisplayCards } from "../lib/posShelfLayout";
 import { posSearchAliases } from "../lib/pharmacyUx";
+import { buildProductSellSearchIndex, filterIndexedProductsForSellView, filterProductsByCategoryOnly } from "../lib/posProductSearch";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 
@@ -89,20 +88,15 @@ export function useSellProductBrowseEngine({
     return { q, aliasTerms: [...aliasSet] };
   }, [searchQuery, preferences.businessType, preferences.pharmacyModeEnabled, preferences.hospitalityModeEnabled]);
 
+  const productSearchIndex = useMemo(() => buildProductSellSearchIndex(products), [products]);
+
   const filteredProducts = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
-    return products
-      .filter((p) => {
-        if (!q) return productMatchesCategoryFilter(p, sellCategoryKey);
-        return productMatchesSellSearch(p, q, aliasTerms);
-      })
-      .sort((a, b) => {
-        const favA = favoriteIdSet.has(a.id) ? 0 : 1;
-        const favB = favoriteIdSet.has(b.id) ? 0 : 1;
-        if (favA !== favB) return favA - favB;
-        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      });
-  }, [products, sellSearchContext, sellCategoryKey, favoriteIdSet]);
+    if (!q) {
+      return filterProductsByCategoryOnly(products, sellCategoryKey, favoriteIdSet);
+    }
+    return filterIndexedProductsForSellView(productSearchIndex, sellCategoryKey, q, aliasTerms, favoriteIdSet);
+  }, [products, productSearchIndex, sellSearchContext, sellCategoryKey, favoriteIdSet]);
 
   const shelfCards = useMemo(
     () => buildPosShelfDisplayCards(products, t(lang, "posNoShelf"), shelfLayout, shelfOrderKeys, shelfDefaultScale),

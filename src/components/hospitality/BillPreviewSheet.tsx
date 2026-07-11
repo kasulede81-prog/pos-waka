@@ -50,15 +50,15 @@ export function BillPreviewSheet({
       align="center"
       title={
         <div className="text-center">
-          <h2 className="text-lg font-black text-stone-950">{shopName}</h2>
-          <p className="text-sm font-bold text-stone-600">{t(lang, "restaurantBillPreviewTitle")}</p>
+          <h2 className="text-lg font-black text-foreground">{shopName}</h2>
+          <p className="text-sm font-bold text-muted-foreground">{t(lang, "restaurantBillPreviewTitle")}</p>
         </div>
       }
     >
-      <div className="mx-auto max-w-sm rounded-2xl border border-stone-200 bg-white p-4 font-mono text-xs shadow-inner">
+      <div className="mx-auto max-w-sm rounded-2xl border border-border bg-card p-4 font-mono text-xs shadow-inner">
         <p className="text-center font-black">{shopName}</p>
-        {branding.header.lines?.[1] ? <p className="text-center text-stone-500">{branding.header.lines[1]}</p> : null}
-        <hr className="my-2 border-dashed border-stone-300" />
+        {branding.header.lines?.[1] ? <p className="text-center text-muted-foreground">{branding.header.lines[1]}</p> : null}
+        <hr className="my-2 border-dashed border-border" />
         <p>
           <strong>{t(lang, "restaurantBillTable")}:</strong> {tableLabel}
         </p>
@@ -75,7 +75,7 @@ export function BillPreviewSheet({
             <strong>{t(lang, "restaurantBillWaiter")}:</strong> {session.waiterLabel}
           </p>
         ) : null}
-        <hr className="my-2 border-dashed border-stone-300" />
+        <hr className="my-2 border-dashed border-border" />
         {lines.map((line) => (
           <div key={line.id ?? line.productId} className="mb-1 flex justify-between gap-2">
             <span className="min-w-0 truncate">
@@ -84,7 +84,7 @@ export function BillPreviewSheet({
             <span>{formatUgx(line.lineTotalUgx)}</span>
           </div>
         ))}
-        <hr className="my-2 border-dashed border-stone-300" />
+        <hr className="my-2 border-dashed border-border" />
         <div className="flex justify-between">
           <span>{t(lang, "subtotal")}</span>
           <span>{formatUgx(totals.listSubtotalUgx)}</span>
@@ -113,7 +113,7 @@ export function BillPreviewSheet({
         </div>
         {billDraft.payments.length > 0 ? (
           <>
-            <hr className="my-2 border-dashed border-stone-300" />
+            <hr className="my-2 border-dashed border-border" />
             <p className="font-black">{t(lang, "restaurantBillPaymentSummary")}</p>
             {billDraft.payments.map((p) => (
               <div key={p.id} className="flex justify-between">
@@ -127,7 +127,7 @@ export function BillPreviewSheet({
             </div>
           </>
         ) : null}
-        <p className="mt-4 text-center text-[10px] text-stone-400">{t(lang, "restaurantBillQrFuture")}</p>
+        <p className="mt-4 text-center text-[10px] text-muted-foreground">{t(lang, "restaurantBillQrFuture")}</p>
       </div>
     </ModalSheet>
   );

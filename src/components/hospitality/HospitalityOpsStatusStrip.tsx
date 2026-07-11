@@ -47,7 +47,7 @@ export function HospitalityOpsStatusStrip({ lang, className }: Props) {
               ? "bg-rose-100 text-rose-900"
               : pendingPrints > 0
                 ? "bg-sky-100 text-sky-900"
-                : "bg-stone-100 text-stone-700",
+                : "bg-muted text-muted-foreground",
           )}
         >
           <Printer className="h-3 w-3" aria-hidden />

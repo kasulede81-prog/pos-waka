@@ -17,11 +17,8 @@ function initials(label: string): string {
   return (label[0] ?? "?").toUpperCase();
 }
 
-function riskClass(tier: StaffControlRow["riskTier"]): string {
-  if (tier === "offender") return "bg-rose-100 text-rose-900";
-  if (tier === "review") return "bg-amber-100 text-amber-900";
-  return "bg-emerald-100 text-emerald-900";
-}
+import { staffRiskBadge } from "../../lib/statusTokens";
+import { chartStroke } from "../../lib/chartTokens";
 
 function TrustRing({ score }: { score: number }) {
   const r = 28;
@@ -30,20 +27,20 @@ function TrustRing({ score }: { score: number }) {
   return (
     <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
       <svg viewBox="0 0 72 72" className="h-full w-full -rotate-90" aria-hidden>
-        <circle cx="36" cy="36" r={r} fill="none" stroke="rgb(245 245 244)" strokeWidth="6" />
+        <circle cx="36" cy="36" r={r} fill="none" stroke={chartStroke.track} strokeWidth="6" />
         <circle
           cx="36"
           cy="36"
           r={r}
           fill="none"
-          stroke="rgb(16 185 129)"
+          stroke={chartStroke.positive}
           strokeWidth="6"
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={offset}
         />
       </svg>
-      <span className="absolute text-xs font-black tabular-nums text-emerald-800">{score}%</span>
+      <span className="absolute text-xs font-black tabular-nums text-success">{score}%</span>
     </div>
   );
 }
@@ -53,12 +50,12 @@ export function CommandCenterStaffCard({ lang, rows, periodLabel }: Props) {
 
   if (!featured) {
     return (
-      <section className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black text-stone-950">{t(lang, "cmdCenterStaffTitle")}</h2>
-        <p className="mt-2 text-sm font-semibold text-stone-500">{t(lang, "ownerShiftEmpty")}</p>
+      <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black text-foreground">{t(lang, "cmdCenterStaffTitle")}</h2>
+        <p className="mt-2 text-sm font-semibold text-muted-foreground">{t(lang, "ownerShiftEmpty")}</p>
         <Link
           to="/office/open-shifts"
-          className="mt-3 inline-flex min-h-[40px] w-full items-center justify-center rounded-2xl border border-stone-200 text-xs font-black text-stone-900"
+          className="mt-3 inline-flex min-h-[40px] w-full items-center justify-center rounded-2xl border border-border text-xs font-black text-foreground"
         >
           {t(lang, "ownerShiftViewAll")} →
         </Link>
@@ -67,25 +64,25 @@ export function CommandCenterStaffCard({ lang, rows, periodLabel }: Props) {
   }
 
   return (
-    <section className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "cmdCenterStaffTitle")}</h2>
-          <p className="text-[11px] font-semibold text-stone-500">{periodLabel}</p>
+          <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterStaffTitle")}</h2>
+          <p className="text-[11px] font-semibold text-muted-foreground">{periodLabel}</p>
         </div>
         <Link to="/office/open-shifts" className="text-[11px] font-black text-waka-700">
           {t(lang, "cmdCenterAllShifts")} →
         </Link>
       </div>
 
-      <div className="mt-3 flex gap-3 rounded-2xl bg-stone-50 p-3">
+      <div className="mt-3 flex gap-3 rounded-2xl bg-muted p-3">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-waka-600 text-lg font-black text-white">
           {initials(featured.label)}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <p className="font-black text-stone-950">{featured.label}</p>
-            <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-black", riskClass(featured.riskTier))}>
+            <p className="font-black text-foreground">{featured.label}</p>
+            <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-black", staffRiskBadge(featured.riskTier === "offender" ? "offender" : featured.riskTier === "review" ? "review" : "ok"))}>
               {featured.riskTier === "trusted"
                 ? t(lang, "ownerStaffRiskTrusted")
                 : featured.riskTier === "review"
@@ -102,19 +99,19 @@ export function CommandCenterStaffCard({ lang, rows, periodLabel }: Props) {
             <TrustRing score={featured.riskScore} />
             <dl className="grid flex-1 grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffColSales")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffColSales")}</dt>
                 <dd className="font-black tabular-nums">{formatShortUgx(featured.salesUgx)}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffColVoids")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffColVoids")}</dt>
                 <dd className="font-black">{featured.voidCount}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffColReturns")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffColReturns")}</dt>
                 <dd className="font-black">{featured.returnCount}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-stone-500">{t(lang, "ownerStaffColDiscounts")}</dt>
+                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffColDiscounts")}</dt>
                 <dd className="font-black">{featured.discountCount}</dd>
               </div>
             </dl>
@@ -123,9 +120,9 @@ export function CommandCenterStaffCard({ lang, rows, periodLabel }: Props) {
       </div>
 
       {rows.length > 1 ? (
-        <ul className="mt-3 space-y-1 border-t border-stone-100 pt-2">
+        <ul className="mt-3 space-y-1 border-t border-border pt-2">
           {rows.slice(1, 4).map((row) => (
-            <li key={row.userId} className="flex items-center justify-between text-xs font-bold text-stone-700">
+            <li key={row.userId} className="flex items-center justify-between text-xs font-bold text-muted-foreground">
               <span>{row.label}</span>
               <span className="tabular-nums">{formatShortUgx(row.salesUgx)}</span>
             </li>

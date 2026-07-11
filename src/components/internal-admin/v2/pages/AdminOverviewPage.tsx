@@ -86,26 +86,26 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
       ) : null}
 
       <section>
-        <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">
+        <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">
           What needs attention ({attentionCount})
         </h2>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          <button type="button" onClick={() => setActiveSheet("trials")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => setActiveSheet("trials")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
             Trial requests <span className="font-mono text-waka-600">{data.pendingTrials.length}</span>
           </button>
-          <button type="button" onClick={() => setActiveSheet("annual")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => setActiveSheet("annual")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
             Annual subscriptions <span className="font-mono text-waka-600">{data.pendingAnnualTickets.length}</span>
           </button>
-          <button type="button" onClick={() => go("/internal/waka/support")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => go("/internal/waka/support")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
             Open support <span className="font-mono text-waka-600">{data.statGrid.support}</span>
           </button>
-          <button type="button" onClick={() => go("/internal/waka/devices")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => go("/internal/waka/devices")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
             Unhealthy devices <span className="font-mono text-amber-700">{data.systemHealth.offlineShops}</span>
           </button>
-          <button type="button" onClick={() => go("/internal/waka/shops")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => go("/internal/waka/shops")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
             Sync failures <span className="font-mono text-rose-700">{data.systemHealth.failedSyncs}</span>
           </button>
-          <button type="button" onClick={() => setActiveSheet("visits")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => setActiveSheet("visits")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
             Field visits <span className="font-mono text-waka-600">{data.visits.length}</span>
           </button>
         </div>
@@ -117,7 +117,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
         <button
           type="button"
           onClick={() => setAnnounceOpen(true)}
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-sm font-black text-stone-800 shadow-sm"
+          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-card text-sm font-black text-foreground shadow-sm"
         >
           <Megaphone className="h-4 w-4 text-waka-600" />
           Broadcast <span className="text-[10px] font-bold uppercase text-amber-700">(dev only)</span>
@@ -125,7 +125,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
       </div>
 
       <section>
-        <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">Quick pulse</h2>
+        <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">Quick pulse</h2>
         <div className={adminKpiGridClass()}>
           <KpiPulseCard label={t(lang, "internalStat_totalShops")} value={data.statGrid.total} onOpen={() => go("/internal/waka/shops")} />
           <KpiPulseCard label={t(lang, "internalStat_activeToday")} value={data.statGrid.active} onOpen={() => go("/internal/waka/shops")} />
@@ -176,7 +176,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
         {data.mapPins.length === 0 ? (
           <EmptyState>No GPS pins yet.</EmptyState>
         ) : (
-          <p className="text-sm font-semibold text-stone-600">{data.mapPins.length} shops with GPS on the map.</p>
+          <p className="text-sm font-semibold text-muted-foreground">{data.mapPins.length} shops with GPS on the map.</p>
         )}
         <button
           type="button"

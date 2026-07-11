@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { EnterprisePasswordField } from "../components/auth/EnterprisePasswordField";
 
 type Props = {
   lang: Language;
@@ -58,7 +59,7 @@ export function SettingsPasswordPage({ lang, authMode, updatePassword }: Props) 
         title={t(lang, "settingsHubPassword")}
         subtitle={t(lang, "settingsHubPasswordSub")}
       />
-      <p className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-700">
+      <p className="rounded-2xl border border-border bg-muted px-4 py-3 text-sm font-medium text-muted-foreground">
         {t(lang, "settingsPasswordHint")}
       </p>
       {ok ? (
@@ -66,38 +67,35 @@ export function SettingsPasswordPage({ lang, authMode, updatePassword }: Props) 
           {ok}
         </p>
       ) : null}
-      {error ? (
-        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">
-          {error}
-        </p>
-      ) : null}
-      <form onSubmit={(e) => void submit(e)} className="space-y-3 rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-        <label className="block text-sm font-bold text-stone-800">
-          {t(lang, "newPassword")}
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5"
-          />
-        </label>
-        <label className="block text-sm font-bold text-stone-800">
-          {t(lang, "confirmPassword")}
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2.5"
-          />
-        </label>
+      <form onSubmit={(e) => void submit(e)} className="space-y-3 rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <EnterprisePasswordField
+          lang={lang}
+          label={t(lang, "newPassword")}
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={8}
+          showStrength
+          loading={busy}
+          error={error}
+        />
+        <EnterprisePasswordField
+          lang={lang}
+          label={t(lang, "confirmPassword")}
+          autoComplete="new-password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          required
+          minLength={8}
+          loading={busy}
+        />
         <button
           type="submit"
           disabled={busy}
-          className="min-h-[48px] w-full rounded-2xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-50"
+          className="min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-base font-black text-white disabled:opacity-50"
         >
-          {busy ? t(lang, "saving") : t(lang, "settingsPasswordSave")}
+          {busy ? "…" : t(lang, "settingsPasswordSave")}
         </button>
       </form>
     </div>

@@ -129,7 +129,7 @@ export function PharmacyPackagingFields({
             checked={state.level1Enabled}
             onCheckedChange={(checked) => onChange({ level1Enabled: checked })}
             label={t(lang, "pharmacyPackLevel1Optional")}
-            className="text-sm font-bold text-stone-800"
+            className="text-sm font-bold text-foreground"
           />
           {state.level1Enabled ? (
             <div className="grid grid-cols-2 gap-2">
@@ -158,7 +158,7 @@ export function PharmacyPackagingFields({
             checked={state.level2Enabled}
             onCheckedChange={(checked) => onChange({ level2Enabled: checked })}
             label={t(lang, "pharmacyPackLevel2Optional")}
-            className="text-sm font-bold text-stone-800"
+            className="text-sm font-bold text-foreground"
           />
           {state.level2Enabled ? (
             <div className="grid grid-cols-2 gap-2">
@@ -208,7 +208,7 @@ export function PharmacyPackagingFields({
                   checked={state.sellStrip}
                   onCheckedChange={(checked) => onChange({ sellStrip: checked })}
                   label={t(lang, "pharmacyPackSellStrip")}
-                  className="mt-2 text-xs font-bold text-stone-600"
+                  className="mt-2 text-xs font-bold text-muted-foreground"
                 />
               </label>
             ) : null}
@@ -225,7 +225,7 @@ export function PharmacyPackagingFields({
                   checked={state.sellBox}
                   onCheckedChange={(checked) => onChange({ sellBox: checked })}
                   label={t(lang, "pharmacyPackSellBox")}
-                  className="mt-2 text-xs font-bold text-stone-600"
+                  className="mt-2 text-xs font-bold text-muted-foreground"
                 />
               </label>
             ) : null}

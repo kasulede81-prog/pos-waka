@@ -22,15 +22,15 @@ function minimalCtx(
       overview: { revenueUgx: 0, profitUgx: 0, transactionCount: 0 },
       attention: { critical: [], warnings: [], information: [] },
       attentionReviewed: { critical: 0, warnings: 0 },
-      liveOps: { openShifts: 0, pendingSyncSales: 0, pendingSyncPurchases: 0, devicesOnline: 1 },
+      liveOps: { openShiftCount: 0, pendingQueueOps: 0, unsyncedOperations: 0, devicesOnline: 1 },
       cash: { hasUnresolvedVariance: false, varianceUgx: 0, expectedUgx: 0, countedUgx: 0 },
       shiftRows: [],
       inventory: {
-        lowStock: [],
-        outOfStock: [],
+        lowStockCount: 0,
+        outOfStockCount: 0,
         slowMovers: [],
         pendingCountSessions: [],
-        expiryAlerts: [],
+        expiringCount: 0,
       },
       financial: {
         revenueUgx: 0,
@@ -113,6 +113,33 @@ describe("enterprise dashboard registry", () => {
     expect(
       resolveDashboardWidgets("live-operations", pharmacyOpsCtx()).some((w) => w.id === "pharmacy-workflow"),
     ).toBe(true);
+  });
+
+  it("injects hospitality command center widgets for hospitality mode", () => {
+    expect(
+      resolveDashboardWidgets(
+        "live-operations",
+        minimalCtx("hospitality", {
+          hospitalityStats: {
+            openTables: 2,
+            occupiedTables: 3,
+            openTabs: 1,
+            pendingBillsUgx: 1000,
+            pendingBillCount: 2,
+            kitchenQueueCount: 1,
+            activeWaiters: ["Jane"],
+            paymentPendingCount: 0,
+          },
+          hospitalityFloor: { areas: [], tables: [], sessions: [], stations: [] },
+        }),
+      ).some((w) => w.id === "hospitality-kitchen-queue"),
+    ).toBe(true);
+  });
+
+  it("injects wholesale command center widgets for wholesale mode", () => {
+    expect(resolveDashboardWidgets("financial", minimalCtx("wholesale")).some((w) => w.id === "wholesale-receivables")).toBe(
+      true,
+    );
   });
 
   it("orders widgets by priority within a slot", () => {

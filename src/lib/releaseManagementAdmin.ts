@@ -189,6 +189,12 @@ export async function publishAppRelease(id: string): Promise<RpcResult> {
   return rpcResult(data, error);
 }
 
+export async function resendAppReleaseNotification(id: string): Promise<RpcResult> {
+  if (!supabase) return { ok: false, error: "offline" };
+  const { data, error } = await supabase.rpc("admin_resend_release_notification", { p_id: id });
+  return rpcResult(data, error);
+}
+
 export async function archiveAppRelease(id: string): Promise<RpcResult> {
   if (!supabase) return { ok: false, error: "offline" };
   const { data, error } = await supabase.rpc("admin_archive_app_release", { p_id: id });

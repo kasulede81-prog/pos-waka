@@ -102,17 +102,17 @@ export function CashManagementPage({ lang }: Props) {
             <AlertTriangle className="mt-0.5 h-8 w-8 shrink-0 text-amber-800" aria-hidden />
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-black uppercase tracking-wide text-stone-700">{snapshot.dayKey}</p>
-            <p className="mt-1 text-xl font-black text-stone-950">
+            <p className="text-sm font-black uppercase tracking-wide text-muted-foreground">{snapshot.dayKey}</p>
+            <p className="mt-1 text-xl font-black text-foreground">
               {snapshot.isBalanced ? t(lang, "cashManagementBalanced") : t(lang, "cashManagementNeedsReview")}
             </p>
             <dl className="mt-4 grid gap-3 sm:grid-cols-2">
               <div>
-                <dt className="text-xs font-semibold text-stone-600">{t(lang, "cashManagementExpected")}</dt>
+                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementExpected")}</dt>
                 <dd className="text-lg font-black tabular-nums">UGX {snapshot.periodExpectedCashUgx.toLocaleString()}</dd>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-stone-600">{t(lang, "cashManagementCounted")}</dt>
+                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementCounted")}</dt>
                 <dd className="text-lg font-black tabular-nums">
                   {snapshot.latestCountedCashUgx != null
                     ? `UGX ${snapshot.latestCountedCashUgx.toLocaleString()}`
@@ -120,12 +120,12 @@ export function CashManagementPage({ lang }: Props) {
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-stone-600">{t(lang, "cashManagementVariance")}</dt>
+                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementVariance")}</dt>
                 <dd
                   className={`text-lg font-black tabular-nums ${
                     snapshot.latestDayVarianceUgx != null && snapshot.latestDayVarianceUgx < 0
                       ? "text-rose-700"
-                      : "text-stone-950"
+                      : "text-foreground"
                   }`}
                 >
                   {snapshot.latestDayVarianceUgx != null
@@ -134,7 +134,7 @@ export function CashManagementPage({ lang }: Props) {
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-stone-600">{t(lang, "cashManagementDrawerOpen")}</dt>
+                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementDrawerOpen")}</dt>
                 <dd className="text-sm font-black">
                   {snapshot.drawerOpen
                     ? `UGX ${snapshot.drawerOpen.openingFloatUgx.toLocaleString()}`
@@ -192,12 +192,12 @@ export function CashManagementPage({ lang }: Props) {
       </ul>
 
       {(snapshot.shortageShiftCount > 0 || snapshot.topShortages.length > 0) && canShifts ? (
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-black text-stone-950">{t(lang, "cashManagementShortages")}</h2>
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <h2 className="text-base font-black text-foreground">{t(lang, "cashManagementShortages")}</h2>
           <ul className="mt-3 space-y-2">
             {snapshot.topShortages.map((row) => (
-              <li key={row.userId} className="flex justify-between rounded-xl bg-stone-50 px-3 py-2 text-sm">
-                <span className="font-bold text-stone-900">{row.label}</span>
+              <li key={row.userId} className="flex justify-between rounded-xl bg-muted px-3 py-2 text-sm">
+                <span className="font-bold text-foreground">{row.label}</span>
                 <span className="font-black tabular-nums text-rose-700">
                   {row.shortageCount30d} / 30d · UGX {row.lifetimeShortageUgx.toLocaleString()}
                 </span>
@@ -208,8 +208,8 @@ export function CashManagementPage({ lang }: Props) {
       ) : null}
 
       {snapshot.floatVerificationFeed.length > 0 ? (
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-black text-stone-950">{t(lang, "ownerCashFloatFeed")}</h2>
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <h2 className="text-base font-black text-foreground">{t(lang, "ownerCashFloatFeed")}</h2>
           <ul className="mt-3 space-y-2">
             {snapshot.floatVerificationFeed.map((row) => (
               <li key={row.shiftId} className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs">
@@ -227,12 +227,12 @@ export function CashManagementPage({ lang }: Props) {
       ) : null}
 
       {snapshot.adjustmentFeed.length > 0 ? (
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-black text-stone-950">{t(lang, "ownerCashAdjustmentFeed")}</h2>
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <h2 className="text-base font-black text-foreground">{t(lang, "ownerCashAdjustmentFeed")}</h2>
           <ul className="mt-3 space-y-2">
             {snapshot.adjustmentFeed.map((row) => (
-              <li key={row.id} className="flex justify-between rounded-xl bg-stone-50 px-3 py-2 text-xs">
-                <span className="font-bold text-stone-900">{row.actorLabel}</span>
+              <li key={row.id} className="flex justify-between rounded-xl bg-muted px-3 py-2 text-xs">
+                <span className="font-bold text-foreground">{row.actorLabel}</span>
                 <span className={`font-black tabular-nums ${row.direction === "out" ? "text-rose-700" : "text-emerald-700"}`}>
                   {row.direction === "out" ? "−" : "+"}UGX {row.amountUgx.toLocaleString()}
                 </span>
@@ -243,21 +243,21 @@ export function CashManagementPage({ lang }: Props) {
       ) : null}
 
       {canHistory && snapshot.varianceHistory.length > 0 ? (
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <button
             type="button"
             onClick={() => setShowVarianceHistory((v) => !v)}
             className="flex w-full items-center justify-between text-left"
           >
-            <h2 className="text-base font-black text-stone-950">{t(lang, "cashManagementVarianceHistory")}</h2>
-            <span className="text-sm font-bold text-stone-500">{showVarianceHistory ? "−" : "+"}</span>
+            <h2 className="text-base font-black text-foreground">{t(lang, "cashManagementVarianceHistory")}</h2>
+            <span className="text-sm font-bold text-muted-foreground">{showVarianceHistory ? "−" : "+"}</span>
           </button>
           {showVarianceHistory ? (
             <ul className="mt-3 divide-y divide-stone-100">
               {snapshot.varianceHistory.map((row) => (
                 <li key={row.id} className="flex justify-between py-2 text-sm">
-                  <span className="font-bold text-stone-900">{row.dateKey}</span>
-                  <span className={`font-black tabular-nums ${row.flagged ? "text-rose-700" : "text-stone-800"}`}>
+                  <span className="font-bold text-foreground">{row.dateKey}</span>
+                  <span className={`font-black tabular-nums ${row.flagged ? "text-rose-700" : "text-foreground"}`}>
                     UGX {row.differenceUgx.toLocaleString()}
                   </span>
                 </li>

@@ -9,8 +9,14 @@ export type EnterpriseAuditSearchParams = {
   limit?: number;
 };
 
-export async function searchEnterpriseAudit(params: EnterpriseAuditSearchParams): Promise<EnterpriseAuditRow[]> {
-  if (!supabase) return [];
+export type EnterpriseAuditSearchResult = {
+  ok: boolean;
+  rows: EnterpriseAuditRow[];
+  error?: string;
+};
+
+export async function searchEnterpriseAudit(params: EnterpriseAuditSearchParams): Promise<EnterpriseAuditSearchResult> {
+  if (!supabase) return { ok: false, rows: [], error: "offline" };
   const { data, error } = await supabase.rpc("enterprise_audit_search", {
     p_shop_id: params.shopId ?? null,
     p_action: params.action ?? null,
@@ -20,9 +26,10 @@ export async function searchEnterpriseAudit(params: EnterpriseAuditSearchParams)
   });
   if (error) {
     console.warn("[enterprise] audit_search", error.message);
-    return [];
+    return { ok: false, rows: [], error: error.message };
   }
-  return Array.isArray(data) ? (data as EnterpriseAuditRow[]) : [];
+  const rows = Array.isArray(data) ? (data as EnterpriseAuditRow[]) : [];
+  return { ok: true, rows };
 }
 
 export function auditSeverity(action: string): "info" | "warning" | "critical" {

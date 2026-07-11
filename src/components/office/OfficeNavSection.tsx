@@ -18,23 +18,23 @@ export function OfficeNavSection({ title, children, desktopGrid = true, collapsi
   if (!collapsible) {
     return (
       <section className="space-y-2">
-        <h2 className="px-0.5 text-xs font-black uppercase tracking-wider text-stone-500">{title}</h2>
+        <h2 className="px-0.5 text-xs font-black uppercase tracking-wider text-muted-foreground">{title}</h2>
         <ul className={listClass}>{children}</ul>
       </section>
     );
   }
 
   return (
-    <details open className="group space-y-2 rounded-2xl border border-stone-100 bg-white/60 p-3 lg:border-0 lg:bg-transparent lg:p-0">
+    <details open className="group space-y-2 rounded-2xl border border-border bg-white/60 p-3 lg:border-0 lg:bg-transparent lg:p-0">
       <summary
         className={clsx(
           "flex cursor-pointer list-none items-center justify-between gap-2 px-0.5 marker:content-none [&::-webkit-details-marker]:hidden",
           "lg:pointer-events-none lg:cursor-default",
         )}
       >
-        <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{title}</h2>
+        <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{title}</h2>
         <ChevronDown
-          className="h-4 w-4 shrink-0 text-stone-400 transition-transform group-open:rotate-180 lg:hidden"
+          className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 lg:hidden"
           aria-hidden
         />
       </summary>

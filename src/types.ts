@@ -2283,6 +2283,20 @@ export type ShopPreferences = {
   launcherTileOrder?: string[];
   /** Main menu tile overrides — hide, pin, accent color. */
   launcherTileLayout?: Record<string, LauncherTileConfig>;
+  /** Inventory products list view preference (Phase 19.1A). */
+  inventoryViewPreference?: "auto" | "card" | "compact" | "table";
+  /** Productivity overlay — archived product ids (Phase 19.1B, local prefs). */
+  inventoryArchivedProductIds?: string[];
+  /** Productivity overlay tags per product id (Phase 19.1B). */
+  inventoryProductTags?: Record<string, string[]>;
+  /** Saved inventory filter presets (Phase 19.1B). */
+  inventorySavedFilters?: Array<{
+    id: string;
+    name: string;
+    filters: Record<string, unknown>;
+    query: string;
+    createdAt: string;
+  }>;
   /** Home hero live preview surround color (hex). Default light green when unset. */
   homeHeroPreviewBgColor?: string | null;
   /** Back office hub section tile order. */

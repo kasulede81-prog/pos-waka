@@ -27,8 +27,8 @@ export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
     <EnterprisePageContainer>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyPatientReportsTitle")}</h1>
-          <p className="mt-1 text-base font-medium text-stone-500">{t(lang, "pharmacyPatientReportsSub")}</p>
+          <h1 className="text-3xl font-black text-foreground">{t(lang, "pharmacyPatientReportsTitle")}</h1>
+          <p className="mt-1 text-base font-medium text-muted-foreground">{t(lang, "pharmacyPatientReportsSub")}</p>
         </div>
         <Link to="/pharmacy/patients" className="min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black">
           {t(lang, "pharmacyTerm_patients")}
@@ -73,8 +73,8 @@ export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
 
 function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
-      <h2 className="text-lg font-black text-stone-950">{title}</h2>
+    <section className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm">
+      <h2 className="text-lg font-black text-foreground">{title}</h2>
       <ul className="mt-3 space-y-2">{children}</ul>
     </section>
   );
@@ -83,7 +83,7 @@ function ReportSection({ title, children }: { title: string; children: React.Rea
 function Row({ left, right }: { left: string; right: string }) {
   return (
     <li className="flex justify-between gap-2 text-sm font-semibold">
-      <span className="truncate text-stone-900">{left}</span>
+      <span className="truncate text-foreground">{left}</span>
       <span className="shrink-0 font-black text-teal-800">{right}</span>
     </li>
   );

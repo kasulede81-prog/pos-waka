@@ -27,12 +27,12 @@ export function FloatingSupportFab({ lang }: Props) {
   return (
     <div className="pointer-events-none fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] right-[max(0.75rem,env(safe-area-inset-right,0px))] z-[35] lg:bottom-8 lg:right-6">
       {open ? (
-        <div className="pointer-events-auto mb-3 w-[min(100vw-2rem,20rem)] rounded-3xl border border-waka-100 bg-white p-4 shadow-xl">
+        <div className="pointer-events-auto mb-3 w-[min(100vw-2rem,20rem)] rounded-3xl border border-waka-100 bg-card p-4 shadow-xl">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-black text-stone-900">{t(lang, "supportFabTitle")}</p>
+            <p className="text-sm font-black text-foreground">{t(lang, "supportFabTitle")}</p>
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-700"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
               onClick={() => setOpen(false)}
               aria-label={t(lang, "cancel")}
             >
@@ -51,7 +51,7 @@ export function FloatingSupportFab({ lang }: Props) {
           </a>
           <a
             href={wakaSupportMailtoUrl()}
-            className="mt-2 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-900"
+            className="mt-2 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card px-4 py-3 text-base font-black text-foreground"
             onClick={() => setOpen(false)}
           >
             <Mail className="h-5 w-5" strokeWidth={2.25} />

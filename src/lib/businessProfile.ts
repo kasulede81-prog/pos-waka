@@ -19,7 +19,7 @@ export type SaveOwnerBundleArgs = {
   longitude?: number | null;
 };
 
-/** Single transactional save (organizations + shops + profiles + starter trial if missing). */
+/** Single transactional save (organizations + shops + profiles). Subscription init is via bootstrap_owner_workspace. */
 export async function saveOwnerBusinessProfileBundleRpc(
   args: SaveOwnerBundleArgs,
 ): Promise<{ ok: boolean; message?: string; shopId?: string; organizationId?: string }> {

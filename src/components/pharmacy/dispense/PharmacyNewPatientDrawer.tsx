@@ -72,33 +72,33 @@ export function PharmacyNewPatientDrawer({ lang, open, onClose, onSave, addCusto
 
   return (
     <AppModalOverlay className="z-[75] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
-        <div className="shrink-0 border-b border-stone-100 px-4 py-4">
-          <h2 className="text-lg font-black text-stone-950">{t(lang, "pharmacyDispenseNewPatientTitle")}</h2>
+      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
+        <div className="shrink-0 border-b border-border px-4 py-4">
+          <h2 className="text-lg font-black text-foreground">{t(lang, "pharmacyDispenseNewPatientTitle")}</h2>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-          <label className="block text-xs font-bold text-stone-600">
+          <label className="block text-xs font-bold text-muted-foreground">
             {t(lang, "pharmacyPatientNamePh")} *
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-stone-200 px-3 text-base font-semibold"
+              className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-border px-3 text-base font-semibold"
             />
           </label>
-          <label className="block text-xs font-bold text-stone-600">
+          <label className="block text-xs font-bold text-muted-foreground">
             {t(lang, "pharmacyPatientPhonePh")} *
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-stone-200 px-3 text-base font-semibold"
+              className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-border px-3 text-base font-semibold"
             />
           </label>
-          <label className="block text-xs font-bold text-stone-600">
+          <label className="block text-xs font-bold text-muted-foreground">
             {t(lang, "pharmacyPatientGender")}
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value as PharmacyPatientGender | "")}
-              className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-stone-200 px-3 text-base font-semibold"
+              className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-border px-3 text-base font-semibold"
             >
               <option value="">—</option>
               <option value="female">Female</option>
@@ -106,39 +106,39 @@ export function PharmacyNewPatientDrawer({ lang, open, onClose, onSave, addCusto
               <option value="other">Other</option>
             </select>
           </label>
-          <label className="block text-xs font-bold text-stone-600">
+          <label className="block text-xs font-bold text-muted-foreground">
             {t(lang, "pharmacyPatientDob")}
             <input
               type="date"
               value={dateOfBirth}
               onChange={(e) => setDateOfBirth(e.target.value)}
-              className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-stone-200 px-3 text-base font-semibold"
+              className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-border px-3 text-base font-semibold"
             />
           </label>
-          <label className="block text-xs font-bold text-stone-600">
+          <label className="block text-xs font-bold text-muted-foreground">
             {t(lang, "pharmacyPatientAllergies")}
             <input
               value={allergiesText}
               onChange={(e) => setAllergiesText(e.target.value)}
               placeholder={t(lang, "pharmacyDispenseAllergiesPh")}
-              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 px-3 text-sm font-semibold"
+              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-border px-3 text-sm font-semibold"
             />
           </label>
-          <label className="block text-xs font-bold text-stone-600">
+          <label className="block text-xs font-bold text-muted-foreground">
             {t(lang, "pharmacyPatientNotes")}
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="mt-1 w-full rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-semibold"
+              className="mt-1 w-full rounded-xl border-2 border-border px-3 py-2 text-sm font-semibold"
             />
           </label>
         </div>
-        <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-stone-100 p-3">
+        <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-border p-3">
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[48px] rounded-2xl border-2 border-stone-200 font-black text-stone-800"
+            className="min-h-[48px] rounded-2xl border-2 border-border font-black text-foreground"
           >
             {t(lang, "cancel")}
           </button>

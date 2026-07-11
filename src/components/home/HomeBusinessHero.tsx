@@ -86,7 +86,7 @@ export function HomeBusinessHero({ lang, sellStat, onSell, heroActionLabelKey = 
             <button
               type="button"
               onClick={onSell}
-              className="inline-flex min-h-[60px] w-full items-center justify-center gap-2.5 rounded-[28px] bg-white px-6 py-4 text-base font-black text-waka-700 shadow-[0_14px_36px_-10px_rgba(0,0,0,0.25)] transition hover:bg-waka-50 active:scale-[0.99] motion-reduce:active:scale-100 sm:min-h-[64px] sm:text-lg"
+              className="inline-flex min-h-[60px] w-full items-center justify-center gap-2.5 rounded-[28px] bg-card px-6 py-4 text-base font-black text-waka-700 shadow-[0_14px_36px_-10px_rgba(0,0,0,0.25)] transition hover:bg-waka-50 active:scale-[0.99] motion-reduce:active:scale-100 sm:min-h-[64px] sm:text-lg"
             >
               {t(lang, heroActionLabelKey)}
               <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.5} aria-hidden />

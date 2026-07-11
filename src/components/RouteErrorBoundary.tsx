@@ -31,8 +31,8 @@ export class RouteErrorBoundary extends Component<Props, State> {
       return (
         <div className="mx-auto flex min-h-[40vh] max-w-md flex-col items-center justify-center gap-4 px-6 py-12 text-center">
           <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 shadow-sm">
-            <p className="text-lg font-black text-stone-900">Something went wrong</p>
-            <p className="mt-2 text-sm font-medium text-stone-600">
+            <p className="text-lg font-black text-foreground">Something went wrong</p>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
               {this.props.scope ? `${this.props.scope} could not load.` : "This page could not load."} Try going back or
               restarting the app.
             </p>
@@ -43,7 +43,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
             ) : null}
             <button
               type="button"
-              className="mt-4 rounded-2xl bg-stone-900 px-5 py-2.5 text-sm font-black text-white"
+              className="mt-4 rounded-2xl bg-foreground px-5 py-2.5 text-sm font-black text-background"
               onClick={() => this.setState({ error: null })}
             >
               Try again

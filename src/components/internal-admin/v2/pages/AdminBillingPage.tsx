@@ -37,19 +37,19 @@ export function AdminBillingPage({ lang, adminRow, previewMode }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-black text-stone-900">Billing</h1>
-        <p className="text-sm text-stone-500">Plans & annual requests</p>
+        <h1 className="text-xl font-black text-foreground">Billing</h1>
+        <p className="text-sm text-muted-foreground">Plans & annual requests</p>
       </div>
 
       <div className="space-y-3">
         {data.opsLoading && data.plans.length === 0 ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-2xl bg-stone-200" />
+              <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />
             ))}
           </div>
         ) : data.plans.length === 0 ? (
-          <p className="rounded-2xl border border-stone-200 bg-white px-4 py-6 text-center text-sm font-semibold text-stone-500">
+          <p className="rounded-2xl border border-border bg-card px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
             No billing plan metrics yet.
           </p>
         ) : (

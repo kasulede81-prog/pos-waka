@@ -65,13 +65,13 @@ export function VerifyEmailPage({ lang, setLang, isAuthenticated, resendVerifica
 
   return (
     <BusinessBuilderShell lang={lang} setLang={setLang} funnelStep="account" unlocks={unlocks}>
-      <div className="rounded-[28px] border border-white/80 bg-white/95 p-6 shadow-lg backdrop-blur-sm sm:rounded-[32px]">
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "verifyTitle")}</h1>
-        <p className="mt-3 text-base font-medium text-stone-600">{t(lang, "builderEmailWaiting")}</p>
+      <div className="rounded-[28px] border border-white/80 bg-card/95 p-6 shadow-lg backdrop-blur-sm sm:rounded-[32px]">
+        <h1 className="text-2xl font-black text-foreground">{t(lang, "verifyTitle")}</h1>
+        <p className="mt-3 text-base font-medium text-muted-foreground">{t(lang, "builderEmailWaiting")}</p>
         {presetEmail ? (
-          <p className="mt-2 text-sm font-semibold text-stone-800">{presetEmail}</p>
+          <p className="mt-2 text-sm font-semibold text-foreground">{presetEmail}</p>
         ) : null}
-        <p className="mt-3 rounded-2xl bg-waka-50 px-3 py-2 text-sm text-stone-700">{t(lang, "verifyOpenEmailHint")}</p>
+        <p className="mt-3 rounded-2xl bg-waka-50 px-3 py-2 text-sm text-muted-foreground">{t(lang, "verifyOpenEmailHint")}</p>
 
         {!hasSupabaseConfig && (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -101,7 +101,7 @@ export function VerifyEmailPage({ lang, setLang, isAuthenticated, resendVerifica
           </form>
         )}
 
-        <p className="mt-6 text-center text-sm text-stone-600">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           {t(lang, "verifyAfterConfirm")}{" "}
           <Link to="/login" className="font-bold text-waka-700 underline underline-offset-2">
             {t(lang, "signIn")}

@@ -17,12 +17,12 @@ export function ShelfScaleSlider({ lang, value, previewHex, onChange }: Props) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-bold text-stone-600">{t(lang, "posShelfEditScale")}</p>
-        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-black tabular-nums text-stone-800">
+        <p className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditScale")}</p>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-black tabular-nums text-foreground">
           {value}%
         </span>
       </div>
-      <p className="text-[11px] font-medium text-stone-500">{t(lang, "posShelfScaleHint")}</p>
+      <p className="text-[11px] font-medium text-muted-foreground">{t(lang, "posShelfScaleHint")}</p>
       <input
         type="range"
         min={25}
@@ -39,7 +39,7 @@ export function ShelfScaleSlider({ lang, value, previewHex, onChange }: Props) {
       <div className="flex justify-center pt-1">
         <div
           className={clsx(
-            "grid gap-1 rounded-xl border border-stone-200 bg-stone-50 p-2",
+            "grid gap-1 rounded-xl border border-border bg-muted p-2",
             col === 2 ? "w-36 grid-cols-2" : "w-20 grid-cols-1",
           )}
           style={{ gridTemplateRows: `repeat(${row}, minmax(0, 1fr))` }}

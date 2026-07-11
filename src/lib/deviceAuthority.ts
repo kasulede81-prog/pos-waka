@@ -1,24 +1,20 @@
 /**
- * Device Authority layer — Phase 2.
- * Authority (primary/secondary) is separate from form factor (tablet/phone/windows/kitchen/bar).
- * Cloud authoritative; offline cache in localStorage.
+ * Device authority layer — approval and operational status for cloud shops.
+ * Every approved operational device is equal; there is no primary device gate.
  */
 
 import { getOrCreateDeviceId } from "./deviceId";
 import { resolveShopCtx } from "../offline/cloudSync";
 import { supabase } from "./supabase";
-import { ENFORCE_PRIMARY_DEVICE } from "./deviceAuthorityPolicy";
 
-export type DeviceAuthority = "primary" | "secondary";
 export type DeviceFormFactor = "tablet" | "phone" | "windows" | "kitchen" | "bar";
 export type DeviceApprovalStatus = "pending" | "approved" | "suspended" | "revoked" | "disabled";
 
-/** Primary-only actions enforced on client + server. */
-export type PrimaryOnlyAction =
+/** Sensitive actions require an approved operational device on cloud shops. */
+export type DeviceAuthorizedAction =
   | "staff_manage"
   | "device_approve"
   | "device_remove"
-  | "primary_transfer"
   | "cloud_recovery"
   | "backup_restore"
   | "backup_export"
@@ -32,14 +28,12 @@ export type DeviceAuthorityContext = {
   shopId: string;
   deviceFingerprint: string;
   deviceId: string | null;
-  deviceAuthority: DeviceAuthority;
   formFactor: DeviceFormFactor;
   approvalStatus: DeviceApprovalStatus;
-  isPrimary: boolean;
+  /** Approved and active — can perform owner management actions. */
+  isDeviceAuthorized: boolean;
   isApproved: boolean;
   isOperational: boolean;
-  primaryDeviceFingerprint: string | null;
-  primaryDeviceId: string | null;
   status: string;
   lastSyncAt: string | null;
   lastLoginAt: string | null;
@@ -54,7 +48,7 @@ export type DeviceAuthorityContext = {
   recoveryStatus: string | null;
 };
 
-const CACHE_KEY = "waka.device.authority.v1";
+const CACHE_KEY = "waka.device.authority.v2";
 const CACHE_TTL_MS = 5 * 60_000;
 
 type CachedEntry = { ctx: DeviceAuthorityContext; at: number };
@@ -89,28 +83,30 @@ export function seedDeviceAuthorityCacheForTests(ctx: DeviceAuthorityContext): v
 
 export function clearDeviceAuthorityCache(): void {
   memoryCache = null;
-  if (typeof window !== "undefined") window.localStorage.removeItem(CACHE_KEY);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(CACHE_KEY);
+    window.localStorage.removeItem("waka.device.authority.v1");
+  }
 }
 
 function parseContext(data: unknown, shopId: string, fp: string): DeviceAuthorityContext | null {
   if (!data || typeof data !== "object") return null;
   const r = data as Record<string, unknown>;
-  const authority = String(r.device_authority ?? (r.is_primary ? "primary" : "secondary")) as DeviceAuthority;
   const approval = String(r.approval_status ?? "approved") as DeviceApprovalStatus;
-  const operational = r.operational === true || (approval === "approved" && String(r.status) === "active");
+  const operational =
+    r.is_device_authorized === true ||
+    r.operational === true ||
+    (approval === "approved" && String(r.status) === "active");
+  const isApproved = approval === "approved";
   return {
     shopId,
     deviceFingerprint: fp,
     deviceId: r.device_id != null ? String(r.device_id) : null,
-    deviceAuthority: authority === "primary" ? "primary" : "secondary",
     formFactor: (String(r.form_factor ?? "tablet") as DeviceFormFactor) || "tablet",
     approvalStatus: approval,
-    isPrimary: authority === "primary" || r.is_primary === true,
-    isApproved: approval === "approved",
+    isDeviceAuthorized: operational && isApproved,
+    isApproved,
     isOperational: operational,
-    primaryDeviceFingerprint:
-      r.primary_device_fingerprint != null ? String(r.primary_device_fingerprint) : null,
-    primaryDeviceId: r.primary_device_id != null ? String(r.primary_device_id) : null,
     status: String(r.status ?? "unknown"),
     lastSyncAt: r.last_sync_at != null ? String(r.last_sync_at) : null,
     lastLoginAt: r.last_login_at != null ? String(r.last_login_at) : null,
@@ -125,6 +121,11 @@ function parseContext(data: unknown, shopId: string, fp: string): DeviceAuthorit
     cloudStatus: r.cloud_status != null ? String(r.cloud_status) : null,
     recoveryStatus: r.recovery_status != null ? String(r.recovery_status) : null,
   };
+}
+
+export function isDeviceAuthorizedForManagement(ctx: DeviceAuthorityContext | null): boolean {
+  if (!ctx) return true;
+  return ctx.isDeviceAuthorized;
 }
 
 /** Fetch device authority from cloud; falls back to offline cache. */
@@ -172,12 +173,8 @@ export function getCachedDeviceAuthoritySync(): DeviceAuthorityContext | null {
   }
 }
 
-export function isPrimaryDeviceCachedSync(): boolean {
-  if (!ENFORCE_PRIMARY_DEVICE) return true;
-  const ctx = getCachedDeviceAuthoritySync();
-  if (!ctx) return true;
-  if (!ctx.primaryDeviceFingerprint) return true;
-  return ctx.isPrimary;
+export function isDeviceAuthorizedForManagementSync(): boolean {
+  return isDeviceAuthorizedForManagement(getCachedDeviceAuthoritySync());
 }
 
 export function isDeviceApprovedCachedSync(): boolean {
@@ -186,40 +183,17 @@ export function isDeviceApprovedCachedSync(): boolean {
   return ctx.isApproved && ctx.approvalStatus !== "pending";
 }
 
-export function canPerformPrimaryActionSync(_action: PrimaryOnlyAction): boolean {
-  return isPrimaryDeviceCachedSync();
+export function canPerformDeviceAuthorizedActionSync(_action: DeviceAuthorizedAction): boolean {
+  return isDeviceAuthorizedForManagementSync();
 }
 
-export async function canPerformPrimaryAction(
-  action: PrimaryOnlyAction,
+export async function canPerformDeviceAuthorizedAction(
+  action: DeviceAuthorizedAction,
   shopId?: string,
 ): Promise<boolean> {
   void action;
-  if (!ENFORCE_PRIMARY_DEVICE) {
-    const ctx = await fetchDeviceAuthorityContext(shopId);
-    if (!ctx) return true;
-    return ctx.isApproved && ctx.approvalStatus !== "pending";
-  }
   const ctx = await fetchDeviceAuthorityContext(shopId);
-  if (!ctx) return true;
-  if (!ctx.primaryDeviceFingerprint) return true;
-  return ctx.isPrimary && ctx.isApproved;
-}
-
-export async function transferPrimaryDevice(
-  shopId: string,
-  newDeviceFingerprint: string,
-): Promise<{ ok: boolean; error?: string }> {
-  if (!supabase) return { ok: false, error: "offline" };
-  const actorFp = getOrCreateDeviceId();
-  const { data, error } = await supabase.rpc("shop_device_transfer_primary", {
-    p_shop_id: shopId,
-    p_new_device_fingerprint: newDeviceFingerprint,
-    p_actor_device_fingerprint: actorFp,
-  });
-  if (error) return { ok: false, error: error.message };
-  clearDeviceAuthorityCache();
-  return { ok: (data as { ok?: boolean })?.ok === true, error: (data as { error?: string })?.error };
+  return isDeviceAuthorizedForManagement(ctx);
 }
 
 export async function setDeviceApprovalStatus(
@@ -243,10 +217,3 @@ export async function setDeviceApprovalStatus(
     limitBlocked: payload?.limit_blocked === true,
   };
 }
-
-export async function setCurrentDeviceAsPrimary(shopId: string): Promise<{ ok: boolean; error?: string }> {
-  return transferPrimaryDevice(shopId, getOrCreateDeviceId());
-}
-
-// Legacy alias
-export type PrimaryDeviceContext = DeviceAuthorityContext;

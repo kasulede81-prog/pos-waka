@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
-import { PinInput } from "../ui/PinInput";
+import { EnterprisePinPad } from "../auth/EnterprisePinPad";
 import { hashShopSecurityPin } from "../../lib/enterpriseSecurity/shopPinSecret";
 import { isShopSecurityPinConfigured } from "../../lib/enterpriseSecurity/shopPinSecret";
 
@@ -12,81 +12,68 @@ export function BackOfficePinForm({ lang }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const [boPinNew, setBoPinNew] = useState("");
-  const [boPinConfirm, setBoPinConfirm] = useState("");
+  const [step, setStep] = useState<"new" | "confirm">("new");
   const [boPinFeedback, setBoPinFeedback] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resetSignal, setResetSignal] = useState(0);
 
   const pinActive = isShopSecurityPinConfigured(preferences.backOfficePin);
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       {pinActive ? (
         <p className="text-sm font-semibold text-emerald-800">{t(lang, "settingsBackOfficePinActiveShort")}</p>
       ) : (
-        <p className="text-sm font-semibold text-stone-600">{t(lang, "settingsBackOfficePinNone")}</p>
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "settingsBackOfficePinNone")}</p>
       )}
       {boPinFeedback ? <p className="mt-2 text-sm font-bold text-waka-900">{boPinFeedback}</p> : null}
-      <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "settingsBackOfficePinNew")}</label>
-      <PinInput
-        autoComplete="off"
-        maxLength={6}
-        value={boPinNew}
-        onChange={(e) => {
-          setBoPinFeedback(null);
-          setBoPinNew(e.target.value.replace(/\D/g, "").slice(0, 6));
-        }}
-        className="mt-2 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
-      />
-      <label className="mt-3 block text-sm font-bold text-stone-800">{t(lang, "settingsBackOfficePinConfirm")}</label>
-      <PinInput
-        autoComplete="off"
-        maxLength={6}
-        value={boPinConfirm}
-        onChange={(e) => {
-          setBoPinFeedback(null);
-          setBoPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6));
-        }}
-        className="mt-2 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
-      />
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          className="min-h-[48px] rounded-2xl bg-waka-600 py-3 text-sm font-black text-white"
-          disabled={saving}
-          onClick={() => {
+      <p className="mt-4 text-sm font-bold text-foreground">
+        {step === "new" ? t(lang, "settingsBackOfficePinNew") : t(lang, "settingsBackOfficePinConfirm")}
+      </p>
+      <EnterprisePinPad
+        lang={lang}
+        disabled={saving}
+        resetSignal={`${step}-${resetSignal}`}
+        className="mt-3"
+        onComplete={(pin: string) => {
+          if (step === "new") {
+            setBoPinNew(pin);
+            setStep("confirm");
             setBoPinFeedback(null);
-            const a = boPinNew.replace(/\D/g, "");
-            const b = boPinConfirm.replace(/\D/g, "");
-            if (a.length < 4 || a.length > 6) {
+            return true;
+          }
+          if (boPinNew !== pin) {
+            setBoPinFeedback(t(lang, "settingsBackOfficePinMismatch"));
+            setBoPinNew("");
+            setStep("new");
+            setResetSignal((n) => n + 1);
+            return false;
+          }
+          setSaving(true);
+          void hashShopSecurityPin(pin).then((hash) => {
+            setSaving(false);
+            if (!hash) {
               setBoPinFeedback(t(lang, "settingsBackOfficePinLength"));
+              setResetSignal((n) => n + 1);
               return;
             }
-            if (a !== b) {
-              setBoPinFeedback(t(lang, "settingsBackOfficePinMismatch"));
-              return;
-            }
-            setSaving(true);
-            void hashShopSecurityPin(a).then((hash) => {
-              setSaving(false);
-              if (!hash) {
-                setBoPinFeedback(t(lang, "settingsBackOfficePinLength"));
-                return;
-              }
-              setPreferences({ backOfficePin: hash });
-              setBoPinNew("");
-              setBoPinConfirm("");
-              setBoPinFeedback(t(lang, "settingsBackOfficePinSaved"));
-            });
-          }}
-        >
-          {t(lang, "settingsBackOfficePinSave")}
-        </button>
+            setPreferences({ backOfficePin: hash });
+            setBoPinNew("");
+            setStep("new");
+            setResetSignal((n) => n + 1);
+            setBoPinFeedback(t(lang, "settingsBackOfficePinSaved"));
+          });
+          return true;
+        }}
+      />
+      <div className="mt-4">
         <button
           type="button"
-          className="min-h-[48px] rounded-2xl border-2 border-stone-200 py-3 text-sm font-bold text-stone-800"
+          className="min-h-[48px] w-full rounded-2xl border-2 border-border py-3 text-sm font-bold text-foreground"
           onClick={() => {
             setBoPinNew("");
-            setBoPinConfirm("");
+            setStep("new");
+            setResetSignal((n) => n + 1);
             setPreferences({ backOfficePin: null });
             setBoPinFeedback(t(lang, "settingsBackOfficePinCleared"));
           }}

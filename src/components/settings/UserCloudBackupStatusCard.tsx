@@ -23,11 +23,11 @@ export function UserCloudBackupStatusCard({ lang }: { lang: Language }) {
   }, []);
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "userCloudBackupTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "userCloudBackupSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "userCloudBackupTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "userCloudBackupSub")}</p>
       {loading ? (
-        <p className="mt-3 text-sm font-semibold text-stone-500">{t(lang, "systemHealthLoading")}</p>
+        <p className="mt-3 text-sm font-semibold text-muted-foreground">{t(lang, "systemHealthLoading")}</p>
       ) : offline ? (
         <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
           {t(lang, "userCloudBackupOffline")}

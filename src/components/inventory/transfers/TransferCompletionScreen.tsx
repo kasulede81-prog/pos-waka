@@ -26,15 +26,15 @@ export function TransferCompletionScreen({ lang, draft, products, onCreateAnothe
       <p className="mt-1 text-sm font-semibold text-emerald-900/90">{t(lang, "xferCompletionSub")}</p>
 
       <dl className="mt-5 grid grid-cols-2 gap-3 text-left text-sm">
-        <div className="rounded-2xl border border-emerald-100 bg-white px-3 py-2">
+        <div className="rounded-2xl border border-emerald-100 bg-card px-3 py-2">
           <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "xferSummaryProducts")}</dt>
           <dd className="text-lg font-black text-foreground">{summary.productCount}</dd>
         </div>
-        <div className="rounded-2xl border border-emerald-100 bg-white px-3 py-2">
+        <div className="rounded-2xl border border-emerald-100 bg-card px-3 py-2">
           <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "xferSummaryUnits")}</dt>
           <dd className="text-lg font-black text-foreground">{summary.totalUnits}</dd>
         </div>
-        <div className="col-span-2 rounded-2xl border border-emerald-100 bg-white px-3 py-2">
+        <div className="col-span-2 rounded-2xl border border-emerald-100 bg-card px-3 py-2">
           <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cntCompletionTime")}</dt>
           <dd className="font-black text-foreground">{completedAt}</dd>
         </div>
@@ -43,7 +43,7 @@ export function TransferCompletionScreen({ lang, draft, products, onCreateAnothe
       <div className="mt-5 flex flex-wrap justify-center gap-2">
         <Link
           to="/stock"
-          className={clsx(WIZARD_BTN_FOOTER_BASE, "border border-border bg-white px-4 text-foreground hover:bg-muted")}
+          className={clsx(WIZARD_BTN_FOOTER_BASE, "border border-border bg-card px-4 text-foreground hover:bg-muted")}
         >
           {t(lang, "cntReturnInventory")}
         </Link>
@@ -61,7 +61,7 @@ export function TransferCompletionScreen({ lang, draft, products, onCreateAnothe
           to="/stock?tab=movements"
           className={clsx(
             WIZARD_BTN_FOOTER_BASE,
-            "gap-2 border border-border bg-white px-4 text-foreground hover:bg-muted",
+            "gap-2 border border-border bg-card px-4 text-foreground hover:bg-muted",
           )}
         >
           <History className="h-4 w-4" aria-hidden />

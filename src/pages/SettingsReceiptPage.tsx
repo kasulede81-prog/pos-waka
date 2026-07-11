@@ -52,7 +52,7 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
   };
 
   const inputClass =
-    "mt-1 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 text-base font-semibold text-stone-900";
+    "mt-1 min-h-[48px] w-full rounded-2xl border-2 border-border px-4 text-base font-semibold text-foreground";
 
   const displayToggles: { key: keyof ReceiptDisplayOptions; labelKey: string }[] = [
     { key: "showCashier", labelKey: "settingsReceiptShowCashier" },
@@ -69,10 +69,10 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
     <>
       <ReceiptLivePreview lang={lang} preferences={preferences} planTier={planTier} />
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black text-stone-900">{t(lang, "settingsReceiptHeaderSection")}</h2>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black text-foreground">{t(lang, "settingsReceiptHeaderSection")}</h2>
         <div className="mt-3 space-y-3">
-          <label className="block text-sm font-bold text-stone-700">
+          <label className="block text-sm font-bold text-muted-foreground">
             {t(lang, "settingsReceiptBusinessName")}
             <input
               value={header.businessName}
@@ -80,7 +80,7 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
               className={inputClass}
             />
           </label>
-          <label className="block text-sm font-bold text-stone-700">
+          <label className="block text-sm font-bold text-muted-foreground">
             {t(lang, "settingsReceiptAddress")}
             <textarea
               rows={3}
@@ -88,11 +88,11 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
               onChange={(e) => patchHeader({ address: e.target.value })}
               className={`${inputClass} min-h-[5.5rem] resize-y py-3 leading-snug`}
             />
-            <span className="mt-1 block text-xs font-medium text-stone-500">
+            <span className="mt-1 block text-xs font-medium text-muted-foreground">
               {t(lang, "settingsReceiptAddressHint")}
             </span>
           </label>
-          <label className="block text-sm font-bold text-stone-700">
+          <label className="block text-sm font-bold text-muted-foreground">
             {t(lang, "settingsReceiptPhone")}
             <input
               value={header.phone}
@@ -100,7 +100,7 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
               className={inputClass}
             />
           </label>
-          <label className="block text-sm font-bold text-stone-700">
+          <label className="block text-sm font-bold text-muted-foreground">
             {t(lang, "settingsReceiptEmail")}
             <input
               type="email"
@@ -110,7 +110,7 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
               className={inputClass}
             />
           </label>
-          <label className="block text-sm font-bold text-stone-700">
+          <label className="block text-sm font-bold text-muted-foreground">
             {t(lang, "settingsReceiptTin")}
             <input
               value={header.tin}
@@ -122,12 +122,12 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
         </div>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black text-stone-900">{t(lang, "settingsReceiptFooterSection")}</h2>
-        <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "settingsReceiptFooterLinesHint")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black text-foreground">{t(lang, "settingsReceiptFooterSection")}</h2>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "settingsReceiptFooterLinesHint")}</p>
         <div className="mt-3 space-y-3">
           {footerLines.map((line, i) => (
-            <label key={i} className="block text-sm font-bold text-stone-700">
+            <label key={i} className="block text-sm font-bold text-muted-foreground">
               {tTemplate(lang, "settingsReceiptFooterLine", { n: String(i + 1) })}
               <input
                 value={line}
@@ -139,8 +139,8 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
         </div>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black text-stone-900">{t(lang, "settingsReceiptDisplaySection")}</h2>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black text-foreground">{t(lang, "settingsReceiptDisplaySection")}</h2>
         <ul className="mt-3 space-y-2">
           {displayToggles.map((opt) => (
             <li key={opt.key}>
@@ -148,14 +148,14 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
                 checked={displayOpts[opt.key]}
                 onCheckedChange={(checked) => patchDisplay({ [opt.key]: checked })}
                 label={t(lang, opt.labelKey)}
-                className="rounded-xl border border-stone-100 px-3 py-2"
+                className="rounded-xl border border-border px-3 py-2"
               />
             </li>
           ))}
         </ul>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <WakaSwitch
           checked={canHidePowered ? preferences.receiptShowPoweredByWaka !== false : true}
           disabled={!canHidePowered}

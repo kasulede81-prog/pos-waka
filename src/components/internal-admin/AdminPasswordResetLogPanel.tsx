@@ -49,12 +49,12 @@ export function AdminPasswordResetLogPanel({ previewMode }: Props) {
   }, [load]);
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Audit trail</p>
-          <h2 className="text-base font-black text-stone-900">Admin password resets</h2>
-          <p className="mt-1 text-xs text-stone-600">
+          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Audit trail</p>
+          <h2 className="text-base font-black text-foreground">Admin password resets</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
             Email requests, direct password sets, and delivery success/failure. Apply migration{" "}
             <span className="font-mono">093</span> if the list stays empty.
           </p>
@@ -62,22 +62,22 @@ export function AdminPasswordResetLogPanel({ previewMode }: Props) {
         <button
           type="button"
           onClick={() => void load()}
-          className="shrink-0 rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-700"
+          className="shrink-0 rounded-xl border border-border px-3 py-2 text-xs font-bold text-muted-foreground"
         >
           Refresh
         </button>
       </div>
 
       {loading ? (
-        <p className="mt-4 text-sm text-stone-500">Loading…</p>
+        <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
       ) : rows.length === 0 ? (
-        <p className="mt-4 text-sm text-stone-500">No password reset events recorded yet.</p>
+        <p className="mt-4 text-sm text-muted-foreground">No password reset events recorded yet.</p>
       ) : (
         <ul className="mt-3 max-h-80 space-y-2 overflow-y-auto">
           {rows.map((row) => (
-            <li key={row.id} className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2.5 text-xs">
-              <p className="font-black text-stone-900">{formatAction(row.action)}</p>
-              <p className="mt-0.5 text-stone-600">
+            <li key={row.id} className="rounded-xl border border-border bg-muted px-3 py-2.5 text-xs">
+              <p className="font-black text-foreground">{formatAction(row.action)}</p>
+              <p className="mt-0.5 text-muted-foreground">
                 {new Date(row.created_at).toLocaleString("en-GB", {
                   dateStyle: "short",
                   timeStyle: "short",

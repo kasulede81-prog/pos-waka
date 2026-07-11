@@ -12,9 +12,9 @@ type Props = {
 
 function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className={clsx("rounded-2xl px-2.5 py-2", warn ? "bg-rose-50" : "bg-stone-50")}>
-      <p className="text-[10px] font-bold uppercase text-stone-500">{label}</p>
-      <p className={clsx("mt-0.5 text-sm font-black tabular-nums", warn ? "text-rose-800" : "text-stone-950")}>{value}</p>
+    <div className={clsx("rounded-2xl px-2.5 py-2", warn ? "bg-rose-50" : "bg-muted")}>
+      <p className="text-[10px] font-bold uppercase text-muted-foreground">{label}</p>
+      <p className={clsx("mt-0.5 text-sm font-black tabular-nums", warn ? "text-rose-800" : "text-foreground")}>{value}</p>
     </div>
   );
 }
@@ -26,11 +26,11 @@ export function CommandCenterInventoryCard({ lang, inventory }: Props) {
       : Math.max(0, 100 - inventory.countVarianceCount * 5 - inventory.negativeStock.length * 3);
 
   return (
-    <section className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "cmdCenterInventoryTitle")}</h2>
-          <p className="text-[11px] font-semibold text-stone-500">{t(lang, "ownerInventoryRiskTitle")}</p>
+          <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterInventoryTitle")}</h2>
+          <p className="text-[11px] font-semibold text-muted-foreground">{t(lang, "ownerInventoryRiskTitle")}</p>
         </div>
         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">
           {accuracyPct}% {t(lang, "cmdCenterAccuracy")}
@@ -47,14 +47,14 @@ export function CommandCenterInventoryCard({ lang, inventory }: Props) {
       </div>
 
       {inventory.fastMovers.length > 0 ? (
-        <p className="mt-3 text-[11px] font-semibold text-stone-600">
+        <p className="mt-3 text-[11px] font-semibold text-muted-foreground">
           {t(lang, "ownerInventoryFastMovers")}: {inventory.fastMovers.slice(0, 2).map((m) => m.name).join(", ")}
         </p>
       ) : null}
 
       <Link
         to="/stock"
-        className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-2xl border-2 border-stone-200 px-4 text-sm font-black text-stone-900"
+        className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-2xl border-2 border-border px-4 text-sm font-black text-foreground"
       >
         {t(lang, "cmdCenterOpenInventory")} →
       </Link>

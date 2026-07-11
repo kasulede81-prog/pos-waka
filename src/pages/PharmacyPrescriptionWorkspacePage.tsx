@@ -4,7 +4,7 @@ import { PharmacyDispenseWorkspaceWithGateway } from "../components/pharmacy/dis
 
 export function PharmacyPrescriptionWorkspacePage({ lang }: { lang: Language }) {
   return (
-    <EnterprisePageContainer variant="viewport" className="bg-stone-100">
+    <EnterprisePageContainer variant="viewport" className="bg-muted">
       <PharmacyDispenseWorkspaceWithGateway lang={lang} />
     </EnterprisePageContainer>
   );

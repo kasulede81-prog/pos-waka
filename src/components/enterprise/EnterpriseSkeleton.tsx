@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { themeUi } from "../../lib/themeTokens";
 
 type Variant = "line" | "card" | "list-row" | "kpi" | "table-row";
 
@@ -19,7 +20,7 @@ const VARIANT_CLASS: Record<Variant, string> = {
 export function EnterpriseSkeleton({ variant = "line", className }: Props) {
   return (
     <div
-      className={clsx("animate-pulse bg-stone-200/80", VARIANT_CLASS[variant], className)}
+      className={clsx(themeUi.skeleton, VARIANT_CLASS[variant], className)}
       aria-hidden
     />
   );

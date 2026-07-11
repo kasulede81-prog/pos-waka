@@ -104,14 +104,14 @@ export function PilotSupportCard({ lang, userId, pilotModeEnabled = false }: Pro
   };
 
   return (
-    <article className="rounded-2xl border border-teal-200/90 bg-gradient-to-br from-teal-50/80 to-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-teal-200/90 bg-gradient-to-br from-teal-50/80 to-card p-4 shadow-sm">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-800">
           <LifeBuoy className="h-5 w-5" aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-base font-black text-stone-900">{t(lang, "pilotSupportTitle")}</p>
-          <p className="mt-1 text-sm text-stone-600">{t(lang, "pilotSupportSub")}</p>
+          <p className="text-base font-black text-foreground">{t(lang, "pilotSupportTitle")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t(lang, "pilotSupportSub")}</p>
         </div>
       </div>
 
@@ -167,7 +167,7 @@ export function PilotSupportCard({ lang, userId, pilotModeEnabled = false }: Pro
               type="button"
               onClick={downloadDiagnostics}
               disabled={!diagnostics}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border-2 border-teal-700 bg-white px-4 text-sm font-black text-teal-900 disabled:opacity-50"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border-2 border-teal-700 bg-card px-4 text-sm font-black text-teal-900 disabled:opacity-50"
             >
               <Download className="h-4 w-4" aria-hidden />
               {t(lang, "pilotSupportExportFile")}
@@ -181,9 +181,9 @@ export function PilotSupportCard({ lang, userId, pilotModeEnabled = false }: Pro
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex justify-between gap-3 rounded-xl bg-stone-50 px-3 py-2">
-      <dt className="font-semibold text-stone-600">{label}</dt>
-      <dd className={`max-w-[55%] truncate font-black text-stone-900 ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
+    <div className="flex justify-between gap-3 rounded-xl bg-muted px-3 py-2">
+      <dt className="font-semibold text-muted-foreground">{label}</dt>
+      <dd className={`max-w-[55%] truncate font-black text-foreground ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
     </div>
   );
 }

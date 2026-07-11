@@ -128,9 +128,9 @@ export function expiryStatusPresentation(status: ExpiryVisualStatus): {
     case "d30":
       return { badgeClass: "bg-red-100 text-red-950 ring-1 ring-red-300", labelKey: "pharmacyExpiry30" };
     case "expired":
-      return { badgeClass: "bg-stone-800 text-stone-100 ring-1 ring-stone-600", labelKey: "pharmacyExpiryExpired" };
+      return { badgeClass: "bg-foreground text-background ring-1 ring-stone-600", labelKey: "pharmacyExpiryExpired" };
     default:
-      return { badgeClass: "bg-stone-100 text-stone-600 ring-1 ring-stone-200", labelKey: "pharmacyExpiryNone" };
+      return { badgeClass: "bg-muted text-muted-foreground ring-1 ring-border", labelKey: "pharmacyExpiryNone" };
   }
 }
 
@@ -172,9 +172,9 @@ export function expiryTilePresentation(bucket: "d90" | "d60" | "d30" | "expired"
     case "expired":
       return {
         borderClass: "border-stone-400",
-        bgClass: "bg-stone-100",
-        labelClass: "text-stone-700",
-        valueClass: "text-stone-950",
+        bgClass: "bg-muted",
+        labelClass: "text-muted-foreground",
+        valueClass: "text-foreground",
       };
   }
 }

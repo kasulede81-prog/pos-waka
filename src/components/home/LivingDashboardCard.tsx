@@ -93,7 +93,7 @@ export function LivingDashboardCard({
     >
       {!usesLauncherPalette ? (
         <>
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/20 via-white/5 to-transparent" aria-hidden />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/20 via-card/5 to-transparent" aria-hidden />
           <div
             className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-40 blur-2xl"
             style={{ background: theme.glow }}

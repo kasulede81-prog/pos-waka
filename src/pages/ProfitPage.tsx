@@ -216,7 +216,7 @@ export function ProfitPage({ lang, embedded }: Props) {
               <button
                 type="button"
                 onClick={() => void exportReport()}
-                className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-stone-50"
+                className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-muted"
               >
                 <FileDown className="h-4 w-4 shrink-0" aria-hidden />
                 <span className="hidden sm:inline">{t(lang, "salesHistoryExport")}</span>
@@ -224,7 +224,7 @@ export function ProfitPage({ lang, embedded }: Props) {
             ) : null}
             <Link
               to="/reports?tab=profit"
-              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-50"
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm active:bg-muted"
             >
               <BarChart3 className="h-4 w-4 shrink-0" aria-hidden />
               <span className="hidden sm:inline">{t(lang, "profitInsightsLink")}</span>
@@ -248,7 +248,7 @@ export function ProfitPage({ lang, embedded }: Props) {
       ) : null}
 
       {hasData ? (
-        <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-stone-50/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
+        <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-muted/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
           <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
           <ProfitQuickFilterChips lang={lang} active={quickFilter} onChange={setQuickFilter} />
           <ProfitSearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} />
@@ -265,7 +265,7 @@ export function ProfitPage({ lang, embedded }: Props) {
         />
       ) : null}
       {needsArchive && includeArchived && archivedSalesCount > 0 ? (
-        <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
+        <p className="text-xs font-semibold text-muted-foreground">{t(lang, "dateFilterArchiveIncluded")}</p>
       ) : null}
       {needsArchive && archivedSalesCount === 0 ? (
         <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
@@ -283,10 +283,10 @@ export function ProfitPage({ lang, embedded }: Props) {
       ) : null}
 
       {!hasData && !salesRefreshing ? (
-        <div className="rounded-2xl border border-dashed border-stone-200 bg-white px-6 py-12 text-center">
-          <TrendingUp className="mx-auto h-8 w-8 text-stone-300" aria-hidden />
-          <p className="mt-3 text-base font-black text-stone-800">{t(lang, "profitEmptyTitle")}</p>
-          <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "profitEmptyHint")}</p>
+        <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center">
+          <TrendingUp className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
+          <p className="mt-3 text-base font-black text-foreground">{t(lang, "profitEmptyTitle")}</p>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "profitEmptyHint")}</p>
         </div>
       ) : null}
 
@@ -309,7 +309,7 @@ export function ProfitPage({ lang, embedded }: Props) {
 
           {showProducts && displayProducts.length > 0 ? (
             <section className="space-y-2">
-              <h3 className="px-0.5 text-xs font-black text-stone-800">{t(lang, "profitTopProducts")}</h3>
+              <h3 className="px-0.5 text-xs font-black text-foreground">{t(lang, "profitTopProducts")}</h3>
               {displayProducts.map((p) => (
                 <ProfitProductCard key={`${p.productId}-${p.name}`} lang={lang} product={p} onOpen={setDetailProduct} />
               ))}
@@ -321,7 +321,7 @@ export function ProfitPage({ lang, embedded }: Props) {
           ) : null}
 
           {hasData && displayProducts.length === 0 && searchedGroups.length === 0 && searchQuery.trim() ? (
-            <p className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-bold text-stone-600">
+            <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">
               {t(lang, "posSellNoMatch")}
             </p>
           ) : null}

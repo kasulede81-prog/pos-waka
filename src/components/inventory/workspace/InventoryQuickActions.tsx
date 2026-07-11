@@ -19,7 +19,7 @@ export function InventoryQuickActions({ lang, actions, onAction }: Props) {
 
   return (
     <section className="space-y-2">
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-stone-500">
+      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, "ipQuickActions")}
       </h3>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -29,20 +29,20 @@ export function InventoryQuickActions({ lang, actions, onAction }: Props) {
             "flex min-h-[72px] flex-col items-start justify-between rounded-2xl border p-3 text-left shadow-sm transition-all",
             "active:scale-[0.98] motion-reduce:active:scale-100",
             action.primary
-              ? "border-waka-200 bg-gradient-to-br from-waka-50 to-white active:border-waka-300"
-              : "border-stone-200/90 bg-white active:border-waka-300 active:shadow-md",
+              ? "border-waka-200 bg-gradient-to-br from-waka-50 to-card active:border-waka-300"
+              : "border-border/90 bg-card active:border-waka-300 active:shadow-md",
           );
           const inner = (
             <>
               <span
                 className={clsx(
                   "flex h-9 w-9 items-center justify-center rounded-xl",
-                  action.primary ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
+                  action.primary ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" aria-hidden />
               </span>
-              <span className="text-xs font-black leading-tight text-stone-950">{t(lang, action.labelKey)}</span>
+              <span className="text-xs font-black leading-tight text-foreground">{t(lang, action.labelKey)}</span>
             </>
           );
 

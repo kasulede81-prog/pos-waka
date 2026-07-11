@@ -60,14 +60,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
         <>
           <PageBackBar lang={lang} />
           <div className="mt-2">
-            <h1 className="text-xl font-black text-stone-950 sm:text-2xl">{t(lang, "settingsHubTitle")}</h1>
-            <p className="text-xs font-medium text-stone-500">{t(lang, "settingsHubSub")}</p>
-            <p className="mt-1 text-xs font-medium text-stone-600">
-              {t(lang, "settingsYourPlanLabel")}: <span className="font-black text-stone-900">{planTier}</span>
-              <span className="mx-2 text-stone-300" aria-hidden>
+            <h1 className="text-xl font-black text-foreground sm:text-2xl">{t(lang, "settingsHubTitle")}</h1>
+            <p className="text-xs font-medium text-muted-foreground">{t(lang, "settingsHubSub")}</p>
+            <p className="mt-1 text-xs font-medium text-muted-foreground">
+              {t(lang, "settingsYourPlanLabel")}: <span className="font-black text-foreground">{planTier}</span>
+              <span className="mx-2 text-muted-foreground" aria-hidden>
                 ·
               </span>
-              {t(lang, "settingsAppVersionLine")}: <span className="font-mono font-black text-stone-900">{appVersion}</span>
+              {t(lang, "settingsAppVersionLine")}: <span className="font-mono font-black text-foreground">{appVersion}</span>
             </p>
           </div>
         </>

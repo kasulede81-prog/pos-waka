@@ -38,21 +38,21 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
         <button
           type="button"
           onClick={() => downloadShiftSummaryCsv(lang, rows)}
-          className="min-h-10 rounded-xl border border-stone-200 bg-white px-4 text-sm font-black text-stone-800"
+          className="min-h-10 rounded-xl border border-border bg-card px-4 text-sm font-black text-foreground"
         >
           {t(lang, "shiftReportExportCsv")}
         </button>
         <button
           type="button"
           onClick={() => downloadShiftSummaryPdf(lang, rows)}
-          className="min-h-10 rounded-xl border border-stone-200 bg-white px-4 text-sm font-black text-stone-800"
+          className="min-h-10 rounded-xl border border-border bg-card px-4 text-sm font-black text-foreground"
         >
           {t(lang, "shiftReportExportPdf")}
         </button>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-stone-200 bg-white shadow-waka-sm">
+      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-waka-sm">
         <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-stone-200 bg-stone-50 text-xs font-black uppercase tracking-wide text-stone-600">
+          <thead className="border-b border-border bg-muted text-xs font-black uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-3 py-3">{t(lang, "openShiftsColCashier")}</th>
               <th className="px-3 py-3">{t(lang, "openShiftsColRole")}</th>
@@ -67,7 +67,7 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={canForceClose ? 8 : 7} className="px-3 py-8 text-center font-semibold text-stone-500">
+                <td colSpan={canForceClose ? 8 : 7} className="px-3 py-8 text-center font-semibold text-muted-foreground">
                   {t(lang, "openShiftsEmpty")}
                 </td>
               </tr>
@@ -76,14 +76,14 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
                 const shiftDay = dateKeyKampala(shift.startAt);
                 const staleOpen = !shift.endAt && shiftDay < todayKey;
                 return (
-                <tr key={shift.id} className="border-b border-stone-100 last:border-0">
-                  <td className="px-3 py-3 font-bold text-stone-900">{shift.actorName ?? shift.actorUserId}</td>
-                  <td className="px-3 py-3 font-semibold text-stone-700">{t(lang, `role_${shift.role}`)}</td>
-                  <td className="px-3 py-3 font-semibold text-stone-700">
+                <tr key={shift.id} className="border-b border-border last:border-0">
+                  <td className="px-3 py-3 font-bold text-foreground">{shift.actorName ?? shift.actorUserId}</td>
+                  <td className="px-3 py-3 font-semibold text-muted-foreground">{t(lang, `role_${shift.role}`)}</td>
+                  <td className="px-3 py-3 font-semibold text-muted-foreground">
                     {new Date(shift.startAt).toLocaleString()}
                   </td>
-                  <td className="px-3 py-3 font-semibold text-stone-700">{durationLabel}</td>
-                  <td className="px-3 py-3 font-semibold text-stone-900">
+                  <td className="px-3 py-3 font-semibold text-muted-foreground">{durationLabel}</td>
+                  <td className="px-3 py-3 font-semibold text-foreground">
                     UGX {shift.salesTotalUgx.toLocaleString()}
                   </td>
                   <td className="px-3 py-3 font-semibold text-teal-800">
@@ -96,7 +96,7 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
                           ? staleOpen
                             ? "rounded-full bg-rose-100 px-2 py-0.5 text-xs font-black text-rose-900"
                             : "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-black text-emerald-900"
-                          : "rounded-full bg-stone-200 px-2 py-0.5 text-xs font-black text-stone-700"
+                          : "rounded-full bg-muted px-2 py-0.5 text-xs font-black text-muted-foreground"
                       }
                     >
                       {shiftStatusLabel(shift)}

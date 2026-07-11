@@ -83,14 +83,14 @@ export function PosShiftSummaryCollapsible({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full min-h-[50px] items-center gap-2 rounded-xl border border-stone-200/90 bg-white px-2.5 py-2 text-left shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100"
+        className="flex w-full min-h-[50px] items-center gap-2 rounded-xl border border-border/90 bg-card px-2.5 py-2 text-left shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100"
       >
         <ChevronDown
-          className={clsx("h-4 w-4 shrink-0 text-stone-500 transition-transform duration-200", expanded && "rotate-180")}
+          className={clsx("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", expanded && "rotate-180")}
           aria-hidden
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-black uppercase tracking-wide text-stone-500">
+          <p className="truncate text-[10px] font-black uppercase tracking-wide text-muted-foreground">
             {t(lang, "posShiftSummaryTitle")}
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
@@ -98,7 +98,7 @@ export function PosShiftSummaryCollapsible({
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
               Shift · {duration}
             </span>
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-stone-800">
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-foreground">
               <ShoppingCart className="h-3 w-3 text-teal-700" aria-hidden />
               {todaySaleCount}
             </span>
@@ -106,7 +106,7 @@ export function PosShiftSummaryCollapsible({
               <Wallet className="h-3 w-3" aria-hidden />
               {fmt(todaySalesUgx)}
             </span>
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-stone-600">
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground">
               <Clock className="h-3 w-3" aria-hidden />
               {pendingCount}
             </span>
@@ -119,42 +119,42 @@ export function PosShiftSummaryCollapsible({
           <button
             type="button"
             aria-label={t(lang, "cancel")}
-            className="fixed inset-0 z-[44] bg-stone-900/40 backdrop-blur-[2px] transition-opacity duration-200"
+            className="fixed inset-0 z-[44] bg-foreground/40 backdrop-blur-[2px] transition-opacity duration-200"
             onClick={() => setExpanded(false)}
           />
           <div
             role="dialog"
             aria-modal="true"
             aria-label={t(lang, "posShiftSummaryTitle")}
-            className="fixed left-2 right-2 top-[calc(var(--waka-safe-top,0px)+3.25rem)] z-[45] max-h-[min(70dvh,32rem)] overflow-y-auto rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl transition-all duration-200"
+            className="fixed left-2 right-2 top-[calc(var(--waka-safe-top,0px)+3.25rem)] z-[45] max-h-[min(70dvh,32rem)] overflow-y-auto rounded-2xl border border-border bg-card p-4 shadow-2xl transition-all duration-200"
           >
-            <div className="flex items-start gap-3 border-b border-stone-100 pb-3">
+            <div className="flex items-start gap-3 border-b border-border pb-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-800">
                 <User className="h-5 w-5" aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-black text-stone-950">
+                <p className="text-sm font-black text-foreground">
                   {t(lang, "activeShiftCashier")}: {cashierName}
                 </p>
-                <p className="text-xs font-semibold text-stone-500">
+                <p className="text-xs font-semibold text-muted-foreground">
                   {t(lang, "activeShiftStarted")} · {duration}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setExpanded(false)}
-                className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-stone-500 active:bg-stone-100"
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-muted-foreground active:bg-muted"
               >
                 {t(lang, "cancel")}
               </button>
             </div>
 
             <dl className="mt-3 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-stone-50 p-2.5">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-stone-500">
+              <div className="rounded-xl bg-muted p-2.5">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                   {t(lang, "shiftCloseOpeningFloat")}
                 </dt>
-                <dd className="mt-0.5 text-sm font-black text-stone-950">{fmt(openingFloatDisplay)}</dd>
+                <dd className="mt-0.5 text-sm font-black text-foreground">{fmt(openingFloatDisplay)}</dd>
               </div>
               <div className="rounded-xl bg-teal-50/80 p-2.5">
                 <dt className="text-[10px] font-bold uppercase tracking-wide text-teal-700">
@@ -168,11 +168,11 @@ export function PosShiftSummaryCollapsible({
                 </dt>
                 <dd className="mt-0.5 text-sm font-black text-teal-900">{fmt(expected)}</dd>
               </div>
-              <div className="rounded-xl bg-stone-50 p-2.5">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-stone-500">
+              <div className="rounded-xl bg-muted p-2.5">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                   {t(lang, "shiftCloseDebtPayments")}
                 </dt>
-                <dd className="mt-0.5 text-sm font-black text-stone-950">{fmt(parts.debtPayments)}</dd>
+                <dd className="mt-0.5 text-sm font-black text-foreground">{fmt(parts.debtPayments)}</dd>
               </div>
             </dl>
 
@@ -195,7 +195,7 @@ export function PosShiftSummaryCollapsible({
                     setExpanded(false);
                     onRecordExpense();
                   }}
-                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-800 active:bg-stone-50"
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-4 py-2 text-sm font-bold text-foreground active:bg-muted"
                 >
                   {t(lang, "posRecordExpenseBtn")}
                 </button>

@@ -98,7 +98,7 @@ export function StaffTeamList({
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "staffYourTeam")}</p>
+        <p className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffYourTeam")}</p>
         <button
           type="button"
           onClick={onAddStaff}
@@ -111,17 +111,17 @@ export function StaffTeamList({
       </div>
 
       <label className="relative block">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t(lang, "staffTeamSearch")}
-          className="w-full rounded-2xl border-2 border-stone-200 bg-white py-3 pl-10 pr-4 text-sm font-semibold text-stone-900 placeholder:text-stone-400 focus:border-waka-400 focus:outline-none"
+          className="w-full rounded-2xl border-2 border-border bg-card py-3 pl-10 pr-4 text-sm font-semibold text-foreground placeholder:text-muted-foreground focus:border-waka-400 focus:outline-none"
         />
       </label>
 
       {ordered.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-semibold text-stone-500">
+        <p className="rounded-2xl border border-dashed border-border bg-muted px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
           {t(lang, "staffTeamEmpty")}
         </p>
       ) : (
@@ -138,14 +138,14 @@ export function StaffTeamList({
                   : roleOptions.find((o) => o.baseRole === s.role)?.id ?? roleOptions[0]?.id ?? "";
 
             return (
-              <li key={s.id} className="rounded-3xl border border-stone-200 bg-white p-4 shadow-sm">
+              <li key={s.id} className="rounded-3xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-stone-100 text-sm font-black text-stone-700">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-muted text-sm font-black text-muted-foreground">
                     {staffInitials(s.name)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-base font-black text-stone-950">{s.name}</p>
-                    <p className="text-sm font-semibold text-stone-500">{staffRoleDisplayName(lang, s, customStaffRoles)}</p>
+                    <p className="truncate text-base font-black text-foreground">{s.name}</p>
+                    <p className="text-sm font-semibold text-muted-foreground">{staffRoleDisplayName(lang, s, customStaffRoles)}</p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <span
@@ -165,34 +165,34 @@ export function StaffTeamList({
                   </div>
                 </div>
 
-                <div className="mt-3 grid gap-2 rounded-2xl bg-stone-50 px-3 py-3 text-xs font-medium text-stone-700 sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 rounded-2xl bg-muted px-3 py-3 text-xs font-medium text-muted-foreground sm:grid-cols-2">
                   <p>
-                    <span className="font-black text-stone-500">{t(lang, "staffSecurityLastLogin")}: </span>
+                    <span className="font-black text-muted-foreground">{t(lang, "staffSecurityLastLogin")}: </span>
                     {formatWhen(s.lastLoginAt, lang)}
                   </p>
                   <p>
-                    <span className="font-black text-stone-500">{t(lang, "staffSecurityDevice")}: </span>
+                    <span className="font-black text-muted-foreground">{t(lang, "staffSecurityDevice")}: </span>
                     {s.lastDeviceFingerprint ? `${s.lastDeviceFingerprint.slice(0, 8)}…` : t(lang, "staffSecurityNever")}
                   </p>
                   <p>
-                    <span className="font-black text-stone-500">{t(lang, "staffSecurityFailedAttempts")}: </span>
+                    <span className="font-black text-muted-foreground">{t(lang, "staffSecurityFailedAttempts")}: </span>
                     {s.failedPinAttempts ?? 0}
                   </p>
                   <p>
-                    <span className="font-black text-stone-500">{t(lang, "staffSecurityPinChanged")}: </span>
+                    <span className="font-black text-muted-foreground">{t(lang, "staffSecurityPinChanged")}: </span>
                     {formatWhen(lastSecretChange(s), lang)}
                   </p>
                   <p>
-                    <span className="font-black text-stone-500">{t(lang, "staffSecurityStatus")}: </span>
+                    <span className="font-black text-muted-foreground">{t(lang, "staffSecurityStatus")}: </span>
                     {isActiveSession ? t(lang, "staffSecuritySignedIn") : t(lang, "staffSecuritySignedOut")}
                   </p>
                   <p>
-                    <span className="font-black text-stone-500">{t(lang, "staffSecurityConnectivity")}: </span>
+                    <span className="font-black text-muted-foreground">{t(lang, "staffSecurityConnectivity")}: </span>
                     {online ? t(lang, "staffSecurityOnline") : t(lang, "staffSecurityOffline")}
                   </p>
                   {locked && s.lockedUntil ? (
                     <p className="sm:col-span-2">
-                      <span className="font-black text-stone-500">{t(lang, "staffSecurityLockedUntil")}: </span>
+                      <span className="font-black text-muted-foreground">{t(lang, "staffSecurityLockedUntil")}: </span>
                       {formatWhen(s.lockedUntil, lang)}
                     </p>
                   ) : null}
@@ -203,11 +203,11 @@ export function StaffTeamList({
                     checked={s.active}
                     onCheckedChange={(checked) => onToggleActive(s.id, checked)}
                     label={s.active ? t(lang, "staffActive") : t(lang, "staffInactive")}
-                    className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-700"
+                    className="rounded-xl border border-border px-3 py-2 text-xs font-bold text-muted-foreground"
                   />
                   <button
                     type="button"
-                    className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-waka-700"
+                    className="rounded-xl border border-border px-3 py-2 text-xs font-bold text-waka-700"
                     onClick={() => setManageId(open ? null : s.id)}
                   >
                     {open ? t(lang, "staffManageClose") : t(lang, "staffManage")}
@@ -215,7 +215,7 @@ export function StaffTeamList({
                 </div>
 
                 {open ? (
-                  <div className="mt-3 flex flex-wrap gap-2 border-t border-stone-100 pt-3">
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
                     <select
                       value={selectedTemplateId}
                       onChange={(e) => {
@@ -231,7 +231,7 @@ export function StaffTeamList({
                         if (!tpl) return;
                         onUpdateRoleTemplate(s.id, tpl.id, tpl.baseRole);
                       }}
-                      className="rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-semibold"
+                      className="rounded-xl border-2 border-border px-3 py-2 text-sm font-semibold"
                     >
                       <optgroup label={t(lang, "enterpriseRolesSystemSection")}>
                         {roleOptions.map((tpl) => (
@@ -250,10 +250,10 @@ export function StaffTeamList({
                         </optgroup>
                       ) : null}
                     </select>
-                    <button type="button" className="rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-bold" onClick={() => onResetPin(s.id)}>
+                    <button type="button" className="rounded-xl border-2 border-border px-3 py-2 text-sm font-bold" onClick={() => onResetPin(s.id)}>
                       {t(lang, "staffResetPin")}
                     </button>
-                    <button type="button" className="rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-bold" onClick={() => onResetPassword(s.id)}>
+                    <button type="button" className="rounded-xl border-2 border-border px-3 py-2 text-sm font-bold" onClick={() => onResetPassword(s.id)}>
                       {t(lang, "staffResetPassword")}
                     </button>
                     {locked ? (
@@ -269,7 +269,7 @@ export function StaffTeamList({
                     {isActiveSession ? (
                       <button
                         type="button"
-                        className="rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-bold"
+                        className="rounded-xl border-2 border-border px-3 py-2 text-sm font-bold"
                         onClick={() => onForceLogout(s.id)}
                       >
                         {t(lang, "staffSecurityForceLogout")}

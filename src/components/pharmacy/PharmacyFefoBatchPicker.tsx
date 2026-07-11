@@ -39,10 +39,10 @@ export function PharmacyFefoBatchPicker({ lang, product, line, onConfirm, onClos
 
   return (
     <AppModalOverlay className="z-[76] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
-        <div className="shrink-0 border-b border-stone-100 px-4 py-4">
-          <h2 className="text-xl font-black text-stone-950">{t(lang, "pharmacyFefoBatchTitle")}</h2>
-          <p className="mt-1 text-sm font-semibold text-stone-600">{line.name}</p>
+      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
+        <div className="shrink-0 border-b border-border px-4 py-4">
+          <h2 className="text-xl font-black text-foreground">{t(lang, "pharmacyFefoBatchTitle")}</h2>
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">{line.name}</p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -65,11 +65,11 @@ export function PharmacyFefoBatchPicker({ lang, product, line, onConfirm, onClos
                     onClick={() => setSelectedId(batch.id)}
                     className={clsx(
                       "flex w-full min-h-[56px] flex-col items-start rounded-2xl border-2 px-4 py-3 text-left touch-manipulation",
-                      active ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white",
+                      active ? "border-waka-500 bg-waka-50" : "border-border bg-card",
                     )}
                   >
-                    <span className="text-base font-black text-stone-950">{batch.batchNumber}</span>
-                    <span className="text-sm font-semibold text-stone-600">
+                    <span className="text-base font-black text-foreground">{batch.batchNumber}</span>
+                    <span className="text-sm font-semibold text-muted-foreground">
                       {t(lang, "pharmacyExpiryDateLabel")}: {batch.expiryDate} · {t(lang, "pharmacyFefoRemaining")}:{" "}
                       {batch.quantityRemaining}
                     </span>
@@ -82,7 +82,7 @@ export function PharmacyFefoBatchPicker({ lang, product, line, onConfirm, onClos
           {isOverride ? (
             <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-3">
               <p className="text-sm font-black text-amber-950">{t(lang, "pharmacyFefoOverrideWarn")}</p>
-              <label className="mt-2 block text-sm font-bold text-stone-800">
+              <label className="mt-2 block text-sm font-bold text-foreground">
                 {t(lang, "pharmacyFefoOverrideReason")} *
                 <input
                   value={reason}
@@ -94,7 +94,7 @@ export function PharmacyFefoBatchPicker({ lang, product, line, onConfirm, onClos
           ) : null}
         </div>
 
-        <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-stone-100 p-4">
+        <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-border p-4">
           <button type="button" onClick={onClose} className="min-h-[52px] rounded-2xl border-2 font-bold">
             {t(lang, "cancel")}
           </button>
@@ -116,8 +116,8 @@ export function PharmacyFefoBatchPicker({ lang, product, line, onConfirm, onClos
 
       {confirmOverride && !reason.trim() ? (
         <AppModalOverlay className="z-[77] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
-            <p className="text-sm font-bold text-stone-800">{t(lang, "pharmacyFefoOverrideReasonRequired")}</p>
+          <div className="w-full max-w-sm rounded-2xl bg-card p-4 shadow-xl">
+            <p className="text-sm font-bold text-foreground">{t(lang, "pharmacyFefoOverrideReasonRequired")}</p>
             <button type="button" onClick={() => setConfirmOverride(false)} className="mt-3 min-h-[44px] w-full rounded-xl border font-bold">
               {t(lang, "cancel")}
             </button>

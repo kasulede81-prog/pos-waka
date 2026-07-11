@@ -100,7 +100,7 @@ export const AppShellSyncLabel = memo(function AppShellSyncLabel({
         {syncLine}
       </p>
       {offlineDur ? (
-        <p className={`truncate text-[10px] font-semibold ${inverted ? "text-waka-100/90" : "text-stone-600"}`}>
+        <p className={`truncate text-[10px] font-semibold ${inverted ? "text-waka-100/90" : "text-muted-foreground"}`}>
           {tTemplate(lang, "autoSyncOfflineDuration", { duration: offlineDur })}
         </p>
       ) : null}

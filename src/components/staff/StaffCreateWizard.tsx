@@ -13,7 +13,8 @@ import {
 import clsx from "clsx";
 import type { BusinessType, Language, UserRole } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { PinInput } from "../ui/PinInput";
+import { EnterprisePinPad } from "../auth/EnterprisePinPad";
+import { EnterprisePasswordField } from "../auth/EnterprisePasswordField";
 import {
   WIZARD_STEPS,
   generateStaffPin,
@@ -60,7 +61,7 @@ type Props = {
 };
 
 const fieldClass =
-  "w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3.5 text-base font-semibold text-stone-900 placeholder:text-stone-400 focus:border-waka-400 focus:outline-none focus:ring-2 focus:ring-waka-200";
+  "w-full rounded-2xl border-2 border-border bg-card px-4 py-3.5 text-base font-semibold text-foreground placeholder:text-muted-foreground focus:border-waka-400 focus:outline-none focus:ring-2 focus:ring-waka-200";
 
 export function StaffCreateWizard({
   lang,
@@ -162,17 +163,17 @@ export function StaffCreateWizard({
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
             <CheckCircle2 className="h-9 w-9 text-emerald-600" aria-hidden />
           </div>
-          <h2 className="mt-4 text-2xl font-black text-stone-950">{t(lang, "staffSuccessTitle")}</h2>
-          <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "staffWizardSuccessSub")}</p>
+          <h2 className="mt-4 text-2xl font-black text-foreground">{t(lang, "staffSuccessTitle")}</h2>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "staffWizardSuccessSub")}</p>
         </div>
 
-        <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+        <article className="rounded-3xl border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-waka-100 text-lg font-black text-waka-800">
               {staffInitials(created.name)}
             </div>
             <div>
-              <p className="text-lg font-black text-stone-950">{created.name}</p>
+              <p className="text-lg font-black text-foreground">{created.name}</p>
               <span className="mt-0.5 inline-block rounded-full bg-waka-100 px-2.5 py-0.5 text-xs font-black uppercase tracking-wide text-waka-800">
                 {t(lang, roleDef.labelKey)}
               </span>
@@ -186,7 +187,7 @@ export function StaffCreateWizard({
               <button
                 type="button"
                 onClick={() => void copyPin()}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-300 bg-white text-emerald-700"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-300 bg-card text-emerald-700"
                 aria-label={t(lang, "staffWizardCopyPin")}
               >
                 <Copy className="h-4 w-4" />
@@ -194,7 +195,7 @@ export function StaffCreateWizard({
             </div>
             {copied ? <p className="mt-1 text-xs font-bold text-emerald-700">{t(lang, "staffWizardCopied")}</p> : null}
           </div>
-          <p className="mt-3 text-center text-sm font-medium text-stone-600">{t(lang, "staffWizardSharePinHint")}</p>
+          <p className="mt-3 text-center text-sm font-medium text-muted-foreground">{t(lang, "staffWizardSharePinHint")}</p>
         </article>
 
         <div className="grid gap-2 sm:grid-cols-2">
@@ -208,7 +209,7 @@ export function StaffCreateWizard({
               setAutoPin(true);
               setStep("details");
             }}
-            className="min-h-[52px] rounded-2xl border-2 border-stone-200 bg-white text-sm font-black text-stone-800"
+            className="min-h-[52px] rounded-2xl border-2 border-border bg-card text-sm font-black text-foreground"
           >
             {t(lang, "staffSuccessAddAnother")}
           </button>
@@ -230,14 +231,14 @@ export function StaffCreateWizard({
         <button
           type="button"
           onClick={step === "details" ? onCancel : step === "permissions" ? goDetails : () => setStep("permissions")}
-          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-stone-200 bg-white text-stone-700"
+          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground"
           aria-label={t(lang, "pageBack")}
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-black text-stone-950">{t(lang, "staffWizardTitle")}</h1>
-          <p className="text-xs font-semibold text-stone-500">{t(lang, stepLabelKey(step))}</p>
+          <h1 className="text-xl font-black text-foreground">{t(lang, "staffWizardTitle")}</h1>
+          <p className="text-xs font-semibold text-muted-foreground">{t(lang, stepLabelKey(step))}</p>
         </div>
       </header>
 
@@ -250,11 +251,11 @@ export function StaffCreateWizard({
               <div
                 className={clsx(
                   "h-1.5 rounded-full transition",
-                  active ? "bg-waka-500" : "bg-stone-200",
+                  active ? "bg-waka-500" : "bg-muted",
                   current && "ring-2 ring-waka-200",
                 )}
               />
-              <p className={clsx("mt-1 text-center text-[10px] font-black uppercase tracking-wide", active ? "text-waka-700" : "text-stone-400")}>
+              <p className={clsx("mt-1 text-center text-[10px] font-black uppercase tracking-wide", active ? "text-waka-700" : "text-muted-foreground")}>
                 {i + 1}. {t(lang, stepLabelKey(s))}
               </p>
             </div>
@@ -263,9 +264,9 @@ export function StaffCreateWizard({
       </nav>
 
       {step === "details" ? (
-        <section className="space-y-4 rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+        <section className="space-y-4 rounded-3xl border border-border bg-card p-5 shadow-sm">
           <label className="block">
-            <span className="text-sm font-bold text-stone-700">{t(lang, "staffNameLabel")}</span>
+            <span className="text-sm font-bold text-muted-foreground">{t(lang, "staffNameLabel")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -277,7 +278,7 @@ export function StaffCreateWizard({
           </label>
 
           <div>
-            <span className="text-sm font-bold text-stone-700">{t(lang, "staffRoleLabel")}</span>
+            <span className="text-sm font-bold text-muted-foreground">{t(lang, "staffRoleLabel")}</span>
             <div className="mt-2 space-y-2">
               {roleOptions.map((card) => {
                 const selected = roleTemplateId === card.id;
@@ -296,8 +297,8 @@ export function StaffCreateWizard({
                       <Icon className="h-5 w-5" aria-hidden />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-base font-black text-stone-950">{t(lang, card.labelKey)}</p>
-                      <p className="mt-0.5 text-sm font-medium text-stone-600">{t(lang, card.descriptionKey)}</p>
+                      <p className="text-base font-black text-foreground">{t(lang, card.labelKey)}</p>
+                      <p className="mt-0.5 text-sm font-medium text-muted-foreground">{t(lang, card.descriptionKey)}</p>
                     </div>
                     {selected ? <Check className="ml-auto h-5 w-5 shrink-0 text-waka-600" /> : null}
                   </button>
@@ -307,24 +308,26 @@ export function StaffCreateWizard({
           </div>
 
           <div>
-            <span className="text-sm font-bold text-stone-700">{t(lang, "staffPinLabel")}</span>
-            <div className="mt-1.5 flex gap-2">
-              <PinInput
-                value={autoPin ? pin : pin}
-                onChange={(e) => {
-                  setAutoPin(false);
-                  setPin(e.target.value.replace(/\D/g, "").slice(0, 4));
+            <span className="text-sm font-bold text-muted-foreground">{t(lang, "staffPinLabel")}</span>
+            {autoPin ? (
+              <p className="mt-1.5 flex min-h-[52px] items-center justify-center rounded-2xl border-2 border-border bg-muted font-mono text-2xl tracking-[0.35em] text-muted-foreground">
+                {pin}
+              </p>
+            ) : (
+              <EnterprisePinPad
+                lang={lang}
+                className="mt-3"
+                onComplete={(entered) => {
+                  setPin(entered);
+                  return true;
                 }}
-                placeholder={autoPin ? t(lang, "staffWizardAutoPinPlaceholder") : t(lang, "staffPinPh")}
-                maxLength={4}
-                autoComplete="off"
-                disabled={autoPin}
-                className={clsx(fieldClass, "flex-1 text-center font-mono text-2xl tracking-[0.35em]", autoPin && "bg-stone-50 text-stone-400")}
               />
+            )}
+            <div className="mt-1.5 flex gap-2">
               <button
                 type="button"
                 onClick={regenPin}
-                className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl border-2 border-stone-200 bg-stone-50 text-stone-700"
+                className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl border-2 border-border bg-muted text-muted-foreground"
                 aria-label={t(lang, "staffWizardRegenPin")}
               >
                 <RefreshCw className="h-5 w-5" />
@@ -337,21 +340,29 @@ export function StaffCreateWizard({
                 if (on) regenPin();
               }}
               label={t(lang, "staffWizardAutoPin")}
-              className="mt-2 text-sm font-semibold text-stone-700"
+              className="mt-2 text-sm font-semibold text-muted-foreground"
             />
           </div>
 
           <details
-            className="rounded-2xl border border-stone-100 bg-stone-50/80"
+            className="rounded-2xl border border-border bg-muted/80"
             open={advancedOpen}
             onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}
           >
-            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-stone-600 marker:hidden [&::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-muted-foreground marker:hidden [&::-webkit-details-marker]:hidden">
               {t(lang, "staffAdvancedTitle")}
             </summary>
-            <div className="space-y-3 border-t border-stone-100 px-4 pb-4 pt-3">
+            <div className="space-y-3 border-t border-border px-4 pb-4 pt-3">
               <input value={advPhone} onChange={(e) => setAdvPhone(e.target.value)} placeholder={t(lang, "staffAdvancedPhone")} className={fieldClass} inputMode="tel" />
-              <input value={advPassword} onChange={(e) => setAdvPassword(e.target.value)} placeholder={t(lang, "staffPasswordPh")} type="password" className={fieldClass} autoComplete="new-password" />
+              <EnterprisePasswordField
+                lang={lang}
+                value={advPassword}
+                onChange={(e) => setAdvPassword(e.target.value)}
+                placeholder={t(lang, "staffPasswordPh")}
+                autoComplete="new-password"
+                minLength={1}
+                wrapperClassName="block"
+              />
               <input
                 value={advUsername}
                 onChange={(e) => setAdvUsername(e.target.value.replace(/\s+/g, "").toLowerCase())}
@@ -382,11 +393,11 @@ export function StaffCreateWizard({
             </p>
           </div>
 
-          <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "staffWizardCanDo")}</h2>
+          <article className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffWizardCanDo")}</h2>
             <ul className="mt-3 space-y-2">
               {roleDef.allowedPermKeys.map((key) => (
-                <li key={key} className="flex items-start gap-2 text-sm font-semibold text-stone-800">
+                <li key={key} className="flex items-start gap-2 text-sm font-semibold text-foreground">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   {t(lang, key)}
                 </li>
@@ -394,11 +405,11 @@ export function StaffCreateWizard({
             </ul>
           </article>
 
-          <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "staffWizardCannotDo")}</h2>
+          <article className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffWizardCannotDo")}</h2>
             <ul className="mt-3 space-y-2">
               {roleDef.restrictedPermKeys.map((key) => (
-                <li key={key} className="flex items-start gap-2 text-sm font-semibold text-stone-600">
+                <li key={key} className="flex items-start gap-2 text-sm font-semibold text-muted-foreground">
                   <X className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
                   {t(lang, key)}
                 </li>
@@ -407,14 +418,14 @@ export function StaffCreateWizard({
           </article>
 
           {role === "cashier" ? (
-            <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "staffWizardExtraPerms")}</h2>
+            <article className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffWizardExtraPerms")}</h2>
               <WakaSwitch
                 checked={staffCanRecordCashExpenses}
                 onCheckedChange={(checked) => onExpensePrefsChange({ staffCanRecordCashExpenses: checked })}
                 label={t(lang, "staffAllowCashierExpenses")}
                 description={t(lang, "staffAllowCashierExpensesSub")}
-                className="mt-3 rounded-2xl bg-stone-50 px-3 py-3"
+                className="mt-3 rounded-2xl bg-muted px-3 py-3"
               />
               <WakaSwitch
                 checked={requireCashierExpenseApproval}
@@ -422,7 +433,7 @@ export function StaffCreateWizard({
                 onCheckedChange={(checked) => onExpensePrefsChange({ requireCashierExpenseApproval: checked })}
                 label={t(lang, "staffRequireExpenseApproval")}
                 description={t(lang, "staffRequireExpenseApprovalSub")}
-                className="mt-2 rounded-2xl bg-stone-50 px-3 py-3"
+                className="mt-2 rounded-2xl bg-muted px-3 py-3"
               />
             </article>
           ) : null}
@@ -445,31 +456,31 @@ export function StaffCreateWizard({
 
       {step === "review" ? (
         <section className="space-y-4">
-          <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "staffWizardReviewInfo")}</h2>
+          <article className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffWizardReviewInfo")}</h2>
             <dl className="mt-3 space-y-3">
-              <div className="flex justify-between gap-3 border-b border-stone-100 pb-2">
-                <dt className="text-sm font-semibold text-stone-500">{t(lang, "staffNameLabel")}</dt>
-                <dd className="text-sm font-black text-stone-950">{name.trim()}</dd>
+              <div className="flex justify-between gap-3 border-b border-border pb-2">
+                <dt className="text-sm font-semibold text-muted-foreground">{t(lang, "staffNameLabel")}</dt>
+                <dd className="text-sm font-black text-foreground">{name.trim()}</dd>
               </div>
-              <div className="flex justify-between gap-3 border-b border-stone-100 pb-2">
-                <dt className="text-sm font-semibold text-stone-500">{t(lang, "staffRoleLabel")}</dt>
-                <dd className="text-sm font-black text-stone-950">{t(lang, `role_${role}`)}</dd>
+              <div className="flex justify-between gap-3 border-b border-border pb-2">
+                <dt className="text-sm font-semibold text-muted-foreground">{t(lang, "staffRoleLabel")}</dt>
+                <dd className="text-sm font-black text-foreground">{t(lang, `role_${role}`)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-sm font-semibold text-stone-500">{t(lang, "staffPinLabel")}</dt>
-                <dd className="font-mono text-sm font-black tracking-widest text-stone-950">
+                <dt className="text-sm font-semibold text-muted-foreground">{t(lang, "staffPinLabel")}</dt>
+                <dd className="font-mono text-sm font-black tracking-widest text-foreground">
                   {displayPin || (autoPin ? t(lang, "staffWizardAutoPin") : "—")}
                 </dd>
               </div>
             </dl>
           </article>
 
-          <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "staffWizardThisStaffCan")}</h2>
+          <article className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffWizardThisStaffCan")}</h2>
             <ul className="mt-3 space-y-1.5">
               {roleDef.allowedPermKeys.slice(0, 4).map((key) => (
-                <li key={key} className="flex items-center gap-2 text-sm font-semibold text-stone-800">
+                <li key={key} className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Check className="h-4 w-4 text-emerald-600" />
                   {t(lang, key)}
                 </li>

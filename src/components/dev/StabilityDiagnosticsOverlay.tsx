@@ -45,7 +45,7 @@ export function StabilityDiagnosticsOverlay() {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-2 left-2 z-[9999] max-w-[min(100vw-1rem,24rem)] rounded-xl border border-stone-700/80 bg-stone-950/92 px-3 py-2 font-mono text-[10px] leading-relaxed text-emerald-300 shadow-lg backdrop-blur-sm"
+      className="pointer-events-none fixed bottom-2 left-2 z-[9999] max-w-[min(100vw-1rem,24rem)] rounded-xl border border-stone-700/80 bg-foreground/92 px-3 py-2 font-mono text-[10px] leading-relaxed text-emerald-300 shadow-lg backdrop-blur-sm"
       aria-hidden
     >
       <p className="font-bold text-amber-300">Waka stability</p>
@@ -73,17 +73,17 @@ export function StabilityDiagnosticsOverlay() {
           {cloudPull.lastPull.durationMs}ms · {(cloudPull.lastPull.payloadBytes / 1024).toFixed(1)} KB
         </p>
       ) : null}
-      <p className="text-stone-500">
+      <p className="text-muted-foreground">
         Checkpoints bootstrap {checkpoints.bootstrapComplete ? "yes" : "no"} · sales{" "}
         {checkpoints.lastSalesSyncAt?.slice(11, 19) ?? "—"}
       </p>
       {reportQueries.last ? (
-        <p className="text-stone-500">
+        <p className="text-muted-foreground">
           Report {reportQueries.last.rpcName} · {reportQueries.last.source} · {reportQueries.last.durationMs}ms ·{" "}
           {reportQueries.last.recordsReturned} rows · {(reportQueries.last.payloadBytes / 1024).toFixed(1)} KB
         </p>
       ) : null}
-      <p className={longTasks > 0 ? "text-rose-400" : "text-stone-500"}>
+      <p className={longTasks > 0 ? "text-rose-400" : "text-muted-foreground"}>
         Long tasks {longTasks} · listeners 0 realtime · tick {tick}
       </p>
     </div>

@@ -26,8 +26,8 @@ type Props = {
 };
 
 const inputCls =
-  "mt-1 min-h-[44px] w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900 outline-none focus:border-waka-500";
-const labelCls = "block text-[11px] font-black uppercase tracking-wide text-stone-500";
+  "mt-1 min-h-[44px] w-full rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground outline-none focus:border-waka-500";
+const labelCls = "block text-[11px] font-black uppercase tracking-wide text-muted-foreground";
 
 function FeatureToggle({
   label,
@@ -45,7 +45,7 @@ function FeatureToggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
+    <div className="rounded-xl border border-border bg-muted px-4 py-3">
       <WakaSwitch
         checked={checked}
         disabled={disabled}
@@ -186,7 +186,7 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
 
   if (!canEdit) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-white p-6 text-center text-sm font-bold text-rose-800">
+      <div className="rounded-2xl border border-rose-200 bg-card p-6 text-center text-sm font-bold text-rose-800">
         Super admin or operations admin only.
       </div>
     );
@@ -197,11 +197,11 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="flex items-center gap-2 text-lg font-black text-stone-900">
+        <h1 className="flex items-center gap-2 text-lg font-black text-foreground">
           <Sparkles className="h-5 w-5 text-waka-600" />
           AI Control Center
         </h1>
-        <p className="text-xs font-semibold text-stone-500">
+        <p className="text-xs font-semibold text-muted-foreground">
           Single source of truth for all AI features, limits, and providers. All flags default off.
         </p>
       </div>
@@ -224,8 +224,8 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
       />
 
       {metrics ? (
-        <section className="rounded-2xl border border-stone-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-black text-stone-800">Usage &amp; cost (this month)</h2>
+        <section className="rounded-2xl border border-border bg-card p-4">
+          <h2 className="mb-3 text-sm font-black text-foreground">Usage &amp; cost (this month)</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               { label: "Total requests", value: metrics.totals.requests.toLocaleString() },
@@ -237,18 +237,18 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
               { label: "Avg latency", value: `${Math.round(metrics.totals.avgLatencyMs)} ms` },
               { label: "Requests left", value: metrics.limits.remainingRequests.toLocaleString() },
             ].map((m) => (
-              <div key={m.label} className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
-                <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{m.label}</p>
-                <p className="mt-1 text-lg font-black text-stone-900">{m.value}</p>
+              <div key={m.label} className="rounded-xl border border-border bg-muted px-3 py-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{m.label}</p>
+                <p className="mt-1 text-lg font-black text-foreground">{m.value}</p>
               </div>
             ))}
           </div>
           {metrics.byFeature.length > 0 ? (
             <div className="mt-4">
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">By feature</p>
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">By feature</p>
               <ul className="mt-2 space-y-1 text-sm">
                 {metrics.byFeature.map((r) => (
-                  <li key={r.feature} className="flex justify-between font-semibold text-stone-800">
+                  <li key={r.feature} className="flex justify-between font-semibold text-foreground">
                     <span>{r.feature}</span>
                     <span>
                       {r.count} · ${r.costUsd.toFixed(2)}
@@ -260,10 +260,10 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
           ) : null}
           {metrics.byShop.length > 0 ? (
             <div className="mt-4">
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">Top shops</p>
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Top shops</p>
               <ul className="mt-2 space-y-1 text-sm">
                 {metrics.byShop.map((r) => (
-                  <li key={r.shop_id} className="flex justify-between font-semibold text-stone-800">
+                  <li key={r.shop_id} className="flex justify-between font-semibold text-foreground">
                     <span className="truncate">{r.shop_name}</span>
                     <span>{r.count}</span>
                   </li>
@@ -274,8 +274,8 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-black text-stone-800">General</h2>
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-black text-foreground">General</h2>
         <div className="space-y-3">
           <FeatureToggle
             label="Enable AI Platform"
@@ -333,8 +333,8 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
       </section>
 
       {SECTION_FEATURES.map((section) => (
-        <section key={section.title} className="rounded-2xl border border-stone-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-black text-stone-800">{section.title}</h2>
+        <section key={section.title} className="rounded-2xl border border-border bg-card p-4">
+          <h2 className="mb-3 text-sm font-black text-foreground">{section.title}</h2>
           <div className="space-y-2">
             {section.keys.map((key) => {
               const meta = AI_FEATURES[key];
@@ -354,8 +354,8 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
         </section>
       ))}
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-black text-stone-800">Limits &amp; cost controls</h2>
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-black text-foreground">Limits &amp; cost controls</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {(
             [
@@ -383,9 +383,9 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
             </label>
           ))}
         </div>
-        <p className="mt-3 text-xs text-stone-500">
-          Set <code className="rounded bg-stone-100 px-1">DEEPSEEK_API_KEY</code> in Supabase Edge secrets, then run{" "}
-          <code className="rounded bg-stone-100 px-1">npm run supabase:deploy:ai</code>.
+        <p className="mt-3 text-xs text-muted-foreground">
+          Set <code className="rounded bg-muted px-1">DEEPSEEK_API_KEY</code> in Supabase Edge secrets, then run{" "}
+          <code className="rounded bg-muted px-1">npm run supabase:deploy:ai</code>.
           Cache hits count toward request limits but not budget limits.
         </p>
       </section>

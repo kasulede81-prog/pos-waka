@@ -71,7 +71,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
     return (
       <EnterprisePageContainer>
         <PageHeader lang={lang} title={t(lang, "inventoryCountTitle")} backLabel={t(lang, "stockCountNav")} backFallback="/stock/count" />
-        <p className="text-sm font-semibold text-stone-500">{t(lang, "invalid")}</p>
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "invalid")}</p>
       </EnterprisePageContainer>
     );
   }

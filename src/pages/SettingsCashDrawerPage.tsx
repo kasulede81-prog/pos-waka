@@ -91,27 +91,27 @@ export function SettingsCashDrawerPage({ lang }: Props) {
         <EnterpriseSaveIndicator lang={lang} mode="explicit" status={saveStatus} />
       </div>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <label className="block text-sm font-bold text-stone-800">
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <label className="block text-sm font-bold text-foreground">
           {t(lang, "cashSettingsVariancePct")}
           <input
             value={pct}
             onChange={(e) => setPct(e.target.value.replace(/[^\d.]/g, "").slice(0, 5))}
             inputMode="decimal"
-            className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 text-lg font-black"
+            className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-border px-4 text-lg font-black"
           />
         </label>
-        <label className="mt-4 block text-sm font-bold text-stone-800">
+        <label className="mt-4 block text-sm font-bold text-foreground">
           {t(lang, "cashSettingsVarianceFixed")}
           <input
             value={fixed}
             onChange={(e) => setFixed(e.target.value.replace(/\D/g, "").slice(0, 12))}
             inputMode="numeric"
-            className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 text-lg font-black"
+            className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-border px-4 text-lg font-black"
           />
         </label>
         <fieldset className="mt-4">
-          <legend className="text-sm font-bold text-stone-800">{t(lang, "cashSettingsFormula")}</legend>
+          <legend className="text-sm font-bold text-foreground">{t(lang, "cashSettingsFormula")}</legend>
           <div className="mt-2 flex flex-wrap gap-2">
             {(["v1", "v2"] as const).map((v) => (
               <button
@@ -119,7 +119,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
                 type="button"
                 onClick={() => setFormula(v)}
                 className={`rounded-xl px-4 py-2 text-sm font-black ${
-                  formula === v ? "bg-stone-950 text-white" : "border border-stone-200 bg-white text-stone-800"
+                  formula === v ? "bg-foreground text-background" : "border border-border bg-card text-foreground"
                 }`}
               >
                 {v.toUpperCase()}
@@ -127,7 +127,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
             ))}
           </div>
         </fieldset>
-        <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+        <div className="mt-5 rounded-2xl border border-border bg-muted px-4 py-3">
           <WakaSwitch
             checked={ownerCorrection}
             onCheckedChange={setOwnerCorrection}

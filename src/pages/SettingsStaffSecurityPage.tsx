@@ -14,8 +14,8 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
   const savePreferences = usePreferencesPatch();
 
   return (
-    <section className="space-y-4 rounded-3xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-      <label className="block text-sm font-bold text-stone-800 dark:text-stone-200">
+    <section className="space-y-4 rounded-3xl border border-border bg-card p-5 dark:bg-foreground">
+      <label className="block text-sm font-bold text-foreground dark:text-muted-foreground">
         {t(lang, "settingsStaffAutoLock")}
         <select
           value={preferences.staffAutoLockMinutes ?? 0}
@@ -24,7 +24,7 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
               staffAutoLockMinutes: Number(e.target.value) as (typeof STAFF_AUTO_LOCK_OPTIONS)[number],
             })
           }
-          className="mt-1.5 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 dark:border-stone-700 dark:bg-stone-950"
+          className="mt-1.5 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
         >
           <option value={0}>{t(lang, "settingsStaffAutoLockNever")}</option>
           {STAFF_AUTO_LOCK_OPTIONS.filter((m) => m > 0).map((m) => (
@@ -51,7 +51,7 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
         label={t(lang, "settingsStaffRememberSession")}
       />
 
-      <label className="block text-sm font-bold text-stone-800 dark:text-stone-200">
+      <label className="block text-sm font-bold text-foreground dark:text-muted-foreground">
         {t(lang, "settingsStaffMaxFailedAttempts")}
         <input
           type="number"
@@ -61,16 +61,16 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
           onChange={(e) =>
             savePreferences({ staffMaxFailedAttempts: Math.min(10, Math.max(3, Number(e.target.value) || 5)) })
           }
-          className="mt-1.5 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 dark:border-stone-700 dark:bg-stone-950"
+          className="mt-1.5 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
         />
       </label>
 
-      <label className="block text-sm font-bold text-stone-800 dark:text-stone-200">
+      <label className="block text-sm font-bold text-foreground dark:text-muted-foreground">
         {t(lang, "settingsStaffSessionTimeout")}
         <select
           value={preferences.staffSessionTimeoutMinutes ?? 480}
           onChange={(e) => savePreferences({ staffSessionTimeoutMinutes: Number(e.target.value) })}
-          className="mt-1.5 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 dark:border-stone-700 dark:bg-stone-950"
+          className="mt-1.5 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
         >
           <option value={60}>1 {t(lang, "settingsStaffHour")}</option>
           <option value={240}>4 {t(lang, "settingsStaffHours")}</option>
@@ -83,7 +83,7 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
       <button
         type="button"
         onClick={() => lockPos("manual")}
-        className="min-h-[48px] w-full rounded-2xl bg-stone-900 py-3 text-base font-black text-white dark:bg-stone-100 dark:text-stone-900"
+        className="min-h-[48px] w-full rounded-2xl bg-foreground py-3 text-base font-black text-background dark:bg-muted dark:text-foreground"
       >
         {t(lang, "settingsStaffLockNow")}
       </button>

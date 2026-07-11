@@ -9,8 +9,6 @@ import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSav
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { isPrimaryRegisterDevice, resolveRegisterMode, type RegisterMode } from "../lib/primaryRegisterMode";
-import { isPrimaryDeviceCachedSync, setCurrentDeviceAsPrimary } from "../lib/deviceAuthority";
-import { ENFORCE_PRIMARY_DEVICE } from "../lib/deviceAuthorityPolicy";
 import type { DiscountControlMode } from "../lib/discountGovernance";
 
 const RECEIPT_PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
@@ -36,15 +34,15 @@ function SellingSettingsBody({ lang }: { lang: Language }) {
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
   const discountMode = preferences.discountControlMode ?? "unrestricted";
   const registerMode = resolveRegisterMode(preferences);
-  const isPrimary = isPrimaryRegisterDevice(preferences) || isPrimaryDeviceCachedSync();
+  const isPrimaryRegister = isPrimaryRegisterDevice(preferences);
   const thisDeviceFp = getOrCreateDeviceId();
 
   return (
     <>
       {canArrangeShelves ? (
-        <article id="sell-shelves" className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <p className="text-base font-black text-stone-950">{t(lang, "stockShelfArrangeTitle")}</p>
-          <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "stockShelfArrangeSub")}</p>
+        <article id="sell-shelves" className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p className="text-base font-black text-foreground">{t(lang, "stockShelfArrangeTitle")}</p>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "stockShelfArrangeSub")}</p>
           <Link
             to="/settings/shelves"
             className="mt-4 inline-flex min-h-[48px] items-center rounded-2xl bg-waka-600 px-5 py-2.5 text-sm font-black text-white"
@@ -54,14 +52,14 @@ function SellingSettingsBody({ lang }: { lang: Language }) {
         </article>
       ) : null}
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "settingsDiscountTitle")}</p>
-        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "settingsDiscountSub")}</p>
-        <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "settingsDiscountModeLabel")}</label>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "settingsDiscountTitle")}</p>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "settingsDiscountSub")}</p>
+        <label className="mt-4 block text-sm font-bold text-foreground">{t(lang, "settingsDiscountModeLabel")}</label>
         <select
           value={discountMode}
           onChange={(e) => savePreferences({ discountControlMode: e.target.value as DiscountControlMode })}
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-semibold"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-card px-4 py-3 text-base font-semibold"
         >
           {DISCOUNT_MODES.map((mode) => (
             <option key={mode} value={mode}>
@@ -71,7 +69,7 @@ function SellingSettingsBody({ lang }: { lang: Language }) {
         </select>
         {discountMode !== "unrestricted" ? (
           <label className="mt-4 block">
-            <span className="text-sm font-bold text-stone-800">{t(lang, "settingsDiscountMaxPercentLabel")}</span>
+            <span className="text-sm font-bold text-foreground">{t(lang, "settingsDiscountMaxPercentLabel")}</span>
             <input
               type="number"
               min={0}
@@ -82,13 +80,13 @@ function SellingSettingsBody({ lang }: { lang: Language }) {
                   discountMaxPercentThreshold: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
                 })
               }
-              className="mt-2 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base font-semibold"
+              className="mt-2 w-full rounded-2xl border-2 border-border px-4 py-3 text-base font-semibold"
             />
           </label>
         ) : null}
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <WakaSwitch
           checked={preferences.kioskQuickSell}
           onCheckedChange={(checked) => savePreferences({ kioskQuickSell: checked })}
@@ -96,36 +94,28 @@ function SellingSettingsBody({ lang }: { lang: Language }) {
         />
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "registerModeTitle")}</p>
-        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "registerModeSub")}</p>
-        <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "registerModeTitle")}</label>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "registerModeTitle")}</p>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "registerModeSub")}</p>
+        <label className="mt-4 block text-sm font-bold text-foreground">{t(lang, "registerModeTitle")}</label>
         <select
           value={registerMode}
           onChange={(e) => savePreferences({ registerMode: e.target.value as RegisterMode })}
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-semibold"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-card px-4 py-3 text-base font-semibold"
         >
           <option value="single">{t(lang, "registerModeSingle")}</option>
           <option value="multi">{t(lang, "registerModeMulti")}</option>
         </select>
-        {registerMode === "single" && ENFORCE_PRIMARY_DEVICE ? (
+        {registerMode === "single" ? (
           <div className="mt-4 space-y-2">
-            <p className="text-sm font-bold text-stone-800">{t(lang, "registerModePrimaryDevice")}</p>
-            <p className="text-xs font-medium text-stone-500">
-              {isPrimary ? t(lang, "registerModeThisDevice") : preferences.primaryDeviceFingerprint ?? "—"}
+            <p className="text-sm font-bold text-foreground">{t(lang, "registerModePrimaryDevice")}</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {isPrimaryRegister ? t(lang, "registerModeThisDevice") : preferences.primaryDeviceFingerprint ?? "—"}
             </p>
-            {!isPrimary ? (
+            {!isPrimaryRegister ? (
               <button
                 type="button"
-                onClick={() => {
-                  savePreferences({ primaryDeviceFingerprint: thisDeviceFp });
-                  void import("../offline/cloudSync").then(({ resolveShopCtx }) =>
-                    resolveShopCtx().then((ctx: { shopId: string } | null) => {
-                      if (ctx) return setCurrentDeviceAsPrimary(ctx.shopId);
-                      return undefined;
-                    }),
-                  );
-                }}
+                onClick={() => savePreferences({ primaryDeviceFingerprint: thisDeviceFp })}
                 className="min-h-[44px] rounded-2xl bg-waka-600 px-4 text-sm font-black text-white"
               >
                 {t(lang, "registerModeSetPrimary")}
@@ -135,13 +125,13 @@ function SellingSettingsBody({ lang }: { lang: Language }) {
         ) : null}
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "receiptPrintSettingsTitle")}</p>
-        <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "receiptPaperSizeLabel")}</label>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "receiptPrintSettingsTitle")}</p>
+        <label className="mt-4 block text-sm font-bold text-foreground">{t(lang, "receiptPaperSizeLabel")}</label>
         <select
           value={preferences.receiptPaperSize ?? "80mm"}
           onChange={(e) => savePreferences({ receiptPaperSize: e.target.value as ReceiptPaperSize })}
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-semibold"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-card px-4 py-3 text-base font-semibold"
         >
           {RECEIPT_PAPER_OPTIONS.map((size) => (
             <option key={size} value={size}>

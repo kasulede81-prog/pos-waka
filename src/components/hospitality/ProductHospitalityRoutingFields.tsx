@@ -16,7 +16,7 @@ type Props = {
 };
 
 const fieldClass =
-  "mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2.5 text-base font-semibold outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-100";
+  "mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2.5 text-base font-semibold outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-100";
 
 export function ProductHospitalityRoutingFields({ lang, value, onChange, onSuggestFromCategory }: Props) {
   const routing = value ?? {};
@@ -33,14 +33,14 @@ export function ProductHospitalityRoutingFields({ lang, value, onChange, onSugge
     <section className="space-y-4 rounded-2xl border border-waka-200 bg-waka-50/40 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-black text-stone-900">{t(lang, "productHospitalityRoutingTitle")}</h3>
-          <p className="text-xs font-medium text-stone-600">{t(lang, "productHospitalityRoutingSub")}</p>
+          <h3 className="text-sm font-black text-foreground">{t(lang, "productHospitalityRoutingTitle")}</h3>
+          <p className="text-xs font-medium text-muted-foreground">{t(lang, "productHospitalityRoutingSub")}</p>
         </div>
         {onSuggestFromCategory ? (
           <button
             type="button"
             onClick={onSuggestFromCategory}
-            className="shrink-0 rounded-lg border border-waka-300 bg-white px-3 py-1.5 text-xs font-black text-waka-800"
+            className="shrink-0 rounded-lg border border-waka-300 bg-card px-3 py-1.5 text-xs font-black text-waka-800"
           >
             {t(lang, "productHospitalitySuggest")}
           </button>
@@ -48,7 +48,7 @@ export function ProductHospitalityRoutingFields({ lang, value, onChange, onSugge
       </div>
 
       <label className="block">
-        <span className="text-xs font-bold uppercase tracking-wide text-stone-600">
+        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
           {t(lang, "productHospitalityProductionStation")}
         </span>
         <select
@@ -75,7 +75,7 @@ export function ProductHospitalityRoutingFields({ lang, value, onChange, onSugge
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="text-xs font-bold uppercase tracking-wide text-stone-600">
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
             {t(lang, "productHospitalityPrepMinutes")}
           </span>
           <input
@@ -93,7 +93,7 @@ export function ProductHospitalityRoutingFields({ lang, value, onChange, onSugge
           />
         </label>
         <label className="block">
-          <span className="text-xs font-bold uppercase tracking-wide text-stone-600">
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
             {t(lang, "productHospitalityDefaultCourse")}
           </span>
           <select
@@ -114,7 +114,7 @@ export function ProductHospitalityRoutingFields({ lang, value, onChange, onSugge
       </div>
 
       <label className="block">
-        <span className="text-xs font-bold uppercase tracking-wide text-stone-600">
+        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
           {t(lang, "productHospitalityPrintStation")}
         </span>
         <select
@@ -134,14 +134,14 @@ export function ProductHospitalityRoutingFields({ lang, value, onChange, onSugge
       </label>
 
       <div className="flex flex-col gap-2">
-        <div className="rounded-xl border border-stone-200 bg-white px-3 py-3">
+        <div className="rounded-xl border border-border bg-card px-3 py-3">
           <WakaSwitch
             checked={routing.modifiersAllowed !== false}
             onCheckedChange={(checked) => patch({ modifiersAllowed: checked })}
             label={t(lang, "productHospitalityModifiersAllowed")}
           />
         </div>
-        <div className="rounded-xl border border-stone-200 bg-white px-3 py-3">
+        <div className="rounded-xl border border-border bg-card px-3 py-3">
           <WakaSwitch
             checked={routing.cookingPreferencesAllowed === true}
             onCheckedChange={(checked) => patch({ cookingPreferencesAllowed: checked })}

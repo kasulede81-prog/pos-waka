@@ -44,7 +44,7 @@ export function DesktopLicenseBar({ lang }: Props) {
   return (
     <Link
       to={upgradeTo}
-      className="group flex min-h-[72px] w-full flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-waka-200 bg-white px-5 py-4 shadow-waka-sm transition-colors hover:border-waka-400 hover:bg-waka-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2"
+      className="group flex min-h-[72px] w-full flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-waka-200 bg-card px-5 py-4 shadow-waka-sm transition-colors hover:border-waka-400 hover:bg-waka-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2"
       aria-label={t(lang, "desktopHomeOpenLicense")}
     >
       <div className="flex min-w-0 items-center gap-4">

@@ -17,7 +17,7 @@ type Props = {
 
 export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Props) {
   return (
-    <div className="auth-scroll-root relative flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-brand-cream-wash transition-colors duration-300 dark:bg-stone-950">
+    <div className="auth-scroll-root relative flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-brand-cream-wash transition-colors duration-300 dark:bg-foreground">
       <div
         className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-waka-300/30 blur-3xl dark:bg-waka-600/15"
         aria-hidden
@@ -42,11 +42,11 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
               <button
                 type="button"
                 onClick={() => setLang(nextLanguage(lang))}
-                className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-2.5 py-2 text-sm font-semibold text-stone-800 shadow-sm active:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-2 text-sm font-semibold text-foreground shadow-sm active:bg-muted dark:bg-foreground dark:text-background"
               >
-                <Globe className="h-4 w-4 text-stone-500" aria-hidden />
+                <Globe className="h-4 w-4 text-muted-foreground" aria-hidden />
                 <span>{languageToggleLabel(lang)}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-stone-400" aria-hidden />
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
               </button>
             </div>
           </header>
@@ -54,22 +54,22 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
           <main className="py-5 sm:py-6">{children}</main>
 
           <footer className="pb-2 text-center">
-            <p className="text-sm font-black tracking-wide text-stone-800 dark:text-stone-100">{WAKA_BRAND_NAME}</p>
-            <p className="mt-0.5 text-xs font-medium text-stone-500 dark:text-stone-400">{WAKA_SLOGAN}</p>
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
+            <p className="text-sm font-black tracking-wide text-foreground dark:text-background">{WAKA_BRAND_NAME}</p>
+            <p className="mt-0.5 text-xs font-medium text-muted-foreground dark:text-muted-foreground">{WAKA_SLOGAN}</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
               © {new Date().getFullYear()} {WAKA_LEGAL_COMPANY_NAME}
             </p>
-            <nav className="mt-3 flex flex-wrap items-center justify-center gap-x-1 gap-y-1 text-xs font-semibold text-stone-600 dark:text-stone-400">
+            <nav className="mt-3 flex flex-wrap items-center justify-center gap-x-1 gap-y-1 text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
               <FooterLink to="/terms" icon={FileText} label="Terms" />
-              <span className="text-stone-300" aria-hidden>
+              <span className="text-muted-foreground" aria-hidden>
                 ·
               </span>
               <FooterLink to="/privacy" icon={Shield} label="Privacy" />
-              <span className="text-stone-300" aria-hidden>
+              <span className="text-muted-foreground" aria-hidden>
                 ·
               </span>
               <FooterLink to="/acceptable-use" icon={Bookmark} label="Acceptable use" />
-              <span className="text-stone-300" aria-hidden>
+              <span className="text-muted-foreground" aria-hidden>
                 ·
               </span>
               <FooterLink to="/support" icon={Headphones} label="Support" />

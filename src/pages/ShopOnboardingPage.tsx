@@ -43,7 +43,7 @@ type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () =>
 type Step = "welcome" | "business" | "hospitality_style" | "selling" | "location" | "products";
 
 const fieldClass =
-  "mt-1.5 w-full min-h-[48px] rounded-2xl border border-stone-200 px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
+  "mt-1.5 w-full min-h-[48px] rounded-2xl border border-border px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
 
 function funnelStepFor(step: Step): BuilderFunnelStep {
   if (step === "welcome" || step === "business" || step === "hospitality_style") return "business";
@@ -380,30 +380,30 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
       unlocks={unlocks}
       brandHref="/"
     >
-      <div className="rounded-[28px] border border-white/80 bg-white/95 p-5 shadow-lg backdrop-blur-sm sm:rounded-[32px] sm:p-6">
+      <div className="rounded-[28px] border border-white/80 bg-card/95 p-5 shadow-lg backdrop-blur-sm sm:rounded-[32px] sm:p-6">
         {booting ? (
-          <p className="py-16 text-center text-sm font-semibold text-stone-500">…</p>
+          <p className="py-16 text-center text-sm font-semibold text-muted-foreground">…</p>
         ) : null}
 
         {!booting && step === "welcome" ? (
           <div className="space-y-5 py-2 text-center">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-waka-700">{t(lang, "onboardWelcomeKicker")}</p>
-            <h1 className="text-2xl font-black text-stone-900">{t(lang, "onboardWelcomeTitle")}</h1>
-            <p className="text-base font-medium text-stone-600">{t(lang, "onboardWelcomeSub")}</p>
+            <h1 className="text-2xl font-black text-foreground">{t(lang, "onboardWelcomeTitle")}</h1>
+            <p className="text-base font-medium text-muted-foreground">{t(lang, "onboardWelcomeSub")}</p>
             <p className="text-sm font-bold text-waka-800">{t(lang, "onboardWelcomeSellFirst")}</p>
             {ownerName ? (
-              <p className="text-sm font-bold text-stone-700">
+              <p className="text-sm font-bold text-muted-foreground">
                 {t(lang, "registerOwnerFullNameLabel")}: {ownerName}
               </p>
             ) : null}
-            <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "registerShopNameLabel")}</p>
+            <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "registerShopNameLabel")}</p>
             <p className="rounded-2xl bg-waka-50 px-4 py-3 text-sm font-bold text-waka-900">{shopName}</p>
             <BuilderPrimaryButton type="button" onClick={() => setStep("business")}>
               {t(lang, "onboardLetsGo")}
             </BuilderPrimaryButton>
             <button
               type="button"
-              className="mt-2 text-sm font-bold text-stone-500 underline-offset-2 hover:text-stone-800 hover:underline"
+              className="mt-2 text-sm font-bold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               onClick={() => void onSignOut().then(() => navigate("/login"))}
             >
               {t(lang, "haveAccount")} — {t(lang, "staffLoginBack")} to sign in
@@ -414,14 +414,14 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
         {!booting && step === "business" ? (
           <div className="space-y-4">
             {!skippedWelcome ? (
-              <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("welcome")}>
+              <button type="button" className="text-sm font-bold text-muted-foreground" onClick={() => setStep("welcome")}>
                 <ChevronLeft className="mr-1 inline h-4 w-4" />
                 {t(lang, "onboardBack")}
               </button>
             ) : null}
-            <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardBizTitle")}</h2>
+            <h2 className="text-xl font-black text-foreground">{t(lang, "onboardBizTitle")}</h2>
             {bizTypeSettingsLoading ? (
-              <p className="text-sm font-semibold text-stone-500">{t(lang, "onboardBizLoading")}</p>
+              <p className="text-sm font-semibold text-muted-foreground">{t(lang, "onboardBizLoading")}</p>
             ) : visibleBusinessCards.length === 0 ? (
               <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
                 {t(lang, "onboardBizNoneEnabled")}
@@ -455,7 +455,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                   >
                     <div className="flex items-center gap-3">
                       <BuilderBusinessTypeArt cardId={card.id} />
-                      <span className="text-base font-black text-stone-900">{t(lang, card.labelKey)}</span>
+                      <span className="text-base font-black text-foreground">{t(lang, card.labelKey)}</span>
                     </div>
                   </BuilderCard>
                 );
@@ -483,12 +483,12 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
 
         {!booting && step === "hospitality_style" ? (
           <div className="space-y-4">
-            <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("business")}>
+            <button type="button" className="text-sm font-bold text-muted-foreground" onClick={() => setStep("business")}>
               <ChevronLeft className="mr-1 inline h-4 w-4" />
               {t(lang, "onboardBack")}
             </button>
-            <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardHospitalityStyleTitle")}</h2>
-            <p className="text-sm font-medium text-stone-600">{t(lang, "onboardHospitalityStyleSub")}</p>
+            <h2 className="text-xl font-black text-foreground">{t(lang, "onboardHospitalityStyleTitle")}</h2>
+            <p className="text-sm font-medium text-muted-foreground">{t(lang, "onboardHospitalityStyleSub")}</p>
             <div className="grid gap-2">
               {visibleHospitalityStyles.map((style) => (
                 <BuilderCard
@@ -502,7 +502,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                 >
                   <div className="flex items-center gap-3">
                     <BuilderBusinessTypeArt cardId="hospitality" />
-                    <span className="text-base font-black text-stone-900">{t(lang, style.labelKey)}</span>
+                    <span className="text-base font-black text-foreground">{t(lang, style.labelKey)}</span>
                   </div>
                 </BuilderCard>
               ))}
@@ -525,14 +525,14 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
           <div className="space-y-4">
             <button
               type="button"
-              className="text-sm font-bold text-stone-500"
+              className="text-sm font-bold text-muted-foreground"
               onClick={() => setStep(pickedHospitalityGroup ? "hospitality_style" : "business")}
             >
               <ChevronLeft className="mr-1 inline h-4 w-4" />
               {t(lang, "onboardBack")}
             </button>
-            <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardSellTitle")}</h2>
-            <p className="text-sm font-medium text-stone-600">{t(lang, "onboardSellSub")}</p>
+            <h2 className="text-xl font-black text-foreground">{t(lang, "onboardSellTitle")}</h2>
+            <p className="text-sm font-medium text-muted-foreground">{t(lang, "onboardSellSub")}</p>
             <div className="grid gap-2">
               {ONBOARDING_SELLING_STYLES.map((opt) => (
                 <BuilderCard
@@ -544,7 +544,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                     <BuilderSellingStyleArt style={opt.id} />
                     <div>
                       <span className="block text-base font-black">{t(lang, opt.labelKey)}</span>
-                      <span className="block text-xs font-medium text-stone-600">{t(lang, opt.hintKey)}</span>
+                      <span className="block text-xs font-medium text-muted-foreground">{t(lang, opt.hintKey)}</span>
                     </div>
                   </div>
                 </BuilderCard>
@@ -561,21 +561,21 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
 
         {!booting && step === "location" ? (
           <div className="space-y-4">
-            <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("selling")}>
+            <button type="button" className="text-sm font-bold text-muted-foreground" onClick={() => setStep("selling")}>
               <ChevronLeft className="mr-1 inline h-4 w-4" />
               {t(lang, "onboardBack")}
             </button>
-            <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardLocTitle")}</h2>
-            <p className="text-sm font-medium text-stone-600">
+            <h2 className="text-xl font-black text-foreground">{t(lang, "onboardLocTitle")}</h2>
+            <p className="text-sm font-medium text-muted-foreground">
               {contactFromSignup ? t(lang, "onboardLocGpsOnlySub") : t(lang, "onboardLocSub")}
             </p>
             {contactFromSignup && districtLabel ? (
-              <p className="rounded-xl bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-800">
+              <p className="rounded-xl bg-muted px-3 py-2 text-sm font-semibold text-foreground">
                 {t(lang, "registerDistrictLabel")}: {districtLabel}
               </p>
             ) : (
               <>
-                <label className="block text-sm font-bold text-stone-800">{t(lang, "registerDistrictLabel")}</label>
+                <label className="block text-sm font-bold text-foreground">{t(lang, "registerDistrictLabel")}</label>
                 <select
                   value={districtId}
                   onChange={(e) => setDistrictId(e.target.value)}
@@ -593,7 +593,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             )}
             {err ? <p className="text-sm font-medium text-red-600">{err}</p> : null}
             {!gpsSkipped && lat != null ? (
-              <p className="rounded-xl bg-stone-50 px-3 py-2 text-xs font-mono text-stone-700">
+              <p className="rounded-xl bg-muted px-3 py-2 text-xs font-mono text-muted-foreground">
                 {lat.toFixed(5)}, {lng?.toFixed(5)}
               </p>
             ) : null}
@@ -602,7 +602,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             </BuilderPrimaryButton>
             <button
               type="button"
-              className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white text-base font-black text-stone-800"
+              className="min-h-[48px] w-full rounded-2xl border-2 border-border bg-card text-base font-black text-foreground"
               disabled={busy}
               onClick={() => {
                 setGpsSkipped(true);
@@ -623,12 +623,12 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
 
         {!booting && step === "products" ? (
           <div className="space-y-4">
-            <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardProductsTitle")}</h2>
-            <p className="text-sm font-medium text-stone-600">{t(lang, "onboardProductsSub")}</p>
+            <h2 className="text-xl font-black text-foreground">{t(lang, "onboardProductsTitle")}</h2>
+            <p className="text-sm font-medium text-muted-foreground">{t(lang, "onboardProductsSub")}</p>
             <p className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 text-sm font-bold text-waka-950">
               {t(lang, "onboardProductsPriority")}
             </p>
-            <p className="text-xs font-semibold text-stone-500">{t(lang, "onboardFinishLaterHint")}</p>
+            <p className="text-xs font-semibold text-muted-foreground">{t(lang, "onboardFinishLaterHint")}</p>
             <AiBusinessSetupCard
               lang={lang}
               shopName={shopName}
@@ -643,7 +643,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                   key={line.nameKey}
                   type="button"
                   onClick={() => addStarterProduct(line)}
-                  className="min-h-[56px] rounded-2xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-black text-stone-900 active:bg-waka-50"
+                  className="min-h-[56px] rounded-2xl border-2 border-border bg-card px-3 py-2 text-sm font-black text-foreground active:bg-waka-50"
                 >
                   + {t(lang, line.nameKey as "starterItem_sugar")}
                 </button>
@@ -652,7 +652,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             <BuilderPrimaryButton type="button" onClick={() => setShowGrandOpening(true)}>
               {`🚀 ${t(lang, "builderOpenMyBusiness")}`}
             </BuilderPrimaryButton>
-            <button type="button" className="text-sm font-bold text-stone-500 underline" onClick={() => setShowGrandOpening(true)}>
+            <button type="button" className="text-sm font-bold text-muted-foreground underline" onClick={() => setShowGrandOpening(true)}>
               {t(lang, "onboardProductsLater")}
             </button>
           </div>

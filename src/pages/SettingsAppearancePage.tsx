@@ -31,12 +31,12 @@ export function SettingsAppearancePage({ lang }: { lang: Language }) {
         subtitle={t(lang, "settingsHubAppearanceSub")}
       />
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-700 dark:bg-stone-900">
-        <p className="text-sm font-medium text-stone-500 dark:text-stone-400">{t(lang, "settingsAppearanceCurrent")}</p>
-        <p className="mt-1 text-lg font-black text-stone-950 dark:text-stone-50">
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm dark:bg-foreground">
+        <p className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">{t(lang, "settingsAppearanceCurrent")}</p>
+        <p className="mt-1 text-lg font-black text-foreground dark:text-background">
           {t(lang, `themeMode_${preference}`)}
           {preference === "system" ? (
-            <span className="ml-2 text-sm font-semibold text-stone-500 dark:text-stone-400">
+            <span className="ml-2 text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
               ({t(lang, resolved === "dark" ? "themeMode_dark" : "themeMode_light")})
             </span>
           ) : null}
@@ -54,18 +54,18 @@ export function SettingsAppearancePage({ lang }: { lang: Language }) {
                   "flex min-h-[88px] flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-colors",
                   selected
                     ? "border-waka-500 bg-waka-50 ring-2 ring-waka-200 dark:border-waka-500 dark:bg-waka-950/40 dark:ring-waka-800"
-                    : "border-stone-200 bg-stone-50 hover:border-stone-300 dark:border-stone-700 dark:bg-stone-800/60 dark:hover:border-stone-600",
+                    : "border-border bg-muted hover:border-border dark:bg-foreground/60 dark:hover:border-stone-600",
                 )}
               >
                 <Icon
                   className={clsx(
                     "h-5 w-5",
-                    selected ? "text-waka-700 dark:text-waka-400" : "text-stone-500 dark:text-stone-400",
+                    selected ? "text-waka-700 dark:text-waka-400" : "text-muted-foreground dark:text-muted-foreground",
                   )}
                   aria-hidden
                 />
-                <span className="text-base font-black text-stone-950 dark:text-stone-50">{t(lang, labelKey)}</span>
-                <span className="text-xs font-medium text-stone-500 dark:text-stone-400">{t(lang, subKey)}</span>
+                <span className="text-base font-black text-foreground dark:text-background">{t(lang, labelKey)}</span>
+                <span className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">{t(lang, subKey)}</span>
               </button>
             );
           })}

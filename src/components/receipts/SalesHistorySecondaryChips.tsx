@@ -16,10 +16,10 @@ export function SalesHistorySecondaryChips({ chips }: Props) {
       {chips.map((chip) => (
         <span
           key={chip.label}
-          className="inline-flex max-w-full items-center gap-1 rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[10px] font-bold text-stone-700 shadow-sm"
+          className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-bold text-muted-foreground shadow-sm"
         >
-          <span className="truncate text-stone-500">{chip.label}</span>
-          <span className="shrink-0 font-black tabular-nums text-stone-900">{chip.value}</span>
+          <span className="truncate text-muted-foreground">{chip.label}</span>
+          <span className="shrink-0 font-black tabular-nums text-foreground">{chip.value}</span>
         </span>
       ))}
     </div>

@@ -62,10 +62,10 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
       title={
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-black text-stone-950">{t(lang, "splitBillTitle")}</h2>
+            <h2 className="text-xl font-black text-foreground">{t(lang, "splitBillTitle")}</h2>
             <p className="text-lg font-black text-waka-700">{formatUgx(totalUgx)}</p>
           </div>
-          <button type="button" className="min-h-[44px] px-2 text-sm font-bold text-stone-500" onClick={onClose}>
+          <button type="button" className="min-h-[44px] px-2 text-sm font-bold text-muted-foreground" onClick={onClose}>
             {t(lang, "cancel")}
           </button>
         </div>
@@ -89,7 +89,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
             onClick={() => setMode(m)}
             className={clsx(
               "min-h-11 rounded-xl border text-xs font-black sm:text-sm",
-              mode === m ? "border-waka-500 bg-waka-50" : "border-stone-200",
+              mode === m ? "border-waka-500 bg-waka-50" : "border-border",
             )}
           >
             {t(lang, `splitBillMode_${m}`)}
@@ -99,7 +99,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
 
       {mode === "equal" ? (
         <>
-          <p className="mb-2 text-sm font-bold text-stone-600">{t(lang, "splitBillPeople")}</p>
+          <p className="mb-2 text-sm font-bold text-muted-foreground">{t(lang, "splitBillPeople")}</p>
           <div className="mb-4 flex flex-wrap gap-2">
             {[2, 3, 4, 5, 6].map((n) => (
               <button
@@ -108,7 +108,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
                 onClick={() => setPeople(n)}
                 className={clsx(
                   "min-h-10 min-w-10 rounded-xl font-black",
-                  people === n ? "bg-waka-600 text-white" : "bg-stone-100",
+                  people === n ? "bg-waka-600 text-white" : "bg-muted",
                 )}
               >
                 {n}
@@ -117,7 +117,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
           </div>
           <ul className="mb-4 space-y-2">
             {equalSplits.map((s) => (
-              <li key={s.id ?? s.label} className="flex justify-between text-sm font-bold text-stone-800">
+              <li key={s.id ?? s.label} className="flex justify-between text-sm font-bold text-foreground">
                 <span>
                   {t(lang, "splitBillPerson")} {s.label}
                 </span>
@@ -131,7 +131,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
       {mode === "by_seat" ? (
         <ul className="mb-4 space-y-2">
           {seatSplits.map((s) => (
-            <li key={s.id ?? s.label} className="flex justify-between text-sm font-bold text-stone-800">
+            <li key={s.id ?? s.label} className="flex justify-between text-sm font-bold text-foreground">
               <span>{s.label}</span>
               <span>{formatUgx(s.amountUgx)}</span>
             </li>
@@ -147,7 +147,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
                 key={b}
                 value={bucketLabels[b] ?? b}
                 onChange={(e) => setBucketLabels({ ...bucketLabels, [b]: e.target.value })}
-                className="min-h-[40px] flex-1 rounded-xl border border-stone-200 px-2 text-sm font-bold"
+                className="min-h-[40px] flex-1 rounded-xl border border-border px-2 text-sm font-bold"
                 placeholder={`Bill ${b}`}
               />
             ))}
@@ -155,12 +155,12 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
           {lines.map((line) => {
             const lineId = line.id ?? line.productId;
             return (
-              <div key={lineId} className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-stone-100 px-3 py-2">
-                <span className="min-w-0 truncate text-sm font-bold text-stone-800">{line.name}</span>
+              <div key={lineId} className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-border px-3 py-2">
+                <span className="min-w-0 truncate text-sm font-bold text-foreground">{line.name}</span>
                 <select
                   value={itemBuckets[lineId] ?? "A"}
                   onChange={(e) => setItemBuckets({ ...itemBuckets, [lineId]: e.target.value })}
-                  className="min-h-[40px] rounded-lg border border-stone-200 px-2 text-sm font-bold"
+                  className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-bold"
                 >
                   <option value="A">{bucketLabels.A ?? "A"}</option>
                   <option value="B">{bucketLabels.B ?? "B"}</option>
@@ -170,7 +170,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
           })}
           <ul className="mt-3 space-y-2">
             {itemSplits.map((s) => (
-              <li key={s.id ?? s.label} className="flex justify-between text-sm font-bold text-stone-800">
+              <li key={s.id ?? s.label} className="flex justify-between text-sm font-bold text-foreground">
                 <span>{s.label}</span>
                 <span>{formatUgx(s.amountUgx)}</span>
               </li>
@@ -190,7 +190,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
                   next[idx] = { ...row, label: e.target.value };
                   setRows(next);
                 }}
-                className="min-h-[44px] rounded-xl border border-stone-200 px-3 py-2 text-sm font-bold"
+                className="min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm font-bold"
               />
               <input
                 value={row.amountUgx ? String(row.amountUgx) : ""}
@@ -201,7 +201,7 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
                 }}
                 inputMode="numeric"
                 placeholder="UGX"
-                className="min-h-[44px] rounded-xl border border-stone-200 px-3 py-2 text-sm font-black"
+                className="min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm font-black"
               />
             </div>
           ))}

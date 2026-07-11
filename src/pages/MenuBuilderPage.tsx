@@ -54,13 +54,13 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
     <div className="space-y-5 pb-8">
       <SettingsPageHeader lang={lang} title={t(lang, "menuBuilderTitle")} subtitle={t(lang, "menuBuilderSub")} />
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-sm font-black text-stone-800">{t(lang, "menuSectionsTitle")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-sm font-black text-foreground">{t(lang, "menuSectionsTitle")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setSectionFilter(null)}
-            className={`min-h-10 rounded-xl px-3 text-xs font-black ${sectionFilter === null ? "bg-waka-600 text-white" : "bg-stone-100"}`}
+            className={`min-h-10 rounded-xl px-3 text-xs font-black ${sectionFilter === null ? "bg-waka-600 text-white" : "bg-muted"}`}
           >
             {t(lang, "menuAllSections")}
           </button>
@@ -69,7 +69,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
               key={s.id}
               type="button"
               onClick={() => setSectionFilter(s.id)}
-              className={`min-h-10 rounded-xl px-3 text-xs font-black ${sectionFilter === s.id ? "bg-waka-600 text-white" : "bg-stone-100"}`}
+              className={`min-h-10 rounded-xl px-3 text-xs font-black ${sectionFilter === s.id ? "bg-waka-600 text-white" : "bg-muted"}`}
             >
               {s.label}
             </button>
@@ -89,8 +89,8 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
       </article>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <p className="mb-3 text-sm font-black text-stone-800">{t(lang, "menuProductsTitle")}</p>
+        <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p className="mb-3 text-sm font-black text-foreground">{t(lang, "menuProductsTitle")}</p>
           <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
             {menuProducts.map((p) => {
               const margin = computeMenuItemMargin(p, products);
@@ -100,11 +100,11 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
                     type="button"
                     onClick={() => setSelectedId(p.id)}
                     className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm font-bold ${
-                      selectedId === p.id ? "border-waka-500 bg-waka-50" : "border-stone-100"
+                      selectedId === p.id ? "border-waka-500 bg-waka-50" : "border-border"
                     }`}
                   >
                     <span className="truncate">{p.name}</span>
-                    <span className="shrink-0 text-xs text-stone-500">
+                    <span className="shrink-0 text-xs text-muted-foreground">
                       {formatUgx(p.sellingPricePerUnitUgx)} · {margin.marginPct.toFixed(0)}%
                     </span>
                   </button>
@@ -114,7 +114,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
           </ul>
         </article>
 
-        <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           {selected ? (
             <ProductMenuConfigFields
               lang={lang}
@@ -126,16 +126,16 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
               }}
             />
           ) : (
-            <p className="text-sm font-medium text-stone-500">{t(lang, "menuSelectProduct")}</p>
+            <p className="text-sm font-medium text-muted-foreground">{t(lang, "menuSelectProduct")}</p>
           )}
         </article>
       </div>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="mb-3 text-sm font-black text-stone-800">{t(lang, "menuReportsTitle")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="mb-3 text-sm font-black text-foreground">{t(lang, "menuReportsTitle")}</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <p className="text-xs font-black uppercase text-stone-500">{t(lang, "menuTopDishes")}</p>
+            <p className="text-xs font-black uppercase text-muted-foreground">{t(lang, "menuTopDishes")}</p>
             <ul className="mt-2 space-y-1 text-sm font-bold">
               {topDishes.map((d) => (
                 <li key={d.productId}>
@@ -145,7 +145,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
             </ul>
           </div>
           <div>
-            <p className="text-xs font-black uppercase text-stone-500">{t(lang, "menuTopModifiers")}</p>
+            <p className="text-xs font-black uppercase text-muted-foreground">{t(lang, "menuTopModifiers")}</p>
             <ul className="mt-2 space-y-1 text-sm font-bold">
               {topModifiers.map((m, i) => (
                 <li key={i}>
@@ -155,7 +155,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
             </ul>
           </div>
           <div>
-            <p className="text-xs font-black uppercase text-stone-500">{t(lang, "menuLowMargin")}</p>
+            <p className="text-xs font-black uppercase text-muted-foreground">{t(lang, "menuLowMargin")}</p>
             <ul className="mt-2 space-y-1 text-sm font-bold text-rose-800">
               {lowMargin.map((m) => (
                 <li key={m.product.id}>

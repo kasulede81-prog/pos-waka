@@ -74,13 +74,13 @@ export function EnterpriseResponsiveTable<T>({
         {rows.map((row) => (
           <li
             key={rowKey(row)}
-            className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm"
+            className="rounded-xl border border-border bg-card p-3 shadow-sm"
           >
             <div className="space-y-1">
               {columns.map((col) => (
                 <div key={col.id} className="flex items-start justify-between gap-2 text-sm">
-                  <span className="shrink-0 font-bold text-stone-500">{col.header}</span>
-                  <span className="min-w-0 text-right font-semibold text-stone-900">{col.cell(row)}</span>
+                  <span className="shrink-0 font-bold text-muted-foreground">{col.header}</span>
+                  <span className="min-w-0 text-right font-semibold text-foreground">{col.cell(row)}</span>
                 </div>
               ))}
               {mobileExtraColumns.length === 0 ? null : null}

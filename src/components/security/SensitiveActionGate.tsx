@@ -72,7 +72,7 @@ export function SensitiveActionGate({ lang, kind, children, onDenied }: Props) {
   if (cancelled && !granted) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 p-6">
-        <p className="text-sm font-semibold text-stone-600">{t(lang, "enterpriseSecurityCancelled")}</p>
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "enterpriseSecurityCancelled")}</p>
       </div>
     );
   }
@@ -80,7 +80,7 @@ export function SensitiveActionGate({ lang, kind, children, onDenied }: Props) {
   if (!granted) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center p-6">
-        <p className="text-sm font-semibold text-stone-500">{t(lang, "biometricGateLoading")}</p>
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "biometricGateLoading")}</p>
       </div>
     );
   }

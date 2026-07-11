@@ -75,11 +75,11 @@ export function SalesHistorySummaryStrip({
   return (
     <div
       className={clsx(
-        "grid divide-stone-200",
+        "grid divide-border",
         compact ? "divide-x divide-y" : "divide-x divide-y",
         embedded
           ? gridClass
-          : `rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm ${gridClass}`,
+          : `rounded-[1.35rem] border border-border bg-card shadow-waka-sm ${gridClass}`,
       )}
     >
       {items.map(({ icon: Icon, label, value, iconClass, valueClass }) => (
@@ -103,7 +103,7 @@ export function SalesHistorySummaryStrip({
           <div className={compact ? "min-w-0 flex-1" : undefined}>
             <p
               className={clsx(
-                "font-bold leading-tight text-stone-600",
+                "font-bold leading-tight text-muted-foreground",
                 compact ? "truncate text-[9px] sm:text-[10px]" : "text-[10px] sm:text-xs",
               )}
             >

@@ -46,7 +46,7 @@ export function CashPositionCashCount({
       >
         {t(lang, "cashPositionSaveCountCloseDay")}
       </Link>
-      <p className="text-center text-xs font-medium text-stone-500">{t(lang, "cashPositionCountPersistHint")}</p>
+      <p className="text-center text-xs font-medium text-muted-foreground">{t(lang, "cashPositionCountPersistHint")}</p>
     </div>
   );
 }
@@ -80,12 +80,12 @@ export function CashPositionMovementForm({
 }) {
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-bold text-stone-800">
+      <label className="block text-sm font-bold text-foreground">
         {t(lang, "cashPositionMovementType")}
         <select
           value={movementType}
           onChange={(e) => onTypeChange(e.target.value as CashDrawerAdjustmentType)}
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-muted px-4 py-3 text-sm font-semibold"
         >
           {CASH_DRAWER_ADJUSTMENT_TYPES.map((type) => (
             <option key={type} value={type}>
@@ -94,33 +94,33 @@ export function CashPositionMovementForm({
           ))}
         </select>
       </label>
-      <label className="block text-sm font-bold text-stone-800">
+      <label className="block text-sm font-bold text-foreground">
         {t(lang, "cashPositionMovementAmount")}
         <input
           value={movementAmount}
           onChange={(e) => onAmountChange(e.target.value.replace(/\D/g, "").slice(0, 12))}
           inputMode="numeric"
           placeholder="0"
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-xl font-black tabular-nums"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-muted px-4 py-3 text-xl font-black tabular-nums"
         />
       </label>
-      <label className="block text-sm font-bold text-stone-800">
+      <label className="block text-sm font-bold text-foreground">
         {t(lang, "cashPositionMovementReason")}
         <input
           value={movementReason}
           onChange={(e) => onReasonChange(e.target.value.slice(0, 80))}
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-muted px-4 py-3 text-sm font-medium"
         />
       </label>
-      <label className="block text-sm font-bold text-stone-800">
+      <label className="block text-sm font-bold text-foreground">
         {t(lang, "cashPositionMovementNote")}
         <input
           value={movementNote}
           onChange={(e) => onNoteChange(e.target.value.slice(0, 120))}
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-muted px-4 py-3 text-sm font-medium"
         />
       </label>
-      <p className="text-xs font-semibold text-stone-500">
+      <p className="text-xs font-semibold text-muted-foreground">
         {t(lang, "cashPositionMovementBy")}: {actorLabel}
       </p>
       <button
@@ -146,7 +146,7 @@ export function CashPositionCategories({
   const [selected, setSelected] = useState<CashPositionCategoryDetail | null>(null);
 
   if (categories.length === 0) {
-    return <p className="text-base font-medium text-stone-500">{t(lang, "cashPositionNoSalesToday")}</p>;
+    return <p className="text-base font-medium text-muted-foreground">{t(lang, "cashPositionNoSalesToday")}</p>;
   }
 
   return (
@@ -157,16 +157,16 @@ export function CashPositionCategories({
             <button
               type="button"
               onClick={() => setSelected(row)}
-              className="w-full rounded-2xl bg-stone-50 px-4 py-3 text-left transition active:bg-stone-100"
+              className="w-full rounded-2xl bg-muted px-4 py-3 text-left transition active:bg-muted"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="font-bold text-stone-900">{row.categoryLabel}</p>
+                <p className="font-bold text-foreground">{row.categoryLabel}</p>
                 <p className="text-lg font-black tabular-nums text-waka-800">UGX {row.amountUgx.toLocaleString()}</p>
               </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-200">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div className="h-full rounded-full bg-waka-500" style={{ width: `${Math.min(100, row.percent)}%` }} />
               </div>
-              <p className="mt-1 text-xs font-semibold text-stone-500">
+              <p className="mt-1 text-xs font-semibold text-muted-foreground">
                 {row.percent}% · {row.itemsSold} {t(lang, "cashPositionItemsSold").toLowerCase()}
               </p>
             </button>
@@ -177,8 +177,8 @@ export function CashPositionCategories({
         <ModalSheet open={Boolean(selected)} title={selected.categoryLabel} onClose={() => setSelected(null)}>
           <ul className="space-y-2">
             {selected.products.map((p) => (
-              <li key={p.productId} className="flex justify-between rounded-xl bg-stone-50 px-3 py-2 text-sm">
-                <span className="font-bold text-stone-900">
+              <li key={p.productId} className="flex justify-between rounded-xl bg-muted px-3 py-2 text-sm">
+                <span className="font-bold text-foreground">
                   {p.name} × {p.qty}
                 </span>
                 <span className="font-black tabular-nums">UGX {p.amountUgx.toLocaleString()}</span>
@@ -193,39 +193,39 @@ export function CashPositionCategories({
 
 export function CashPositionCashiers({ lang, cashiers }: { lang: Language; cashiers: CashPositionCashierDetail[] }) {
   if (cashiers.length === 0) {
-    return <p className="text-base font-medium text-stone-500">{t(lang, "cashPositionNoSalesToday")}</p>;
+    return <p className="text-base font-medium text-muted-foreground">{t(lang, "cashPositionNoSalesToday")}</p>;
   }
 
   return (
     <ul className="space-y-2">
       {cashiers.map((row) => (
-        <li key={row.cashierId} className="rounded-2xl border border-stone-100 bg-stone-50 px-4 py-3">
+        <li key={row.cashierId} className="rounded-2xl border border-border bg-muted px-4 py-3">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-waka-100 text-waka-700">
               <User className="h-5 w-5" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-black text-white">
+                <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-black text-background">
                   #{row.rank}
                 </span>
-                <p className="truncate font-bold text-stone-900">{row.name}</p>
+                <p className="truncate font-bold text-foreground">{row.name}</p>
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <div>
-                  <dt className="font-semibold text-stone-500">{t(lang, "cashPositionTotalSales")}</dt>
+                  <dt className="font-semibold text-muted-foreground">{t(lang, "cashPositionTotalSales")}</dt>
                   <dd className="font-black tabular-nums">UGX {row.salesUgx.toLocaleString()}</dd>
                 </div>
                 <div>
-                  <dt className="font-semibold text-stone-500">{t(lang, "cashPositionTransactions")}</dt>
+                  <dt className="font-semibold text-muted-foreground">{t(lang, "cashPositionTransactions")}</dt>
                   <dd className="font-black">{row.transactionCount}</dd>
                 </div>
                 <div>
-                  <dt className="font-semibold text-stone-500">{t(lang, "cashPositionAverageSale")}</dt>
+                  <dt className="font-semibold text-muted-foreground">{t(lang, "cashPositionAverageSale")}</dt>
                   <dd className="font-black tabular-nums">UGX {row.averageSaleUgx.toLocaleString()}</dd>
                 </div>
                 <div>
-                  <dt className="font-semibold text-stone-500">{t(lang, "cashPositionRefunds")}</dt>
+                  <dt className="font-semibold text-muted-foreground">{t(lang, "cashPositionRefunds")}</dt>
                   <dd className="font-black tabular-nums text-rose-700">UGX {row.refundsUgx.toLocaleString()}</dd>
                 </div>
               </dl>
@@ -291,36 +291,36 @@ export function CashPositionSafeLimit({
 }) {
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-bold text-stone-800">
+      <label className="block text-sm font-bold text-foreground">
         {t(lang, "cashPositionSafeLimitLabel")}
         <input
           value={limitInput}
           onChange={(e) => onLimitChange(e.target.value.replace(/\D/g, "").slice(0, 12))}
           inputMode="numeric"
           placeholder="0"
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-lg font-black tabular-nums"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-muted px-4 py-3 text-lg font-black tabular-nums"
         />
       </label>
       <button
         type="button"
         onClick={onSaveLimit}
-        className="min-h-[40px] rounded-xl bg-stone-900 px-4 py-2 text-xs font-black text-white"
+        className="min-h-[40px] rounded-xl bg-foreground px-4 py-2 text-xs font-black text-background"
       >
         {t(lang, "save")}
       </button>
       {safeLimit.limitUgx != null && safeLimit.limitUgx > 0 ? (
-        <dl className="grid gap-2 rounded-2xl bg-stone-50 p-3 text-sm">
+        <dl className="grid gap-2 rounded-2xl bg-muted p-3 text-sm">
           <div className="flex justify-between">
-            <dt className="font-bold text-stone-600">{t(lang, "cashPositionCurrentDrawer")}</dt>
+            <dt className="font-bold text-muted-foreground">{t(lang, "cashPositionCurrentDrawer")}</dt>
             <dd className="font-black tabular-nums">UGX {safeLimit.currentCashUgx.toLocaleString()}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="font-bold text-stone-600">{t(lang, "cashPositionSafeLimitLabel")}</dt>
+            <dt className="font-bold text-muted-foreground">{t(lang, "cashPositionSafeLimitLabel")}</dt>
             <dd className="font-black tabular-nums">UGX {safeLimit.limitUgx.toLocaleString()}</dd>
           </div>
           {safeLimit.remainingUgx != null ? (
             <div className="flex justify-between">
-              <dt className="font-bold text-stone-600">{t(lang, "cashPositionSafeRemaining")}</dt>
+              <dt className="font-bold text-muted-foreground">{t(lang, "cashPositionSafeRemaining")}</dt>
               <dd className="font-black tabular-nums">UGX {safeLimit.remainingUgx.toLocaleString()}</dd>
             </div>
           ) : null}
@@ -343,7 +343,7 @@ export function CashPositionPreviousCounts({
   rows: Array<{ dateKey: string; differenceUgx: number; kind: import("../../lib/cashPosition").CashPositionVariance }>;
 }) {
   if (rows.length === 0) {
-    return <p className="text-sm font-medium text-stone-500">{t(lang, "cashPositionPreviousEmpty")}</p>;
+    return <p className="text-sm font-medium text-muted-foreground">{t(lang, "cashPositionPreviousEmpty")}</p>;
   }
 
   return (
@@ -352,9 +352,9 @@ export function CashPositionPreviousCounts({
         <li key={row.dateKey}>
           <Link
             to="/close-day"
-            className="flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2.5 text-sm transition active:bg-stone-100"
+            className="flex items-center justify-between rounded-xl bg-muted px-3 py-2.5 text-sm transition active:bg-muted"
           >
-            <span className="font-bold text-stone-900">{row.dateKey}</span>
+            <span className="font-bold text-foreground">{row.dateKey}</span>
             <span
               className={clsx(
                 "font-black tabular-nums",
@@ -392,7 +392,7 @@ export function CashPositionDailyNotes({
         onChange={(e) => onChange(e.target.value.slice(0, 500))}
         rows={4}
         placeholder={t(lang, "cashPositionNotesPlaceholder")}
-        className="w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium"
+        className="w-full rounded-2xl border-2 border-border bg-muted px-4 py-3 text-sm font-medium"
       />
       <button
         type="button"
@@ -435,28 +435,28 @@ export function CashPositionExportCenter({
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <button type="button" disabled={exportBusy} onClick={onPrint} className={`${btn} bg-stone-900 text-white`}>
+        <button type="button" disabled={exportBusy} onClick={onPrint} className={`${btn} bg-foreground text-background`}>
           {receiptPrintActionLabel(lang)}
         </button>
         <button type="button" disabled={exportBusy} onClick={onPdf} className={`${btn} bg-waka-600 text-white`}>
           {t(lang, "cashPositionExportPdf")}
         </button>
-        <button type="button" disabled={exportBusy} onClick={onCsv} className={`${btn} border-2 border-stone-300 bg-white`}>
+        <button type="button" disabled={exportBusy} onClick={onCsv} className={`${btn} border-2 border-border bg-card`}>
           {t(lang, "cashPositionExportCsv")}
         </button>
-        <button type="button" disabled={exportBusy} onClick={onExcel} className={`${btn} border-2 border-stone-300 bg-white`}>
+        <button type="button" disabled={exportBusy} onClick={onExcel} className={`${btn} border-2 border-border bg-card`}>
           {t(lang, "cashPositionExportExcel")}
         </button>
         <button type="button" disabled={exportBusy} onClick={onShare} className={`${btn} border-2 border-waka-300 bg-waka-50 text-waka-900`}>
           {t(lang, "cashPositionExportShare")}
         </button>
-        <button type="button" disabled={exportBusy} onClick={onEmail} className={`${btn} border-2 border-stone-300 bg-white`}>
+        <button type="button" disabled={exportBusy} onClick={onEmail} className={`${btn} border-2 border-border bg-card`}>
           {t(lang, "cashPositionExportEmail")}
         </button>
         <button type="button" disabled={exportBusy} onClick={onWhatsApp} className={`${btn} border-2 border-emerald-300 bg-emerald-50 text-emerald-950`}>
           {t(lang, "cashPositionExportWhatsApp")}
         </button>
-        <button type="button" disabled={exportBusy} onClick={onPreview} className={`${btn} border-2 border-stone-300 bg-white`}>
+        <button type="button" disabled={exportBusy} onClick={onPreview} className={`${btn} border-2 border-border bg-card`}>
           {t(lang, "cashPositionExportPreview")}
         </button>
       </div>

@@ -16,10 +16,10 @@ export function StaffCacheMissingScreen({ lang }: Props) {
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
         <WifiOff className="h-6 w-6" aria-hidden />
       </div>
-      <h2 className="mt-4 text-lg font-black text-stone-900 dark:text-stone-50">
+      <h2 className="mt-4 text-lg font-black text-foreground dark:text-background">
         {t(lang, "staffCacheMissingTitle")}
       </h2>
-      <p className="mt-2 text-sm font-medium text-stone-700 dark:text-stone-300">
+      <p className="mt-2 text-sm font-medium text-muted-foreground dark:text-muted-foreground">
         {t(lang, "staffCacheMissingBody")}
       </p>
     </div>

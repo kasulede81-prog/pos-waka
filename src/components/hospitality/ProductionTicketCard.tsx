@@ -61,22 +61,22 @@ export function ProductionTicketCard({
     <li className={clsx("rounded-2xl border-2 p-4", URGENCY_STYLES[urgency])}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-lg font-black text-stone-950">
+          <p className="text-lg font-black text-foreground">
             {ticket.tableLabel}
             {ticket.areaName ? ` · ${ticket.areaName}` : ""}
           </p>
-          <p className="text-xs font-bold uppercase text-stone-600">
+          <p className="text-xs font-bold uppercase text-muted-foreground">
             #{ticket.ticketNumber}
             {stationName ? ` · ${stationName}` : ""}
             {ticket.waiterLabel ? ` · ${ticket.waiterLabel}` : ""}
           </p>
-          <p className="mt-1 text-xs font-semibold text-stone-500">
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">
             {ticket.guestCount ?? "—"} {t(lang, "tableOrderGuests")}
             {ticket.orderRound ? ` · ${t(lang, "productionOrderRound")} ${ticket.orderRound}` : ""}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className="rounded-lg bg-white px-2 py-1 text-xs font-black uppercase text-stone-800">
+          <span className="rounded-lg bg-card px-2 py-1 text-xs font-black uppercase text-foreground">
             {t(lang, statusLabelKey(ticket.status) as "kitchenStatus_queued")}
           </span>
           {ticket.priority && ticket.priority !== "normal" ? (
@@ -92,19 +92,19 @@ export function ProductionTicketCard({
           {formatElapsedMinutes(elapsed)}
           {target != null ? ` / ${target}m` : ""}
         </span>
-        <span className="text-xs font-semibold text-stone-500">
+        <span className="text-xs font-semibold text-muted-foreground">
           {t(lang, "productionFiredAt")} {new Date(ticket.firedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </span>
       </div>
 
-      <ul className="mt-3 space-y-2 text-sm font-bold text-stone-800">
+      <ul className="mt-3 space-y-2 text-sm font-bold text-foreground">
         {items.map((item) => (
           <li key={item.id} className="rounded-lg bg-white/70 px-2 py-1.5">
             <div className="flex items-start justify-between gap-2">
               <span>
                 {item.quantity}× {item.productName}
                 {item.course ? (
-                  <span className="ml-1 text-[10px] font-black uppercase text-stone-400">
+                  <span className="ml-1 text-[10px] font-black uppercase text-muted-foreground">
                     ({t(lang, hospitalityCourseLabelKey(item.course) as "hospitalityCourse_main")})
                   </span>
                 ) : null}
@@ -118,7 +118,7 @@ export function ProductionTicketCard({
               </button>
             </div>
             {item.variantLabel ? (
-              <p className="text-xs font-bold text-stone-600">{item.variantLabel}</p>
+              <p className="text-xs font-bold text-muted-foreground">{item.variantLabel}</p>
             ) : null}
             {item.modifierLabels?.length ? (
               <p className="text-xs font-bold text-violet-800">{item.modifierLabels.join(" · ")}</p>
@@ -139,7 +139,7 @@ export function ProductionTicketCard({
           <button
             type="button"
             onClick={onReprint}
-            className="col-span-2 min-h-10 rounded-xl border border-stone-300 bg-white text-xs font-black uppercase text-stone-700"
+            className="col-span-2 min-h-10 rounded-xl border border-border bg-card text-xs font-black uppercase text-muted-foreground"
           >
             {t(lang, "kitchenReprintChit")}
           </button>
@@ -166,7 +166,7 @@ export function ProductionTicketCard({
             onClick={onAdvance}
             className={clsx(
               "min-h-12 rounded-xl text-sm font-black text-white",
-              ticket.status === "ready" ? "bg-emerald-600" : "bg-stone-900",
+              ticket.status === "ready" ? "bg-emerald-600" : "bg-foreground",
               canRecall && (ticket.status === "ready" || ticket.status === "cooking" || ticket.status === "picked_up")
                 ? "col-span-2"
                 : "",
@@ -201,17 +201,17 @@ export function RecallTicketDialog({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-black text-stone-950">{t(lang, "kitchenRecallTitle")}</h2>
-        <p className="mt-1 text-sm text-stone-600">{t(lang, "kitchenRecallSub")}</p>
+      <div className="w-full max-w-md rounded-2xl bg-card p-5 shadow-xl">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "kitchenRecallTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t(lang, "kitchenRecallSub")}</p>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder={t(lang, "kitchenRecallReasonPh")}
-          className="mt-4 min-h-24 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+          className="mt-4 min-h-24 w-full rounded-xl border border-border px-3 py-2 text-sm"
         />
         <div className="mt-4 flex gap-2">
-          <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl border border-stone-200 font-bold">
+          <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl border border-border font-bold">
             {t(lang, "cancel")}
           </button>
           <button
@@ -246,17 +246,17 @@ export function CancelItemDialog({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-black text-stone-950">{t(lang, "kitchenCancelItemTitle")}</h2>
-        <p className="mt-1 text-sm text-stone-600">{t(lang, "kitchenCancelItemSub")}</p>
+      <div className="w-full max-w-md rounded-2xl bg-card p-5 shadow-xl">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "kitchenCancelItemTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t(lang, "kitchenCancelItemSub")}</p>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder={t(lang, "kitchenCancelReasonPh")}
-          className="mt-4 min-h-24 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+          className="mt-4 min-h-24 w-full rounded-xl border border-border px-3 py-2 text-sm"
         />
         <div className="mt-4 flex gap-2">
-          <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl border border-stone-200 font-bold">
+          <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-xl border border-border font-bold">
             {t(lang, "cancel")}
           </button>
           <button

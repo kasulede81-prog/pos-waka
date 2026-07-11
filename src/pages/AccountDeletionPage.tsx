@@ -199,14 +199,14 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
         ) : null}
 
         {needsPassword ? (
-          <label className="block text-sm font-bold text-stone-900">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "accountDeletionPasswordLabel")}
             <input
               type="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-2 w-full rounded-xl border-2 border-stone-200 px-4 py-3 text-base font-semibold"
+              className="mt-2 w-full rounded-xl border-2 border-border px-4 py-3 text-base font-semibold"
             />
           </label>
         ) : null}
@@ -216,7 +216,7 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
             type="button"
             disabled={busy}
             onClick={() => void runGoogleReauth()}
-            className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white py-3 text-sm font-black text-stone-900 disabled:opacity-50"
+            className="min-h-[48px] w-full rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground disabled:opacity-50"
           >
             {t(lang, "accountDeletionGoogleReauth")}
           </button>
@@ -276,31 +276,31 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
         checked={ack}
         onCheckedChange={setAck}
         label={t(lang, "accountDeletionAck")}
-        className="text-sm font-semibold text-stone-800"
+        className="text-sm font-semibold text-foreground"
       />
 
-      <label className="block text-sm font-bold text-stone-900">
+      <label className="block text-sm font-bold text-foreground">
         {t(lang, "accountDeletionTypeLabel")}
         <input
           value={confirmText}
           onChange={(e) => setConfirmText(e.target.value)}
-          className="mt-2 w-full rounded-xl border-2 border-stone-200 px-4 py-3 text-base font-semibold"
+          className="mt-2 w-full rounded-xl border-2 border-border px-4 py-3 text-base font-semibold"
           autoComplete="off"
           placeholder={shopName ? shopName : "DELETE PERMANENTLY"}
         />
       </label>
 
       {needsPassword ? (
-        <label className="block text-sm font-bold text-stone-900">
+        <label className="block text-sm font-bold text-foreground">
           {t(lang, "accountDeletionPasswordLabel")}
           <input
             type="password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-2 w-full rounded-xl border-2 border-stone-200 px-4 py-3 text-base font-semibold"
+            className="mt-2 w-full rounded-xl border-2 border-border px-4 py-3 text-base font-semibold"
           />
-          <span className="mt-1 block text-xs font-medium text-stone-500">{t(lang, "accountDeletionPasswordHint")}</span>
+          <span className="mt-1 block text-xs font-medium text-muted-foreground">{t(lang, "accountDeletionPasswordHint")}</span>
         </label>
       ) : null}
 
@@ -309,7 +309,7 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
           type="button"
           disabled={busy}
           onClick={() => void runGoogleReauth()}
-          className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white py-3 text-sm font-black text-stone-900 disabled:opacity-50"
+          className="min-h-[48px] w-full rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground disabled:opacity-50"
         >
           {reauthOk ? t(lang, "accountDeletionGoogleReauthOk") : t(lang, "accountDeletionGoogleReauth")}
         </button>

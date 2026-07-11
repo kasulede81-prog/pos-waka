@@ -10,7 +10,7 @@ export function EnterpriseDashboardShell({ ctx }: { ctx: DashboardCenterContext 
   const className =
     ctx.className ??
     (ctx.surface === "pharmacy-operations"
-      ? "enterprise-page space-y-6 bg-stone-50/40"
+      ? "enterprise-page space-y-6 bg-muted/40"
       : "enterprise-page space-y-4 sm:space-y-5");
 
   if (ctx.surface === "pharmacy-operations") {

@@ -65,7 +65,7 @@ export function PharmacyMobileNav({ lang, visible }: Props) {
                 "flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-black leading-tight transition-waka touch-manipulation",
                 active
                   ? "bg-teal-600 text-white shadow-waka-sm"
-                  : "text-stone-600 hover:bg-teal-50 active:bg-teal-100",
+                  : "text-muted-foreground hover:bg-teal-50 active:bg-teal-100",
               )}
             >
               <Icon className="h-5 w-5 shrink-0" strokeWidth={active ? 2.5 : 2} aria-hidden />

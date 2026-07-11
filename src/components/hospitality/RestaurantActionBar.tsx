@@ -57,7 +57,7 @@ export function RestaurantActionBar({
           type="button"
           disabled={busy}
           onClick={onToggleReview}
-          className={clsx(btn, reviewMode ? "bg-white text-sky-900" : "bg-sky-500 text-white")}
+          className={clsx(btn, reviewMode ? "bg-card text-sky-900" : "bg-sky-500 text-white")}
         >
           <ListOrdered className="h-4 w-4" />
           <span>{reviewMode ? t(lang, "restaurantMenuView") : t(lang, "restaurantReviewOrder")}</span>
@@ -130,7 +130,7 @@ export function RestaurantActionBar({
           type="button"
           disabled={busy}
           onClick={onBackToFloor}
-          className={clsx(btn, "bg-stone-200 text-stone-800")}
+          className={clsx(btn, "bg-muted text-foreground")}
         >
           <ClipboardList className="h-4 w-4" />
           <span>{t(lang, "restaurantBackFloor")}</span>

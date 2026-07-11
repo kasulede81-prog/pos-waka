@@ -18,12 +18,12 @@ export function RecoveryInProgressEscapeFooter({ lang, onSignOut }: Props) {
   };
 
   return (
-    <div className="space-y-3 border-t border-stone-100 pt-4">
+    <div className="space-y-3 border-t border-border pt-4">
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm font-bold">
-        <button type="button" disabled={busy} className="text-stone-600 underline-offset-2 hover:underline" onClick={() => run(onSignOut)}>
+        <button type="button" disabled={busy} className="text-muted-foreground underline-offset-2 hover:underline" onClick={() => run(onSignOut)}>
           {t(lang, "startupLogout")}
         </button>
-        <button type="button" disabled={busy} className="text-stone-600 underline-offset-2 hover:underline" onClick={() => run(onSignOut)}>
+        <button type="button" disabled={busy} className="text-muted-foreground underline-offset-2 hover:underline" onClick={() => run(onSignOut)}>
           {t(lang, "startupSwitchAccount")}
         </button>
       </div>

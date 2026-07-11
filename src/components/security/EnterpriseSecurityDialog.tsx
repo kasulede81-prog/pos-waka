@@ -1,11 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { checkBiometricCapability } from "../../lib/biometricAuth";
 import type { SecurityCredentialType } from "../../lib/enterpriseSecurity/types";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
-import { PinInput } from "../ui/PinInput";
+import { EnterpriseAuthenticationDialog } from "../auth/EnterpriseAuthenticationDialog";
 
 export type EnterpriseSecurityDialogMode = {
   /** Primary PIN credential to collect when user chooses PIN entry. */
@@ -25,12 +24,6 @@ type Props = {
   onCancel: () => void;
 };
 
-function pinPromptKey(credential: EnterpriseSecurityDialogMode["pinCredential"]): Parameters<typeof t>[1] {
-  if (credential === "shop_security_pin") return "enterpriseSecurityShopPinPrompt";
-  if (credential === "owner_override") return "enterpriseSecurityOwnerOverridePrompt";
-  return "enterpriseSecurityStaffPinPrompt";
-}
-
 function pinTitleKey(credential: EnterpriseSecurityDialogMode["pinCredential"]): Parameters<typeof t>[1] {
   if (credential === "shop_security_pin") return "enterpriseSecurityShopPinTitle";
   if (credential === "owner_override") return "enterpriseSecurityOwnerOverrideTitle";
@@ -49,14 +42,14 @@ export function EnterpriseSecurityDialog({
   onSubmitPin,
   onCancel,
 }: Props) {
-  const [pin, setPin] = useState("");
   const [pinMode, setPinMode] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [pinResetSignal, setPinResetSignal] = useState(0);
 
   useEffect(() => {
     if (!open) {
-      setPin("");
       setPinMode(false);
+      setPinResetSignal((n) => n + 1);
     }
   }, [open]);
 
@@ -77,94 +70,27 @@ export function EnterpriseSecurityDialog({
     };
   }, [open, mode.allowBiometric]);
 
-  if (!open) return null;
-
-  const submitPin = (e: FormEvent) => {
-    e.preventDefault();
-    onSubmitPin(pin);
-    setPin("");
-  };
+  const showPin = pinMode || !mode.allowBiometric || !biometricAvailable;
 
   return (
-    <AppModalOverlay className="z-[110] flex items-end justify-center bg-stone-900/50 p-3 sm:items-center">
-      <div
-        role="dialog"
-        aria-modal
-        aria-labelledby="enterprise-security-title"
-        className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-6 shadow-waka"
-      >
-        <p id="enterprise-security-title" className="text-xl font-black text-stone-900">
-          {t(lang, pinTitleKey(mode.pinCredential))}
-        </p>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "enterpriseSecurityDialogSub")}</p>
-
-        {statusMessage ? (
-          <p
-            className={`mt-3 rounded-xl px-3 py-2 text-sm font-bold ${
-              statusKind === "success"
-                ? "border border-emerald-200 bg-emerald-50 text-emerald-950"
-                : "border border-rose-200 bg-rose-50 text-rose-950"
-            }`}
-          >
-            {statusMessage}
-          </p>
-        ) : null}
-
-        {pinMode || !mode.allowBiometric ? (
-          <form onSubmit={submitPin} className="mt-5 space-y-3">
-            <p className="text-sm font-semibold text-stone-700">{t(lang, pinPromptKey(mode.pinCredential))}</p>
-            <PinInput
-              maxLength={6}
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder={t(lang, "unlockPinPlaceholder")}
-              autoFocus
-              className="w-full rounded-2xl border-2 border-stone-200 px-4 py-4 text-center text-2xl font-black tracking-[0.3em] text-stone-900"
-            />
-            <button
-              type="submit"
-              disabled={pin.length < 4 || busy}
-              className="min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
-            >
-              {t(lang, "enterpriseSecuritySubmit")}
-            </button>
-          </form>
-        ) : (
-          <div className="mt-5 space-y-3">
-            {biometricAvailable ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onAuthenticateBiometric}
-                className="min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
-              >
-                {busy ? t(lang, "biometricAuthenticating") : t(lang, "enterpriseSecurityBiometricButton")}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setPinMode(true)}
-              className={
-                biometricAvailable
-                  ? "w-full rounded-2xl border border-stone-200 py-3 text-sm font-bold text-stone-700"
-                  : "min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-lg font-black text-white shadow-waka-sm"
-              }
-            >
-              {t(lang, pinPromptKey(mode.pinCredential))}
-            </button>
-          </div>
-        )}
-
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onCancel}
-          className="mt-3 w-full rounded-2xl border border-stone-200 py-3 text-sm font-bold text-stone-500"
-        >
-          {t(lang, "biometricCancel")}
-        </button>
-      </div>
-    </AppModalOverlay>
+    <EnterpriseAuthenticationDialog
+      lang={lang}
+      open={open}
+      title={t(lang, pinTitleKey(mode.pinCredential))}
+      subtitle={t(lang, "enterpriseSecurityDialogSub")}
+      mode={showPin ? "pin" : "biometric"}
+      busy={busy}
+      statusMessage={statusMessage}
+      statusKind={statusKind}
+      showBiometric={showPin && mode.allowBiometric === true && biometricAvailable}
+      onBiometric={onAuthenticateBiometric}
+      onUsePin={() => setPinMode(true)}
+      onPinComplete={(pin) => {
+        onSubmitPin(pin);
+        setPinResetSignal((n) => n + 1);
+      }}
+      pinResetSignal={pinResetSignal}
+      onCancel={onCancel}
+    />
   );
 }

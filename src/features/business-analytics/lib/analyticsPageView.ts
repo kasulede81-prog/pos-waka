@@ -210,7 +210,7 @@ export function buildAnalyticsKpiCards(params: {
       value: formatShortUgx(params.debtOutstanding),
       pctChange: cmp(params.debtOutstanding, params.priorDebt),
       sparkline: params.sparkline,
-      valueClass: params.debtOutstanding > 0 ? "text-amber-800" : "text-stone-950",
+      valueClass: params.debtOutstanding > 0 ? "text-amber-800" : "text-foreground",
     },
   ].filter((c) => !c.hidden);
 }

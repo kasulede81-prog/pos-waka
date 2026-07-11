@@ -72,11 +72,11 @@ function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-stone-950/55 p-3 sm:items-center">
-      <div className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-5 shadow-waka">
-        <p className="flex items-center justify-between gap-3 text-lg font-black text-stone-900">
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-foreground/55 p-3 sm:items-center">
+      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-waka">
+        <p className="flex items-center justify-between gap-3 text-lg font-black text-foreground">
           {title}
-          <button type="button" className="rounded-xl p-2 text-stone-600 hover:bg-stone-50" onClick={onClose} aria-label="Close">
+          <button type="button" className="rounded-xl p-2 text-muted-foreground hover:bg-muted" onClick={onClose} aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </p>
@@ -292,15 +292,15 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
   }, [createOpen, loadCandidates]);
 
   const cardCls = lovableUi
-    ? "rounded-2xl border border-stone-200 bg-white shadow-sm"
-    : "rounded-xl border border-stone-200 bg-white";
+    ? "rounded-2xl border border-border bg-card shadow-sm"
+    : "rounded-xl border border-border bg-card";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black text-stone-900">{t(lang, "internalAgentsTitle")}</h2>
-          <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "internalAgentsSub")}</p>
+          <h2 className="text-xl font-black text-foreground">{t(lang, "internalAgentsTitle")}</h2>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "internalAgentsSub")}</p>
         </div>
         <button
           type="button"
@@ -319,7 +319,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder={t(lang, "internalAgentsSearchPh")}
-        className="w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm font-semibold"
+        className="w-full rounded-2xl border border-border px-4 py-3 text-sm font-semibold"
       />
 
       {loadError ? (
@@ -327,27 +327,27 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
       ) : null}
 
       {loading ? (
-        <p className="text-sm font-semibold text-stone-500">…</p>
+        <p className="text-sm font-semibold text-muted-foreground">…</p>
       ) : filtered.length === 0 && !loadError ? (
-        <p className={clsx(cardCls, "px-4 py-8 text-center text-sm font-bold text-stone-500")}>{t(lang, "internalAgentsEmpty")}</p>
+        <p className={clsx(cardCls, "px-4 py-8 text-center text-sm font-bold text-muted-foreground")}>{t(lang, "internalAgentsEmpty")}</p>
       ) : (
         <ul className="space-y-2">
           {filtered.map((a) => (
             <li key={a.id} className={clsx(cardCls, "p-4")}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="font-mono text-lg font-black uppercase tracking-wide text-stone-950">{a.referralCode}</p>
-                  <p className="text-sm font-semibold text-stone-700">{a.shopName ?? a.fullName ?? "—"}</p>
+                  <p className="font-mono text-lg font-black uppercase tracking-wide text-foreground">{a.referralCode}</p>
+                  <p className="text-sm font-semibold text-muted-foreground">{a.shopName ?? a.fullName ?? "—"}</p>
                   {!a.active ? (
                     <p className="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">
                       Inactive
                     </p>
                   ) : null}
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-muted-foreground">
                     {formatOwnerContactLabel(a.email, a.phoneE164)}
                     {a.fullName && a.shopName ? ` · ${a.fullName}` : ""}
                   </p>
-                  <p className="text-[11px] font-bold uppercase text-stone-400">
+                  <p className="text-[11px] font-bold uppercase text-muted-foreground">
                     {(roleEdits[a.id] ?? a.roles ?? []).join(" · ")}
                   </p>
                 </div>
@@ -356,15 +356,15 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                     <Users className="h-3.5 w-3.5" aria-hidden />
                     {a.referralCount}
                   </p>
-                  <p className="mt-1 text-[11px] font-bold uppercase text-stone-400">{a.active ? "Active" : "Inactive"}</p>
+                  <p className="mt-1 text-[11px] font-bold uppercase text-muted-foreground">{a.active ? "Active" : "Inactive"}</p>
                 </div>
               </div>
-              <div className="mt-3 space-y-2 border-t border-stone-100 pt-3">
-                <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+              <div className="mt-3 space-y-2 border-t border-border pt-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
                   {t(lang, "internalAgentIdVerifyTitle")}
                 </p>
-                <p className="text-xs font-medium text-stone-600">{t(lang, "internalAgentIdVerifySub")}</p>
-                <p className="break-all font-mono text-xs font-semibold text-stone-600">
+                <p className="text-xs font-medium text-muted-foreground">{t(lang, "internalAgentIdVerifySub")}</p>
+                <p className="break-all font-mono text-xs font-semibold text-muted-foreground">
                   {buildAgentVerificationUrl(a.referralCode)}
                 </p>
                 <div className="flex flex-wrap gap-3">
@@ -378,14 +378,14 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   <button
                     type="button"
                     onClick={() => void copyAgentLink(a.referralCode)}
-                    className="text-sm font-black text-stone-700 underline"
+                    className="text-sm font-black text-muted-foreground underline"
                   >
                     {t(lang, "agentCopyLink")}
                   </button>
                 </div>
               </div>
               <div className="mt-3 space-y-2">
-                <p className="text-xs font-bold text-stone-600">{t(lang, "internalAgentsRolesLabel")}</p>
+                <p className="text-xs font-bold text-muted-foreground">{t(lang, "internalAgentsRolesLabel")}</p>
                 <div className="flex flex-wrap gap-2">
                   {MARKETING_AGENT_ROLES.map((role) => {
                     const checked = (roleEdits[a.id] ?? a.roles).includes(role);
@@ -394,7 +394,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                         key={role}
                         className={clsx(
                           "inline-flex min-h-[36px] rounded-xl border px-3 py-1.5 text-xs font-bold",
-                          checked ? "border-waka-400 bg-waka-50 text-waka-950" : "border-stone-200 bg-white",
+                          checked ? "border-waka-400 bg-waka-50 text-waka-950" : "border-border bg-card",
                         )}
                       >
                         <WakaCheckbox
@@ -415,7 +415,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   type="button"
                   disabled={roleBusyKey === a.id}
                   onClick={() => void saveAgentRoles(a.id, a.shopName ?? a.referralCode)}
-                  className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-black text-stone-800 disabled:opacity-50"
+                  className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-black text-foreground disabled:opacity-50"
                 >
                   {roleBusyKey === a.id ? "…" : t(lang, "internalAgentsSaveRoles")}
                 </button>
@@ -432,7 +432,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   type="button"
                   disabled={removeBusyKey === a.id}
                   onClick={() => void removeAgent(a, false)}
-                  className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-black text-stone-800 disabled:opacity-50"
+                  className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-black text-foreground disabled:opacity-50"
                 >
                   {removeBusyKey === a.id ? "…" : t(lang, "internalAgentsRemove")}
                 </button>
@@ -452,27 +452,27 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
 
       <Modal title={t(lang, "internalAgentsGrantTitle")} open={createOpen} onClose={() => setCreateOpen(false)}>
         <div className="space-y-3">
-          <p className="text-sm font-medium text-stone-600">{t(lang, "internalAgentsGrantHint")}</p>
-          <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
+          <p className="text-sm font-medium text-muted-foreground">{t(lang, "internalAgentsGrantHint")}</p>
+          <div className="space-y-2 rounded-xl border border-border bg-muted p-3">
             <div className="flex gap-2">
               <input
                 value={candidateQuery}
                 onChange={(e) => setCandidateQuery(e.target.value)}
-                className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold"
                 placeholder={t(lang, "internalAgentsCandidateSearchPh")}
               />
               <button
                 type="button"
                 onClick={() => void loadCandidates()}
-                className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs font-black"
+                className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-black"
               >
                 Search
               </button>
             </div>
             {candidateLoading ? (
-              <p className="text-xs font-semibold text-stone-500">Loading users…</p>
+              <p className="text-xs font-semibold text-muted-foreground">Loading users…</p>
             ) : candidates.length === 0 ? (
-              <p className="text-xs font-semibold text-stone-500">{t(lang, "internalAgentsCandidatesEmpty")}</p>
+              <p className="text-xs font-semibold text-muted-foreground">{t(lang, "internalAgentsCandidatesEmpty")}</p>
             ) : (
               <ul className="max-h-40 space-y-1 overflow-y-auto">
                 {candidates.map((c) => (
@@ -487,11 +487,11 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                         "w-full rounded-lg border px-3 py-2 text-left text-xs",
                         grantShopId === c.shopId
                           ? "border-waka-400 bg-waka-50"
-                          : "border-stone-200 bg-white hover:border-waka-300",
+                          : "border-border bg-card hover:border-waka-300",
                       )}
                     >
-                      <p className="font-black text-stone-900">{c.shopName}</p>
-                      <p className="font-semibold text-stone-500">
+                      <p className="font-black text-foreground">{c.shopName}</p>
+                      <p className="font-semibold text-muted-foreground">
                         {c.fullName ?? "—"} · {formatOwnerContactLabel(c.email, c.phoneE164)}
                         {c.district ? ` · ${c.district}` : ""}
                       </p>
@@ -501,13 +501,13 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
               </ul>
             )}
           </div>
-          <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAgentsGrantShopLabel")}</p>
-            <p className="mt-1 text-base font-black uppercase tracking-wide text-stone-900">
+          <div className="rounded-xl border border-border bg-muted px-3 py-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAgentsGrantShopLabel")}</p>
+            <p className="mt-1 text-base font-black uppercase tracking-wide text-foreground">
               {grantShopName || t(lang, "internalAgentsShopRequired")}
             </p>
           </div>
-          <p className="text-sm font-bold text-stone-800">{t(lang, "internalAgentsRolesLabel")}</p>
+          <p className="text-sm font-bold text-foreground">{t(lang, "internalAgentsRolesLabel")}</p>
           <div className="flex flex-wrap gap-2">
             {MARKETING_AGENT_ROLES.map((role) => {
               const checked = grantRoles.includes(role);
@@ -516,7 +516,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   key={role}
                   className={clsx(
                     "inline-flex min-h-[40px] rounded-xl border px-3 py-2 text-xs font-bold",
-                    checked ? "border-waka-400 bg-waka-50" : "border-stone-200 bg-white",
+                    checked ? "border-waka-400 bg-waka-50" : "border-border bg-card",
                   )}
                 >
                   <WakaCheckbox
@@ -528,7 +528,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
               );
             })}
           </div>
-          <p className="text-xs font-medium text-stone-500">{t(lang, "internalAgentsRolesHint")}</p>
+          <p className="text-xs font-medium text-muted-foreground">{t(lang, "internalAgentsRolesHint")}</p>
           {createMsg ? <p className="text-sm font-bold text-rose-700">{createMsg}</p> : null}
           <button
             type="button"
@@ -550,21 +550,21 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
         }}
       >
         {detailLoading ? (
-          <p className="text-sm text-stone-500">…</p>
+          <p className="text-sm text-muted-foreground">…</p>
         ) : detailError ? (
           <p className="text-sm font-bold text-rose-700">{detailError}</p>
         ) : detailRows.length === 0 ? (
-          <p className="text-sm font-semibold text-stone-500">{t(lang, "internalAgentsReferralsEmpty")}</p>
+          <p className="text-sm font-semibold text-muted-foreground">{t(lang, "internalAgentsReferralsEmpty")}</p>
         ) : (
           <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
             {detailRows.map((r) => (
-              <li key={r.id} className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
-                <p className="font-bold text-stone-900">{r.shopName ?? "—"}</p>
-                <p className="text-xs text-stone-500">
+              <li key={r.id} className="rounded-xl border border-border bg-muted px-3 py-2">
+                <p className="font-bold text-foreground">{r.shopName ?? "—"}</p>
+                <p className="text-xs text-muted-foreground">
                   {formatOwnerContactLabel(r.ownerEmail, r.ownerPhone)}
                   {r.planCode ? ` · ${r.planCode}` : ""}
                 </p>
-                <p className="text-[11px] text-stone-400">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "—"}</p>
+                <p className="text-[11px] text-muted-foreground">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "—"}</p>
               </li>
             ))}
           </ul>

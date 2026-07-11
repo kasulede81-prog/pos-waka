@@ -1,6 +1,8 @@
-import { useEffect, useRef } from "react";
-import Lottie, { type LottieRefCurrentProps } from "lottie-react";
+import { lazy, Suspense, useEffect, useRef } from "react";
+import type { LottieRefCurrentProps } from "lottie-react";
 import clsx from "clsx";
+
+const LottiePlayer = lazy(() => import("lottie-react"));
 
 /** Minimal confetti burst — lazy-loaded for grand opening only. */
 export function BuilderConfetti({ className }: { className?: string }) {
@@ -119,7 +121,9 @@ export function BuilderConfetti({ className }: { className?: string }) {
 
   return (
     <div className={clsx("builder-confetti", className)} aria-hidden>
-      <Lottie lottieRef={lottieRef} animationData={data} loop={false} className="h-full w-full" />
+      <Suspense fallback={null}>
+        <LottiePlayer lottieRef={lottieRef} animationData={data} loop={false} className="h-full w-full" />
+      </Suspense>
     </div>
   );
 }

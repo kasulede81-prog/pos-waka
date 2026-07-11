@@ -76,7 +76,7 @@ export function SalesHistoryDateFilterChips({ lang, filter, onFilterChange }: Pr
               "min-h-[34px] shrink-0 rounded-full px-3 py-1 text-xs font-black transition-all",
               chipActive(filter, id)
                 ? "bg-waka-600 text-white shadow-sm"
-                : "border border-stone-200 bg-white text-stone-700 active:bg-stone-50",
+                : "border border-border bg-card text-muted-foreground active:bg-muted",
             )}
           >
             {labelFor(id)}
@@ -84,14 +84,14 @@ export function SalesHistoryDateFilterChips({ lang, filter, onFilterChange }: Pr
         ))}
       </div>
       {customOpen ? (
-        <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-          <label htmlFor={dateInputId} className="flex items-center gap-2 text-xs font-bold text-stone-700">
+        <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+          <label htmlFor={dateInputId} className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
             <CalendarDays className="h-4 w-4 text-waka-600" aria-hidden />
             {t(lang, "dateFilterPickDate")}
             <input
               id={dateInputId}
               type="date"
-              className="ml-auto rounded-lg border border-stone-200 px-2 py-1 text-xs font-semibold"
+              className="ml-auto rounded-lg border border-border px-2 py-1 text-xs font-semibold"
               value={customDayKey}
               onChange={(e) => {
                 const v = e.target.value;

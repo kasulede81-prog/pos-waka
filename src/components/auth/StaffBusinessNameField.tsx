@@ -87,13 +87,13 @@ export function StaffBusinessNameField({
         <ul
           id={`${listId}-dropdown`}
           role="listbox"
-          className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-stone-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-lg"
         >
           {visibleSuggestions.map((s) => (
             <li key={s.id} role="option">
               <button
                 type="button"
-                className="w-full px-3 py-2.5 text-left text-sm font-semibold text-stone-800 hover:bg-waka-50 active:bg-waka-100"
+                className="w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-waka-50 active:bg-waka-100"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   onChange(s.label);
@@ -107,8 +107,8 @@ export function StaffBusinessNameField({
         </ul>
       ) : null}
 
-      {loading ? <span className="mt-1 block text-xs text-stone-500">{hint ?? "Loading saved shops…"}</span> : null}
-      {!loading && hint ? <span className="mt-1 block text-xs text-stone-500">{hint}</span> : null}
+      {loading ? <span className="mt-1 block text-xs text-muted-foreground">{hint ?? "Loading saved shops…"}</span> : null}
+      {!loading && hint ? <span className="mt-1 block text-xs text-muted-foreground">{hint}</span> : null}
     </div>
   );
 }

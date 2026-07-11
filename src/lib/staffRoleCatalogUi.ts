@@ -19,7 +19,7 @@ export function staffInitials(name: string): string {
 type Accent = "waka" | "violet" | "emerald" | "amber" | "rose" | "sky" | "orange";
 
 export function roleAccentClasses(accent: Accent, selected: boolean): string {
-  if (!selected) return "border-stone-200 bg-white hover:border-stone-300";
+  if (!selected) return "border-border bg-card hover:border-border";
   if (accent === "violet") return "border-violet-500 bg-violet-50 ring-2 ring-violet-200";
   if (accent === "emerald") return "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200";
   if (accent === "amber") return "border-amber-500 bg-amber-50 ring-2 ring-amber-200";
@@ -30,7 +30,7 @@ export function roleAccentClasses(accent: Accent, selected: boolean): string {
 }
 
 export function roleIconClasses(accent: Accent, selected: boolean): string {
-  if (!selected) return "bg-stone-100 text-stone-600";
+  if (!selected) return "bg-muted text-muted-foreground";
   if (accent === "violet") return "bg-violet-100 text-violet-700";
   if (accent === "emerald") return "bg-emerald-100 text-emerald-700";
   if (accent === "amber") return "bg-amber-100 text-amber-700";

@@ -14,12 +14,12 @@ type Props = {
 export function InvestigationRefundsSection({ lang, integrityReport, returns, onTraceReturn }: Props) {
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/80 to-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/80 to-card p-4 shadow-sm">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden />
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-black text-stone-900">{t(lang, "refundIntegrityTitle")}</h2>
-            <p className="mt-0.5 text-xs font-medium text-stone-600">{t(lang, "refundIntegritySub")}</p>
+            <h2 className="text-sm font-black text-foreground">{t(lang, "refundIntegrityTitle")}</h2>
+            <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "refundIntegritySub")}</p>
             <p className={`mt-2 text-sm font-bold ${integrityReport.ok ? "text-emerald-800" : "text-rose-800"}`}>
               {integrityReport.ok
                 ? t(lang, "refundIntegrityOk")
@@ -42,10 +42,10 @@ export function InvestigationRefundsSection({ lang, integrityReport, returns, on
         </div>
       </section>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-xs font-black uppercase tracking-widest text-stone-500">{t(lang, "refundHistoryTitle")}</h2>
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "refundHistoryTitle")}</h2>
         {returns.length === 0 ? (
-          <p className="mt-3 text-sm text-stone-600">{t(lang, "refundHistoryEmpty")}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t(lang, "refundHistoryEmpty")}</p>
         ) : (
           <ul className="mt-3 space-y-2">
             {returns.map((r) => {
@@ -57,12 +57,12 @@ export function InvestigationRefundsSection({ lang, integrityReport, returns, on
                 minute: "2-digit",
               });
               return (
-                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-stone-100 bg-stone-50/50 px-3 py-2">
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-stone-900">
+                    <p className="text-sm font-black text-foreground">
                       {r.productName} · UGX {r.refundAmountUgx.toLocaleString()}
                     </p>
-                    <p className="text-xs text-stone-600">
+                    <p className="text-xs text-muted-foreground">
                       {staff} · {when}
                     </p>
                   </div>

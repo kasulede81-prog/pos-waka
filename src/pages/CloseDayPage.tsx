@@ -27,6 +27,7 @@ import { useReportingSales } from "../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 
 import { PageHeader } from "../components/layout/PageHeader";
+import { EnterpriseApprovalPinPad } from "../components/auth/EnterpriseApprovalPinPad";
 
 import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
 
@@ -139,8 +140,6 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   const [emergencyReason, setEmergencyReason] = useState("");
 
   const [reopenReason, setReopenReason] = useState("");
-
-  const [reopenPin, setReopenPin] = useState("");
 
   const [preflight, setPreflight] = useState<DayClosePreflightSnapshot | null>(null);
 
@@ -393,27 +392,6 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-  const submitReopen = () => {
-
-    setCloseErrorKey(null);
-
-    const result = reopenBusinessDay({ dateKey: todayKey, reason: reopenReason, ownerPin: reopenPin });
-
-    if (!result.ok) setCloseErrorKey(result.errorKey ?? "invalid");
-
-    else {
-
-      setReopenReason("");
-
-      setReopenPin("");
-
-      void refreshPreflight();
-
-    }
-
-  };
-
-
 
   const last = activeCloseToday ?? dayCloses.find((d) => d.dateKey === closeDateKey) ?? dayCloses[0];
 
@@ -477,7 +455,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
         <PageHeader lang={lang} title={t(lang, "closeDay")} backLabel={t(lang, "officeBackToHub")} />
 
-        <p className="text-lg text-stone-700">{t(lang, "noPermission")}</p>
+        <p className="text-lg text-muted-foreground">{t(lang, "noPermission")}</p>
 
       </div>
 
@@ -517,7 +495,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
           to="/office/x-report"
 
-          className="rounded-2xl border border-stone-200 bg-white px-4 py-2 text-sm font-black text-waka-800"
+          className="rounded-2xl border border-border bg-card px-4 py-2 text-sm font-black text-waka-800"
 
         >
 
@@ -529,11 +507,11 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-      <section className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+      <section className="rounded-2xl border border-border bg-muted px-4 py-3">
 
-        <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "dayCloseBusinessDate")}</p>
+        <p className="text-[11px] font-black uppercase text-muted-foreground">{t(lang, "dayCloseBusinessDate")}</p>
 
-        <p className="text-lg font-black text-stone-950">{closeDateKey}</p>
+        <p className="text-lg font-black text-foreground">{closeDateKey}</p>
 
         {closeDateKey !== todayKey ? (
           <p className="mt-2 text-sm font-semibold text-amber-900">
@@ -555,7 +533,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
                 className={
                   dk === closeDateKey
                     ? "rounded-xl bg-waka-600 px-3 py-2 text-sm font-black text-white"
-                    : "rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-bold text-amber-950"
+                    : "rounded-xl border border-amber-300 bg-card px-3 py-2 text-sm font-bold text-amber-950"
                 }
               >
                 {dk}
@@ -579,23 +557,23 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
+      <section className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm">
 
         <div className="grid grid-cols-2 gap-3">
 
-          <div className="rounded-2xl bg-stone-50 px-3 py-3 col-span-2">
+          <div className="rounded-2xl bg-muted px-3 py-3 col-span-2">
 
-            <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "totalSales")}</p>
+            <p className="text-[11px] font-black uppercase text-muted-foreground">{t(lang, "totalSales")}</p>
 
-            <p className="mt-1 text-xl font-black text-stone-950">UGX {summary.total.toLocaleString()}</p>
+            <p className="mt-1 text-xl font-black text-foreground">UGX {summary.total.toLocaleString()}</p>
 
           </div>
 
-          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 col-span-2">
+          <div className="rounded-2xl border border-border bg-muted px-3 py-3 col-span-2">
 
-            <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "closeDayExpectedTitle")}</p>
+            <p className="text-[11px] font-black uppercase text-muted-foreground">{t(lang, "closeDayExpectedTitle")}</p>
 
-            <p className="mt-1 text-xl font-black text-stone-950">UGX {summary.expectedCash.toLocaleString()}</p>
+            <p className="mt-1 text-xl font-black text-foreground">UGX {summary.expectedCash.toLocaleString()}</p>
 
           </div>
 
@@ -619,7 +597,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
             inputMode="numeric"
 
-            className="mt-2 w-full rounded-2xl border-2 border-waka-300 bg-white px-4 py-4 text-3xl font-black"
+            className="mt-2 w-full rounded-2xl border-2 border-waka-300 bg-card px-4 py-4 text-3xl font-black"
 
             placeholder="0"
 
@@ -627,7 +605,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
           {counted.length > 0 ? (
 
-            <p className="mt-2 text-sm font-bold text-stone-700">
+            <p className="mt-2 text-sm font-bold text-muted-foreground">
 
               {t(lang, "closeLastDiff")}: UGX {varianceDiff.toLocaleString()}
 
@@ -644,27 +622,17 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
           {(varianceFlagged || preflight?.requiresSyncOverride) && (
-
-            <label className="mt-4 block text-sm font-bold text-stone-800">
-
-              {t(lang, "dayCloseVariancePinLabel")}
-
-              <input
-
-                type="password"
-
-                inputMode="numeric"
-
-                value={managerPin}
-
-                onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 text-xl font-black tracking-widest"
-
+            <div className="mt-4">
+              <p className="text-sm font-bold text-foreground">{t(lang, "dayCloseVariancePinLabel")}</p>
+              <EnterpriseApprovalPinPad
+                lang={lang}
+                preferences={preferences}
+                className="mt-2"
+                onApproved={(pin) => {
+                  setManagerPin(pin);
+                }}
               />
-
-            </label>
-
+            </div>
           )}
 
 
@@ -728,35 +696,23 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
           />
 
-          <input
-
-            type="password"
-
-            inputMode="numeric"
-
-            value={reopenPin}
-
-            onChange={(e) => setReopenPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-
-            placeholder={t(lang, "dayCloseReopenOwnerPin")}
-
-            className="mt-2 w-full rounded-xl border border-amber-300 px-3 py-2 text-sm"
-
+          <EnterpriseApprovalPinPad
+            lang={lang}
+            preferences={preferences}
+            disabled={!reopenReason.trim()}
+            className="mt-3"
+            onApproved={(pin) => {
+              setCloseErrorKey(null);
+              const result = reopenBusinessDay({ dateKey: todayKey, reason: reopenReason, ownerPin: pin });
+              if (!result.ok) {
+                setCloseErrorKey(result.errorKey ?? "invalid");
+                return false;
+              }
+              setReopenReason("");
+              void refreshPreflight();
+              return true;
+            }}
           />
-
-          <button
-
-            type="button"
-
-            onClick={submitReopen}
-
-            className="mt-3 min-h-[48px] w-full rounded-2xl bg-amber-700 font-black text-white"
-
-          >
-
-            {t(lang, "dayCloseReopenConfirm")}
-
-          </button>
 
         </section>
 
@@ -797,20 +753,14 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
               />
 
-              <input
-
-                type="password"
-
-                inputMode="numeric"
-
-                value={managerPin}
-
-                onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-
-                placeholder={t(lang, "dayCloseReopenOwnerPin")}
-
-                className="mt-2 w-full rounded-xl border border-rose-300 px-3 py-2 text-sm"
-
+              <EnterpriseApprovalPinPad
+                lang={lang}
+                preferences={preferences}
+                disabled={!emergencyReason.trim()}
+                className="mt-3"
+                onApproved={(pin) => {
+                  setManagerPin(pin);
+                }}
               />
 
               <button
@@ -839,15 +789,15 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       {dayReopenHistory.length > 0 ? (
 
-        <section className="rounded-3xl border border-stone-200 bg-white p-4">
+        <section className="rounded-3xl border border-border bg-card p-4">
 
-          <h2 className="text-base font-black text-stone-950">{t(lang, "dayCloseReopenHistory")}</h2>
+          <h2 className="text-base font-black text-foreground">{t(lang, "dayCloseReopenHistory")}</h2>
 
           <ul className="mt-2 space-y-2">
 
             {dayReopenHistory.slice(0, 10).map((r) => (
 
-              <li key={r.id} className="text-xs font-semibold text-stone-600">
+              <li key={r.id} className="text-xs font-semibold text-muted-foreground">
 
                 {r.dateKey} · {r.reopenedByLabel} · {r.reason}
 
@@ -865,7 +815,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       {doneMsg && (
 
-        <div className="space-y-3 rounded-2xl bg-stone-900 px-4 py-4 text-white">
+        <div className="space-y-3 rounded-2xl bg-foreground px-4 py-4 text-background">
 
           <p className="text-center text-lg font-bold">{t(lang, "closeSaved")}</p>
 
@@ -903,7 +853,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       {last && last.dateKey === closeDateKey && activeCloseToday ? (
 
-        <section className="rounded-3xl border-2 border-stone-200 bg-stone-50 p-5">
+        <section className="rounded-3xl border-2 border-border bg-muted p-5">
 
           <DocumentActionsBar
 
@@ -925,9 +875,9 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
           />
 
-          <p className="mt-4 text-lg font-black text-stone-900">{t(lang, "closeLastDiff")}</p>
+          <p className="mt-4 text-lg font-black text-foreground">{t(lang, "closeLastDiff")}</p>
 
-          <p className="mt-2 text-3xl font-black text-stone-800">
+          <p className="mt-2 text-3xl font-black text-foreground">
 
             UGX {last.differenceUgx.toLocaleString()}
 
@@ -943,7 +893,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
         <section className="space-y-4">
 
-          <h2 className="text-xl font-black text-stone-900">{t(lang, "closeHistoryTitle")}</h2>
+          <h2 className="text-xl font-black text-foreground">{t(lang, "closeHistoryTitle")}</h2>
 
           <HistoryHeroCard
 
@@ -969,7 +919,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
             isEmpty={filteredDayCloses.length === 0}
 
-            empty={<p className="text-sm font-semibold text-stone-600">{t(lang, "closeHistoryTitle")}</p>}
+            empty={<p className="text-sm font-semibold text-muted-foreground">{t(lang, "closeHistoryTitle")}</p>}
 
           >
 
@@ -977,11 +927,11 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
               {filteredDayCloses.slice(0, 20).map((d) => (
 
-                <li key={d.id} className="border-b border-stone-100 px-3 py-3 last:border-b-0">
+                <li key={d.id} className="border-b border-border px-3 py-3 last:border-b-0">
 
-                  <p className="text-sm font-black text-stone-950">{d.dateKey}</p>
+                  <p className="text-sm font-black text-foreground">{d.dateKey}</p>
 
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-muted-foreground">
 
                     UGX {d.expectedCashUgx.toLocaleString()} / {d.countedCashUgx.toLocaleString()}
 

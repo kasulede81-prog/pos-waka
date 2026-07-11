@@ -46,11 +46,11 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
   return (
     <div className="space-y-4">
       <label className="block">
-        <span className="text-sm font-bold text-stone-700">{t(lang, "menuProductKind")}</span>
+        <span className="text-sm font-bold text-muted-foreground">{t(lang, "menuProductKind")}</span>
         <select
           value={menu.productKind ?? "finished_menu"}
           onChange={(e) => setMenu({ ...menu, productKind: e.target.value as ProductMenuConfig["productKind"] })}
-          className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 px-3 text-sm font-bold"
+          className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-bold"
         >
           <option value="finished_menu">{t(lang, "menuKindFinished")}</option>
           <option value="ingredient">{t(lang, "menuKindIngredient")}</option>
@@ -60,11 +60,11 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
       </label>
 
       <label className="block">
-        <span className="text-sm font-bold text-stone-700">{t(lang, "menuSection")}</span>
+        <span className="text-sm font-bold text-muted-foreground">{t(lang, "menuSection")}</span>
         <select
           value={menu.menuSection ?? ""}
           onChange={(e) => setMenu({ ...menu, menuSection: e.target.value || null })}
-          className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 px-3 text-sm font-bold"
+          className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-bold"
         >
           <option value="">{product.category}</option>
           {DEFAULT_MENU_SECTIONS.map((s) => (
@@ -75,15 +75,15 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
         </select>
       </label>
 
-      <section className="rounded-2xl border border-stone-200 p-3">
+      <section className="rounded-2xl border border-border p-3">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-black text-stone-800">{t(lang, "menuModifiersTitle")}</p>
+          <p className="text-sm font-black text-foreground">{t(lang, "menuModifiersTitle")}</p>
           <button type="button" onClick={addModifierGroup} className="text-xs font-black text-waka-700">
             + {t(lang, "menuAddGroup")}
           </button>
         </div>
         {(menu.modifierGroups ?? []).map((group, gi) => (
-          <div key={group.id} className="mb-3 rounded-xl bg-stone-50 p-3">
+          <div key={group.id} className="mb-3 rounded-xl bg-muted p-3">
             <input
               value={group.label}
               onChange={(e) => {
@@ -91,7 +91,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 groups[gi] = { ...group, label: e.target.value };
                 setMenu({ ...menu, modifierGroups: groups });
               }}
-              className="mb-2 min-h-[40px] w-full rounded-lg border border-stone-200 px-2 text-sm font-bold"
+              className="mb-2 min-h-[40px] w-full rounded-lg border border-border px-2 text-sm font-bold"
             />
             <WakaSwitch
               checked={group.required}
@@ -114,7 +114,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                     groups[gi] = { ...group, options };
                     setMenu({ ...menu, modifierGroups: groups });
                   }}
-                  className="min-h-[40px] rounded-lg border border-stone-200 px-2 text-sm"
+                  className="min-h-[40px] rounded-lg border border-border px-2 text-sm"
                 />
                 <input
                   value={opt.priceDeltaUgx ? String(opt.priceDeltaUgx) : ""}
@@ -129,7 +129,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                     setMenu({ ...menu, modifierGroups: groups });
                   }}
                   placeholder="UGX"
-                  className="min-h-[40px] rounded-lg border border-stone-200 px-2 text-sm font-black"
+                  className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-black"
                 />
               </div>
             ))}
@@ -149,9 +149,9 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
         ))}
       </section>
 
-      <section className="rounded-2xl border border-stone-200 p-3">
+      <section className="rounded-2xl border border-border p-3">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-black text-stone-800">{t(lang, "menuRecipeTitle")}</p>
+          <p className="text-sm font-black text-foreground">{t(lang, "menuRecipeTitle")}</p>
           <button type="button" onClick={addRecipeLine} className="text-xs font-black text-waka-700">
             + {t(lang, "menuAddIngredient")}
           </button>
@@ -170,7 +170,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 };
                 setMenu({ ...menu, recipe: { lines } });
               }}
-              className="min-h-[40px] rounded-lg border border-stone-200 px-2 text-sm"
+              className="min-h-[40px] rounded-lg border border-border px-2 text-sm"
             >
               {ingredientProducts.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -185,16 +185,16 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 lines[li] = { ...line, quantityBase: Math.max(0, Number(e.target.value) || 0) };
                 setMenu({ ...menu, recipe: { lines } });
               }}
-              className="min-h-[40px] rounded-lg border border-stone-200 px-2 text-sm font-black"
+              className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-black"
             />
-            <span className="flex items-center text-xs font-bold text-stone-500">{line.unitLabel ?? "ea"}</span>
+            <span className="flex items-center text-xs font-bold text-muted-foreground">{line.unitLabel ?? "ea"}</span>
           </div>
         ))}
       </section>
 
-      <section className="rounded-2xl border border-stone-200 p-3">
+      <section className="rounded-2xl border border-border p-3">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-black text-stone-800">{t(lang, "menuVariantsTitle")}</p>
+          <p className="text-sm font-black text-foreground">{t(lang, "menuVariantsTitle")}</p>
           <button
             type="button"
             onClick={() => {
@@ -213,7 +213,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
           </button>
         </div>
         {(menu.variants ?? []).map((variant, vi) => (
-          <div key={variant.id} className="mb-2 grid grid-cols-[1fr_100px] gap-2 rounded-xl bg-stone-50 p-2">
+          <div key={variant.id} className="mb-2 grid grid-cols-[1fr_100px] gap-2 rounded-xl bg-muted p-2">
             <input
               value={variant.label}
               onChange={(e) => {
@@ -221,7 +221,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 variants[vi] = { ...variant, label: e.target.value };
                 setMenu({ ...menu, variants });
               }}
-              className="min-h-[40px] rounded-lg border border-stone-200 px-2 text-sm font-bold"
+              className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-bold"
             />
             <input
               value={variant.priceUgx != null ? String(variant.priceUgx) : ""}
@@ -234,15 +234,15 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 setMenu({ ...menu, variants });
               }}
               placeholder="UGX"
-              className="min-h-[40px] rounded-lg border border-stone-200 px-2 text-sm font-black"
+              className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-black"
             />
           </div>
         ))}
       </section>
 
-      <section className="rounded-2xl border border-stone-200 p-3">
+      <section className="rounded-2xl border border-border p-3">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-black text-stone-800">{t(lang, "menuComboTitle")}</p>
+          <p className="text-sm font-black text-foreground">{t(lang, "menuComboTitle")}</p>
           <button
             type="button"
             onClick={() => {
@@ -275,11 +275,11 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 },
               })
             }
-            className="mt-1 min-h-[40px] w-full rounded-lg border border-stone-200 px-2 text-sm font-black"
+            className="mt-1 min-h-[40px] w-full rounded-lg border border-border px-2 text-sm font-black"
           />
         </label>
         {(menu.combo?.slots ?? []).map((slot, si) => (
-          <div key={slot.id} className="mb-3 rounded-xl bg-stone-50 p-2">
+          <div key={slot.id} className="mb-3 rounded-xl bg-muted p-2">
             <input
               value={slot.label}
               onChange={(e) => {
@@ -287,10 +287,10 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 slots[si] = { ...slot, label: e.target.value };
                 setMenu({ ...menu, combo: { ...menu.combo!, slots } });
               }}
-              className="mb-2 min-h-[40px] w-full rounded-lg border border-stone-200 px-2 text-sm font-bold"
+              className="mb-2 min-h-[40px] w-full rounded-lg border border-border px-2 text-sm font-bold"
             />
             <select
-              className="min-h-[40px] w-full rounded-lg border border-stone-200 px-2 text-sm"
+              className="min-h-[40px] w-full rounded-lg border border-border px-2 text-sm"
               value={slot.choices[0]?.productId ?? ""}
               onChange={(e) => {
                 const slots = [...(menu.combo?.slots ?? [])];

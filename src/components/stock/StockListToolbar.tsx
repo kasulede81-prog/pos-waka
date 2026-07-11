@@ -42,7 +42,7 @@ export function StockListToolbar({
             type="button"
             onClick={() => onListFilter("all")}
             className={`min-h-[32px] rounded-full px-3 py-1 text-xs font-black ${
-              listFilter === "all" ? "bg-waka-600 text-white shadow-sm" : "border border-stone-200 bg-white text-stone-700"
+              listFilter === "all" ? "bg-waka-600 text-white shadow-sm" : "border border-border bg-card text-muted-foreground"
             }`}
           >
             {t(lang, "stockFilterAll")}
@@ -51,7 +51,7 @@ export function StockListToolbar({
             type="button"
             onClick={() => onListFilter("low")}
             className={`min-h-[32px] rounded-full px-3 py-1 text-xs font-black ${
-              listFilter === "low" ? "bg-rose-600 text-white shadow-sm" : "border border-stone-200 bg-white text-stone-700"
+              listFilter === "low" ? "bg-rose-600 text-white shadow-sm" : "border border-border bg-card text-muted-foreground"
             }`}
           >
             {t(lang, "stockFilterLow")}
@@ -60,7 +60,7 @@ export function StockListToolbar({
             type="button"
             onClick={() => onGroupByCategory(!groupByCategory)}
             className={`min-h-[32px] rounded-full px-3 py-1 text-xs font-black ${
-              groupByCategory ? "bg-stone-900 text-white" : "border border-stone-200 bg-white text-stone-700"
+              groupByCategory ? "bg-foreground text-background" : "border border-border bg-card text-muted-foreground"
             }`}
           >
             {t(lang, "stockGroupByCategory")}
@@ -69,13 +69,13 @@ export function StockListToolbar({
 
       <div className={compact ? "flex flex-wrap gap-2" : "grid grid-cols-2 gap-2 sm:grid-cols-3"}>
         <label className={compact ? "min-w-[7rem] flex-1" : "block sm:col-span-1"}>
-          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-stone-500">
+          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
             {t(lang, "stockListSortLabel")}
           </span>
           <select
             value={listSort}
             onChange={(e) => onListSort(e.target.value as SortKey)}
-            className="min-h-[36px] w-full rounded-xl border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-bold text-stone-900"
+            className="min-h-[36px] w-full rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-bold text-foreground"
           >
             <option value="name_az">{t(lang, "stockSortNameAz")}</option>
             <option value="name_za">{t(lang, "stockSortNameZa")}</option>
@@ -84,13 +84,13 @@ export function StockListToolbar({
           </select>
         </label>
         <label className={compact ? "min-w-[8rem] flex-[2]" : "block sm:col-span-2"}>
-          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-stone-500">
+          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
             {t(lang, "stockFilterCategoryLabel")}
           </span>
           <select
             value={stockCategoryFilter}
             onChange={(e) => onStockCategoryFilter(e.target.value)}
-            className="min-h-[36px] w-full rounded-xl border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-bold text-stone-900"
+            className="min-h-[36px] w-full rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-bold text-foreground"
           >
             <option value={CATEGORY_FILTER_ALL}>{t(lang, "posCategoryAll")}</option>
             {stockHasUncategorized ? <option value={UNCATEGORIZED_SENTINEL}>{t(lang, "uncategorized")}</option> : null}

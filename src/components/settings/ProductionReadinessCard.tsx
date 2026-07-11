@@ -24,8 +24,8 @@ function statusClass(status: ReadinessStatus): string {
 
 function CheckRow({ lang, check }: { lang: Language; check: ReadinessCheck }) {
   return (
-    <li className="flex items-start justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2 text-sm">
-      <span className="font-semibold text-stone-800">{check.label}</span>
+    <li className="flex items-start justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+      <span className="font-semibold text-foreground">{check.label}</span>
       <span className={`font-black ${statusClass(check.status)}`}>{statusLabel(lang, check.status)}</span>
     </li>
   );
@@ -83,12 +83,12 @@ export function ProductionReadinessCard({ lang, lazy = false }: { lang: Language
   }, lazy ? [queue?.checkedAt] : [customers, sales, debtPayments, products, stockMovements, auditLogs, queue?.checkedAt]);
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "productionReadinessTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "productionReadinessSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "productionReadinessTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "productionReadinessSub")}</p>
 
       {loading ? (
-        <p className="mt-3 text-sm font-semibold text-stone-500">{t(lang, "systemHealthLoading")}</p>
+        <p className="mt-3 text-sm font-semibold text-muted-foreground">{t(lang, "systemHealthLoading")}</p>
       ) : (
         <div
           data-certification-state={certificationState}
@@ -112,12 +112,12 @@ export function ProductionReadinessCard({ lang, lazy = false }: { lang: Language
           <CheckRow key={c.id} lang={lang} check={c} />
         ))}
       </ul>
-      <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/70 p-3">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-700">{t(lang, "releaseChecklistTitle")}</p>
+      <div className="mt-4 rounded-xl border border-border bg-muted/70 p-3">
+        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "releaseChecklistTitle")}</p>
         <ul className="mt-2 space-y-2">
           {releaseChecklist.map((item) => (
             <li key={item.id} className="flex items-start justify-between gap-2 text-sm">
-              <span className="font-semibold text-stone-800">{item.id}</span>
+              <span className="font-semibold text-foreground">{item.id}</span>
               <span className={item.passed ? "font-black text-emerald-700" : "font-black text-red-700"}>
                 {item.passed ? t(lang, "systemHealthPass") : t(lang, "systemHealthFail")}
               </span>
@@ -129,7 +129,7 @@ export function ProductionReadinessCard({ lang, lazy = false }: { lang: Language
       <button
         type="button"
         onClick={runTest}
-        className="mt-4 min-h-[44px] w-full rounded-2xl border-2 border-stone-300 bg-white font-bold text-stone-900"
+        className="mt-4 min-h-[44px] w-full rounded-2xl border-2 border-border bg-card font-bold text-foreground"
       >
         {t(lang, "productionReadinessRerun")}
       </button>

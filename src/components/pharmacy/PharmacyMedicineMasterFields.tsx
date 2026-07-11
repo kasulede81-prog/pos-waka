@@ -113,9 +113,9 @@ type Props = {
 };
 
 const inputClass =
-  "min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-base font-bold outline-none ring-waka-300 focus:ring";
-const labelClass = "block text-sm font-bold text-stone-700";
-const sectionClass = "rounded-2xl border border-stone-200 bg-stone-50/80 p-4 space-y-3";
+  "min-h-[52px] w-full rounded-2xl border-2 border-border px-4 text-base font-bold outline-none ring-waka-300 focus:ring";
+const labelClass = "block text-sm font-bold text-muted-foreground";
+const sectionClass = "rounded-2xl border border-border bg-muted/80 p-4 space-y-3";
 
 export function PharmacyMedicineMasterFields({
   lang,
@@ -134,7 +134,7 @@ export function PharmacyMedicineMasterFields({
   return (
     <div className="space-y-4">
       <section className={sectionClass}>
-        <h4 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "pharmacyMasterSectionIdentity")}</h4>
+        <h4 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "pharmacyMasterSectionIdentity")}</h4>
         {hideBrandName ? null : (
         <label className={labelClass}>
           {t(lang, "pharmacyBrandName")}
@@ -195,7 +195,7 @@ export function PharmacyMedicineMasterFields({
       </section>
 
       <section className={sectionClass}>
-        <h4 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "pharmacyMasterSectionRegulatory")}</h4>
+        <h4 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "pharmacyMasterSectionRegulatory")}</h4>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className={labelClass}>
             {t(lang, "pharmacyManufacturer")}
@@ -234,7 +234,7 @@ export function PharmacyMedicineMasterFields({
                   "min-h-[48px] rounded-2xl border-2 text-sm font-black touch-manipulation",
                   state.otcOrPrescription === kind
                     ? "border-waka-500 bg-waka-600 text-white"
-                    : "border-stone-200 bg-white text-stone-900",
+                    : "border-border bg-card text-foreground",
                 )}
               >
                 {t(lang, kind === "otc" ? "pharmacyOtc" : "pharmacyPrescriptionRx")}
@@ -243,7 +243,7 @@ export function PharmacyMedicineMasterFields({
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
-          <div className={clsx(flagClass, state.controlledDrug ? "border-violet-400 bg-violet-50" : "border-stone-200 bg-white")}>
+          <div className={clsx(flagClass, state.controlledDrug ? "border-violet-400 bg-violet-50" : "border-border bg-card")}>
             <WakaSwitch
               checked={state.controlledDrug}
               onCheckedChange={(checked) =>
@@ -256,28 +256,28 @@ export function PharmacyMedicineMasterFields({
               label={t(lang, "pharmacyControlled")}
             />
           </div>
-          <div className={clsx(flagClass, state.refrigerated ? "border-sky-400 bg-sky-50" : "border-stone-200 bg-white")}>
+          <div className={clsx(flagClass, state.refrigerated ? "border-sky-400 bg-sky-50" : "border-border bg-card")}>
             <WakaSwitch
               checked={state.refrigerated}
               onCheckedChange={(checked) => onChange({ refrigerated: checked })}
               label={t(lang, "pharmacyRefrigerated")}
             />
           </div>
-          <div className={clsx(flagClass, state.hazardous ? "border-amber-400 bg-amber-50" : "border-stone-200 bg-white")}>
+          <div className={clsx(flagClass, state.hazardous ? "border-amber-400 bg-amber-50" : "border-border bg-card")}>
             <WakaSwitch
               checked={state.hazardous}
               onCheckedChange={(checked) => onChange({ hazardous: checked })}
               label={t(lang, "pharmacyHazardous")}
             />
           </div>
-          <div className={clsx(flagClass, state.batchTracked ? "border-teal-400 bg-teal-50" : "border-stone-200 bg-white")}>
+          <div className={clsx(flagClass, state.batchTracked ? "border-teal-400 bg-teal-50" : "border-border bg-card")}>
             <WakaSwitch
               checked={state.batchTracked}
               onCheckedChange={(checked) => onChange({ batchTracked: checked })}
               label={t(lang, "pharmacyBatchTracked")}
             />
           </div>
-          <div className={clsx(flagClass, state.expiryTracked ? "border-teal-400 bg-teal-50" : "border-stone-200 bg-white")}>
+          <div className={clsx(flagClass, state.expiryTracked ? "border-teal-400 bg-teal-50" : "border-border bg-card")}>
             <WakaSwitch
               checked={state.expiryTracked}
               onCheckedChange={(checked) => onChange({ expiryTracked: checked })}
@@ -322,14 +322,14 @@ export function PharmacyMedicineMasterFields({
               />
             </label>
             <div className="grid gap-2 sm:grid-cols-2">
-              <div className={clsx(flagClass, state.managerOverrideRequired ? "border-violet-400 bg-white" : "border-stone-200 bg-white")}>
+              <div className={clsx(flagClass, state.managerOverrideRequired ? "border-violet-400 bg-card" : "border-border bg-card")}>
                 <WakaSwitch
                   checked={state.managerOverrideRequired}
                   onCheckedChange={(checked) => onChange({ managerOverrideRequired: checked })}
                   label={t(lang, "pharmacyComplianceManagerOverride")}
                 />
               </div>
-              <div className={clsx(flagClass, state.witnessRequired ? "border-violet-400 bg-white" : "border-stone-200 bg-white")}>
+              <div className={clsx(flagClass, state.witnessRequired ? "border-violet-400 bg-card" : "border-border bg-card")}>
                 <WakaSwitch
                   checked={state.witnessRequired}
                   onCheckedChange={(checked) => onChange({ witnessRequired: checked })}
@@ -342,7 +342,7 @@ export function PharmacyMedicineMasterFields({
       </section>
 
       <section className={sectionClass}>
-        <h4 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "pharmacyMasterSectionCodes")}</h4>
+        <h4 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "pharmacyMasterSectionCodes")}</h4>
         <label className={labelClass}>
           {t(lang, "pharmacyPrimaryBarcode")}
           <input
@@ -371,7 +371,7 @@ export function PharmacyMedicineMasterFields({
       </section>
 
       <section className={sectionClass}>
-        <h4 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "pharmacyMasterSectionStorage")}</h4>
+        <h4 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "pharmacyMasterSectionStorage")}</h4>
         <label className={labelClass}>
           {t(lang, "pharmacyStorageNotes")}
           <textarea

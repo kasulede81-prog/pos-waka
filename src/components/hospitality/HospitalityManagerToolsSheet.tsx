@@ -3,7 +3,8 @@ import { Link2, RotateCcw, Unlink, XCircle } from "lucide-react";
 import type { HospitalityFloorState, Language, TableSession } from "../../types";
 import { t } from "../../lib/i18n";
 import { ModalSheet } from "../layout/ModalSheet";
-import { PinInput } from "../ui/PinInput";
+import { EnterprisePinPad } from "../auth/EnterprisePinPad";
+import { verifyManagerApprovalPinSync } from "../../lib/enterpriseSecurity/EnterpriseSecurityService";
 import { usePosStore } from "../../store/usePosStore";
 import { sessionDisplayLabel } from "../../lib/hospitality";
 import { isTableSeatable } from "../../lib/hospitalityFrontOfHouse";
@@ -30,13 +31,14 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
   const reopenTableBill = usePosStore((s) => s.reopenTableBill);
   const voidSettledTableBill = usePosStore((s) => s.voidSettledTableBill);
   const sales = usePosStore((s) => s.sales);
+  const preferences = usePosStore((s) => s.preferences);
 
   const [tab, setTab] = useState<Tab>("combine");
   const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
-  const [pin, setPin] = useState("");
+  const [pinResetSignal, setPinResetSignal] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -80,26 +82,28 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
     setStatus(t(lang, "hospitalitySplitDone"));
   };
 
-  const runReopen = () => {
-    if (!selectedSessionId || !reason.trim() || pin.length !== 4) return;
+  const runReopen = (managerPin: string) => {
+    if (!selectedSessionId || !reason.trim()) return;
     setBusy(true);
-    const res = reopenTableBill({ sessionId: selectedSessionId, reason: reason.trim(), managerPin: pin });
+    const res = reopenTableBill({ sessionId: selectedSessionId, reason: reason.trim(), managerPin });
     setBusy(false);
     if (!res.ok) {
       setStatus(t(lang, res.errorKey ?? "saleError"));
+      setPinResetSignal((n) => n + 1);
       return;
     }
     setStatus(t(lang, "hospitalityReopenDone"));
     onClose();
   };
 
-  const runVoid = () => {
-    if (!selectedSessionId || !reason.trim() || pin.length !== 4) return;
+  const runVoid = (managerPin: string) => {
+    if (!selectedSessionId || !reason.trim()) return;
     setBusy(true);
-    const res = voidSettledTableBill({ sessionId: selectedSessionId, reason: reason.trim(), managerPin: pin });
+    const res = voidSettledTableBill({ sessionId: selectedSessionId, reason: reason.trim(), managerPin });
     setBusy(false);
     if (!res.ok) {
       setStatus(t(lang, res.errorKey ?? "saleError"));
+      setPinResetSignal((n) => n + 1);
       return;
     }
     setStatus(t(lang, "hospitalityVoidDone"));
@@ -125,7 +129,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
               setStatus(null);
             }}
             className={`inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black ${
-              tab === id ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-800"
+              tab === id ? "bg-foreground text-background" : "bg-muted text-foreground"
             }`}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -136,7 +140,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
 
       {tab === "combine" ? (
         <div className="mt-4 space-y-3">
-          <p className="text-sm font-medium text-stone-600">{t(lang, "hospitalityCombineSub")}</p>
+          <p className="text-sm font-medium text-muted-foreground">{t(lang, "hospitalityCombineSub")}</p>
           <ul className="grid max-h-48 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
             {availableTables.map((table) => (
               <li key={table.id}>
@@ -146,7 +150,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
                   className={`min-h-12 w-full rounded-xl border-2 px-2 text-sm font-black ${
                     selectedTableIds.includes(table.id)
                       ? "border-waka-600 bg-waka-50 text-waka-900"
-                      : "border-stone-200 bg-white"
+                      : "border-border bg-card"
                   }`}
                 >
                   {table.label}
@@ -167,7 +171,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
 
       {tab === "split" ? (
         <div className="mt-4 space-y-3">
-          <p className="text-sm font-medium text-stone-600">{t(lang, "hospitalitySplitSub")}</p>
+          <p className="text-sm font-medium text-muted-foreground">{t(lang, "hospitalitySplitSub")}</p>
           <ul className="space-y-2">
             {combinedGroups.map((g) => (
               <li key={g.id}>
@@ -175,7 +179,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
                   type="button"
                   onClick={() => setSelectedGroupId(g.id)}
                   className={`min-h-12 w-full rounded-xl border-2 px-3 text-left text-sm font-black ${
-                    selectedGroupId === g.id ? "border-waka-600 bg-waka-50" : "border-stone-200"
+                    selectedGroupId === g.id ? "border-waka-600 bg-waka-50" : "border-border"
                   }`}
                 >
                   {g.displayLabel}
@@ -183,14 +187,14 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
               </li>
             ))}
             {!combinedGroups.length ? (
-              <p className="text-sm text-stone-500">{t(lang, "hospitalityNoCombined")}</p>
+              <p className="text-sm text-muted-foreground">{t(lang, "hospitalityNoCombined")}</p>
             ) : null}
           </ul>
           <button
             type="button"
             disabled={busy || !selectedGroupId}
             onClick={runSplit}
-            className="min-h-12 w-full rounded-2xl bg-stone-900 text-sm font-black text-white disabled:opacity-50"
+            className="min-h-12 w-full rounded-2xl bg-foreground text-sm font-black text-background disabled:opacity-50"
           >
             {t(lang, "hospitalitySplitAction")}
           </button>
@@ -199,7 +203,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
 
       {(tab === "reopen" || tab === "void") && (
         <div className="mt-4 space-y-3">
-          <p className="text-sm font-medium text-stone-600">
+          <p className="text-sm font-medium text-muted-foreground">
             {tab === "reopen" ? t(lang, "hospitalityReopenSub") : t(lang, "hospitalityVoidSub")}
           </p>
           <ul className="max-h-40 space-y-2 overflow-y-auto">
@@ -213,7 +217,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
                     disabled={tab === "reopen" ? false : voided}
                     onClick={() => setSelectedSessionId(session.id)}
                     className={`min-h-12 w-full rounded-xl border-2 px-3 text-left text-sm font-bold ${
-                      selectedSessionId === session.id ? "border-waka-600 bg-waka-50" : "border-stone-200"
+                      selectedSessionId === session.id ? "border-waka-600 bg-waka-50" : "border-border"
                     } ${voided ? "opacity-50" : ""}`}
                   >
                     {sessionDisplayLabel(session, floor)}
@@ -223,29 +227,34 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
                 </li>
               );
             })}
-            {!closed.length ? <p className="text-sm text-stone-500">{t(lang, "hospitalityNoClosed")}</p> : null}
+            {!closed.length ? <p className="text-sm text-muted-foreground">{t(lang, "hospitalityNoClosed")}</p> : null}
           </ul>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder={t(lang, "hospitalityManagerReasonPh")}
-            className="min-h-20 w-full rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-semibold"
+            className="min-h-20 w-full rounded-xl border-2 border-border px-3 py-2 text-sm font-semibold"
           />
-          <PinInput value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-          <button
-            type="button"
-            disabled={busy || !selectedSessionId || !reason.trim() || pin.length !== 4}
-            onClick={tab === "reopen" ? runReopen : runVoid}
-            className={`min-h-12 w-full rounded-2xl text-sm font-black text-white disabled:opacity-50 ${
-              tab === "void" ? "bg-rose-700" : "bg-waka-600"
-            }`}
-          >
-            {tab === "reopen" ? t(lang, "hospitalityReopenAction") : t(lang, "hospitalityVoidAction")}
-          </button>
+          <EnterprisePinPad
+            lang={lang}
+            disabled={busy || !selectedSessionId || !reason.trim()}
+            resetSignal={`${tab}-${pinResetSignal}`}
+            onComplete={(managerPin) => {
+              if (!verifyManagerApprovalPinSync(managerPin, preferences)) {
+                return false;
+              }
+              if (tab === "reopen") {
+                runReopen(managerPin);
+              } else {
+                runVoid(managerPin);
+              }
+              return true;
+            }}
+          />
         </div>
       )}
 
-      {status ? <p className="mt-3 text-sm font-bold text-stone-700">{status}</p> : null}
+      {status ? <p className="mt-3 text-sm font-bold text-muted-foreground">{status}</p> : null}
     </ModalSheet>
   );
 }

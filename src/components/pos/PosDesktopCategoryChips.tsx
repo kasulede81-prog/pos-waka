@@ -34,7 +34,7 @@ export function PosDesktopCategoryChips({ lang, shelves, selectedKey, onSelect, 
       "pos-ds-category-chip inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-xs font-black transition-colors",
       active
         ? "border-waka-500 bg-waka-600 text-white shadow-sm"
-        : "border-stone-200 bg-white text-stone-800 active:bg-stone-50",
+        : "border-border bg-card text-foreground active:bg-muted",
     );
 
   return (
@@ -67,7 +67,7 @@ export function PosDesktopCategoryChips({ lang, shelves, selectedKey, onSelect, 
             <ChevronDown className={clsx("h-3.5 w-3.5 transition", moreOpen && "rotate-180")} aria-hidden />
           </button>
           {moreOpen ? (
-            <div className="absolute left-0 top-[calc(100%+0.25rem)] z-30 max-h-64 min-w-[10rem] overflow-y-auto rounded-xl border border-stone-200 bg-white p-1 shadow-lg">
+            <div className="absolute left-0 top-[calc(100%+0.25rem)] z-30 max-h-64 min-w-[10rem] overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-lg">
               {overflow.map((shelf) => (
                 <button
                   key={shelf.key}
@@ -78,7 +78,7 @@ export function PosDesktopCategoryChips({ lang, shelves, selectedKey, onSelect, 
                   }}
                   className={clsx(
                     "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold",
-                    selectedKey === shelf.key ? "bg-waka-50 text-waka-900" : "text-stone-800 active:bg-stone-50",
+                    selectedKey === shelf.key ? "bg-waka-50 text-waka-900" : "text-foreground active:bg-muted",
                   )}
                 >
                   {shelf.icon ? <span aria-hidden>{shelf.icon}</span> : null}

@@ -26,9 +26,9 @@ export function ProductionStationDashboard({ lang, dashboard }: Props) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
       {cells.map((cell) => (
-        <div key={cell.label} className="rounded-xl border border-stone-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{cell.label}</p>
-          <p className="mt-0.5 text-lg font-black text-stone-950">{cell.value}</p>
+        <div key={cell.label} className="rounded-xl border border-border bg-card px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{cell.label}</p>
+          <p className="mt-0.5 text-lg font-black text-foreground">{cell.value}</p>
         </div>
       ))}
     </div>

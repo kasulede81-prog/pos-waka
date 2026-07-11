@@ -24,13 +24,13 @@ function PharmacySettingsBody({ lang }: { lang: Language }) {
 
   return (
     <>
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "pharmacyExpiredSaleBehavior")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "pharmacyExpiredSaleBehavior")}</p>
         <div className="mt-4 space-y-3">
           {(["warn", "block"] as PharmacyExpiredSaleBehavior[]).map((value) => (
             <label
               key={value}
-              className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-stone-900"
+              className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-border px-3 py-2 text-base font-bold text-foreground"
             >
               <input
                 type="radio"
@@ -47,17 +47,17 @@ function PharmacySettingsBody({ lang }: { lang: Language }) {
 
       <article className="rounded-2xl border border-violet-200 bg-violet-50/40 p-4 shadow-sm">
         <p className="text-base font-black text-violet-950">{t(lang, "pharmacyComplianceSettingsTitle")}</p>
-        <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "pharmacyComplianceSettingsSub")}</p>
+        <p className="mt-1 text-sm font-semibold text-muted-foreground">{t(lang, "pharmacyComplianceSettingsSub")}</p>
 
         <WakaSwitch
           checked={Boolean(compliance.witnessWorkflowEnabled)}
           onCheckedChange={(checked) => patchCompliance({ witnessWorkflowEnabled: checked })}
           label={t(lang, "pharmacyComplianceWitnessWorkflow")}
-          className="mt-4 rounded-xl border border-violet-100 bg-white px-3 py-2"
+          className="mt-4 rounded-xl border border-violet-100 bg-card px-3 py-2"
         />
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "pharmacyComplianceLargeQtyThreshold")}
             <input
               type="number"
@@ -69,7 +69,7 @@ function PharmacySettingsBody({ lang }: { lang: Language }) {
               className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-violet-200 px-3 text-base font-bold"
             />
           </label>
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "pharmacyComplianceOverrideThreshold")}
             <input
               type="number"
@@ -81,7 +81,7 @@ function PharmacySettingsBody({ lang }: { lang: Language }) {
               className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-violet-200 px-3 text-base font-bold"
             />
           </label>
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "pharmacyComplianceOverrideWindow")}
             <input
               type="number"
@@ -93,7 +93,7 @@ function PharmacySettingsBody({ lang }: { lang: Language }) {
               className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-violet-200 px-3 text-base font-bold"
             />
           </label>
-          <label className="block text-sm font-bold text-stone-800">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "pharmacyComplianceFailedApprovalThreshold")}
             <input
               type="number"

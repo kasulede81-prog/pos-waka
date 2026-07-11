@@ -24,8 +24,10 @@ import {
 } from "../lib/commandCenterPageView";
 import { shareText } from "../lib/reportExport";
 import { EnterpriseDashboardShell } from "../components/command-center/EnterpriseDashboardShell";
-import { resolveDashboardMode } from "../components/command-center/registry/dashboardMode";
+import { isHospitalityMode } from "../lib/hospitality";
+import { computeHospitalityDashboardStats } from "../lib/hospitalityStats";
 import type { DashboardCenterContext } from "../components/command-center/registry/dashboardWidgetTypes";
+import { resolveDashboardMode } from "../components/command-center/registry/dashboardMode";
 
 const RECOMMENDATIONS_SECTION_ID = "cmd-center-recommendations";
 
@@ -74,6 +76,17 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
   const mode = resolveDashboardMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const pharmacyMode = mode === "pharmacy";
+  const hospitalityStats = useMemo(() => {
+    const floor = preferences.hospitalityFloor;
+    if (mode !== "hospitality" || !floor || !isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
+      return null;
+    }
+    return computeHospitalityDashboardStats(floor, sales);
+  }, [mode, preferences.hospitalityFloor, preferences.businessType, preferences.hospitalityModeEnabled, sales]);
+  const hospitalityFloor =
+    mode === "hospitality" && isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)
+      ? preferences.hospitalityFloor ?? null
+      : null;
   const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, filter), [filter, lang]);
   const syncStats = useMemo(() => computeSyncSalesStats(sales), [sales]);
 
@@ -277,6 +290,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     onAcknowledge,
     exportDashboard,
     recommendationsSectionId: RECOMMENDATIONS_SECTION_ID,
+    hospitalityStats,
+    hospitalityFloor,
   }), [
     lang,
     mode,
@@ -307,6 +322,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     revenueSparkline,
     onAcknowledge,
     exportDashboard,
+    hospitalityStats,
+    hospitalityFloor,
   ]);
 
   return <EnterpriseDashboardShell ctx={ctx} />;

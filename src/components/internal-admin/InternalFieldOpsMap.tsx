@@ -229,7 +229,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
   const token = accessToken?.trim();
   if (!token) {
     return (
-      <p className="rounded-xl bg-white/10 px-3 py-4 text-center text-sm font-semibold text-stone-200">
+      <p className="rounded-xl bg-white/10 px-3 py-4 text-center text-sm font-semibold text-muted-foreground">
         {t(lang, "internalAdminMapHint")}
       </p>
     );
@@ -290,7 +290,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
             <div className="absolute left-3 top-12 z-[15] flex flex-col gap-2">
               <button
                 type="button"
-                className="rounded-full bg-stone-900/90 px-3 py-1.5 text-xs font-black text-white shadow-lg ring-1 ring-white/20"
+                className="rounded-full bg-foreground/90 px-3 py-1.5 text-xs font-black text-background shadow-lg ring-1 ring-white/20"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSpider(null);
@@ -390,29 +390,29 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
               closeOnClick={false}
               maxWidth="300px"
             >
-              <div className="min-w-[220px] p-1 text-stone-900">
+              <div className="min-w-[220px] p-1 text-foreground">
                 <p className="font-black leading-tight">{popup.pin.shop_name}</p>
-                <dl className="mt-2 space-y-1 text-xs font-semibold text-stone-700">
+                <dl className="mt-2 space-y-1 text-xs font-semibold text-muted-foreground">
                   <div className="flex justify-between gap-2">
-                    <dt className="text-stone-500">{t(lang, "internalMapOwnerLabel")}</dt>
-                    <dd className="text-right font-bold text-stone-900">{popup.pin.owner_label ?? "—"}</dd>
+                    <dt className="text-muted-foreground">{t(lang, "internalMapOwnerLabel")}</dt>
+                    <dd className="text-right font-bold text-foreground">{popup.pin.owner_label ?? "—"}</dd>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <dt className="text-stone-500">{t(lang, "internalMapPlanLabel")}</dt>
+                    <dt className="text-muted-foreground">{t(lang, "internalMapPlanLabel")}</dt>
                     <dd className="text-right uppercase text-waka-800">{popup.pin.plan_code ?? "—"}</dd>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <dt className="text-stone-500">{t(lang, "internalMapLastActive")}</dt>
-                    <dd className="text-right font-mono text-[11px] text-stone-800">{fmtLastActive(popup.pin.last_seen_at)}</dd>
+                    <dt className="text-muted-foreground">{t(lang, "internalMapLastActive")}</dt>
+                    <dd className="text-right font-mono text-[11px] text-foreground">{fmtLastActive(popup.pin.last_seen_at)}</dd>
                   </div>
                 </dl>
-                <p className="mt-1 text-xs font-semibold text-stone-600">
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
                   {[popup.pin.district, popup.pin.city].filter(Boolean).join(" · ") || "—"}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
                     to={`/internal/waka/shop/${popup.pin.shop_id}`}
-                    className="inline-flex rounded-lg bg-stone-900 px-3 py-2 text-xs font-black text-white hover:bg-stone-800"
+                    className="inline-flex rounded-lg bg-foreground px-3 py-2 text-xs font-black text-background hover:bg-foreground"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {t(lang, "internalMapOpenShop")}
@@ -436,7 +436,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
         </Map>
 
         {validPins.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-stone-950/55 px-4">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-foreground/55 px-4">
             <p className="max-w-sm text-center text-sm font-bold text-white drop-shadow-md">{t(lang, "internalMapNoPins")}</p>
           </div>
         ) : null}

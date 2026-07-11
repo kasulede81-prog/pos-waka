@@ -210,43 +210,6 @@ export async function fetchRecentPromotionalGrants(limit = 100): Promise<Promoti
   return (data as GrantRow[]).map(mapGrant);
 }
 
-export async function adminGrantPromotionalAccess(params: {
-  shopId: string;
-  planCode: PromotionalPlanCode;
-  days: number;
-  reason: string;
-  campaignId?: string | null;
-}): Promise<RpcResult> {
-  if (!supabase) return { ok: false, error: "no_supabase" };
-  const { data, error } = await supabase.rpc("admin_grant_promotional_access", {
-    p_shop_id: params.shopId,
-    p_plan_code: params.planCode,
-    p_days: params.days,
-    p_reason: params.reason || null,
-    p_campaign_id: params.campaignId ?? null,
-  });
-  return rpcResult(data, error);
-}
-
-export async function adminExtendPromotionalAccess(grantId: string, extraDays: number, reason?: string): Promise<RpcResult> {
-  if (!supabase) return { ok: false, error: "no_supabase" };
-  const { data, error } = await supabase.rpc("admin_extend_promotional_access", {
-    p_grant_id: grantId,
-    p_extra_days: extraDays,
-    p_reason: reason || null,
-  });
-  return rpcResult(data, error);
-}
-
-export async function adminRevokePromotionalAccess(grantId: string, reason?: string): Promise<RpcResult> {
-  if (!supabase) return { ok: false, error: "no_supabase" };
-  const { data, error } = await supabase.rpc("admin_revoke_promotional_access", {
-    p_grant_id: grantId,
-    p_reason: reason || null,
-  });
-  return rpcResult(data, error);
-}
-
 // ---------------------------------------------------------------------------
 // Metrics
 // ---------------------------------------------------------------------------
@@ -281,29 +244,3 @@ export async function fetchGrowthCampaignMetrics(filter?: {
 // ---------------------------------------------------------------------------
 // Registration hook (owner side)
 // ---------------------------------------------------------------------------
-
-/**
- * Applies any active automatic / referral growth-campaign grant to the
- * caller's freshly bootstrapped workspace. Idempotent; safe to call on every
- * post-signup session check.
- */
-export async function applyGrowthCampaignGrantForSession(referralCode?: string | null): Promise<{
-  granted: boolean;
-  planCode?: string;
-}> {
-  if (!supabase) return { granted: false };
-  try {
-    const { data, error } = await supabase.rpc("apply_growth_campaign_grant", {
-      p_referral_code: referralCode ?? null,
-    });
-    if (error || !data) return { granted: false };
-    const obj = data as Record<string, unknown>;
-    if (obj.granted === true) {
-      window.dispatchEvent(new Event("waka:subscription-updated"));
-      return { granted: true, planCode: typeof obj.plan_code === "string" ? obj.plan_code : undefined };
-    }
-    return { granted: false };
-  } catch {
-    return { granted: false };
-  }
-}

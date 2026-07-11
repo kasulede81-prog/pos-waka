@@ -37,16 +37,16 @@ export function ReservationCalendarPage({ lang }: { lang: Language }) {
       <PageBackBar lang={lang} fallbackTo="/floor" label={t(lang, "navFloor")} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-stone-950">{t(lang, "reservationCalendarTitle")}</h1>
-          <p className="text-sm font-medium text-stone-500">{t(lang, "reservationCalendarSub")}</p>
+          <h1 className="text-2xl font-black text-foreground">{t(lang, "reservationCalendarTitle")}</h1>
+          <p className="text-sm font-medium text-muted-foreground">{t(lang, "reservationCalendarSub")}</p>
         </div>
-        <div className="flex gap-1 rounded-xl border border-stone-200 bg-white p-1">
+        <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
           {(["daily", "weekly", "timeline"] as ViewMode[]).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
-              className={view === v ? "rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-black text-white" : "rounded-lg px-3 py-1.5 text-xs font-bold text-stone-600"}
+              className={view === v ? "rounded-lg bg-foreground px-3 py-1.5 text-xs font-black text-background" : "rounded-lg px-3 py-1.5 text-xs font-bold text-muted-foreground"}
             >
               {t(lang, `reservationView_${v}` as "reservationView_daily")}
             </button>
@@ -64,25 +64,25 @@ export function ReservationCalendarPage({ lang }: { lang: Language }) {
         </ul>
       ) : null}
 
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl border border-stone-200 px-3 py-2 text-sm font-bold" />
+      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl border border-border px-3 py-2 text-sm font-bold" />
 
       {view === "daily" ? (
         <ul className="space-y-2">
           {reservations.map((r) => (
-            <li key={r.id} className="rounded-xl border border-stone-200 bg-white p-4">
+            <li key={r.id} className="rounded-xl border border-border bg-card p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="font-black text-stone-950">
+                  <p className="font-black text-foreground">
                     {r.reservationTime} · {r.guestName} (#{r.reservationNumber})
                   </p>
-                  <p className="text-xs font-semibold text-stone-500">
+                  <p className="text-xs font-semibold text-muted-foreground">
                     {r.guestCount} guests · {r.phone} · {t(lang, `reservationStatus_${r.status}` as "reservationStatus_confirmed")}
                   </p>
                 </div>
                 <select
                   value={r.preferredTableId ?? ""}
                   onChange={(e) => updateReservation(r.id, { preferredTableId: e.target.value || null })}
-                  className="rounded-lg border border-stone-200 px-2 py-1 text-xs font-bold"
+                  className="rounded-lg border border-border px-2 py-1 text-xs font-bold"
                 >
                   <option value="">{t(lang, "reservationAnyTable")}</option>
                   {floor.tables.filter((tble) => tble.isActive).map((tble) => (
@@ -93,7 +93,7 @@ export function ReservationCalendarPage({ lang }: { lang: Language }) {
             </li>
           ))}
           {reservations.length === 0 ? (
-            <p className="py-10 text-center text-sm font-semibold text-stone-400">{t(lang, "reservationCalendarEmpty")}</p>
+            <p className="py-10 text-center text-sm font-semibold text-muted-foreground">{t(lang, "reservationCalendarEmpty")}</p>
           ) : null}
         </ul>
       ) : null}
@@ -103,10 +103,10 @@ export function ReservationCalendarPage({ lang }: { lang: Language }) {
           {weekDates.map((d) => {
             const dayRes = reservationsForDate(floor, d);
             return (
-              <div key={d} className="rounded-xl border border-stone-200 bg-white p-3">
-                <p className="text-xs font-black uppercase text-stone-500">{d}</p>
-                <p className="mt-1 text-2xl font-black text-stone-900">{dayRes.length}</p>
-                <ul className="mt-2 space-y-1 text-xs font-semibold text-stone-600">
+              <div key={d} className="rounded-xl border border-border bg-card p-3">
+                <p className="text-xs font-black uppercase text-muted-foreground">{d}</p>
+                <p className="mt-1 text-2xl font-black text-foreground">{dayRes.length}</p>
+                <ul className="mt-2 space-y-1 text-xs font-semibold text-muted-foreground">
                   {dayRes.slice(0, 3).map((r) => (
                     <li key={r.id}>{r.reservationTime} {r.guestName}</li>
                   ))}
@@ -118,14 +118,14 @@ export function ReservationCalendarPage({ lang }: { lang: Language }) {
       ) : null}
 
       {view === "timeline" ? (
-        <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white p-4">
+        <div className="overflow-x-auto rounded-xl border border-border bg-card p-4">
           <div className="min-w-[600px] space-y-2">
             {Array.from({ length: 24 }, (_, h) => {
               const slot = `${String(h).padStart(2, "0")}:00`;
               const slotRes = reservations.filter((r) => r.reservationTime.startsWith(String(h).padStart(2, "0")));
               return (
-                <div key={slot} className="flex gap-3 border-b border-stone-100 py-2">
-                  <span className="w-12 shrink-0 text-xs font-black text-stone-400">{slot}</span>
+                <div key={slot} className="flex gap-3 border-b border-border py-2">
+                  <span className="w-12 shrink-0 text-xs font-black text-muted-foreground">{slot}</span>
                   <div className="flex flex-1 flex-wrap gap-2">
                     {slotRes.map((r) => (
                       <span key={r.id} className="rounded-lg bg-violet-100 px-2 py-1 text-xs font-bold text-violet-900">

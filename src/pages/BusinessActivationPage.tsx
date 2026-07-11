@@ -60,8 +60,8 @@ export function BusinessActivationPage({ lang, setLang }: Props) {
   if (bypass) {
     return (
       <BusinessBuilderShell lang={lang} setLang={setLang} funnelStep="open" unlocks={unlocks} showProgress={false}>
-        <div className="rounded-[28px] bg-white p-6 shadow-lg">
-          <p className="text-base font-medium leading-relaxed text-stone-700">{t(lang, "activationStaffBypass")}</p>
+        <div className="rounded-[28px] bg-card p-6 shadow-lg">
+          <p className="text-base font-medium leading-relaxed text-muted-foreground">{t(lang, "activationStaffBypass")}</p>
           <Link
             className="mt-8 inline-flex min-h-[52px] w-full items-center justify-center rounded-[28px] bg-gradient-to-r from-waka-500 to-waka-600 text-base font-semibold text-white"
             to="/"
@@ -76,10 +76,10 @@ export function BusinessActivationPage({ lang, setLang }: Props) {
   if (active) {
     return (
       <BusinessBuilderShell lang={lang} setLang={setLang} funnelStep="open" unlocks={unlocks}>
-        <div className="space-y-6 rounded-[28px] bg-white p-6 text-center shadow-lg">
-          <h1 className="text-3xl font-black tracking-tight text-stone-900">{t(lang, "activationActiveTitle")}</h1>
+        <div className="space-y-6 rounded-[28px] bg-card p-6 text-center shadow-lg">
+          <h1 className="text-3xl font-black tracking-tight text-foreground">{t(lang, "activationActiveTitle")}</h1>
           {gate?.active_license_key ? (
-            <p className="font-mono text-sm text-stone-500">{gate.active_license_key}</p>
+            <p className="font-mono text-sm text-muted-foreground">{gate.active_license_key}</p>
           ) : null}
           <Link
             to="/"
@@ -94,22 +94,22 @@ export function BusinessActivationPage({ lang, setLang }: Props) {
 
   return (
     <BusinessBuilderShell lang={lang} setLang={setLang} funnelStep="open" unlocks={unlocks}>
-      <div className="rounded-[28px] border border-white/80 bg-white/95 p-6 shadow-lg backdrop-blur-sm sm:rounded-[32px]">
+      <div className="rounded-[28px] border border-white/80 bg-card/95 p-6 shadow-lg backdrop-blur-sm sm:rounded-[32px]">
         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-waka-600">
           {t(lang, "activationHeroKicker")}
         </p>
-        <h1 className="mt-3 text-2xl font-black leading-tight text-stone-900 sm:text-3xl">
+        <h1 className="mt-3 text-2xl font-black leading-tight text-foreground sm:text-3xl">
           {t(lang, "activationPageTitle")}
         </h1>
-        <p className="mt-3 text-base leading-relaxed text-stone-600">{t(lang, "activationPageSubtitle")}</p>
+        <p className="mt-3 text-base leading-relaxed text-muted-foreground">{t(lang, "activationPageSubtitle")}</p>
 
         {showSuccess ? (
           <section className="mt-8 space-y-4 text-center">
-            <h2 className="text-xl font-black text-stone-900">{t(lang, "activationSuccessTitle")}</h2>
-            <p className="text-base leading-relaxed text-stone-600">{t(lang, "activationSuccessBody")}</p>
-            <p className="text-sm leading-relaxed text-stone-500">{t(lang, "activationSuccessHint")}</p>
+            <h2 className="text-xl font-black text-foreground">{t(lang, "activationSuccessTitle")}</h2>
+            <p className="text-base leading-relaxed text-muted-foreground">{t(lang, "activationSuccessBody")}</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">{t(lang, "activationSuccessHint")}</p>
             {displayRef ? (
-              <p className="font-mono text-xs text-stone-400">
+              <p className="font-mono text-xs text-muted-foreground">
                 {t(lang, "activationRefHint").replace("{{code}}", displayRef)}
               </p>
             ) : null}
@@ -137,13 +137,13 @@ export function BusinessActivationPage({ lang, setLang }: Props) {
         <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Link
             to="/demo"
-            className="flex min-h-[48px] items-center justify-center rounded-2xl border border-stone-200 bg-white text-center text-sm font-semibold text-stone-800 shadow-sm"
+            className="flex min-h-[48px] items-center justify-center rounded-2xl border border-border bg-card text-center text-sm font-semibold text-foreground shadow-sm"
           >
             {t(lang, "activationTryDemo")}
           </Link>
           <Link
             to="/support"
-            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-stone-900 text-center text-sm font-semibold text-white"
+            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-foreground text-center text-sm font-semibold text-background"
           >
             {t(lang, "activationContactSupport")}
           </Link>

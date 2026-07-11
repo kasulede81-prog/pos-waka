@@ -55,17 +55,17 @@ export function ShopConsoleOverviewTab({ ctx }: Props) {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        {ownerName ? <p className="text-xs font-semibold text-stone-700">{ownerName}</p> : null}
-        {ownerEmail ? <p className="text-xs font-semibold text-stone-600">{ownerEmail}</p> : null}
-        <h2 className="mt-0.5 text-xl font-black text-stone-900">{detail.shop.name}</h2>
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        {ownerName ? <p className="text-xs font-semibold text-muted-foreground">{ownerName}</p> : null}
+        {ownerEmail ? <p className="text-xs font-semibold text-muted-foreground">{ownerEmail}</p> : null}
+        <h2 className="mt-0.5 text-xl font-black text-foreground">{detail.shop.name}</h2>
         {formatWakaShopNumber(detail.shop.shop_number) ? (
           <p className="mt-1 font-mono text-sm font-black text-waka-700">
             Shop no. {formatWakaShopNumber(detail.shop.shop_number)}
           </p>
         ) : null}
-        <p className="mt-1 text-[11px] font-medium text-stone-500">ID {detail.shop.id}</p>
-        <p className="mt-1 text-xs font-semibold text-stone-600">
+        <p className="mt-1 text-[11px] font-medium text-muted-foreground">ID {detail.shop.id}</p>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">
           {[detail.shop.district, detail.shop.city].filter(Boolean).join(" · ") || "—"}
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -73,7 +73,7 @@ export function ShopConsoleOverviewTab({ ctx }: Props) {
             className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${
               formatLastActive(detail.shop.last_seen_at) === "Active now"
                 ? "bg-emerald-100 text-emerald-900"
-                : "bg-stone-100 text-stone-700"
+                : "bg-muted text-muted-foreground"
             }`}
           >
             {formatLastActive(detail.shop.last_seen_at)}
@@ -84,7 +84,7 @@ export function ShopConsoleOverviewTab({ ctx }: Props) {
           <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-[10px] font-black text-violet-900">
             {detail.product_count} {t(lang, "internalShopProfileProducts")}
           </span>
-          <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-black text-stone-700">
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-black text-muted-foreground">
             {detail.sale_count_30d} {t(lang, "internalShopProfileSales30d")}
           </span>
           {vipCountdown ? (
@@ -94,7 +94,7 @@ export function ShopConsoleOverviewTab({ ctx }: Props) {
           ) : null}
         </div>
         {detail.shop.phone_e164 ? (
-          <p className="mt-1.5 font-mono text-xs text-stone-700">{detail.shop.phone_e164}</p>
+          <p className="mt-1.5 font-mono text-xs text-muted-foreground">{detail.shop.phone_e164}</p>
         ) : null}
         {detail.shop.latitude != null &&
         detail.shop.longitude != null &&

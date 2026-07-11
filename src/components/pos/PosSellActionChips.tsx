@@ -27,7 +27,7 @@ export function PosSellActionChip({
   className?: string;
 }) {
   const base =
-    "inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11px] font-bold text-stone-800 active:bg-stone-100";
+    "inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-bold text-foreground active:bg-muted";
   if (href) {
     return (
       <a href={href} className={clsx(base, className)}>

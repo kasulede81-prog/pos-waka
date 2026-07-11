@@ -5,8 +5,7 @@ import { hasSupabaseConfig } from "../lib/supabase";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
-import { useSubscription } from "../context/SubscriptionContext";
-import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
+import { AccountSubscriptionCenter } from "../components/subscription/AccountSubscriptionCenter";
 
 type Props = {
   lang: Language;
@@ -17,18 +16,8 @@ type Props = {
   authMode: "supabase" | "local";
 };
 
-function planLabelKey(tier: string): string {
-  if (tier === "starter") return "planStarterName";
-  if (tier === "business") return "planBusinessName";
-  if (tier === "waka_plus") return "planWakaPlusName";
-  return "planFreeName";
-}
-
 export function AccountPage({ lang, email, shopName, onSignOut, user, authMode }: Props) {
   const actor = useSessionActor();
-  const { snapshot } = useSubscription();
-  const planTier =
-    authMode === "supabase" && snapshot.kind === "remote" ? resolveEffectivePlanTier(snapshot) : authMode === "local" ? "waka_plus" : "free";
 
   const displayName =
     String((user?.user_metadata as Record<string, unknown> | undefined)?.full_name ?? "").trim() ||
@@ -44,32 +33,24 @@ export function AccountPage({ lang, email, shopName, onSignOut, user, authMode }
         backLabel={t(lang, "officeBackToHub")}
       />
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "accountSignedIn")}</p>
-        <p className="mt-1 text-lg font-black text-stone-950">{displayName}</p>
-        {email ? <p className="mt-0.5 text-sm font-semibold text-stone-600">{email}</p> : null}
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "accountSignedIn")}</p>
+        <p className="mt-1 text-lg font-black text-foreground">{displayName}</p>
+        {email ? <p className="mt-0.5 text-sm font-semibold text-muted-foreground">{email}</p> : null}
         {shopName ? (
-          <p className="mt-3 text-sm text-stone-600">
+          <p className="mt-3 text-sm text-muted-foreground">
             <span className="font-bold">{t(lang, "shopHeading")}:</span> {shopName}
           </p>
         ) : null}
-        <p className="mt-2 text-sm text-stone-500">
+        <p className="mt-2 text-sm text-muted-foreground">
           {t(lang, "loggedInAs")}: {t(lang, `role_${actor.role}`)}
         </p>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "officePremiumPlanLabel")}</p>
-        <p className="mt-1 text-base font-black text-stone-950">{t(lang, planLabelKey(planTier) as "planFreeName")}</p>
-        {authMode === "supabase" ? (
-          <Link to="/upgrade" className="mt-3 inline-block text-sm font-bold text-waka-800 underline">
-            {t(lang, "officePremiumUpgrade")} →
-          </Link>
-        ) : null}
-      </article>
+      {authMode === "supabase" ? <AccountSubscriptionCenter lang={lang} /> : null}
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-sm font-semibold text-stone-600">
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-sm font-semibold text-muted-foreground">
           {hasSupabaseConfig ? t(lang, "settingsAccountOnline") : t(lang, "settingsAccountOffline")}
         </p>
       </article>
@@ -79,7 +60,7 @@ export function AccountPage({ lang, email, shopName, onSignOut, user, authMode }
           <p className="text-sm font-semibold text-rose-950">{t(lang, "accountDeletionCardHint")}</p>
           <Link
             to="/office/account/delete"
-            className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-rose-300 bg-white px-4 text-sm font-black text-rose-800"
+            className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-rose-300 bg-card px-4 text-sm font-black text-rose-800"
           >
             {t(lang, "userMenuDeleteAccount")} →
           </Link>

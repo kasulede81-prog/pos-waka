@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import { useShopAction } from "../hooks/useShopAction";
 import {
   activeProductionTickets,
   computeProductionAlerts,
@@ -19,6 +20,7 @@ import {
 } from "../components/hospitality/ProductionTicketCard";
 
 export function KitchenDisplayPage({ lang }: { lang: Language }) {
+  const { run: runShopAction } = useShopAction();
   const [params, setParams] = useSearchParams();
   const stationParam = params.get("station");
   const advanceTicket = usePosStore((s) => s.advanceKitchenTicket);
@@ -87,15 +89,15 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
       <PageBackBar lang={lang} fallbackTo="/floor" label={t(lang, "navFloor")} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-stone-950">{pageTitle}</h1>
-          <p className="mt-1 text-sm font-medium text-stone-500">
+          <h1 className="text-2xl font-black text-foreground">{pageTitle}</h1>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">
             {tickets.length} {t(lang, "kitchenDisplayWaiting")}
           </p>
         </div>
         <button
           type="button"
           onClick={() => cleanupTickets()}
-          className="min-h-10 rounded-xl border border-stone-200 px-3 text-xs font-black text-stone-700"
+          className="min-h-10 rounded-xl border border-border px-3 text-xs font-black text-muted-foreground"
         >
           {t(lang, "kitchenCleanup")}
         </button>
@@ -110,8 +112,8 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
               onClick={() => setParams({ station: st.id })}
               className={
                 st.id === selectedStationId
-                  ? "rounded-xl bg-stone-900 px-3 py-2 text-xs font-black text-white"
-                  : "rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-black text-stone-700"
+                  ? "rounded-xl bg-foreground px-3 py-2 text-xs font-black text-background"
+                  : "rounded-xl border border-border bg-card px-3 py-2 text-xs font-black text-muted-foreground"
               }
             >
               {st.name}
@@ -119,7 +121,7 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
           ))}
         </div>
       ) : selectedStation ? (
-        <p className="text-xs font-bold uppercase text-stone-500">
+        <p className="text-xs font-bold uppercase text-muted-foreground">
           {t(lang, hospitalityRoutingLabelKey(selectedStation.stationType) as "hospitalityStation_kitchen")}
         </p>
       ) : null}
@@ -139,7 +141,7 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
       {err ? <p className="text-sm font-bold text-rose-700">{err}</p> : null}
 
       {tickets.length === 0 ? (
-        <p className="rounded-2xl border border-stone-200 bg-white px-4 py-10 text-center text-sm font-bold text-stone-500">
+        <p className="rounded-2xl border border-border bg-card px-4 py-10 text-center text-sm font-bold text-muted-foreground">
           {t(lang, "kitchenDisplayEmpty")}
         </p>
       ) : (
@@ -155,7 +157,9 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
               onCancel={() => cancelTicket(ticket.id)}
               onRecall={() => setRecallId(ticket.id)}
               onCancelItem={(itemId) => setCancelItemCtx({ ticketId: ticket.id, itemId })}
-              onReprint={() => reprintKitchenTicket(ticket.id)}
+              onReprint={() => {
+                void runShopAction({ lang, action: "kitchen.reprint" }, () => reprintKitchenTicket(ticket.id));
+              }}
             />
           ))}
         </ul>

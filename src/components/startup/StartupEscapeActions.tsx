@@ -33,14 +33,14 @@ export function StartupEscapeActions({
 
   return (
     <div className="space-y-3">
-      {title ? <p className="text-center text-base font-black text-stone-900">{title}</p> : null}
-      {subtitle ? <p className="text-center text-sm font-medium text-stone-600">{subtitle}</p> : null}
+      {title ? <p className="text-center text-base font-black text-foreground">{title}</p> : null}
+      {subtitle ? <p className="text-center text-sm font-medium text-muted-foreground">{subtitle}</p> : null}
 
       <button
         type="button"
         disabled={busy}
         onClick={() => run(onRetry)}
-        className="flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-stone-900 text-base font-black text-white disabled:opacity-60"
+        className="flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-foreground text-base font-black text-background disabled:opacity-60"
       >
         {t(lang, "startupRetry")}
       </button>
@@ -50,7 +50,7 @@ export function StartupEscapeActions({
           type="button"
           disabled={busy}
           onClick={() => run(onContinueOffline)}
-          className="flex min-h-[48px] w-full items-center justify-center rounded-2xl border-2 border-waka-300 bg-white text-base font-black text-waka-900 disabled:opacity-60"
+          className="flex min-h-[48px] w-full items-center justify-center rounded-2xl border-2 border-waka-300 bg-card text-base font-black text-waka-900 disabled:opacity-60"
         >
           {t(lang, "startupContinueOffline")}
         </button>
@@ -61,7 +61,7 @@ export function StartupEscapeActions({
           type="button"
           disabled={busy}
           onClick={() => run(onSignOut)}
-          className="min-h-[44px] rounded-xl border-2 border-stone-200 bg-white text-sm font-black text-stone-800 disabled:opacity-60"
+          className="min-h-[44px] rounded-xl border-2 border-border bg-card text-sm font-black text-foreground disabled:opacity-60"
         >
           {t(lang, "startupLogout")}
         </button>
@@ -69,7 +69,7 @@ export function StartupEscapeActions({
           type="button"
           disabled={busy}
           onClick={() => run(onSwitchAccount ?? onSignOut)}
-          className="min-h-[44px] rounded-xl border-2 border-stone-200 bg-white text-sm font-black text-stone-800 disabled:opacity-60"
+          className="min-h-[44px] rounded-xl border-2 border-border bg-card text-sm font-black text-foreground disabled:opacity-60"
         >
           {t(lang, "startupSwitchAccount")}
         </button>

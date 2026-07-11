@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { Battery, MonitorSmartphone, Plus, Star, Wifi, WifiOff } from "lucide-react";
+import { Battery, MonitorSmartphone, Plus, Wifi, WifiOff } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { EnterpriseSkeletonList } from "../components/enterprise/EnterpriseSkeleton";
-import { ManagedByPrimaryDevice } from "../components/device/ManagedByPrimaryDevice";
 import { useSubscription } from "../context/SubscriptionContext";
 import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
 import { useSensitiveActionAuth } from "../context/SensitiveActionAuthContext";
@@ -26,7 +25,7 @@ import {
   type ShopDeviceRow,
 } from "../lib/shopDevices";
 import { registerShopDeviceOnLogin } from "../lib/deviceActivation";
-import { ENFORCE_PRIMARY_DEVICE } from "../lib/deviceAuthorityPolicy";
+import { setDeviceApprovalStatus } from "../lib/deviceAuthority";
 import {
   formatPendingApprovalCountdown,
   isPendingApprovalExpired,
@@ -37,7 +36,6 @@ import {
   formatDevicePlatformLabel,
   formatLastActiveRelative,
 } from "../lib/devicePresenceFormat";
-import { setDeviceApprovalStatus, transferPrimaryDevice } from "../lib/deviceAuthority";
 
 type Props = { lang: Language };
 
@@ -48,16 +46,11 @@ function formatPlanDisplayName(snapshot: SubscriptionSnapshot): string {
   return code.charAt(0).toUpperCase() + code.slice(1).replace(/_/g, " ");
 }
 
-function authorityLabel(lang: Language, device: ShopDeviceRow): string {
-  if (!ENFORCE_PRIMARY_DEVICE) return formatDevicePlatformLabel(device.platform) || "Device";
-  if (device.device_authority === "primary") return t(lang, "deviceMgmtPrimaryBadge");
-  return t(lang, "deviceMgmtSecondaryBadge");
-}
-
 function approvalBadge(lang: Language, status: ShopDeviceRow["approval_status"]): string {
-  if (status === "pending") return t(lang, "deviceMgmtStatusPending");
-  if (status === "suspended") return t(lang, "deviceMgmtStatusSuspended");
-  if (status === "revoked" || status === "disabled") return t(lang, "deviceMgmtStatusRevoked");
+  if (status === "pending") return t(lang, "deviceMgmtStatusPendingApproval");
+  if (status === "suspended" || status === "revoked" || status === "disabled") {
+    return t(lang, "deviceMgmtStatusBlocked");
+  }
   return t(lang, "deviceMgmtStatusApproved");
 }
 
@@ -73,14 +66,10 @@ type DeviceCardProps = {
   device: ShopDeviceRow;
   currentFp: string;
   nowMs: number;
-  isPrimary: boolean;
   isShopOwner: boolean;
   busy: boolean;
-  transferTarget: string | null;
   onApprove: (device: ShopDeviceRow) => void;
-  onReject: (device: ShopDeviceRow) => void;
   onDismiss: (device: ShopDeviceRow) => void;
-  onTransferPrimary: (device: ShopDeviceRow) => void;
   onDisconnect: (device: ShopDeviceRow) => void;
   onRemove: (device: ShopDeviceRow) => void;
   showLifecycleActions: boolean;
@@ -91,14 +80,10 @@ function DeviceCard({
   device,
   currentFp,
   nowMs,
-  isPrimary,
   isShopOwner,
   busy,
-  transferTarget,
   onApprove,
-  onReject,
   onDismiss,
-  onTransferPrimary,
   onDisconnect,
   onRemove,
   showLifecycleActions,
@@ -115,40 +100,21 @@ function DeviceCard({
     device.approval_status === "pending" && isPendingApprovalExpired(device.approval_requested_at, nowMs);
 
   return (
-    <li
-      className={`rounded-2xl border bg-white p-4 shadow-sm ${
-        ENFORCE_PRIMARY_DEVICE && device.device_authority === "primary"
-          ? "border-amber-300 ring-1 ring-amber-100"
-          : "border-stone-200"
-      }`}
-    >
+    <li className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start gap-3">
-        <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-            ENFORCE_PRIMARY_DEVICE && device.device_authority === "primary"
-              ? "bg-amber-100 text-amber-800"
-              : "bg-stone-100 text-stone-700"
-          }`}
-        >
-          {ENFORCE_PRIMARY_DEVICE && device.device_authority === "primary" ? (
-            <Star className="h-5 w-5" aria-hidden />
-          ) : (
-            <MonitorSmartphone className="h-5 w-5" aria-hidden />
-          )}
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <MonitorSmartphone className="h-5 w-5" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-black text-stone-950">{name}</h2>
-            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-700">
-              {authorityLabel(lang, device)}
-            </span>
+            <h2 className="text-base font-black text-foreground">{name}</h2>
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                 device.approval_status === "approved"
                   ? "bg-emerald-100 text-emerald-800"
                   : device.approval_status === "pending"
                     ? pendingExpired
-                      ? "bg-stone-200 text-stone-700"
+                      ? "bg-muted text-muted-foreground"
                       : "bg-amber-100 text-amber-900"
                     : "bg-red-100 text-red-800"
               }`}
@@ -170,8 +136,8 @@ function DeviceCard({
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 text-sm font-medium text-stone-600">{platform}</p>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-stone-500">
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">{platform}</p>
+          <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               {online ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5" />}
               {online ? t(lang, "deviceMgmtOnline") : t(lang, "deviceMgmtOffline")}
@@ -194,7 +160,7 @@ function DeviceCard({
             </span>
           </div>
           {(device.pending_uploads ?? 0) > 0 || (device.pending_downloads ?? 0) > 0 ? (
-            <p className="mt-1 text-xs font-medium text-stone-500">
+            <p className="mt-1 text-xs font-medium text-muted-foreground">
               {t(lang, "deviceMgmtSyncQueue")}: ↑{device.pending_uploads ?? 0} ↓{device.pending_downloads ?? 0}
             </p>
           ) : null}
@@ -222,50 +188,15 @@ function DeviceCard({
         </div>
       ) : null}
 
-      {isPrimary && device.approval_status === "pending" && !isShopOwner ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={busy || pendingExpired}
-            onClick={() => onApprove(device)}
-            className="min-h-[44px] flex-1 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white disabled:opacity-50"
-          >
-            {busy ? t(lang, "deviceMgmtApproving") : t(lang, "deviceMgmtApprove")}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onReject(device)}
-            className="min-h-[44px] flex-1 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-800 disabled:opacity-50"
-          >
-            {t(lang, "deviceMgmtReject")}
-          </button>
-        </div>
-      ) : null}
-
-      {showLifecycleActions &&
-      (ENFORCE_PRIMARY_DEVICE ? isPrimary : isShopOwner) &&
-      device.approval_status === "approved" ? (
+      {showLifecycleActions && isShopOwner && device.approval_status === "approved" ? (
         <div className="mt-4 flex flex-col gap-2">
-          {ENFORCE_PRIMARY_DEVICE && device.device_authority !== "primary" && !isCurrent ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onTransferPrimary(device)}
-              className="min-h-[44px] w-full rounded-xl border border-amber-300 bg-amber-50 px-4 text-sm font-bold text-amber-950 disabled:opacity-50"
-            >
-              {transferTarget === device.id && busy
-                ? t(lang, "deviceMgmtTransferring")
-                : t(lang, "deviceMgmtMakePrimary")}
-            </button>
-          ) : null}
-          {!isCurrent && (ENFORCE_PRIMARY_DEVICE ? device.device_authority !== "primary" : true) ? (
+          {!isCurrent ? (
             <>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => onDisconnect(device)}
-                className="min-h-[44px] w-full rounded-xl border border-stone-300 bg-stone-50 px-4 text-sm font-bold text-stone-800 disabled:opacity-50"
+                className="min-h-[44px] w-full rounded-xl border border-border bg-muted px-4 text-sm font-bold text-foreground disabled:opacity-50"
               >
                 {busy ? t(lang, "deviceMgmtDisconnecting") : t(lang, "deviceMgmtDisconnect")}
               </button>
@@ -287,14 +218,13 @@ function DeviceCard({
 
 export function DeviceManagementPage({ lang }: Props) {
   const { userId, snapshot, authMode } = useSubscription();
-  const { isPrimary, canPrimary, refresh: refreshAuthority } = useDeviceAuthority();
+  const { refresh: refreshAuthority } = useDeviceAuthority();
   const { ensureAuthorized } = useSensitiveActionAuth();
   const [shopId, setShopId] = useState<string | null>(null);
   const [devices, setDevices] = useState<ShopDeviceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isShopOwner, setIsShopOwner] = useState(true);
 
@@ -410,54 +340,6 @@ export function DeviceManagementPage({ lang }: Props) {
     }
   };
 
-  const handleReject = async (device: ShopDeviceRow) => {
-    if (!shopId) return;
-    const ok = await ensureAuthorized("manage_users");
-    if (!ok) return;
-    if (
-      !window.confirm(
-        tTemplate(lang, "deviceMgmtRejectConfirm", { name: formatDeviceDisplayName(device.label, device.platform) }),
-      )
-    ) {
-      return;
-    }
-    setBusyId(device.id);
-    try {
-      if (device.approval_status === "pending") {
-        await dismissPendingOwnerShopDevice(device.id, shopId);
-      } else {
-        await setDeviceApprovalStatus(shopId, device.id, "revoked");
-      }
-      await loadDevices(shopId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t(lang, "deviceMgmtRejectError"));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleTransferPrimary = async (device: ShopDeviceRow) => {
-    if (!shopId || !canPrimary("primary_transfer")) return;
-    const ok = await ensureAuthorized("change_settings");
-    if (!ok) return;
-    setTransferTarget(device.id);
-    setBusyId(device.id);
-    try {
-      const result = await transferPrimaryDevice(shopId, device.device_fingerprint);
-      if (!result.ok) {
-        setError(result.error ?? t(lang, "deviceMgmtTransferError"));
-        return;
-      }
-      await loadDevices(shopId);
-      await refreshAuthority();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t(lang, "deviceMgmtTransferError"));
-    } finally {
-      setBusyId(null);
-      setTransferTarget(null);
-    }
-  };
-
   const handleDisconnect = async (device: ShopDeviceRow) => {
     if (!shopId) return;
     const ok = await ensureAuthorized("manage_users");
@@ -510,13 +392,9 @@ export function DeviceManagementPage({ lang }: Props) {
     lang,
     currentFp,
     nowMs,
-    isPrimary,
     isShopOwner,
-    transferTarget,
     onApprove: (d: ShopDeviceRow) => void handleApprove(d),
-    onReject: (d: ShopDeviceRow) => void handleReject(d),
     onDismiss: (d: ShopDeviceRow) => void handleDismiss(d),
-    onTransferPrimary: (d: ShopDeviceRow) => void handleTransferPrimary(d),
     onDisconnect: (d: ShopDeviceRow) => void handleDisconnect(d),
     onRemove: (d: ShopDeviceRow) => void handleRemove(d),
   };
@@ -525,11 +403,9 @@ export function DeviceManagementPage({ lang }: Props) {
     <EnterprisePageContainer className="space-y-6">
       <PageBackBar lang={lang} fallbackTo="/settings" label={t(lang, "settingsHubTitle")} />
       <div>
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "deviceMgmtEnterpriseTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "deviceMgmtSub")}</p>
+        <h1 className="text-2xl font-black text-foreground">{t(lang, "deviceMgmtEnterpriseTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "deviceMgmtSub")}</p>
       </div>
-
-      {!isPrimary ? <ManagedByPrimaryDevice lang={lang} /> : null}
 
       {!isShopOwner ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
@@ -537,18 +413,18 @@ export function DeviceManagementPage({ lang }: Props) {
         </div>
       ) : null}
 
-      {isShopOwner && (!ENFORCE_PRIMARY_DEVICE || isPrimary) && devices.length === 0 && !loading ? (
+      {isShopOwner && devices.length === 0 && !loading ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-950">
-          {t(lang, "deviceMgmtRegisterPrimaryHint")}
+          {t(lang, "deviceMgmtRegisterHintEmpty")}
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "deviceLimitPackageLabel")}</p>
-        <p className="mt-1 text-lg font-black text-stone-950">{planName}</p>
-        <p className="mt-3 text-base font-black text-stone-900">{usageLine}</p>
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "deviceLimitPackageLabel")}</p>
+        <p className="mt-1 text-lg font-black text-foreground">{planName}</p>
+        <p className="mt-3 text-base font-black text-foreground">{usageLine}</p>
         {usage.planLimit != null && usage.planLimit > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-4 text-sm font-semibold text-stone-600">
+          <div className="mt-2 flex flex-wrap gap-4 text-sm font-semibold text-muted-foreground">
             <span>
               {t(lang, "deviceMgmtMaximum")}: {usage.planLimit}
             </span>
@@ -564,12 +440,12 @@ export function DeviceManagementPage({ lang }: Props) {
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-4">
+      <section className="rounded-2xl border border-dashed border-border bg-muted p-4">
         <div className="flex items-start gap-3">
-          <Plus className="mt-0.5 h-5 w-5 shrink-0 text-stone-600" aria-hidden />
+          <Plus className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <div>
-            <p className="text-sm font-bold text-stone-800">{t(lang, "deviceMgmtRegisterDevice")}</p>
-            <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "deviceMgmtRegisterHint")}</p>
+            <p className="text-sm font-bold text-foreground">{t(lang, "deviceMgmtRegisterDevice")}</p>
+            <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "deviceMgmtRegisterHint")}</p>
           </div>
         </div>
       </section>
@@ -591,7 +467,7 @@ export function DeviceManagementPage({ lang }: Props) {
       ) : (
         <div className="space-y-6">
           <div>
-            <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "deviceMgmtActiveHeading")}</h2>
+            <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{t(lang, "deviceMgmtActiveHeading")}</h2>
             {activeDevices.length === 0 ? (
               <EnterpriseEmptyState
                 icon={MonitorSmartphone}
@@ -616,7 +492,7 @@ export function DeviceManagementPage({ lang }: Props) {
 
           {pendingDevices.length > 0 ? (
             <div>
-              <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">
+              <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
                 {t(lang, "deviceMgmtPendingHeading")}
               </h2>
               <ul className="mt-3 space-y-4">

@@ -17,16 +17,16 @@ function ReportBlock({
   lang: Language;
 }) {
   return (
-    <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm print:break-inside-avoid">
-      <h2 className="text-lg font-black text-stone-950">{title}</h2>
-      <p className="text-xs font-bold text-stone-500">{rows.length} {t(lang, "pharmacyComplianceReportEntries")}</p>
+    <section className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm print:break-inside-avoid">
+      <h2 className="text-lg font-black text-foreground">{title}</h2>
+      <p className="text-xs font-bold text-muted-foreground">{rows.length} {t(lang, "pharmacyComplianceReportEntries")}</p>
       <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto print:max-h-none">
         {rows.length === 0 ? (
-          <li className="text-sm font-semibold text-stone-500">{t(lang, "pharmacyComplianceRegisterEmpty")}</li>
+          <li className="text-sm font-semibold text-muted-foreground">{t(lang, "pharmacyComplianceRegisterEmpty")}</li>
         ) : (
           rows.slice(0, 30).map((r) => (
             <li key={r.id} className="flex justify-between gap-2 text-sm font-semibold">
-              <span className="truncate text-stone-900">
+              <span className="truncate text-foreground">
                 {r.productName}
                 {r.patientName ? ` · ${r.patientName}` : ""}
               </span>
@@ -58,8 +58,8 @@ export function PharmacyComplianceReportsPage({ lang }: { lang: Language }) {
     <EnterprisePageContainer className="print:space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div>
-          <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyComplianceReportsTitle")}</h1>
-          <p className="mt-1 text-base font-medium text-stone-500">{t(lang, "pharmacyComplianceReportsSub")}</p>
+          <h1 className="text-3xl font-black text-foreground">{t(lang, "pharmacyComplianceReportsTitle")}</h1>
+          <p className="mt-1 text-base font-medium text-muted-foreground">{t(lang, "pharmacyComplianceReportsSub")}</p>
         </div>
         <Link
           to="/pharmacy/compliance/register"
@@ -95,15 +95,15 @@ export function PharmacyComplianceReportsPage({ lang }: { lang: Language }) {
         <ReportBlock title={t(lang, "pharmacyComplianceReportWitness")} rows={bundle.witnessLog} lang={lang} />
       </div>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm print:break-inside-avoid">
-        <h2 className="text-lg font-black text-stone-950">{t(lang, "pharmacyComplianceReportStock")}</h2>
+      <section className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm print:break-inside-avoid">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "pharmacyComplianceReportStock")}</h2>
         <ul className="mt-3 space-y-2">
           {bundle.controlledStockHints.length === 0 ? (
-            <li className="text-sm font-semibold text-stone-500">{t(lang, "pharmacyComplianceRegisterEmpty")}</li>
+            <li className="text-sm font-semibold text-muted-foreground">{t(lang, "pharmacyComplianceRegisterEmpty")}</li>
           ) : (
             bundle.controlledStockHints.map((h) => (
               <li key={h.productId} className="flex justify-between gap-2 text-sm font-semibold">
-                <span className="truncate text-stone-900">{h.productName}</span>
+                <span className="truncate text-foreground">{h.productName}</span>
                 <span className="shrink-0 font-black text-teal-800">{h.dispensedQty}</span>
               </li>
             ))

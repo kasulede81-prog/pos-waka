@@ -27,6 +27,7 @@ import {
   applyPharmacyKpiFilter,
   isPharmacyInvestigationKpiId,
 } from "../extensions/pharmacy/computePharmacyInvestigationKpis";
+import { severityStatusBadge, severityStatusIcon } from "../../../lib/statusTokens";
 
 const SALES: ReadonlySet<AuditAction> = new Set(["sale_completed", "sale_void", "receipt_reprint", "receipt_pdf_export"]);
 const INVENTORY: ReadonlySet<AuditAction> = new Set([
@@ -200,19 +201,19 @@ export function severityLabelKey(severity: ActivitySeverity): string {
 }
 
 export function severityBadgeClass(severity: ActivitySeverity): string {
-  if (severity === "completed") return "bg-emerald-50 text-emerald-800 ring-emerald-200/80";
-  if (severity === "info") return "bg-sky-50 text-sky-800 ring-sky-200/80";
-  if (severity === "warning") return "bg-amber-50 text-amber-900 ring-amber-200/80";
-  if (severity === "security") return "bg-violet-50 text-violet-800 ring-violet-200/80";
-  return "bg-rose-50 text-rose-800 ring-rose-200/80";
+  if (severity === "completed") return severityStatusBadge("completed");
+  if (severity === "info") return severityStatusBadge("info");
+  if (severity === "warning") return severityStatusBadge("warning");
+  if (severity === "security") return severityStatusBadge("security");
+  return severityStatusBadge("error");
 }
 
 export function severityIconClass(severity: ActivitySeverity): string {
-  if (severity === "completed") return "bg-emerald-100 text-emerald-700";
-  if (severity === "info") return "bg-sky-100 text-sky-700";
-  if (severity === "warning") return "bg-amber-100 text-amber-700";
-  if (severity === "security") return "bg-violet-100 text-violet-700";
-  return "bg-rose-100 text-rose-700";
+  if (severity === "completed") return severityStatusIcon("completed");
+  if (severity === "info") return severityStatusIcon("info");
+  if (severity === "warning") return severityStatusIcon("warning");
+  if (severity === "security") return severityStatusIcon("security");
+  return severityStatusIcon("error");
 }
 
 export function applyKpiFilter(

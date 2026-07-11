@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { ChevronDown, RefreshCw, type LucideIcon } from "lucide-react";
+import { themeUi } from "../../lib/themeTokens";
 
 export function AdminHero({
   greeting,
@@ -59,14 +60,14 @@ export function AdminShortcut({
   return (
     <a
       href={href}
-      className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-3 shadow-sm transition hover:border-waka-400"
+      className={clsx("flex items-center gap-3 p-3 transition hover:border-waka-400", themeUi.adminSurface)}
     >
-      <span className="grid h-10 w-10 place-items-center rounded-xl bg-waka-100 text-waka-700">
+      <span className="grid h-10 w-10 place-items-center rounded-xl bg-business-muted text-waka-700">
         <Icon className="h-5 w-5" aria-hidden />
       </span>
       <div>
-        <div className="text-xs font-bold uppercase text-stone-500">{label}</div>
-        <div className="text-lg font-black text-stone-900">{count}</div>
+        <div className="text-xs font-bold uppercase text-muted-foreground">{label}</div>
+        <div className="text-lg font-black text-foreground">{count}</div>
       </div>
     </a>
   );
@@ -74,9 +75,9 @@ export function AdminShortcut({
 
 export function AdminMetric({ label, value }: { label: string; value: string | number | undefined }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-      <div className="text-[11px] font-bold uppercase text-stone-500">{label}</div>
-      <div className="mt-1 text-2xl font-black text-stone-900">{value ?? "—"}</div>
+    <div className={clsx("p-3", themeUi.adminSurface)}>
+      <div className="text-[11px] font-bold uppercase text-muted-foreground">{label}</div>
+      <div className="mt-1 text-2xl font-black text-foreground">{value ?? "—"}</div>
     </div>
   );
 }
@@ -94,10 +95,10 @@ export function AdminSection({
 }) {
   return (
     <section id={id} className={id ? "scroll-mt-4" : undefined}>
-      <h2 className="mb-2 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-stone-600">
+      <h2 className="mb-2 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-muted-foreground">
         {title}
         {typeof count === "number" ? (
-          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-black text-stone-700">{count}</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-black text-muted-foreground">{count}</span>
         ) : null}
       </h2>
       {children}
@@ -107,7 +108,7 @@ export function AdminSection({
 
 export function AdminEmpty({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-stone-200 bg-white p-6 text-center text-sm font-medium text-stone-600">
+    <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm font-medium text-muted-foreground">
       {children}
     </div>
   );
@@ -115,7 +116,7 @@ export function AdminEmpty({ children }: { children: ReactNode }) {
 
 export function AdminCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={clsx("rounded-2xl border border-stone-200 bg-white shadow-sm", className)}>{children}</div>
+    <div className={clsx("rounded-2xl border border-border bg-card shadow-sm", className)}>{children}</div>
   );
 }
 
@@ -151,12 +152,12 @@ export function AdminSectionSelect({
 
   return (
     <label className={clsx("block", className)}>
-      <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-stone-500">{label}</span>
+      <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-muted-foreground">{label}</span>
       <div className="relative">
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="min-h-[48px] w-full appearance-none rounded-xl border border-stone-200 bg-white py-2.5 pl-3 pr-10 text-sm font-bold text-stone-900 outline-none ring-waka-200 focus:border-waka-400 focus:ring-2"
+          className="min-h-[48px] w-full appearance-none rounded-xl border border-border bg-card py-2.5 pl-3 pr-10 text-sm font-bold text-foreground outline-none ring-waka-200 focus:border-waka-400 focus:ring-2"
         >
           {[...grouped.entries()].map(([group, items]) =>
             group ? (
@@ -178,7 +179,7 @@ export function AdminSectionSelect({
             ),
           )}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden />
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
       </div>
     </label>
   );
@@ -256,15 +257,15 @@ export function AdminCollapsible({
   children: ReactNode;
 }) {
   return (
-    <details className="group rounded-2xl border border-stone-200 bg-white shadow-sm" open={defaultOpen}>
+    <details className="group rounded-2xl border border-border bg-card shadow-sm" open={defaultOpen}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-3 sm:px-4 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
-          <p className="text-sm font-black text-stone-900">{title}</p>
-          {summary ? <p className="mt-0.5 truncate text-xs font-medium text-stone-500">{summary}</p> : null}
+          <p className="text-sm font-black text-foreground">{title}</p>
+          {summary ? <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground">{summary}</p> : null}
         </div>
-        <ChevronDown className="h-4 w-4 shrink-0 text-stone-400 transition group-open:rotate-180" aria-hidden />
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition group-open:rotate-180" aria-hidden />
       </summary>
-      <div className="border-t border-stone-100 px-3 pb-3 pt-2 sm:px-4 sm:pb-4">{children}</div>
+      <div className="border-t border-border px-3 pb-3 pt-2 sm:px-4 sm:pb-4">{children}</div>
     </details>
   );
 }
@@ -314,7 +315,7 @@ export function OpsPanelNavButton({
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition",
         active
           ? "border-waka-600 bg-waka-600 text-white shadow-sm"
-          : "border-stone-200 bg-white text-stone-700 hover:border-waka-300 hover:bg-waka-50",
+          : "border-border bg-card text-muted-foreground hover:border-waka-300 hover:bg-waka-50",
       )}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -323,7 +324,7 @@ export function OpsPanelNavButton({
         <span
           className={clsx(
             "rounded-full px-1.5 py-0.5 font-mono text-[10px]",
-            active ? "bg-white/20 text-white" : "bg-stone-100 text-stone-700",
+            active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground",
           )}
         >
           {count}

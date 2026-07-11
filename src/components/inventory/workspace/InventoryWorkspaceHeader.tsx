@@ -8,8 +8,8 @@ type Props = {
 export function InventoryWorkspaceHeader({ lang }: Props) {
   return (
     <header className="space-y-1">
-      <h2 className="text-lg font-black tracking-tight text-stone-950">{t(lang, "iwWorkspaceTitle")}</h2>
-      <p className="text-xs font-semibold text-stone-500">{t(lang, "iwWorkspaceSub")}</p>
+      <h2 className="text-lg font-black tracking-tight text-foreground">{t(lang, "iwWorkspaceTitle")}</h2>
+      <p className="text-xs font-semibold text-muted-foreground">{t(lang, "iwWorkspaceSub")}</p>
     </header>
   );
 }

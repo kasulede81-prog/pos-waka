@@ -31,11 +31,11 @@ export function ReturnReceiptActionsModal({ lang, open, ctx, onClose }: Props) {
         onClick={onClose}
       >
         <div
-          className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl sm:rounded-3xl"
+          className="w-full max-w-md rounded-3xl bg-card p-5 shadow-xl sm:rounded-3xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <h2 className="text-lg font-black text-stone-900">{t(lang, "returnTitle")}</h2>
-          <p className="mt-1 text-sm text-stone-600">{ctx.returnRecord.productName}</p>
+          <h2 className="text-lg font-black text-foreground">{t(lang, "returnTitle")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{ctx.returnRecord.productName}</p>
           <div className="mt-4">
             <DocumentActionsBar
               lang={lang}
@@ -47,7 +47,7 @@ export function ReturnReceiptActionsModal({ lang, open, ctx, onClose }: Props) {
           </div>
           <button
             type="button"
-            className="mt-4 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 py-3 font-bold"
+            className="mt-4 min-h-[48px] w-full rounded-2xl border-2 border-border py-3 font-bold"
             onClick={onClose}
           >
             {t(lang, "receiptClose")}

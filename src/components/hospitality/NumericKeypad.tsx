@@ -32,7 +32,7 @@ export function NumericKeypad({ value, onChange, onConfirm, confirmLabel = "OK",
           type="button"
           onClick={() => press(key)}
           className={clsx(
-            "flex min-h-10 items-center justify-center rounded-lg border border-stone-300 bg-stone-100 text-base font-black text-stone-800 active:bg-stone-200",
+            "flex min-h-10 items-center justify-center rounded-lg border border-border bg-muted text-base font-black text-foreground active:bg-muted",
             key === "C" && "bg-rose-50 text-rose-800 border-rose-200",
           )}
         >
@@ -42,7 +42,7 @@ export function NumericKeypad({ value, onChange, onConfirm, confirmLabel = "OK",
       <button
         type="button"
         onClick={() => onChange(value.slice(0, -1))}
-        className="flex min-h-10 items-center justify-center rounded-lg border border-stone-300 bg-stone-50 text-stone-700"
+        className="flex min-h-10 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground"
         aria-label="Backspace"
       >
         <Delete className="h-4 w-4" />

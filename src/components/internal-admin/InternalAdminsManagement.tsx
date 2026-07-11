@@ -45,7 +45,7 @@ function Chip({ children, tone }: { children: React.ReactNode; tone: "orange" | 
         ? "bg-emerald-50 text-emerald-900 ring-emerald-200/80"
         : tone === "rose"
           ? "bg-rose-50 text-rose-900 ring-rose-200/80"
-          : "bg-stone-50 text-stone-900 ring-stone-200/80";
+          : "bg-muted text-foreground ring-border/80";
   return (
     <span className={clsx("inline-flex items-center rounded-full px-3 py-1 text-[11px] font-black uppercase ring-1", cls)}>
       {children}
@@ -216,28 +216,28 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
         </p>
       ) : null}
       {!lovableUi ? (
-      <header className="rounded-3xl border border-waka-100 bg-gradient-to-br from-white via-waka-50/40 to-white p-6 shadow-[0_20px_60px_rgb(251_146_60/0.10)]">
+      <header className="rounded-3xl border border-waka-100 bg-gradient-to-br from-white via-waka-50/40 to-card p-6 shadow-[0_20px_60px_rgb(251_146_60/0.10)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-waka-900 ring-1 ring-waka-200/60">
               <Shield className="h-4 w-4 text-waka-600" />
               {t(lang, "internalAdminsHeaderTitle")}
             </div>
-            <h1 className="mt-3 text-2xl font-black text-stone-900">{t(lang, "internalAdminsHeaderH1")}</h1>
-            <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "internalAdminsHeaderSub")}</p>
+            <h1 className="mt-3 text-2xl font-black text-foreground">{t(lang, "internalAdminsHeaderH1")}</h1>
+            <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "internalAdminsHeaderSub")}</p>
           </div>
-          <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-stone-100 sm:min-w-[12rem]">
-            <p className="text-[11px] font-black uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsCountLabel")}</p>
-            <p className="mt-1 text-2xl font-black text-stone-900">{admins.length}</p>
+          <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-border sm:min-w-[12rem]">
+            <p className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsCountLabel")}</p>
+            <p className="mt-1 text-2xl font-black text-foreground">{admins.length}</p>
           </div>
         </div>
       </header>
       ) : (
-        <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">{t(lang, "internalAdminsHeaderTitle")}</p>
-          <h1 className="mt-1 text-xl font-black text-stone-900">{t(lang, "internalAdminsHeaderH1")}</h1>
-          <p className="mt-1 text-sm text-stone-600">{t(lang, "internalAdminsHeaderSub")}</p>
-          <p className="mt-2 text-xs font-bold text-stone-500">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t(lang, "internalAdminsHeaderTitle")}</p>
+          <h1 className="mt-1 text-xl font-black text-foreground">{t(lang, "internalAdminsHeaderH1")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t(lang, "internalAdminsHeaderSub")}</p>
+          <p className="mt-2 text-xs font-bold text-muted-foreground">
             {t(lang, "internalAdminsCountLabel")}: {admins.length}
           </p>
         </div>
@@ -248,31 +248,31 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
           <AdminCollapsible title={t(lang, "internalAdminsCreateTitle")} summary={t(lang, "internalAdminsCreateSub")}>
           <div className="space-y-3">
               <label className="block">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsEmailLabel")}</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsEmailLabel")}</p>
                 <input
                   value={createEmail}
                   onChange={(e) => setCreateEmail(e.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+                  className="mt-1 w-full rounded-2xl border border-border bg-card px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   placeholder="email@example.com"
                   autoComplete="email"
                 />
               </label>
               <label className="block">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsFullNameLabel")}</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsFullNameLabel")}</p>
                 <input
                   value={createFullName}
                   onChange={(e) => setCreateFullName(e.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+                  className="mt-1 w-full rounded-2xl border border-border bg-card px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   placeholder="Kasule Denis"
                 />
               </label>
 
               <label className="block">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsRoleLabel")}</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsRoleLabel")}</p>
                 <select
                   value={createRole}
                   onChange={(e) => setCreateRole(e.target.value as RoleCode)}
-                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+                  className="mt-1 w-full rounded-2xl border border-border bg-card px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                 >
                   {ROLE_OPTIONS.map((o) => (
                     <option key={o.code} value={o.code}>
@@ -283,10 +283,10 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
               </label>
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsDistrictsLabel")}</p>
-                <div className="mt-2 max-h-44 overflow-y-auto rounded-2xl border border-stone-200 bg-stone-50 p-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsDistrictsLabel")}</p>
+                <div className="mt-2 max-h-44 overflow-y-auto rounded-2xl border border-border bg-muted p-2">
                   {districts.length === 0 ? (
-                    <p className="px-2 py-3 text-sm font-semibold text-stone-500">{districtLoadErr ? t(lang, "internalAdminsDistrictsLoadFail") : t(lang, "internalAdminsDistrictsLoading")}</p>
+                    <p className="px-2 py-3 text-sm font-semibold text-muted-foreground">{districtLoadErr ? t(lang, "internalAdminsDistrictsLoadFail") : t(lang, "internalAdminsDistrictsLoading")}</p>
                   ) : (
                     districts.map((d) => {
                       const on = createDistrictIds.includes(d.id as string);
@@ -297,7 +297,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                           onClick={() => toggleDistrict(d.id as string, setCreateDistrictIds, createDistrictIds)}
                           className={clsx(
                             "m-1 inline-flex min-h-[36px] items-center rounded-xl border px-3 py-1 text-xs font-black",
-                            on ? "border-waka-300 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700",
+                            on ? "border-waka-300 bg-waka-50 text-waka-900" : "border-border bg-card text-muted-foreground",
                           )}
                         >
                           {d.name}
@@ -309,7 +309,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
               </div>
 
               {createMsg ? (
-                <p className={clsx("rounded-2xl px-4 py-3 text-sm font-bold", createMsg.includes("Ok") ? "bg-emerald-50 text-emerald-900" : "bg-stone-50 text-stone-700")}>
+                <p className={clsx("rounded-2xl px-4 py-3 text-sm font-bold", createMsg.includes("Ok") ? "bg-emerald-50 text-emerald-900" : "bg-muted text-muted-foreground")}>
                   {createMsg}
                 </p>
               ) : null}
@@ -324,30 +324,30 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                 {createBusy ? "…" : t(lang, "internalAdminsCreateCta")}
               </button>
 
-              <p className="text-xs font-semibold text-stone-500">{t(lang, "internalAdminsCreateHint")}</p>
+              <p className="text-xs font-semibold text-muted-foreground">{t(lang, "internalAdminsCreateHint")}</p>
             </div>
           </AdminCollapsible>
         </div>
 
         <div className="lg:col-span-2 space-y-4">
-          <div className="rounded-3xl border border-stone-200/80 bg-white p-4 shadow-waka-sm">
+          <div className="rounded-3xl border border-border/80 bg-card p-4 shadow-waka-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsSearchLabel")}</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsSearchLabel")}</p>
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+                  className="mt-1 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   placeholder={t(lang, "internalAdminsSearchPlaceholder")}
                 />
               </div>
               <div className="flex flex-wrap gap-3">
                 <label className="block">
-                  <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsRoleFilterLabel")}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsRoleFilterLabel")}</p>
                   <select
                     value={roleFilter}
                     onChange={(e) => setRoleFilter(e.target.value as RoleCode | "all")}
-                    className="mt-1 min-w-[160px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+                    className="mt-1 min-w-[160px] rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   >
                     <option value="all">{t(lang, "internalAdminsFilterAll")}</option>
                     {ROLE_OPTIONS.map((o) => (
@@ -358,11 +358,11 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                   </select>
                 </label>
                 <label className="block">
-                  <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsActiveFilterLabel")}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsActiveFilterLabel")}</p>
                   <select
                     value={activeFilter}
                     onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}
-                    className="mt-1 min-w-[160px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+                    className="mt-1 min-w-[160px] rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   >
                     <option value="all">{t(lang, "internalAdminsFilterAll")}</option>
                     <option value="active">{t(lang, "internalAdminsActiveOnly")}</option>
@@ -373,35 +373,35 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-stone-600">
+              <p className="text-sm font-semibold text-muted-foreground">
                 {t(lang, "internalAdminsShowing")} {filtered.length}
               </p>
-              <button type="button" onClick={() => void refresh()} className="rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-black text-stone-700">
+              <button type="button" onClick={() => void refresh()} className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-black text-muted-foreground">
                 {t(lang, "internalAdminsRefresh")}
               </button>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-stone-200/80 bg-white p-4 shadow-waka-sm">
+          <div className="rounded-3xl border border-border/80 bg-card p-4 shadow-waka-sm">
             {loading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-24 animate-pulse rounded-2xl bg-stone-100" />
+                  <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />
                 ))}
               </div>
             ) : filtered.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-10 text-center">
-                <p className="text-sm font-black text-stone-700">{t(lang, "internalAdminsEmptyTitle")}</p>
-                <p className="mt-1 text-xs font-semibold text-stone-500">{t(lang, "internalAdminsEmptySub")}</p>
+              <div className="rounded-2xl border border-dashed border-border bg-muted px-4 py-10 text-center">
+                <p className="text-sm font-black text-muted-foreground">{t(lang, "internalAdminsEmptyTitle")}</p>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">{t(lang, "internalAdminsEmptySub")}</p>
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
                 {filtered.map((a) => (
-                  <div key={a.id} className="rounded-3xl border border-stone-200 bg-stone-50/40 p-4">
+                  <div key={a.id} className="rounded-3xl border border-border bg-muted/40 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-lg font-black text-stone-900">{a.full_name ?? a.email.split("@")[0]}</p>
-                        <p className="mt-0.5 truncate text-xs font-semibold text-stone-500">{a.email}</p>
+                        <p className="truncate text-lg font-black text-foreground">{a.full_name ?? a.email.split("@")[0]}</p>
+                        <p className="mt-0.5 truncate text-xs font-semibold text-muted-foreground">{a.email}</p>
                       </div>
                       <Chip tone={a.active ? "emerald" : "rose"}>{a.active ? t(lang, "internalAdminsActive") : t(lang, "internalAdminsInactive")}</Chip>
                     </div>
@@ -438,7 +438,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                           setEditTargetId(a.id);
                           beginEdit(a);
                         }}
-                        className="rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-black text-stone-800"
+                        className="rounded-2xl border border-border bg-card px-4 py-2.5 text-sm font-black text-foreground"
                       >
                         {t(lang, "internalAdminsEdit")}
                       </button>
@@ -452,7 +452,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                           if (!r.ok) return;
                           await refresh();
                         }}
-                        className="rounded-2xl bg-stone-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40"
+                        className="rounded-2xl bg-foreground px-4 py-2.5 text-sm font-black text-background disabled:opacity-40"
                       >
                         {editBusyId === a.id ? "…" : a.active ? t(lang, "internalAdminsDeactivate") : t(lang, "internalAdminsReactivate")}
                       </button>
@@ -473,11 +473,11 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
         {editTargetId ? (
           <div className="space-y-3">
             <label className="block">
-              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsRoleLabel")}</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsRoleLabel")}</p>
               <select
                 value={editRole}
                 onChange={(e) => setEditRole(e.target.value as RoleCode)}
-                className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+                className="mt-1 w-full rounded-2xl border border-border bg-card px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
               >
                 {ROLE_OPTIONS.map((o) => (
                   <option key={o.code} value={o.code}>
@@ -488,28 +488,28 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
             </label>
 
             <label className="block">
-              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsFullNameLabel")}</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsFullNameLabel")}</p>
               <input
                 value={editFullName}
                 onChange={(e) => setEditFullName(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+                className="mt-1 w-full rounded-2xl border border-border bg-card px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
               />
             </label>
 
             <label className="block">
-              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsActiveToggleLabel")}</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsActiveToggleLabel")}</p>
               <div className="mt-2 flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setEditActive(true)}
-                  className={clsx("min-h-[44px] flex-1 rounded-2xl border px-4 py-2.5 text-sm font-black", editActive ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-white text-stone-700")}
+                  className={clsx("min-h-[44px] flex-1 rounded-2xl border px-4 py-2.5 text-sm font-black", editActive ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-border bg-card text-muted-foreground")}
                 >
                   {t(lang, "internalAdminsActive")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditActive(false)}
-                  className={clsx("min-h-[44px] flex-1 rounded-2xl border px-4 py-2.5 text-sm font-black", !editActive ? "border-rose-300 bg-rose-50 text-rose-900" : "border-stone-200 bg-white text-stone-700")}
+                  className={clsx("min-h-[44px] flex-1 rounded-2xl border px-4 py-2.5 text-sm font-black", !editActive ? "border-rose-300 bg-rose-50 text-rose-900" : "border-border bg-card text-muted-foreground")}
                 >
                   {t(lang, "internalAdminsInactive")}
                 </button>
@@ -517,8 +517,8 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
             </label>
 
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsDistrictsLabel")}</p>
-              <div className="mt-2 max-h-44 overflow-y-auto rounded-2xl border border-stone-200 bg-stone-50 p-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "internalAdminsDistrictsLabel")}</p>
+              <div className="mt-2 max-h-44 overflow-y-auto rounded-2xl border border-border bg-muted p-2">
                 {districts.map((d) => {
                   const on = editDistrictIds.includes(d.id as string);
                   return (
@@ -528,7 +528,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                       onClick={() => toggleDistrict(d.id as string, setEditDistrictIds, editDistrictIds)}
                       className={clsx(
                         "m-1 inline-flex min-h-[36px] items-center rounded-xl border px-3 py-1 text-xs font-black",
-                        on ? "border-waka-300 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700",
+                        on ? "border-waka-300 bg-waka-50 text-waka-900" : "border-border bg-card text-muted-foreground",
                       )}
                     >
                       {d.name}

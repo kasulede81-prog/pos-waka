@@ -14,7 +14,7 @@ export function CashDrawerToleranceLink({ lang, className }: Props) {
       to="/settings/cash-drawer"
       className={
         className ??
-        "inline-flex min-h-[40px] items-center text-xs font-bold text-stone-500 underline decoration-stone-300"
+        "inline-flex min-h-[40px] items-center text-xs font-bold text-muted-foreground underline decoration-stone-300"
       }
     >
       {t(lang, "cashManageDrawerSettings")}

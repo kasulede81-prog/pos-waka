@@ -27,8 +27,8 @@ export function CustomRolePermissionEditor({ lang, businessType, selected, onCha
   return (
     <div className="space-y-4">
       {categories.map((cat) => (
-        <section key={cat.id} className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 dark:border-stone-700 dark:bg-stone-900/40">
-          <h3 className="text-sm font-black uppercase tracking-wide text-stone-600 dark:text-stone-300">
+        <section key={cat.id} className="rounded-2xl border border-border bg-muted/80 p-4 dark:bg-foreground/40">
+          <h3 className="text-sm font-black uppercase tracking-wide text-muted-foreground dark:text-muted-foreground">
             {t(lang, cat.labelKey as "permCategory_sales")}
           </h3>
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -41,7 +41,7 @@ export function CustomRolePermissionEditor({ lang, businessType, selected, onCha
                       "rounded-xl border px-3 py-2.5 transition",
                       checked
                         ? "border-waka-300 bg-waka-50 text-waka-950 dark:border-waka-700 dark:bg-waka-950/30 dark:text-waka-100"
-                        : "border-stone-200 bg-white text-stone-700 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-200",
+                        : "border-border bg-card text-muted-foreground dark:bg-foreground dark:text-muted-foreground",
                       disabled && "cursor-not-allowed opacity-60",
                     )}
                   >
@@ -77,8 +77,8 @@ export function CustomRolePermissionPreview({
 
   return (
     <div className="rounded-2xl border border-waka-200 bg-waka-50/80 p-4 dark:border-waka-800 dark:bg-waka-950/20">
-      <p className="text-sm font-black text-stone-900 dark:text-stone-100">{t(lang, "enterpriseRolesPreviewTitle")}</p>
-      <ul className="mt-3 space-y-1 text-sm font-semibold text-stone-700 dark:text-stone-300">
+      <p className="text-sm font-black text-foreground dark:text-background">{t(lang, "enterpriseRolesPreviewTitle")}</p>
+      <ul className="mt-3 space-y-1 text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
         {rows.map((row) => (
           <li key={row.id} className="flex items-center justify-between gap-3">
             <span>{t(lang, row.labelKey as "permCategory_sales")}</span>

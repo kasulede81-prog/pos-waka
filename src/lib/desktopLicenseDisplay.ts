@@ -1,6 +1,6 @@
+import { resolveEffectiveSubscription } from "./effectiveSubscription";
 import {
   getPaidPlanRenewalCountdown,
-  resolveEffectivePlanTier,
   maxDevicesHintForTier,
   type SubscriptionPlanCode,
   type SubscriptionSnapshot,
@@ -19,30 +19,6 @@ export type DesktopLicenseDisplay = {
   deviceLimit: number | null;
 };
 
-function msToDays(ms: number): number {
-  return Math.max(0, Math.ceil(ms / 86400000));
-}
-
-function resolveExpiryMs(snapshot: SubscriptionSnapshot, nowMs: number): number | null {
-  if (snapshot.kind === "local_full") return null;
-  const grant = snapshot.promotionalGrant;
-  if (grant && !grant.revoked_at) {
-    const grantEnd = new Date(grant.expires_at).getTime();
-    if (Number.isFinite(grantEnd) && grantEnd > nowMs) return grantEnd;
-  }
-  if (snapshot.kind !== "remote") return null;
-  const row = snapshot.row;
-  if (row.trial_ends_at) {
-    const trialEnd = new Date(row.trial_ends_at).getTime();
-    if (Number.isFinite(trialEnd)) return trialEnd;
-  }
-  if (row.current_period_end) {
-    const periodEnd = new Date(row.current_period_end).getTime();
-    if (Number.isFinite(periodEnd)) return periodEnd;
-  }
-  return null;
-}
-
 /** Subscription license strip for desktop terminal home — read-only display helpers. */
 export function resolveDesktopLicenseDisplay(
   snapshot: SubscriptionSnapshot,
@@ -59,25 +35,23 @@ export function resolveDesktopLicenseDisplay(
     };
   }
 
-  const planTier = resolveEffectivePlanTier(snapshot, nowMs);
-  const row = snapshot.kind === "remote" ? snapshot.row : null;
-  const st = (row?.status ?? "").trim().toLowerCase();
-  const expiryMs = resolveExpiryMs(snapshot, nowMs);
-  const expiryAt = expiryMs ? new Date(expiryMs) : null;
+  const effective = resolveEffectiveSubscription(snapshot, nowMs, authMode);
+  const planTier = effective.effectivePlan;
+  const expiryAt = effective.expiresAt ? new Date(effective.expiresAt) : null;
+  const deviceLimit = effective.deviceLimit ?? maxDevicesHintForTier(planTier);
 
-  if (st === "expired" || (expiryMs !== null && expiryMs <= nowMs && planTier !== "free")) {
+  if (effective.isExpired) {
     return {
       status: "expired",
       planTier,
       expiryAt,
       daysRemaining: 0,
-      deviceLimit: row?.max_devices ?? maxDevicesHintForTier(planTier),
+      deviceLimit,
     };
   }
 
   const renewal = getPaidPlanRenewalCountdown(snapshot, nowMs);
-  const daysRemaining =
-    renewal?.days ?? (expiryMs !== null ? msToDays(expiryMs - nowMs) : null);
+  const daysRemaining = renewal?.days ?? effective.daysRemaining;
 
   if (daysRemaining !== null && daysRemaining <= EXPIRING_SOON_DAYS) {
     return {
@@ -85,7 +59,7 @@ export function resolveDesktopLicenseDisplay(
       planTier,
       expiryAt,
       daysRemaining,
-      deviceLimit: row?.max_devices ?? maxDevicesHintForTier(planTier),
+      deviceLimit,
     };
   }
 
@@ -94,7 +68,7 @@ export function resolveDesktopLicenseDisplay(
     planTier,
     expiryAt,
     daysRemaining,
-    deviceLimit: row?.max_devices ?? maxDevicesHintForTier(planTier),
+    deviceLimit,
   };
 }
 

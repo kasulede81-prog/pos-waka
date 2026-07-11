@@ -31,7 +31,7 @@ export function InvestigationCategoryChips({
               "min-h-[34px] shrink-0 rounded-full px-3 py-1 text-xs font-black transition-all",
               active === id
                 ? "bg-waka-600 text-white shadow-sm"
-                : "border border-stone-200 bg-white text-stone-700 active:bg-stone-50",
+                : "border border-border bg-card text-muted-foreground active:bg-muted",
               accentCategories?.has(id)
                 ? active === id
                   ? "bg-violet-700 ring-violet-200"

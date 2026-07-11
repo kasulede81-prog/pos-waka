@@ -57,55 +57,55 @@ export function SettingsDiagnosticsPage({ lang, user }: { lang: Language; user: 
     <div className="space-y-6 pb-8">
       <PageBackBar lang={lang} fallbackTo="/settings" label={t(lang, "settingsHubTitle")} />
       <div>
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "diagnosticsPageTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "diagnosticsPageSub")}</p>
+        <h1 className="text-2xl font-black text-foreground">{t(lang, "diagnosticsPageTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "diagnosticsPageSub")}</p>
       </div>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
         <SyncHealthCard lang={lang} variant="simple" />
       </section>
 
       <SelfDeleteHealthPanel lang={lang} user={user} />
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
         <dl className="space-y-3 text-sm">
           <div className="flex flex-wrap justify-between gap-2">
-            <dt className="font-bold text-stone-600">{t(lang, "diagnosticsDeviceName")}</dt>
-            <dd className="max-w-[65%] text-right font-semibold text-stone-900">{report?.deviceName ?? "…"}</dd>
+            <dt className="font-bold text-muted-foreground">{t(lang, "diagnosticsDeviceName")}</dt>
+            <dd className="max-w-[65%] text-right font-semibold text-foreground">{report?.deviceName ?? "…"}</dd>
           </div>
           {Capacitor.getPlatform() === "android" ? (
             <div className="flex flex-wrap justify-between gap-2">
-              <dt className="font-bold text-stone-600">{t(lang, "diagnosticsAndroidVersion")}</dt>
-              <dd className="font-semibold text-stone-900">{report?.androidVersion ?? "—"}</dd>
+              <dt className="font-bold text-muted-foreground">{t(lang, "diagnosticsAndroidVersion")}</dt>
+              <dd className="font-semibold text-foreground">{report?.androidVersion ?? "—"}</dd>
             </div>
           ) : null}
           <div className="flex flex-wrap justify-between gap-2">
-            <dt className="font-bold text-stone-600">{t(lang, "diagnosticsAppVersion")}</dt>
-            <dd className="font-mono font-semibold text-stone-900">
+            <dt className="font-bold text-muted-foreground">{t(lang, "diagnosticsAppVersion")}</dt>
+            <dd className="font-mono font-semibold text-foreground">
               {report ? `${report.appVersion} (${report.build})` : "…"}
             </dd>
           </div>
           <div className="flex flex-wrap justify-between gap-2">
-            <dt className="font-bold text-stone-600">{t(lang, "diagnosticsOfflineStatus")}</dt>
-            <dd className="font-semibold text-stone-900">
+            <dt className="font-bold text-muted-foreground">{t(lang, "diagnosticsOfflineStatus")}</dt>
+            <dd className="font-semibold text-foreground">
               {sync.isOnline ? t(lang, "diagnosticsOnline") : t(lang, "diagnosticsOffline")}
             </dd>
           </div>
           <div className="flex flex-wrap justify-between gap-2">
-            <dt className="font-bold text-stone-600">{t(lang, "diagnosticsLastSync")}</dt>
-            <dd className="font-semibold text-stone-900">{lastSyncLabel}</dd>
+            <dt className="font-bold text-muted-foreground">{t(lang, "diagnosticsLastSync")}</dt>
+            <dd className="font-semibold text-foreground">{lastSyncLabel}</dd>
           </div>
           <div className="flex flex-wrap justify-between gap-2">
-            <dt className="font-bold text-stone-600">{t(lang, "diagnosticsScannerSupport")}</dt>
-            <dd className="font-semibold text-stone-900">{yesNo(lang, Boolean(hw?.barcodeWedge))}</dd>
+            <dt className="font-bold text-muted-foreground">{t(lang, "diagnosticsScannerSupport")}</dt>
+            <dd className="font-semibold text-foreground">{yesNo(lang, Boolean(hw?.barcodeWedge))}</dd>
           </div>
           <div className="flex flex-wrap justify-between gap-2">
-            <dt className="font-bold text-stone-600">{t(lang, "diagnosticsCameraSupport")}</dt>
-            <dd className="font-semibold text-stone-900">{yesNo(lang, Boolean(hw?.camera && hw?.barcodeCamera))}</dd>
+            <dt className="font-bold text-muted-foreground">{t(lang, "diagnosticsCameraSupport")}</dt>
+            <dd className="font-semibold text-foreground">{yesNo(lang, Boolean(hw?.camera && hw?.barcodeCamera))}</dd>
           </div>
           <div className="flex flex-wrap justify-between gap-2">
-            <dt className="font-bold text-stone-600">{t(lang, "diagnosticsThermalPrint")}</dt>
-            <dd className="font-semibold text-stone-900">{yesNo(lang, Boolean(hw?.escPos))}</dd>
+            <dt className="font-bold text-muted-foreground">{t(lang, "diagnosticsThermalPrint")}</dt>
+            <dd className="font-semibold text-foreground">{yesNo(lang, Boolean(hw?.escPos))}</dd>
           </div>
         </dl>
         <button

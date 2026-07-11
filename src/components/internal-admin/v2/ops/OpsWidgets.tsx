@@ -58,7 +58,7 @@ export function SystemStatusCenter({ health }: { health: SystemHealthSnapshot })
   ];
 
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-gradient-to-br from-stone-900 via-stone-800 to-waka-950 p-4 text-white shadow-lg">
+    <section className="rounded-2xl border border-border/90 bg-gradient-to-br from-foreground via-foreground/80 to-waka-950 p-4 text-white shadow-lg">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-waka-200/90">Mission control</p>
@@ -89,9 +89,9 @@ export function ActivityFeedPanel({ events, previewMode }: { events: OpsFeedEven
   const list = filter === "high" ? events.filter((e) => e.priority === "high") : events;
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-black text-stone-900">Live activity</h2>
+        <h2 className="text-sm font-black text-foreground">Live activity</h2>
         <div className="flex gap-1">
           {(["all", "high"] as const).map((f) => (
             <button
@@ -100,7 +100,7 @@ export function ActivityFeedPanel({ events, previewMode }: { events: OpsFeedEven
               onClick={() => setFilter(f)}
               className={clsx(
                 "rounded-full px-2.5 py-1 text-[10px] font-black uppercase",
-                filter === f ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-600",
+                filter === f ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
               )}
             >
               {f}
@@ -110,7 +110,7 @@ export function ActivityFeedPanel({ events, previewMode }: { events: OpsFeedEven
       </div>
       <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
         {list.length === 0 ? (
-          <li className="py-6 text-center text-sm font-semibold text-stone-500">No events right now.</li>
+          <li className="py-6 text-center text-sm font-semibold text-muted-foreground">No events right now.</li>
         ) : (
           list.map((e) => (
             <motion.li
@@ -120,11 +120,11 @@ export function ActivityFeedPanel({ events, previewMode }: { events: OpsFeedEven
               animate={{ opacity: 1, y: 0 }}
               className={clsx(
                 "rounded-xl border px-3 py-2.5 text-sm",
-                e.priority === "high" ? "border-rose-200 bg-rose-50/80" : "border-stone-100 bg-stone-50/60",
+                e.priority === "high" ? "border-rose-200 bg-rose-50/80" : "border-border bg-muted/60",
               )}
             >
-              <p className="text-[10px] font-bold text-stone-500">{e.timeLabel}</p>
-              <p className="font-semibold text-stone-900">{e.message}</p>
+              <p className="text-[10px] font-bold text-muted-foreground">{e.timeLabel}</p>
+              <p className="font-semibold text-foreground">{e.message}</p>
               {e.shopId ? (
                 <Link
                   to={internalAdminShopHref(e.shopId, previewMode)}
@@ -154,7 +154,7 @@ export function SupportTagsRow({ tags }: { tags: SupportTag[] }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1">
       {tags.slice(0, 4).map((t) => (
-        <span key={t} className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[9px] font-black uppercase text-stone-600">
+        <span key={t} className="rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-black uppercase text-muted-foreground">
           {tagLabel(t)}
         </span>
       ))}
@@ -451,10 +451,10 @@ export function GlobalSearchBar({
       <div
         className={clsx(
           "flex items-center gap-2 rounded-2xl border px-3 shadow-sm",
-          compact ? "border-white/25 bg-white/10" : "border-stone-200 bg-white",
+          compact ? "border-white/25 bg-white/10" : "border-border bg-card",
         )}
       >
-        <Search className={clsx("h-4 w-4 shrink-0", compact ? "text-white/70" : "text-stone-400")} />
+        <Search className={clsx("h-4 w-4 shrink-0", compact ? "text-white/70" : "text-muted-foreground")} />
         <input
           value={q}
           onChange={(e) => {
@@ -466,14 +466,14 @@ export function GlobalSearchBar({
           placeholder="Search shops, campaigns, devices, tickets…"
           className={clsx(
             "min-h-[40px] flex-1 bg-transparent text-sm font-semibold outline-none",
-            compact ? "text-white placeholder:text-white/60" : "text-stone-900",
+            compact ? "text-white placeholder:text-white/60" : "text-foreground",
           )}
         />
       </div>
       {open && q.length >= 2 ? (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-stone-200 bg-white py-1 shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-border bg-card py-1 shadow-xl">
           {results.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-stone-500">No matches.</p>
+            <p className="px-4 py-3 text-sm text-muted-foreground">No matches.</p>
           ) : (
             results.map((r) => (
               <button
@@ -482,8 +482,8 @@ export function GlobalSearchBar({
                 className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-waka-50"
                 onClick={() => go(r)}
               >
-                <span className="text-sm font-black text-stone-900">{r.label}</span>
-                <span className="text-[11px] font-medium text-stone-500">
+                <span className="text-sm font-black text-foreground">{r.label}</span>
+                <span className="text-[11px] font-medium text-muted-foreground">
                   {r.type} · {r.sub}
                 </span>
               </button>
@@ -497,16 +497,16 @@ export function GlobalSearchBar({
 
 export function AppVersionPanel({ versions }: { versions: { version: string; count: number; pct: number }[] }) {
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-black text-stone-900">App versions</h2>
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <h2 className="text-sm font-black text-foreground">App versions</h2>
       <ul className="mt-3 space-y-2">
         {versions.slice(0, 5).map((v) => (
           <li key={v.version}>
-            <div className="flex justify-between text-xs font-bold text-stone-700">
+            <div className="flex justify-between text-xs font-bold text-muted-foreground">
               <span>v{v.version}</span>
               <span>{v.pct}%</span>
             </div>
-            <div className="mt-1 h-2 overflow-hidden rounded-full bg-stone-100">
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
               <div className="h-full rounded-full bg-waka-500 transition-all" style={{ width: `${v.pct}%` }} />
             </div>
           </li>
@@ -528,8 +528,8 @@ export function PlatformAnalyticsPanel({
   const maxSignup = Math.max(1, ...signups7.map((b) => b.count));
   return (
     <section className="space-y-4">
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black text-stone-900">Growth (7 days)</h2>
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black text-foreground">Growth (7 days)</h2>
         <div className="mt-3 flex h-24 items-end gap-1">
           {signups7.map((b) => (
             <div key={b.label} className="flex flex-1 flex-col items-center gap-1">
@@ -537,21 +537,21 @@ export function PlatformAnalyticsPanel({
                 className="w-full max-w-[2rem] rounded-t-lg bg-waka-500"
                 style={{ height: `${Math.max(8, (b.count / maxSignup) * 100)}%` }}
               />
-              <span className="text-[9px] font-bold text-stone-400">{b.label}</span>
+              <span className="text-[9px] font-bold text-muted-foreground">{b.label}</span>
             </div>
           ))}
         </div>
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="mt-2 text-xs text-muted-foreground">
           Subscriptions 7d: {subs7.reduce((s, b) => s + b.count, 0)} new
         </p>
       </div>
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black text-stone-900">Top districts</h2>
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black text-foreground">Top districts</h2>
         <ul className="mt-2 space-y-2">
           {districts.slice(0, 5).map((d) => (
             <li key={d.label} className="flex justify-between text-sm font-semibold">
               <span>{d.label}</span>
-              <span className="font-mono text-stone-600">{d.totalShops}</span>
+              <span className="font-mono text-muted-foreground">{d.totalShops}</span>
             </li>
           ))}
         </ul>
@@ -573,10 +573,10 @@ export function DeviceFleetCard({
 }) {
   const online = deviceOnline(device.last_seen_at);
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-black text-stone-900">{device.label ?? "Device"}</p>
+          <p className="font-black text-foreground">{device.label ?? "Device"}</p>
           <button type="button" onClick={onOpenShop} className="text-xs font-bold text-waka-600">
             {device.shop_name} →
           </button>
@@ -584,13 +584,13 @@ export function DeviceFleetCard({
         <span
           className={clsx(
             "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase",
-            online ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-600",
+            online ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground",
           )}
         >
           {online ? "Online" : "Offline"}
         </span>
       </div>
-      <dl className="mt-2 grid grid-cols-2 gap-1 text-[11px] font-semibold text-stone-600">
+      <dl className="mt-2 grid grid-cols-2 gap-1 text-[11px] font-semibold text-muted-foreground">
         <div>v{device.app_version ?? "?"}</div>
         <div>{device.platform ?? "—"}</div>
         <div>Sync pending: {device.pending_sync}</div>
@@ -606,14 +606,14 @@ export function DeviceFleetCard({
           <button
             type="button"
             onClick={() => onAction("trust")}
-            className="min-h-[40px] rounded-xl border border-stone-200 px-3 text-[11px] font-black"
+            className="min-h-[40px] rounded-xl border border-border px-3 text-[11px] font-black"
           >
             Trust
           </button>
           <button
             type="button"
             onClick={() => onAction("deactivate")}
-            className="min-h-[40px] rounded-xl border border-stone-200 px-3 text-[11px] font-black"
+            className="min-h-[40px] rounded-xl border border-border px-3 text-[11px] font-black"
           >
             Deactivate
           </button>
@@ -651,7 +651,7 @@ export function AnnouncementSheet({
         <select
           value={kind}
           onChange={(e) => setKind(e.target.value as OpsAnnouncement["kind"])}
-          className="w-full rounded-xl border border-stone-200 px-3 py-3 text-sm font-bold"
+          className="w-full rounded-xl border border-border px-3 py-3 text-sm font-bold"
         >
           <option value="maintenance">Maintenance</option>
           <option value="feature">Feature</option>
@@ -662,14 +662,14 @@ export function AnnouncementSheet({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Title"
-          className="w-full rounded-xl border border-stone-200 px-3 py-3 text-sm font-bold"
+          className="w-full rounded-xl border border-border px-3 py-3 text-sm font-bold"
         />
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={3}
           placeholder="Message to shops…"
-          className="w-full rounded-xl border border-stone-200 px-3 py-3 text-sm font-semibold"
+          className="w-full rounded-xl border border-border px-3 py-3 text-sm font-semibold"
         />
         <button
           type="button"
@@ -680,9 +680,9 @@ export function AnnouncementSheet({
         </button>
         <ul className="space-y-2">
           {list.map((a) => (
-            <li key={a.id} className="rounded-xl bg-stone-50 p-3 text-sm">
-              <p className="font-black text-stone-900">{a.title}</p>
-              <p className="text-xs text-stone-600">{a.body}</p>
+            <li key={a.id} className="rounded-xl bg-muted p-3 text-sm">
+              <p className="font-black text-foreground">{a.title}</p>
+              <p className="text-xs text-muted-foreground">{a.body}</p>
             </li>
           ))}
         </ul>
@@ -725,8 +725,8 @@ export function ShopTimelinePanel({ events }: { events: OpsFeedEvent[] }) {
       {events.map((e) => (
         <li key={e.id} className="relative pb-4">
           <span className="absolute -left-[1.35rem] top-1 h-2.5 w-2.5 rounded-full bg-waka-500 ring-2 ring-white" />
-          <p className="text-[10px] font-bold text-stone-500">{e.timeLabel}</p>
-          <p className="text-sm font-semibold text-stone-900">{e.message}</p>
+          <p className="text-[10px] font-bold text-muted-foreground">{e.timeLabel}</p>
+          <p className="text-sm font-semibold text-foreground">{e.message}</p>
         </li>
       ))}
     </ul>
@@ -781,7 +781,7 @@ export function InternalNotesPanel({
         onChange={(e) => setBody(e.target.value)}
         rows={2}
         placeholder="Private staff note (VIP, fraud, extension…) "
-        className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold"
+        className="w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold"
       />
       <button
         type="button"
@@ -793,12 +793,12 @@ export function InternalNotesPanel({
       </button>
       <ul className="space-y-2">
         {notes.length === 0 ? (
-          <li className="text-sm font-semibold text-stone-500">No notes yet.</li>
+          <li className="text-sm font-semibold text-muted-foreground">No notes yet.</li>
         ) : (
           notes.map((n) => (
             <li key={n.id} className="rounded-xl bg-violet-50/80 p-3 text-sm">
-              <p className="font-semibold text-stone-900">{n.body}</p>
-              <p className="mt-1 text-[10px] text-stone-500">
+              <p className="font-semibold text-foreground">{n.body}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
                 {n.author} · {new Date(n.created_at).toLocaleString("en-GB")}
               </p>
             </li>

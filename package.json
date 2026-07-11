@@ -3,7 +3,7 @@
   "private": true,
   "description": "WAKA POS desktop and mobile point-of-sale application.",
   "author": "WAKA Technologies",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "type": "module",
   "scripts": {
     "dev": "vite --mode development",
@@ -35,6 +35,7 @@
     "verify:multi-device": "node scripts/multi-device-consistency.mjs",
     "verify:hospitality-concurrency": "vitest run src/lib/pendingSaleMerge.test.ts",
     "test": "vitest run",
+    "check:app-versions": "node scripts/check-app-version-alignment.mjs",
     "test:all:batches": "node scripts/run-test-batches.mjs",
     "test:all:domains": "node scripts/run-all-domains.mjs",
     "test:retail": "node scripts/run-test-domain.mjs retail",

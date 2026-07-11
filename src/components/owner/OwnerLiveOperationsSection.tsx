@@ -24,9 +24,9 @@ function formatSyncAt(iso: string | null, lang: Language): string {
 
 function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className={`rounded-xl px-2.5 py-2 ${warn ? "bg-amber-50" : "bg-stone-50"}`}>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{label}</p>
-      <p className={`mt-0.5 text-sm font-black tabular-nums ${warn ? "text-amber-900" : "text-stone-950"}`}>{value}</p>
+    <div className={`rounded-xl px-2.5 py-2 ${warn ? "bg-amber-50" : "bg-muted"}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`mt-0.5 text-sm font-black tabular-nums ${warn ? "text-amber-900" : "text-foreground"}`}>{value}</p>
     </div>
   );
 }
@@ -36,11 +36,11 @@ export function OwnerLiveOperationsSection({ lang, live }: Props) {
     live.queueHealth === "degraded" || live.queueHealth === "backing_off" || live.unsyncedOperations > 0;
 
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm sm:p-4">
+    <section className="rounded-2xl border border-border/90 bg-card p-3 shadow-sm sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "ownerLiveOpsTitle")}</h2>
-          <p className="text-[11px] font-semibold text-stone-500">{t(lang, "ownerLiveOpsSub")}</p>
+          <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "ownerLiveOpsTitle")}</h2>
+          <p className="text-[11px] font-semibold text-muted-foreground">{t(lang, "ownerLiveOpsSub")}</p>
         </div>
         <Link
           to="/settings/devices"
@@ -74,7 +74,7 @@ export function OwnerLiveOperationsSection({ lang, live }: Props) {
         />
       </div>
       {live.activeCashierLabels.length > 0 ? (
-        <p className="mt-2 text-[11px] font-semibold text-stone-600">
+        <p className="mt-2 text-[11px] font-semibold text-muted-foreground">
           {t(lang, "ownerLiveOpsActiveList")}: {live.activeCashierLabels.join(", ")}
         </p>
       ) : null}

@@ -38,19 +38,19 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
         <header className="flex flex-col items-center text-center">
           <FounderAvatar large className="mx-auto" />
           <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-waka-700">Founder profile</p>
-          <h1 className="mt-2 text-4xl font-black text-stone-950">{FOUNDER_NAME}</h1>
+          <h1 className="mt-2 text-4xl font-black text-foreground">{FOUNDER_NAME}</h1>
           <p className="mt-2 text-lg font-bold text-waka-800">
             {FOUNDER_ROLE}, {WAKA_BRAND_NAME}
           </p>
-          <p className="mt-1 text-xs font-medium text-stone-500">Legal entity: {WAKA_LEGAL_COMPANY_NAME}</p>
-          <p className="mt-1 text-sm font-semibold text-stone-500">{FOUNDER_BASE}</p>
+          <p className="mt-1 text-xs font-medium text-muted-foreground">Legal entity: {WAKA_LEGAL_COMPANY_NAME}</p>
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">{FOUNDER_BASE}</p>
         </header>
 
-        <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">
-          <h2 className="text-lg font-black text-stone-950">Biography</h2>
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-waka-sm sm:p-8">
+          <h2 className="text-lg font-black text-foreground">Biography</h2>
           <div className="mt-4 space-y-4">
             {FOUNDER_BIO_PARAGRAPHS.map((para) => (
-              <p key={para.slice(0, 56)} className="text-sm font-medium leading-relaxed text-stone-700">
+              <p key={para.slice(0, 56)} className="text-sm font-medium leading-relaxed text-muted-foreground">
                 {para}
               </p>
             ))}
@@ -58,30 +58,30 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
         </section>
 
         <section className="rounded-3xl border border-waka-100 bg-waka-50 p-6 sm:p-8">
-          <h2 className="text-lg font-black text-stone-950">Vision</h2>
-          <p className="mt-4 text-base font-medium leading-relaxed text-stone-800">{FOUNDER_VISION}</p>
-          <p className="mt-4 text-sm font-medium leading-relaxed text-stone-700">{FOUNDER_QUOTE_SECOND}</p>
+          <h2 className="text-lg font-black text-foreground">Vision</h2>
+          <p className="mt-4 text-base font-medium leading-relaxed text-foreground">{FOUNDER_VISION}</p>
+          <p className="mt-4 text-sm font-medium leading-relaxed text-muted-foreground">{FOUNDER_QUOTE_SECOND}</p>
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-stone-100 bg-white p-5 shadow-sm">
-            <h3 className="font-black text-stone-950">What we are building</h3>
-            <ul className="mt-2 list-inside list-disc space-y-1 text-sm font-medium text-stone-700">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <h3 className="font-black text-foreground">What we are building</h3>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-sm font-medium text-muted-foreground">
               <li>{WAKA_MAIN_PRODUCT} for sales, stock, receipts, and reports</li>
               <li>Offline-friendly tools for busy trading days</li>
               <li>Affordable plans for growing Ugandan businesses</li>
             </ul>
           </div>
-          <div className="rounded-2xl border border-stone-100 bg-white p-5 shadow-sm">
-            <h3 className="font-black text-stone-950">Company</h3>
-            <p className="mt-2 text-sm font-medium text-stone-700">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <h3 className="font-black text-foreground">Company</h3>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
               {WAKA_BRAND_NAME} builds simple technology for shops, pharmacies, salons, supermarkets, restaurants, and
               market vendors across Uganda. Registered as {WAKA_LEGAL_COMPANY_NAME}.
             </p>
           </div>
         </section>
 
-        <p className="text-center text-xs font-medium text-stone-500">
+        <p className="text-center text-xs font-medium text-muted-foreground">
           {WAKA_PRODUCT_DESCRIPTION}{" "}
           <Link to="/about" className="font-bold text-waka-800 underline">
             About Waka POS

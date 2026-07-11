@@ -23,15 +23,15 @@ export function VoidLineModal({ lang, open, line, onClose, onConfirm }: Props) {
   return (
     <AppModalOverlay className="z-[64] flex items-end justify-center bg-black/55 sm:items-center" role="dialog" aria-modal onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-t-[1.75rem] bg-white p-5 shadow-2xl sm:rounded-3xl"
+        className="w-full max-w-md rounded-t-[1.75rem] bg-card p-5 shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-black text-stone-900">{t(lang, "voidTitle")}</h2>
-        <p className="mt-1 text-sm font-semibold text-stone-600">{line.name}</p>
+        <h2 className="text-xl font-black text-foreground">{t(lang, "voidTitle")}</h2>
+        <p className="mt-1 text-sm font-semibold text-muted-foreground">{line.name}</p>
         <p className="mt-1 text-lg font-black text-rose-700">UGX {line.lineTotalUgx.toLocaleString()}</p>
-        <p className="mt-2 text-sm text-stone-500">{t(lang, "voidHint")}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{t(lang, "voidHint")}</p>
 
-        <p className="mt-4 text-sm font-bold text-stone-800">{t(lang, "voidReasonLabel")}</p>
+        <p className="mt-4 text-sm font-bold text-foreground">{t(lang, "voidReasonLabel")}</p>
         <div className="mt-2 space-y-2">
           {REASONS.map((r) => (
             <button
@@ -40,7 +40,7 @@ export function VoidLineModal({ lang, open, line, onClose, onConfirm }: Props) {
               onClick={() => setReason(r)}
               className={clsx(
                 "flex min-h-[48px] w-full items-center rounded-2xl border-2 px-4 text-left text-base font-black",
-                reason === r ? "border-rose-500 bg-rose-50 text-rose-950" : "border-stone-200 text-stone-900",
+                reason === r ? "border-rose-500 bg-rose-50 text-rose-950" : "border-border text-foreground",
               )}
             >
               {t(lang, `voidReason_${r}`)}
@@ -48,12 +48,12 @@ export function VoidLineModal({ lang, open, line, onClose, onConfirm }: Props) {
           ))}
         </div>
 
-        <label className="mt-4 block text-sm font-bold text-stone-800">
+        <label className="mt-4 block text-sm font-bold text-foreground">
           {t(lang, "voidNoteOptional")}
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="mt-2 min-h-[44px] w-full rounded-xl border-2 border-stone-200 px-3 text-base"
+            className="mt-2 min-h-[44px] w-full rounded-xl border-2 border-border px-3 text-base"
             placeholder={t(lang, "voidNotePh")}
           />
         </label>

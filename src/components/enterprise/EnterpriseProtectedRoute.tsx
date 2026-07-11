@@ -14,7 +14,7 @@ type Props = {
 
 function SessionLoadingGate() {
   return (
-    <div className="flex min-h-[28vh] items-center justify-center px-4 text-sm font-semibold text-stone-500">
+    <div className="flex min-h-[28vh] items-center justify-center px-4 text-sm font-semibold text-muted-foreground">
       Loading…
     </div>
   );

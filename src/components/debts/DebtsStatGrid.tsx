@@ -38,8 +38,8 @@ function StatCard({
         highlight
           ? "border-waka-300 bg-gradient-to-br from-waka-50 to-waka-50/80"
           : warn
-            ? "border-rose-200/90 bg-white"
-            : "border-stone-200/90 bg-white",
+            ? "border-rose-200/90 bg-card"
+            : "border-border/90 bg-card",
       )}
     >
       <div className="flex items-center gap-1.5">
@@ -50,16 +50,16 @@ function StatCard({
               ? "bg-waka-600 text-white"
               : warn
                 ? "bg-rose-100 text-rose-700"
-                : "bg-stone-100 text-stone-600",
+                : "bg-muted text-muted-foreground",
           )}
         >
           <Icon className="h-3.5 w-3.5" aria-hidden />
         </span>
-        <span className="line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wide text-stone-500">
+        <span className="line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wide text-muted-foreground">
           {label}
         </span>
       </div>
-      <p className={clsx("text-base font-black leading-tight tabular-nums sm:text-lg", valueClass ?? "text-stone-950")}>
+      <p className={clsx("text-base font-black leading-tight tabular-nums sm:text-lg", valueClass ?? "text-foreground")}>
         {value}
       </p>
     </div>

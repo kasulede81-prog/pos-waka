@@ -11,24 +11,24 @@ export function ShopConsoleBusinessTab({ ctx }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-black text-stone-900">Business profile</h2>
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-black text-foreground">Business profile</h2>
         <dl className="mt-3 space-y-2 text-sm">
           <div className="flex justify-between gap-2">
-            <dt className="font-bold text-stone-500">District</dt>
-            <dd className="font-semibold text-stone-900">{detail.shop.district ?? "—"}</dd>
+            <dt className="font-bold text-muted-foreground">District</dt>
+            <dd className="font-semibold text-foreground">{detail.shop.district ?? "—"}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="font-bold text-stone-500">City</dt>
-            <dd className="font-semibold text-stone-900">{detail.shop.city ?? "—"}</dd>
+            <dt className="font-bold text-muted-foreground">City</dt>
+            <dd className="font-semibold text-foreground">{detail.shop.city ?? "—"}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="font-bold text-stone-500">Organization</dt>
-            <dd className="font-mono text-xs text-stone-700">{detail.shop.organization_id}</dd>
+            <dt className="font-bold text-muted-foreground">Organization</dt>
+            <dd className="font-mono text-xs text-muted-foreground">{detail.shop.organization_id}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="font-bold text-stone-500">Business type</dt>
-            <dd className="font-semibold text-stone-900">{detail.shop.business_type ?? "—"}</dd>
+            <dt className="font-bold text-muted-foreground">Business type</dt>
+            <dd className="font-semibold text-foreground">{detail.shop.business_type ?? "—"}</dd>
           </div>
         </dl>
       </div>

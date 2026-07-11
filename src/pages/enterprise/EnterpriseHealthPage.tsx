@@ -6,6 +6,9 @@ import { ENTERPRISE_PERFORMANCE_BUDGETS } from "../../types/enterprise";
 export function EnterpriseHealthPage({ lang }: { lang: Language }) {
   return (
     <EnterpriseShell lang={lang} title={t(lang, "enterpriseNav_health")} subtitle={t(lang, "enterpriseHealthSub")}>
+      <p className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
+        {t(lang, "enterpriseHealthReferenceNote")}
+      </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <BudgetCard label={t(lang, "enterpriseHealth_products")} value={ENTERPRISE_PERFORMANCE_BUDGETS.maxProductsPerBranch.toLocaleString()} />
         <BudgetCard label={t(lang, "enterpriseHealth_sales")} value={ENTERPRISE_PERFORMANCE_BUDGETS.maxSalesPerBranch.toLocaleString()} />
@@ -19,9 +22,9 @@ export function EnterpriseHealthPage({ lang }: { lang: Language }) {
 
 function BudgetCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-black uppercase text-stone-500">{label}</p>
-      <p className="mt-1 text-xl font-black text-stone-950">{value}</p>
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-xs font-black uppercase text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-black text-foreground">{value}</p>
     </div>
   );
 }

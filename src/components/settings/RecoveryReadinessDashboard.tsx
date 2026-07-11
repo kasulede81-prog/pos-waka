@@ -64,9 +64,9 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-stone-100 bg-stone-50/80 p-3">
-      <p className="text-xs font-black uppercase tracking-wide text-stone-500">{title}</p>
-      <div className="mt-2 space-y-1 text-sm text-stone-800">{children}</div>
+    <section className="rounded-xl border border-border bg-muted/80 p-3">
+      <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{title}</p>
+      <div className="mt-2 space-y-1 text-sm text-foreground">{children}</div>
     </section>
   );
 }
@@ -198,20 +198,20 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
   };
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "recoveryReadinessTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "recoveryReadinessSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "recoveryReadinessTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "recoveryReadinessSub")}</p>
 
       <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-bold ${statusClass(overallStatus)}`}>
         {statusLabel(lang, overallStatus)}
       </p>
 
-      <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "cloudRecoveryStatusTitle")}</p>
-        <p className="mt-1 text-2xl font-black tabular-nums text-stone-950">
+      <div className="mt-3 rounded-xl border border-border bg-muted px-3 py-2">
+        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "cloudRecoveryStatusTitle")}</p>
+        <p className="mt-1 text-2xl font-black tabular-nums text-foreground">
           {tTemplate(lang, "cloudRecoveryScoreLabel", { pct: cloudRecovery.scorePct })}
         </p>
-        <p className="mt-1 text-xs font-semibold text-stone-600">
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">
           {t(lang, cloudRecovery.badgeKey)} · {cloudRecovery.authoritativeCount} {t(lang, "cloudProtectionAuthoritative")} ·{" "}
           {cloudRecovery.partialCount} {t(lang, "cloudProtectionPartial")} · {cloudRecovery.localOnlyCount}{" "}
           {t(lang, "cloudProtectionLocalOnly")}
@@ -221,10 +221,10 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
         ) : null}
       </div>
 
-      <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "recoveryCompletenessTitle")}</p>
-        <p className="mt-1 text-2xl font-black tabular-nums text-stone-950">{completeness.scorePct}%</p>
-        <ul className="mt-2 space-y-1 text-xs text-stone-700">
+      <div className="mt-3 rounded-xl border border-border bg-muted px-3 py-2">
+        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "recoveryCompletenessTitle")}</p>
+        <p className="mt-1 text-2xl font-black tabular-nums text-foreground">{completeness.scorePct}%</p>
+        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
           {completeness.categories.map((cat) => (
             <li key={cat.id} className="flex justify-between gap-2">
               <span>{t(lang, cat.labelKey)}</span>
@@ -240,8 +240,8 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
         <ul className="space-y-1">
           {cloudRecovery.entities.map((entity) => (
             <li key={entity.id} className="flex flex-wrap items-center justify-between gap-1 text-xs">
-              <span className="font-semibold text-stone-800">{t(lang, entity.labelKey)}</span>
-              <span className="font-bold text-stone-600">
+              <span className="font-semibold text-foreground">{t(lang, entity.labelKey)}</span>
+              <span className="font-bold text-muted-foreground">
                 {t(lang, entity.protectionLabelKey)}
                 {entity.localCount > 0 ? ` · ${entity.localCount}` : ""}
                 {entity.unsyncedCount > 0 ? ` · ${entity.unsyncedCount} unsynced` : ""}
@@ -272,7 +272,7 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
               {lastRecovery.entityCounts.shifts} shifts · {lastRecovery.entityCounts.dayCloses} day closes
             </p>
             {lastRecovery.completeness ? (
-              <p className="text-xs font-semibold text-stone-700">
+              <p className="text-xs font-semibold text-muted-foreground">
                 {t(lang, "recoveryCompletenessTitle")}: {lastRecovery.completeness.scorePct}%
               </p>
             ) : null}
@@ -286,22 +286,22 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
             ) : null}
           </>
         ) : (
-          <p className="text-stone-500">{t(lang, "recoveryDiagnosticsNone")}</p>
+          <p className="text-muted-foreground">{t(lang, "recoveryDiagnosticsNone")}</p>
         )}
       </Section>
 
-      <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "cloudRecoverySimulationTitle")}</p>
-        <p className="mt-1 text-sm text-stone-600">{t(lang, "cloudRecoverySimulationSub")}</p>
+      <div className="mt-4 rounded-xl border border-border bg-muted/80 p-3">
+        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "cloudRecoverySimulationTitle")}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{t(lang, "cloudRecoverySimulationSub")}</p>
         <button
           type="button"
           onClick={runRecoverySimulation}
-          className="mt-3 inline-flex min-h-[40px] items-center rounded-xl bg-stone-900 px-4 text-sm font-black text-white"
+          className="mt-3 inline-flex min-h-[40px] items-center rounded-xl bg-foreground px-4 text-sm font-black text-background"
         >
           {t(lang, "cloudRecoverySimulationRun")}
         </button>
         {simResult ? (
-          <div className="mt-3 space-y-1 text-sm text-stone-800">
+          <div className="mt-3 space-y-1 text-sm text-foreground">
             <p className={`font-bold ${simResult.ok ? "text-emerald-800" : "text-amber-900"}`}>
               {simResult.ok ? t(lang, "cloudRecoverySimulationOk") : t(lang, "cloudRecoverySimulationFail")}
             </p>
@@ -318,7 +318,7 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
                 ))}
               </ul>
             ) : null}
-            <p className="text-xs text-stone-500">{new Date(simResult.checkedAt).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">{new Date(simResult.checkedAt).toLocaleString()}</p>
           </div>
         ) : null}
       </div>
@@ -338,10 +338,10 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
             <>
               <p>{t(lang, "recoveryRestoreCleared")}: {lastRestore.clearedCount}</p>
               <p>{t(lang, "recoveryRestoreArchived")}: {lastRestore.archivedCount}</p>
-              <p className="text-xs text-stone-500">{new Date(lastRestore.at).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">{new Date(lastRestore.at).toLocaleString()}</p>
             </>
           ) : (
-            <p className="text-stone-500">{t(lang, "recoveryRestoreNone")}</p>
+            <p className="text-muted-foreground">{t(lang, "recoveryRestoreNone")}</p>
           )}
           <p>{t(lang, "recoveryArchiveTotal")}: {archiveTotal}</p>
         </Section>
@@ -361,7 +361,7 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
         <Section title={t(lang, "recoverySectionDebt")}>
           <p>{statusLabel(lang, liveValidation.debt.status)} · {liveValidation.debt.mismatchCount} {t(lang, "recoveryMismatchLabel")}</p>
           {lastPostRestore ? (
-            <p className="text-xs text-stone-500">{t(lang, "recoveryLastRestoreCheck")}: {new Date(lastPostRestore.checkedAt).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">{t(lang, "recoveryLastRestoreCheck")}: {new Date(lastPostRestore.checkedAt).toLocaleString()}</p>
           ) : null}
         </Section>
 
@@ -394,17 +394,17 @@ export function RestoreDiagnosticsCard({ lang }: { lang: Language }) {
   if (!canView) return null;
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "restoreDiagnosticsTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "restoreDiagnosticsSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "restoreDiagnosticsTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "restoreDiagnosticsSub")}</p>
       {lastRestore ? (
         <div className="mt-3 space-y-1 text-sm">
           <p>{t(lang, "recoveryRestoreCleared")}: <strong>{lastRestore.clearedCount}</strong></p>
           <p>{t(lang, "recoveryRestoreArchived")}: <strong>{lastRestore.archivedCount}</strong></p>
-          <p className="text-xs text-stone-500">{new Date(lastRestore.at).toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground">{new Date(lastRestore.at).toLocaleString()}</p>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-stone-500">{t(lang, "recoveryRestoreNone")}</p>
+        <p className="mt-3 text-sm text-muted-foreground">{t(lang, "recoveryRestoreNone")}</p>
       )}
       <p className="mt-2 text-sm">{t(lang, "recoveryArchiveTotal")}: {archiveTotal}</p>
     </article>
@@ -433,9 +433,9 @@ export function QueueStatusCard({ lang, lazy = false }: { lang: Language; lazy?:
   if (!canView) return null;
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "queueStatusTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "queueStatusSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "queueStatusTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "queueStatusSub")}</p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
         <span>{t(lang, "recoveryQueueCount")}: {queueSnap?.queuedCount ?? 0}</span>
         <span>{t(lang, "recoveryQueueOldest")}: {formatAge(queueSnap?.oldestOpAgeMs ?? null)}</span>
@@ -499,9 +499,9 @@ export function SnapshotHealthCard({ lang, lazy = false }: { lang: Language; laz
         : "warning";
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "snapshotHealthTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "snapshotHealthSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "snapshotHealthTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "snapshotHealthSub")}</p>
       <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-bold ${statusClass(status)}`}>
         {statusLabel(lang, status)}
       </p>
@@ -511,7 +511,7 @@ export function SnapshotHealthCard({ lang, lazy = false }: { lang: Language; laz
         <p>{t(lang, "recoverySnapshotArchives")}: {analysis.retainedArchivedSalesCount} / {analysis.originalArchivedSalesCount}</p>
         {analysis.wouldTrim ? <p className="font-semibold text-amber-900">{t(lang, "recoverySnapshotWouldTrim")}</p> : null}
         {lastUpload?.wouldTrim ? (
-          <p className="text-xs text-stone-500">{t(lang, "recoverySnapshotLastUploadTrim")}: {lastUpload.salesTrimmedCount} sales</p>
+          <p className="text-xs text-muted-foreground">{t(lang, "recoverySnapshotLastUploadTrim")}: {lastUpload.salesTrimmedCount} sales</p>
         ) : null}
       </div>
     </article>

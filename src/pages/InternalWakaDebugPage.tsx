@@ -92,8 +92,8 @@ export function InternalWakaDebugPage({ lang, adminRow }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-waka-700">{t(lang, "internalDebugBadge")}</p>
-          <h1 className="text-2xl font-black text-stone-900">{t(lang, "internalDebugTitle")}</h1>
-          <p className="mt-1 text-sm font-semibold text-stone-600">
+          <h1 className="text-2xl font-black text-foreground">{t(lang, "internalDebugTitle")}</h1>
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">
             {adminRow.email ?? "—"} · {adminRow.role}
           </p>
         </div>
@@ -102,11 +102,11 @@ export function InternalWakaDebugPage({ lang, adminRow }: Props) {
             type="button"
             disabled={busy}
             onClick={() => void run()}
-            className="rounded-2xl bg-stone-900 px-4 py-2 text-sm font-black text-white disabled:opacity-40"
+            className="rounded-2xl bg-foreground px-4 py-2 text-sm font-black text-background disabled:opacity-40"
           >
             {busy ? "…" : t(lang, "internalDebugReload")}
           </button>
-          <Link to="/internal/waka" className="rounded-2xl border-2 border-stone-300 px-4 py-2 text-sm font-bold text-stone-800">
+          <Link to="/internal/waka" className="rounded-2xl border-2 border-border px-4 py-2 text-sm font-bold text-foreground">
             {t(lang, "internalAdminBack")}
           </Link>
         </div>
@@ -116,31 +116,31 @@ export function InternalWakaDebugPage({ lang, adminRow }: Props) {
         {t(lang, "internalDebugHint")}
       </p>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-stone-900">{t(lang, "internalDebugProbes")}</h2>
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "internalDebugProbes")}</h2>
         <ul className="mt-4 space-y-2">
           {probes.map((p) => (
-            <li key={p.label} className="rounded-2xl border border-stone-100 bg-stone-50 px-4 py-3 text-sm">
+            <li key={p.label} className="rounded-2xl border border-border bg-muted px-4 py-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-black text-stone-900">{p.label}</span>
+                <span className="font-black text-foreground">{p.label}</span>
                 <span className={`font-mono text-xs font-bold ${p.ok ? "text-emerald-700" : "text-rose-700"}`}>
                   {p.ok ? "OK" : "FAIL"} · {p.ms}ms
                 </span>
               </div>
-              <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-all text-xs text-stone-700">{p.detail}</pre>
+              <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-all text-xs text-muted-foreground">{p.detail}</pre>
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-stone-900">internal_ops_dashboard_metrics</h2>
-        <pre className="mt-3 max-h-80 overflow-auto rounded-2xl bg-stone-900 p-4 text-xs text-emerald-100">{metricsJson || "—"}</pre>
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="text-lg font-black text-foreground">internal_ops_dashboard_metrics</h2>
+        <pre className="mt-3 max-h-80 overflow-auto rounded-2xl bg-foreground p-4 text-xs text-emerald-100">{metricsJson || "—"}</pre>
       </section>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-stone-900">internal_ops_recent_shops (limit 5)</h2>
-        <pre className="mt-3 max-h-80 overflow-auto rounded-2xl bg-stone-900 p-4 text-xs text-emerald-100">{recentJson || "—"}</pre>
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="text-lg font-black text-foreground">internal_ops_recent_shops (limit 5)</h2>
+        <pre className="mt-3 max-h-80 overflow-auto rounded-2xl bg-foreground p-4 text-xs text-emerald-100">{recentJson || "—"}</pre>
       </section>
     </div>
   );
@@ -166,7 +166,7 @@ export function InternalWakaDebugRoute({ lang }: { lang: Language }) {
   }, []);
 
   if (loading) {
-    return <div className="h-40 animate-pulse rounded-3xl bg-stone-200/70" />;
+    return <div className="h-40 animate-pulse rounded-3xl bg-muted/70" />;
   }
   if (!row) {
     return null;

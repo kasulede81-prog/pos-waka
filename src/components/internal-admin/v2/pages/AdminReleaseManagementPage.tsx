@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Rocket,
   Save,
+  Send,
   Trash2,
 } from "lucide-react";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
@@ -21,6 +22,7 @@ import {
   fetchAppReleases,
   publishAppRelease,
   releaseToDraft,
+  resendAppReleaseNotification,
   saveAppRelease,
   type AppReleaseDraft,
   type AppReleaseEvent,
@@ -36,12 +38,12 @@ type Props = {
 };
 
 const inputCls =
-  "w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm font-semibold text-stone-900 outline-none focus:border-waka-500";
-const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-stone-500";
+  "w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground outline-none focus:border-waka-500";
+const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-muted-foreground";
 
 function statusBadge(status: string): string {
   if (status === "published") return "bg-emerald-100 text-emerald-800";
-  if (status === "archived") return "bg-stone-200 text-stone-700";
+  if (status === "archived") return "bg-muted text-muted-foreground";
   return "bg-amber-100 text-amber-900";
 }
 
@@ -155,6 +157,20 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
     void openRelease(draft.id);
   };
 
+  const handleResend = async (id: string) => {
+    if (!canEdit || previewMode) return;
+    if (!window.confirm("Resend update notification to eligible devices? This does not change release policy.")) return;
+    setBusy(true);
+    const result = await resendAppReleaseNotification(id);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error ?? "Resend failed");
+      return;
+    }
+    setNotice("Update notification resent.");
+    void load();
+  };
+
   const handleArchive = async (id: string) => {
     if (!canEdit || previewMode) return;
     if (!window.confirm("Archive this release?")) return;
@@ -198,7 +214,7 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
 
   if (!canEdit && !previewMode) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-white p-6 text-center text-sm font-bold text-rose-800">
+      <div className="rounded-2xl border border-rose-200 bg-card p-6 text-center text-sm font-bold text-rose-800">
         Operations admin access required.
       </div>
     );
@@ -208,8 +224,8 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
     <div className="space-y-6 pb-10">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-stone-950">Release Management</h1>
-          <p className="mt-1 max-w-2xl text-sm font-medium text-stone-600">
+          <h1 className="text-2xl font-black tracking-tight text-foreground">Release Management</h1>
+          <p className="mt-1 max-w-2xl text-sm font-medium text-muted-foreground">
             Control Google Play in-app update prompts and customer-facing release notes. APK distribution stays on Google Play.
           </p>
         </div>
@@ -217,7 +233,7 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
           <button
             type="button"
             onClick={() => void load()}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-800"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-bold text-foreground"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -235,12 +251,25 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
       </header>
 
       {published ? (
-        <article className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-4 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Live on devices</p>
-          <p className="mt-1 text-lg font-black text-stone-950">
-            v{published.versionNumber} · Play code {published.googlePlayVersionCode}
-            {published.promptUsers ? " · Prompt ON" : " · Prompt OFF"}
-          </p>
+        <article className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Live on devices</p>
+              <p className="mt-1 text-lg font-black text-foreground">
+                v{published.versionNumber} · Play code {published.googlePlayVersionCode}
+                {published.promptUsers ? " · Prompt ON" : " · Prompt OFF"}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={busy || previewMode}
+              onClick={() => void handleResend(published.id)}
+              className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-emerald-300 bg-card px-3 text-sm font-bold text-emerald-900 disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" />
+              Resend notification
+            </button>
+          </div>
         </article>
       ) : null}
 
@@ -253,10 +282,10 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
 
       {editing ? (
         <section className="grid gap-5 lg:grid-cols-2">
-          <article className="space-y-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm lg:col-span-2">
+          <article className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm lg:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-black text-stone-950">{draft.id ? "Edit release" : "New release"}</h2>
-              <button type="button" onClick={() => setEditing(false)} className="text-sm font-bold text-stone-500">
+              <h2 className="text-lg font-black text-foreground">{draft.id ? "Edit release" : "New release"}</h2>
+              <button type="button" onClick={() => setEditing(false)} className="text-sm font-bold text-muted-foreground">
                 Close
               </button>
             </div>
@@ -327,8 +356,8 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <fieldset className="rounded-xl border border-stone-200 p-4">
-                <legend className="px-1 text-xs font-black uppercase tracking-wide text-stone-500">Update type</legend>
+              <fieldset className="rounded-xl border border-border p-4">
+                <legend className="px-1 text-xs font-black uppercase tracking-wide text-muted-foreground">Update type</legend>
                 <label className="mt-2 flex items-center gap-2 text-sm font-semibold">
                   <input
                     type="radio"
@@ -349,8 +378,8 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
                 </label>
               </fieldset>
 
-              <fieldset className="space-y-3 rounded-xl border border-stone-200 p-4">
-                <legend className="px-1 text-xs font-black uppercase tracking-wide text-stone-500">Behavior</legend>
+              <fieldset className="space-y-3 rounded-xl border border-border p-4">
+                <legend className="px-1 text-xs font-black uppercase tracking-wide text-muted-foreground">Behavior</legend>
                 {[
                   ["promptUsers", "Prompt users to update"],
                   ["forceBelowMinimum", "Force update below minimum version"],
@@ -388,12 +417,12 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
               />
             </div>
 
-            <div className="flex flex-wrap gap-2 border-t border-stone-100 pt-4">
+            <div className="flex flex-wrap gap-2 border-t border-border pt-4">
               <button
                 type="button"
                 disabled={busy || previewMode}
                 onClick={() => void handleSave()}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-black text-white disabled:opacity-50"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-foreground px-4 text-sm font-black text-background disabled:opacity-50"
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Save draft
@@ -413,7 +442,7 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
                     type="button"
                     disabled={busy || previewMode}
                     onClick={() => void handleArchive(draft.id!)}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold"
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-bold"
                   >
                     <Archive className="h-4 w-4" />
                     Archive
@@ -434,19 +463,19 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-stone-200 bg-white shadow-sm">
-        <div className="border-b border-stone-100 px-4 py-3">
-          <h2 className="text-sm font-black uppercase tracking-wide text-stone-600">Release history</h2>
+      <section className="rounded-2xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Release history</h2>
         </div>
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-12 text-sm font-semibold text-stone-500">
+          <div className="flex items-center justify-center gap-2 py-12 text-sm font-semibold text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             Loading…
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-stone-50 text-[11px] font-black uppercase tracking-wide text-stone-500">
+              <thead className="bg-muted text-[11px] font-black uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3">Version</th>
                   <th className="px-4 py-3">Date</th>
@@ -461,10 +490,10 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
               </thead>
               <tbody>
                 {releases.map((row) => (
-                  <tr key={row.id} className="border-t border-stone-100 hover:bg-stone-50/80">
-                    <td className="px-4 py-3 font-bold text-stone-900">
+                  <tr key={row.id} className="border-t border-border hover:bg-muted/80">
+                    <td className="px-4 py-3 font-bold text-foreground">
                       {row.versionNumber}
-                      <span className="ml-1 text-xs font-semibold text-stone-500">({row.googlePlayVersionCode})</span>
+                      <span className="ml-1 text-xs font-semibold text-muted-foreground">({row.googlePlayVersionCode})</span>
                     </td>
                     <td className="px-4 py-3">{formatDate(row.releaseDate)}</td>
                     <td className="px-4 py-3">
@@ -479,13 +508,13 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
                       {row.minimumSupportedVersionCode ? ` (${row.minimumSupportedVersionCode})` : ""}
                     </td>
                     <td className="px-4 py-3">{row.publishedByName || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-stone-500">{formatDate(row.createdAt)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(row.createdAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         <button
                           type="button"
                           onClick={() => void openRelease(row.id)}
-                          className="rounded-lg border border-stone-200 px-2 py-1 text-xs font-bold"
+                          className="rounded-lg border border-border px-2 py-1 text-xs font-bold"
                         >
                           {draft.id === row.id && editing ? "Editing" : "View"}
                         </button>
@@ -493,7 +522,7 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
                           type="button"
                           disabled={previewMode}
                           onClick={() => void handleDuplicate(row.id)}
-                          className="rounded-lg border border-stone-200 px-2 py-1 text-xs font-bold disabled:opacity-50"
+                          className="rounded-lg border border-border px-2 py-1 text-xs font-bold disabled:opacity-50"
                         >
                           <Copy className="inline h-3 w-3" /> Dup
                         </button>
@@ -502,7 +531,7 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
                             type="button"
                             disabled={previewMode}
                             onClick={() => void handleArchive(row.id)}
-                            className="rounded-lg border border-stone-200 px-2 py-1 text-xs font-bold disabled:opacity-50"
+                            className="rounded-lg border border-border px-2 py-1 text-xs font-bold disabled:opacity-50"
                           >
                             Archive
                           </button>
@@ -513,7 +542,7 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
                 ))}
                 {releases.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-sm font-semibold text-stone-500">
+                    <td colSpan={9} className="px-4 py-10 text-center text-sm font-semibold text-muted-foreground">
                       No releases yet.
                     </td>
                   </tr>
@@ -525,15 +554,15 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
       </section>
 
       {!previewMode && events.length > 0 ? (
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-black uppercase tracking-wide text-stone-600">Recent client events</h2>
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Recent client events</h2>
           <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto text-xs">
             {events.slice(0, 20).map((ev) => (
-              <li key={ev.id} className="flex flex-wrap gap-2 rounded-lg bg-stone-50 px-3 py-2 font-medium text-stone-700">
+              <li key={ev.id} className="flex flex-wrap gap-2 rounded-lg bg-muted px-3 py-2 font-medium text-muted-foreground">
                 <span className="font-black text-waka-700">{ev.eventType}</span>
                 <span>{new Date(ev.createdAt).toLocaleString()}</span>
                 {ev.appVersion ? <span>v{ev.appVersion}</span> : null}
-                {ev.deviceId ? <span className="truncate text-stone-500">{ev.deviceId}</span> : null}
+                {ev.deviceId ? <span className="truncate text-muted-foreground">{ev.deviceId}</span> : null}
               </li>
             ))}
           </ul>

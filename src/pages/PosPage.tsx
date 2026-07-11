@@ -78,9 +78,14 @@ import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
   productMatchesCategoryFilter,
-  productMatchesSellSearch,
   shelfIconFor,
 } from "../lib/productCategories";
+import {
+  buildProductSellSearchIndex,
+  filterIndexedProductsForSellView,
+  filterProductsByCategoryOnly,
+  productMatchesIndexedSellSearch,
+} from "../lib/posProductSearch";
 import { formatStockLabel, getPosSellPresets } from "../lib/sellingEngine";
 import {
   baseUnitsForSaleUnit,
@@ -166,7 +171,7 @@ const Numpad = memo(function Numpad({
             key={k}
             type="button"
             onClick={() => onDigit(k)}
-            className="min-h-[56px] rounded-2xl bg-stone-100 py-3 text-2xl font-semibold text-stone-900 active:bg-stone-200 active:brightness-95 motion-reduce:active:brightness-100"
+            className="min-h-[56px] rounded-2xl bg-muted py-3 text-2xl font-semibold text-foreground active:bg-muted active:brightness-95 motion-reduce:active:brightness-100"
           >
             {k}
           </button>
@@ -182,7 +187,7 @@ const Numpad = memo(function Numpad({
               else if (k === "⌫") onDigit("back");
               else onDigit(k);
             }}
-            className="min-h-[56px] rounded-2xl bg-stone-100 py-3 text-2xl font-semibold text-stone-900 active:bg-stone-200 active:brightness-95"
+            className="min-h-[56px] rounded-2xl bg-muted py-3 text-2xl font-semibold text-foreground active:bg-muted active:brightness-95"
           >
             {k}
           </button>
@@ -671,11 +676,13 @@ export function PosPage({ lang }: { lang: Language }) {
     return { q, aliasTerms: [...aliasSet] };
   }, [searchQuery, shopPreferences.businessType, shopPreferences.pharmacyModeEnabled]);
 
+  const productSearchIndex = useMemo(() => buildProductSellSearchIndex(products), [products]);
+
   const sellRowMatchesSearch = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
     if (!q) return () => true;
-    return (p: Product) => productMatchesSellSearch(p, q, aliasTerms);
-  }, [sellSearchContext]);
+    return (p: Product) => productMatchesIndexedSellSearch(productSearchIndex, p, q, aliasTerms);
+  }, [sellSearchContext, productSearchIndex]);
 
   const frequentTodayVisible = useMemo(
     () => frequentToday.filter(({ product }) => sellRowMatchesSearch(product)),
@@ -694,19 +701,11 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const filteredProducts = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
-    return products
-      .filter((p) => {
-        if (!q) return productMatchesCategoryFilter(p, sellCategoryKey);
-        // Master search — any product in the shop, not limited to the active shelf.
-        return productMatchesSellSearch(p, q, aliasTerms);
-      })
-      .sort((a, b) => {
-      const favA = favoriteIdSet.has(a.id) ? 0 : 1;
-      const favB = favoriteIdSet.has(b.id) ? 0 : 1;
-      if (favA !== favB) return favA - favB;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-    });
-  }, [products, sellSearchContext, sellCategoryKey, favoriteIdSet]);
+    if (!q) {
+      return filterProductsByCategoryOnly(products, sellCategoryKey, favoriteIdSet);
+    }
+    return filterIndexedProductsForSellView(productSearchIndex, sellCategoryKey, q, aliasTerms, favoriteIdSet);
+  }, [products, productSearchIndex, sellSearchContext, sellCategoryKey, favoriteIdSet]);
 
   const shelfCards = useMemo(() => {
     return buildPosShelfDisplayCards(
@@ -1679,7 +1678,7 @@ export function PosPage({ lang }: { lang: Language }) {
             <PosSellActionChip onClick={() => clearDraft()}>{modeTerm("clearSale")}</PosSellActionChip>
           ) : null}
           {canSavePending ? (
-            <Link to="/pending-sales" className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11px] font-bold text-stone-800 active:bg-stone-100">
+            <Link to="/pending-sales" className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-bold text-foreground active:bg-muted">
               {t(lang, "pendingSalesLink")}
               {pendingCount > 0 ? (
                 <span className="rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-amber-950">
@@ -1825,14 +1824,14 @@ export function PosPage({ lang }: { lang: Language }) {
         <div
           className={clsx(
             mobileSellFocus
-              ? "sticky top-0 z-20 -mx-0.5 space-y-0 bg-stone-50/95 pb-1.5 pt-0.5 backdrop-blur-md"
+              ? "sticky top-0 z-20 -mx-0.5 space-y-0 bg-muted/95 pb-1.5 pt-0.5 backdrop-blur-md"
               : isFullDesktopPos
                 ? "shrink-0 space-y-1"
-                : "space-y-1.5 rounded-[1.35rem] border border-stone-200 bg-white p-2 shadow-waka-sm",
+                : "space-y-1.5 rounded-[1.35rem] border border-border bg-card p-2 shadow-waka-sm",
           )}
         >
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               ref={searchInputRef}
               value={searchQuery}
@@ -1856,17 +1855,17 @@ export function PosPage({ lang }: { lang: Language }) {
                     : t(lang, "posSellSearchPlaceholder")
               }
               className={clsx(
-                "pos-ds-input w-full rounded-2xl border border-stone-200 bg-white pl-9 pr-10 font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
+                "pos-ds-input w-full rounded-2xl border border-border bg-card pl-9 pr-10 font-semibold text-foreground outline-none ring-waka-200 placeholder:text-muted-foreground transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
                 mobileSellFocus
                   ? "h-12 text-base shadow-sm"
                   : isFullDesktopPos
-                    ? "h-10 bg-stone-50/90 text-sm focus:bg-white focus:ring-1"
-                    : "h-11 bg-stone-50/90 text-base focus:bg-white focus:ring-1",
+                    ? "h-10 bg-muted/90 text-sm focus:bg-card focus:ring-1"
+                    : "h-11 bg-muted/90 text-base focus:bg-card focus:ring-1",
               )}
             />
             <button
               type="button"
-              className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-stone-500 active:bg-stone-100"
+              className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
               onClick={() => {
                 if (searchQuery.trim()) setSearchQuery("");
                 else if (detectBarcodeCapabilities().cameraScan) setCameraScanOpen(true);
@@ -1886,7 +1885,7 @@ export function PosPage({ lang }: { lang: Language }) {
                   <button
                     type="button"
                     onClick={() => setSearchQuery(item)}
-                    className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-semibold text-stone-700 active:bg-stone-100"
+                    className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground active:bg-muted"
                   >
                     {item}
                   </button>
@@ -1896,7 +1895,7 @@ export function PosPage({ lang }: { lang: Language }) {
           ) : null}
           {!mobileSellFocus && !isFullDesktopPos && frequentTodayVisible.length > 0 ? (
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFrequentToday")}</p>
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFrequentToday")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
                 {frequentTodayVisible.map(({ product, qty }) => (
                   <button
@@ -1913,7 +1912,7 @@ export function PosPage({ lang }: { lang: Language }) {
           ) : null}
           {!mobileSellFocus && !isFullDesktopPos && favoriteProductsVisible.length > 0 ? (
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFavorites")}</p>
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFavorites")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
                 {favoriteProductsVisible.map((p) => (
                   <button
@@ -1930,14 +1929,14 @@ export function PosPage({ lang }: { lang: Language }) {
           ) : null}
           {!mobileSellFocus && !isFullDesktopPos && recentProductsVisible.length > 0 ? (
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentProducts")}</p>
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posRecentProducts")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
                 {recentProductsVisible.map((p) => (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => openProduct(p)}
-                      className="shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-semibold text-stone-800 active:bg-stone-100"
+                      className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-foreground active:bg-muted"
                     >
                       {p.name}
                     </button>
@@ -1982,9 +1981,9 @@ export function PosPage({ lang }: { lang: Language }) {
           onFinishSale={finishSale}
         />
       ) : products.length === 0 && shelfCards.length === 0 ? (
-        <section className="rounded-3xl border-2 border-dashed border-stone-200 bg-stone-50 p-8 text-center">
-          <p className="text-2xl font-black text-stone-900">{t(lang, "posEmptyTitle")}</p>
-          <p className="mt-2 text-lg text-stone-600">{t(lang, "posEmptySub")}</p>
+        <section className="rounded-3xl border-2 border-dashed border-border bg-muted p-8 text-center">
+          <p className="text-2xl font-black text-foreground">{t(lang, "posEmptyTitle")}</p>
+          <p className="mt-2 text-lg text-muted-foreground">{t(lang, "posEmptySub")}</p>
           {actorHasPermission(actor, "products.add") ? (
             <Link
               to="/stock"
@@ -1993,7 +1992,7 @@ export function PosPage({ lang }: { lang: Language }) {
               {t(lang, "posEmptyCtaProducts")}
             </Link>
           ) : (
-            <p className="mt-4 text-base font-semibold text-stone-600">{t(lang, "posEmptyAskOwner")}</p>
+            <p className="mt-4 text-base font-semibold text-muted-foreground">{t(lang, "posEmptyAskOwner")}</p>
           )}
         </section>
       ) : showCatalogShelfGrid ? (
@@ -2005,7 +2004,7 @@ export function PosPage({ lang }: { lang: Language }) {
             )}
             data-pos-catalog-scroll={catalogSellMode ? true : undefined}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-card/95 px-2.5 py-2 shadow-sm backdrop-blur">
               <button
                 type="button"
                 onClick={() => setSellCategoryFilter(CATEGORY_FILTER_ALL)}
@@ -2014,7 +2013,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 <ArrowLeft className="h-5 w-5" aria-hidden />
                 {t(lang, "posBackToShelves")}
               </button>
-              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-stone-900">
+              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-foreground">
                 {shelfIconFor(selectedShelfLabel) ? (
                   <span className="mr-1" aria-hidden>
                     {shelfIconFor(selectedShelfLabel)}
@@ -2040,11 +2039,11 @@ export function PosPage({ lang }: { lang: Language }) {
         )
       ) : showCatalogSearchResults ? (
         <section className={clsx("space-y-2", catalogSellMode && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
-          <p className="px-0.5 text-xs font-black text-stone-700">
+          <p className="px-0.5 text-xs font-black text-muted-foreground">
             {t(lang, "posSearchResults")}
-            <span className="font-semibold text-stone-500"> · {t(lang, "posMasterSearchAll")}</span>
+            <span className="font-semibold text-muted-foreground"> · {t(lang, "posMasterSearchAll")}</span>
             {filteredProducts.length > 0 ? (
-              <span className="font-semibold text-stone-500"> ({filteredProducts.length})</span>
+              <span className="font-semibold text-muted-foreground"> ({filteredProducts.length})</span>
             ) : null}
           </p>
           {filteredProducts.length === 0 ? (
@@ -2106,7 +2105,7 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : showShelfBoxes ? (
         <section className="space-y-2.5">
           <div className="flex items-center justify-end gap-2">
-            <p className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-black text-stone-700">
+            <p className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-black text-muted-foreground">
               {products.length}
             </p>
           </div>
@@ -2127,9 +2126,9 @@ export function PosPage({ lang }: { lang: Language }) {
                     key={p.id}
                     type="button"
                     onClick={() => quickTapAddProduct(p)}
-                    className="shrink-0 rounded-xl border border-waka-200/90 bg-white px-3 py-2 text-left shadow-sm active:border-waka-400 active:bg-waka-50"
+                    className="shrink-0 rounded-xl border border-waka-200/90 bg-card px-3 py-2 text-left shadow-sm active:border-waka-400 active:bg-waka-50"
                   >
-                    <span className="block max-w-[7rem] truncate text-sm font-black text-stone-950">{p.name}</span>
+                    <span className="block max-w-[7rem] truncate text-sm font-black text-foreground">{p.name}</span>
                     <span className="text-[10px] font-bold text-waka-700">UGX {p.sellingPricePerUnitUgx.toLocaleString()}</span>
                   </button>
                 ))}
@@ -2154,7 +2153,7 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : showDesktopProductView && filteredProducts.length === 0 ? (
         <section className={clsx("space-y-2", isFullDesktopPos && "min-h-0 flex-1")}>
           {hasSellViewFilter && !isFullDesktopPos ? (
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-card/95 px-2.5 py-2 shadow-sm backdrop-blur">
               <button
                 type="button"
                 onClick={clearSellView}
@@ -2163,7 +2162,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 <ArrowLeft className="h-5 w-5" aria-hidden />
                 {t(lang, "posBackToShelves")}
               </button>
-              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-stone-900">
+              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-foreground">
                 {sellSearchContext.q ? t(lang, "posSearchResults") : selectedShelfLabel}
               </p>
             </div>
@@ -2176,7 +2175,7 @@ export function PosPage({ lang }: { lang: Language }) {
           data-pos-catalog-scroll={isFullDesktopPos ? true : undefined}
         >
           {!isFullDesktopPos ? (
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-card/95 px-2.5 py-2 shadow-sm backdrop-blur">
             <button
               type="button"
               onClick={clearSellView}
@@ -2185,7 +2184,7 @@ export function PosPage({ lang }: { lang: Language }) {
               <ArrowLeft className="h-5 w-5" aria-hidden />
               {t(lang, "posBackToShelves")}
             </button>
-            <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-stone-900">
+            <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-foreground">
               {sellCategoryKey !== CATEGORY_FILTER_ALL && shelfIconFor(selectedShelfLabel) ? (
                 <span className="mr-1" aria-hidden>
                   {shelfIconFor(selectedShelfLabel)}
@@ -2237,19 +2236,19 @@ export function PosPage({ lang }: { lang: Language }) {
                   className={clsx(
                     "relative flex min-h-[132px] flex-col justify-between rounded-[1.35rem] border p-3 pt-10 text-left shadow-sm",
                     locked
-                      ? "border-stone-200/80 bg-stone-50/90 opacity-55"
-                      : "border-stone-200 bg-white active:border-waka-400",
+                      ? "border-border/80 bg-muted/90 opacity-55"
+                      : "border-border bg-card active:border-waka-400",
                   )}
                   style={{ contentVisibility: "auto" }}
                 >
                   {locked ? (
-                    <span className="absolute left-2.5 top-2.5 rounded-full bg-stone-800/90 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+                    <span className="absolute left-2.5 top-2.5 rounded-full bg-foreground/90 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-background">
                       {t(lang, "productLockedBadge")}
                     </span>
                   ) : null}
                   <button
                     type="button"
-                    className="absolute right-2.5 top-2.5 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full border border-stone-200 bg-white text-base shadow-sm active:bg-stone-50"
+                    className="absolute right-2.5 top-2.5 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full border border-border bg-card text-base shadow-sm active:bg-muted"
                       aria-label={favoriteIdSet.has(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -2259,12 +2258,12 @@ export function PosPage({ lang }: { lang: Language }) {
                     {favoriteIdSet.has(p.id) ? "★" : "☆"}
                   </button>
                   <button type="button" onClick={() => openProduct(p)} className="text-left">
-                    <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-stone-950">{p.name}</p>
-                    <p className="mt-0.5 truncate text-[11px] font-bold text-stone-500">
+                    <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-foreground">{p.name}</p>
+                    <p className="mt-0.5 truncate text-[11px] font-bold text-muted-foreground">
                       {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
                       {(p.category ?? "").trim() ? p.category.trim() : t(lang, "posNoShelf")}
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-xs font-bold leading-snug text-stone-600">
+                    <p className="mt-0.5 line-clamp-2 text-xs font-bold leading-snug text-muted-foreground">
                       {t(lang, "stockLabel")}: {formatStockLabel(p)}
                     </p>
                     {p.stockOnHand <= p.minimumStockAlert ? (
@@ -2278,7 +2277,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     className={clsx(
                       "mt-2 min-h-[44px] rounded-2xl px-3 py-2 text-base font-black",
                       locked
-                        ? "border-2 border-stone-300 bg-stone-200 text-stone-600"
+                        ? "border-2 border-border bg-muted text-muted-foreground"
                         : "bg-waka-600 text-white active:bg-waka-700",
                     )}
                   >
@@ -2363,7 +2362,7 @@ export function PosPage({ lang }: { lang: Language }) {
       {sheetOpen && selected && (
         <PosScreenPortal>
         <div
-          className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top,0px))] waka-overlay-clear-nav"
+          className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-card pt-[max(0.5rem,env(safe-area-inset-top,0px))] waka-overlay-clear-nav"
           style={
             keyboardInset > 0
               ? { paddingBottom: combinedBottomInsetStyle(keyboardInset) ?? checkoutBottomPad }
@@ -2373,20 +2372,20 @@ export function PosPage({ lang }: { lang: Language }) {
           aria-modal
           aria-labelledby="pos-add-sheet-title"
         >
-          <header className="flex shrink-0 items-start gap-3 border-b border-stone-100 px-3 py-3">
+          <header className="flex shrink-0 items-start gap-3 border-b border-border px-3 py-3">
             <button
               type="button"
               onClick={() => setSheetOpen(false)}
-              className="min-h-[48px] shrink-0 rounded-2xl border-2 border-stone-200 px-4 py-2 text-sm font-bold text-stone-700 active:bg-stone-50"
+              className="min-h-[48px] shrink-0 rounded-2xl border-2 border-border px-4 py-2 text-sm font-bold text-muted-foreground active:bg-muted"
             >
               {t(lang, "cancel")}
             </button>
             <div className="min-w-0 flex-1 py-0.5 text-center">
-              <p id="pos-add-sheet-title" className="text-lg font-black leading-snug text-stone-900">
+              <p id="pos-add-sheet-title" className="text-lg font-black leading-snug text-foreground">
                 {selected.name}
               </p>
-              <p className="text-sm font-semibold leading-snug text-stone-500">{formatProductPriceLabel(selected)}</p>
-              <p className="text-xs font-bold leading-snug text-stone-600">
+              <p className="text-sm font-semibold leading-snug text-muted-foreground">{formatProductPriceLabel(selected)}</p>
+              <p className="text-xs font-bold leading-snug text-muted-foreground">
                 {pharmacyPackActive ? formatPharmacyStockPrimary(selected) : formatStockLabel(selected)}
               </p>
             </div>
@@ -2417,7 +2416,7 @@ export function PosPage({ lang }: { lang: Language }) {
                         "min-h-[52px] rounded-2xl border-2 text-sm font-black capitalize",
                         pharmacySellUnit === unit
                           ? "border-waka-500 bg-waka-600 text-white"
-                          : "border-stone-200 bg-white text-stone-800",
+                          : "border-border bg-card text-foreground",
                       )}
                     >
                       {label}
@@ -2428,7 +2427,7 @@ export function PosPage({ lang }: { lang: Language }) {
             ) : null}
             {(sellPresets.length > 0 || moneyPresets.length > 0 || qtyPresets.length > 0) && (
               <div className="space-y-3">
-                <p className="text-center text-sm font-bold uppercase tracking-wide text-stone-500">
+                <p className="text-center text-sm font-bold uppercase tracking-wide text-muted-foreground">
                   {t(lang, "posWholesaleUnits")}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -2450,7 +2449,7 @@ export function PosPage({ lang }: { lang: Language }) {
             {quickSell && !showAdvanced ? (
               <button
                 type="button"
-                className="mt-6 min-h-[52px] w-full rounded-2xl border-2 border-dashed border-stone-300 py-4 text-lg font-bold text-stone-600 active:bg-stone-50"
+                className="mt-6 min-h-[52px] w-full rounded-2xl border-2 border-dashed border-border py-4 text-lg font-bold text-muted-foreground active:bg-muted"
                 onClick={() => setShowAdvanced(true)}
               >
                 {t(lang, "otherAmount")}
@@ -2466,7 +2465,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     }}
                     className={clsx(
                       "min-h-[52px] rounded-2xl py-4 text-lg font-black",
-                      inputMode === "money" ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
+                      inputMode === "money" ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
                     )}
                   >
                     {t(lang, "moneyTab")}
@@ -2479,16 +2478,16 @@ export function PosPage({ lang }: { lang: Language }) {
                     }}
                     className={clsx(
                       "min-h-[52px] rounded-2xl py-4 text-lg font-black",
-                      inputMode === "quantity" ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
+                      inputMode === "quantity" ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
                     )}
                   >
                     {t(lang, "qtyTab")}
                   </button>
                 </div>
 
-                <div className="mt-4 min-h-[76px] rounded-2xl bg-stone-100 px-4 py-4 text-right text-5xl font-black tracking-tight text-stone-900">
+                <div className="mt-4 min-h-[76px] rounded-2xl bg-muted px-4 py-4 text-right text-5xl font-black tracking-tight text-foreground">
                   {display || "0"}
-                  <span className="ml-2 text-xl font-bold text-stone-500">
+                  <span className="ml-2 text-xl font-bold text-muted-foreground">
                     {inputMode === "money"
                       ? "UGX"
                       : pharmacyPackActive
@@ -2508,12 +2507,12 @@ export function PosPage({ lang }: { lang: Language }) {
               </>
             )}
             </div>
-            <div className="shrink-0 border-t border-stone-100 bg-white p-4">
+            <div className="shrink-0 border-t border-border bg-card p-4">
               {quickSell && !showAdvanced ? null : (
                 <button
                   type="button"
                   onClick={applyDraftInput}
-                  className="min-h-[56px] w-full rounded-2xl bg-stone-900 py-4 text-lg font-black text-white active:bg-stone-800"
+                  className="min-h-[56px] w-full rounded-2xl bg-foreground py-4 text-lg font-black text-background active:bg-foreground"
                 >
                   {t(lang, "addToSale")}
                 </button>
@@ -2541,30 +2540,30 @@ export function PosPage({ lang }: { lang: Language }) {
       {receiptSale && receiptPlain && receiptDisplay ? (
         <PosScreenPortal>
         <div
-          className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top,0px))] waka-overlay-clear-nav"
+          className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-card pt-[max(0.5rem,env(safe-area-inset-top,0px))] waka-overlay-clear-nav"
           role="dialog"
           aria-modal
           aria-labelledby="pos-receipt-title"
         >
-          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
-            <h2 id="pos-receipt-title" className="text-xl font-black text-stone-900">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <h2 id="pos-receipt-title" className="text-xl font-black text-foreground">
               {t(lang, "receiptTitle")}
             </h2>
             <button
               type="button"
               onClick={() => setReceiptSaleId(null)}
-              className="min-h-[44px] rounded-xl border-2 border-stone-200 px-4 py-2 text-sm font-bold text-stone-700 active:bg-stone-50"
+              className="min-h-[44px] rounded-xl border-2 border-border px-4 py-2 text-sm font-bold text-muted-foreground active:bg-muted"
             >
               {t(lang, "receiptClose")}
             </button>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8fafc] px-4 py-4 pb-6 [-webkit-overflow-scrolling:touch]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-background px-4 py-4 pb-6 [-webkit-overflow-scrolling:touch]">
             <div
-              className="mx-auto w-full max-w-md rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+              className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-sm"
               dangerouslySetInnerHTML={{ __html: receiptHtmlPreview }}
             />
           </div>
-          <footer className="shrink-0 space-y-2 border-t border-stone-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+          <footer className="shrink-0 space-y-2 border-t border-border bg-card px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
             {receiptSale ? (
               <DocumentActionsBar
                 lang={lang}
@@ -2750,9 +2749,9 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {expiryWarnProduct ? (
         <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
-          <div className="max-w-md rounded-[2rem] bg-white p-6 shadow-2xl">
+          <div className="max-w-md rounded-[2rem] bg-card p-6 shadow-2xl">
             <h2 className="text-xl font-black text-red-950">{t(lang, "pharmacyExpiredSaleWarnTitle")}</h2>
-            <p className="mt-3 text-base font-medium text-stone-700">
+            <p className="mt-3 text-base font-medium text-muted-foreground">
               {t(lang, "pharmacyExpiredSaleWarnBody")
                 .replace("{name}", expiryWarnProduct.name)
                 .replace("{date}", expiryWarnProduct.expiryDate ?? "—")}
@@ -2772,7 +2771,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </button>
               <button
                 type="button"
-                className="min-h-[52px] w-full rounded-2xl border-2 border-stone-300 py-3 text-lg font-bold text-stone-800 active:bg-stone-50"
+                className="min-h-[52px] w-full rounded-2xl border-2 border-border py-3 text-lg font-bold text-foreground active:bg-muted"
                 onClick={() => {
                   pendingExpiredAddRef.current = null;
                   setExpiryWarnProduct(null);
@@ -2787,12 +2786,12 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {checkoutBlockModalOpen && checkoutBlockMessage ? (
         <AppModalOverlay className="z-[95] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
-          <div className="max-w-md rounded-[2rem] bg-white p-6 shadow-2xl">
+          <div className="max-w-md rounded-[2rem] bg-card p-6 shadow-2xl">
             <h2 className="text-xl font-black text-red-950">{t(lang, "pharmacyExpiredCheckoutBlockedTitle")}</h2>
-            <p className="mt-3 text-base font-medium text-stone-700">{checkoutBlockMessage}</p>
+            <p className="mt-3 text-base font-medium text-muted-foreground">{checkoutBlockMessage}</p>
             <button
               type="button"
-              className="mt-6 min-h-[52px] w-full rounded-2xl bg-stone-900 py-3 text-lg font-black text-white"
+              className="mt-6 min-h-[52px] w-full rounded-2xl bg-foreground py-3 text-lg font-black text-background"
               onClick={() => setCheckoutBlockModalOpen(false)}
             >
               {t(lang, "cancel")}
@@ -2814,19 +2813,19 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       {toast && (
-        <div className="pointer-events-none fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-[100] max-w-sm -translate-x-1/2 rounded-2xl bg-stone-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
+        <div className="pointer-events-none fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-[100] max-w-sm -translate-x-1/2 rounded-2xl bg-foreground px-5 py-4 text-center text-base font-semibold text-background shadow-xl">
           {toast}
         </div>
       )}
 
       {firstSaleOpen ? (
         <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
-          <div className="max-w-md rounded-[2rem] bg-gradient-to-b from-amber-100 to-white p-8 text-center shadow-2xl">
+          <div className="max-w-md rounded-[2rem] bg-gradient-to-b from-amber-100 to-card p-8 text-center shadow-2xl">
             <p className="text-4xl" aria-hidden>
               🎉
             </p>
-            <p className="mt-4 text-3xl font-black text-stone-900">{t(lang, "firstSaleTitle")}</p>
-            <p className="mt-3 text-lg text-stone-700">{t(lang, "firstSaleBody")}</p>
+            <p className="mt-4 text-3xl font-black text-foreground">{t(lang, "firstSaleTitle")}</p>
+            <p className="mt-3 text-lg text-muted-foreground">{t(lang, "firstSaleBody")}</p>
             <div className="mt-8 flex flex-col gap-3">
               <Link
                 to="/"
@@ -2839,7 +2838,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </Link>
               <button
                 type="button"
-                className="min-h-[52px] w-full rounded-2xl border-2 border-stone-300 py-4 text-lg font-bold text-stone-800 active:bg-stone-50"
+                className="min-h-[52px] w-full rounded-2xl border-2 border-border py-4 text-lg font-bold text-foreground active:bg-muted"
                 onClick={() => {
                   dismissFirstSale();
                 }}
@@ -2853,13 +2852,13 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {cameraScanOpen ? (
         <AppModalOverlay className="z-[90] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal>
-          <div className="w-full max-w-md rounded-3xl bg-white p-4 shadow-2xl">
-            <p className="text-lg font-black text-stone-900">{t(lang, "posBarcodeSoon")}</p>
+          <div className="w-full max-w-md rounded-3xl bg-card p-4 shadow-2xl">
+            <p className="text-lg font-black text-foreground">{t(lang, "posBarcodeSoon")}</p>
             <video ref={cameraVideoRef} className="mt-3 h-56 w-full rounded-2xl bg-black object-cover" />
-            <p className="mt-2 text-xs font-semibold text-stone-600">{cameraScanStatus || "Point camera at barcode."}</p>
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">{cameraScanStatus || "Point camera at barcode."}</p>
             <button
               type="button"
-              className="mt-3 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white py-3 text-sm font-black text-stone-900"
+              className="mt-3 min-h-[48px] w-full rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground"
               onClick={() => {
                 void stopBarcodeSession();
                 setCameraScanOpen(false);

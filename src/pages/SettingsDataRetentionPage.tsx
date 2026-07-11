@@ -46,14 +46,14 @@ export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
         {t(lang, "retentionNeverDeleteNote")}
       </p>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-        <p className="text-sm font-bold text-stone-800">{t(lang, "retentionPolicyLabel")}</p>
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <p className="text-sm font-bold text-foreground">{t(lang, "retentionPolicyLabel")}</p>
         <div className="mt-3 space-y-2">
           {DATA_RETENTION_OPTIONS.map((opt) => (
             <label
               key={opt}
               className={`flex cursor-pointer items-center gap-3 rounded-2xl border-2 px-4 py-3 ${
-                policy === opt ? "border-waka-500 bg-waka-50" : "border-stone-200"
+                policy === opt ? "border-waka-500 bg-waka-50" : "border-border"
               }`}
             >
               <input
@@ -63,7 +63,7 @@ export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
                 onChange={() => applyPolicy(opt)}
                 className="h-4 w-4"
               />
-              <span className="text-sm font-bold text-stone-900">
+              <span className="text-sm font-bold text-foreground">
                 {t(lang, retentionPolicyLabelKey(opt))}
                 {opt === "3m" ? (
                   <span className="ml-2 rounded-full bg-waka-600 px-2 py-0.5 text-xs font-black text-white">
@@ -76,9 +76,9 @@ export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-        <p className="text-sm font-bold text-stone-800">{t(lang, "retentionArchiveSummary")}</p>
-        <p className="mt-2 text-sm text-stone-600">
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <p className="text-sm font-bold text-foreground">{t(lang, "retentionArchiveSummary")}</p>
+        <p className="mt-2 text-sm text-muted-foreground">
           {tTemplate(lang, "retentionArchiveCounts", {
             sales: String(archivedSales.length),
             activity: String(archivedAuditLogs.length),
@@ -86,7 +86,7 @@ export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
         </p>
         <Link
           to="/settings/archive"
-          className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-stone-200 px-4 text-sm font-bold text-stone-800"
+          className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border px-4 text-sm font-bold text-foreground"
         >
           {t(lang, "archivePageTitle")}
         </Link>
@@ -99,7 +99,7 @@ export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
         </button>
       </section>
 
-      {msg ? <p className="rounded-xl bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-800">{msg}</p> : null}
+      {msg ? <p className="rounded-xl bg-muted px-4 py-3 text-sm font-semibold text-foreground">{msg}</p> : null}
     </div>
   );
 }

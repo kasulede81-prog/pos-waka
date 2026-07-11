@@ -93,8 +93,8 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-stone-950">{t(lang, "hospitalityDashTitle")}</h1>
-          <p className="mt-1 text-base font-medium text-stone-500">{t(lang, "hospitalityDashSub")}</p>
+          <h1 className="text-3xl font-black tracking-tight text-foreground">{t(lang, "hospitalityDashTitle")}</h1>
+          <p className="mt-1 text-base font-medium text-muted-foreground">{t(lang, "hospitalityDashSub")}</p>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {canFloor ? (
@@ -108,7 +108,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
           {canSell ? (
             <Link
               to="/pos"
-              className="inline-flex min-h-[46px] shrink-0 items-center rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-800 shadow-sm"
+              className="inline-flex min-h-[46px] shrink-0 items-center rounded-2xl border border-border bg-card px-4 py-3 text-base font-black text-foreground shadow-sm"
             >
               {t(lang, "hospitalityDashTakeaway")}
             </Link>
@@ -131,8 +131,8 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
           <h2 className="text-xl font-black text-waka-950">{t(lang, "setupChecklistTitle")}</h2>
           <p className="mt-1 text-base text-waka-900">{t(lang, "setupChecklistSub")}</p>
           <ol className="mt-4 space-y-3 text-lg">
-            <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
-              <span className={products.length > 0 ? "text-waka-600" : "text-stone-400"}>{products.length > 0 ? "✓" : "①"}</span>
+            <li className="flex flex-wrap items-center gap-2 font-bold text-foreground">
+              <span className={products.length > 0 ? "text-waka-600" : "text-muted-foreground"}>{products.length > 0 ? "✓" : "①"}</span>
               {t(lang, "hospitalitySetupStep1")}
               {products.length === 0 && canStock ? (
                 <Link to="/stock" className="rounded-full bg-waka-600 px-4 py-2 text-sm font-black text-white">
@@ -140,18 +140,18 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
                 </Link>
               ) : null}
             </li>
-            <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
-              <span className={hasOpenSessions ? "text-waka-600" : "text-stone-400"}>{hasOpenSessions ? "✓" : "②"}</span>
+            <li className="flex flex-wrap items-center gap-2 font-bold text-foreground">
+              <span className={hasOpenSessions ? "text-waka-600" : "text-muted-foreground"}>{hasOpenSessions ? "✓" : "②"}</span>
               {t(lang, "hospitalitySetupStep2")}
               {!hasOpenSessions && canFloor ? (
-                <Link to="/floor" className="rounded-full bg-stone-900 px-4 py-2 text-sm font-black text-white">
+                <Link to="/floor" className="rounded-full bg-foreground px-4 py-2 text-sm font-black text-background">
                   {t(lang, "navFloor")}
                 </Link>
               ) : null}
             </li>
             {kitchenEnabled ? (
-              <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
-                <span className="text-stone-400">③</span>
+              <li className="flex flex-wrap items-center gap-2 font-bold text-foreground">
+                <span className="text-muted-foreground">③</span>
                 {t(lang, "hospitalitySetupStep3")}
                 {canKitchen ? (
                   <Link to="/kitchen" className="rounded-full border-2 border-waka-700 px-4 py-2 text-sm font-black text-waka-900">
@@ -183,7 +183,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
             <p className="mt-1 text-xs font-semibold text-amber-800">{stats.pendingBillCount} open</p>
           </article>
           {todayRevenue != null ? (
-          <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
+          <article className="rounded-3xl bg-gradient-to-br from-foreground to-foreground/80 p-4 text-white shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "hospitalityDashTodayRevenue")}</p>
             <p className="mt-1 text-2xl font-black">UGX {todayRevenue.toLocaleString()}</p>
             <p className="mt-1 text-xs font-semibold text-white/70">{t(lang, "dashboardTodaySalesHint")}</p>
@@ -197,9 +197,9 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
+      <section className="rounded-3xl border-2 border-border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xl font-black text-stone-900">{t(lang, "hospitalityDashActiveBills")}</h2>
+          <h2 className="text-xl font-black text-foreground">{t(lang, "hospitalityDashActiveBills")}</h2>
           {canFloor ? (
             <Link to="/floor" className="text-sm font-bold text-waka-700">
               {t(lang, "seeAll")} →
@@ -207,18 +207,18 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
           ) : null}
         </div>
         {openBills.length === 0 ? (
-          <p className="mt-4 text-lg text-stone-500">{t(lang, "hospitalityDashNoOpenBills")}</p>
+          <p className="mt-4 text-lg text-muted-foreground">{t(lang, "hospitalityDashNoOpenBills")}</p>
         ) : (
           <ul className="mt-4 space-y-3">
             {openBills.slice(0, 8).map(({ session, label, subtitle, total }) => (
               <li key={session.id}>
                 <Link
                   to={`/floor/order/${session.id}`}
-                  className="flex items-center justify-between gap-3 rounded-2xl bg-stone-50 px-4 py-3 active:bg-waka-50"
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-muted px-4 py-3 active:bg-waka-50"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-black text-stone-900">{label}</p>
-                    <p className="text-xs font-medium text-stone-500">{subtitle}</p>
+                    <p className="truncate font-black text-foreground">{label}</p>
+                    <p className="text-xs font-medium text-muted-foreground">{subtitle}</p>
                   </div>
                   <p className="shrink-0 text-sm font-black text-waka-700">
                     {total > 0 ? formatUgx(total) : "—"}

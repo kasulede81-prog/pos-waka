@@ -59,11 +59,11 @@ export function InventoryStatusStrip({ lang, className }: Props) {
   const pendingPrints = (hw.printQueue ?? []).filter((j) => j.status === "queued" || j.status === "sending").length;
 
   const chipClass =
-    "inline-flex items-center gap-1.5 rounded-full border border-stone-200/90 bg-white px-2.5 py-1 text-[10px] font-bold text-stone-700 shadow-sm";
+    "inline-flex items-center gap-1.5 rounded-full border border-border/90 bg-card px-2.5 py-1 text-[10px] font-bold text-muted-foreground shadow-sm";
 
   return (
     <section className={clsx("space-y-2", className)} aria-label={t(lang, "iwStatusStripLabel")}>
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-stone-500">
+      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, "iwStatusStripLabel")}
       </h3>
       <div className="flex flex-wrap items-center gap-2">

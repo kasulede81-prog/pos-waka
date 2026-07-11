@@ -69,9 +69,9 @@ export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language
           : "warning";
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "debtSyncDiagnosticsTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "debtSyncDiagnosticsSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "debtSyncDiagnosticsTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "debtSyncDiagnosticsSub")}</p>
 
       <p
         className={`mt-3 rounded-xl px-3 py-2 text-sm font-bold ${
@@ -92,7 +92,7 @@ export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language
         <p className="mt-2 text-xs font-semibold text-amber-900">{t(lang, "debtSyncPaymentsNotHydrated")}</p>
       ) : null}
 
-      <p className="mt-2 text-xs text-stone-500">
+      <p className="mt-2 text-xs text-muted-foreground">
         {t(lang, "debtSyncLastChecked")}: {new Date(snapshot.checkedAt).toLocaleString()}
         {snapshot.lastSyncAt ? ` · ${t(lang, "debtSyncLastSync")}: ${new Date(snapshot.lastSyncAt).toLocaleString()}` : null}
       </p>
@@ -104,7 +104,7 @@ export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language
             type="button"
             onClick={() => setFilter(f)}
             className={`rounded-full px-3 py-1 text-xs font-bold ${
-              filter === f ? "bg-stone-900 text-white" : "border border-stone-200 bg-stone-50 text-stone-700"
+              filter === f ? "bg-foreground text-background" : "border border-border bg-muted text-muted-foreground"
             }`}
           >
             {filterLabel(lang, f)}
@@ -113,24 +113,24 @@ export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language
       </div>
 
       {rows.length === 0 ? (
-        <p className="mt-4 text-sm text-stone-500">{t(lang, "debtSyncNoRows")}</p>
+        <p className="mt-4 text-sm text-muted-foreground">{t(lang, "debtSyncNoRows")}</p>
       ) : (
         <>
           <div className="mt-4 space-y-2 md:hidden">
             {rows.slice(0, 50).map((row) => (
-              <div key={row.customerId} className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs">
-                <p className="font-black text-stone-900">{row.customerName}</p>
+              <div key={row.customerId} className="rounded-xl border border-border bg-muted p-3 text-xs">
+                <p className="font-black text-foreground">{row.customerName}</p>
                 <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1">
-                  <dt className="text-stone-500">{t(lang, "debtSyncColStored")}</dt>
+                  <dt className="text-muted-foreground">{t(lang, "debtSyncColStored")}</dt>
                   <dd className="text-right tabular-nums font-semibold">UGX {row.actual.toLocaleString()}</dd>
-                  <dt className="text-stone-500">{t(lang, "debtSyncColExpected")}</dt>
+                  <dt className="text-muted-foreground">{t(lang, "debtSyncColExpected")}</dt>
                   <dd className="text-right tabular-nums font-semibold">UGX {row.expected.toLocaleString()}</dd>
-                  <dt className="text-stone-500">{t(lang, "debtSyncColDifference")}</dt>
+                  <dt className="text-muted-foreground">{t(lang, "debtSyncColDifference")}</dt>
                   <dd className="text-right tabular-nums font-semibold">
                     {row.delta >= 0 ? "+" : ""}
                     {row.delta.toLocaleString()}
                   </dd>
-                  <dt className="text-stone-500">{t(lang, "debtSyncColStatus")}</dt>
+                  <dt className="text-muted-foreground">{t(lang, "debtSyncColStatus")}</dt>
                   <dd className="text-right font-bold">{statusLabel(lang, row.status)}</dd>
                 </dl>
               </div>
@@ -139,7 +139,7 @@ export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language
           <div className="mt-4 hidden md:block">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-stone-200 text-stone-500">
+                <tr className="border-b border-border text-muted-foreground">
                   <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColCustomer")}</th>
                   <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColStored")}</th>
                   <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColExpected")}</th>
@@ -149,8 +149,8 @@ export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language
               </thead>
               <tbody>
                 {rows.slice(0, 50).map((row) => (
-                  <tr key={row.customerId} className="border-b border-stone-100">
-                    <td className="py-2 pr-2 font-semibold text-stone-900">{row.customerName}</td>
+                  <tr key={row.customerId} className="border-b border-border">
+                    <td className="py-2 pr-2 font-semibold text-foreground">{row.customerName}</td>
                     <td className="py-2 pr-2 tabular-nums">UGX {row.actual.toLocaleString()}</td>
                     <td className="py-2 pr-2 tabular-nums">UGX {row.expected.toLocaleString()}</td>
                     <td className="py-2 pr-2 tabular-nums">{row.delta >= 0 ? "+" : ""}{row.delta.toLocaleString()}</td>

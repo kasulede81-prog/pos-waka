@@ -31,7 +31,7 @@ export function TicketInternalNotesPanel({ ticketId }: Props) {
         value={body}
         onChange={(e) => setBody(e.target.value)}
         rows={2}
-        className="w-full rounded-lg border border-stone-200 px-2 py-1.5 text-xs"
+        className="w-full rounded-lg border border-border px-2 py-1.5 text-xs"
         placeholder="Staff note on this ticket…"
       />
       <button
@@ -44,9 +44,9 @@ export function TicketInternalNotesPanel({ ticketId }: Props) {
       </button>
       <ul className="space-y-1">
         {notes.map((n) => (
-          <li key={n.id} className="rounded-lg bg-white px-2 py-1.5 text-xs">
-            <p className="font-semibold text-stone-900">{n.body}</p>
-            <p className="text-[10px] text-stone-500">
+          <li key={n.id} className="rounded-lg bg-card px-2 py-1.5 text-xs">
+            <p className="font-semibold text-foreground">{n.body}</p>
+            <p className="text-[10px] text-muted-foreground">
               {n.author} · {new Date(n.created_at).toLocaleString("en-GB")}
             </p>
           </li>

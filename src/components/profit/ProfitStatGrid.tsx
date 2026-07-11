@@ -31,23 +31,23 @@ function StatCard({
     <div
       className={clsx(
         "flex min-h-[76px] flex-col justify-between rounded-2xl border p-2.5 shadow-sm",
-        highlight ? "border-waka-300 bg-gradient-to-br from-waka-50 to-waka-50/80" : "border-stone-200/90 bg-white",
+        highlight ? "border-waka-300 bg-gradient-to-br from-waka-50 to-waka-50/80" : "border-border/90 bg-card",
       )}
     >
       <div className="flex items-center gap-1.5">
         <span
           className={clsx(
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
-            highlight ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-600",
+            highlight ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
           )}
         >
           <Icon className="h-3.5 w-3.5" aria-hidden />
         </span>
-        <span className="line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wide text-stone-500">
+        <span className="line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wide text-muted-foreground">
           {label}
         </span>
       </div>
-      <p className={clsx("truncate text-base font-black leading-tight tabular-nums sm:text-lg", valueClass ?? "text-stone-950")}>
+      <p className={clsx("truncate text-base font-black leading-tight tabular-nums sm:text-lg", valueClass ?? "text-foreground")}>
         {value}
       </p>
     </div>
@@ -73,7 +73,7 @@ export function ProfitStatGrid({
         valueClass={netProfitUgx >= 0 ? "text-waka-700" : "text-rose-700"}
       />
       <StatCard icon={ShoppingCart} label={t(lang, "profitStatRevenue")} value={formatShortUgx(revenueUgx)} />
-      <StatCard icon={Package} label={t(lang, "profitStatCost")} value={formatShortUgx(costUgx)} valueClass="text-stone-800" />
+      <StatCard icon={Package} label={t(lang, "profitStatCost")} value={formatShortUgx(costUgx)} valueClass="text-foreground" />
       <StatCard
         icon={Wallet}
         label={t(lang, "profitStatMargin")}

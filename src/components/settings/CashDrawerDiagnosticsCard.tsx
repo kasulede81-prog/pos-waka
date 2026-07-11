@@ -83,10 +83,10 @@ export function CashDrawerDiagnosticsCard({ lang }: { lang: Language }) {
   }, [cashDrawerAdjustments, dayCloses, dayDrawerOpens, shifts, todayKey, lang, pct, fixed, preferences, dayOpen, formulaVersion]);
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "cashDrawerDiagnosticsTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{todayKey}</p>
-      <p className="mt-2 text-xs font-bold uppercase text-stone-500">
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "cashDrawerDiagnosticsTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{todayKey}</p>
+      <p className="mt-2 text-xs font-bold uppercase text-muted-foreground">
         {t(lang, "dayDrawerDiagnosticsFormula")}: {formulaVersion}
       </p>
       {dayOpen ? (

@@ -68,16 +68,16 @@ function RestoreProgressOverlay({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-stone-900/75 px-5 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-foreground/75 px-5 backdrop-blur-[2px]"
       role="alertdialog"
       aria-modal
       aria-busy="true"
       aria-live="polite"
     >
-      <div className="w-full max-w-sm rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl">
-        <p className="text-center text-base font-black leading-snug text-stone-900">{label}</p>
-        <p className="mt-2 text-center text-xs font-semibold text-stone-500">{hint}</p>
-        <div className="mx-auto mt-5 h-2 w-full overflow-hidden rounded-full bg-stone-100">
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-2xl">
+        <p className="text-center text-base font-black leading-snug text-foreground">{label}</p>
+        <p className="mt-2 text-center text-xs font-semibold text-muted-foreground">{hint}</p>
+        <div className="mx-auto mt-5 h-2 w-full overflow-hidden rounded-full bg-muted">
           {pct != null ? (
             <div className="h-full rounded-full bg-waka-600 transition-[width] duration-200" style={{ width: `${pct}%` }} />
           ) : (
@@ -299,22 +299,22 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
         />
       ) : null}
 
-      <article className={compact ? "rounded-2xl border border-stone-200 bg-white p-4 shadow-sm" : "rounded-3xl border-2 border-waka-100 bg-waka-50/30 p-5"}>
+      <article className={compact ? "rounded-2xl border border-border bg-card p-4 shadow-sm" : "rounded-3xl border-2 border-waka-100 bg-waka-50/30 p-5"}>
         {!compact ? (
           <>
             <p className="text-xl font-black text-waka-950">{t(lang, "backupTitle")}</p>
             <p className="mt-1 text-sm text-waka-900">{t(lang, "backupSub")}</p>
-            <p className="mt-2 rounded-xl border border-waka-200/80 bg-white/80 px-3 py-2 text-xs font-medium leading-relaxed text-stone-700">
+            <p className="mt-2 rounded-xl border border-waka-200/80 bg-white/80 px-3 py-2 text-xs font-medium leading-relaxed text-muted-foreground">
               {t(lang, "backupRestoreTip")}
             </p>
-            <p className="mt-2 text-xs font-semibold text-stone-600">{t(lang, "restoreCallWakaHint")}</p>
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">{t(lang, "restoreCallWakaHint")}</p>
           </>
         ) : null}
         {msg ? (
-          <div className="mt-2 space-y-1 rounded-xl bg-stone-50 px-3 py-2">
-            <p className="text-sm font-semibold text-stone-800">{msg}</p>
+          <div className="mt-2 space-y-1 rounded-xl bg-muted px-3 py-2">
+            <p className="text-sm font-semibold text-foreground">{msg}</p>
             {msg === t(lang, "backupExportOk") || msg === t(lang, "backupManualOk") ? (
-              <p className="text-xs font-medium text-stone-600">{t(lang, "backupExportOkHint")}</p>
+              <p className="text-xs font-medium text-muted-foreground">{t(lang, "backupExportOkHint")}</p>
             ) : null}
           </div>
         ) : null}
@@ -346,26 +346,26 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
             type="button"
             disabled={busy}
             onClick={() => void exportNow()}
-            className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-white px-4 py-3 text-sm font-black text-waka-900 disabled:opacity-50"
+            className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-card px-4 py-3 text-sm font-black text-waka-900 disabled:opacity-50"
           >
             {t(lang, "backupDownloadCopy")}
           </button>
-          <label className="inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-2xl border-2 border-stone-300 bg-white px-4 py-3 text-sm font-black text-stone-800 disabled:opacity-50">
+          <label className="inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-2xl border-2 border-border bg-card px-4 py-3 text-sm font-black text-foreground disabled:opacity-50">
             <input type="file" accept="application/json,.json" className="sr-only" disabled={busy} onChange={onPickFile} />
             {t(lang, "backupRestoreFile")}
           </label>
         </div>
 
         <div className={compact ? "mt-4" : "mt-6"}>
-          <p className="text-sm font-bold text-stone-800">{t(lang, "backupListTitle")}</p>
-          <p className="mt-0.5 text-xs font-medium text-stone-500">{t(lang, "backupListHint")}</p>
+          <p className="text-sm font-bold text-foreground">{t(lang, "backupListTitle")}</p>
+          <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "backupListHint")}</p>
           <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-2xl border border-white/60 bg-white/80 p-3">
             {meta.length === 0 ? (
-              <li className="text-sm text-stone-500">{t(lang, "backupListEmpty")}</li>
+              <li className="text-sm text-muted-foreground">{t(lang, "backupListEmpty")}</li>
             ) : (
               meta.map((m) => (
-                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2 text-sm">
-                  <span className="font-semibold text-stone-800">
+                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+                  <span className="font-semibold text-foreground">
                     {m.kind === "daily_auto" ? t(lang, "backupKindDaily") : t(lang, "backupKindManual")} ·{" "}
                     {new Date(m.createdAt).toLocaleString()}
                   </span>
@@ -373,7 +373,7 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
                     type="button"
                     disabled={busy}
                     onClick={() => void restoreFromId(m.id)}
-                    className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                    className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-bold text-background disabled:opacity-50"
                   >
                     {t(lang, "backupRestore")}
                   </button>

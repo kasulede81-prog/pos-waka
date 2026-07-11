@@ -49,12 +49,12 @@ export function ShopConsoleDevicesTab({ ctx }: Props) {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs font-semibold text-stone-600">
+      <p className="text-xs font-semibold text-muted-foreground">
         {active.length} logged in · {registered} registered
       </p>
 
       {registered === 0 ? (
-        <p className="text-sm font-semibold text-stone-500">{t(lang, "internalShopProfileDevicesEmpty")}</p>
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "internalShopProfileDevicesEmpty")}</p>
       ) : (
         <ul className="space-y-3">
           {devicesToShow.map((d) => (
@@ -159,13 +159,13 @@ function DeviceRow({
   const online = isRescueDeviceOnline(device.last_seen_at);
 
   return (
-    <li className="rounded-xl border border-stone-100 bg-stone-50/80 p-3">
+    <li className="rounded-xl border border-border bg-muted/80 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-black text-stone-900">
+          <p className="truncate text-sm font-black text-foreground">
             {device.label || device.device_fingerprint.slice(0, 18)}
           </p>
-          <p className="text-[10px] font-semibold text-stone-500">
+          <p className="text-[10px] font-semibold text-muted-foreground">
             {[device.platform, device.app_version ? `v${device.app_version}` : null].filter(Boolean).join(" · ") || "—"}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] font-black uppercase">
@@ -173,7 +173,7 @@ function DeviceRow({
               className={
                 online
                   ? "rounded-md bg-emerald-100 px-1.5 py-0.5 text-emerald-900"
-                  : "rounded-md bg-stone-200 px-1.5 py-0.5 text-stone-700"
+                  : "rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground"
               }
             >
               {online ? t(lang, "internalShopProfileDeviceOnline") : t(lang, "internalShopProfileDeviceOffline")}
@@ -183,20 +183,20 @@ function DeviceRow({
                 {t(lang, "internalShopProfileDeviceTrusted")}
               </span>
             ) : (
-              <span className="rounded-md bg-stone-200 px-1.5 py-0.5">Untrusted</span>
+              <span className="rounded-md bg-muted px-1.5 py-0.5">Untrusted</span>
             )}
             {device.suspicious_flag ? (
               <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-rose-900">Suspicious</span>
             ) : null}
           </div>
-          <p className="mt-1 text-[10px] text-stone-600">Last online: {fmtTime(device.last_seen_at)}</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">Last online: {fmtTime(device.last_seen_at)}</p>
         </div>
         {canSupport ? (
           <div className="flex flex-wrap gap-1">
             <button
               type="button"
               disabled={busy}
-              className="rounded-lg border border-stone-300 px-2 py-1 text-[10px] font-black text-stone-900 disabled:opacity-40"
+              className="rounded-lg border border-border px-2 py-1 text-[10px] font-black text-foreground disabled:opacity-40"
               onClick={onActivate}
             >
               {device.is_active

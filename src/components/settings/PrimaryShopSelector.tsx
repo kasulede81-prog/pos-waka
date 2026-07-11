@@ -43,17 +43,17 @@ export function PrimaryShopSelector({ lang, authMode }: Props) {
   };
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <p className="text-sm font-black text-stone-900">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-sm font-black text-foreground">
         {lang === "lg" ? "Amaduuka go (primary)" : "Your shops (primary)"}
       </p>
-      <p className="mt-1 text-xs font-medium text-stone-600">
+      <p className="mt-1 text-xs font-medium text-muted-foreground">
         {lang === "lg"
           ? "Londa edduuka erikulembera okusinkana n'omukutu."
           : "Choose which shop sync and billing use on this account."}
       </p>
       <select
-        className="mt-3 w-full min-h-[48px] rounded-xl border border-stone-200 px-3 text-base font-semibold"
+        className="mt-3 w-full min-h-[48px] rounded-xl border border-border px-3 text-base font-semibold"
         value={primaryId ?? ""}
         disabled={busy}
         onChange={(e) => void onSelect(e.target.value)}

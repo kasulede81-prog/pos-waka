@@ -39,13 +39,13 @@ export function ForgotPasswordPage({ lang, setLang, isAuthenticated, requestPass
 
   return (
     <AuthLayout lang={lang} setLang={setLang}>
-      <div className="mx-auto max-w-md rounded-3xl border border-stone-200/80 bg-white p-6 shadow-waka-sm">
+      <div className="mx-auto max-w-md rounded-3xl border border-border/80 bg-card p-6 shadow-waka-sm">
         <div className="flex flex-col items-center text-center">
           <WakaPosLogo size="md" />
-          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-stone-500">{WAKA_LEGAL_COMPANY_NAME}</p>
-          <h1 className="mt-4 text-2xl font-black text-stone-900">{t(lang, "forgotTitle")}</h1>
-          <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "forgotSubtitle")}</p>
-          <p className="mt-2 text-xs font-medium text-stone-500">{t(lang, "forgotEmailOrPhoneHint")}</p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{WAKA_LEGAL_COMPANY_NAME}</p>
+          <h1 className="mt-4 text-2xl font-black text-foreground">{t(lang, "forgotTitle")}</h1>
+          <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "forgotSubtitle")}</p>
+          <p className="mt-2 text-xs font-medium text-muted-foreground">{t(lang, "forgotEmailOrPhoneHint")}</p>
         </div>
 
         {!hasSupabaseConfig ? (
@@ -54,7 +54,7 @@ export function ForgotPasswordPage({ lang, setLang, isAuthenticated, requestPass
           <p className="mt-6 rounded-xl border border-waka-200 bg-waka-50 px-3 py-3 text-sm text-waka-950">{t(lang, "resetEmailSent")}</p>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
-            <label className="block text-sm font-bold text-stone-800">
+            <label className="block text-sm font-bold text-foreground">
               {t(lang, "email")}
               <input
                 type="email"
@@ -62,7 +62,7 @@ export function ForgotPasswordPage({ lang, setLang, isAuthenticated, requestPass
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2"
+                className="mt-1.5 w-full min-h-[48px] rounded-xl border border-border px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2"
               />
             </label>
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}

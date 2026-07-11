@@ -91,7 +91,7 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
           />
           <div
             className={clsx(
-              "absolute left-3 right-3 z-[45] rounded-2xl border border-stone-200 bg-white p-3 text-stone-900 shadow-xl",
+              "absolute left-3 right-3 z-[45] rounded-2xl border border-border bg-card p-3 text-foreground shadow-xl",
               panelPositionClass,
             )}
           >
@@ -107,7 +107,7 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
                   className={`min-h-[36px] rounded-full border px-3 text-xs font-black ${
                     filter.kind === "preset" && filter.preset === preset
                       ? "border-waka-500 bg-waka-600 text-white"
-                      : "border-stone-200 bg-stone-50 text-stone-800"
+                      : "border-border bg-muted text-foreground"
                   }`}
                 >
                   {presetLabel(preset)}
@@ -116,14 +116,14 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
             </div>
             <label
               htmlFor={dateInputId}
-              className="mt-3 flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 text-sm font-bold text-stone-800"
+              className="mt-3 flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl border border-border bg-muted px-3 text-sm font-bold text-foreground"
             >
               <CalendarDays className="h-4 w-4 shrink-0 text-waka-600" aria-hidden />
               <span>{t(lang, "dateFilterPickDate")}</span>
               <input
                 id={dateInputId}
                 type="date"
-                className="ml-auto max-w-[9rem] rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs font-semibold"
+                className="ml-auto max-w-[9rem] rounded-lg border border-border bg-card px-2 py-1 text-xs font-semibold"
                 value={customDayKey}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -133,14 +133,14 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
                 }}
               />
             </label>
-            <div className="mt-3 space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">
+            <div className="mt-3 space-y-2 rounded-xl border border-border bg-muted p-3">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
                 {t(lang, "dateFilterCustomRange")}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="date"
-                  className="min-h-[36px] flex-1 rounded-lg border border-stone-200 bg-white px-2 text-xs font-semibold"
+                  className="min-h-[36px] flex-1 rounded-lg border border-border bg-card px-2 text-xs font-semibold"
                   value={rangeFrom}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -148,10 +148,10 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
                     onFilterChange({ kind: "range", fromKey: v, toKey: rangeTo >= v ? rangeTo : v });
                   }}
                 />
-                <span className="text-xs font-bold text-stone-500">→</span>
+                <span className="text-xs font-bold text-muted-foreground">→</span>
                 <input
                   type="date"
-                  className="min-h-[36px] flex-1 rounded-lg border border-stone-200 bg-white px-2 text-xs font-semibold"
+                  className="min-h-[36px] flex-1 rounded-lg border border-border bg-card px-2 text-xs font-semibold"
                   value={rangeTo}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -171,7 +171,7 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
                 </button>
               </div>
             </div>
-            {footer ? <div className="mt-3 border-t border-stone-100 pt-3">{footer}</div> : null}
+            {footer ? <div className="mt-3 border-t border-border pt-3">{footer}</div> : null}
           </div>
         </>
       ) : null}

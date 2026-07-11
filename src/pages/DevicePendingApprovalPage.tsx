@@ -22,7 +22,7 @@ import {
 
 type Props = { lang: Language };
 
-/** Read-only waiting screen until Primary Device approves this device. */
+/** Read-only waiting screen until the shop owner approves this device. */
 export function DevicePendingApprovalPage({ lang }: Props) {
   const navigate = useNavigate();
   const { retry, shopId, activated, block } = useDeviceActivation();
@@ -132,14 +132,14 @@ export function DevicePendingApprovalPage({ lang }: Props) {
   }, [activated, authorityLoading, expired, recheck]);
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-6 py-12">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-muted to-stone-100 px-6 py-12">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-800">
         <MonitorSmartphone className="h-8 w-8" aria-hidden />
       </div>
-      <h1 className="mt-6 text-center text-2xl font-black text-stone-950">
+      <h1 className="mt-6 text-center text-2xl font-black text-foreground">
         {expired ? t(lang, "devicePendingApprovalExpiredTitle") : t(lang, "devicePendingApprovalTitle")}
       </h1>
-      <p className="mt-3 max-w-md text-center text-sm font-medium text-stone-600">
+      <p className="mt-3 max-w-md text-center text-sm font-medium text-muted-foreground">
         {expired
           ? t(lang, "devicePendingApprovalExpiredBody")
           : isOwner
@@ -154,7 +154,7 @@ export function DevicePendingApprovalPage({ lang }: Props) {
         </p>
       ) : null}
       {shopId ? (
-        <p className="mt-2 text-xs font-semibold text-stone-400">{t(lang, "devicePendingApprovalHint")}</p>
+        <p className="mt-2 text-xs font-semibold text-muted-foreground">{t(lang, "devicePendingApprovalHint")}</p>
       ) : null}
       {isOwner && !expired ? (
         <button

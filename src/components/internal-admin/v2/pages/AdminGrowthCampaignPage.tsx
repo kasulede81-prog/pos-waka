@@ -89,8 +89,8 @@ const GRANT_MODE_LABELS: Record<GrowthGrantMode, string> = {
 };
 
 const inputCls =
-  "w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm font-semibold text-stone-900 outline-none focus:border-waka-500";
-const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-stone-500";
+  "w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground outline-none focus:border-waka-500";
+const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-muted-foreground";
 
 export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
   const [loading, setLoading] = useState(true);
@@ -249,15 +249,15 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-black text-stone-900">Monetization · Growth Campaign</h1>
-          <p className="text-xs font-semibold text-stone-500">
+          <h1 className="text-lg font-black text-foreground">Monetization · Growth Campaign</h1>
+          <p className="text-xs font-semibold text-muted-foreground">
             Temporary promotional plan grants. The paid subscription system stays fully active.
           </p>
         </div>
         <button
           type="button"
           onClick={() => void load()}
-          className="flex min-h-[44px] items-center gap-1 rounded-xl bg-stone-100 px-3 text-xs font-black text-stone-700 hover:bg-stone-200"
+          className="flex min-h-[44px] items-center gap-1 rounded-xl bg-muted px-3 text-xs font-black text-muted-foreground hover:bg-muted"
         >
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
@@ -270,9 +270,9 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
       ) : null}
 
       {/* Campaign list */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
+      <section className="rounded-2xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-black text-stone-800">
+          <h2 className="flex items-center gap-2 text-sm font-black text-foreground">
             <Megaphone className="h-4 w-4 text-waka-600" /> Campaigns
           </h2>
           <button
@@ -284,7 +284,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
           </button>
         </div>
         {campaigns.length === 0 ? (
-          <p className="text-sm font-semibold text-stone-500">No campaigns yet.</p>
+          <p className="text-sm font-semibold text-muted-foreground">No campaigns yet.</p>
         ) : (
           <ul className="space-y-1.5">
             {campaigns.map((c) => {
@@ -297,13 +297,13 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
                     className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-bold ${
                       draft.id === c.id
                         ? "border-waka-400 bg-waka-50 text-waka-900"
-                        : "border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100"
+                        : "border-border bg-muted text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     <span className="truncate">{c.name || "(unnamed)"}</span>
                     <span
                       className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
-                        active ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-600"
+                        active ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
                       }`}
                     >
                       {active ? "Active" : c.enabled ? "Scheduled" : "Off"}
@@ -317,14 +317,14 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
       </section>
 
       {/* Campaign editor */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
+      <section className="rounded-2xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-black text-stone-800">
+          <h2 className="text-sm font-black text-foreground">
             {draft.id ? "Edit campaign" : "New campaign"}
           </h2>
           <span
             className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
-              campaignActive ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-600"
+              campaignActive ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
             }`}
           >
             Campaign {campaignActive ? "Active" : "Inactive"}
@@ -393,7 +393,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
               checked={draft.enabled}
               onCheckedChange={(checked) => setDraft({ ...draft, enabled: checked })}
               label="Enable Growth Campaign"
-              className="text-sm font-black text-stone-800"
+              className="text-sm font-black text-foreground"
             />
           </div>
           <div>
@@ -428,18 +428,18 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
       </section>
 
       {/* Referral codes */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-black text-stone-800">
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-black text-foreground">
           <Ticket className="h-4 w-4 text-waka-600" /> Referral codes
         </h2>
 
         {codes.length === 0 ? (
-          <p className="mb-3 text-sm font-semibold text-stone-500">No referral codes yet.</p>
+          <p className="mb-3 text-sm font-semibold text-muted-foreground">No referral codes yet.</p>
         ) : (
           <div className="mb-3 overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-sm">
               <thead>
-                <tr className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+                <tr className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
                   <th className="px-2 py-1.5">Code</th>
                   <th className="px-2 py-1.5">Plan</th>
                   <th className="px-2 py-1.5">Days</th>
@@ -450,7 +450,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
               </thead>
               <tbody>
                 {codes.map((c) => (
-                  <tr key={c.id} className="border-t border-stone-100 font-semibold text-stone-800">
+                  <tr key={c.id} className="border-t border-border font-semibold text-foreground">
                     <td className="px-2 py-2 font-black">{c.code}</td>
                     <td className="px-2 py-2">{promotionalPlanLabel(c.planCode)}</td>
                     <td className="px-2 py-2">{c.durationDays}</td>
@@ -458,7 +458,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
                     <td className="px-2 py-2">
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
-                          c.enabled ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-600"
+                          c.enabled ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {c.enabled ? "On" : "Off"}
@@ -477,7 +477,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
                             enabled: c.enabled,
                           })
                         }
-                        className="rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-black text-stone-700 hover:bg-stone-200"
+                        className="rounded-lg bg-muted px-2.5 py-1.5 text-xs font-black text-muted-foreground hover:bg-muted"
                       >
                         Edit
                       </button>
@@ -537,7 +537,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
               checked={codeDraft.enabled}
               onCheckedChange={(checked) => setCodeDraft({ ...codeDraft, enabled: checked })}
               label="Enabled"
-              className="text-sm font-black text-stone-800"
+              className="text-sm font-black text-foreground"
             />
           </div>
           <div className="flex items-end gap-2">
@@ -554,7 +554,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
               <button
                 type="button"
                 onClick={() => setCodeDraft(EMPTY_CODE_DRAFT)}
-                className="min-h-[44px] rounded-xl bg-stone-100 px-3 text-xs font-black text-stone-700 hover:bg-stone-200"
+                className="min-h-[44px] rounded-xl bg-muted px-3 text-xs font-black text-muted-foreground hover:bg-muted"
               >
                 Cancel
               </button>
@@ -564,8 +564,8 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
       </section>
 
       {/* Metrics */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-black text-stone-800">Campaign metrics</h2>
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-black text-foreground">Campaign metrics</h2>
         <div className="mb-3 grid gap-3 sm:grid-cols-3">
           <div>
             <label className={labelCls}>Campaign</label>
@@ -616,14 +616,14 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
               { label: "Conversion rate", value: `${metrics.conversionRatePct}%` },
               { label: "MRR from converted", value: `UGX ${metrics.mrrFromConvertedUgx.toLocaleString()}` },
             ].map((m) => (
-              <div key={m.label} className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
-                <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{m.label}</p>
-                <p className="mt-1 text-lg font-black text-stone-900">{m.value}</p>
+              <div key={m.label} className="rounded-xl border border-border bg-muted px-3 py-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{m.label}</p>
+                <p className="mt-1 text-lg font-black text-foreground">{m.value}</p>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm font-semibold text-stone-500">Metrics unavailable.</p>
+          <p className="text-sm font-semibold text-muted-foreground">Metrics unavailable.</p>
         )}
       </section>
     </div>

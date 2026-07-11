@@ -37,9 +37,9 @@ export function DeletionSafetyDiagnosticsCard({ lang }: { lang: Language }) {
   const blocked = snap?.organizationBlocked ?? false;
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "deletionSafetyDiagnosticsTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "deletionSafetyDiagnosticsSub")}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "deletionSafetyDiagnosticsTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(lang, "deletionSafetyDiagnosticsSub")}</p>
 
       {blocked && (
         <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-950">
@@ -47,7 +47,7 @@ export function DeletionSafetyDiagnosticsCard({ lang }: { lang: Language }) {
         </p>
       )}
 
-      <dl className="mt-3 space-y-2 text-sm text-stone-700">
+      <dl className="mt-3 space-y-2 text-sm text-muted-foreground">
         <div className="flex justify-between gap-3">
           <dt>{t(lang, "deletionSafetyActiveNamespace")}</dt>
           <dd className="font-mono text-xs">{snap?.activeAccountKey ?? "—"}</dd>

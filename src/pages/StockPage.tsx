@@ -1,5 +1,5 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import type { Language, Product } from "../types";
@@ -25,7 +25,20 @@ import { inferProductGuess, uiPlaceholder } from "../lib/pharmacyUx";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
-import { VirtualizedStockProductList } from "../components/stock/VirtualizedStockProductList";
+import { InventoryViewProvider } from "../features/inventory/viewEngine/InventoryViewContext";
+import { InventoryViewSwitcher } from "../features/inventory/viewEngine/InventoryViewSwitcher";
+import { InventoryProductList } from "../features/inventory/viewEngine/InventoryProductList";
+import {
+  buildInventorySearchIndex,
+  queryInventoryProducts,
+} from "../features/inventory/viewEngine/inventoryProductListQuery";
+import { InventorySelectionProvider } from "../features/inventory/selection/InventorySelectionProvider";
+import { InventorySelectionToolbar } from "../features/inventory/selection/InventorySelectionToolbar";
+import { InventorySelectionModeButton } from "../features/inventory/selection/InventorySelectionModeButton";
+import { InventoryFilterBar, useInventorySavedFilters } from "../features/inventory/filters/InventoryFilterBar";
+import { defaultInventoryAdvancedFilters, mergeAdvancedFilters } from "../features/inventory/filters/types";
+import { buildLastSupplierByProductId } from "../features/inventory/filters/inventoryAdvancedFilters";
+import { StockInventoryProductivityChrome } from "../features/inventory/StockInventoryProductivityChrome";
 import { StockSectionTabs, type StockHubTab } from "../components/stock/StockSectionTabs";
 import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
@@ -57,8 +70,6 @@ import {
   UNCATEGORIZED_SENTINEL,
   distinctTrimmedCategories,
   normalizedCategoryKey,
-  productMatchesCategoryFilter,
-  productMatchesSellSearch,
 } from "../lib/productCategories";
 import {
   QUICK_SELL_SHELF_KEY,
@@ -167,6 +178,10 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [removeReason, setRemoveReason] = useState("");
   const [stockCategoryFilter, setStockCategoryFilter] = useState<string>(CATEGORY_FILTER_ALL);
   const [stockGroupByCategoryOverride, setStockGroupByCategoryOverride] = useState<boolean | null>(null);
+  const [advancedFilters, setAdvancedFilters] = useState(() => defaultInventoryAdvancedFilters(CATEGORY_FILTER_ALL));
+  const [visibleProductIds, setVisibleProductIds] = useState<string[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const { presets: savedFilterPresets, save: saveFilterPreset } = useInventorySavedFilters();
 
   useEffect(() => {
     const caps = detectBarcodeCapabilities();
@@ -278,26 +293,46 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     [products, preferences.posPinnedShelfKeys, preferences.posShelfLayout],
   );
 
-  const listableProducts = useMemo(() => {
-    let list = [...products];
-    const q = listQuery.trim();
-    if (q) {
-      list = list.filter((p) => productMatchesSellSearch(p, q));
-    }
-    if (listFilter === "low") list = list.filter((p) => isLowStock(p));
-    list = list.filter((p) => productMatchesCategoryFilter(p, stockCategoryFilter));
-    return [...list].sort((a, b) => {
-      if (listSort === "name_az") return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      if (listSort === "name_za") return b.name.localeCompare(a.name, undefined, { sensitivity: "base" });
-      if (listSort === "stock_low") {
-        const d = a.stockOnHand - b.stockOnHand;
-        return d !== 0 ? d : a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      }
-      const ta = new Date(a.updatedAt).getTime();
-      const tb = new Date(b.updatedAt).getTime();
-      return tb - ta || a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-    });
-  }, [products, listQuery, listFilter, listSort, stockCategoryFilter]);
+  const productSearchIndex = useMemo(
+    () => buildInventorySearchIndex(products, preferences, stockMovements),
+    [products, preferences, stockMovements],
+  );
+
+  const lastSupplierByProductId = useMemo(() => {
+    const names = new Map(suppliers.map((s) => [s.id, s.name]));
+    return buildLastSupplierByProductId(stockMovements, names);
+  }, [stockMovements, suppliers]);
+
+  const filterContext = useMemo(
+    () => ({ preferences, lastSupplierByProductId }),
+    [preferences, lastSupplierByProductId],
+  );
+
+  const listableProducts = useMemo(
+    () =>
+      queryInventoryProducts({
+        products,
+        query: listQuery,
+        categoryFilter: stockCategoryFilter,
+        listFilter,
+        sort: listSort,
+        index: productSearchIndex,
+        advancedFilters,
+        filterContext,
+        stockMovements,
+      }),
+    [
+      products,
+      listQuery,
+      listFilter,
+      listSort,
+      stockCategoryFilter,
+      productSearchIndex,
+      advancedFilters,
+      filterContext,
+      stockMovements,
+    ],
+  );
 
   const lowStockCount = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)).length, [unlockedProducts]);
   const inventoryValueUgx = useMemo(() => inventoryValueAtCostUgx(unlockedProducts), [unlockedProducts]);
@@ -324,13 +359,21 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   const productsInSelectedShelf = useMemo(() => {
     if (!selectedShelf) return [];
-    let list = unlockedProducts.filter(
+    const shelfProducts = unlockedProducts.filter(
       (p) => (normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL) === selectedShelf,
     );
-    const q = listQuery.trim();
-    if (q) list = list.filter((p) => productMatchesSellSearch(p, q));
-    return list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }, [selectedShelf, unlockedProducts, listQuery]);
+    return queryInventoryProducts({
+      products: shelfProducts,
+      query: listQuery,
+      categoryFilter: CATEGORY_FILTER_ALL,
+      listFilter: "all",
+      sort: "name_az",
+      index: productSearchIndex,
+      advancedFilters,
+      filterContext,
+      stockMovements,
+    });
+  }, [selectedShelf, unlockedProducts, listQuery, productSearchIndex, advancedFilters, filterContext, stockMovements]);
 
   const recentMovements = useMemo(
     () => [...stockMovements].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
@@ -705,17 +748,17 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   const onlyProductInStock = unlockedProducts.length === 1;
 
-  const renderProductCards = (items: Product[], variant: "default" | "lowStock" = "default") => {
+  const renderProductList = (items: Product[], variant: "default" | "lowStock" = "default") => {
     if (items.length === 0) {
       return (
-        <p className="rounded-xl bg-stone-50 px-3 py-8 text-center text-sm font-semibold text-stone-500">
+        <p className="rounded-xl bg-muted px-3 py-8 text-center text-sm font-semibold text-muted-foreground">
           {t(lang, "stockNoListMatch")}
         </p>
       );
     }
 
     return (
-      <VirtualizedStockProductList
+      <InventoryProductList
         lang={lang}
         products={items}
         preferences={preferences}
@@ -726,8 +769,11 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         canRestock={canRestock}
         isOnlyProduct={onlyProductInStock}
         variant={variant}
+        listSort={listSort}
+        onListSort={setListSort}
         onAction={handleRowAction}
         onOpenDetail={setDetailProduct}
+        onVisibleIdsChange={setVisibleProductIds}
       />
     );
   };
@@ -757,6 +803,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   };
 
   return (
+    <InventoryViewProvider>
+    <InventorySelectionProvider>
     <EnterprisePageContainer className="space-y-3" variant={workspaceEmbed ? "flush" : "default"}>
       {!workspaceEmbed ? (
         <PageHeader
@@ -791,12 +839,12 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             </p>
           ) : null}
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Link to="/upgrade" className="rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-black text-white">
+            <Link to="/upgrade" className="rounded-2xl bg-foreground px-4 py-3 text-center text-sm font-black text-background">
               {t(lang, "freeLimitUpgrade")}
             </Link>
             <Link
               to="/support"
-              className="rounded-2xl border-2 border-waka-300 bg-white px-4 py-3 text-center text-sm font-black text-waka-950"
+              className="rounded-2xl border-2 border-waka-300 bg-card px-4 py-3 text-center text-sm font-black text-waka-950"
             >
               {t(lang, "freeLimitSupport")}
             </Link>
@@ -805,9 +853,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       ) : null}
 
       {unlockedProducts.length === 0 ? (
-        <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50/80 to-white px-6 py-10 text-center">
-          <p className="text-xl font-black text-stone-900">{modeTerm("stockEmptyTitle")}</p>
-          <p className="mx-auto mt-2 max-w-sm text-base text-stone-600">{modeTerm("stockEmptySub")}</p>
+        <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50/80 to-card px-6 py-10 text-center">
+          <p className="text-xl font-black text-foreground">{modeTerm("stockEmptyTitle")}</p>
+          <p className="mx-auto mt-2 max-w-sm text-base text-muted-foreground">{modeTerm("stockEmptySub")}</p>
           {canAdd ? (
             <div className="mx-auto mt-6 flex w-full max-w-xs flex-col gap-2">
               <button
@@ -856,8 +904,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
           <div
             className={clsx(
-              "sticky top-0 z-20 -mx-3 space-y-2 border-b border-stone-200/80 bg-stone-50/95 px-3 py-2 backdrop-blur-md",
-              "supports-[backdrop-filter]:bg-stone-50/88 md:-mx-6 md:px-6",
+              "sticky top-0 z-20 -mx-3 space-y-2 border-b border-border/80 bg-muted/95 px-3 py-2 backdrop-blur-md",
+              "supports-[backdrop-filter]:bg-muted/88 md:-mx-6 md:px-6",
             )}
           >
             <StockSectionTabs lang={lang} active={stockTab} onChange={handleStockTabChange} />
@@ -881,33 +929,69 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
           {stockTab === "products" ? (
             <section className="space-y-3">
-              <StockListToolbar
+              <InventoryFilterBar
                 lang={lang}
-                listSort={listSort}
-                onListSort={setListSort}
-                listFilter={listFilter}
-                onListFilter={setListFilter}
-                stockCategoryFilter={stockCategoryFilter}
-                onStockCategoryFilter={setStockCategoryFilter}
+                filters={advancedFilters}
+                onChange={setAdvancedFilters}
+                query={listQuery}
+                onQueryChange={setListQuery}
+                products={products}
+                suppliers={suppliers}
+                lastSupplierByProductId={lastSupplierByProductId}
                 stockCategoryPicklist={stockCategoryPicklist}
-                stockHasUncategorized={stockHasUncategorized}
-                groupByCategory={groupByCategory}
-                onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
+                savedPresets={savedFilterPresets}
+                onSavePreset={(name) => saveFilterPreset(name, advancedFilters, listQuery)}
+                onApplyPreset={(preset) => {
+                  setAdvancedFilters(
+                    mergeAdvancedFilters(
+                      defaultInventoryAdvancedFilters(CATEGORY_FILTER_ALL),
+                      preset.filters,
+                    ),
+                  );
+                  setListQuery(preset.query);
+                }}
                 compact
               />
+              <InventorySelectionToolbar
+                lang={lang}
+                visibleIds={visibleProductIds}
+                filteredIds={listableProducts.map((p) => p.id)}
+              />
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <StockListToolbar
+                    lang={lang}
+                    listSort={listSort}
+                    onListSort={setListSort}
+                    listFilter={listFilter}
+                    onListFilter={setListFilter}
+                    stockCategoryFilter={stockCategoryFilter}
+                    onStockCategoryFilter={setStockCategoryFilter}
+                    stockCategoryPicklist={stockCategoryPicklist}
+                    stockHasUncategorized={stockHasUncategorized}
+                    groupByCategory={groupByCategory}
+                    onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
+                    compact
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <InventorySelectionModeButton lang={lang} />
+                  <InventoryViewSwitcher lang={lang} variant="toolbar" />
+                </div>
+              </div>
               {groupByCategory && categoryGroups && listableProducts.length > 0 ? (
                 <div className="space-y-4">
                   {categoryGroups.keys.map((gk) => (
                     <div key={gk}>
-                      <h3 className="mb-2 px-0.5 text-[10px] font-black uppercase tracking-wide text-stone-500">
+                      <h3 className="mb-2 px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
                         {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
                       </h3>
-                      {renderProductCards(categoryGroups.map.get(gk) ?? [])}
+                      {renderProductList(categoryGroups.map.get(gk) ?? [])}
                     </div>
                   ))}
                 </div>
               ) : (
-                renderProductCards(listableProducts)
+                renderProductList(listableProducts)
               )}
             </section>
           ) : null}
@@ -922,20 +1006,25 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
               onBack={() => setSelectedShelf(null)}
               shelfDetailHeader={
                 selectedShelf ? (
-                  <StockListToolbar
-                    lang={lang}
-                    listSort={listSort}
-                    onListSort={setListSort}
-                    listFilter="all"
-                    onListFilter={() => undefined}
-                    stockCategoryFilter={CATEGORY_FILTER_ALL}
-                    onStockCategoryFilter={() => undefined}
-                    stockCategoryPicklist={[]}
-                    stockHasUncategorized={false}
-                    groupByCategory={false}
-                    onGroupByCategory={() => undefined}
-                    compact
-                  />
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <StockListToolbar
+                        lang={lang}
+                        listSort={listSort}
+                        onListSort={setListSort}
+                        listFilter="all"
+                        onListFilter={() => undefined}
+                        stockCategoryFilter={CATEGORY_FILTER_ALL}
+                        onStockCategoryFilter={() => undefined}
+                        stockCategoryPicklist={[]}
+                        stockHasUncategorized={false}
+                        groupByCategory={false}
+                        onGroupByCategory={() => undefined}
+                        compact
+                      />
+                    </div>
+                    <InventoryViewSwitcher lang={lang} variant="inline" />
+                  </div>
                 ) : undefined
               }
             >
@@ -952,7 +1041,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                     onAddProduct={() => openAddProductForShelf(selectedShelf)}
                   />
                 ) : (
-                  renderProductCards(productsInSelectedShelf)
+                  renderProductList(productsInSelectedShelf)
                 )
               ) : null}
             </StockShelfGrid>
@@ -960,12 +1049,15 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
           {stockTab === "low" ? (
             <section className="space-y-3">
+              <div className="flex justify-end">
+                <InventoryViewSwitcher lang={lang} variant="inline" />
+              </div>
               {lowStockProducts.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50 px-3 py-8 text-center text-sm font-semibold text-emerald-900">
                   {t(lang, "stockLowStockEmpty")}
                 </p>
               ) : (
-                renderProductCards(lowStockProducts, "lowStock")
+                renderProductList(lowStockProducts, "lowStock")
               )}
             </section>
           ) : null}
@@ -989,11 +1081,11 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         >
           <form
             onSubmit={submitQuick}
-            className="flex max-h-[min(92dvh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-3xl"
+            className="flex max-h-[min(92dvh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-card shadow-2xl sm:max-h-[90vh] sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
-            <p className="text-center text-xl font-black text-stone-900">
+            <p className="text-center text-xl font-black text-foreground">
               {industryPlaceholderMode
                 ? uiPlaceholder(
                     lang,
@@ -1004,7 +1096,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                   )
                 : t(lang, "stockQuickAddTitle")}
             </p>
-            <p className="mt-1 text-center text-sm text-stone-500">{t(lang, "stockQuickAddSub")}</p>
+            <p className="mt-1 text-center text-sm text-muted-foreground">{t(lang, "stockQuickAddSub")}</p>
             {guessPreview ? (
               <p className="mt-3 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
                 {t(lang, "smartGuessHint")}: {t(lang, `mode_${guessPreview.sellingMode}`)} · {guessPreview.baseUnit}
@@ -1040,7 +1132,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             </div>
             </div>
 
-            <div className="shrink-0 border-t border-stone-100 bg-white px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+            <div className="shrink-0 border-t border-border bg-card px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
             <div className="grid grid-cols-2 gap-3">
               <button type="button" className="min-h-[52px] rounded-2xl border-2 py-3 text-lg font-bold" onClick={() => setQuickOpen(false)}>
                 {t(lang, "cancel")}
@@ -1070,14 +1162,14 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           onClick={() => setStarterOpen(false)}
         >
           <div
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white p-6 shadow-2xl sm:rounded-3xl"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-card p-6 shadow-2xl sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-center text-2xl font-black text-stone-900">{t(lang, "starterPackTitle")}</p>
-            <p className="mt-1 text-center text-sm text-stone-500">{t(lang, "starterPackSub")}</p>
+            <p className="text-center text-2xl font-black text-foreground">{t(lang, "starterPackTitle")}</p>
+            <p className="mt-1 text-center text-sm text-muted-foreground">{t(lang, "starterPackSub")}</p>
             <ul className="mt-4 space-y-3">
               {starterRows.map((row, i) => (
-                <li key={`${row.nameKey}-${i}`} className="rounded-2xl border-2 border-stone-100 p-3">
+                <li key={`${row.nameKey}-${i}`} className="rounded-2xl border-2 border-border p-3">
                   <WakaCheckbox
                     checked={row.enabled}
                     onCheckedChange={(checked) =>
@@ -1086,7 +1178,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                     label={<span className="flex-1 text-lg">{t(lang, row.nameKey)}</span>}
                   />
                   <div className="mt-2 grid grid-cols-2 gap-2 pl-9">
-                    <label className="text-xs font-bold text-stone-600">
+                    <label className="text-xs font-bold text-muted-foreground">
                       {t(lang, "quickAddPrice")}
                       <input
                         value={row.priceStr}
@@ -1099,7 +1191,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                         className="mt-1 w-full rounded-xl border-2 px-2 py-2 text-lg font-black"
                       />
                     </label>
-                    <label className="text-xs font-bold text-stone-600">
+                    <label className="text-xs font-bold text-muted-foreground">
                       {t(lang, "quickAddStock")}
                       <input
                         value={row.stockStr}
@@ -1202,19 +1294,19 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
       {removeId ? (
         <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
-          <div className="max-w-sm rounded-3xl bg-white p-6 shadow-xl">
-            <p className="text-lg font-black text-stone-900">
+          <div className="max-w-sm rounded-3xl bg-card p-6 shadow-xl">
+            <p className="text-lg font-black text-foreground">
               {onlyProductInStock ? t(lang, "removeLastProductConfirmTitle") : t(lang, "removeProductConfirm")}
             </p>
             {onlyProductInStock ? (
-              <p className="mt-2 text-sm font-semibold text-stone-600">{t(lang, "removeLastProductConfirmBody")}</p>
+              <p className="mt-2 text-sm font-semibold text-muted-foreground">{t(lang, "removeLastProductConfirmBody")}</p>
             ) : null}
             <label className="mt-4 block">
-              <span className="text-sm font-bold text-stone-800">{t(lang, "auditReasonLabel")}</span>
+              <span className="text-sm font-bold text-foreground">{t(lang, "auditReasonLabel")}</span>
               <textarea
                 value={removeReason}
                 onChange={(e) => setRemoveReason(e.target.value)}
-                className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+                className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-border px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
                 placeholder={t(lang, "auditReasonPlaceholder")}
               />
             </label>
@@ -1310,6 +1402,21 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           setActionSheetProduct(null);
         }}
       />
+      <StockInventoryProductivityChrome
+        lang={lang}
+        enabled={stockTab === "products" || stockTab === "low" || (stockTab === "shelves" && selectedShelf !== null)}
+        products={products}
+        filteredProducts={listableProducts}
+        preferences={preferences}
+        suppliers={suppliers}
+        canEdit={canAdd}
+        canAdjust={canAdjust}
+        stockCategoryPicklist={stockCategoryPicklist}
+        searchInputRef={searchInputRef}
+        filteredIds={listableProducts.map((p) => p.id)}
+      />
     </EnterprisePageContainer>
+    </InventorySelectionProvider>
+    </InventoryViewProvider>
   );
 }

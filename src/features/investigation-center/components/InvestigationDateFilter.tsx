@@ -73,12 +73,12 @@ export function InvestigationDateFilter({ lang, filter, onFilterChange }: Props)
   };
 
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm">
+    <section className="rounded-2xl border border-border/90 bg-card p-3 shadow-sm">
       <div className="flex items-center gap-2">
         <CalendarDays className="h-4 w-4 shrink-0 text-waka-600" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">{t(lang, "icDateRange")}</p>
-          <p className="truncate text-sm font-black text-stone-950">{periodLabel}</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t(lang, "icDateRange")}</p>
+          <p className="truncate text-sm font-black text-foreground">{periodLabel}</p>
         </div>
       </div>
 
@@ -92,7 +92,7 @@ export function InvestigationDateFilter({ lang, filter, onFilterChange }: Props)
               "min-h-[36px] shrink-0 rounded-full px-3 py-1.5 text-xs font-black transition-all",
               chipActive(filter, id)
                 ? "bg-waka-600 text-white shadow-sm"
-                : "border border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
+                : "border border-border bg-muted text-muted-foreground active:bg-muted",
             )}
           >
             {labelFor(id)}
@@ -101,25 +101,25 @@ export function InvestigationDateFilter({ lang, filter, onFilterChange }: Props)
       </div>
 
       {customOpen || isCustomFilter(filter) ? (
-        <div className="mt-3 grid gap-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3 sm:grid-cols-2">
-          <label htmlFor={fromInputId} className="block text-xs font-bold text-stone-700">
+        <div className="mt-3 grid gap-3 rounded-xl border border-border bg-muted/80 p-3 sm:grid-cols-2">
+          <label htmlFor={fromInputId} className="block text-xs font-bold text-muted-foreground">
             {t(lang, "auditFilterDateFrom")}
             <input
               id={fromInputId}
               type="date"
               max={today}
-              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 text-sm font-semibold outline-none focus:border-waka-500"
+              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 text-sm font-semibold outline-none focus:border-waka-500"
               value={customFrom}
               onChange={(e) => applyCustomRange(e.target.value, customTo)}
             />
           </label>
-          <label htmlFor={toInputId} className="block text-xs font-bold text-stone-700">
+          <label htmlFor={toInputId} className="block text-xs font-bold text-muted-foreground">
             {t(lang, "auditFilterDateTo")}
             <input
               id={toInputId}
               type="date"
               max={today}
-              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 text-sm font-semibold outline-none focus:border-waka-500"
+              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 text-sm font-semibold outline-none focus:border-waka-500"
               value={customTo}
               onChange={(e) => applyCustomRange(customFrom, e.target.value)}
             />

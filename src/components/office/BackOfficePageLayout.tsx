@@ -13,8 +13,8 @@ export function BackOfficePageLayout({ header, children, className }: Props) {
     <div className={clsx("pb-4", className)}>
       <div
         className={clsx(
-          "sticky top-0 z-20 -mx-3 border-b border-stone-200/80 bg-stone-50/95 px-3 py-2 backdrop-blur-md",
-          "supports-[backdrop-filter]:bg-stone-50/88",
+          "sticky top-0 z-20 -mx-3 border-b border-border/80 bg-muted/95 px-3 py-2 backdrop-blur-md",
+          "supports-[backdrop-filter]:bg-muted/88",
           "sm:-mx-4 sm:px-4",
           "md:-mx-6 md:px-6",
         )}

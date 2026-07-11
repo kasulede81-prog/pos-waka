@@ -28,8 +28,8 @@ export function PharmacyRxActionBar({
   const needsVerify = rx.status === "draft" || rx.status === "waiting_verification";
 
   return (
-    <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-b border-stone-200 bg-white px-2 py-2">
-      <span className="rounded-lg bg-stone-100 px-2 py-1 text-[10px] font-black text-stone-700">
+    <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-b border-border bg-card px-2 py-2">
+      <span className="rounded-lg bg-muted px-2 py-1 text-[10px] font-black text-muted-foreground">
         {rx.prescriptionNumber} · {t(lang, prescriptionStatusLabelKey(rx.status))}
       </span>
       {needsVerify ? (
@@ -65,7 +65,7 @@ function ActionBtn({
       onClick={onClick}
       className={clsx(
         "min-h-[36px] rounded-lg px-2.5 text-[10px] font-black touch-manipulation sm:text-xs",
-        primary ? "bg-teal-600 text-white" : "border border-stone-200 bg-white text-stone-900",
+        primary ? "bg-teal-600 text-white" : "border border-border bg-card text-foreground",
       )}
     >
       {label}

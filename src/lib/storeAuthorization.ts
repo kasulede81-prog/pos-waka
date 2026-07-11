@@ -11,7 +11,7 @@ import { hasEffectivePermission, type SubscriptionSnapshot } from "./subscriptio
 export type StoreAuthErrorKey =
   | "forbidden"
   | "noSelection"
-  | "notPrimaryDevice"
+  | "deviceNotAuthorized"
   | "planProductLimit"
   | "planProductLocked"
   | "planStaffLimit"

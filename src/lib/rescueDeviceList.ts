@@ -25,9 +25,6 @@ export function isRescueDeviceLoggedIn(device: ShopDeviceRow, nowMs = Date.now()
 
 export function sortRescueDevices(devices: ShopDeviceRow[]): ShopDeviceRow[] {
   return [...devices].sort((a, b) => {
-    const aPrimary = a.device_authority === "primary" ? 1 : 0;
-    const bPrimary = b.device_authority === "primary" ? 1 : 0;
-    if (aPrimary !== bPrimary) return bPrimary - aPrimary;
     const aSeen = a.last_seen_at ? Date.parse(a.last_seen_at) : 0;
     const bSeen = b.last_seen_at ? Date.parse(b.last_seen_at) : 0;
     return bSeen - aSeen;

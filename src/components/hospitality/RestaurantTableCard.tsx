@@ -47,12 +47,12 @@ export function RestaurantTableCard({
       />
       {session ? (
         <div className="mt-1 w-full max-w-[120px] space-y-0.5 text-center">
-          <p className="text-[10px] font-bold text-stone-600">
+          <p className="text-[10px] font-bold text-muted-foreground">
             {session.guestCount} {t(lang, "tableOrderGuests")}
             {elapsed ? ` · ${elapsed}` : ""}
           </p>
           {totalUgx > 0 ? (
-            <p className="text-xs font-black tabular-nums text-stone-900">{formatUgx(totalUgx)}</p>
+            <p className="text-xs font-black tabular-nums text-foreground">{formatUgx(totalUgx)}</p>
           ) : null}
         </div>
       ) : reservation ? (

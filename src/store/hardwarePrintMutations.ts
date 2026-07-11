@@ -177,6 +177,15 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       const state = get();
       const ticket = state.preferences.hospitalityFloor?.kitchenTickets?.find((t) => t.id === ticketId);
       if (!ticket) return { ok: false as const, errorKey: "invalid" };
+      const hw = resolveHospitalityHardware(state.preferences);
+      if (!hw.autoPrintKitchen) return { ok: false as const, errorKey: "kitchenPrintDisabled" };
+      const printer = resolvePrinterForStation(
+        state.preferences,
+        state.preferences.hospitalityFloor,
+        ticket.stationId,
+        ticket.stationType,
+      );
+      if (!printer) return { ok: false as const, errorKey: "kitchenNoPrinter" };
       void enqueueKitchenTickets([ticket], "reprint");
       return { ok: true as const };
     },

@@ -44,9 +44,9 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
 
   return (
     <>
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "menuBuilderTitle")}</p>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "menuBuilderSub")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "menuBuilderTitle")}</p>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "menuBuilderSub")}</p>
         <a
           href="/settings/menu"
           className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
@@ -55,13 +55,13 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
         </a>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "hospitalitySettingsKitchenTitle")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "hospitalitySettingsKitchenTitle")}</p>
         {preferences.businessType === "bar" ? (
-          <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "hospitalitySettingsKitchenDefaultBar")}</p>
+          <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "hospitalitySettingsKitchenDefaultBar")}</p>
         ) : null}
         <div className="mt-4 space-y-3">
-          <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-stone-900">
+          <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-border px-3 py-2 text-base font-bold text-foreground">
             <input
               type="radio"
               name="hospitalityKitchen"
@@ -71,7 +71,7 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
             />
             {t(lang, "hospitalitySettingsKitchenOn")}
           </label>
-          <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-stone-900">
+          <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-border px-3 py-2 text-base font-bold text-foreground">
             <input
               type="radio"
               name="hospitalityKitchen"
@@ -84,9 +84,9 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
         </div>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "productHospitalityRoutingTitle")}</p>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "productHospitalityRoutingSub")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "productHospitalityRoutingTitle")}</p>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "productHospitalityRoutingSub")}</p>
         <button
           type="button"
           className="mt-4 min-h-11 rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
@@ -105,9 +105,9 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
         {applyMsg ? <p className="mt-3 text-sm font-semibold text-emerald-800">{applyMsg}</p> : null}
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "hospitalityServiceChargeTitle")}</p>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "hospitalityServiceChargeHint")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "hospitalityServiceChargeTitle")}</p>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "hospitalityServiceChargeHint")}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {[0, 5, 10, 12.5].map((pct) => (
             <button
@@ -117,7 +117,7 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
               className={`min-h-11 rounded-xl px-4 text-sm font-black ${
                 (preferences.hospitalityServiceChargePercent ?? 0) === pct
                   ? "bg-waka-600 text-white"
-                  : "bg-stone-100 text-stone-800"
+                  : "bg-muted text-foreground"
               }`}
             >
               {pct}%
@@ -126,9 +126,9 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
         </div>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "hospitalityTaxTitle")}</p>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "hospitalityTaxHint")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "hospitalityTaxTitle")}</p>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "hospitalityTaxHint")}</p>
         <WakaSwitch
           checked={preferences.hospitalityTaxEnabled !== false}
           onCheckedChange={(checked) => savePreferences({ hospitalityTaxEnabled: checked })}
@@ -142,7 +142,7 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
               type="button"
               onClick={() => savePreferences({ hospitalityTaxPercent: pct })}
               className={`min-h-11 rounded-xl px-4 text-sm font-black ${
-                (preferences.hospitalityTaxPercent ?? 0) === pct ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-800"
+                (preferences.hospitalityTaxPercent ?? 0) === pct ? "bg-waka-600 text-white" : "bg-muted text-foreground"
               }`}
             >
               {pct}%
@@ -157,28 +157,28 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
               onClick={() => savePreferences({ hospitalityTaxMode: mode })}
               className={`min-h-11 flex-1 rounded-xl text-sm font-black ${
                 (preferences.hospitalityTaxMode ?? "exclusive") === mode
-                  ? "bg-stone-900 text-white"
-                  : "bg-stone-100 text-stone-800"
+                  ? "bg-foreground text-background"
+                  : "bg-muted text-foreground"
               }`}
             >
               {t(lang, mode === "exclusive" ? "hospitalityTaxExclusive" : "hospitalityTaxInclusive")}
             </button>
           ))}
         </div>
-        <p className="mt-3 rounded-xl bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-600">
+        <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
           {t(lang, "hospitalityTaxPreview")}: UGX 100,000 → tax {taxPreview.taxUgx.toLocaleString()} → total{" "}
           {taxPreview.grandTotalUgx.toLocaleString()}
         </p>
       </article>
 
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "hospitalityIngredientPolicyTitle")}</p>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "hospitalityIngredientPolicySub")}</p>
+      <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-base font-black text-foreground">{t(lang, "hospitalityIngredientPolicyTitle")}</p>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "hospitalityIngredientPolicySub")}</p>
         <div className="mt-3 space-y-2">
           {(["warn", "block", "manager_override"] as const).map((policy) => (
             <label
               key={policy}
-              className="flex min-h-[48px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 text-sm font-bold"
+              className="flex min-h-[48px] cursor-pointer items-center gap-3 rounded-xl border border-border px-3 text-sm font-bold"
             >
               <input
                 type="radio"
@@ -228,7 +228,7 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
                 },
               })
             }
-            className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 px-3 font-semibold"
+            className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 font-semibold"
           />
         </label>
       </article>

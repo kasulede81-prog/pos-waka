@@ -7,6 +7,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { PageHeader } from "../components/layout/PageHeader";
+import { EnterpriseApprovalPinPad } from "../components/auth/EnterpriseApprovalPinPad";
 import { KeyboardSafePage } from "../components/layout/KeyboardSafePage";
 import { dateKeyKampala } from "../lib/datesUg";
 import {
@@ -109,7 +110,7 @@ export function DayOpenPage({ lang }: { lang: Language }) {
       ) : null}
 
       {!active && mutable ? (
-        <section className="rounded-3xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-white p-5">
+        <section className="rounded-3xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-card p-5">
           <p className="text-sm font-black text-amber-950">{t(lang, "dayOpenHubAlertTitle")}</p>
           <p className="mt-1 text-xs font-semibold text-amber-900/80">{t(lang, "dayOpenHubAlertSub")}</p>
         </section>
@@ -138,22 +139,22 @@ export function DayOpenPage({ lang }: { lang: Language }) {
       ) : null}
 
       {mutable ? (
-        <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
-          <label className="block text-sm font-bold text-stone-800">
+        <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
+          <label className="block text-sm font-bold text-foreground">
             {t(lang, "dayOpenAmountLabel")}
             <input
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/\D/g, "").slice(0, 12))}
               inputMode="numeric"
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
+              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-border px-4 text-2xl font-black"
             />
           </label>
-          <label className="mt-4 block text-sm font-bold text-stone-800">
+          <label className="mt-4 block text-sm font-bold text-foreground">
             {t(lang, "dayOpenNoteLabel")}
             <input
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 200))}
-              className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 px-4 text-sm font-semibold"
+              className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-border px-4 text-sm font-semibold"
             />
           </label>
           <button
@@ -169,7 +170,7 @@ export function DayOpenPage({ lang }: { lang: Language }) {
                 value={voidReason}
                 onChange={(e) => setVoidReason(e.target.value.slice(0, 200))}
                 placeholder={t(lang, "shiftFloatOverrideReason")}
-                className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 px-4 text-sm"
+                className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-border px-4 text-sm"
               />
               <button
                 type="button"
@@ -184,44 +185,44 @@ export function DayOpenPage({ lang }: { lang: Language }) {
       ) : null}
 
       {canOwnerCorrect && active ? (
-        <section className="rounded-3xl border-2 border-amber-300 bg-white p-5 shadow-waka-sm">
-          <h2 className="text-base font-black text-stone-950">{t(lang, "dayOpenCorrectionSectionTitle")}</h2>
-          <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "dayOpenCorrectionSectionSub")}</p>
-          <label className="mt-4 block text-sm font-bold text-stone-800">
+        <section className="rounded-3xl border-2 border-amber-300 bg-card p-5 shadow-waka-sm">
+          <h2 className="text-base font-black text-foreground">{t(lang, "dayOpenCorrectionSectionTitle")}</h2>
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">{t(lang, "dayOpenCorrectionSectionSub")}</p>
+          <label className="mt-4 block text-sm font-bold text-foreground">
             {t(lang, "dayOpenAmountLabel")}
             <input
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/\D/g, "").slice(0, 12))}
               inputMode="numeric"
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
+              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-border px-4 text-2xl font-black"
             />
           </label>
-          <label className="mt-4 block text-sm font-bold text-stone-800">
+          <label className="mt-4 block text-sm font-bold text-foreground">
             {t(lang, "dayOpenNoteLabel")}
             <input
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 200))}
-              className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 px-4 text-sm font-semibold"
+              className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-border px-4 text-sm font-semibold"
             />
           </label>
-          <label className="mt-4 block text-sm font-bold text-stone-800">
+          <label className="mt-4 block text-sm font-bold text-foreground">
             {t(lang, "shiftFloatOverrideReason")}
             <input
               value={correctionReason}
               onChange={(e) => setCorrectionReason(e.target.value.slice(0, 200))}
-              className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 px-4 text-sm font-semibold"
+              className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-border px-4 text-sm font-semibold"
             />
           </label>
-          <label className="mt-4 block text-sm font-bold text-stone-800">
-            {t(lang, "dayOpenCorrectionPinLabel")}
-            <input
-              type="password"
-              inputMode="numeric"
-              value={ownerPin}
-              onChange={(e) => setOwnerPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 text-xl font-black tracking-widest"
-            />
-          </label>
+          <p className="mt-4 text-sm font-bold text-foreground">{t(lang, "dayOpenCorrectionPinLabel")}</p>
+          <EnterpriseApprovalPinPad
+            lang={lang}
+            preferences={preferences}
+            disabled={!correctionReason.trim()}
+            className="mt-2"
+            onApproved={(pin) => {
+              setOwnerPin(pin);
+            }}
+          />
           <button
             type="button"
             onClick={submitOwnerCorrection}
@@ -240,7 +241,7 @@ export function DayOpenPage({ lang }: { lang: Language }) {
       ) : null}
 
       {!correctionEnabled && !mutable && active ? (
-        <p className="text-center text-xs font-semibold text-stone-500">
+        <p className="text-center text-xs font-semibold text-muted-foreground">
           {t(lang, "dayOpenEnableCorrectionInSettings")}{" "}
           <Link to="/settings/cash-drawer" className="font-black text-waka-700 underline">
             {t(lang, "settingsHubTitle")}

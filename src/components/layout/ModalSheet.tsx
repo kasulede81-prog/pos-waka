@@ -2,6 +2,7 @@ import clsx from "clsx";
 import type { CSSProperties, FocusEvent, MouseEvent, ReactNode } from "react";
 import { useVisualViewportBounds } from "../../hooks/useVisualViewportBounds";
 import { AppModalOverlay } from "./AppModalOverlay";
+import { themeUi } from "../../lib/themeTokens";
 
 type Props = {
   open: boolean;
@@ -84,7 +85,8 @@ export function ModalSheet({
       style={overlayStyle}
       className={clsx(
         zIndexClass,
-        "flex bg-black/55 pt-[max(0.25rem,env(safe-area-inset-top,0px))]",
+        "flex pt-[max(0.25rem,env(safe-area-inset-top,0px))]",
+        themeUi.overlay,
         align === "center"
           ? "items-end justify-center sm:items-center sm:p-4"
           : "items-end justify-center sm:items-center sm:p-4",
@@ -93,7 +95,8 @@ export function ModalSheet({
     >
       <div
         className={clsx(
-          "flex w-full max-w-md min-h-0 flex-col overflow-hidden bg-white shadow-2xl",
+          "flex w-full max-w-md min-h-0 flex-col overflow-hidden shadow-2xl",
+          themeUi.dialog,
           maxHeightClass,
           "rounded-t-[1.75rem] sm:rounded-3xl",
           panelClassName,
@@ -102,9 +105,9 @@ export function ModalSheet({
         onClick={(e) => e.stopPropagation()}
       >
         {title ? (
-          <div className="shrink-0 border-b border-stone-100 px-5 py-4">
+          <div className={themeUi.dialogHeader}>
             {typeof title === "string" ? (
-              <h2 className="text-xl font-black text-stone-950">{title}</h2>
+              <h2 className="text-xl font-black text-foreground">{title}</h2>
             ) : (
               title
             )}
@@ -119,7 +122,7 @@ export function ModalSheet({
         </div>
 
         {footer ? (
-          <div className="shrink-0 border-t border-stone-100 bg-white px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+          <div className={clsx(themeUi.dialogFooter, "pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]")}>
             {footer}
           </div>
         ) : null}

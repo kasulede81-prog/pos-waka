@@ -55,9 +55,19 @@ describe("resolveEffectivePlanTier", () => {
   });
 
   it("business trial unlocks owner dashboard for owner role", () => {
-    const snap = remote({ plan_code: "business", status: "trial" });
+    const snap = remote({ plan_code: "business", status: "trial", trial_ends_at: new Date(Date.now() + 86400000 * 20).toISOString() });
     expect(hasEffectivePermission("owner", "owner.dashboard", snap, "supabase")).toBe(true);
     expect(hasEffectivePermission("owner", "settings.shop", snap, "supabase")).toBe(true);
     expect(hasEffectivePermission("owner", "reports.profit", snap, "supabase")).toBe(true);
+  });
+
+  it("expired business trial loses premium permissions", () => {
+    const snap = remote({
+      plan_code: "business",
+      status: "trial",
+      trial_ends_at: new Date(Date.now() - 86400000).toISOString(),
+    });
+    expect(resolveEffectivePlanTier(snap)).toBe("free");
+    expect(hasEffectivePermission("owner", "owner.dashboard", snap, "supabase")).toBe(false);
   });
 });

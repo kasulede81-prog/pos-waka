@@ -34,9 +34,9 @@ export function DayDrawerOpenCloudDiagnosticsCard({ lang }: { lang: Language }) 
   }, [diag, lang]);
 
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">{t(lang, "dayDrawerCloudDiagTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{todayKey}</p>
+    <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
+      <p className="text-base font-black text-foreground">{t(lang, "dayDrawerCloudDiagTitle")}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{todayKey}</p>
       {diag.activeOpen ? (
         <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm">
           <p className="font-black text-sky-950">
@@ -52,7 +52,7 @@ export function DayDrawerOpenCloudDiagnosticsCard({ lang }: { lang: Language }) 
           ) : null}
         </div>
       ) : (
-        <p className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700">
+        <p className="mt-3 rounded-xl border border-border bg-muted px-3 py-2 text-sm font-semibold text-muted-foreground">
           {t(lang, "dayDrawerCloudDiagNoActiveOpen")}
         </p>
       )}

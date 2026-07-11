@@ -48,8 +48,8 @@ export function VirtualizedActivityTimeline({
 
   if (entries.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-stone-200 bg-white px-4 py-10 text-center">
-        <p className="text-sm font-semibold text-stone-600">{t(lang, "auditEmpty")}</p>
+      <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-10 text-center">
+        <p className="text-sm font-semibold text-muted-foreground">{t(lang, "auditEmpty")}</p>
       </div>
     );
   }
@@ -59,7 +59,7 @@ export function VirtualizedActivityTimeline({
     if (!row) return null;
     if (row.kind === "header") {
       return (
-        <p className="sticky top-[88px] z-10 bg-stone-50/95 py-2 text-xs font-black uppercase tracking-widest text-stone-500 backdrop-blur-sm">
+        <p className="sticky top-[88px] z-10 bg-muted/95 py-2 text-xs font-black uppercase tracking-widest text-muted-foreground backdrop-blur-sm">
           {row.label}
         </p>
       );

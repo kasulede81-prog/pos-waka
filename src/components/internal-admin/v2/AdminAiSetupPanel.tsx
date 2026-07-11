@@ -25,7 +25,7 @@ export function AdminAiSetupPanel({ shopId, shopName, businessType, canManage, p
 
   return (
     <div className="space-y-3 text-sm">
-      <p className="font-semibold text-stone-600">
+      <p className="font-semibold text-muted-foreground">
         Reset onboarding AI setup so the shop can receive fresh shelves and starter products on next onboarding visit.
       </p>
       <div className="flex flex-wrap gap-2">
@@ -53,13 +53,13 @@ export function AdminAiSetupPanel({ shopId, shopName, businessType, canManage, p
         <button
           type="button"
           disabled={busy || !canManage || previewMode}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-stone-300 px-4 text-xs font-black text-stone-800 disabled:opacity-40"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-border px-4 text-xs font-black text-foreground disabled:opacity-40"
           onClick={() => void run(() => adminResetShopAiSetup(shopId), "AI setup cleared — shop can run setup again.")}
         >
           Clear AI setup only
         </button>
       </div>
-      {message ? <p className="rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-800">{message}</p> : null}
+      {message ? <p className="rounded-xl bg-muted px-3 py-2 text-xs font-semibold text-foreground">{message}</p> : null}
     </div>
   );
 }

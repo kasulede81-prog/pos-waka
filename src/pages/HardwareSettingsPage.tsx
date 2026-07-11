@@ -99,8 +99,8 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 pb-16 pt-2">
       <PageBackBar lang={lang} fallbackTo="/settings" />
-      <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "hardwareSettingsTitle")}</h1>
-      <p className="text-sm font-medium text-stone-600">{t(lang, "hardwareSettingsSub")}</p>
+      <h1 className="text-2xl font-black text-foreground sm:text-3xl">{t(lang, "hardwareSettingsTitle")}</h1>
+      <p className="text-sm font-medium text-muted-foreground">{t(lang, "hardwareSettingsSub")}</p>
 
       <article className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/80 p-5 shadow-waka-sm">
         <div className="flex items-center gap-2">
@@ -123,20 +123,20 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
         </p>
       </article>
 
-      <article className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-waka-sm">
+      <article className="rounded-3xl border-2 border-waka-100 bg-card p-5 shadow-waka-sm">
         <div className="flex items-center gap-2">
           <ScanLine className="h-5 w-5 text-waka-700" aria-hidden />
-          <p className="text-lg font-black text-stone-900">Barcode diagnostics</p>
+          <p className="text-lg font-black text-foreground">Barcode diagnostics</p>
         </div>
-        <p className="mt-2 text-sm font-medium text-stone-600">
+        <p className="mt-2 text-sm font-medium text-muted-foreground">
           Supports keyboard-wedge scanners on desktop/browser and camera scan where supported.
         </p>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold text-stone-700">
-          <p className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold text-muted-foreground">
+          <p className="rounded-xl border border-border bg-muted px-3 py-2">
             <Keyboard className="mr-1 inline h-3.5 w-3.5" />
             Wedge: {barcodeCaps.hidWedge ? "ready" : "unsupported"}
           </p>
-          <p className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
+          <p className="rounded-xl border border-border bg-muted px-3 py-2">
             <Camera className="mr-1 inline h-3.5 w-3.5" />
             Camera: {barcodeCaps.cameraScan ? "ready" : "unsupported"}
           </p>
@@ -145,14 +145,14 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
           <button
             type="button"
             onClick={() => setScanMode("hid")}
-            className={`min-h-[42px] flex-1 rounded-xl border text-sm font-black ${scanMode === "hid" ? "border-waka-400 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700"}`}
+            className={`min-h-[42px] flex-1 rounded-xl border text-sm font-black ${scanMode === "hid" ? "border-waka-400 bg-waka-50 text-waka-900" : "border-border bg-card text-muted-foreground"}`}
           >
             USB scanner
           </button>
           <button
             type="button"
             onClick={() => setScanMode("camera")}
-            className={`min-h-[42px] flex-1 rounded-xl border text-sm font-black ${scanMode === "camera" ? "border-waka-400 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700"}`}
+            className={`min-h-[42px] flex-1 rounded-xl border text-sm font-black ${scanMode === "camera" ? "border-waka-400 bg-waka-50 text-waka-900" : "border-border bg-card text-muted-foreground"}`}
           >
             Camera scanner
           </button>
@@ -161,14 +161,14 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
           <button type="button" onClick={startScan} className="min-h-[48px] flex-1 rounded-2xl bg-waka-600 py-3 text-sm font-black text-white">
             Start test scan
           </button>
-          <button type="button" onClick={stopScan} className="min-h-[48px] flex-1 rounded-2xl border-2 border-stone-200 bg-white py-3 text-sm font-black text-stone-800">
+          <button type="button" onClick={stopScan} className="min-h-[48px] flex-1 rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground">
             Stop
           </button>
         </div>
         {scanMode === "camera" ? (
-          <video ref={cameraRef} className="mt-3 h-40 w-full rounded-2xl border border-stone-200 bg-black object-cover" />
+          <video ref={cameraRef} className="mt-3 h-40 w-full rounded-2xl border border-border bg-black object-cover" />
         ) : null}
-        <p className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-700">
+        <p className="mt-3 rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
           Status: {scanStatus}
         </p>
         <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
@@ -176,18 +176,18 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
         </p>
       </article>
 
-      <article className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-waka-sm">
+      <article className="rounded-3xl border-2 border-waka-100 bg-card p-5 shadow-waka-sm">
         <div className="flex items-center gap-2">
           <Printer className="h-5 w-5 text-waka-700" aria-hidden />
-          <p className="text-lg font-black text-stone-900">{t(lang, "receiptPrintSettingsTitle")}</p>
+          <p className="text-lg font-black text-foreground">{t(lang, "receiptPrintSettingsTitle")}</p>
         </div>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "receiptPrintSettingsSub")}</p>
-        <p className="mt-2 text-xs font-semibold text-stone-500">{t(lang, "receiptPrintAirPrintHint")}</p>
-        <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "receiptPaperSizeLabel")}</label>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "receiptPrintSettingsSub")}</p>
+        <p className="mt-2 text-xs font-semibold text-muted-foreground">{t(lang, "receiptPrintAirPrintHint")}</p>
+        <label className="mt-4 block text-sm font-bold text-foreground">{t(lang, "receiptPaperSizeLabel")}</label>
         <select
           value={preferences.receiptPaperSize ?? "80mm"}
           onChange={(e) => setPreferences({ receiptPaperSize: e.target.value as ReceiptPaperSize })}
-          className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-semibold"
+          className="mt-2 w-full rounded-2xl border-2 border-border bg-card px-4 py-3 text-base font-semibold"
         >
           {PAPER_OPTIONS.map((size) => (
             <option key={size} value={size}>
@@ -203,7 +203,7 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
           {t(lang, "receiptPaperTestPrint")}
         </button>
         {printerCaps ? (
-          <p className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-700">
+          <p className="mt-3 rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
             {printerCaps.state === "SUPPORTED"
               ? t(lang, "printerStateSupported")
               : printerCaps.state === "PARTIAL"
@@ -220,7 +220,7 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
         {typeof window !== "undefined" && window.wakaDesktop?.print ? (
           <button
             type="button"
-            className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-stone-300 bg-white py-2 text-sm font-black text-stone-800"
+            className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-border bg-card py-2 text-sm font-black text-foreground"
             onClick={() => void printElectronWindow().then((ok) => setPrintingStatus(ok ? "Electron print invoked." : "Electron print failed."))}
           >
             {t(lang, "electronPrintTest")}
@@ -235,8 +235,8 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
 
       <PrinterManagementPanel lang={lang} />
 
-      <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 font-mono text-xs text-stone-800">{snap || "—"}</div>
-      <p className="text-xs text-stone-500">{t(lang, "hardwareSettingsStubHint")}</p>
+      <div className="rounded-2xl border border-border bg-muted p-4 font-mono text-xs text-foreground">{snap || "—"}</div>
+      <p className="text-xs text-muted-foreground">{t(lang, "hardwareSettingsStubHint")}</p>
     </div>
   );
 }

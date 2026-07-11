@@ -447,8 +447,7 @@ export function formatLastActive(iso: string | null | undefined): string {
   return `${Math.floor(ms / 86_400_000)}d ago`;
 }
 
-export const ADMIN_PLAN_CODES = ["free", "starter", "business", "waka_plus"] as const;
-export type AdminPlanCode = (typeof ADMIN_PLAN_CODES)[number];
+export { ADMIN_PLAN_CODES, type AdminPlanCode } from "./subscriptionEngine";
 
 const PLAN_CODES = ["starter", "business", "waka_plus"] as const;
 
@@ -499,23 +498,6 @@ export async function fetchPendingSubscriptionRequests(limit = 50): Promise<Pend
   const { data, error } = await supabase.rpc("internal_ops_subscription_requests_pending", { p_limit: limit });
   if (error || !Array.isArray(data)) return [];
   return data as PendingSubscriptionRequestRow[];
-}
-
-export async function internalOpsSetSubscriptionRequestStatus(
-  requestId: string,
-  status: "approved" | "rejected",
-  note?: string | null,
-): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { data, error } = await supabase.rpc("internal_ops_subscription_request_set_status", {
-    p_request_id: requestId,
-    p_status: status,
-    p_note: note ?? null,
-  });
-  if (error) return { ok: false, message: error.message };
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok === true) return { ok: true };
-  return { ok: false, message: j.error ?? "Request could not be updated." };
 }
 
 export type AdminShopProductRow = {
@@ -1448,89 +1430,6 @@ export async function adminSetShopActive(shopId: string, active: boolean): Promi
   return { ok: true };
 }
 
-export async function adminExtendSubscriptionTrial(
-  subscriptionId: string,
-  extraDays: number,
-): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { error } = await supabase.rpc("admin_extend_subscription_trial", {
-    p_subscription_id: subscriptionId,
-    p_extra_days: extraDays,
-  });
-  if (error) return { ok: false, message: error.message };
-  return { ok: true };
-}
-
-export async function adminSubscriptionSetPlan(
-  subscriptionId: string,
-  planCode: AdminPlanCode,
-): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { error } = await supabase.rpc("admin_subscription_set_plan", {
-    p_subscription_id: subscriptionId,
-    p_plan_code: planCode,
-  });
-  if (error) return { ok: false, message: error.message };
-  return { ok: true };
-}
-
-export async function adminShopSetSubscriptionPlan({
-  shopId,
-  planCode,
-  days,
-}: {
-  shopId: string;
-  planCode: AdminPlanCode;
-  days: number;
-}): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { data, error } = await supabase.rpc("admin_shop_set_subscription_plan", {
-    p_shop_id: shopId,
-    p_plan_code: planCode,
-    p_days: Math.max(1, Math.floor(days || 30)),
-  });
-  if (error) {
-    const missingFn = error.message?.includes("Could not find the function") || error.code === "PGRST202";
-    return {
-      ok: false,
-      message: missingFn
-        ? "Admin VIP function is missing on Supabase. Apply migration 043_repair_admin_shop_plan_rpc.sql, then reload the app."
-        : error.message,
-    };
-  }
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok === true) return { ok: true };
-  return { ok: false, message: j.error ?? "Plan could not be changed." };
-}
-
-export async function adminSubscriptionSetStatus(
-  subscriptionId: string,
-  status: "trial" | "trialing" | "active" | "expired" | "past_due" | "cancelled" | "paused",
-): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { error } = await supabase.rpc("admin_subscription_set_status", {
-    p_subscription_id: subscriptionId,
-    p_status: status,
-  });
-  if (error) return { ok: false, message: error.message };
-  return { ok: true };
-}
-
-export async function adminSubscriptionMarkPayment(
-  subscriptionId: string,
-  amountUgx: number,
-  note?: string | null,
-): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { error } = await supabase.rpc("admin_subscription_mark_payment", {
-    p_subscription_id: subscriptionId,
-    p_amount_ugx: Math.max(0, Math.floor(amountUgx)),
-    p_note: note ?? null,
-  });
-  if (error) return { ok: false, message: error.message };
-  return { ok: true };
-}
-
 export async function adminShopResetSync(shopId: string): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: "Offline" };
   const { error } = await supabase.rpc("admin_shop_reset_sync", { p_shop_id: shopId });
@@ -1584,29 +1483,6 @@ export async function adminShopOpenSupportMessage(
   });
   if (error) return { ok: false, message: error.message };
   return { ok: true, id: data as string | undefined };
-}
-
-export async function adminShopSetPrimaryDevice(
-  shopId: string,
-  deviceId: string,
-): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { data, error } = await supabase.rpc("admin_shop_set_primary_device", {
-    p_shop_id: shopId,
-    p_device_id: deviceId,
-  });
-  if (error) {
-    const missingFn = error.message?.includes("Could not find the function") || error.code === "PGRST202";
-    return {
-      ok: false,
-      message: missingFn
-        ? "Missing RPC: admin_shop_set_primary_device. Apply migration 131 and retry."
-        : error.message,
-    };
-  }
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok === true) return { ok: true };
-  return { ok: false, message: j.error ?? "Could not set primary device." };
 }
 
 export async function adminShopResetBackOfficePin(
@@ -1886,21 +1762,6 @@ export async function internalOpsOrgBillingOfferSend(
   const j = (data ?? {}) as { ok?: boolean; error?: string };
   if (j.ok) return { ok: true };
   return { ok: false, message: j.error ?? "Could not send offer." };
-}
-
-export async function internalOpsOrgBillingOfferFulfill(
-  offerId: string,
-  note?: string | null,
-): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { data, error } = await supabase.rpc("internal_ops_org_billing_offer_fulfill", {
-    p_offer_id: offerId,
-    p_note: note ?? null,
-  });
-  if (error) return { ok: false, message: error.message };
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok) return { ok: true };
-  return { ok: false, message: j.error ?? "Could not fulfill offer." };
 }
 
 export type FleetDeviceRow = ShopDeviceRow & {

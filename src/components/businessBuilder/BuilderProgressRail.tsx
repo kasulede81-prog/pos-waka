@@ -15,16 +15,16 @@ export function BuilderProgressRail({ lang, unlocks, className }: Props) {
   return (
     <div
       className={clsx(
-        "rounded-[24px] border border-stone-200/70 bg-white/90 p-3 shadow-sm backdrop-blur-sm",
+        "rounded-[24px] border border-border/70 bg-white/90 p-3 shadow-sm backdrop-blur-sm",
         className,
       )}
       role="list"
       aria-label={t(lang, "builderProgressTitle")}
     >
-      <p className="text-xs font-black uppercase tracking-wide text-stone-500">
+      <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, "builderProgressTitle")}
       </p>
-      <p className="mt-0.5 text-[10px] font-semibold text-stone-400">
+      <p className="mt-0.5 text-[10px] font-semibold text-muted-foreground">
         {doneCount}/{unlocks.length}
       </p>
       <ul className="mt-2 space-y-1.5">
@@ -36,13 +36,13 @@ export function BuilderProgressRail({ lang, unlocks, className }: Props) {
               "flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs font-semibold transition-all duration-500",
               item.done
                 ? "builder-unlock-done bg-emerald-50 text-emerald-900"
-                : "text-stone-400",
+                : "text-muted-foreground",
             )}
           >
             <span
               className={clsx(
                 "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black",
-                item.done ? "bg-emerald-500 text-white" : "bg-stone-200 text-stone-500",
+                item.done ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground",
               )}
               aria-hidden
             >

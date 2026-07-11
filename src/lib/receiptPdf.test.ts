@@ -3,8 +3,8 @@ import {
   buildDebtPaymentReceiptPdfBlob,
   buildReturnReceiptPdfBlob,
   buildSaleReceiptPdfBlob,
-  documentReceiptNumber,
-} from "./receiptDocuments";
+} from "./receiptPdfDocuments";
+import { documentReceiptNumber } from "./receiptDocuments";
 import { buildPlainReceiptPdfBlob } from "./nativeReceiptPrint";
 import type { Customer, DebtPayment, ReturnRecord, Sale } from "../types";
 
@@ -36,8 +36,8 @@ const sale: Sale = {
 };
 
 describe("receiptPdf", () => {
-  it("builds sale receipt PDF blob", () => {
-    const blob = buildSaleReceiptPdfBlob({
+  it("builds sale receipt PDF blob", async () => {
+    const blob = await buildSaleReceiptPdfBlob({
       shopName: "Test Shop",
       cashier: "Jane",
       receiptNumber: "001",
@@ -78,7 +78,7 @@ describe("receiptPdf", () => {
     expect(blob.type).toBe("application/pdf");
   });
 
-  it("builds return receipt PDF blob", () => {
+  it("builds return receipt PDF blob", async () => {
     const ret: ReturnRecord = {
       id: "ret-1",
       productId: "p1",
@@ -89,7 +89,7 @@ describe("receiptPdf", () => {
       actorUserId: "u1",
       createdAt: "2026-06-02T11:00:00.000Z",
     };
-    const blob = buildReturnReceiptPdfBlob({
+    const blob = await buildReturnReceiptPdfBlob({
       shopName: "Shop",
       receiptNumber: "R-1",
       returnRecord: ret,
@@ -98,7 +98,7 @@ describe("receiptPdf", () => {
     expect(blob.size).toBeGreaterThan(400);
   });
 
-  it("builds debt payment receipt PDF blob", () => {
+  it("builds debt payment receipt PDF blob", async () => {
     const payment: DebtPayment = {
       id: "pay-1",
       customerId: "c1",
@@ -114,7 +114,7 @@ describe("receiptPdf", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
       version: 1,
     };
-    const blob = buildDebtPaymentReceiptPdfBlob({
+    const blob = await buildDebtPaymentReceiptPdfBlob({
       shopName: "Shop",
       receiptNumber: "D-1",
       payment,
@@ -131,8 +131,8 @@ describe("receiptPdf", () => {
     expect(n).toContain("ABC-DE");
   });
 
-  it("builds plain text receipt PDF for native share/print", () => {
-    const blob = buildPlainReceiptPdfBlob("Shop\n\nTotal: UGX 1,000\n", "80mm");
+  it("builds plain text receipt PDF for native share/print", async () => {
+    const blob = await buildPlainReceiptPdfBlob("Shop\n\nTotal: UGX 1,000\n", "80mm");
     expect(blob.size).toBeGreaterThan(200);
     expect(blob.type).toBe("application/pdf");
   });

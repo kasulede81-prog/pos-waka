@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { Check, Loader2 } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { saveIndicatorClasses } from "../../lib/statusTokens";
 
 export type EnterpriseSaveMode = "auto" | "explicit";
 
@@ -35,18 +36,11 @@ export function EnterpriseSaveIndicator({ lang, mode, status, className }: Enter
 
   if (!label) return null;
 
+  const chipStatus =
+    status === "saved" ? "saved" : status === "saving" ? "saving" : status === "dirty" ? "dirty" : "pending";
+
   return (
-    <span
-      className={clsx(
-        "inline-flex min-h-[32px] items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black",
-        status === "saved" && "bg-emerald-100 text-emerald-900",
-        status === "saving" && "bg-stone-100 text-stone-700",
-        (status === "pending" || status === "dirty") && "bg-amber-100 text-amber-950",
-        className,
-      )}
-      role="status"
-      aria-live="polite"
-    >
+    <span className={clsx(saveIndicatorClasses(chipStatus), className)} role="status" aria-live="polite">
       {status === "saving" ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
       ) : status === "saved" ? (

@@ -68,8 +68,8 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-black text-stone-900">Devices</h1>
-        <p className="text-sm text-stone-500">{list.length} devices · fleet diagnostics</p>
+        <h1 className="text-xl font-black text-foreground">Devices</h1>
+        <p className="text-sm text-muted-foreground">{list.length} devices · fleet diagnostics</p>
       </div>
 
       {toast ? (
@@ -93,7 +93,7 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
             type="button"
             onClick={() => setFilter(f)}
             className={`shrink-0 rounded-full px-3 py-2 text-xs font-black uppercase ${
-              filter === f ? "bg-waka-600 text-white" : "bg-white ring-1 ring-stone-200"
+              filter === f ? "bg-waka-600 text-white" : "bg-card ring-1 ring-border"
             }`}
           >
             {f}
@@ -104,7 +104,7 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
       {data.opsLoading && !list.length ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-2xl bg-stone-200" />
+            <div key={i} className="h-32 animate-pulse rounded-2xl bg-muted" />
           ))}
         </div>
       ) : list.length === 0 ? (
@@ -119,7 +119,7 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
                 onOpenShop={() => navigate(internalAdminShopHref(d.shop_id, previewMode))}
                 onAction={(action) => void runDeviceAction(d.id, d.shop_id, action)}
               />
-              {busyId === d.id ? <p className="text-center text-xs font-bold text-stone-500">Updating…</p> : null}
+              {busyId === d.id ? <p className="text-center text-xs font-bold text-muted-foreground">Updating…</p> : null}
             </li>
           ))}
         </ul>

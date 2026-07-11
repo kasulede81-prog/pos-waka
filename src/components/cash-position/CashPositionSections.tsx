@@ -39,21 +39,21 @@ export function CashPositionQuickActions({
   ] as const;
 
   return (
-    <div className="sticky top-0 z-20 -mx-1 border-b border-stone-200/80 bg-[#f8f6f3]/95 px-1 py-2 backdrop-blur-md">
+    <div className="sticky top-0 z-20 -mx-1 border-b border-border/80 bg-[#f8f6f3]/95 px-1 py-2 backdrop-blur-md">
       <div className="flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
         {actions.map(({ id, label, icon: Icon, onClick }) => (
           <button
             key={id}
             type="button"
             onClick={onClick}
-            className="flex min-w-[5.5rem] shrink-0 flex-col items-center gap-1 rounded-2xl border border-stone-200 bg-white px-3 py-2.5 shadow-sm transition active:scale-[0.98]"
+            className="flex min-w-[5.5rem] shrink-0 flex-col items-center gap-1 rounded-2xl border border-border bg-card px-3 py-2.5 shadow-sm transition active:scale-[0.98]"
           >
             <Icon className="h-5 w-5 text-waka-600" aria-hidden />
-            <span className="text-center text-[10px] font-black leading-tight text-stone-800">{label}</span>
+            <span className="text-center text-[10px] font-black leading-tight text-foreground">{label}</span>
           </button>
         ))}
       </div>
-      <p className="mt-1.5 flex items-center gap-1 px-1 text-[10px] font-semibold text-stone-500">
+      <p className="mt-1.5 flex items-center gap-1 px-1 text-[10px] font-semibold text-muted-foreground">
         <AlertTriangle className="h-3 w-3" aria-hidden />
         {t(lang, "cashPositionCloseDayHint")}{" "}
         <Link to="/close-day" className="font-black text-waka-700 underline">
@@ -82,7 +82,7 @@ export function CashPositionHeroSummary({
   ];
 
   return (
-    <div className="rounded-3xl border-2 border-stone-900 bg-gradient-to-br from-stone-900 to-stone-700 p-5 text-white shadow-waka-sm">
+    <div className="rounded-3xl border-2 border-stone-900 bg-gradient-to-br from-foreground to-foreground/80 p-5 text-white shadow-waka-sm">
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "cashPositionSectionToday")}</p>
         <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold text-white/90">{rangeLabel}</span>
@@ -142,20 +142,20 @@ export function CashPositionPaymentMethods({
   report: import("../../lib/cashPosition").CashPositionReport;
 }) {
   if (report.paymentMethods.length === 0 && report.paymentAdjustmentUgx === 0) {
-    return <p className="text-base font-medium text-stone-500">{t(lang, "cashPositionNoSalesToday")}</p>;
+    return <p className="text-base font-medium text-muted-foreground">{t(lang, "cashPositionNoSalesToday")}</p>;
   }
 
   return (
     <ul className="space-y-3">
       {report.paymentMethods.map((row) => (
-        <li key={row.key} className="rounded-2xl bg-stone-50 px-4 py-3">
+        <li key={row.key} className="rounded-2xl bg-muted px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-black text-stone-800">{paymentLabel(lang, row.key)}</p>
-              <p className="mt-0.5 text-xs font-semibold text-stone-500">
+              <p className="text-sm font-black text-foreground">{paymentLabel(lang, row.key)}</p>
+              <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
                 {row.transactionCount} {t(lang, "cashPositionTxnLabel")}
               </p>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-200">
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
                 <div
                   className={clsx("h-full rounded-full transition-all", PAYMENT_COLORS[row.key] ?? "bg-waka-500")}
                   style={{ width: `${Math.min(100, row.percent)}%` }}
@@ -163,7 +163,7 @@ export function CashPositionPaymentMethods({
               </div>
             </div>
             <div className="text-right">
-              <p className="text-xl font-black tabular-nums text-stone-900">UGX {row.amountUgx.toLocaleString()}</p>
+              <p className="text-xl font-black tabular-nums text-foreground">UGX {row.amountUgx.toLocaleString()}</p>
               <p className="text-sm font-bold text-waka-700">{row.percent}%</p>
             </div>
           </div>
@@ -246,11 +246,11 @@ export function CashPositionActivityTimeline({
   events: import("../../lib/cashPositionDashboard").CashActivityEvent[];
 }) {
   if (events.length === 0) {
-    return <p className="text-sm font-medium text-stone-500">{t(lang, "cashPositionTimelineEmpty")}</p>;
+    return <p className="text-sm font-medium text-muted-foreground">{t(lang, "cashPositionTimelineEmpty")}</p>;
   }
 
   return (
-    <ul className="relative space-y-0 border-l-2 border-stone-200 pl-4">
+    <ul className="relative space-y-0 border-l-2 border-border pl-4">
       {events.map((ev) => (
         <li key={ev.id} className="relative pb-4 last:pb-0">
           <span
@@ -261,8 +261,8 @@ export function CashPositionActivityTimeline({
           />
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-bold text-stone-500">{ev.timeLabel}</p>
-              <p className="text-sm font-bold text-stone-900">{ev.label}</p>
+              <p className="text-xs font-bold text-muted-foreground">{ev.timeLabel}</p>
+              <p className="text-sm font-bold text-foreground">{ev.label}</p>
             </div>
             <p
               className={clsx(
@@ -294,7 +294,7 @@ export function CashPositionDrawerStatus({
         ? "border-rose-300 bg-rose-50"
         : kind === "excess"
           ? "border-sky-300 bg-sky-50"
-          : "border-stone-200 bg-stone-50";
+          : "border-border bg-muted";
 
   const statusLabel =
     kind === "balanced"
@@ -309,17 +309,17 @@ export function CashPositionDrawerStatus({
     <div className={clsx("rounded-2xl border-2 p-4", cardClass)}>
       <dl className="grid gap-3 sm:grid-cols-3">
         <div>
-          <dt className="text-xs font-bold text-stone-600">{t(lang, "cashPositionExpectedLabel")}</dt>
+          <dt className="text-xs font-bold text-muted-foreground">{t(lang, "cashPositionExpectedLabel")}</dt>
           <dd className="text-xl font-black tabular-nums">UGX {status.expectedCashUgx.toLocaleString()}</dd>
         </div>
         <div>
-          <dt className="text-xs font-bold text-stone-600">{t(lang, "cashPositionActualLabel")}</dt>
+          <dt className="text-xs font-bold text-muted-foreground">{t(lang, "cashPositionActualLabel")}</dt>
           <dd className="text-xl font-black tabular-nums">
             {status.countedCashUgx != null ? `UGX ${status.countedCashUgx.toLocaleString()}` : "—"}
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-bold text-stone-600">{t(lang, "cashPositionVariance")}</dt>
+          <dt className="text-xs font-bold text-muted-foreground">{t(lang, "cashPositionVariance")}</dt>
           <dd className="text-xl font-black tabular-nums">
             {status.varianceUgx != null
               ? `${status.varianceUgx >= 0 ? "+" : ""}UGX ${status.varianceUgx.toLocaleString()}`

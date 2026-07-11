@@ -9,6 +9,7 @@
   --card-foreground: 20 15% 12%;
   --primary: 25 95% 53%;
   --primary-foreground: 0 0% 100%;
+  --primary-hover: 21 90% 48%;
   --secondary: 150 30% 38%;
   --secondary-foreground: 0 0% 100%;
   --muted: 30 12% 91%;
@@ -19,6 +20,97 @@
   --destructive: 0 74% 52%;
   --destructive-foreground: 0 0% 100%;
   --radius: 0.875rem;
+
+  /* Enterprise semantic surfaces (Phase 17.9) */
+  --surface: var(--card);
+  --surface-foreground: var(--card-foreground);
+  --surface-elevated: 0 0% 100%;
+  --surface-muted: 30 12% 94%;
+  --dialog: var(--card);
+  --dialog-foreground: var(--card-foreground);
+  --divider: var(--border);
+  --text-primary: var(--foreground);
+  --text-secondary: 20 10% 28%;
+  --text-muted: var(--muted-foreground);
+  --text-inverse: 0 0% 100%;
+  --overlay: 20 15% 12%;
+  --focus: var(--ring);
+  --disabled: 20 8% 62%;
+  --selection: 25 95% 53%;
+
+  /* Status semantics */
+  --success: 152 69% 31%;
+  --success-foreground: 0 0% 100%;
+  --success-muted: 152 40% 92%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 26 80% 14%;
+  --warning-muted: 48 96% 89%;
+  --danger: var(--destructive);
+  --danger-foreground: var(--destructive-foreground);
+  --danger-muted: 0 86% 94%;
+  --info: 199 89% 48%;
+  --info-foreground: 0 0% 100%;
+  --info-muted: 204 94% 94%;
+  --pending: 38 92% 50%;
+  --pending-foreground: var(--warning-foreground);
+  --pending-muted: var(--warning-muted);
+  --draft: 30 8% 55%;
+  --draft-foreground: 20 15% 12%;
+  --draft-muted: 30 12% 91%;
+  --trial: 271 81% 56%;
+  --trial-foreground: 0 0% 100%;
+  --trial-muted: 270 95% 95%;
+  --expired: 20 8% 42%;
+  --expired-foreground: 0 0% 100%;
+  --expired-muted: 30 8% 88%;
+  --offline: 20 8% 48%;
+  --offline-foreground: 0 0% 100%;
+  --offline-muted: 30 10% 90%;
+  --syncing: var(--info);
+  --syncing-foreground: var(--info-foreground);
+  --syncing-muted: var(--info-muted);
+  --paid: var(--success);
+  --paid-foreground: var(--success-foreground);
+  --paid-muted: var(--success-muted);
+  --free: 199 89% 48%;
+  --free-foreground: 0 0% 100%;
+  --free-muted: var(--info-muted);
+  --business: 25 95% 53%;
+  --business-foreground: 0 0% 100%;
+  --business-muted: 33 100% 93%;
+  --vip: 271 81% 56%;
+  --vip-foreground: 0 0% 100%;
+  --vip-muted: var(--trial-muted);
+  --cancelled: 0 74% 52%;
+  --cancelled-foreground: var(--destructive-foreground);
+  --cancelled-muted: var(--danger-muted);
+  --active: var(--success);
+  --active-foreground: var(--success-foreground);
+  --active-muted: var(--success-muted);
+
+  /* Chart semantics */
+  --chart-grid: 30 10% 88%;
+  --chart-axis: 20 8% 48%;
+  --chart-label: 20 8% 48%;
+  --chart-primary: 25 95% 53%;
+  --chart-primary-hover: 21 90% 48%;
+  --chart-secondary: 21 90% 48%;
+  --chart-area-fill: 25 95% 53%;
+  --chart-positive: 152 69% 40%;
+  --chart-negative: 0 74% 52%;
+  --chart-warning: 38 92% 50%;
+  --chart-neutral: 30 8% 65%;
+  --chart-bg: var(--card);
+  --chart-hover: 30 12% 94%;
+  --chart-selection: 25 95% 53%;
+  --chart-series-1: 152 69% 40%;
+  --chart-series-2: 199 89% 48%;
+  --chart-series-3: 271 81% 56%;
+  --chart-series-4: 38 92% 50%;
+  --chart-series-5: 30 8% 65%;
+  --chart-track: 30 12% 91%;
+  --chart-dot-stroke: var(--card);
+
   /* Waka brand primitives — resources/brand/README.md */
   --waka-brand-orange: 249 115 22;
   --waka-brand-orange-dark: 234 88 12;
@@ -119,8 +211,16 @@ body {
 }
 
 ::selection {
-  background-color: #ffedd5;
-  color: #431407;
+  background-color: hsl(var(--business-muted));
+  color: hsl(var(--foreground));
+}
+
+@layer base {
+  /** Global focus — WCAG AA keyboard navigation (Phase 17.9) */
+  :where(button, a, input, select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
 }
 
 @layer utilities {
@@ -415,7 +515,7 @@ body {
 
 @layer components {
   .waka-data-table-shell {
-    @apply w-full min-w-0 overflow-x-auto rounded-xl ring-1 ring-stone-200;
+    @apply w-full min-w-0 overflow-x-auto rounded-xl ring-1 ring-border;
   }
 
   .waka-data-table {
@@ -426,7 +526,7 @@ body {
     position: sticky;
     top: 0;
     z-index: 1;
-    @apply bg-stone-50 px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-stone-600 shadow-[inset_0_-1px_0_theme(colors.stone.200)];
+    @apply bg-muted px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-muted-foreground shadow-[inset_0_-1px_0_hsl(var(--border))];
   }
 
   .waka-data-table tbody td {
@@ -434,7 +534,7 @@ body {
   }
 
   .waka-data-table tbody tr {
-    @apply border-b border-stone-100 last:border-b-0;
+    @apply border-b border-border last:border-b-0;
   }
 
   /** Waka design system — reusable surfaces & controls */
@@ -467,7 +567,7 @@ body {
   }
 
   .waka-chip-active {
-    @apply border-waka-500 bg-waka-50 text-waka-900 ring-1 ring-waka-200;
+    @apply border-waka-500 bg-business-muted text-waka-900 ring-1 ring-waka-200 dark:text-waka-100;
   }
 
   .waka-link {
@@ -574,6 +674,42 @@ body {
   --border: 24 8% 20%;
   --input: 24 8% 20%;
   --ring: 25 95% 53%;
+  --primary-hover: 25 95% 58%;
+  --surface-elevated: 24 10% 14%;
+  --surface-muted: 24 8% 14%;
+  --text-secondary: 30 10% 82%;
+  --overlay: 0 0% 0%;
+
+  --success: 152 55% 45%;
+  --success-foreground: 152 40% 10%;
+  --success-muted: 152 30% 16%;
+  --warning: 38 92% 55%;
+  --warning-foreground: 48 96% 90%;
+  --warning-muted: 38 40% 16%;
+  --danger-muted: 0 40% 16%;
+  --info: 199 89% 55%;
+  --info-foreground: 204 94% 94%;
+  --info-muted: 199 40% 16%;
+  --pending-muted: 38 40% 16%;
+  --draft: 30 8% 55%;
+  --draft-foreground: 30 10% 90%;
+  --draft-muted: 24 8% 18%;
+  --trial-muted: 270 30% 18%;
+  --expired-muted: 24 8% 18%;
+  --offline-muted: 24 8% 18%;
+  --free-muted: 199 40% 16%;
+  --business-muted: 25 40% 16%;
+  --vip-muted: 270 30% 18%;
+  --cancelled-muted: 0 40% 16%;
+  --active-muted: 152 30% 16%;
+
+  --chart-grid: 24 8% 22%;
+  --chart-axis: 30 8% 62%;
+  --chart-label: 30 8% 62%;
+  --chart-hover: 24 8% 16%;
+  --chart-track: 24 8% 18%;
+  --chart-dot-stroke: var(--card);
+
   color-scheme: dark;
 }
 
@@ -601,69 +737,83 @@ body {
 }
 
 /** Remap common light utilities app-wide when `.dark` is on `<html>`. */
-.dark .bg-white {
+.dark .bg-card {
   background-color: hsl(var(--card));
 }
 
-.dark .bg-white\/95,
-.dark .bg-white\/90 {
+.dark .bg-card\/95,
+.dark .bg-card\/90 {
   background-color: hsl(var(--card) / 0.95);
 }
 
 .dark .from-waka-50\/90,
-.dark .via-white,
-.dark .to-white {
+.dark .via-card,
+.dark .to-card {
   --tw-gradient-from: hsl(var(--background)) var(--tw-gradient-from-position);
   --tw-gradient-to: hsl(var(--card)) var(--tw-gradient-to-position);
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
 }
 
-.dark .bg-stone-50,
-.dark .bg-stone-50 {
+.dark .bg-muted,
+.dark .bg-muted {
   background-color: hsl(var(--background));
 }
 
-.dark .bg-stone-100,
-.dark .bg-stone-100 {
+.dark .bg-muted,
+.dark .bg-muted {
   background-color: hsl(var(--muted));
 }
 
-.dark .hover\:bg-stone-50:hover,
-.dark .hover\:bg-stone-100:hover {
+.dark .bg-muted,
+.dark .bg-muted\/80 {
   background-color: hsl(var(--muted));
 }
 
-.dark .text-stone-950,
-.dark .text-stone-900,
-.dark .text-stone-900,
-.dark .text-stone-950 {
+.dark .bg-border {
+  background-color: hsl(var(--border));
+}
+
+.dark .ring-offset-white,
+.dark .ring-offset-background {
+  --tw-ring-offset-color: hsl(var(--background));
+}
+
+.dark .hover\:bg-muted:hover,
+.dark .hover\:bg-muted:hover {
+  background-color: hsl(var(--muted));
+}
+
+.dark .text-foreground,
+.dark .text-foreground,
+.dark .text-foreground,
+.dark .text-foreground {
   color: hsl(var(--foreground));
 }
 
-.dark .text-stone-800,
-.dark .text-stone-700,
-.dark .text-stone-800,
-.dark .text-stone-700 {
+.dark .text-foreground,
+.dark .text-muted-foreground,
+.dark .text-foreground,
+.dark .text-muted-foreground {
   color: hsl(var(--card-foreground));
 }
 
-.dark .text-stone-600,
-.dark .text-stone-500,
-.dark .text-stone-400,
-.dark .text-stone-600,
-.dark .text-stone-500 {
+.dark .text-muted-foreground,
+.dark .text-muted-foreground,
+.dark .text-muted-foreground,
+.dark .text-muted-foreground,
+.dark .text-muted-foreground {
   color: hsl(var(--muted-foreground));
 }
 
-.dark .border-stone-200,
-.dark .border-stone-100,
-.dark .border-stone-200,
-.dark .border-stone-100 {
+.dark .border-border,
+.dark .border-border,
+.dark .border-border,
+.dark .border-border {
   border-color: hsl(var(--border));
 }
 
-.dark .ring-stone-200,
-.dark .ring-stone-900\/5 {
+.dark .ring-border,
+.dark .ring-foreground\/5 {
   --tw-ring-color: hsl(var(--border));
 }
 
@@ -686,17 +836,7 @@ body {
   --tw-shadow-color: rgb(0 0 0 / 0.35);
 }
 
-.dark .waka-data-table-shell {
-  @apply ring-stone-700;
-}
-
-.dark .waka-data-table--sticky-head thead th {
-  @apply bg-stone-900 text-stone-300 shadow-[inset_0_-1px_0_theme(colors.stone.700)];
-}
-
-.dark .waka-data-table tbody tr {
-  @apply border-stone-800;
-}
+/** waka-data-table uses semantic border/muted tokens — no dark-specific overrides needed. */
 
 /** Marketing site theme tokens — scoped via `.marketing-theme-dark` on `<html>`. */
 :root {

@@ -9,10 +9,10 @@ export function PharmacyAccessDeniedPage({ lang }: { lang: Language }) {
 
   return (
     <EnterprisePageContainer className="flex min-h-[50vh] flex-col items-center justify-center text-center">
-      <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyAccessDeniedTitle")}</h1>
-      <p className="mt-2 max-w-md text-base font-semibold text-stone-600">{t(lang, "pharmacyAccessDeniedSub")}</p>
+      <h1 className="text-3xl font-black text-foreground">{t(lang, "pharmacyAccessDeniedTitle")}</h1>
+      <p className="mt-2 max-w-md text-base font-semibold text-muted-foreground">{t(lang, "pharmacyAccessDeniedSub")}</p>
       {from ? (
-        <p className="mt-1 text-sm font-medium text-stone-400">
+        <p className="mt-1 text-sm font-medium text-muted-foreground">
           {from}
         </p>
       ) : null}

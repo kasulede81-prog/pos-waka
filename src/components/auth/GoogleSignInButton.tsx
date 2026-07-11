@@ -44,14 +44,14 @@ export function GoogleSignInButton({ lang, busy, disabled, onClick, className }:
       disabled={disabled || busy}
       aria-busy={busy}
       className={clsx(
-        "flex min-h-[52px] w-full items-center justify-center gap-3 rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-900 shadow-sm transition-waka",
-        "hover:border-stone-300 hover:bg-stone-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60",
+        "flex min-h-[52px] w-full items-center justify-center gap-3 rounded-2xl border-2 border-border bg-card px-4 py-3 text-base font-black text-foreground shadow-sm transition-waka",
+        "hover:border-border hover:bg-muted active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60",
         className,
       )}
     >
       {busy ? (
         <span
-          className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-orange-600"
+          className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-orange-600"
           aria-hidden
         />
       ) : (

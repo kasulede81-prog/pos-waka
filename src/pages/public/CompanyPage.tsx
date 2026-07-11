@@ -35,8 +35,8 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
       <article className="space-y-6">
         <header className="space-y-3">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">Legal</p>
-          <h1 className="text-4xl font-black text-stone-950">Company information</h1>
-          <p className="text-base font-medium text-stone-600">
+          <h1 className="text-4xl font-black text-foreground">Company information</h1>
+          <p className="text-base font-medium text-muted-foreground">
             Public brand: {WAKA_BRAND_NAME} · {WAKA_SLOGAN}. Legal registration below.
           </p>
         </header>
@@ -63,7 +63,7 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
         <InfoBlock title="Contact email">{WAKA_SUPPORT_EMAILS.join(" · ")}</InfoBlock>
         <InfoBlock title="Industry">Business software / POS systems</InfoBlock>
 
-        <nav className="flex flex-wrap gap-3 rounded-3xl border border-stone-100 bg-white p-5 text-sm font-black text-waka-800">
+        <nav className="flex flex-wrap gap-3 rounded-3xl border border-border bg-card p-5 text-sm font-black text-waka-800">
           <Link to="/terms">Terms</Link>
           <Link to="/privacy">Privacy</Link>
           <Link to="/acceptable-use">Acceptable use</Link>
@@ -75,9 +75,9 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
 
 function InfoBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-stone-100 bg-white p-5 shadow-sm">
-      <h2 className="text-[11px] font-black uppercase tracking-wide text-stone-500">{title}</h2>
-      <p className="mt-2 text-sm font-semibold text-stone-800">{children}</p>
+    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <h2 className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">{title}</h2>
+      <p className="mt-2 text-sm font-semibold text-foreground">{children}</p>
     </section>
   );
 }

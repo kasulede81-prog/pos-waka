@@ -16,11 +16,11 @@ export function PosExitConfirmModal({ lang, open, onLock, onContinue, onCancel }
   return (
     <AppModalOverlay className="z-[70] flex items-center justify-center bg-black/55 p-4" role="dialog" aria-modal onClick={onCancel}>
       <div
-        className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
+        className="w-full max-w-md rounded-3xl bg-card p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-black text-stone-900">{t(lang, "posExitTitle")}</h2>
-        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "posExitBody")}</p>
+        <h2 className="text-xl font-black text-foreground">{t(lang, "posExitTitle")}</h2>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "posExitBody")}</p>
         <div className="mt-5 grid gap-2">
           <button
             type="button"
@@ -32,11 +32,11 @@ export function PosExitConfirmModal({ lang, open, onLock, onContinue, onCancel }
           <button
             type="button"
             onClick={onContinue}
-            className="min-h-[48px] rounded-2xl border-2 border-stone-200 font-bold text-stone-800"
+            className="min-h-[48px] rounded-2xl border-2 border-border font-bold text-foreground"
           >
             {t(lang, "posExitContinueBtn")}
           </button>
-          <button type="button" onClick={onCancel} className="min-h-[44px] text-sm font-bold text-stone-500">
+          <button type="button" onClick={onCancel} className="min-h-[44px] text-sm font-bold text-muted-foreground">
             {t(lang, "cancel")}
           </button>
         </div>

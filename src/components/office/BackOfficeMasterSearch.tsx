@@ -104,7 +104,7 @@ export function BackOfficeMasterSearch({ lang, className }: Props) {
         {t(lang, "backOfficeSearchLabel")}
       </label>
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <input
           ref={inputRef}
           id="back-office-master-search"
@@ -119,7 +119,7 @@ export function BackOfficeMasterSearch({ lang, className }: Props) {
           placeholder={t(lang, "backOfficeSearchPlaceholder")}
           autoComplete="off"
           enterKeyHint="search"
-          className="w-full min-h-[44px] rounded-2xl border border-stone-200 bg-stone-50 py-2.5 pl-10 pr-10 text-sm font-semibold text-stone-900 shadow-sm outline-none ring-waka-400 placeholder:font-medium placeholder:text-stone-400 focus:border-waka-400 focus:bg-white focus:ring-2"
+          className="w-full min-h-[44px] rounded-2xl border border-border bg-muted py-2.5 pl-10 pr-10 text-sm font-semibold text-foreground shadow-sm outline-none ring-waka-400 placeholder:font-medium placeholder:text-muted-foreground focus:border-waka-400 focus:bg-card focus:ring-2"
         />
         {query ? (
           <button
@@ -128,7 +128,7 @@ export function BackOfficeMasterSearch({ lang, className }: Props) {
               setQuery("");
               inputRef.current?.focus();
             }}
-            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-stone-500 hover:bg-stone-100"
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted"
             aria-label={t(lang, "backOfficeSearchClear")}
           >
             <X className="h-4 w-4" aria-hidden />
@@ -139,10 +139,10 @@ export function BackOfficeMasterSearch({ lang, className }: Props) {
       {showDropdown ? (
         <ul
           role="listbox"
-          className="absolute z-50 mt-1.5 max-h-[min(22rem,50dvh)] w-full overflow-y-auto rounded-2xl border border-stone-200 bg-white py-1 shadow-lg ring-1 ring-stone-900/5"
+          className="absolute z-50 mt-1.5 max-h-[min(22rem,50dvh)] w-full overflow-y-auto rounded-2xl border border-border bg-card py-1 shadow-lg ring-1 ring-foreground/5"
         >
           {results.length === 0 ? (
-            <li className="px-4 py-3 text-sm font-semibold text-stone-500">{t(lang, "backOfficeSearchEmpty")}</li>
+            <li className="px-4 py-3 text-sm font-semibold text-muted-foreground">{t(lang, "backOfficeSearchEmpty")}</li>
           ) : (
             results.map((entry) => (
               <li key={entry.id} role="option">
@@ -151,11 +151,11 @@ export function BackOfficeMasterSearch({ lang, className }: Props) {
                   onClick={() => pick(entry)}
                   className="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-waka-50 active:bg-waka-100"
                 >
-                  <span className="text-sm font-black text-stone-950">{entry.title}</span>
+                  <span className="text-sm font-black text-foreground">{entry.title}</span>
                   {entry.subtitle ? (
-                    <span className="line-clamp-1 text-xs font-medium text-stone-500">{entry.subtitle}</span>
+                    <span className="line-clamp-1 text-xs font-medium text-muted-foreground">{entry.subtitle}</span>
                   ) : null}
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-stone-400">{entry.section}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{entry.section}</span>
                 </button>
               </li>
             ))

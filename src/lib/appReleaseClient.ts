@@ -15,6 +15,8 @@ export type AppReleaseClientPolicy = {
   forceBelowMinimum: boolean;
   showWhatsNew: boolean;
   publicNotesHtml: string;
+  policyGeneration: number;
+  publishedAt: string | null;
 };
 
 export type AppReleaseClientEventType =
@@ -40,6 +42,8 @@ function mapPolicy(row: Record<string, unknown>): AppReleaseClientPolicy {
     forceBelowMinimum: Boolean(row.force_below_minimum),
     showWhatsNew: Boolean(row.show_whats_new),
     publicNotesHtml: String(row.public_notes_html ?? ""),
+    policyGeneration: Number(row.policy_generation ?? 0),
+    publishedAt: row.published_at ? String(row.published_at) : null,
   };
 }
 

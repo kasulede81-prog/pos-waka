@@ -68,24 +68,24 @@ export function ArchiveDataPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "retentionSettingsTitle")}
       />
 
-      <ul className="space-y-2 rounded-3xl border border-stone-200 bg-white p-4 shadow-sm">
-        <li className="flex justify-between rounded-xl bg-stone-50 px-4 py-3 text-sm font-semibold">
+      <ul className="space-y-2 rounded-3xl border border-border bg-card p-4 shadow-sm">
+        <li className="flex justify-between rounded-xl bg-muted px-4 py-3 text-sm font-semibold">
           <span>{t(lang, "archiveSalesReceipts")}</span>
           <span className="font-black">{archivedSales.length}</span>
         </li>
-        <li className="flex justify-between rounded-xl bg-stone-50 px-4 py-3 text-sm font-semibold">
+        <li className="flex justify-between rounded-xl bg-muted px-4 py-3 text-sm font-semibold">
           <span>{t(lang, "staffActivityTitle")}</span>
           <span className="font-black">{archivedAuditLogs.length}</span>
         </li>
-        <li className="flex justify-between rounded-xl bg-stone-50 px-4 py-3 text-sm font-semibold">
+        <li className="flex justify-between rounded-xl bg-muted px-4 py-3 text-sm font-semibold">
           <span>{t(lang, "archiveDayCloses")}</span>
           <span className="font-black">{archivedDayCloses.length}</span>
         </li>
-        <li className="flex justify-between rounded-xl bg-stone-50 px-4 py-3 text-sm font-semibold">
+        <li className="flex justify-between rounded-xl bg-muted px-4 py-3 text-sm font-semibold">
           <span>{t(lang, "archiveShifts")}</span>
           <span className="font-black">{archivedShifts.length}</span>
         </li>
-        <li className="flex justify-between rounded-xl bg-stone-50 px-4 py-3 text-sm font-semibold">
+        <li className="flex justify-between rounded-xl bg-muted px-4 py-3 text-sm font-semibold">
           <span>{t(lang, "archiveVoidsReturns")}</span>
           <span className="font-black">
             {archivedVoidRecords.length + archivedReturnRecords.length}
@@ -101,7 +101,7 @@ export function ArchiveDataPage({ lang }: { lang: Language }) {
             moved.sales + moved.auditLogs > 0 ? t(lang, "retentionArchiveRan").replace("{count}", "✓") : t(lang, "retentionArchiveNone"),
           );
         }}
-        className="min-h-[48px] w-full rounded-2xl border-2 border-waka-600 bg-white py-3 text-sm font-black text-waka-900"
+        className="min-h-[48px] w-full rounded-2xl border-2 border-waka-600 bg-card py-3 text-sm font-black text-waka-900"
       >
         {t(lang, "retentionRunArchiveNow")}
       </button>
@@ -116,8 +116,8 @@ export function ArchiveDataPage({ lang }: { lang: Language }) {
         </button>
       ) : null}
 
-      <p className="text-xs font-medium text-stone-500">{t(lang, "retentionDeleteWarning")}</p>
-      {msg ? <p className="rounded-xl bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-800">{msg}</p> : null}
+      <p className="text-xs font-medium text-muted-foreground">{t(lang, "retentionDeleteWarning")}</p>
+      {msg ? <p className="rounded-xl bg-muted px-4 py-3 text-sm font-semibold text-foreground">{msg}</p> : null}
     </div>
   );
 }

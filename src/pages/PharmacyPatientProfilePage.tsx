@@ -88,7 +88,7 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
   if (!patient || !profile) {
     return (
       <EnterprisePageContainer>
-        <p className="font-bold text-stone-600">{t(lang, "pharmacyPatientNotFound")}</p>
+        <p className="font-bold text-muted-foreground">{t(lang, "pharmacyPatientNotFound")}</p>
         <Link to="/pharmacy/patients" className="mt-2 inline-block font-black text-teal-700">
           {t(lang, "pharmacyNavExit")}
         </Link>
@@ -131,8 +131,8 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
           <Link to="/pharmacy/patients" className="text-sm font-bold text-teal-700">
             ← {t(lang, "pharmacyTerm_patients")}
           </Link>
-          <h1 className="mt-1 text-3xl font-black text-stone-950">{patient.name}</h1>
-          <p className="text-sm font-semibold text-stone-500">
+          <h1 className="mt-1 text-3xl font-black text-foreground">{patient.name}</h1>
+          <p className="text-sm font-semibold text-muted-foreground">
             {patientDisplayId(patient)} · {patient.phone || "—"}
             {age != null ? ` · ${age} ${t(lang, "pharmacyPatientYears")}` : ""}
           </p>
@@ -178,8 +178,8 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
-          <h2 className="text-lg font-black text-stone-950">{t(lang, "pharmacyPatientProfileSection")}</h2>
+        <section className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm">
+          <h2 className="text-lg font-black text-foreground">{t(lang, "pharmacyPatientProfileSection")}</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Field label={t(lang, "pharmacyPatientDob")} value={profile.dateOfBirth ?? ""} onChange={(v) => patch("dateOfBirth", v)} />
             <Field label={t(lang, "pharmacyPatientGender")} value={profile.gender ?? ""} onChange={(v) => patch("gender", v)} />
@@ -212,7 +212,7 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
                   "min-h-[44px] rounded-xl px-3 text-sm font-black touch-manipulation",
                   profile.medicalFlags?.[key as keyof typeof profile.medicalFlags]
                     ? "bg-violet-600 text-white"
-                    : "border border-stone-200 bg-stone-50 text-stone-700",
+                    : "border border-border bg-muted text-muted-foreground",
                 )}
               >
                 {label}
@@ -221,8 +221,8 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
-          <h2 className="text-lg font-black text-stone-950">{t(lang, "pharmacyPatientStats")}</h2>
+        <section className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm">
+          <h2 className="text-lg font-black text-foreground">{t(lang, "pharmacyPatientStats")}</h2>
           {stats ? (
             <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
               <Stat label={t(lang, "pharmacyRxTimelineTitle")} value={String(stats.prescriptionCount)} />
@@ -240,17 +240,17 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
         </section>
       </div>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
-        <h2 className="text-lg font-black text-stone-950">{t(lang, "pharmacyPatientTimelineTitle")}</h2>
+      <section className="rounded-3xl border border-border bg-card p-4 shadow-waka-sm">
+        <h2 className="text-lg font-black text-foreground">{t(lang, "pharmacyPatientTimelineTitle")}</h2>
         <ul className="mt-3 max-h-[420px] space-y-2 overflow-y-auto">
           {timeline.map((ev) => (
-            <li key={ev.id} className="rounded-2xl border border-stone-100 bg-stone-50 px-4 py-3">
+            <li key={ev.id} className="rounded-2xl border border-border bg-muted px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-black text-stone-950">{ev.title}</p>
-                <p className="text-xs font-bold text-stone-500">{ev.at.slice(0, 16).replace("T", " ")}</p>
+                <p className="font-black text-foreground">{ev.title}</p>
+                <p className="text-xs font-bold text-muted-foreground">{ev.at.slice(0, 16).replace("T", " ")}</p>
               </div>
               {ev.productName ? <p className="text-sm font-semibold text-teal-900">{ev.productName}</p> : null}
-              <p className="text-sm text-stone-600">
+              <p className="text-sm text-muted-foreground">
                 {[ev.doctorName, ev.batchNumber ? `${t(lang, "pharmacyBatchNumber")}: ${ev.batchNumber}` : null, ev.quantity != null ? `×${ev.quantity}` : null, ev.detail]
                   .filter(Boolean)
                   .join(" · ")}
@@ -259,16 +259,16 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
           ))}
         </ul>
         {timeline.length === 0 ? (
-          <p className="mt-3 text-sm font-medium text-stone-500">{t(lang, "pharmacyPatientNoHistory")}</p>
+          <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "pharmacyPatientNoHistory")}</p>
         ) : null}
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-3xl border border-stone-200 bg-white p-4">
+        <section className="rounded-3xl border border-border bg-card p-4">
           <h2 className="text-lg font-black">{t(lang, "pharmacyChronicTitle")}</h2>
           <ul className="mt-2 space-y-2">
             {chronicMeds.map((m) => (
-              <li key={m.id} className="flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2 text-sm font-bold">
+              <li key={m.id} className="flex items-center justify-between rounded-xl bg-muted px-3 py-2 text-sm font-bold">
                 <span>{m.productName}</span>
                 <span className={m.status === "missed" ? "text-rose-700" : "text-teal-800"}>{m.status}</span>
               </li>
@@ -276,7 +276,7 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
           </ul>
         </section>
 
-        <section className="rounded-3xl border border-stone-200 bg-white p-4">
+        <section className="rounded-3xl border border-border bg-card p-4">
           <h2 className="text-lg font-black">{t(lang, "pharmacyPatientNotes")}</h2>
           <div className="mt-2 flex gap-2">
             <input
@@ -296,7 +296,7 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
               {t(lang, "pharmacyPatientPinNote")}
             </button>
           </div>
-          <ul className="mt-2 space-y-1 text-sm font-semibold text-stone-700">
+          <ul className="mt-2 space-y-1 text-sm font-semibold text-muted-foreground">
             {(profile.notes ?? []).map((n) => (
               <li key={n.id}>
                 {n.pinned ? "📌 " : ""}
@@ -307,9 +307,9 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
         </section>
       </div>
 
-      <section className="rounded-3xl border border-dashed border-stone-300 bg-stone-50 p-4">
+      <section className="rounded-3xl border border-dashed border-border bg-muted p-4">
         <h2 className="text-lg font-black">{t(lang, "pharmacyPatientDocuments")}</h2>
-        <p className="text-xs font-semibold text-stone-500">{t(lang, "pharmacyPatientDocumentsSub")}</p>
+        <p className="text-xs font-semibold text-muted-foreground">{t(lang, "pharmacyPatientDocumentsSub")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           <select value={docKind} onChange={(e) => setDocKind(e.target.value as PharmacyPatientDocumentKind)} className="min-h-[44px] rounded-xl border-2 px-2 font-bold">
             {DOC_KINDS.map((k) => (
@@ -319,18 +319,18 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
             ))}
           </select>
           <input value={docLabel} onChange={(e) => setDocLabel(e.target.value)} placeholder={t(lang, "pharmacyPatientDocLabelPh")} className="min-h-[44px] flex-1 rounded-xl border-2 px-3" />
-          <button type="button" onClick={() => { addDocument(patient.id, docKind, docLabel); setDocLabel(""); }} className="min-h-[44px] rounded-xl bg-stone-800 px-4 font-black text-white">
+          <button type="button" onClick={() => { addDocument(patient.id, docKind, docLabel); setDocLabel(""); }} className="min-h-[44px] rounded-xl bg-foreground px-4 font-black text-background">
             {t(lang, "pharmacyAdd")}
           </button>
         </div>
-        <ul className="mt-2 text-sm font-semibold text-stone-600">
+        <ul className="mt-2 text-sm font-semibold text-muted-foreground">
           {(profile.documents ?? []).map((d) => (
             <li key={d.id}>{t(lang, `pharmacyDoc_${d.kind}`)} — {d.label}</li>
           ))}
         </ul>
       </section>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-4">
+      <section className="rounded-3xl border border-border bg-card p-4">
         <h2 className="text-lg font-black">{t(lang, "pharmacyDoctorDirectory")}</h2>
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
           <input value={doctorName} onChange={(e) => setDoctorName(e.target.value)} placeholder={t(lang, "pharmacyRxDoctor")} className="min-h-[44px] rounded-xl border-2 px-3 font-semibold" />
@@ -341,7 +341,7 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
         </div>
         <ul className="mt-3 space-y-1">
           {searchPharmacyDoctors(doctors, "").slice(0, 12).map((d) => (
-            <li key={d.id} className="text-sm font-bold text-stone-800">
+            <li key={d.id} className="text-sm font-bold text-foreground">
               {d.name}
               {d.clinic ? ` · ${d.clinic}` : ""}
               {d.phone ? ` · ${d.phone}` : ""}
@@ -365,13 +365,13 @@ function Field({
   className?: string;
 }) {
   return (
-    <label className={clsx("block text-sm font-bold text-stone-700", className)}>
+    <label className={clsx("block text-sm font-bold text-muted-foreground", className)}>
       {label}
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={(e) => onChange(e.target.value)}
-        className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 px-3 font-semibold"
+        className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-border px-3 font-semibold"
       />
     </label>
   );
@@ -379,16 +379,16 @@ function Field({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-stone-50 p-3">
-      <p className="text-xs font-black uppercase text-stone-500">{label}</p>
-      <p className="text-2xl font-black text-stone-950">{value}</p>
+    <div className="rounded-xl bg-muted p-3">
+      <p className="text-xs font-black uppercase text-muted-foreground">{label}</p>
+      <p className="text-2xl font-black text-foreground">{value}</p>
     </div>
   );
 }
 
 function PrintBtn({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="min-h-[40px] rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800">
+    <button type="button" onClick={onClick} className="min-h-[40px] rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground">
       {label}
     </button>
   );

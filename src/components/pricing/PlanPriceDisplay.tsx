@@ -36,9 +36,9 @@ export function PlanPriceDisplay({ price, interval = "month", size = "lg" }: Pro
 
   return (
     <div className="space-y-1">
-      <p className={`text-sm font-bold text-stone-500 line-through`}>{formatUgx(original)}</p>
+      <p className={`text-sm font-bold text-muted-foreground line-through`}>{formatUgx(original)}</p>
       <p className={`${mainCls} text-waka-700`}>
-        {formatUgx(final)} <span className="text-base font-bold text-stone-600">{suffix}</span>
+        {formatUgx(final)} <span className="text-base font-bold text-muted-foreground">{suffix}</span>
       </p>
       {interval === "month" && savings > 0 ? (
         <p className="text-sm font-black text-emerald-700">Save {formatUgx(savings)}</p>

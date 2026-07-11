@@ -53,7 +53,7 @@ export function DesktopStatusChips({ lang }: Props) {
       {showRisks ? (
         <Link
           to="/office/audit-center"
-          className={`${chipClass} border-rose-200 bg-white text-rose-800 shadow-sm hover:border-rose-300 hover:bg-rose-50`}
+          className={`${chipClass} border-rose-200 bg-card text-rose-800 shadow-sm hover:border-rose-300 hover:bg-rose-50`}
         >
           <span aria-hidden>🔴</span>
           {tTemplate(lang, "desktopHomeStatusRisks", { count: String(riskCount) })}

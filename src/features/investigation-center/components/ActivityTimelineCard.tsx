@@ -49,15 +49,15 @@ export function ActivityTimelineCard({
           <div className={clsx("flex h-9 w-9 items-center justify-center rounded-full", severityIconClass(severity))}>
             <span className="h-2 w-2 rounded-full bg-current opacity-80" aria-hidden />
           </div>
-          {!isLastInGroup ? <div className="mt-1 w-px flex-1 bg-stone-200" aria-hidden /> : null}
+          {!isLastInGroup ? <div className="mt-1 w-px flex-1 bg-muted" aria-hidden /> : null}
         </div>
       ) : null}
 
-      <article className="mb-2 min-w-0 flex-1 rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm">
+      <article className="mb-2 min-w-0 flex-1 rounded-2xl border border-border/90 bg-card p-3 shadow-sm">
         <div className="flex items-start gap-2">
           <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left active:opacity-80">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-black text-stone-950">{title}</h3>
+              <h3 className="text-sm font-black text-foreground">{title}</h3>
               <span
                 className={clsx(
                   "inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ring-inset",
@@ -67,8 +67,8 @@ export function ActivityTimelineCard({
                 {t(lang, severityLabelKey(severity))}
               </span>
             </div>
-            <p className="mt-1 line-clamp-2 text-xs font-medium text-stone-600">{narrative}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-stone-500">
+            <p className="mt-1 line-clamp-2 text-xs font-medium text-muted-foreground">{narrative}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-muted-foreground">
               <span>{staff}</span>
               <span aria-hidden>·</span>
               <time dateTime={entry.at}>{when}</time>
@@ -77,7 +77,7 @@ export function ActivityTimelineCard({
           <button
             type="button"
             onClick={onMenu}
-            className="inline-flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-xl text-stone-500 active:bg-stone-50"
+            className="inline-flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
             aria-label={t(lang, "icActionsTitle")}
           >
             <MoreVertical className="h-4 w-4" aria-hidden />

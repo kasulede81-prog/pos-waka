@@ -337,19 +337,19 @@ export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props)
     <>
       <SeoHead title={content.title} description={content.intro} path={SEO_PATH[kind]} structuredData="legal" />
       <main className="space-y-5">
-        <section className="rounded-3xl border border-waka-100 bg-white p-6 shadow-waka-sm">
+        <section className="rounded-3xl border border-waka-100 bg-card p-6 shadow-waka-sm">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">{WAKA_COMPANY_TAGLINE}</p>
-          <h1 className="mt-2 text-3xl font-black leading-tight text-stone-950">{content.title}</h1>
-          <p className="mt-3 text-base font-medium leading-relaxed text-stone-600">{content.intro}</p>
+          <h1 className="mt-2 text-3xl font-black leading-tight text-foreground">{content.title}</h1>
+          <p className="mt-3 text-base font-medium leading-relaxed text-muted-foreground">{content.intro}</p>
         </section>
 
         <section className="space-y-3">
           {content.sections.map((section) => (
-            <article key={section.title} className="rounded-3xl border border-stone-100 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-black text-stone-950">{section.title}</h2>
+            <article key={section.title} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="text-lg font-black text-foreground">{section.title}</h2>
               <div className="mt-3 space-y-2">
                 {section.body.map((paragraph) => (
-                  <p key={paragraph} className="text-sm font-medium leading-relaxed text-stone-700">
+                  <p key={paragraph} className="text-sm font-medium leading-relaxed text-muted-foreground">
                     {paragraph}
                   </p>
                 ))}
@@ -360,7 +360,7 @@ export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props)
 
         <WakaSupportCard />
 
-        <div className="flex flex-wrap justify-center gap-3 rounded-3xl border border-stone-100 bg-white p-4 text-sm font-black text-waka-800">
+        <div className="flex flex-wrap justify-center gap-3 rounded-3xl border border-border bg-card p-4 text-sm font-black text-waka-800">
           <Link to="/terms">Terms</Link>
           <Link to="/privacy">Privacy</Link>
           <Link to="/acceptable-use">Acceptable Use</Link>

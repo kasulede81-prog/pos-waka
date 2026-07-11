@@ -38,10 +38,10 @@ export function AdminDiagnosticsImportPanel({
 
   return (
     <section className="rounded-2xl border border-teal-200 bg-teal-50/50 p-4">
-      <h2 className="text-base font-black text-stone-900">
+      <h2 className="text-base font-black text-foreground">
         {rescueMode ? "Import diagnostics (legacy panel)" : "Import pilot diagnostics"}
       </h2>
-      <p className="mt-1 text-xs font-medium text-stone-600">
+      <p className="mt-1 text-xs font-medium text-muted-foreground">
         Paste or upload owner JSON — pilot, Cloud Trust, production certification, startup, sync health.
       </p>
 
@@ -50,7 +50,7 @@ export function AdminDiagnosticsImportPanel({
         onChange={(e) => loadText(e.target.value)}
         rows={4}
         placeholder='{"appVersion":"1.0.5","shopId":"…",…}'
-        className="mt-3 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 font-mono text-xs"
+        className="mt-3 w-full rounded-xl border border-border bg-card px-3 py-2 font-mono text-xs"
       />
 
       <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-bold text-teal-900">
@@ -78,9 +78,9 @@ export function AdminDiagnosticsImportPanel({
           {parsed.issueNote ? <Row label="Issue note" value={parsed.issueNote} /> : null}
           {parsed.screenshotFileName ? <Row label="Screenshot" value={parsed.screenshotFileName} /> : null}
           {Object.keys(parsed.pendingBreakdown).length > 0 ? (
-            <div className="rounded-xl bg-white px-3 py-2 text-xs">
-              <p className="font-black text-stone-700">Queue breakdown</p>
-              <ul className="mt-1 space-y-0.5 font-mono text-stone-600">
+            <div className="rounded-xl bg-card px-3 py-2 text-xs">
+              <p className="font-black text-muted-foreground">Queue breakdown</p>
+              <ul className="mt-1 space-y-0.5 font-mono text-muted-foreground">
                 {Object.entries(parsed.pendingBreakdown).map(([k, v]) => (
                   <li key={k}>
                     {k}: {v}
@@ -101,19 +101,19 @@ export function AdminDiagnosticsImportPanel({
               </ul>
             </div>
           ) : null}
-          <div className="rounded-xl bg-white px-3 py-2 text-xs">
-            <p className="font-black text-stone-700">Migrations (client checklist)</p>
-            <ul className="mt-1 list-disc pl-4 text-stone-600">
+          <div className="rounded-xl bg-card px-3 py-2 text-xs">
+            <p className="font-black text-muted-foreground">Migrations (client checklist)</p>
+            <ul className="mt-1 list-disc pl-4 text-muted-foreground">
               {parsed.requiredMigrations.map((m) => (
                 <li key={m}>{m}</li>
               ))}
             </ul>
-            {parsed.migrationNote ? <p className="mt-1 text-stone-500">{parsed.migrationNote}</p> : null}
+            {parsed.migrationNote ? <p className="mt-1 text-muted-foreground">{parsed.migrationNote}</p> : null}
           </div>
           {parsed.recentEvents.length > 0 ? (
-            <div className="rounded-xl bg-white px-3 py-2 text-xs">
-              <p className="font-black text-stone-700">Pilot events (device)</p>
-              <ul className="mt-1 max-h-28 space-y-0.5 overflow-y-auto text-stone-600">
+            <div className="rounded-xl bg-card px-3 py-2 text-xs">
+              <p className="font-black text-muted-foreground">Pilot events (device)</p>
+              <ul className="mt-1 max-h-28 space-y-0.5 overflow-y-auto text-muted-foreground">
                 {parsed.recentEvents.map((e, i) => (
                   <li key={`${e.at}-${i}`}>
                     <span className="font-bold">{e.kind}</span> · {e.summary}
@@ -139,8 +139,8 @@ export function AdminDiagnosticsImportPanel({
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex justify-between gap-2 rounded-xl bg-white/80 px-3 py-2">
-      <dt className="font-semibold text-stone-600">{label}</dt>
-      <dd className={`max-w-[60%] truncate text-right font-black text-stone-900 ${mono ? "font-mono text-[11px]" : ""}`}>
+      <dt className="font-semibold text-muted-foreground">{label}</dt>
+      <dd className={`max-w-[60%] truncate text-right font-black text-foreground ${mono ? "font-mono text-[11px]" : ""}`}>
         {value}
       </dd>
     </div>

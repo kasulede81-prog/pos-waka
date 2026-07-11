@@ -1,4 +1,9 @@
 import type { Permission, UserRole } from "../types";
+import {
+  resolveActivePromotionalGrantTier,
+  resolveEffectivePlanTierFromResolver,
+  resolveEffectiveSubscription,
+} from "./effectiveSubscription";
 import { hasActorPermission } from "./permissions";
 
 export type SubscriptionPlanCode = "free" | "starter" | "business" | "waka_plus";
@@ -81,55 +86,23 @@ export function normalizePlanCode(raw: string | undefined | null): SubscriptionP
   return "starter";
 }
 
-/** Tier from an active (non-revoked, non-expired) promotional grant, or null. */
+/** @deprecated Use resolveActivePromotionalGrantTier from effectiveSubscription.ts */
 export function resolvePromotionalGrantTier(
   snapshot: SubscriptionSnapshot,
   nowMs: number = Date.now(),
 ): SubscriptionPlanCode | null {
-  if (snapshot.kind === "local_full") return null;
-  const grant = snapshot.promotionalGrant;
-  if (!grant || grant.revoked_at) return null;
-  const end = new Date(grant.expires_at).getTime();
-  if (!Number.isFinite(end) || end <= nowMs) return null;
-  const tier = normalizePlanCode(grant.plan_code);
-  return tier === "free" ? null : tier;
-}
-
-/** Underlying tier from the real subscription only (paid → trial → free). */
-function resolveBasePlanTier(snapshot: SubscriptionSnapshot, nowMs: number): SubscriptionPlanCode {
-  if (snapshot.kind === "local_full") return "waka_plus";
-  if (snapshot.kind === "none") return "free";
-
-  const row = snapshot.row;
-  const trialLike = row.status === "trial" || row.status === "trialing";
-  if (trialLike) return normalizePlanCode(row.plan_code);
-
-  if (row.status === "expired") {
-    return "free";
-  }
-
-  if (row.status === "active" && row.current_period_end) {
-    const periodEndMs = new Date(row.current_period_end).getTime();
-    if (Number.isFinite(periodEndMs) && periodEndMs <= nowMs) return "free";
-  }
-
-  return normalizePlanCode(row.plan_code);
+  return resolveActivePromotionalGrantTier(snapshot, nowMs);
 }
 
 /**
  * Effective subscription tier for feature gates.
- * Priority: active promotional grant → active paid subscription → trial → free.
- * A grant never downgrades a higher paid tier (no feature loss during campaigns),
- * and on grant expiry the shop falls back to its real subscription automatically.
+ * Delegates to the enterprise resolver (Phase 16.4).
  */
 export function resolveEffectivePlanTier(
   snapshot: SubscriptionSnapshot,
   nowMs: number = Date.now(),
 ): SubscriptionPlanCode {
-  const base = resolveBasePlanTier(snapshot, nowMs);
-  const grantTier = resolvePromotionalGrantTier(snapshot, nowMs);
-  if (grantTier && TIER_RANK[grantTier] > TIER_RANK[base]) return grantTier;
-  return base;
+  return resolveEffectivePlanTierFromResolver(snapshot, nowMs);
 }
 
 export function tierMeetsMinimum(tier: SubscriptionPlanCode, minimum: SubscriptionPlanCode): boolean {
@@ -139,13 +112,8 @@ export function tierMeetsMinimum(tier: SubscriptionPlanCode, minimum: Subscripti
 /** True when org has Starter, Business, or Waka Plus (including trial period on those plans, or an active promotional grant). */
 export function hasCommercialSubscription(snapshot: SubscriptionSnapshot): boolean {
   if (snapshot.kind === "local_full") return true;
-  if (resolvePromotionalGrantTier(snapshot) !== null) return true;
-  if (snapshot.kind !== "remote") return false;
-  const row = snapshot.row;
-  const plan = normalizePlanCode(row.plan_code);
-  if (plan === "free") return false;
-  const st = (row.status ?? "").trim().toLowerCase();
-  return st === "active" || st === "trial" || st === "trialing";
+  const effective = resolveEffectiveSubscription(snapshot);
+  return effective.effectivePlan !== "free";
 }
 
 /** “Why upgrade?” and similar free-only upsell — not for paid or trial commercial plans. */
@@ -241,3 +209,6 @@ export function hasEffectivePermission(
   const tier = resolveEffectivePlanTier(snapshot);
   return planAllowsPermission(tier, permission);
 }
+
+export { resolveEffectiveSubscription } from "./effectiveSubscription";
+export type { EffectiveSubscription } from "./effectiveSubscription";
