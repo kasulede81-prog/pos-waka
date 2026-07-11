@@ -17,7 +17,7 @@ export function pickNewerStaffAccount(local: StaffAccount, cloud: StaffAccount):
 }
 
 /**
- * Additive staff merge — cloud is authoritative (primary device only).
+ * Additive staff merge — cloud is authoritative for approved devices.
  * Local-only staff kept until explicit owner delete or cloud confirms removal.
  */
 export function mergeStaffAccountsForCloudSync(

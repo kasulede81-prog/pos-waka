@@ -1,5 +1,5 @@
 /** Must match `shop_device_pending_approval_ttl()` in Supabase. */
-export const DEVICE_PENDING_APPROVAL_TTL_MS = 60_000;
+export const DEVICE_PENDING_APPROVAL_TTL_MS = 15 * 60_000;
 
 export function pendingApprovalExpiresAtMs(requestedAt: string | null | undefined): number | null {
   if (!requestedAt) return null;

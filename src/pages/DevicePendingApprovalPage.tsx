@@ -9,9 +9,7 @@ import {
   fetchShopDeviceLimitContext,
   registerShopDeviceOnLogin,
   resolveLoginDeviceActivation,
-  tryOwnerApproveCurrentDevice,
 } from "../lib/deviceActivation";
-import { OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN } from "../lib/deviceAuthorityPolicy";
 import { fetchShopDevicesForManagement } from "../lib/shopDevices";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import {
@@ -22,7 +20,7 @@ import {
 
 type Props = { lang: Language };
 
-/** Read-only waiting screen until the shop owner approves this device. */
+/** Waiting screen until the shop owner approves this device (staff / non-owner path). */
 export function DevicePendingApprovalPage({ lang }: Props) {
   const navigate = useNavigate();
   const { retry, shopId, activated, block } = useDeviceActivation();
@@ -46,12 +44,15 @@ export function DevicePendingApprovalPage({ lang }: Props) {
 
   useEffect(() => {
     if (!shopId) return;
-    void fetchShopDeviceLimitContext(shopId).then((ctx) => {
-      setIsOwner(Boolean(ctx?.is_owner));
-      if (ctx?.is_owner && OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN && !ctx.at_limit) {
-        void tryOwnerApproveCurrentDevice(shopId).then((ok) => {
-          if (ok) void retry().then(() => navigate("/", { replace: true }));
-        });
+    void fetchShopDeviceLimitContext(shopId).then(async (ctx) => {
+      const owner = Boolean(ctx?.is_owner);
+      setIsOwner(owner);
+      if (owner) {
+        const outcome = await resolveLoginDeviceActivation(shopId);
+        if (outcome.activated) {
+          await retry();
+          navigate("/", { replace: true });
+        }
       }
     });
     const fp = getOrCreateDeviceId();
@@ -59,7 +60,7 @@ export function DevicePendingApprovalPage({ lang }: Props) {
       const mine = devices.find((d) => d.device_fingerprint === fp);
       if (mine?.approval_requested_at) setRequestedAt(mine.approval_requested_at);
     });
-  }, [shopId]);
+  }, [navigate, retry, shopId]);
 
   useEffect(() => {
     if (block?.result.approval_requested_at) {
@@ -83,8 +84,7 @@ export function DevicePendingApprovalPage({ lang }: Props) {
   const handleExpired = useCallback(async () => {
     setExpired(true);
     await recheck();
-    navigate("/device-limit?autoActivate=1", { replace: true });
-  }, [navigate, recheck]);
+  }, [recheck]);
 
   useEffect(() => {
     if (activated || authorityLoading || expired) return;
@@ -109,13 +109,11 @@ export function DevicePendingApprovalPage({ lang }: Props) {
       if (outcome.activated) {
         await retry();
         navigate("/", { replace: true });
-        return;
       }
-      await recheck();
     } finally {
       setOwnerBusy(false);
     }
-  }, [navigate, ownerBusy, recheck, retry, shopId]);
+  }, [navigate, ownerBusy, retry, shopId]);
 
   useEffect(() => {
     if (activated) {

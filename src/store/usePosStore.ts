@@ -268,6 +268,7 @@ import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } fro
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
+  authorizeStaffAccountMutation,
   authorizeStaffAccountMutationWithDevice,
   StaffAccountAuthorizationError,
 } from "../lib/staffAccountAuthorization";
@@ -1821,17 +1822,15 @@ export const usePosStore = create<PosState>((set, get) => {
 
   addStaffAccount: async (input) => {
     const { snapshot, authMode } = getStoreSubscriptionContext();
-    const staffDenied = await authorizeStaffAccountMutationWithDevice(get().sessionActor, {
-      authMode,
-    });
-    if (!staffDenied.ok) {
+    const roleAuth = authorizeStaffAccountMutation(get().sessionActor);
+    if (!roleAuth.ok) {
       pushAudit("auth_forbidden", "Denied addStaffAccount", {
         permission: "settings.shop",
         action: "addStaffAccount",
         attemptedRole: get().sessionActor?.role ?? null,
-        errorKey: staffDenied.errorKey,
+        errorKey: roleAuth.errorKey,
       });
-      return { ok: false, errorKey: staffDenied.errorKey };
+      return { ok: false, errorKey: roleAuth.errorKey };
     }
 
     const existing = get().preferences.staffAccounts ?? [];
@@ -1845,6 +1844,19 @@ export const usePosStore = create<PosState>((set, get) => {
         errorKey: staffCap.errorKey,
       });
       return { ok: false, errorKey: staffCap.errorKey };
+    }
+
+    const staffDenied = await authorizeStaffAccountMutationWithDevice(get().sessionActor, {
+      authMode,
+    });
+    if (!staffDenied.ok) {
+      pushAudit("auth_forbidden", "Denied addStaffAccount", {
+        permission: "settings.shop",
+        action: "addStaffAccount",
+        attemptedRole: get().sessionActor?.role ?? null,
+        errorKey: staffDenied.errorKey,
+      });
+      return { ok: false, errorKey: staffDenied.errorKey };
     }
 
     const name = input.name.trim();

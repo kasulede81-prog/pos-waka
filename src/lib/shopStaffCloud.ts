@@ -110,7 +110,7 @@ export async function pushStaffToCloud(staff: StaffAccount): Promise<boolean> {
     return false;
   }
   const result = data as { ok?: boolean; error?: string };
-  if (result?.error === "device_not_authorized" || result?.error === "not_primary_device") {
+  if (result?.error === "device_not_authorized") {
     console.warn("[waka-staff] upsert blocked — device not authorized");
   }
   return result?.ok === true;

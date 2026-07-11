@@ -3522,6 +3522,11 @@ async function syncShopWithCloudInner(opts?: {
       deviceAuthority,
       force: opts?.forceFull === true,
     });
+    const ctx = await resolveShopCtx().catch(() => null);
+    if (ctx?.shopId) {
+      const { hydrateShopSecurityPin } = await import("../lib/shopSecurityPinSync");
+      void hydrateShopSecurityPin(ctx.shopId).catch(() => "failed");
+    }
     void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
       flushPendingStaffSecurityEvents();
     });

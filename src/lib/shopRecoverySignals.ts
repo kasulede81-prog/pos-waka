@@ -58,6 +58,9 @@ export async function applyAdminBackOfficePinClear(shopId: string, clearedAt: st
   writeAppliedPinClearAt(shopId, clearedAt);
   flushPendingPersist();
 
+  const { applyShopSecurityPinRecoveryClear } = await import("./shopSecurityPinSync");
+  applyShopSecurityPinRecoveryClear(shopId);
+
   void import("./cloudSnapshotSync").then(({ uploadShopCloudSnapshot }) => {
     void uploadShopCloudSnapshot({ force: true });
   });

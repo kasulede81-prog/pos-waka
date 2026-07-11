@@ -1,8 +1,5 @@
-/** Auto-approve this device on owner login instead of blocking on pending approval. */
+/** @deprecated Phase 20.6 — owner enrollment is server-side in shop_device_register_on_login. */
 export const AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN = true;
 
 /** Allow staff PIN login even when device approval is still pending. */
 export const ALLOW_STAFF_LOGIN_WHILE_DEVICE_PENDING = true;
-
-/** Shop owners with a free device slot skip the pending-approval gate on login. */
-export const OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN = true;

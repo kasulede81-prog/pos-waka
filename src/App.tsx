@@ -95,6 +95,7 @@ import { DeviceActivationProvider } from "./context/DeviceActivationContext";
 import { DeviceActivationGateOutlet } from "./components/DeviceActivationGateOutlet";
 import { EmailVerificationGateOutlet } from "./components/EmailVerificationGateOutlet";
 import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
+import { DeviceActivatingPage } from "./pages/DeviceActivatingPage";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
 import { StartupBootstrapGate } from "./components/startup/StartupBootstrapGate";
 import { ToastProvider } from "./context/ToastProvider";
@@ -361,7 +362,7 @@ function AppRoutes() {
                       <EmailVerificationGateOutlet authMode={auth.mode} user={auth.user}>
                         <DeviceActivationProvider authMode={auth.mode} user={auth.user}>
                           <DeviceAuthorityBridge authMode={auth.mode}>
-                            <DeviceActivationGateOutlet />
+                            <DeviceActivationGateOutlet lang={lang} />
                           </DeviceAuthorityBridge>
                         </DeviceActivationProvider>
                       </EmailVerificationGateOutlet>
@@ -372,6 +373,7 @@ function AppRoutes() {
                   path="device-limit"
                   element={<DeviceLimitReachedPage lang={lang} onSignOut={auth.signOut} />}
                 />
+                <Route path="device-activating" element={<DeviceActivatingPage lang={lang} />} />
                 <Route path="device-pending" element={<DevicePendingApprovalPage lang={lang} />} />
                 <Route element={<InternalAdminOutlet />}>
                   <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />

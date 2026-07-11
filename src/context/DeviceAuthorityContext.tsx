@@ -10,6 +10,7 @@ import {
 import {
   fetchDeviceAuthorityContext,
   isDeviceAuthorizedForManagement,
+  subscribeDeviceAuthorityRefresh,
   type DeviceAuthorityContext,
   type DeviceAuthorizedAction,
 } from "../lib/deviceAuthority";
@@ -56,6 +57,10 @@ export function DeviceAuthorityProvider({ shopId, authMode, children }: Props) {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => subscribeDeviceAuthorityRefresh(() => {
+    void refresh();
+  }), [refresh]);
+
   const value = useMemo((): DeviceAuthorityState => {
     const hasCtx = ctx != null;
     const deviceAuthorized =
@@ -101,7 +106,7 @@ export async function assertDeviceAuthorizedAction(
   shopId?: string,
 ): Promise<{ ok: true } | { ok: false; errorKey: "deviceNotAuthorized" | "devicePendingApproval" }> {
   const deviceCtx = await fetchDeviceAuthorityContext(shopId);
-  if (!deviceCtx) return { ok: true };
+  if (!deviceCtx) return { ok: false, errorKey: "deviceNotAuthorized" };
   if (deviceCtx.approvalStatus === "pending") {
     return { ok: false, errorKey: "devicePendingApproval" };
   }

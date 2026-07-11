@@ -5,14 +5,17 @@ import {
   notifyOwnerNewDeviceActivation,
   reportDeviceFingerprintChangeIfNeeded,
 } from "./deviceFingerprintTrust";
-import { setDeviceApprovalStatus } from "./deviceAuthority";
-import { isPendingApprovalExpired } from "./devicePendingApproval";
-import {
-  AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN,
-  OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN,
-} from "./deviceAuthorityPolicy";
-import { fetchShopDevicesForManagement, type ShopDeviceRow } from "./shopDevices";
+import type { ShopDeviceRow } from "./shopDevices";
 import { supabase } from "./supabase";
+import {
+  activationDeviceId,
+  classifyActivationError,
+  logActivationAttempt,
+  logActivationFailure,
+  logActivationStage,
+  nextActivationAttempt,
+  type ActivationFailureKind,
+} from "./deviceActivationDiagnostics";
 
 function presencePlatform(): string {
   if (typeof window === "undefined") return "server";
@@ -62,11 +65,22 @@ export type DeviceActivationResult = {
   revoked?: boolean;
   existing_device?: boolean;
   reactivated?: boolean;
+  owner_enrolled?: boolean;
   status?: string;
   plan_code?: string;
   plan_name?: string;
   active_count?: number;
   device_limit?: number | null;
+};
+
+export type ActivationBlockKind = "limit" | "pending" | "revoked" | "connection";
+
+export type LoginDeviceActivationOutcome = {
+  activated: boolean;
+  result: DeviceActivationResult;
+  failureReason?: ActivationFailureKind;
+  failureDetail?: string;
+  isOwner?: boolean;
 };
 
 function parseActivationResult(data: unknown): DeviceActivationResult {
@@ -88,6 +102,7 @@ function parseActivationResult(data: unknown): DeviceActivationResult {
     revoked: r.revoked === true,
     existing_device: r.existing_device === true,
     reactivated: r.reactivated === true,
+    owner_enrolled: r.owner_enrolled === true,
     status: r.status != null ? String(r.status) : undefined,
     plan_code: r.plan_code != null ? String(r.plan_code) : undefined,
     plan_name: r.plan_name != null ? String(r.plan_name) : undefined,
@@ -135,19 +150,26 @@ function applyActivationSideEffects(shopId: string, parsed: DeviceActivationResu
       deviceLimit: parsed.device_limit,
     });
   }
-  if (parsed.ok && parsed.activated && !parsed.pending_approval && parsed.approval_status !== "pending") {
-    void import("./staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {
-      scheduleStaffCacheProvisioning();
-    });
-  }
 }
 
 export async function ensureShopDeviceActivation(shopId: string): Promise<DeviceActivationResult> {
   if (!shopId || !supabase) return { ok: true, activated: true };
   const args = presenceFields(shopId);
+  const started = Date.now();
+  logActivationStage("activate", { shopId });
   const { data, error } = await supabase.rpc("shop_device_ensure_activation", args);
   if (error) throw error;
   const parsed = parseActivationResult(data);
+  logActivationAttempt({
+    attempt: nextActivationAttempt(),
+    shopId,
+    deviceId: activationDeviceId(),
+    stage: "activate",
+    rpc: "shop_device_ensure_activation",
+    elapsedMs: Date.now() - started,
+    approvalStatus: parsed.approval_status,
+    activationStatus: parsed.activated ? "activated" : parsed.approval_status ?? parsed.status,
+  });
   applyActivationSideEffects(shopId, parsed);
   return parsed;
 }
@@ -155,139 +177,139 @@ export async function ensureShopDeviceActivation(shopId: string): Promise<Device
 export async function registerShopDeviceOnLogin(shopId: string): Promise<DeviceActivationResult> {
   if (!shopId || !supabase) return { ok: true, activated: true };
   const args = presenceFields(shopId);
+  const started = Date.now();
   const { data, error } = await supabase.rpc("shop_device_register_on_login", args);
   if (error) throw error;
   const parsed = parseActivationResult(data);
-  applyActivationSideEffects(shopId, parsed);
-  void import("./deviceAuthority").then(({ fetchDeviceAuthorityContext }) => {
-    void fetchDeviceAuthorityContext(shopId);
+  logActivationAttempt({
+    attempt: nextActivationAttempt(),
+    shopId,
+    deviceId: activationDeviceId(),
+    stage: "register",
+    rpc: "shop_device_register_on_login",
+    elapsedMs: Date.now() - started,
+    approvalStatus: parsed.approval_status,
+    activationStatus: parsed.activated ? "activated" : parsed.status,
   });
+  applyActivationSideEffects(shopId, parsed);
   return parsed;
 }
 
+/** Resolve block screen for staff device gate. Owners should not reach pending/activating states. */
 export function resolveActivationBlockKind(opts: {
   result: DeviceActivationResult;
   context: DeviceLimitContext | null;
   currentDevice: ShopDeviceRow | null;
-}): "limit" | "pending" | "retry" {
-  if (opts.result.approval_expired) return "retry";
-  if (opts.result.limit_blocked || opts.context?.at_limit) return "limit";
-  if (opts.result.pending_approval || opts.currentDevice?.approval_status === "pending") {
-    if (isPendingApprovalExpired(opts.currentDevice?.approval_requested_at)) return "retry";
+  failureReason?: ActivationFailureKind;
+}): ActivationBlockKind {
+  if (opts.result.revoked || opts.failureReason === "revoked" || opts.failureReason === "device_revoked") {
+    return "revoked";
+  }
+  if (
+    opts.result.limit_blocked ||
+    opts.failureReason === "limit_reached" ||
+    opts.failureReason === "device_limit_reached"
+  ) {
+    return "limit";
+  }
+
+  const pending =
+    opts.result.pending_approval ||
+    opts.result.approval_status === "pending" ||
+    opts.currentDevice?.approval_status === "pending";
+
+  if (pending && opts.context?.is_owner === false) {
     return "pending";
   }
-  return "retry";
+
+  if (
+    opts.failureReason === "timeout" ||
+    opts.failureReason === "network" ||
+    opts.failureReason === "network_error" ||
+    opts.failureReason === "rpc_failure"
+  ) {
+    return "connection";
+  }
+
+  if (pending) {
+    return "pending";
+  }
+
+  return "connection";
 }
 
-/** Owner approves this browser/device — no primary device required (owner-only RPC). */
-export async function tryOwnerApproveCurrentDevice(shopId: string): Promise<boolean> {
-  let ctx: DeviceLimitContext | null = null;
-  try {
-    ctx = await fetchShopDeviceLimitContext(shopId);
-  } catch {
-    return false;
-  }
-  if (!ctx?.is_owner) return false;
-
-  const fp = getOrCreateDeviceId();
-  const findMine = async (): Promise<ShopDeviceRow | undefined> => {
-    const { devices } = await fetchShopDevicesForManagement(shopId);
-    return devices.find((d) => d.device_fingerprint === fp);
-  };
-
-  let mine = await findMine();
-  if (!mine || (mine.approval_status !== "pending" && mine.approval_status !== "approved")) {
-    await registerShopDeviceOnLogin(shopId);
-    mine = await findMine();
-  }
-
-  if (!mine) return false;
-
-  if (mine.approval_status === "approved") {
-    try {
-      const activation = await ensureShopDeviceActivation(shopId);
-      return activation.activated === true;
-    } catch {
-      return false;
-    }
-  }
-
-  if (mine.approval_status !== "pending") return false;
-
-  let approval = await setDeviceApprovalStatus(shopId, mine.id, "approved");
-  if (!approval.ok) {
-    await registerShopDeviceOnLogin(shopId);
-    mine = await findMine();
-    if (mine?.approval_status === "pending") {
-      approval = await setDeviceApprovalStatus(shopId, mine.id, "approved");
-    }
-  }
-  if (!approval.ok) return false;
-
-  try {
-    const activation = await ensureShopDeviceActivation(shopId);
-    return activation.activated === true;
-  } catch {
-    return false;
-  }
-}
-
-export type LoginDeviceActivationOutcome = {
-  activated: boolean;
-  result: DeviceActivationResult;
-  /** Client allowed owner through even though cloud activation is still catching up. */
-  ownerBypass?: boolean;
-};
-
-/** Full login activation: register → owner auto-approve → optional owner bypass when a slot is free. */
+/**
+ * Owner-first login enrollment: single server RPC handles register + approve + activate.
+ * Staff devices still return pending when approval is required.
+ */
 export async function resolveLoginDeviceActivation(shopId: string): Promise<LoginDeviceActivationOutcome> {
+  logActivationStage("login", { shopId, deviceId: activationDeviceId() });
+
+  let context: DeviceLimitContext | null = null;
+  try {
+    context = await fetchShopDeviceLimitContext(shopId);
+  } catch {
+    context = null;
+  }
+  const isOwner = context?.is_owner ?? false;
+
   let result: DeviceActivationResult;
   try {
+    logActivationStage("register", { shopId, ownerFirst: isOwner });
     result = await registerShopDeviceOnLogin(shopId);
-  } catch {
-    result = { ok: false, activated: false };
+  } catch (error) {
+    const failureReason = classifyActivationError(error);
+    logActivationFailure("register", failureReason, { shopId });
+    return {
+      activated: false,
+      result: { ok: false, activated: false },
+      failureReason,
+      failureDetail: error instanceof Error ? error.message : undefined,
+      isOwner,
+    };
   }
 
-  if (result.activated) return { activated: true, result };
-
-  if (AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN) {
-    const approved = await tryOwnerApproveCurrentDevice(shopId);
-    if (approved) {
-      try {
-        result = await ensureShopDeviceActivation(shopId);
-      } catch {
-        result = { ok: false, activated: false };
-      }
-      if (result.activated) return { activated: true, result };
-    }
+  if (result.activated) {
+    logActivationStage("completed", { shopId, ownerEnrolled: result.owner_enrolled });
+    return { activated: true, result, isOwner };
   }
 
-  if (OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN) {
-    let context: DeviceLimitContext | null = null;
-    try {
-      context = await fetchShopDeviceLimitContext(shopId);
-    } catch {
-      context = null;
-    }
-    const slotFree = Boolean(context?.is_owner && !context.at_limit);
-    const pending =
-      result.pending_approval ||
-      result.approval_status === "pending" ||
-      (!result.activated && !result.limit_blocked && !result.revoked);
-    if (slotFree && pending) {
-      return { activated: true, result, ownerBypass: true };
-    }
+  if (result.revoked) {
+    return { activated: false, result, failureReason: "device_revoked", isOwner };
   }
 
-  return { activated: false, result };
+  if (result.limit_blocked || (context?.at_limit && isOwner)) {
+    return { activated: false, result, failureReason: "device_limit_reached", isOwner };
+  }
+
+  if (result.pending_approval || result.approval_status === "pending") {
+    if (!isOwner) {
+      return { activated: false, result, failureReason: "device_pending", isOwner: false };
+    }
+    logActivationFailure("register", "activation_failed", {
+      shopId,
+      detail: "owner_received_pending_after_enrollment_rpc",
+    });
+    return {
+      activated: false,
+      result,
+      failureReason: "activation_failed",
+      failureDetail: "owner_pending_unexpected",
+      isOwner: true,
+    };
+  }
+
+  return {
+    activated: false,
+    result,
+    failureReason: "activation_failed",
+    isOwner,
+  };
 }
 
 /** Activate this device and continue login when the plan still has room. */
 export async function tryActivateCurrentDevice(shopId: string): Promise<DeviceActivationResult> {
   const outcome = await resolveLoginDeviceActivation(shopId);
-  if (outcome.ownerBypass) {
-    return { ok: true, activated: true, accepted: true, approval_status: "approved" };
-  }
   return outcome.result;
 }
 
@@ -341,4 +363,16 @@ export async function recordDeviceReplacementCompleted(
     p_old_device_fingerprint: oldDeviceFingerprint,
     p_new_device_fingerprint: newFp,
   });
+}
+
+/** @deprecated Phase 20.6 — owner enrollment is server-side; kept for migration compatibility. */
+export async function tryOwnerApproveCurrentDevice(
+  shopId: string,
+): Promise<{ ok: boolean; failureReason?: ActivationFailureKind; failureDetail?: string }> {
+  const outcome = await resolveLoginDeviceActivation(shopId);
+  return {
+    ok: outcome.activated,
+    failureReason: outcome.failureReason,
+    failureDetail: outcome.failureDetail,
+  };
 }

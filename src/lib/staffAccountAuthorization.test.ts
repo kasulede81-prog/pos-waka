@@ -7,6 +7,8 @@ import {
   StaffAccountAuthorizationError,
 } from "./staffAccountAuthorization";
 import { setStoreSubscriptionContext } from "./storeSubscriptionContext";
+import { clearDeviceAuthorityCache, seedDeviceAuthorityCacheForTests } from "./deviceAuthority";
+import { approvedDeviceAuthorityFixture } from "./deviceAuthorityTestFixtures";
 
 vi.mock("./staffSyncQueue", () => ({
   createStaffInCloudFirst: vi.fn(async (row: { id: string }) => ({ ok: true as const, id: row.id })),
@@ -51,6 +53,7 @@ describe("usePosStore — staff account CRUD authorization", () => {
   };
 
   beforeEach(() => {
+    clearDeviceAuthorityCache();
     setStoreSubscriptionContext({ snapshot: { kind: "local_full" }, authMode: "local" });
     usePosStore.setState({
       _hydrated: true,
@@ -98,6 +101,7 @@ describe("usePosStore — staff account CRUD authorization", () => {
   });
 
   it("owner addStaffAccount persists locally after cloud-first create", async () => {
+    seedDeviceAuthorityCacheForTests(approvedDeviceAuthorityFixture());
     setStoreSubscriptionContext({ snapshot: { kind: "local_full" }, authMode: "supabase" });
     usePosStore.setState({ sessionActor: actor("owner"), preferences: { ...usePosStore.getState().preferences, staffAccounts: [] } });
     const r = await usePosStore.getState().addStaffAccount({

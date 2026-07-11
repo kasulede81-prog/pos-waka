@@ -12,23 +12,23 @@ import type { User } from "@supabase/supabase-js";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import {
   fetchShopDeviceLimitContext,
-  registerShopDeviceOnLogin,
   resolveActivationBlockKind,
   resolveLoginDeviceActivation,
-  tryOwnerApproveCurrentDevice,
+  type ActivationBlockKind,
   type DeviceActivationResult,
   type DeviceLimitContext,
 } from "../lib/deviceActivation";
 import { fetchShopDevicesForManagement } from "../lib/shopDevices";
 import { getOrCreateDeviceId } from "../lib/deviceId";
-import { isPendingApprovalExpired } from "../lib/devicePendingApproval";
-import { AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN } from "../lib/deviceAuthorityPolicy";
+import { logActivationFailure, type ActivationFailureKind } from "../lib/deviceActivationDiagnostics";
+import { schedulePostLoginBackgroundTasks } from "../lib/postLoginBackgroundTasks";
 
 export type DeviceActivationBlock = {
   shopId: string;
   result: DeviceActivationResult;
   context: DeviceLimitContext | null;
-  kind: "limit" | "pending" | "revoked" | "retry";
+  kind: ActivationBlockKind;
+  failureReason?: ActivationFailureKind;
 };
 
 type DeviceActivationState = {
@@ -41,7 +41,7 @@ type DeviceActivationState = {
 
 const DeviceActivationCtx = createContext<DeviceActivationState | null>(null);
 
-const DEVICE_CHECK_TIMEOUT_MS = 20_000;
+const DEVICE_CHECK_TIMEOUT_MS = 30_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise((resolve) => {
@@ -63,6 +63,7 @@ export function pathAllowedWhenDeviceBlocked(path: string): boolean {
   const p = path.split("?")[0] || "/";
   return (
     p === "/device-limit" ||
+    p === "/device-activating" ||
     p === "/device-pending" ||
     p === "/upgrade" ||
     p === "/login" ||
@@ -99,83 +100,103 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         setBlock(null);
         return;
       }
+
       const loginActivation = await withTimeout(
         resolveLoginDeviceActivation(sid),
         DEVICE_CHECK_TIMEOUT_MS,
-        { activated: false, result: { ok: false, activated: false } },
+        {
+          activated: false,
+          result: { ok: false, activated: false },
+          failureReason: "timeout" as ActivationFailureKind,
+        },
       );
-      const result = loginActivation.result;
+
       if (loginActivation.activated) {
         setActivated(true);
         setBlock(null);
-        void import("../lib/staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {
-          scheduleStaffCacheProvisioning();
+        schedulePostLoginBackgroundTasks(sid);
+        return;
+      }
+
+      const result = loginActivation.result;
+      const context = await withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null);
+      const isOwner = loginActivation.isOwner ?? context?.is_owner ?? false;
+
+      if (
+        result.revoked ||
+        loginActivation.failureReason === "revoked" ||
+        loginActivation.failureReason === "device_revoked"
+      ) {
+        setActivated(false);
+        setBlock({
+          shopId: sid,
+          result,
+          context,
+          kind: "revoked",
+          failureReason: "device_revoked",
         });
         return;
       }
-      if (result.pending_approval || result.approval_status === "pending") {
-        if (AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN) {
-          const approved = await withTimeout(tryOwnerApproveCurrentDevice(sid), DEVICE_CHECK_TIMEOUT_MS, false);
-          if (approved) {
-            setActivated(true);
-            setBlock(null);
-            return;
-          }
-        }
-        if (result.approval_expired || isPendingApprovalExpired(result.approval_requested_at)) {
-          const refreshed = await withTimeout(
-            registerShopDeviceOnLogin(sid),
-            DEVICE_CHECK_TIMEOUT_MS,
-            { ok: false, activated: false },
-          );
-          if (refreshed.activated) {
-            setActivated(true);
-            setBlock(null);
-            return;
-          }
-          if (refreshed.pending_approval || refreshed.approval_status === "pending") {
-            setActivated(false);
-            setBlock({ shopId: sid, result: refreshed, context: null, kind: "pending" });
-            return;
-          }
-          const fp = getOrCreateDeviceId();
-          const [{ devices }, context] = await Promise.all([
-            withTimeout(fetchShopDevicesForManagement(sid), DEVICE_CHECK_TIMEOUT_MS, { devices: [], isOwner: false }),
-            withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null),
-          ]);
-          const mine = devices.find((d) => d.device_fingerprint === fp);
-          const kind = resolveActivationBlockKind({ result: refreshed, context, currentDevice: mine ?? null });
-          setActivated(false);
-          setBlock({ shopId: sid, result: refreshed, context, kind });
-          return;
-        }
+
+      if (
+        result.limit_blocked ||
+        loginActivation.failureReason === "limit_reached" ||
+        loginActivation.failureReason === "device_limit_reached"
+      ) {
         setActivated(false);
-        setBlock({ shopId: sid, result, context: null, kind: "pending" });
+        setBlock({
+          shopId: sid,
+          result,
+          context,
+          kind: "limit",
+          failureReason: "device_limit_reached",
+        });
         return;
       }
-      if (result.revoked) {
+
+      if (!isOwner && (result.pending_approval || result.approval_status === "pending")) {
         setActivated(false);
-        setBlock({ shopId: sid, result, context: null, kind: "revoked" });
+        setBlock({
+          shopId: sid,
+          result,
+          context,
+          kind: "pending",
+          failureReason: "device_pending",
+        });
         return;
       }
-      if (result.limit_blocked) {
-        const context = await withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null);
-        setActivated(false);
-        setBlock({ shopId: sid, result, context, kind: "limit" });
-        return;
-      }
+
       const fp = getOrCreateDeviceId();
-      const [{ devices }, context] = await Promise.all([
+      const [{ devices }, deviceContext] = await Promise.all([
         withTimeout(fetchShopDevicesForManagement(sid), DEVICE_CHECK_TIMEOUT_MS, { devices: [], isOwner: false }),
-        withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null),
+        Promise.resolve(context),
       ]);
       const mine = devices.find((d) => d.device_fingerprint === fp);
-      const kind = resolveActivationBlockKind({ result, context, currentDevice: mine ?? null });
+      const kind = resolveActivationBlockKind({
+        result,
+        context: deviceContext,
+        currentDevice: mine ?? null,
+        failureReason: loginActivation.failureReason,
+      });
+
+      if (kind === "limit") {
+        setActivated(false);
+        setBlock({ shopId: sid, result, context: deviceContext, kind: "limit", failureReason: "device_limit_reached" });
+        return;
+      }
+
+      if (kind === "pending" && !isOwner) {
+        setActivated(false);
+        setBlock({ shopId: sid, result, context: deviceContext, kind: "pending", failureReason: "device_pending" });
+        return;
+      }
+
       setActivated(false);
-      setBlock({ shopId: sid, result, context, kind });
-    } catch {
+      setBlock({ shopId: sid, result, context: deviceContext, kind, failureReason: loginActivation.failureReason });
+    } catch (error) {
       setActivated(false);
       setBlock(null);
+      logActivationFailure("login", "unknown", { error: String(error) });
     } finally {
       inFlightRef.current = null;
       setLoading(false);

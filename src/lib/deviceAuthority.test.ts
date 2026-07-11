@@ -40,10 +40,10 @@ const approvedDevice: DeviceAuthorityContext = {
 };
 
 describe("deviceAuthority cache", () => {
-  it("defaults permissive when cache is cold", () => {
-    expect(isDeviceAuthorizedForManagementSync()).toBe(true);
-    expect(isDeviceApprovedCachedSync()).toBe(true);
-    expect(canPerformDeviceAuthorizedActionSync("staff_manage")).toBe(true);
+  it("blocks management when cache is cold", () => {
+    expect(isDeviceAuthorizedForManagementSync()).toBe(false);
+    expect(isDeviceApprovedCachedSync()).toBe(false);
+    expect(canPerformDeviceAuthorizedActionSync("staff_manage")).toBe(false);
   });
 
   it("approved device can manage staff", () => {

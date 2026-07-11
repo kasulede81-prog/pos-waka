@@ -22,6 +22,7 @@ export function pathAllowedWhenEmailUnverified(pathname: string): boolean {
     "/onboarding",
     "/upgrade",
     "/device-limit",
+    "/device-activating",
     "/account",
   ];
   if (allowed.includes(p)) return true;

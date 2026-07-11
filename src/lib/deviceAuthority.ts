@@ -53,6 +53,23 @@ const CACHE_TTL_MS = 5 * 60_000;
 
 type CachedEntry = { ctx: DeviceAuthorityContext; at: number };
 let memoryCache: CachedEntry | null = null;
+const refreshListeners = new Set<() => void>();
+
+function notifyAuthorityRefreshListeners(): void {
+  for (const listener of refreshListeners) {
+    try {
+      listener();
+    } catch {
+      /* ignore listener errors */
+    }
+  }
+}
+
+/** Subscribe to authority cache refresh events (e.g. after device activation). */
+export function subscribeDeviceAuthorityRefresh(listener: () => void): () => void {
+  refreshListeners.add(listener);
+  return () => refreshListeners.delete(listener);
+}
 
 function readOfflineCache(shopId: string): DeviceAuthorityContext | null {
   if (typeof window === "undefined") return null;
@@ -123,20 +140,26 @@ function parseContext(data: unknown, shopId: string, fp: string): DeviceAuthorit
   };
 }
 
-export function isDeviceAuthorizedForManagement(ctx: DeviceAuthorityContext | null): boolean {
-  if (!ctx) return true;
+export function isDeviceAuthorizedForManagement(ctx: DeviceAuthorityContext | null | undefined): boolean {
+  if (!ctx) return false;
   return ctx.isDeviceAuthorized;
 }
 
 /** Fetch device authority from cloud; falls back to offline cache. */
 export async function fetchDeviceAuthorityContext(
   shopId?: string,
+  opts?: { force?: boolean },
 ): Promise<DeviceAuthorityContext | null> {
   const ctx = shopId ? { shopId } : await resolveShopCtx();
   if (!ctx) return null;
   const fp = getOrCreateDeviceId();
 
-  if (memoryCache && memoryCache.ctx.shopId === ctx.shopId && Date.now() - memoryCache.at < CACHE_TTL_MS) {
+  if (
+    !opts?.force &&
+    memoryCache &&
+    memoryCache.ctx.shopId === ctx.shopId &&
+    Date.now() - memoryCache.at < CACHE_TTL_MS
+  ) {
     return memoryCache.ctx;
   }
 
@@ -156,6 +179,16 @@ export async function fetchDeviceAuthorityContext(
   }
   const parsed = parseContext(data, ctx.shopId, fp);
   if (parsed) writeOfflineCache(parsed);
+  return parsed;
+}
+
+/** Force-refresh authority from cloud and notify subscribers. */
+export async function refreshDeviceAuthorityContext(
+  shopId?: string,
+): Promise<DeviceAuthorityContext | null> {
+  memoryCache = null;
+  const parsed = await fetchDeviceAuthorityContext(shopId, { force: true });
+  notifyAuthorityRefreshListeners();
   return parsed;
 }
 
@@ -179,7 +212,7 @@ export function isDeviceAuthorizedForManagementSync(): boolean {
 
 export function isDeviceApprovedCachedSync(): boolean {
   const ctx = getCachedDeviceAuthoritySync();
-  if (!ctx) return true;
+  if (!ctx) return false;
   return ctx.isApproved && ctx.approvalStatus !== "pending";
 }
 
@@ -211,9 +244,11 @@ export async function setDeviceApprovalStatus(
   if (error) return { ok: false, error: error.message };
   clearDeviceAuthorityCache();
   const payload = data as { ok?: boolean; error?: string; limit_blocked?: boolean } | null;
-  return {
+  const result = {
     ok: payload?.ok === true,
     error: payload?.error,
     limitBlocked: payload?.limit_blocked === true,
   };
+  if (result.ok) notifyAuthorityRefreshListeners();
+  return result;
 }

@@ -19,6 +19,8 @@ import {
 } from "./subscriptionDiagnostics";
 import { usePosStore } from "../store/usePosStore";
 import { openTestShift } from "../test/shiftTestSetup";
+import { clearDeviceAuthorityCache, seedDeviceAuthorityCacheForTests } from "./deviceAuthority";
+import { approvedDeviceAuthorityFixture } from "./deviceAuthorityTestFixtures";
 
 function actor(role: SessionActor["role"]): SessionActor {
   return { userId: "user-1", role, displayName: "Test" };
@@ -110,12 +112,17 @@ describe("checkStorePermissionEffective", () => {
 });
 
 describe("authorizeBackupRestore", () => {
+  beforeEach(() => {
+    clearDeviceAuthorityCache();
+  });
+
   it("denies free tier restore", () => {
     const r = authorizeBackupRestore({ actor: actor("owner"), snapshot: freeRemote(), authMode: "supabase" });
     expect(r).toEqual({ ok: false, errorKey: "backupRestoreNotEntitled" });
   });
 
   it("allows starter tier restore for owner", () => {
+    seedDeviceAuthorityCacheForTests(approvedDeviceAuthorityFixture());
     const r = authorizeBackupRestore({ actor: actor("owner"), snapshot: starterRemote(), authMode: "supabase" });
     expect(r.ok).toBe(true);
   });
