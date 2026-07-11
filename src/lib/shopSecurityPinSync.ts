@@ -14,6 +14,10 @@ import {
   logShopSecurityPinEvent,
   logShopSecurityPinFailure,
 } from "./shopSecurityPinDiagnostics";
+import {
+  clearShopSecurityPinMigrationBlock,
+  isShopSecurityPinMigrationBlocked,
+} from "./shopSecurityPinRecovery";
 import { supabase } from "./supabase";
 
 const CACHE_KEY = "waka.shop.security.pin.cache.v1";
@@ -129,6 +133,11 @@ async function applyCloudStateToLocal(
 export async function migrateLocalShopSecurityPinToCloud(shopId: string): Promise<boolean> {
   if (!shopId || !supabase || !getDeviceOnline()) return false;
 
+  if (isShopSecurityPinMigrationBlocked(shopId)) {
+    logShopSecurityPinEvent("pin_migration_blocked", { shopId, reason: "recovery_authoritative" });
+    return false;
+  }
+
   const { usePosStore } = await import("../store/usePosStore");
   let localHash = usePosStore.getState().preferences.backOfficePin;
   if (!localHash) return false;
@@ -187,11 +196,22 @@ export async function hydrateShopSecurityPin(
   const localConfigured = isShopSecurityPinConfigured(localHash);
 
   if (!cloud.configured && !localConfigured) {
-    logShopSecurityPinEvent("pin_hydrate_success", { shopId, result: "unchanged" });
+    if (isShopSecurityPinMigrationBlocked(shopId)) {
+      clearShopSecurityPinMigrationBlock(shopId);
+      logShopSecurityPinEvent("pin_hydrate_success", { shopId, result: "server_empty_confirmed" });
+    } else {
+      logShopSecurityPinEvent("pin_hydrate_success", { shopId, result: "unchanged" });
+    }
     return "unchanged";
   }
 
   if (!cloud.configured && localConfigured) {
+    if (isShopSecurityPinMigrationBlocked(shopId)) {
+      await applyCloudStateToLocal(shopId, cloud);
+      clearShopSecurityPinMigrationBlock(shopId);
+      logShopSecurityPinEvent("pin_cleared", { shopId, version: cloud.version, reason: "recovery_wins" });
+      return "cleared";
+    }
     const migrated = await migrateLocalShopSecurityPinToCloud(shopId);
     return migrated ? "migrated" : "unchanged";
   }
@@ -213,6 +233,7 @@ export async function hydrateShopSecurityPin(
 
   if (!cloud.configured) {
     await applyCloudStateToLocal(shopId, cloud);
+    clearShopSecurityPinMigrationBlock(shopId);
     logShopSecurityPinEvent("pin_cleared", { shopId, version: cloud.version });
     return "cleared";
   }

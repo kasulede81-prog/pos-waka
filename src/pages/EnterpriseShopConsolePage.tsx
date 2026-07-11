@@ -173,7 +173,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
         confirm: t(lang, "internalShopActionConfirmLogout"),
       });
       actions.push({ id: "password_reset", label: "Send owner password reset", group: "Account recovery" });
-      actions.push({ id: "clear_bo_pin", label: "Clear back office PIN", group: "Account recovery" });
+      actions.push({ id: "clear_bo_pin", label: t(lang, "internalAdminClearShopSecurityPin"), group: "Account recovery" });
     }
 
     if (subId && canSubs) {
@@ -269,7 +269,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
       case "clear_bo_pin":
         void executeAction("admin_reset_backoffice_pin", () => adminShopResetBackOfficePin(detail.shop.id), {
           permitted: canSupport,
-          confirm: "Clear back office PIN for this shop?",
+          confirm: t(lang, "internalAdminClearShopSecurityPinConfirm"),
         });
         break;
       case "extend_trial":

@@ -7675,8 +7675,8 @@ export async function applyRestoredSnapshotFromBackup(
       supplierPayments: restored.supplierPayments,
     });
 
-    void import("../lib/shopRecoverySignals").then(({ applyShopRecoverySignalsForCurrentShop }) => {
-      void applyShopRecoverySignalsForCurrentShop();
+    void import("../lib/shopSecurityPinRecovery").then(({ scheduleShopSecurityPinRecovery }) => {
+      void scheduleShopSecurityPinRecovery("app_launch");
     });
   } finally {
     release();
@@ -7895,9 +7895,9 @@ async function runPostBootstrapTasks(): Promise<void> {
   if (!sessionData.session?.user) return;
 
   const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
-  const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
+  const { scheduleShopSecurityPinRecovery } = await import("../lib/shopSecurityPinRecovery");
   void hydrateLocalShopProfileFromCloud().catch(() => undefined);
-  void applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
+  void scheduleShopSecurityPinRecovery("app_launch").catch(() => undefined);
   const { isCloudRecoveryLockActive } = await import("../lib/cloudRecoverySession");
   if (isCloudRecoveryLockActive()) return;
   const { shouldRequireRecoveryLock } = await import("../lib/postAuthCloudHydrate");

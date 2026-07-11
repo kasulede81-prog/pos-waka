@@ -3195,6 +3195,16 @@ const en: Dict = {
   settingsBackOfficePinSyncFailed: "Could not sync PIN to your shop. Try again when online.",
   settingsBackOfficePinMismatch: "PINs must match.",
   settingsBackOfficePinLength: "Use 4 to 6 digits.",
+  shopSecurityPinRecoveryCleared: "Shop Security PIN cleared.",
+  shopSecurityPinRecoveryCreateNew: "Create a new Shop Security PIN before using protected features.",
+  shopSecurityPinRecoveryBannerAction: "Create Shop Security PIN",
+  shopSecurityPinRecoveryBannerDismiss: "Dismiss",
+  internalAdminClearShopSecurityPin: "Clear Shop Security PIN",
+  internalAdminClearShopSecurityPinConfirm:
+    "Clear Shop Security PIN for this shop? This removes only the Shop Security PIN — not staff credentials or owner login.",
+  internalAdminClearShopSecurityPinSuccess:
+    "Shop Security PIN removed. The owner must create a new Shop Security PIN.",
+  internalAdminClearShopSecurityPinSignal: "Shop Security PIN clear signal",
   homeCashierHello: "Ready to sell",
   homeCashierSub: "Start selling fast",
   homeProfitWindowTitle: "Today's profit",
@@ -9388,6 +9398,16 @@ const lg: Dict = {
   settingsBackOfficePinSyncFailed: "Tetusobodde kusync PIN ku duka lyo. Gezaako nate nga online.",
   settingsBackOfficePinMismatch: "PIN z'ekwenkanankana.",
   settingsBackOfficePinLength: "Kozesa namba 4 okutuuka ku 6.",
+  shopSecurityPinRecoveryCleared: "PIN y'ebyokwerinda y'omu duka eggyiddwawo.",
+  shopSecurityPinRecoveryCreateNew: "Kola PIN empya ey'ebyokwerinda y'omu duka nga tonnakozesa bintu eby'ekyama.",
+  shopSecurityPinRecoveryBannerAction: "Kola PIN y'ebyokwerinda",
+  shopSecurityPinRecoveryBannerDismiss: "Ggalawo",
+  internalAdminClearShopSecurityPin: "Ggyawo PIN y'ebyokwerinda y'omu duka",
+  internalAdminClearShopSecurityPinConfirm:
+    "Ggyawo PIN y'ebyokwerinda y'omu duka? Kino kiggyawo PIN y'omu duka bwokka — si staff oba password ya owner.",
+  internalAdminClearShopSecurityPinSuccess:
+    "PIN y'ebyokwerinda y'omu duka eggyiddwawo. Owner alina okukola PIN empya.",
+  internalAdminClearShopSecurityPinSignal: "Obubaka bwa PIN y'ebyokwerinda egiddwawo",
   homeCashierHello: "Weteekeddwa okutunda",
   homeCashierSub: "Tandika okutunda mangu",
   homeProfitWindowTitle: "Amagoba ga leero",

@@ -1,5 +1,7 @@
 import { getAuthRecoveryUrl } from "./authConfig";
 import { hasSupabaseConfig, supabase } from "./supabase";
+import type { ShopSecurityPinRecoveryTrigger } from "./shopSecurityPinRecovery";
+import { logShopSecurityPinRecoveryStep } from "./shopSecurityPinDiagnostics";
 
 const APPLIED_PIN_CLEAR_KEY = "waka.recovery.pinClearApplied.v1";
 
@@ -26,10 +28,14 @@ function writeAppliedPinClearAt(shopId: string, at: string): void {
 }
 
 /**
- * Apply server-side admin PIN reset on this device.
+ * Apply server-side admin Shop Security PIN clear on this device.
  * Bypasses setPreferences auth — support recovery must always win over local session role.
  */
-export async function applyAdminBackOfficePinClear(shopId: string, clearedAt: string): Promise<boolean> {
+export async function applyAdminBackOfficePinClear(
+  shopId: string,
+  clearedAt: string,
+  reason?: ShopSecurityPinRecoveryTrigger,
+): Promise<boolean> {
   const lastApplied = readAppliedPinClearAt(shopId);
   if (lastApplied === clearedAt) return false;
 
@@ -44,22 +50,30 @@ export async function applyAdminBackOfficePinClear(shopId: string, clearedAt: st
     preferences: {
       ...s.preferences,
       backOfficePin: null,
-      posLocked: false,
-      biometricAuthEnabled: false,
     },
   }));
 
-  usePosStore.getState().logAuditAction(
-    "admin_pin_clear_applied",
-    "Shop Security PIN cleared by support recovery",
-    { shopId, clearedAt },
-  );
+  usePosStore.getState().logAuditAction("admin_pin_clear_applied", "Shop Security PIN cleared by support recovery", {
+    shopId,
+    clearedAt,
+    recoveryReason: reason ?? "recovery_signal",
+    recoveryCompleted: true,
+    recoveryAppliedOnDevice: true,
+  });
 
   writeAppliedPinClearAt(shopId, clearedAt);
   flushPendingPersist();
 
   const { applyShopSecurityPinRecoveryClear } = await import("./shopSecurityPinSync");
   applyShopSecurityPinRecoveryClear(shopId);
+
+  const { blockShopSecurityPinMigration, setShopSecurityPinRecoveryNotice } = await import(
+    "./shopSecurityPinRecovery"
+  );
+  blockShopSecurityPinMigration(shopId, "admin_clear");
+  setShopSecurityPinRecoveryNotice(shopId, clearedAt);
+
+  logShopSecurityPinRecoveryStep("local_cache_cleared", { shopId, reason: reason ?? "recovery_signal" });
 
   void import("./cloudSnapshotSync").then(({ uploadShopCloudSnapshot }) => {
     void uploadShopCloudSnapshot({ force: true });
@@ -68,19 +82,24 @@ export async function applyAdminBackOfficePinClear(shopId: string, clearedAt: st
   return true;
 }
 
-/** Apply server-side admin PIN reset on this device (after cloud sync / login). */
-export async function applyShopRecoverySignalsForCurrentShop(): Promise<boolean> {
+/** Apply server-side admin Shop Security PIN clear on this device (after cloud sync / login). */
+export async function applyShopRecoverySignalsForCurrentShop(
+  reason?: ShopSecurityPinRecoveryTrigger,
+): Promise<boolean> {
   if (!hasSupabaseConfig || !supabase) return false;
 
   const { resolveShopCtx } = await import("../offline/cloudSync");
   const ctx = await resolveShopCtx();
   if (!ctx) return false;
 
-  return applyShopRecoverySignalsForShop(ctx.shopId);
+  return applyShopRecoverySignalsForShop(ctx.shopId, reason);
 }
 
 /** Fetch and apply recovery signals for a shop — safe to call before cloud pull. */
-export async function applyShopRecoverySignalsForShop(shopId: string): Promise<boolean> {
+export async function applyShopRecoverySignalsForShop(
+  shopId: string,
+  reason?: ShopSecurityPinRecoveryTrigger,
+): Promise<boolean> {
   if (!hasSupabaseConfig || !supabase) return false;
 
   const rpc = supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: shopId });
@@ -95,12 +114,16 @@ export async function applyShopRecoverySignalsForShop(shopId: string): Promise<b
   const clearedAt = String((data as { clear_back_office_pin_at?: string }).clear_back_office_pin_at ?? "").trim();
   if (!clearedAt) return false;
 
-  return applyAdminBackOfficePinClear(shopId, clearedAt);
+  return applyAdminBackOfficePinClear(shopId, clearedAt, reason);
 }
 
 /** Proactive check on app load / unlock screens — does not require full sync. */
-export async function ensureShopRecoveryApplied(): Promise<boolean> {
-  return applyShopRecoverySignalsForCurrentShop();
+export async function ensureShopRecoveryApplied(
+  reason?: ShopSecurityPinRecoveryTrigger,
+): Promise<boolean> {
+  const { scheduleShopSecurityPinRecovery } = await import("./shopSecurityPinRecovery");
+  const result = await scheduleShopSecurityPinRecovery(reason ?? "app_launch");
+  return result.applied;
 }
 
 /** Send Supabase password recovery email to shop owner (after admin RPC audit). */

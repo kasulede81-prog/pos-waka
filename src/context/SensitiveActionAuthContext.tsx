@@ -17,7 +17,7 @@ import {
   sensitiveAuthSatisfiedByBackOfficeUnlock,
   grantSecuritySessionForScope,
 } from "../lib/sensitiveActionAuth";
-import { verifySecurityCredential } from "../lib/enterpriseSecurity/EnterpriseSecurityService";
+import { isShopPinConfigured, verifySecurityCredential } from "../lib/enterpriseSecurity/EnterpriseSecurityService";
 import type { SecurityAuditPayload } from "../lib/enterpriseSecurity/types";
 import {
   isSecuritySessionActive,
@@ -29,6 +29,8 @@ import {
   EnterpriseSecurityDialog,
   type EnterpriseSecurityDialogMode,
 } from "../components/security/EnterpriseSecurityDialog";
+import { Link } from "react-router-dom";
+import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { defaultSecurityAuditLogger } from "../lib/enterpriseSecurity/audit";
 
 type PendingRequest = {
@@ -48,6 +50,10 @@ function actionPromptReason(lang: Language, kind: SensitiveActionKind): string {
   return t(lang, key);
 }
 
+function requiresShopSecurityPin(kind: SensitiveActionKind): boolean {
+  return kind === "change_settings" || kind === "manage_users" || kind === "access_reports";
+}
+
 function dialogModeForKind(kind: SensitiveActionKind): EnterpriseSecurityDialogMode {
   if (kind === "change_settings" || kind === "manage_users" || kind === "access_reports") {
     return { pinCredential: "shop_security_pin", allowBiometric: true };
@@ -60,6 +66,7 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
   const { isUnlocked: backOfficeUnlocked } = useBackOfficeSession();
   const [pending, setPending] = useState<PendingRequest | null>(null);
   const [forcePin, setForcePin] = useState(false);
+  const [pinSetupRequired, setPinSetupRequired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusKind, setStatusKind] = useState<"success" | "error" | null>(null);
@@ -71,6 +78,7 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
     pendingRef.current = null;
     setPending(null);
     setForcePin(false);
+    setPinSetupRequired(false);
     setBusy(false);
     if (!granted) {
       setStatusMessage(null);
@@ -105,6 +113,16 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
         return Promise.resolve(true);
       }
       const preferences = usePosStore.getState().preferences;
+      if (requiresShopSecurityPin(kind) && !isShopPinConfigured(preferences)) {
+        return new Promise<boolean>((resolve) => {
+          pendingRef.current = { kind, resolve };
+          setPending({ kind, resolve });
+          setPinSetupRequired(true);
+          setForcePin(false);
+          setStatusMessage(t(lang, "shopSecurityPinRecoveryCreateNew"));
+          setStatusKind(null);
+        });
+      }
       if (sensitiveAuthSatisfiedByBackOfficeUnlock(preferences, backOfficeUnlocked)) {
         grantForKind(kind);
         return Promise.resolve(true);
@@ -249,7 +267,33 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
   return (
     <SensitiveActionAuthContext.Provider value={value}>
       {children}
-      {pending && dialogMode ? (
+      {pending && pinSetupRequired ? (
+        <AppModalOverlay className="z-[60] flex items-center justify-center bg-foreground/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl">
+            <h2 className="text-lg font-black text-foreground">{t(lang, "shopSecurityPinRecoveryCleared")}</h2>
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">
+              {t(lang, "shopSecurityPinRecoveryCreateNew")}
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <Link
+                to="/settings/pin"
+                className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
+                onClick={() => finish(false)}
+              >
+                {t(lang, "shopSecurityPinRecoveryBannerAction")}
+              </Link>
+              <button
+                type="button"
+                className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-border px-4 text-sm font-black text-foreground"
+                onClick={cancel}
+              >
+                {t(lang, "cancel")}
+              </button>
+            </div>
+          </div>
+        </AppModalOverlay>
+      ) : null}
+      {pending && dialogMode && !pinSetupRequired ? (
         <EnterpriseSecurityDialog
           lang={lang}
           open

@@ -8,8 +8,11 @@ import {
 } from "../../lib/wakaInternalAdmin";
 import { sendOwnerPasswordResetEmail } from "../../lib/shopRecoverySignals";
 import { executeInternalAdminAction } from "../../lib/internalAdminActionRunner";
+import { t } from "../../lib/i18n";
+import type { Language } from "../../types";
 
 type Props = {
+  lang: Language;
   shopId: string;
   detail: ShopOpsDetail | null;
   busy: boolean;
@@ -20,6 +23,7 @@ type Props = {
 };
 
 export function AccountRecoveryPanel({
+  lang,
   shopId,
   detail,
   busy,
@@ -61,9 +65,9 @@ export function AccountRecoveryPanel({
   return (
     <section className="rounded-2xl border-2 border-amber-200 bg-amber-50/90 p-4 shadow-sm">
       <p className="text-[10px] font-black uppercase tracking-wide text-amber-900">Account recovery</p>
-      <h2 className="mt-0.5 text-base font-black text-foreground">Reset login &amp; back office PIN</h2>
+      <h2 className="mt-0.5 text-base font-black text-foreground">Owner login &amp; Shop Security PIN</h2>
       <p className="mt-1 text-xs font-medium text-muted-foreground">
-        Use when the shop owner forgot their sign-in password or back office / lock PIN.
+        Use when the shop owner forgot their sign-in password or Shop Security PIN.
       </p>
       {ownerEmail ? (
         <p className="mt-2 font-mono text-xs text-foreground">
@@ -112,15 +116,15 @@ export function AccountRecoveryPanel({
                 if (!r.ok) return r;
                 return {
                   ok: true,
-                  message:
-                    "Shop Security PIN cleared on server and cloud backup. Owner reopens Waka online — PIN lifts automatically.",
+                  message: t(lang, "internalAdminClearShopSecurityPinSuccess"),
                 };
               },
-              "Shop Security PIN cleared.",
+              t(lang, "internalAdminClearShopSecurityPinSuccess"),
+              t(lang, "internalAdminClearShopSecurityPinConfirm"),
             )
           }
         >
-          Clear back office PIN
+          {t(lang, "internalAdminClearShopSecurityPin")}
         </button>
       </div>
       <div className="mt-4 rounded-xl border border-violet-200 bg-white/90 p-3">
@@ -172,7 +176,7 @@ export function AccountRecoveryPanel({
 
       <ul className="mt-3 list-disc space-y-1 pl-4 text-[11px] font-medium text-muted-foreground">
         <li>Email reset sends a link only if the owner has a real email on file (not a phone-only login).</li>
-        <li>Back office PIN is cleared on the server; the owner must open Waka POS while online.</li>
+        <li>Shop Security PIN is cleared on the server; owner devices remove it on next online check.</li>
         <li>Staff switch-user PINs are reset in Settings → Staff on the owner device.</li>
       </ul>
     </section>

@@ -103,7 +103,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           {filtered.length} of {data.shopOpenings.length} · {sort === "health" ? "health sorted" : "recent sorted"}
         </p>
         <p className="mt-1 text-xs font-semibold text-amber-900">
-          Open a shop → yellow <strong>Account recovery</strong> card to reset owner login or back office PIN.
+          Open a shop → yellow <strong>Account recovery</strong> card to reset owner login or clear Shop Security PIN.
         </p>
       </div>
 

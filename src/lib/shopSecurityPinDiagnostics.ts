@@ -6,26 +6,39 @@ export type ShopSecurityPinDiagnosticEvent =
   | "pin_hydrate_failed"
   | "pin_synced"
   | "pin_migrated"
+  | "pin_migration_blocked"
   | "pin_created"
   | "pin_changed"
   | "pin_cleared"
   | "pin_recovery_applied"
   | "pin_version_conflict";
 
-const LOG_PREFIX = "[waka-shop-security-pin]";
+export type ShopSecurityPinRecoveryDiagnosticStep =
+  | "recovery_detected"
+  | "local_cache_cleared"
+  | "migration_blocked"
+  | "hydration_complete"
+  | "awaiting_new_pin"
+  | "offline_recovery_applied";
+
+const LOG_PREFIX = "[waka-shop-security]";
+
+function sanitizeDetail(detail?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!detail) return undefined;
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(detail)) {
+    const lower = key.toLowerCase();
+    if (lower.includes("hash") || lower.includes("pin") || lower.includes("secret")) continue;
+    safe[key] = value;
+  }
+  return safe;
+}
 
 export function logShopSecurityPinEvent(
   event: ShopSecurityPinDiagnosticEvent,
   detail?: Record<string, unknown>,
 ): void {
-  const safe: Record<string, unknown> = { event };
-  if (detail) {
-    for (const [key, value] of Object.entries(detail)) {
-      if (key.toLowerCase().includes("hash") || key.toLowerCase().includes("pin")) continue;
-      safe[key] = value;
-    }
-  }
-  console.info(LOG_PREFIX, safe);
+  console.info(LOG_PREFIX, { event, ...sanitizeDetail(detail) });
 }
 
 export function logShopSecurityPinFailure(
@@ -33,4 +46,11 @@ export function logShopSecurityPinFailure(
   detail?: Record<string, unknown>,
 ): void {
   logShopSecurityPinEvent(event, { ...detail, level: "warn" });
+}
+
+export function logShopSecurityPinRecoveryStep(
+  step: ShopSecurityPinRecoveryDiagnosticStep,
+  detail?: Record<string, unknown>,
+): void {
+  console.info(LOG_PREFIX, { recovery: step, ...sanitizeDetail(detail) });
 }

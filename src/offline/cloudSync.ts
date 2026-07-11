@@ -2991,7 +2991,12 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   }
 
   const mergeStarted = Date.now();
-  const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
+  const { scheduleShopSecurityPinRecovery } = await import("../lib/shopSecurityPinRecovery");
+  await scheduleShopSecurityPinRecovery("background_sync").catch(() => ({
+    applied: false,
+    hydrated: false,
+    awaitingNewPin: false,
+  }));
   const { applyRestoredSnapshotFromBackup, persistRestoredSnapshotToDisk } = await import(
     "../store/usePosStore",
   );
@@ -3156,7 +3161,11 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       sales: usePosStore.getState().sales,
       debtPayments: usePosStore.getState().debtPayments,
     });
-    await applyShopRecoverySignalsForCurrentShop();
+    await scheduleShopSecurityPinRecovery("background_sync").catch(() => ({
+      applied: false,
+      hydrated: false,
+      awaitingNewPin: false,
+    }));
     const { isDiagnosticsEnabled, recordCloudMergeDuration, recordSyncDuration } = await import(
       "../lib/stabilityDiagnostics",
     );
@@ -3336,7 +3345,11 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     });
   }
 
-  await applyShopRecoverySignalsForCurrentShop();
+  await scheduleShopSecurityPinRecovery("background_sync").catch(() => ({
+    applied: false,
+    hydrated: false,
+    awaitingNewPin: false,
+  }));
   if (opts?.cloudRecovery) {
     const { reconcileRecoveryInventoryLedger } = await import("../lib/recoveryInventoryReconciliation");
     const { recordRecoveryIntegrityDiagnostics } = await import("../lib/cloudRecoverySession");
@@ -3500,8 +3513,12 @@ async function syncShopWithCloudInner(opts?: {
     }
   }
 
-  const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
-  await applyShopRecoverySignalsForCurrentShop().catch(() => false);
+  const { scheduleShopSecurityPinRecovery } = await import("../lib/shopSecurityPinRecovery");
+  await scheduleShopSecurityPinRecovery("background_sync").catch(() => ({
+    applied: false,
+    hydrated: false,
+    awaitingNewPin: false,
+  }));
 
   const pullBlocked = shouldPausePosBackgroundPull();
   const doPull = pullBlocked

@@ -1503,7 +1503,7 @@ export async function adminShopResetBackOfficePin(
   if (j.ok === true) {
     return { ok: true, clearedAt: j.clear_back_office_pin_at };
   }
-  return { ok: false, message: j.error ?? "Could not reset back office PIN." };
+  return { ok: false, message: j.error ?? "Could not clear Shop Security PIN." };
 }
 
 /** Support: set owner auth password directly (edge function + service role). */

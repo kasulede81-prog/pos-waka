@@ -18,6 +18,7 @@ export function ShopConsoleSecurityTab({ ctx, onDeleted }: Props) {
     <div className="space-y-3">
       {canSupport ? (
         <AccountRecoveryPanel
+          lang={ctx.lang}
           shopId={detail.shop.id}
           detail={detail}
           busy={busy}

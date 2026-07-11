@@ -44,7 +44,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
         <p className="text-sm text-muted-foreground">Helpdesk inbox</p>
         {perms.canShopSupport ? (
           <p className="mt-1 text-xs font-semibold text-amber-900">
-            Reset owner login or back office PIN: Shops → open shop → <strong>Account recovery</strong> card, or use the
+            Reset owner login or clear Shop Security PIN: Shops → open shop → <strong>Account recovery</strong> card, or use the
             tool below.
           </p>
         ) : null}

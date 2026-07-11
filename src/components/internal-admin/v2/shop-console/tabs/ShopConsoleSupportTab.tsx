@@ -150,7 +150,7 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
                 })
               }
             >
-              PIN reset
+              {t(lang, "internalAdminClearShopSecurityPin")}
             </RescueActionButton>
             <RescueActionButton
               variant="secondary"
@@ -189,7 +189,7 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
                 <div>Password reset signal: {new Date(rescue.recoverySignals.passwordResetRequestedAt).toLocaleString("en-GB")}</div>
               ) : null}
               {rescue.recoverySignals.clearBackOfficePinAt ? (
-                <div>PIN reset signal: {new Date(rescue.recoverySignals.clearBackOfficePinAt).toLocaleString("en-GB")}</div>
+                <div>{t(lang, "internalAdminClearShopSecurityPinSignal")}: {new Date(rescue.recoverySignals.clearBackOfficePinAt).toLocaleString("en-GB")}</div>
               ) : null}
             </dl>
           ) : null}

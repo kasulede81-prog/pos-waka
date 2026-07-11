@@ -236,8 +236,8 @@ async function runCloudDataRestore(opts: {
     }
 
     await runFullCloudPull({ onStep: onStep, cloudRecovery });
-    const { applyShopRecoverySignalsForCurrentShop } = await import("./shopRecoverySignals");
-    await applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
+    const { scheduleShopSecurityPinRecovery } = await import("./shopSecurityPinRecovery");
+    await scheduleShopSecurityPinRecovery("owner_login").catch(() => undefined);
     return;
   }
 

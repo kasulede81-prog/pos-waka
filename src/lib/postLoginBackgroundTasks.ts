@@ -12,12 +12,12 @@ export function schedulePostLoginBackgroundTasks(shopId: string): void {
     logActivationFailure("refresh", classifyActivationError(error), { shopId, background: true });
   });
 
-  void import("./shopSecurityPinSync")
-    .then(({ hydrateShopSecurityPin }) => hydrateShopSecurityPin(shopId))
+  void import("./shopSecurityPinRecovery")
+    .then(({ scheduleShopSecurityPinRecovery }) => scheduleShopSecurityPinRecovery("owner_login"))
     .catch((error) => {
       logActivationFailure("refresh", classifyActivationError(error), {
         shopId,
-        task: "shop_security_pin",
+        task: "shop_security_pin_recovery",
         background: true,
       });
     });

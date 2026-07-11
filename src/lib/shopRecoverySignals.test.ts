@@ -4,6 +4,11 @@ const mockSetState = vi.fn();
 const mockGetState = vi.fn();
 const mockLogAuditAction = vi.fn();
 const mockFlushPendingPersist = vi.fn();
+const mockClearSecuritySession = vi.fn();
+const mockClearLegacySensitiveSession = vi.fn();
+const mockApplyShopSecurityPinRecoveryClear = vi.fn();
+const mockBlockMigration = vi.fn();
+const mockSetRecoveryNotice = vi.fn();
 
 vi.mock("../store/usePosStore", () => ({
   usePosStore: {
@@ -14,8 +19,8 @@ vi.mock("../store/usePosStore", () => ({
 }));
 
 vi.mock("./enterpriseSecurity/securitySession", () => ({
-  clearSecuritySession: vi.fn(),
-  clearLegacySensitiveSession: vi.fn(),
+  clearSecuritySession: (...args: unknown[]) => mockClearSecuritySession(...args),
+  clearLegacySensitiveSession: (...args: unknown[]) => mockClearLegacySensitiveSession(...args),
 }));
 
 vi.mock("../offline/cloudSync", () => ({
@@ -24,6 +29,16 @@ vi.mock("../offline/cloudSync", () => ({
 
 vi.mock("./cloudSnapshotSync", () => ({
   uploadShopCloudSnapshot: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("./shopSecurityPinSync", () => ({
+  applyShopSecurityPinRecoveryClear: (...args: unknown[]) => mockApplyShopSecurityPinRecoveryClear(...args),
+}));
+
+vi.mock("./shopSecurityPinRecovery", () => ({
+  blockShopSecurityPinMigration: (...args: unknown[]) => mockBlockMigration(...args),
+  setShopSecurityPinRecoveryNotice: (...args: unknown[]) => mockSetRecoveryNotice(...args),
+  scheduleShopSecurityPinRecovery: vi.fn().mockResolvedValue({ applied: false, hydrated: false, awaitingNewPin: false }),
 }));
 
 vi.mock("./supabase", () => ({
@@ -54,28 +69,41 @@ describe("shopRecoverySignals", () => {
     vi.stubGlobal("window", { localStorage: localStorageMock });
     mockGetState.mockReturnValue({
       logAuditAction: mockLogAuditAction,
-      preferences: { backOfficePin: "1234", posLocked: true, biometricAuthEnabled: true },
+      preferences: { backOfficePin: "argon2id:hash", posLocked: true, biometricAuthEnabled: true },
     });
   });
 
-  it("applyAdminBackOfficePinClear bypasses auth and clears shop security PIN", async () => {
+  it("applyAdminBackOfficePinClear clears shop security PIN only and verification cache", async () => {
     const { applyAdminBackOfficePinClear } = await import("./shopRecoverySignals");
     const clearedAt = "2026-07-08T12:00:00.000Z";
 
-    const applied = await applyAdminBackOfficePinClear("shop-1", clearedAt);
+    const applied = await applyAdminBackOfficePinClear("shop-1", clearedAt, "background_sync");
     expect(applied).toBe(true);
 
+    expect(mockClearSecuritySession).toHaveBeenCalled();
+    expect(mockClearLegacySensitiveSession).toHaveBeenCalled();
     expect(mockSetState).toHaveBeenCalledOnce();
     const updater = mockSetState.mock.calls[0][0] as (s: {
       preferences: { backOfficePin: string | null; posLocked: boolean; biometricAuthEnabled: boolean };
     }) => unknown;
     const next = updater({
-      preferences: { backOfficePin: "1234", posLocked: true, biometricAuthEnabled: true },
+      preferences: { backOfficePin: "argon2id:hash", posLocked: true, biometricAuthEnabled: true },
     }) as { preferences: { backOfficePin: string | null; posLocked: boolean; biometricAuthEnabled: boolean } };
     expect(next.preferences.backOfficePin).toBeNull();
-    expect(next.preferences.posLocked).toBe(false);
-    expect(next.preferences.biometricAuthEnabled).toBe(false);
-    expect(mockLogAuditAction).toHaveBeenCalled();
+    expect(next.preferences.posLocked).toBe(true);
+    expect(next.preferences.biometricAuthEnabled).toBe(true);
+    expect(mockApplyShopSecurityPinRecoveryClear).toHaveBeenCalledWith("shop-1");
+    expect(mockBlockMigration).toHaveBeenCalledWith("shop-1", "admin_clear");
+    expect(mockSetRecoveryNotice).toHaveBeenCalledWith("shop-1", clearedAt);
+    expect(mockLogAuditAction).toHaveBeenCalledWith(
+      "admin_pin_clear_applied",
+      expect.any(String),
+      expect.objectContaining({
+        shopId: "shop-1",
+        recoveryCompleted: true,
+        recoveryAppliedOnDevice: true,
+      }),
+    );
     expect(mockFlushPendingPersist).toHaveBeenCalled();
   });
 
@@ -101,7 +129,7 @@ describe("shopRecoverySignals", () => {
     } as never);
 
     const { applyShopRecoverySignalsForCurrentShop } = await import("./shopRecoverySignals");
-    const applied = await applyShopRecoverySignalsForCurrentShop();
+    const applied = await applyShopRecoverySignalsForCurrentShop("cloud_reconnect");
     expect(applied).toBe(true);
     expect(supabase!.rpc).toHaveBeenCalledWith("shop_fetch_recovery_signal", { p_shop_id: "shop-1" });
   });
