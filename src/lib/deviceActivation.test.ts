@@ -109,7 +109,7 @@ describe("resolveActivationBlockKind", () => {
         context: freeSlotContext,
         currentDevice: baseDevice,
       }),
-    ).toBe("pending");
+    ).toBe("connection");
   });
 
   it("returns connection for network failures", () => {
@@ -257,6 +257,45 @@ describe("resolveLoginDeviceActivation — owner-first (Phase 20.6)", () => {
     const outcome = await resolveLoginDeviceActivation("s1");
     expect(outcome.activated).toBe(false);
     expect(outcome.failureReason).toBe("device_pending");
+  });
+
+  it("owner login on stale pending device — auto-recovers via re-register", async () => {
+    await mockRpcSequence([
+      {
+        fn: "shop_device_limit_context",
+        data: {
+          shop_id: "s1",
+          is_owner: true,
+          at_limit: false,
+          device_limit: 4,
+          active_count: 1,
+          devices: [],
+        },
+      },
+      {
+        fn: "shop_device_register_on_login",
+        data: {
+          ok: true,
+          activated: false,
+          pending_approval: true,
+          approval_status: "pending",
+          status: "disconnected",
+        },
+      },
+      {
+        fn: "shop_device_register_on_login",
+        data: {
+          ok: true,
+          activated: true,
+          approval_status: "approved",
+          status: "active",
+          owner_enrolled: true,
+        },
+      },
+    ]);
+    const outcome = await resolveLoginDeviceActivation("s1");
+    expect(outcome.activated).toBe(true);
+    expect(outcome.isOwner).toBe(true);
   });
 
   it("web owner login uses single register RPC (same path as android)", async () => {

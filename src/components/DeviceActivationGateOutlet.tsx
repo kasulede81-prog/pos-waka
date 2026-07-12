@@ -1,6 +1,10 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import type { Language } from "../types";
-import { pathAllowedWhenDeviceBlocked, useDeviceActivation } from "../context/DeviceActivationContext";
+import {
+  pathAllowedWhenDeviceBlocked,
+  resolveIsShopOwner,
+  useDeviceActivation,
+} from "../context/DeviceActivationContext";
 import { t } from "../lib/i18n";
 
 type Props = { lang: Language };
@@ -32,6 +36,14 @@ export function DeviceActivationGateOutlet({ lang }: Props) {
     return <Outlet />;
   }
 
+  // Safety net: owners must never be held on staff approval / activating routes.
+  if (resolveIsShopOwner(block?.context ?? null)) {
+    if (block?.kind === "limit") {
+      return <Navigate to="/device-limit" replace state={{ from: location.pathname }} />;
+    }
+    return <Outlet />;
+  }
+
   if (block?.kind === "pending") {
     return <Navigate to="/device-pending" replace state={{ from: location.pathname }} />;
   }
@@ -44,7 +56,7 @@ export function DeviceActivationGateOutlet({ lang }: Props) {
     return <Navigate to="/device-pending" replace state={{ from: location.pathname, revoked: true }} />;
   }
 
-  if (block?.kind === "connection") {
+  if (block?.kind === "connection" || !block) {
     return (
       <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-waka-50 to-muted px-6 dark:from-foreground dark:to-foreground">
         <h1 className="text-center text-xl font-black text-foreground dark:text-background">

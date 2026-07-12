@@ -21,7 +21,7 @@ import {
 import { fetchShopDevicesForManagement } from "../lib/shopDevices";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { logActivationFailure, type ActivationFailureKind } from "../lib/deviceActivationDiagnostics";
-import { schedulePostLoginBackgroundTasks } from "../lib/postLoginBackgroundTasks";
+import { scheduleOwnerDeviceEnrollment, schedulePostLoginBackgroundTasks } from "../lib/postLoginBackgroundTasks";
 
 export type DeviceActivationBlock = {
   shopId: string;
@@ -41,6 +41,21 @@ type DeviceActivationState = {
 
 const DeviceActivationCtx = createContext<DeviceActivationState | null>(null);
 
+export function pathAllowedWhenDeviceBlocked(path: string): boolean {
+  const p = path.split("?")[0] || "/";
+  return (
+    p === "/device-limit" ||
+    p === "/device-activating" ||
+    p === "/device-pending" ||
+    p === "/upgrade" ||
+    p === "/login" ||
+    p === "/onboarding" ||
+    p.startsWith("/auth/") ||
+    p === "/account" ||
+    p === "/settings/devices"
+  );
+}
+
 const DEVICE_CHECK_TIMEOUT_MS = 30_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -59,18 +74,24 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   });
 }
 
-export function pathAllowedWhenDeviceBlocked(path: string): boolean {
-  const p = path.split("?")[0] || "/";
+/** Prefer server context; either source may mark shop owner (Phase 20.6). */
+export function resolveIsShopOwner(
+  context: DeviceLimitContext | null | undefined,
+  loginActivation?: { isOwner?: boolean },
+): boolean {
+  if (context?.is_owner === true) return true;
+  if (loginActivation?.isOwner === true) return true;
+  return false;
+}
+
+function ownerDeviceLimitBlocked(
+  result: DeviceActivationResult,
+  failureReason?: ActivationFailureKind,
+): boolean {
   return (
-    p === "/device-limit" ||
-    p === "/device-activating" ||
-    p === "/device-pending" ||
-    p === "/upgrade" ||
-    p === "/login" ||
-    p === "/onboarding" ||
-    p.startsWith("/auth/") ||
-    p === "/account" ||
-    p === "/settings/devices"
+    result.limit_blocked === true ||
+    failureReason === "limit_reached" ||
+    failureReason === "device_limit_reached"
   );
 }
 
@@ -101,15 +122,16 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         return;
       }
 
-      const loginActivation = await withTimeout(
-        resolveLoginDeviceActivation(sid),
-        DEVICE_CHECK_TIMEOUT_MS,
-        {
+      const [loginActivation, context] = await Promise.all([
+        withTimeout(resolveLoginDeviceActivation(sid), DEVICE_CHECK_TIMEOUT_MS, {
           activated: false,
           result: { ok: false, activated: false },
           failureReason: "timeout" as ActivationFailureKind,
-        },
-      );
+        }),
+        withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null),
+      ]);
+
+      const isOwner = resolveIsShopOwner(context, loginActivation);
 
       if (loginActivation.activated) {
         setActivated(true);
@@ -119,8 +141,27 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
       }
 
       const result = loginActivation.result;
-      const context = await withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null);
-      const isOwner = loginActivation.isOwner ?? context?.is_owner ?? false;
+
+      // Phase 20.6 — owner auth == access. Only subscription device limit blocks login.
+      if (isOwner) {
+        if (ownerDeviceLimitBlocked(result, loginActivation.failureReason)) {
+          setActivated(false);
+          setBlock({
+            shopId: sid,
+            result,
+            context,
+            kind: "limit",
+            failureReason: "device_limit_reached",
+          });
+          return;
+        }
+
+        setActivated(true);
+        setBlock(null);
+        schedulePostLoginBackgroundTasks(sid);
+        scheduleOwnerDeviceEnrollment(sid);
+        return;
+      }
 
       if (
         result.revoked ||
@@ -185,18 +226,54 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         return;
       }
 
-      if (kind === "pending" && !isOwner) {
+      if (kind === "pending") {
         setActivated(false);
-        setBlock({ shopId: sid, result, context: deviceContext, kind: "pending", failureReason: "device_pending" });
+        setBlock({
+          shopId: sid,
+          result,
+          context: deviceContext,
+          kind: "pending",
+          failureReason: "device_pending",
+        });
         return;
       }
 
       setActivated(false);
       setBlock({ shopId: sid, result, context: deviceContext, kind, failureReason: loginActivation.failureReason });
     } catch (error) {
+      logActivationFailure("login", "unknown", { error: String(error) });
+      try {
+        const org = await withTimeout(resolvePrimaryOrganizationForUser(uid), DEVICE_CHECK_TIMEOUT_MS, null);
+        const recoverySid = org?.shopId ?? null;
+        if (recoverySid) {
+          setShopId(recoverySid);
+          const recoveryContext = await withTimeout(
+            fetchShopDeviceLimitContext(recoverySid),
+            DEVICE_CHECK_TIMEOUT_MS,
+            null,
+          );
+          if (resolveIsShopOwner(recoveryContext)) {
+            setActivated(true);
+            setBlock(null);
+            schedulePostLoginBackgroundTasks(recoverySid);
+            scheduleOwnerDeviceEnrollment(recoverySid);
+            return;
+          }
+          setActivated(false);
+          setBlock({
+            shopId: recoverySid,
+            result: { ok: false, activated: false },
+            context: recoveryContext,
+            kind: "connection",
+            failureReason: "rpc_failure",
+          });
+          return;
+        }
+      } catch {
+        // fall through
+      }
       setActivated(false);
       setBlock(null);
-      logActivationFailure("login", "unknown", { error: String(error) });
     } finally {
       inFlightRef.current = null;
       setLoading(false);

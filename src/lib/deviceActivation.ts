@@ -1,5 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { appendDeviceAuditEntry } from "./deviceAudit";
+import { setDeviceApprovalStatus } from "./deviceAuthority";
 import { getOrCreateDeviceId } from "./deviceId";
 import {
   notifyOwnerNewDeviceActivation,
@@ -232,10 +233,46 @@ export function resolveActivationBlockKind(opts: {
   }
 
   if (pending) {
-    return "pending";
+    return "connection";
   }
 
   return "connection";
+}
+
+async function findCurrentDeviceIdInContext(
+  shopId: string,
+  context: DeviceLimitContext | null,
+): Promise<string | null> {
+  const fp = getOrCreateDeviceId();
+  const fromContext = context?.devices.find((d) => d.device_fingerprint === fp)?.id;
+  if (fromContext) return fromContext;
+  try {
+    const refreshed = await fetchShopDeviceLimitContext(shopId);
+    return refreshed?.devices.find((d) => d.device_fingerprint === fp)?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Phase 20.6 fallback when server still returns pending for a shop owner (stale row / missing migration). */
+async function recoverOwnerPendingActivation(
+  shopId: string,
+  context: DeviceLimitContext | null,
+): Promise<DeviceActivationResult | null> {
+  let result = await registerShopDeviceOnLogin(shopId);
+  if (result.activated) return result;
+
+  result = await ensureShopDeviceActivation(shopId);
+  if (result.activated) return result;
+
+  const deviceId = await findCurrentDeviceIdInContext(shopId, context);
+  if (!deviceId) return null;
+
+  const approval = await setDeviceApprovalStatus(shopId, deviceId, "approved");
+  if (!approval.ok) return null;
+
+  result = await ensureShopDeviceActivation(shopId);
+  return result.activated ? result : null;
 }
 
 /**
@@ -286,9 +323,18 @@ export async function resolveLoginDeviceActivation(shopId: string): Promise<Logi
     if (!isOwner) {
       return { activated: false, result, failureReason: "device_pending", isOwner: false };
     }
+    const recovered = await recoverOwnerPendingActivation(shopId, context);
+    if (recovered?.activated) {
+      logActivationStage("completed", {
+        shopId,
+        ownerEnrolled: recovered.owner_enrolled,
+        recoveredFromPending: true,
+      });
+      return { activated: true, result: recovered, isOwner: true };
+    }
     logActivationFailure("register", "activation_failed", {
       shopId,
-      detail: "owner_received_pending_after_enrollment_rpc",
+      detail: "owner_pending_unexpected_after_recovery",
     });
     return {
       activated: false,

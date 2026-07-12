@@ -44,15 +44,9 @@ export function DevicePendingApprovalPage({ lang }: Props) {
 
   useEffect(() => {
     if (!shopId) return;
-    void fetchShopDeviceLimitContext(shopId).then(async (ctx) => {
-      const owner = Boolean(ctx?.is_owner);
-      setIsOwner(owner);
-      if (owner) {
-        const outcome = await resolveLoginDeviceActivation(shopId);
-        if (outcome.activated) {
-          await retry();
-          navigate("/", { replace: true });
-        }
+    void fetchShopDeviceLimitContext(shopId).then((ctx) => {
+      if (ctx?.is_owner) {
+        navigate("/", { replace: true });
       }
     });
     const fp = getOrCreateDeviceId();

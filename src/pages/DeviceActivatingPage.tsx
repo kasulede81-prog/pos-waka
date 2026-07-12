@@ -26,6 +26,12 @@ export function DeviceActivatingPage({ lang }: Props) {
       navigate("/device-pending", { replace: true });
       return;
     }
+    if (ctx?.is_owner) {
+      schedulePostLoginBackgroundTasks(sid);
+      await retry();
+      navigate("/", { replace: true });
+      return;
+    }
     const outcome = await resolveLoginDeviceActivation(sid);
     if (outcome.activated) {
       schedulePostLoginBackgroundTasks(sid);

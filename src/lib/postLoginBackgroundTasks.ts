@@ -38,3 +38,18 @@ export function schedulePostLoginBackgroundTasks(shopId: string): void {
       console.warn("[waka-post-login]", "release_policy_failed", error);
     });
 }
+
+/** Retry owner device enrollment without blocking POS (Phase 20.6). */
+export function scheduleOwnerDeviceEnrollment(shopId: string): void {
+  if (!shopId) return;
+  logActivationStage("register", { shopId, background: true, ownerRetry: true });
+  void import("./deviceActivation")
+    .then(({ resolveLoginDeviceActivation }) => resolveLoginDeviceActivation(shopId))
+    .catch((error) => {
+      logActivationFailure("register", classifyActivationError(error), {
+        shopId,
+        background: true,
+        ownerRetry: true,
+      });
+    });
+}
