@@ -1,7 +1,7 @@
 import type { Language, ShopPreferences } from "../../types";
 import { EnterprisePinPad } from "./EnterprisePinPad";
-import { verifyManagerApprovalPin } from "../../lib/enterpriseSecurity/EnterpriseSecurityService";
-import { getOrCreateDeviceId } from "../../lib/deviceId";
+import { verifyFloatVerifyOverride } from "../../lib/enterpriseSecurity/EnterpriseSecurityService";
+import { useSessionActor } from "../../context/SessionActorContext";
 
 type Props = {
   lang: Language;
@@ -21,6 +21,8 @@ export function EnterpriseApprovalPinPad({
   resetSignal,
   className,
 }: Props) {
+  const actor = useSessionActor();
+
   return (
     <EnterprisePinPad
       lang={lang}
@@ -28,7 +30,13 @@ export function EnterpriseApprovalPinPad({
       resetSignal={resetSignal}
       className={className}
       onComplete={async (pin) => {
-        const verified = await verifyManagerApprovalPin(pin, preferences, getOrCreateDeviceId());
+        const verified = await verifyFloatVerifyOverride(
+          pin,
+          preferences,
+          actor.role ?? "cashier",
+          actor.userId ?? "unknown",
+          actor.displayName?.trim() || actor.role || "User",
+        );
         if (!verified.ok) {
           return false;
         }

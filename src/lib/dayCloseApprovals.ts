@@ -74,7 +74,20 @@ export async function resolveDayCloseApprovalAsync(
   sessionLabel: string,
 ): Promise<DayCloseApprovalResult> {
   const normalized = pin.trim();
-  if (!normalized) return { ok: false, errorKey: "dayCloseApprovalPinRequired" };
+  if (!normalized) {
+    const stored = preferences.backOfficePin?.trim() ?? "";
+    const staff = preferences.staffAccounts ?? [];
+    if (!stored && staff.length === 0 && ["owner", "manager", "supervisor"].includes(sessionRole)) {
+      return resolveDayCloseApprovalFromAuth(kind, {
+        ok: true,
+        via: "role_session",
+        role: sessionRole,
+        actorUserId: sessionUserId,
+        actorLabel: sessionLabel,
+      });
+    }
+    return { ok: false, errorKey: "dayCloseApprovalPinRequired" };
+  }
 
   const auth = await resolveFloatVerifyOverrideAsync(
     normalized,

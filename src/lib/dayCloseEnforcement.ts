@@ -309,7 +309,7 @@ export function buildDayClosePreflightSnapshot(input: {
     input.cloudPullStale ??
     (health.lastPullAt
       ? Date.now() - new Date(health.lastPullAt).getTime() > STALE_RECONCILIATION_MS
-      : getDeviceOnline());
+      : false);
 
   const counted = input.countedCashUgx;
   const hasCount = counted != null && counted >= 0;

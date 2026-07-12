@@ -47,7 +47,7 @@ import { CloseDayPreflightPanel } from "../components/office/CloseDayPreflightPa
 
 import {
 
-  evaluateDayClosePreflightSync,
+  runDayClosePreflight,
 
   type DayClosePreflightSnapshot,
 
@@ -55,8 +55,6 @@ import {
 
 import { dayCloseVarianceIsFlagged } from "../lib/dayCloseApprovals";
 import { CashVarianceSummary } from "../components/cash/CashVarianceSummary";
-
-import { readSyncQueue } from "../offline/localDb";
 
 import {
   findUnclosedPriorBusinessDays,
@@ -222,11 +220,9 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
     setPreflightLoading(true);
 
-    const queue = await readSyncQueue();
-
     const state = usePosStore.getState();
 
-    const result = evaluateDayClosePreflightSync({
+    const result = await runDayClosePreflight({
 
       state: {
 
@@ -259,8 +255,6 @@ export function CloseDayPage({ lang }: { lang: Language }) {
       expectedCashUgx: summary.expectedCash,
 
       countedCashUgx: counted.length > 0 ? countedN : null,
-
-      queue,
 
       variancePreferences: preferences,
 
@@ -323,7 +317,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       syncOverride,
 
-      varianceOverride: varianceFlagged,
+      varianceOverride: varianceFlagged && managerPin.trim().length > 0,
 
     });
 
@@ -436,12 +430,18 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
+  const oldestUnclosedPriorDay = unclosedPriorDays[0] ?? null;
+
   const needsManagerPin =
     varianceFlagged || (Boolean(preflight?.requiresSyncOverride) && syncOverride);
-
+  const pinConfigured =
+    Boolean(preferences.backOfficePin?.trim()) ||
+    (preferences.staffAccounts ?? []).some((s) => Boolean(s.pinHash || s.pin));
+  const sessionCanApproveWithoutPin =
+    !pinConfigured && ["owner", "manager", "supervisor"].includes(actor.role);
   const canSubmitNormal =
     preflight?.canClose &&
-    (!needsManagerPin || managerPin.trim().length > 0) &&
+    (!needsManagerPin || managerPin.trim().length > 0 || sessionCanApproveWithoutPin) &&
     (!preflight?.requiresSyncOverride || syncOverride) &&
     !activeCloseToday;
 
@@ -529,11 +529,12 @@ export function CloseDayPage({ lang }: { lang: Language }) {
               <button
                 key={dk}
                 type="button"
+                disabled={oldestUnclosedPriorDay != null && dk !== oldestUnclosedPriorDay}
                 onClick={() => setSearchParams({ date: dk })}
                 className={
                   dk === closeDateKey
-                    ? "rounded-xl bg-waka-600 px-3 py-2 text-sm font-black text-white"
-                    : "rounded-xl border border-amber-300 bg-card px-3 py-2 text-sm font-bold text-amber-950"
+                    ? "rounded-xl bg-waka-600 px-3 py-2 text-sm font-black text-white disabled:opacity-60"
+                    : "rounded-xl border border-amber-300 bg-card px-3 py-2 text-sm font-bold text-amber-950 disabled:opacity-40"
                 }
               >
                 {dk}
@@ -618,7 +619,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-          {(varianceFlagged || preflight?.requiresSyncOverride) && (
+          {(varianceFlagged || preflight?.requiresSyncOverride) && !sessionCanApproveWithoutPin ? (
             <div className="mt-4">
               <p className="text-sm font-bold text-foreground">{t(lang, "dayCloseVariancePinLabel")}</p>
               <EnterpriseApprovalPinPad
@@ -630,7 +631,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
                 }}
               />
             </div>
-          )}
+          ) : null}
 
 
 
@@ -700,7 +701,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
             className="mt-3"
             onApproved={async (pin) => {
               setCloseErrorKey(null);
-              const result = await reopenBusinessDay({ dateKey: todayKey, reason: reopenReason, ownerPin: pin });
+              const result = await reopenBusinessDay({ dateKey: closeDateKey, reason: reopenReason, ownerPin: pin });
               if (!result.ok) {
                 setCloseErrorKey(result.errorKey ?? "invalid");
                 return false;

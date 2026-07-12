@@ -47,4 +47,17 @@ describe("resolveDayCloseApprovalAsync", () => {
     );
     expect(result.ok).toBe(false);
   });
+
+  it("allows manager session when no shop or staff PIN is configured", async () => {
+    const result = await resolveDayCloseApprovalAsync(
+      "sync_override",
+      "",
+      prefs({ backOfficePin: null }),
+      "owner",
+      "owner-1",
+      "Owner",
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.auth.via).toBe("role_session");
+  });
 });
