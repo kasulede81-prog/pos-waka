@@ -3,59 +3,60 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import type { IntegritySignal } from "../../lib/ownerCommandCenterBuilders";
+import { EnterpriseCard } from "../enterprise/EnterpriseCard";
+import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
+import { statusTokens } from "../../lib/statusTokens";
+import { Shield } from "lucide-react";
 
 type Props = {
   lang: Language;
   signals: IntegritySignal[];
 };
 
-function statusEmoji(status: IntegritySignal["status"]): string {
-  if (status === "critical") return "🔴";
-  if (status === "warning") return "🟡";
-  return "🟢";
-}
-
-function statusClass(status: IntegritySignal["status"]): string {
-  if (status === "critical") return "border-rose-100 bg-rose-50/50";
-  if (status === "warning") return "border-amber-100 bg-amber-50/50";
-  return "border-emerald-100 bg-emerald-50/30";
+function signalTone(status: IntegritySignal["status"]): keyof typeof statusTokens {
+  if (status === "critical") return "danger";
+  if (status === "warning") return "warning";
+  return "success";
 }
 
 export function CommandCenterIntegrityPanel({ lang, signals }: Props) {
   return (
-    <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterIntegrityTitle")}</h2>
-          <p className="text-[11px] font-semibold text-muted-foreground">{t(lang, "ownerIntegritySub")}</p>
-        </div>
+    <EnterpriseCard
+      title={t(lang, "cmdCenterIntegrityTitle")}
+      subtitle={t(lang, "ownerIntegritySub")}
+      actions={
         <Link to="/office/audit-center" className="text-[11px] font-black text-waka-700">
           {t(lang, "cmdCenterInvestigation")} →
         </Link>
-      </div>
-      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-        {signals.map((sig) => (
-          <li key={sig.id}>
-            <Link
-              to={sig.actionTo}
-              className={clsx(
-                "flex min-h-[56px] items-center gap-3 rounded-2xl border px-3 py-2 transition active:scale-[0.99]",
-                statusClass(sig.status),
-              )}
-            >
-              <span className="text-base" aria-hidden>
-                {statusEmoji(sig.status)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-black text-foreground">{t(lang, sig.labelKey)}</p>
-                <p className="truncate text-xs font-semibold text-muted-foreground">
-                  {sig.detailVars ? tTemplate(lang, sig.detailKey, sig.detailVars) : t(lang, sig.detailKey)}
-                </p>
-              </div>
-            </Link>
-          </li>
-        ))}
+      }
+    >
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {signals.map((sig) => {
+          const tone = signalTone(sig.status);
+          return (
+            <li key={sig.id}>
+              <Link
+                to={sig.actionTo}
+                className={clsx(
+                  "flex min-h-[56px] items-center gap-3 rounded-2xl border px-3 py-2 transition active:scale-[0.99]",
+                  statusTokens[tone].banner,
+                  statusTokens[tone].badgeRing,
+                )}
+              >
+                <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", statusTokens[tone].icon)}>
+                  <Shield className="h-4 w-4" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <SectionTitle as="p" className="!text-sm">{t(lang, sig.labelKey)}</SectionTitle>
+                  <Caption className="truncate normal-case">
+                    {sig.detailVars ? tTemplate(lang, sig.detailKey, sig.detailVars) : t(lang, sig.detailKey)}
+                  </Caption>
+                </div>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
-    </section>
+    </EnterpriseCard>
   );
 }

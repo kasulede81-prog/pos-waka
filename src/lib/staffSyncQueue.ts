@@ -70,6 +70,9 @@ export async function createStaffInCloudFirst(
   const { refreshStaffCacheAfterOwnerMutation } = await import("./staffCacheSync");
   await refreshStaffCacheAfterOwnerMutation();
 
+  const { upsertStaffAccountInStore } = await import("./staffSyncApply");
+  await upsertStaffAccountInStore({ ...row, pendingCloudSync: false });
+
   const { usePosStore } = await import("../store/usePosStore");
   const confirmed = (usePosStore.getState().preferences.staffAccounts ?? []).find((a) => a.id === row.id);
   return { ok: true, id: confirmed?.id ?? row.id };

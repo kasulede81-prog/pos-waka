@@ -3,15 +3,17 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { healthScoreLabelKey, type DomainStatusRow } from "../../lib/commandCenterPageView";
+import { chartShellClass, chartStroke } from "../../lib/chartTokens";
+import { healthStatusBadge, healthStatusDot } from "../../lib/statusTokens";
+import { EnterpriseCard } from "../enterprise/EnterpriseCard";
+import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
+import { WakaButton } from "../ui/wakaPrimitives";
 
 type Props = {
   lang: Language;
   score: number;
   domains: DomainStatusRow[];
 };
-
-import { chartShellClass, chartStroke } from "../../lib/chartTokens";
-import { healthStatusBadge, healthStatusDot } from "../../lib/statusTokens";
 
 function HealthRing({ score }: { score: number }) {
   const r = 44;
@@ -43,14 +45,12 @@ function HealthRing({ score }: { score: number }) {
 
 export function CommandCenterHealthHero({ lang, score, domains }: Props) {
   return (
-    <section className={clsx(chartShellClass, "overflow-hidden bg-gradient-to-br from-card via-card to-business-muted/40 p-4 sm:p-5")}>
+    <EnterpriseCard className={clsx(chartShellClass, "overflow-hidden bg-gradient-to-br from-card via-card to-business-muted/40")}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <HealthRing score={score} />
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-            {t(lang, "cmdCenterHealthTitle")}
-          </p>
-          <p className="mt-0.5 text-lg font-black text-foreground">{t(lang, healthScoreLabelKey(score))}</p>
+          <Caption className="uppercase tracking-widest">{t(lang, "cmdCenterHealthTitle")}</Caption>
+          <SectionTitle as="p" className="mt-0.5 !text-lg">{t(lang, healthScoreLabelKey(score))}</SectionTitle>
           <ul className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {domains.map((d) => (
               <li
@@ -72,12 +72,11 @@ export function CommandCenterHealthHero({ lang, score, domains }: Props) {
           </ul>
         </div>
       </div>
-      <Link
-        to="/settings/health"
-        className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-2xl bg-waka-600 px-4 text-sm font-black text-white shadow-sm transition active:scale-[0.99]"
-      >
-        {t(lang, "cmdCenterViewHealthReport")} →
+      <Link to="/settings/health" className="mt-4 block">
+        <WakaButton type="button" className="w-full">
+          {t(lang, "cmdCenterViewHealthReport")} →
+        </WakaButton>
       </Link>
-    </section>
+    </EnterpriseCard>
   );
 }

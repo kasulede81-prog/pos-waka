@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
-import { AppModalOverlay } from "./layout/AppModalOverlay";
+import { ModalSheet } from "./layout/ModalSheet";
+import { WakaButton } from "./ui/wakaPrimitives";
+import { Body } from "./enterprise/EnterpriseTypography";
 
 type Props = {
   lang: Language;
@@ -10,38 +12,29 @@ type Props = {
 };
 
 export function ProductLockedModal({ lang, open, onClose }: Props) {
-  if (!open) return null;
-
   return (
-    <AppModalOverlay
-      className="z-[80] flex items-center justify-center bg-black/55 p-4"
-      role="dialog"
-      aria-modal
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="text-2xl font-black text-foreground">{t(lang, "productLockedTitle")}</p>
-        <p className="mt-2 text-base font-semibold leading-relaxed text-muted-foreground">{t(lang, "productLockedBody")}</p>
-        <div className="mt-5 grid gap-2">
-          <Link
-            to="/upgrade"
-            className="flex min-h-[52px] items-center justify-center rounded-2xl bg-waka-600 text-lg font-black text-white shadow-md active:bg-waka-700"
-            onClick={onClose}
-          >
-            {t(lang, "productLockedUpgrade")}
+    <ModalSheet
+      open={open}
+      onClose={onClose}
+      align="center"
+      zIndexClass="z-[80]"
+      maxHeightClass="max-h-[min(88dvh,480px)]"
+      panelClassName="max-w-sm"
+      title={t(lang, "productLockedTitle")}
+      footer={
+        <div className="grid gap-2">
+          <Link to="/upgrade" onClick={onClose}>
+            <WakaButton type="button" className="w-full">
+              {t(lang, "productLockedUpgrade")}
+            </WakaButton>
           </Link>
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-[44px] rounded-2xl border-2 border-border text-base font-bold text-muted-foreground"
-          >
+          <WakaButton type="button" variant="secondary" className="w-full" onClick={onClose}>
             {t(lang, "cancel")}
-          </button>
+          </WakaButton>
         </div>
-      </div>
-    </AppModalOverlay>
+      }
+    >
+      <Body className="text-muted-foreground">{t(lang, "productLockedBody")}</Body>
+    </ModalSheet>
   );
 }

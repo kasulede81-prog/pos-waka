@@ -1,5 +1,5 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { FormEvent } from "react";
 
@@ -47,11 +47,14 @@ import { CloseDayPreflightPanel } from "../components/office/CloseDayPreflightPa
 
 import {
 
+  evaluateDayClosePreflightSync,
+
   runDayClosePreflight,
 
   type DayClosePreflightSnapshot,
 
 } from "../lib/dayCloseEnforcement";
+import { readSyncQueue } from "../offline/localDb";
 
 import { dayCloseVarianceIsFlagged } from "../lib/dayCloseApprovals";
 import { CashVarianceSummary } from "../components/cash/CashVarianceSummary";
@@ -216,7 +219,57 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-  const refreshPreflight = useCallback(async () => {
+  const refreshPreflightQuick = useCallback(async () => {
+
+    const state = usePosStore.getState();
+
+    const queue = await readSyncQueue();
+
+    const result = evaluateDayClosePreflightSync({
+
+      state: {
+
+        draftLines: state.draftLines,
+
+        activePendingSaleId: state.activePendingSaleId,
+
+        sales: state.sales,
+
+        preferences: state.preferences,
+
+        dayCloses: state.dayCloses,
+
+        dayDrawerOpens: state.dayDrawerOpens,
+
+        products: state.products,
+
+        returnRecords: state.returnRecords,
+
+        cashDrawerAdjustments: state.cashDrawerAdjustments,
+
+        cashExpenses: state.cashExpenses,
+
+        inventoryCountSessions: state.inventoryCountSessions,
+
+      },
+
+      dateKey: closeDateKey,
+
+      expectedCashUgx: summary.expectedCash,
+
+      countedCashUgx: counted.length > 0 ? countedN : null,
+
+      queue,
+
+      variancePreferences: preferences,
+
+    });
+
+    setPreflight(result.snapshot);
+
+  }, [closeDateKey, summary.expectedCash, counted, countedN, preferences]);
+
+  const refreshPreflightWithSync = useCallback(async () => {
 
     setPreflightLoading(true);
 
@@ -266,15 +319,33 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
   }, [closeDateKey, summary.expectedCash, counted, countedN, preferences]);
 
-
+  const initialSyncDone = useRef(false);
 
   useEffect(() => {
 
-    void refreshPreflight();
+    initialSyncDone.current = false;
+
+  }, [closeDateKey]);
+
+  useEffect(() => {
+
+    if (!initialSyncDone.current) {
+
+      initialSyncDone.current = true;
+
+      void refreshPreflightWithSync();
+
+      return;
+
+    }
+
+    void refreshPreflightQuick();
 
   }, [
 
-    refreshPreflight,
+    refreshPreflightQuick,
+
+    refreshPreflightWithSync,
 
     draftLines.length,
 
@@ -325,7 +396,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       setCloseErrorKey(result.errorKey ?? "invalid");
 
-      void refreshPreflight();
+      void refreshPreflightWithSync();
 
       return;
 
@@ -339,7 +410,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
     setDoneMsg(true);
 
-    void refreshPreflight();
+    void refreshPreflightWithSync();
 
     window.setTimeout(() => setDoneMsg(false), 3000);
 
@@ -548,7 +619,45 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       <CloseDayPreflightPanel lang={lang} snapshot={preflight} loading={preflightLoading} />
 
+      {preflight?.requiresSyncOverride ? (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="text-base font-black text-amber-950">{t(lang, "dayCloseSyncOverrideTitle")}</h2>
+          <p className="mt-1 text-sm font-semibold text-amber-900">{t(lang, "dayCloseSyncOverrideBody")}</p>
+          <button
+            type="button"
+            disabled={preflightLoading}
+            onClick={() => void refreshPreflightWithSync()}
+            className="mt-3 min-h-[44px] rounded-2xl border border-amber-300 bg-card px-4 text-sm font-black text-amber-950 disabled:opacity-50"
+          >
+            {preflightLoading ? t(lang, "dayClosePreflightLoading") : t(lang, "dayCloseSyncRetryBtn")}
+          </button>
+          <WakaSwitch
+            className="mt-3 text-sm font-semibold text-amber-900"
+            checked={syncOverride}
+            onCheckedChange={setSyncOverride}
+            label={t(lang, "dayCloseCheckCloudSyncFail")}
+          />
+        </section>
+      ) : null}
 
+      {(varianceFlagged || (Boolean(preflight?.requiresSyncOverride) && syncOverride)) &&
+      !sessionCanApproveWithoutPin ? (
+        <section className="rounded-3xl border border-border bg-card p-4">
+          <p className="text-sm font-bold text-foreground">{t(lang, "dayCloseVariancePinLabel")}</p>
+          <EnterpriseApprovalPinPad
+            lang={lang}
+            preferences={preferences}
+            persistOnSuccess
+            className="mt-2"
+            onApproved={(pin) => {
+              setManagerPin(pin);
+            }}
+          />
+          {managerPin.trim().length > 0 ? (
+            <p className="mt-2 text-center text-sm font-bold text-emerald-700">{t(lang, "staffPinCaptured")}</p>
+          ) : null}
+        </section>
+      ) : null}
 
       <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950">
 
@@ -617,37 +726,6 @@ export function CloseDayPage({ lang }: { lang: Language }) {
             />
           ) : null}
 
-
-
-          {(varianceFlagged || preflight?.requiresSyncOverride) && !sessionCanApproveWithoutPin ? (
-            <div className="mt-4">
-              <p className="text-sm font-bold text-foreground">{t(lang, "dayCloseVariancePinLabel")}</p>
-              <EnterpriseApprovalPinPad
-                lang={lang}
-                preferences={preferences}
-                className="mt-2"
-                onApproved={(pin) => {
-                  setManagerPin(pin);
-                }}
-              />
-            </div>
-          ) : null}
-
-
-
-          {preflight?.requiresSyncOverride ? (
-
-            <WakaSwitch
-              className="mt-3 text-sm font-semibold text-amber-900"
-              checked={syncOverride}
-              onCheckedChange={setSyncOverride}
-              label={t(lang, "dayCloseCheckCloudSyncFail")}
-            />
-
-          ) : null}
-
-
-
           <button
 
             type="submit"
@@ -707,7 +785,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
                 return false;
               }
               setReopenReason("");
-              void refreshPreflight();
+              void refreshPreflightWithSync();
               return true;
             }}
           />

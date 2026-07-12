@@ -56,9 +56,12 @@ import {
   resolveWizardEditCostPatch,
   type BuiltWizardProduct,
 } from "../lib/simpleProductWizard";
-import { AppModalOverlay } from "../components/layout/AppModalOverlay";
+import { ModalSheet } from "../components/layout/ModalSheet";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
-import { PageHeader } from "../components/layout/PageHeader";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
+import { WakaButton } from "../components/ui/wakaPrimitives";
+import { Package } from "lucide-react";
 import {
   costPerUnitFromPackAndStock,
   resolveQuickAddSellUnit,
@@ -807,7 +810,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     <InventorySelectionProvider>
     <EnterprisePageContainer className="space-y-3" variant={workspaceEmbed ? "flush" : "default"}>
       {!workspaceEmbed ? (
-        <PageHeader
+        <EnterprisePageHeader
           lang={lang}
           title={modeTerm("stockTitle")}
           subtitle={modeTerm("stockPageSub")}
@@ -853,42 +856,27 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       ) : null}
 
       {unlockedProducts.length === 0 ? (
-        <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50/80 to-card px-6 py-10 text-center">
-          <p className="text-xl font-black text-foreground">{modeTerm("stockEmptyTitle")}</p>
-          <p className="mx-auto mt-2 max-w-sm text-base text-muted-foreground">{modeTerm("stockEmptySub")}</p>
+        <EnterpriseEmptyState
+          icon={Package}
+          title={modeTerm("stockEmptyTitle")}
+          description={modeTerm("stockEmptySub")}
+        >
           {canAdd ? (
             <div className="mx-auto mt-6 flex w-full max-w-xs flex-col gap-2">
-              <button
-                type="button"
-                disabled={freeProductLimitReached}
-                onClick={openAddProductSheet}
-                className="w-full rounded-2xl bg-waka-600 px-6 py-4 text-lg font-black text-white shadow-md active:bg-waka-700"
-              >
+              <WakaButton type="button" disabled={freeProductLimitReached} onClick={openAddProductSheet}>
                 {modeTerm("stockAddProduct")}
-              </button>
+              </WakaButton>
               {aiProductAssistantEnabled ? (
-                <button
-                  type="button"
-                  disabled={freeProductLimitReached}
-                  onClick={openAiProductAssist}
-                  className="w-full rounded-2xl border-2 border-violet-300 bg-violet-50 px-6 py-3 text-base font-black text-violet-950"
-                >
+                <WakaButton type="button" variant="secondary" disabled={freeProductLimitReached} onClick={openAiProductAssist}>
                   {t(lang, "aiProductAssistBtn")}
-                </button>
+                </WakaButton>
               ) : null}
+              <WakaButton type="button" variant="ghost" disabled={freeProductLimitReached} onClick={openStarter}>
+                {t(lang, "starterPackOpen")}
+              </WakaButton>
             </div>
           ) : null}
-          {canAdd ? (
-            <button
-              type="button"
-              disabled={freeProductLimitReached}
-              onClick={openStarter}
-              className="mt-3 text-sm font-bold text-waka-800 underline-offset-2 hover:underline"
-            >
-              {t(lang, "starterPackOpen")}
-            </button>
-          ) : null}
-        </section>
+        </EnterpriseEmptyState>
       ) : (
         <>
           {stockTab !== "movements" ? (
@@ -1072,155 +1060,139 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         </>
       )}
 
-      {quickOpen ? (
-        <AppModalOverlay
-          className="z-[70] flex flex-col justify-end bg-black/50 sm:items-center sm:justify-center sm:p-4"
-          role="dialog"
-          aria-modal
-          onClick={() => setQuickOpen(false)}
-        >
-          <form
-            onSubmit={submitQuick}
-            className="flex max-h-[min(92dvh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-card shadow-2xl sm:max-h-[90vh] sm:rounded-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
-            <p className="text-center text-xl font-black text-foreground">
+      <ModalSheet
+        open={quickOpen}
+        onClose={() => setQuickOpen(false)}
+        align="center"
+        zIndexClass="z-[70]"
+        title={
+          industryPlaceholderMode
+            ? uiPlaceholder(
+                lang,
+                preferences.businessType,
+                "quickAddTitle",
+                preferences.pharmacyModeEnabled,
+                preferences.hospitalityModeEnabled,
+              )
+            : t(lang, "stockQuickAddTitle")
+        }
+        footer={
+          <div className="grid grid-cols-2 gap-3">
+            <WakaButton type="button" variant="secondary" onClick={() => setQuickOpen(false)}>
+              {t(lang, "cancel")}
+            </WakaButton>
+            <WakaButton type="submit" form="stock-quick-add-form">
               {industryPlaceholderMode
                 ? uiPlaceholder(
                     lang,
                     preferences.businessType,
-                    "quickAddTitle",
+                    "quickAddSave",
                     preferences.pharmacyModeEnabled,
                     preferences.hospitalityModeEnabled,
                   )
-                : t(lang, "stockQuickAddTitle")}
-            </p>
-            <p className="mt-1 text-center text-sm text-muted-foreground">{t(lang, "stockQuickAddSub")}</p>
-            {guessPreview ? (
-              <p className="mt-3 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
-                {t(lang, "smartGuessHint")}: {t(lang, `mode_${guessPreview.sellingMode}`)} · {guessPreview.baseUnit}
-              </p>
-            ) : null}
-            <div className="mt-4">
-              <QuickAddProductFields
-                lang={lang}
-                variant="sheet"
-                businessType={preferences.businessType}
-                pharmacyModeEnabled={preferences.pharmacyModeEnabled}
-                hospitalityModeEnabled={preferences.hospitalityModeEnabled}
-                categorySuggestions={stockCategoryPicklist}
-                values={{
-                  name: qaName,
-                  category: qaCategory,
-                  sellUnitPreset: qaUnitPreset,
-                  sellUnitCustom: qaUnitCustom,
-                  price: qaPrice,
-                  stock: qaStock,
-                  buyPackTotal: qaBuyPackTotal,
-                }}
-                onChange={(patch) => {
-                  if (patch.name !== undefined) setQaName(patch.name);
-                  if (patch.category !== undefined) setQaCategory(patch.category);
-                  if (patch.sellUnitPreset !== undefined) setQaUnitPreset(patch.sellUnitPreset);
-                  if (patch.sellUnitCustom !== undefined) setQaUnitCustom(patch.sellUnitCustom);
-                  if (patch.price !== undefined) setQaPrice(patch.price);
-                  if (patch.stock !== undefined) setQaStock(patch.stock);
-                  if (patch.buyPackTotal !== undefined) setQaBuyPackTotal(patch.buyPackTotal);
-                }}
-              />
-            </div>
-            </div>
-
-            <div className="shrink-0 border-t border-border bg-card px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
-            <div className="grid grid-cols-2 gap-3">
-              <button type="button" className="min-h-[52px] rounded-2xl border-2 py-3 text-lg font-bold" onClick={() => setQuickOpen(false)}>
-                {t(lang, "cancel")}
-              </button>
-              <button type="submit" className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-lg font-black text-white">
-                {industryPlaceholderMode
-                  ? uiPlaceholder(
-                      lang,
-                      preferences.businessType,
-                      "quickAddSave",
-                      preferences.pharmacyModeEnabled,
-                      preferences.hospitalityModeEnabled,
-                    )
-                  : t(lang, "quickAddSave")}
-              </button>
-            </div>
-            </div>
-          </form>
-        </AppModalOverlay>
-      ) : null}
-
-      {starterOpen ? (
-        <AppModalOverlay
-          className="z-[56] flex items-end justify-center bg-black/50 sm:items-center"
-          role="dialog"
-          aria-modal
-          onClick={() => setStarterOpen(false)}
-        >
-          <div
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-card p-6 shadow-2xl sm:rounded-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-center text-2xl font-black text-foreground">{t(lang, "starterPackTitle")}</p>
-            <p className="mt-1 text-center text-sm text-muted-foreground">{t(lang, "starterPackSub")}</p>
-            <ul className="mt-4 space-y-3">
-              {starterRows.map((row, i) => (
-                <li key={`${row.nameKey}-${i}`} className="rounded-2xl border-2 border-border p-3">
-                  <WakaCheckbox
-                    checked={row.enabled}
-                    onCheckedChange={(checked) =>
-                      setStarterRows((rows) => rows.map((r, j) => (j === i ? { ...r, enabled: checked } : r)))
-                    }
-                    label={<span className="flex-1 text-lg">{t(lang, row.nameKey)}</span>}
-                  />
-                  <div className="mt-2 grid grid-cols-2 gap-2 pl-9">
-                    <label className="text-xs font-bold text-muted-foreground">
-                      {t(lang, "quickAddPrice")}
-                      <input
-                        value={row.priceStr}
-                        onChange={(e) =>
-                          setStarterRows((rows) =>
-                            rows.map((r, j) => (j === i ? { ...r, priceStr: e.target.value.replace(/\D/g, "").slice(0, 10) } : r)),
-                          )
-                        }
-                        inputMode="numeric"
-                        className="mt-1 w-full rounded-xl border-2 px-2 py-2 text-lg font-black"
-                      />
-                    </label>
-                    <label className="text-xs font-bold text-muted-foreground">
-                      {t(lang, "quickAddStock")}
-                      <input
-                        value={row.stockStr}
-                        onChange={(e) =>
-                          setStarterRows((rows) =>
-                            rows.map((r, j) =>
-                              j === i ? { ...r, stockStr: e.target.value.replace(/[^\d.]/g, "").slice(0, 10) } : r,
-                            ),
-                          )
-                        }
-                        inputMode="decimal"
-                        className="mt-1 w-full rounded-xl border-2 px-2 py-2 text-lg font-black"
-                      />
-                    </label>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button type="button" className="rounded-2xl border-2 py-4 text-lg font-bold" onClick={() => setStarterOpen(false)}>
-                {t(lang, "cancel")}
-              </button>
-              <button type="button" className="rounded-2xl bg-waka-600 py-4 text-lg font-black text-white" onClick={applyStarter}>
-                {t(lang, "starterPackApply")}
-              </button>
-            </div>
+                : t(lang, "quickAddSave")}
+            </WakaButton>
           </div>
-        </AppModalOverlay>
-      ) : null}
+        }
+      >
+        <form id="stock-quick-add-form" onSubmit={submitQuick} className="space-y-4">
+          <p className="text-center text-sm text-muted-foreground">{t(lang, "stockQuickAddSub")}</p>
+          {guessPreview ? (
+            <p className="rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
+              {t(lang, "smartGuessHint")}: {t(lang, `mode_${guessPreview.sellingMode}`)} · {guessPreview.baseUnit}
+            </p>
+          ) : null}
+          <QuickAddProductFields
+            lang={lang}
+            variant="sheet"
+            businessType={preferences.businessType}
+            pharmacyModeEnabled={preferences.pharmacyModeEnabled}
+            hospitalityModeEnabled={preferences.hospitalityModeEnabled}
+            categorySuggestions={stockCategoryPicklist}
+            values={{
+              name: qaName,
+              category: qaCategory,
+              sellUnitPreset: qaUnitPreset,
+              sellUnitCustom: qaUnitCustom,
+              price: qaPrice,
+              stock: qaStock,
+              buyPackTotal: qaBuyPackTotal,
+            }}
+            onChange={(patch) => {
+              if (patch.name !== undefined) setQaName(patch.name);
+              if (patch.category !== undefined) setQaCategory(patch.category);
+              if (patch.sellUnitPreset !== undefined) setQaUnitPreset(patch.sellUnitPreset);
+              if (patch.sellUnitCustom !== undefined) setQaUnitCustom(patch.sellUnitCustom);
+              if (patch.price !== undefined) setQaPrice(patch.price);
+              if (patch.stock !== undefined) setQaStock(patch.stock);
+              if (patch.buyPackTotal !== undefined) setQaBuyPackTotal(patch.buyPackTotal);
+            }}
+          />
+        </form>
+      </ModalSheet>
+
+      <ModalSheet
+        open={starterOpen}
+        onClose={() => setStarterOpen(false)}
+        align="center"
+        zIndexClass="z-[56]"
+        title={t(lang, "starterPackTitle")}
+        footer={
+          <div className="grid grid-cols-2 gap-3">
+            <WakaButton type="button" variant="secondary" onClick={() => setStarterOpen(false)}>
+              {t(lang, "cancel")}
+            </WakaButton>
+            <WakaButton type="button" onClick={applyStarter}>
+              {t(lang, "starterPackApply")}
+            </WakaButton>
+          </div>
+        }
+      >
+        <p className="text-center text-sm text-muted-foreground">{t(lang, "starterPackSub")}</p>
+        <ul className="mt-4 space-y-3">
+          {starterRows.map((row, i) => (
+            <li key={`${row.nameKey}-${i}`} className="rounded-2xl border-2 border-border p-3">
+              <WakaCheckbox
+                checked={row.enabled}
+                onCheckedChange={(checked) =>
+                  setStarterRows((rows) => rows.map((r, j) => (j === i ? { ...r, enabled: checked } : r)))
+                }
+                label={<span className="flex-1 text-lg">{t(lang, row.nameKey)}</span>}
+              />
+              <div className="mt-2 grid grid-cols-2 gap-2 pl-9">
+                <label className="text-xs font-bold text-muted-foreground">
+                  {t(lang, "quickAddPrice")}
+                  <input
+                    value={row.priceStr}
+                    onChange={(e) =>
+                      setStarterRows((rows) =>
+                        rows.map((r, j) => (j === i ? { ...r, priceStr: e.target.value.replace(/\D/g, "").slice(0, 10) } : r)),
+                      )
+                    }
+                    inputMode="numeric"
+                    className="mt-1 w-full rounded-xl border-2 px-2 py-2 text-lg font-black"
+                  />
+                </label>
+                <label className="text-xs font-bold text-muted-foreground">
+                  {t(lang, "quickAddStock")}
+                  <input
+                    value={row.stockStr}
+                    onChange={(e) =>
+                      setStarterRows((rows) =>
+                        rows.map((r, j) =>
+                          j === i ? { ...r, stockStr: e.target.value.replace(/[^\d.]/g, "").slice(0, 10) } : r,
+                        ),
+                      )
+                    }
+                    inputMode="decimal"
+                    className="mt-1 w-full rounded-xl border-2 px-2 py-2 text-lg font-black"
+                  />
+                </label>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </ModalSheet>
 
       {pharmacyMode && !wizardPrefill && !editingProduct ? (
         <PharmacyAddMedicineWizard
@@ -1292,42 +1264,47 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
       <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
 
-      {removeId ? (
-        <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
-          <div className="max-w-sm rounded-3xl bg-card p-6 shadow-xl">
-            <p className="text-lg font-black text-foreground">
-              {onlyProductInStock ? t(lang, "removeLastProductConfirmTitle") : t(lang, "removeProductConfirm")}
-            </p>
-            {onlyProductInStock ? (
-              <p className="mt-2 text-sm font-semibold text-muted-foreground">{t(lang, "removeLastProductConfirmBody")}</p>
-            ) : null}
-            <label className="mt-4 block">
-              <span className="text-sm font-bold text-foreground">{t(lang, "auditReasonLabel")}</span>
-              <textarea
-                value={removeReason}
-                onChange={(e) => setRemoveReason(e.target.value)}
-                className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-border px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
-                placeholder={t(lang, "auditReasonPlaceholder")}
-              />
-            </label>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                className="flex-1 rounded-2xl border-2 py-3 font-bold"
-                onClick={() => {
-                  setRemoveId(null);
-                  setRemoveReason("");
-                }}
-              >
-                {t(lang, "cancel")}
-              </button>
-              <button type="button" className="flex-1 rounded-2xl bg-rose-600 py-3 font-black text-white" onClick={() => confirmRemove(removeId)}>
-                {t(lang, "removeProduct")}
-              </button>
-            </div>
+      <ModalSheet
+        open={removeId !== null}
+        onClose={() => {
+          setRemoveId(null);
+          setRemoveReason("");
+        }}
+        align="center"
+        zIndexClass="z-[60]"
+        title={onlyProductInStock ? t(lang, "removeLastProductConfirmTitle") : t(lang, "removeProductConfirm")}
+        footer={
+          <div className="flex gap-3">
+            <WakaButton
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                setRemoveId(null);
+                setRemoveReason("");
+              }}
+            >
+              {t(lang, "cancel")}
+            </WakaButton>
+            <WakaButton type="button" variant="danger" className="flex-1" onClick={() => removeId && confirmRemove(removeId)}>
+              {t(lang, "removeProduct")}
+            </WakaButton>
           </div>
-        </AppModalOverlay>
-      ) : null}
+        }
+      >
+        {onlyProductInStock ? (
+          <p className="text-sm font-semibold text-muted-foreground">{t(lang, "removeLastProductConfirmBody")}</p>
+        ) : null}
+        <label className="mt-4 block">
+          <span className="text-sm font-bold text-foreground">{t(lang, "auditReasonLabel")}</span>
+          <textarea
+            value={removeReason}
+            onChange={(e) => setRemoveReason(e.target.value)}
+            className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-border px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+            placeholder={t(lang, "auditReasonPlaceholder")}
+          />
+        </label>
+      </ModalSheet>
 
       <StockProductDetailSheet
         lang={lang}

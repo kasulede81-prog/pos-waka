@@ -4,6 +4,14 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { StaffControlRow } from "../../lib/ownerCommandCenterBuilders";
 import { formatShortUgx } from "../../lib/commandCenterPageView";
+import { staffRiskBadge } from "../../lib/statusTokens";
+import { chartStroke } from "../../lib/chartTokens";
+import { EnterpriseCard } from "../enterprise/EnterpriseCard";
+import { EnterpriseEmptyState } from "../enterprise/EnterpriseEmptyState";
+import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
+import { WakaButton } from "../ui/wakaPrimitives";
+import { Users } from "lucide-react";
+import { statusTokens } from "../../lib/statusTokens";
 
 type Props = {
   lang: Language;
@@ -16,9 +24,6 @@ function initials(label: string): string {
   if (parts.length >= 2) return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
   return (label[0] ?? "?").toUpperCase();
 }
-
-import { staffRiskBadge } from "../../lib/statusTokens";
-import { chartStroke } from "../../lib/chartTokens";
 
 function TrustRing({ score }: { score: number }) {
   const r = 28;
@@ -50,38 +55,38 @@ export function CommandCenterStaffCard({ lang, rows, periodLabel }: Props) {
 
   if (!featured) {
     return (
-      <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm">
-        <h2 className="text-sm font-black text-foreground">{t(lang, "cmdCenterStaffTitle")}</h2>
-        <p className="mt-2 text-sm font-semibold text-muted-foreground">{t(lang, "ownerShiftEmpty")}</p>
-        <Link
-          to="/office/open-shifts"
-          className="mt-3 inline-flex min-h-[40px] w-full items-center justify-center rounded-2xl border border-border text-xs font-black text-foreground"
-        >
-          {t(lang, "ownerShiftViewAll")} →
+      <EnterpriseCard title={t(lang, "cmdCenterStaffTitle")}>
+        <EnterpriseEmptyState
+          icon={Users}
+          title={t(lang, "ownerShiftEmpty")}
+          className="!border-0 !bg-transparent !p-0 !shadow-none"
+        />
+        <Link to="/office/open-shifts" className="mt-3 block">
+          <WakaButton type="button" variant="secondary" className="w-full">
+            {t(lang, "ownerShiftViewAll")} →
+          </WakaButton>
         </Link>
-      </section>
+      </EnterpriseCard>
     );
   }
 
   return (
-    <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterStaffTitle")}</h2>
-          <p className="text-[11px] font-semibold text-muted-foreground">{periodLabel}</p>
-        </div>
+    <EnterpriseCard
+      title={t(lang, "cmdCenterStaffTitle")}
+      subtitle={periodLabel}
+      actions={
         <Link to="/office/open-shifts" className="text-[11px] font-black text-waka-700">
           {t(lang, "cmdCenterAllShifts")} →
         </Link>
-      </div>
-
-      <div className="mt-3 flex gap-3 rounded-2xl bg-muted p-3">
+      }
+    >
+      <div className="flex gap-3 rounded-2xl bg-muted p-3">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-waka-600 text-lg font-black text-white">
           {initials(featured.label)}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <p className="font-black text-foreground">{featured.label}</p>
+            <SectionTitle as="p" className="!text-base">{featured.label}</SectionTitle>
             <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-black", staffRiskBadge(featured.riskTier === "offender" ? "offender" : featured.riskTier === "review" ? "review" : "ok"))}>
               {featured.riskTier === "trusted"
                 ? t(lang, "ownerStaffRiskTrusted")
@@ -90,29 +95,29 @@ export function CommandCenterStaffCard({ lang, rows, periodLabel }: Props) {
                   : t(lang, "ownerStaffRiskOffender")}
             </span>
             {featured.hasActiveShift ? (
-              <span className="rounded-full bg-waka-100 px-2 py-0.5 text-[10px] font-black uppercase text-waka-800">
+              <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-black uppercase", statusTokens.info.badge)}>
                 {t(lang, "ownerShiftActive")}
               </span>
             ) : null}
           </div>
           <div className="mt-2 flex items-center gap-3">
             <TrustRing score={featured.riskScore} />
-            <dl className="grid flex-1 grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+            <dl className="grid flex-1 grid-cols-2 gap-x-2 gap-y-1">
               <div>
-                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffColSales")}</dt>
-                <dd className="font-black tabular-nums">{formatShortUgx(featured.salesUgx)}</dd>
+                <dt><Caption>{t(lang, "ownerStaffColSales")}</Caption></dt>
+                <dd className="font-black tabular-nums text-foreground">{formatShortUgx(featured.salesUgx)}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffColVoids")}</dt>
-                <dd className="font-black">{featured.voidCount}</dd>
+                <dt><Caption>{t(lang, "ownerStaffColVoids")}</Caption></dt>
+                <dd className="font-black text-foreground">{featured.voidCount}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffColReturns")}</dt>
-                <dd className="font-black">{featured.returnCount}</dd>
+                <dt><Caption>{t(lang, "ownerStaffColReturns")}</Caption></dt>
+                <dd className="font-black text-foreground">{featured.returnCount}</dd>
               </div>
               <div>
-                <dt className="font-semibold text-muted-foreground">{t(lang, "ownerStaffColDiscounts")}</dt>
-                <dd className="font-black">{featured.discountCount}</dd>
+                <dt><Caption>{t(lang, "ownerStaffColDiscounts")}</Caption></dt>
+                <dd className="font-black text-foreground">{featured.discountCount}</dd>
               </div>
             </dl>
           </div>
@@ -129,6 +134,6 @@ export function CommandCenterStaffCard({ lang, rows, periodLabel }: Props) {
           ))}
         </ul>
       ) : null}
-    </section>
+    </EnterpriseCard>
   );
 }

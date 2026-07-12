@@ -1,9 +1,15 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { Cloud, Lock, ShieldCheck, Zap } from "lucide-react";
-import { PageHeader } from "../components/layout/PageHeader";
+import clsx from "clsx";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { EnterpriseCard } from "../components/enterprise/EnterpriseCard";
+import { Body } from "../components/enterprise/EnterpriseTypography";
+import { WakaButton } from "../components/ui/wakaPrimitives";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
+import { statusTokens } from "../lib/statusTokens";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -12,7 +18,6 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { usePosStore } from "../store/usePosStore";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
-import { syncStaffAccountsWithCloud } from "../lib/shopStaffCloud";
 import { supabase } from "../lib/supabase";
 import { StaffCreateWizard } from "../components/staff/StaffCreateWizard";
 import { StaffTeamList } from "../components/staff/StaffTeamList";
@@ -40,32 +45,46 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const [creating, setCreating] = useState(false);
   const [resetPinStaffId, setResetPinStaffId] = useState<string | null>(null);
   const [resetPasswordStaffId, setResetPasswordStaffId] = useState<string | null>(null);
+  const [staffHydrating, setStaffHydrating] = useState(false);
+
+  const hydrateStaffFromCloud = useCallback(async () => {
+    if (authMode !== "supabase" || !supabase) return;
+    setStaffHydrating(true);
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (!data.user || !isSupabaseEmailVerified(data.user)) return;
+      const { hydrateStaffTeamFromCloud } = await import("../lib/staffRecovery");
+      await hydrateStaffTeamFromCloud({ force: true });
+    } finally {
+      setStaffHydrating(false);
+    }
+  }, [authMode]);
 
   useEffect(() => {
-    if (authMode !== "supabase" || !supabase) return;
-    void supabase.auth.getUser().then(({ data }) => {
-      if (!data.user || !isSupabaseEmailVerified(data.user)) return;
-      void syncStaffAccountsWithCloud(data.user, staff).then(async (merged) => {
-        if (!merged) return;
-        const { applyStaffAccountsMergeToStore } = await import("../lib/staffSyncApply");
-        await applyStaffAccountsMergeToStore(merged, { source: "staff_page_hydrate", sanitize: false });
-      });
-    });
-  }, [authMode, setPreferences, staff.length]);
+    void hydrateStaffFromCloud();
+  }, [hydrateStaffFromCloud]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void hydrateStaffFromCloud();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [hydrateStaffFromCloud]);
 
   if (!canManage) return <Navigate to="/" replace />;
 
   if (maxStaff <= 0) {
     return (
-      <div className="space-y-4 pb-8">
-        <PageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
-        <p className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-4 text-sm font-semibold text-waka-950">
-          {t(lang, "upgradeWhyStaff")} → {t(lang, "upgradeWhyStaffPlan")}
-        </p>
-        <Link to="/upgrade" className="inline-flex min-h-[48px] items-center rounded-2xl bg-waka-600 px-5 py-3 text-sm font-black text-white">
-          {t(lang, "officePremiumUpgrade")} →
+      <EnterprisePageContainer>
+        <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
+        <EnterpriseCard muted>
+          <Body>{t(lang, "upgradeWhyStaff")} → {t(lang, "upgradeWhyStaffPlan")}</Body>
+        </EnterpriseCard>
+        <Link to="/upgrade">
+          <WakaButton variant="primary">{t(lang, "officePremiumUpgrade")} →</WakaButton>
         </Link>
-      </div>
+      </EnterprisePageContainer>
     );
   }
 
@@ -104,18 +123,8 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
               const errKey = res.errorKey ?? "staffCreateFail";
               return { ok: false, error: t(lang, errKey as "staffCreateFail") };
             }
-            if (authMode === "supabase" && supabase) {
-              const { data } = await supabase.auth.getUser();
-              if (data.user) {
-                const merged = await syncStaffAccountsWithCloud(
-                  data.user,
-                  usePosStore.getState().preferences.staffAccounts ?? [],
-                );
-                if (merged) {
-                  const { applyStaffAccountsMergeToStore } = await import("../lib/staffSyncApply");
-                  await applyStaffAccountsMergeToStore(merged, { source: "staff_page_post_create", sanitize: false });
-                }
-              }
+            if (authMode === "supabase") {
+              await hydrateStaffFromCloud();
             }
             return { ok: true };
           }}
@@ -127,8 +136,8 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
   return (
     <DeviceApprovedGate lang={lang}>
-      <div className="space-y-5 pb-8">
-      <PageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
+      <EnterprisePageContainer>
+      <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
 
       <div className="grid gap-3 sm:grid-cols-2">
         {[
@@ -137,12 +146,12 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           { key: "staffHighlightRoles", Icon: ShieldCheck },
           { key: "staffHighlightFast", Icon: Zap },
         ].map(({ key, Icon }) => (
-          <article key={key} className="flex gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+          <EnterpriseCard key={key} muted className="flex gap-3 !p-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-waka-50 text-waka-700">
               <Icon className="h-4 w-4" aria-hidden />
             </div>
-            <p className="text-sm font-bold text-foreground">{t(lang, key)}</p>
-          </article>
+            <Body className="!text-sm !font-bold">{t(lang, key)}</Body>
+          </EnterpriseCard>
         ))}
       </div>
 
@@ -153,6 +162,8 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         staff={staff}
         maxStaff={maxStaff}
         activeStaffId={activeStaffId}
+        hydrating={staffHydrating}
+        onRefresh={() => void hydrateStaffFromCloud()}
         onAddStaff={() => setCreating(true)}
         onToggleActive={(id, active) => updateStaffAccount(id, { active })}
         onUpdateRoleTemplate={(id, roleTemplateId, role) => updateStaffAccount(id, { role, roleTemplateId, customRoleId: null })}
@@ -181,8 +192,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         }}
       />
 
-      <section className="space-y-3 rounded-3xl border border-border bg-card p-4 shadow-sm">
-        <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffPermissionsTitle")}</h2>
+      <EnterpriseCard title={t(lang, "staffPermissionsTitle")}>
         <WakaSwitch
           checked={preferences.staffCanRecordCashExpenses === true}
           onCheckedChange={(checked) => setPreferences({ staffCanRecordCashExpenses: checked })}
@@ -198,11 +208,11 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           description={t(lang, "staffRequireExpenseApprovalSub")}
           className="rounded-2xl bg-muted px-4 py-3"
         />
-      </section>
+      </EnterpriseCard>
 
-      <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-        {t(lang, "staffDeviceLocalTrust")}
-      </p>
+      <div className={clsx("rounded-2xl border px-4 py-3", statusTokens.warning.banner, statusTokens.warning.badgeRing)}>
+        <Body className="!text-sm !font-semibold text-warning-foreground">{t(lang, "staffDeviceLocalTrust")}</Body>
+      </div>
 
       <StaffPinResetDialog
         lang={lang}
@@ -226,7 +236,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           }
         }}
       />
-      </div>
+      </EnterprisePageContainer>
     </DeviceApprovedGate>
   );
 }

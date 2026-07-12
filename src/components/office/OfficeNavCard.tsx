@@ -1,6 +1,10 @@
 import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import clsx from "clsx";
+import { wakaUi } from "../../lib/brandTokens";
+import { enterpriseIconClass } from "../../lib/enterpriseIcons";
+import { enterpriseTypeClass } from "../../lib/enterpriseTypography";
+import { Caption } from "../enterprise/EnterpriseTypography";
 
 type Props = {
   to: string;
@@ -19,16 +23,17 @@ export function OfficeNavCard({ to, title, subtitle, Icon, highlight, deemphasiz
       <Link
         to={to}
         className={clsx(
+          wakaUi.surface,
           "relative flex min-h-[80px] flex-col justify-between gap-1 rounded-xl border p-2.5 transition active:scale-[0.99] motion-reduce:active:scale-100",
           highlight
             ? "border-waka-300 bg-gradient-to-br from-waka-50 to-card shadow-sm"
             : deemphasized
               ? "border-border bg-muted/80 shadow-none"
-              : "border-border/90 bg-card shadow-sm",
+              : "border-border/90 shadow-sm",
         )}
       >
         {trailing ? (
-          <span className="absolute right-2 top-2 text-[10px] font-black leading-none text-waka-800">{trailing}</span>
+          <Caption className="absolute right-2 top-2 normal-case leading-none text-waka-800">{trailing}</Caption>
         ) : null}
         <span
           className={clsx(
@@ -36,12 +41,14 @@ export function OfficeNavCard({ to, title, subtitle, Icon, highlight, deemphasiz
             highlight ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
           )}
         >
-          <Icon className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+          <Icon className={enterpriseIconClass("md")} strokeWidth={2.25} aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="line-clamp-2 text-xs font-black leading-tight text-foreground">{title}</span>
+          <span className={enterpriseTypeClass("body", "line-clamp-2 text-xs !font-black leading-tight")}>
+            {title}
+          </span>
           {subtitle ? (
-            <span className="mt-0.5 line-clamp-1 text-[10px] font-semibold leading-snug text-muted-foreground">{subtitle}</span>
+            <Caption className="mt-0.5 line-clamp-1 normal-case leading-snug">{subtitle}</Caption>
           ) : null}
         </span>
       </Link>

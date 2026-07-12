@@ -151,7 +151,14 @@ export async function mirrorStaffCacheToPreferences(staff: StaffAccount[]): Prom
  * merge cache rows into preferences.staffAccounts without a cloud round-trip.
  */
 export async function reconcileStaffCacheToPreferencesIfNeeded(shopId: string): Promise<boolean> {
-  const cache = await readOfflineStaffCache(shopId);
+  let cache = await readOfflineStaffCache(shopId);
+  if (!cache?.staff.length) {
+    const cloudVersion = await fetchCloudStaffVersion(shopId);
+    if (cloudVersion != null && cloudVersion > 0) {
+      await refreshStaffCacheBackground({ force: true });
+      cache = await readOfflineStaffCache(shopId);
+    }
+  }
   if (!cache?.staff.length) return false;
 
   const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");

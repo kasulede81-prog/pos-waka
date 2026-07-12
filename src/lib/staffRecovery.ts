@@ -121,6 +121,27 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
   lastStaffSyncAt = now;
 }
 
+/** Force staff list hydration from cloud/cache — use on Workers page and after login. */
+export async function hydrateStaffTeamFromCloud(opts?: { force?: boolean }): Promise<number> {
+  const { resolveShopCtx } = await import("../offline/cloudSync");
+  const ctx = await resolveShopCtx();
+  if (!ctx) return 0;
+
+  const {
+    refreshStaffCacheBackground,
+    reconcileStaffCacheToPreferencesIfNeeded,
+  } = await import("./staffCacheSync");
+
+  await refreshStaffCacheBackground({ force: opts?.force ?? false });
+  await reconcileStaffCacheToPreferencesIfNeeded(ctx.shopId);
+
+  const { usePosStore } = await import("../store/usePosStore");
+  const localCount = (usePosStore.getState().preferences.staffAccounts ?? []).length;
+  if (localCount > 0) return localCount;
+
+  return pullAndMergeStaffAccountsForRecovery();
+}
+
 export async function pullAndMergeStaffAccountsForRecovery(): Promise<number> {
   const { refreshStaffCacheBackground } = await import("./staffCacheSync");
   await refreshStaffCacheBackground({ force: true });

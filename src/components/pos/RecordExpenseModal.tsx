@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { ModalSheet } from "../layout/ModalSheet";
 import {
   CASH_EXPENSE_CATEGORY_KEYS,
   canRecordCashExpenses,
@@ -10,6 +10,10 @@ import {
 import { usePosStore } from "../../store/usePosStore";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { dateKeyKampala } from "../../lib/datesUg";
+import { EnterpriseTextField } from "../enterprise/EnterpriseTextField";
+import { WakaButton } from "../ui/wakaPrimitives";
+import { Body, Caption } from "../enterprise/EnterpriseTypography";
+import { enterpriseTypeClass } from "../../lib/enterpriseTypography";
 
 type Props = {
   lang: Language;
@@ -66,80 +70,73 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
     }, 900);
   };
 
-  const inputClass =
-    "mt-2 min-h-[52px] w-full rounded-2xl border-2 border-border px-4 text-lg font-bold outline-none focus:border-waka-500";
-
   return (
-    <AppModalOverlay className="z-[65] flex items-end justify-center bg-black/50 p-3 sm:items-center" role="dialog" aria-modal>
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-card p-6 shadow-xl">
-        <h2 className="text-xl font-black text-foreground">{t(lang, "posRecordExpenseTitle")}</h2>
-        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "posRecordExpenseSub")}</p>
-
-        <form onSubmit={onSubmit} className="mt-5 space-y-4">
-          <label className="block text-sm font-bold text-foreground">
-            {t(lang, "cashExpenseAmount")} *
-            <input
-              inputMode="numeric"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
-              className={inputClass}
-              required
-            />
-          </label>
-          <label className="block text-sm font-bold text-foreground">
-            {t(lang, "cashExpenseCategory")} *
-            <select value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)} className={inputClass}>
-              {CASH_EXPENSE_CATEGORY_KEYS.map((k) => (
-                <option key={k} value={k}>
-                  {cashExpenseCategoryLabel(lang, k)}
-                </option>
-              ))}
-              <option value="custom">{t(lang, "cashExpenseCategoryCustom")}</option>
-            </select>
-          </label>
-          {categoryKey === "custom" ? (
-            <label className="block text-sm font-bold text-foreground">
-              {t(lang, "cashExpenseCustomName")}
-              <input value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className={inputClass} required />
-            </label>
-          ) : null}
-          <label className="block text-sm font-bold text-foreground">
-            {t(lang, "cashExpenseDescription")}
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-border px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
-            />
-          </label>
-          {err ? <p className="text-sm font-bold text-rose-700">{err}</p> : null}
-          {saved ? <p className="text-sm font-bold text-emerald-700">{t(lang, "cashExpenseSaved")}</p> : null}
-          <div className="flex gap-3 pt-2">
-            <button type="button" className="flex-1 rounded-2xl border-2 py-3 font-bold" onClick={onClose}>
-              {t(lang, "cancel")}
-            </button>
-            <button type="submit" className="flex-1 rounded-2xl bg-waka-600 py-3 font-black text-white">
-              {t(lang, "cashExpenseRecordBtn")}
-            </button>
-          </div>
-        </form>
-
-        {myTodayExpenses.length > 0 ? (
-          <section className="mt-6 border-t border-border pt-4">
-            <h3 className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posMyExpensesToday")}</h3>
-            <ul className="mt-2 space-y-2">
-              {myTodayExpenses.slice(0, 8).map((e) => (
-                <li key={e.id} className="flex items-center justify-between rounded-xl bg-muted px-3 py-2 text-sm">
-                  <span className="font-semibold text-foreground">{e.category}</span>
-                  <span className="font-black text-foreground">
-                    UGX {e.amountUgx.toLocaleString()}
-                    {e.approvalStatus === "pending" ? ` · ${t(lang, "expenseStatusPending")}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
+    <ModalSheet open={open} onClose={onClose} title={t(lang, "posRecordExpenseTitle")} align="center">
+      <Body className="!text-sm text-muted-foreground">{t(lang, "posRecordExpenseSub")}</Body>
+      <form onSubmit={onSubmit} className="mt-5 space-y-4">
+        <EnterpriseTextField
+          label={`${t(lang, "cashExpenseAmount")} *`}
+          inputMode="numeric"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
+          pos
+          required
+        />
+        <label className="block">
+          <span className={enterpriseTypeClass("body", "mb-1.5 block !text-sm !font-bold")}>{t(lang, "cashExpenseCategory")} *</span>
+          <select value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)} className="min-h-[52px] w-full rounded-2xl border-2 border-border px-4 text-lg font-bold">
+            {CASH_EXPENSE_CATEGORY_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {cashExpenseCategoryLabel(lang, k)}
+              </option>
+            ))}
+            <option value="custom">{t(lang, "cashExpenseCategoryCustom")}</option>
+          </select>
+        </label>
+        {categoryKey === "custom" ? (
+          <EnterpriseTextField
+            label={t(lang, "cashExpenseCustomName")}
+            value={customCategory}
+            onChange={(e) => setCustomCategory(e.target.value)}
+            required
+          />
         ) : null}
-      </div>
-    </AppModalOverlay>
+        <label className="block">
+          <span className={enterpriseTypeClass("body", "mb-1.5 block !text-sm !font-bold")}>{t(lang, "cashExpenseDescription")}</span>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-border px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+          />
+        </label>
+        {err ? <Body className="!text-sm text-danger-foreground">{err}</Body> : null}
+        {saved ? <Body className="!text-sm text-emerald-700">{t(lang, "cashExpenseSaved")}</Body> : null}
+        <div className="flex gap-3 pt-2">
+          <WakaButton type="button" variant="secondary" className="flex-1" onClick={onClose}>
+            {t(lang, "cancel")}
+          </WakaButton>
+          <WakaButton type="submit" variant="primary" className="flex-1">
+            {t(lang, "cashExpenseRecordBtn")}
+          </WakaButton>
+        </div>
+      </form>
+
+      {myTodayExpenses.length > 0 ? (
+        <section className="mt-6 border-t border-border pt-4">
+          <Caption as="h3" className="mb-2 block">{t(lang, "posMyExpensesToday")}</Caption>
+          <ul className="space-y-2">
+            {myTodayExpenses.slice(0, 8).map((e) => (
+              <li key={e.id} className="flex items-center justify-between rounded-xl bg-muted px-3 py-2 text-sm">
+                <Body as="span" className="!text-sm !font-semibold">{e.category}</Body>
+                <Caption className="normal-case tabular-nums">
+                  UGX {e.amountUgx.toLocaleString()}
+                  {e.approvalStatus === "pending" ? ` · ${t(lang, "expenseStatusPending")}` : ""}
+                </Caption>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </ModalSheet>
   );
 }

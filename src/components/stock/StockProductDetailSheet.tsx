@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import clsx from "clsx";
 import type { Language, Product, ShopPreferences } from "../../types";
 import { t } from "../../lib/i18n";
@@ -9,8 +8,11 @@ import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../li
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { profitPerSellUnitUgx } from "../../lib/simpleProductWizard";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { ModalSheet } from "../layout/ModalSheet";
 import { ExpiryStatusBadge } from "../pharmacy/ExpiryStatusBadge";
+import { WakaButton } from "../ui/wakaPrimitives";
+import { Caption, MonoNumber, SectionTitle } from "../enterprise/EnterpriseTypography";
+import { statusTokens } from "../../lib/statusTokens";
 
 type Props = {
   lang: Language;
@@ -51,19 +53,11 @@ export function StockProductDetailSheet({
   onEdit,
   onMore,
 }: Props) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open || !product) return null;
-
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
+
+  if (!product) return null;
+
   const shelf = normalizedCategoryKey(product) ? product.category!.trim() : t(lang, "uncategorized");
   const shelfIcon = shelfIconFor(shelf) ?? "📦";
   const low = isLowStock(product);
@@ -80,7 +74,7 @@ export function StockProductDetailSheet({
     {
       label: t(lang, "stockLabel"),
       value: formatStockLabel(product),
-      valueClass: low ? "text-rose-700" : undefined,
+      warn: low,
     },
     {
       label: t(lang, "stockDetailCost"),
@@ -90,10 +84,16 @@ export function StockProductDetailSheet({
     {
       label: t(lang, "stockDetailProfit"),
       value: profit != null ? `UGX ${profit.toLocaleString()}` : "—",
-      valueClass: profit != null && profit < 0 ? "text-rose-700" : profit != null ? "text-teal-800" : undefined,
+      positive: profit != null && profit >= 0,
+      negative: profit != null && profit < 0,
     },
     ...(marginPct != null
-      ? [{ label: t(lang, "profitStatMargin"), value: `${marginPct.toFixed(1)}%`, valueClass: marginPct < 0 ? "text-rose-700" : "text-teal-800" }]
+      ? [{
+          label: t(lang, "profitStatMargin"),
+          value: `${marginPct.toFixed(1)}%`,
+          positive: marginPct >= 0,
+          negative: marginPct < 0,
+        }]
       : []),
     { label: t(lang, "stockDetailLastUpdated"), value: formatUpdated(product.updatedAt, lang) },
   ];
@@ -104,88 +104,95 @@ export function StockProductDetailSheet({
   };
 
   return (
-    <AppModalOverlay className="z-[54] flex items-end bg-foreground/40 backdrop-blur-[2px]" clearNav={false}>
-      <button type="button" className="absolute inset-0" aria-label={t(lang, "cancel")} onClick={onClose} />
-      <div className="relative z-[55] max-h-[min(88dvh,42rem)] w-full overflow-y-auto rounded-t-[1.75rem] border border-border bg-card px-4 pb-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+1rem)] pt-3 shadow-2xl">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" aria-hidden />
-
+    <ModalSheet
+      open={open}
+      onClose={onClose}
+      clearNav={false}
+      zIndexClass="z-[54]"
+      maxHeightClass="max-h-[min(88dvh,42rem)]"
+      title={
         <div className="flex items-start gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-muted text-2xl leading-none">
             {shelfIcon}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-base font-black text-foreground">{formatMedicineListPrimary(product)}</p>
+            <SectionTitle as="h2" className="!text-base">{formatMedicineListPrimary(product)}</SectionTitle>
             {pharmacyMode && formatMedicineListSecondary(product) ? (
-              <p className="text-xs font-semibold text-muted-foreground">{formatMedicineListSecondary(product)}</p>
+              <Caption className="normal-case">{formatMedicineListSecondary(product)}</Caption>
             ) : null}
             <div className="mt-1 flex flex-wrap gap-1">
               {pharmacyMode ? <ExpiryStatusBadge lang={lang} product={product} compact /> : null}
               {low ? (
-                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-black uppercase text-rose-800">
+                <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-black uppercase", statusTokens.danger.badge)}>
                   {t(lang, "cardLowStock")}
                 </span>
               ) : null}
               {locked ? (
-                <span className="rounded-full bg-foreground px-2 py-0.5 text-[9px] font-black uppercase text-background">
+                <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-black uppercase text-background">
                   {t(lang, "productLockedBadge")}
                 </span>
               ) : null}
             </div>
           </div>
         </div>
-
-        <dl className="mt-4 space-y-2 rounded-xl bg-muted p-3">
-          {rows.map((row) => (
-            <div key={row.label} className="flex items-center justify-between gap-2 text-sm">
-              <dt className="font-semibold text-muted-foreground">{row.label}</dt>
-              <dd className={clsx("font-black tabular-nums text-foreground", row.valueClass)}>{row.value}</dd>
+      }
+      footer={
+        !locked ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+              {canSell ? (
+                <WakaButton type="button" onClick={() => closeAnd(onSell)}>
+                  {pharmacyMode ? pt("stockCardSell") : t(lang, "stockCardSell")}
+                </WakaButton>
+              ) : (
+                <span />
+              )}
+              {canAdd ? (
+                <WakaButton type="button" variant="secondary" onClick={() => closeAnd(onEdit)}>
+                  {t(lang, "stockCardEdit")}
+                </WakaButton>
+              ) : (
+                <span />
+              )}
+              <WakaButton
+                type="button"
+                variant="secondary"
+                className="!min-w-[44px] !px-3"
+                onClick={() => closeAnd(onMore)}
+                aria-label={t(lang, "stockMoreActions")}
+              >
+                ⋮
+              </WakaButton>
             </div>
-          ))}
-        </dl>
-
-        {!locked ? (
-          <div className="mt-3 grid grid-cols-[1fr_1fr_auto] gap-2">
-            {canSell ? (
-              <button
-                type="button"
-                onClick={() => closeAnd(onSell)}
-                className="min-h-[44px] rounded-xl bg-waka-600 text-sm font-black text-white active:bg-waka-700"
-              >
-                {pharmacyMode ? pt("stockCardSell") : t(lang, "stockCardSell")}
-              </button>
-            ) : (
-              <span />
-            )}
-            {canAdd ? (
-              <button
-                type="button"
-                onClick={() => closeAnd(onEdit)}
-                className="min-h-[44px] rounded-xl border border-border text-sm font-black text-foreground active:bg-muted"
-              >
-                {t(lang, "stockCardEdit")}
-              </button>
-            ) : (
-              <span />
-            )}
-            <button
-              type="button"
-              onClick={() => closeAnd(onMore)}
-              className="min-h-[44px] min-w-[44px] rounded-xl border border-border text-sm font-black text-muted-foreground active:bg-muted"
-              aria-label={t(lang, "stockMoreActions")}
-            >
-              ⋮
-            </button>
+            <WakaButton type="button" variant="ghost" className="w-full" onClick={onClose}>
+              {t(lang, "cancel")}
+            </WakaButton>
           </div>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-xl border border-border text-sm font-bold text-muted-foreground active:bg-muted"
-        >
-          {t(lang, "cancel")}
-        </button>
-      </div>
-    </AppModalOverlay>
+        ) : (
+          <WakaButton type="button" variant="secondary" className="w-full" onClick={onClose}>
+            {t(lang, "cancel")}
+          </WakaButton>
+        )
+      }
+    >
+      <dl className="space-y-2 rounded-xl bg-muted p-3">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-2 text-sm">
+            <dt className="font-semibold text-muted-foreground">{row.label}</dt>
+            <dd>
+              <MonoNumber
+                className={clsx(
+                  row.warn && "text-danger-foreground",
+                  row.positive && "text-success-foreground",
+                  row.negative && "text-danger-foreground",
+                )}
+              >
+                {row.value}
+              </MonoNumber>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </ModalSheet>
   );
 }

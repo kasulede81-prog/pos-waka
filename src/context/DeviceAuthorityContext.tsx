@@ -10,10 +10,14 @@ import {
 import {
   fetchDeviceAuthorityContext,
   isDeviceAuthorizedForManagement,
+  isShopOwnerDeviceAuthorityBypassActive,
+  seedOwnerApprovedDeviceAuthority,
+  setShopOwnerDeviceAuthorityBypass,
   subscribeDeviceAuthorityRefresh,
   type DeviceAuthorityContext,
   type DeviceAuthorizedAction,
 } from "../lib/deviceAuthority";
+import { fetchShopDeviceLimitContext } from "../lib/deviceActivation";
 
 type DeviceAuthorityState = {
   loading: boolean;
@@ -38,14 +42,26 @@ type Props = {
 export function DeviceAuthorityProvider({ shopId, authMode, children }: Props) {
   const [loading, setLoading] = useState(false);
   const [ctx, setCtx] = useState<DeviceAuthorityContext | null>(null);
+  const [isShopOwner, setIsShopOwner] = useState(false);
 
   const refresh = useCallback(async () => {
     if (authMode !== "supabase" || !shopId) {
       setCtx(null);
+      setIsShopOwner(false);
+      setShopOwnerDeviceAuthorityBypass(null);
       return;
     }
     setLoading(true);
     try {
+      const limitCtx = await fetchShopDeviceLimitContext(shopId).catch(() => null);
+      const owner = Boolean(limitCtx?.is_owner);
+      setIsShopOwner(owner);
+      if (owner) {
+        setShopOwnerDeviceAuthorityBypass(shopId);
+        seedOwnerApprovedDeviceAuthority(shopId);
+      } else {
+        setShopOwnerDeviceAuthorityBypass(null);
+      }
       const next = await fetchDeviceAuthorityContext(shopId);
       setCtx(next);
     } finally {
@@ -63,12 +79,13 @@ export function DeviceAuthorityProvider({ shopId, authMode, children }: Props) {
 
   const value = useMemo((): DeviceAuthorityState => {
     const hasCtx = ctx != null;
+    const ownerBypass = isShopOwner || isShopOwnerDeviceAuthorityBypassActive(shopId);
     const deviceAuthorized =
-      authMode === "local" || (hasCtx && isDeviceAuthorizedForManagement(ctx));
-    const isApproved = authMode === "local" || (hasCtx && ctx.isApproved);
-    const isOperational = authMode === "local" || (hasCtx && ctx.isOperational);
+      authMode === "local" || ownerBypass || (hasCtx && isDeviceAuthorizedForManagement(ctx));
+    const isApproved = authMode === "local" || ownerBypass || (hasCtx && ctx.isApproved);
+    const isOperational = authMode === "local" || ownerBypass || (hasCtx && ctx.isOperational);
     const pendingApproval =
-      authMode === "supabase" && hasCtx && ctx.approvalStatus === "pending";
+      authMode === "supabase" && hasCtx && ctx.approvalStatus === "pending" && !ownerBypass;
     return {
       loading,
       ctx,
@@ -79,7 +96,7 @@ export function DeviceAuthorityProvider({ shopId, authMode, children }: Props) {
       refresh,
       canPerformAuthorizedAction: () => deviceAuthorized,
     };
-  }, [authMode, ctx, loading]);
+  }, [authMode, ctx, isShopOwner, loading, refresh, shopId]);
 
   return <DeviceAuthorityCtx.Provider value={value}>{children}</DeviceAuthorityCtx.Provider>;
 }
@@ -105,9 +122,14 @@ export async function assertDeviceAuthorizedAction(
   action: DeviceAuthorizedAction,
   shopId?: string,
 ): Promise<{ ok: true } | { ok: false; errorKey: "deviceNotAuthorized" | "devicePendingApproval" }> {
+  if (shopId) {
+    const limitCtx = await fetchShopDeviceLimitContext(shopId).catch(() => null);
+    if (limitCtx?.is_owner) return { ok: true };
+  }
   const deviceCtx = await fetchDeviceAuthorityContext(shopId);
+  if (!deviceCtx && isShopOwnerDeviceAuthorityBypassActive(shopId)) return { ok: true };
   if (!deviceCtx) return { ok: false, errorKey: "deviceNotAuthorized" };
-  if (deviceCtx.approvalStatus === "pending") {
+  if (deviceCtx.approvalStatus === "pending" && !isShopOwnerDeviceAuthorityBypassActive(deviceCtx.shopId)) {
     return { ok: false, errorKey: "devicePendingApproval" };
   }
   if (!isDeviceAuthorizedForManagement(deviceCtx)) {

@@ -7,7 +7,8 @@ import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
-import { PageHeader } from "../components/layout/PageHeader";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { WakaButton } from "../components/ui/wakaPrimitives";
 import { StockPage } from "./StockPage";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
 import { InventoryPurchasingTabs } from "../features/inventory-purchasing/components/InventoryPurchasingTabs";
@@ -60,23 +61,20 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
 
   return (
     <EnterprisePageContainer className="space-y-3">
-      <PageHeader
+      <EnterprisePageHeader
         lang={lang}
         title={t(lang, "ipPageTitle")}
         subtitle={t(lang, "ipPageSub")}
+        backFallback="/office"
         backLabel={t(lang, "officeBackToHub")}
         compact
       >
         {canPurchasesRecord ? (
-          <button
-            type="button"
-            onClick={openNewPurchaseFlow}
-            className="inline-flex min-h-[40px] items-center rounded-xl bg-waka-600 px-4 text-xs font-black text-white shadow-sm"
-          >
+          <WakaButton type="button" variant="primary" onClick={openNewPurchaseFlow}>
             + {t(lang, "ipActionNewPurchase")}
-          </button>
+          </WakaButton>
         ) : null}
-      </PageHeader>
+      </EnterprisePageHeader>
 
       <div
         className={clsx(

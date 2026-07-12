@@ -170,7 +170,7 @@ export function EnterprisePinPad({
       role="group"
       aria-labelledby={labelledBy}
       aria-describedby={displayError ? "enterprise-pin-error" : undefined}
-      className={clsx("space-y-4 outline-none", className)}
+      className={clsx("space-y-4 outline-none touch-manipulation", className)}
     >
       <div
         className={clsx(
@@ -224,21 +224,36 @@ export function EnterprisePinPad({
             type="button"
             disabled={blocked}
             className={keyClass}
-            onClick={() => appendDigit(d)}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              appendDigit(d);
+            }}
             aria-label={d}
           >
             {d}
           </button>
         ))}
         <span aria-hidden className="min-h-[44px]" />
-        <button type="button" disabled={blocked} className={keyClass} onClick={() => appendDigit("0")} aria-label="0">
+        <button
+          type="button"
+          disabled={blocked}
+          className={keyClass}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            appendDigit("0");
+          }}
+          aria-label="0"
+        >
           0
         </button>
         <button
           type="button"
           disabled={blocked || pin.length === 0}
           className={clsx(keyClass, "border-transparent bg-transparent text-muted-foreground dark:text-muted-foreground")}
-          onClick={backspace}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            backspace();
+          }}
           aria-label={t(lang, "pinKeypadBackspace")}
         >
           <Delete className="mx-auto h-5 w-5" />

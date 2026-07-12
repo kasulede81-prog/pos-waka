@@ -3,7 +3,11 @@ import { Link, Navigate } from "react-router-dom";
 import { MonitorSmartphone, Plus } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
-import { PageBackBar } from "../components/layout/PageBackBar";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { EnterpriseCard } from "../components/enterprise/EnterpriseCard";
+import { Body, Caption, MonoNumber } from "../components/enterprise/EnterpriseTypography";
+import { statusTokens } from "../lib/statusTokens";
+import clsx from "clsx";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { EnterpriseSkeletonList } from "../components/enterprise/EnterpriseSkeleton";
@@ -309,23 +313,27 @@ export function DeviceManagementPage({ lang }: Props) {
 
   return (
     <EnterprisePageContainer className="space-y-6">
-      <PageBackBar lang={lang} fallbackTo="/settings" label={t(lang, "settingsHubTitle")} />
-      <div>
-        <h1 className="text-2xl font-black text-foreground">{t(lang, "deviceMgmtEnterpriseTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "deviceFleetSub")}</p>
-      </div>
+      <EnterprisePageHeader
+        lang={lang}
+        title={t(lang, "deviceMgmtEnterpriseTitle")}
+        subtitle={t(lang, "deviceFleetSub")}
+        backFallback="/settings"
+        backLabel={t(lang, "settingsHubTitle")}
+      />
 
       {!isShopOwner ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
-          {t(lang, "deviceMgmtOwnerAccountRequired")}
+        <div className={clsx("rounded-2xl border px-4 py-3", statusTokens.warning.banner, statusTokens.warning.badgeRing)}>
+          <Body className="!text-sm text-warning-foreground">{t(lang, "deviceMgmtOwnerAccountRequired")}</Body>
         </div>
       ) : null}
 
       {currentDevice ? (
-        <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-          <h2 className="text-sm font-black text-sky-950">{t(lang, "deviceFleetThisDevice")}</h2>
-          <p className="mt-1 text-xs font-semibold text-sky-900">{t(lang, "deviceFleetThisDeviceSub")}</p>
-          <dl className="mt-3 grid gap-1 text-xs font-semibold text-sky-950">
+        <EnterpriseCard
+          title={t(lang, "deviceFleetThisDevice")}
+          subtitle={t(lang, "deviceFleetThisDeviceSub")}
+          className={clsx(statusTokens.info.banner, statusTokens.info.badgeRing)}
+        >
+          <dl className="grid gap-1 text-xs font-semibold text-foreground">
             <div className="flex justify-between gap-3">
               <dt>{t(lang, "deviceMgmtVersion")}</dt>
               <dd>{currentDevice.app_version ?? import.meta.env.VITE_APP_VERSION ?? "—"}</dd>
@@ -341,13 +349,13 @@ export function DeviceManagementPage({ lang }: Props) {
               </dd>
             </div>
           </dl>
-        </section>
+        </EnterpriseCard>
       ) : null}
 
-      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "deviceLimitPackageLabel")}</p>
-        <p className="mt-1 text-lg font-black text-foreground">{planName}</p>
-        <p className="mt-3 text-base font-black text-foreground">{usageLine}</p>
+      <EnterpriseCard>
+        <Caption>{t(lang, "deviceLimitPackageLabel")}</Caption>
+        <MonoNumber className="mt-1 text-lg">{planName}</MonoNumber>
+        <Body className="mt-3 !font-black">{usageLine}</Body>
         {usage.planLimit != null && usage.planLimit > 0 ? (
           <div className="mt-2 flex flex-wrap gap-4 text-sm font-semibold text-muted-foreground">
             <span>
@@ -359,11 +367,11 @@ export function DeviceManagementPage({ lang }: Props) {
           </div>
         ) : null}
         {usage.atPlanLimit ? (
-          <span className="mt-3 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900">
+          <span className={clsx("mt-3 inline-flex rounded-full px-2.5 py-1 text-xs font-bold", statusTokens.warning.badge, statusTokens.warning.badgeRing)}>
             {t(lang, "connectedDevicesAtLimitBadge")}
           </span>
         ) : null}
-      </section>
+      </EnterpriseCard>
 
       <section className="rounded-2xl border border-dashed border-border bg-muted p-4">
         <div className="flex items-start gap-3">

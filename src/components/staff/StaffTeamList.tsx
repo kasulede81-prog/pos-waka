@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Search, Shield, UserPlus } from "lucide-react";
+import { AlertTriangle, RefreshCw, Search, Shield, UserPlus } from "lucide-react";
 import clsx from "clsx";
 import type { BusinessType, CustomStaffRole, Language, StaffAccount, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
@@ -25,6 +25,8 @@ type Props = {
   onForceLogout: (id: string) => void;
   onDelete: (id: string) => void;
   activeStaffId?: string | null;
+  hydrating?: boolean;
+  onRefresh?: () => void;
 };
 
 function staffRoleDisplayName(
@@ -72,6 +74,8 @@ export function StaffTeamList({
   onForceLogout,
   onDelete,
   activeStaffId,
+  hydrating = false,
+  onRefresh,
 }: Props) {
   const [query, setQuery] = useState("");
   const [manageId, setManageId] = useState<string | null>(null);
@@ -99,15 +103,28 @@ export function StaffTeamList({
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-black uppercase tracking-wide text-muted-foreground">{t(lang, "staffYourTeam")}</p>
-        <button
-          type="button"
-          onClick={onAddStaff}
-          disabled={maxStaff > 0 && staff.length >= maxStaff}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-50"
-        >
-          <UserPlus className="h-4 w-4" />
-          {t(lang, "staffWizardAddStaff")}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onRefresh ? (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={hydrating}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border-2 border-border bg-card px-4 text-sm font-black text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={clsx("h-4 w-4", hydrating && "animate-spin")} aria-hidden />
+              {t(lang, "syncingShort")}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onAddStaff}
+            disabled={maxStaff > 0 && staff.length >= maxStaff}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-50"
+          >
+            <UserPlus className="h-4 w-4" />
+            {t(lang, "staffWizardAddStaff")}
+          </button>
+        </div>
       </div>
 
       <label className="relative block">
@@ -122,7 +139,7 @@ export function StaffTeamList({
 
       {ordered.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border bg-muted px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
-          {t(lang, "staffTeamEmpty")}
+          {hydrating ? t(lang, "syncingShort") : t(lang, "staffTeamEmpty")}
         </p>
       ) : (
         <ul className="space-y-2">

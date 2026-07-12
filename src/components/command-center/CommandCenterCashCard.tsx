@@ -4,6 +4,11 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { OwnerCashExtended } from "../../lib/ownerCommandCenterBuilders";
 import { formatShortUgx } from "../../lib/commandCenterPageView";
+import { EnterpriseCard } from "../enterprise/EnterpriseCard";
+import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
+import { WakaButton } from "../ui/wakaPrimitives";
+import { statusTokens } from "../../lib/statusTokens";
+import { Banknote, Landmark, PiggyBank, Receipt, Scale, Wallet } from "lucide-react";
 
 type Props = {
   lang: Language;
@@ -12,60 +17,47 @@ type Props = {
 
 export function CommandCenterCashCard({ lang, cash }: Props) {
   return (
-    <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterCashTitle")}</h2>
-          <p className="text-[11px] font-semibold text-muted-foreground">{t(lang, "ownerCashSub")}</p>
-        </div>
-        {cash.hasUnresolvedVariance ? (
-          <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black uppercase text-rose-800">
+    <EnterpriseCard
+      title={t(lang, "cmdCenterCashTitle")}
+      subtitle={t(lang, "ownerCashSub")}
+      actions={
+        cash.hasUnresolvedVariance ? (
+          <span className={clsx("rounded-full px-2.5 py-0.5 text-xs font-black uppercase", statusTokens.danger.badge, statusTokens.danger.badgeRing)}>
             {t(lang, "ownerCashUnresolved")}
           </span>
-        ) : null}
-      </div>
-
-      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <CashMetric label={t(lang, "ownerCashExpected")} value={formatShortUgx(cash.periodExpectedCashUgx)} />
-        <CashMetric
+        ) : null
+      }
+    >
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <EnterpriseKpiCard icon={Wallet} label={t(lang, "ownerCashExpected")} value={formatShortUgx(cash.periodExpectedCashUgx)} />
+        <EnterpriseKpiCard
+          icon={Scale}
           label={t(lang, "ownerCashCounted")}
           value={cash.latestCountedCashUgx != null ? formatShortUgx(cash.latestCountedCashUgx) : "—"}
         />
-        <CashMetric
+        <EnterpriseKpiCard
+          icon={Banknote}
           label={t(lang, "ownerCashDayVariance")}
           value={cash.latestDayVarianceUgx != null ? formatShortUgx(cash.latestDayVarianceUgx) : "—"}
-          warn={cash.latestDayVarianceUgx != null && cash.latestDayVarianceUgx !== 0}
+          tone={cash.latestDayVarianceUgx != null && cash.latestDayVarianceUgx !== 0 ? "danger" : "default"}
         />
-        <CashMetric label={t(lang, "ownerCashOwnerWithdrawal")} value={formatShortUgx(cash.ownerWithdrawalsUgx)} />
-        <CashMetric label={t(lang, "ownerCashBankDeposit")} value={formatShortUgx(cash.bankDepositsUgx)} />
-        <CashMetric label={t(lang, "ownerCashExpenses")} value={formatShortUgx(cash.cashExpensesUgx)} />
-      </dl>
+        <EnterpriseKpiCard icon={PiggyBank} label={t(lang, "ownerCashOwnerWithdrawal")} value={formatShortUgx(cash.ownerWithdrawalsUgx)} />
+        <EnterpriseKpiCard icon={Landmark} label={t(lang, "ownerCashBankDeposit")} value={formatShortUgx(cash.bankDepositsUgx)} />
+        <EnterpriseKpiCard icon={Receipt} label={t(lang, "ownerCashExpenses")} value={formatShortUgx(cash.cashExpensesUgx)} />
+      </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <Link
-          to="/office/cash-position"
-          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-waka-600 px-4 text-sm font-black text-white"
-        >
-          {t(lang, "ownerCashViewPosition")}
+        <Link to="/office/cash-position">
+          <WakaButton type="button" variant="primary" className="w-full">
+            {t(lang, "ownerCashViewPosition")}
+          </WakaButton>
         </Link>
-        <Link
-          to="/close-day"
-          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border px-4 text-sm font-black text-foreground"
-        >
-          {t(lang, "ownerCashViewClose")}
+        <Link to="/close-day">
+          <WakaButton type="button" variant="secondary" className="w-full">
+            {t(lang, "ownerCashViewClose")}
+          </WakaButton>
         </Link>
       </div>
-    </section>
-  );
-}
-
-function CashMetric({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
-  return (
-    <div className={clsx("rounded-2xl px-2.5 py-2", warn ? "bg-rose-50" : "bg-muted")}>
-      <dt className="text-[10px] font-bold uppercase text-muted-foreground">{label}</dt>
-      <dd className={clsx("mt-0.5 text-sm font-black tabular-nums", warn ? "text-rose-800" : "text-foreground")}>
-        {value}
-      </dd>
-    </div>
+    </EnterpriseCard>
   );
 }

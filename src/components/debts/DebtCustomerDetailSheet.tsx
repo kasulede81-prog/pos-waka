@@ -1,10 +1,14 @@
-import { useEffect } from "react";
 import clsx from "clsx";
 import type { Customer, Language } from "../../types";
 import type { CreditActivityEntry } from "../../lib/customerDebtActivity";
 import { t } from "../../lib/i18n";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { customerInitials, formatActivityWhen } from "../../lib/debtsPageView";
+import { ModalSheet } from "../layout/ModalSheet";
+import { EnterpriseEmptyState } from "../enterprise/EnterpriseEmptyState";
+import { Caption, MonoNumber, SectionTitle } from "../enterprise/EnterpriseTypography";
+import { WakaButton } from "../ui/wakaPrimitives";
+import { Wallet } from "lucide-react";
+import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
 
 type Props = {
   lang: Language;
@@ -25,90 +29,86 @@ export function DebtCustomerDetailSheet({
   onReceive,
   canDebt,
 }: Props) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open || !customer) return null;
+  if (!customer) return null;
 
   const localeLang = lang === "sw" ? "sw" : "en";
 
   return (
-    <AppModalOverlay className="z-[54] flex items-end bg-foreground/40 backdrop-blur-[2px]" clearNav={false}>
-      <button type="button" className="absolute inset-0" aria-label={t(lang, "cancel")} onClick={onClose} />
-      <div className="relative z-[55] max-h-[min(85dvh,40rem)] w-full overflow-y-auto rounded-t-[1.75rem] border border-border bg-card px-4 pb-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+1rem)] pt-3 shadow-2xl">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" aria-hidden />
-
+    <ModalSheet
+      open={open}
+      onClose={onClose}
+      clearNav={false}
+      zIndexClass="z-[54]"
+      maxHeightClass="max-h-[min(85dvh,40rem)]"
+      title={
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-waka-100 text-sm font-black text-waka-800">
             {customerInitials(customer.name)}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-base font-black text-foreground">{customer.name}</p>
-            <p className="text-xs font-semibold text-muted-foreground">{customer.phone || t(lang, "debtNoPhone")}</p>
+            <SectionTitle as="h2" className="truncate !text-base">{customer.name}</SectionTitle>
+            <Caption className="normal-case">{customer.phone || t(lang, "debtNoPhone")}</Caption>
           </div>
         </div>
-
-        <div className="mt-3 rounded-xl bg-muted p-3">
-          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "debtBalanceLabel")}</p>
-          <p className="text-xl font-black tabular-nums text-waka-700">UGX {customer.debtBalanceUgx.toLocaleString()}</p>
+      }
+      footer={
+        <div className="space-y-2">
+          {canDebt && customer.debtBalanceUgx > 0 ? (
+            <WakaButton
+              type="button"
+              className="w-full"
+              onClick={() => {
+                onClose();
+                onReceive();
+              }}
+            >
+              {t(lang, "repayDebt")}
+            </WakaButton>
+          ) : null}
+          <WakaButton type="button" variant="secondary" className="w-full" onClick={onClose}>
+            {t(lang, "cancel")}
+          </WakaButton>
         </div>
+      }
+    >
+      <EnterpriseKpiCard
+        icon={Wallet}
+        label={t(lang, "debtBalanceLabel")}
+        value={`UGX ${customer.debtBalanceUgx.toLocaleString()}`}
+        tone={customer.debtBalanceUgx > 0 ? "warning" : "default"}
+        className="mb-3"
+      />
 
-        <div className="mt-3">
-          <p className="text-xs font-black text-foreground">{t(lang, "creditActivityTitle")}</p>
-          {timeline.length === 0 ? (
-            <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "creditActivityEmpty")}</p>
-          ) : (
-            <ul className="mt-2 space-y-2">
-              {timeline.slice(0, 12).map((entry) => (
-                <li key={`${entry.kind}-${entry.id}`} className="flex items-start justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-foreground">
-                      {entry.kind === "credit_sale" ? t(lang, "creditSaleActivity") : t(lang, "debtPaymentActivity")}
-                      {entry.receiptSeq != null ? ` #${String(entry.receiptSeq).padStart(3, "0")}` : ""}
-                    </p>
-                    <p className="text-[10px] font-medium text-muted-foreground">{formatActivityWhen(entry.at, localeLang)}</p>
-                  </div>
-                  <span
-                    className={clsx(
-                      "shrink-0 text-xs font-black tabular-nums",
-                      entry.kind === "debt_payment" ? "text-teal-800" : "text-waka-700",
-                    )}
-                  >
-                    {entry.kind === "debt_payment" ? "−" : "+"}UGX {entry.amountUgx.toLocaleString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {canDebt && customer.debtBalanceUgx > 0 ? (
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onReceive();
-            }}
-            className="mt-3 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-waka-600 text-sm font-black text-white active:bg-waka-700"
-          >
-            {t(lang, "repayDebt")}
-          </button>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-xl border border-border text-sm font-bold text-muted-foreground active:bg-muted"
-        >
-          {t(lang, "cancel")}
-        </button>
-      </div>
-    </AppModalOverlay>
+      <SectionTitle as="h3" className="!text-sm">{t(lang, "creditActivityTitle")}</SectionTitle>
+      {timeline.length === 0 ? (
+        <EnterpriseEmptyState
+          icon={Wallet}
+          title={t(lang, "creditActivityEmpty")}
+          className="mt-2 !border-0 !bg-transparent !p-4 !shadow-none"
+        />
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {timeline.slice(0, 12).map((entry) => (
+            <li key={`${entry.kind}-${entry.id}`} className="flex items-start justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2">
+              <div className="min-w-0">
+                <Caption className="font-bold normal-case text-foreground">
+                  {entry.kind === "credit_sale" ? t(lang, "creditSaleActivity") : t(lang, "debtPaymentActivity")}
+                  {entry.receiptSeq != null ? ` #${String(entry.receiptSeq).padStart(3, "0")}` : ""}
+                </Caption>
+                <Caption>{formatActivityWhen(entry.at, localeLang)}</Caption>
+              </div>
+              <MonoNumber
+                className={clsx(
+                  "text-xs",
+                  entry.kind === "debt_payment" ? "text-success-foreground" : "text-waka-700",
+                )}
+              >
+                {entry.kind === "debt_payment" ? "−" : "+"}UGX {entry.amountUgx.toLocaleString()}
+              </MonoNumber>
+            </li>
+          ))}
+        </ul>
+      )}
+    </ModalSheet>
   );
 }

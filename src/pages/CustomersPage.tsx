@@ -36,7 +36,7 @@ import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { ModalSheet } from "../components/layout/ModalSheet";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
-import { PageHeader } from "../components/layout/PageHeader";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
 import { VirtualizedCustomerDebtList } from "../components/debts/VirtualizedCustomerDebtList";
 import { DebtsStatGrid } from "../components/debts/DebtsStatGrid";
 import { DebtsFilterChips } from "../components/debts/DebtsFilterChips";
@@ -230,7 +230,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
     <EnterprisePageContainer className="space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <PageHeader
+          <EnterprisePageHeader
             lang={lang}
             title={modeTerm("debts")}
             subtitle={t(lang, "debtsPageSub")}

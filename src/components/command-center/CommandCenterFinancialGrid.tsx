@@ -1,9 +1,15 @@
 import { Link } from "react-router-dom";
+import { ArrowDownLeft, ArrowUpRight, PiggyBank, Receipt, Scale, TrendingUp, Wallet } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { OwnerFinancialExtended } from "../../lib/ownerCommandCenterBuilders";
 import { formatShortUgx, pctChangeLabel, type SparkPoint } from "../../lib/commandCenterPageView";
 import { MiniSparkline } from "./MiniSparkline";
+import { EnterpriseCard } from "../enterprise/EnterpriseCard";
+import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
+import { Caption, MonoNumber } from "../enterprise/EnterpriseTypography";
+import { WakaButton } from "../ui/wakaPrimitives";
 
 type Props = {
   lang: Language;
@@ -16,7 +22,7 @@ type FinMetric = {
   labelKey: string;
   value: string;
   pct: string | null;
-  warn?: boolean;
+  icon: LucideIcon;
 };
 
 export function CommandCenterFinancialGrid({ lang, financial, periodLabel, revenueSparkline = [] }: Props) {
@@ -29,66 +35,65 @@ export function CommandCenterFinancialGrid({ lang, financial, periodLabel, reven
       labelKey: "ownerFinancialRevenue",
       value: formatShortUgx(financial.revenueUgx),
       pct: pctChangeLabel(financial.trendVsPriorDay?.pctRevenue ?? null),
+      icon: TrendingUp,
     },
     {
       labelKey: "ownerFinancialProfit",
       value: formatShortUgx(financial.profitUgx),
       pct: pctChangeLabel(financial.trendVsPriorDay?.pctProfit ?? null),
+      icon: PiggyBank,
     },
-    { labelKey: "ownerFinancialPurchases", value: formatShortUgx(financial.purchasesUgx), pct: null },
-    { labelKey: "ownerFinancialExpensesPeriod", value: formatShortUgx(financial.expensesPeriodUgx), pct: null },
-    { labelKey: "ownerFinancialReceivables", value: formatShortUgx(financial.receivablesUgx), pct: null },
-    { labelKey: "ownerFinancialPayables", value: formatShortUgx(financial.payablesUgx), pct: null },
-    { labelKey: "ownerFinancialDebtCollected", value: formatShortUgx(financial.debtCollectedUgx), pct: null },
-    { labelKey: "ownerFinancialDebtIssued", value: formatShortUgx(financial.debtIssuedUgx), pct: null },
+    { labelKey: "ownerFinancialPurchases", value: formatShortUgx(financial.purchasesUgx), pct: null, icon: ArrowUpRight },
+    { labelKey: "ownerFinancialExpensesPeriod", value: formatShortUgx(financial.expensesPeriodUgx), pct: null, icon: Receipt },
+    { labelKey: "ownerFinancialReceivables", value: formatShortUgx(financial.receivablesUgx), pct: null, icon: Wallet },
+    { labelKey: "ownerFinancialPayables", value: formatShortUgx(financial.payablesUgx), pct: null, icon: Scale },
+    { labelKey: "ownerFinancialDebtCollected", value: formatShortUgx(financial.debtCollectedUgx), pct: null, icon: ArrowDownLeft },
+    { labelKey: "ownerFinancialDebtIssued", value: formatShortUgx(financial.debtIssuedUgx), pct: null, icon: ArrowUpRight },
   ];
 
   return (
-    <section className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
-      <div>
-        <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterFinancialTitle")}</h2>
-        <p className="text-[11px] font-semibold text-muted-foreground">{periodLabel}</p>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <EnterpriseCard title={t(lang, "cmdCenterFinancialTitle")} subtitle={periodLabel}>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {metrics.map((m) => (
-          <div key={m.labelKey} className="rounded-2xl border border-border bg-muted/80 p-2.5">
-            <p className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, m.labelKey)}</p>
-            <p className="mt-0.5 text-sm font-black tabular-nums text-foreground">{m.value}</p>
-            <div className="mt-1 flex items-end justify-between">
-              {m.pct ? <span className="text-[10px] font-bold text-teal-700">{m.pct}</span> : <span />}
-              <MiniSparkline points={revenueSparkline} strokeClass="stroke-stone-400" />
-            </div>
-          </div>
+          <EnterpriseKpiCard
+            key={m.labelKey}
+            icon={m.icon}
+            label={t(lang, m.labelKey)}
+            value={
+              <div className="flex items-end justify-between gap-1">
+                <MonoNumber className="text-sm sm:text-base">{m.value}</MonoNumber>
+                <MiniSparkline points={revenueSparkline} strokeClass="stroke-stone-400" />
+              </div>
+            }
+            hint={m.pct ? `${m.pct} ${t(lang, "cmdCenterVsYesterday")}` : undefined}
+          />
         ))}
       </div>
 
       {mixTotal > 0 ? (
         <div className="mt-4 rounded-2xl bg-muted p-3">
-          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "ownerFinancialPaymentMix")}</p>
+          <Caption className="uppercase tracking-wide">{t(lang, "ownerFinancialPaymentMix")}</Caption>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full bg-waka-500 transition-all" style={{ width: `${cashPct}%` }} />
           </div>
-          <p className="mt-1 text-[11px] font-bold text-muted-foreground">
+          <Caption className="mt-1">
             {t(lang, "ownerFinancialCash")} {cashPct}%
-          </p>
+          </Caption>
         </div>
       ) : null}
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <Link
-          to="/office/audit-center"
-          className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-border text-xs font-black text-foreground"
-        >
-          {t(lang, "ownerFinancialDrillDown")} →
+        <Link to="/office/audit-center">
+          <WakaButton type="button" variant="secondary" className="w-full">
+            {t(lang, "ownerFinancialDrillDown")} →
+          </WakaButton>
         </Link>
-        <Link
-          to="/purchases"
-          className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-border text-xs font-black text-foreground"
-        >
-          {t(lang, "ownerFinancialViewPurchases")} →
+        <Link to="/purchases">
+          <WakaButton type="button" variant="secondary" className="w-full">
+            {t(lang, "ownerFinancialViewPurchases")} →
+          </WakaButton>
         </Link>
       </div>
-    </section>
+    </EnterpriseCard>
   );
 }

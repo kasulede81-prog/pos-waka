@@ -5,6 +5,7 @@ import {
   isDeviceApprovedCachedSync,
   isDeviceAuthorizedForManagementSync,
   seedDeviceAuthorityCacheForTests,
+  setShopOwnerDeviceAuthorityBypass,
   type DeviceAuthorityContext,
 } from "./deviceAuthority";
 
@@ -63,6 +64,12 @@ describe("deviceAuthority cache", () => {
     });
     expect(isDeviceApprovedCachedSync()).toBe(false);
     expect(isDeviceAuthorizedForManagementSync()).toBe(false);
+  });
+
+  it("shop owner bypass allows management without approved device row", () => {
+    setShopOwnerDeviceAuthorityBypass("shop-1");
+    expect(isDeviceAuthorizedForManagementSync()).toBe(true);
+    expect(isDeviceApprovedCachedSync()).toBe(true);
   });
 });
 

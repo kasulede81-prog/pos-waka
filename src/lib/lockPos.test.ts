@@ -12,4 +12,9 @@ describe("shouldSuppressPosLockScreen", () => {
     expect(shouldSuppressPosLockScreen("/staff-access", false)).toBe(false);
     expect(shouldSuppressPosLockScreen("/pos/sell", true)).toBe(false);
   });
+
+  it("suppresses POS lock on close day and office routes", () => {
+    expect(shouldSuppressPosLockScreen("/close-day", true)).toBe(true);
+    expect(shouldSuppressPosLockScreen("/office/cash-drawer", true)).toBe(true);
+  });
 });

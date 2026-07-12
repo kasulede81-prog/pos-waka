@@ -3514,8 +3514,10 @@ async function syncShopWithCloudInner(opts?: {
         : shouldPullFromCloud();
   const pulled = doPull ? await pullCloudAndMergeIntoStore({ forceFull: opts?.forceFull }) : false;
   const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
-  if (getDeviceOnline() && !pullBlocked) {
-    await pullHospitalityStateFromCloud(opts?.forceFull === true);
+  if (getDeviceOnline()) {
+    if (!pullBlocked) {
+      await pullHospitalityStateFromCloud(opts?.forceFull === true);
+    }
     const { fetchDeviceAuthorityContext } = await import("../lib/deviceAuthority");
     const deviceAuthority = await fetchDeviceAuthorityContext();
     const { pullAndMergeStaffDuringCloudSync } = await import("../lib/staffRecovery");
@@ -3523,14 +3525,16 @@ async function syncShopWithCloudInner(opts?: {
       deviceAuthority,
       force: opts?.forceFull === true,
     });
-    const ctx = await resolveShopCtx().catch(() => null);
-    if (ctx?.shopId) {
-      const { hydrateShopSecurityPin } = await import("../lib/shopSecurityPinSync");
-      void hydrateShopSecurityPin(ctx.shopId).catch(() => "failed");
+    if (!pullBlocked) {
+      const ctx = await resolveShopCtx().catch(() => null);
+      if (ctx?.shopId) {
+        const { hydrateShopSecurityPin } = await import("../lib/shopSecurityPinSync");
+        void hydrateShopSecurityPin(ctx.shopId).catch(() => "failed");
+      }
+      void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
+        flushPendingStaffSecurityEvents();
+      });
     }
-    void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
-      flushPendingStaffSecurityEvents();
-    });
   }
   const { push, queueFailed } = await pushShopPendingToCloudInner();
   if (getDeviceOnline() && push.fail === 0) {
@@ -3564,6 +3568,9 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
   if (!hasSupabaseConfig) return;
   if (shouldPausePosBackgroundPull()) {
     void import("../lib/posPushScheduler").then(({ schedulePushPendingUploads }) => schedulePushPendingUploads());
+    void import("../lib/staffRecovery").then(({ pullAndMergeStaffDuringCloudSync }) => {
+      void pullAndMergeStaffDuringCloudSync();
+    });
     return;
   }
   if (backgroundSyncTimer != null) return;

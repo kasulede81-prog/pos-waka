@@ -8,7 +8,8 @@ import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { useSessionActor } from "../context/SessionActorContext";
 
-import { PageBackBar } from "../components/layout/PageBackBar";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { Body, MonoNumber } from "../components/enterprise/EnterpriseTypography";
 import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
@@ -57,20 +58,21 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   return (
     <BackOfficePageLayout
       header={
-        <>
-          <PageBackBar lang={lang} />
-          <div className="mt-2">
-            <h1 className="text-xl font-black text-foreground sm:text-2xl">{t(lang, "settingsHubTitle")}</h1>
-            <p className="text-xs font-medium text-muted-foreground">{t(lang, "settingsHubSub")}</p>
-            <p className="mt-1 text-xs font-medium text-muted-foreground">
-              {t(lang, "settingsYourPlanLabel")}: <span className="font-black text-foreground">{planTier}</span>
-              <span className="mx-2 text-muted-foreground" aria-hidden>
-                ·
-              </span>
-              {t(lang, "settingsAppVersionLine")}: <span className="font-mono font-black text-foreground">{appVersion}</span>
-            </p>
-          </div>
-        </>
+        <EnterprisePageHeader
+          lang={lang}
+          title={t(lang, "settingsHubTitle")}
+          subtitle={t(lang, "settingsHubSub")}
+          backFallback="/"
+          compact
+        >
+          <Body className="text-xs text-muted-foreground">
+            {t(lang, "settingsYourPlanLabel")}: <MonoNumber as="span">{planTier}</MonoNumber>
+            <span className="mx-2 text-muted-foreground" aria-hidden>
+              ·
+            </span>
+            {t(lang, "settingsAppVersionLine")}: <MonoNumber as="span" className="font-mono">{appVersion}</MonoNumber>
+          </Body>
+        </EnterprisePageHeader>
       }
       className="pb-8"
     >

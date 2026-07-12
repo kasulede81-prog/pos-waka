@@ -51,6 +51,49 @@ export type DeviceAuthorityContext = {
 const CACHE_KEY = "waka.device.authority.v2";
 const CACHE_TTL_MS = 5 * 60_000;
 
+/** Phase 20.6 — shop owners are not gated by device approval for management actions. */
+let ownerAuthorityBypassShopId: string | null = null;
+
+export function setShopOwnerDeviceAuthorityBypass(shopId: string | null): void {
+  ownerAuthorityBypassShopId = shopId?.trim() ? shopId : null;
+}
+
+export function isShopOwnerDeviceAuthorityBypassActive(shopId?: string | null): boolean {
+  if (!ownerAuthorityBypassShopId) return false;
+  if (!shopId) return true;
+  return ownerAuthorityBypassShopId === shopId;
+}
+
+/** Seed approved authority for owner sessions when cloud context is stale/missing. */
+export function seedOwnerApprovedDeviceAuthority(shopId: string): DeviceAuthorityContext {
+  const ctx: DeviceAuthorityContext = {
+    shopId,
+    deviceFingerprint: getOrCreateDeviceId(),
+    deviceId: null,
+    formFactor: "tablet",
+    approvalStatus: "approved",
+    isDeviceAuthorized: true,
+    isApproved: true,
+    isOperational: true,
+    status: "active",
+    lastSyncAt: null,
+    lastLoginAt: null,
+    lastSeenAt: null,
+    currentStaffClientId: null,
+    appVersion: import.meta.env.VITE_APP_VERSION ?? null,
+    label: "Owner session",
+    platform: typeof window !== "undefined" && /localhost|127\.0\.0\.1/.test(window.location.hostname) ? "web" : null,
+    pendingUploads: 0,
+    pendingDownloads: 0,
+    cloudStatus: null,
+    recoveryStatus: null,
+  };
+  writeOfflineCache(ctx);
+  setShopOwnerDeviceAuthorityBypass(shopId);
+  notifyAuthorityRefreshListeners();
+  return ctx;
+}
+
 type CachedEntry = { ctx: DeviceAuthorityContext; at: number };
 let memoryCache: CachedEntry | null = null;
 const refreshListeners = new Set<() => void>();
@@ -100,6 +143,7 @@ export function seedDeviceAuthorityCacheForTests(ctx: DeviceAuthorityContext): v
 
 export function clearDeviceAuthorityCache(): void {
   memoryCache = null;
+  ownerAuthorityBypassShopId = null;
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(CACHE_KEY);
     window.localStorage.removeItem("waka.device.authority.v1");
@@ -141,6 +185,7 @@ function parseContext(data: unknown, shopId: string, fp: string): DeviceAuthorit
 }
 
 export function isDeviceAuthorizedForManagement(ctx: DeviceAuthorityContext | null | undefined): boolean {
+  if (isShopOwnerDeviceAuthorityBypassActive(ctx?.shopId)) return true;
   if (!ctx) return false;
   return ctx.isDeviceAuthorized;
 }
@@ -207,10 +252,12 @@ export function getCachedDeviceAuthoritySync(): DeviceAuthorityContext | null {
 }
 
 export function isDeviceAuthorizedForManagementSync(): boolean {
+  if (isShopOwnerDeviceAuthorityBypassActive(getCachedDeviceAuthoritySync()?.shopId)) return true;
   return isDeviceAuthorizedForManagement(getCachedDeviceAuthoritySync());
 }
 
 export function isDeviceApprovedCachedSync(): boolean {
+  if (isShopOwnerDeviceAuthorityBypassActive(getCachedDeviceAuthoritySync()?.shopId)) return true;
   const ctx = getCachedDeviceAuthoritySync();
   if (!ctx) return false;
   return ctx.isApproved && ctx.approvalStatus !== "pending";

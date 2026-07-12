@@ -82,11 +82,19 @@ export type PendingSyncBreakdown = {
   other: number;
 };
 
+export type PendingSalePreflightRow = {
+  saleId: string;
+  label: string;
+  createdAt: string;
+  totalUgx: number;
+};
+
 export type DayClosePreflightSnapshot = {
   dateKey: string;
   items: DayClosePreflightItem[];
   openShifts: OpenShiftPreflightRow[];
   hospitalitySessions: HospitalityPreflightRow[];
+  pendingSales: PendingSalePreflightRow[];
   pendingSync: PendingSyncBreakdown;
   expectedCashUgx: number;
   canClose: boolean;
@@ -131,18 +139,50 @@ function dateHasBusinessActivity(
   return false;
 }
 
-function hasPendingSalesBlockingDayClose(state: DayClosePreflightState, dateKey: string): boolean {
+/** Pending sales / draft cart blocking close for a specific business date. */
+export function collectPendingSalesBlockers(
+  state: DayClosePreflightState,
+  dateKey: string,
+): PendingSalePreflightRow[] {
   const todayKey = dateKeyKampala(new Date());
-  if (dateKey === todayKey) {
-    if (state.draftLines.length > 0) return true;
-    if (state.activePendingSaleId) {
-      const active = state.sales.find(
-        (s) => s.id === state.activePendingSaleId && s.status === "pending",
-      );
-      if (active) return true;
+  const rows: PendingSalePreflightRow[] = [];
+
+  if (dateKey === todayKey && state.draftLines.length > 0) {
+    rows.push({
+      saleId: "draft-cart",
+      label: "draft_cart",
+      createdAt: new Date().toISOString(),
+      totalUgx: 0,
+    });
+  }
+
+  if (dateKey === todayKey && state.activePendingSaleId) {
+    const active = state.sales.find(
+      (s) => s.id === state.activePendingSaleId && s.status === "pending",
+    );
+    if (active && !rows.some((r) => r.saleId === active.id)) {
+      rows.push({
+        saleId: active.id,
+        label: active.tableSessionId ? "table_sale" : "active_pending",
+        createdAt: active.createdAt,
+        totalUgx: active.totalUgx ?? 0,
+      });
     }
   }
-  return state.sales.some((s) => s.status === "pending" && saleReportingDayKey(s) === dateKey);
+
+  for (const sale of state.sales) {
+    if (sale.status !== "pending") continue;
+    if (saleReportingDayKey(sale) !== dateKey) continue;
+    if (rows.some((r) => r.saleId === sale.id)) continue;
+    rows.push({
+      saleId: sale.id,
+      label: sale.tableSessionId ? "table_sale" : "pending_sale",
+      createdAt: sale.createdAt,
+      totalUgx: sale.totalUgx ?? 0,
+    });
+  }
+
+  return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 function countPendingSync(rows: { pendingSync?: boolean }[]): number {
@@ -283,9 +323,10 @@ export function buildDayClosePreflightSnapshot(input: {
     state.sales,
     dateKey,
   );
+  const pendingSalesRows = collectPendingSalesBlockers(state, dateKey);
   const pendingSync = collectPendingSyncBreakdown(state, input.queue ?? []);
 
-  const hasPendingSales = hasPendingSalesBlockingDayClose(state, dateKey);
+  const hasPendingSales = pendingSalesRows.length > 0;
 
   const v2 = isFormulaV2(state.preferences);
   const dayOpen = activeDayDrawerOpenForDate(state.dayDrawerOpens, dateKey);
@@ -429,6 +470,7 @@ export function buildDayClosePreflightSnapshot(input: {
     items,
     openShifts,
     hospitalitySessions,
+    pendingSales: pendingSalesRows,
     pendingSync,
     expectedCashUgx,
     canClose,

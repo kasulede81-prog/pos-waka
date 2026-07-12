@@ -2,11 +2,14 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Link } from "react-router-dom";
 import { Cloud, Share2 } from "lucide-react";
+import clsx from "clsx";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
+import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { OfficePremiumSection } from "../components/office/OfficePremiumSection";
 import { OfficeHubSectionTile } from "../components/office/OfficeHubSectionTile";
-import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
+import { statusTokens } from "../lib/statusTokens";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
 import { runWhenIdle } from "../lib/uiYield";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
@@ -40,11 +43,11 @@ function OfficeSyncStatusChip({ lang }: { lang: Language }) {
   return (
     <Link
       to="/office/backup"
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black ${
-        ok
-          ? "border border-emerald-200/80 bg-emerald-50 text-emerald-900"
-          : "border border-amber-200 bg-amber-50 text-amber-950"
-      }`}
+      className={clsx(
+        "inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-black",
+        ok ? statusTokens.success.badgeRing : statusTokens.warning.badgeRing,
+        ok ? statusTokens.success.banner : statusTokens.warning.banner,
+      )}
     >
       <Cloud className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
       <span className="truncate">{label}</span>
@@ -95,10 +98,12 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
     <BackOfficePageLayout
       header={
         <div className="space-y-1.5">
-          <div>
-            <h1 className="text-xl font-black tracking-tight text-foreground sm:text-2xl">{t(lang, "officeHubTitle")}</h1>
-            <p className="text-xs font-medium text-muted-foreground">{t(lang, "officeHubSub")}</p>
-          </div>
+          <EnterprisePageHeader
+            lang={lang}
+            title={t(lang, "officeHubTitle")}
+            subtitle={t(lang, "officeHubSub")}
+            showBack={false}
+          />
           <OfficeSyncStatusChip lang={lang} />
         </div>
       }
@@ -114,7 +119,9 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       <OfficePremiumSection lang={lang} />
 
       {empty ? (
-        <p className="rounded-xl bg-amber-50 px-3 py-3 text-sm font-bold text-amber-950">{t(lang, "officeHubEmpty")}</p>
+        <p className={clsx("rounded-xl px-3 py-3 text-sm font-bold", statusTokens.warning.banner, statusTokens.warning.badgeRing)}>
+          {t(lang, "officeHubEmpty")}
+        </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:max-w-4xl">
           {visibleSections.map((section, index) => (

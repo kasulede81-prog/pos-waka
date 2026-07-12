@@ -1,8 +1,9 @@
-import clsx from "clsx";
 import { AlertTriangle, Clock, HandCoins, TrendingDown, Users, Wallet } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { formatShortUgx } from "../../lib/debtsPageView";
+import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
+import { MonoNumber } from "../enterprise/EnterpriseTypography";
 
 type Props = {
   lang: Language;
@@ -15,56 +16,6 @@ type Props = {
   collectedLabel?: string;
   creditSalesLabel?: string;
 };
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  highlight,
-  warn,
-  valueClass,
-}: {
-  icon: typeof Wallet;
-  label: string;
-  value: string;
-  highlight?: boolean;
-  warn?: boolean;
-  valueClass?: string;
-}) {
-  return (
-    <div
-      className={clsx(
-        "flex min-h-[76px] flex-col justify-between rounded-2xl border p-2.5 shadow-sm",
-        highlight
-          ? "border-waka-300 bg-gradient-to-br from-waka-50 to-waka-50/80"
-          : warn
-            ? "border-rose-200/90 bg-card"
-            : "border-border/90 bg-card",
-      )}
-    >
-      <div className="flex items-center gap-1.5">
-        <span
-          className={clsx(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
-            highlight
-              ? "bg-waka-600 text-white"
-              : warn
-                ? "bg-rose-100 text-rose-700"
-                : "bg-muted text-muted-foreground",
-          )}
-        >
-          <Icon className="h-3.5 w-3.5" aria-hidden />
-        </span>
-        <span className="line-clamp-2 text-[10px] font-bold uppercase leading-tight tracking-wide text-muted-foreground">
-          {label}
-        </span>
-      </div>
-      <p className={clsx("text-base font-black leading-tight tabular-nums sm:text-lg", valueClass ?? "text-foreground")}>
-        {value}
-      </p>
-    </div>
-  );
-}
 
 export function DebtsStatGrid({
   lang,
@@ -82,29 +33,27 @@ export function DebtsStatGrid({
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-      <StatCard
+      <EnterpriseKpiCard
         icon={Wallet}
         label={t(lang, "debtsStatOutstanding")}
-        value={formatShortUgx(outstandingUgx)}
-        highlight
-        valueClass="text-waka-700"
+        value={<MonoNumber className="text-base text-waka-700 sm:text-lg">{formatShortUgx(outstandingUgx)}</MonoNumber>}
+        tone="highlight"
       />
-      <StatCard icon={Users} label={t(lang, "debtsStatCustomersOwing")} value={String(customersOwing)} />
-      <StatCard
+      <EnterpriseKpiCard icon={Users} label={t(lang, "debtsStatCustomersOwing")} value={String(customersOwing)} />
+      <EnterpriseKpiCard
         icon={TrendingDown}
         label={collected}
-        value={formatShortUgx(collectedUgx)}
-        valueClass="text-teal-800"
+        value={<MonoNumber className="text-base text-teal-800 sm:text-lg">{formatShortUgx(collectedUgx)}</MonoNumber>}
+        tone="success"
       />
-      <StatCard icon={HandCoins} label={creditSales} value={formatShortUgx(creditSalesUgx)} />
-      <StatCard
+      <EnterpriseKpiCard icon={HandCoins} label={creditSales} value={formatShortUgx(creditSalesUgx)} />
+      <EnterpriseKpiCard
         icon={AlertTriangle}
         label={t(lang, "debtsStatOverdue")}
         value={String(overdueCount)}
-        warn={overdueCount > 0}
-        valueClass={overdueCount > 0 ? "text-rose-700" : undefined}
+        tone={overdueCount > 0 ? "danger" : "default"}
       />
-      <StatCard
+      <EnterpriseKpiCard
         icon={Clock}
         label={t(lang, "debtsStatAvgCollection")}
         value={avgCollectionDays != null ? tTemplate(lang, "debtsStatAvgDays", { days: String(avgCollectionDays) }) : "—"}

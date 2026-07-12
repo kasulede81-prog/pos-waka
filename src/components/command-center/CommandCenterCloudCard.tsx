@@ -3,6 +3,12 @@ import { Cloud, ShieldCheck } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { CloudRecoverySnapshot } from "../../lib/cloudAuthorityAudit";
+import { EnterpriseCard } from "../enterprise/EnterpriseCard";
+import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
+import { Caption } from "../enterprise/EnterpriseTypography";
+import { WakaButton } from "../ui/wakaPrimitives";
+import { statusTokens } from "../../lib/statusTokens";
+import clsx from "clsx";
 
 type Props = {
   lang: Language;
@@ -25,74 +31,63 @@ function formatTs(iso: string | null, lang: Language): string {
   }
 }
 
+function badgeTone(badge: CloudRecoverySnapshot["badge"]): "success" | "warning" | "danger" {
+  if (badge === "protected") return "success";
+  if (badge === "partial") return "warning";
+  return "danger";
+}
+
 export function CommandCenterCloudCard({ lang, cloud, devicesOnline, devicesTotal }: Props) {
-  const badgeClass =
-    cloud.badge === "protected"
-      ? "bg-emerald-100 text-emerald-900"
-      : cloud.badge === "partial"
-        ? "bg-amber-100 text-amber-900"
-        : "bg-rose-100 text-rose-900";
+  const tone = badgeTone(cloud.badge);
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-border/90 bg-gradient-to-br from-white to-muted/80 p-4 shadow-sm sm:p-5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-            <Cloud className="h-5 w-5" aria-hidden />
-          </span>
-          <div>
-            <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterCloudTitle")}</h2>
-            <p className="text-[11px] font-semibold text-muted-foreground">{t(lang, "cloudProtectionSub")}</p>
-          </div>
-        </div>
-        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${badgeClass}`}>
+    <EnterpriseCard
+      title={t(lang, "cmdCenterCloudTitle")}
+      subtitle={t(lang, "cloudProtectionSub")}
+      actions={
+        <span className={clsx("rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase", statusTokens[tone].badge)}>
           {t(lang, cloud.badgeKey)}
+        </span>
+      }
+      className="overflow-hidden bg-gradient-to-br from-card to-muted/80"
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <span className={clsx("flex h-10 w-10 items-center justify-center rounded-2xl", statusTokens.info.icon, statusTokens.info.badge)}>
+          <Cloud className="h-5 w-5" aria-hidden />
         </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Metric label={t(lang, "cloudProtectionScore")} value={`${cloud.scorePct}%`} highlight />
-        <Metric label={t(lang, "cmdCenterCloudBackup")} value={cloud.recoveryReady ? t(lang, "cmdCenterCloudOk") : t(lang, "cmdCenterCloudPartial")} />
-        <Metric label={t(lang, "cmdCenterDevicesOnline")} value={`${devicesOnline}/${devicesTotal || devicesOnline || 1}`} />
-        <Metric label={t(lang, "cloudProtectionUnsynced")} value={String(cloud.unsyncedOperations)} warn={cloud.unsyncedOperations > 0} />
-        <Metric label={t(lang, "cloudProtectionLastSnapshot")} value={formatTs(cloud.lastSnapshotUploadAt, lang)} small />
-        <Metric label={t(lang, "cloudProtectionLastSync")} value={formatTs(cloud.lastSuccessfulSyncAt, lang)} small />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <EnterpriseKpiCard icon={ShieldCheck} label={t(lang, "cloudProtectionScore")} value={`${cloud.scorePct}%`} tone="highlight" />
+        <EnterpriseKpiCard
+          icon={Cloud}
+          label={t(lang, "cmdCenterCloudBackup")}
+          value={cloud.recoveryReady ? t(lang, "cmdCenterCloudOk") : t(lang, "cmdCenterCloudPartial")}
+          tone={cloud.recoveryReady ? "success" : "warning"}
+        />
+        <EnterpriseKpiCard icon={Cloud} label={t(lang, "cmdCenterDevicesOnline")} value={`${devicesOnline}/${devicesTotal || devicesOnline || 1}`} />
+        <EnterpriseKpiCard
+          icon={Cloud}
+          label={t(lang, "cloudProtectionUnsynced")}
+          value={String(cloud.unsyncedOperations)}
+          tone={cloud.unsyncedOperations > 0 ? "warning" : "default"}
+        />
+        <EnterpriseKpiCard icon={Cloud} label={t(lang, "cloudProtectionLastSnapshot")} value={formatTs(cloud.lastSnapshotUploadAt, lang)} />
+        <EnterpriseKpiCard icon={Cloud} label={t(lang, "cloudProtectionLastSync")} value={formatTs(cloud.lastSuccessfulSyncAt, lang)} />
       </div>
 
-      <p className="mt-3 flex items-start gap-1.5 text-[11px] font-semibold text-muted-foreground">
-        <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+      <Caption className="mt-3 flex items-start gap-1.5 normal-case">
+        <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
         {cloud.recoveryReady && !cloud.localOnlyRisk
           ? t(lang, "cloudProtectionProtectedHint")
           : t(lang, "cloudProtectionLocalOnlyWarning")}
-      </p>
+      </Caption>
 
-      <Link
-        to="/settings/devices"
-        className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-2xl border-2 border-border bg-card px-4 text-sm font-black text-foreground"
-      >
-        {t(lang, "cmdCenterManageCloud")} →
+      <Link to="/settings/devices" className="mt-4 block">
+        <WakaButton type="button" variant="secondary" className="w-full">
+          {t(lang, "cmdCenterManageCloud")} →
+        </WakaButton>
       </Link>
-    </section>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  highlight,
-  warn,
-  small,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-  warn?: boolean;
-  small?: boolean;
-}) {
-  return (
-    <div className={`rounded-2xl px-2.5 py-2 ${warn ? "bg-amber-50" : highlight ? "bg-waka-50" : "bg-card ring-1 ring-border"}`}>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={`mt-0.5 font-black tabular-nums text-foreground ${small ? "text-[11px]" : "text-sm"}`}>{value}</p>
-    </div>
+    </EnterpriseCard>
   );
 }

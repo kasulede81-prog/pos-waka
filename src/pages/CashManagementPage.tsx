@@ -16,7 +16,10 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
-import { PageHeader } from "../components/layout/PageHeader";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { EnterpriseCard } from "../components/enterprise/EnterpriseCard";
+import { WakaButton } from "../components/ui/wakaPrimitives";
+import { Body, Caption, MonoNumber, SectionTitle } from "../components/enterprise/EnterpriseTypography";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
 import { buildCashManagementSnapshot, canAccessCashManagement } from "../lib/cashManagementSnapshot";
@@ -115,7 +118,7 @@ export function CashManagementPage({ lang }: Props) {
 
   return (
     <EnterprisePageContainer className="space-y-5">
-      <PageHeader
+      <EnterprisePageHeader
         lang={lang}
         title={t(lang, "cashManagementTitle")}
         subtitle={t(lang, "cashManagementSub")}
@@ -125,10 +128,11 @@ export function CashManagementPage({ lang }: Props) {
 
       {needsDayOpen ? <DayDrawerOpenAlert lang={lang} /> : null}
 
-      <section
-        className={`rounded-3xl border-2 p-5 ${
-          snapshot.isBalanced ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"
-        }`}
+      <EnterpriseCard
+        className={clsx(
+          snapshot.isBalanced ? statusTokens.success.banner : statusTokens.warning.banner,
+          snapshot.isBalanced ? statusTokens.success.badgeRing : statusTokens.warning.badgeRing,
+        )}
       >
         <div className="flex items-start gap-3">
           {snapshot.isBalanced ? (
@@ -137,75 +141,69 @@ export function CashManagementPage({ lang }: Props) {
             <AlertTriangle className="mt-0.5 h-8 w-8 shrink-0 text-amber-800" aria-hidden />
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-black uppercase tracking-wide text-muted-foreground">{snapshot.dayKey}</p>
-            <p className="mt-1 text-xl font-black text-foreground">
+            <Caption>{snapshot.dayKey}</Caption>
+            <SectionTitle as="p" className="mt-1">
               {snapshot.isBalanced ? t(lang, "cashManagementBalanced") : t(lang, "cashManagementNeedsReview")}
-            </p>
+            </SectionTitle>
             <dl className="mt-4 grid gap-3 sm:grid-cols-2">
               <div>
-                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementExpected")}</dt>
-                <dd className="text-lg font-black tabular-nums">UGX {snapshot.periodExpectedCashUgx.toLocaleString()}</dd>
+                <Caption className="normal-case">{t(lang, "cashManagementExpected")}</Caption>
+                <MonoNumber className="text-lg">UGX {snapshot.periodExpectedCashUgx.toLocaleString()}</MonoNumber>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementCounted")}</dt>
-                <dd className="text-lg font-black tabular-nums">
+                <Caption className="normal-case">{t(lang, "cashManagementCounted")}</Caption>
+                <MonoNumber className="text-lg">
                   {snapshot.latestCountedCashUgx != null
                     ? `UGX ${snapshot.latestCountedCashUgx.toLocaleString()}`
                     : "—"}
-                </dd>
+                </MonoNumber>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementVariance")}</dt>
-                <dd
-                  className={`text-lg font-black tabular-nums ${
-                    snapshot.latestDayVarianceUgx != null && snapshot.latestDayVarianceUgx < 0
-                      ? "text-rose-700"
-                      : "text-foreground"
-                  }`}
-                >
+                <Caption className="normal-case">{t(lang, "cashManagementVariance")}</Caption>
+                <MonoNumber className={clsx("text-lg", snapshot.latestDayVarianceUgx != null && snapshot.latestDayVarianceUgx < 0 && "text-rose-700")}>
                   {snapshot.latestDayVarianceUgx != null
                     ? `UGX ${snapshot.latestDayVarianceUgx.toLocaleString()}`
                     : "—"}
-                </dd>
+                </MonoNumber>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementTolerance")}</dt>
-                <dd className="text-lg font-black tabular-nums">±UGX {toleranceUgx.toLocaleString()}</dd>
+                <Caption className="normal-case">{t(lang, "cashManagementTolerance")}</Caption>
+                <MonoNumber className="text-lg">±UGX {toleranceUgx.toLocaleString()}</MonoNumber>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementOpenShifts")}</dt>
-                <dd className="text-lg font-black tabular-nums">{openShifts.length}</dd>
+                <Caption className="normal-case">{t(lang, "cashManagementOpenShifts")}</Caption>
+                <MonoNumber className="text-lg">{openShifts.length}</MonoNumber>
               </div>
               {recoverableShifts.length > 0 ? (
                 <div className="sm:col-span-2">
-                  <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementRecoveryPending")}</dt>
-                  <dd className="text-sm font-black text-amber-900">
+                  <Caption className="normal-case">{t(lang, "cashManagementRecoveryPending")}</Caption>
+                  <Body className="!text-sm !font-black text-amber-900">
                     {recoverableShifts.length} ·{" "}
                     <a href="/office/open-shifts" className="underline">
                       {t(lang, "officeCardOpenShifts")}
                     </a>
-                  </dd>
+                  </Body>
                 </div>
               ) : null}
               {dayAssessment ? (
                 <div className="sm:col-span-2">
-                  <span className={clsx("inline-flex", statusTokens[varianceStateStatusKind(dayAssessment.state)].badgeRing)}>
+                  <span className={clsx("inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold", statusTokens[varianceStateStatusKind(dayAssessment.state)].badge, statusTokens[varianceStateStatusKind(dayAssessment.state)].badgeRing)}>
                     {t(lang, varianceStateLabelKey(dayAssessment.state))}
                   </span>
                 </div>
               ) : null}
               <div>
-                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementDrawerOpen")}</dt>
-                <dd className="text-sm font-black">
+                <Caption className="normal-case">{t(lang, "cashManagementDrawerOpen")}</Caption>
+                <Body className="!text-sm !font-black">
                   {snapshot.drawerOpen
                     ? `UGX ${snapshot.drawerOpen.openingFloatUgx.toLocaleString()}`
                     : t(lang, "ownerCashDrawerOpenNo")}
-                </dd>
+                </Body>
               </div>
             </dl>
           </div>
         </div>
-      </section>
+      </EnterpriseCard>
 
       <ul className="grid gap-3 sm:grid-cols-2">
         {canOpen && !needsDayOpen ? (
@@ -253,8 +251,7 @@ export function CashManagementPage({ lang }: Props) {
       </ul>
 
       {closedToday.length > 0 && canShifts ? (
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <h2 className="text-base font-black text-foreground">{t(lang, "cashManagementClosedShiftsToday")}</h2>
+        <EnterpriseCard title={t(lang, "cashManagementClosedShiftsToday")}>
           <ul className="mt-3 space-y-4">
             {closedToday.map((shift) => (
               <li key={shift.id}>
@@ -269,31 +266,29 @@ export function CashManagementPage({ lang }: Props) {
               </li>
             ))}
           </ul>
-        </section>
+        </EnterpriseCard>
       ) : null}
 
       {(snapshot.shortageShiftCount > 0 || snapshot.topShortages.length > 0) && canShifts ? (
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <h2 className="text-base font-black text-foreground">{t(lang, "cashManagementShortages")}</h2>
+        <EnterpriseCard title={t(lang, "cashManagementShortages")}>
           <ul className="mt-3 space-y-2">
             {snapshot.topShortages.map((row) => (
               <li key={row.userId} className="flex justify-between rounded-xl bg-muted px-3 py-2 text-sm">
                 <span className="font-bold text-foreground">{row.label}</span>
-                <span className="font-black tabular-nums text-rose-700">
+                <MonoNumber className={clsx("text-rose-700")}>
                   {row.shortageCount30d} / 30d · UGX {row.lifetimeShortageUgx.toLocaleString()}
-                </span>
+                </MonoNumber>
               </li>
             ))}
           </ul>
-        </section>
+        </EnterpriseCard>
       ) : null}
 
       {snapshot.floatVerificationFeed.length > 0 ? (
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <h2 className="text-base font-black text-foreground">{t(lang, "ownerCashFloatFeed")}</h2>
-          <ul className="mt-3 space-y-2">
+        <EnterpriseCard title={t(lang, "ownerCashFloatFeed")}>
+          <ul className="space-y-2">
             {snapshot.floatVerificationFeed.map((row) => (
-              <li key={row.shiftId} className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs">
+              <li key={row.shiftId} className={clsx("rounded-xl border px-3 py-2 text-xs", statusTokens.danger.banner, statusTokens.danger.badgeRing)}>
                 <div className="flex justify-between font-bold text-rose-950">
                   <span>{row.cashierLabel}</span>
                   <span>UGX {row.varianceUgx.toLocaleString()}</span>
@@ -304,12 +299,11 @@ export function CashManagementPage({ lang }: Props) {
               </li>
             ))}
           </ul>
-        </section>
+        </EnterpriseCard>
       ) : null}
 
       {snapshot.adjustmentFeed.length > 0 ? (
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <h2 className="text-base font-black text-foreground">{t(lang, "ownerCashAdjustmentFeed")}</h2>
+        <EnterpriseCard title={t(lang, "ownerCashAdjustmentFeed")}>
           <ul className="mt-3 space-y-2">
             {snapshot.adjustmentFeed.map((row) => (
               <li key={row.id} className="flex justify-between rounded-xl bg-muted px-3 py-2 text-xs">
@@ -320,19 +314,18 @@ export function CashManagementPage({ lang }: Props) {
               </li>
             ))}
           </ul>
-        </section>
+        </EnterpriseCard>
       ) : null}
 
       {canHistory && snapshot.varianceHistory.length > 0 ? (
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setShowVarianceHistory((v) => !v)}
-            className="flex w-full items-center justify-between text-left"
-          >
-            <h2 className="text-base font-black text-foreground">{t(lang, "cashManagementVarianceHistory")}</h2>
-            <span className="text-sm font-bold text-muted-foreground">{showVarianceHistory ? "−" : "+"}</span>
-          </button>
+        <EnterpriseCard
+          title={t(lang, "cashManagementVarianceHistory")}
+          actions={
+            <WakaButton type="button" variant="ghost" onClick={() => setShowVarianceHistory((v) => !v)}>
+              {showVarianceHistory ? "−" : "+"}
+            </WakaButton>
+          }
+        >
           {showVarianceHistory ? (
             <ul className="mt-3 divide-y divide-stone-100">
               {snapshot.varianceHistory.map((row) => (
@@ -345,7 +338,7 @@ export function CashManagementPage({ lang }: Props) {
               ))}
             </ul>
           ) : null}
-        </section>
+        </EnterpriseCard>
       ) : null}
 
     </EnterprisePageContainer>

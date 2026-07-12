@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import { OFFICE_NAV_TILE_GRID } from "./BackOfficePageLayout";
+import { Caption } from "../enterprise/EnterpriseTypography";
 
 type Props = {
   title: string;
@@ -18,7 +19,9 @@ export function OfficeNavSection({ title, children, desktopGrid = true, collapsi
   if (!collapsible) {
     return (
       <section className="space-y-2">
-        <h2 className="px-0.5 text-xs font-black uppercase tracking-wider text-muted-foreground">{title}</h2>
+        <Caption as="h2" className="px-0.5 tracking-wider">
+          {title}
+        </Caption>
         <ul className={listClass}>{children}</ul>
       </section>
     );
@@ -32,7 +35,9 @@ export function OfficeNavSection({ title, children, desktopGrid = true, collapsi
           "lg:pointer-events-none lg:cursor-default",
         )}
       >
-        <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{title}</h2>
+        <Caption as="h2" className="tracking-wider">
+          {title}
+        </Caption>
         <ChevronDown
           className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 lg:hidden"
           aria-hidden

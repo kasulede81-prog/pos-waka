@@ -216,6 +216,43 @@ describe("reconcileStaffCacheToPreferencesIfNeeded", () => {
     expect(changed).toBe(true);
     expect(usePosStore.setState).toHaveBeenCalled();
   });
+
+  it("forces cache download when cloud has staff but local cache is empty", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase!.rpc).mockImplementation((async (fn: string) => {
+      if (fn === "shop_pos_staff_version") {
+        return { data: { version: 2 }, error: null };
+      }
+      if (fn === "shop_pos_staff_download") {
+        return {
+          data: {
+            unchanged: false,
+            version: 2,
+            changed: [
+              {
+                client_id: "remote-1",
+                id: "remote-1",
+                name: "Remote",
+                role: "cashier",
+                is_active: true,
+                created_at: "2026-01-01T00:00:00.000Z",
+                updated_at: "2026-06-01T00:00:00.000Z",
+              },
+            ],
+            removed_client_ids: [],
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: null };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }) as any);
+
+    const { reconcileStaffCacheToPreferencesIfNeeded } = await import("./staffCacheSync");
+    const changed = await reconcileStaffCacheToPreferencesIfNeeded("shop-1");
+    expect(changed).toBe(true);
+    expect(cacheStore.get("version")).toBe(2);
+  });
 });
 
 describe("fetchCloudStaffVersion", () => {

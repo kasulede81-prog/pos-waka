@@ -2,6 +2,8 @@ export { EnterpriseScrollControls } from "./EnterpriseScrollControls";
 export { WakaSwitch } from "./WakaSwitch";
 export { WakaCheckbox } from "./WakaCheckbox";
 export { EnterpriseEmptyState } from "./EnterpriseEmptyState";
+export { EnterpriseActionSheet } from "./EnterpriseActionSheet";
+export { EnterpriseFeedbackBanner } from "./EnterpriseFeedbackBanner";
 export { EnterpriseErrorState } from "./EnterpriseErrorState";
 export { EnterpriseAsyncShell } from "./EnterpriseAsyncShell";
 export { EnterpriseComingSoonPanel } from "./EnterpriseComingSoonPanel";

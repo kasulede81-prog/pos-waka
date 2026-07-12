@@ -1,12 +1,19 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowDownLeft, ArrowUpRight, Scale } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Scale, Wallet } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { PageHeader } from "../components/layout/PageHeader";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { EnterpriseCard } from "../components/enterprise/EnterpriseCard";
+import { EnterpriseKpiCard } from "../components/enterprise/EnterpriseKpiCard";
+import { EnterpriseTextField } from "../components/enterprise/EnterpriseTextField";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
+import { Caption, MonoNumber, SectionTitle } from "../components/enterprise/EnterpriseTypography";
+import { WakaButton } from "../components/ui/wakaPrimitives";
 import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
 import { HistoryListCard } from "../components/shared/HistoryListCard";
 import {
@@ -158,10 +165,10 @@ export function SupplierDetailPage({
     }
   };
 
-  return (
-    <div className="space-y-5 pb-16">
+  const content = (
+    <>
       {!embedded ? (
-        <PageHeader
+        <EnterprisePageHeader
           lang={lang}
           title={supplier.name}
           subtitle={t(lang, "supplierDetailTitle")}
@@ -169,64 +176,56 @@ export function SupplierDetailPage({
           backLabel={t(lang, "suppliersTitle")}
         />
       ) : onClose ? (
-        <button type="button" onClick={onClose} className="text-sm font-black text-waka-700">
+        <WakaButton type="button" variant="ghost" onClick={onClose} className="!px-0">
           ← {t(lang, "suppliersTitle")}
-        </button>
+        </WakaButton>
       ) : null}
 
-      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
+      <EnterpriseCard>
         {editSaved ? (
-          <p className="mb-3 text-sm font-bold text-emerald-800">{t(lang, "supplierEditSave")}</p>
+          <p className="mb-3 text-sm font-bold text-success-foreground">{t(lang, "supplierEditSave")}</p>
         ) : null}
         {canManage && !editOpen ? (
-          <button
-            type="button"
-            onClick={openEdit}
-            className="mb-4 w-full rounded-2xl border-2 border-border bg-muted py-2.5 text-sm font-black text-foreground"
-          >
+          <WakaButton type="button" variant="secondary" onClick={openEdit} className="mb-4 w-full">
             {t(lang, "supplierEditTitle")}
-          </button>
+          </WakaButton>
         ) : null}
         {editOpen ? (
           <form onSubmit={submitEdit} className="mb-4 space-y-3 rounded-2xl border border-waka-200 bg-waka-50/40 p-4">
-            <h3 className="text-sm font-black text-waka-950">{t(lang, "supplierEditTitle")}</h3>
-            <input
+            <SectionTitle as="h3">{t(lang, "supplierEditTitle")}</SectionTitle>
+            <EnterpriseTextField
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               placeholder={t(lang, "supplierNamePh")}
-              className="w-full rounded-xl border border-border px-3 py-2 text-sm"
               required
             />
-            <input
+            <EnterpriseTextField
               value={editPhone}
               onChange={(e) => setEditPhone(e.target.value)}
               placeholder={t(lang, "supplierPhonePh")}
-              className="w-full rounded-xl border border-border px-3 py-2 text-sm"
             />
-            <input
+            <EnterpriseTextField
               value={editLocation}
               onChange={(e) => setEditLocation(e.target.value)}
               placeholder={t(lang, "supplierLocationPh")}
-              className="w-full rounded-xl border border-border px-3 py-2 text-sm"
             />
-            <textarea
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              placeholder={t(lang, "supplierNotesPh")}
-              rows={2}
-              className="w-full rounded-xl border border-border px-3 py-2 text-sm"
-            />
+            <label className="block">
+              <span className="text-sm font-bold text-foreground">{t(lang, "supplierNotesPh")}</span>
+              <textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                placeholder={t(lang, "supplierNotesPh")}
+                rows={2}
+                className="mt-1.5 w-full rounded-xl border border-border px-3 py-2 text-sm"
+              />
+            </label>
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setEditOpen(false)}
-                className="flex-1 rounded-xl border border-border bg-card py-2 text-sm font-bold"
-              >
+              <WakaButton type="button" variant="secondary" className="flex-1" onClick={() => setEditOpen(false)}>
                 {t(lang, "pendingSalesCancel")}
-              </button>
-              <button type="submit" className="flex-1 rounded-xl bg-waka-600 py-2 text-sm font-black text-white">
+              </WakaButton>
+              <WakaButton type="submit" className="flex-1">
                 {t(lang, "supplierEditSave")}
-              </button>
+              </WakaButton>
             </div>
           </form>
         ) : null}
@@ -251,54 +250,46 @@ export function SupplierDetailPage({
           ) : null}
         </dl>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-amber-50 px-3 py-3">
-            <p className="text-[10px] font-black uppercase text-amber-800">{t(lang, "supplierBalanceLabel")}</p>
-            <p className="mt-1 text-xl font-black text-amber-950">UGX {supplier.balanceOwedUgx.toLocaleString()}</p>
-          </div>
-          <div className="rounded-2xl bg-muted px-3 py-3">
-            <p className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "supplierTotalBuy")}</p>
-            <p className="mt-1 text-xl font-black text-foreground">UGX {supplier.totalPurchasesUgx.toLocaleString()}</p>
-          </div>
+          <EnterpriseKpiCard
+            icon={Wallet}
+            label={t(lang, "supplierBalanceLabel")}
+            value={`UGX ${supplier.balanceOwedUgx.toLocaleString()}`}
+            tone={supplier.balanceOwedUgx > 0 ? "warning" : "default"}
+          />
+          <EnterpriseKpiCard
+            icon={ArrowUpRight}
+            label={t(lang, "supplierTotalBuy")}
+            value={`UGX ${supplier.totalPurchasesUgx.toLocaleString()}`}
+          />
           {supplier.lastSupplyAt ? (
-            <div className="col-span-2 rounded-2xl bg-muted px-3 py-3">
-              <p className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "supplierLastSupply")}</p>
-              <p className="mt-1 font-bold text-foreground">{dateKeyKampala(supplier.lastSupplyAt)}</p>
+            <div className="col-span-2">
+              <EnterpriseKpiCard
+                icon={Scale}
+                label={t(lang, "supplierLastSupply")}
+                value={dateKeyKampala(supplier.lastSupplyAt)}
+              />
             </div>
           ) : null}
         </div>
-      </section>
+      </EnterpriseCard>
 
-      <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/40 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-black text-waka-950">{t(lang, "supplierStatementTitle")}</h2>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={exportBusy || filteredStatement.length === 0}
-              onClick={() => void runPrint()}
-              className="min-h-[40px] rounded-2xl bg-foreground px-3 py-2 text-xs font-black text-background disabled:opacity-50"
-            >
+      <EnterpriseCard
+        title={t(lang, "supplierStatementTitle")}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <WakaButton type="button" disabled={exportBusy || filteredStatement.length === 0} onClick={() => void runPrint()}>
               {receiptPrintActionLabel(lang)}
-            </button>
-            <button
-              type="button"
-              disabled={exportBusy || filteredStatement.length === 0}
-              onClick={() => void runExport("csv")}
-              className="min-h-[40px] rounded-2xl border-2 border-border bg-card px-3 py-2 text-xs font-black disabled:opacity-50"
-            >
+            </WakaButton>
+            <WakaButton type="button" variant="secondary" disabled={exportBusy || filteredStatement.length === 0} onClick={() => void runExport("csv")}>
               {t(lang, "purchasesExportCsv")}
-            </button>
-            <button
-              type="button"
-              disabled={exportBusy || filteredStatement.length === 0}
-              onClick={() => void runExport("pdf")}
-              className="min-h-[40px] rounded-2xl bg-waka-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
-            >
+            </WakaButton>
+            <WakaButton type="button" disabled={exportBusy || filteredStatement.length === 0} onClick={() => void runExport("pdf")}>
               {t(lang, "purchasesExportPdf")}
-            </button>
+            </WakaButton>
           </div>
-        </div>
-        {exportHint ? <p className="mt-2 text-sm font-bold text-waka-800">{exportHint}</p> : null}
+        }
+      >
+        {exportHint ? <p className="text-sm font-bold text-success-foreground">{exportHint}</p> : null}
         <div className="mt-4">
           <HistoryHeroCard
             lang={lang}
@@ -324,7 +315,11 @@ export function SupplierDetailPage({
           />
         </div>
         {filteredStatement.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">{t(lang, "purchasesEmpty")}</p>
+          <EnterpriseEmptyState
+            icon={Scale}
+            title={t(lang, "purchasesEmpty")}
+            className="mt-4 !border-0 !bg-transparent !p-0 !shadow-none"
+          />
         ) : (
           <HistoryListCard className="mt-4">
             <ul>
@@ -332,7 +327,7 @@ export function SupplierDetailPage({
               <li key={`${entry.kind}-${entry.id}`} className="border-b border-border last:border-b-0">
                 <div className="flex items-start justify-between gap-3 px-3 py-3 sm:px-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-bold uppercase text-muted-foreground">{entry.dayKey}</p>
+                    <Caption>{entry.dayKey}</Caption>
                     <p className="mt-0.5 text-sm font-black text-foreground">
                       {entry.kind === "purchase"
                         ? t(lang, "supplierStatementPurchase")
@@ -350,13 +345,13 @@ export function SupplierDetailPage({
                     )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className={`text-sm font-black ${entry.deltaUgx >= 0 ? "text-amber-900" : "text-teal-800"}`}>
+                    <MonoNumber className={entry.deltaUgx >= 0 ? "text-warning-foreground" : "text-success-foreground"}>
                       {entry.deltaUgx >= 0 ? "+" : ""}
                       UGX {entry.deltaUgx.toLocaleString()}
-                    </p>
-                    <p className="mt-0.5 text-[11px] font-bold text-muted-foreground">
+                    </MonoNumber>
+                    <Caption className="mt-0.5">
                       {t(lang, "supplierStatementBalance")}: UGX {entry.runningBalanceUgx.toLocaleString()}
-                    </p>
+                    </Caption>
                   </div>
                 </div>
               </li>
@@ -364,22 +359,22 @@ export function SupplierDetailPage({
             </ul>
           </HistoryListCard>
         )}
-      </section>
+      </EnterpriseCard>
 
-      <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
-        <h2 className="text-lg font-black text-foreground">{t(lang, "supplierPaymentHistory")}</h2>
-        <p className="mt-1 text-sm font-semibold text-muted-foreground">
-          {t(lang, "purchasesColTotal")}: UGX {sumSupplierPaymentsUgx(payments).toLocaleString()}
-        </p>
+      <EnterpriseCard title={t(lang, "supplierPaymentHistory")} subtitle={`${t(lang, "purchasesColTotal")}: UGX ${sumSupplierPaymentsUgx(payments).toLocaleString()}`}>
         {payments.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">{t(lang, "supplierPaymentEmpty")}</p>
+          <EnterpriseEmptyState
+            icon={ArrowDownLeft}
+            title={t(lang, "supplierPaymentEmpty")}
+            className="mt-3 !border-0 !bg-transparent !p-0 !shadow-none"
+          />
         ) : (
           <ul className="mt-4 space-y-2">
             {payments.map((pay) => (
               <li key={pay.id} className="flex justify-between gap-3 rounded-2xl bg-muted px-4 py-3">
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground">{dateKeyKampala(pay.createdAt)}</p>
-                  <p className="text-xs font-semibold text-muted-foreground">
+                  <Caption>{dateKeyKampala(pay.createdAt)}</Caption>
+                  <Caption className="mt-0.5">
                     {t(lang, "supplierPaymentCreatedBy")}:{" "}
                     {supplierPaymentCreatedByLabel(
                       pay,
@@ -387,24 +382,30 @@ export function SupplierDetailPage({
                         (e) => e.action === "supplier_payment" && e.payload.paymentId === pay.id,
                       ) ?? null,
                     )}
-                  </p>
+                  </Caption>
                   {pay.paymentMethod ? (
-                    <p className="text-xs text-muted-foreground">
-                      {t(lang, "supplierPaymentMethod")}: {pay.paymentMethod}
-                    </p>
+                    <Caption>{t(lang, "supplierPaymentMethod")}: {pay.paymentMethod}</Caption>
                   ) : null}
                   {pay.reference ? (
-                    <p className="text-xs text-muted-foreground">
-                      {t(lang, "supplierPaymentReference")}: {pay.reference}
-                    </p>
+                    <Caption>{t(lang, "supplierPaymentReference")}: {pay.reference}</Caption>
                   ) : null}
                 </div>
-                <p className="font-black text-teal-800">UGX {pay.amountUgx.toLocaleString()}</p>
+                <MonoNumber className="text-success-foreground">UGX {pay.amountUgx.toLocaleString()}</MonoNumber>
               </li>
             ))}
           </ul>
         )}
-      </section>
-    </div>
+      </EnterpriseCard>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-5 pb-16">{content}</div>;
+  }
+
+  return (
+    <EnterprisePageContainer className="space-y-5 pb-16">
+      {content}
+    </EnterprisePageContainer>
   );
 }

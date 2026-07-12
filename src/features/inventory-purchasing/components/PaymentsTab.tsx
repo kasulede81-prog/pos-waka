@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Banknote, Wallet } from "lucide-react";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
@@ -10,6 +11,14 @@ import { SalesHistoryDateFilterChips } from "../../../components/receipts/SalesH
 import { buildSupplierSummary } from "../../../lib/purchaseReporting";
 import { formatShortUgx } from "../lib/overviewStats";
 import { isWalkInSupplierId } from "../../../lib/walkInSupplier";
+import { EnterpriseKpiCard } from "../../../components/enterprise/EnterpriseKpiCard";
+import { EnterpriseResponsiveTable } from "../../../components/shared/ResponsiveDataTable";
+import { WakaButton } from "../../../components/ui/wakaPrimitives";
+import { enterpriseTypeClass } from "../../../lib/enterpriseTypography";
+import { Caption, MonoNumber, SectionTitle } from "../../../components/enterprise/EnterpriseTypography";
+import { Body } from "../../../components/enterprise/EnterpriseTypography";
+import clsx from "clsx";
+import { statusTokens } from "../../../lib/statusTokens";
 
 type Props = {
   lang: Language;
@@ -42,14 +51,18 @@ export function PaymentsTab({ lang, onRecordPayment, onOpenSupplier }: Props) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
-          <p className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ipPaymentsPeriod")}</p>
-          <p className="text-lg font-black tabular-nums text-teal-800">{formatShortUgx(sumSupplierPaymentsUgx(payments))}</p>
-        </div>
-        <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-3 shadow-sm">
-          <p className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ipStatOutstanding")}</p>
-          <p className="text-lg font-black tabular-nums text-rose-800">{formatShortUgx(summary.totalDebtUgx)}</p>
-        </div>
+        <EnterpriseKpiCard
+          icon={Wallet}
+          label={t(lang, "ipPaymentsPeriod")}
+          value={<MonoNumber className="text-lg text-teal-800">{formatShortUgx(sumSupplierPaymentsUgx(payments))}</MonoNumber>}
+          tone="success"
+        />
+        <EnterpriseKpiCard
+          icon={Banknote}
+          label={t(lang, "ipStatOutstanding")}
+          value={<MonoNumber className="text-lg text-rose-800">{formatShortUgx(summary.totalDebtUgx)}</MonoNumber>}
+          tone="danger"
+        />
       </div>
 
       <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
@@ -61,20 +74,28 @@ export function PaymentsTab({ lang, onRecordPayment, onOpenSupplier }: Props) {
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
-        <button type="button" onClick={onRecordPayment} className="rounded-xl bg-waka-600 px-4 py-2 text-xs font-black text-white">
+        <WakaButton type="button" variant="primary" onClick={onRecordPayment}>
           {t(lang, "supplierPayButton")}
-        </button>
+        </WakaButton>
       </div>
 
       {owingSuppliers.length > 0 ? (
         <section>
-          <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "ipUpcomingPayments")}</h3>
+          <Caption as="h3" className="mb-2 block">{t(lang, "ipUpcomingPayments")}</Caption>
           <ul className="space-y-2">
             {owingSuppliers.slice(0, 5).map((s) => (
               <li key={s.id}>
-                <button type="button" onClick={() => onOpenSupplier(s.id)} className="flex w-full items-center justify-between rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-left">
-                  <span className="text-sm font-bold text-foreground">{s.name}</span>
-                  <span className="text-sm font-black tabular-nums text-rose-800">{formatShortUgx(s.balanceOwedUgx)}</span>
+                <button
+                  type="button"
+                  onClick={() => onOpenSupplier(s.id)}
+                  className={clsx(
+                    "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left",
+                    statusTokens.warning.banner,
+                    statusTokens.warning.badgeRing,
+                  )}
+                >
+                  <span className={enterpriseTypeClass("body", "!text-sm !font-bold")}>{s.name}</span>
+                  <MonoNumber className="text-sm text-rose-800">{formatShortUgx(s.balanceOwedUgx)}</MonoNumber>
                 </button>
               </li>
             ))}
@@ -83,28 +104,46 @@ export function PaymentsTab({ lang, onRecordPayment, onOpenSupplier }: Props) {
       ) : null}
 
       <section>
-        <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "supplierPaymentHistory")}</h3>
-        {payments.length === 0 ? (
-          <p className="text-sm font-semibold text-muted-foreground">{t(lang, "supplierPaymentEmpty")}</p>
-        ) : (
-          <ul className="space-y-2">
-            {payments.map((pay) => (
-              <li key={pay.id} className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-black text-foreground">{supplierNameById.get(pay.supplierId) ?? "—"}</p>
-                    <p className="text-xs font-semibold text-muted-foreground">{dateKeyKampala(pay.createdAt)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {t(lang, "supplierPaymentCreatedBy")}:{" "}
-                      {supplierPaymentCreatedByLabel(pay, auditLogs.find((e) => e.action === "supplier_payment" && e.payload.paymentId === pay.id) ?? null)}
-                    </p>
-                  </div>
-                  <p className="text-lg font-black tabular-nums text-teal-800">{formatShortUgx(pay.amountUgx)}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <SectionTitle as="h3" className="mb-2 !text-xs uppercase tracking-wide text-muted-foreground">
+          {t(lang, "supplierPaymentHistory")}
+        </SectionTitle>
+        <EnterpriseResponsiveTable
+          rows={payments}
+          rowKey={(pay) => pay.id}
+          minWidthPx={640}
+          emptyState={<Body className="text-muted-foreground">{t(lang, "supplierPaymentEmpty")}</Body>}
+          columns={[
+            {
+              id: "supplier",
+              header: t(lang, "officeCardSuppliers"),
+              cell: (pay) => supplierNameById.get(pay.supplierId) ?? "—",
+            },
+            {
+              id: "date",
+              header: t(lang, "purchasesColDate"),
+              cell: (pay) => dateKeyKampala(pay.createdAt),
+              hideOnMobile: true,
+            },
+            {
+              id: "by",
+              header: t(lang, "supplierPaymentCreatedBy"),
+              cell: (pay) =>
+                supplierPaymentCreatedByLabel(
+                  pay,
+                  auditLogs.find((e) => e.action === "supplier_payment" && e.payload.paymentId === pay.id) ?? null,
+                ),
+              hideOnMobile: true,
+            },
+            {
+              id: "amount",
+              header: t(lang, "supplierPayAmount"),
+              className: "text-right",
+              cell: (pay) => (
+                <MonoNumber className="text-teal-800">{formatShortUgx(pay.amountUgx)}</MonoNumber>
+              ),
+            },
+          ]}
+        />
       </section>
     </div>
   );

@@ -10,6 +10,7 @@ type Props = {
   disabled?: boolean;
   resetSignal?: string | number;
   className?: string;
+  persistOnSuccess?: boolean;
 };
 
 /** Manager / owner approval PIN — verifies via existing EnterpriseSecurityService rules. */
@@ -20,6 +21,7 @@ export function EnterpriseApprovalPinPad({
   disabled,
   resetSignal,
   className,
+  persistOnSuccess,
 }: Props) {
   const actor = useSessionActor();
 
@@ -29,6 +31,8 @@ export function EnterpriseApprovalPinPad({
       disabled={disabled}
       resetSignal={resetSignal}
       className={className}
+      persistOnSuccess={persistOnSuccess}
+      size="mobile"
       onComplete={async (pin) => {
         const verified = await verifyFloatVerifyOverride(
           pin,
