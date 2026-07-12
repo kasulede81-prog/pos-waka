@@ -8,7 +8,6 @@ import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
 import {
   fetchShopDeviceLimitContext,
   registerShopDeviceOnLogin,
-  resolveLoginDeviceActivation,
 } from "../lib/deviceActivation";
 import { fetchShopDevicesForManagement } from "../lib/shopDevices";
 import { getOrCreateDeviceId } from "../lib/deviceId";
@@ -26,8 +25,6 @@ export function DevicePendingApprovalPage({ lang }: Props) {
   const { retry, shopId, activated, block } = useDeviceActivation();
   const { refresh, loading: authorityLoading } = useDeviceAuthority();
   const [checking, setChecking] = useState(false);
-  const [isOwner, setIsOwner] = useState(false);
-  const [ownerBusy, setOwnerBusy] = useState(false);
   const [requestedAt, setRequestedAt] = useState<string | null>(block?.result.approval_requested_at ?? null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [expired, setExpired] = useState(false);
@@ -54,7 +51,7 @@ export function DevicePendingApprovalPage({ lang }: Props) {
       const mine = devices.find((d) => d.device_fingerprint === fp);
       if (mine?.approval_requested_at) setRequestedAt(mine.approval_requested_at);
     });
-  }, [navigate, retry, shopId]);
+  }, [navigate, shopId]);
 
   useEffect(() => {
     if (block?.result.approval_requested_at) {
@@ -95,20 +92,6 @@ export function DevicePendingApprovalPage({ lang }: Props) {
     requestedAt,
   ]);
 
-  const ownerApproveAndContinue = useCallback(async () => {
-    if (!shopId || ownerBusy) return;
-    setOwnerBusy(true);
-    try {
-      const outcome = await resolveLoginDeviceActivation(shopId);
-      if (outcome.activated) {
-        await retry();
-        navigate("/", { replace: true });
-      }
-    } finally {
-      setOwnerBusy(false);
-    }
-  }, [navigate, ownerBusy, retry, shopId]);
-
   useEffect(() => {
     if (activated) {
       navigate("/", { replace: true });
@@ -132,11 +115,7 @@ export function DevicePendingApprovalPage({ lang }: Props) {
         {expired ? t(lang, "devicePendingApprovalExpiredTitle") : t(lang, "devicePendingApprovalTitle")}
       </h1>
       <p className="mt-3 max-w-md text-center text-sm font-medium text-muted-foreground">
-        {expired
-          ? t(lang, "devicePendingApprovalExpiredBody")
-          : isOwner
-            ? t(lang, "devicePendingApprovalOwnerBody")
-            : t(lang, "devicePendingApprovalBody")}
+        {expired ? t(lang, "devicePendingApprovalExpiredBody") : t(lang, "devicePendingApprovalBody")}
       </p>
       {!expired ? (
         <p className="mt-4 rounded-full bg-amber-100 px-4 py-2 text-sm font-black text-amber-950">
@@ -148,19 +127,9 @@ export function DevicePendingApprovalPage({ lang }: Props) {
       {shopId ? (
         <p className="mt-2 text-xs font-semibold text-muted-foreground">{t(lang, "devicePendingApprovalHint")}</p>
       ) : null}
-      {isOwner && !expired ? (
-        <button
-          type="button"
-          disabled={ownerBusy || checking}
-          onClick={() => void ownerApproveAndContinue()}
-          className="mt-8 min-h-[48px] rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white disabled:opacity-60"
-        >
-          {ownerBusy ? t(lang, "deviceLimitActivating") : t(lang, "devicePendingApprovalOwnerContinue")}
-        </button>
-      ) : null}
       <button
         type="button"
-        disabled={checking || ownerBusy}
+        disabled={checking}
         onClick={() => (expired ? void handleExpired() : void recheck())}
         className="mt-3 min-h-[48px] rounded-2xl bg-waka-600 px-6 text-sm font-black text-white disabled:opacity-60"
       >
