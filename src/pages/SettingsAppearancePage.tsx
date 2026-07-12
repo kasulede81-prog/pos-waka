@@ -6,6 +6,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { useAppTheme } from "../context/AppThemeProvider";
 import type { AppThemePreference } from "../lib/appTheme";
 
@@ -24,7 +25,7 @@ export function SettingsAppearancePage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-5 pb-8">
+    <EnterprisePageContainer>
       <SettingsPageHeader
         lang={lang}
         title={t(lang, "settingsHubAppearance")}
@@ -71,6 +72,6 @@ export function SettingsAppearancePage({ lang }: { lang: Language }) {
           })}
         </div>
       </article>
-    </div>
+    </EnterprisePageContainer>
   );
 }

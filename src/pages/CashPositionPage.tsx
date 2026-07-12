@@ -195,7 +195,7 @@ export function CashPositionPage({ lang }: { lang: Language }) {
 
       {dashboard.isToday && dashboard.drawerStatus ? (
         <CashPositionCollapsibleCard id="drawer" title={t(lang, "cashPositionSectionDrawer")} icon="⚖️" defaultOpen>
-          <CashPositionDrawerStatus lang={lang} status={dashboard.drawerStatus} />
+          <CashPositionDrawerStatus lang={lang} status={dashboard.drawerStatus} preferences={preferences} />
         </CashPositionCollapsibleCard>
       ) : null}
 

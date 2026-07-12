@@ -3,6 +3,7 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { ModalSheet } from "../layout/ModalSheet";
 import { EnterpriseApprovalPinPad } from "../auth/EnterpriseApprovalPinPad";
+import { CashVarianceSummary } from "../cash/CashVarianceSummary";
 import { usePosStore } from "../../store/usePosStore";
 
 export type FloatOverrideAction = "accept_cashier" | "correct_day_open" | "reject";
@@ -34,8 +35,6 @@ export function FloatVerifyOverrideModal({
   const [pinResetSignal, setPinResetSignal] = useState(0);
 
   if (!open) return null;
-
-  const variance = verifiedUgx - expectedUgx;
 
   const reset = () => {
     setPin("");
@@ -74,11 +73,15 @@ export function FloatVerifyOverrideModal({
       }
     >
       <p className="text-sm font-medium text-muted-foreground">{t(lang, "shiftFloatOverrideBody")}</p>
-      <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
-        Expected UGX {expectedUgx.toLocaleString()} · Counted UGX {verifiedUgx.toLocaleString()} (
-        {variance >= 0 ? "+" : ""}
-        {variance.toLocaleString()})
-      </p>
+      <CashVarianceSummary
+        lang={lang}
+        expectedCashUgx={expectedUgx}
+        countedCashUgx={verifiedUgx}
+        preferences={preferences}
+        context="shift_open"
+        diagnosticEvent="shift_open_override"
+        className="mt-3"
+      />
 
       <p className="mt-4 text-sm font-bold text-foreground">{t(lang, "shiftFloatOverridePin")}</p>
       <EnterpriseApprovalPinPad

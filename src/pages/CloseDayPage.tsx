@@ -54,6 +54,7 @@ import {
 } from "../lib/dayCloseEnforcement";
 
 import { dayCloseVarianceIsFlagged } from "../lib/dayCloseApprovals";
+import { CashVarianceSummary } from "../components/cash/CashVarianceSummary";
 
 import { readSyncQueue } from "../offline/localDb";
 
@@ -604,19 +605,16 @@ export function CloseDayPage({ lang }: { lang: Language }) {
           />
 
           {counted.length > 0 ? (
-
-            <p className="mt-2 text-sm font-bold text-muted-foreground">
-
-              {t(lang, "closeLastDiff")}: UGX {varianceDiff.toLocaleString()}
-
-              {varianceFlagged ? (
-
-                <span className="ml-2 text-rose-700">{t(lang, "dayCloseApprovalNeeded")}</span>
-
-              ) : null}
-
-            </p>
-
+            <CashVarianceSummary
+              lang={lang}
+              expectedCashUgx={summary.expectedCash}
+              countedCashUgx={countedN}
+              preferences={preferences}
+              context="day_close"
+              showSettingsLink
+              diagnosticEvent="day_close_preview"
+              className="mt-4"
+            />
           ) : null}
 
 

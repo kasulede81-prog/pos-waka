@@ -21,6 +21,17 @@ import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
 import { buildCashManagementSnapshot, canAccessCashManagement } from "../lib/cashManagementSnapshot";
 import { isFormulaV2 } from "../lib/dayDrawerOpen";
+import {
+  classifyCashVariance,
+  computeCashVarianceThresholdUgx,
+  varianceStateLabelKey,
+  varianceStateStatusKind,
+} from "../lib/cashVarianceExperience";
+import { listOpenShifts, listRecoverableOpenShifts } from "../lib/shiftRecoveryOps";
+import { shiftExpectedCash } from "../lib/saleAdjustments";
+import { ShiftCashAuditTimeline } from "../components/cash/ShiftCashAuditTimeline";
+import { statusTokens } from "../lib/statusTokens";
+import clsx from "clsx";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { getCachedComputation } from "../lib/computationResultCache";
 import { timedComputation } from "../lib/performanceMetrics";
@@ -68,15 +79,39 @@ export function CashManagementPage({ lang }: Props) {
     todayKey,
   ]);
 
-  if (!canAccessCashManagement(actor.role)) {
-    return <Navigate to="/office" replace />;
-  }
-
   const canOpen = actorHasPermission(actor, "day.open_drawer");
   const canClose = actorHasPermission(actor, "day.close");
   const canShifts = actor.role === "owner" || actor.role === "manager";
   const canHistory = actorHasPermission(actor, "owner.cash_history");
   const needsDayOpen = isFormulaV2(preferences) && !snapshot.drawerOpen && canOpen;
+
+  const openShifts = useMemo(() => listOpenShifts(shifts), [shifts]);
+  const recoverableShifts = useMemo(
+    () => listRecoverableOpenShifts(shifts, actor.userId),
+    [shifts, actor.userId],
+  );
+  const toleranceUgx = computeCashVarianceThresholdUgx(snapshot.periodExpectedCashUgx, preferences);
+  const dayAssessment =
+    snapshot.latestCountedCashUgx != null
+      ? classifyCashVariance(
+          snapshot.periodExpectedCashUgx,
+          snapshot.latestCountedCashUgx,
+          preferences,
+          "day_close",
+        )
+      : null;
+  const closedToday = useMemo(
+    () =>
+      shifts
+        .filter((sh) => sh.endAt && dateKeyKampala(sh.startAt) === todayKey && sh.countedCashUgx != null)
+        .slice(0, 5),
+    [shifts, todayKey],
+  );
+  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
+
+  if (!canAccessCashManagement(actor.role)) {
+    return <Navigate to="/office" replace />;
+  }
 
   return (
     <EnterprisePageContainer className="space-y-5">
@@ -134,6 +169,32 @@ export function CashManagementPage({ lang }: Props) {
                 </dd>
               </div>
               <div>
+                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementTolerance")}</dt>
+                <dd className="text-lg font-black tabular-nums">±UGX {toleranceUgx.toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementOpenShifts")}</dt>
+                <dd className="text-lg font-black tabular-nums">{openShifts.length}</dd>
+              </div>
+              {recoverableShifts.length > 0 ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementRecoveryPending")}</dt>
+                  <dd className="text-sm font-black text-amber-900">
+                    {recoverableShifts.length} ·{" "}
+                    <a href="/office/open-shifts" className="underline">
+                      {t(lang, "officeCardOpenShifts")}
+                    </a>
+                  </dd>
+                </div>
+              ) : null}
+              {dayAssessment ? (
+                <div className="sm:col-span-2">
+                  <span className={clsx("inline-flex", statusTokens[varianceStateStatusKind(dayAssessment.state)].badgeRing)}>
+                    {t(lang, varianceStateLabelKey(dayAssessment.state))}
+                  </span>
+                </div>
+              ) : null}
+              <div>
                 <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cashManagementDrawerOpen")}</dt>
                 <dd className="text-sm font-black">
                   {snapshot.drawerOpen
@@ -190,6 +251,26 @@ export function CashManagementPage({ lang }: Props) {
           />
         ) : null}
       </ul>
+
+      {closedToday.length > 0 && canShifts ? (
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <h2 className="text-base font-black text-foreground">{t(lang, "cashManagementClosedShiftsToday")}</h2>
+          <ul className="mt-3 space-y-4">
+            {closedToday.map((shift) => (
+              <li key={shift.id}>
+                <p className="text-sm font-black text-foreground">{shift.actorName ?? shift.actorUserId}</p>
+                <ShiftCashAuditTimeline
+                  lang={lang}
+                  shift={shift}
+                  expectedCashUgx={shiftExpectedCash(shift, { formulaVersion })}
+                  preferences={preferences}
+                  className="mt-2"
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {(snapshot.shortageShiftCount > 0 || snapshot.topShortages.length > 0) && canShifts ? (
         <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">

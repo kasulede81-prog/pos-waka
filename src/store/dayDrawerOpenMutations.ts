@@ -21,7 +21,16 @@ import { resolveStaffPermissions } from "../lib/enterpriseRoles";
 import { assertSequentialBusinessDay } from "../lib/sequentialBusinessDays";
 import { assertBusinessDateNotLocked } from "../lib/businessDateLock";
 import { resolveFloatVerifyOverride } from "../lib/managerFloatVerify";
-import { shiftExpectedCash, type ShiftCashContext } from "../lib/saleAdjustments";
+import { type ShiftCashContext } from "../lib/saleAdjustments";
+import { assertCanCloseShift } from "../lib/shiftEnforcement";
+import {
+  assertCanRecoverShift,
+  authorizeShiftClose,
+  buildShiftClosePatch,
+  computeShiftCloseAmounts,
+  logShiftRecoveryEvent,
+  resolveShiftCloseTarget,
+} from "../lib/shiftRecoveryOps";
 import type { PosState } from "./usePosStore";
 
 type StoreGet = () => PosState;
@@ -457,7 +466,13 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     return { ok: true as const, shiftId: row.id };
   };
 
-  const closeShiftWithHandoff = (input: { countedCashUgx: number; handoffFloatUgx: number }) => {
+  const closeShiftWithHandoff = (input: {
+    countedCashUgx: number;
+    handoffFloatUgx: number;
+    shiftId?: string;
+    recoveryReason?: string;
+    recoveryNotes?: string;
+  }) => {
     const denied = denyUnlessEffectivePermission("shift.close", "closeShiftWithCashCount");
     if (denied) return { ok: false as const, errorKey: denied.errorKey };
 
@@ -465,51 +480,102 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     const actor = state.sessionActor;
     if (!actor) return { ok: false as const, errorKey: "noSelection" };
 
-    const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
-    if (!open) return { ok: false as const, errorKey: "invalid" };
+    const target = resolveShiftCloseTarget(state.preferences.shifts, actor.userId, input.shiftId);
+    if (!target.ok) return { ok: false as const, errorKey: target.errorKey };
+
+    const hasPermission = (permission: import("../types").Permission) =>
+      denyUnlessEffectivePermission(permission, "closeShiftWithCashCount") === null;
+    const authz = authorizeShiftClose(
+      {
+        actorUserId: actor.userId,
+        actorRole: actor.role,
+        actorDisplayName: actor.displayName,
+        hasPermission,
+      },
+      target.shift,
+      target.isRecovery,
+    );
+    if (!authz.ok) return { ok: false as const, errorKey: authz.errorKey };
+
+    const closeGuard = target.isRecovery ? assertCanRecoverShift(state) : assertCanCloseShift(state);
+    if (!closeGuard.ok) return { ok: false as const, errorKey: closeGuard.errorKey };
 
     const formulaVersion = isFormulaV2(state.preferences) ? "v2" : "v1";
     const ctx: ShiftCashContext = { formulaVersion };
-    const expected = shiftExpectedCash(open, ctx);
-    const counted = Math.max(0, Math.floor(input.countedCashUgx));
-    const handoff = Math.max(0, Math.floor(input.handoffFloatUgx));
-    const differenceUgx = counted - expected;
+    const { counted, handoff, expected, differenceUgx } = computeShiftCloseAmounts(
+      target.shift,
+      input.countedCashUgx,
+      input.handoffFloatUgx,
+      ctx,
+    );
     const endAt = new Date().toISOString();
+    const recoveryMeta = target.isRecovery
+      ? {
+          recoveredByUserId: actor.userId,
+          recoveredByLabel: actor.displayName ?? actor.userId,
+          recoveredAt: endAt,
+          recoveryReason: input.recoveryReason,
+          recoveryNotes: input.recoveryNotes,
+        }
+      : undefined;
 
     set((st) => ({
       preferences: {
         ...st.preferences,
         shifts: (st.preferences.shifts ?? []).map((sh) =>
-          sh.id === open.id
-            ? {
-                ...sh,
-                endAt,
-                countedCashUgx: counted,
-                cashDifferenceUgx: differenceUgx,
-                handoffFloatUgx: formulaVersion === "v2" ? handoff : sh.handoffFloatUgx,
-                pendingSync: true,
-                updatedAt: endAt,
-              }
+          sh.id === target.shift.id
+            ? buildShiftClosePatch(
+                sh,
+                { counted, handoff, endAt, differenceUgx, formulaVersion },
+                recoveryMeta,
+              )
             : sh,
         ),
       },
     }));
 
-    pushAudit("shift_close_count", `Shift close · expected UGX ${expected.toLocaleString()} · counted UGX ${counted.toLocaleString()}`, {
-      shiftId: open.id,
-      expectedCashUgx: expected,
-      countedCashUgx: counted,
-      differenceUgx,
-      actorUserId: actor.userId,
-    });
+    pushAudit(
+      target.isRecovery ? "shift_recovery_close" : "shift_close_count",
+      target.isRecovery
+        ? `Shift recovery close · ${target.shift.actorName ?? target.shift.actorUserId} · expected UGX ${expected.toLocaleString()} · counted UGX ${counted.toLocaleString()}`
+        : `Shift close · expected UGX ${expected.toLocaleString()} · counted UGX ${counted.toLocaleString()}`,
+      {
+        shiftId: target.shift.id,
+        expectedCashUgx: expected,
+        countedCashUgx: counted,
+        differenceUgx,
+        actorUserId: target.shift.actorUserId,
+        operatorUserId: target.shift.actorUserId,
+        operatorLabel: target.shift.actorName ?? target.shift.actorUserId,
+        ...(target.isRecovery
+          ? {
+              recoveredByUserId: actor.userId,
+              recoveredByLabel: actor.displayName ?? actor.userId,
+              recoveryReason: input.recoveryReason?.trim() || null,
+              recoveryNotes: input.recoveryNotes?.trim() || null,
+            }
+          : { closedByUserId: actor.userId }),
+      },
+    );
     if (formulaVersion === "v2") {
       pushAudit("shift_handoff_ready", `Handoff UGX ${handoff.toLocaleString()}`, {
-        shiftId: open.id,
+        shiftId: target.shift.id,
         handoffFloatUgx: handoff,
-        actorUserId: actor.userId,
+        actorUserId: target.shift.actorUserId,
+        ...(target.isRecovery
+          ? { recoveredByUserId: actor.userId, recoveredByLabel: actor.displayName ?? actor.userId }
+          : {}),
       });
     }
-    void queueRemote("pending_shifts", { shiftId: open.id });
+    if (target.isRecovery) {
+      logShiftRecoveryEvent("recovering_shift", {
+        shiftId: target.shift.id,
+        operatorUserId: target.shift.actorUserId,
+        recoveredByUserId: actor.userId,
+        varianceUgx: differenceUgx,
+      });
+    }
+    void queueRemote("pending_shifts", { shiftId: target.shift.id });
     return { ok: true as const, differenceUgx };
   };
 

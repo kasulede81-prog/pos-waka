@@ -5,8 +5,8 @@ import { getDeviceOnline } from "../lib/deviceOnline";
 import {
   dismissShopSecurityPinRecoveryNotice,
   peekShopSecurityPinRecoveryNotice,
-  scheduleShopSecurityPinRecovery,
 } from "../lib/shopSecurityPinRecovery";
+import { scheduleShopRecovery } from "../lib/shopRecoveryOrchestration";
 
 /** Run Shop Security PIN recovery on resume, reconnect, and expose owner notice state. */
 export function useShopSecurityPinRecovery(shopId: string | null | undefined) {
@@ -41,7 +41,7 @@ export function useShopSecurityPinRecovery(shopId: string | null | undefined) {
   useEffect(() => {
     const onOnline = () => {
       if (!getDeviceOnline()) return;
-      void scheduleShopSecurityPinRecovery("cloud_reconnect");
+      void scheduleShopRecovery("cloud_reconnect");
     };
     window.addEventListener("waka:network-online", onOnline);
     window.addEventListener("online", onOnline);
@@ -54,7 +54,7 @@ export function useShopSecurityPinRecovery(shopId: string | null | undefined) {
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== "visible" || !getDeviceOnline()) return;
-      void scheduleShopSecurityPinRecovery("app_resume");
+      void scheduleShopRecovery("app_resume");
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
@@ -64,7 +64,7 @@ export function useShopSecurityPinRecovery(shopId: string | null | undefined) {
     if (!Capacitor.isNativePlatform()) return;
     const sub = App.addListener("appStateChange", (state) => {
       if (state.isActive && getDeviceOnline()) {
-        void scheduleShopSecurityPinRecovery("app_resume");
+        void scheduleShopRecovery("app_resume");
       }
     });
     return () => {

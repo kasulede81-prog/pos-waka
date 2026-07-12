@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { Battery, MonitorSmartphone, Plus, Wifi, WifiOff } from "lucide-react";
+import { MonitorSmartphone, Plus } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { PageBackBar } from "../components/layout/PageBackBar";
@@ -10,6 +10,7 @@ import { EnterpriseSkeletonList } from "../components/enterprise/EnterpriseSkele
 import { useSubscription } from "../context/SubscriptionContext";
 import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
 import { useSensitiveActionAuth } from "../context/SensitiveActionAuthContext";
+import { useDeviceActivation } from "../context/DeviceActivationContext";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
 import {
@@ -26,16 +27,15 @@ import {
 } from "../lib/shopDevices";
 import { registerShopDeviceOnLogin } from "../lib/deviceActivation";
 import { setDeviceApprovalStatus } from "../lib/deviceAuthority";
-import {
-  formatPendingApprovalCountdown,
-  isPendingApprovalExpired,
-  pendingApprovalRemainingMs,
-} from "../lib/devicePendingApproval";
-import {
-  formatDeviceDisplayName,
-  formatDevicePlatformLabel,
-  formatLastActiveRelative,
-} from "../lib/devicePresenceFormat";
+import { isPendingApprovalExpired } from "../lib/devicePendingApproval";
+import { filterFleetDevices, groupFleetDevicesByBucket, type DeviceFleetFilter } from "../lib/deviceFleetCatalog";
+import { logDeviceFleetDiagnostic } from "../lib/deviceFleetPresence";
+import { readDeviceDisplayAlias } from "../lib/deviceFleetLabels";
+import { readSyncCheckpoints } from "../lib/syncCheckpoints";
+import { usePosStore } from "../store/usePosStore";
+import { DeviceFleetCard } from "../components/device/DeviceFleetCard";
+import { DeviceFleetDetailsPanel } from "../components/device/DeviceFleetDetailsPanel";
+import { DeviceFleetFilters } from "../components/device/DeviceFleetFilters";
 
 type Props = { lang: Language };
 
@@ -46,180 +46,23 @@ function formatPlanDisplayName(snapshot: SubscriptionSnapshot): string {
   return code.charAt(0).toUpperCase() + code.slice(1).replace(/_/g, " ");
 }
 
-function approvalBadge(lang: Language, status: ShopDeviceRow["approval_status"]): string {
-  if (status === "pending") return t(lang, "deviceMgmtStatusPendingApproval");
-  if (status === "suspended" || status === "revoked" || status === "disabled") {
-    return t(lang, "deviceMgmtStatusBlocked");
-  }
-  return t(lang, "deviceMgmtStatusApproved");
-}
+const BUCKET_ORDER = ["current", "approved", "pending", "offline", "disconnected", "revoked"] as const;
 
-function lastActiveText(lang: Language, iso: string | null, nowMs: number): string {
-  const rel = formatLastActiveRelative(iso, nowMs);
-  if (rel.key === "never") return t(lang, "connectedDevicesLastActiveNever");
-  if (rel.key === "just_now") return t(lang, "connectedDevicesLastActiveJustNow");
-  return iso ? new Date(iso).toLocaleString() : "—";
-}
-
-type DeviceCardProps = {
-  lang: Language;
-  device: ShopDeviceRow;
-  currentFp: string;
-  nowMs: number;
-  isShopOwner: boolean;
-  busy: boolean;
-  onApprove: (device: ShopDeviceRow) => void;
-  onDismiss: (device: ShopDeviceRow) => void;
-  onDisconnect: (device: ShopDeviceRow) => void;
-  onRemove: (device: ShopDeviceRow) => void;
-  showLifecycleActions: boolean;
+const BUCKET_HEADING: Record<(typeof BUCKET_ORDER)[number], string> = {
+  current: "deviceFleetSectionCurrent",
+  approved: "deviceFleetSectionApproved",
+  pending: "deviceFleetSectionPending",
+  offline: "deviceFleetSectionOffline",
+  disconnected: "deviceFleetSectionDisconnected",
+  revoked: "deviceFleetSectionRevoked",
 };
-
-function DeviceCard({
-  lang,
-  device,
-  currentFp,
-  nowMs,
-  isShopOwner,
-  busy,
-  onApprove,
-  onDismiss,
-  onDisconnect,
-  onRemove,
-  showLifecycleActions,
-}: DeviceCardProps) {
-  const isCurrent = device.device_fingerprint === currentFp;
-  const name = formatDeviceDisplayName(device.label, device.platform);
-  const platform = formatDevicePlatformLabel(device.platform);
-  const online = device.status === "active" && device.approval_status === "approved";
-  const pendingRemainingMs =
-    device.approval_status === "pending"
-      ? pendingApprovalRemainingMs(device.approval_requested_at, nowMs)
-      : 0;
-  const pendingExpired =
-    device.approval_status === "pending" && isPendingApprovalExpired(device.approval_requested_at, nowMs);
-
-  return (
-    <li className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-          <MonitorSmartphone className="h-5 w-5" aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-black text-foreground">{name}</h2>
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                device.approval_status === "approved"
-                  ? "bg-emerald-100 text-emerald-800"
-                  : device.approval_status === "pending"
-                    ? pendingExpired
-                      ? "bg-muted text-muted-foreground"
-                      : "bg-amber-100 text-amber-900"
-                    : "bg-red-100 text-red-800"
-              }`}
-            >
-              {device.approval_status === "pending" && pendingExpired
-                ? t(lang, "deviceMgmtStatusExpired")
-                : approvalBadge(lang, device.approval_status)}
-            </span>
-            {device.approval_status === "pending" && !pendingExpired ? (
-              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-900">
-                {tTemplate(lang, "deviceMgmtPendingCountdown", {
-                  time: formatPendingApprovalCountdown(pendingRemainingMs),
-                })}
-              </span>
-            ) : null}
-            {isCurrent ? (
-              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800">
-                {t(lang, "connectedDevicesCurrentBadge")}
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-0.5 text-sm font-medium text-muted-foreground">{platform}</p>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              {online ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5" />}
-              {online ? t(lang, "deviceMgmtOnline") : t(lang, "deviceMgmtOffline")}
-            </span>
-            <span>
-              {t(lang, "deviceMgmtLastSync")}:{" "}
-              {device.last_sync_at ? new Date(device.last_sync_at).toLocaleString() : "—"}
-            </span>
-            <span>
-              {t(lang, "connectedDevicesLastActivePrefix")}: {lastActiveText(lang, device.last_seen_at, nowMs)}
-            </span>
-            {device.app_version ? (
-              <span>
-                {t(lang, "deviceMgmtVersion")}: {device.app_version}
-              </span>
-            ) : null}
-            <span className="inline-flex items-center gap-1">
-              <Battery className="h-3.5 w-3.5" aria-hidden />
-              {t(lang, "deviceMgmtHealthy")}
-            </span>
-          </div>
-          {(device.pending_uploads ?? 0) > 0 || (device.pending_downloads ?? 0) > 0 ? (
-            <p className="mt-1 text-xs font-medium text-muted-foreground">
-              {t(lang, "deviceMgmtSyncQueue")}: ↑{device.pending_uploads ?? 0} ↓{device.pending_downloads ?? 0}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      {isShopOwner && device.approval_status === "pending" ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={busy || pendingExpired}
-            onClick={() => onApprove(device)}
-            className="min-h-[44px] flex-1 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white disabled:opacity-50"
-          >
-            {busy ? t(lang, "deviceMgmtApproving") : t(lang, "deviceMgmtApprove")}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onDismiss(device)}
-            className="min-h-[44px] flex-1 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-800 disabled:opacity-50"
-          >
-            {busy ? t(lang, "deviceMgmtDeleting") : t(lang, "deviceMgmtDeletePending")}
-          </button>
-        </div>
-      ) : null}
-
-      {showLifecycleActions && isShopOwner && device.approval_status === "approved" ? (
-        <div className="mt-4 flex flex-col gap-2">
-          {!isCurrent ? (
-            <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onDisconnect(device)}
-                className="min-h-[44px] w-full rounded-xl border border-border bg-muted px-4 text-sm font-bold text-foreground disabled:opacity-50"
-              >
-                {busy ? t(lang, "deviceMgmtDisconnecting") : t(lang, "deviceMgmtDisconnect")}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onRemove(device)}
-                className="min-h-[44px] w-full rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-800 disabled:opacity-50"
-              >
-                {busy ? t(lang, "deviceMgmtRemoving") : t(lang, "deviceMgmtRemove")}
-              </button>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </li>
-  );
-}
 
 export function DeviceManagementPage({ lang }: Props) {
   const { userId, snapshot, authMode } = useSubscription();
   const { refresh: refreshAuthority } = useDeviceAuthority();
   const { ensureAuthorized } = useSensitiveActionAuth();
+  const { retry: retryActivation } = useDeviceActivation();
+  const staffAccounts = usePosStore((s) => s.preferences.staffAccounts ?? []);
   const [shopId, setShopId] = useState<string | null>(null);
   const [devices, setDevices] = useState<ShopDeviceRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -227,26 +70,69 @@ export function DeviceManagementPage({ lang }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isShopOwner, setIsShopOwner] = useState(true);
+  const [filter, setFilter] = useState<DeviceFleetFilter>("all");
+  const [search, setSearch] = useState("");
+  const [selectedDevice, setSelectedDevice] = useState<ShopDeviceRow | null>(null);
+  const [aliasVersion, setAliasVersion] = useState(0);
 
   const currentFp = useMemo(() => currentDeviceFingerprint(), []);
   const planLimit = useMemo(() => parsePlanDeviceLimit(snapshot, authMode), [snapshot, authMode]);
   const usage = useMemo(() => buildDeviceUsageSummary(devices, planLimit), [devices, planLimit]);
-  const { activeDevices, pendingDevices } = useMemo(() => partitionShopDevices(devices), [devices]);
+  const { pendingDevices } = useMemo(() => partitionShopDevices(devices), [devices]);
   const planName = useMemo(() => formatPlanDisplayName(snapshot), [snapshot]);
   const remaining =
     usage.planLimit != null && usage.planLimit > 0
       ? Math.max(0, usage.planLimit - usage.activeCount)
       : null;
 
+  const filteredDevices = useMemo(
+    () =>
+      filterFleetDevices(devices, {
+        filter,
+        search,
+        currentFingerprint: currentFp,
+        nowMs,
+      }),
+    [devices, filter, search, currentFp, nowMs],
+  );
+
+  const grouped = useMemo(
+    () => groupFleetDevicesByBucket(filteredDevices, currentFp, nowMs),
+    [filteredDevices, currentFp, nowMs],
+  );
+
+  const resolveStaffLabel = useCallback(
+    (device: ShopDeviceRow): string | null => {
+      const staffId = device.current_staff_client_id?.trim();
+      if (!staffId) return null;
+      const staff = staffAccounts.find((s) => s.id === staffId);
+      return staff?.name ?? staffId;
+    },
+    [staffAccounts],
+  );
+
+  const resolveDisplayName = useCallback(
+    (device: ShopDeviceRow): string | undefined => {
+      if (!shopId) return undefined;
+      void aliasVersion;
+      return readDeviceDisplayAlias(shopId, device.id) ?? undefined;
+    },
+    [shopId, aliasVersion],
+  );
+
   const loadDevices = useCallback(async (sid: string) => {
     setError(null);
     const { devices: rows, isOwner } = await fetchShopDevicesForManagement(sid);
     setIsShopOwner(isOwner);
     setDevices(rows);
+    logDeviceFleetDiagnostic("fleet_loaded", {
+      count: rows.length,
+      shopId: sid,
+    });
   }, []);
 
   useEffect(() => {
-    const intervalMs = pendingDevices.length > 0 ? 1_000 : 60_000;
+    const intervalMs = pendingDevices.length > 0 ? 1_000 : 30_000;
     const id = window.setInterval(() => setNowMs(Date.now()), intervalMs);
     return () => window.clearInterval(id);
   }, [pendingDevices.length]);
@@ -327,8 +213,9 @@ export function DeviceManagementPage({ lang }: Props) {
     if (!shopId || !isShopOwner) return;
     const ok = await ensureAuthorized("manage_users");
     if (!ok) return;
-    const name = formatDeviceDisplayName(device.label, device.platform);
-    if (!window.confirm(tTemplate(lang, "deviceMgmtDeletePendingConfirm", { name }))) return;
+    if (!window.confirm(tTemplate(lang, "deviceMgmtDeletePendingConfirm", { name: resolveDisplayName(device) ?? device.label ?? device.id }))) {
+      return;
+    }
     setBusyId(device.id);
     try {
       await dismissPendingOwnerShopDevice(device.id, shopId);
@@ -344,7 +231,7 @@ export function DeviceManagementPage({ lang }: Props) {
     if (!shopId) return;
     const ok = await ensureAuthorized("manage_users");
     if (!ok) return;
-    const name = formatDeviceDisplayName(device.label, device.platform);
+    const name = resolveDisplayName(device) ?? device.label ?? device.id;
     if (!window.confirm(tTemplate(lang, "connectedDevicesDisconnectConfirm", { name }))) return;
     setBusyId(device.id);
     try {
@@ -362,7 +249,7 @@ export function DeviceManagementPage({ lang }: Props) {
     if (!shopId) return;
     const ok = await ensureAuthorized("manage_users");
     if (!ok) return;
-    const name = formatDeviceDisplayName(device.label, device.platform);
+    const name = resolveDisplayName(device) ?? device.label ?? device.id;
     if (!window.confirm(tTemplate(lang, "deviceMgmtRemoveConfirm", { name }))) return;
     setBusyId(device.id);
     try {
@@ -373,6 +260,15 @@ export function DeviceManagementPage({ lang }: Props) {
       setError(e instanceof Error ? e.message : t(lang, "deviceMgmtRemoveError"));
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleCopyId = async (device: ShopDeviceRow) => {
+    try {
+      await navigator.clipboard.writeText(device.device_fingerprint);
+      logDeviceFleetDiagnostic("device_id_copied", { deviceId: device.id });
+    } catch {
+      setError(t(lang, "deviceFleetCopyFailed"));
     }
   };
 
@@ -388,15 +284,23 @@ export function DeviceManagementPage({ lang }: Props) {
         })
       : tTemplate(lang, "connectedDevicesUsageNoLimit", { used: String(usage.activeCount) });
 
+  const syncCheckpoints = readSyncCheckpoints();
+  const currentDevice = devices.find((d) => d.device_fingerprint === currentFp) ?? null;
+
   const cardProps = {
     lang,
-    currentFp,
+    currentFingerprint: currentFp,
     nowMs,
     isShopOwner,
     onApprove: (d: ShopDeviceRow) => void handleApprove(d),
     onDismiss: (d: ShopDeviceRow) => void handleDismiss(d),
     onDisconnect: (d: ShopDeviceRow) => void handleDisconnect(d),
     onRemove: (d: ShopDeviceRow) => void handleRemove(d),
+    onCopyId: (d: ShopDeviceRow) => void handleCopyId(d),
+    onRetryActivation: () => void retryActivation(),
+    onSelect: setSelectedDevice,
+    resolveStaffLabel,
+    resolveDisplayName,
   };
 
   return (
@@ -404,7 +308,7 @@ export function DeviceManagementPage({ lang }: Props) {
       <PageBackBar lang={lang} fallbackTo="/settings" label={t(lang, "settingsHubTitle")} />
       <div>
         <h1 className="text-2xl font-black text-foreground">{t(lang, "deviceMgmtEnterpriseTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "deviceMgmtSub")}</p>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "deviceFleetSub")}</p>
       </div>
 
       {!isShopOwner ? (
@@ -413,10 +317,27 @@ export function DeviceManagementPage({ lang }: Props) {
         </div>
       ) : null}
 
-      {isShopOwner && devices.length === 0 && !loading ? (
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-950">
-          {t(lang, "deviceMgmtRegisterHintEmpty")}
-        </div>
+      {currentDevice ? (
+        <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+          <h2 className="text-sm font-black text-sky-950">{t(lang, "deviceFleetThisDevice")}</h2>
+          <p className="mt-1 text-xs font-semibold text-sky-900">{t(lang, "deviceFleetThisDeviceSub")}</p>
+          <dl className="mt-3 grid gap-1 text-xs font-semibold text-sky-950">
+            <div className="flex justify-between gap-3">
+              <dt>{t(lang, "deviceMgmtVersion")}</dt>
+              <dd>{currentDevice.app_version ?? import.meta.env.VITE_APP_VERSION ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt>{t(lang, "deviceMgmtLastSync")}</dt>
+              <dd>{syncCheckpoints.lastSalesSyncAt ? new Date(syncCheckpoints.lastSalesSyncAt).toLocaleString() : "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt>{t(lang, "connectedDevicesLastActivePrefix")}</dt>
+              <dd>
+                {currentDevice.last_seen_at ? new Date(currentDevice.last_seen_at).toLocaleString() : t(lang, "connectedDevicesLastActiveNever")}
+              </dd>
+            </div>
+          </dl>
+        </section>
       ) : null}
 
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -445,10 +366,18 @@ export function DeviceManagementPage({ lang }: Props) {
           <Plus className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <div>
             <p className="text-sm font-bold text-foreground">{t(lang, "deviceMgmtRegisterDevice")}</p>
-            <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "deviceMgmtRegisterHint")}</p>
+            <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "deviceFleetRegisterHint")}</p>
           </div>
         </div>
       </section>
+
+      <DeviceFleetFilters
+        lang={lang}
+        filter={filter}
+        search={search}
+        onFilterChange={setFilter}
+        onSearchChange={setSearch}
+      />
 
       {error ? (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
@@ -462,52 +391,45 @@ export function DeviceManagementPage({ lang }: Props) {
         <EnterpriseEmptyState
           icon={MonitorSmartphone}
           title={t(lang, "connectedDevicesNoShop")}
-          description={t(lang, "deviceMgmtSub")}
+          description={t(lang, "deviceFleetSub")}
+        />
+      ) : devices.length === 0 ? (
+        <EnterpriseEmptyState
+          icon={MonitorSmartphone}
+          title={t(lang, "deviceFleetEmptyTitle")}
+          description={t(lang, "deviceFleetEmptySub")}
+        />
+      ) : filteredDevices.length === 0 ? (
+        <EnterpriseEmptyState
+          icon={MonitorSmartphone}
+          title={t(lang, "deviceFleetNoMatchesTitle")}
+          description={t(lang, "deviceFleetNoMatchesSub")}
         />
       ) : (
         <div className="space-y-6">
-          <div>
-            <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{t(lang, "deviceMgmtActiveHeading")}</h2>
-            {activeDevices.length === 0 ? (
-              <EnterpriseEmptyState
-                icon={MonitorSmartphone}
-                title={t(lang, "deviceMgmtNoActiveDevices")}
-                description={t(lang, "deviceMgmtRegisterHint")}
-                className="mt-3"
-              />
-            ) : (
-              <ul className="mt-3 space-y-4">
-                {activeDevices.map((device) => (
-                  <DeviceCard
-                    key={device.id}
-                    {...cardProps}
-                    device={device}
-                    busy={busyId === device.id}
-                    showLifecycleActions
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {pendingDevices.length > 0 ? (
-            <div>
-              <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-                {t(lang, "deviceMgmtPendingHeading")}
-              </h2>
-              <ul className="mt-3 space-y-4">
-                {pendingDevices.map((device) => (
-                  <DeviceCard
-                    key={device.id}
-                    {...cardProps}
-                    device={device}
-                    busy={busyId === device.id}
-                    showLifecycleActions={false}
-                  />
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          {BUCKET_ORDER.map((bucket) => {
+            const rows = grouped[bucket];
+            if (rows.length === 0) return null;
+            return (
+              <div key={bucket}>
+                <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                  {t(lang, BUCKET_HEADING[bucket])} ({rows.length})
+                </h2>
+                <ul className="mt-3 space-y-4">
+                  {rows.map((device) => (
+                    <DeviceFleetCard
+                      key={device.id}
+                      device={device}
+                      displayName={resolveDisplayName(device)}
+                      staffLabel={resolveStaffLabel(device)}
+                      busy={busyId === device.id}
+                      {...cardProps}
+                    />
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -519,6 +441,18 @@ export function DeviceManagementPage({ lang }: Props) {
           {t(lang, "connectedDevicesUpgradeCta")}
         </Link>
       ) : null}
+
+      <DeviceFleetDetailsPanel
+        lang={lang}
+        open={Boolean(selectedDevice)}
+        device={selectedDevice}
+        shopId={shopId}
+        displayName={selectedDevice ? resolveDisplayName(selectedDevice) : undefined}
+        staffLabel={selectedDevice ? resolveStaffLabel(selectedDevice) : null}
+        isCurrent={selectedDevice?.device_fingerprint === currentFp}
+        onClose={() => setSelectedDevice(null)}
+        onAliasSaved={() => setAliasVersion((v) => v + 1)}
+      />
     </EnterprisePageContainer>
   );
 }

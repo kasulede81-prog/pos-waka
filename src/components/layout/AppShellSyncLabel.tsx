@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
+import { useSessionConnectionState } from "../../hooks/useSessionConnectionState";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../../offline/cloudSync";
 import { offlineDurationLabel } from "../../lib/syncMeta";
@@ -55,6 +56,7 @@ export const AppShellSyncLabel = memo(function AppShellSyncLabel({
   inverted?: boolean;
 }) {
   const { isOnline } = useOfflineStatus();
+  const sessionConnection = useSessionConnectionState();
   const { syncing, pendingCount, health, pullPaused } = useSyncStatus();
   const syncErrors = countSalesWithSyncErrors();
   const salesHydration = usePosStore((s) => s.salesHistoryHydration);
@@ -83,8 +85,20 @@ export const AppShellSyncLabel = memo(function AppShellSyncLabel({
         : t(lang, "salesHistoryHydrationLoading")
       : null;
 
+  const authSessionLine =
+    sessionConnection === "offline_cached"
+      ? t(lang, "authSessionOfflineCached")
+      : sessionConnection === "reconnecting"
+        ? t(lang, "authSessionReconnecting")
+        : null;
+
   return (
     <div className="min-w-0">
+      {authSessionLine ? (
+        <p className={`truncate text-[11px] font-semibold ${inverted ? "text-amber-100" : "text-amber-800"}`}>
+          {authSessionLine}
+        </p>
+      ) : null}
       <p
         className={`truncate text-[11px] font-medium ${
           needsAction

@@ -3,7 +3,10 @@ import { Navigate } from "react-router-dom";
 import clsx from "clsx";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
-import { PageBackBar } from "../components/layout/PageBackBar";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { ResponsiveDataTable } from "../components/shared/ResponsiveDataTable";
+import { WakaButton } from "../components/ui/wakaPrimitives";
 import { useSessionActor } from "../context/SessionActorContext";
 import { canSeeFinanceDiagnostics } from "../lib/financeVisibility";
 import { usePosStore } from "../store/usePosStore";
@@ -15,13 +18,15 @@ import {
   type FinanceDiagnosticFilter,
   type FinanceDiagnosticSeverity,
 } from "../lib/costValidation";
+import { enterpriseTypeClass } from "../lib/enterpriseTypography";
+import { healthStatusBadge } from "../lib/statusTokens";
 
 type SortMode = "lowest_cost" | "highest_margin";
 
-function severityBadgeClass(severity: FinanceDiagnosticSeverity): string {
-  if (severity === "critical") return "bg-rose-100 text-rose-900 border-rose-200";
-  if (severity === "warning") return "bg-amber-100 text-amber-950 border-amber-200";
-  return "bg-emerald-100 text-emerald-900 border-emerald-200";
+function severityToHealth(severity: FinanceDiagnosticSeverity): "ok" | "warning" | "critical" {
+  if (severity === "critical") return "critical";
+  if (severity === "warning") return "warning";
+  return "ok";
 }
 
 function severityLabel(lang: Language, severity: FinanceDiagnosticSeverity): string {
@@ -67,12 +72,13 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
   ];
 
   return (
-    <div className="space-y-5 pb-8">
-      <PageBackBar lang={lang} fallbackTo="/settings" />
-      <div>
-        <h1 className="text-2xl font-black text-foreground">{t(lang, "financeDiagnosticsTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "financeDiagnosticsSub")}</p>
-      </div>
+    <EnterprisePageContainer>
+      <EnterprisePageHeader
+        lang={lang}
+        title={t(lang, "financeDiagnosticsTitle")}
+        subtitle={t(lang, "financeDiagnosticsSub")}
+        backFallback="/settings"
+      />
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {healthCards.map(({ key, labelKey, count }) => (
@@ -81,33 +87,30 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
             type="button"
             onClick={() => setFilter(key)}
             className={clsx(
-              "rounded-2xl border p-3 text-left transition",
+              "rounded-2xl border p-3 text-left transition-waka",
               filter === key
-                ? "border-waka-500 bg-waka-50 shadow-waka-sm"
+                ? "border-primary bg-business-muted shadow-waka-sm"
                 : "border-border bg-card hover:border-border",
             )}
           >
-            <p className="text-2xl font-black tabular-nums text-foreground">{count}</p>
-            <p className="mt-1 text-[11px] font-bold leading-tight text-muted-foreground">{t(lang, labelKey)}</p>
+            <p className={enterpriseTypeClass("monoNumber", "text-2xl")}>{count}</p>
+            <p className={enterpriseTypeClass("caption", "mt-1 normal-case")}>{t(lang, labelKey)}</p>
           </button>
         ))}
       </div>
 
       <div className="flex flex-wrap gap-2">
         {filterChips.map(({ key, labelKey }) => (
-          <button
+          <WakaButton
             key={key}
             type="button"
+            size="standard"
+            variant={filter === key ? "primary" : "secondary"}
+            className={clsx("!min-h-[36px] !rounded-full !px-2.5 !py-1 !text-xs")}
             onClick={() => setFilter(key)}
-            className={clsx(
-              "rounded-full border px-2.5 py-1 text-xs font-bold",
-              filter === key
-                ? "border-waka-500 bg-waka-600 text-white"
-                : "border-border bg-card text-muted-foreground",
-            )}
           >
             {t(lang, labelKey)}
-          </button>
+          </WakaButton>
         ))}
       </div>
 
@@ -118,19 +121,15 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
             ["highest_margin", "financeDiagnosticsSortHighestMargin"],
           ] as const
         ).map(([mode, labelKey]) => (
-          <button
+          <WakaButton
             key={mode}
             type="button"
+            variant={sort === mode ? "primary" : "secondary"}
+            className="!rounded-full"
             onClick={() => setSort(mode)}
-            className={clsx(
-              "rounded-full border px-3 py-1.5 text-sm font-bold",
-              sort === mode
-                ? "border-stone-400 bg-foreground text-background"
-                : "border-border bg-card text-muted-foreground",
-            )}
           >
             {t(lang, labelKey)}
-          </button>
+          </WakaButton>
         ))}
       </div>
 
@@ -139,54 +138,45 @@ export function SettingsFinanceDiagnosticsPage({ lang }: { lang: Language }) {
           {t(lang, "financeDiagnosticsEmpty")}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-waka-sm">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-border bg-muted text-[11px] font-black uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2.5">{t(lang, "financeDiagnosticsColProduct")}</th>
-                <th className="px-3 py-2.5">{t(lang, "financeDiagnosticsColStatus")}</th>
-                <th className="px-3 py-2.5 text-right">{t(lang, "financeDiagnosticsColStock")}</th>
-                <th className="px-3 py-2.5 text-right">{t(lang, "financeDiagnosticsColUnitCost")}</th>
-                <th className="px-3 py-2.5 text-right">{t(lang, "financeDiagnosticsColSellPrice")}</th>
-                <th className="px-3 py-2.5 text-right">{t(lang, "financeDiagnosticsColStockValue")}</th>
-                <th className="px-3 py-2.5 text-right">{t(lang, "financeDiagnosticsColMargin")}</th>
+        <ResponsiveDataTable minWidthPx={720}>
+          <thead>
+            <tr>
+              <th>{t(lang, "financeDiagnosticsColProduct")}</th>
+              <th>{t(lang, "financeDiagnosticsColStatus")}</th>
+              <th className="text-right">{t(lang, "financeDiagnosticsColStock")}</th>
+              <th className="text-right">{t(lang, "financeDiagnosticsColUnitCost")}</th>
+              <th className="text-right">{t(lang, "financeDiagnosticsColSellPrice")}</th>
+              <th className="text-right">{t(lang, "financeDiagnosticsColStockValue")}</th>
+              <th className="text-right">{t(lang, "financeDiagnosticsColMargin")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.productId}>
+                <td className="max-w-[10rem] truncate font-bold text-foreground">{row.name}</td>
+                <td>
+                  <span className={healthStatusBadge(severityToHealth(row.severity))}>
+                    {severityLabel(lang, row.severity)}
+                  </span>
+                </td>
+                <td className={enterpriseTypeClass("monoNumber", "text-right text-sm")}>{row.stockOnHand}</td>
+                <td className={enterpriseTypeClass("monoNumber", "text-right text-sm text-muted-foreground")}>
+                  {row.unitCostUgx.toLocaleString()}
+                </td>
+                <td className={enterpriseTypeClass("monoNumber", "text-right text-sm text-muted-foreground")}>
+                  {row.sellPriceUgx.toLocaleString()}
+                </td>
+                <td className={enterpriseTypeClass("monoNumber", "text-right text-sm")}>
+                  {row.stockValueUgx.toLocaleString()}
+                </td>
+                <td className={enterpriseTypeClass("monoNumber", "text-right text-sm")}>
+                  {row.marginPct != null ? `${row.marginPct}%` : "—"}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.productId} className="border-b border-border last:border-0">
-                  <td className="max-w-[10rem] truncate px-3 py-2.5 font-bold text-foreground">{row.name}</td>
-                  <td className="px-3 py-2.5">
-                    <span
-                      className={clsx(
-                        "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black uppercase",
-                        severityBadgeClass(row.severity),
-                      )}
-                    >
-                      {severityLabel(lang, row.severity)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-muted-foreground">
-                    {row.stockOnHand}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-muted-foreground">
-                    {row.unitCostUgx.toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-muted-foreground">
-                    {row.sellPriceUgx.toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-bold text-violet-800">
-                    {row.stockValueUgx.toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-bold text-foreground">
-                    {row.marginPct != null ? `${row.marginPct}%` : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </ResponsiveDataTable>
       )}
-    </div>
+    </EnterprisePageContainer>
   );
 }

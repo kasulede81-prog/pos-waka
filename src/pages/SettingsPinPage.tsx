@@ -5,6 +5,7 @@ import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { BackOfficePinForm } from "../components/settings/BackOfficePinForm";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 
 export function SettingsPinPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -17,7 +18,7 @@ export function SettingsPinPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-5 pb-8">
+    <EnterprisePageContainer>
       <SettingsPageHeader
         lang={lang}
         title={t(lang, "settingsHubPin")}
@@ -29,6 +30,6 @@ export function SettingsPinPage({ lang }: { lang: Language }) {
         </p>
       ) : null}
       <BackOfficePinForm lang={lang} />
-    </div>
+    </EnterprisePageContainer>
   );
 }

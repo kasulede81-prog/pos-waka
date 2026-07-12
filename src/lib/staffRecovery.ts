@@ -51,15 +51,6 @@ export function mergeStaffAccountsFromCloudPull(local: StaffAccount[], cloud: St
   return mergeStaffAccountsForCloudSync(local, cloud);
 }
 
-function staffAccountsEqual(a: StaffAccount[], b: StaffAccount[]): boolean {
-  if (a.length !== b.length) return false;
-  const sortKey = (row: StaffAccount) =>
-    `${row.id}:${row.updatedAt}:${row.active}:${row.name}:${row.pendingCloudSync ? 1 : 0}`;
-  const left = [...a].map(sortKey).sort();
-  const right = [...b].map(sortKey).sort();
-  return left.every((value, index) => value === right[index]);
-}
-
 async function reconcileLocalOnlyStaffToCloud(cloud: StaffAccount[], merged: StaffAccount[]): Promise<void> {
   const cloudIds = new Set(cloud.map((row) => row.id));
   for (const row of merged) {
@@ -81,6 +72,10 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
   const now = Date.now();
   if (!opts?.force && now - lastStaffSyncAt < STAFF_SYNC_MIN_INTERVAL_MS) return;
 
+  const { resolveShopCtx } = await import("../offline/cloudSync");
+  const ctx = await resolveShopCtx();
+  if (!ctx) return;
+
   const {
     refreshStaffCacheBackground,
     isStaffCacheUpToDate,
@@ -88,13 +83,14 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
 
   const updated = await refreshStaffCacheBackground();
   if (updated) {
+    const { usePosStore } = await import("../store/usePosStore");
+    const { readOfflineStaffCache } = await import("./offlineStaffCache");
+    const cache = await readOfflineStaffCache(ctx.shopId);
+    const merged = usePosStore.getState().preferences.staffAccounts ?? [];
+    await reconcileLocalOnlyStaffToCloud(cache?.staff ?? [], merged);
     lastStaffSyncAt = now;
     return;
   }
-
-  const { resolveShopCtx } = await import("../offline/cloudSync");
-  const ctx = await resolveShopCtx();
-  if (!ctx) return;
 
   if (await isStaffCacheUpToDate(ctx.shopId)) {
     lastStaffSyncAt = now;
@@ -114,12 +110,9 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
     if (repulled) cloud = repulled;
   }
 
-  const merged = mergeStaffAccountsForCloudSync(local, cloud);
-  if (!staffAccountsEqual(local, merged)) {
-    usePosStore.setState({
-      preferences: { ...state.preferences, staffAccounts: merged },
-    });
-  }
+  const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
+  await applyStaffAccountsMergeToStore(cloud, { source: "cloud_pull" });
+  const merged = usePosStore.getState().preferences.staffAccounts ?? [];
 
   await reconcileLocalOnlyStaffToCloud(cloud, merged);
   await refreshStaffCacheBackground({ force: true });
@@ -134,18 +127,17 @@ export async function pullAndMergeStaffAccountsForRecovery(): Promise<number> {
   const ctx = await resolveShopCtx();
   if (!ctx) return 0;
   const cache = await readOfflineStaffCache(ctx.shopId);
+  const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
+
   if (!cache?.staff.length) {
     const pulled = await pullShopStaffFromCloud();
     if (!pulled?.length) return 0;
+    await applyStaffAccountsMergeToStore(pulled, { source: "recovery_cloud_pull" });
     const { usePosStore } = await import("../store/usePosStore");
-    const state = usePosStore.getState();
-    const merged = mergeStaffAccountsForCloudSync(state.preferences.staffAccounts ?? [], pulled);
-    usePosStore.setState({
-      preferences: { ...state.preferences, staffAccounts: merged },
-    });
-    return merged.length;
+    return (usePosStore.getState().preferences.staffAccounts ?? []).length;
   }
-  const { mirrorStaffCacheToPreferences } = await import("./staffCacheSync");
-  mirrorStaffCacheToPreferences(cache.staff);
-  return cache.staff.length;
+
+  await applyStaffAccountsMergeToStore(cache.staff, { source: "recovery_cache" });
+  const { usePosStore } = await import("../store/usePosStore");
+  return (usePosStore.getState().preferences.staffAccounts ?? []).length;
 }

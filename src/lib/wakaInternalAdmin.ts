@@ -1506,6 +1506,36 @@ export async function adminShopResetBackOfficePin(
   return { ok: false, message: j.error ?? "Could not clear Shop Security PIN." };
 }
 
+export async function adminShopResetAllStaffCredentials(
+  shopId: string,
+): Promise<{ ok: boolean; message?: string; clearedAt?: string; staffCount?: number }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("admin_shop_reset_all_staff_credentials", { p_shop_id: shopId });
+  if (error) {
+    const missingFn = error.message?.includes("Could not find the function") || error.code === "PGRST202";
+    return {
+      ok: false,
+      message: missingFn
+        ? "Missing RPC: admin_shop_reset_all_staff_credentials. Add DB migration and retry."
+        : error.message,
+    };
+  }
+  const j = (data ?? {}) as {
+    ok?: boolean;
+    error?: string;
+    clear_staff_credentials_at?: string;
+    staff_count?: number;
+  };
+  if (j.ok === true) {
+    return {
+      ok: true,
+      clearedAt: j.clear_staff_credentials_at,
+      staffCount: typeof j.staff_count === "number" ? j.staff_count : undefined,
+    };
+  }
+  return { ok: false, message: j.error ?? "Could not reset staff credentials." };
+}
+
 /** Support: set owner auth password directly (edge function + service role). */
 export async function adminShopSetOwnerPasswordDirect(
   shopId: string,

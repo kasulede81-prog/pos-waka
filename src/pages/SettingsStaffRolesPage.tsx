@@ -7,6 +7,7 @@ import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { usePosStore } from "../store/usePosStore";
 import { StaffRolesCenter, countStaffWithCustomRole } from "../components/staff/StaffRolesCenter";
 import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 
 export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -22,7 +23,7 @@ export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
 
   return (
     <DeviceApprovedGate lang={lang}>
-      <div className="space-y-5 pb-8">
+      <EnterprisePageContainer>
         <SettingsPageHeader
           lang={lang}
           title={t(lang, "enterpriseRolesPageTitle")}
@@ -39,7 +40,7 @@ export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
           onCloneTemplate={(templateId, name) => cloneCustomStaffRole({ kind: "template", id: templateId }, name)}
           onCloneRole={(roleId, name) => cloneCustomStaffRole({ kind: "custom", id: roleId }, name)}
         />
-      </div>
+      </EnterprisePageContainer>
     </DeviceApprovedGate>
   );
 }

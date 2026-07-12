@@ -238,7 +238,6 @@ export async function syncStaffAccountsWithCloud(
   localStaff: StaffAccount[],
 ): Promise<StaffAccount[] | null> {
   if (!user || !isSupabaseEmailVerified(user)) return null;
-  const { mergeStaffAccountsForCloudSync } = await import("./staffRecovery");
   let pulled = await pullShopStaffFromCloud();
   if (!pulled) return null;
   if (pulled.length === 0 && localStaff.length > 0) {
@@ -248,5 +247,6 @@ export async function syncStaffAccountsWithCloud(
     if (!pulled) return null;
   }
   if (pulled.length === 0 && localStaff.length === 0) return null;
-  return mergeStaffAccountsForCloudSync(localStaff, pulled);
+  const { mergeStaffAccountsWithDedupe } = await import("./staffSyncApply");
+  return mergeStaffAccountsWithDedupe(localStaff, pulled);
 }

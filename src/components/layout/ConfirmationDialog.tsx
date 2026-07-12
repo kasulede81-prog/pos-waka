@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { WakaButton } from "../ui/wakaPrimitives";
 import { ModalSheet } from "./ModalSheet";
+import { enterpriseTypeClass } from "../../lib/enterpriseTypography";
 
 type Props = {
   lang: Language;
@@ -44,28 +45,24 @@ export function ConfirmationDialog({
       panelClassName="max-w-sm"
       footer={
         <div className="grid grid-cols-2 gap-2.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-[44px] rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold text-foreground"
-          >
+          <WakaButton type="button" variant="secondary" onClick={onClose}>
             {t(lang, cancelLabelKey)}
-          </button>
-          <button
+          </WakaButton>
+          <WakaButton
             type="button"
-            disabled={confirmDisabled || confirmBusy}
+            variant={destructive ? "danger" : "primary"}
+            disabled={confirmDisabled}
+            loading={confirmBusy}
             onClick={onConfirm}
-            className={clsx(
-              "min-h-[44px] rounded-xl px-4 py-2.5 text-sm font-black text-white disabled:opacity-50",
-              destructive ? "bg-rose-600 hover:bg-rose-700" : "bg-waka-600 hover:bg-waka-700",
-            )}
           >
-            {confirmBusy ? "…" : t(lang, confirmLabelKey)}
-          </button>
+            {t(lang, confirmLabelKey)}
+          </WakaButton>
         </div>
       }
     >
-      {children ? <div className="text-sm font-medium text-muted-foreground">{children}</div> : null}
+      {children ? (
+        <div className={enterpriseTypeClass("body", "text-muted-foreground")}>{children}</div>
+      ) : null}
     </ModalSheet>
   );
 }

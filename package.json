@@ -35,6 +35,7 @@
     "verify:multi-device": "node scripts/multi-device-consistency.mjs",
     "verify:hospitality-concurrency": "vitest run src/lib/pendingSaleMerge.test.ts",
     "test": "vitest run",
+    "design-system:check": "node scripts/design-system-enforcement.mjs",
     "check:app-versions": "node scripts/check-app-version-alignment.mjs",
     "test:all:batches": "node scripts/run-test-batches.mjs",
     "test:all:domains": "node scripts/run-all-domains.mjs",

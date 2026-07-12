@@ -202,7 +202,6 @@ import {
   applyCustomerDebtDelta,
   creditDebtReductionFromSaleAdjustment,
   reduceSaleTotalsByAmount,
-  shiftExpectedCash,
   type DiscountMode,
 } from "../lib/saleAdjustments";
 import {
@@ -210,6 +209,14 @@ import {
   getActiveShiftForActor,
   requireActiveShift,
 } from "../lib/shiftEnforcement";
+import {
+  authorizeShiftClose,
+  assertCanRecoverShift,
+  buildShiftClosePatch,
+  computeShiftCloseAmounts,
+  logShiftRecoveryEvent,
+  resolveShiftCloseTarget,
+} from "../lib/shiftRecoveryOps";
 import { cartDiscountFromPendingSale, mergeDraftSaleLine, rebuildDraftLineQuantity, shouldMergeDraftSaleLines } from "../lib/draftCart";
 import {
   applyCartDiscountSnapshot,
@@ -947,6 +954,7 @@ export type PosState = {
   closeShiftWithCashCount: (
     countedCashUgx: number,
     handoffFloatUgx?: number,
+    opts?: import("../lib/shiftRecoveryOps").ShiftCloseOptions,
   ) => { ok: boolean; errorKey?: string; differenceUgx?: number };
   finalizeDraftSale: (opts: {
     debtUgx: number;
@@ -1917,22 +1925,14 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     if (!cloudResult.ok) {
       if (cloudResult.queued) {
-        set((s) => ({
-          preferences: {
-            ...s.preferences,
-            staffAccounts: [{ ...row, pendingCloudSync: true }, ...(s.preferences.staffAccounts ?? [])],
-          },
-        }));
+        const { upsertStaffAccountInStore } = await import("../lib/staffSyncApply");
+        await upsertStaffAccountInStore({ ...row, pendingCloudSync: true });
       }
       return { ok: false, errorKey: cloudResult.errorKey, queued: cloudResult.queued };
     }
 
-    set((s) => ({
-      preferences: {
-        ...s.preferences,
-        staffAccounts: [{ ...row, pendingCloudSync: false }, ...(s.preferences.staffAccounts ?? [])],
-      },
-    }));
+    const { upsertStaffAccountInStore } = await import("../lib/staffSyncApply");
+    await upsertStaffAccountInStore({ ...row, pendingCloudSync: false });
 
     const confirmed = (get().preferences.staffAccounts ?? []).find((a) => a.id === row.id);
     void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
@@ -4695,12 +4695,10 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true, returnRecord: returnRec };
   },
 
-  closeShiftWithCashCount: (countedCashUgx, handoffFloatUgx) => {
+  closeShiftWithCashCount: (countedCashUgx, handoffFloatUgx, opts) => {
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    const closeGuard = assertCanCloseShift(state);
-    if (!closeGuard.ok) return { ok: false, errorKey: closeGuard.errorKey };
 
     if (isFormulaV2(state.preferences)) {
       const { closeShiftWithHandoff } = createDayDrawerOpenStoreActions({
@@ -4713,45 +4711,98 @@ export const usePosStore = create<PosState>((set, get) => {
       return closeShiftWithHandoff({
         countedCashUgx,
         handoffFloatUgx: handoffFloatUgx ?? countedCashUgx,
+        shiftId: opts?.shiftId,
+        recoveryReason: opts?.recoveryReason,
+        recoveryNotes: opts?.recoveryNotes,
       });
     }
 
-    const denied = denyUnlessEffectivePermission("shift.close", "closeShiftWithCashCount");
-    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const target = resolveShiftCloseTarget(state.preferences.shifts, actor.userId, opts?.shiftId);
+    if (!target.ok) return { ok: false, errorKey: target.errorKey };
 
-    const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
-    if (!open) return { ok: false, errorKey: "invalid" };
-    const expected = shiftExpectedCash(open, { formulaVersion: "v1" });
-    const counted = Math.max(0, Math.floor(countedCashUgx));
-    const differenceUgx = counted - expected;
+    const hasPermission = (permission: import("../types").Permission) =>
+      denyUnlessEffectivePermission(permission, "closeShiftWithCashCount") === null;
+    const authz = authorizeShiftClose(
+      {
+        actorUserId: actor.userId,
+        actorRole: actor.role,
+        actorDisplayName: actor.displayName,
+        hasPermission,
+      },
+      target.shift,
+      target.isRecovery,
+    );
+    if (!authz.ok) return { ok: false, errorKey: authz.errorKey };
+
+    const closeGuard = target.isRecovery ? assertCanRecoverShift(state) : assertCanCloseShift(state);
+    if (!closeGuard.ok) return { ok: false, errorKey: closeGuard.errorKey };
+
+    const formulaVersion = "v1";
+    const ctx = { formulaVersion } as const;
+    const { counted, expected, differenceUgx } = computeShiftCloseAmounts(
+      target.shift,
+      countedCashUgx,
+      handoffFloatUgx,
+      ctx,
+    );
     const endAt = new Date().toISOString();
+    const recoveryMeta = target.isRecovery
+      ? {
+          recoveredByUserId: actor.userId,
+          recoveredByLabel: actor.displayName ?? actor.userId,
+          recoveredAt: endAt,
+          recoveryReason: opts?.recoveryReason,
+          recoveryNotes: opts?.recoveryNotes,
+        }
+      : undefined;
 
     set((st) => ({
       preferences: {
         ...st.preferences,
         shifts: (st.preferences.shifts ?? []).map((sh) =>
-          sh.id === open.id
-            ? {
-                ...sh,
-                endAt,
-                countedCashUgx: counted,
-                cashDifferenceUgx: differenceUgx,
-                pendingSync: true,
-                updatedAt: endAt,
-              }
+          sh.id === target.shift.id
+            ? buildShiftClosePatch(
+                sh,
+                { counted, endAt, differenceUgx, formulaVersion },
+                recoveryMeta,
+              )
             : sh,
         ),
       },
     }));
 
-    pushAudit("shift_close_count", `Shift close · expected UGX ${expected.toLocaleString()} · counted UGX ${counted.toLocaleString()}`, {
-      shiftId: open.id,
-      expectedCashUgx: expected,
-      countedCashUgx: counted,
-      differenceUgx,
-      actorUserId: actor.userId,
-    });
-    void queueRemote("pending_shifts", { shiftId: open.id });
+    pushAudit(
+      target.isRecovery ? "shift_recovery_close" : "shift_close_count",
+      target.isRecovery
+        ? `Shift recovery close · ${target.shift.actorName ?? target.shift.actorUserId} · expected UGX ${expected.toLocaleString()} · counted UGX ${counted.toLocaleString()}`
+        : `Shift close · expected UGX ${expected.toLocaleString()} · counted UGX ${counted.toLocaleString()}`,
+      {
+        shiftId: target.shift.id,
+        expectedCashUgx: expected,
+        countedCashUgx: counted,
+        differenceUgx,
+        actorUserId: target.shift.actorUserId,
+        operatorUserId: target.shift.actorUserId,
+        operatorLabel: target.shift.actorName ?? target.shift.actorUserId,
+        ...(target.isRecovery
+          ? {
+              recoveredByUserId: actor.userId,
+              recoveredByLabel: actor.displayName ?? actor.userId,
+              recoveryReason: opts?.recoveryReason?.trim() || null,
+              recoveryNotes: opts?.recoveryNotes?.trim() || null,
+            }
+          : { closedByUserId: actor.userId }),
+      },
+    );
+    if (target.isRecovery) {
+      logShiftRecoveryEvent("recovering_shift", {
+        shiftId: target.shift.id,
+        operatorUserId: target.shift.actorUserId,
+        recoveredByUserId: actor.userId,
+        varianceUgx: differenceUgx,
+      });
+    }
+    void queueRemote("pending_shifts", { shiftId: target.shift.id });
     return { ok: true, differenceUgx };
   },
 
@@ -7675,8 +7726,8 @@ export async function applyRestoredSnapshotFromBackup(
       supplierPayments: restored.supplierPayments,
     });
 
-    void import("../lib/shopSecurityPinRecovery").then(({ scheduleShopSecurityPinRecovery }) => {
-      void scheduleShopSecurityPinRecovery("app_launch");
+    void import("../lib/shopRecoveryOrchestration").then(({ scheduleShopRecovery }) => {
+      void scheduleShopRecovery("app_launch");
     });
   } finally {
     release();
@@ -7895,9 +7946,9 @@ async function runPostBootstrapTasks(): Promise<void> {
   if (!sessionData.session?.user) return;
 
   const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
-  const { scheduleShopSecurityPinRecovery } = await import("../lib/shopSecurityPinRecovery");
+  const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
   void hydrateLocalShopProfileFromCloud().catch(() => undefined);
-  void scheduleShopSecurityPinRecovery("app_launch").catch(() => undefined);
+  void scheduleShopRecovery("app_launch").catch(() => undefined);
   const { isCloudRecoveryLockActive } = await import("../lib/cloudRecoverySession");
   if (isCloudRecoveryLockActive()) return;
   const { shouldRequireRecoveryLock } = await import("../lib/postAuthCloudHydrate");

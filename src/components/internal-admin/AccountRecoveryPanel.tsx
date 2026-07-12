@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ShopOpsDetail } from "../../lib/wakaInternalAdmin";
 import {
   adminShopLogPasswordResetEmail,
+  adminShopResetAllStaffCredentials,
   adminShopResetBackOfficePin,
   adminShopSendOwnerPasswordReset,
   adminShopSetOwnerPasswordDirect,
@@ -65,9 +66,9 @@ export function AccountRecoveryPanel({
   return (
     <section className="rounded-2xl border-2 border-amber-200 bg-amber-50/90 p-4 shadow-sm">
       <p className="text-[10px] font-black uppercase tracking-wide text-amber-900">Account recovery</p>
-      <h2 className="mt-0.5 text-base font-black text-foreground">Owner login &amp; Shop Security PIN</h2>
+      <h2 className="mt-0.5 text-base font-black text-foreground">Account recovery</h2>
       <p className="mt-1 text-xs font-medium text-muted-foreground">
-        Use when the shop owner forgot their sign-in password or Shop Security PIN.
+        Three separate recovery actions: owner login password, Shop Security PIN, and staff credentials.
       </p>
       {ownerEmail ? (
         <p className="mt-2 font-mono text-xs text-foreground">
@@ -102,7 +103,7 @@ export function AccountRecoveryPanel({
             )
           }
         >
-          Send login password reset
+          Send owner password reset
         </button>
         <button
           type="button"
@@ -125,6 +126,32 @@ export function AccountRecoveryPanel({
           }
         >
           {t(lang, "internalAdminClearShopSecurityPin")}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          className="min-h-[48px] flex-1 rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40"
+          onClick={() =>
+            void run(
+              "admin_reset_all_staff_credentials",
+              async () => {
+                const r = await adminShopResetAllStaffCredentials(shopId);
+                if (!r.ok) return r;
+                const count = r.staffCount ?? 0;
+                return {
+                  ok: true,
+                  message: t(lang, "internalAdminResetStaffCredentialsSuccess").replace(
+                    "{{count}}",
+                    String(count),
+                  ),
+                };
+              },
+              t(lang, "internalAdminResetStaffCredentialsSuccess").replace("{{count}}", "all"),
+              t(lang, "internalAdminResetStaffCredentialsConfirm"),
+            )
+          }
+        >
+          {t(lang, "internalAdminResetStaffCredentials")}
         </button>
       </div>
       <div className="mt-4 rounded-xl border border-violet-200 bg-white/90 p-3">
@@ -177,7 +204,7 @@ export function AccountRecoveryPanel({
       <ul className="mt-3 list-disc space-y-1 pl-4 text-[11px] font-medium text-muted-foreground">
         <li>Email reset sends a link only if the owner has a real email on file (not a phone-only login).</li>
         <li>Shop Security PIN is cleared on the server; owner devices remove it on next online check.</li>
-        <li>Staff switch-user PINs are reset in Settings → Staff on the owner device.</li>
+        <li>Staff credential reset invalidates all staff PINs and passwords; staff create new credentials at next login.</li>
       </ul>
     </section>
   );

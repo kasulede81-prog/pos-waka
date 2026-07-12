@@ -92,7 +92,8 @@ export function SettingsCashDrawerPage({ lang }: Props) {
       </div>
 
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <label className="block text-sm font-bold text-foreground">
+        <p className="text-sm font-medium text-muted-foreground">{t(lang, "drawerToleranceScopeHint")}</p>
+        <label className="mt-4 block text-sm font-bold text-foreground">
           {t(lang, "cashSettingsVariancePct")}
           <input
             value={pct}

@@ -9,9 +9,16 @@ import {
   Download,
   PlusCircle,
 } from "lucide-react";
-import type { Language } from "../../types";
+import type { Language, ShopPreferences } from "../../types";
 import { t } from "../../lib/i18n";
 import { cashDrawerAdjustmentTypeLabel } from "../../lib/cashDrawerLedger";
+import {
+  classifyCashVariance,
+  computeCashVarianceThresholdUgx,
+  varianceStateLabelKey,
+  varianceStateStatusKind,
+} from "../../lib/cashVarianceExperience";
+import { statusTokens } from "../../lib/statusTokens";
 
 type Props = {
   lang: Language;
@@ -282,22 +289,31 @@ export function CashPositionActivityTimeline({
 export function CashPositionDrawerStatus({
   lang,
   status,
+  preferences,
 }: {
   lang: Language;
   status: NonNullable<import("../../lib/cashPositionDashboard").CashPositionDashboardResult["drawerStatus"]>;
+  preferences?: Pick<ShopPreferences, "cashVarianceThresholdPct" | "cashVarianceThresholdUgxFixed">;
 }) {
   const kind = status.kind;
-  const cardClass =
-    kind === "balanced"
-      ? "border-emerald-300 bg-emerald-50"
+  const assessment =
+    preferences && status.countedCashUgx != null
+      ? classifyCashVariance(status.expectedCashUgx, status.countedCashUgx, preferences, "day_close")
+      : null;
+  const toleranceUgx = preferences ? computeCashVarianceThresholdUgx(status.expectedCashUgx, preferences) : null;
+  const cardClass = assessment
+    ? statusTokens[varianceStateStatusKind(assessment.state)].banner
+    : kind === "balanced"
+      ? "rounded-2xl border-2 border-success/30 bg-success-muted p-4"
       : kind === "shortage"
-        ? "border-rose-300 bg-rose-50"
+        ? "rounded-2xl border-2 border-danger/30 bg-danger-muted p-4"
         : kind === "excess"
-          ? "border-sky-300 bg-sky-50"
-          : "border-border bg-muted";
+          ? "rounded-2xl border-2 border-warning/30 bg-warning-muted p-4"
+          : "rounded-2xl border-2 border-border bg-muted p-4";
 
-  const statusLabel =
-    kind === "balanced"
+  const statusLabel = assessment
+    ? t(lang, varianceStateLabelKey(assessment.state))
+    : kind === "balanced"
       ? t(lang, "cashPositionBalanced")
       : kind === "shortage"
         ? t(lang, "cashPositionDrawerShort")
@@ -306,8 +322,8 @@ export function CashPositionDrawerStatus({
           : t(lang, "cashPositionDrawerPending");
 
   return (
-    <div className={clsx("rounded-2xl border-2 p-4", cardClass)}>
-      <dl className="grid gap-3 sm:grid-cols-3">
+    <div className={cardClass}>
+      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <dt className="text-xs font-bold text-muted-foreground">{t(lang, "cashPositionExpectedLabel")}</dt>
           <dd className="text-xl font-black tabular-nums">UGX {status.expectedCashUgx.toLocaleString()}</dd>
@@ -324,6 +340,12 @@ export function CashPositionDrawerStatus({
             {status.varianceUgx != null
               ? `${status.varianceUgx >= 0 ? "+" : ""}UGX ${status.varianceUgx.toLocaleString()}`
               : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-bold text-muted-foreground">{t(lang, "drawerVarianceTolerance")}</dt>
+          <dd className="text-xl font-black tabular-nums">
+            {toleranceUgx != null ? `±UGX ${toleranceUgx.toLocaleString()}` : "—"}
           </dd>
         </div>
       </dl>

@@ -8,6 +8,7 @@ import {
   adminShopForceLogoutDevices,
   adminShopOpenSupportMessage,
   adminShopResetBackOfficePin,
+  adminShopResetAllStaffCredentials,
   adminShopResetSync,
   adminShopSendOwnerPasswordReset,
   adminShopLogPasswordResetEmail,
@@ -143,6 +144,19 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
               variant="secondary"
               disabled={busy}
               onClick={() =>
+                void runShopConsoleRescueAction(ctx, "rescue_staff_credentials_reset", async () => {
+                  const r = await adminShopResetAllStaffCredentials(detail.shop.id);
+                  if (r.ok) await refreshRecoverySignals();
+                  return r;
+                })
+              }
+            >
+              {t(lang, "internalAdminResetStaffCredentials")}
+            </RescueActionButton>
+            <RescueActionButton
+              variant="secondary"
+              disabled={busy}
+              onClick={() =>
                 void runShopConsoleRescueAction(ctx, "rescue_pin_reset", async () => {
                   const r = await adminShopResetBackOfficePin(detail.shop.id);
                   if (r.ok) await refreshRecoverySignals();
@@ -183,13 +197,18 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
               </RescueActionButton>
             ) : null}
           </div>
-          {rescue.recoverySignals.passwordResetRequestedAt || rescue.recoverySignals.clearBackOfficePinAt ? (
+          {rescue.recoverySignals.passwordResetRequestedAt ||
+          rescue.recoverySignals.clearBackOfficePinAt ||
+          rescue.recoverySignals.clearStaffCredentialsAt ? (
             <dl className="mt-3 grid gap-2 text-xs text-muted-foreground">
               {rescue.recoverySignals.passwordResetRequestedAt ? (
                 <div>Password reset signal: {new Date(rescue.recoverySignals.passwordResetRequestedAt).toLocaleString("en-GB")}</div>
               ) : null}
               {rescue.recoverySignals.clearBackOfficePinAt ? (
                 <div>{t(lang, "internalAdminClearShopSecurityPinSignal")}: {new Date(rescue.recoverySignals.clearBackOfficePinAt).toLocaleString("en-GB")}</div>
+              ) : null}
+              {rescue.recoverySignals.clearStaffCredentialsAt ? (
+                <div>{t(lang, "internalAdminResetStaffCredentialsSignal")}: {new Date(rescue.recoverySignals.clearStaffCredentialsAt).toLocaleString("en-GB")}</div>
               ) : null}
             </dl>
           ) : null}

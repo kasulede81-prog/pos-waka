@@ -34,6 +34,7 @@ import {
   adminSetShopActive,
   adminShopForceLogoutDevices,
   adminShopResetBackOfficePin,
+  adminShopResetAllStaffCredentials,
   adminShopResetSync,
   adminShopSendOwnerPasswordReset,
   formatDisplayEmail,
@@ -174,6 +175,12 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
       });
       actions.push({ id: "password_reset", label: "Send owner password reset", group: "Account recovery" });
       actions.push({ id: "clear_bo_pin", label: t(lang, "internalAdminClearShopSecurityPin"), group: "Account recovery" });
+      actions.push({
+        id: "reset_staff_credentials",
+        label: t(lang, "internalAdminResetStaffCredentials"),
+        group: "Account recovery",
+        confirm: t(lang, "internalAdminResetStaffCredentialsConfirm"),
+      });
     }
 
     if (subId && canSubs) {
@@ -271,6 +278,16 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
           permitted: canSupport,
           confirm: t(lang, "internalAdminClearShopSecurityPinConfirm"),
         });
+        break;
+      case "reset_staff_credentials":
+        void executeAction(
+          "admin_reset_all_staff_credentials",
+          () => adminShopResetAllStaffCredentials(detail.shop.id),
+          {
+            permitted: canSupport,
+            confirm: t(lang, "internalAdminResetStaffCredentialsConfirm"),
+          },
+        );
         break;
       case "extend_trial":
         if (subId)

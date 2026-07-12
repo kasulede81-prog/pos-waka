@@ -3,6 +3,7 @@ import type { CSSProperties, FocusEvent, MouseEvent, ReactNode } from "react";
 import { useVisualViewportBounds } from "../../hooks/useVisualViewportBounds";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { themeUi } from "../../lib/themeTokens";
+import { enterpriseDialogTitle } from "../../lib/enterpriseTypography";
 
 type Props = {
   open: boolean;
@@ -107,7 +108,7 @@ export function ModalSheet({
         {title ? (
           <div className={themeUi.dialogHeader}>
             {typeof title === "string" ? (
-              <h2 className="text-xl font-black text-foreground">{title}</h2>
+              <h2 className={enterpriseDialogTitle}>{title}</h2>
             ) : (
               title
             )}

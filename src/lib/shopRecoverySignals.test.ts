@@ -41,6 +41,19 @@ vi.mock("./shopSecurityPinRecovery", () => ({
   scheduleShopSecurityPinRecovery: vi.fn().mockResolvedValue({ applied: false, hydrated: false, awaitingNewPin: false }),
 }));
 
+vi.mock("./staffOfflineAuth", () => ({
+  clearStaffAuth: vi.fn(),
+  clearRememberedStaffDevice: vi.fn(),
+}));
+
+vi.mock("./offlineStaffCache", () => ({
+  clearOfflineStaffCache: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./auth/staffLoginLimiter", () => ({
+  clearStaffUnlockLimiter: vi.fn(),
+}));
+
 vi.mock("./supabase", () => ({
   hasSupabaseConfig: true,
   supabase: {
@@ -69,7 +82,23 @@ describe("shopRecoverySignals", () => {
     vi.stubGlobal("window", { localStorage: localStorageMock });
     mockGetState.mockReturnValue({
       logAuditAction: mockLogAuditAction,
-      preferences: { backOfficePin: "argon2id:hash", posLocked: true, biometricAuthEnabled: true },
+      preferences: {
+        backOfficePin: "argon2id:hash",
+        posLocked: true,
+        biometricAuthEnabled: true,
+        staffAccounts: [
+          {
+            id: "s1",
+            name: "Staff",
+            role: "cashier",
+            active: true,
+            pinHash: "argon2id:staff",
+            permissions: [],
+            createdAt: "2026-01-01",
+            updatedAt: "2026-01-01",
+          },
+        ],
+      },
     });
   });
 
@@ -132,5 +161,38 @@ describe("shopRecoverySignals", () => {
     const applied = await applyShopRecoverySignalsForCurrentShop("cloud_reconnect");
     expect(applied).toBe(true);
     expect(supabase!.rpc).toHaveBeenCalledWith("shop_fetch_recovery_signal", { p_shop_id: "shop-1" });
+  });
+
+  it("applyShopRecoverySignalsForShop applies staff credential clear without clearing Shop Security PIN", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase!.rpc).mockResolvedValue({
+      data: { clear_staff_credentials_at: "2026-07-12T10:00:00.000Z" },
+      error: null,
+      count: null,
+      status: 200,
+      statusText: "OK",
+      success: true,
+    } as never);
+
+    const { applyShopRecoverySignalsForShop } = await import("./shopRecoverySignals");
+    const applied = await applyShopRecoverySignalsForShop("shop-1", "cloud_reconnect");
+    expect(applied).toBe(true);
+
+    const updater = mockSetState.mock.calls[0][0] as (s: {
+      preferences: { backOfficePin: string | null; staffAccounts: { pinHash: string | null }[] };
+    }) => unknown;
+    const next = updater({
+      preferences: {
+        backOfficePin: "argon2id:hash",
+        staffAccounts: [{ pinHash: "argon2id:staff" }],
+      },
+    }) as { preferences: { backOfficePin: string | null; staffAccounts: { pinHash: string | null }[] } };
+    expect(next.preferences.backOfficePin).toBe("argon2id:hash");
+    expect(next.preferences.staffAccounts[0].pinHash).toBeNull();
+    expect(mockLogAuditAction).toHaveBeenCalledWith(
+      "admin_staff_credentials_clear_applied",
+      expect.any(String),
+      expect.objectContaining({ shopId: "shop-1", recoveryCompleted: true }),
+    );
   });
 });

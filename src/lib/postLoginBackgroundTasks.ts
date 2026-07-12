@@ -12,8 +12,8 @@ export function schedulePostLoginBackgroundTasks(shopId: string): void {
     logActivationFailure("refresh", classifyActivationError(error), { shopId, background: true });
   });
 
-  void import("./shopSecurityPinRecovery")
-    .then(({ scheduleShopSecurityPinRecovery }) => scheduleShopSecurityPinRecovery("owner_login"))
+  void import("./shopRecoveryOrchestration")
+    .then(({ scheduleShopRecovery }) => scheduleShopRecovery("owner_login"))
     .catch((error) => {
       logActivationFailure("refresh", classifyActivationError(error), {
         shopId,

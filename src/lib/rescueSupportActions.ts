@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 export type RescueSupportAction =
   | "rescue_password_reset"
   | "rescue_pin_reset"
+  | "rescue_staff_credentials_reset"
   | "rescue_force_logout"
   | "rescue_retry_sync"
   | "rescue_reset_sync"
@@ -58,15 +59,22 @@ export async function logInternalAdminAudit(input: LogRescueActionInput): Promis
 
 export async function fetchShopRecoverySignals(
   shopId: string,
-): Promise<{ clearBackOfficePinAt: string | null; passwordResetRequestedAt: string | null }> {
-  if (!supabase) return { clearBackOfficePinAt: null, passwordResetRequestedAt: null };
+): Promise<{
+  clearBackOfficePinAt: string | null;
+  clearStaffCredentialsAt: string | null;
+  passwordResetRequestedAt: string | null;
+}> {
+  if (!supabase) {
+    return { clearBackOfficePinAt: null, clearStaffCredentialsAt: null, passwordResetRequestedAt: null };
+  }
   const { data, error } = await supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: shopId });
   if (error || !data || typeof data !== "object") {
-    return { clearBackOfficePinAt: null, passwordResetRequestedAt: null };
+    return { clearBackOfficePinAt: null, clearStaffCredentialsAt: null, passwordResetRequestedAt: null };
   }
   const j = data as Record<string, unknown>;
   return {
     clearBackOfficePinAt: j.clear_back_office_pin_at != null ? String(j.clear_back_office_pin_at) : null,
+    clearStaffCredentialsAt: j.clear_staff_credentials_at != null ? String(j.clear_staff_credentials_at) : null,
     passwordResetRequestedAt:
       j.password_reset_requested_at != null ? String(j.password_reset_requested_at) : null,
   };

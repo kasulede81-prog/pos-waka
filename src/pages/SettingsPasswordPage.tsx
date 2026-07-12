@@ -4,6 +4,8 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { EnterprisePasswordField } from "../components/auth/EnterprisePasswordField";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { WakaButton } from "../components/ui/wakaPrimitives";
 
 type Props = {
   lang: Language;
@@ -53,7 +55,7 @@ export function SettingsPasswordPage({ lang, authMode, updatePassword }: Props) 
   };
 
   return (
-    <div className="space-y-5 pb-8">
+    <EnterprisePageContainer>
       <SettingsPageHeader
         lang={lang}
         title={t(lang, "settingsHubPassword")}
@@ -90,14 +92,10 @@ export function SettingsPasswordPage({ lang, authMode, updatePassword }: Props) 
           minLength={8}
           loading={busy}
         />
-        <button
-          type="submit"
-          disabled={busy}
-          className="min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-base font-black text-white disabled:opacity-50"
-        >
-          {busy ? "…" : t(lang, "settingsPasswordSave")}
-        </button>
+        <WakaButton type="submit" size="pos" className="w-full" disabled={busy} loading={busy}>
+          {t(lang, "settingsPasswordSave")}
+        </WakaButton>
       </form>
-    </div>
+    </EnterprisePageContainer>
   );
 }

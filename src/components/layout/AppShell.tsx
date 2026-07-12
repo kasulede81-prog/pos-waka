@@ -66,6 +66,10 @@ import { AppThemeToggle } from "../ui/AppThemeToggle";
 import { EnterpriseScrollControls } from "../enterprise/EnterpriseScrollControls";
 import { useShopSecurityPinRecovery } from "../../hooks/useShopSecurityPinRecovery";
 import { ShopSecurityPinRecoveryBanner } from "../security/ShopSecurityPinRecoveryBanner";
+import {
+  StaffCredentialRecoveryBanner,
+  useStaffCredentialRecoveryOwnerNotice,
+} from "../security/StaffCredentialRecoveryBanner";
 import { PwaUpdateBanner } from "../app-update/AppUpdateControls";
 
 const BackOfficeMasterSearch = lazy(() =>
@@ -112,6 +116,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const shopId = snapshot.kind === "remote" ? snapshot.row.shop_id : null;
   const { noticeAt: shopSecurityPinRecoveryNotice, dismissNotice: dismissShopSecurityPinRecoveryNotice } =
     useShopSecurityPinRecovery(shopId);
+  const { noticeAt: staffCredentialRecoveryNotice, dismissNotice: dismissStaffCredentialRecoveryNotice } =
+    useStaffCredentialRecoveryOwnerNotice(shopId);
   const setPosLocked = usePosStore((s) => s.setPosLocked);
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const shifts = usePosStore((s) => s.preferences.shifts);
@@ -315,6 +321,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         !isBackOfficePinConfigured(preferences.backOfficePin) &&
         !internalAdminRoute ? (
           <ShopSecurityPinRecoveryBanner lang={lang} onDismiss={dismissShopSecurityPinRecoveryNotice} />
+        ) : null}
+        {staffCredentialRecoveryNotice && actor.role === "owner" && !internalAdminRoute ? (
+          <StaffCredentialRecoveryBanner lang={lang} onDismiss={dismissStaffCredentialRecoveryNotice} />
         ) : null}
         {pilotActive ? <PilotModeBanner lang={lang} /> : null}
         {!fullDesktopSell ? (

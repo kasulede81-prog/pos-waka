@@ -51,3 +51,7 @@ export const themeUi = {
 export const wakaUi = themeUi;
 
 export type ThemeUiKey = keyof typeof themeUi;
+
+export { enterpriseType, enterpriseTypeClass, enterpriseDialogTitle } from "./enterpriseTypography";
+export { enterpriseMotion, enterpriseDurationMs } from "./enterpriseMotion";
+export { enterpriseIconClass, ENTERPRISE_ICON_STROKE, type EnterpriseIconSize } from "./enterpriseIcons";

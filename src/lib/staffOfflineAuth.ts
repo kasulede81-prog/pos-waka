@@ -27,6 +27,21 @@ export class StaffCacheMissingError extends Error {
   }
 }
 
+export class StaffCredentialRecoveryRequiredError extends Error {
+  readonly code = "staff_credential_recovery_required" as const;
+  readonly staffId: string;
+  readonly staffName: string;
+  readonly shopId: string | null;
+
+  constructor(input: { staffId: string; staffName: string; shopId: string | null; message?: string }) {
+    super(input.message ?? "Staff credentials were reset. Create a new PIN to continue.");
+    this.name = "StaffCredentialRecoveryRequiredError";
+    this.staffId = input.staffId;
+    this.staffName = input.staffName;
+    this.shopId = input.shopId;
+  }
+}
+
 export type PersistedStaffSession = {
   accountKey: string;
   businessName: string;
@@ -185,6 +200,10 @@ export async function isStaffCacheMissingOffline(accountKey: string, shopId?: st
 }
 
 export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<StaffAuthResult> {
+  void import("./shopRecoveryOrchestration").then(({ scheduleShopRecovery }) => {
+    void scheduleShopRecovery("staff_login").catch(() => undefined);
+  });
+
   const businessName = input.businessName.trim();
   const identifier = input.identifier.trim();
   const secret = input.pinOrPassword.trim();
@@ -240,11 +259,21 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
     throw new Error("Invalid staff credentials.");
   }
 
+  const effectiveShopId = shopId ?? shop.shopId ?? null;
+
+  const { staffAccountNeedsCredentialSetup } = await import("./staffCredentialRecovery");
+  if (staffAccountNeedsCredentialSetup(candidate)) {
+    throw new StaffCredentialRecoveryRequiredError({
+      staffId: candidate.id,
+      staffName: candidate.name,
+      shopId: effectiveShopId,
+    });
+  }
+
   if (isStaffLoginLocked(candidate)) {
     throw new Error("Too many failed attempts. Try again later.");
   }
 
-  const effectiveShopId = shopId ?? shop.shopId ?? null;
   if (effectiveShopId) {
     const { assertStaffLoginDeviceApproved, recordStaffLoginAttemptLocal } = await import("./staffLoginSecurity");
     const deviceCheck = await assertStaffLoginDeviceApproved(effectiveShopId);

@@ -263,6 +263,46 @@ describe("usePosStore shift enforcement", () => {
     expect(guard.ok).toBe(false);
     if (!guard.ok) expect(guard.errorKey).toBe("shiftCloseOpenTable");
   });
+
+  it("manager can recover and close another cashier shift with cash count", () => {
+    const cashierShift = openShift({ id: "shift-cashier", actorUserId: "staff:cashier-a", estimatedCashUgx: 40_000, openingFloatUgx: 10_000 });
+    usePosStore.setState({
+      sessionActor: { userId: "owner-user", role: "owner", displayName: "Owner" },
+      draftLines: [],
+      preferences: {
+        ...usePosStore.getState().preferences,
+        cashDrawerFormulaVersion: "v1",
+        hospitalityFloor: undefined,
+        shifts: [cashierShift],
+      },
+    });
+    const r = usePosStore.getState().closeShiftWithCashCount(50_000, undefined, {
+      shiftId: "shift-cashier",
+      recoveryReason: "Cashier left",
+      recoveryNotes: "Counted at close",
+    });
+    expect(r.ok).toBe(true);
+    const closed = usePosStore.getState().preferences.shifts?.[0];
+    expect(closed?.endAt).toBeTruthy();
+    expect(closed?.countedCashUgx).toBe(50_000);
+    expect(closed?.actorUserId).toBe("staff:cashier-a");
+    expect(closed?.recoveredByUserId).toBe("owner-user");
+    expect(usePosStore.getState().auditLogs.some((a) => a.action === "shift_recovery_close")).toBe(true);
+  });
+
+  it("cashier cannot recover another operators shift", () => {
+    const cashierShift = openShift({ id: "shift-other", actorUserId: "staff:other" });
+    usePosStore.setState({
+      sessionActor: { userId: ACTOR_ID, role: "cashier", displayName: "Tester" },
+      preferences: {
+        ...usePosStore.getState().preferences,
+        shifts: [cashierShift],
+      },
+    });
+    const r = usePosStore.getState().closeShiftWithCashCount(10_000, undefined, { shiftId: "shift-other" });
+    expect(r.ok).toBe(false);
+    expect(r.errorKey).toBe("shiftRecoverDenied");
+  });
 });
 
 describe("active shift banner data", () => {

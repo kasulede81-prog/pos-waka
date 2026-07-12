@@ -4,6 +4,7 @@ import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { BiometricAuthSettingsForm } from "../components/settings/BiometricAuthSettingsForm";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 
 export function SettingsBiometricPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -13,13 +14,13 @@ export function SettingsBiometricPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-5 pb-8">
+    <EnterprisePageContainer>
       <SettingsPageHeader
         lang={lang}
         title={t(lang, "biometricSettingsTitle")}
         subtitle={t(lang, "biometricSettingsPageSub")}
       />
       <BiometricAuthSettingsForm lang={lang} />
-    </div>
+    </EnterprisePageContainer>
   );
 }

@@ -93,6 +93,7 @@ export type AuditAction =
   | "sale_return"
   | "discount_given"
   | "shift_close_count"
+  | "shift_recovery_close"
   | "stock_adjust"
   | "expired_stock_writeoff"
   | "price_change"
@@ -112,6 +113,7 @@ export type AuditAction =
   | "back_office_unlock_success"
   | "back_office_unlock_failed"
   | "admin_pin_clear_applied"
+  | "admin_staff_credentials_clear_applied"
   | "shift_start"
   | "shift_end"
   | "product_add"
@@ -279,6 +281,12 @@ export type ShiftRecord = {
   /** Cloud sync pending (multi-device). */
   pendingSync?: boolean;
   updatedAt?: string;
+  /** Manager/owner recovery — original operator preserved in actorUserId. */
+  recoveredByUserId?: string | null;
+  recoveredByLabel?: string | null;
+  recoveredAt?: string | null;
+  recoveryReason?: string | null;
+  recoveryNotes?: string | null;
 };
 
 export type CashDrawerFormulaVersion = "v1" | "v2";
@@ -2082,6 +2090,8 @@ export type StaffAccount = {
   failureWindowStartedAt?: string | null;
   pinChangedAt?: string | null;
   passwordChangedAt?: string | null;
+  /** Set when internal admin bulk credential recovery invalidates secrets. */
+  credentialsInvalidatedAt?: string | null;
 };
 
 /** Receipt printer paper — 58mm / 80mm thermal, or A4 for office printers. */

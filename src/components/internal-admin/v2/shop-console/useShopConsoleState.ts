@@ -30,7 +30,11 @@ import { adminPermissions } from "../adminRoles";
 
 export type ShopConsoleRescueState = {
   auditRows: OpsAuditRow[];
-  recoverySignals: { clearBackOfficePinAt: string | null; passwordResetRequestedAt: string | null };
+  recoverySignals: {
+    clearBackOfficePinAt: string | null;
+    clearStaffCredentialsAt: string | null;
+    passwordResetRequestedAt: string | null;
+  };
   cloudSnapshot: unknown;
   diagnostics: ParsedRescueDiagnostics | null;
   importText: string;
@@ -74,7 +78,7 @@ export function useShopConsoleState(
   const [supportBody, setSupportBody] = useState("");
   const [rescue, setRescue] = useState<ShopConsoleRescueState>({
     auditRows: [],
-    recoverySignals: { clearBackOfficePinAt: null, passwordResetRequestedAt: null },
+    recoverySignals: { clearBackOfficePinAt: null, clearStaffCredentialsAt: null, passwordResetRequestedAt: null },
     cloudSnapshot: null,
     diagnostics: null,
     importText: "",

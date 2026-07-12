@@ -29,7 +29,17 @@ import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/works
 import { cachePendingRegistrationProfile } from "../lib/registrationProfileCache";
 import { ensureReferralAttributionForSession } from "../lib/referralAgents";
 import { storePendingReferralCode } from "../lib/pendingReferral";
-import { withTimeout } from "../lib/promiseTimeout";
+import {
+  cancelSessionRefreshRetry,
+  logAuthSessionEvent,
+  readPersistedSupabaseSession,
+  resolveStartupSession,
+  scheduleSessionRefreshRetry,
+  shouldDeferSignedOut,
+  triggerSessionRefreshOnReconnect,
+} from "../lib/offlineSessionResilience";
+import { resetSessionConnectionState } from "../lib/sessionConnectionState";
+import { getDeviceOnline } from "../lib/deviceOnline";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
   clearRememberedStaffDevice,
@@ -148,6 +158,7 @@ export function useAuth() {
   const signUpInProgressRef = useRef(false);
   const signUpLockRef = useRef(false);
   const backgroundSyncScheduledRef = useRef<Record<string, true>>({});
+  const explicitSignOutRef = useRef(false);
 
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
@@ -343,6 +354,11 @@ export function useAuth() {
   const ensureWorkspaceRef = useRef(ensureWorkspaceForSession);
   ensureWorkspaceRef.current = ensureWorkspaceForSession;
 
+  const sessionRefreshCallbacksRef = useRef({
+    onSessionUpdated: (_next: Session) => {},
+    onSessionRevoked: () => {},
+  });
+
   const applySupabaseSession = useCallback(
     (next: Session, via: string) => {
       clearStaffAuth();
@@ -366,6 +382,28 @@ export function useAuth() {
     },
     [],
   );
+
+  sessionRefreshCallbacksRef.current = {
+    onSessionUpdated: (next: Session) => {
+      applySupabaseSession(next, "refresh_retry");
+    },
+    onSessionRevoked: () => {
+      if (explicitSignOutRef.current) return;
+      logAuthSessionEvent("session_revoked_confirmed");
+      applyAccountSwitchSync(null);
+      setSession(null);
+      resetSessionConnectionState();
+    },
+  };
+
+  const scheduleOwnerSessionRefresh = useCallback(() => {
+    const client = supabase;
+    if (!client) return;
+    scheduleSessionRefreshRetry(
+      () => client.auth.refreshSession(),
+      sessionRefreshCallbacksRef.current,
+    );
+  }, []);
 
   useEffect(() => {
     return subscribeAuthSessionBridge((next) => {
@@ -414,36 +452,35 @@ export function useAuth() {
         return;
       }
 
-      const sessionResult = await withTimeout(supabase.auth.getSession(), 6000, null);
-      const next = sessionResult?.data.session ?? null;
+      const client = supabase;
+      if (!client) {
+        if (!cancelled) setInitializing(false);
+        return;
+      }
+
+      const startup = await resolveStartupSession(() => client.auth.getSession());
       if (cancelled) return;
-      if (next?.user) {
-        clearStaffAuth();
-        tryApplyAccountSwitchSync(
-          computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
-          () => {
-            void supabase?.auth.signOut();
-            setSession(null);
-          },
-        );
-        if (!getActiveAccountKey()?.startsWith("sb:")) {
-          if (!cancelled) setInitializing(false);
-          return;
+
+      if (startup.session?.user) {
+        applySupabaseSession(startup.session, startup.source === "cached" ? "cached_restore" : "finishInit");
+        if (startup.source === "cached") {
+          scheduleOwnerSessionRefresh();
         }
-        applySignupProfileToLocalStore(next);
-        setSession(next);
-        setStaffSession(null);
-        setLocalEmail(null);
-        setInitializing(false);
-        logStartupPhase("auth_restored", { userId: next.user.id, via: "finishInit" });
-        bootTrace("BOOT-007", "useAuth state", "SUCCESS", { via: "finishInit", userId: next.user.id });
-        void ensureWorkspaceRef.current(next).catch((e) => {
+        void ensureWorkspaceRef.current(startup.session).catch((e) => {
           console.error("[waka-auth] bootstrap on initial session failed", e);
         });
         return;
       }
 
-      applyAccountSwitchSync(null);
+      if (!startup.timedOut) {
+        applyAccountSwitchSync(null);
+      } else {
+        logAuthSessionEvent("session_restore", {
+          source: "none",
+          offline: startup.offline,
+          reason: "getSession_timeout_no_cache",
+        });
+      }
       setStaffSession(null);
       setInitializing(false);
     };
@@ -460,6 +497,7 @@ export function useAuth() {
       bootTrace("BOOT-006", "Auth event", "START", { event, userId: next?.user?.id ?? null });
       if (next?.user) {
         if (event === "TOKEN_REFRESHED") {
+          resetSessionConnectionState();
           setSession((prev) => {
             if (prev?.user?.id !== next.user.id) return next;
             if (prev.user.email_confirmed_at !== next.user.email_confirmed_at) return next;
@@ -482,6 +520,7 @@ export function useAuth() {
           return;
         }
         applySignupProfileToLocalStore(next);
+        resetSessionConnectionState();
         if (event === "SIGNED_IN" && !signUpInProgressRef.current) {
           void ensureWorkspaceRef.current(next).catch((e) => {
             console.error("[waka-auth] bootstrap on auth state change failed", e);
@@ -498,6 +537,24 @@ export function useAuth() {
         return;
       }
       if (event === "SIGNED_OUT") {
+        if (
+          shouldDeferSignedOut({
+            cachedSession: readPersistedSupabaseSession(),
+            explicitSignOut: explicitSignOutRef.current,
+          })
+        ) {
+          const cached = readPersistedSupabaseSession();
+          logAuthSessionEvent("signed_out_deferred", { offline: !getDeviceOnline() });
+          if (cached?.user) {
+            applySupabaseSession(cached, "signed_out_deferred");
+          }
+          scheduleOwnerSessionRefresh();
+          bootTrace("BOOT-006", "Auth event", "SUCCESS", { event, deferred: true });
+          return;
+        }
+        explicitSignOutRef.current = false;
+        cancelSessionRefreshRetry();
+        resetSessionConnectionState();
         applyAccountSwitchSync(null);
         setSession(null);
       }
@@ -507,7 +564,52 @@ export function useAuth() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [applySupabaseSession, scheduleOwnerSessionRefresh]);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig || !supabase) return;
+
+    const onReconnect = () => {
+      if (!session?.user && !readPersistedSupabaseSession()?.user) return;
+      triggerSessionRefreshOnReconnect(
+        () => supabase!.auth.refreshSession(),
+        sessionRefreshCallbacksRef.current,
+      );
+    };
+
+    window.addEventListener("waka:network-online", onReconnect);
+    return () => window.removeEventListener("waka:network-online", onReconnect);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig || !supabase) return;
+
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!session?.user && !readPersistedSupabaseSession()?.user) return;
+      scheduleOwnerSessionRefresh();
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [scheduleOwnerSessionRefresh, session?.user?.id]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !hasSupabaseConfig || !supabase) return;
+
+    let removeListener: (() => void) | undefined;
+    void import("@capacitor/app").then(({ App }) => {
+      void App.addListener("appStateChange", ({ isActive }) => {
+        if (!isActive) return;
+        if (!session?.user && !readPersistedSupabaseSession()?.user) return;
+        scheduleOwnerSessionRefresh();
+      }).then((handle) => {
+        removeListener = () => void handle.remove();
+      });
+    });
+
+    return () => removeListener?.();
+  }, [scheduleOwnerSessionRefresh, session?.user?.id]);
 
   const signIn = useCallback(async (identifier: string, password: string) => {
     clearStaffAuth();
@@ -826,6 +928,9 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     appendPilotEvent("logout", "Sign out");
+    explicitSignOutRef.current = true;
+    cancelSessionRefreshRetry();
+    resetSessionConnectionState();
     if (staffSession) {
       flushPendingPersist();
       const store = usePosStore.getState();
@@ -837,17 +942,20 @@ export function useAuth() {
       applyAccountSwitchSync(null);
       usePosStore.getState().resetForSignOut();
       setStaffSession(null);
+      explicitSignOutRef.current = false;
       return;
     }
     if (hasSupabaseConfig && supabase) {
       await supabase.auth.signOut();
       applyAccountSwitchSync(null);
       setSession(null);
+      explicitSignOutRef.current = false;
       return;
     }
     localStorage.removeItem(LOCAL_AUTH_KEY);
     applyAccountSwitchSync(null);
     setLocalEmail(null);
+    explicitSignOutRef.current = false;
   }, [staffSession]);
 
   const signInStaff = useCallback(async (input: StaffLoginInput) => {

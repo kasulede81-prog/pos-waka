@@ -7,6 +7,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { usePosStore } from "../store/usePosStore";
 import { DATA_RETENTION_OPTIONS, retentionPolicyLabelKey } from "../lib/dataRetention";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 
 export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -35,7 +36,7 @@ export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="space-y-5 pb-8">
+    <EnterprisePageContainer>
       <SettingsPageHeader
         lang={lang}
         title={t(lang, "retentionSettingsTitle")}
@@ -100,6 +101,6 @@ export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
       </section>
 
       {msg ? <p className="rounded-xl bg-muted px-4 py-3 text-sm font-semibold text-foreground">{msg}</p> : null}
-    </div>
+    </EnterprisePageContainer>
   );
 }

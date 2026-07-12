@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Store } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../../lib/staffOfflineAuth";
+import type { CachedShop, RememberedStaffDevice, StaffLoginInput, StaffCredentialRecoveryRequiredError } from "../../lib/staffOfflineAuth";
+import { StaffRecoveryCredentialSetup } from "./StaffRecoveryCredentialSetup";
 import { EnterprisePinPad } from "./EnterprisePinPad";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
@@ -32,6 +33,11 @@ export function EnterpriseStaffLoginPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pinResetSignal, setPinResetSignal] = useState(0);
+  const [recoverySetup, setRecoverySetup] = useState<{
+    shopId: string;
+    staffId: string;
+    staffName: string;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +77,23 @@ export function EnterpriseStaffLoginPanel({
         });
         return true;
       } catch (err) {
+        if (
+          err &&
+          typeof err === "object" &&
+          "code" in err &&
+          (err as StaffCredentialRecoveryRequiredError).code === "staff_credential_recovery_required"
+        ) {
+          const recovery = err as StaffCredentialRecoveryRequiredError;
+          if (recovery.shopId) {
+            setRecoverySetup({
+              shopId: recovery.shopId,
+              staffId: recovery.staffId,
+              staffName: recovery.staffName,
+            });
+            setError(null);
+            return false;
+          }
+        }
         setError(err instanceof Error ? err.message : t(lang, "saleError"));
         setPinResetSignal((n) => n + 1);
         return false;
@@ -170,6 +193,21 @@ export function EnterpriseStaffLoginPanel({
           </button>
         ) : null}
       </form>
+
+      {recoverySetup ? (
+        <StaffRecoveryCredentialSetup
+          lang={lang}
+          open
+          shopId={recoverySetup.shopId}
+          staffId={recoverySetup.staffId}
+          staffName={recoverySetup.staffName}
+          onClose={() => setRecoverySetup(null)}
+          onComplete={(newPin) => {
+            setRecoverySetup(null);
+            void submitWithPin(newPin);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

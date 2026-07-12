@@ -1,58 +1,86 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import type { Language } from "../types";
-import { t } from "../lib/i18n";
+import type { Language, ShiftRecord } from "../types";
+import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { shiftStatusLabel } from "../lib/shiftEnforcement";
+import { shiftStatusLabel, formatShiftDuration } from "../lib/shiftEnforcement";
 import { dateKeyKampala } from "../lib/datesUg";
+import { WakaButton } from "../components/ui/wakaPrimitives";
+import { ResponsiveDataTable } from "../components/shared/ResponsiveDataTable";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
-import { PageHeader } from "../components/layout/PageHeader";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
 import {
   buildShiftSummaryRows,
   downloadShiftSummaryCsv,
   downloadShiftSummaryPdf,
 } from "../lib/shiftReportExport";
+import { actorHasPermission } from "../lib/actorAuthorization";
+import {
+  canActorRecoverShifts,
+  listOpenShifts,
+  listRecoverableOpenShifts,
+} from "../lib/shiftRecoveryOps";
+import { shiftExpectedCash } from "../lib/saleAdjustments";
+import { ShiftRecoveryWizard } from "../components/pos/ShiftRecoveryWizard";
 
 function canViewShiftDashboard(role: string): boolean {
-  return role === "owner" || role === "manager";
+  return role === "owner" || role === "manager" || role === "supervisor";
 }
 
 export function OpenShiftsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const preferences = usePosStore((s) => s.preferences);
+  const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const managerForceCloseOpenShift = usePosStore((s) => s.managerForceCloseOpenShift);
   const todayKey = dateKeyKampala(new Date());
+  const [recoveringShift, setRecoveringShift] = useState<ShiftRecord | null>(null);
 
   const rows = useMemo(() => buildShiftSummaryRows(shifts), [shifts]);
-  const canForceClose = actor.role === "owner" || actor.role === "manager" || actor.role === "supervisor";
+  const openShifts = useMemo(() => listOpenShifts(shifts), [shifts]);
+  const recoverableForActor = useMemo(
+    () => listRecoverableOpenShifts(shifts, actor.userId),
+    [shifts, actor.userId],
+  );
+  const canRecover = useMemo(
+    () =>
+      canActorRecoverShifts({
+        actorUserId: actor.userId,
+        actorRole: actor.role,
+        actorDisplayName: actor.displayName,
+        hasPermission: (permission) => actorHasPermission(actor, permission),
+      }),
+    [actor],
+  );
 
   if (!canViewShiftDashboard(actor.role)) {
     return <Navigate to="/office" replace />;
   }
 
+  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
+
   return (
     <EnterprisePageContainer>
-      <PageHeader lang={lang} title={t(lang, "openShiftsTitle")} subtitle={t(lang, "openShiftsSub")} backFallback="/office" backLabel={t(lang, "officeBackToHub")} />
+      <EnterprisePageHeader lang={lang} title={t(lang, "openShiftsTitle")} subtitle={t(lang, "openShiftsSub")} backFallback="/office" backLabel={t(lang, "officeBackToHub")} />
+
+      {openShifts.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-black text-amber-950">{t(lang, "shiftRecoveryPendingBanner")}</p>
+          <p className="mt-1 text-xs font-semibold text-amber-900">{t(lang, "shiftRecoveryPendingSub")}</p>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => downloadShiftSummaryCsv(lang, rows)}
-          className="min-h-10 rounded-xl border border-border bg-card px-4 text-sm font-black text-foreground"
-        >
+        <WakaButton type="button" variant="secondary" onClick={() => downloadShiftSummaryCsv(lang, rows)}>
           {t(lang, "shiftReportExportCsv")}
-        </button>
-        <button
-          type="button"
-          onClick={() => downloadShiftSummaryPdf(lang, rows)}
-          className="min-h-10 rounded-xl border border-border bg-card px-4 text-sm font-black text-foreground"
-        >
+        </WakaButton>
+        <WakaButton type="button" variant="secondary" onClick={() => downloadShiftSummaryPdf(lang, rows)}>
           {t(lang, "shiftReportExportPdf")}
-        </button>
+        </WakaButton>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-waka-sm">
-        <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-border bg-muted text-xs font-black uppercase tracking-wide text-muted-foreground">
+      <ResponsiveDataTable minWidthPx={960}>
+          <thead>
             <tr>
               <th className="px-3 py-3">{t(lang, "openShiftsColCashier")}</th>
               <th className="px-3 py-3">{t(lang, "openShiftsColRole")}</th>
@@ -60,14 +88,15 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
               <th className="px-3 py-3">{t(lang, "openShiftsColDuration")}</th>
               <th className="px-3 py-3">{t(lang, "openShiftsColSales")}</th>
               <th className="px-3 py-3">{t(lang, "openShiftsColDebt")}</th>
+              <th className="px-3 py-3">{t(lang, "shiftRecoveryExpectedCash")}</th>
               <th className="px-3 py-3">{t(lang, "openShiftsColStatus")}</th>
-              {canForceClose ? <th className="px-3 py-3" /> : null}
+              {canRecover ? <th className="px-3 py-3" /> : null}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={canForceClose ? 8 : 7} className="px-3 py-8 text-center font-semibold text-muted-foreground">
+                <td colSpan={canRecover ? 9 : 8} className="px-3 py-8 text-center font-semibold text-muted-foreground">
                   {t(lang, "openShiftsEmpty")}
                 </td>
               </tr>
@@ -75,6 +104,12 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
               rows.map(({ shift, durationLabel }) => {
                 const shiftDay = dateKeyKampala(shift.startAt);
                 const staleOpen = !shift.endAt && shiftDay < todayKey;
+                const isOpen = !shift.endAt;
+                const expectedCash = isOpen
+                  ? shiftExpectedCash(shift, { formulaVersion })
+                  : null;
+                const isOtherOperator = isOpen && shift.actorUserId !== actor.userId;
+                const showRecover = isOpen && canRecover && (isOtherOperator || actor.userId === shift.actorUserId);
                 return (
                 <tr key={shift.id} className="border-b border-border last:border-0">
                   <td className="px-3 py-3 font-bold text-foreground">{shift.actorName ?? shift.actorUserId}</td>
@@ -82,12 +117,15 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
                   <td className="px-3 py-3 font-semibold text-muted-foreground">
                     {new Date(shift.startAt).toLocaleString()}
                   </td>
-                  <td className="px-3 py-3 font-semibold text-muted-foreground">{durationLabel}</td>
+                  <td className="px-3 py-3 font-semibold text-muted-foreground">{durationLabel || formatShiftDuration(shift.startAt)}</td>
                   <td className="px-3 py-3 font-semibold text-foreground">
                     UGX {shift.salesTotalUgx.toLocaleString()}
                   </td>
                   <td className="px-3 py-3 font-semibold text-teal-800">
                     UGX {(shift.debtPaymentsTotalUgx ?? 0).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-3 font-semibold text-foreground">
+                    {expectedCash != null ? `UGX ${expectedCash.toLocaleString()}` : "—"}
                   </td>
                   <td className="px-3 py-3">
                     <span
@@ -102,19 +140,30 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
                       {shiftStatusLabel(shift)}
                     </span>
                   </td>
-                  {canForceClose ? (
+                  {canRecover ? (
                     <td className="px-3 py-3">
-                      {!shift.endAt ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!window.confirm(t(lang, "openShiftsForceCloseConfirm"))) return;
-                            managerForceCloseOpenShift(shift.id, "Manager force close");
-                          }}
-                          className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-black text-rose-900"
-                        >
-                          {t(lang, "openShiftsForceClose")}
-                        </button>
+                      {showRecover ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setRecoveringShift(shift)}
+                            className="rounded-lg border border-waka-200 bg-waka-50 px-2 py-1 text-xs font-black text-waka-900"
+                          >
+                            {isOtherOperator ? t(lang, "shiftRecoveryRecover") : t(lang, "shiftRecoveryContinue")}
+                          </button>
+                          {isOtherOperator && staleOpen ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!window.confirm(t(lang, "openShiftsForceCloseConfirm"))) return;
+                                managerForceCloseOpenShift(shift.id, "Emergency force close without count");
+                              }}
+                              className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-black text-rose-900"
+                            >
+                              {t(lang, "openShiftsForceClose")}
+                            </button>
+                          ) : null}
+                        </div>
                       ) : null}
                     </td>
                   ) : null}
@@ -123,8 +172,29 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
               })
             )}
           </tbody>
-        </table>
-      </div>
+      </ResponsiveDataTable>
+
+      {recoverableForActor.length > 0 && canRecover ? (
+        <p className="text-xs font-semibold text-muted-foreground">
+          {tTemplate(lang, "shiftRecoveryOtherCount", { count: String(recoverableForActor.length) })}
+        </p>
+      ) : null}
+
+      <ShiftRecoveryWizard
+        lang={lang}
+        open={Boolean(recoveringShift)}
+        shift={recoveringShift}
+        recoveryMode={Boolean(recoveringShift && recoveringShift.actorUserId !== actor.userId)}
+        onClose={() => setRecoveringShift(null)}
+        onConfirm={(counted, handoff, recoveryMeta) => {
+          if (!recoveringShift) return { ok: false, errorKey: "invalid" };
+          return closeShiftWithCashCount(counted, handoff, {
+            shiftId: recoveringShift.id,
+            recoveryReason: recoveryMeta?.recoveryReason,
+            recoveryNotes: recoveryMeta?.recoveryNotes,
+          });
+        }}
+      />
     </EnterprisePageContainer>
   );
 }

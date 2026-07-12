@@ -99,3 +99,13 @@ export function recordUnlockFailure(scopeKey: string, maxAttempts = UNLOCK_MAX_A
 export function clearUnlockFailures(scopeKey: string): void {
   writeState(scopeKey, { failures: 0, tierIndex: 0, lockedUntil: null });
 }
+
+/** Clears all lock-screen unlock limiter state (staff credential recovery). */
+export function clearStaffUnlockLimiter(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}

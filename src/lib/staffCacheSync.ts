@@ -140,16 +140,10 @@ export function applyStaffDeltaToCache(
   };
 }
 
-/** Mirror cache into preferences for existing POS consumers — read-only on secondary. */
+/** Mirror cache into preferences — merge-only (Phase 21.4). */
 export function mirrorStaffCacheToPreferences(staff: StaffAccount[]): void {
-  void import("../store/usePosStore").then(({ usePosStore }) => {
-    const state = usePosStore.getState();
-    usePosStore.setState({
-      preferences: {
-        ...state.preferences,
-        staffAccounts: sanitizeStaffForCache(staff),
-      },
-    });
+  void import("./staffSyncApply").then(({ applyStaffAccountsMergeToStore }) => {
+    void applyStaffAccountsMergeToStore(staff, { source: "cache_mirror" });
   });
 }
 

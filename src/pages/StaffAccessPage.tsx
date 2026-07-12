@@ -45,10 +45,10 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
     if (authMode !== "supabase" || !supabase) return;
     void supabase.auth.getUser().then(({ data }) => {
       if (!data.user || !isSupabaseEmailVerified(data.user)) return;
-      void syncStaffAccountsWithCloud(data.user, staff).then((merged) => {
-        if (merged && merged.length > 0) {
-          setPreferences({ staffAccounts: merged });
-        }
+      void syncStaffAccountsWithCloud(data.user, staff).then(async (merged) => {
+        if (!merged) return;
+        const { applyStaffAccountsMergeToStore } = await import("../lib/staffSyncApply");
+        await applyStaffAccountsMergeToStore(merged, { source: "staff_page_hydrate", sanitize: false });
       });
     });
   }, [authMode, setPreferences, staff.length]);
@@ -107,8 +107,14 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
             if (authMode === "supabase" && supabase) {
               const { data } = await supabase.auth.getUser();
               if (data.user) {
-                const merged = await syncStaffAccountsWithCloud(data.user, usePosStore.getState().preferences.staffAccounts ?? []);
-                if (merged) setPreferences({ staffAccounts: merged });
+                const merged = await syncStaffAccountsWithCloud(
+                  data.user,
+                  usePosStore.getState().preferences.staffAccounts ?? [],
+                );
+                if (merged) {
+                  const { applyStaffAccountsMergeToStore } = await import("../lib/staffSyncApply");
+                  await applyStaffAccountsMergeToStore(merged, { source: "staff_page_post_create", sanitize: false });
+                }
               }
             }
             return { ok: true };
