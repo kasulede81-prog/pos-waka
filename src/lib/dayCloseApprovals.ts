@@ -3,7 +3,11 @@
  */
 
 import type { ShopPreferences, UserRole } from "../types";
-import { resolveFloatVerifyOverride, type FloatVerifyOverrideSuccess } from "./managerFloatVerify";
+import {
+  resolveFloatVerifyOverride,
+  resolveFloatVerifyOverrideAsync,
+  type FloatVerifyOverrideSuccess,
+} from "./managerFloatVerify";
 
 export type DayCloseApprovalKind =
   | "variance"
@@ -24,18 +28,10 @@ const MANAGER_KINDS = new Set<DayCloseApprovalKind>([
   "emergency_close",
 ]);
 
-export function resolveDayCloseApproval(
+function resolveDayCloseApprovalFromAuth(
   kind: DayCloseApprovalKind,
-  pin: string,
-  preferences: ShopPreferences,
-  sessionRole: UserRole,
-  sessionUserId: string,
-  sessionLabel: string,
+  auth: FloatVerifyOverrideSuccess | { ok: false },
 ): DayCloseApprovalResult {
-  const normalized = pin.trim();
-  if (!normalized) return { ok: false, errorKey: "dayCloseApprovalPinRequired" };
-
-  const auth = resolveFloatVerifyOverride(normalized, preferences, sessionRole, sessionUserId, sessionLabel);
   if (!auth.ok) return { ok: false, errorKey: "auth_forbidden" };
 
   if (kind === "reopen_day" || kind === "sequential_day") {
@@ -51,6 +47,43 @@ export function resolveDayCloseApproval(
   }
 
   return { ok: false, errorKey: "auth_forbidden" };
+}
+
+export function resolveDayCloseApproval(
+  kind: DayCloseApprovalKind,
+  pin: string,
+  preferences: ShopPreferences,
+  sessionRole: UserRole,
+  sessionUserId: string,
+  sessionLabel: string,
+): DayCloseApprovalResult {
+  const normalized = pin.trim();
+  if (!normalized) return { ok: false, errorKey: "dayCloseApprovalPinRequired" };
+
+  const auth = resolveFloatVerifyOverride(normalized, preferences, sessionRole, sessionUserId, sessionLabel);
+  return resolveDayCloseApprovalFromAuth(kind, auth);
+}
+
+/** Async approval — supports Argon2-hashed shop PIN and staff PINs. */
+export async function resolveDayCloseApprovalAsync(
+  kind: DayCloseApprovalKind,
+  pin: string,
+  preferences: ShopPreferences,
+  sessionRole: UserRole,
+  sessionUserId: string,
+  sessionLabel: string,
+): Promise<DayCloseApprovalResult> {
+  const normalized = pin.trim();
+  if (!normalized) return { ok: false, errorKey: "dayCloseApprovalPinRequired" };
+
+  const auth = await resolveFloatVerifyOverrideAsync(
+    normalized,
+    preferences,
+    sessionRole,
+    sessionUserId,
+    sessionLabel,
+  );
+  return resolveDayCloseApprovalFromAuth(kind, auth);
 }
 
 export function dayCloseVarianceIsFlagged(

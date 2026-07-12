@@ -1,9 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./supabase", () => ({
+  supabase: {
+    rpc: vi.fn(),
+  },
+}));
+
 import {
+  fetchOwnerShopDevices,
   isDeviceHistoryRecord,
   isLicensedActiveDevice,
   isPendingApprovalDevice,
   partitionShopDevices,
+  recordDevicesPageViewed,
   type ShopDeviceRow,
 } from "./shopDevices";
 
@@ -56,5 +65,38 @@ describe("partitionShopDevices", () => {
     const pending = device({ id: "p", status: "disconnected", approval_status: "pending" });
     expect(isPendingApprovalDevice(pending)).toBe(true);
     expect(isDeviceHistoryRecord(pending)).toBe(false);
+  });
+});
+
+describe("fetchOwnerShopDevices", () => {
+  it("parses jsonb array returned as JSON string", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase!.rpc).mockResolvedValueOnce({
+      data: JSON.stringify([
+        {
+          id: "dev-1",
+          device_fingerprint: "fp-1",
+          status: "active",
+          approval_status: "approved",
+          is_active: true,
+          created_at: "2026-01-01T00:00:00.000Z",
+        },
+      ]),
+      error: null,
+    } as never);
+    const rows = await fetchOwnerShopDevices("shop-1");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe("dev-1");
+  });
+});
+
+describe("recordDevicesPageViewed", () => {
+  it("does not throw when audit rpc fails", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase!.rpc).mockResolvedValueOnce({
+      data: null,
+      error: { message: "Forbidden" },
+    } as never);
+    await expect(recordDevicesPageViewed("shop-1")).resolves.toBeUndefined();
   });
 });

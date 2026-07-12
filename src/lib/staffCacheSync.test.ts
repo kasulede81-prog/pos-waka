@@ -191,6 +191,33 @@ describe("refreshStaffCacheBackground", () => {
   });
 });
 
+describe("reconcileStaffCacheToPreferencesIfNeeded", () => {
+  beforeEach(() => {
+    cacheStore.clear();
+    vi.clearAllMocks();
+  });
+
+  it("merges cache staff missing from preferences", async () => {
+    cacheStore.set("record", {
+      shopId: "shop-1",
+      version: 3,
+      downloadedAt: "2026-06-01T00:00:00.000Z",
+      staff: [staff("from-cache"), staff("also-cache")],
+    });
+    cacheStore.set("version", 3);
+
+    const { usePosStore } = await import("../store/usePosStore");
+    vi.mocked(usePosStore.getState).mockReturnValue({
+      preferences: { shopDisplayName: "Test Shop", staffAccounts: [staff("from-cache")] },
+    } as ReturnType<typeof usePosStore.getState>);
+
+    const { reconcileStaffCacheToPreferencesIfNeeded } = await import("./staffCacheSync");
+    const changed = await reconcileStaffCacheToPreferencesIfNeeded("shop-1");
+    expect(changed).toBe(true);
+    expect(usePosStore.setState).toHaveBeenCalled();
+  });
+});
+
 describe("fetchCloudStaffVersion", () => {
   it("returns version from rpc", async () => {
     const { supabase } = await import("./supabase");

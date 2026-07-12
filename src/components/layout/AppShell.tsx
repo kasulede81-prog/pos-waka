@@ -35,7 +35,7 @@ import { MobileScrollTail } from "./MobileScrollTail";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
-import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
+import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured, shouldSuppressPosLockScreen } from "../../lib/lockPos";
 import { ShiftCloseModal } from "../pos/ShiftCloseModal";
 import { DisplayScaleControl } from "../pos/DisplayScaleControl";
 import { EnterpriseStaffLockScreen } from "../auth/EnterpriseStaffLockScreen";
@@ -546,7 +546,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <HospitalityMobileNav lang={lang} visible={showHospitalityMobileNav} />
         <PharmacyMobileNav lang={lang} visible={showPharmacyMobileNav} />
         <EnterpriseScrollControls enabled={!viewportLocked} />
-        {preferences.posLocked ? (
+        {preferences.posLocked && !shouldSuppressPosLockScreen(location.pathname, actorHasPermission(actor, "settings.shop")) ? (
           <EnterpriseStaffLockScreen
             lang={lang}
             preferences={preferences as ShopPreferences}

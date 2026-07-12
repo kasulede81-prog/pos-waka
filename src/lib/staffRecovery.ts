@@ -79,6 +79,7 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
   const {
     refreshStaffCacheBackground,
     isStaffCacheUpToDate,
+    reconcileStaffCacheToPreferencesIfNeeded,
   } = await import("./staffCacheSync");
 
   const updated = await refreshStaffCacheBackground();
@@ -93,6 +94,7 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
   }
 
   if (await isStaffCacheUpToDate(ctx.shopId)) {
+    await reconcileStaffCacheToPreferencesIfNeeded(ctx.shopId);
     lastStaffSyncAt = now;
     return;
   }

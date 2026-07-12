@@ -96,8 +96,8 @@ export function ConnectedDevicesPage({ lang }: Props) {
           setDevices([]);
           return;
         }
-        await recordDevicesPageViewed(sid);
         await loadDevices(sid);
+        void recordDevicesPageViewed(sid);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : t(lang, "connectedDevicesLoadError"));

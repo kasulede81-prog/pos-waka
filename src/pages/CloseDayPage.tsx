@@ -436,14 +436,13 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
+  const needsManagerPin =
+    varianceFlagged || (Boolean(preflight?.requiresSyncOverride) && syncOverride);
+
   const canSubmitNormal =
-
     preflight?.canClose &&
-
-    (!varianceFlagged || managerPin.trim().length > 0) &&
-
-    (!preflight.requiresSyncOverride || syncOverride) &&
-
+    (!needsManagerPin || managerPin.trim().length > 0) &&
+    (!preflight?.requiresSyncOverride || syncOverride) &&
     !activeCloseToday;
 
 
@@ -699,9 +698,9 @@ export function CloseDayPage({ lang }: { lang: Language }) {
             preferences={preferences}
             disabled={!reopenReason.trim()}
             className="mt-3"
-            onApproved={(pin) => {
+            onApproved={async (pin) => {
               setCloseErrorKey(null);
-              const result = reopenBusinessDay({ dateKey: todayKey, reason: reopenReason, ownerPin: pin });
+              const result = await reopenBusinessDay({ dateKey: todayKey, reason: reopenReason, ownerPin: pin });
               if (!result.ok) {
                 setCloseErrorKey(result.errorKey ?? "invalid");
                 return false;

@@ -314,14 +314,30 @@ export function StaffCreateWizard({
                 {pin}
               </p>
             ) : (
-              <EnterprisePinPad
-                lang={lang}
-                className="mt-3"
-                onComplete={(entered) => {
-                  setPin(entered);
-                  return true;
-                }}
-              />
+              <div className="mt-3 space-y-2">
+                <EnterprisePinPad
+                  lang={lang}
+                  persistOnSuccess
+                  resetSignal={autoPin ? "auto" : "manual"}
+                  onComplete={(entered) => {
+                    setPin(entered);
+                    return true;
+                  }}
+                />
+                {pin.length === 4 ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
+                    <p className="text-xs font-black uppercase tracking-wide text-emerald-800">
+                      {t(lang, "staffPinCaptured")}
+                    </p>
+                    <p className="mt-2 font-mono text-2xl tracking-[0.35em] text-emerald-950">
+                      {pin.replace(/\d/g, "•")}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-emerald-900">{t(lang, "staffPinHint")}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs font-semibold text-muted-foreground">{t(lang, "staffPinHint")}</p>
+                )}
+              </div>
             )}
             <div className="mt-1.5 flex gap-2">
               <button
@@ -338,6 +354,7 @@ export function StaffCreateWizard({
               onCheckedChange={(on) => {
                 setAutoPin(on);
                 if (on) regenPin();
+                else setPin("");
               }}
               label={t(lang, "staffWizardAutoPin")}
               className="mt-2 text-sm font-semibold text-muted-foreground"

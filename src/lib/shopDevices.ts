@@ -86,9 +86,22 @@ export function buildDeviceUsageSummary(
   return { activeCount, totalCount, planLimit, atPlanLimit, overPlanLimit };
 }
 
+function normalizeRpcDeviceList(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  if (typeof data === "string") {
+    try {
+      const parsed = JSON.parse(data) as unknown;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 function parseDeviceRows(data: unknown): ShopDeviceRow[] {
-  if (!Array.isArray(data)) return [];
-  return data
+  const rows = normalizeRpcDeviceList(data);
+  return rows
     .map((row) => {
       const r = row as Record<string, unknown>;
       const id = String(r.id ?? "");
@@ -198,10 +211,17 @@ export async function recordDevicesPageViewed(shopId: string): Promise<void> {
     deviceFingerprint: fp,
   });
   if (!supabase || !shopId) return;
-  await supabase.rpc("owner_record_devices_viewed", {
-    p_shop_id: shopId,
-    p_device_fingerprint: fp,
-  });
+  try {
+    const { error } = await supabase.rpc("owner_record_devices_viewed", {
+      p_shop_id: shopId,
+      p_device_fingerprint: fp,
+    });
+    if (error) {
+      console.warn("[waka-devices] record_devices_viewed", error.message);
+    }
+  } catch (e) {
+    console.warn("[waka-devices] record_devices_viewed", e);
+  }
 }
 
 export function currentDeviceFingerprint(): string {

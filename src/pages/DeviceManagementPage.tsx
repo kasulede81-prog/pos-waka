@@ -122,14 +122,18 @@ export function DeviceManagementPage({ lang }: Props) {
 
   const loadDevices = useCallback(async (sid: string) => {
     setError(null);
-    const { devices: rows, isOwner } = await fetchShopDevicesForManagement(sid);
-    setIsShopOwner(isOwner);
-    setDevices(rows);
-    logDeviceFleetDiagnostic("fleet_loaded", {
-      count: rows.length,
-      shopId: sid,
-    });
-  }, []);
+    try {
+      const { devices: rows, isOwner } = await fetchShopDevicesForManagement(sid);
+      setIsShopOwner(isOwner);
+      setDevices(rows);
+      logDeviceFleetDiagnostic("fleet_loaded", {
+        count: rows.length,
+        shopId: sid,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t(lang, "connectedDevicesLoadError"));
+    }
+  }, [lang]);
 
   useEffect(() => {
     const intervalMs = pendingDevices.length > 0 ? 1_000 : 30_000;
@@ -165,8 +169,8 @@ export function DeviceManagementPage({ lang }: Props) {
           return;
         }
         await registerShopDeviceOnLogin(sid).catch(() => undefined);
-        await recordDevicesPageViewed(sid);
         await loadDevices(sid);
+        void recordDevicesPageViewed(sid);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : t(lang, "connectedDevicesLoadError"));
@@ -380,9 +384,23 @@ export function DeviceManagementPage({ lang }: Props) {
       />
 
       {error ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
-          {error}
-        </p>
+        <div className="space-y-3">
+          <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
+            {error}
+          </p>
+          {shopId ? (
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                void loadDevices(shopId).finally(() => setLoading(false));
+              }}
+              className="min-h-[44px] rounded-xl border border-border bg-card px-4 text-sm font-bold text-foreground"
+            >
+              {t(lang, "enterpriseRetry")}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {loading ? (
@@ -393,7 +411,7 @@ export function DeviceManagementPage({ lang }: Props) {
           title={t(lang, "connectedDevicesNoShop")}
           description={t(lang, "deviceFleetSub")}
         />
-      ) : devices.length === 0 ? (
+      ) : error ? null : devices.length === 0 ? (
         <EnterpriseEmptyState
           icon={MonitorSmartphone}
           title={t(lang, "deviceFleetEmptyTitle")}

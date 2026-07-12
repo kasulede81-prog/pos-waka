@@ -22,6 +22,8 @@ export type EnterprisePinPadProps = {
   className?: string;
   /** External lockout message (presentation only) */
   lockoutMessage?: string | null;
+  /** When true, filled dots stay visible after successful entry (PIN setup, not unlock). */
+  persistOnSuccess?: boolean;
   /** Override default incorrect PIN message */
   errorMessage?: string | null;
   /** aria-labelledby target for screen readers */
@@ -43,6 +45,7 @@ export function EnterprisePinPad({
   size = "tablet",
   className,
   lockoutMessage,
+  persistOnSuccess = false,
   errorMessage,
   labelledBy,
 }: EnterprisePinPadProps) {
@@ -88,7 +91,7 @@ export function EnterprisePinPad({
         const result = await onComplete(nextPin);
         if (isFailure(result)) {
           runFailure();
-        } else {
+        } else if (!persistOnSuccess) {
           setPin("");
         }
       } catch {
@@ -98,7 +101,7 @@ export function EnterprisePinPad({
         setInternalVerifying(false);
       }
     },
-    [blocked, onComplete, runFailure],
+    [blocked, onComplete, persistOnSuccess, runFailure],
   );
 
   const appendDigit = useCallback(

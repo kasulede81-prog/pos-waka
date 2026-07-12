@@ -253,7 +253,7 @@ import {
 } from "../lib/dayCloseEnforcement";
 import {
   dayCloseVarianceIsFlagged,
-  resolveDayCloseApproval,
+  resolveDayCloseApprovalAsync,
 } from "../lib/dayCloseApprovals";
 import { assertSequentialBusinessDay } from "../lib/sequentialBusinessDays";
 import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
@@ -1143,7 +1143,7 @@ export type PosState = {
     dateKey: string;
     reason: string;
     ownerPin: string;
-  }) => { ok: boolean; errorKey?: string };
+  }) => Promise<{ ok: boolean; errorKey?: string }>;
   repairCustomerDebtIntegrity: () => {
     ok: boolean;
     healedCount: number;
@@ -2017,7 +2017,13 @@ export const usePosStore = create<PosState>((set, get) => {
       });
     }
     if (updated) {
-      void import("../lib/shopStaffCloud").then(({ pushStaffToCloud }) => pushStaffToCloud(updated));
+      void import("../lib/shopStaffCloud").then(async ({ pushStaffToCloud }) => {
+        const ok = await pushStaffToCloud(updated);
+        if (!ok) {
+          const { enqueuePendingStaffSync } = await import("../lib/staffSyncQueue");
+          await enqueuePendingStaffSync({ action: "update", staff: updated });
+        }
+      });
     }
   },
 
@@ -2245,7 +2251,12 @@ export const usePosStore = create<PosState>((set, get) => {
     void import("../offline/cloudSync").then(async ({ resolveShopCtx }) => {
       const { deleteCloudStaff } = await import("../lib/shopStaffCloud");
       const ctx = await resolveShopCtx();
-      if (ctx) await deleteCloudStaff(ctx.shopId, id);
+      if (!ctx || !removed) return;
+      const ok = await deleteCloudStaff(ctx.shopId, id);
+      if (!ok) {
+        const { enqueuePendingStaffSync } = await import("../lib/staffSyncQueue");
+        await enqueuePendingStaffSync({ action: "delete", staff: removed, staffCloudId: id });
+      }
     });
   },
 
@@ -6828,7 +6839,7 @@ export const usePosStore = create<PosState>((set, get) => {
     }
     if (varianceFlagged && (varianceOverride || emergency)) {
       const pin = managerPin?.trim() ?? "";
-      const approval = resolveDayCloseApproval("variance", pin, state.preferences, actorRole, actorUserId, actorLabel);
+      const approval = await resolveDayCloseApprovalAsync("variance", pin, state.preferences, actorRole, actorUserId, actorLabel);
       if (!approval.ok) return { ok: false, errorKey: approval.errorKey };
       pushAudit("variance_override", `Variance override ${dateKey} UGX ${diff.toLocaleString()}`, {
         dateKey,
@@ -6851,7 +6862,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const needsSyncOverride = preflight.snapshot.requiresSyncOverride;
     if (needsSyncOverride && (syncOverride || emergency)) {
       const pin = managerPin?.trim() ?? "";
-      const approval = resolveDayCloseApproval(
+      const approval = await resolveDayCloseApprovalAsync(
         emergency ? "emergency_close" : "sync_override",
         pin,
         state.preferences,
@@ -6878,7 +6889,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (emergency) {
       const reason = (emergencyReason ?? "").trim();
       if (reason.length < 3) return { ok: false, errorKey: "dayCloseEmergencyReasonRequired" };
-      const approval = resolveDayCloseApproval(
+      const approval = await resolveDayCloseApprovalAsync(
         "emergency_close",
         managerPin?.trim() ?? "",
         state.preferences,
@@ -6896,7 +6907,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (existing && override) {
       const reason = (overrideReason ?? "").trim();
       if (reason.length < 3) return { ok: false, errorKey: "dayCloseOverrideReasonRequired" };
-      const approval = resolveDayCloseApproval(
+      const approval = await resolveDayCloseApprovalAsync(
         "reclose_override",
         managerPin?.trim() ?? "",
         state.preferences,
@@ -7024,7 +7035,7 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true, warnings: preflightWarnings.length > 0 ? preflightWarnings : undefined };
   },
 
-  reopenBusinessDay: ({ dateKey, reason, ownerPin }) => {
+  reopenBusinessDay: async ({ dateKey, reason, ownerPin }) => {
     const denied = denyUnlessEffectivePermission("day.close", "reopenBusinessDay");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
@@ -7038,7 +7049,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const trimmedReason = reason.trim();
     if (trimmedReason.length < 3) return { ok: false, errorKey: "dayCloseOverrideReasonRequired" };
 
-    const approval = resolveDayCloseApproval(
+    const approval = await resolveDayCloseApprovalAsync(
       "reopen_day",
       ownerPin,
       state.preferences,

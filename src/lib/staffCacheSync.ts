@@ -141,10 +141,22 @@ export function applyStaffDeltaToCache(
 }
 
 /** Mirror cache into preferences — merge-only (Phase 21.4). */
-export function mirrorStaffCacheToPreferences(staff: StaffAccount[]): void {
-  void import("./staffSyncApply").then(({ applyStaffAccountsMergeToStore }) => {
-    void applyStaffAccountsMergeToStore(staff, { source: "cache_mirror" });
-  });
+export async function mirrorStaffCacheToPreferences(staff: StaffAccount[]): Promise<void> {
+  const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
+  await applyStaffAccountsMergeToStore(staff, { source: "cache_mirror" });
+}
+
+/**
+ * When encrypted staff cache is newer than preferences (common after cross-device sync),
+ * merge cache rows into preferences.staffAccounts without a cloud round-trip.
+ */
+export async function reconcileStaffCacheToPreferencesIfNeeded(shopId: string): Promise<boolean> {
+  const cache = await readOfflineStaffCache(shopId);
+  if (!cache?.staff.length) return false;
+
+  const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
+  const stats = await applyStaffAccountsMergeToStore(cache.staff, { source: "cache_reconcile" });
+  return stats.added > 0 || stats.updated > 0 || stats.mergedCount !== stats.localCount;
 }
 
 export async function isStaffCacheUpToDate(shopId: string): Promise<boolean> {
@@ -213,7 +225,7 @@ export async function refreshStaffCacheBackground(opts?: {
     next.businessName = businessName;
   }
   await writeOfflineStaffCache(next);
-  mirrorStaffCacheToPreferences(next.staff);
+  await mirrorStaffCacheToPreferences(next.staff);
 
   return true;
 }
@@ -222,7 +234,13 @@ export async function refreshStaffCacheBackground(opts?: {
 export function scheduleStaffCacheProvisioning(): void {
   void import("./uiYield").then(({ runWhenIdle }) => {
     runWhenIdle(() => {
-      void refreshStaffCacheBackground({ force: false });
+      void (async () => {
+        const ctx = await resolveShopCtx();
+        await refreshStaffCacheBackground({ force: false });
+        if (ctx?.shopId) {
+          await reconcileStaffCacheToPreferencesIfNeeded(ctx.shopId);
+        }
+      })();
     }, 500);
   });
 }

@@ -1,6 +1,7 @@
 import type { Language, ShopPreferences } from "../../types";
 import { EnterprisePinPad } from "./EnterprisePinPad";
-import { verifyManagerApprovalPinSync } from "../../lib/enterpriseSecurity/EnterpriseSecurityService";
+import { verifyManagerApprovalPin } from "../../lib/enterpriseSecurity/EnterpriseSecurityService";
+import { getOrCreateDeviceId } from "../../lib/deviceId";
 
 type Props = {
   lang: Language;
@@ -27,7 +28,8 @@ export function EnterpriseApprovalPinPad({
       resetSignal={resetSignal}
       className={className}
       onComplete={async (pin) => {
-        if (!verifyManagerApprovalPinSync(pin, preferences)) {
+        const verified = await verifyManagerApprovalPin(pin, preferences, getOrCreateDeviceId());
+        if (!verified.ok) {
           return false;
         }
         const result = await onApproved(pin);

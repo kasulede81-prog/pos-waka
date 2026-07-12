@@ -18,3 +18,12 @@ export function activeStaffCanUnlock(accounts: import("../types").ShopPreference
 export function canLockPos(preferences: Pick<import("../types").ShopPreferences, "backOfficePin">): boolean {
   return isBackOfficePinConfigured(preferences.backOfficePin);
 }
+
+/** Owner staff/setup screens — do not cover with POS lock overlay (same PIN pad UX). */
+export function shouldSuppressPosLockScreen(
+  pathname: string,
+  canManageShopSettings: boolean,
+): boolean {
+  if (!canManageShopSettings) return false;
+  return pathname === "/staff-access" || pathname.startsWith("/settings/");
+}
