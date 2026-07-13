@@ -270,6 +270,80 @@ npm test
 
 ---
 
+## Phase 25.3B — Runtime Flex Chain Fix
+
+**Mode:** Surgical implementation (runtime layout only)  
+**Status:** Complete  
+**Builds on:** [Phase 25.3A runtime certification](./PHASE_25_3A_ENTERPRISE_POS_RUNTIME_SCROLL_VERIFICATION_CERTIFICATION.md)
+
+### Root cause (confirmed)
+
+Phase 25.3A proved scroll CSS, touch routing, and virtualizer binding were correct. The catalog scroll pane had `clientHeight === scrollHeight` because the **PosPage split wrapper** (~L1844) only received `flex-1 min-h-0` when `mountDesktopCheckoutSidebar && isFullDesktopPos`. On mobile, compact tablet, and full desktop with an empty cart, the wrapper was a block box — the catalog column’s `flex-1` was inert and the pane expanded to content height.
+
+### Before vs after layout chain
+
+**Before (25.3A broken runtime):**
+
+```
+PosPage root (flex-1, bounded)
+└─ split wrapper (block, flex: 0 1 auto)  ← broken link
+   └─ catalog column (flex-1 inert)
+      └─ .pos-catalog-scroll-pane (3560px tall, no overflow)
+```
+
+**After (25.3B):**
+
+```
+PosPage root (flex-1, bounded)
+└─ split wrapper (flex-1 min-h-0 overflow-hidden; grid when desktop sidebar)
+   └─ catalog column (flex-1, bounded)
+      └─ .pos-catalog-scroll-pane (~500px client, 3560px scroll)  ← scroll owner
+```
+
+### Change scope
+
+| Item | Changed? |
+|------|----------|
+| `PosPage.tsx` split wrapper className | ✅ |
+| `posInteractionDiagnostics.ts` — `catalog_flex_chain` dev log | ✅ |
+| CSS / touch / virtualizer / AppShell / Android native | ❌ |
+
+Split wrapper now always receives `min-h-0 flex-1 overflow-hidden` when `catalogSellMode`. Desktop checkout grid keeps `grid items-stretch gap-2` when sidebar is mounted.
+
+### Runtime measurements (Playwright fixture, post-fix chain)
+
+| Viewport | Pane `clientHeight` | `scrollHeight` | Scrollable |
+|----------|---------------------|----------------|------------|
+| Mobile 390px | ~499 | 3560 | ✅ |
+| Compact 800px | ~796 | 3560 | ✅ |
+| Desktop 1280px | ~572 | 3560 | ✅ |
+
+Dev console: `[waka-pos] { event: "catalog_flex_chain", scrollable: true, overflowOwner: "data-pos-catalog-scroll" }`
+
+### Android rebuild
+
+After implementation:
+
+```bash
+npm run build
+npx cap sync android
+```
+
+Web assets copied to `android/app/src/main/assets/public`. **Rebuild the APK** before device testing — do not use a pre-sync debug build.
+
+### Verification
+
+```bash
+npm run build   # ✅ passed
+npm test        # ✅ passed
+npx cap sync android   # ✅ passed
+```
+
+Manual shelf scroll matrix (Web + Android) remains required for production sign-off.
+
+---
+
 ## Related Documents
 
 - [Phase 25.2 — Scroll & Touch Certification (audit)](./PHASE_25_2_ENTERPRISE_POS_SCROLL_AND_TOUCH_INTERACTION_CERTIFICATION.md)
+- [Phase 25.3A — Runtime Scroll Verification Certification (audit)](./PHASE_25_3A_ENTERPRISE_POS_RUNTIME_SCROLL_VERIFICATION_CERTIFICATION.md)

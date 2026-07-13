@@ -66,8 +66,8 @@ import { useKeyboardInset } from "../hooks/useKeyboardInset";
 import { combinedBottomInsetStyle } from "../lib/safeAreaInsets";
 import { scrollCatalogToTop } from "../lib/posCatalogScroll";
 import {
+  reportPosCatalogFlexChain,
   reportPosKeyboardInset,
-  reportPosScrollOwner,
   reportPosViewportMetrics,
 } from "../lib/posInteractionDiagnostics";
 import { ProductLockedModal } from "../components/ProductLockedModal";
@@ -393,6 +393,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const catalogWidthRef = useRef<HTMLDivElement>(null);
   const catalogRef = useRef<HTMLDivElement>(null);
+  const catalogSplitRef = useRef<HTMLDivElement>(null);
   const customerSelectRef = useRef<HTMLSelectElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const checkoutPanelRef = useRef<HTMLDivElement>(null);
@@ -1346,9 +1347,13 @@ export function PosPage({ lang }: { lang: Language }) {
   const checkoutBottomPad = combinedBottomInsetStyle(keyboardInset) ?? "env(safe-area-inset-bottom, 0px)";
 
   useEffect(() => {
+    if (!catalogSellMode) return;
     reportPosViewportMetrics();
-    reportPosScrollOwner(catalogRef.current);
-  }, []);
+    const frame = requestAnimationFrame(() => {
+      reportPosCatalogFlexChain(catalogSplitRef.current, catalogRef.current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [catalogSellMode]);
 
   useEffect(() => {
     reportPosKeyboardInset(keyboardInset);
@@ -1842,8 +1847,12 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       <div
+        ref={catalogSplitRef}
         className={clsx(
-          mountDesktopCheckoutSidebar && isFullDesktopPos && "grid min-h-0 flex-1 items-stretch gap-2",
+          catalogSellMode && "min-h-0 flex-1 overflow-hidden",
+          mountDesktopCheckoutSidebar && isFullDesktopPos
+            ? "grid items-stretch gap-2"
+            : catalogSellMode && "flex flex-col",
         )}
         style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
       >

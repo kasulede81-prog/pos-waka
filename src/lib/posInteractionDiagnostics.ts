@@ -6,6 +6,7 @@ import { findCatalogScrollElement, POS_CATALOG_SCROLL_ATTR } from "./posCatalogS
 
 type PosDiagEvent =
   | "scroll_owner"
+  | "catalog_flex_chain"
   | "viewport"
   | "keyboard_inset"
   | "virtualizer_owner"
@@ -36,6 +37,23 @@ export function reportPosScrollOwner(from?: HTMLElement | null): void {
     clientHeight: el?.clientHeight ?? null,
     scrollHeight: el?.scrollHeight ?? null,
     scrollable: el ? el.scrollHeight > el.clientHeight : null,
+  });
+}
+
+/** Phase 25.3B — one-shot dev log for split wrapper + catalog scroll pane bounds. */
+export function reportPosCatalogFlexChain(
+  wrapper: HTMLElement | null | undefined,
+  scrollPaneFrom?: HTMLElement | null,
+): void {
+  const scrollPane = findCatalogScrollElement(scrollPaneFrom);
+  const scrollable = scrollPane ? scrollPane.scrollHeight > scrollPane.clientHeight : false;
+  logPosInteraction("catalog_flex_chain", {
+    wrapperClientHeight: wrapper?.clientHeight ?? null,
+    wrapperScrollHeight: wrapper?.scrollHeight ?? null,
+    paneClientHeight: scrollPane?.clientHeight ?? null,
+    paneScrollHeight: scrollPane?.scrollHeight ?? null,
+    scrollable,
+    overflowOwner: scrollable ? POS_CATALOG_SCROLL_ATTR : null,
   });
 }
 
