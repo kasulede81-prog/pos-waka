@@ -29,7 +29,8 @@ import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription"
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
-import { SYNC_PULL_MIN_INTERVAL_MS } from "../lib/syncTiming";
+import { isCloudRecoveryLockActive } from "../lib/cloudRecoverySession";
+import { SYNC_EVENT_PULL_MIN_MS, SYNC_PULL_MIN_INTERVAL_MS } from "../lib/syncTiming";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
 import { setCachedShopId } from "../lib/shopSyncContext";
@@ -1371,6 +1372,46 @@ async function pushSupplierToCloud(supplier: Supplier, ctx: ShopCtx): Promise<bo
   return result?.ok === true;
 }
 
+async function pushSupplierDeletedToCloud(
+  supplierId: string,
+  payload: Record<string, unknown>,
+  ctx: ShopCtx,
+): Promise<boolean> {
+  if (!supabase || !isUuid(supplierId) || isWalkInSupplierId(supplierId)) return true;
+  const snap =
+    payload.snapshot && typeof payload.snapshot === "object"
+      ? (payload.snapshot as Record<string, unknown>)
+      : {};
+  const deletedAt = typeof payload.deletedAt === "string" ? payload.deletedAt : new Date().toISOString();
+  const rpcPayload = {
+    id: supplierId,
+    name: String(snap.name ?? "Supplier").trim() || "Supplier",
+    phone: String(snap.phone ?? ""),
+    location: String(snap.location ?? ""),
+    notes: String(snap.notes ?? ""),
+    balance_owed_ugx: Math.max(0, Math.floor(Number(snap.balance_owed_ugx ?? 0))),
+    total_purchases_ugx: Math.max(0, Math.floor(Number(snap.total_purchases_ugx ?? 0))),
+    last_supply_at: snap.last_supply_at != null ? String(snap.last_supply_at) : null,
+    created_at: String(snap.created_at ?? deletedAt),
+    metadata: { wakaClient: true, deleted: true, deletedAt, version: Number(snap.version ?? 1) },
+  };
+  const { data, error } = await supabase.rpc("shop_push_supplier", {
+    p_shop_id: ctx.shopId,
+    p_payload: rpcPayload,
+  });
+  if (error) {
+    if (isMissingTableError(error)) return false;
+    return false;
+  }
+  const result = data as { ok?: boolean } | null;
+  const ok = result?.ok === true;
+  if (ok) {
+    const { clearProductTombstone } = await import("./entityStore");
+    await clearProductTombstone(supplierId);
+  }
+  return ok;
+}
+
 async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(payment.id)) return false;
   const payload = {
@@ -1464,6 +1505,10 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     }
     case "supplier": {
       const supplierId = String(payload.id ?? "");
+      if (payload.deleted) {
+        if (!isUuid(supplierId)) return true;
+        return pushSupplierDeletedToCloud(supplierId, payload, ctx);
+      }
       const supplier = usePosStore.getState().suppliers.find((s) => s.id === supplierId);
       if (!supplier) return true;
       return pushSupplierToCloud(supplier, ctx);
@@ -2533,6 +2578,8 @@ async function pullCashExpensesFull(ctx: ShopCtx): Promise<{ cashExpenses: CashE
 export async function pullShopDataFromCloud(opts?: {
   mode?: CloudPullMode;
   forceFull?: boolean;
+  /** Store already hydrated from cloud snapshot — skip full re-download. */
+  afterSnapshotRestore?: boolean;
   cloudRecovery?: boolean;
   onRecoveryStep?: (
     step: import("../lib/cloudRecoverySession").CloudRecoveryStepId,
@@ -2546,7 +2593,11 @@ export async function pullShopDataFromCloud(opts?: {
   const state = usePosStore.getState();
   const localEmpty = state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
   const mode: CloudPullMode =
-    opts?.forceFull === true || opts?.mode === "full" || needsBootstrapPull(localEmpty) ? "full" : "incremental";
+    opts?.forceFull === true ||
+    opts?.mode === "full" ||
+    (needsBootstrapPull(localEmpty) && opts?.afterSnapshotRestore !== true)
+      ? "full"
+      : "incremental";
 
   const cp = readSyncCheckpoints();
   let products: Product[] = [];
@@ -2850,21 +2901,7 @@ export async function pullShopDataFromCloud(opts?: {
     };
   }
 
-  if (opts?.cloudRecovery) {
-    const audit = await pullEntitySafe("audit_logs", entityErrors, async () => {
-      const { pullAuditLogsFromCloud } = await import("../lib/auditCloudSync");
-      return pullAuditLogsFromCloud(ctx.shopId, {
-        onProgress: (progress) => {
-          opts?.onRecoveryStep?.("audit");
-          void progress;
-        },
-      });
-    });
-    if (audit) {
-      recoveredAuditLogs = audit;
-      opts?.onRecoveryStep?.("audit");
-    }
-  }
+  // Audit logs are deferred to background certification (non-blocking for POS unlock).
 
   recordEntityPullErrors(entityErrors);
 
@@ -2942,6 +2979,7 @@ export async function pullShopDataFromCloud(opts?: {
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
 export async function pullCloudAndMergeIntoStore(opts?: {
   forceFull?: boolean;
+  afterSnapshotRestore?: boolean;
   cloudRecovery?: boolean;
   onRecoveryStep?: (
     step: import("../lib/cloudRecoverySession").CloudRecoveryStepId,
@@ -2995,10 +3033,15 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     "../store/usePosStore",
   );
   if (!hasSupabaseConfig) return failMerge("cloud_pull_not_configured");
+  const checkpointStarted = performance.now();
   const cloud = await pullShopDataFromCloud({
     forceFull: opts?.forceFull,
+    afterSnapshotRestore: opts?.afterSnapshotRestore,
     onRecoveryStep: opts?.onRecoveryStep,
     cloudRecovery: opts?.cloudRecovery,
+  });
+  void import("../lib/syncDiagnostics").then(({ recordCheckpointDuration }) => {
+    recordCheckpointDuration(performance.now() - checkpointStarted);
   });
   if (!cloud) return failMerge("cloud_pull_failed");
 
@@ -3027,6 +3070,11 @@ export async function pullCloudAndMergeIntoStore(opts?: {
 
   if (!hasCloud) {
     if (opts?.cloudRecovery) {
+      const { storeHasCoreRecoveryData } = await import("../lib/recoveryHydration");
+      if (opts?.afterSnapshotRestore && storeHasCoreRecoveryData()) {
+        await assertCloudRecoveryStoreHydrated();
+        return true;
+      }
       const { logRecoveryDiagnosticEvent } = await import("../lib/cloudRecoverySession");
       logRecoveryDiagnosticEvent("merge_produced_empty_store");
       return failMerge("merge_produced_empty_store");
@@ -3148,7 +3196,10 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       },
       { cloudRecovery: opts?.cloudRecovery },
     );
-    await persistRestoredSnapshotToDisk(undefined, { cloudRecovery: opts?.cloudRecovery });
+    await persistRestoredSnapshotToDisk(undefined, {
+      cloudRecovery: opts?.cloudRecovery,
+      skipEntityMigration: opts?.cloudRecovery === true,
+    });
     if (shouldMarkBootstrap) markBootstrapSyncComplete();
     runPostSyncDebtValidation({
       customers: usePosStore.getState().customers,
@@ -3433,11 +3484,101 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
 
 const PULL_MIN_INTERVAL_MS = SYNC_PULL_MIN_INTERVAL_MS;
 
-function shouldPullFromCloud(): boolean {
+function isEventPullReason(reason: string): boolean {
+  return (
+    reason === "realtime" ||
+    reason === "sale_ack" ||
+    reason === "reconnect" ||
+    reason === "foreground" ||
+    reason === "resume" ||
+    reason === "visibility" ||
+    reason === "startup"
+  );
+}
+
+function shouldAllowCloudPull(opts?: { force?: boolean; reason?: string }): boolean {
+  if (shouldPausePosBackgroundPull()) return false;
+  if (isCloudRecoveryLockActive()) return false;
+  if (opts?.force) return true;
   const last = readSyncHealthMeta().lastPullAt;
   if (!last) return true;
   const age = Date.now() - new Date(last).getTime();
+  if (opts?.reason && isEventPullReason(opts.reason)) {
+    return age >= SYNC_EVENT_PULL_MIN_MS;
+  }
   return age >= PULL_MIN_INTERVAL_MS;
+}
+
+function shouldPullFromCloud(): boolean {
+  return shouldAllowCloudPull();
+}
+
+/** Ancillary entities merged during incremental/full cloud pull. */
+async function runCloudPullBundle(opts?: {
+  forceFull?: boolean;
+  pullReason?: string;
+}): Promise<boolean> {
+  const pulled = await pullCloudAndMergeIntoStore({ forceFull: opts?.forceFull });
+  if (getDeviceOnline()) {
+    const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
+    await pullHospitalityStateFromCloud(opts?.forceFull === true);
+    const { fetchDeviceAuthorityContext } = await import("../lib/deviceAuthority");
+    const deviceAuthority = await fetchDeviceAuthorityContext();
+    const { pullAndMergeStaffDuringCloudSync } = await import("../lib/staffRecovery");
+    await pullAndMergeStaffDuringCloudSync({
+      deviceAuthority,
+      force: opts?.forceFull === true,
+      reason: opts?.pullReason,
+    });
+    const ctx = await resolveShopCtx().catch(() => null);
+    if (ctx?.shopId) {
+      const { hydrateShopSecurityPin } = await import("../lib/shopSecurityPinSync");
+      void hydrateShopSecurityPin(ctx.shopId).catch(() => "failed");
+    }
+    void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
+      flushPendingStaffSecurityEvents();
+    });
+  }
+  return pulled;
+}
+
+let incrementalPullTimer: ReturnType<typeof setTimeout> | null = null;
+let incrementalPullQueued = false;
+
+/** Event-driven incremental pull — independent from push pipeline (Phase 24.1B). */
+export function scheduleIncrementalCloudPull(reason: string, opts?: { force?: boolean }): void {
+  void import("../lib/syncDiagnostics").then(({ logSync }) => {
+    logSync("pull_scheduled", { reason, force: opts?.force ?? false });
+  });
+  if (incrementalPullTimer != null) clearTimeout(incrementalPullTimer);
+  incrementalPullTimer = globalThis.setTimeout(() => {
+    incrementalPullTimer = null;
+    void runIncrementalCloudPull(reason, opts);
+  }, 0);
+}
+
+async function runIncrementalCloudPull(reason: string, opts?: { force?: boolean }): Promise<boolean> {
+  if (!hasSupabaseConfig || !getDeviceOnline()) return false;
+  if (!shouldAllowCloudPull({ force: opts?.force, reason })) return false;
+  if (incrementalPullQueued) return false;
+  incrementalPullQueued = true;
+  try {
+    const { withPullSyncMutex } = await import("../lib/globalSyncMutex");
+    const { logSync, recordPullDuration, recordMergeDuration, consumeRealtimeToPullLatency } =
+      await import("../lib/syncDiagnostics");
+    if (reason === "realtime") consumeRealtimeToPullLatency();
+    logSync("pull_start", { reason });
+    const started = performance.now();
+    const mergeStart = performance.now();
+    const pulled = await withPullSyncMutex("pullCloud", () =>
+      runCloudPullBundle({ forceFull: false, pullReason: reason }),
+    );
+    recordMergeDuration(performance.now() - mergeStart);
+    recordPullDuration(performance.now() - started);
+    return pulled;
+  } finally {
+    incrementalPullQueued = false;
+  }
 }
 
 /** Push pending sales/queue only (fast, for background sync). */
@@ -3473,11 +3614,11 @@ export async function pushShopPendingToCloud(): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
-  const { withGlobalSyncMutex } = await import("../lib/globalSyncMutex");
-  return withGlobalSyncMutex("pushPending", () => pushShopPendingToCloudInner());
+  const { withPushSyncMutex } = await import("../lib/globalSyncMutex");
+  return withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner());
 }
 
-/** Pull cloud data, push pending local rows, then drain the offline queue. */
+/** Pull cloud data, push pending local rows — push and pull run concurrently. */
 async function syncShopWithCloudInner(opts?: {
   pull?: boolean;
   forceFull?: boolean;
@@ -3504,45 +3645,41 @@ async function syncShopWithCloudInner(opts?: {
   const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
   await scheduleShopRecovery("background_sync").catch(() => undefined);
 
-  const pullBlocked = shouldPausePosBackgroundPull();
-  const doPull = pullBlocked
-    ? false
-    : opts?.pull === false
-      ? false
-      : opts?.pull === true
-        ? true
-        : shouldPullFromCloud();
-  const pulled = doPull ? await pullCloudAndMergeIntoStore({ forceFull: opts?.forceFull }) : false;
-  const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
-  if (getDeviceOnline()) {
-    if (!pullBlocked) {
-      await pullHospitalityStateFromCloud(opts?.forceFull === true);
-    }
-    const { fetchDeviceAuthorityContext } = await import("../lib/deviceAuthority");
-    const deviceAuthority = await fetchDeviceAuthorityContext();
-    const { pullAndMergeStaffDuringCloudSync } = await import("../lib/staffRecovery");
-    await pullAndMergeStaffDuringCloudSync({
-      deviceAuthority,
-      force: opts?.forceFull === true,
-    });
-    if (!pullBlocked) {
-      const ctx = await resolveShopCtx().catch(() => null);
-      if (ctx?.shopId) {
-        const { hydrateShopSecurityPin } = await import("../lib/shopSecurityPinSync");
-        void hydrateShopSecurityPin(ctx.shopId).catch(() => "failed");
-      }
-      void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
-        flushPendingStaffSecurityEvents();
-      });
-    }
-  }
-  const { push, queueFailed } = await pushShopPendingToCloudInner();
-  if (getDeviceOnline() && push.fail === 0) {
+  const doPull =
+    opts?.pull !== false &&
+    (opts?.pull === true || shouldPullFromCloud()) &&
+    !shouldPausePosBackgroundPull();
+
+  const { withPullSyncMutex, withPushSyncMutex } = await import("../lib/globalSyncMutex");
+  const { logSync, recordPullDuration, recordMergeDuration } = await import("../lib/syncDiagnostics");
+
+  const pullPromise: Promise<boolean> =
+    doPull && getDeviceOnline()
+      ? (async () => {
+          logSync("pull_start", { reason: "full_sync" });
+          const started = performance.now();
+          const mergeStart = performance.now();
+          const pulled = await withPullSyncMutex("syncShopWithCloud", () =>
+            runCloudPullBundle({ forceFull: opts?.forceFull }),
+          );
+          recordMergeDuration(performance.now() - mergeStart);
+          recordPullDuration(performance.now() - started);
+          return pulled;
+        })()
+      : Promise.resolve(false);
+
+  const pushPromise = getDeviceOnline()
+    ? withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner())
+    : Promise.resolve({ push: { ok: 0, fail: 0 }, queueFailed: 0 });
+
+  const [pulled, pushResult] = await Promise.all([pullPromise, pushPromise]);
+
+  if (getDeviceOnline() && pushResult.push.fail === 0) {
     const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
     const { runWhenIdle } = await import("../lib/uiYield");
     runWhenIdle(() => void uploadShopCloudSnapshot().catch(() => false), isNativeApp() ? 15_000 : 4000);
   }
-  return { pulled, push, queueFailed };
+  return { pulled, push: pushResult.push, queueFailed: pushResult.queueFailed };
 }
 
 export async function syncShopWithCloud(opts?: {
@@ -3553,10 +3690,9 @@ export async function syncShopWithCloud(opts?: {
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
-  const { withGlobalSyncMutex } = await import("../lib/globalSyncMutex");
   const { recordSyncDuration } = await import("../lib/performanceMetrics");
   const started = performance.now();
-  const result = await withGlobalSyncMutex("syncShopWithCloud", () => syncShopWithCloudInner(opts));
+  const result = await syncShopWithCloudInner(opts);
   recordSyncDuration("syncShopWithCloud", performance.now() - started);
   return result;
 }
@@ -3568,15 +3704,16 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
   if (!hasSupabaseConfig) return;
   if (shouldPausePosBackgroundPull()) {
     void import("../lib/posPushScheduler").then(({ schedulePushPendingUploads }) => schedulePushPendingUploads());
-    void import("../lib/staffRecovery").then(({ pullAndMergeStaffDuringCloudSync }) => {
-      void pullAndMergeStaffDuringCloudSync();
-    });
     return;
   }
   if (backgroundSyncTimer != null) return;
   const delay = opts?.delayMs ?? 0;
   backgroundSyncTimer = globalThis.setTimeout(() => {
     backgroundSyncTimer = null;
+    if (opts?.pull === false) {
+      void pushShopPendingToCloud().catch(() => undefined);
+      return;
+    }
     void syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
   }, delay);
 }

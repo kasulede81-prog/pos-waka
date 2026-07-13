@@ -4,6 +4,7 @@
 
 import type { CloudRecoveryValidationResult } from "./cloudRecoveryValidator";
 import type { RecoveryCompletenessReport } from "./cloudRecoveryCompleteness";
+import { progressPctForStep, DOWNLOAD_PROGRESS_CAP } from "./recoveryProgress";
 
 export type CloudRecoveryStepId =
   | "probing"
@@ -53,13 +54,29 @@ export type RecoveryIntegrityDiagnostics = {
   inventoryReconciliation: RecoveryInventoryReconciliationDiagnostics | null;
 };
 
+export type RecoveryRuntimeDiagnostics = {
+  sessionId: string | null;
+  currentStage: string | null;
+  stageStartedAt: string | null;
+  timeoutCount: number;
+  retryCount: number;
+  idbPersistDurationMs: number | null;
+  lastCloudRequestDurationMs: number | null;
+};
+
 export type CloudRecoverySessionState = {
-  status: "idle" | "active" | "failed" | "complete";
+  status: "idle" | "active" | "core_unlocked" | "certifying" | "failed" | "complete";
+  progressPhase: "downloading" | "validating" | "finalizing" | "complete";
   startedAt: string | null;
   finishedAt: string | null;
   durationMs: number | null;
   currentStep: CloudRecoveryStepId | null;
   lastCompletedStep: CloudRecoveryStepId | null;
+  /** Monotonic floor — progress never drops below this during download. */
+  progressFloorPct: number;
+  /** Explicit sub-step progress (e.g. snapshot persist). */
+  manualProgressPct: number;
+  runtime: RecoveryRuntimeDiagnostics;
   /** Rows downloaded from cloud during pull (may lead restored counts). */
   downloadedCounts: CloudRecoveryEntityCounts;
   /** Rows confirmed in local store after restore + persist. */
@@ -68,6 +85,7 @@ export type CloudRecoverySessionState = {
   entityCounts: CloudRecoveryEntityCounts;
   integrityDiagnostics: RecoveryIntegrityDiagnostics;
   certification: import("./cloudTrustCenter").CloudTrustCertificationReport | null;
+  certificationWarnings: string[];
   errorMessage: string | null;
   errorKey: string | null;
   validation: CloudRecoveryValidationResult | null;
@@ -105,18 +123,33 @@ const emptyIntegrityDiagnostics = (): RecoveryIntegrityDiagnostics => ({
   inventoryReconciliation: null,
 });
 
+const emptyRuntime = (): RecoveryRuntimeDiagnostics => ({
+  sessionId: null,
+  currentStage: null,
+  stageStartedAt: null,
+  timeoutCount: 0,
+  retryCount: 0,
+  idbPersistDurationMs: null,
+  lastCloudRequestDurationMs: null,
+});
+
 let session: CloudRecoverySessionState = {
   status: "idle",
+  progressPhase: "downloading",
   startedAt: null,
   finishedAt: null,
   durationMs: null,
   currentStep: null,
   lastCompletedStep: null,
+  progressFloorPct: 0,
+  manualProgressPct: 0,
+  runtime: emptyRuntime(),
   downloadedCounts: emptyCounts(),
   restoredCounts: emptyCounts(),
   entityCounts: emptyCounts(),
   integrityDiagnostics: emptyIntegrityDiagnostics(),
   certification: null,
+  certificationWarnings: [],
   errorMessage: null,
   errorKey: null,
   validation: null,
@@ -137,6 +170,7 @@ function cloneSession(): CloudRecoverySessionState {
     downloadedCounts: { ...session.downloadedCounts },
     restoredCounts: { ...session.restoredCounts },
     entityCounts: { ...session.restoredCounts },
+    runtime: { ...session.runtime },
     integrityDiagnostics: {
       ...session.integrityDiagnostics,
       fullPullDownloadedCounts: { ...session.integrityDiagnostics.fullPullDownloadedCounts },
@@ -178,30 +212,78 @@ export function readLastCloudRecoveryDiagnostics(): CloudRecoveryDiagnostics | n
     if (!parsed.integrityDiagnostics) {
       parsed.integrityDiagnostics = emptyIntegrityDiagnostics();
     }
+    if (!parsed.progressPhase) {
+      parsed.progressPhase = parsed.status === "complete" ? "complete" : "downloading";
+    }
+    if (typeof parsed.progressFloorPct !== "number") {
+      parsed.progressFloorPct = 0;
+    }
+    if (typeof parsed.manualProgressPct !== "number") {
+      parsed.manualProgressPct = 0;
+    }
+    if (!parsed.runtime) {
+      parsed.runtime = {
+        sessionId: null,
+        currentStage: null,
+        stageStartedAt: null,
+        timeoutCount: 0,
+        retryCount: 0,
+        idbPersistDurationMs: null,
+        lastCloudRequestDurationMs: null,
+      };
+    }
+    if (!parsed.certificationWarnings) {
+      parsed.certificationWarnings = [];
+    }
     return parsed;
   } catch {
     return null;
   }
 }
 
-/** True while recovery is running or failed — blocks POS and mutations. */
+/** True only while download/hydrate is in flight — does not block after core unlock (Phase 24.1BB). */
 export function isCloudRecoveryLockActive(): boolean {
-  return session.status === "active" || session.status === "failed";
+  return session.status === "active";
+}
+
+/** Background certification or optional modules still running. */
+export function isCloudRecoveryBackgroundActive(): boolean {
+  return session.status === "certifying" || session.status === "core_unlocked";
+}
+
+/** Full-screen blocking overlay required (probe fail or core download fail without usable data). */
+export function isCloudRecoveryBlocking(): boolean {
+  if (session.status === "active") return true;
+  if (session.status === "failed") {
+    const c = session.restoredCounts;
+    const hasCore = c.products > 0 || c.sales > 0 || c.customers > 0;
+    return !hasCore;
+  }
+  return false;
+}
+
+function newRecoverySessionId(): string {
+  return `rec_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function beginCloudRecoverySession(): void {
   session = {
     status: "active",
+    progressPhase: "downloading",
     startedAt: new Date().toISOString(),
     finishedAt: null,
     durationMs: null,
     currentStep: null,
     lastCompletedStep: null,
+    progressFloorPct: 0,
+    manualProgressPct: 0,
+    runtime: { ...emptyRuntime(), sessionId: newRecoverySessionId(), currentStage: "starting" },
     downloadedCounts: emptyCounts(),
     restoredCounts: emptyCounts(),
     entityCounts: emptyCounts(),
     integrityDiagnostics: emptyIntegrityDiagnostics(),
     certification: null,
+    certificationWarnings: [],
     errorMessage: null,
     errorKey: null,
     validation: null,
@@ -209,6 +291,32 @@ export function beginCloudRecoverySession(): void {
     completedWithInventoryWarnings: false,
     completionMessage: null,
   };
+  emit();
+}
+
+export function setRecoveryProgressPhase(phase: CloudRecoverySessionState["progressPhase"]): void {
+  session.progressPhase = phase;
+  emit();
+}
+
+export function unlockCoreRecoverySession(): void {
+  if (session.status !== "active") return;
+  session.status = "core_unlocked";
+  session.progressPhase = "validating";
+  emit();
+}
+
+export function beginBackgroundCertification(): void {
+  session.status = "certifying";
+  session.progressPhase = "validating";
+  emit();
+}
+
+export function recordCertificationWarnings(warnings: string[], message?: string | null): void {
+  session.certificationWarnings = [...warnings];
+  if (message) session.completionMessage = message;
+  session.status = "core_unlocked";
+  session.progressPhase = "validating";
   emit();
 }
 
@@ -245,9 +353,49 @@ export function reportRecoveryStep(
   if (session.status !== "active") return;
   session.currentStep = step;
   session.lastCompletedStep = step;
+  session.progressFloorPct = Math.max(session.progressFloorPct, progressPctForStep(step));
+  session.manualProgressPct = 0;
   if (counts) {
     session.downloadedCounts = { ...session.downloadedCounts, ...counts };
   }
+  emit();
+}
+
+export function reportRecoveryManualProgress(pct: number): void {
+  if (session.status !== "active") return;
+  session.manualProgressPct = Math.max(session.manualProgressPct, Math.min(DOWNLOAD_PROGRESS_CAP, pct));
+  session.progressFloorPct = Math.max(session.progressFloorPct, session.manualProgressPct);
+  emit();
+}
+
+export function recordRecoveryRuntime(patch: Partial<RecoveryRuntimeDiagnostics>): void {
+  session.runtime = { ...session.runtime, ...patch };
+  emit();
+}
+
+export function recordRecoveryTimeout(): void {
+  session.runtime = { ...session.runtime, timeoutCount: session.runtime.timeoutCount + 1 };
+  emit();
+}
+
+export function recordRecoveryRetry(): void {
+  session.runtime = { ...session.runtime, retryCount: session.runtime.retryCount + 1 };
+  emit();
+}
+
+export function unlockCoreRecoveryWithDegradedValidation(
+  validation: CloudRecoveryValidationResult,
+  message: string,
+): void {
+  if (session.status !== "active" && session.status !== "failed") return;
+  session.status = "core_unlocked";
+  session.progressPhase = "validating";
+  session.validation = validation;
+  session.errorMessage = null;
+  session.errorKey = null;
+  session.completedWithInventoryWarnings = true;
+  session.completionMessage = message;
+  session.certificationWarnings = [...(session.certificationWarnings ?? []), "recovery_degraded_unlock"];
   emit();
 }
 
@@ -275,6 +423,7 @@ export function completeCloudRecoverySession(
   session = {
     ...session,
     status: "complete",
+    progressPhase: "complete",
     finishedAt,
     durationMs: Date.now() - startedMs,
     currentStep: "validation",
@@ -302,6 +451,7 @@ export function failCloudRecoverySession(
   session = {
     ...session,
     status: "failed",
+    progressPhase: "downloading",
     finishedAt,
     durationMs: Date.now() - startedMs,
     errorMessage,
@@ -312,6 +462,8 @@ export function failCloudRecoverySession(
     certification: session.certification,
     completedWithInventoryWarnings: false,
     completionMessage: null,
+    progressFloorPct: session.progressFloorPct,
+    manualProgressPct: session.manualProgressPct,
   };
   persistDiagnostics();
   emit();
@@ -320,16 +472,21 @@ export function failCloudRecoverySession(
 export function resetCloudRecoverySessionForRetry(): void {
   session = {
     status: "idle",
+    progressPhase: "downloading",
     startedAt: null,
     finishedAt: null,
     durationMs: null,
     currentStep: null,
     lastCompletedStep: null,
+    progressFloorPct: 0,
+    manualProgressPct: 0,
+    runtime: emptyRuntime(),
     downloadedCounts: emptyCounts(),
     restoredCounts: emptyCounts(),
     entityCounts: emptyCounts(),
     integrityDiagnostics: emptyIntegrityDiagnostics(),
     certification: null,
+    certificationWarnings: [],
     errorMessage: null,
     errorKey: null,
     validation: null,

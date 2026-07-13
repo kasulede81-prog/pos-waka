@@ -4,6 +4,7 @@ import { withTimeout } from "./promiseTimeout";
 import { setSessionConnectionState } from "./sessionConnectionState";
 
 export const SESSION_GET_TIMEOUT_MS = 6000;
+export const SESSION_REFRESH_TIMEOUT_MS = 8000;
 export const SESSION_REFRESH_BACKOFF_MS = [1000, 5000, 15000, 30000, 60000] as const;
 
 export type SessionRestoreSource = "live" | "cached" | "none";
@@ -141,7 +142,8 @@ export async function resolveStartupSession(
         reason: "getSession_empty",
       });
     }
-    setSessionConnectionState(offline ? "offline_cached" : "reconnecting");
+    // Keep the app feeling instant: cached session is usable while refresh runs in background.
+    setSessionConnectionState(offline ? "offline_cached" : "online");
     return {
       session: cached,
       source: "cached",
@@ -198,7 +200,9 @@ export function scheduleSessionRefreshRetry(
   clearRetryTimer();
 
   const delay = SESSION_REFRESH_BACKOFF_MS[Math.min(retryAttempt, SESSION_REFRESH_BACKOFF_MS.length - 1)];
-  setSessionConnectionState(getDeviceOnline() ? "reconnecting" : "offline_cached");
+  if (!getDeviceOnline()) {
+    setSessionConnectionState("offline_cached");
+  }
   logAuthSessionEvent("refresh_scheduled", { delayMs: delay, attempt: retryAttempt + 1 });
 
   retryTimer = window.setTimeout(() => {
@@ -220,10 +224,20 @@ export async function runSessionRefreshAttempt(): Promise<void> {
       return;
     }
 
-    setSessionConnectionState("reconnecting");
     logAuthSessionEvent("refresh_attempt", { attempt: retryAttempt + 1 });
 
-    const { data, error } = await activeRefreshFn();
+    const { data, error } = await withTimeout(
+      activeRefreshFn(),
+      SESSION_REFRESH_TIMEOUT_MS,
+      {
+        data: { session: null },
+        error: {
+          name: "AuthRetryableFetchError",
+          message: "refresh timeout",
+          status: 0,
+        } as AuthError,
+      },
+    );
     if (data.session?.user) {
       retryAttempt = 0;
       setSessionConnectionState("online");
@@ -242,6 +256,7 @@ export async function runSessionRefreshAttempt(): Promise<void> {
     const cached = readPersistedSupabaseSession();
     if (isSessionLocallyRestorable(cached)) {
       retryAttempt += 1;
+      setSessionConnectionState(getDeviceOnline() ? "online" : "offline_cached");
       logAuthSessionEvent("refresh_failed", {
         code: error?.code ?? null,
         connectivity: isLikelyConnectivityError(error) || offline,

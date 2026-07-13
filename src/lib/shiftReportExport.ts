@@ -1,5 +1,7 @@
 import type { Language, ShiftRecord } from "../types";
+import { jsPDF } from "jspdf";
 import { t } from "./i18n";
+import { exportCsvFile, printReportDocument } from "./reportExportEngine";
 import { formatShiftDuration, shiftStatusLabel } from "./shiftEnforcement";
 import { shiftExpectedCash } from "./saleAdjustments";
 
@@ -64,19 +66,18 @@ function csvCell(value: string): string {
   return value;
 }
 
-export function downloadShiftSummaryCsv(lang: Language, rows: ShiftSummaryRow[]): void {
-  const blob = new Blob([buildShiftSummaryCsv(lang, rows)], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `waka-shift-summary-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+export async function downloadShiftSummaryCsv(lang: Language, rows: ShiftSummaryRow[]): Promise<boolean> {
+  const csv = buildShiftSummaryCsv(lang, rows);
+  const filename = `waka-shift-summary-${new Date().toISOString().slice(0, 10)}.csv`;
+  const result = await exportCsvFile("shift", filename, csvToRows(csv));
+  return result.ok;
 }
 
-export function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummaryRow[]): void {
-  const win = window.open("", "_blank", "noopener,noreferrer");
-  if (!win) return;
+function csvToRows(csv: string): Array<Array<string | number>> {
+  return csv.split("\n").map((line) => line.split(","));
+}
+
+export async function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummaryRow[]): Promise<boolean> {
   const title = t(lang, "shiftReportTitle");
   const tableRows = rows
     .map((row) => {
@@ -95,7 +96,8 @@ export function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummaryRow[])
       </tr>`;
     })
     .join("");
-  win.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(title)}</title>
+
+  const html = `<!DOCTYPE html><html><head><title>${escapeHtml(title)}</title>
     <style>
       body { font-family: system-ui, sans-serif; padding: 24px; color: #111; }
       h1 { font-size: 20px; margin-bottom: 16px; }
@@ -119,9 +121,36 @@ export function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummaryRow[])
       </tr></thead>
       <tbody>${tableRows}</tbody>
     </table>
-    <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 500); };</script>
-    </body></html>`);
-  win.document.close();
+    </body></html>`;
+
+  const filename = `waka-shift-summary-${new Date().toISOString().slice(0, 10)}.pdf`;
+  return printReportDocument("shift", {
+    pdfFilename: filename,
+    buildPdfBlob: () => {
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(title, 40, 40);
+      let y = 64;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      for (const row of rows) {
+        const sh = row.shift;
+        const line = `${sh.actorName ?? sh.actorUserId} | ${formatTs(sh.startAt)} | UGX ${sh.salesTotalUgx.toLocaleString()}`;
+        doc.text(line, 40, y);
+        y += 12;
+        if (y > 760) {
+          doc.addPage();
+          y = 40;
+        }
+      }
+      return doc.output("blob");
+    },
+    htmlBody: html,
+    paper: "a4",
+    title,
+    shareDialogTitle: t(lang, "shiftReportExportPdf"),
+  });
 }
 
 function formatTs(iso: string): string {

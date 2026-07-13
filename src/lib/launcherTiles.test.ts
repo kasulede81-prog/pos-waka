@@ -63,6 +63,19 @@ describe("launcher tile defaults", () => {
     expect(secondary.find((t) => t.id === "salesHistory")?.labelKey).toBe("pharmacyDispensingHistory");
     expect(secondary.find((t) => t.id === "investigation")?.to).toBe("/office/audit-center");
   });
+
+  it("recovers when every secondary tile was hidden in saved layout", () => {
+    const hiddenAll = Object.fromEntries(
+      DEFAULT_LAUNCHER_TILE_ORDER.map((id) => [id, { hidden: true }]),
+    );
+    const { secondary } = resolveHomeMenuTiles({
+      savedOrder: [],
+      layout: hiddenAll,
+      hasPermission: () => true,
+    });
+    expect(secondary.length).toBeGreaterThan(0);
+    expect(secondary.some((t) => t.id === "inventory")).toBe(true);
+  });
 });
 
 describe("office hub tile defaults", () => {

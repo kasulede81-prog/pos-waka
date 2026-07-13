@@ -204,7 +204,8 @@ function ExecutiveFooterWidget({ ctx }: DashboardWidgetProps) {
       summaryKey={ctx.summaryKey}
       summaryVars={ctx.summaryVars}
       onExport={ctx.exportDashboard ?? (() => {})}
-      onShare={ctx.exportDashboard ?? (() => {})}
+      onShare={ctx.shareDashboard ?? (() => {})}
+      onPrint={ctx.printDashboard ?? (() => {})}
     />
   );
 }

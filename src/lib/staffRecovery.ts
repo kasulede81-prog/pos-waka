@@ -47,10 +47,6 @@ export function mergeStaffAccountsForCloudSync(
   return [...merged.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-export function mergeStaffAccountsFromCloudPull(local: StaffAccount[], cloud: StaffAccount[]): StaffAccount[] {
-  return mergeStaffAccountsForCloudSync(local, cloud);
-}
-
 async function reconcileLocalOnlyStaffToCloud(cloud: StaffAccount[], merged: StaffAccount[]): Promise<void> {
   const cloudIds = new Set(cloud.map((row) => row.id));
   for (const row of merged) {
@@ -64,13 +60,34 @@ async function reconcileLocalOnlyStaffToCloud(cloud: StaffAccount[], merged: Sta
 const STAFF_SYNC_MIN_INTERVAL_MS = 45_000;
 let lastStaffSyncAt = 0;
 
-/** Pull staff during cloud sync — Phase 3 uses versioned cache on all devices. */
+/** Event-driven staff pulls bypass the routine safety throttle (Phase 25.1). */
+export function isEventDrivenStaffPull(reason?: string): boolean {
+  if (!reason) return false;
+  return (
+    reason === "staff_ack" ||
+    reason === "staff_realtime" ||
+    reason === "realtime" ||
+    reason === "reconnect" ||
+    reason === "foreground" ||
+    reason === "visibility" ||
+    reason === "sale_ack"
+  );
+}
+
+/** Pull staff during cloud sync — versioned cache on all devices. */
 export async function pullAndMergeStaffDuringCloudSync(opts?: {
   deviceAuthority?: import("./deviceAuthority").DeviceAuthorityContext | null;
   force?: boolean;
+  reason?: string;
 }): Promise<void> {
   const now = Date.now();
-  if (!opts?.force && now - lastStaffSyncAt < STAFF_SYNC_MIN_INTERVAL_MS) return;
+  const eventDriven = opts?.force === true || isEventDrivenStaffPull(opts?.reason);
+  if (opts?.reason === "staff_realtime") {
+    void import("./staffSyncDiagnostics").then(({ consumeStaffRealtimeToPullLatency }) => {
+      consumeStaffRealtimeToPullLatency();
+    });
+  }
+  if (!eventDriven && now - lastStaffSyncAt < STAFF_SYNC_MIN_INTERVAL_MS) return;
 
   const { resolveShopCtx } = await import("../offline/cloudSync");
   const ctx = await resolveShopCtx();
@@ -82,7 +99,7 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
     reconcileStaffCacheToPreferencesIfNeeded,
   } = await import("./staffCacheSync");
 
-  const updated = await refreshStaffCacheBackground();
+  const updated = await refreshStaffCacheBackground({ force: eventDriven });
   if (updated) {
     const { usePosStore } = await import("../store/usePosStore");
     const { readOfflineStaffCache } = await import("./offlineStaffCache");
@@ -112,8 +129,9 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
     if (repulled) cloud = repulled;
   }
 
-  const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
-  await applyStaffAccountsMergeToStore(cloud, { source: "cloud_pull" });
+  const { applyStaffAccountsMergeToStore, computeImplicitStaffTombstones } = await import("./staffSyncApply");
+  const removedIds = computeImplicitStaffTombstones(local, cloud);
+  await applyStaffAccountsMergeToStore(cloud, { source: "cloud_pull", removedIds });
   const merged = usePosStore.getState().preferences.staffAccounts ?? [];
 
   await reconcileLocalOnlyStaffToCloud(cloud, merged);
@@ -121,25 +139,36 @@ export async function pullAndMergeStaffDuringCloudSync(opts?: {
   lastStaffSyncAt = now;
 }
 
-/** Force staff list hydration from cloud/cache — use on Workers page and after login. */
+/** Force staff list hydration from cloud/cache — validates against cloud even when local staff exist. */
 export async function hydrateStaffTeamFromCloud(opts?: { force?: boolean }): Promise<number> {
+  const hydrateStarted = performance.now();
   const { resolveShopCtx } = await import("../offline/cloudSync");
   const ctx = await resolveShopCtx();
   if (!ctx) return 0;
 
+  const force = opts?.force ?? false;
   const {
     refreshStaffCacheBackground,
     reconcileStaffCacheToPreferencesIfNeeded,
   } = await import("./staffCacheSync");
 
-  await refreshStaffCacheBackground({ force: opts?.force ?? false });
+  await refreshStaffCacheBackground({ force: force || undefined });
   await reconcileStaffCacheToPreferencesIfNeeded(ctx.shopId);
 
-  const { usePosStore } = await import("../store/usePosStore");
-  const localCount = (usePosStore.getState().preferences.staffAccounts ?? []).length;
-  if (localCount > 0) return localCount;
+  const { readOfflineStaffCache } = await import("./offlineStaffCache");
+  const cache = await readOfflineStaffCache(ctx.shopId);
+  if (!cache?.staff.length) {
+    const count = await pullAndMergeStaffAccountsForRecovery();
+    const { recordStaffHydrationDuration } = await import("./staffSyncDiagnostics");
+    recordStaffHydrationDuration(performance.now() - hydrateStarted, { force, count });
+    return count;
+  }
 
-  return pullAndMergeStaffAccountsForRecovery();
+  const { usePosStore } = await import("../store/usePosStore");
+  const count = (usePosStore.getState().preferences.staffAccounts ?? []).length;
+  const { recordStaffHydrationDuration } = await import("./staffSyncDiagnostics");
+  recordStaffHydrationDuration(performance.now() - hydrateStarted, { force, count });
+  return count;
 }
 
 export async function pullAndMergeStaffAccountsForRecovery(): Promise<number> {
@@ -150,17 +179,21 @@ export async function pullAndMergeStaffAccountsForRecovery(): Promise<number> {
   const ctx = await resolveShopCtx();
   if (!ctx) return 0;
   const cache = await readOfflineStaffCache(ctx.shopId);
-  const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
+  const { applyStaffAccountsMergeToStore, computeImplicitStaffTombstones } = await import("./staffSyncApply");
 
   if (!cache?.staff.length) {
     const pulled = await pullShopStaffFromCloud();
     if (!pulled?.length) return 0;
-    await applyStaffAccountsMergeToStore(pulled, { source: "recovery_cloud_pull" });
     const { usePosStore } = await import("../store/usePosStore");
+    const local = usePosStore.getState().preferences.staffAccounts ?? [];
+    const removedIds = computeImplicitStaffTombstones(local, pulled);
+    await applyStaffAccountsMergeToStore(pulled, { source: "recovery_cloud_pull", removedIds });
     return (usePosStore.getState().preferences.staffAccounts ?? []).length;
   }
 
-  await applyStaffAccountsMergeToStore(cache.staff, { source: "recovery_cache" });
   const { usePosStore } = await import("../store/usePosStore");
+  const local = usePosStore.getState().preferences.staffAccounts ?? [];
+  const removedIds = computeImplicitStaffTombstones(local, cache.staff);
+  await applyStaffAccountsMergeToStore(cache.staff, { source: "recovery_cache", removedIds });
   return (usePosStore.getState().preferences.staffAccounts ?? []).length;
 }

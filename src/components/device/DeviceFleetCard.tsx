@@ -33,7 +33,6 @@ export type DeviceFleetCardProps = {
   onApprove: (device: ShopDeviceRow) => void;
   onDismiss: (device: ShopDeviceRow) => void;
   onDisconnect: (device: ShopDeviceRow) => void;
-  onRemove: (device: ShopDeviceRow) => void;
   onCopyId: (device: ShopDeviceRow) => void;
   onRetryActivation?: () => void;
 };
@@ -88,7 +87,6 @@ export function DeviceFleetCard({
   onApprove,
   onDismiss,
   onDisconnect,
-  onRemove,
   onCopyId,
   onRetryActivation,
 }: DeviceFleetCardProps) {
@@ -240,29 +238,20 @@ export function DeviceFleetCard({
         </div>
       ) : null}
 
-      {isShopOwner && device.approval_status === "approved" && device.status === "active" ? (
-        <div className="mt-3 flex flex-col gap-2">
+      {isShopOwner && device.approval_status === "approved" && device.status === "active" && !isCurrent ? (
+        <div className="mt-3">
           <button
             type="button"
             disabled={busy}
             onClick={() => onDisconnect(device)}
-            className="min-h-[44px] w-full rounded-xl border border-border bg-muted px-4 text-sm font-bold text-foreground disabled:opacity-50"
+            className="min-h-[44px] w-full rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-800 disabled:opacity-50"
           >
             {busy ? t(lang, "deviceMgmtDisconnecting") : t(lang, "deviceMgmtDisconnect")}
           </button>
-          {!isCurrent ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onRemove(device)}
-              className="min-h-[44px] w-full rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-800 disabled:opacity-50"
-            >
-              {busy ? t(lang, "deviceMgmtRemoving") : t(lang, "deviceMgmtRemove")}
-            </button>
-          ) : (
-            <p className="text-xs font-medium text-muted-foreground">{t(lang, "deviceFleetCurrentDisconnectHint")}</p>
-          )}
         </div>
+      ) : null}
+      {isCurrent ? (
+        <p className="mt-3 text-xs font-medium text-muted-foreground">{t(lang, "deviceFleetCurrentDisconnectHint")}</p>
       ) : null}
     </li>
   );

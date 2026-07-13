@@ -117,6 +117,7 @@ function CategoryContentWidget({ ctx }: ReportWidgetProps) {
       supplierDebtTotal={ctx.report.supplierDebtTotal}
       stockValueAtCost={ctx.report.stockValueAtCost}
       purchasesTodayUgx={ctx.purchasesTodayUgx}
+      purchasesInPeriodUgx={ctx.purchasesInPeriodUgx}
       marginLeaders={ctx.marginLeaders}
       weakProducts={ctx.report.slowProducts}
       products={ctx.products}

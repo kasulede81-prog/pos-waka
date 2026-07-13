@@ -1,10 +1,11 @@
+import { jsPDF } from "jspdf";
 import type { CashExpense, Language, Product, ReturnRecord, Sale, StaffAccount } from "../types";
 import { sumCashExpensesInMonth } from "./cashReconciliation";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesInMonth } from "./financialMetrics";
 import { inventoryValueAtCostUgx } from "./costPrecision";
-import { Capacitor } from "@capacitor/core";
 import { saveExportedFile } from "./fileDownload";
+import { printDocumentNativeFallback } from "./nativePrintFallback";
 import { t } from "./i18n";
 
 export type MonthlyBusinessReport = {
@@ -234,56 +235,11 @@ ${escapeHtml(t(lang, "monthlyReportLowStock"))}: ${report.inventorySummary.lowSt
 </body></html>`;
 }
 
-export function printMonthlyReport(
+export function buildMonthlyReportPdfBlob(
   lang: Language,
   report: MonthlyBusinessReport,
   opts: { includeProfit: boolean },
-): boolean {
-  const html = buildMonthlyReportHtml(lang, report, opts);
-  const frame = document.createElement("iframe");
-  frame.style.position = "fixed";
-  frame.style.right = "0";
-  frame.style.bottom = "0";
-  frame.style.width = "0";
-  frame.style.height = "0";
-  frame.style.border = "0";
-  document.body.appendChild(frame);
-  const doc = frame.contentWindow?.document;
-  if (!doc) {
-    frame.remove();
-    const popup = window.open("", "_blank");
-    if (!popup) return false;
-    popup.document.write(html);
-    popup.document.close();
-    popup.focus();
-    popup.print();
-    return true;
-  }
-  doc.open();
-  doc.write(html);
-  doc.close();
-  frame.contentWindow?.focus();
-  frame.contentWindow?.print();
-  window.setTimeout(() => frame.remove(), 2000);
-  return true;
-}
-
-export async function downloadMonthlyReportWord(
-  lang: Language,
-  report: MonthlyBusinessReport,
-  opts: { includeProfit: boolean },
-): Promise<boolean> {
-  const html = buildMonthlyReportHtml(lang, report, opts);
-  return saveExportedFile(`waka-monthly-${report.monthKey}.doc`, html, "application/msword;charset=utf-8");
-}
-
-export async function downloadMonthlyReportPdf(
-  lang: Language,
-  report: MonthlyBusinessReport,
-  opts: { includeProfit: boolean },
-): Promise<boolean> {
-  try {
-  const { jsPDF } = await import("jspdf");
+): Blob {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const margin = 48;
   let y = margin;
@@ -323,13 +279,44 @@ export async function downloadMonthlyReportPdf(
   for (const c of report.byCashier) {
     line(`  ${c.label} — ${c.count} sales — UGX ${c.revenueUgx.toLocaleString()}`);
   }
+  return doc.output("blob");
+}
+
+export async function printMonthlyReport(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): Promise<boolean> {
+  const html = buildMonthlyReportHtml(lang, report, opts);
   const filename = `waka-monthly-${report.monthKey}.pdf`;
-  if (Capacitor.isNativePlatform()) {
-    doc.save(filename);
-    return true;
-  }
-  const pdfBlob = doc.output("blob");
-  return saveExportedFile(filename, pdfBlob, "application/pdf");
+  return printDocumentNativeFallback({
+    pdfFilename: filename,
+    buildPdfBlob: () => buildMonthlyReportPdfBlob(lang, report, opts),
+    htmlBody: html.replace(/<\/?html[^>]*>|<\/?head[^>]*>|<\/?body[^>]*>/gi, ""),
+    paper: "a4",
+    title: `${report.shopName} ${report.monthKey}`,
+    shareDialogTitle: t(lang, "monthlyReportPrint"),
+  });
+}
+
+export async function downloadMonthlyReportWord(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): Promise<boolean> {
+  const html = buildMonthlyReportHtml(lang, report, opts);
+  return saveExportedFile(`waka-monthly-${report.monthKey}.doc`, html, "application/msword;charset=utf-8");
+}
+
+export async function downloadMonthlyReportPdf(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): Promise<boolean> {
+  try {
+    const filename = `waka-monthly-${report.monthKey}.pdf`;
+    const pdfBlob = buildMonthlyReportPdfBlob(lang, report, opts);
+    return saveExportedFile(filename, pdfBlob, "application/pdf");
   } catch {
     return false;
   }

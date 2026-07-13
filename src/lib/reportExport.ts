@@ -1,8 +1,12 @@
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
 import type { CashExpense, CashDrawerAdjustment, DebtPayment, Language, Product, ReturnRecord, Sale, ShiftRecord, SupplierPayment } from "../types";
 import { t } from "./i18n";
 import { dateKeyKampala } from "./datesUg";
 import { getDrawerCashForDayInput } from "./cashReconciliation";
 import { getCompletedFinancials } from "./financialMetrics";
+import { logShareOutcome } from "./reportExportEngine";
+import type { ReportExportKind } from "./reportExportDiagnostics";
 
 export type DailyReportExportInput = {
   sales: Sale[];
@@ -84,15 +88,47 @@ export function buildDailyReportText(
   return lines.join("\n");
 }
 
-export async function shareText(body: string, title: string): Promise<boolean> {
+function isUserShareCancel(err: unknown): boolean {
+  const name = (err as { name?: string })?.name ?? "";
+  const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
+  return name === "AbortError" || msg.includes("cancel") || msg.includes("dismiss");
+}
+
+export async function shareText(
+  body: string,
+  title: string,
+  kind: ReportExportKind = "other",
+): Promise<boolean> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Share.share({ title, text: body, dialogTitle: title });
+      logShareOutcome(kind, true);
+      return true;
+    } catch (err) {
+      if (isUserShareCancel(err)) {
+        logShareOutcome(kind, false, "cancelled");
+        return false;
+      }
+      logShareOutcome(kind, false, String((err as Error)?.message ?? err));
+      return false;
+    }
+  }
+
   const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
   if (typeof nav.share === "function") {
     try {
       await nav.share({ title, text: body });
+      logShareOutcome(kind, true);
       return true;
-    } catch {
+    } catch (err) {
+      if (isUserShareCancel(err)) {
+        logShareOutcome(kind, false, "cancelled");
+        return false;
+      }
+      logShareOutcome(kind, false, String((err as Error)?.message ?? err));
       return false;
     }
   }
+  logShareOutcome(kind, false, "share_unavailable");
   return false;
 }

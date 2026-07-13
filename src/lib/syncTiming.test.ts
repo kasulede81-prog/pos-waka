@@ -30,6 +30,7 @@ describe("syncTiming desktop profile", () => {
     vi.resetModules();
     const timing = await import("./syncTiming");
     expect(timing.activeSyncProfile()).toBe("mobile_web");
-    expect(timing.POST_SALE_PUSH_DEBOUNCE_MS).toBeGreaterThan(150);
+    expect(timing.POST_SALE_PUSH_DEBOUNCE_MS).toBe(60);
+    expect(timing.SYNC_RECONNECT_DELAY_MS).toBeLessThan(200);
   });
 });

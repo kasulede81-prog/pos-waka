@@ -107,7 +107,15 @@ export function rowToPurchase(row: Record<string, unknown>): CloudPurchaseRow | 
   return { record, updatedAt };
 }
 
+export function isSupplierDeletedMetadata(row: Record<string, unknown>): boolean {
+  const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {};
+  if (meta.deleted === true || meta.deleted === "true") return true;
+  const deletedAt = meta.deletedAt ?? meta.deleted_at;
+  return deletedAt != null && String(deletedAt).trim() !== "";
+}
+
 export function rowToSupplier(row: Record<string, unknown>): CloudSupplierRow | null {
+  if (isSupplierDeletedMetadata(row)) return null;
   const id = String(row.id ?? "").trim();
   if (!id || isWalkInSupplierId(id)) return null;
 

@@ -15,6 +15,8 @@ describe("enterprise UX foundation", () => {
   it("includes EnterpriseSaveIndicator in mandatory primitives", () => {
     expect(ENTERPRISE_UX_PRIMITIVES).toContain("EnterpriseSaveIndicator");
     expect(ENTERPRISE_UX_PRIMITIVES).toContain("EnterpriseSkeleton");
+    expect(ENTERPRISE_UX_PRIMITIVES).toContain("EnterpriseSpinner");
+    expect(ENTERPRISE_UX_PRIMITIVES).toContain("enterpriseMotion");
     expect(ENTERPRISE_UX_PRIMITIVES).toContain("EnterpriseListFooter");
   });
 });

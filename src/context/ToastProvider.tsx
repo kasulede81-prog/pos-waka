@@ -11,8 +11,11 @@ import {
 import clsx from "clsx";
 import { t } from "../lib/i18n";
 import { statusTokens } from "../lib/statusTokens";
+import { enterpriseMotion } from "../lib/enterpriseMotion";
+import { enterpriseTypeClass } from "../lib/enterpriseTypography";
 import { subscribeSubscriptionNotifications } from "../lib/subscriptionNotifications";
 import { readUiLanguageCacheSync } from "../lib/uiLanguage";
+import { EnterpriseSpinner } from "../components/enterprise/EnterpriseSpinner";
 import type { Language } from "../types";
 
 export type ToastKind = "success" | "warning" | "error" | "offline" | "syncing";
@@ -72,17 +75,18 @@ function ToastViewport({ items, lang }: { items: ToastItem[]; lang: Language }) 
           key={item.id}
           role="status"
           className={clsx(
-            "pointer-events-auto max-w-md rounded-2xl shadow-lg",
+            "pointer-events-auto max-w-md rounded-2xl px-4 py-3 shadow-lg",
+            enterpriseMotion.toastEnter,
             toastStyles(item.kind),
           )}
         >
           {item.kind === "syncing" ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span className={clsx("inline-flex items-center gap-2", enterpriseTypeClass("body", "!font-semibold"))}>
+              <EnterpriseSpinner size="sm" label={t(lang, "notifySyncing")} />
               {item.message || t(lang, "notifySyncing")}
             </span>
           ) : (
-            item.message
+            <span className={enterpriseTypeClass("body", "!font-semibold")}>{item.message}</span>
           )}
         </div>
       ))}

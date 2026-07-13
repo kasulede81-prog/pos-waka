@@ -140,10 +140,38 @@ export function applyStaffDeltaToCache(
   };
 }
 
-/** Mirror cache into preferences — merge-only (Phase 21.4). */
-export async function mirrorStaffCacheToPreferences(staff: StaffAccount[]): Promise<void> {
-  const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
-  await applyStaffAccountsMergeToStore(staff, { source: "cache_mirror" });
+/** Mirror cache into preferences — single unified path (Phase 25.1). */
+export async function mirrorStaffCacheToPreferences(
+  staff: StaffAccount[],
+  opts?: { removedIds?: string[]; source?: string },
+): Promise<void> {
+  const mirrorStarted = performance.now();
+  const { applyStaffAccountsMergeToStore, computeImplicitStaffTombstones } = await import("./staffSyncApply");
+  const { usePosStore } = await import("../store/usePosStore");
+  const local = usePosStore.getState().preferences.staffAccounts ?? [];
+  const implicitRemoved = computeImplicitStaffTombstones(local, staff);
+  const removedIds = [...new Set([...(opts?.removedIds ?? []), ...implicitRemoved])];
+  await applyStaffAccountsMergeToStore(staff, {
+    source: opts?.source ?? "cache_mirror",
+    removedIds,
+  });
+  const { recordStaffMirrorDuration } = await import("./staffSyncDiagnostics");
+  recordStaffMirrorDuration(performance.now() - mirrorStarted, { source: opts?.source ?? "cache_mirror" });
+}
+
+/** Write encrypted cache and mirror to preferences in one step. */
+export async function writeStaffCacheAndMirrorToPreferences(
+  record: OfflineStaffCacheRecord,
+  removedClientIds: string[] = [],
+): Promise<void> {
+  await writeOfflineStaffCache(record);
+  void import("./staffSyncDiagnostics").then(({ recordStaffCacheVersion }) => {
+    recordStaffCacheVersion(record.version);
+  });
+  await mirrorStaffCacheToPreferences(record.staff, {
+    removedIds: removedClientIds,
+    source: "cache_delta",
+  });
 }
 
 /**
@@ -161,9 +189,15 @@ export async function reconcileStaffCacheToPreferencesIfNeeded(shopId: string): 
   }
   if (!cache?.staff.length) return false;
 
-  const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
-  const stats = await applyStaffAccountsMergeToStore(cache.staff, { source: "cache_reconcile" });
-  return stats.added > 0 || stats.updated > 0 || stats.mergedCount !== stats.localCount;
+  const { applyStaffAccountsMergeToStore, computeImplicitStaffTombstones } = await import("./staffSyncApply");
+  const { usePosStore } = await import("../store/usePosStore");
+  const local = usePosStore.getState().preferences.staffAccounts ?? [];
+  const removedIds = computeImplicitStaffTombstones(local, cache.staff);
+  const stats = await applyStaffAccountsMergeToStore(cache.staff, {
+    source: "cache_reconcile",
+    removedIds,
+  });
+  return stats.added > 0 || stats.updated > 0 || removedIds.length > 0 || stats.mergedCount !== stats.localCount;
 }
 
 export async function isStaffCacheUpToDate(shopId: string): Promise<boolean> {
@@ -231,8 +265,7 @@ export async function refreshStaffCacheBackground(opts?: {
   if (businessName) {
     next.businessName = businessName;
   }
-  await writeOfflineStaffCache(next);
-  await mirrorStaffCacheToPreferences(next.staff);
+  await writeStaffCacheAndMirrorToPreferences(next, delta.removedClientIds);
 
   return true;
 }

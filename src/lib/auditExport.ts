@@ -101,7 +101,7 @@ export async function buildAuditPdfBlob(lang: Language, entries: AuditLogEntry[]
   y += 8;
 
   const rows = auditEntriesToExportRows(lang, entries);
-  for (const r of rows.slice(0, 500)) {
+  for (const r of rows) {
     addLine(`${r.timestamp} | ${r.staff} (${r.role}) | ${r.action}`, true);
     addLine(r.summary);
     if (r.reason) addLine(`${t(lang, "auditExportColReason")}: ${r.reason}`);

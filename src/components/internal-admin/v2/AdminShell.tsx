@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
+import { EnterpriseSpinner } from "../../enterprise/EnterpriseSpinner";
 import { WakaSymbolIcon } from "../../brand/WakaLogo";
 import clsx from "clsx";
 import type { Language } from "../../../types";
@@ -170,7 +171,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
   if (loading) {
     return createPortal(
       <div className={clsx("waka-internal-admin-root fixed inset-0 flex h-[100dvh] flex-col items-center justify-center font-admin", themeUi.adminPage)}>
-        <Loader2 className="h-8 w-8 animate-spin text-waka-600" />
+        <EnterpriseSpinner size="lg" label="Loading admin" className="text-waka-600" />
         <p className="mt-3 text-sm font-semibold text-muted-foreground">Loading admin…</p>
       </div>,
       document.body,

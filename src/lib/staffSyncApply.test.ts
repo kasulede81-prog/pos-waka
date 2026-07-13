@@ -107,6 +107,38 @@ describe("staffSyncApply", () => {
     expect(stats.mergedCount).toBe(1);
     expect(mockSetState).not.toHaveBeenCalled();
   });
+
+  it("applyStaffAccountsMergeToStore applies cloud tombstones", async () => {
+    mockGetState.mockReturnValue({
+      preferences: {
+        staffAccounts: [
+          staff("gone", "Deleted", "2026-07-01T10:00:00.000Z"),
+          staff("keep", "Keep", "2026-07-01T10:00:00.000Z"),
+        ],
+      },
+    });
+
+    const { applyStaffAccountsMergeToStore } = await import("./staffSyncApply");
+    await applyStaffAccountsMergeToStore([], {
+      source: "test",
+      removedIds: ["gone"],
+    });
+
+    const lastCall = mockSetState.mock.calls.at(-1)?.[0] as {
+      preferences: { staffAccounts: StaffAccount[] };
+    };
+    expect(lastCall.preferences.staffAccounts.map((s) => s.id)).toEqual(["keep"]);
+  });
+
+  it("computeImplicitStaffTombstones removes non-pending staff missing from cache", async () => {
+    const { computeImplicitStaffTombstones } = await import("./staffSyncApply");
+    const local = [
+      staff("gone", "Gone", "2026-07-01T10:00:00.000Z"),
+      staff("b", "B", "2026-07-01T10:00:00.000Z", { pendingCloudSync: true }),
+    ];
+    const cache = [staff("a", "A", "2026-07-01T11:00:00.000Z")];
+    expect(computeImplicitStaffTombstones(local, cache)).toEqual(["gone"]);
+  });
 });
 
 describe("mergeStaffAccountsForCloudSync regression", () => {

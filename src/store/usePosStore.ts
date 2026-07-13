@@ -69,6 +69,13 @@ import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import {
+  buildTodayKpiSnapshotFromSales,
+  bumpTodayKpiSnapshot,
+  readTodayKpiSnapshot,
+  writeTodayKpiSnapshot,
+  type TodayKpiSnapshot,
+} from "../lib/todayKpiSnapshot";
+import {
   buildPendingSaleFromDraft,
   closeTableSession,
   ensureHospitalityFloor,
@@ -410,7 +417,25 @@ function normalizeStaffAccounts(raw: unknown, customRoles: CustomStaffRole[] = [
       permissions: resolveStaffPermissions(draft, customRoles),
     });
   }
-  return out;
+  return dedupeStaffAccountsOnLoad(out);
+}
+
+/** Snapshot hydration dedupe — newest row wins per ID (Phase 25.1). */
+function dedupeStaffAccountsOnLoad(accounts: StaffAccount[]): StaffAccount[] {
+  const byId = new Map<string, StaffAccount>();
+  for (const row of accounts) {
+    const id = row.id?.trim();
+    if (!id) continue;
+    const existing = byId.get(id);
+    if (!existing) {
+      byId.set(id, row);
+      continue;
+    }
+    const localMs = Date.parse(existing.updatedAt || existing.createdAt) || 0;
+    const nextMs = Date.parse(row.updatedAt || row.createdAt) || 0;
+    byId.set(id, nextMs >= localMs ? row : existing);
+  }
+  return [...byId.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
 function normalizeCustomStaffRoles(raw: unknown): CustomStaffRole[] {
@@ -579,6 +604,10 @@ export type PosState = {
   pharmacyComplianceAlerts: import("../types").PharmacyComplianceAlert[];
   /** Background sales history load — shows trust banner while older sales hydrate. */
   salesHistoryHydration: { active: boolean; loaded: number; total: number } | null;
+  /** Phase 24.1A — staged hydration for instant shell. */
+  hydrationStage: "none" | "critical" | "interactive" | "background" | "complete";
+  /** Cached today KPIs — stable dashboard numbers during background sales load. */
+  todayKpiSnapshot: TodayKpiSnapshot | null;
 
   hydrate: (
     data: {
@@ -1166,6 +1195,7 @@ export type PosState = {
     supplierId: string,
     patch: { name?: string; phone?: string; location?: string; notes?: string },
   ) => { ok: boolean; errorKey?: string };
+  removeSupplier: (supplierId: string) => { ok: boolean; errorKey?: string };
   addSupplierPayment: (supplierId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
   voidPurchase: (purchaseId: string, reason: string) => { ok: boolean; errorKey?: string };
   recordPurchase: (input: {
@@ -1585,6 +1615,8 @@ export const usePosStore = create<PosState>((set, get) => {
   pharmacyDispenseCompliance: null,
   pharmacyComplianceAlerts: [],
   salesHistoryHydration: null,
+  hydrationStage: "none",
+  todayKpiSnapshot: null,
 
   hydrate: (data, opts) =>
     set({
@@ -1644,6 +1676,7 @@ export const usePosStore = create<PosState>((set, get) => {
       })(),
       pharmacyDispenseCompliance: null,
       _hydrated: true,
+      hydrationStage: "complete",
       draftLines: [],
       draftInput: null,
       draftCartDiscountUgx: 0,
@@ -1677,6 +1710,7 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedVoidRecords: [],
       archivedReturnRecords: [],
       _hydrated: true,
+      hydrationStage: "critical",
       draftLines: [],
       draftInput: null,
       draftCartDiscountUgx: 0,
@@ -1720,6 +1754,7 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedDayCloses: data.archivedDayCloses ?? s.archivedDayCloses,
       archivedVoidRecords: data.archivedVoidRecords ?? s.archivedVoidRecords,
       archivedReturnRecords: data.archivedReturnRecords ?? s.archivedReturnRecords,
+      hydrationStage: s.hydrationStage === "none" ? "background" : s.hydrationStage,
     })),
 
   applyRestoredSnapshot: (snap) => {
@@ -1762,6 +1797,9 @@ export const usePosStore = create<PosState>((set, get) => {
       draftLines: [],
       draftInput: null,
       draftCartDiscountUgx: 0,
+      salesHistoryHydration: null,
+      hydrationStage: "none",
+      todayKpiSnapshot: null,
     });
   },
 
@@ -2019,7 +2057,10 @@ export const usePosStore = create<PosState>((set, get) => {
     if (updated) {
       void import("../lib/shopStaffCloud").then(async ({ pushStaffToCloud }) => {
         const ok = await pushStaffToCloud(updated);
-        if (!ok) {
+        if (ok) {
+          const { afterStaffCloudAck } = await import("../lib/staffSyncQueue");
+          await afterStaffCloudAck("update");
+        } else {
           const { enqueuePendingStaffSync } = await import("../lib/staffSyncQueue");
           await enqueuePendingStaffSync({ action: "update", staff: updated });
         }
@@ -2253,7 +2294,10 @@ export const usePosStore = create<PosState>((set, get) => {
       const ctx = await resolveShopCtx();
       if (!ctx || !removed) return;
       const ok = await deleteCloudStaff(ctx.shopId, id);
-      if (!ok) {
+      if (ok) {
+        const { afterStaffCloudAck } = await import("../lib/staffSyncQueue");
+        await afterStaffCloudAck("delete");
+      } else {
         const { enqueuePendingStaffSync } = await import("../lib/staffSyncQueue");
         await enqueuePendingStaffSync({ action: "delete", staff: removed, staffCloudId: id });
       }
@@ -2321,8 +2365,17 @@ export const usePosStore = create<PosState>((set, get) => {
       }));
       const updated = get().preferences.staffAccounts?.find((a) => a.id === id);
       if (updated) {
-        const { pushStaffToCloud } = await import("../lib/shopStaffCloud");
-        await pushStaffToCloud(updated);
+        const { authMode } = getStoreSubscriptionContext();
+        if (authMode === "supabase") {
+          const field: import("../lib/staffSyncQueue").StaffSecretResetField =
+            patch.pin !== undefined && patch.password !== undefined
+              ? "both"
+              : patch.password !== undefined
+                ? "password"
+                : "pin";
+          const { syncStaffSecretResetInCloud } = await import("../lib/staffSyncQueue");
+          await syncStaffSecretResetInCloud(updated, { isOnline: getDeviceOnline(), field });
+        }
         void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
           if (patch.pin !== undefined) {
             logStaffSecurityAudit("staff_pin_reset", { staffId: updated.id, staffName: updated.name });
@@ -4320,10 +4373,12 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(state, saleMovements),
       preferences: nextPreferences,
       auditLogs: mergeAuditLogs(state.auditLogs, auditEntries),
+      todayKpiSnapshot: bumpTodayKpiSnapshot(state.todayKpiSnapshot, sale),
     });
 
+    void writeTodayKpiSnapshot(bumpTodayKpiSnapshot(state.todayKpiSnapshot, sale)).catch(() => undefined);
+
     void queueRemote("pending_sales", { saleId: sale.id });
-    void import("../lib/posPushScheduler").then(({ schedulePushPendingUploads }) => schedulePushPendingUploads());
     if (closedSessionId) queueHospitalityChange({ sessionIds: [closedSessionId] });
     for (const entry of auditEntries) {
       void queueRemote("audit_log", { entry });
@@ -6084,6 +6139,58 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
+  removeSupplier: (supplierId) => {
+    const actor = get().sessionActor;
+    if (!actor || actor.role !== "owner") {
+      pushAudit("auth_forbidden", "Denied removeSupplier (owner only)", {
+        permission: "suppliers.manage",
+        action: "removeSupplier",
+        attemptedRole: actor?.role ?? null,
+      });
+      return { ok: false, errorKey: "forbidden" };
+    }
+
+    const denied = denyUnlessEffectivePermission("suppliers.manage", "removeSupplier");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    if (isWalkInSupplierId(supplierId)) return { ok: false, errorKey: "invalid" };
+
+    const state = get();
+    const sup = state.suppliers.find((s) => s.id === supplierId);
+    if (!sup) return { ok: false, errorKey: "missingSupplier" };
+    if (sup.balanceOwedUgx > 0) return { ok: false, errorKey: "supplierHasBalance" };
+
+    const hasPurchases = state.purchases.some(
+      (p) => p.supplierId === supplierId && !isPurchaseVoided(p),
+    );
+    if (hasPurchases) return { ok: false, errorKey: "supplierHasPurchases" };
+
+    const hasPayments = state.supplierPayments.some((p) => p.supplierId === supplierId);
+    if (hasPayments) return { ok: false, errorKey: "supplierHasPayments" };
+
+    const deletedAt = new Date().toISOString();
+    set((s) => ({ suppliers: s.suppliers.filter((x) => x.id !== supplierId) }));
+    void import("../offline/incrementalPersist").then((m) => m.markSupplierDeleted(supplierId));
+    void queueRemote("supplier", {
+      id: supplierId,
+      deleted: true,
+      deletedAt,
+      snapshot: {
+        name: sup.name,
+        phone: sup.phone,
+        location: sup.location,
+        notes: sup.notes,
+        balance_owed_ugx: sup.balanceOwedUgx,
+        total_purchases_ugx: sup.totalPurchasesUgx,
+        last_supply_at: sup.lastSupplyAt,
+        created_at: sup.createdAt,
+        version: sup.version,
+      },
+    });
+    pushAudit("supplier_remove", sup.name, { supplierId, name: sup.name });
+    return { ok: true };
+  },
+
   addSupplierPayment: (supplierId, amountUgx) => {
     const denied = denyUnlessEffectivePermission("suppliers.manage", "addSupplierPayment");
     if (denied) return { ok: false, errorKey: denied.errorKey };
@@ -7574,7 +7681,7 @@ function reportRestoreProgress(
 /** Write current in-memory store to IndexedDB after a restore (can run after UI unblocks). */
 export async function persistRestoredSnapshotToDisk(
   sessionId?: number,
-  opts?: { cloudRecovery?: boolean },
+  opts?: { cloudRecovery?: boolean; skipEntityMigration?: boolean },
 ): Promise<void> {
   const { assertOrganizationOperationsAllowed, ORGANIZATION_DELETED_ERROR } = await import(
     "../lib/organizationDeletionState",
@@ -7611,7 +7718,15 @@ export async function persistRestoredSnapshotToDisk(
   assertBackupRestoreNotAborted(sessionId);
   const s = usePosStore.getState();
   const { flushFullSnapshotPersist } = await import("../offline/incrementalPersist");
-  await flushFullSnapshotPersist(s, { skipLastGood: true });
+  const persistStarted = performance.now();
+  const result = await flushFullSnapshotPersist(s, {
+    skipLastGood: true,
+    skipEntityMigration: opts?.skipEntityMigration === true,
+  });
+  if (opts?.cloudRecovery) {
+    const { recordRecoveryRuntime } = await import("../lib/cloudRecoverySession");
+    recordRecoveryRuntime({ idbPersistDurationMs: result.durationMs ?? Math.round(performance.now() - persistStarted) });
+  }
 }
 
 /**
@@ -7813,6 +7928,9 @@ function scheduleBackgroundSalesHydrateByIds(ids: string[]): void {
       });
     }
     usePosStore.setState({ salesHistoryHydration: null });
+    const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
+    usePosStore.setState({ todayKpiSnapshot: snapshot });
+    void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
   })();
 }
 
@@ -7839,6 +7957,9 @@ function scheduleBackgroundSalesHydrate(sales: Sale[]): void {
       });
     }
     usePosStore.setState({ salesHistoryHydration: null });
+    const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
+    usePosStore.setState({ todayKpiSnapshot: snapshot });
+    void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
   })();
 }
 
@@ -8013,8 +8134,6 @@ function scheduleLegacySnapshotMigration(initialSnap: Partial<PersistedSnapshot>
   })();
 }
 
-const BOOTSTRAP_DISK_TIMEOUT_MS = 12_000;
-
 /** Returning Supabase owners should not be sent through new-shop onboarding after a slow/empty disk read. */
 function preferencesForAccountBootstrap(key: string): ShopPreferences {
   const preferences = createDefaultPreferences();
@@ -8039,16 +8158,108 @@ function preferencesForAccountBootstrap(key: string): ShopPreferences {
   return preferences;
 }
 
-/** Load local POS data; never hang the UI longer than BOOTSTRAP_DISK_TIMEOUT_MS. */
-export async function bootstrapPosFromDisk(): Promise<void> {
+const BOOTSTRAP_CRITICAL_TIMEOUT_MS = 8_000;
+
+async function raceBootstrap<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("bootstrap_timeout")), timeoutMs);
+    }),
+  ]);
+}
+
+async function applyTodayKpiSnapshotFromDisk(): Promise<void> {
+  const cached = await readTodayKpiSnapshot();
+  if (cached) {
+    usePosStore.setState({ todayKpiSnapshot: cached });
+  }
+}
+
+async function hydrateEntityRemainderFromManifest(manifest: import("../offline/entityStore").EntityManifest): Promise<void> {
+  const { getEntitiesByBucket, getEntitiesByIds } = await import("../offline/entityStore");
+  const voidedSales = manifest.voidedSaleIds ?? {};
+  const tombstones = manifest.tombstones ?? {};
+  const [
+    debtPaymentsRaw,
+    dayClosesRaw,
+    auditLogsRaw,
+    suppliersRaw,
+    purchasesRaw,
+    supplierPaymentsRaw,
+    stockMovementsRaw,
+    voidRecordsRaw,
+    returnRecordsRaw,
+    cashExpensesRaw,
+    cashDrawerAdjustmentsRaw,
+    dayDrawerOpensRaw,
+    inventoryCountSessionsRaw,
+    archivedAuditLogsRaw,
+    archivedDayClosesRaw,
+    archivedVoidRecordsRaw,
+    archivedReturnRecordsRaw,
+  ] = await Promise.all([
+    getEntitiesByBucket<DebtPayment>("debtPayment"),
+    getEntitiesByBucket<DayCloseSummary>("dayClose"),
+    getEntitiesByBucket<AuditLogEntry>("auditLog"),
+    getEntitiesByBucket<Supplier>("supplier"),
+    getEntitiesByBucket<Purchase>("purchase"),
+    getEntitiesByBucket<SupplierPayment>("supplierPayment"),
+    getEntitiesByBucket<StockMovement>("stockMovement"),
+    getEntitiesByBucket<VoidRecord>("voidRecord"),
+    getEntitiesByBucket<ReturnRecord>("returnRecord"),
+    getEntitiesByBucket<CashExpense>("cashExpense"),
+    getEntitiesByBucket<CashDrawerAdjustment>("cashDrawerAdjustment"),
+    getEntitiesByBucket<DayDrawerOpen>("dayDrawerOpen"),
+    getEntitiesByBucket<InventoryCountSession>("inventoryCountSession"),
+    getEntitiesByBucket<AuditLogEntry>("archivedAuditLog"),
+    getEntitiesByBucket<DayCloseSummary>("archivedDayClose"),
+    getEntitiesByBucket<VoidRecord>("archivedVoidRecord"),
+    getEntitiesByBucket<ReturnRecord>("archivedReturnRecord"),
+  ]);
+  const archivedSalesRaw = (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale);
+  usePosStore.getState().hydrateRemainder({
+    debtPayments: debtPaymentsRaw,
+    dayCloses: dayClosesRaw,
+    auditLogs: auditLogsRaw,
+    suppliers: suppliersRaw.filter((s) => !tombstones[s.id]).map(normalizeSupplier),
+    purchases: purchasesRaw.map(normalizePurchase),
+    supplierPayments: supplierPaymentsRaw.map(normalizeSupplierPayment),
+    stockMovements: stockMovementsRaw.map(normalizeStockMovement),
+    voidRecords: voidRecordsRaw,
+    returnRecords: returnRecordsRaw,
+    cashExpenses: cashExpensesRaw.map(normalizeCashExpense),
+    cashDrawerAdjustments: cashDrawerAdjustmentsRaw.map(normalizeCashDrawerAdjustment),
+    dayDrawerOpens: dayDrawerOpensRaw.map(normalizeDayDrawerOpen),
+    inventoryCountSessions: inventoryCountSessionsRaw.map(normalizeInventoryCountSession),
+    archivedSales: archivedSalesRaw,
+    archivedAuditLogs: archivedAuditLogsRaw,
+    archivedDayCloses: archivedDayClosesRaw,
+    archivedVoidRecords: archivedVoidRecordsRaw,
+    archivedReturnRecords: archivedReturnRecordsRaw,
+  });
+  if (manifest.salesOrder.length > INITIAL_SALES_LOAD_COUNT) {
+    scheduleBackgroundSalesHydrateByIds(
+      manifest.salesOrder.slice(INITIAL_SALES_LOAD_COUNT).filter((id) => !voidedSales[id]),
+    );
+  }
+}
+
+/** Stage 1 — products, customers, preferences, cached today KPIs only. */
+export async function bootstrapPosCriticalFromDisk(): Promise<void> {
   const { markBootstrapStart, markBootstrapEnd } = await import("../lib/performanceMetrics");
+  const { markStartupPerf } = await import("../lib/startupPerformance");
   markBootstrapStart();
+  markStartupPerf("critical_hydrate_start");
+
   const key = getActiveAccountKey();
   if (!key) {
     usePosStore.getState().resetForSignOut();
     markBootstrapEnd();
+    markStartupPerf("critical_hydrate_end");
     return;
   }
+
   if (key.startsWith("demo:")) {
     usePosStore.getState().resetForSignOut();
     const prefs = createDefaultPreferences();
@@ -8061,127 +8272,33 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       customers: [],
       preferences: prefs,
     });
+    usePosStore.setState({ hydrationStage: "complete" });
     markBootstrapEnd();
+    markStartupPerf("critical_hydrate_end");
     schedulePostBootstrapTasks();
     return;
   }
 
   const load = async () => {
-    const { readEntityManifest, getEntitiesByBucket, getEntitiesByIds, migrateSnapshotToEntities } = await import(
-      "../offline/entityStore",
-    );
+    const { readEntityManifest, getEntitiesByBucket } = await import("../offline/entityStore");
     const manifest = await readEntityManifest();
     if (manifest) {
       const products = (await getEntitiesByBucket<Product>("product")).map(normalizeProduct);
       const customers = (await getEntitiesByBucket<Customer>("customer")).map(normalizeCustomer);
       const tombstones = manifest.tombstones ?? {};
-      const voidedSales = manifest.voidedSaleIds ?? {};
-      const filteredProducts = products.filter((p) => !tombstones[p.id]);
       usePosStore.getState().hydrateEssentials({
-        products: filteredProducts,
+        products: products.filter((p) => !tombstones[p.id]),
         customers,
         preferences: manifest.preferences,
       });
-      const headIds = manifest.salesOrder
-        .slice(0, INITIAL_SALES_LOAD_COUNT)
-        .filter((id) => !voidedSales[id]);
-      const headSales = (await getEntitiesByIds<Sale>("sale", headIds)).map(normalizeSale);
-      await hydrateSalesBatched(headSales);
-      if (manifest.salesOrder.length > INITIAL_SALES_LOAD_COUNT) {
-        scheduleBackgroundSalesHydrateByIds(
-          manifest.salesOrder.slice(INITIAL_SALES_LOAD_COUNT).filter((id) => !voidedSales[id]),
-        );
-      }
-      const [
-        debtPaymentsRaw,
-        dayClosesRaw,
-        auditLogsRaw,
-        suppliersRaw,
-        purchasesRaw,
-        supplierPaymentsRaw,
-        stockMovementsRaw,
-        voidRecordsRaw,
-        returnRecordsRaw,
-        cashExpensesRaw,
-        cashDrawerAdjustmentsRaw,
-        dayDrawerOpensRaw,
-        inventoryCountSessionsRaw,
-        archivedAuditLogsRaw,
-        archivedDayClosesRaw,
-        archivedVoidRecordsRaw,
-        archivedReturnRecordsRaw,
-      ] = await Promise.all([
-        getEntitiesByBucket<DebtPayment>("debtPayment"),
-        getEntitiesByBucket<DayCloseSummary>("dayClose"),
-        getEntitiesByBucket<AuditLogEntry>("auditLog"),
-        getEntitiesByBucket<Supplier>("supplier"),
-        getEntitiesByBucket<Purchase>("purchase"),
-        getEntitiesByBucket<SupplierPayment>("supplierPayment"),
-        getEntitiesByBucket<StockMovement>("stockMovement"),
-        getEntitiesByBucket<VoidRecord>("voidRecord"),
-        getEntitiesByBucket<ReturnRecord>("returnRecord"),
-        getEntitiesByBucket<CashExpense>("cashExpense"),
-        getEntitiesByBucket<CashDrawerAdjustment>("cashDrawerAdjustment"),
-        getEntitiesByBucket<DayDrawerOpen>("dayDrawerOpen"),
-        getEntitiesByBucket<InventoryCountSession>("inventoryCountSession"),
-        getEntitiesByBucket<AuditLogEntry>("archivedAuditLog"),
-        getEntitiesByBucket<DayCloseSummary>("archivedDayClose"),
-        getEntitiesByBucket<VoidRecord>("archivedVoidRecord"),
-        getEntitiesByBucket<ReturnRecord>("archivedReturnRecord"),
-      ]);
-      const archivedSalesRaw = (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(
-        normalizeSale,
-      );
-      const remainder = {
-        debtPayments: debtPaymentsRaw,
-        dayCloses: dayClosesRaw,
-        auditLogs: auditLogsRaw,
-        suppliers: suppliersRaw.map(normalizeSupplier),
-        purchases: purchasesRaw.map(normalizePurchase),
-        supplierPayments: supplierPaymentsRaw.map(normalizeSupplierPayment),
-        stockMovements: stockMovementsRaw.map(normalizeStockMovement),
-        voidRecords: voidRecordsRaw,
-        returnRecords: returnRecordsRaw,
-        cashExpenses: cashExpensesRaw.map(normalizeCashExpense),
-        cashDrawerAdjustments: cashDrawerAdjustmentsRaw.map(normalizeCashDrawerAdjustment),
-        dayDrawerOpens: dayDrawerOpensRaw.map(normalizeDayDrawerOpen),
-        inventoryCountSessions: inventoryCountSessionsRaw.map(normalizeInventoryCountSession),
-        archivedSales: archivedSalesRaw,
-        archivedAuditLogs: archivedAuditLogsRaw,
-        archivedDayCloses: archivedDayClosesRaw,
-        archivedVoidRecords: archivedVoidRecordsRaw,
-        archivedReturnRecords: archivedReturnRecordsRaw,
-      };
-      usePosStore.getState().hydrateRemainder({
-        debtPayments: remainder.debtPayments,
-        dayCloses: remainder.dayCloses,
-        auditLogs: remainder.auditLogs,
-        suppliers: remainder.suppliers,
-        purchases: remainder.purchases,
-        supplierPayments: remainder.supplierPayments,
-        stockMovements: remainder.stockMovements,
-        voidRecords: remainder.voidRecords,
-        returnRecords: remainder.returnRecords,
-        cashExpenses: remainder.cashExpenses,
-        cashDrawerAdjustments: remainder.cashDrawerAdjustments,
-        dayDrawerOpens: remainder.dayDrawerOpens,
-        inventoryCountSessions: remainder.inventoryCountSessions,
-        archivedSales: remainder.archivedSales,
-        archivedAuditLogs: remainder.archivedAuditLogs,
-        archivedDayCloses: remainder.archivedDayCloses,
-        archivedVoidRecords: remainder.archivedVoidRecords,
-        archivedReturnRecords: remainder.archivedReturnRecords,
-      });
+      await applyTodayKpiSnapshotFromDisk();
       return;
     }
 
     const snap = await readSnapshotWithFallback();
-    if (snap) {
-      void migrateSnapshotToEntities(snap as PersistedSnapshot);
-    }
-    if (snapshotHasInventoryOrSales(snap)) {
-      hydrateEssentialsFromSnap(snap!);
-      scheduleHydrateRemainderFromSnap(snap!);
+    if (snap && snapshotHasInventoryOrSales(snap)) {
+      hydrateEssentialsFromSnap(snap);
+      await applyTodayKpiSnapshotFromDisk();
       return;
     }
 
@@ -8190,7 +8307,6 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     } else {
       const preferences = preferencesForAccountBootstrap(key);
       usePosStore.getState().hydrateEssentials({ products: [], customers: [], preferences });
-      // Supabase accounts: skip empty disk write until cloud recovery completes (P0 snapshot safety).
       if (!key.startsWith("sb:")) {
         void writeSnapshot({
           products: [],
@@ -8209,16 +8325,11 @@ export async function bootstrapPosFromDisk(): Promise<void> {
         });
       }
     }
-    scheduleLegacySnapshotMigration(snap);
+    await applyTodayKpiSnapshotFromDisk();
   };
 
   try {
-    await Promise.race([
-      load(),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("bootstrap_timeout")), BOOTSTRAP_DISK_TIMEOUT_MS);
-      }),
-    ]);
+    await raceBootstrap(load(), BOOTSTRAP_CRITICAL_TIMEOUT_MS);
   } catch (e) {
     if (!usePosStore.getState()._hydrated) {
       usePosStore.getState().hydrateEssentials({
@@ -8227,10 +8338,80 @@ export async function bootstrapPosFromDisk(): Promise<void> {
         preferences: preferencesForAccountBootstrap(key),
       });
     }
-    if (import.meta.env.DEV) console.warn("[waka-pos] bootstrap disk", e);
+    if (import.meta.env.DEV) console.warn("[waka-pos] bootstrap critical", e);
   }
+
   markBootstrapEnd();
+  markStartupPerf("critical_hydrate_end");
+}
+
+/** Stage 2 — sales head for POS + refresh today KPI snapshot from loaded sales. */
+export async function bootstrapPosInteractiveFromDisk(): Promise<void> {
+  const { markStartupPerf } = await import("../lib/startupPerformance");
+  const key = getActiveAccountKey();
+  if (!key || key.startsWith("demo:") || !usePosStore.getState()._hydrated) return;
+
+  const { readEntityManifest, getEntitiesByIds, migrateSnapshotToEntities } = await import("../offline/entityStore");
+  const manifest = await readEntityManifest();
+  if (manifest) {
+    const voidedSales = manifest.voidedSaleIds ?? {};
+    const headIds = manifest.salesOrder.slice(0, INITIAL_SALES_LOAD_COUNT).filter((id) => !voidedSales[id]);
+    const headSales = (await getEntitiesByIds<Sale>("sale", headIds)).map(normalizeSale);
+    await hydrateSalesBatched(headSales);
+    const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
+    usePosStore.setState({ todayKpiSnapshot: snapshot, hydrationStage: "interactive" });
+    void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
+    markStartupPerf("interactive_hydrate_end");
+    return;
+  }
+
+  const snap = await readSnapshotWithFallback();
+  if (snap) {
+    void migrateSnapshotToEntities(snap as PersistedSnapshot);
+  }
+  if (snap && snapshotHasInventoryOrSales(snap)) {
+    scheduleHydrateRemainderFromSnap(snap);
+    usePosStore.setState({ hydrationStage: "interactive" });
+    markStartupPerf("interactive_hydrate_end");
+    return;
+  }
+
+  scheduleLegacySnapshotMigration(snap);
+  usePosStore.setState({ hydrationStage: "interactive" });
+  markStartupPerf("interactive_hydrate_end");
+}
+
+/** Stage 3 — back-office buckets + sales tail (non-blocking to shell). */
+export async function bootstrapPosBackgroundFromDisk(): Promise<void> {
+  const { markStartupPerf } = await import("../lib/startupPerformance");
+  const key = getActiveAccountKey();
+  if (!key || key.startsWith("demo:") || !usePosStore.getState()._hydrated) return;
+
+  usePosStore.setState({ hydrationStage: "background" });
+  const { readEntityManifest } = await import("../offline/entityStore");
+  const manifest = await readEntityManifest();
+  if (manifest) {
+    await hydrateEntityRemainderFromManifest(manifest);
+    const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
+    usePosStore.setState({ todayKpiSnapshot: snapshot, hydrationStage: "complete" });
+    void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
+    markStartupPerf("background_hydrate_end");
+    schedulePostBootstrapTasks();
+    markStartupPerf("background_complete");
+    return;
+  }
+
+  usePosStore.setState({ hydrationStage: "complete" });
+  markStartupPerf("background_hydrate_end");
   schedulePostBootstrapTasks();
+  markStartupPerf("background_complete");
+}
+
+/** Full disk bootstrap — compatibility path (sequential stages). */
+export async function bootstrapPosFromDisk(): Promise<void> {
+  await bootstrapPosCriticalFromDisk();
+  await bootstrapPosInteractiveFromDisk();
+  await bootstrapPosBackgroundFromDisk();
 }
 
 export function formatProductPriceLabel(product: Product): string {

@@ -11,6 +11,7 @@ import {
 } from "../../lib/pharmacyMedicine";
 import { computeMedicineBatchSummary, medicineDisplayBrand, medicineDisplayGeneric } from "../../lib/pharmacyBatches";
 import { ExpiryStatusBadge } from "../pharmacy/ExpiryStatusBadge";
+import { POS_CATALOG_TILE_TOUCH_CLASS } from "../../lib/posTouchInteraction";
 
 type Props = {
   lang: Language;
@@ -44,7 +45,8 @@ export function PharmacySellMedicineCard({
       onClick={() => onPick(p)}
       disabled={locked}
       className={clsx(
-        "relative flex w-full flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-waka touch-manipulation",
+        "relative flex w-full flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-waka",
+        POS_CATALOG_TILE_TOUCH_CLASS,
         compact ? "min-h-[148px]" : "min-h-[168px]",
         locked
           ? "border-border/80 bg-muted/90 opacity-55"

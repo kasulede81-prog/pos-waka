@@ -80,18 +80,66 @@ export function buildDeviceUsageSummary(
   planLimit: number | null,
 ): DeviceUsageSummary {
   const activeCount = devices.filter((d) => isLicensedActiveDevice(d)).length;
-  const totalCount = devices.length;
+  const totalCount = devices.filter((d) => isAssignableFleetDevice(d)).length;
   const atPlanLimit = planLimit != null && planLimit > 0 && activeCount >= planLimit;
   const overPlanLimit = planLimit != null && planLimit > 0 && activeCount > planLimit;
   return { activeCount, totalCount, planLimit, atPlanLimit, overPlanLimit };
 }
 
+/** Licensed slot or pending approval — excludes disconnected/revoked history. */
+export function isAssignableFleetDevice(device: ShopDeviceRow): boolean {
+  return isLicensedActiveDevice(device) || isPendingApprovalDevice(device);
+}
+
+function deviceRecencyMs(device: ShopDeviceRow): number {
+  const seen = device.last_seen_at ? Date.parse(device.last_seen_at) : Number.NaN;
+  if (!Number.isNaN(seen)) return seen;
+  const login = device.last_login_at ? Date.parse(device.last_login_at) : Number.NaN;
+  if (!Number.isNaN(login)) return login;
+  const created = Date.parse(device.created_at);
+  return Number.isNaN(created) ? 0 : created;
+}
+
+/** Keep only plan-assigned devices (active licensed + pending), capped to plan limit for active slots. */
+export function filterAssignableFleetDevices(
+  devices: ShopDeviceRow[],
+  planLimit: number | null,
+  currentFingerprint?: string,
+): ShopDeviceRow[] {
+  const assignable = devices.filter(isAssignableFleetDevice);
+  const pending = assignable.filter(isPendingApprovalDevice);
+  let active = assignable
+    .filter(isLicensedActiveDevice)
+    .sort((a, b) => deviceRecencyMs(b) - deviceRecencyMs(a));
+
+  if (planLimit != null && planLimit > 0 && active.length > planLimit) {
+    const keep = active.slice(0, planLimit);
+    const current = currentFingerprint
+      ? active.find((d) => d.device_fingerprint === currentFingerprint)
+      : undefined;
+    if (current && !keep.some((d) => d.id === current.id)) {
+      keep[keep.length - 1] = current;
+    }
+    active = keep;
+  }
+
+  return [...active, ...pending];
+}
+
 function normalizeRpcDeviceList(data: unknown): unknown[] {
   if (Array.isArray(data)) return data;
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (Array.isArray(record.devices)) return record.devices;
+  }
   if (typeof data === "string") {
     try {
       const parsed = JSON.parse(data) as unknown;
-      return Array.isArray(parsed) ? parsed : [];
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === "object") {
+        const record = parsed as Record<string, unknown>;
+        if (Array.isArray(record.devices)) return record.devices;
+      }
     } catch {
       return [];
     }
@@ -137,11 +185,70 @@ function parseDeviceRows(data: unknown): ShopDeviceRow[] {
     .filter((d): d is ShopDeviceRow => d != null);
 }
 
-export async function fetchOwnerShopDevices(shopId: string): Promise<ShopDeviceRow[]> {
+const SHOP_DEVICES_TABLE_SELECT =
+  "id,device_fingerprint,label,platform,app_version,last_seen_at,last_sync_at,last_login_at,is_active,status,device_authority,approval_status,approval_requested_at,form_factor,device_type,is_primary,current_staff_client_id,pending_uploads,pending_downloads,cloud_status,recovery_status,created_at";
+
+async function fetchShopDevicesDirect(shopId: string): Promise<ShopDeviceRow[]> {
   if (!supabase || !shopId) return [];
-  const { data, error } = await supabase.rpc("owner_list_shop_devices", { p_shop_id: shopId });
+  const { data, error } = await supabase
+    .from("shop_devices")
+    .select(SHOP_DEVICES_TABLE_SELECT)
+    .eq("shop_id", shopId)
+    .or("and(status.eq.active,approval_status.eq.approved),approval_status.eq.pending")
+    .order("last_seen_at", { ascending: false, nullsFirst: false });
   if (error) throw error;
-  return parseDeviceRows(data);
+  return parseDeviceRows(data ?? []);
+}
+
+function finalizeFleetDeviceRows(
+  devices: ShopDeviceRow[],
+  planLimit: number | null,
+  currentFingerprint?: string,
+): ShopDeviceRow[] {
+  return filterAssignableFleetDevices(devices, planLimit, currentFingerprint);
+}
+
+export async function fetchOwnerShopDevices(
+  shopId: string,
+  opts?: { planLimit?: number | null; currentFingerprint?: string },
+): Promise<ShopDeviceRow[]> {
+  if (!supabase || !shopId) return [];
+  const planLimit = opts?.planLimit ?? null;
+  const currentFingerprint = opts?.currentFingerprint;
+
+  let rpcFailure: unknown = null;
+  try {
+    const { data, error } = await supabase.rpc("owner_list_shop_devices", { p_shop_id: shopId });
+    if (error) {
+      rpcFailure = error;
+    } else {
+      const parsed = parseDeviceRows(data);
+      if (parsed.length > 0) {
+        return finalizeFleetDeviceRows(parsed, planLimit, currentFingerprint);
+      }
+    }
+  } catch (e) {
+    rpcFailure = e;
+  }
+
+  try {
+    const direct = await fetchShopDevicesDirect(shopId);
+    if (direct.length > 0) {
+      console.info("[waka-devices] loaded fleet via shop_devices table fallback", { shopId, count: direct.length });
+      return finalizeFleetDeviceRows(direct, planLimit, currentFingerprint);
+    }
+  } catch (e) {
+    console.warn("[waka-devices] direct shop_devices query failed", e);
+    if (rpcFailure) throw rpcFailure;
+    throw e;
+  }
+
+  if (rpcFailure) {
+    const msg = (rpcFailure instanceof Error ? rpcFailure.message : String(rpcFailure)).toLowerCase();
+    if (msg.includes("forbidden")) return [];
+    throw rpcFailure;
+  }
+  return [];
 }
 
 export type ShopDevicesManagementLoad = {
@@ -150,10 +257,29 @@ export type ShopDevicesManagementLoad = {
 };
 
 /** Owner list includes pending devices; staff without owner role cannot manage approvals. */
-export async function fetchShopDevicesForManagement(shopId: string): Promise<ShopDevicesManagementLoad> {
+export async function fetchShopDevicesForManagement(
+  shopId: string,
+  opts?: { planLimit?: number | null; currentFingerprint?: string },
+): Promise<ShopDevicesManagementLoad> {
+  let isOwner = false;
+  let planLimit = opts?.planLimit ?? null;
   try {
-    const devices = await fetchOwnerShopDevices(shopId);
-    return { devices, isOwner: true };
+    const { fetchShopDeviceLimitContext } = await import("./deviceActivation");
+    const ctx = await fetchShopDeviceLimitContext(shopId);
+    isOwner = ctx?.is_owner ?? false;
+    if (planLimit == null && ctx?.device_limit != null) {
+      planLimit = ctx.device_limit;
+    }
+  } catch {
+    // Degrade gracefully — device rows may still load via table fallback.
+  }
+
+  try {
+    const devices = await fetchOwnerShopDevices(shopId, {
+      planLimit,
+      currentFingerprint: opts?.currentFingerprint,
+    });
+    return { devices, isOwner };
   } catch (e) {
     const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
     if (msg.includes("forbidden")) {

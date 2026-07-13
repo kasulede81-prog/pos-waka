@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Phase 22.5 — Design system enforcement scanner + adoption metrics.
+ * Phase 22.6 — Design system enforcement scanner + premium polish adoption metrics.
  * Run: npm run design-system:check
  */
 
@@ -96,9 +96,10 @@ const ADOPTION_SIGNALS = [
   { id: "enterprise-form", pattern: /\bEnterpriseTextField\b/g, label: "EnterpriseTextField" },
   { id: "enterprise-modal", pattern: /\bModalSheet\b|\bEnterpriseDialog\b|\bConfirmationDialog\b|\bEnterpriseAuthenticationDialog\b|\bEnterpriseActionSheet\b/g, label: "Enterprise modals" },
   { id: "enterprise-empty", pattern: /\bEnterpriseEmptyState\b/g, label: "EnterpriseEmptyState" },
-  { id: "enterprise-loading", pattern: /\bEnterpriseSkeleton\b|\bEnterpriseAsyncShell\b|\bEnterpriseSkeletonList\b/g, label: "Enterprise loading" },
-  { id: "enterprise-feedback", pattern: /\bEnterpriseFeedbackBanner\b|statusTokens\.(success|warning|danger|info)\.banner/g, label: "Enterprise feedback" },
+  { id: "enterprise-loading", pattern: /\bEnterpriseSkeleton(Table|Form|Dashboard|Dialog|ProductList|Report)?\b|\bEnterpriseAsyncShell\b|\bEnterpriseSkeletonList\b|\bEnterpriseSkeletonKpiGrid\b/g, label: "Enterprise loading" },
+  { id: "enterprise-feedback", pattern: /\bEnterpriseFeedbackBanner\b|\bEnterpriseSpinner\b|statusTokens\.(success|warning|danger|info|offline|syncing)\.banner/g, label: "Enterprise feedback" },
   { id: "enterprise-action-sheet", pattern: /\bEnterpriseActionSheet\b/g, label: "EnterpriseActionSheet" },
+  { id: "enterprise-motion", pattern: /enterpriseMotion\.|animate-enterprise-|transition-waka|waka-skeleton-bar/g, label: "Enterprise motion" },
   { id: "status-tokens", pattern: /statusTokens\./g, label: "statusTokens" },
 ];
 
@@ -107,6 +108,8 @@ const LEGACY_SIGNALS = [
   { id: "legacy-page-header", pattern: /\bPageHeader\b/g, label: "PageHeader (legacy)" },
   { id: "legacy-inline-cta", pattern: /\bbg-waka-600\b/g, label: "inline bg-waka-600 CTAs" },
   { id: "legacy-fractional-type", pattern: /text-\[(8|9|10|11|13|15|17|18|22)px\]/g, label: "fractional typography" },
+  { id: "legacy-pulse-skeleton", pattern: /animate-pulse bg-muted/g, label: "pulse skeleton (use waka-skeleton-bar)" },
+  { id: "legacy-raw-spinner", pattern: /border-t-transparent|animate-spin rounded-full border-2/g, label: "raw CSS spinners" },
 ];
 
 function walk(dir, out = []) {
@@ -196,7 +199,7 @@ const adoptionPct =
 const businessPct =
   businessWorkspaceFiles > 0 ? Math.round((businessWorkspaceAdopted / businessWorkspaceFiles) * 100) : 0;
 
-console.log("design-system:check — Phase 22.5 adoption summary\n");
+console.log("design-system:check — Phase 22.6 premium polish adoption summary\n");
 console.log(`High-traffic module primitive adoption: ${highTrafficAdopted}/${highTrafficFiles} files (${adoptionPct}%)`);
 console.log(`Business workspace adoption (Suppliers/Expenses/Cash/Stock/CC): ${businessWorkspaceAdopted}/${businessWorkspaceFiles} files (${businessPct}%)`);
 console.log("\nEnterprise primitive references:");
@@ -221,5 +224,8 @@ if (violations.length === 0) {
   }
 }
 
-console.log("\nManual review still required: remaining AppModalOverlay modals, POS sell density, public marketing pages.");
+console.log("\nPremium polish:");
+console.log(`  Enterprise motion refs: ${adoptionCounts["enterprise-motion"] ?? 0}`);
+console.log(`  Legacy pulse skeletons (lower is better): ${legacyCounts["legacy-pulse-skeleton"] ?? 0}`);
+console.log(`  Legacy raw spinners (lower is better): ${legacyCounts["legacy-raw-spinner"] ?? 0}`);
 process.exit(0);

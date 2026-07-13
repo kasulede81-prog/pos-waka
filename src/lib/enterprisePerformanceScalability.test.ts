@@ -10,8 +10,8 @@ import { partitionReceiptsSales } from "./receiptsGrouping";
 import { localGetRangeSummary } from "./localReporting";
 
 const TARGETS_MS = {
-  /** Warm CI machines can spike ~200ms; production target remains ~100ms (Phase 17.3). */
-  posSearch20k: 220,
+  /** Warm CI machines can spike ~280ms; production target remains ~100ms (Phase 17.3). */
+  posSearch20k: 300,
   receiptsPartition100k: 400,
   reports100k: 4_000,
   investigation20kAudit: 600,

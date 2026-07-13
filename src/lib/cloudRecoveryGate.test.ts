@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   evaluateCloudRecoveryLock,
   shouldRequireRecoveryLock,
+  validateCoreOperationalGate,
   validateRecoveryCompletionGate,
 } from "./cloudRecoveryGate";
 import type { CloudRecoveryValidationResult } from "./cloudRecoveryValidator";
@@ -198,6 +199,25 @@ describe("cloudRecoveryGate", () => {
 
       await expect(shouldRequireRecoveryLock()).resolves.toBe(false);
       expect(mockProbeCloudShopHasData).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("validateCoreOperationalGate", () => {
+    it("passes when products exist", () => {
+      const gate = validateCoreOperationalGate(
+        { hasCloudProducts: true, hasSnapshot: false, snapshotUpdatedAt: null, snapshotRowFound: false, snapshotContainsCoreData: false },
+        baseValidation({ counts: { ...baseValidation().counts, products: 5 } }),
+      );
+      expect(gate.ok).toBe(true);
+    });
+
+    it("fails when cloud has products but local count is zero", () => {
+      const gate = validateCoreOperationalGate(
+        { hasCloudProducts: true, hasSnapshot: false, snapshotUpdatedAt: null, snapshotRowFound: false, snapshotContainsCoreData: false },
+        baseValidation({ counts: { ...baseValidation().counts, products: 0 } }),
+      );
+      expect(gate.ok).toBe(false);
+      expect(gate.failures).toContain("products_not_restored");
     });
   });
 });

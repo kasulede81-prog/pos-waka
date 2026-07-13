@@ -12,6 +12,7 @@ import {
 } from "../../lib/posCheckoutKeypad";
 import { DraftCartLineRow } from "./DraftCartLineRow";
 import { DraftCartSummary } from "./DraftCartSummary";
+import { POS_CHECKOUT_SCROLL_CLASS } from "../../lib/posTouchInteraction";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -1096,14 +1097,15 @@ export function PosCheckoutPanel({
       ) : null}
 
       {emptyCart ? (
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className={clsx("min-h-0 flex-1 p-4", POS_CHECKOUT_SCROLL_CLASS)}>
           <p className="py-8 text-center text-sm font-semibold text-muted-foreground">{t(lang, "posCartEmptyHint")}</p>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div
             className={clsx(
-              "overflow-y-auto overscroll-y-contain border-b border-waka-200 [-webkit-overflow-scrolling:touch]",
+              POS_CHECKOUT_SCROLL_CLASS,
+              "border-b border-waka-200",
               catalogDock && isSidebar
                 ? "min-h-0 flex-1 shrink px-2 py-1.5"
                 : clsx(
@@ -1136,7 +1138,7 @@ export function PosCheckoutPanel({
           </div>
           <div
             className={clsx(
-              catalogDock && isSidebar ? "shrink-0 px-2 py-1.5" : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain",
+              catalogDock && isSidebar ? "shrink-0 px-2 py-1.5" : clsx(POS_CHECKOUT_SCROLL_CLASS, "min-h-0 flex-1"),
               !catalogDock && isSidebar && "px-2.5 py-2",
               !isSidebar && "px-3 py-2",
             )}

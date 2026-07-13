@@ -72,10 +72,10 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <WakaButton type="button" variant="secondary" onClick={() => downloadShiftSummaryCsv(lang, rows)}>
+        <WakaButton type="button" variant="secondary" onClick={() => void downloadShiftSummaryCsv(lang, rows)}>
           {t(lang, "shiftReportExportCsv")}
         </WakaButton>
-        <WakaButton type="button" variant="secondary" onClick={() => downloadShiftSummaryPdf(lang, rows)}>
+        <WakaButton type="button" variant="secondary" onClick={() => void downloadShiftSummaryPdf(lang, rows)}>
           {t(lang, "shiftReportExportPdf")}
         </WakaButton>
       </div>

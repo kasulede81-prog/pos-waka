@@ -43,7 +43,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   }
 
   const canShop = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
-  const canDrawerSettings = actorHasPermission(actor, "day.open_drawer");
+  const canDrawerSettings = actorHasEffectivePermission(actor, "day.open_drawer", snapshot, authMode);
   const canOwnerFinanceDiagnostics =
     canSeeFinanceDiagnostics(actor.role) &&
     actorHasEffectivePermission(actor, "owner.dashboard", snapshot, authMode);

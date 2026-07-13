@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { EnterpriseSpinner } from "../enterprise/EnterpriseSpinner";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import {
   isInternalAdminPreviewActive,
@@ -46,7 +46,7 @@ export function InternalAdminOutlet() {
   if (state === "loading") {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-muted font-admin">
-        <Loader2 className="h-8 w-8 animate-spin text-waka-600" aria-hidden />
+        <EnterpriseSpinner size="lg" label="Checking access" className="text-waka-600" />
         <p className="mt-3 text-sm font-semibold text-muted-foreground">Checking access…</p>
       </div>
     );

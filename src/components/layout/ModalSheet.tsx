@@ -4,6 +4,7 @@ import { useVisualViewportBounds } from "../../hooks/useVisualViewportBounds";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { themeUi } from "../../lib/themeTokens";
 import { enterpriseDialogTitle } from "../../lib/enterpriseTypography";
+import { enterpriseMotion } from "../../lib/enterpriseMotion";
 
 type Props = {
   open: boolean;
@@ -88,6 +89,7 @@ export function ModalSheet({
         zIndexClass,
         "flex pt-[max(0.25rem,env(safe-area-inset-top,0px))]",
         themeUi.overlay,
+        enterpriseMotion.overlayEnter,
         align === "center"
           ? "items-end justify-center sm:items-center sm:p-4"
           : "items-end justify-center sm:items-center sm:p-4",
@@ -100,6 +102,7 @@ export function ModalSheet({
           themeUi.dialog,
           maxHeightClass,
           "rounded-t-[1.75rem] sm:rounded-3xl",
+          align === "center" ? enterpriseMotion.dialogEnter : enterpriseMotion.sheetEnter,
           panelClassName,
         )}
         style={panelStyle}

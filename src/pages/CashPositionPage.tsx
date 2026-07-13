@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import type { CashDrawerAdjustmentType, Language } from "../types";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -18,6 +18,7 @@ import {
 } from "../lib/cashPositionExport";
 import type { CashPositionReconciliation } from "../lib/cashPosition";
 import { useCashPositionDashboard } from "../hooks/useCashPositionDashboard";
+import { useDrawerCashForDay } from "../hooks/useDrawerCashForDay";
 import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
 import { CashPositionCollapsibleCard } from "../components/cash-position/CashPositionCollapsibleCard";
 import {
@@ -41,13 +42,39 @@ import {
 } from "../components/cash-position/CashPositionMoreSections";
 
 export function CashPositionPage({ lang }: { lang: Language }) {
+  const [searchParams] = useSearchParams();
+  const dateParam = searchParams.get("date");
+  const fromCloseDay = searchParams.get("from") === "close-day";
   const actor = useSessionActor();
   const canView = actorHasPermission(actor, "day.close");
   const addCashDrawerAdjustment = usePosStore((s) => s.addCashDrawerAdjustment);
   const setPreferences = usePosStore((s) => s.setPreferences);
 
-  const [filter, setFilter] = useState<DateFilterValue>(DEFAULT_DATE_FILTER);
+  const [filter, setFilter] = useState<DateFilterValue>(() => {
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      return { kind: "day", dateKey: dateParam };
+    }
+    return DEFAULT_DATE_FILTER;
+  });
   const { dashboard, isStale, todayKey, preferences } = useCashPositionDashboard(lang, filter);
+  const countDayKey = dashboard.isSingleDay ? dashboard.bounds.fromKey : todayKey;
+  const drawerForCount = useDrawerCashForDay(countDayKey);
+  const showCashCountSection = dashboard.isSingleDay && (dashboard.isToday || fromCloseDay);
+  const closeDayReturnUrl = `/close-day?date=${encodeURIComponent(countDayKey)}#cash-count`;
+
+  useEffect(() => {
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      setFilter({ kind: "day", dateKey: dateParam });
+    }
+  }, [dateParam]);
+
+  useEffect(() => {
+    if (fromCloseDay && window.location.hash === "#count") {
+      window.requestAnimationFrame(() => {
+        document.getElementById("count")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [fromCloseDay, countDayKey]);
 
   const [exportHint, setExportHint] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
@@ -146,9 +173,15 @@ export function CashPositionPage({ lang }: { lang: Language }) {
         lang={lang}
         title={t(lang, "cashPositionTitle")}
         subtitle={t(lang, "cashPositionSub")}
-        backFallback="/"
-        backLabel={t(lang, "posNavMainMenu")}
+        backFallback={fromCloseDay ? closeDayReturnUrl : "/"}
+        backLabel={fromCloseDay ? t(lang, "cashPositionReturnCloseDay") : t(lang, "posNavMainMenu")}
       />
+
+      {fromCloseDay && dashboard.isSingleDay ? (
+        <p className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 text-sm font-semibold text-waka-950">
+          {tTemplate(lang, "cashPositionCountForDate", { date: countDayKey })}
+        </p>
+      ) : null}
 
       <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
       <p className="text-sm font-semibold text-muted-foreground">
@@ -226,15 +259,17 @@ export function CashPositionPage({ lang }: { lang: Language }) {
         <CashPositionCashiers lang={lang} cashiers={dashboard.cashiers} />
       </CashPositionCollapsibleCard>
 
-      {dashboard.isToday ? (
+      {showCashCountSection ? (
         <div ref={sectionRefs.count}>
           <CashPositionCollapsibleCard id="count" title={t(lang, "cashPositionSectionCount")} icon="💰" defaultOpen>
             <CashPositionCashCount
               lang={lang}
-              expectedUgx={dashboard.report.cashPosition.expectedCashUgx}
+              closeDateKey={countDayKey}
+              expectedUgx={drawerForCount.expectedDrawerCashUgx}
               onUseTotal={(total) => {
                 try {
                   sessionStorage.setItem("waka-close-day-prefill", String(total));
+                  sessionStorage.setItem("waka-close-day-prefill-date", countDayKey);
                 } catch {
                   /* ignore */
                 }

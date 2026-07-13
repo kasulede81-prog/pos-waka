@@ -7,9 +7,9 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { authorizePreferencesPatch } from "../lib/settingsAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { EnterpriseSaveIndicator } from "../components/enterprise/EnterpriseSaveIndicator";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { useUnsavedChangesGuard } from "../components/enterprise/useUnsavedChangesGuard";
@@ -20,6 +20,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
+  const isOwner = actor.role === "owner";
 
   const [pct, setPct] = useState(String(preferences.cashVarianceThresholdPct ?? 5));
   const [fixed, setFixed] = useState(String(preferences.cashVarianceThresholdUgxFixed ?? 10_000));
@@ -40,9 +41,9 @@ export function SettingsCashDrawerPage({ lang }: Props) {
       pctN !== (preferences.cashVarianceThresholdPct ?? 5) ||
       fixedN !== (preferences.cashVarianceThresholdUgxFixed ?? 10_000) ||
       formula !== resolveCashDrawerFormulaVersion(preferences) ||
-      ownerCorrection !== (preferences.ownerDayOpenCorrectionAfterSales === true)
+      (isOwner && ownerCorrection !== (preferences.ownerDayOpenCorrectionAfterSales === true))
     );
-  }, [pct, fixed, formula, ownerCorrection, preferences]);
+  }, [pct, fixed, formula, ownerCorrection, preferences, isOwner]);
 
   useUnsavedChangesGuard(lang, dirty);
 
@@ -53,20 +54,22 @@ export function SettingsCashDrawerPage({ lang }: Props) {
   const save = () => {
     const pctN = Math.max(0, Math.min(100, Number(pct) || 0));
     const fixedN = Math.max(0, Math.floor(Number(fixed.replace(/\D/g, "")) || 0));
-    const patch = {
+    const patch: Partial<typeof preferences> = {
       cashVarianceThresholdPct: pctN,
       cashVarianceThresholdUgxFixed: fixedN,
       cashDrawerFormulaVersion: formula,
-      ownerDayOpenCorrectionAfterSales: ownerCorrection,
     };
+    if (isOwner) {
+      patch.ownerDayOpenCorrectionAfterSales = ownerCorrection;
+    }
     const { snapshot, authMode } = getStoreSubscriptionContext();
-    const denied = authorizePreferencesPatch(actor, patch, {
+    const auth = authorizePreferencesPatch(actor, patch, {
       snapshot,
       authMode,
       currentStaffAccounts: preferences.staffAccounts ?? [],
     });
-    if (!denied.ok) {
-      setErrorKey(denied.errorKey ?? "forbidden");
+    if (!auth.ok) {
+      setErrorKey(auth.errorKey ?? "forbidden");
       setSaved(false);
       return;
     }
@@ -81,12 +84,17 @@ export function SettingsCashDrawerPage({ lang }: Props) {
   const saveStatus = saving ? "saving" : saved ? "saved" : dirty ? "dirty" : "idle";
 
   return (
-    <EnterprisePageContainer className="space-y-5">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "cashManageDrawerSettings")}
-        subtitle={t(lang, "cashManageDrawerSettingsSub")}
-      />
+    <BackOfficePageLayout
+      header={
+        <SettingsPageHeader
+          lang={lang}
+          title={t(lang, "cashManageDrawerSettings")}
+          subtitle={t(lang, "cashManageDrawerSettingsSub")}
+          backTo="/settings"
+        />
+      }
+      className="pb-8"
+    >
       <div className="flex justify-end">
         <EnterpriseSaveIndicator lang={lang} mode="explicit" status={saveStatus} />
       </div>
@@ -128,14 +136,16 @@ export function SettingsCashDrawerPage({ lang }: Props) {
             ))}
           </div>
         </fieldset>
-        <div className="mt-5 rounded-2xl border border-border bg-muted px-4 py-3">
-          <WakaSwitch
-            checked={ownerCorrection}
-            onCheckedChange={setOwnerCorrection}
-            label={t(lang, "cashSettingsOwnerDayOpenCorrection")}
-            description={t(lang, "cashSettingsOwnerDayOpenCorrectionHint")}
-          />
-        </div>
+        {isOwner ? (
+          <div className="mt-5 rounded-2xl border border-border bg-muted px-4 py-3">
+            <WakaSwitch
+              checked={ownerCorrection}
+              onCheckedChange={setOwnerCorrection}
+              label={t(lang, "cashSettingsOwnerDayOpenCorrection")}
+              description={t(lang, "cashSettingsOwnerDayOpenCorrectionHint")}
+            />
+          </div>
+        ) : null}
         <button
           type="button"
           onClick={save}
@@ -150,6 +160,6 @@ export function SettingsCashDrawerPage({ lang }: Props) {
           </p>
         ) : null}
       </section>
-    </EnterprisePageContainer>
+    </BackOfficePageLayout>
   );
 }

@@ -18,7 +18,7 @@ export const themeUi = {
   link: "font-bold text-waka-700 underline decoration-waka-300 underline-offset-2 hover:text-primary-hover dark:text-waka-400 dark:hover:text-waka-300",
   backLink: "inline-flex min-h-[44px] items-center gap-1.5 text-sm font-bold text-waka-800 active:opacity-70 dark:text-waka-400",
   overlay: "bg-overlay/55",
-  skeleton: "animate-pulse bg-muted",
+  skeleton: "waka-skeleton-bar",
   focusRing:
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   btnPrimary:
@@ -43,7 +43,7 @@ export const themeUi = {
   /** High-contrast inverse CTA (works in light + dark) */
   btnInverse:
     "inline-flex min-h-[44px] items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-black text-background shadow-sm transition-waka hover:bg-foreground/90 active:bg-foreground/80 disabled:opacity-50",
-  tableRow: "border-b border-border hover:bg-muted/40",
+  tableRow: "border-b border-border transition-waka hover:bg-muted/40 active:bg-muted/60",
   tableHead: "bg-muted px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-muted-foreground",
 } as const;
 

@@ -425,6 +425,8 @@ export function buildDayClosePreflightSnapshot(input: {
       id: "cash_counted",
       status: hasCount ? "pass" : "pending",
       labelKey: "dayCloseCheckCashCounted",
+      detailKey: !hasCount ? "dayCloseCheckCashCountedPending" : undefined,
+      navigateTo: `/office/cash-drawer?date=${encodeURIComponent(dateKey)}&from=close-day#count`,
       blockClose: !hasCount,
     },
     {

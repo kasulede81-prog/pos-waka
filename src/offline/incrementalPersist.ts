@@ -181,7 +181,10 @@ export async function flushIncrementalPersist(prev: PosState, next: PosState): P
 }
 
 /** Full snapshot for backups, disaster recovery, export, and legacy compatibility. */
-export async function flushFullSnapshotPersist(state: PosState, opts?: { skipLastGood?: boolean }): Promise<IncrementalPersistResult> {
+export async function flushFullSnapshotPersist(
+  state: PosState,
+  opts?: { skipLastGood?: boolean; skipEntityMigration?: boolean },
+): Promise<IncrementalPersistResult> {
   const started = performance.now();
   const { readEntityManifest } = await import("./entityStore");
   const { snapshotFieldsFromTombstones, tombstonesFromManifest } = await import("../lib/tombstoneDurability");
@@ -218,7 +221,9 @@ export async function flushFullSnapshotPersist(state: PosState, opts?: { skipLas
     deletedProductIds: tombstoneFields.deletedProductIds,
     voidedSaleIds: tombstoneFields.voidedSaleIds,
   };
-  await migrateSnapshotToEntities({ ...payload, updatedAt: new Date().toISOString() });
+  if (!opts?.skipEntityMigration) {
+    await migrateSnapshotToEntities({ ...payload, updatedAt: new Date().toISOString() });
+  }
   await writeSnapshot(payload, { skipLastGood: opts?.skipLastGood });
   const bytesWritten = JSON.stringify(payload).length;
   return {
@@ -234,5 +239,13 @@ export async function markProductDeleted(productId: string): Promise<void> {
   const manifest = await readEntityManifest();
   if (!manifest) return;
   manifest.tombstones[productId] = new Date().toISOString();
+  await writeEntityManifest(manifest);
+}
+
+export async function markSupplierDeleted(supplierId: string): Promise<void> {
+  await deleteEntityRecord("supplier", supplierId);
+  const manifest = await readEntityManifest();
+  if (!manifest) return;
+  manifest.tombstones[supplierId] = new Date().toISOString();
   await writeEntityManifest(manifest);
 }

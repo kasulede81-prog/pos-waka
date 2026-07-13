@@ -3,6 +3,9 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { WakaButton } from "../ui/wakaPrimitives";
 import { emptyStateClasses } from "../../lib/statusTokens";
+import { ENTERPRISE_ICON_STROKE, enterpriseIconClass } from "../../lib/enterpriseIcons";
+import { enterpriseMotion } from "../../lib/enterpriseMotion";
+import { enterpriseTypeClass } from "../../lib/enterpriseTypography";
 
 export type EnterpriseEmptyStateProps = {
   icon: LucideIcon;
@@ -26,12 +29,14 @@ export function EnterpriseEmptyState({
   const styles = emptyStateClasses();
 
   return (
-    <div className={clsx(styles.shell, className)}>
-      <span className={styles.icon}>
-        <Icon className="h-7 w-7" strokeWidth={2} aria-hidden />
+    <div className={clsx(styles.shell, enterpriseMotion.standard, className)}>
+      <span className={clsx(styles.icon, "transition-waka")}>
+        <Icon className={enterpriseIconClass("lg")} strokeWidth={ENTERPRISE_ICON_STROKE} aria-hidden />
       </span>
-      <h3 className={styles.title}>{title}</h3>
-      {description ? <p className={styles.body}>{description}</p> : null}
+      <h3 className={enterpriseTypeClass("sectionTitle", "text-center")}>{title}</h3>
+      {description ? (
+        <p className={enterpriseTypeClass("body", "mt-2 text-center text-muted-foreground")}>{description}</p>
+      ) : null}
       {children}
       {(primaryAction || secondaryAction) && (
         <div className="mt-6 flex flex-wrap items-center justify-center gap-2">

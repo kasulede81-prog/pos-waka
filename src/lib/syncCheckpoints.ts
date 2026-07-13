@@ -123,6 +123,28 @@ export function clearBootstrapSyncComplete(): SyncCheckpoints {
   return writeSyncCheckpoints({ bootstrapComplete: false });
 }
 
+/** Seed entity cursors after snapshot restore — incremental pulls only fetch changes since the snapshot. */
+export function seedEntitySyncCursorsAt(at: string): SyncCheckpoints {
+  return writeSyncCheckpoints({
+    lastSalesSyncAt: at,
+    lastProductsSyncAt: at,
+    lastCustomersSyncAt: at,
+    lastDebtsSyncAt: at,
+    lastDebtPaymentsSyncAt: at,
+    lastExpensesSyncAt: at,
+    lastReturnsSyncAt: at,
+    lastPurchasesSyncAt: at,
+    lastSuppliersSyncAt: at,
+    lastSupplierPaymentsSyncAt: at,
+    lastCashDrawerAdjustmentsSyncAt: at,
+    lastDayDrawerOpensSyncAt: at,
+    lastInventoryCountSessionsSyncAt: at,
+    lastShiftsSyncAt: at,
+    lastDayClosesSyncAt: at,
+    lastStockMovementsSyncAt: at,
+  });
+}
+
 /** Mark bootstrap done and set all entity cursors to the same timestamp. */
 export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCheckpoints {
   return writeSyncCheckpoints({

@@ -233,6 +233,10 @@ export function describeAuditLine(
       const name = typeof pl.name === "string" ? pl.name : typeof pl.supplierName === "string" ? pl.supplierName : e.payloadSummary;
       return tTemplate(lang, "narrativeSupplierEdited", { name });
     }
+    case "supplier_remove": {
+      const name = typeof pl.name === "string" ? pl.name : e.payloadSummary;
+      return tTemplate(lang, "narrativeSupplierRemoved", { name });
+    }
     case "purchase_void": {
       const supplier = typeof pl.supplierName === "string" ? pl.supplierName : "";
       const total = typeof pl.totalCostUgx === "number" ? pl.totalCostUgx : 0;

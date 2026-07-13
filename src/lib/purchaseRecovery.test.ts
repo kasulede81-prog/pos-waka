@@ -8,6 +8,7 @@ import {
   rowToPurchase,
   rowToSupplier,
   rowToSupplierPayment,
+  isSupplierDeletedMetadata,
 } from "./purchaseRecovery";
 import {
   buyingUnitsToBaseUnits,
@@ -200,5 +201,15 @@ describe("purchaseRecovery — device recovery parity", () => {
     const merged = mergePurchasesForRecovery(local, [remote]);
     expect(merged[0].totalCostUgx).toBe(24_000);
     expect(merged[0].pendingSync).toBe(false);
+  });
+
+  it("rowToSupplier ignores cloud rows marked deleted in metadata", () => {
+    expect(
+      isSupplierDeletedMetadata({
+        id: SUPPLIER_ID,
+        metadata: { deleted: true, deletedAt: "2026-06-01T00:00:00.000Z" },
+      }),
+    ).toBe(true);
+    expect(rowToSupplier({ id: SUPPLIER_ID, name: "Gone", metadata: { deletedAt: "2026-06-01T00:00:00.000Z" } })).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, XCircle } from "lucide-react";
+import { EnterpriseSkeletonList } from "../enterprise/EnterpriseSkeleton";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import type { DayClosePreflightSnapshot } from "../../lib/dayCloseEnforcement";
@@ -26,10 +27,9 @@ export function CloseDayPreflightPanel({ lang, snapshot, loading }: Props) {
       <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "dayClosePreflightSub")}</p>
 
       {loading ? (
-        <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          {t(lang, "dayClosePreflightLoading")}
-        </p>
+        <div className="mt-4">
+          <EnterpriseSkeletonList variant="list-row" count={4} />
+        </div>
       ) : null}
 
       {snapshot ? (
@@ -47,12 +47,15 @@ export function CloseDayPreflightPanel({ lang, snapshot, loading }: Props) {
                 {item.detailKey && item.status !== "pass" ? (
                   <p className="mt-0.5 text-xs font-medium text-muted-foreground">{translate(item.detailKey)}</p>
                 ) : null}
-                {item.navigateTo && item.status === "fail" ? (
+                {item.navigateTo &&
+                (item.status === "fail" || (item.id === "cash_counted" && item.status === "pending")) ? (
                   <Link
                     to={item.navigateTo}
                     className="mt-1 inline-block text-xs font-black text-waka-700 underline"
                   >
-                    {t(lang, "dayClosePreflightFixLink")}
+                    {item.id === "cash_counted"
+                      ? t(lang, "dayClosePreflightCountLink")
+                      : t(lang, "dayClosePreflightFixLink")}
                   </Link>
                 ) : null}
               </div>

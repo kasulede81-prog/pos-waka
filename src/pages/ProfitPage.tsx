@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { BarChart3, FileDown, TrendingUp } from "lucide-react";
+import { BarChart3, FileDown, Printer, Share2, TrendingUp } from "lucide-react";
+import { jsPDF } from "jspdf";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -38,8 +39,11 @@ import {
   type ProfitProductView,
   type ProfitQuickFilter,
 } from "../lib/profitPageView";
-import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
+import { formatDateFilterViewingLabel, selectedDayKeyForFilter } from "../lib/dateFilterLabels";
+import { dateKeyKampala } from "../lib/datesUg";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
+import { buildProfitExportRows } from "../lib/analyticsReportExport";
+import { exportCsvFile, printReportDocument } from "../lib/reportExportEngine";
 
 type Props = { lang: Language; embedded?: boolean };
 
@@ -164,11 +168,33 @@ export function ProfitPage({ lang, embedded }: Props) {
   const detailLastSold = detailProduct ? lastSoldAtForProduct(filteredSales, detailProduct.productId) : null;
   const detailRecord = detailProduct ? productById.get(detailProduct.productId) : undefined;
 
+  const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, filter), [lang, filter]);
+
+  const exportProfitRows = useMemo(
+    () =>
+      buildProfitExportRows({
+        lang,
+        periodLabel,
+        profitUgx: total.profitUgx,
+        revenueUgx: total.salesUgx,
+        costUgx: total.costUgx,
+        marginPct,
+        groups,
+      }),
+    [lang, periodLabel, total, marginPct, groups],
+  );
+
   if (!canViewProfit) {
     return <Navigate to="/upgrade" replace />;
   }
 
-  const exportReport = async () => {
+  const exportProfitCsv = async () => {
+    await exportCsvFile("profit", `waka-profit-${dateKeyKampala(new Date())}.csv`, exportProfitRows, {
+      shareDialogTitle: t(lang, "profitPageTitle"),
+    });
+  };
+
+  const shareProfitReport = async () => {
     const dayKey = selectedDayKeyForFilter(filter);
     if (dayKey) {
       const body = buildDailyReportText(lang, dayKey, {
@@ -177,22 +203,37 @@ export function ProfitPage({ lang, embedded }: Props) {
         returnRecords: filteredReturns,
         includeProfit: true,
       });
-      await shareText(body, t(lang, "profitPageTitle"));
+      await shareText(body, t(lang, "profitPageTitle"), "profit");
       return;
     }
-    const lines = [
-      t(lang, "profitPageTitle"),
-      `${t(lang, "profitStatNetProfit")}: UGX ${total.profitUgx.toLocaleString()}`,
-      `${t(lang, "profitStatRevenue")}: UGX ${total.salesUgx.toLocaleString()}`,
-      `${t(lang, "profitStatCost")}: UGX ${total.costUgx.toLocaleString()}`,
-      `${t(lang, "profitStatMargin")}: ${marginPct.toFixed(1)}%`,
-      "",
-      ...groups.flatMap((g) => [
-        `${g.categoryLabel}: UGX ${g.profitUgx.toLocaleString()}`,
-        ...g.products.map((p) => `  ${p.name}: UGX ${p.profitUgx.toLocaleString()}`),
-      ]),
-    ];
-    await shareText(lines.join("\n"), t(lang, "profitPageTitle"));
+    const lines = exportProfitRows.map((row) => row.join(": ")).join("\n");
+    await shareText(lines, t(lang, "profitPageTitle"), "profit");
+  };
+
+  const printProfitReport = async () => {
+    const filename = `waka-profit-${dateKeyKampala(new Date())}.pdf`;
+    const body = exportProfitRows.map((row) => row.join("\t")).join("\n");
+    await printReportDocument("profit", {
+      pdfFilename: filename,
+      buildPdfBlob: () => {
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
+        doc.setFontSize(10);
+        let y = 40;
+        for (const line of body.split("\n")) {
+          doc.text(line, 40, y);
+          y += 12;
+          if (y > 760) {
+            doc.addPage();
+            y = 40;
+          }
+        }
+        return doc.output("blob");
+      },
+      htmlBody: `<pre>${body.replace(/</g, "&lt;")}</pre>`,
+      paper: "a4",
+      title: t(lang, "profitPageTitle"),
+      shareDialogTitle: t(lang, "profitPageTitle"),
+    });
   };
 
   const hasData = filteredSales.length > 0 || groups.length > 0;
@@ -213,14 +254,32 @@ export function ProfitPage({ lang, embedded }: Props) {
           </div>
           <div className="flex shrink-0 items-center gap-1.5 pt-8">
             {hasData ? (
-              <button
-                type="button"
-                onClick={() => void exportReport()}
-                className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-muted"
-              >
-                <FileDown className="h-4 w-4 shrink-0" aria-hidden />
-                <span className="hidden sm:inline">{t(lang, "salesHistoryExport")}</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => void exportProfitCsv()}
+                  className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-muted"
+                >
+                  <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="hidden sm:inline">{t(lang, "salesHistoryExport")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void printProfitReport()}
+                  className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-foreground shadow-sm active:bg-muted"
+                >
+                  <Printer className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="hidden sm:inline">{t(lang, "monthlyReportPrint")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void shareProfitReport()}
+                  className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-foreground shadow-sm active:bg-muted"
+                >
+                  <Share2 className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="hidden sm:inline">{t(lang, "cmdCenterShareReport")}</span>
+                </button>
+              </>
             ) : null}
             <Link
               to="/reports?tab=profit"

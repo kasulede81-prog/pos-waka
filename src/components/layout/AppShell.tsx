@@ -35,6 +35,7 @@ import { MobileScrollTail } from "./MobileScrollTail";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
+import { readCachedShopMemberRole, writeCachedShopMemberRole } from "../../lib/shopMemberRoleCache";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured, shouldSuppressPosLockScreen } from "../../lib/lockPos";
 import { ShiftCloseModal } from "../pos/ShiftCloseModal";
 import { DisplayScaleControl } from "../pos/DisplayScaleControl";
@@ -131,8 +132,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     secret: string;
   } | null>(null);
   const [isInternalAdmin, setIsInternalAdmin] = useState(false);
-  const [shopMemberRole, setShopMemberRole] = useState<UserRole | null>(null);
-  const [roleReady, setRoleReady] = useState(() => authMode !== "supabase" || !user?.id);
+  const [shopMemberRole, setShopMemberRole] = useState<UserRole | null>(() => {
+    if (authMode !== "supabase" || !user?.id) return null;
+    return readCachedShopMemberRole(user.id);
+  });
+  const [roleReady, setRoleReady] = useState(() => {
+    if (authMode !== "supabase" || !user?.id) return true;
+    return readCachedShopMemberRole(user.id) != null;
+  });
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -153,13 +160,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       setRoleReady(true);
       return;
     }
+    const cached = readCachedShopMemberRole(user.id);
+    if (cached) {
+      setShopMemberRole(cached);
+      setRoleReady(true);
+    } else {
+      setRoleReady(false);
+    }
     let cancelled = false;
-    setRoleReady(false);
     void fetchShopMemberRoleForUser(user.id).then((role) => {
-      if (!cancelled) {
-        setShopMemberRole(role);
-        setRoleReady(true);
-      }
+      if (cancelled) return;
+      if (role) writeCachedShopMemberRole(user.id, role);
+      setShopMemberRole(role);
+      setRoleReady(true);
     });
     return () => {
       cancelled = true;
@@ -531,7 +544,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 onSellScreen ? "scroll-main-chrome--pos" : "",
               )}
             >
-              <div className={clsx("min-h-0 min-w-0 max-w-full", viewportLocked && "flex min-h-0 flex-1 flex-col")}>
+              <div
+                className={clsx(
+                  "min-h-0 min-w-0 max-w-full",
+                  viewportLocked && "flex min-h-0 flex-1 flex-col overflow-hidden",
+                )}
+              >
                 <BackOfficeRouteGuard lang={lang}>
                   <RouteErrorBoundary scope="page">
                     <Outlet />

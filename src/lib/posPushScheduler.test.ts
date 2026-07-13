@@ -17,7 +17,7 @@ vi.mock("./deviceOnline", () => ({
 }));
 
 vi.mock("./globalSyncMutex", () => ({
-  isGlobalSyncInFlight: () => mocks.syncInFlight,
+  isPullSyncInFlight: () => mocks.syncInFlight,
 }));
 
 vi.mock("./backgroundWorkPolicy", () => ({

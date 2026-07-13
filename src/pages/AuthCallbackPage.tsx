@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
+import { EnterpriseSpinner } from "../components/enterprise/EnterpriseSpinner";
 import { authDevLog } from "../lib/authConfig";
 import { publishAuthSessionFromCallback } from "../lib/authSessionBridge";
 import { bootTrace, bootTraceAsync } from "../lib/bootTrace";
@@ -178,10 +179,7 @@ export function AuthCallbackPage() {
 
       {state === "loading" ? (
         <div className="mt-8 flex flex-col items-center gap-3 text-center">
-          <span
-            className="h-10 w-10 animate-spin rounded-full border-[3px] border-waka-200 border-t-orange-600"
-            aria-hidden
-          />
+          <EnterpriseSpinner size="lg" label="Finishing sign-in" />
           <p className="text-sm font-semibold text-muted-foreground">Finishing sign-in…</p>
           <p className="max-w-xs text-xs text-muted-foreground">Please wait while we secure your session.</p>
         </div>

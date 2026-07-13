@@ -289,7 +289,22 @@ export async function restoreShopFromCloudSnapshot(
   const { pullDayDrawerOpensForRecovery } = await import("./dayDrawerOpenCloudSync");
   await pullDayDrawerOpensForRecovery(ctx).catch(() => false);
 
-  await persistRestoredSnapshotToDisk(undefined, { cloudRecovery: opts?.cloudRecovery });
+  if (opts?.cloudRecovery) {
+    const { reportRecoveryManualProgress } = await import("./cloudRecoverySession");
+    const { snapshotPersistProgressPct } = await import("./recoveryProgress");
+    reportRecoveryManualProgress(snapshotPersistProgressPct(0));
+  }
+
+  await persistRestoredSnapshotToDisk(undefined, {
+    cloudRecovery: opts?.cloudRecovery,
+    skipEntityMigration: true,
+  });
+
+  if (opts?.cloudRecovery) {
+    const { reportRecoveryManualProgress } = await import("./cloudRecoverySession");
+    const { snapshotPersistProgressPct } = await import("./recoveryProgress");
+    reportRecoveryManualProgress(snapshotPersistProgressPct(100));
+  }
 
   return storeHasCoreRecoveryData();
 }

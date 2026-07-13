@@ -208,15 +208,15 @@ export function StockProductEditModal({
     : totalStock;
   const previewProduct: Product | null = product
     ? {
-        ...product,
-        stockOnHand: previewStock,
+    ...product,
+    stockOnHand: previewStock,
         baseUnit:
           packagingEdit && previewPackaging?.enabled
             ? previewPackaging.baseUnit
             : resolveSellBaseUnit(sellUnit, sellUnitCustom),
-        buyingUnit: hasPack && piecesN > 1 && !packagingEdit ? packLabel.toLowerCase() : product.buyingUnit,
-        conversionRate: hasPack && piecesN > 1 && !packagingEdit ? piecesN : product.conversionRate,
-        pharmacyPackaging: previewPackaging,
+    buyingUnit: hasPack && piecesN > 1 && !packagingEdit ? packLabel.toLowerCase() : product.buyingUnit,
+    conversionRate: hasPack && piecesN > 1 && !packagingEdit ? piecesN : product.conversionRate,
+    pharmacyPackaging: previewPackaging,
         sellingPricePerUnitUgx: priceUgx,
         costPricePerUnitUgx: buyPerUnit,
       }
@@ -387,11 +387,11 @@ export function StockProductEditModal({
         name={name}
         category={category}
         categoryPlaceholder={uiPlaceholder(
-          lang,
-          preferences.businessType,
-          "simpleAddShelfPlaceholder",
-          preferences.pharmacyModeEnabled,
-        )}
+                lang,
+                preferences.businessType,
+                "simpleAddShelfPlaceholder",
+                preferences.pharmacyModeEnabled,
+              )}
         categorySuggestions={categorySuggestions}
         onNameChange={(v) => {
           markDirty();
@@ -423,17 +423,17 @@ export function StockProductEditModal({
         formLabel={pt("form")}
       />
 
-      {packagingEdit ? (
+          {packagingEdit ? (
         <EditorSection title={t(lang, "productEditorSectionPackaging")}>
-          <PharmacyPackagingFields
-            lang={lang}
-            state={packagingState}
+              <PharmacyPackagingFields
+                lang={lang}
+                state={packagingState}
             onChange={(patch) => {
               markDirty();
               setPackagingState((s) => ({ ...s, ...patch }));
             }}
-            hideTabletPrice
-            showEnableToggle={!isPharmacyPackagingActive(product)}
+                hideTabletPrice
+                showEnableToggle={!isPharmacyPackagingActive(product)}
             inputClass={clsx(WIZARD_INPUT_TEXT, "mt-2")}
             labelClass="block text-sm font-bold text-foreground"
           />
@@ -525,7 +525,7 @@ export function StockProductEditModal({
       />
 
       <EditorInventorySection
-        lang={lang}
+              lang={lang}
         pharmacyMode={pharmacyMode}
         product={previewProduct}
         minAlert={minAlert}
@@ -581,7 +581,7 @@ export function StockProductEditModal({
             compact
           />
         </EditorSection>
-      ) : null}
+              ) : null}
 
       <EditorAdvancedSection
         lang={lang}

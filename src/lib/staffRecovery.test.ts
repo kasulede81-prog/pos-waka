@@ -52,3 +52,13 @@ describe("pickNewerStaffAccount", () => {
     expect(pickNewerStaffAccount(local, cloud).name).toBe("Cloud");
   });
 });
+
+describe("isEventDrivenStaffPull", () => {
+  it("bypasses throttle for ack and realtime reasons", async () => {
+    const { isEventDrivenStaffPull } = await import("./staffRecovery");
+    expect(isEventDrivenStaffPull("staff_ack")).toBe(true);
+    expect(isEventDrivenStaffPull("staff_realtime")).toBe(true);
+    expect(isEventDrivenStaffPull("reconnect")).toBe(true);
+    expect(isEventDrivenStaffPull("safety_poll")).toBe(false);
+  });
+});

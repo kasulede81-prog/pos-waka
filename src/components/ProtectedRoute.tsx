@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { bootTrace } from "../lib/bootTrace";
 import { unauthenticatedEntryPath } from "../lib/nativeApp";
+import { EnterpriseSpinner } from "./enterprise/EnterpriseSpinner";
 
 type Props = {
   initializing: boolean;
@@ -24,10 +25,16 @@ export function ProtectedRoute({ initializing, isAuthenticated }: Props) {
     }
   }, [initializing, isAuthenticated, location.pathname]);
 
+  useEffect(() => {
+    if (!initializing) {
+      void import("../lib/startupPerformance").then(({ markStartupPerf }) => markStartupPerf("auth_ready"));
+    }
+  }, [initializing]);
+
   if (initializing) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-brand-cream px-6 text-center">
-        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-waka-200 border-t-orange-600" aria-hidden />
+        <EnterpriseSpinner size="lg" label="Loading session" />
         <p className="text-sm font-semibold text-muted-foreground">Loading…</p>
       </div>
     );

@@ -1,4 +1,4 @@
-import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
+import { actorHasEffectivePermission, actorHasPermission } from "../../lib/actorAuthorization";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Share2 } from "lucide-react";
@@ -24,6 +24,7 @@ import { HomeBusinessHero } from "./HomeBusinessHero";
 import { useHomeDashboardAnimationPause } from "../../hooks/useHomeDashboardAnimationPause";
 import { useHomeDashboardMetrics } from "../../hooks/useHomeDashboardMetrics";
 import { useHomeTileSpotlight } from "../../hooks/useHomeTileSpotlight";
+import { useSessionHydration } from "../../context/SessionHydrationContext";
 
 type Props = { lang: Language };
 
@@ -42,7 +43,8 @@ export function DesktopHomeTiles({ lang }: Props) {
   const savedOrder = usePosStore((s) => s.preferences.launcherTileOrder) ?? EMPTY_ORDER;
   const layout = usePosStore((s) => s.preferences.launcherTileLayout) ?? EMPTY_LAYOUT;
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
-  const { snapshot, authMode } = useSubscription();
+  const { snapshot, authMode, loading: subscriptionLoading } = useSubscription();
+  const { roleReady } = useSessionHydration();
   const { isMarketingAgent } = useMarketingAgentPortal();
 
   const tier = resolveEffectivePlanTier(snapshot);
@@ -63,9 +65,17 @@ export function DesktopHomeTiles({ lang }: Props) {
   const liveStats = useHomeDashboardMetrics(lang, actor.role, actor.userId, lowStockCount, actor.permissions);
 
   const can = useCallback(
-    (perm?: Permission) =>
-      !perm || actorHasEffectivePermission(actor, perm, snapshot, authMode),
-    [actor.role, snapshot, authMode],
+    (perm?: Permission) => {
+      if (!perm) return true;
+      if (!roleReady) {
+        return actorHasPermission(actor, perm);
+      }
+      if (authMode === "supabase" && subscriptionLoading) {
+        return actorHasPermission(actor, perm);
+      }
+      return actorHasEffectivePermission(actor, perm, snapshot, authMode);
+    },
+    [actor, roleReady, subscriptionLoading, snapshot, authMode],
   );
 
   const rxQueueCount = useMemo(

@@ -17,6 +17,8 @@ export const ENTERPRISE_UX_PRIMITIVES = [
   "EnterpriseScrollControls",
   "EnterpriseEmptyState",
   "EnterpriseSkeleton",
+  "EnterpriseSpinner",
+  "enterpriseMotion",
   "EnterpriseActionSheet",
   "EnterpriseFeedbackBanner",
   "EnterpriseSaveIndicator",

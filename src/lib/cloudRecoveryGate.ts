@@ -208,3 +208,32 @@ export function validateRecoveryCompletionGate(
 
   return { ok, message, failures, warnings, inventoryWarnings };
 }
+
+/** Lighter gate — unlock POS when catalog is operational (Phase 24.1BB). */
+export function validateCoreOperationalGate(
+  probe: CloudShopProbe,
+  validation: CloudRecoveryValidationResult,
+): RecoveryCompletionGateResult {
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  const c = validation.counts;
+
+  if (probe.hasCloudProducts && c.products === 0) {
+    failures.push("products_not_restored");
+  }
+
+  const cloudExpectedData = probe.hasCloudProducts || probe.hasSnapshot;
+  const hasCoreData = c.products > 0 || c.sales > 0 || c.customers > 0;
+  if (cloudExpectedData && !hasCoreData) {
+    failures.push("shop_still_empty");
+  }
+
+  const criticalValidation = validation.failures.filter((f) => f.severity === "critical");
+  if (criticalValidation.length > 0) {
+    failures.push("integrity_critical");
+  }
+
+  const ok = failures.length === 0;
+  const message = ok ? "Core operational dataset ready" : "Core business data not restored";
+  return { ok, message, failures, warnings, inventoryWarnings: false };
+}

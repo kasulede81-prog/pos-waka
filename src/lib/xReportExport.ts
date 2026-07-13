@@ -4,6 +4,7 @@ import { t } from "./i18n";
 import { createPdfLayout, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
 import { downloadPdfBlob, sharePdfBlob } from "./documentPrint";
 import { printDocumentNativeFallback } from "./nativePrintFallback";
+import { exportCsvFile } from "./reportExportEngine";
 import { formatXReportCsv, type XReportSnapshot } from "./xReport";
 
 export function buildXReportPdfBlob(lang: Language, snapshot: XReportSnapshot): Blob {
@@ -64,13 +65,9 @@ export async function printXReport(lang: Language, snapshot: XReportSnapshot): P
   });
 }
 
-export function downloadXReportCsv(snapshot: XReportSnapshot): void {
+export async function downloadXReportCsv(snapshot: XReportSnapshot): Promise<boolean> {
   const csv = formatXReportCsv(snapshot);
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `x-report-${snapshot.dateKey}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const rows = csv.split("\n").map((line) => line.split(","));
+  const result = await exportCsvFile("x_report", `x-report-${snapshot.dateKey}.csv`, rows);
+  return result.ok;
 }

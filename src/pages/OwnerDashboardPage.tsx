@@ -23,6 +23,10 @@ import {
   filterAttentionByQuery,
 } from "../lib/commandCenterPageView";
 import { shareText } from "../lib/reportExport";
+import { buildCommandCenterExportRows } from "../lib/analyticsReportExport";
+import { exportCsvFile, printReportDocument } from "../lib/reportExportEngine";
+import { jsPDF } from "jspdf";
+import { dateKeyKampala } from "../lib/datesUg";
 import { EnterpriseDashboardShell } from "../components/command-center/EnterpriseDashboardShell";
 import { isHospitalityMode } from "../lib/hospitality";
 import { computeHospitalityDashboardStats } from "../lib/hospitalityStats";
@@ -227,9 +231,9 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const filteredAttention = useMemo(() => {
     if (!searchQuery.trim()) return commandCenter.attention;
     return {
-      critical: filterAttentionByQuery(commandCenter.attention.critical, searchQuery),
-      warnings: filterAttentionByQuery(commandCenter.attention.warnings, searchQuery),
-      information: filterAttentionByQuery(commandCenter.attention.information, searchQuery),
+      critical: filterAttentionByQuery(commandCenter.attention.critical, searchQuery, lang),
+      warnings: filterAttentionByQuery(commandCenter.attention.warnings, searchQuery, lang),
+      information: filterAttentionByQuery(commandCenter.attention.information, searchQuery, lang),
     };
   }, [commandCenter.attention, searchQuery]);
 
@@ -242,7 +246,23 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     [acknowledgeOwnerAlert],
   );
 
-  const exportDashboard = useCallback(() => {
+  const exportDashboard = useCallback(async () => {
+    const rows = buildCommandCenterExportRows({
+      lang,
+      shopName,
+      periodLabel,
+      score: healthScore,
+      revenueUgx: overview.revenueUgx,
+      profitUgx: overview.profitUgx,
+      transactions: overview.transactionCount,
+      expectedCashUgx: heroExpectedCash,
+    });
+    await exportCsvFile("command_center", `waka-command-center-${dateKeyKampala(new Date())}.csv`, rows, {
+      shareDialogTitle: `${shopName} Command Center`,
+    });
+  }, [lang, shopName, periodLabel, healthScore, overview, heroExpectedCash]);
+
+  const shareDashboard = useCallback(() => {
     const text = buildCommandCenterExportText({
       shopName,
       periodLabel,
@@ -252,7 +272,41 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       transactions: overview.transactionCount,
       expectedCashUgx: heroExpectedCash,
     });
-    void shareText(text, `${shopName} Command Center`);
+    void shareText(text, `${shopName} Command Center`, "command_center");
+  }, [shopName, periodLabel, healthScore, overview, heroExpectedCash]);
+
+  const printDashboard = useCallback(async () => {
+    const text = buildCommandCenterExportText({
+      shopName,
+      periodLabel,
+      score: healthScore,
+      revenueUgx: overview.revenueUgx,
+      profitUgx: overview.profitUgx,
+      transactions: overview.transactionCount,
+      expectedCashUgx: heroExpectedCash,
+    });
+    const filename = `waka-command-center-${dateKeyKampala(new Date())}.pdf`;
+    await printReportDocument("command_center", {
+      pdfFilename: filename,
+      buildPdfBlob: () => {
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
+        doc.setFontSize(10);
+        let y = 40;
+        for (const line of text.split("\n")) {
+          doc.text(line, 40, y);
+          y += 12;
+          if (y > 760) {
+            doc.addPage();
+            y = 40;
+          }
+        }
+        return doc.output("blob");
+      },
+      htmlBody: `<pre>${text.replace(/</g, "&lt;")}</pre>`,
+      paper: "a4",
+      title: `${shopName} Command Center`,
+      shareDialogTitle: `${shopName} Command Center`,
+    });
   }, [shopName, periodLabel, healthScore, overview, heroExpectedCash]);
 
   const ctx = useMemo((): DashboardCenterContext => ({
@@ -289,6 +343,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     revenueSparkline,
     onAcknowledge,
     exportDashboard,
+    shareDashboard,
+    printDashboard,
     recommendationsSectionId: RECOMMENDATIONS_SECTION_ID,
     hospitalityStats,
     hospitalityFloor,
@@ -322,6 +378,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     revenueSparkline,
     onAcknowledge,
     exportDashboard,
+    shareDashboard,
+    printDashboard,
     hospitalityStats,
     hospitalityFloor,
   ]);

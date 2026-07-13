@@ -19,8 +19,8 @@ import { dateKeyKampala } from "../../lib/datesUg";
 import { auditRefundIntegrity } from "../../lib/auditRefundIntegrity";
 import { resolveDateFilterBounds, type DateFilterValue } from "../../lib/dateFilters";
 import { formatDateFilterViewingLabel } from "../../lib/dateFilterLabels";
-import { printHtmlDocument } from "../../lib/documentPrint";
 import { shareText } from "../../lib/reportExport";
+import { exportCsvFile, exportJsonFile, exportPdfFile, exportXlsxFile, printReportDocument } from "../../lib/reportExportEngine";
 import { useInvestigationCenter, splitActiveKpis } from "./hooks/useInvestigationCenter";
 import { computePharmacyInvestigationKpis } from "./extensions/pharmacy/computePharmacyInvestigationKpis";
 import {
@@ -116,6 +116,15 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
 
   const saleById = useMemo(() => new Map(sales.map((s) => [s.id, s])), [sales]);
 
+  const returnsCountInRange = useMemo(
+    () =>
+      allReturns.filter((r) => {
+        const key = dateKeyKampala(r.createdAt);
+        return key >= dateFrom && key <= dateTo;
+      }).length,
+    [allReturns, dateFrom, dateTo],
+  );
+
   const returnsInRange = useMemo(() => {
     return allReturns
       .filter((r) => {
@@ -161,9 +170,23 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     return rows;
   }, [baseFiltered, category, activeKpi]);
 
+  const exportEntries = useMemo(() => {
+    const allBase = filterAuditLogsIndexed(
+      auditIndex,
+      filters,
+      { products, customers, suppliers, lang },
+      Number.MAX_SAFE_INTEGER,
+    );
+    const todayKey = dateKeyKampala(new Date());
+    let rows = allBase.filter((entry) => !shouldHideFromInvestigationCenter(entry));
+    rows = rows.filter((entry) => matchesCategory(entry, category));
+    rows = applyKpiFilter(rows, activeKpi, todayKey);
+    return rows;
+  }, [auditIndex, filters, products, customers, suppliers, lang, category, activeKpi]);
+
   const kpiCards = useMemo(
-    () => computeInvestigationKpis(auditIndex, dateFrom, dateTo, returnsInRange.length),
-    [auditIndex, dateFrom, dateTo, returnsInRange.length],
+    () => computeInvestigationKpis(auditIndex, dateFrom, dateTo, returnsCountInRange),
+    [auditIndex, dateFrom, dateTo, returnsCountInRange],
   );
 
   const pharmacyKpiCards = useMemo(() => {
@@ -274,66 +297,76 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     [action, actorUserId, applyFilters, customerId, productId, supplierId],
   );
 
-  const downloadBlob = useCallback((filename: string, blob: Blob) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, []);
-
   const downloadCsv = useCallback(
-    (entries: AuditLogEntry[] = filtered) => {
-      downloadBlob(`audit-${dateKeyKampala(new Date())}.csv`, new Blob([buildAuditCsv(lang, entries)], { type: "text/csv;charset=utf-8" }));
+    async (entries: AuditLogEntry[] = exportEntries) => {
+      const csv = buildAuditCsv(lang, entries);
+      const rows = csv.split("\n").map((line) => line.split(","));
+      await exportCsvFile("investigation", `audit-${dateKeyKampala(new Date())}.csv`, rows, {
+        shareDialogTitle: t(lang, "auditCenterTitle"),
+      });
     },
-    [downloadBlob, filtered, lang],
+    [exportEntries, lang],
   );
 
   const downloadExcel = useCallback(
-    (entries: AuditLogEntry[] = filtered) => {
-      downloadBlob(
-        `audit-${dateKeyKampala(new Date())}.csv`,
-        new Blob([buildExcelCompatibleCsv(lang, entries)], { type: "text/csv;charset=utf-8" }),
-      );
+    async (entries: AuditLogEntry[] = exportEntries) => {
+      const csv = buildExcelCompatibleCsv(lang, entries);
+      const rows = csv.replace(/^\uFEFF/, "").split("\n").map((line) => line.split(","));
+      await exportXlsxFile("investigation", `audit-${dateKeyKampala(new Date())}.xlsx`, rows, {
+        shareDialogTitle: t(lang, "auditCenterTitle"),
+        sheetName: "Audit",
+      });
     },
-    [downloadBlob, filtered, lang],
+    [exportEntries, lang],
   );
 
   const downloadPdf = useCallback(
-    async (entries: AuditLogEntry[] = filtered) => {
+    async (entries: AuditLogEntry[] = exportEntries) => {
       const blob = await buildAuditPdfBlob(lang, entries, shopName);
-      downloadBlob(`audit-${dateKeyKampala(new Date())}.pdf`, blob);
+      await exportPdfFile("investigation", `audit-${dateKeyKampala(new Date())}.pdf`, blob, {
+        shareDialogTitle: t(lang, "auditCenterTitle"),
+      });
     },
-    [downloadBlob, filtered, lang, shopName],
+    [exportEntries, lang, shopName],
   );
 
   const downloadJson = useCallback(
-    (entries: AuditLogEntry[] = filtered) => {
-      downloadBlob(
+    async (entries: AuditLogEntry[] = exportEntries) => {
+      await exportJsonFile(
+        "investigation",
         `audit-${dateKeyKampala(new Date())}.json`,
-        new Blob([buildAuditJsonExport(lang, entries)], { type: "application/json;charset=utf-8" }),
+        buildAuditJsonExport(lang, entries),
+        { shareDialogTitle: t(lang, "auditCenterTitle") },
       );
     },
-    [downloadBlob, filtered, lang],
+    [exportEntries, lang],
   );
 
   const printEntries = useCallback(
-    (entries: AuditLogEntry[] = filtered) => {
-      printHtmlDocument(buildAuditPrintHtml(lang, entries, shopName), "80mm", t(lang, "auditCenterTitle"));
+    async (entries: AuditLogEntry[] = exportEntries) => {
+      const filename = `audit-${dateKeyKampala(new Date())}.pdf`;
+      const blob = await buildAuditPdfBlob(lang, entries, shopName);
+      await printReportDocument("investigation", {
+        pdfFilename: filename,
+        buildPdfBlob: () => blob,
+        htmlBody: buildAuditPrintHtml(lang, entries, shopName),
+        paper: "a4",
+        title: t(lang, "auditCenterTitle"),
+        shareDialogTitle: t(lang, "auditCenterTitle"),
+      });
     },
-    [filtered, lang, shopName],
+    [exportEntries, lang, shopName],
   );
 
   const shareEntries = useCallback(
-    async (entries: AuditLogEntry[] = filtered) => {
+    async (entries: AuditLogEntry[] = exportEntries) => {
       const body = entries
         .slice(0, 40)
         .map((e) => buildActivityDetailText(lang, e, { productById, customerById }))
         .join("\n\n---\n\n");
-      await shareText(body, t(lang, "auditCenterTitle"));
+      await shareText(body, t(lang, "auditCenterTitle"), "investigation");
     },
-    [customerById, filtered, lang, productById],
+    [customerById, exportEntries, lang, productById],
   );
 
   const copyEntry = useCallback(

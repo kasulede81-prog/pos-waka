@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
 import { formatStockLabel } from "../../lib/sellingEngine";
+import { POS_CATALOG_TILE_TOUCH_CLASS } from "../../lib/posTouchInteraction";
 
 type Props = {
   product: Product;
@@ -21,6 +22,7 @@ export function PosSellProductCard({ product, stockLabel, addLabel, locked, lock
     <article
       className={clsx(
         "pos-ds-product-card relative flex min-h-[108px] flex-col justify-between rounded-xl border p-2.5 text-left shadow-sm transition-all motion-reduce:transition-none",
+        POS_CATALOG_TILE_TOUCH_CLASS,
         locked
           ? "border-border/80 bg-muted/90 opacity-55"
           : "border-border/90 bg-card active:scale-[0.98] active:border-waka-400 active:shadow-md motion-reduce:active:scale-100",

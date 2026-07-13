@@ -12,6 +12,10 @@ import {
 } from "../../lib/posShelfLayout";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import {
+  POS_ARRANGE_TOUCH_CLASS,
+  POS_CATALOG_TILE_TOUCH_CLASS,
+} from "../../lib/posTouchInteraction";
 
 type Props = {
   shelf: PosShelfDisplayCard;
@@ -198,8 +202,11 @@ export function PosShelfTile({
     </>
   );
 
+  const touchScrollClass = mode === "sell" && !isArrange ? POS_CATALOG_TILE_TOUCH_CLASS : POS_ARRANGE_TOUCH_CLASS;
+
   const sharedClass = clsx(
-    "relative w-full touch-manipulation overflow-hidden text-left transition-all duration-150 motion-reduce:transition-none",
+    "relative w-full overflow-hidden text-left transition-all duration-150 motion-reduce:transition-none",
+    touchScrollClass,
     sellCatalogGrid
       ? clsx(
           "flex flex-col items-center justify-center rounded-xl border shadow-sm transition-[border-color,box-shadow,transform] duration-150",

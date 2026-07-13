@@ -5,9 +5,13 @@ import { WakaStartupBrand } from "../brand/WakaStartupBrand";
 import { StartupProgressBar } from "../startup/StartupProgressBar";
 import { STARTUP_SCREEN_BG } from "../startup/StartupLoadingScreen";
 import {
-  CLOUD_RECOVERY_STEP_ORDER,
+  computeRecoveryProgressPct,
+  downloadStepIndex,
+} from "../../lib/recoveryProgress";
+import {
   type CloudRecoveryStepId,
 } from "../../lib/cloudRecoverySession";
+import { classifyRecoveryFailure } from "../../lib/recoveryFailureClassification";
 import { useCloudRecoverySession } from "../../hooks/useCloudRecoverySession";
 import { getDeviceOnline } from "../../lib/deviceOnline";
 import { StartupEscapeActions } from "../startup/StartupEscapeActions";
@@ -57,7 +61,7 @@ function stepLabelKey(step: CloudRecoveryStepId): string {
 }
 
 function stepIndex(step: CloudRecoveryStepId): number {
-  return CLOUD_RECOVERY_STEP_ORDER.indexOf(step);
+  return downloadStepIndex(step);
 }
 
 function recoveryStepToStartupStep(step: CloudRecoveryStepId | null): void {
@@ -107,12 +111,15 @@ export function CloudRecoveryScreen({
     };
   }, [probeFailed, onRetry]);
 
-  const progressPct = useMemo(() => {
-    if (probeFailed) return 0;
-    const total = CLOUD_RECOVERY_STEP_ORDER.length;
-    const done = Math.max(lastIdx + 1, 0);
-    return Math.min(100, Math.round((done / total) * 100));
-  }, [lastIdx, probeFailed]);
+  const progressPct = useMemo(() => computeRecoveryProgressPct(session), [session]);
+
+  const failurePresentation = useMemo(
+    () =>
+      classifyRecoveryFailure(session.errorKey, {
+        coreUnlocked: session.status === "core_unlocked",
+      }),
+    [session.errorKey, session.status],
+  );
 
   const downloaded = session.downloadedCounts;
   const restored = session.restoredCounts;
@@ -160,15 +167,18 @@ export function CloudRecoveryScreen({
       <div className="mx-auto w-full max-w-md space-y-5">
         <div className="text-center">
           <p className="text-base font-black text-foreground">
-            {failed ? t(lang, "recoveryFailedTitle") : t(lang, "recoveryTitle")}
+            {failed ? t(lang, failurePresentation.titleKey) : t(lang, "recoveryTitle")}
           </p>
           <p className="mt-1 text-sm font-medium text-muted-foreground">
-            {failed ? t(lang, "recoveryFailedSub") : t(lang, "recoverySub")}
+            {failed ? t(lang, failurePresentation.subKey) : t(lang, "recoverySub")}
           </p>
         </div>
 
-        <StartupProgressBar value={progressPct} />
-        <p className="text-center text-xs font-bold tabular-nums text-muted-foreground">{progressPct}%</p>
+        <StartupProgressBar value={probeFailed ? 0 : progressPct} />
+        <p className="text-center text-xs font-bold tabular-nums text-muted-foreground">
+          {probeFailed ? "…" : `${progressPct}%`}
+          {session.progressPhase === "validating" && !failed ? ` · ${t(lang, "recoveryStepValidation")}` : null}
+        </p>
 
         <ul className="space-y-2 rounded-2xl border border-border bg-card/95 p-4 shadow-waka-sm">
           {DISPLAY_STEPS.map((step) => {

@@ -4,6 +4,7 @@ import { t, tTemplate } from "../../lib/i18n";
 import { readUiLanguageCacheSync, loadPersistedUiLanguage } from "../../lib/uiLanguage";
 import type { Language } from "../../types";
 import { EnterpriseUpdateEngine } from "../../lib/updateEngine/EnterpriseUpdateEngine";
+import { EnterpriseSpinner } from "../enterprise/EnterpriseSpinner";
 import { shouldShowOverlay } from "../../lib/updateEngine/UpdateNotifications";
 import { useUpdateEngine, useUpdateEngineInit } from "../../lib/updateEngine/useUpdateEngine";
 
@@ -111,7 +112,7 @@ export function AppReleaseUpdateProvider({ children }: Props) {
       {showAndroidOverlay && state.phase === "flexible_downloading" ? (
         <div className="fixed inset-x-0 bottom-0 z-[185] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <article className="mx-auto flex max-w-lg items-center gap-3 rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 shadow-lg">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-waka-600 border-t-transparent" />
+            <EnterpriseSpinner size="sm" label={t(lang, "updateDownloadingBody")} className="text-waka-600 shrink-0" />
             <p className="text-sm font-bold text-waka-950">{t(lang, "updateDownloadingBody")}</p>
           </article>
         </div>

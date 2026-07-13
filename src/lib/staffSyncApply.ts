@@ -64,6 +64,18 @@ export function mergeStaffAccountsWithDedupe(
   return dedupeStaffAccountsById(merged);
 }
 
+/** Staff in local preferences but absent from authoritative cache — cloud tombstones. */
+export function computeImplicitStaffTombstones(
+  local: StaffAccount[],
+  cacheStaff: StaffAccount[],
+): string[] {
+  if (cacheStaff.length === 0) return [];
+  const cacheIds = new Set(cacheStaff.map((s) => s.id));
+  return local
+    .filter((row) => row.pendingCloudSync !== true && !cacheIds.has(row.id))
+    .map((row) => row.id);
+}
+
 export function computeStaffMergeStats(
   local: StaffAccount[],
   incoming: StaffAccount[],
@@ -97,13 +109,21 @@ export function computeStaffMergeStats(
  */
 export async function applyStaffAccountsMergeToStore(
   incoming: StaffAccount[],
-  opts?: { sanitize?: boolean; source?: string },
+  opts?: { sanitize?: boolean; source?: string; removedIds?: string[] },
 ): Promise<StaffMergeApplyStats> {
   const { usePosStore } = await import("../store/usePosStore");
   const state = usePosStore.getState();
   const local = state.preferences.staffAccounts ?? [];
   const cloudRows = opts?.sanitize === false ? incoming : sanitizeStaffForCache(incoming);
-  const merged = mergeStaffAccountsWithDedupe(local, cloudRows);
+  const removed = new Set(opts?.removedIds ?? []);
+  let merged = mergeStaffAccountsWithDedupe(local, cloudRows);
+  if (removed.size > 0) {
+    merged = merged.filter((row) => !removed.has(row.id));
+    logStaffSyncEvent("tombstones_applied", {
+      source: opts?.source ?? "unknown",
+      count: removed.size,
+    });
+  }
   const stats = computeStaffMergeStats(local, cloudRows, merged);
 
   logStaffSyncEvent("merge_applied", {
@@ -114,6 +134,7 @@ export async function applyStaffAccountsMergeToStore(
     updated: stats.updated,
     preservedLocal: stats.preservedLocal,
     skippedDuplicates: stats.duplicatesSkipped,
+    tombstones: removed.size,
   });
 
   if (!staffListsEqual(local, merged)) {

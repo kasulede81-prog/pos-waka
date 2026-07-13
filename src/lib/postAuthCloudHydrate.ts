@@ -13,23 +13,27 @@ import { captureAppException } from "./crashReporting";
 import { reportSyncIssue } from "./monitoring";
 import {
   beginCloudRecoverySession,
-  completeCloudRecoverySession,
   failCloudRecoverySession,
   getCloudRecoverySession,
   logRecoveryDiagnosticEvent,
   recordRecoveryIntegrityDiagnostics,
+  recordRecoveryRetry,
+  recordRecoveryRuntime,
+  recordRecoveryTimeout,
   reportRecoveryStep,
   resetCloudRecoverySessionForRetry,
-  recordRecoveryCertification,
+  unlockCoreRecoverySession,
+  unlockCoreRecoveryWithDegradedValidation,
   syncRecoveryRestoredCountsFromStore,
   type CloudRecoveryEntityCounts,
+  type CloudRecoveryStepId,
 } from "./cloudRecoverySession";
 import {
   evaluateCloudRecoveryLock,
   probeIndicatesCloudBusiness,
   resolveCloudShopProbe,
   shouldRequireRecoveryLock,
-  validateRecoveryCompletionGate,
+  validateCoreOperationalGate,
   type CloudShopProbe,
 } from "./cloudRecoveryGate";
 import type { CloudRecoveryValidationResult } from "./cloudRecoveryValidator";
@@ -40,6 +44,25 @@ import {
   verifyRecoveryHydration,
 } from "./recoveryHydration";
 import { recordStartupRecoveryFailure } from "./startupDiagnostics";
+import { runBackgroundRecoveryCertification } from "./backgroundRecoveryCertification";
+import { logRecovery, markRecoveryPerf, resetRecoveryDiagnostics } from "./recoveryDiagnostics";
+import { beginRecoveryStageWatch, endRecoveryStageWatch } from "./recoveryWatchdog";
+import {
+  RECOVERY_GLOBAL_TIMEOUT_MS,
+  RECOVERY_PERSIST_TIMEOUT_MS,
+  RECOVERY_PROBE_TIMEOUT_MS,
+  RECOVERY_STAFF_TIMEOUT_MS,
+  RecoveryTimeoutError,
+  withRecoveryTimeoutPromise,
+} from "./recoveryTimeout";
+import { smallShopFastPathFromCounts } from "./recoveryFastPath";
+import {
+  allCriticalModulesCheckpointed,
+  canSkipRecoveryModule,
+  markRecoveryModuleComplete,
+  readRecoveryModuleCheckpoints,
+} from "./recoveryModuleCheckpoints";
+import { isCoreOperationalDatasetReady, recoveryStepToModule } from "./recoveryModuleClassification";
 
 const HYDRATE_COOLDOWN_MS = 120_000;
 const HYDRATE_FORCE_COOLDOWN_MS = 30_000;
@@ -53,8 +76,11 @@ export type CloudRecoveryGatedResult = {
   validation: CloudRecoveryValidationResult | null;
   error?: string;
   errorKey?: string;
-  /** True when cloud probe failed — app must stay locked (fail closed). */
+  /** True when cloud probe failed — blocking until online. */
   probeFailed?: boolean;
+  /** Core catalog restored — POS may operate; certification may still run. */
+  coreUnlocked?: boolean;
+  certificationPending?: boolean;
   inventoryWarnings?: boolean;
   message?: string;
 };
@@ -97,15 +123,24 @@ function syncRestoredCountsFromStore(): void {
   syncRecoveryRestoredCountsFromStore(readStoreRecoveryCounts());
 }
 
+function reportRecoveryStepWithCheckpoint(
+  step: CloudRecoveryStepId,
+  counts?: Partial<CloudRecoveryEntityCounts>,
+): void {
+  reportRecoveryStep(step, counts);
+  const module = recoveryStepToModule(step);
+  if (module) markRecoveryModuleComplete(module, counts);
+}
+
 function reportRecoveryStepsFromStore(): void {
   const counts = readStoreRecoveryCounts();
-  reportRecoveryStep("products", { products: counts.products });
-  reportRecoveryStep("sales", { sales: counts.sales });
-  reportRecoveryStep("customers", { customers: counts.customers });
-  reportRecoveryStep("inventory", { inventory: counts.inventory });
-  reportRecoveryStep("shifts", { shifts: counts.shifts });
-  reportRecoveryStep("day_closes", { dayCloses: counts.dayCloses });
-  reportRecoveryStep("cash", { cashRecords: counts.cashRecords });
+  reportRecoveryStepWithCheckpoint("products", { products: counts.products });
+  reportRecoveryStepWithCheckpoint("sales", { sales: counts.sales });
+  reportRecoveryStepWithCheckpoint("customers", { customers: counts.customers });
+  reportRecoveryStepWithCheckpoint("inventory", { inventory: counts.inventory });
+  reportRecoveryStepWithCheckpoint("shifts", { shifts: counts.shifts });
+  reportRecoveryStepWithCheckpoint("day_closes", { dayCloses: counts.dayCloses });
+  reportRecoveryStepWithCheckpoint("cash", { cashRecords: counts.cashRecords });
 }
 
 function recoveryErrorFromUnknown(err: unknown, fallbackKey: string): { message: string; errorKey: string } {
@@ -140,37 +175,122 @@ async function runFullCloudPull(opts: {
     counts?: Partial<import("./cloudRecoverySession").CloudRecoveryEntityCounts>,
   ) => void;
   cloudRecovery: boolean;
+  afterSnapshotRestore?: boolean;
 }): Promise<void> {
   recordRecoveryIntegrityDiagnostics({ fullPullAttempted: true });
-  const { pullCloudAndMergeIntoStore } = await import("../offline/cloudSync");
-  const merged = await pullCloudAndMergeIntoStore({
-    forceFull: true,
-    onRecoveryStep: opts.onStep,
-    cloudRecovery: opts.cloudRecovery,
-  });
-  if (!merged) {
-    if (opts.cloudRecovery) {
-      const errorKey = "cloud_merge_failed";
-      const message = "Cloud data merge did not complete";
-      failCloudRecoverySession(message, null, errorKey);
-      recordStartupRecoveryFailure(message, errorKey);
-      throw new Error(errorKey);
+  beginRecoveryStageWatch("full_cloud_pull", 20_000);
+  recordRecoveryRuntime({ currentStage: "full_cloud_pull", stageStartedAt: new Date().toISOString() });
+  try {
+    const { pullCloudAndMergeIntoStore } = await import("../offline/cloudSync");
+    const merged = await withRecoveryTimeoutPromise(
+      pullCloudAndMergeIntoStore({
+        forceFull: !opts.afterSnapshotRestore,
+        afterSnapshotRestore: opts.afterSnapshotRestore,
+        onRecoveryStep: opts.onStep,
+        cloudRecovery: opts.cloudRecovery,
+      }),
+      {
+        kind: "entity_pull",
+        timeoutMs: RECOVERY_GLOBAL_TIMEOUT_MS,
+        onRetry: () => recordRecoveryRetry(),
+      },
+    );
+    if (!merged) {
+      if (opts.cloudRecovery) {
+        const errorKey = "cloud_merge_failed";
+        const message = "Cloud data merge did not complete";
+        failCloudRecoverySession(message, null, errorKey);
+        recordStartupRecoveryFailure(message, errorKey);
+        throw new Error(errorKey);
+      }
+      return;
     }
-    return;
-  }
-  syncRestoredCountsFromStore();
-  recordRecoveryIntegrityDiagnostics({
-    fullPullDownloadedCounts: { ...getCloudRecoverySession().downloadedCounts },
-    finalStoreCounts: readStoreRecoveryCounts(),
-  });
-  if (opts.cloudRecovery) {
-    assertRecoveryHydratedOrThrow();
-    const { pullAndMergeStaffAccountsForRecovery } = await import("./staffRecovery");
-    const staffCount = await pullAndMergeStaffAccountsForRecovery();
-    reportRecoveryStep("staff");
-    void staffCount;
     syncRestoredCountsFromStore();
+    recordRecoveryIntegrityDiagnostics({
+      fullPullDownloadedCounts: { ...getCloudRecoverySession().downloadedCounts },
+      finalStoreCounts: readStoreRecoveryCounts(),
+    });
+    if (opts.cloudRecovery) {
+      await pullAndFinalizeRecoveryStaff(opts.onStep);
+    }
+  } finally {
+    endRecoveryStageWatch();
   }
+}
+
+async function pullAndFinalizeRecoveryStaff(
+  onStep?: (
+    step: CloudRecoveryStepId,
+    counts?: Partial<CloudRecoveryEntityCounts>,
+  ) => void,
+): Promise<void> {
+  assertRecoveryHydratedOrThrow();
+  beginRecoveryStageWatch("staff", 10_000);
+  recordRecoveryRuntime({ currentStage: "staff", stageStartedAt: new Date().toISOString() });
+  try {
+    const { pullAndMergeStaffAccountsForRecovery } = await import("./staffRecovery");
+    const staffCount = await withRecoveryTimeoutPromise(pullAndMergeStaffAccountsForRecovery(), {
+      kind: "staff",
+      timeoutMs: RECOVERY_STAFF_TIMEOUT_MS,
+      onRetry: () => recordRecoveryRetry(),
+    });
+    reportRecoveryStepWithCheckpoint("staff");
+    void staffCount;
+    void onStep;
+    syncRestoredCountsFromStore();
+  } catch (err) {
+    if (err instanceof RecoveryTimeoutError) {
+      recordRecoveryTimeout();
+      throw err;
+    }
+    throw err;
+  } finally {
+    endRecoveryStageWatch();
+  }
+}
+
+async function finishGracefulCoreUnlock(opts: {
+  probe: CloudShopProbe;
+  validation: CloudRecoveryValidationResult;
+  message: string;
+  degraded?: boolean;
+}): Promise<CloudRecoveryGatedResult> {
+  const { markBootstrapSyncComplete } = await import("./syncCheckpoints");
+  const usedSnapshot =
+    getCloudRecoverySession().integrityDiagnostics.snapshotRestoreProducedData === true;
+  const bootstrapAt =
+    usedSnapshot && opts.probe.snapshotUpdatedAt ? opts.probe.snapshotUpdatedAt : new Date().toISOString();
+  markBootstrapSyncComplete(bootstrapAt);
+
+  if (opts.degraded) {
+    unlockCoreRecoveryWithDegradedValidation(opts.validation, opts.message);
+  } else {
+    unlockCoreRecoverySession();
+  }
+  markRecoveryPerf("coreRecoveredMs");
+  markRecoveryPerf("posUnlockedMs");
+  logRecovery("core_unlock", { degraded: opts.degraded === true });
+
+  const restoredCounts = readStoreRecoveryCounts();
+  void runBackgroundRecoveryCertification({
+    probe: opts.probe,
+    validation: opts.validation,
+    restoredCounts,
+    skipHeavyPull: smallShopFastPathFromCounts(restoredCounts),
+  });
+
+  return {
+    success: true,
+    validation: opts.validation,
+    coreUnlocked: true,
+    certificationPending: true,
+    inventoryWarnings: opts.degraded === true,
+    message: opts.message,
+  };
+}
+
+function canSkipSnapshotRestore(live: CloudRecoveryEntityCounts): boolean {
+  return canSkipRecoveryModule("products", live) && live.products > 0;
 }
 
 async function runCloudDataRestore(opts: {
@@ -188,12 +308,18 @@ async function runCloudDataRestore(opts: {
   if (!shouldRecoverFromCloud) return;
 
   const cloudRecovery = opts?.recoveryMode === true;
+  const liveCounts = readStoreRecoveryCounts();
+
+  if (cloudRecovery && allCriticalModulesCheckpointed(liveCounts) && isCoreOperationalDatasetReady()) {
+    logRecovery("resume", { modules: Object.keys(readRecoveryModuleCheckpoints()).join(",") });
+    reportRecoveryStepsFromStore();
+    syncRestoredCountsFromStore();
+    return;
+  }
+
   const onStep = cloudRecovery
-    ? (
-        step: import("./cloudRecoverySession").CloudRecoveryStepId,
-        counts?: Partial<import("./cloudRecoverySession").CloudRecoveryEntityCounts>,
-      ) => {
-        reportRecoveryStep(step, counts);
+    ? (step: CloudRecoveryStepId, counts?: Partial<CloudRecoveryEntityCounts>) => {
+        reportRecoveryStepWithCheckpoint(step, counts);
       }
     : undefined;
 
@@ -203,16 +329,36 @@ async function runCloudDataRestore(opts: {
       reportRecoveryStep("snapshot");
     }
 
-    let snapshotRestoreSucceeded = false;
-    try {
-      snapshotRestoreSucceeded = await restoreShopFromCloudSnapshot(opts?.onProgress, { cloudRecovery });
-    } catch (err) {
-      const { message, errorKey } = recoveryErrorFromUnknown(err, "cloud_snapshot_restore_failed");
-      if (cloudRecovery) {
-        failCloudRecoverySession(message, null, errorKey);
-        recordStartupRecoveryFailure(message, errorKey);
+    const skipSnapshot = cloudRecovery && canSkipSnapshotRestore(liveCounts);
+
+    let snapshotRestoreSucceeded = skipSnapshot;
+    if (!skipSnapshot) {
+      try {
+        beginRecoveryStageWatch("snapshot", 12_000);
+        recordRecoveryRuntime({ currentStage: "snapshot", stageStartedAt: new Date().toISOString() });
+        snapshotRestoreSucceeded = await withRecoveryTimeoutPromise(
+          restoreShopFromCloudSnapshot(opts?.onProgress, { cloudRecovery }),
+          {
+            kind: "snapshot",
+            timeoutMs: RECOVERY_PERSIST_TIMEOUT_MS,
+            onRetry: () => recordRecoveryRetry(),
+          },
+        );
+      } catch (err) {
+        if (err instanceof RecoveryTimeoutError) {
+          recordRecoveryTimeout();
+        }
+        const { message, errorKey } = recoveryErrorFromUnknown(err, "cloud_snapshot_restore_failed");
+        if (cloudRecovery) {
+          failCloudRecoverySession(message, null, errorKey);
+          recordStartupRecoveryFailure(message, errorKey);
+        }
+        throw err;
+      } finally {
+        endRecoveryStageWatch();
       }
-      throw err;
+    } else {
+      logRecovery("resume", { skipped: "snapshot" });
     }
 
     const counts = readStoreRecoveryCounts();
@@ -226,16 +372,21 @@ async function runCloudDataRestore(opts: {
       syncRestoredCountsFromStore();
       if (cloudRecovery) {
         reportRecoveryStepsFromStore();
+        const snapshotAt = cloudProbe?.snapshotUpdatedAt;
+        if (snapshotAt) {
+          const { seedEntitySyncCursorsAt } = await import("./syncCheckpoints");
+          seedEntitySyncCursorsAt(snapshotAt);
+        }
+        await pullAndFinalizeRecoveryStaff(onStep);
       }
-    }
-
-    if (snapshotRestoreSucceeded && !hasCoreData) {
+    } else if (snapshotRestoreSucceeded && !hasCoreData) {
       reportRecoveryStep("snapshot_empty_after_restore");
       logRecoveryDiagnosticEvent("snapshot_empty_after_restore");
       recordRecoveryIntegrityDiagnostics({ snapshotRestoreProducedData: false });
+      await runFullCloudPull({ onStep, cloudRecovery });
+    } else {
+      await runFullCloudPull({ onStep, cloudRecovery });
     }
-
-    await runFullCloudPull({ onStep: onStep, cloudRecovery });
     const { scheduleShopRecovery } = await import("./shopRecoveryOrchestration");
     await scheduleShopRecovery("owner_login").catch(() => undefined);
     return;
@@ -352,8 +503,7 @@ async function runHydrateAccountFromCloudInner(opts?: {
 }
 
 /**
- * P0 gated recovery — blocks app until hydrate + validation pass.
- * No snapshot upload until validation succeeds.
+ * P0 gated recovery — download + core unlock, then background certification (Phase 24.1BB).
  */
 export async function runCloudRecoveryGated(opts?: {
   forcePull?: boolean;
@@ -371,108 +521,148 @@ export async function runCloudRecoveryGated(opts?: {
       return { success: true, validation: null };
     }
 
-    beginCloudRecoverySession();
-    reportRecoveryStep("probing");
+    const runGated = async (): Promise<CloudRecoveryGatedResult> => {
+      resetRecoveryDiagnostics();
+      logRecovery("download_start");
+      beginCloudRecoverySession();
+      reportRecoveryStep("probing");
 
-    const probeResult =
-      lockEval.probeResult?.status === "success"
-        ? lockEval.probeResult
-        : await resolveCloudShopProbe();
+      const probeResult =
+        lockEval.probeResult?.status === "success"
+          ? lockEval.probeResult
+          : await withRecoveryTimeoutPromise(resolveCloudShopProbe(), {
+              kind: "probe",
+              timeoutMs: RECOVERY_PROBE_TIMEOUT_MS,
+              onRetry: () => recordRecoveryRetry(),
+            });
 
-    if (probeResult.status === "failed") {
-      failCloudRecoverySession(probeResult.error, null, "cloud_probe_failed");
-      recordStartupRecoveryFailure(probeResult.error, "cloud_probe_failed");
-      return { success: false, validation: null, error: probeResult.error, errorKey: "cloud_probe_failed", probeFailed: true };
-    }
+      if (probeResult.status === "failed") {
+        failCloudRecoverySession(probeResult.error, null, "cloud_probe_failed");
+        recordStartupRecoveryFailure(probeResult.error, "cloud_probe_failed");
+        return { success: false, validation: null, error: probeResult.error, errorKey: "cloud_probe_failed", probeFailed: true };
+      }
 
-    if (!probeIndicatesCloudBusiness(probeResult.probe)) {
-      resetCloudRecoverySessionForRetry();
-      return { success: true, validation: null };
-    }
+      if (!probeIndicatesCloudBusiness(probeResult.probe)) {
+        resetCloudRecoverySessionForRetry();
+        return { success: true, validation: null };
+      }
 
-    const probe = probeResult.probe;
-    recordProbeIntegrityDiagnostics(probe);
+      const probe = probeResult.probe;
+      recordProbeIntegrityDiagnostics(probe);
 
-    try {
-      await runHydrateAccountFromCloudInner({
-        forcePull: opts?.forcePull ?? true,
-        onProgress: opts?.onProgress,
-        recoveryMode: true,
-        cloudProbe: probe,
-      });
+      try {
+        beginRecoveryStageWatch("cloud_restore", 20_000);
+        recordRecoveryRuntime({ currentStage: "cloud_restore", stageStartedAt: new Date().toISOString() });
+        await withRecoveryTimeoutPromise(
+          runHydrateAccountFromCloudInner({
+            forcePull: opts?.forcePull ?? true,
+            onProgress: opts?.onProgress,
+            recoveryMode: true,
+            cloudProbe: probe,
+          }),
+          {
+            kind: "entity_pull",
+            timeoutMs: RECOVERY_GLOBAL_TIMEOUT_MS,
+            retries: 0,
+          },
+        );
+        endRecoveryStageWatch();
 
-      reportRecoveryStep("validation");
-      syncRestoredCountsFromStore();
+        syncRestoredCountsFromStore();
+        logRecovery("persist");
 
-      const { buildCloudRecoverySimulationReport, recordCloudRecoveryValidation } = await import(
-        "./cloudRecoveryValidator"
-      );
-      const validation = buildCloudRecoverySimulationReport({ recoveryMode: true });
-      recordCloudRecoveryValidation(validation);
+        reportRecoveryStep("validation");
+        const { buildCloudRecoverySimulationReport, recordCloudRecoveryValidation } = await import(
+          "./cloudRecoveryValidator"
+        );
+        const validation = buildCloudRecoverySimulationReport({ recoveryMode: true });
+        recordCloudRecoveryValidation(validation);
 
-      const {
-        fetchCloudEntityCounts,
-        buildCloudTrustCertificationReport,
-        readLocalEntityCounts,
-      } = await import("./cloudTrustCenter");
-      const { counts: cloudCounts, errors: cloudErrors } = await fetchCloudEntityCounts();
-      const certification = buildCloudTrustCertificationReport({
-        cloud: cloudCounts,
-        cloudErrors,
-        local: readLocalEntityCounts(),
-        requireCloudParity: true,
-      });
-      recordRecoveryCertification(certification);
+        const coreGate = validateCoreOperationalGate(probe, validation);
+        if (!coreGate.ok) {
+          if (storeHasCoreRecoveryData()) {
+            return finishGracefulCoreUnlock({
+              probe,
+              validation,
+              message: `${coreGate.message} (non-blocking — core data restored)`,
+              degraded: true,
+            });
+          }
+          const { clearBootstrapSyncComplete } = await import("./syncCheckpoints");
+          clearBootstrapSyncComplete();
+          recordRecoveryIntegrityDiagnostics({ recoveryInvariantPassed: false });
+          failCloudRecoverySession(coreGate.message, validation, coreGate.failures[0] ?? "recovery_validation_failed");
+          recordStartupRecoveryFailure(coreGate.message, coreGate.failures[0] ?? "recovery_validation_failed");
+          return { success: false, validation, error: coreGate.message, errorKey: coreGate.failures[0] };
+        }
 
-      const gate = validateRecoveryCompletionGate(probe, validation, { certification });
-      if (!gate.ok) {
+        try {
+          assertRecoveryHydratedOrThrow();
+        } catch (hydrateErr) {
+          if (storeHasCoreRecoveryData()) {
+            return finishGracefulCoreUnlock({
+              probe,
+              validation,
+              message: "Core data restored with hydration warnings",
+              degraded: true,
+            });
+          }
+          throw hydrateErr;
+        }
+
+        return finishGracefulCoreUnlock({
+          probe,
+          validation,
+          message: "Core business data restored",
+        });
+      } catch (err) {
+        endRecoveryStageWatch();
+        if (err instanceof RecoveryTimeoutError) {
+          recordRecoveryTimeout();
+        }
+        const { buildCloudRecoverySimulationReport } = await import("./cloudRecoveryValidator");
+        const validation = buildCloudRecoverySimulationReport({ recoveryMode: true });
+        if (storeHasCoreRecoveryData()) {
+          syncRestoredCountsFromStore();
+          return finishGracefulCoreUnlock({
+            probe,
+            validation,
+            message: err instanceof Error ? err.message : "Recovery completed with warnings",
+            degraded: true,
+          });
+        }
         const { clearBootstrapSyncComplete } = await import("./syncCheckpoints");
         clearBootstrapSyncComplete();
-        recordRecoveryIntegrityDiagnostics({ recoveryInvariantPassed: false });
-        failCloudRecoverySession(gate.message, validation, gate.failures[0] ?? "recovery_validation_failed");
-        recordStartupRecoveryFailure(gate.message, gate.failures[0] ?? "recovery_validation_failed");
-        return { success: false, validation, error: gate.message, errorKey: gate.failures[0] };
+        captureAppException(err, { scope: "cloud_recovery_gated" });
+        reportSyncIssue("cloud_recovery_gated_failed");
+        const { message, errorKey } = recoveryErrorFromUnknown(err, "cloud_recovery_gated_failed");
+        if (getCloudRecoverySession().status === "active") {
+          failCloudRecoverySession(message, validation, errorKey);
+        }
+        recordStartupRecoveryFailure(message, errorKey);
+        return { success: false, validation, error: message, errorKey };
       }
+    };
 
-      assertRecoveryHydratedOrThrow();
-
-      const { markBootstrapSyncComplete } = await import("./syncCheckpoints");
-      markBootstrapSyncComplete();
-
-      const s = usePosStore.getState();
-      const { buildRecoveryCompletenessReport } = await import("./cloudRecoveryCompleteness");
-      const { wasLastSalesPullTruncated } = await import("../offline/cloudSync");
-      const completeness = buildRecoveryCompletenessReport({
-        validation,
-        probe,
-        stockMovements: s.stockMovements.length,
-        inventoryCountSessions: s.inventoryCountSessions.length,
-        archivedSales: s.archivedSales.length,
-        salesPullTruncated: wasLastSalesPullTruncated(),
-      });
-
-      if (getDeviceOnline()) {
-        await import("../offline/cloudSync").then((m) => m.pushShopPendingToCloud().catch(() => undefined));
-        await uploadShopCloudSnapshot({ force: true }).catch(() => false);
+    return withRecoveryTimeoutPromise(runGated(), {
+      kind: "global",
+      timeoutMs: RECOVERY_GLOBAL_TIMEOUT_MS + 30_000,
+      retries: 0,
+    }).catch(async (err) => {
+      if (storeHasCoreRecoveryData()) {
+        const probe = lockEval.probeResult?.status === "success" ? lockEval.probeResult.probe : null;
+        if (probe) {
+          const { buildCloudRecoverySimulationReport } = await import("./cloudRecoveryValidator");
+          return finishGracefulCoreUnlock({
+            probe,
+            validation: buildCloudRecoverySimulationReport({ recoveryMode: true }),
+            message: "Recovery timed out — continuing with restored core data",
+            degraded: true,
+          });
+        }
       }
-
-      completeCloudRecoverySession(validation, completeness, {
-        inventoryWarnings: gate.inventoryWarnings || gate.warnings.length > 0,
-        message: gate.message,
-      });
-      return { success: true, validation, inventoryWarnings: gate.inventoryWarnings, message: gate.message };
-    } catch (err) {
-      const { clearBootstrapSyncComplete } = await import("./syncCheckpoints");
-      clearBootstrapSyncComplete();
-      captureAppException(err, { scope: "cloud_recovery_gated" });
-      reportSyncIssue("cloud_recovery_gated_failed");
-      const { message, errorKey } = recoveryErrorFromUnknown(err, "cloud_recovery_gated_failed");
-      if (getCloudRecoverySession().status === "active") {
-        failCloudRecoverySession(message, null, errorKey);
-      }
-      recordStartupRecoveryFailure(message, errorKey);
-      return { success: false, validation: null, error: message, errorKey };
-    }
+      throw err;
+    });
   })().finally(() => {
     gatedRecoveryInFlight = null;
     lastHydrateFinishedAt = Date.now();

@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { themeUi } from "../../lib/themeTokens";
+import { enterpriseMotion } from "../../lib/enterpriseMotion";
 
 type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "role" | "type" | "onChange"> & {
   checked: boolean;
@@ -33,6 +34,7 @@ export function WakaSwitch({
       onClick={() => onCheckedChange(!checked)}
       className={clsx(
         "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200",
+        enterpriseMotion.standard,
         themeUi.focusRing,
         checked ? themeUi.switchTrackOn : themeUi.switchTrackOff,
         disabled && "cursor-not-allowed opacity-50",
@@ -42,7 +44,7 @@ export function WakaSwitch({
     >
       <span
         className={clsx(
-          "inline-block h-5 w-5 transform rounded-full transition-transform duration-200",
+          "inline-block h-5 w-5 transform rounded-full transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
           themeUi.switchThumb,
           checked ? "translate-x-[1.35rem]" : "translate-x-1",
         )}

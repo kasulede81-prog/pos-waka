@@ -3,6 +3,7 @@ import type { InventoryCountSession, Language } from "../types";
 import { buildInventoryCountVarianceReport } from "./inventoryCount";
 import { t } from "./i18n";
 import { createPdfLayout, ensurePdfSpace, pdfGap, pdfLine } from "./pdfLayout";
+import { exportCsvFile } from "./reportExportEngine";
 
 function escCsv(v: string | number): string {
   const s = String(v);
@@ -90,15 +91,18 @@ export function buildInventoryCountVariancePdfBlob(
   return doc.output("blob");
 }
 
-export function downloadInventoryCountCsv(lang: Language, session: InventoryCountSession, filename: string): void {
+export async function downloadInventoryCountCsv(
+  lang: Language,
+  session: InventoryCountSession,
+  filename: string,
+): Promise<boolean> {
   const csv = buildInventoryCountVarianceCsv(lang, session);
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  const rows = csv
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => line.split(","));
+  const result = await exportCsvFile("inventory_count", filename, rows);
+  return result.ok;
 }
 
 export async function downloadInventoryCountPdf(

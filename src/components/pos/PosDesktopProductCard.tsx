@@ -2,6 +2,7 @@ import clsx from "clsx";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
 import { formatStockLabel } from "../../lib/sellingEngine";
+import { POS_CATALOG_TILE_TOUCH_CLASS } from "../../lib/posTouchInteraction";
 
 type Props = {
   product: Product;
@@ -32,6 +33,7 @@ export function PosDesktopProductCard({
     <article
       className={clsx(
         "pos-ds-product-card relative flex min-h-[108px] flex-col overflow-hidden rounded-xl border bg-card text-left shadow-sm",
+        POS_CATALOG_TILE_TOUCH_CLASS,
         locked ? "border-border/80 opacity-55" : "border-border/90 active:border-waka-400",
       )}
       style={{ contentVisibility: "auto" }}

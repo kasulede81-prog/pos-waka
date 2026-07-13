@@ -2,6 +2,7 @@ import clsx from "clsx";
 import type { Product } from "../../types";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { POS_HORIZONTAL_CHIP_TOUCH_CLASS } from "../../lib/posTouchInteraction";
 
 type Props = {
   lang: Language;
@@ -19,7 +20,7 @@ export function PosQuickProductChips({ lang, products, onTap, className }: Props
       <p className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
         {t(lang, "posFrequentToday")}
       </p>
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
+      <div className={clsx("flex gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]", POS_HORIZONTAL_CHIP_TOUCH_CLASS)}>
         {products.map((p) => (
           <button
             key={p.id}

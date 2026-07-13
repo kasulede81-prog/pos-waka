@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ModalSheet } from "../layout/ModalSheet";
 import { WakaButton } from "../ui/wakaPrimitives";
 import { Caption, SectionTitle } from "./EnterpriseTypography";
+import { enterpriseMotion } from "../../lib/enterpriseMotion";
 import { statusTokens } from "../../lib/statusTokens";
 
 export type EnterpriseActionSheetItem = {
@@ -73,8 +74,11 @@ export function EnterpriseActionSheet({
                 disabled={item.disabled}
                 onClick={() => run(item)}
                 className={clsx(
-                  "flex min-h-[48px] w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold transition active:bg-muted disabled:cursor-not-allowed disabled:opacity-50",
-                  item.destructive ? statusTokens.danger.banner : "text-foreground",
+                  "flex min-h-[48px] w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold",
+                  enterpriseMotion.standard,
+                  enterpriseMotion.press,
+                  enterpriseMotion.focus,
+                  item.destructive ? statusTokens.danger.banner : "text-foreground active:bg-muted",
                 )}
               >
                 {item.icon}

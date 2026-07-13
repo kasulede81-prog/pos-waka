@@ -123,6 +123,7 @@ export type AuditAction =
   | "customer_add"
   | "supplier_add"
   | "supplier_edit"
+  | "supplier_remove"
   | "purchase_saved"
   | "purchase_void"
   | "supplier_payment"

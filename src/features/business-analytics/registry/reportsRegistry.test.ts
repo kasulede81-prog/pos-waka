@@ -78,6 +78,7 @@ function minimalCtx(mode: ReportsCenterContext["mode"], overrides: Partial<Repor
     topCashiers: [],
     marginLeaders: [],
     purchasesTodayUgx: 0,
+    purchasesInPeriodUgx: 0,
     showDailyExport: false,
     reportDayKey: "2026-07-09",
     exportSummaryText: "",

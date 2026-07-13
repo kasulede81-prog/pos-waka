@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
+import {
+  bootstrapPosBackgroundFromDisk,
+  bootstrapPosCriticalFromDisk,
+  bootstrapPosInteractiveFromDisk,
+  flushPendingPersist,
+  usePosStore,
+} from "../store/usePosStore";
 
 import { getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 
@@ -19,6 +25,7 @@ import {
 
 import { bootTrace } from "../lib/bootTrace";
 import { CloudRecoveryScreen } from "../components/recovery/CloudRecoveryScreen";
+import { RecoveryBackgroundBanner } from "../components/recovery/RecoveryBackgroundBanner";
 
 import {
   isCloudRecoveryLockActive,
@@ -45,6 +52,10 @@ import {
 
 import { STARTUP_STALL_MS } from "../components/startup/StartupBootstrapGate";
 
+import { scheduleStartupTask, resetStartupScheduler } from "../lib/startupScheduler";
+
+import { markStartupPerf } from "../lib/startupPerformance";
+
 import type { Language } from "../types";
 
 import { t } from "../lib/i18n";
@@ -66,12 +77,16 @@ async function markFreshAccountBootstrapReady(): Promise<void> {
   resetCloudRecoverySessionForRetry();
 }
 
-type BootPhase = "disk" | "recovery" | "ready";
+type BootPhase = "disk" | "ready";
+
+type RecoveryOverlayState = {
+  failed: boolean;
+  probeFailed: boolean;
+};
 
 export function PosDataProvider({ children, lang = "en", accountKey, onSignOut = async () => {} }: Props) {
   const [bootPhase, setBootPhase] = useState<BootPhase>(() => (!accountKey ? "ready" : "disk"));
-  const [recoveryFailed, setRecoveryFailed] = useState(false);
-  const [probeFailed, setProbeFailed] = useState(false);
+  const [recoveryOverlay, setRecoveryOverlay] = useState<RecoveryOverlayState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stalled, setStalled] = useState(false);
   const [startupStep, setStartupStep] = useState<StartupStepId>(() => "local_disk");
@@ -85,7 +100,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
   useEffect(() => {
     if (!accountKey) return;
     void forceHideNativeSplash();
-  }, [accountKey, bootPhase, error, recoveryFailed, probeFailed, stalled]);
+  }, [accountKey, bootPhase, error, recoveryOverlay, stalled]);
 
   useEffect(() => {
     const sync = () => setStartupStep(getStartupDiagnosticsSnapshot().currentStep);
@@ -109,49 +124,104 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     tick();
     const id = window.setInterval(tick, 2000);
     return () => window.clearInterval(id);
-  }, [bootPhase, error, recoveryFailed, probeFailed]);
+  }, [bootPhase, error, recoveryOverlay]);
+
+  const finishReady = useCallback((via: string, userId: string | null) => {
+    recordStartupStep("finalizing");
+    setBootPhase("ready");
+    recordStartupStep("ready");
+    logStartupPhase("dashboard_ready", { via });
+    markStartupPerf("shell_render");
+    markStartupPerf("first_interactive");
+    markStartupPerf("dashboard_ready");
+    logOnboardingRequired(userId);
+    void hideNativeSplashWhenReady();
+  }, []);
 
   const runRecovery = useCallback(async (gen: number, userId: string | null) => {
-    setRecoveryFailed(false);
-    setProbeFailed(false);
-    setBootPhase("recovery");
+    setRecoveryOverlay({ failed: false, probeFailed: false });
     recordStartupStep("cloud_recovery");
 
     const result = await runCloudRecoveryGated({ forcePull: true });
 
     if (bootGenRef.current !== gen) return;
 
-    if (result.success) {
+    if (result.success && result.coreUnlocked) {
       recordStartupRecoveryValidated();
-      setBootPhase("ready");
-      recordStartupStep("ready");
-      logStartupPhase("dashboard_ready", { via: "cloud_recovery" });
+      setRecoveryOverlay(null);
+      logOnboardingRequired(userId);
+      bootTrace("BOOT-014", "Cloud Recovery", "SUCCESS", { userId, via: "core_unlock" });
+      void hideNativeSplashWhenReady();
+    } else if (result.success) {
+      recordStartupRecoveryValidated();
+      setRecoveryOverlay(null);
       logOnboardingRequired(userId);
       bootTrace("BOOT-014", "Cloud Recovery", "SUCCESS", { userId });
       void hideNativeSplashWhenReady();
     } else if (result.probeFailed) {
       recordStartupStep("cloud_probe", { failureReason: result.error ?? "Cloud probe failed" });
-      setProbeFailed(true);
+      setRecoveryOverlay({ failed: false, probeFailed: true });
     } else {
       recordStartupStep("cloud_recovery", { failureReason: result.error ?? "Recovery failed" });
-      setRecoveryFailed(true);
+      setRecoveryOverlay({ failed: true, probeFailed: false });
     }
   }, []);
+
+  const scheduleBackgroundHydration = useCallback((gen: number, userId: string | null) => {
+    scheduleStartupTask({
+      id: "bootstrap-interactive",
+      priority: 1,
+      run: async () => {
+        if (bootGenRef.current !== gen) return;
+        await bootstrapPosInteractiveFromDisk();
+      },
+    });
+
+    scheduleStartupTask({
+      id: "bootstrap-background",
+      priority: 2,
+      run: async () => {
+        if (bootGenRef.current !== gen) return;
+        await bootstrapPosBackgroundFromDisk();
+      },
+    });
+
+    scheduleStartupTask({
+      id: "cloud-recovery",
+      priority: 3,
+      run: async () => {
+        if (bootGenRef.current !== gen) return;
+        if (!hasSupabaseConfig || !accountKey?.startsWith("sb:")) return;
+
+        const needsRecovery = await shouldRunCloudRecoveryForAccount(userId);
+        if (needsRecovery) {
+          bootTrace("BOOT-014", "Cloud Recovery", "START", { userId });
+          await runRecovery(gen, userId);
+          return;
+        }
+
+        if (isLocalShopDataEmpty()) {
+          await markFreshAccountBootstrapReady();
+        }
+        if (isCloudRecoveryLockActive()) {
+          resetCloudRecoverySessionForRetry();
+        }
+      },
+    });
+  }, [accountKey, runRecovery]);
 
   const runBoot = useCallback(
     async (gen: number) => {
       bootTrace("BOOT-012", "PosDataProvider.runBoot", "START", { accountKey });
+      resetStartupScheduler();
       setError(null);
-      setRecoveryFailed(false);
-      setProbeFailed(false);
+      setRecoveryOverlay(null);
       setStalled(false);
 
       const userId = userIdFromAccountKey(accountKey);
 
       if (!accountKey) {
-        setBootPhase("ready");
-        recordStartupStep("ready");
-        logStartupPhase("dashboard_ready", { via: "no_account" });
+        finishReady("no_account", userId);
         return;
       }
 
@@ -168,16 +238,13 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
         setActiveAccountKey(accountKey);
       }
 
-      recordStartupStep("recovery_check");
-      const needsRecoveryCheck =
-        hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount(userId));
-
-      if (isStoreReadyForAccount(accountKey) && !needsRecoveryCheck && !isCloudRecoveryLockActive()) {
-        setBootPhase("ready");
-        recordStartupStep("ready");
-        logStartupPhase("dashboard_ready", { via: "store_already_ready" });
-        logOnboardingRequired(userId);
-        void hideNativeSplashWhenReady();
+      if (isStoreReadyForAccount(accountKey)) {
+        const stage = usePosStore.getState().hydrationStage;
+        finishReady("store_already_ready", userId);
+        bootTrace("BOOT-012", "PosDataProvider.runBoot", "SUCCESS", { via: "store_already_ready" });
+        if (stage !== "complete") {
+          scheduleBackgroundHydration(gen, userId);
+        }
         return;
       }
 
@@ -185,46 +252,24 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       recordStartupStep("local_disk");
 
       try {
-        await bootstrapPosFromDisk();
+        await bootstrapPosCriticalFromDisk();
       } catch {
         if (bootGenRef.current === gen) {
           setError("load");
-          setBootPhase("ready");
-          recordStartupStep("local_disk", { failureReason: "Local data load failed" });
+          finishReady("critical_load_error", userId);
         }
         return;
       }
 
       if (bootGenRef.current !== gen) return;
 
-      const needsRecovery =
-        hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount(userId));
+      recordStartupStep("recovery_check");
+      finishReady("critical_hydrate", userId);
+      bootTrace("BOOT-012", "PosDataProvider.runBoot", "SUCCESS", { via: "critical_hydrate" });
 
-      if (needsRecovery) {
-        bootTrace("BOOT-014", "Cloud Recovery", "START", { userId });
-        await runRecovery(gen, userId);
-        return;
-      }
-
-      if (hasSupabaseConfig && accountKey.startsWith("sb:") && isLocalShopDataEmpty()) {
-        await markFreshAccountBootstrapReady();
-      }
-
-      if (isCloudRecoveryLockActive()) {
-        resetCloudRecoverySessionForRetry();
-      }
-
-      if (bootGenRef.current !== gen) return;
-
-      recordStartupStep("finalizing");
-      setBootPhase("ready");
-      recordStartupStep("ready");
-      logStartupPhase("dashboard_ready", { via: "first_time_or_local_boot" });
-      logOnboardingRequired(userId);
-      bootTrace("BOOT-012", "PosDataProvider.runBoot", "SUCCESS", { via: "first_time_or_local_boot" });
-      void hideNativeSplashWhenReady();
+      scheduleBackgroundHydration(gen, userId);
     },
-    [accountKey, runRecovery],
+    [accountKey, finishReady, scheduleBackgroundHydration],
   );
 
   useEffect(() => {
@@ -242,24 +287,22 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     void runBoot(gen);
     return () => {
       bootGenRef.current += 1;
+      resetStartupScheduler();
     };
   }, [accountKey, runBoot]);
 
   useEffect(() => {
     if (bootPhase === "ready" || !accountKey) return;
     const id = window.setTimeout(() => {
-      setBootPhase("ready");
-      recordStartupStep("ready");
-      logStartupPhase("dashboard_ready", { via: "boot_timeout_escape" });
-      logOnboardingRequired(userIdFromAccountKey(accountKey));
+      finishReady("boot_timeout_escape", userIdFromAccountKey(accountKey));
       bootTrace("BOOT-012", "PosDataProvider.runBoot", "TIMEOUT", { via: "boot_timeout_escape", accountKey });
       if (isCloudRecoveryLockActive()) {
         resetCloudRecoverySessionForRetry();
       }
-      void hideNativeSplashWhenReady();
+      scheduleBackgroundHydration(bootGenRef.current, userIdFromAccountKey(accountKey));
     }, 12_000);
     return () => window.clearTimeout(id);
-  }, [bootPhase, accountKey]);
+  }, [bootPhase, accountKey, finishReady, scheduleBackgroundHydration]);
 
   const handleRetryRecovery = useCallback(() => {
     resetStartupSessionForRetry();
@@ -281,11 +324,9 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     if (isLocalShopDataEmpty()) return;
     setRecoveryOfflineBypass();
     resetCloudRecoverySessionForRetry();
-    setRecoveryFailed(false);
-    setProbeFailed(false);
+    setRecoveryOverlay(null);
     setStalled(false);
     recordStartupStep("finalizing");
-    setBootPhase("ready");
     recordStartupStep("ready");
     logStartupPhase("dashboard_ready", { via: "continue_offline" });
     void hideNativeSplashWhenReady();
@@ -317,7 +358,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     );
   }
 
-  if (error) {
+  if (error && bootPhase !== "ready") {
     return (
       <div className={`flex min-h-dvh flex-col items-center justify-center gap-4 ${STARTUP_SCREEN_BG} px-6 py-[max(2rem,env(safe-area-inset-top))]`}>
         <div className="max-w-sm space-y-4 rounded-3xl border-2 border-amber-100 bg-amber-50/90 p-8 shadow-waka-sm">
@@ -335,23 +376,27 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     );
   }
 
-  if (bootPhase === "recovery") {
-    return (
-      <CloudRecoveryScreen
-        lang={lang}
-        failed={recoveryFailed}
-        probeFailed={probeFailed}
-        onRetry={handleRetryRecovery}
-        onSignOut={handleSignOut}
-        onContinueOffline={handleContinueOffline}
-        canContinueOffline={canContinueOffline}
-      />
-    );
-  }
-
   if (bootPhase !== "ready") {
     return <StartupLoadingScreen lang={lang} step={startupStep} />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <RecoveryBackgroundBanner lang={lang} onRetry={handleRetryRecovery} />
+      {recoveryOverlay ? (
+        <div className="fixed inset-0 z-[220]">
+          <CloudRecoveryScreen
+            lang={lang}
+            failed={recoveryOverlay.failed}
+            probeFailed={recoveryOverlay.probeFailed}
+            onRetry={handleRetryRecovery}
+            onSignOut={handleSignOut}
+            onContinueOffline={handleContinueOffline}
+            canContinueOffline={canContinueOffline}
+          />
+        </div>
+      ) : null}
+    </>
+  );
 }

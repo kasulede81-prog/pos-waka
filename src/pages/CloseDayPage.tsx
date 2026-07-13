@@ -149,6 +149,27 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
   const [historyFilter, setHistoryFilter] = useState<DateFilterValue>({ kind: "preset", preset: "this_month" });
 
+  useEffect(() => {
+    try {
+      const prefill = sessionStorage.getItem("waka-close-day-prefill");
+      const prefillDate = sessionStorage.getItem("waka-close-day-prefill-date");
+      if (prefill && (!prefillDate || prefillDate === closeDateKey)) {
+        setCounted(prefill.replace(/\D/g, "").slice(0, 12));
+        sessionStorage.removeItem("waka-close-day-prefill");
+        sessionStorage.removeItem("waka-close-day-prefill-date");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [closeDateKey]);
+
+  useEffect(() => {
+    if (window.location.hash !== "#cash-count") return;
+    window.requestAnimationFrame(() => {
+      document.getElementById("cash-count")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [closeDateKey, preflightLoading]);
+
 
 
   const historyBounds = useMemo(() => resolveDateFilterBounds(historyFilter), [historyFilter]);
@@ -695,7 +716,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       {!activeCloseToday ? (
 
-        <form onSubmit={submit} className="rounded-3xl border border-waka-200 bg-waka-50/70 p-4">
+        <form id="cash-count" onSubmit={submit} className="rounded-3xl border border-waka-200 bg-waka-50/70 p-4 scroll-mt-24">
 
           <label className="block text-base font-black text-waka-950">{t(lang, "closeCountedCash")}</label>
 

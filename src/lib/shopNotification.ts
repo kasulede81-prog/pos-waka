@@ -5,6 +5,7 @@ const ACTION_SUCCESS_KEYS: Record<string, string> = {
   "customer.add": "notifyCustomerSaved",
   "customer.debt_payment": "notifyDebtPaymentSaved",
   "supplier.payment": "notifySupplierPaymentSaved",
+  "supplier.remove": "notifySupplierRemoved",
   "expense.record": "notifyExpenseSaved",
   "kitchen.reprint": "notifyKitchenReprintOk",
 };

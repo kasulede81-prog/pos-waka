@@ -74,6 +74,7 @@ export type ReportsCenterContext = {
   topCashiers: LeaderboardRow[];
   marginLeaders: Array<{ name: string; revenue: number; profit: number; pct: number }>;
   purchasesTodayUgx: number;
+  purchasesInPeriodUgx: number;
   showDailyExport: boolean;
   reportDayKey: string;
   exportSummaryText: string;

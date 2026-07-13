@@ -12,6 +12,7 @@ import {
 } from "../lib/homeVisibility";
 import { localGetDailySalesSummary, localGetMonthlySalesSummary } from "../lib/localReporting";
 import { formatShortUgx } from "../lib/commandCenterPageView";
+import { resolveStableTodayKpi } from "../lib/todayKpiSnapshot";
 import { permissionsHasEffective } from "../lib/actorAuthorization";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
 import type { Language, Permission, UserRole } from "../types";
@@ -53,6 +54,8 @@ export function useHomeDashboardMetrics(
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const todayKpiSnapshot = usePosStore((s) => s.todayKpiSnapshot);
+  const salesHydrating = usePosStore((s) => s.salesHistoryHydration?.active ?? false);
   const { snapshot, authMode } = useSubscription();
   const homeMetrics = resolveVisibleHomeMetrics(role);
   const profitVisibility = resolveProfitVisibility({ role, snapshot, authMode, actorPermissions });
@@ -70,7 +73,17 @@ export function useHomeDashboardMetrics(
   );
 
   return useMemo(() => {
-    const today = localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey);
+    const computedToday = localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey);
+    const stableToday = resolveStableTodayKpi(
+      todayKpiSnapshot,
+      {
+        transactionCount: computedToday.transactionCount,
+        totalRevenueUgx: computedToday.totalRevenueUgx,
+      },
+      todayKey,
+      salesHydrating,
+    );
+    const today = { ...computedToday, ...stableToday };
     const month = localGetMonthlySalesSummary(scopedSales, products, scopedReturns, monthKey, cashExpenses);
     const totalDebtUgx = customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0);
     const canCash = permissionsHasEffective(role, "day.close", snapshot, authMode, actorPermissions);
@@ -176,5 +189,7 @@ export function useHomeDashboardMetrics(
     snapshot,
     authMode,
     actorPermissions,
+    todayKpiSnapshot,
+    salesHydrating,
   ]);
 }

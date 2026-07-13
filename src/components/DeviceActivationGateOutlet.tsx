@@ -6,6 +6,7 @@ import {
   useDeviceActivation,
 } from "../context/DeviceActivationContext";
 import { t } from "../lib/i18n";
+import { EnterpriseSpinner } from "./enterprise/EnterpriseSpinner";
 
 type Props = { lang: Language };
 
@@ -17,7 +18,7 @@ export function DeviceActivationGateOutlet({ lang }: Props) {
   if (loading) {
     return (
       <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-waka-50 to-muted px-4 dark:from-foreground dark:to-foreground">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-waka-200 border-t-orange-600" aria-hidden />
+        <EnterpriseSpinner size="lg" label="Checking device access" />
         <p className="mt-3 text-sm font-semibold text-muted-foreground dark:text-muted-foreground">Checking device access…</p>
       </div>
     );

@@ -366,10 +366,15 @@ export function resolveHomeMenuTiles(params: {
     .filter((t) => params.includeHidden || !launcherTileLayoutEntry(effectiveLayout, t.id)?.hidden)
     .map((t) => t.id);
 
+  const visibleSecondaryIds =
+    !params.includeHidden && secondaryIds.length === 0 && secondaryDefs.length > 0
+      ? secondaryDefs.map((t) => t.id)
+      : secondaryIds;
+
   const arrangeIds = secondaryDefs.map((t) => t.id);
   const order = effectiveLauncherTileOrder(
     params.savedOrder,
-    params.includeHidden ? arrangeIds : secondaryIds,
+    params.includeHidden ? arrangeIds : visibleSecondaryIds,
     Boolean(params.pharmacyMode),
   );
 

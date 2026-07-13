@@ -67,7 +67,7 @@ export function ProfitStatGrid({
     <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
       <StatCard
         icon={TrendingUp}
-        label={t(lang, "profitStatNetProfit")}
+        label={t(lang, "profitStatGrossProfit")}
         value={formatShortUgx(netProfitUgx)}
         highlight
         valueClass={netProfitUgx >= 0 ? "text-waka-700" : "text-rose-700"}

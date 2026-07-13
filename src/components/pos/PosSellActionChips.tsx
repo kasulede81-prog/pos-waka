@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
+import { POS_HORIZONTAL_CHIP_TOUCH_CLASS } from "../../lib/posTouchInteraction";
 
 /** Slim action row for POS sell screen (pending, expense, count drawer). */
 export function PosSellActionChips({ children, className }: { children: ReactNode; className?: string }) {
@@ -7,6 +8,7 @@ export function PosSellActionChips({ children, className }: { children: ReactNod
     <div
       className={clsx(
         "flex max-w-full gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]",
+        POS_HORIZONTAL_CHIP_TOUCH_CLASS,
         className,
       )}
     >

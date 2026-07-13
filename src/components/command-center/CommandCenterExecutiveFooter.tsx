@@ -11,6 +11,7 @@ type Props = {
   summaryVars?: Record<string, string | number>;
   onExport: () => void;
   onShare: () => void;
+  onPrint: () => void;
 };
 
 export function CommandCenterExecutiveFooter({
@@ -20,6 +21,7 @@ export function CommandCenterExecutiveFooter({
   summaryVars,
   onExport,
   onShare,
+  onPrint,
 }: Props) {
   const stars = starCountFromScore(score);
 
@@ -40,7 +42,7 @@ export function CommandCenterExecutiveFooter({
       <p className="mt-3 text-sm font-semibold leading-relaxed text-muted-foreground">
         {summaryVars ? tTemplate(lang, summaryKey, summaryVars) : t(lang, summaryKey)}
       </p>
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           to="/settings/health"
           className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-white/80 px-4 text-sm font-black text-foreground"
@@ -53,6 +55,13 @@ export function CommandCenterExecutiveFooter({
           className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-waka-600 px-4 text-sm font-black text-white"
         >
           {t(lang, "cmdCenterExportDashboard")}
+        </button>
+        <button
+          type="button"
+          onClick={onPrint}
+          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-white/80 px-4 text-sm font-black text-foreground"
+        >
+          {t(lang, "monthlyReportPrint")}
         </button>
         <button
           type="button"

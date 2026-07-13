@@ -64,6 +64,12 @@ import { PosScreenPortal } from "../components/layout/PosScreenPortal";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { useKeyboardInset } from "../hooks/useKeyboardInset";
 import { combinedBottomInsetStyle } from "../lib/safeAreaInsets";
+import { scrollCatalogToTop } from "../lib/posCatalogScroll";
+import {
+  reportPosKeyboardInset,
+  reportPosScrollOwner,
+  reportPosViewportMetrics,
+} from "../lib/posInteractionDiagnostics";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
@@ -385,6 +391,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const [batchPickerLine, setBatchPickerLine] = useState<SaleLine | null>(null);
   const [cartSaleDiscountOpen, setCartSaleDiscountOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const catalogWidthRef = useRef<HTMLDivElement>(null);
   const catalogRef = useRef<HTMLDivElement>(null);
   const customerSelectRef = useRef<HTMLSelectElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
@@ -395,6 +402,13 @@ export function PosPage({ lang }: { lang: Language }) {
     useDisplayScale();
   const displayScaleMultiplier = DISPLAY_SCALE_META[displayScaleLevel].multiplier;
   const isFullDesktopPos = posLayoutMode === "full";
+  const mobileSellFocus = posLayoutMode === "mobile";
+  const compactSellFocus = posLayoutMode === "compact";
+  /** Mobile, compact tablet, and full desktop share the catalog scroll pane model (Phase 25.3). */
+  const catalogSellMode = mobileSellFocus || isFullDesktopPos || compactSellFocus;
+  const catalogViewportLayout = catalogSellMode;
+  const catalogScrollPaneClass =
+    "pos-catalog-scroll-pane h-0 min-h-0 flex-1 overscroll-y-contain [-webkit-overflow-scrolling:touch]";
   const mountDesktopCheckoutSidebar = shouldMountDesktopCheckoutSidebar(
     posLayoutMode,
     products.length > 0,
@@ -406,7 +420,7 @@ export function PosPage({ lang }: { lang: Language }) {
     mountDesktopCheckoutSidebar && isFullDesktopPos
       ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier)
       : null;
-  const { columnCount: productGridCols } = useCatalogContainerWidth(catalogRef, displayScaleLevel);
+  const { columnCount: productGridCols } = useCatalogContainerWidth(catalogWidthRef, displayScaleLevel);
   const activeShift = useMemo(
     () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
     [preferences.shifts, actor.userId],
@@ -741,7 +755,8 @@ export function PosPage({ lang }: { lang: Language }) {
     products.length > 0 &&
     sellCategoryKey === CATEGORY_FILTER_ALL &&
     sellSearchContext.q.length === 0 &&
-    !isFullDesktopPos;
+    !isFullDesktopPos &&
+    !catalogSellMode;
   const hasSellViewFilter = sellCategoryKey !== CATEGORY_FILTER_ALL || sellSearchContext.q.length > 0;
 
   const selectedShelfLabel =
@@ -1330,6 +1345,23 @@ export function PosPage({ lang }: { lang: Language }) {
   const keyboardInset = useKeyboardInset();
   const checkoutBottomPad = combinedBottomInsetStyle(keyboardInset) ?? "env(safe-area-inset-bottom, 0px)";
 
+  useEffect(() => {
+    reportPosViewportMetrics();
+    reportPosScrollOwner(catalogRef.current);
+  }, []);
+
+  useEffect(() => {
+    reportPosKeyboardInset(keyboardInset);
+  }, [keyboardInset]);
+
+  useEffect(() => {
+    if (keyboardInset <= 0) return;
+    const active = document.activeElement;
+    if (active === searchInputRef.current) {
+      searchInputRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [keyboardInset]);
+
   const adjustFocusedCartQty = useCallback(
     (backwards: boolean) => {
       const lastLine = draftLines[draftLines.length - 1];
@@ -1536,9 +1568,6 @@ export function PosPage({ lang }: { lang: Language }) {
     onFinishSale: finishSale,
   };
 
-  const mobileSellFocus = posLayoutMode === "mobile";
-  const catalogSellMode = mobileSellFocus || isFullDesktopPos;
-
   const showCatalogShelfGrid =
     catalogSellMode && shelfCards.length > 0 && sellSearchContext.q.length === 0;
   const showCatalogProductsBelow =
@@ -1551,7 +1580,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const catalogShelfCards = shelfCards;
 
   const quickProductChips = useMemo(() => {
-    if (!mobileSellFocus) return [];
+    if (!catalogSellMode || isFullDesktopPos) return [];
     const seen = new Set<string>();
     const out: Product[] = [];
     for (const p of quickSellProducts) {
@@ -1567,7 +1596,7 @@ export function PosPage({ lang }: { lang: Language }) {
       }
     }
     return out.slice(0, 12);
-  }, [mobileSellFocus, quickSellProducts, frequentToday]);
+  }, [catalogSellMode, isFullDesktopPos, quickSellProducts, frequentToday]);
 
   const handleCatalogShelfTap = useCallback(
     (shelfKey: string) => {
@@ -1661,10 +1690,7 @@ export function PosPage({ lang }: { lang: Language }) {
     if (!catalogSellMode || sellCategoryKey === CATEGORY_FILTER_ALL || sellSearchContext.q.length > 0) {
       return;
     }
-    const scrollRoot = isFullDesktopPos
-      ? catalogRef.current
-      : document.querySelector(".scroll-main-chrome");
-    if (scrollRoot instanceof HTMLElement) scrollRoot.scrollTop = 0;
+    scrollCatalogToTop(catalogRef.current);
   }, [catalogSellMode, isFullDesktopPos, sellCategoryKey, sellSearchContext.q]);
 
   const sellActionFooter =
@@ -1750,8 +1776,14 @@ export function PosPage({ lang }: { lang: Language }) {
 
   return (
     <ShiftSellGateway lang={lang}>
-    <div className={clsx(isFullDesktopPos || mobileSellFocus ? "flex h-full min-h-0 flex-1 flex-col" : "space-y-2", mobileSellFocus && !isFullDesktopPos && "min-h-0")}>
-      <PosOfflineBanner lang={lang} compact={mobileSellFocus || isFullDesktopPos} />
+    <div
+      className={clsx(
+        catalogViewportLayout
+          ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+          : "space-y-2",
+      )}
+    >
+      <PosOfflineBanner lang={lang} compact={catalogSellMode} />
       {isFullDesktopPos ? (
         <PosDesktopCompactHeader
           lang={lang}
@@ -1816,15 +1848,15 @@ export function PosPage({ lang }: { lang: Language }) {
         style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
       >
         <div
-          ref={catalogRef}
-          className={clsx(isFullDesktopPos ? "flex min-h-0 min-w-0 flex-col gap-1.5" : mobileSellFocus ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : "min-w-0 space-y-2")}
+          ref={catalogWidthRef}
+          className={clsx(isFullDesktopPos ? "flex min-h-0 min-w-0 flex-col gap-1.5" : catalogSellMode ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : "min-w-0 space-y-2")}
         >
 
       {products.length > 0 ? (
         <div
           className={clsx(
-            mobileSellFocus
-              ? "sticky top-0 z-20 -mx-0.5 space-y-0 bg-muted/95 pb-1.5 pt-0.5 backdrop-blur-md"
+            mobileSellFocus || compactSellFocus
+              ? "sticky top-0 z-20 shrink-0 -mx-0.5 space-y-0 bg-muted/95 pb-1.5 pt-0.5 backdrop-blur-md"
               : isFullDesktopPos
                 ? "shrink-0 space-y-1"
                 : "space-y-1.5 rounded-[1.35rem] border border-border bg-card p-2 shadow-waka-sm",
@@ -1947,8 +1979,8 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {mobileSellFocus && quickProductChips.length > 0 ? (
-        <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} />
+      {mobileSellFocus && quickProductChips.length > 0 && !showCatalogShelfGrid ? (
+        <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} className="shrink-0" />
       ) : null}
 
       {showDesktopCatalogCheckoutDock ? (
@@ -1998,10 +2030,8 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : showCatalogShelfGrid ? (
         catalogShelfDrillDown ? (
           <section
-            className={clsx(
-              "space-y-2",
-              catalogSellMode && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain",
-            )}
+            ref={catalogRef}
+            className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
             data-pos-catalog-scroll={catalogSellMode ? true : undefined}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-card/95 px-2.5 py-2 shadow-sm backdrop-blur">
@@ -2026,9 +2056,18 @@ export function PosPage({ lang }: { lang: Language }) {
           </section>
         ) : (
           <div
-            className={clsx(catalogSellMode && "pos-catalog-scroll-pane min-h-0 flex-1")}
+            ref={catalogRef}
+            className={clsx(catalogSellMode && catalogScrollPaneClass, (mobileSellFocus || compactSellFocus) && "mt-2")}
             data-pos-catalog-scroll={catalogSellMode ? true : undefined}
           >
+            {catalogSellMode && !isFullDesktopPos && quickProductChips.length > 0 ? (
+              <PosQuickProductChips
+                lang={lang}
+                products={quickProductChips}
+                onTap={quickTapAddProduct}
+                className="mb-2 shrink-0"
+              />
+            ) : null}
             <PosSellCatalogShelfSection
               lang={lang}
               shelves={catalogShelfCards}
@@ -2038,7 +2077,11 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
         )
       ) : showCatalogSearchResults ? (
-        <section className={clsx("space-y-2", catalogSellMode && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
+        <section
+          ref={catalogRef}
+          className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
+          data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+        >
           <p className="px-0.5 text-xs font-black text-muted-foreground">
             {t(lang, "posSearchResults")}
             <span className="font-semibold text-muted-foreground"> · {t(lang, "posMasterSearchAll")}</span>
@@ -2171,8 +2214,9 @@ export function PosPage({ lang }: { lang: Language }) {
         </section>
       ) : showDesktopProductView ? (
         <section
-          className={clsx("space-y-2", catalogSellMode && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}
-          data-pos-catalog-scroll={isFullDesktopPos ? true : undefined}
+          ref={catalogRef}
+          className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
+          data-pos-catalog-scroll={catalogSellMode ? true : undefined}
         >
           {!isFullDesktopPos ? (
           <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-card/95 px-2.5 py-2 shadow-sm backdrop-blur">
@@ -2291,7 +2335,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-        <PosPageScrollSpacer minimizedCheckout={showMinimizedCheckoutFab} />
+        {!catalogSellMode ? <PosPageScrollSpacer minimizedCheckout={showMinimizedCheckoutFab} /> : null}
         </div>
 
         {mountDesktopCheckoutSidebar ? (

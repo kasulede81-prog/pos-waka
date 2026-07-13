@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
 import { App } from "@capacitor/app";
@@ -7,8 +7,16 @@ import { deriveQueueHealth } from "../lib/autoSync";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { runWhenIdle } from "../lib/uiYield";
 import { readSyncQueue } from "../offline/localDb";
-import { pushShopPendingToCloud, syncShopWithCloud, countUnsyncedSales } from "../offline/cloudSync";
+import {
+  pushShopPendingToCloud,
+  scheduleIncrementalCloudPull,
+  syncShopWithCloud,
+  countUnsyncedSales,
+} from "../offline/cloudSync";
 import { POS_PUSH_INTERVAL_MS, runPosPushOnlyUpload } from "../lib/posPushScheduler";
+import { scheduleImmediatePull } from "../lib/immediateSync";
+import { markSyncReconnecting } from "../lib/syncDiagnostics";
+import { startRealtimeSyncPull, stopRealtimeSyncPull } from "../lib/realtimeSyncPull";
 import {
   SYNC_AUTO_DRAIN_MS,
   SYNC_MIN_FULL_INTERVAL_MS,
@@ -39,7 +47,7 @@ export type SyncStatusApi = {
   pendingCount: number;
   pendingBreakdown: PendingBreakdown;
   syncing: boolean;
-  /** True when cloud pull is deferred on POS routes (push-only uploads still run). */
+  /** True only on internal admin routes where cloud pull is blocked. */
   pullPaused: boolean;
   status: SyncStatus;
   health: SyncHealthMeta;
@@ -108,8 +116,6 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
   const visTimerRef = useRef<number | null>(null);
   const pendingRef = useRef(0);
   const wasOnlineRef = useRef(isOnline);
-  const startupDoneRef = useRef(false);
-
   const refreshQueue = useCallback(() => {
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     void pendingUploadStats().then(({ total, breakdown, queueHealth }) => {
@@ -139,6 +145,14 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
       setHealth(readSyncHealthMeta());
     }
   }, []);
+
+  const scheduleBackgroundPull = useCallback(
+    (reason: string, opts?: { force?: boolean }) => {
+      if (pullPaused) return;
+      scheduleImmediatePull(reason, opts);
+    },
+    [pullPaused],
+  );
 
   const runFlush = useCallback(async (opts?: {
     pull?: boolean;
@@ -170,11 +184,6 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
       if (now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && !pendingWork) return;
     }
 
-    if (!wantPull && pullPaused) {
-      await runPosPushFlush({ showSpinner, force: forcePending });
-      return;
-    }
-
     syncingRef.current = true;
     if (showSpinner) setSyncing(true);
     const attemptAt = new Date().toISOString();
@@ -183,9 +192,10 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
     try {
       const work = (async () => {
         if (wantPull) {
-          const { push, queueFailed } = await syncShopWithCloud({ pull: true, forceFull });
+          const { pulled, push, queueFailed } = await syncShopWithCloud({ pull: true, forceFull });
           lastFullSyncAtRef.current = Date.now();
           lastPushAtRef.current = lastFullSyncAtRef.current;
+          void pulled;
           if (push.fail === 0 && queueFailed === 0) {
             writeSyncHealthMeta({
               lastSuccessAt: attemptAt,
@@ -233,23 +243,25 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
       writeSyncHealthMeta({ queueHealth });
       setHealth(readSyncHealthMeta());
     }
-  }, [pullPaused, runPosPushFlush]);
+  }, [pullPaused]);
 
-  /** Startup: load queue stats and resume uploads without user action. */
+  /** Realtime channel + startup resume (must survive React StrictMode remount). */
   useEffect(() => {
-    if (startupDoneRef.current) return;
-    startupDoneRef.current = true;
     refreshQueue();
+    void startRealtimeSyncPull();
     if (getDeviceOnline()) {
       runWhenIdle(
-        () =>
-          void (pullPaused
-            ? runPosPushFlush({ showSpinner: false, force: true })
-            : runFlush({ pull: true, showSpinner: false, forcePending: true })),
+        () => {
+          void runPosPushFlush({ showSpinner: false, force: true });
+          scheduleBackgroundPull("startup", { force: true });
+        },
         syncStartupIdleMs(),
       );
     }
-  }, [pullPaused, refreshQueue, runFlush, runPosPushFlush]);
+    return () => {
+      stopRealtimeSyncPull();
+    };
+  }, [refreshQueue, runPosPushFlush, scheduleBackgroundPull]);
 
   useEffect(() => {
     refreshQueue();
@@ -257,45 +269,44 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
     return () => window.clearInterval(id);
   }, [refreshQueue]);
 
-  /** Connectivity restored → immediate automatic upload (pull only when not on POS). */
+  /** Connectivity restored → immediate push + event-driven pull. */
   useEffect(() => {
     const wasOnline = wasOnlineRef.current;
     wasOnlineRef.current = isOnline;
 
     if (!wasOnline && isOnline) {
+      markSyncReconnecting();
       writeSyncHealthMeta({
         offlineSinceAt: null,
         lastOnlineAt: new Date().toISOString(),
       });
       setHealth(readSyncHealthMeta());
       window.setTimeout(() => {
-        void (pullPaused
-          ? runPosPushFlush({ showSpinner: false, force: true })
-          : runFlush({ pull: true, showSpinner: false, forcePending: true }));
+        void runPosPushFlush({ showSpinner: false, force: true });
+        scheduleBackgroundPull("reconnect", { force: true });
       }, RECONNECT_FLUSH_DELAY_MS);
     } else if (wasOnline && !isOnline) {
       writeSyncHealthMeta({ offlineSinceAt: new Date().toISOString() });
       setHealth(readSyncHealthMeta());
     }
-  }, [isOnline, pullPaused, runFlush, runPosPushFlush]);
+  }, [isOnline, runPosPushFlush, scheduleBackgroundPull]);
 
-  /** Periodic background drain — push-only on POS, pull+push elsewhere. */
+  /** Safety polling — push pending work; pull on fallback interval. */
   useEffect(() => {
-    const intervalMs = pullPaused ? POS_PUSH_INTERVAL_MS : AUTO_DRAIN_MS;
+    const intervalMs = Math.min(AUTO_DRAIN_MS, POS_PUSH_INTERVAL_MS);
     const id = window.setInterval(() => {
       if (!getDeviceOnline() || syncingRef.current) return;
       if (hasPendingSyncWork(pendingRef.current)) {
-        void (pullPaused
-          ? runPosPushFlush({ showSpinner: false })
-          : runFlush({ pull: false, showSpinner: false }));
+        void runPosPushFlush({ showSpinner: false });
         return;
       }
       if (!pullPaused && Date.now() - lastFullSyncAtRef.current >= MIN_FULL_SYNC_INTERVAL_MS) {
-        void runFlush({ pull: true, showSpinner: false });
+        scheduleIncrementalCloudPull("safety_poll");
+        lastFullSyncAtRef.current = Date.now();
       }
     }, intervalMs);
     return () => window.clearInterval(id);
-  }, [pullPaused, runFlush, runPosPushFlush]);
+  }, [pullPaused, runPosPushFlush]);
 
   useEffect(() => {
     const onVis = () => {
@@ -303,14 +314,13 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
       if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
       visTimerRef.current = window.setTimeout(() => {
         runWhenIdle(
-          () =>
-            void (pullPaused
-              ? runPosPushFlush({ showSpinner: false, force: hasPendingSyncWork(pendingRef.current) })
-              : runFlush({
-                  pull: hasPendingSyncWork(pendingRef.current),
-                  showSpinner: false,
-                  forcePending: true,
-                })),
+          () => {
+            void runPosPushFlush({
+              showSpinner: false,
+              force: hasPendingSyncWork(pendingRef.current),
+            });
+            scheduleBackgroundPull("visibility", { force: hasPendingSyncWork(pendingRef.current) });
+          },
           syncVisibilityDelayMs(),
         );
       }, syncVisibilityDelayMs());
@@ -320,7 +330,7 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
       document.removeEventListener("visibilitychange", onVis);
       if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
     };
-  }, [pullPaused, runFlush, runPosPushFlush]);
+  }, [runPosPushFlush, scheduleBackgroundPull]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -329,10 +339,10 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
         refreshQueue();
         window.setTimeout(() => {
           runWhenIdle(
-            () =>
-              void (pullPaused
-                ? runPosPushFlush({ showSpinner: false, force: true })
-                : runFlush({ pull: true, showSpinner: false, forcePending: true })),
+            () => {
+              void runPosPushFlush({ showSpinner: false, force: true });
+              scheduleBackgroundPull("resume", { force: true });
+            },
             syncAppResumeDelayMs(),
           );
         }, syncAppResumeDelayMs());
@@ -341,7 +351,7 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
     return () => {
       void sub.then((h) => h.remove());
     };
-  }, [pullPaused, runFlush, runPosPushFlush, refreshQueue]);
+  }, [refreshQueue, runPosPushFlush, scheduleBackgroundPull]);
 
   let status: SyncStatus = "offline";
   if (isOnline) {
@@ -366,7 +376,22 @@ export function SyncStatusProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const pullPaused = shouldPausePosBackgroundPull(location.pathname);
   const value = useSyncStatusEngine({ pullPaused });
-  return <SyncStatusContext.Provider value={value}>{children}</SyncStatusContext.Provider>;
+  const memoValue = useMemo(
+    () => value,
+    [
+      value.isOnline,
+      value.pendingCount,
+      value.pendingBreakdown,
+      value.syncing,
+      value.pullPaused,
+      value.status,
+      value.health,
+      value.refreshQueue,
+      value.flush,
+      value.flushFull,
+    ],
+  );
+  return <SyncStatusContext.Provider value={memoValue}>{children}</SyncStatusContext.Provider>;
 }
 
 export function useSyncStatus(): SyncStatusApi {

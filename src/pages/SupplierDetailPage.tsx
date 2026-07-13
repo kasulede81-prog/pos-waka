@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowDownLeft, ArrowUpRight, Scale, Wallet } from "lucide-react";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { ArrowDownLeft, ArrowUpRight, Scale, Trash2, Wallet } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -28,6 +28,8 @@ import { receiptPrintActionLabel } from "../lib/printActionLabels";
 import { dateKeyKampala } from "../lib/datesUg";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
 import { dateMatchesFilter, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
+import { useShopAction } from "../hooks/useShopAction";
+import { ModalSheet } from "../components/layout/ModalSheet";
 
 export function SupplierDetailPage({
   lang,
@@ -44,13 +46,17 @@ export function SupplierDetailPage({
 }) {
   const { supplierId: routeSupplierId } = useParams<{ supplierId: string }>();
   const supplierId = supplierIdProp ?? routeSupplierId;
+  const navigate = useNavigate();
+  const { run: runShopAction } = useShopAction();
   const actor = useSessionActor();
   const canView = actorHasPermission(actor, "suppliers.view");
   const canManage = actorHasPermission(actor, "suppliers.manage");
+  const canDelete = actor?.role === "owner";
 
   const suppliers = usePosStore((s) => s.suppliers);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const updateSupplier = usePosStore((s) => s.updateSupplier);
+  const removeSupplier = usePosStore((s) => s.removeSupplier);
   const purchases = usePosStore((s) => s.purchases);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const preferences = usePosStore((s) => s.preferences);
@@ -64,6 +70,7 @@ export function SupplierDetailPage({
   const [editLocation, setEditLocation] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editSaved, setEditSaved] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [statementFilter, setStatementFilter] = useState<DateFilterValue>({ kind: "preset", preset: "this_month" });
 
   const statementBounds = useMemo(() => resolveDateFilterBounds(statementFilter), [statementFilter]);
@@ -165,6 +172,18 @@ export function SupplierDetailPage({
     }
   };
 
+  const confirmDelete = async () => {
+    const r = await runShopAction(
+      { lang, action: "supplier.remove", permitted: canDelete, successKey: "supplierDeleteOk" },
+      () => removeSupplier(supplier.id),
+    );
+    if (r.ok) {
+      setDeleteOpen(false);
+      if (embedded && onClose) onClose();
+      else navigate("/stock?tab=suppliers", { replace: true });
+    }
+  };
+
   const content = (
     <>
       {!embedded ? (
@@ -188,6 +207,12 @@ export function SupplierDetailPage({
         {canManage && !editOpen ? (
           <WakaButton type="button" variant="secondary" onClick={openEdit} className="mb-4 w-full">
             {t(lang, "supplierEditTitle")}
+          </WakaButton>
+        ) : null}
+        {canDelete && !editOpen ? (
+          <WakaButton type="button" variant="danger" onClick={() => setDeleteOpen(true)} className="mb-4 w-full">
+            <Trash2 className="h-4 w-4" aria-hidden />
+            {t(lang, "supplierDeleteButton")}
           </WakaButton>
         ) : null}
         {editOpen ? (
@@ -396,6 +421,26 @@ export function SupplierDetailPage({
           </ul>
         )}
       </EnterpriseCard>
+
+      <ModalSheet
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        align="center"
+        title={t(lang, "supplierDeleteConfirm")}
+        footer={
+          <div className="flex gap-3">
+            <WakaButton type="button" variant="secondary" className="flex-1" onClick={() => setDeleteOpen(false)}>
+              {t(lang, "cancel")}
+            </WakaButton>
+            <WakaButton type="button" variant="danger" className="flex-1" onClick={() => void confirmDelete()}>
+              {t(lang, "supplierDeleteButton")}
+            </WakaButton>
+          </div>
+        }
+      >
+        <SectionTitle as="p" className="!text-sm">{supplier.name}</SectionTitle>
+        <p className="mt-2 text-sm font-semibold text-muted-foreground">{t(lang, "supplierDeleteConfirmBody")}</p>
+      </ModalSheet>
     </>
   );
 

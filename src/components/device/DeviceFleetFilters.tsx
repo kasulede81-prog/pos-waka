@@ -17,8 +17,6 @@ const FILTERS: DeviceFleetFilter[] = [
   "offline",
   "pending",
   "approved",
-  "disconnected",
-  "revoked",
   "android",
   "windows",
   "web",

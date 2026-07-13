@@ -11,10 +11,11 @@ import {
 } from "./backgroundWorkPolicy";
 
 describe("backgroundWorkPolicy", () => {
-  it("defers cloud pull on POS routes", () => {
-    expect(shouldPausePosBackgroundPull("/pos")).toBe(true);
-    expect(shouldPausePosBackgroundPull("/pos/checkout")).toBe(true);
-    expect(shouldPausePosBackgroundPull("/stock")).toBe(true);
+  it("allows cloud pull on POS and stock routes (Phase 24.1B)", () => {
+    expect(shouldPausePosBackgroundPull("/pos")).toBe(false);
+    expect(shouldPausePosBackgroundPull("/pos/checkout")).toBe(false);
+    expect(shouldPausePosBackgroundPull("/stock")).toBe(false);
+    expect(shouldPausePosBackgroundPull("/owner")).toBe(false);
   });
 
   it("allows cloud pull on settings routes", () => {
@@ -27,7 +28,8 @@ describe("backgroundWorkPolicy", () => {
     expect(shouldPausePosBackgroundPush("/stock")).toBe(false);
   });
 
-  it("blocks push on internal admin routes", () => {
+  it("blocks pull and push on internal admin routes", () => {
+    expect(shouldPausePosBackgroundPull("/internal/admin")).toBe(true);
     expect(shouldPausePosBackgroundPush("/internal/admin")).toBe(true);
   });
 

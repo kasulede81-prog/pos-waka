@@ -3,6 +3,7 @@ import { Link, Navigate } from "react-router-dom";
 import { MonitorSmartphone, Plus } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
+import { fetchShopDeviceLimitContext, type DeviceLimitContext } from "../lib/deviceActivation";
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
 import { EnterpriseCard } from "../components/enterprise/EnterpriseCard";
 import { Body, Caption, MonoNumber } from "../components/enterprise/EnterpriseTypography";
@@ -23,10 +24,11 @@ import {
   dismissPendingOwnerShopDevice,
   disconnectOwnerShopDevice,
   fetchShopDevicesForManagement,
+  filterAssignableFleetDevices,
+  isLicensedActiveDevice,
   parsePlanDeviceLimit,
   partitionShopDevices,
   recordDevicesPageViewed,
-  removeOwnerShopDevice,
   type ShopDeviceRow,
 } from "../lib/shopDevices";
 import { registerShopDeviceOnLogin } from "../lib/deviceActivation";
@@ -50,15 +52,13 @@ function formatPlanDisplayName(snapshot: SubscriptionSnapshot): string {
   return code.charAt(0).toUpperCase() + code.slice(1).replace(/_/g, " ");
 }
 
-const BUCKET_ORDER = ["current", "approved", "pending", "offline", "disconnected", "revoked"] as const;
+const BUCKET_ORDER = ["current", "approved", "pending", "offline"] as const;
 
 const BUCKET_HEADING: Record<(typeof BUCKET_ORDER)[number], string> = {
   current: "deviceFleetSectionCurrent",
   approved: "deviceFleetSectionApproved",
   pending: "deviceFleetSectionPending",
   offline: "deviceFleetSectionOffline",
-  disconnected: "deviceFleetSectionDisconnected",
-  revoked: "deviceFleetSectionRevoked",
 };
 
 export function DeviceManagementPage({ lang }: Props) {
@@ -78,10 +78,22 @@ export function DeviceManagementPage({ lang }: Props) {
   const [search, setSearch] = useState("");
   const [selectedDevice, setSelectedDevice] = useState<ShopDeviceRow | null>(null);
   const [aliasVersion, setAliasVersion] = useState(0);
+  const [limitContext, setLimitContext] = useState<DeviceLimitContext | null>(null);
 
   const currentFp = useMemo(() => currentDeviceFingerprint(), []);
   const planLimit = useMemo(() => parsePlanDeviceLimit(snapshot, authMode), [snapshot, authMode]);
-  const usage = useMemo(() => buildDeviceUsageSummary(devices, planLimit), [devices, planLimit]);
+  const usage = useMemo(() => {
+    const base = buildDeviceUsageSummary(devices, planLimit);
+    if (limitContext && base.activeCount === 0 && limitContext.active_count > 0) {
+      return {
+        ...base,
+        activeCount: limitContext.active_count,
+        atPlanLimit: limitContext.at_limit,
+        overPlanLimit: limitContext.device_limit != null && limitContext.active_count > limitContext.device_limit,
+      };
+    }
+    return base;
+  }, [devices, planLimit, limitContext]);
   const { pendingDevices } = useMemo(() => partitionShopDevices(devices), [devices]);
   const planName = useMemo(() => formatPlanDisplayName(snapshot), [snapshot]);
   const remaining =
@@ -127,17 +139,23 @@ export function DeviceManagementPage({ lang }: Props) {
   const loadDevices = useCallback(async (sid: string) => {
     setError(null);
     try {
-      const { devices: rows, isOwner } = await fetchShopDevicesForManagement(sid);
-      setIsShopOwner(isOwner);
-      setDevices(rows);
+      const [{ devices: rows, isOwner }, ctx] = await Promise.all([
+        fetchShopDevicesForManagement(sid, { planLimit, currentFingerprint: currentFp }),
+        fetchShopDeviceLimitContext(sid).catch(() => null),
+      ]);
+      setIsShopOwner(isOwner || (ctx?.is_owner ?? false));
+      setLimitContext(ctx);
+      const assignable = filterAssignableFleetDevices(rows, planLimit ?? ctx?.device_limit ?? null, currentFp);
+      setDevices(assignable);
       logDeviceFleetDiagnostic("fleet_loaded", {
-        count: rows.length,
+        count: assignable.length,
         shopId: sid,
+        activeCount: ctx?.active_count ?? assignable.filter((d) => isLicensedActiveDevice(d)).length,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : t(lang, "connectedDevicesLoadError"));
     }
-  }, [lang]);
+  }, [lang, planLimit, currentFp]);
 
   useEffect(() => {
     const intervalMs = pendingDevices.length > 0 ? 1_000 : 30_000;
@@ -153,6 +171,15 @@ export function DeviceManagementPage({ lang }: Props) {
     if (!expired) return;
     void loadDevices(shopId);
   }, [shopId, pendingDevices, nowMs, loadDevices]);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const intervalMs = pendingDevices.length > 0 ? 5_000 : 30_000;
+    const id = window.setInterval(() => {
+      void loadDevices(shopId);
+    }, intervalMs);
+    return () => window.clearInterval(id);
+  }, [shopId, pendingDevices.length, loadDevices]);
 
   useEffect(() => {
     if (!userId || authMode === "local") {
@@ -244,28 +271,11 @@ export function DeviceManagementPage({ lang }: Props) {
     setBusyId(device.id);
     try {
       await disconnectOwnerShopDevice(device.id, shopId);
+      setDevices((prev) => prev.filter((d) => d.id !== device.id));
       await loadDevices(shopId);
       await refreshAuthority();
     } catch (e) {
       setError(e instanceof Error ? e.message : t(lang, "connectedDevicesDisconnectError"));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleRemove = async (device: ShopDeviceRow) => {
-    if (!shopId) return;
-    const ok = await ensureAuthorized("manage_users");
-    if (!ok) return;
-    const name = resolveDisplayName(device) ?? device.label ?? device.id;
-    if (!window.confirm(tTemplate(lang, "deviceMgmtRemoveConfirm", { name }))) return;
-    setBusyId(device.id);
-    try {
-      await removeOwnerShopDevice(device.id, shopId);
-      await loadDevices(shopId);
-      await refreshAuthority();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t(lang, "deviceMgmtRemoveError"));
     } finally {
       setBusyId(null);
     }
@@ -303,7 +313,6 @@ export function DeviceManagementPage({ lang }: Props) {
     onApprove: (d: ShopDeviceRow) => void handleApprove(d),
     onDismiss: (d: ShopDeviceRow) => void handleDismiss(d),
     onDisconnect: (d: ShopDeviceRow) => void handleDisconnect(d),
-    onRemove: (d: ShopDeviceRow) => void handleRemove(d),
     onCopyId: (d: ShopDeviceRow) => void handleCopyId(d),
     onRetryActivation: () => void retryActivation(),
     onSelect: setSelectedDevice,

@@ -69,6 +69,8 @@ export type DashboardCenterContext = {
   revenueSparkline?: { value: number }[];
   onAcknowledge?: (alertId: string) => void;
   exportDashboard?: () => void;
+  shareDashboard?: () => void;
+  printDashboard?: () => void;
   recommendationsSectionId?: string;
   // Pharmacy operations
   actorName?: string;

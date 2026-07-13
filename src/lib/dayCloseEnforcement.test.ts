@@ -219,4 +219,30 @@ describe("dayCloseEnforcement", () => {
     });
     expect(key).toBe("2026-06-10");
   });
+
+  it("cash_counted checklist links to cash drawer for the same business date", () => {
+    const snapshot = buildDayClosePreflightSnapshot({
+      state: {
+        draftLines: { length: 0 },
+        activePendingSaleId: null,
+        sales: [],
+        preferences: { shifts: [], cashDrawerFormulaVersion: "v2" },
+        dayCloses: [],
+        dayDrawerOpens: [],
+        products: [],
+        returnRecords: [],
+        cashDrawerAdjustments: [],
+        cashExpenses: [],
+        inventoryCountSessions: [],
+      },
+      dateKey: DAY,
+      expectedCashUgx: 100_000,
+      countedCashUgx: null,
+      queue: [],
+      cloudPullStale: false,
+    });
+    const cashItem = snapshot.items.find((i) => i.id === "cash_counted");
+    expect(cashItem?.status).toBe("pending");
+    expect(cashItem?.navigateTo).toBe(`/office/cash-drawer?date=${DAY}&from=close-day#count`);
+  });
 });

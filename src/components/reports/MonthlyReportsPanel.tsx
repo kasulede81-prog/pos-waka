@@ -121,8 +121,9 @@ export function MonthlyReportsPanel({ lang }: Props) {
   };
 
   const printReport = () => {
-    const ok = printMonthlyReport(lang, report, exportOpts);
-    showToast(ok ? t(lang, "monthlyReportPrintOk") : t(lang, "monthlyReportPrintFail"));
+    void printMonthlyReport(lang, report, exportOpts).then((ok) =>
+      showToast(ok ? t(lang, "monthlyReportPrintOk") : t(lang, "monthlyReportPrintFail")),
+    );
   };
 
   const shareText = async () => {

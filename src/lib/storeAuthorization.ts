@@ -57,6 +57,7 @@ export const STORE_ACTION_PERMISSIONS = {
   recordPurchase: "purchases.record",
   addSupplier: "suppliers.manage",
   updateSupplier: "suppliers.manage",
+  removeSupplier: "suppliers.manage",
   addSupplierPayment: "suppliers.manage",
   voidPurchase: "purchases.void",
   addCustomer: "customers.view",

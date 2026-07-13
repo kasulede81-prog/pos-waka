@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
+import { jsPDF } from "jspdf";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { actorHasPermission } from "../../lib/actorAuthorization";
@@ -16,7 +17,9 @@ import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../../lib/profitVisibility";
 import { buildDailyReportText, shareText } from "../../lib/reportExport";
 import { downloadDailyReportPdf } from "../../lib/dailyReportPdf";
-import { printHtmlDocument } from "../../lib/documentPrint";
+import { buildAnalyticsReportRows } from "../../lib/analyticsReportExport";
+import { exportCsvFile, exportXlsxFile, printReportDocument } from "../../lib/reportExportEngine";
+import { filterPurchases } from "../../lib/purchaseReporting";
 import { computeHospitalityReports } from "../../lib/hospitalityReports";
 import { isHospitalityMode, totalOpenTablesPendingUgx } from "../../lib/hospitality";
 import { activeSessions } from "../../lib/hospitalityStats";
@@ -102,6 +105,10 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const showDailyExport = isSingleDayFilter(filter);
   const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, filter), [filter, lang]);
   const pageTitle = useMemo(() => resolveReportsPageTitle(lang, mode), [lang, mode]);
+
+  const purchasesInPeriodUgx = useMemo(() => {
+    return filterPurchases(purchases, bounds).reduce((a, p) => a + p.totalCostUgx, 0);
+  }, [purchases, bounds]);
 
   const purchasesTodayUgx = useMemo(() => {
     return purchases.filter((p) => dateKeyKampala(p.createdAt) === reportDayKey).reduce((a, p) => a + p.totalCostUgx, 0);
@@ -198,16 +205,31 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     [preferences.staffAccounts, preferences.shopDisplayName, shifts, auditLogs, actor.userId, actor.displayName],
   );
 
-  const topProducts = useMemo(() => productLeaderboard(report.topProducts, "revenue"), [report.topProducts]);
-  const topCustomers = useMemo(() => customerLeaderboard(customers, sales, filter), [customers, sales, filter]);
+  const searchNeedle = searchQuery.trim().toLowerCase();
+
+  const topProducts = useMemo(() => {
+    const rows = productLeaderboard(report.topProducts, "revenue");
+    if (!searchNeedle) return rows;
+    return rows.filter((r) => r.label.toLowerCase().includes(searchNeedle));
+  }, [report.topProducts, searchNeedle]);
+
+  const topCustomers = useMemo(() => {
+    const rows = customerLeaderboard(customers, sales, filter);
+    if (!searchNeedle) return rows;
+    return rows.filter((r) => r.label.toLowerCase().includes(searchNeedle));
+  }, [customers, sales, filter, searchNeedle]);
+
   const topCashiers = useMemo(
-    () =>
-      computeTopCashiers(sales, analytics.bounds, {
+    () => {
+      const rows = computeTopCashiers(sales, analytics.bounds, {
         lang,
         nameByUserId: soldByNameByUserId,
         shopDisplayName: preferences.shopDisplayName,
-      }),
-    [sales, analytics.bounds, lang, soldByNameByUserId, preferences.shopDisplayName],
+      });
+      if (!searchNeedle) return rows;
+      return rows.filter((r) => r.label.toLowerCase().includes(searchNeedle));
+    },
+    [sales, analytics.bounds, lang, soldByNameByUserId, preferences.shopDisplayName, searchNeedle],
   );
 
   const exportSummaryText = useMemo(() => {
@@ -304,27 +326,72 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     canProfit,
   ]);
 
-  const onExportCsv = useCallback(() => {
-    void navigator.clipboard.writeText(exportSummaryText);
-    setReportHint(t(lang, "reportCopied"));
-  }, [exportSummaryText, lang]);
+  const analyticsExportRows = useMemo(
+    () =>
+      buildAnalyticsReportRows({
+        lang,
+        title: pageTitle,
+        periodLabel,
+        report,
+        expensesUgx: analytics.expensesUgx,
+        purchasesInPeriodUgx,
+        canProfit,
+      }),
+    [lang, pageTitle, periodLabel, report, analytics.expensesUgx, purchasesInPeriodUgx, canProfit],
+  );
 
-  const onExportExcel = useCallback(() => {
-    void navigator.clipboard.writeText(exportSummaryText);
-    setReportHint(t(lang, "reportCopied"));
-  }, [exportSummaryText, lang]);
-
-  const onPrint = useCallback(() => {
-    printHtmlDocument(
-      `<pre style="font-family:system-ui;white-space:pre-wrap">${exportSummaryText.replace(/</g, "&lt;")}</pre>`,
-      "80mm",
-      pageTitle,
+  const onExportCsv = useCallback(async () => {
+    const result = await exportCsvFile(
+      "reports",
+      `waka-report-${dateKeyKampala(new Date())}.csv`,
+      analyticsExportRows,
+      { shareDialogTitle: pageTitle },
     );
-  }, [exportSummaryText, pageTitle]);
+    setReportHint(result.ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+  }, [analyticsExportRows, lang, pageTitle]);
+
+  const onExportExcel = useCallback(async () => {
+    const result = await exportXlsxFile(
+      "reports",
+      `waka-report-${dateKeyKampala(new Date())}.xlsx`,
+      analyticsExportRows,
+      { shareDialogTitle: pageTitle, sheetName: "Report" },
+    );
+    setReportHint(result.ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+  }, [analyticsExportRows, lang, pageTitle]);
+
+  const onPrint = useCallback(async () => {
+    const filename = `waka-report-${dateKeyKampala(new Date())}.pdf`;
+    const ok = await printReportDocument("reports", {
+      pdfFilename: filename,
+      buildPdfBlob: () => {
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        let y = 40;
+        for (const line of exportSummaryText.split("\n")) {
+          doc.text(line, 40, y);
+          y += 14;
+          if (y > 760) {
+            doc.addPage();
+            y = 40;
+          }
+        }
+        return doc.output("blob");
+      },
+      htmlBody: `<pre style="font-family:system-ui;white-space:pre-wrap">${exportSummaryText.replace(/</g, "&lt;")}</pre>`,
+      paper: "a4",
+      title: pageTitle,
+      shareDialogTitle: pageTitle,
+    });
+    setReportHint(ok ? t(lang, "monthlyReportPrintOk") : t(lang, "monthlyReportPrintFail"));
+  }, [exportSummaryText, lang, pageTitle]);
 
   const onShare = useCallback(() => {
-    void shareText(exportSummaryText, pageTitle);
-  }, [exportSummaryText, pageTitle]);
+    void shareText(exportSummaryText, pageTitle, "reports").then((ok) =>
+      setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")),
+    );
+  }, [exportSummaryText, lang, pageTitle]);
 
   const onCopy = useCallback(() => {
     void navigator.clipboard.writeText(exportSummaryText);
@@ -370,6 +437,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     topCashiers,
     marginLeaders,
     purchasesTodayUgx,
+    purchasesInPeriodUgx,
     showDailyExport,
     reportDayKey,
     exportSummaryText,
@@ -430,6 +498,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     topCashiers,
     marginLeaders,
     purchasesTodayUgx,
+    purchasesInPeriodUgx,
     showDailyExport,
     reportDayKey,
     exportSummaryText,

@@ -1,4 +1,5 @@
-import type { Sale } from "../types";
+import type { Language, Sale } from "../types";
+import { t, tTemplate } from "./i18n";
 import type { AttentionItem } from "./ownerCommandCenter";
 import type { IntegritySignal } from "./ownerCommandCenterBuilders";
 import type { OwnerFinancialExtended, OwnerInventoryExtended } from "./ownerCommandCenterBuilders";
@@ -324,12 +325,17 @@ export function buildKpiCards(
   ];
 }
 
-export function filterAttentionByQuery(items: AttentionItem[], query: string): AttentionItem[] {
+export function filterAttentionByQuery(items: AttentionItem[], query: string, lang: Language): AttentionItem[] {
   const q = query.trim().toLowerCase();
   if (!q) return items;
   return items.filter((item) => {
-    const title = item.titleKey.toLowerCase();
+    const title = (
+      item.titleVars ? tTemplate(lang, item.titleKey, item.titleVars) : t(lang, item.titleKey)
+    ).toLowerCase();
+    const detail = item.detailKey
+      ? (item.detailVars ? tTemplate(lang, item.detailKey, item.detailVars) : t(lang, item.detailKey)).toLowerCase()
+      : "";
     const actor = item.actorLabel?.toLowerCase() ?? "";
-    return title.includes(q) || actor.includes(q) || item.id.includes(q);
+    return title.includes(q) || detail.includes(q) || actor.includes(q) || item.id.includes(q);
   });
 }

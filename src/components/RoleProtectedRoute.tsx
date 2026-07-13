@@ -3,7 +3,8 @@ import type { Permission } from "../types";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSessionHydration } from "../context/SessionHydrationContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { actorHasEffectivePermission } from "../lib/actorAuthorization";import { usePosStore } from "../store/usePosStore";
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
+import { usePosStore } from "../store/usePosStore";
 
 type Props = {
   permission: Permission;
@@ -39,7 +40,14 @@ export function RoleProtectedRoute({ permission, children }: Props) {
       permission === "owner.activity" ||
       permission === "owner.cash_history" ||
       permission === "settings.shop";
-    return <Navigate to={tierGated ? "/upgrade" : "/"} replace state={{ from: location.pathname }} />;
+    const settingsSubpage = location.pathname.startsWith("/settings/");
+    return (
+      <Navigate
+        to={tierGated ? "/upgrade" : settingsSubpage ? "/settings" : "/"}
+        replace
+        state={{ from: location.pathname }}
+      />
+    );
   }
 
   return <>{children}</>;

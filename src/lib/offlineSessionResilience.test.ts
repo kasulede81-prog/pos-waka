@@ -15,6 +15,7 @@ import {
   scheduleSessionRefreshRetry,
   shouldDeferSignedOut,
   SESSION_GET_TIMEOUT_MS,
+  SESSION_REFRESH_TIMEOUT_MS,
 } from "./offlineSessionResilience";
 import { getSessionConnectionState, resetSessionConnectionState } from "./sessionConnectionState";
 
@@ -96,7 +97,7 @@ describe("offlineSessionResilience", () => {
     expect(getSessionConnectionState()).toBe("offline_cached");
   });
 
-  it("scenario 2: slow getSession timeout keeps cached session", async () => {
+  it("scenario 2: slow getSession timeout keeps cached session online while refresh is scheduled", async () => {
     const session = makeSession();
     localStorage.setItem("sb-test-auth-token", JSON.stringify(session));
 
@@ -111,6 +112,24 @@ describe("offlineSessionResilience", () => {
     expect(startup.session?.user.id).toBe("user-1");
     expect(startup.source).toBe("cached");
     expect(startup.timedOut).toBe(true);
+    expect(getSessionConnectionState()).toBe("online");
+  });
+
+  it("scenario 2b: cached restore while offline stays offline_cached", async () => {
+    const session = makeSession();
+    localStorage.setItem("sb-test-auth-token", JSON.stringify(session));
+    vi.mocked(getDeviceOnline).mockReturnValue(false);
+
+    const startupPromise = resolveStartupSession(
+      () => new Promise(() => {
+        /* hang */
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(SESSION_GET_TIMEOUT_MS);
+    const startup = await startupPromise;
+
+    expect(startup.source).toBe("cached");
+    expect(getSessionConnectionState()).toBe("offline_cached");
   });
 
   it("scenario 3: reconnect refresh succeeds and updates connection state", async () => {
@@ -126,6 +145,52 @@ describe("offlineSessionResilience", () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(onSessionUpdated).toHaveBeenCalledWith(session);
+    expect(onSessionRevoked).not.toHaveBeenCalled();
+    expect(getSessionConnectionState()).toBe("online");
+  });
+
+  it("scenario 3b: refresh failure with restorable cache stays online between retries", async () => {
+    const session = makeSession();
+    localStorage.setItem("sb-test-auth-token", JSON.stringify(session));
+    const onSessionUpdated = vi.fn();
+    const onSessionRevoked = vi.fn();
+
+    scheduleSessionRefreshRetry(
+      async () => ({
+        data: { session: null },
+        error: {
+          name: "AuthRetryableFetchError",
+          message: "Failed to fetch",
+          status: 0,
+        } as AuthError,
+      }),
+      { onSessionUpdated, onSessionRevoked },
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(onSessionUpdated).not.toHaveBeenCalled();
+    expect(onSessionRevoked).not.toHaveBeenCalled();
+    expect(getSessionConnectionState()).toBe("online");
+  });
+
+  it("scenario 3c: refresh timeout retries without leaving reconnecting state", async () => {
+    const session = makeSession();
+    localStorage.setItem("sb-test-auth-token", JSON.stringify(session));
+    const onSessionUpdated = vi.fn();
+    const onSessionRevoked = vi.fn();
+
+    scheduleSessionRefreshRetry(
+      () => new Promise(() => {
+        /* hang */
+      }),
+      { onSessionUpdated, onSessionRevoked },
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(SESSION_REFRESH_TIMEOUT_MS);
+
+    expect(onSessionUpdated).not.toHaveBeenCalled();
     expect(onSessionRevoked).not.toHaveBeenCalled();
     expect(getSessionConnectionState()).toBe("online");
   });

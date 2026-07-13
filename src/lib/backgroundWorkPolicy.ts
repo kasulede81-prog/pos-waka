@@ -1,24 +1,16 @@
 import { isInternalAdminAppPath } from "./internalAdminPreview";
 
-/** Routes where heavy cloud pull / merge is deferred to avoid WebView jank during selling. */
-const DEFER_PULL_PREFIXES = ["/pos", "/stock", "/reports", "/customers", "/owner", "/sales-history"];
-
 export function getPathname(): string {
   if (typeof window === "undefined") return "/";
   return window.location.pathname || "/";
 }
 
-function isDeferPullRoute(pathname: string): boolean {
-  return DEFER_PULL_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}
-
-/** Block full cloud pull, reconciliation, and heavy merge on POS and related routes. */
+/** Only internal admin blocks background cloud pull — POS routes stay live (Phase 24.1B). */
 export function shouldPausePosBackgroundPull(pathname: string = getPathname()): boolean {
-  if (isInternalAdminAppPath(pathname)) return true;
-  return isDeferPullRoute(pathname);
+  return isInternalAdminAppPath(pathname);
 }
 
-/** Block push-only uploads (internal admin only — POS routes allow push). */
+/** Block push-only uploads (internal admin only). */
 export function shouldPausePosBackgroundPush(pathname: string = getPathname()): boolean {
   return isInternalAdminAppPath(pathname);
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { EnterpriseSpinner } from "../components/enterprise/EnterpriseSpinner";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useDeviceActivation } from "../context/DeviceActivationContext";
@@ -55,7 +55,7 @@ export function DeviceActivatingPage({ lang }: Props) {
   return (
     <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-waka-50 to-muted px-6 dark:from-foreground dark:to-foreground">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-waka-100 text-waka-700 dark:bg-waka-500/20 dark:text-waka-300">
-        <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
+        <EnterpriseSpinner size="lg" label={t(lang, "deviceActivatingTitle")} />
       </div>
       <h1 className="mt-6 text-center text-2xl font-black text-foreground dark:text-background">
         {t(lang, "deviceActivatingTitle")}

@@ -18,15 +18,18 @@ import { ModalSheet } from "../layout/ModalSheet";
 export function CashPositionCashCount({
   lang,
   expectedUgx,
+  closeDateKey,
   onUseTotal,
 }: {
   lang: Language;
   expectedUgx: number;
+  closeDateKey: string;
   onUseTotal: (total: number) => void;
 }) {
   const [value, setValue] = useState("");
 
   const activeTotal = Math.max(0, Math.floor(Number(value.replace(/\D/g, "")) || 0));
+  const closeDayUrl = `/close-day?date=${encodeURIComponent(closeDateKey)}#cash-count`;
 
   return (
     <div className="space-y-4">
@@ -38,7 +41,7 @@ export function CashPositionCashCount({
         showVariance
       />
       <Link
-        to="/close-day"
+        to={closeDayUrl}
         onClick={() => {
           if (activeTotal > 0) onUseTotal(activeTotal);
         }}

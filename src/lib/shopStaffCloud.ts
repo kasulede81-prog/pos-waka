@@ -116,18 +116,6 @@ export async function pushStaffToCloud(staff: StaffAccount): Promise<boolean> {
   return result?.ok === true;
 }
 
-export async function setCloudStaffActive(shopId: string, staffId: string, active: boolean): Promise<boolean> {
-  if (!supabase) return false;
-  const { data, error } = await supabase.rpc("shop_pos_staff_set_active", {
-    p_shop_id: shopId,
-    p_staff_id: staffId,
-    p_active: active,
-    p_device_fingerprint: deviceFingerprintArg(),
-  });
-  if (error) return false;
-  return (data as { ok?: boolean })?.ok === true;
-}
-
 export async function deleteCloudStaff(shopId: string, cloudStaffId: string): Promise<boolean> {
   if (!supabase) return false;
   const { data, error } = await supabase.rpc("shop_pos_staff_delete", {

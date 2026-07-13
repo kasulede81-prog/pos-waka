@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { actorHasPermission } from "../../../lib/actorAuthorization";
 import clsx from "clsx";
-import { Building2, Phone, MessageCircle, Users, Wallet } from "lucide-react";
+import { Building2, Phone, MessageCircle, Trash2, Users, Wallet } from "lucide-react";
 import type { Language, Supplier } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { useShopAction } from "../../../hooks/useShopAction";
@@ -27,10 +27,12 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
   const { run: runShopAction } = useShopAction();
   const actor = useSessionActor();
   const canManage = actorHasPermission(actor, "suppliers.manage");
+  const canDelete = actor?.role === "owner";
   const suppliers = usePosStore((s) => s.suppliers);
   const purchases = usePosStore((s) => s.purchases);
   const addSupplier = usePosStore((s) => s.addSupplier);
   const addSupplierPayment = usePosStore((s) => s.addSupplierPayment);
+  const removeSupplier = usePosStore((s) => s.removeSupplier);
 
   const [searchQ, setSearchQ] = useState("");
   const [outstandingOnly, setOutstandingOnly] = useState(false);
@@ -42,6 +44,7 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
   const [notes, setNotes] = useState("");
   const [paySupplier, setPaySupplier] = useState<Supplier | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [deleteSupplier, setDeleteSupplier] = useState<Supplier | null>(null);
 
   const realSuppliers = useMemo(() => suppliers.filter((s) => !isWalkInSupplierId(s.id)), [suppliers]);
 
@@ -101,6 +104,15 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
       setPaySupplier(null);
       setPayAmount("");
     }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteSupplier) return;
+    const r = await runShopAction(
+      { lang, action: "supplier.remove", permitted: canDelete, successKey: "supplierDeleteOk" },
+      () => removeSupplier(deleteSupplier.id),
+    );
+    if (r.ok) setDeleteSupplier(null);
   };
 
   return (
@@ -257,6 +269,18 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
                       {t(lang, "supplierPayButton")}
                     </WakaButton>
                   ) : null}
+                  {canDelete ? (
+                    <WakaButton
+                      type="button"
+                      variant="danger"
+                      size="standard"
+                      className="!min-h-[36px] !px-2 !text-xs"
+                      onClick={() => setDeleteSupplier(s)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                      {t(lang, "supplierDeleteButton")}
+                    </WakaButton>
+                  ) : null}
                 </div>
               ),
             },
@@ -287,6 +311,30 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
           </form>
         </ModalSheet>
       ) : null}
+
+      <ModalSheet
+        open={deleteSupplier !== null}
+        onClose={() => setDeleteSupplier(null)}
+        align="center"
+        title={t(lang, "supplierDeleteConfirm")}
+        footer={
+          <div className="flex gap-3">
+            <WakaButton type="button" variant="secondary" className="flex-1" onClick={() => setDeleteSupplier(null)}>
+              {t(lang, "cancel")}
+            </WakaButton>
+            <WakaButton type="button" variant="danger" className="flex-1" onClick={() => void confirmDelete()}>
+              {t(lang, "supplierDeleteButton")}
+            </WakaButton>
+          </div>
+        }
+      >
+        {deleteSupplier ? (
+          <>
+            <SectionTitle as="p" className="!text-sm">{deleteSupplier.name}</SectionTitle>
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">{t(lang, "supplierDeleteConfirmBody")}</p>
+          </>
+        ) : null}
+      </ModalSheet>
     </div>
   );
 }

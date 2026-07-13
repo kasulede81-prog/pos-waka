@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { EnterpriseEmptyState } from "./EnterpriseEmptyState";
 import { EnterpriseErrorState } from "./EnterpriseErrorState";
-import { EnterpriseSkeletonKpiGrid } from "./EnterpriseSkeleton";
+import { EnterpriseSkeletonDashboard } from "./EnterpriseSkeleton";
 import type { LucideIcon } from "lucide-react";
 
 export type EnterpriseAsyncShellProps = {
@@ -37,7 +37,7 @@ export function EnterpriseAsyncShell({
   children,
 }: EnterpriseAsyncShellProps) {
   if (loading) {
-    return loadingFallback ?? <EnterpriseSkeletonKpiGrid count={4} />;
+    return loadingFallback ?? <EnterpriseSkeletonDashboard />;
   }
   if (error) {
     return (

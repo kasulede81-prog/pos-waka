@@ -2,6 +2,7 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation } from "../types";
 import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "../lib/autoSync";
+import { sortSyncQueueByPriority } from "../lib/syncQueuePriority";
 import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
 
@@ -11,7 +12,15 @@ export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attemp
     attempts: op.attempts ?? 0,
     lastAttemptAt: op.lastAttemptAt ?? null,
   };
+  const enqueueStarted = performance.now();
   await appendSyncOperation(full);
+  void import("../lib/syncDiagnostics").then(({ recordEnqueueLatency, recordQueueDepth }) => {
+    recordEnqueueLatency(performance.now() - enqueueStarted);
+    void readSyncQueue().then((q) => recordQueueDepth(q.length));
+  });
+  void import("../lib/immediateSync").then(({ scheduleImmediateSyncForKind }) => {
+    scheduleImmediateSyncForKind(full.kind, full.payload);
+  });
 }
 
 /**
@@ -46,7 +55,7 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   remaining: number;
   skippedBackoff: number;
 }> {
-  const queue = (await readSyncQueue()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const queue = sortSyncQueueByPriority(await readSyncQueue());
   const ready: SyncOperation[] = [];
   let skippedBackoff = 0;
   for (const op of queue) {
@@ -58,6 +67,9 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   }
 
   const total = queue.length;
+  void import("../lib/syncDiagnostics").then(({ recordQueueDepth }) => {
+    recordQueueDepth(total);
+  });
   let failed = 0;
   let done = skippedBackoff;
   const { mapPool } = await import("../lib/asyncPool");
@@ -70,6 +82,9 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
         await removeSyncOperation(op.id);
       } else {
         failed += 1;
+        void import("../lib/syncDiagnostics").then(({ recordSyncRetry }) => {
+          recordSyncRetry(op.kind, op.attempts + 1);
+        });
         if (op.attempts < 100) {
           await appendSyncOperation(markSyncOpFailed(op));
         }

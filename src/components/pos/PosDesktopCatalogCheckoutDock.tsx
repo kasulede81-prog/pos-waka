@@ -87,7 +87,7 @@ export function PosDesktopCatalogCheckoutDock({
         )}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 pos-checkout-scroll-pane touch-pan-y [-webkit-overflow-scrolling:touch]">
         {isCredit ? (
           <CreditCatalogDockPanel
             lang={lang}

@@ -1,7 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import type { ReactNode } from "react";
-import { enterpriseIconClass } from "../../lib/enterpriseIcons";
+import { enterpriseIconClass, ENTERPRISE_ICON_STROKE } from "../../lib/enterpriseIcons";
+import { enterpriseMotion } from "../../lib/enterpriseMotion";
 import { statusTokens } from "../../lib/statusTokens";
 import { Caption, MonoNumber } from "./EnterpriseTypography";
 
@@ -57,15 +58,16 @@ export function EnterpriseKpiCard({ icon: Icon, label, value, hint, tone = "defa
       type={onClick ? "button" : undefined}
       onClick={onClick}
       className={clsx(
-        "flex min-h-[76px] flex-col justify-between rounded-2xl border p-2.5 text-left shadow-sm transition-all",
+        "flex min-h-[76px] flex-col justify-between rounded-2xl border p-2.5 text-left shadow-sm",
+        enterpriseMotion.standard,
         shellClasses(tone),
-        onClick && "active:scale-[0.98] active:shadow-md motion-reduce:active:scale-100",
+        onClick && clsx(enterpriseMotion.cardInteractive, enterpriseMotion.focus),
         className,
       )}
     >
       <div className="flex items-center gap-1.5">
         <span className={clsx("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", iconShellClasses(tone))}>
-          <Icon className={enterpriseIconClass("sm")} aria-hidden />
+          <Icon className={enterpriseIconClass("sm")} strokeWidth={ENTERPRISE_ICON_STROKE} aria-hidden />
         </span>
         <Caption className="line-clamp-2 normal-case leading-tight">{label}</Caption>
       </div>

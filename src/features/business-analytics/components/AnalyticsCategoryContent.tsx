@@ -30,6 +30,7 @@ export type AnalyticsSectionProps = {
   supplierDebtTotal: number;
   stockValueAtCost: number;
   purchasesTodayUgx: number;
+  purchasesInPeriodUgx: number;
   marginLeaders: Array<{ name: string; revenue: number; profit: number; pct: number }>;
   weakProducts: Array<{ name: string; revenueUgx: number }>;
   products: Product[];
@@ -209,18 +210,16 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
   if (category === "expenses") {
     return (
       <div className="space-y-4">
-        <StatTile label={t(lang, "cashExpensesToday")} value={formatShortUgx(props.expensesUgx)} hint={t(lang, "expensesFutureHint")} />
+        <StatTile label={t(lang, "baExpensesInPeriod")} value={formatShortUgx(props.expensesUgx)} hint={t(lang, "expensesFutureHint")} />
       </div>
     );
   }
 
   if (category === "purchases") {
-    const purchaseTotal = props.purchases.reduce((a, p) => a + p.totalCostUgx, 0);
     return (
       <div className="space-y-4">
-        <StatTile label={t(lang, "reportsPurchasesToday")} value={formatShortUgx(props.purchasesTodayUgx)} />
-        <StatTile label={t(lang, "baPurchasesTotal")} value={formatShortUgx(purchaseTotal)} hint={`${props.suppliers.length} ${t(lang, "auditFilterSupplier").toLowerCase()}`} />
-        <StatTile label={t(lang, "reportsSupplierDebt")} value={formatShortUgx(props.supplierDebtTotal)} />
+        <StatTile label={t(lang, "baPurchasesInPeriod")} value={formatShortUgx(props.purchasesInPeriodUgx)} />
+        <StatTile label={t(lang, "reportsSupplierDebt")} value={formatShortUgx(props.supplierDebtTotal)} hint={`${props.suppliers.length} ${t(lang, "auditFilterSupplier").toLowerCase()}`} />
       </div>
     );
   }
@@ -230,7 +229,7 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <StatTile label={t(lang, "baMoneyIn")} value={formatShortUgx(props.revenue)} />
-          <StatTile label={t(lang, "baMoneyOut")} value={formatShortUgx(props.expensesUgx + props.purchasesTodayUgx)} />
+          <StatTile label={t(lang, "baMoneyOut")} value={formatShortUgx(props.expensesUgx + props.purchasesInPeriodUgx)} />
           <StatTile label={t(lang, "baNetCashFlow")} value={formatShortUgx(props.report.cash - props.expensesUgx)} />
           <StatTile label={t(lang, "cashInHand")} value={formatShortUgx(props.report.cash)} />
         </div>
@@ -243,6 +242,12 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
   }
 
   if (category === "taxes") {
+    const taxesConfigured = (props.report.taxesUgx ?? 0) > 0;
+    if (!taxesConfigured) {
+      return (
+        <AnalyticsEmptyState lang={lang} titleKey="baTaxesCollected" bodyKey="baTaxNotConfigured" />
+      );
+    }
     return (
       <StatTile label={t(lang, "baTaxesCollected")} value={formatShortUgx(props.report.taxesUgx ?? 0)} hint={t(lang, "baTaxesHint")} />
     );

@@ -3,7 +3,6 @@
  */
 
 import { getDeviceOnline } from "./deviceOnline";
-import { isGlobalSyncInFlight } from "./globalSyncMutex";
 import { hasSupabaseConfig, supabase } from "./supabase";
 import { shouldPausePosBackgroundPush } from "./backgroundWorkPolicy";
 import { readSyncHealthMeta, writeSyncHealthMeta } from "./syncMeta";
@@ -11,8 +10,9 @@ import { countUnsyncedSales } from "../offline/cloudSync";
 import {
   MIN_POS_PUSH_GAP_MS,
   POS_PUSH_INTERVAL_MS,
-  POST_SALE_PUSH_DEBOUNCE_MS,
 } from "./syncTiming";
+
+export { POS_PUSH_INTERVAL_MS };
 
 export type PosPushSkipReason =
   | "offline"
@@ -42,10 +42,7 @@ export type PosPushUploadResult = {
   queueFailed: number;
 };
 
-const POST_SALE_DEBOUNCE_MS = POST_SALE_PUSH_DEBOUNCE_MS;
-export { POS_PUSH_INTERVAL_MS };
 
-let postSaleTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;
 let lastPushStartedAt = 0;
 
@@ -120,8 +117,6 @@ export async function canRunPosPushUpload(opts?: {
     return { ok: false, reason: "org_blocked" };
   }
 
-  if (isGlobalSyncInFlight() && !pushInFlight) return { ok: false, reason: "sync_busy" };
-
   if (opts?.requirePending !== false) {
     const { readSyncQueue } = await import("../offline/localDb");
     const queue = await readSyncQueue();
@@ -133,13 +128,11 @@ export async function canRunPosPushUpload(opts?: {
   return { ok: true };
 }
 
-/** Fire-and-forget debounced push after checkout — never blocks sale completion. */
+/** Immediate-first push after local mutation — legacy debounce retained as fallback. */
 export function schedulePushPendingUploads(): void {
-  if (postSaleTimer != null) clearTimeout(postSaleTimer);
-  postSaleTimer = globalThis.setTimeout(() => {
-    postSaleTimer = null;
-    void runPosPushOnlyUpload({ source: "post_sale", force: true });
-  }, POST_SALE_DEBOUNCE_MS);
+  void import("./immediateSync").then(({ scheduleImmediatePushAfterMutation }) => {
+    scheduleImmediatePushAfterMutation();
+  });
 }
 
 /** Push pending sales + drain sync queue — no cloud pull. */
@@ -168,10 +161,19 @@ export async function runPosPushOnlyUpload(opts?: {
   pushInFlight = true;
   lastPushStartedAt = now;
   recordPosPushAttempt();
+  void import("./syncDiagnostics").then(({ logSync }) => {
+    logSync("push_start", { source: opts?.source ?? "pos_push" });
+  });
+  const uploadStarted = performance.now();
 
   try {
     const { pushShopPendingToCloud } = await import("../offline/cloudSync");
     const { push, queueFailed } = await pushShopPendingToCloud();
+    const uploadMs = performance.now() - uploadStarted;
+    void import("./syncDiagnostics").then(({ recordPushDuration, recordAckLatency }) => {
+      recordPushDuration(uploadMs);
+      if (push.fail === 0 && queueFailed === 0) recordAckLatency(uploadMs);
+    });
     recordPosPushSuccess(push.ok, push.fail, queueFailed);
     const attemptAt = new Date().toISOString();
     if (push.fail === 0 && queueFailed === 0) {

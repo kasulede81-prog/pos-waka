@@ -3,52 +3,72 @@ import {
   currentGlobalSyncKind,
   globalSyncMutexDepth,
   isGlobalSyncInFlight,
+  isPullSyncInFlight,
+  isPushSyncInFlight,
   withGlobalSyncMutex,
+  withPullSyncMutex,
+  withPushSyncMutex,
 } from "./globalSyncMutex";
 
 describe("globalSyncMutex", () => {
-  it("runs tasks sequentially when not nested", async () => {
+  it("runs pull tasks sequentially when not nested", async () => {
     const order: string[] = [];
-    const first = withGlobalSyncMutex("syncShopWithCloud", async () => {
-      order.push("start-1");
+    const first = withPullSyncMutex("syncShopWithCloud", async () => {
+      order.push("pull-start-1");
       await new Promise((r) => setTimeout(r, 20));
-      order.push("end-1");
+      order.push("pull-end-1");
     });
-    const second = withGlobalSyncMutex("flushSyncQueue", async () => {
-      order.push("start-2");
-      order.push("end-2");
+    const second = withPullSyncMutex("pullCloud", async () => {
+      order.push("pull-start-2");
+      order.push("pull-end-2");
     });
     await Promise.all([first, second]);
-    expect(order).toEqual(["start-1", "end-1", "start-2", "end-2"]);
-    expect(isGlobalSyncInFlight()).toBe(false);
-    expect(currentGlobalSyncKind()).toBeNull();
+    expect(order).toEqual(["pull-start-1", "pull-end-1", "pull-start-2", "pull-end-2"]);
+    expect(isPullSyncInFlight()).toBe(false);
   });
 
-  it("queues a second top-level call while the first is in flight", async () => {
+  it("runs push tasks sequentially when not nested", async () => {
     const order: string[] = [];
-    let releaseFirst: (() => void) | undefined;
-    const firstGate = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
+    await withPushSyncMutex("pushPending", async () => {
+      order.push("push-start-1");
+      await withPushSyncMutex("flushSyncQueue", async () => {
+        order.push("flush-inner");
+      });
+      order.push("push-end-1");
     });
-    const first = withGlobalSyncMutex("syncShopWithCloud", async () => {
-      order.push("start-1");
-      await firstGate;
-      order.push("end-1");
+    expect(order).toEqual(["push-start-1", "flush-inner", "push-end-1"]);
+    expect(isPushSyncInFlight()).toBe(false);
+  });
+
+  it("allows push while pull is in flight (split pipelines)", async () => {
+    const order: string[] = [];
+    let releasePull: (() => void) | undefined;
+    const pullGate = new Promise<void>((resolve) => {
+      releasePull = resolve;
     });
-    const second = withGlobalSyncMutex("flushSyncQueue", async () => {
-      order.push("start-2");
-      order.push("end-2");
+    const pull = withPullSyncMutex("syncShopWithCloud", async () => {
+      order.push("pull-start");
+      await pullGate;
+      order.push("pull-end");
     });
     await new Promise((r) => setTimeout(r, 10));
-    expect(order).toEqual(["start-1"]);
-    releaseFirst?.();
-    await Promise.all([first, second]);
-    expect(order).toEqual(["start-1", "end-1", "start-2", "end-2"]);
+    const push = withPushSyncMutex("pushPending", async () => {
+      order.push("push-start");
+      order.push("push-end");
+    });
+    await Promise.all([push, (async () => {
+      await new Promise((r) => setTimeout(r, 10));
+      releasePull?.();
+      await pull;
+    })()]);
+    expect(order).toContain("pull-start");
+    expect(order).toContain("push-start");
+    expect(order).toContain("push-end");
     expect(isGlobalSyncInFlight()).toBe(false);
     expect(currentGlobalSyncKind()).toBeNull();
   });
 
-  it("allows nested reentrant calls without deadlock (push → flush pattern)", async () => {
+  it("allows nested reentrant calls within the same pipeline", async () => {
     const order: string[] = [];
     await withGlobalSyncMutex("pushPending", async () => {
       order.push("push-start");

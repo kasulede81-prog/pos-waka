@@ -90,7 +90,7 @@ export function WakaCard({
   ...props
 }: HTMLAttributes<HTMLDivElement> & { muted?: boolean }) {
   return (
-    <div className={clsx(muted ? wakaUi.surfaceMuted : wakaUi.surface, className)} {...props}>
+    <div className={clsx(muted ? wakaUi.surfaceMuted : wakaUi.surface, enterpriseMotion.standard, className)} {...props}>
       {children}
     </div>
   );
@@ -114,7 +114,8 @@ export function WakaPage({ className, children, ...props }: HTMLAttributes<HTMLD
 export { WakaSwitch } from "../enterprise/WakaSwitch";
 export { WakaCheckbox } from "../enterprise/WakaCheckbox";
 export { EnterpriseEmptyState } from "../enterprise/EnterpriseEmptyState";
-export { EnterpriseSkeleton, EnterpriseSkeletonList } from "../enterprise/EnterpriseSkeleton";
+export { EnterpriseSkeleton, EnterpriseSkeletonList, EnterpriseSkeletonKpiGrid, EnterpriseSkeletonTable, EnterpriseSkeletonForm, EnterpriseSkeletonDashboard, EnterpriseSkeletonDialog, EnterpriseSkeletonProductList, EnterpriseSkeletonReport } from "../enterprise/EnterpriseSkeleton";
+export { EnterpriseSpinner } from "../enterprise/EnterpriseSpinner";
 export { EnterpriseSaveIndicator } from "../enterprise/EnterpriseSaveIndicator";
 export { EnterpriseScrollControls } from "../enterprise/EnterpriseScrollControls";
 export { EnterpriseListFooter } from "../enterprise/EnterpriseListFooter";

@@ -21,11 +21,16 @@ export const enterpriseType: Record<EnterpriseTypeRole, string> = {
   sectionTitle: "font-bold tracking-tight text-foreground text-base sm:text-lg",
   body: "font-medium text-foreground text-sm sm:text-base leading-relaxed",
   caption: "font-semibold text-muted-foreground text-xs uppercase tracking-wide",
-  monoNumber: "font-black tabular-nums text-foreground",
+  monoNumber: "font-black tabular-nums lining-nums text-foreground tracking-tight",
 };
 
 export function enterpriseTypeClass(role: EnterpriseTypeRole, className?: string): string {
   return clsx(enterpriseType[role], className);
+}
+
+/** Currency / UGX amounts in KPIs, tables, and reports */
+export function enterpriseCurrencyClass(className?: string): string {
+  return clsx(enterpriseType.monoNumber, "text-base sm:text-lg", className);
 }
 
 /** Dialog / sheet titles */

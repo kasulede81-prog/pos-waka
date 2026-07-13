@@ -10,6 +10,9 @@ import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../li
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { DISPLAY_SCALE_META } from "../../lib/displayScale/scaleTokens";
 import { useDisplayScale } from "../../context/DisplayScaleProvider";
+import { requireCatalogScrollElement } from "../../lib/posCatalogScroll";
+import { reportPosVirtualizerOwner } from "../../lib/posInteractionDiagnostics";
+import { POS_CATALOG_TILE_TOUCH_CLASS } from "../../lib/posTouchInteraction";
 import { PosSellProductCard } from "./PosSellProductCard";
 import { PosDesktopProductCard } from "./PosDesktopProductCard";
 import { PharmacySellMedicineCard } from "./PharmacySellMedicineCard";
@@ -69,10 +72,11 @@ function VirtualizedProductGridInner({
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
-    getScrollElement: () =>
-      parentRef.current?.closest<HTMLElement>("[data-pos-catalog-scroll]") ??
-      parentRef.current?.closest<HTMLElement>(".scroll-main-chrome") ??
-      document.querySelector<HTMLElement>(".scroll-main-chrome"),
+    getScrollElement: () => {
+      const owner = requireCatalogScrollElement(parentRef.current);
+      reportPosVirtualizerOwner(owner, variant);
+      return owner;
+    },
     estimateSize: () => rowEstimate,
     overscan: 5,
   });
@@ -152,6 +156,7 @@ function VirtualizedProductGridInner({
                     onClick={() => onPick(p)}
                     className={clsx(
                       "relative flex min-h-[132px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm motion-reduce:transition-none",
+                      POS_CATALOG_TILE_TOUCH_CLASS,
                       locked
                         ? "border-border/80 bg-muted/90 opacity-55"
                         : "border-border bg-card shadow-md active:scale-[0.98] active:border-waka-500 active:shadow-sm",
