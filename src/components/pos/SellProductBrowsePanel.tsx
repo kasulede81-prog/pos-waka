@@ -6,6 +6,8 @@ import { t } from "../../lib/i18n";
 import { useSellProductBrowseEngine } from "../../hooks/useSellProductBrowseEngine";
 import { useSellBarcodeScanner } from "../../hooks/useSellBarcodeScanner";
 import { useCatalogContainerWidth } from "../../hooks/useCatalogContainerWidth";
+import { usePosViewportWidth } from "../../hooks/usePosViewportWidth";
+import { isWakaMobile } from "../../lib/responsiveBreakpoints";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { CATEGORY_FILTER_ALL } from "../../lib/productCategories";
@@ -39,7 +41,10 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
   searchPlaceholder,
 }: SellProductBrowsePanelProps) {
   const catalogRef = useRef<HTMLDivElement>(null);
-  const { columnCount } = useCatalogContainerWidth(catalogRef);
+  const viewportWidth = usePosViewportWidth();
+  const { columnCount } = useCatalogContainerWidth(catalogRef, {
+    phoneBand: isWakaMobile(viewportWidth),
+  });
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const modeTerm = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
 

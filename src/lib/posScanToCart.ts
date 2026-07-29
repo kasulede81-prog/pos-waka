@@ -65,3 +65,7 @@ export function resolveScanToCartInput(product: Product): ScanToCartInput | null
 export function canScanToCartFastAdd(product: Product): boolean {
   return resolveScanToCartInput(product) !== null;
 }
+
+/** Phase 28.1 — one-tap add uses the same unambiguous routing as barcode fast-add. */
+export const canOneTapAddProduct = canScanToCartFastAdd;
+export const resolveTapToCartInput = resolveScanToCartInput;

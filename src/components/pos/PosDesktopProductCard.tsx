@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { Plus } from "lucide-react";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
 import { formatStockLabel } from "../../lib/sellingEngine";
@@ -11,11 +12,15 @@ type Props = {
   locked?: boolean;
   lockedBadge?: string;
   favorite?: boolean;
+  cartQty?: number;
   onPick: (product: Product) => void;
   onToggleFavorite?: (productId: string) => void;
 };
 
-/** Dense desktop sell tile — image placeholder, name, price, stock, sell CTA. */
+/**
+ * Phase 28.1 — dense desktop sell tile, name-first (no image / letter avatar).
+ * Whole card taps to add (or open sheet when product needs configuration).
+ */
 export function PosDesktopProductCard({
   product,
   stockLabel,
@@ -23,18 +28,18 @@ export function PosDesktopProductCard({
   locked,
   lockedBadge,
   favorite,
+  cartQty = 0,
   onPick,
   onToggleFavorite,
 }: Props) {
   const lowStock = product.stockOnHand <= product.minimumStockAlert;
-  const initial = (product.name.trim()[0] ?? "?").toUpperCase();
 
   return (
     <article
       className={clsx(
-        "pos-ds-product-card relative flex min-h-[108px] flex-col overflow-hidden rounded-xl border bg-card text-left shadow-sm",
+        "pos-ds-product-card relative flex min-h-[112px] flex-col overflow-hidden rounded-xl border bg-card text-left shadow-sm",
         POS_CATALOG_TILE_TOUCH_CLASS,
-        locked ? "border-border/80 opacity-55" : "border-border/90 active:border-waka-400",
+        locked ? "border-border/80 opacity-55" : "border-border/90 active:border-teal-400",
       )}
       style={{ contentVisibility: "auto" }}
     >
@@ -42,12 +47,16 @@ export function PosDesktopProductCard({
         <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-foreground/90 px-1.5 py-0.5 text-[8px] font-black uppercase text-background">
           {lockedBadge}
         </span>
+      ) : cartQty > 0 ? (
+        <span className="absolute left-1.5 top-1.5 z-10 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-teal-700 px-1.5 text-[11px] font-black text-white shadow-sm">
+          {Number.isInteger(cartQty) ? cartQty : cartQty.toFixed(1)}
+        </span>
       ) : null}
 
       {onToggleFavorite ? (
         <button
           type="button"
-          className="absolute right-1 top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/80 bg-card/95 text-sm shadow-sm active:bg-muted"
+          className="absolute right-1 top-1 z-10 flex h-8 w-8 min-h-[32px] min-w-[32px] items-center justify-center rounded-full border border-border/80 bg-card/95 text-sm shadow-sm active:bg-muted"
           aria-label={favorite ? "Remove favorite" : "Add favorite"}
           onClick={(e) => {
             e.stopPropagation();
@@ -58,35 +67,41 @@ export function PosDesktopProductCard({
         </button>
       ) : null}
 
-      <button type="button" onClick={() => onPick(product)} disabled={locked} className="flex min-h-0 flex-1 flex-col p-1.5 text-left">
-        <div className="pos-ds-product-avatar relative flex h-10 items-center justify-center rounded-lg bg-gradient-to-br from-stone-100 to-muted">
-          <span className="sr-only">{product.name}</span>
-          <span className="text-lg font-black text-waka-600/80" aria-hidden>
-            {initial}
-          </span>
-        </div>
-        <p className="pos-ds-product-name mt-1 line-clamp-2 text-[11px] font-black leading-tight text-foreground">{product.name}</p>
-        <p className="pos-ds-product-price mt-0.5 text-xs font-black text-waka-700">{formatProductPriceLabel(product)}</p>
-        <p
-          className={clsx(
-            "pos-ds-product-stock mt-0.5 truncate text-[9px] font-bold",
-            lowStock ? "text-rose-700" : "text-muted-foreground",
-          )}
-        >
-          {stockLabel}: {formatStockLabel(product)}
-        </p>
-      </button>
-
       <button
         type="button"
         onClick={() => onPick(product)}
         disabled={locked}
-        className={clsx(
-          "pos-ds-product-cta mx-1.5 mb-1.5 min-h-[28px] rounded-lg px-2 py-1 text-[10px] font-black",
-          locked ? "bg-muted text-muted-foreground" : "bg-waka-600 text-white active:bg-waka-700",
-        )}
+        aria-label={`${sellLabel}: ${product.name}`}
+        className="flex min-h-0 flex-1 flex-col p-2 text-left"
       >
-        {locked ? lockedBadge : sellLabel}
+        <p
+          className={clsx(
+            "pos-ds-product-name line-clamp-3 text-[13px] font-black leading-snug text-foreground",
+            onToggleFavorite || cartQty > 0 || locked ? "pr-8" : undefined,
+          )}
+        >
+          {product.name}
+        </p>
+        <p className="pos-ds-product-price mt-1 text-xs font-black tabular-nums text-waka-800">
+          {formatProductPriceLabel(product)}
+        </p>
+        <p
+          className={clsx(
+            "pos-ds-product-stock mt-0.5 truncate text-[10px] font-bold",
+            lowStock ? "text-rose-700" : "text-emerald-800",
+          )}
+        >
+          {stockLabel}: {formatStockLabel(product)}
+        </p>
+        <span
+          className={clsx(
+            "pos-ds-product-cta mt-auto flex h-9 w-9 min-h-[36px] min-w-[36px] items-center justify-center self-end rounded-lg",
+            locked ? "bg-muted text-muted-foreground" : "bg-waka-600 text-white",
+          )}
+          aria-hidden
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+        </span>
       </button>
     </article>
   );

@@ -36,8 +36,10 @@ function distIsFresh(maxAgeMinutes = 120) {
 }
 
 if (!hasProductionEnv()) {
-  console.warn("\n⚠️  No .env.production.local — copy .env.production.example and set Supabase keys.");
-  console.warn("   Build may still run; login will not work in the APK without VITE_* vars.\n");
+  console.error("\n❌ Missing .env.production.local — cloud login will not work in the Android app.");
+  console.error("   cp .env.production.example .env.production.local");
+  console.error("   Then set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY.\n");
+  process.exit(1);
 }
 
 const skipBuild = process.env.SKIP_ANDROID_BUILD === "1" || process.env.SKIP_ANDROID_BUILD === "true";
@@ -60,6 +62,7 @@ if (!skipBuild && !distIsFresh()) {
 }
 
 console.log("📲 Syncing web assets + Capacitor plugins into android/…\n");
+run("node scripts/verify-native-supabase-bundle.mjs");
 runCap("sync android");
 
 console.log("\n🚀 Opening Android Studio…\n");

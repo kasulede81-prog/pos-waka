@@ -4,11 +4,9 @@ import {
   AlertTriangle,
   BarChart3,
   ClipboardList,
-  FileText,
   FolderOpen,
   History,
   Package,
-  Pill,
   Receipt,
   Scale,
   Shield,
@@ -58,11 +56,18 @@ export function inventoryWorkspaceBasePath(mode: InventoryWorkspaceMode): string
   return mode === "pharmacy" ? "/pharmacy/inventory" : "/stock";
 }
 
+/**
+ * Stock Transfer UI exists as a placeholder only (`InventoryTransferPage`).
+ * Keep false until persistence is shipped — never surface Transfer in production nav.
+ */
+export const INVENTORY_TRANSFER_ENABLED = false;
+
 function tabHref(base: string, tab: string, extra?: Record<string, string>): string {
   const p = new URLSearchParams({ tab, ...extra });
   return `${base}?${p.toString()}`;
 }
 
+/** Hub directory — completed destinations only (Phase 27.1). */
 export function resolveInventoryNavTiles(
   mode: InventoryWorkspaceMode,
   basePath: string,
@@ -82,13 +87,6 @@ export function resolveInventoryNavTiles(
       Icon: ClipboardList,
       href: "/stock/count",
       perm: "stock.count",
-    },
-    {
-      id: "transfer",
-      labelKey: "iwNavTransfer",
-      Icon: ArrowLeftRight,
-      href: "/stock/transfer",
-      perm: "stock.view",
     },
     {
       id: "movements",
@@ -119,6 +117,15 @@ export function resolveInventoryNavTiles(
       perm: "reports.view",
     },
   ];
+  if (INVENTORY_TRANSFER_ENABLED) {
+    tiles.splice(3, 0, {
+      id: "transfer",
+      labelKey: "iwNavTransfer",
+      Icon: ArrowLeftRight,
+      href: "/stock/transfer",
+      perm: "stock.view",
+    });
+  }
   if (mode === "wholesale") {
     return tiles.map((t) =>
       t.id === "products" ? { ...t, labelKey: "iwNavBulkStock", Icon: Warehouse } : t,
@@ -127,14 +134,23 @@ export function resolveInventoryNavTiles(
   return tiles;
 }
 
+/** Overview primary actions — ≤2 taps for receive / add / adjust / count. */
 export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMode): InventoryQuickActionDef[] {
-  return [
+  const actions: InventoryQuickActionDef[] = [
     {
       id: "receive",
       labelKey: "ipActionReceiveStock",
       Icon: Truck,
       actionId: "receiveStock",
       perm: "purchases.record",
+      primary: true,
+    },
+    {
+      id: "newProduct",
+      labelKey: "stockAddProductBtn",
+      Icon: Package,
+      actionId: "newProduct",
+      perm: "products.add",
       primary: true,
     },
     {
@@ -151,14 +167,17 @@ export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMo
       href: "/stock/count",
       perm: "stock.count",
     },
-    {
+  ];
+  if (INVENTORY_TRANSFER_ENABLED) {
+    actions.push({
       id: "transfer",
       labelKey: "iwQuickTransfer",
       Icon: ArrowLeftRight,
       href: "/stock/transfer",
       perm: "stock.view",
-    },
-  ];
+    });
+  }
+  return actions;
 }
 
 export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): InventoryQuickActionDef[] {
@@ -177,6 +196,7 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
       Icon: Package,
       actionId: "newProduct",
       perm: "products.add",
+      primary: true,
     },
     {
       id: "count",
@@ -193,13 +213,6 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
       perm: "stock.adjust",
     },
     {
-      id: "transfer",
-      labelKey: "iwQuickTransfer",
-      Icon: ArrowLeftRight,
-      href: "/stock/transfer",
-      perm: "stock.view",
-    },
-    {
       id: "purchases",
       labelKey: "iwNavPurchases",
       Icon: Receipt,
@@ -214,18 +227,20 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
       perm: "suppliers.view",
     },
   ];
+  if (INVENTORY_TRANSFER_ENABLED) {
+    shared.splice(4, 0, {
+      id: "transfer",
+      labelKey: "iwQuickTransfer",
+      Icon: ArrowLeftRight,
+      href: "/stock/transfer",
+      perm: "stock.view",
+    });
+  }
 
   if (mode !== "pharmacy") return shared;
 
   return [
     ...shared,
-    {
-      id: "receiveBatch",
-      labelKey: "iwQuickReceiveBatch",
-      Icon: Pill,
-      actionId: "receiveBatch",
-      perm: "purchases.record",
-    },
     {
       id: "expiry",
       labelKey: "pharmacyExpiryCenterTitle",
@@ -243,9 +258,13 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
   ];
 }
 
+/**
+ * Mode extensions that map to real screens only (Phase 27.1).
+ * Placeholder / duplicate-of-products tiles are omitted.
+ */
 export function resolveInventoryExtensionTiles(
   mode: InventoryWorkspaceMode,
-  basePath: string,
+  _basePath: string,
   badges?: Partial<Record<string, number>>,
 ): InventoryWorkspaceTile[] {
   switch (mode) {
@@ -260,34 +279,12 @@ export function resolveInventoryExtensionTiles(
           badge: badges?.nearExpiry,
         },
         {
-          id: "batchLedger",
-          labelKey: "iwExtBatchLedger",
-          Icon: FileText,
-          href: tabHref(basePath, "products"),
-          perm: "stock.view",
-        },
-        {
           id: "compliance",
           labelKey: "pharmacyComplianceRegisterTitle",
           Icon: Shield,
           href: "/pharmacy/compliance/register",
           perm: "pharmacy.access",
           badge: badges?.controlledAlerts,
-        },
-        {
-          id: "supplierReturns",
-          labelKey: "iwExtSupplierReturns",
-          Icon: Truck,
-          href: "/pharmacy/expiry",
-          perm: "purchases.record",
-        },
-        {
-          id: "batchIntegrity",
-          labelKey: "iwExtBatchIntegrity",
-          Icon: AlertTriangle,
-          href: tabHref(basePath, "products"),
-          perm: "stock.view",
-          badge: badges?.batchIntegrity,
         },
       ];
     case "retail":
@@ -311,15 +308,7 @@ export function resolveInventoryExtensionTiles(
         },
       ];
     case "wholesale":
-      return [
-        {
-          id: "bulkStock",
-          labelKey: "iwNavBulkStock",
-          Icon: Warehouse,
-          href: tabHref(basePath, "products"),
-          perm: "stock.view",
-        },
-      ];
+      return [];
   }
   return [];
 }

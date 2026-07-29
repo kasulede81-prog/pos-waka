@@ -19,8 +19,8 @@ import { PharmacySellMedicineCard } from "./PharmacySellMedicineCard";
 import type { Language } from "../../types";
 
 const ROW_ESTIMATE_DEFAULT = 148;
-const ROW_ESTIMATE_SELL_MOBILE = 120;
-const ROW_ESTIMATE_SELL_DESKTOP = 112;
+const ROW_ESTIMATE_SELL_MOBILE = 128;
+const ROW_ESTIMATE_SELL_DESKTOP = 120;
 const BOTTOM_SCROLL_GUTTER = 24;
 
 type Props = {
@@ -35,6 +35,8 @@ type Props = {
   variant?: "default" | "sellMobile" | "sellDesktop" | "pharmacyMedicine";
   favoriteIds?: Set<string>;
   onToggleFavorite?: (productId: string) => void;
+  /** Draft cart quantities by product id (Phase 28.1 badge). */
+  cartQtyByProductId?: ReadonlyMap<string, number>;
   lang?: Language;
 };
 
@@ -51,6 +53,7 @@ function VirtualizedProductGridInner({
   variant = "default",
   favoriteIds,
   onToggleFavorite,
+  cartQtyByProductId,
   lang,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -127,6 +130,7 @@ function VirtualizedProductGridInner({
                       addLabel={addLabel}
                       locked={locked}
                       lockedBadge={lockedBadge}
+                      cartQty={cartQtyByProductId?.get(p.id) ?? 0}
                       onPick={onPick}
                     />
                   );
@@ -141,6 +145,7 @@ function VirtualizedProductGridInner({
                       locked={locked}
                       lockedBadge={lockedBadge}
                       favorite={favoriteIds?.has(p.id)}
+                      cartQty={cartQtyByProductId?.get(p.id) ?? 0}
                       onPick={onPick}
                       onToggleFavorite={onToggleFavorite}
                     />
@@ -169,7 +174,7 @@ function VirtualizedProductGridInner({
                       </span>
                     ) : null}
                     <span>
-                      <span className="line-clamp-2 text-base font-black leading-tight text-foreground">
+                      <span className="line-clamp-3 text-base font-black leading-snug text-foreground">
                         {formatMedicineListPrimary(p)}
                       </span>
                       {detail ? (

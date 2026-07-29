@@ -683,12 +683,12 @@ body {
   }
 
   html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-name {
-    font-size: var(--ds-font-sm);
-    line-height: 1.2;
+    font-size: var(--ds-font-base);
+    line-height: 1.25;
   }
 
   html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-price {
-    font-size: var(--ds-font-base);
+    font-size: var(--ds-font-sm);
   }
 
   html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-stock {
@@ -696,7 +696,9 @@ body {
   }
 
   html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-cta {
-    min-height: var(--ds-btn-min-h);
+    width: var(--ds-touch-min);
+    height: var(--ds-touch-min);
+    min-height: var(--ds-touch-min);
     font-size: var(--ds-font-xs);
     border-radius: var(--ds-radius-md);
   }

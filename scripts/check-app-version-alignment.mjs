@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+#!/usr/bin/env node
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
@@ -20,9 +21,24 @@ if (!gradleVersionCode) {
   errors.push("Could not read Gradle versionCode");
 }
 
+const pbxprojPath = resolve(root, "ios/App/App.xcodeproj/project.pbxproj");
+if (existsSync(pbxprojPath)) {
+  const pbx = readFileSync(pbxprojPath, "utf8");
+  const marketing = [...pbx.matchAll(/MARKETING_VERSION = ([^;]+);/g)].map((m) => m[1].trim());
+  const uniqueMarketing = [...new Set(marketing)];
+  if (uniqueMarketing.length === 0) {
+    errors.push("Could not read iOS MARKETING_VERSION");
+  } else if (uniqueMarketing.some((v) => v !== pkgVersion)) {
+    errors.push(
+      `package.json version (${pkgVersion}) != iOS MARKETING_VERSION (${uniqueMarketing.join(", ")})`,
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error("App version alignment check failed:\n" + errors.map((e) => `- ${e}`).join("\n"));
   process.exit(1);
 }
 
-console.log(`App versions aligned: ${pkgVersion} / versionCode ${gradleVersionCode}`);
+const iosNote = existsSync(pbxprojPath) ? " + iOS MARKETING_VERSION" : "";
+console.log(`App versions aligned: ${pkgVersion} / versionCode ${gradleVersionCode}${iosNote}`);

@@ -22,6 +22,16 @@ function parseHost(url: string): string | null {
   }
 }
 
+/** Loopback + RFC1918 — keep http:// for Vite live-reload on Simulator/device. */
+export function isLoopbackOrPrivateLan(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h === "127.0.0.1" || h.endsWith(".localhost")) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+  return false;
+}
+
 export function isUnsafeAppRedirectHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
@@ -36,7 +46,7 @@ export function enforceHttpsOrigin(origin: string): string {
   if (!origin) return origin;
   try {
     const u = new URL(origin);
-    if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1")) {
+    if (u.protocol === "http:" && isLoopbackOrPrivateLan(u.hostname)) {
       return u.origin;
     }
     if (u.protocol === "http:") {
@@ -52,6 +62,7 @@ export function enforceHttpsOrigin(origin: string): string {
 /** Origin for email links, OAuth return URLs, and password reset. */
 export function authRedirectOrigin(): string {
   if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
+    // Bundled app: https://localhost. Live reload: http://<LAN-IP>:5173 — do not force https.
     return enforceHttpsOrigin(window.location.origin);
   }
 

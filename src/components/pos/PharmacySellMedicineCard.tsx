@@ -60,7 +60,7 @@ export function PharmacySellMedicineCard({
         </span>
       ) : null}
       <span className="min-w-0 pr-1">
-        <span className="line-clamp-2 text-base font-black leading-tight text-foreground">
+        <span className="line-clamp-3 text-base font-black leading-snug text-foreground">
           {brand || formatMedicineListPrimary(p)}
         </span>
         {generic ? (

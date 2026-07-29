@@ -421,7 +421,18 @@ export function PosPage({ lang }: { lang: Language }) {
     mountDesktopCheckoutSidebar && isFullDesktopPos
       ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier)
       : null;
-  const { columnCount: productGridCols } = useCatalogContainerWidth(catalogWidthRef, displayScaleLevel);
+  const { columnCount: productGridCols } = useCatalogContainerWidth(catalogWidthRef, {
+    displayScale: displayScaleLevel,
+    phoneBand: mobileSellFocus,
+  });
+  const cartQtyByProductId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const line of draftLines) {
+      map.set(line.productId, (map.get(line.productId) ?? 0) + line.quantity);
+    }
+    return map;
+  }, [draftLines]);
+  const tapAddGuardRef = useRef<{ productId: string; at: number } | null>(null);
   const activeShift = useMemo(
     () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
     [preferences.shifts, actor.userId],
@@ -773,17 +784,19 @@ export function PosPage({ lang }: { lang: Language }) {
         setProductLockedOpen(true);
         return;
       }
-      const moneyPresetsForProduct = p.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
-      const qtyPresetsForProduct = p.quickPresetsQty?.filter((x) => x > 0) ?? [];
-      const pref = usePosStore.getState().preferences;
-      const singleQuickPreset =
-        pref.kioskQuickSell && moneyPresetsForProduct.length + qtyPresetsForProduct.length === 1;
 
-      if (singleQuickPreset) {
-        const mode: LineInputMode = moneyPresetsForProduct.length === 1 ? "money" : "quantity";
-        const value = moneyPresetsForProduct[0] ?? qtyPresetsForProduct[0] ?? 0;
+      // Phase 28.1 — one-tap add for simple products (same criteria as barcode fast-add).
+      const fast = resolveScanToCartInput(p);
+      if (fast) {
+        const now = Date.now();
+        const guard = tapAddGuardRef.current;
+        if (guard && guard.productId === p.id && now - guard.at < 400) {
+          return;
+        }
+        tapAddGuardRef.current = { productId: p.id, at: now };
+
         runWithExpiredGuard(p, () => {
-          setDraftInput({ product: p, inputMode: mode, value });
+          setDraftInput({ product: p, inputMode: fast.inputMode, value: fast.value });
           const res = addDraftLineFromInput();
           if (!res.ok) {
             setToast(t(lang, res.errorKey ?? "saleError"));
@@ -793,12 +806,25 @@ export function PosPage({ lang }: { lang: Language }) {
           bumpRecentProduct(p.id);
           if (hapticsOn) void hapticTap();
           if (posLayoutMode !== "full") setSaleCheckoutMinimized(true);
-          setToast(t(lang, "posAddedToCart"));
-          window.setTimeout(() => setToast(null), 1200);
+          const nextQty =
+            (usePosStore.getState().draftLines
+              .filter((l) => l.productId === p.id)
+              .reduce((a, l) => a + l.quantity, 0));
+          const qtyLabel = Number.isInteger(nextQty) ? String(nextQty) : nextQty.toFixed(2).replace(/\.?0+$/, "");
+          setToast(
+            nextQty > fast.value
+              ? t(lang, "posTapAddedQty").replace("{{qty}}", qtyLabel)
+              : t(lang, "posTapAdded"),
+          );
+          window.setTimeout(() => setToast(null), 1000);
           searchInputRef.current?.focus();
         });
         return;
       }
+
+      const moneyPresetsForProduct = p.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
+      const qtyPresetsForProduct = p.quickPresetsQty?.filter((x) => x > 0) ?? [];
+      const pref = usePosStore.getState().preferences;
 
       setSelected(p);
       setInputMode("money");
@@ -1646,6 +1672,7 @@ export function PosPage({ lang }: { lang: Language }) {
           variant={isFullDesktopPos ? "sellDesktop" : "sellMobile"}
           favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
           onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
+          cartQtyByProductId={cartQtyByProductId}
         />
       );
     }
@@ -1664,6 +1691,7 @@ export function PosPage({ lang }: { lang: Language }) {
               locked={isProductPlanLocked(p.id, lockedIds)}
               lockedBadge={t(lang, "productLockedBadge")}
               favorite={favoriteIdSet.has(p.id)}
+              cartQty={cartQtyByProductId.get(p.id) ?? 0}
               onPick={openProduct}
               onToggleFavorite={toggleFavoriteProduct}
             />
@@ -1684,6 +1712,7 @@ export function PosPage({ lang }: { lang: Language }) {
             addLabel={t(lang, "addToSale")}
             locked={isProductPlanLocked(p.id, lockedIds)}
             lockedBadge={t(lang, "productLockedBadge")}
+            cartQty={cartQtyByProductId.get(p.id) ?? 0}
             onPick={openProduct}
           />
         ))}
@@ -2115,6 +2144,7 @@ export function PosPage({ lang }: { lang: Language }) {
               variant={isFullDesktopPos ? "sellDesktop" : "sellMobile"}
               favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
               onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
+              cartQtyByProductId={cartQtyByProductId}
             />
           ) : isFullDesktopPos ? (
             <div
@@ -2130,6 +2160,7 @@ export function PosPage({ lang }: { lang: Language }) {
                   locked={isProductPlanLocked(p.id, lockedIds)}
                   lockedBadge={t(lang, "productLockedBadge")}
                   favorite={favoriteIdSet.has(p.id)}
+                  cartQty={cartQtyByProductId.get(p.id) ?? 0}
                   onPick={openProduct}
                   onToggleFavorite={toggleFavoriteProduct}
                 />
@@ -2148,6 +2179,7 @@ export function PosPage({ lang }: { lang: Language }) {
                   addLabel={t(lang, "addToSale")}
                   locked={isProductPlanLocked(p.id, lockedIds)}
                   lockedBadge={t(lang, "productLockedBadge")}
+                  cartQty={cartQtyByProductId.get(p.id) ?? 0}
                   onPick={openProduct}
                 />
               ))}
@@ -2260,6 +2292,7 @@ export function PosPage({ lang }: { lang: Language }) {
               variant={isFullDesktopPos ? "sellDesktop" : "default"}
               favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
               onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
+              cartQtyByProductId={cartQtyByProductId}
             />
           ) : (
             <div
@@ -2278,66 +2311,24 @@ export function PosPage({ lang }: { lang: Language }) {
                       locked={locked}
                       lockedBadge={t(lang, "productLockedBadge")}
                       favorite={favoriteIdSet.has(p.id)}
+                      cartQty={cartQtyByProductId.get(p.id) ?? 0}
                       onPick={openProduct}
                       onToggleFavorite={toggleFavoriteProduct}
                     />
                   );
                 }
                 return (
-                <article
-                  key={p.id}
-                  className={clsx(
-                    "relative flex min-h-[132px] flex-col justify-between rounded-[1.35rem] border p-3 pt-10 text-left shadow-sm",
-                    locked
-                      ? "border-border/80 bg-muted/90 opacity-55"
-                      : "border-border bg-card active:border-waka-400",
-                  )}
-                  style={{ contentVisibility: "auto" }}
-                >
-                  {locked ? (
-                    <span className="absolute left-2.5 top-2.5 rounded-full bg-foreground/90 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-background">
-                      {t(lang, "productLockedBadge")}
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="absolute right-2.5 top-2.5 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full border border-border bg-card text-base shadow-sm active:bg-muted"
-                      aria-label={favoriteIdSet.has(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFavoriteProduct(p.id);
-                    }}
-                  >
-                    {favoriteIdSet.has(p.id) ? "★" : "☆"}
-                  </button>
-                  <button type="button" onClick={() => openProduct(p)} className="text-left">
-                    <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-foreground">{p.name}</p>
-                    <p className="mt-0.5 truncate text-[11px] font-bold text-muted-foreground">
-                      {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
-                      {(p.category ?? "").trim() ? p.category.trim() : t(lang, "posNoShelf")}
-                    </p>
-                    <p className="mt-0.5 line-clamp-2 text-xs font-bold leading-snug text-muted-foreground">
-                      {t(lang, "stockLabel")}: {formatStockLabel(p)}
-                    </p>
-                    {p.stockOnHand <= p.minimumStockAlert ? (
-                      <p className="mt-0.5 text-[11px] font-bold text-rose-700">{t(lang, "cardLowStock")}</p>
-                    ) : null}
-                    <p className="mt-1.5 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openProduct(p)}
-                    className={clsx(
-                      "mt-2 min-h-[44px] rounded-2xl px-3 py-2 text-base font-black",
-                      locked
-                        ? "border-2 border-border bg-muted text-muted-foreground"
-                        : "bg-waka-600 text-white active:bg-waka-700",
-                    )}
-                  >
-                    {locked ? t(lang, "productLockedTitle") : t(lang, "addToSale")}
-                  </button>
-                </article>
-              );
+                  <PosSellProductCard
+                    key={p.id}
+                    product={p}
+                    stockLabel={t(lang, "stockLabel")}
+                    addLabel={t(lang, "addToSale")}
+                    locked={locked}
+                    lockedBadge={t(lang, "productLockedBadge")}
+                    cartQty={cartQtyByProductId.get(p.id) ?? 0}
+                    onPick={openProduct}
+                  />
+                );
               })}
             </div>
           )}

@@ -10,6 +10,11 @@ export const POS_CATALOG_COL_BREAKPOINT_820 = 820;
 export const POS_CATALOG_COL_BREAKPOINT_640 = 640;
 export const POS_CATALOG_COL_BREAKPOINT_520 = 520;
 
+/** Phone portrait catalog — prefer readability (Phase 28.1). */
+export const POS_PHONE_PORTRAIT_COLUMNS = 2;
+/** Phone landscape catalog. */
+export const POS_PHONE_LANDSCAPE_COLUMNS = 3;
+
 /** @deprecated Use POS_CATALOG_COL_BREAKPOINT_1900 */
 export const POS_CATALOG_COL_BREAKPOINT_1600 = POS_CATALOG_COL_BREAKPOINT_1900;
 /** @deprecated Use POS_CATALOG_COL_BREAKPOINT_1400 */
@@ -22,13 +27,25 @@ import { catalogColumnDeltaForScale } from "./displayScale/scaleTokens";
 
 export type CatalogColumnOptions = {
   displayScale?: DisplayScaleLevel;
+  /**
+   * Phone layout band (viewport ≤767). Forces 2-col portrait / 3-col landscape
+   * so names stay readable (Phase 28.1). Tablet/desktop ignore this and stay adaptive.
+   */
+  phoneBand?: boolean;
+  /** Used when phoneBand — landscape gets 3 columns. */
+  isLandscape?: boolean;
 };
 
 /**
  * Product grid columns from measured catalog container width (not viewport).
  * Tuned for enterprise desktop POS: 1366 → 8, 1600 → 9, 1920 → 10, 2560 → 12.
+ * Phone band (Phase 28.1): portrait 2 / landscape 3 — identification over density.
  */
 export function catalogColumnCount(catalogWidthPx: number, options?: CatalogColumnOptions): number {
+  if (options?.phoneBand) {
+    return options.isLandscape ? POS_PHONE_LANDSCAPE_COLUMNS : POS_PHONE_PORTRAIT_COLUMNS;
+  }
+
   const w = Math.max(0, catalogWidthPx);
   let cols = 3;
   if (w >= POS_CATALOG_COL_BREAKPOINT_1900) cols = POS_GRID_MAX_COLUMNS;

@@ -11,8 +11,9 @@ Regenerate everything:
 
 ```bash
 npm run brand:assets   # PNG/SVG exports from w-symbol-source.png
-npm run cap:assets     # brand + Android mipmap / PWA from logo.png + splash.png
-npm run cap:build
+npm run cap:assets     # brand + Android/iOS/PWA assets from logo.png + splash.png
+npm run cap:build      # Android sync
+npm run build:ios      # iOS sync
 ```
 
-See `brand/README.md` for file listing.
+See `brand/README.md` for file listing. iOS setup: `IOS_SETUP.md`.

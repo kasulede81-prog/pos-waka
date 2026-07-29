@@ -23,6 +23,19 @@ supabase/functions/.env
 
 android/local.properties
 
+# iOS / Xcode
+ios/App/Pods/
+ios/App/App/public/
+ios/DerivedData/
+**/xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
 # Electron builds
 release/
 release/windows/

@@ -4,7 +4,10 @@ import { useShallow } from "zustand/react/shallow";
 import type { Language } from "../../../types";
 import { usePosStore } from "../../../store/usePosStore";
 import {
+  inventoryWorkspaceBasePath,
   inventoryWorkspaceMode,
+  resolveInventoryExtensionTiles,
+  resolveInventoryNavTiles,
   resolveInventoryOverviewQuickActions,
 } from "../../../lib/inventoryWorkspaceTiles";
 import { computeInventoryWorkspaceDashboardStats } from "../../../lib/inventoryWorkspaceStats";
@@ -12,6 +15,8 @@ import { InventoryWorkspaceShell } from "./InventoryWorkspaceShell";
 import { InventorySearchBar } from "./InventorySearchBar";
 import { InventoryDashboardCards } from "./InventoryDashboardCards";
 import { InventoryQuickActions } from "./InventoryQuickActions";
+import { InventoryNavigationTiles } from "./InventoryNavigationTiles";
+import { InventoryBusinessExtension } from "./InventoryBusinessExtension";
 import { InventoryStatusStrip } from "./InventoryStatusStrip";
 import { StockAdjustmentSheet } from "../../stock/StockAdjustmentSheet";
 import type { InventoryPurchasingTab } from "../../../features/inventory-purchasing/types";
@@ -20,9 +25,11 @@ type Props = {
   lang: Language;
   onSetTab: (tab: InventoryPurchasingTab, extra?: Record<string, string | null>) => void;
   onReceiveStock: () => void;
+  /** Opens Add Product on the Products tab (≤2 taps from hub). */
+  onAddProduct: () => void;
 };
 
-export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock }: Props) {
+export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onAddProduct }: Props) {
   const navigate = useNavigate();
   const { products, purchases, supplierPayments, suppliers, preferences, pharmacyComplianceAlerts } = usePosStore(
     useShallow((s) => ({
@@ -36,6 +43,7 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock }: P
   );
 
   const mode = inventoryWorkspaceMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const basePath = inventoryWorkspaceBasePath(mode);
 
   const stats = useMemo(
     () =>
@@ -52,6 +60,15 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock }: P
   );
 
   const quickActions = useMemo(() => resolveInventoryOverviewQuickActions(mode), [mode]);
+  const navTiles = useMemo(() => resolveInventoryNavTiles(mode, basePath), [mode, basePath]);
+  const extensionTiles = useMemo(
+    () =>
+      resolveInventoryExtensionTiles(mode, basePath, {
+        nearExpiry: stats.nearExpiryCount,
+        controlledAlerts: stats.controlledAlerts,
+      }),
+    [mode, basePath, stats.nearExpiryCount, stats.controlledAlerts],
+  );
 
   const [adjustOpen, setAdjustOpen] = useState(false);
 
@@ -60,8 +77,17 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock }: P
       case "receiveStock":
         onReceiveStock();
         break;
+      case "newProduct":
+        onAddProduct();
+        break;
       case "adjustStock":
         setAdjustOpen(true);
+        break;
+      case "viewPurchases":
+        onSetTab("purchases");
+        break;
+      case "viewSuppliers":
+        onSetTab("suppliers");
         break;
       default:
         break;
@@ -87,6 +113,8 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock }: P
         onControlledAlerts={() => navigate("/pharmacy/compliance/register")}
       />
       <InventoryQuickActions lang={lang} actions={quickActions} onAction={handleAction} />
+      <InventoryNavigationTiles lang={lang} tiles={navTiles} />
+      <InventoryBusinessExtension lang={lang} mode={mode} tiles={extensionTiles} />
       <InventoryStatusStrip lang={lang} />
       <StockAdjustmentSheet lang={lang} open={adjustOpen} onClose={() => setAdjustOpen(false)} />
     </InventoryWorkspaceShell>

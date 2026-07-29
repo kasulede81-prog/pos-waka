@@ -34,10 +34,10 @@ import {
 } from "../features/inventory/viewEngine/inventoryProductListQuery";
 import { InventorySelectionProvider } from "../features/inventory/selection/InventorySelectionProvider";
 import { InventorySelectionToolbar } from "../features/inventory/selection/InventorySelectionToolbar";
-import { InventorySelectionModeButton } from "../features/inventory/selection/InventorySelectionModeButton";
-import { InventoryFilterBar, useInventorySavedFilters } from "../features/inventory/filters/InventoryFilterBar";
+import { useInventorySavedFilters } from "../features/inventory/filters/InventoryFilterBar";
 import { defaultInventoryAdvancedFilters, mergeAdvancedFilters } from "../features/inventory/filters/types";
 import { buildLastSupplierByProductId } from "../features/inventory/filters/inventoryAdvancedFilters";
+import { InventoryProductsControlBar } from "../features/inventory/InventoryProductsControlBar";
 import { StockInventoryProductivityChrome } from "../features/inventory/StockInventoryProductivityChrome";
 import { StockSectionTabs, type StockHubTab } from "../components/stock/StockSectionTabs";
 import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
@@ -94,7 +94,8 @@ import {
   type PharmacyBatchAdjustmentKind,
 } from "../components/pharmacy/PharmacyBatchAdjustmentSheet";
 import { findProductByBarcode } from "../lib/pharmacyMedicine";
-
+import { usePosViewportWidth } from "../hooks/usePosViewportWidth";
+import { isWakaMobile } from "../lib/responsiveBreakpoints";
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
 export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceEmbed?: boolean }) {
@@ -165,7 +166,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
   const [stockTab, setStockTab] = useState<StockHubTab>("overview");
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [receiveProduct, setReceiveProduct] = useState<Product | null>(null);
@@ -173,6 +173,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [actionSheetProduct, setActionSheetProduct] = useState<Product | null>(null);
 
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewportWidth = usePosViewportWidth();
+  const isPhone = isWakaMobile(viewportWidth);
   const [listQuery, setListQuery] = useState("");
   const [listSort, setListSort] = useState<"name_az" | "name_za" | "stock_low" | "updated">("name_az");
   const [listFilter, setListFilter] = useState<"all" | "low">("all");
@@ -214,6 +217,19 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       }
       const q = searchParams.get("q");
       if (q) setListQuery(q);
+      if (searchParams.get("add") === "1" && canAdd && !freeProductLimitReached) {
+        setWizardPrefill(undefined);
+        setWizardInitialStep(undefined);
+        setBulkOpen(true);
+        setSearchParams(
+          (prev) => {
+            const p = new URLSearchParams(prev);
+            p.delete("add");
+            return p;
+          },
+          { replace: true },
+        );
+      }
       return;
     }
     const tab = searchParams.get("tab");
@@ -240,7 +256,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         setBulkOpen(true);
       }
     }
-  }, [searchParams, workspaceEmbed, canAdd, freeProductLimitReached]);
+  }, [searchParams, workspaceEmbed, canAdd, freeProductLimitReached, setSearchParams]);
 
   useEffect(() => {
     const productId = searchParams.get("productId");
@@ -892,12 +908,14 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
           <div
             className={clsx(
-              "sticky top-0 z-20 -mx-3 space-y-2 border-b border-border/80 bg-muted/95 px-3 py-2 backdrop-blur-md",
+              "-mx-3 space-y-2 border-b border-border/80 bg-muted/95 px-3 py-2",
               "supports-[backdrop-filter]:bg-muted/88 md:-mx-6 md:px-6",
+              // Phone: avoid nested sticky chrome that buries the product list (Phase 27.1 / 4A).
+              "md:sticky md:top-0 md:z-20 md:backdrop-blur-md",
             )}
           >
             <StockSectionTabs lang={lang} active={stockTab} onChange={handleStockTabChange} />
-            {showPinnedSearch ? (
+            {showPinnedSearch && !(isPhone && stockTab === "products") ? (
               <StockPinnedSearch lang={lang} value={listQuery} onChange={handlePinnedSearch} />
             ) : null}
           </div>
@@ -917,13 +935,15 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
           {stockTab === "products" ? (
             <section className="space-y-3">
-              <InventoryFilterBar
+              <InventoryProductsControlBar
                 lang={lang}
+                isPhone={isPhone}
                 filters={advancedFilters}
-                onChange={setAdvancedFilters}
+                onChangeFilters={setAdvancedFilters}
                 query={listQuery}
                 onQueryChange={setListQuery}
                 products={products}
+                filteredProducts={listableProducts}
                 suppliers={suppliers}
                 lastSupplierByProductId={lastSupplierByProductId}
                 stockCategoryPicklist={stockCategoryPicklist}
@@ -938,35 +958,21 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                   );
                   setListQuery(preset.query);
                 }}
-                compact
+                listSort={listSort}
+                onListSort={setListSort}
+                listFilter={listFilter}
+                onListFilter={setListFilter}
+                stockCategoryFilter={stockCategoryFilter}
+                onStockCategoryFilter={setStockCategoryFilter}
+                stockHasUncategorized={stockHasUncategorized}
+                groupByCategory={groupByCategory}
+                onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
               />
               <InventorySelectionToolbar
                 lang={lang}
                 visibleIds={visibleProductIds}
                 filteredIds={listableProducts.map((p) => p.id)}
               />
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <StockListToolbar
-                    lang={lang}
-                    listSort={listSort}
-                    onListSort={setListSort}
-                    listFilter={listFilter}
-                    onListFilter={setListFilter}
-                    stockCategoryFilter={stockCategoryFilter}
-                    onStockCategoryFilter={setStockCategoryFilter}
-                    stockCategoryPicklist={stockCategoryPicklist}
-                    stockHasUncategorized={stockHasUncategorized}
-                    groupByCategory={groupByCategory}
-                    onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
-                    compact
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <InventorySelectionModeButton lang={lang} />
-                  <InventoryViewSwitcher lang={lang} variant="toolbar" />
-                </div>
-              </div>
               {groupByCategory && categoryGroups && listableProducts.length > 0 ? (
                 <div className="space-y-4">
                   {categoryGroups.keys.map((gk) => (

@@ -22,6 +22,8 @@ See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for:
 - Offline verification checklist
 - Security (RLS, keys) and monitoring hooks
 
+**iOS (Capacitor):** see **[IOS_SETUP.md](IOS_SETUP.md)** and **[AUDIT.md](AUDIT.md)**.
+
 ## Scripts
 
 | Command | Purpose |
@@ -30,10 +32,15 @@ See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for:
 | `npm run dev:staging` | Dev server with `staging` env |
 | `npm run build` | Production build |
 | `npm run build:staging` | Staging build |
-| `npm run cap:sync` | Copy web build into Android (run `npm run build` first) |
+| `npm run android` | Build + sync + open Android Studio |
+| `npm run ios` | Build + sync + open Xcode |
+| `npm run build:ios` | Production build + `cap sync ios` |
+| `npm run ios:sync` | Sync web assets into `ios/` |
+| `npm run cap:sync` | Sync Capacitor for all configured platforms |
 
 ## Repo layout
 
 - `src/` — React app, offline DB, sync queue
 - `supabase/migrations/` — SQL migrations (run via Supabase CLI or dashboard)
-- `android/` — Capacitor Android shell (`README-RELEASE.md` for signed APK)
+- `android/` — Capacitor Android shell (`docs/ANDROID.md`)
+- `ios/` — Capacitor iOS shell (`IOS_SETUP.md`)

@@ -6,9 +6,15 @@ describe("catalogColumnCount", () => {
     expect(catalogColumnCount(4000)).toBe(POS_GRID_MAX_COLUMNS);
   });
 
-  it("returns 3 columns below 520px catalog width", () => {
+  it("returns 3 columns below 520px catalog width (tablet/desktop adaptive)", () => {
     expect(catalogColumnCount(0)).toBe(3);
     expect(catalogColumnCount(519)).toBe(3);
+  });
+
+  it("phone band uses 2 columns portrait and 3 landscape (Phase 28.1)", () => {
+    expect(catalogColumnCount(400, { phoneBand: true, isLandscape: false })).toBe(2);
+    expect(catalogColumnCount(800, { phoneBand: true, isLandscape: true })).toBe(3);
+    expect(catalogColumnCount(1200, { phoneBand: true, isLandscape: false })).toBe(2);
   });
 
   it("returns 4 columns from 520px", () => {

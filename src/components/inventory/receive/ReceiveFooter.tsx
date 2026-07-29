@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
+import { useVisualViewportBounds } from "../../../hooks/useVisualViewportBounds";
 import { WIZARD_BTN_FOOTER_BASE } from "./receiveTokens";
 
 type Props = {
@@ -30,11 +31,15 @@ export function ReceiveFooter({
   fixed,
   cancelLabelKey = "cancel",
 }: Props) {
-  const footer = (
+  const viewport = useVisualViewportBounds();
+  // Fixed page footers sit under the soft keyboard — fall back to in-flow when keyboard is open.
+  const useFixed = Boolean(fixed) && viewport.keyboardGap < 80;
+
+  return (
     <footer
       className={clsx(
         "shrink-0 border-t border-border/60 bg-card/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md sm:px-5",
-        fixed &&
+        useFixed &&
           "fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-30 sm:static sm:border-t sm:bg-card/95",
       )}
     >
@@ -78,6 +83,4 @@ export function ReceiveFooter({
       )}
     </footer>
   );
-
-  return footer;
 }

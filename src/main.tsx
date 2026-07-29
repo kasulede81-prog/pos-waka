@@ -11,6 +11,7 @@ import "./index.css";
 import { AppRootErrorBoundary } from "./components/AppRootErrorBoundary";
 import App from "./App";
 import { AppProviders } from "./providers/AppProviders";
+import { Capacitor } from "@capacitor/core";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { initCapacitorShell } from "./lib/capacitorInit";
 import { initCrashReporting, installGlobalErrorHandlers } from "./lib/crashReporting";
@@ -32,7 +33,8 @@ recordStartupStep("app_launch");
 bootTrace("BOOT-001", "App mounted", "SUCCESS");
 warmupLocalDb();
 
-if (!isElectronDesktop()) {
+/** PWA service worker: web only. Skip Electron (file://) and Capacitor WebViews (iOS/Android). */
+if (!isElectronDesktop() && !Capacitor.isNativePlatform()) {
   void import("virtual:pwa-register").then(({ registerSW }) => {
     registerSW({
       immediate: true,

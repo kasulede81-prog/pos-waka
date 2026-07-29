@@ -7,12 +7,37 @@ export type CatalogContainerMetrics = {
   columnCount: number;
 };
 
+export type CatalogContainerWidthOptions = {
+  displayScale?: DisplayScaleLevel;
+  /** Phone layout band — forces 2/3 columns (Phase 28.1). */
+  phoneBand?: boolean;
+};
+
+function readLandscape(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(orientation: landscape)").matches;
+}
+
 /** Tracks catalog container width via ResizeObserver (not viewport width). */
 export function useCatalogContainerWidth(
   catalogRef: RefObject<HTMLElement | null>,
-  displayScale: DisplayScaleLevel = "normal",
+  displayScaleOrOptions: DisplayScaleLevel | CatalogContainerWidthOptions = "normal",
 ): CatalogContainerMetrics {
-  const [metrics, setMetrics] = useState<CatalogContainerMetrics>({ containerWidth: 0, columnCount: 3 });
+  const options: CatalogContainerWidthOptions =
+    typeof displayScaleOrOptions === "string"
+      ? { displayScale: displayScaleOrOptions }
+      : displayScaleOrOptions;
+  const displayScale = options.displayScale ?? "normal";
+  const phoneBand = Boolean(options.phoneBand);
+
+  const [metrics, setMetrics] = useState<CatalogContainerMetrics>(() => ({
+    containerWidth: 0,
+    columnCount: catalogColumnCount(0, {
+      displayScale,
+      phoneBand,
+      isLandscape: false,
+    }),
+  }));
 
   useEffect(() => {
     const el = catalogRef.current;
@@ -22,15 +47,29 @@ export function useCatalogContainerWidth(
       const width = el.getBoundingClientRect().width;
       setMetrics({
         containerWidth: width,
-        columnCount: catalogColumnCount(width, { displayScale }),
+        columnCount: catalogColumnCount(width, {
+          displayScale,
+          phoneBand,
+          isLandscape: readLandscape(),
+        }),
       });
     };
 
     measure();
     const observer = new ResizeObserver(() => measure());
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [catalogRef, displayScale]);
+
+    const mq = window.matchMedia("(orientation: landscape)");
+    const onOrientation = () => measure();
+    mq.addEventListener("change", onOrientation);
+    window.addEventListener("resize", onOrientation);
+
+    return () => {
+      observer.disconnect();
+      mq.removeEventListener("change", onOrientation);
+      window.removeEventListener("resize", onOrientation);
+    };
+  }, [catalogRef, displayScale, phoneBand]);
 
   return metrics;
 }

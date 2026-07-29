@@ -1,9 +1,10 @@
-import type { FormEvent, ReactNode } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { Package, X } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { AppModalOverlay } from "../../layout/AppModalOverlay";
+import { useVisualViewportBounds } from "../../../hooks/useVisualViewportBounds";
 import { ReceiveValidationBanner } from "./ReceiveValidationBanner";
 
 type Props = {
@@ -45,6 +46,8 @@ export function ReceiveOperationShell({
   icon,
   pageClassName,
 }: Props) {
+  const viewport = useVisualViewportBounds();
+
   const banner = error ? (
     <ReceiveValidationBanner message={error} tone="error" />
   ) : success ? (
@@ -113,16 +116,29 @@ export function ReceiveOperationShell({
 
   if (!open) return null;
 
+  const overlayStyle: CSSProperties = {
+    top: viewport.offsetTop,
+    left: viewport.offsetLeft,
+    width: viewport.width,
+    height: viewport.height,
+    right: "auto",
+    bottom: "auto",
+  };
+
+  const panelMaxHeightPx = Math.min(Math.round(viewport.height * 0.94), 900);
+
   return (
     <AppModalOverlay
       className={clsx(zClassName, "flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center")}
       role="dialog"
       aria-modal
       aria-labelledby={titleId}
+      style={overlayStyle}
       onClick={onRequestClose}
     >
       <div
-        className="flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-border/60 bg-card shadow-2xl sm:max-h-[90dvh] sm:rounded-3xl"
+        className="flex w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-border/60 bg-card shadow-2xl sm:rounded-3xl"
+        style={{ maxHeight: panelMaxHeightPx }}
         onClick={(e) => e.stopPropagation()}
       >
         {body}

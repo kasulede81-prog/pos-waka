@@ -71,7 +71,6 @@ import { EnterpriseProtectedRoute } from "./components/enterprise/EnterpriseProt
 import { LegacyPurchaseDetailRedirect, LegacySupplierDetailRedirect } from "./components/inventory/LegacyInventoryRedirects";
 import { InventoryCountSessionsPage } from "./pages/InventoryCountSessionsPage";
 import { InventoryCountSessionPage } from "./pages/InventoryCountSessionPage";
-import { InventoryTransferPage } from "./pages/InventoryTransferPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
 import { XReportPage } from "./pages/XReportPage";
 import { CashPositionPage } from "./pages/CashPositionPage";
@@ -630,11 +629,7 @@ function AppRoutes() {
             />
             <Route
               path="stock/transfer"
-              element={
-                <RoleProtectedRoute permission="stock.view">
-                  <InventoryTransferPage lang={lang} />
-                </RoleProtectedRoute>
-              }
+              element={<Navigate to="/stock" replace />}
             />
             <Route path="suppliers" element={<Navigate to="/stock?tab=suppliers" replace />} />
             <Route path="suppliers/:supplierId" element={<LegacySupplierDetailRedirect />} />

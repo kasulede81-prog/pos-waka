@@ -90,6 +90,7 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
           lang={lang}
           onSetTab={setTab}
           onReceiveStock={openNewPurchaseFlow}
+          onAddProduct={() => setTab("products", { add: "1", stockView: null })}
         />
       ) : null}
 

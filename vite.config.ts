@@ -23,8 +23,22 @@ export default defineConfig(({ mode }) => {
     );
   }
 
+  const supabaseUrl = env.VITE_SUPABASE_URL?.trim() ?? "";
+  const supabaseAnon = env.VITE_SUPABASE_ANON_KEY?.trim() ?? "";
+  if (mode === "production" && (!supabaseUrl || !supabaseAnon)) {
+    console.warn(
+      "[waka] VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing — cloud login will NOT work in Capacitor. " +
+        "Create .env.production.local (see .env.production.example). Native scripts hard-fail if dist lacks Supabase.",
+    );
+  }
+
   return {
     base: isElectronDist ? "./" : "/",
+    server: {
+      host: true,
+      port: Number(env.VITE_PORT || 5173),
+      strictPort: false,
+    },
     test: {
       environment: "node",
       include: ["src/**/*.test.ts"],
