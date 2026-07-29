@@ -152,7 +152,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   if (shelfCards.length === 0) {
     return (
-      <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-sm font-semibold text-amber-950">
+      <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-sm font-semibold text-warning-foreground">
         {t(lang, "posEmptySub")}
       </p>
     );

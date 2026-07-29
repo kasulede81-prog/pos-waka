@@ -15,6 +15,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "android": "node scripts/android-open.mjs",
+    "android:dev": "node scripts/android-dev.mjs",
     "open:android": "node scripts/android-open.mjs",
     "ios": "node scripts/ios-open.mjs",
     "ios:dev": "node scripts/ios-dev.mjs",

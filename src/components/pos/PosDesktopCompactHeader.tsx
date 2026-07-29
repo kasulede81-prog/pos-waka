@@ -147,8 +147,8 @@ export function PosDesktopCompactHeader({
           className={clsx(
             "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-black",
             synced
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : "border-amber-200 bg-amber-50 text-amber-900",
+              ? "border-success/30 bg-success-muted text-success"
+              : "border-warning/30 bg-warning-muted text-warning-foreground",
           )}
           role="status"
         >

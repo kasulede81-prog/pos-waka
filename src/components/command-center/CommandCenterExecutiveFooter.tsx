@@ -45,7 +45,7 @@ export function CommandCenterExecutiveFooter({
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           to="/settings/health"
-          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-white/80 px-4 text-sm font-black text-foreground"
+          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-card/80 px-4 text-sm font-black text-foreground"
         >
           {t(lang, "cmdCenterViewFullReport")}
         </Link>
@@ -59,14 +59,14 @@ export function CommandCenterExecutiveFooter({
         <button
           type="button"
           onClick={onPrint}
-          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-white/80 px-4 text-sm font-black text-foreground"
+          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-card/80 px-4 text-sm font-black text-foreground"
         >
           {t(lang, "monthlyReportPrint")}
         </button>
         <button
           type="button"
           onClick={onShare}
-          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border-2 border-border bg-white/80 px-4 text-sm font-black text-foreground"
+          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border-2 border-border bg-card/80 px-4 text-sm font-black text-foreground"
         >
           <Share2 className="h-4 w-4" aria-hidden />
           {t(lang, "cmdCenterShareReport")}

@@ -69,7 +69,7 @@ const Numpad = memo(function Numpad({
         <button
           type="button"
           onClick={onClear}
-          className="w-full min-h-[32px] rounded-lg bg-amber-100 py-1 text-sm font-bold text-amber-900 active:bg-amber-200"
+          className="w-full min-h-[32px] rounded-lg bg-warning-muted py-1 text-sm font-bold text-warning-foreground active:bg-warning-muted"
         >
           C
         </button>
@@ -77,7 +77,7 @@ const Numpad = memo(function Numpad({
         <button
           type="button"
           onClick={onClear}
-          className="w-full min-h-[52px] rounded-2xl bg-amber-100 py-3 text-lg font-bold text-amber-900 active:bg-amber-200"
+          className="w-full min-h-[52px] rounded-2xl bg-warning-muted py-3 text-lg font-bold text-warning-foreground active:bg-warning-muted"
         >
           C
         </button>
@@ -204,7 +204,7 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           type="button"
           onClick={onClear}
           className={clsx(
-            "rounded-xl bg-rose-500 font-black text-white active:bg-rose-600",
+            "rounded-xl bg-danger-muted0 font-black text-white active:bg-danger",
             sidebar ? "min-h-[44px] text-lg" : "min-h-[52px] text-xl",
           )}
         >
@@ -216,7 +216,7 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           onClick={onSave}
           disabled={saveDisabled}
           className={clsx(
-            "flex flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-1 py-2 font-black leading-tight text-white shadow-md active:bg-emerald-700 disabled:opacity-40",
+            "flex flex-col items-center justify-center gap-1 rounded-xl bg-success px-1 py-2 font-black leading-tight text-white shadow-md active:bg-success/90 disabled:opacity-40",
             sidebar ? "min-h-[7.5rem] text-xs" : keypadMode === "alpha" ? "min-h-[8.5rem] text-sm" : "min-h-0 flex-1",
           )}
         >
@@ -361,7 +361,7 @@ function PaymentBlock({
       </div>
 
       {paymentMethod === "credit" && dockMode && hideCreditDockPanel ? (
-        <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-900">
+        <p className="mt-1.5 rounded-md bg-warning-muted px-2 py-1 text-[10px] font-semibold text-warning-foreground">
           {t(lang, "posDesktopCreditPanelHint")}
         </p>
       ) : null}
@@ -452,7 +452,7 @@ function PaymentBlock({
               </button>
             </div>
           </div>
-          <p className="mt-1.5 rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-900">
+          <p className="mt-1.5 rounded-md bg-warning-muted px-2 py-1 text-[10px] font-bold text-warning-foreground">
             {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
           </p>
           <div className="mt-2 space-y-2">
@@ -529,17 +529,17 @@ function PaymentBlock({
       {(paymentMethod === "cash" || paymentMethod === "credit") && (cashInput || changeDue > 0) ? (
         <p
           className={clsx(
-            "font-black text-emerald-900",
+            "font-black text-success",
             sidebarCompact
               ? "mt-1 rounded px-2 py-0.5 text-[10px] font-bold"
               : dockMode
-                ? "mt-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-sm"
+                ? "mt-1.5 rounded-md bg-success-muted px-2.5 py-1.5 text-sm"
                 : compact
-                  ? "mt-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm"
-                  : "mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-base",
-            !sidebarCompact && dockMode && "bg-emerald-50",
-            !sidebarCompact && compact && "bg-emerald-50",
-            !sidebarCompact && !dockMode && !compact && "bg-emerald-50",
+                  ? "mt-1.5 rounded-lg bg-success-muted px-3 py-1.5 text-sm"
+                  : "mt-3 rounded-xl bg-success-muted px-4 py-3 text-base",
+            !sidebarCompact && dockMode && "bg-success-muted",
+            !sidebarCompact && compact && "bg-success-muted",
+            !sidebarCompact && !dockMode && !compact && "bg-success-muted",
           )}
         >
           {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
@@ -548,7 +548,7 @@ function PaymentBlock({
 
       {paymentMethod === "credit" && !dockMode ? (
         <>
-          <p className={clsx("rounded-xl bg-amber-100 font-bold text-amber-900", compact ? "mt-2 px-3 py-1.5 text-xs" : "mt-3 px-4 py-2 text-sm")}>
+          <p className={clsx("rounded-xl bg-warning-muted font-bold text-warning-foreground", compact ? "mt-2 px-3 py-1.5 text-xs" : "mt-3 px-4 py-2 text-sm")}>
             {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
           </p>
           <div className={clsx("grid gap-2", compact ? "mt-2" : "mt-4 sm:grid-cols-2 sm:gap-3")}>
@@ -678,11 +678,11 @@ export function CreditCatalogDockPanel({
           </button>
         </div>
       </div>
-      <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-bold text-amber-900">
+      <p className="rounded-lg bg-warning-muted px-3 py-2 text-sm font-bold text-warning-foreground">
         {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
       </p>
       {changeDue > 0 ? (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
+        <p className="rounded-lg bg-success-muted px-3 py-2 text-sm font-black text-success">
           {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
         </p>
       ) : null}
@@ -1156,7 +1156,7 @@ export function PosCheckoutPanel({
                 type="button"
                 onClick={onSavePending}
                 className={clsx(
-                  "w-full rounded-lg border border-amber-300 bg-amber-50 font-black text-amber-950 active:bg-amber-100",
+                  "w-full rounded-lg border border-amber-300 bg-warning-muted font-black text-warning-foreground active:bg-warning-muted",
                   catalogDock && isSidebar ? "mb-1 py-1 text-[10px]" : isSidebar ? "mb-2 py-1.5 text-xs" : "mb-2 py-2 text-sm",
                 )}
               >
@@ -1172,7 +1172,7 @@ export function PosCheckoutPanel({
                       onClick={() => setSidebarNumpadOpen(true)}
                       aria-label={t(lang, "posKeypadShow")}
                       title={t(lang, "posKeypadShow")}
-                      className="flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg bg-emerald-600 text-[10px] font-black leading-none text-white shadow-sm active:bg-emerald-700"
+                      className="flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg bg-success text-[10px] font-black leading-none text-white shadow-sm active:bg-success/90"
                     >
                       ABC
                     </button>
@@ -1182,7 +1182,7 @@ export function PosCheckoutPanel({
                     type="button"
                     onClick={onFinishSale}
                     disabled={emptyCart}
-                    className="pos-ds-checkout-btn min-h-[40px] flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-black text-white shadow-md active:bg-emerald-700 disabled:opacity-40"
+                    className="pos-ds-checkout-btn min-h-[40px] flex-1 rounded-lg bg-success py-2 text-sm font-black text-white shadow-md active:bg-success/90 disabled:opacity-40"
                   >
                     {saveSaleLabel}
                   </button>
@@ -1197,7 +1197,7 @@ export function PosCheckoutPanel({
                       onClick={() => setSidebarNumpadOpen(true)}
                       aria-label={t(lang, "posKeypadShow")}
                       title={t(lang, "posKeypadShow")}
-                      className="flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-emerald-600 text-xs font-black leading-none text-white shadow-md active:bg-emerald-700"
+                      className="flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-success text-xs font-black leading-none text-white shadow-md active:bg-success/90"
                     >
                       ABC
                     </button>
@@ -1207,7 +1207,7 @@ export function PosCheckoutPanel({
                     type="button"
                     onClick={onFinishSale}
                     disabled={emptyCart}
-                    className="pos-ds-checkout-btn min-h-[48px] flex-1 rounded-xl bg-emerald-600 py-3 text-base font-black text-white shadow-lg active:bg-emerald-700 disabled:opacity-40"
+                    className="pos-ds-checkout-btn min-h-[48px] flex-1 rounded-xl bg-success py-3 text-base font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
                   >
                     {saveSaleLabel}
                   </button>
@@ -1221,7 +1221,7 @@ export function PosCheckoutPanel({
                 type="button"
                 onClick={onFinishSale}
                 disabled={emptyCart}
-                className="pos-ds-checkout-btn w-full rounded-xl bg-emerald-600 py-3.5 text-lg font-black text-white shadow-lg active:bg-emerald-700 disabled:opacity-40"
+                className="pos-ds-checkout-btn w-full rounded-xl bg-success py-3.5 text-lg font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
               >
                 {saveSaleLabel}
               </button>

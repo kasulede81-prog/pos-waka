@@ -158,15 +158,15 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
     "mt-2 min-h-[52px] w-full rounded-2xl border-2 px-4 text-xl font-black outline-none transition",
     "border-stone-400 bg-card text-foreground caret-amber-600",
     "placeholder:text-muted-foreground placeholder:font-bold",
-    "focus:border-amber-500 focus:ring-2 focus:ring-amber-200",
-    exceedsMax && "border-rose-400 focus:border-rose-500 focus:ring-rose-100",
+    "focus:border-warning focus:ring-2 focus:ring-amber-200",
+    exceedsMax && "border-danger focus:border-danger focus:ring-rose-100",
   );
 
   return (
     <PosScreenPortal>
       <AppModalOverlay
         clearNav={false}
-        className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
+        className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-overlay/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
         role="dialog"
         aria-modal
         onClick={onClose}
@@ -222,7 +222,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                 </span>
               ) : null}
               {qtyInvalid ? (
-                <span className="mt-1 block text-xs font-bold text-rose-700">
+                <span className="mt-1 block text-xs font-bold text-danger">
                   {tTemplate(lang, "returnMaxQtyHint", { qty: String(maxQty) })}
                 </span>
               ) : null}
@@ -266,7 +266,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                 </label>
 
                 {exceedsMax ? (
-                  <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800">
+                  <p className="mt-2 rounded-xl border border-danger/30 bg-danger-muted px-3 py-2 text-xs font-bold text-danger">
                     {tTemplate(lang, "returnCapWarning", { max: (maxRefundUgx ?? 0).toLocaleString() })}
                   </p>
                 ) : null}
@@ -321,7 +321,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                   onClick={() => setReason(r)}
                   className={clsx(
                     "min-h-[44px] rounded-2xl border-2 px-2 text-left text-xs font-black leading-tight sm:text-sm",
-                    reason === r ? "border-amber-500 bg-amber-50 text-amber-950" : "border-border",
+                    reason === r ? "border-warning bg-warning-muted text-warning-foreground" : "border-border",
                     r === "other" && "col-span-2",
                   )}
                 >
@@ -344,7 +344,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
             ) : null}
 
             {submitError ? (
-              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-800">
+              <p className="mt-3 rounded-xl border border-danger/30 bg-danger-muted px-3 py-2 text-sm font-bold text-danger">
                 {submitError}
               </p>
             ) : null}
@@ -359,7 +359,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="min-h-[52px] rounded-2xl bg-amber-600 font-black text-white disabled:opacity-40"
+                className="min-h-[52px] rounded-2xl bg-warning font-black text-white disabled:opacity-40"
               >
                 {t(lang, "returnConfirm")}
               </button>

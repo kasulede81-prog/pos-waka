@@ -15,8 +15,8 @@ export function AdjustmentValidationBanner({ message, tone = "error" }: Props) {
       className={clsx(
         "mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold",
         tone === "success"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-          : "border-amber-200 bg-amber-50 text-amber-950",
+          ? "border-success/30 bg-success-muted text-success"
+          : "border-warning/30 bg-warning-muted text-warning-foreground",
       )}
       role="alert"
     >

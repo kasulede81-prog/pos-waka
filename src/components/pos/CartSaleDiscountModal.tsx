@@ -122,7 +122,7 @@ export function CartSaleDiscountModal({ lang, open, lineSubtotalUgx, currentDisc
         )}
 
         {discountUgx > 0 ? (
-          <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-center text-sm font-black text-emerald-900">
+          <p className="mt-3 rounded-2xl bg-success-muted px-4 py-3 text-center text-sm font-black text-success">
             {tTemplate(lang, "cartDiscountSummary", {
               discount: discountUgx.toLocaleString(),
               payable: payable.toLocaleString(),

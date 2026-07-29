@@ -81,7 +81,7 @@ function CompactProductRow({
         className={clsx(
           "flex min-h-[68px] items-center gap-2 rounded-lg border bg-card px-2 py-1.5 shadow-sm",
           locked ? "border-border/80 opacity-55" : "border-border/90",
-          low && !locked && lowStockFocus && "border-rose-200/90 bg-rose-50/30",
+          low && !locked && lowStockFocus && "border-danger/30 bg-danger-muted/30",
           selected && "border-indigo-300 bg-indigo-50/40",
         )}
         onPointerDown={onPointerDown}
@@ -115,7 +115,7 @@ function CompactProductRow({
             </div>
             <p className="truncate text-[10px] font-semibold text-muted-foreground">{shelf}</p>
             <div className="flex items-baseline gap-2">
-              <span className={clsx("text-[10px] font-bold", low && !locked ? "text-rose-700" : "text-muted-foreground")}>
+              <span className={clsx("text-[10px] font-bold", low && !locked ? "text-danger" : "text-muted-foreground")}>
                 {stockText}
               </span>
               <span className="text-xs font-black text-teal-700">{formatProductPriceLabel(p)}</span>

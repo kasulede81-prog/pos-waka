@@ -126,7 +126,7 @@ export function CommandCenterAttentionSection({
     >
       {active.length === 0 ? (
         <div className={clsx("rounded-2xl px-3 py-4", statusTokens.success.banner, statusTokens.success.badgeRing)}>
-          <Body className="!text-sm font-semibold text-success-foreground">{t(lang, "ownerAttentionAllClear")}</Body>
+          <Body className="!text-sm font-semibold text-success">{t(lang, "ownerAttentionAllClear")}</Body>
         </div>
       ) : (
         <ul className="mt-3 space-y-2">

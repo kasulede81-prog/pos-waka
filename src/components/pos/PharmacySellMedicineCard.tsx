@@ -72,7 +72,7 @@ export function PharmacySellMedicineCard({
         <span className="mt-1.5 flex flex-wrap items-center gap-1">
           <ExpiryStatusBadge lang={lang} product={p} compact />
           {controlled ? (
-            <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-violet-900">
+            <span className="rounded-full bg-trial-muted px-1.5 py-0.5 text-[8px] font-black uppercase text-trial">
               {t(lang, "pharmacyControlledBadge")}
             </span>
           ) : null}

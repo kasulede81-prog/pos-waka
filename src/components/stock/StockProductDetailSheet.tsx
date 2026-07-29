@@ -182,9 +182,9 @@ export function StockProductDetailSheet({
             <dd>
               <MonoNumber
                 className={clsx(
-                  row.warn && "text-danger-foreground",
-                  row.positive && "text-success-foreground",
-                  row.negative && "text-danger-foreground",
+                  row.warn && "text-danger",
+                  row.positive && "text-success",
+                  row.negative && "text-danger",
                 )}
               >
                 {row.value}

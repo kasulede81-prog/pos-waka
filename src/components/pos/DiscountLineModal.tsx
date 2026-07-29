@@ -83,7 +83,7 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
         </label>
 
         {discountGiven > 0 ? (
-          <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-center text-base font-black text-emerald-900">
+          <p className="mt-3 rounded-2xl bg-success-muted px-4 py-3 text-center text-base font-black text-success">
             {tTemplate(lang, "discountGiven", { amount: discountGiven.toLocaleString() })}
           </p>
         ) : null}

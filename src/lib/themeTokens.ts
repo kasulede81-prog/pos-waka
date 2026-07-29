@@ -31,7 +31,7 @@ export const themeUi = {
     "min-h-[48px] w-full rounded-xl border border-input bg-card px-4 text-base text-foreground shadow-sm outline-none transition-waka placeholder:text-muted-foreground focus:border-waka-400 focus:ring-2 focus:ring-waka-200/60 disabled:cursor-not-allowed disabled:opacity-50",
   chip:
     "inline-flex items-center rounded-full border border-border bg-card px-3 py-1 text-xs font-bold text-foreground shadow-sm",
-  chipActive: "border-waka-500 bg-business-muted text-waka-900 ring-1 ring-waka-200 dark:text-waka-100",
+  chipActive: "border-business/40 bg-business-muted text-business ring-1 ring-business/30",
   fab:
     "inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/90 bg-card/95 text-foreground shadow-lg backdrop-blur transition-waka hover:bg-muted active:scale-95 md:h-9 md:w-9",
   switchTrackOff: "bg-border",

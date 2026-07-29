@@ -43,7 +43,7 @@ const QtyNumpad = memo(function QtyNumpad({
       <button
         type="button"
         onClick={onClear}
-        className="w-full min-h-[52px] rounded-2xl bg-amber-100 py-3 text-lg font-bold text-amber-900 active:bg-amber-200"
+        className="w-full min-h-[52px] rounded-2xl bg-warning-muted py-3 text-lg font-bold text-warning-foreground active:bg-warning-muted"
       >
         C
       </button>
@@ -115,7 +115,7 @@ export function QuantityEditModal({
     <PosScreenPortal>
     <AppModalOverlay
       clearNav={false}
-      className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
+      className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-overlay/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
       role="dialog"
       aria-modal
       onClick={onClose}

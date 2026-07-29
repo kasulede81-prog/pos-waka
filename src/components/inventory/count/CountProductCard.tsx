@@ -61,7 +61,7 @@ export function CountProductCard({
           ) : null}
         </div>
         {line.countedQty != null ? (
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-success-muted text-success">
             <Check className="h-4 w-4" aria-hidden />
           </span>
         ) : null}
@@ -75,7 +75,7 @@ export function CountProductCard({
         {showReview && currentStock != null ? (
           <div>
             <dt>{t(lang, "inventoryCountCurrentStock")}</dt>
-            <dd className={clsx("text-sm font-black", drift ? "text-amber-700" : "text-foreground")}>
+            <dd className={clsx("text-sm font-black", drift ? "text-warning-foreground" : "text-foreground")}>
               {currentStock}
             </dd>
           </div>

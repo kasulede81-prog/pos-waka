@@ -100,7 +100,7 @@ export function DisplayScaleControl({
 
       {sheetOpen ? (
         <AppModalOverlay
-          className="z-[var(--waka-z-pos-modal)] flex flex-col justify-end bg-black/40"
+          className="z-[var(--waka-z-pos-modal)] flex flex-col justify-end bg-overlay/40"
           onClick={() => setSheetOpen(false)}
         >
           <div

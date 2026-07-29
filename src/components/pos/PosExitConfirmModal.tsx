@@ -14,7 +14,7 @@ export function PosExitConfirmModal({ lang, open, onLock, onContinue, onCancel }
   if (!open) return null;
 
   return (
-    <AppModalOverlay className="z-[70] flex items-center justify-center bg-black/55 p-4" role="dialog" aria-modal onClick={onCancel}>
+    <AppModalOverlay className="z-[70] flex items-center justify-center bg-overlay/55 p-4" role="dialog" aria-modal onClick={onCancel}>
       <div
         className="w-full max-w-md rounded-3xl bg-card p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}

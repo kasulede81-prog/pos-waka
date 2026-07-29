@@ -95,7 +95,7 @@ export function StockShelfGrid({
                 "flex min-h-[88px] flex-col items-center justify-center rounded-xl border p-2.5 text-center shadow-sm",
                 "transition-all active:scale-[0.97] motion-reduce:active:scale-100",
                 empty
-                  ? "border-rose-200/90 bg-rose-50/30 active:border-rose-300 active:shadow-md"
+                  ? "border-danger/30 bg-danger-muted/30 active:border-danger/40 active:shadow-md"
                   : "border-border/90 bg-card active:border-waka-300 active:shadow-md",
               )}
             >
@@ -108,7 +108,7 @@ export function StockShelfGrid({
               <span
                 className={clsx(
                   "mt-0.5 text-[10px] font-semibold",
-                  empty ? "font-black text-rose-700" : "text-muted-foreground",
+                  empty ? "font-black text-danger" : "text-muted-foreground",
                 )}
               >
                 {empty

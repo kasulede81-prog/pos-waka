@@ -1047,7 +1047,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 <InventoryViewSwitcher lang={lang} variant="inline" />
               </div>
               {lowStockProducts.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50 px-3 py-8 text-center text-sm font-semibold text-emerald-900">
+                <p className="rounded-xl border border-dashed border-success/30 bg-success-muted px-3 py-8 text-center text-sm font-semibold text-success">
                   {t(lang, "stockLowStockEmpty")}
                 </p>
               ) : (

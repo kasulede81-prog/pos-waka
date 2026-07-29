@@ -68,7 +68,7 @@ function PreviewBlock({
         </p>
       ) : null}
       {preview.profitPerUnitUgx != null ? (
-        <p className={profitPositive ? "font-black text-emerald-700 dark:text-emerald-400" : "font-black text-rose-700 dark:text-rose-400"}>
+        <p className={profitPositive ? "font-black text-success" : "font-black text-danger"}>
           {tTemplate(lang, "costPreviewProfit", {
             unit: unitLabel,
             amount: preview.profitPerUnitUgx.toLocaleString(),
@@ -81,7 +81,7 @@ function PreviewBlock({
         </p>
       ) : null}
       {warnings.length > 0 ? (
-        <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2.5 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-100">
+        <div className="rounded-xl border border-warning/40 bg-warning-muted/80 px-3 py-2.5 text-warning-foreground dark:border-warning/30 dark:bg-warning-muted dark:text-warning-foreground">
           <p className="font-black">{t(lang, "costPreviewWarningTitle")}</p>
           <p className="mt-0.5 font-semibold opacity-90">{t(lang, "costPreviewWarningBody")}</p>
         </div>

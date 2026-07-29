@@ -12,10 +12,10 @@ type Props = {
 
 const toneClass: Record<NonNullable<Props["tone"]>, string> = {
   default: "border-border bg-card text-foreground",
-  emerald: "border-emerald-200 bg-emerald-50 text-emerald-950",
-  amber: "border-amber-200 bg-amber-50 text-amber-950",
-  violet: "border-violet-200 bg-violet-50 text-violet-950",
-  sky: "border-sky-200 bg-sky-50 text-sky-950",
+  emerald: "border-success/30 bg-success-muted text-success",
+  amber: "border-warning/30 bg-warning-muted text-warning-foreground",
+  violet: "border-trial/30 bg-trial-muted text-trial",
+  sky: "border-info/30 bg-info-muted text-info",
 };
 
 export function VerticalDashboardCard({ label, value, hint, tone = "default", className, children }: Props) {

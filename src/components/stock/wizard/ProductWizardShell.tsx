@@ -50,7 +50,7 @@ export function ProductWizardShell({
     <AppModalOverlay
       className={clsx(
         zClassName,
-        "flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center",
+        "flex items-end justify-center bg-overlay/50 backdrop-blur-[2px] sm:items-center",
       )}
       role="dialog"
       aria-modal
@@ -95,13 +95,13 @@ export function ProductWizardShell({
             {saveError ? <WizardValidationBanner message={saveError} /> : null}
             {savedFlash ? (
               <div
-                className="wizard-success-enter flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-6 py-8 text-center"
+                className="wizard-success-enter flex flex-col items-center gap-3 rounded-2xl border border-success/25 bg-success-muted0/10 px-6 py-8 text-center"
                 role="status"
               >
-                <span className="wizard-check-pop flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <span className="wizard-check-pop flex h-14 w-14 items-center justify-center rounded-full bg-success-muted0/15 text-success">
                   <CheckCircle2 className="h-8 w-8" strokeWidth={2.25} aria-hidden />
                 </span>
-                <p className="text-lg font-black text-emerald-900 dark:text-emerald-100">
+                <p className="text-lg font-black text-success dark:text-success">
                   {savedMessage ?? t(lang, "simpleAddSaved")}
                 </p>
               </div>

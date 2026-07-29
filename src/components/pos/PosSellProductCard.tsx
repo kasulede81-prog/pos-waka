@@ -66,7 +66,7 @@ export function PosSellProductCard({
         <span
           className={clsx(
             "pos-ds-product-stock mt-1 inline-block max-w-full truncate rounded-md px-1.5 py-0.5 text-[10px] font-bold",
-            lowStock ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-800",
+            lowStock ? "bg-danger-muted text-danger" : "bg-success-muted text-success",
           )}
         >
           {stockLabel}: {formatStockLabel(product)}

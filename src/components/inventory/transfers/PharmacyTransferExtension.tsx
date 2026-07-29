@@ -37,14 +37,14 @@ export function PharmacyTransferExtension({
     <section className="mt-3 space-y-2 rounded-2xl border border-border/60 bg-muted/20 p-3">
       <TransferHeader title={t(lang, "adjBatchSectionTitle")} />
       {!integrity.ok ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
+        <p className="rounded-xl border border-warning/30 bg-warning-muted px-3 py-2 text-xs font-semibold text-warning-foreground">
           {t(lang, "pharmacyBatchIntegrityHint")}
         </p>
       ) : null}
       <div className="flex flex-wrap gap-1.5">
         <ExpiryStatusBadge lang={lang} product={product} compact />
         {controlled ? (
-          <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-violet-900">
+          <span className="inline-flex items-center rounded-full border border-trial/30 bg-trial-muted px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-trial">
             {t(lang, "pharmacyControlledBadge")}
           </span>
         ) : null}

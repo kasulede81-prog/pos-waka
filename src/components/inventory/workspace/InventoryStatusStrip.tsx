@@ -71,8 +71,8 @@ export function InventoryStatusStrip({ lang, className }: Props) {
           className={clsx(
             chipClass,
             isOnline && syncErrors === 0 && pendingCount === 0
-              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-              : "border-amber-200 bg-amber-50 text-amber-950",
+              ? "border-success/30 bg-success-muted text-success"
+              : "border-warning/30 bg-warning-muted text-warning-foreground",
           )}
         >
           {isOnline ? <Wifi className="h-3 w-3" aria-hidden /> : <WifiOff className="h-3 w-3" aria-hidden />}
@@ -95,7 +95,7 @@ export function InventoryStatusStrip({ lang, className }: Props) {
             className={clsx(
               chipClass,
               failedPrints > 0
-                ? "border-rose-200 bg-rose-50 text-rose-900"
+                ? "border-danger/30 bg-danger-muted text-danger"
                 : pendingPrints > 0
                   ? "border-sky-200 bg-sky-50 text-sky-900"
                   : undefined,

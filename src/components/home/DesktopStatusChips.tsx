@@ -53,7 +53,7 @@ export function DesktopStatusChips({ lang }: Props) {
       {showRisks ? (
         <Link
           to="/office/audit-center"
-          className={`${chipClass} border-rose-200 bg-card text-rose-800 shadow-sm hover:border-rose-300 hover:bg-rose-50`}
+          className={`${chipClass} border-danger/30 bg-card text-danger shadow-sm hover:border-danger/40 hover:bg-danger-muted`}
         >
           <span aria-hidden>🔴</span>
           {tTemplate(lang, "desktopHomeStatusRisks", { count: String(riskCount) })}
@@ -72,7 +72,7 @@ export function DesktopStatusChips({ lang }: Props) {
         to="/office/backup"
         className={`${chipClass} ${
           synced
-            ? "border-emerald-200 bg-emerald-50 text-emerald-900 shadow-sm hover:border-emerald-300 hover:bg-emerald-100"
+            ? "border-success/30 bg-success-muted text-success shadow-sm hover:border-success/40 hover:bg-success-muted"
             : "border-waka-300 bg-waka-50 text-waka-900 shadow-sm hover:border-waka-400 hover:bg-waka-100"
         }`}
       >

@@ -94,7 +94,7 @@ export function BulkInventoryAiModal({
 
   return (
     <AppModalOverlay
-      className="z-[59] flex items-end justify-center bg-black/55 sm:items-center"
+      className="z-[59] flex items-end justify-center bg-overlay/55 sm:items-center"
       role="dialog"
       aria-modal
       onClick={onClose}
@@ -105,7 +105,7 @@ export function BulkInventoryAiModal({
       >
         <div className="shrink-0 border-b border-border px-5 pb-4 pt-5">
           <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-trial-muted text-trial">
               <Sparkles className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
@@ -133,19 +133,19 @@ export function BulkInventoryAiModal({
           ) : null}
 
           {loading ? (
-            <p className="rounded-2xl bg-violet-50 px-4 py-3 text-center text-base font-bold text-violet-900">
+            <p className="rounded-2xl bg-trial-muted px-4 py-3 text-center text-base font-bold text-trial">
               {t(lang, "aiBulkGenerating")}
             </p>
           ) : null}
 
           {error ? (
-            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+            <p className="rounded-2xl bg-warning-muted px-4 py-3 text-sm font-semibold text-warning-foreground">
               {formatAiErrorMessage({ code: errorCode, detail: error })}
             </p>
           ) : null}
 
           {importResult ? (
-            <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900">{importResult}</p>
+            <p className="rounded-2xl bg-success-muted px-4 py-3 text-sm font-bold text-success">{importResult}</p>
           ) : null}
 
           {rows.length > 0 ? (
@@ -224,7 +224,7 @@ export function BulkInventoryAiModal({
               type="button"
               disabled={loading || !description.trim()}
               onClick={() => void handleGenerate()}
-              className="min-h-[56px] w-full rounded-2xl bg-violet-600 text-lg font-black text-white shadow-md disabled:opacity-50"
+              className="min-h-[56px] w-full rounded-2xl bg-trial text-lg font-black text-white shadow-md disabled:opacity-50"
             >
               {t(lang, "aiBulkGenerate")}
             </button>

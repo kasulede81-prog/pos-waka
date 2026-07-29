@@ -39,7 +39,7 @@ export function InventoryNavigationTiles({ lang, tiles, titleKey = "iwSectionNav
                   <Icon className="h-5 w-5" aria-hidden />
                 </span>
                 {tile.badge != null && tile.badge > 0 ? (
-                  <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black text-white">
+                  <span className="rounded-full bg-danger px-2 py-0.5 text-[10px] font-black text-white">
                     {tile.badge > 99 ? "99+" : tile.badge}
                   </span>
                 ) : null}

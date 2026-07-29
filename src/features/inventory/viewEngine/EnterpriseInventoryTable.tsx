@@ -200,7 +200,7 @@ function EnterpriseInventoryTableInner({
                   "group absolute left-0 top-0 grid w-full gap-2 border-b border-border/60 px-3 py-2 text-xs",
                   GRID,
                   locked && "opacity-55",
-                  low && !locked && "bg-rose-50/20",
+                  low && !locked && "bg-danger-muted/20",
                   selected && "bg-indigo-50/40",
                 )}
                 style={{ transform: `translateY(${virtualRow.start}px)`, height: `${virtualRow.size}px` }}
@@ -225,7 +225,7 @@ function EnterpriseInventoryTableInner({
                 </button>
                 <span className="truncate font-semibold text-muted-foreground">{p.sku?.trim() || "—"}</span>
                 <span className="truncate font-semibold text-muted-foreground">{shelf}</span>
-                <span className={clsx("font-bold", low ? "text-rose-700" : "text-muted-foreground")}>{stockText}</span>
+                <span className={clsx("font-bold", low ? "text-danger" : "text-muted-foreground")}>{stockText}</span>
                 <span className="font-semibold text-muted-foreground">{formatCost(p)}</span>
                 <span className="font-black text-teal-700">{formatProductPriceLabel(p)}</span>
                 <span className="font-semibold text-muted-foreground">

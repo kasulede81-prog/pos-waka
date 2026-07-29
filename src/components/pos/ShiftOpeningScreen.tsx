@@ -176,8 +176,8 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
               />
             </label>
             {needsPriorDayClose ? (
-              <div className="mt-3 space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left">
-                <p className="text-sm font-semibold text-amber-950">
+              <div className="mt-3 space-y-2 rounded-2xl border border-warning/30 bg-warning-muted px-4 py-3 text-left">
+                <p className="text-sm font-semibold text-warning-foreground">
                   {tTemplate(lang, "sequentialDayBlockedDates", { dates: blockedDays.join(", ") })}
                 </p>
                 {canCloseDay ? (
@@ -189,18 +189,18 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
                     {tTemplate(lang, "sequentialDayBlockedCloseLink", { date: blockedDays[0]! })}
                   </button>
                 ) : (
-                  <p className="text-sm font-medium text-amber-900">{t(lang, "sequentialDayBlockedAskManager")}</p>
+                  <p className="text-sm font-medium text-warning-foreground">{t(lang, "sequentialDayBlockedAskManager")}</p>
                 )}
               </div>
             ) : null}
             {errorKey && errorKey !== "sequentialDayBlocked" ? (
-              <p className="mt-3 text-sm font-bold text-rose-700">
+              <p className="mt-3 text-sm font-bold text-danger">
                 {(t as (l: Language, k: string) => string)(lang, errorKey)}
               </p>
             ) : null}
           </>
         ) : (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+          <p className="rounded-xl border border-warning/30 bg-warning-muted px-4 py-3 text-sm font-semibold text-warning-foreground">
             {t(lang, "dayDrawerNotOpen")}
           </p>
         )}
@@ -239,7 +239,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
               <button
                 type="button"
                 onClick={() => setOverrideOpen(true)}
-                className="min-h-[44px] w-full rounded-2xl border-2 border-amber-300 text-sm font-black text-amber-950"
+                className="min-h-[44px] w-full rounded-2xl border-2 border-amber-300 text-sm font-black text-warning-foreground"
               >
                 {t(lang, "shiftVerifyRequestOverride")}
               </button>
@@ -274,7 +274,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
               />
             </label>
             {floatInput.length > 0 && !matched ? (
-              <p className="mt-2 text-sm font-bold text-rose-700">{t(lang, "shiftVerifyMismatch")}</p>
+              <p className="mt-2 text-sm font-bold text-danger">{t(lang, "shiftVerifyMismatch")}</p>
             ) : null}
           </>
         ) : (
@@ -292,7 +292,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
         )}
 
         {errorKey ? (
-          <p className="mt-3 text-sm font-bold text-rose-700">
+          <p className="mt-3 text-sm font-bold text-danger">
             {(t as (l: Language, k: string) => string)(lang, errorKey)}
           </p>
         ) : null}

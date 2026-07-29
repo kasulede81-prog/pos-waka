@@ -120,7 +120,7 @@ export function PosDesktopCatalogCheckoutDock({
                   UGX {(cashInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                 </p>
                 {changeDue > 0 ? (
-                  <p className="mt-1 text-sm font-bold text-emerald-800">
+                  <p className="mt-1 text-sm font-bold text-success">
                     {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
                   </p>
                 ) : null}

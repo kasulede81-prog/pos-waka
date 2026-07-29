@@ -19,7 +19,7 @@ export function ReceiveStatusStrip({ lang, className }: Props) {
       <span
         className={clsx(
           "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold",
-          isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-950",
+          isOnline ? "border-success/30 bg-success-muted text-success" : "border-warning/30 bg-warning-muted text-warning-foreground",
         )}
       >
         {isOnline ? <Wifi className="h-3 w-3" aria-hidden /> : <WifiOff className="h-3 w-3" aria-hidden />}

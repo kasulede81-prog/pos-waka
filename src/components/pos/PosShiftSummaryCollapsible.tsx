@@ -95,7 +95,7 @@ export function PosShiftSummaryCollapsible({
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
             <span className="inline-flex items-center gap-1 text-xs font-bold text-teal-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+              <span className="h-1.5 w-1.5 rounded-full bg-success-muted0" aria-hidden />
               Shift · {duration}
             </span>
             <span className="inline-flex items-center gap-1 text-xs font-bold text-foreground">
@@ -204,11 +204,11 @@ export function PosShiftSummaryCollapsible({
                 <Link
                   to="/pending-sales"
                   onClick={() => setExpanded(false)}
-                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-950 active:bg-amber-100"
+                  className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-warning/30 bg-warning-muted px-4 py-2 text-sm font-bold text-warning-foreground active:bg-warning-muted"
                 >
                   {t(lang, "pendingSalesLink")}
                   {pendingCount > 0 ? (
-                    <span className="rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-amber-950">
+                    <span className="rounded-full bg-warning px-1.5 py-px text-[10px] font-black text-warning-foreground">
                       {pendingCount}
                     </span>
                   ) : null}

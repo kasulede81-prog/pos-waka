@@ -67,7 +67,7 @@ export function ShiftCloseModal({ lang, open, shift, recoveryOperatorLabel, onCl
       }
     >
       {recoveryOperatorLabel ? (
-        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+        <p className="rounded-xl bg-warning-muted px-3 py-2 text-sm font-semibold text-warning-foreground">
           {tTemplate(lang, "shiftRecoveryOtherOperatorHint", { operator: recoveryOperatorLabel })}
         </p>
       ) : (
@@ -86,19 +86,19 @@ export function ShiftCloseModal({ lang, open, shift, recoveryOperatorLabel, onCl
           <span>UGX {parts.sales.toLocaleString()}</span>
         </li>
         {parts.discounts > 0 ? (
-          <li className="flex justify-between text-amber-800">
+          <li className="flex justify-between text-warning-foreground">
             <span>{t(lang, "shiftCloseDiscounts")}</span>
             <span>− UGX {parts.discounts.toLocaleString()}</span>
           </li>
         ) : null}
         {parts.voids > 0 ? (
-          <li className="flex justify-between text-rose-800">
+          <li className="flex justify-between text-danger">
             <span>{t(lang, "shiftCloseVoids")}</span>
             <span>− UGX {parts.voids.toLocaleString()}</span>
           </li>
         ) : null}
         {parts.returns > 0 ? (
-          <li className="flex justify-between text-rose-800">
+          <li className="flex justify-between text-danger">
             <span>{t(lang, "shiftCloseReturns")}</span>
             <span>− UGX {parts.returns.toLocaleString()}</span>
           </li>
@@ -154,7 +154,7 @@ export function ShiftCloseModal({ lang, open, shift, recoveryOperatorLabel, onCl
       ) : null}
 
       {errorKey ? (
-        <p className="mt-3 rounded-xl border border-danger/30 bg-danger-muted px-3 py-2 text-sm font-bold text-danger-foreground" role="alert">
+        <p className="mt-3 rounded-xl border border-danger/30 bg-danger-muted px-3 py-2 text-sm font-bold text-danger" role="alert">
           {t(lang, errorKey as never)}
         </p>
       ) : null}

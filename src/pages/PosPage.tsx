@@ -203,7 +203,7 @@ const Numpad = memo(function Numpad({
         <button
           type="button"
           onClick={onClear}
-          className="w-full min-h-[52px] rounded-2xl bg-amber-100 py-3 text-lg font-bold text-amber-900 active:bg-amber-200"
+          className="w-full min-h-[52px] rounded-2xl bg-warning-muted py-3 text-lg font-bold text-warning-foreground active:bg-warning-muted"
         >
           C
         </button>
@@ -1653,7 +1653,7 @@ export function PosPage({ lang }: { lang: Language }) {
         );
       }
       return (
-        <p className="rounded-xl bg-amber-50 px-3 py-4 text-center text-sm font-bold text-amber-950">
+        <p className="rounded-xl bg-warning-muted px-3 py-4 text-center text-sm font-bold text-warning-foreground">
           {t(lang, "posSellNoMatch")}
         </p>
       );
@@ -1741,7 +1741,7 @@ export function PosPage({ lang }: { lang: Language }) {
             <Link to="/pending-sales" className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-bold text-foreground active:bg-muted">
               {t(lang, "pendingSalesLink")}
               {pendingCount > 0 ? (
-                <span className="rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-amber-950">
+                <span className="rounded-full bg-warning px-1.5 py-px text-[10px] font-black text-warning-foreground">
                   {pendingCount}
                 </span>
               ) : null}
@@ -1775,7 +1775,7 @@ export function PosPage({ lang }: { lang: Language }) {
             >
               {t(lang, "pendingSalesLink")}
               {pendingCount > 0 ? (
-                <span className="rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-amber-950">
+                <span className="rounded-full bg-warning px-1.5 py-px text-[10px] font-black text-warning-foreground">
                   {pendingCount}
                 </span>
               ) : null}
@@ -1972,7 +1972,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     key={product.id}
                     type="button"
                     onClick={() => openProduct(product)}
-                    className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 active:bg-amber-100"
+                    className="shrink-0 rounded-full border border-warning/30 bg-warning-muted px-2.5 py-1 text-xs font-bold text-warning-foreground active:bg-warning-muted"
                   >
                     {product.name} · {qty}
                   </button>
@@ -2128,7 +2128,7 @@ export function PosPage({ lang }: { lang: Language }) {
             ) : null}
           </p>
           {filteredProducts.length === 0 ? (
-            <p className="rounded-xl bg-amber-50 px-3 py-4 text-center text-sm font-bold text-amber-950">
+            <p className="rounded-xl bg-warning-muted px-3 py-4 text-center text-sm font-bold text-warning-foreground">
               {t(lang, "posSellNoMatch")}
             </p>
           ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
@@ -2251,7 +2251,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </p>
             </div>
           ) : null}
-          <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
+          <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-lg font-bold text-warning-foreground">{t(lang, "posSellNoMatch")}</p>
         </section>
       ) : showDesktopProductView ? (
         <section
@@ -2864,7 +2864,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {firstSaleOpen ? (
         <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
-          <div className="max-w-md rounded-[2rem] bg-gradient-to-b from-amber-100 to-card p-8 text-center shadow-2xl">
+          <div className="max-w-md rounded-[2rem] bg-gradient-to-b from-warning-muted to-card p-8 text-center shadow-2xl">
             <p className="text-4xl" aria-hidden>
               🎉
             </p>

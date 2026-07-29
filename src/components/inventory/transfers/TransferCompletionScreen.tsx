@@ -20,21 +20,21 @@ export function TransferCompletionScreen({ lang, draft, products, onCreateAnothe
   const completedAt = new Date(draft.preparedAt).toLocaleString();
 
   return (
-    <section className="rounded-3xl border border-emerald-200 bg-emerald-50/80 p-6 text-center shadow-sm">
-      <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-700" aria-hidden />
-      <h2 className="mt-3 text-xl font-black text-emerald-950">{t(lang, "xferCompletionTitle")}</h2>
-      <p className="mt-1 text-sm font-semibold text-emerald-900/90">{t(lang, "xferCompletionSub")}</p>
+    <section className="rounded-3xl border border-success/30 bg-success-muted/80 p-6 text-center shadow-sm">
+      <CheckCircle2 className="mx-auto h-12 w-12 text-success" aria-hidden />
+      <h2 className="mt-3 text-xl font-black text-success">{t(lang, "xferCompletionTitle")}</h2>
+      <p className="mt-1 text-sm font-semibold text-success">{t(lang, "xferCompletionSub")}</p>
 
       <dl className="mt-5 grid grid-cols-2 gap-3 text-left text-sm">
-        <div className="rounded-2xl border border-emerald-100 bg-card px-3 py-2">
+        <div className="rounded-2xl border border-success/20 bg-card px-3 py-2">
           <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "xferSummaryProducts")}</dt>
           <dd className="text-lg font-black text-foreground">{summary.productCount}</dd>
         </div>
-        <div className="rounded-2xl border border-emerald-100 bg-card px-3 py-2">
+        <div className="rounded-2xl border border-success/20 bg-card px-3 py-2">
           <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "xferSummaryUnits")}</dt>
           <dd className="text-lg font-black text-foreground">{summary.totalUnits}</dd>
         </div>
-        <div className="col-span-2 rounded-2xl border border-emerald-100 bg-card px-3 py-2">
+        <div className="col-span-2 rounded-2xl border border-success/20 bg-card px-3 py-2">
           <dt className="text-xs font-semibold text-muted-foreground">{t(lang, "cntCompletionTime")}</dt>
           <dd className="font-black text-foreground">{completedAt}</dd>
         </div>

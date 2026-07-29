@@ -294,29 +294,29 @@ export function CustomersPage({ lang }: { lang: Language }) {
         <details
           open={orphanOpen}
           onToggle={(e) => setOrphanOpen((e.currentTarget as HTMLDetailsElement).open)}
-          className="overflow-hidden rounded-2xl border border-rose-200 bg-rose-50/50"
+          className="overflow-hidden rounded-2xl border border-danger/30 bg-danger-muted/50"
         >
           <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 marker:content-none [&::-webkit-details-marker]:hidden">
             <div className="min-w-0">
-              <p className="text-sm font-black text-rose-950">{t(lang, "orphanDebtTitle")}</p>
-              <p className="text-xs font-semibold text-rose-800">
+              <p className="text-sm font-black text-danger">{t(lang, "orphanDebtTitle")}</p>
+              <p className="text-xs font-semibold text-danger">
                 UGX {orphanDebtTotal.toLocaleString()} · {orphanDebts.length}{" "}
                 {orphanDebts.length === 1 ? t(lang, "orphanDebtSaleOne") : t(lang, "orphanDebtSaleMany")}
               </p>
             </div>
-            <ChevronDown className={clsx("h-5 w-5 shrink-0 text-rose-700 transition-transform", orphanOpen && "rotate-180")} />
+            <ChevronDown className={clsx("h-5 w-5 shrink-0 text-danger transition-transform", orphanOpen && "rotate-180")} />
           </summary>
-          <div className="space-y-2 border-t border-rose-200 px-3 py-3">
-            <p className="text-xs text-rose-900">{t(lang, "orphanDebtHelp")}</p>
-            {assignMessage ? <p className="text-xs font-bold text-rose-900">{assignMessage}</p> : null}
+          <div className="space-y-2 border-t border-danger/30 px-3 py-3">
+            <p className="text-xs text-danger">{t(lang, "orphanDebtHelp")}</p>
+            {assignMessage ? <p className="text-xs font-bold text-danger">{assignMessage}</p> : null}
             <ul className="space-y-2">
               {(orphanInRange.length > 0 ? orphanInRange : orphanDebts).map((o) => (
-                <li key={o.saleId} className="rounded-xl border border-rose-200 bg-card p-3">
-                  <p className="text-xs font-semibold text-rose-950">
+                <li key={o.saleId} className="rounded-xl border border-danger/30 bg-card p-3">
+                  <p className="text-xs font-semibold text-danger">
                     {new Date(o.createdAt).toLocaleString()}
                     {o.receiptSeq != null ? ` · #${String(o.receiptSeq).padStart(3, "0")}` : ""}
                   </p>
-                  <p className="mt-1 text-base font-black text-rose-950">UGX {o.debtUgx.toLocaleString()}</p>
+                  <p className="mt-1 text-base font-black text-danger">UGX {o.debtUgx.toLocaleString()}</p>
                   {canDebt && customers.length > 0 ? (
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                       <select
@@ -324,7 +324,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
                         onChange={(e) =>
                           setAssignCustomerBySale((prev) => ({ ...prev, [o.saleId]: e.target.value }))
                         }
-                        className="min-h-[44px] flex-1 rounded-xl border border-rose-200 bg-card px-3 text-sm font-semibold"
+                        className="min-h-[44px] flex-1 rounded-xl border border-danger/30 bg-card px-3 text-sm font-semibold"
                         aria-label={t(lang, "orphanDebtAssignCustomer")}
                       >
                         <option value="">{t(lang, "orphanDebtAssignCustomer")}</option>
@@ -337,7 +337,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
                       <button
                         type="button"
                         onClick={() => submitAssignOrphan(o.saleId)}
-                        className="min-h-[44px] rounded-xl bg-rose-900 px-4 text-sm font-black text-white"
+                        className="min-h-[44px] rounded-xl bg-danger px-4 text-sm font-black text-white"
                       >
                         {t(lang, "orphanDebtAssign")}
                       </button>

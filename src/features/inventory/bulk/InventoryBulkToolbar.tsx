@@ -116,7 +116,7 @@ export function InventoryBulkToolbar({
       </div>
 
       {sheet ? (
-        <AppModalOverlay className="z-[80] flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={() => setSheet(null)}>
+        <AppModalOverlay className="z-[80] flex items-end justify-center bg-overlay/50 p-4 sm:items-center" onClick={() => setSheet(null)}>
           <div
             className="w-full max-w-md rounded-2xl bg-card p-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}

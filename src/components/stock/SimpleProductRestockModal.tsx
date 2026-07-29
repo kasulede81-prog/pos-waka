@@ -183,7 +183,7 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
           ))}
         </ul>
         {preview.costPerBaseUnitUgx > 0 ? (
-          <p className="mt-2 text-xs font-bold text-emerald-900">
+          <p className="mt-2 text-xs font-bold text-success">
             {t(lang, "pharmacyPackCostPreview")}: {preview.costPerBaseUnitUgx.toLocaleString()} UGX / {product.baseUnit}
           </p>
         ) : null}

@@ -8,9 +8,9 @@ type Props = {
 };
 
 const toneClass: Record<Tone, string> = {
-  error: "border-rose-200 bg-rose-50 text-rose-950",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-950",
-  warning: "border-amber-200 bg-amber-50 text-amber-950",
+  error: "border-danger/30 bg-danger-muted text-danger",
+  success: "border-success/30 bg-success-muted text-success",
+  warning: "border-warning/30 bg-warning-muted text-warning-foreground",
 };
 
 export function TransferValidationBanner({ message, tone = "error" }: Props) {

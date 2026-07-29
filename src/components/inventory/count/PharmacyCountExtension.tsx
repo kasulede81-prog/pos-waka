@@ -33,13 +33,13 @@ export function PharmacyCountExtension({ lang, product, businessType, pharmacyMo
         </span>
       ) : null}
       {!integrity.ok && integrity.batchTracked ? (
-        <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-950">
+        <span className="inline-flex items-center rounded-full border border-amber-300 bg-warning-muted px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-warning-foreground">
           {t(lang, "pharmacyBatchIntegrityWarning")}
         </span>
       ) : null}
       <ExpiryStatusBadge lang={lang} product={product} compact />
       {controlled ? (
-        <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-violet-900">
+        <span className="inline-flex items-center rounded-full border border-trial/30 bg-trial-muted px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-trial">
           {t(lang, "pharmacyControlledBadge")}
         </span>
       ) : null}

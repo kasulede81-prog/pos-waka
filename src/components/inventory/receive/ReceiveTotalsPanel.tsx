@@ -41,7 +41,7 @@ export function ReceiveTotalsPanel({
             />
           </label>
           {balanceOwedUgx != null && balanceOwedUgx > 0 ? (
-            <p className="mt-2 text-sm font-bold text-amber-800">
+            <p className="mt-2 text-sm font-bold text-warning-foreground">
               {tTemplate(lang, "restockStillOwe", { amount: balanceOwedUgx.toLocaleString() })}
             </p>
           ) : null}

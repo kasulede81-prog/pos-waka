@@ -37,8 +37,12 @@ describe("statusTokens", () => {
     for (const kind of ALL_KINDS) {
       const entry = statusTokens[kind];
       expect(entry.badge).toMatch(/bg-\w+/);
-      expect(entry.badge).not.toMatch(/bg-card|bg-stone|text-stone/);
+      expect(entry.badge).not.toMatch(/bg-card|bg-stone|text-stone|violet|emerald|rose|amber-/);
       expect(entry.dot).toContain("rounded-full");
+      // Phase 29.1: on-muted badges must not use inverse *-foreground (white-on-pastel)
+      if (kind !== "warning" && kind !== "pending") {
+        expect(entry.badge).not.toMatch(/text-\w+-foreground/);
+      }
     }
   });
 
@@ -46,7 +50,8 @@ describe("statusTokens", () => {
     expect(severityStatusBadge("completed")).toContain("success");
     expect(severityStatusBadge("warning")).toContain("warning");
     expect(severityStatusBadge("error")).toContain("danger");
-    expect(severityStatusIcon("security")).toContain("violet");
+    // Security maps to trial (purple semantic) — no hard-coded violet palette
+    expect(severityStatusIcon("security")).toContain("trial");
   });
 
   it("maps health tiers consistently", () => {

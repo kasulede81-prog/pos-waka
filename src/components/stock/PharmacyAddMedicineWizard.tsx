@@ -576,7 +576,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
             )}
 
             {costPerUnit > 0 && totalBaseUnits > 0 ? (
-              <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">
+              <p className="rounded-2xl border border-success/30 bg-success-muted px-4 py-3 text-sm font-black text-success">
                 {t(lang, "pharmacyPackCostPreview")}: {costPerUnit.toLocaleString()} UGX
               </p>
             ) : null}

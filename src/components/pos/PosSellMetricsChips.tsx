@@ -46,13 +46,13 @@ export function PosSellMetricsChips({
           icon: Wallet,
           label: cartTotalLabel,
           value: `UGX ${cartTotalValue.toLocaleString()}`,
-          accent: "text-emerald-800",
+          accent: "text-success",
         },
         {
           icon: Clock,
           label: t(lang, "pendingSalesLink"),
           value: String(pendingCount),
-          accent: pendingCount > 0 ? "text-amber-800" : "text-muted-foreground",
+          accent: pendingCount > 0 ? "text-warning-foreground" : "text-muted-foreground",
         },
       ]
     : [
@@ -66,13 +66,13 @@ export function PosSellMetricsChips({
           icon: Wallet,
           label: t(lang, "salesHistoryTodaySales"),
           value: `UGX ${todaySalesUgx.toLocaleString()}`,
-          accent: "text-emerald-800",
+          accent: "text-success",
         },
         {
           icon: Clock,
           label: t(lang, "pendingSalesLink"),
           value: String(pendingCount),
-          accent: pendingCount > 0 ? "text-amber-800" : "text-muted-foreground",
+          accent: pendingCount > 0 ? "text-warning-foreground" : "text-muted-foreground",
         },
       ];
 

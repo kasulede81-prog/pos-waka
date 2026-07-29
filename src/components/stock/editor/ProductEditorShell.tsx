@@ -48,7 +48,7 @@ export function ProductEditorShell({
     <AppModalOverlay
       className={clsx(
         zClassName,
-        "flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center",
+        "flex items-end justify-center bg-overlay/50 backdrop-blur-[2px] sm:items-center",
       )}
       role="dialog"
       aria-modal

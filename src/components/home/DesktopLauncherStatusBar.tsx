@@ -56,7 +56,7 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
       <Link
         key="sales"
         to={POS_RECEIPTS_ROUTE}
-        className={`${chip} border-emerald-500/40 bg-emerald-950/70 text-emerald-100`}
+        className={`${chip} border-success/40 bg-success-muted text-success`}
       >
         <span aria-hidden>📈</span>
         {tTemplate(lang, "launcherStatusTodaySales", { count: String(today.count) })}
@@ -69,7 +69,7 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
       <Link
         key="pending"
         to="/pending-sales"
-        className={`${chip} border-amber-500/40 bg-amber-950/70 text-amber-100`}
+        className={`${chip} border-warning/40 bg-warning-muted text-warning-foreground`}
       >
         <span aria-hidden>⏳</span>
         {tTemplate(lang, "launcherStatusPendingSales", { count: String(pendingSaleCount) })}
@@ -92,8 +92,8 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
       to="/office/backup"
       className={`${chip} ${
         synced
-          ? "border-emerald-500/40 bg-emerald-950/70 text-emerald-100"
-          : "border-amber-500/40 bg-amber-950/70 text-amber-100"
+          ? "border-success/40 bg-success-muted text-success"
+          : "border-warning/40 bg-warning-muted text-warning-foreground"
       }`}
     >
       <span aria-hidden>{synced ? "🟢" : "🟠"}</span>

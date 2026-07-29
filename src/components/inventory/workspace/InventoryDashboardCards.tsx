@@ -58,7 +58,7 @@ function StatCard({
       className={clsx(
         "flex min-h-[88px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-all",
         highlight ? "border-waka-200 bg-gradient-to-br from-waka-50 to-waka-50/60" : "border-border/90 bg-card",
-        warn && !highlight && "border-rose-100 bg-rose-50/40",
+        warn && !highlight && "border-danger/20 bg-danger-muted/40",
         onClick && "active:scale-[0.98] motion-reduce:active:scale-100",
       )}
     >
@@ -66,7 +66,7 @@ function StatCard({
         <span
           className={clsx(
             "flex h-8 w-8 items-center justify-center rounded-xl",
-            highlight ? "bg-waka-600 text-white" : warn ? "bg-rose-100 text-rose-700" : "bg-muted text-muted-foreground",
+            highlight ? "bg-waka-600 text-white" : warn ? "bg-danger-muted text-danger" : "bg-muted text-muted-foreground",
           )}
         >
           <Icon className="h-4 w-4" aria-hidden />
@@ -74,7 +74,7 @@ function StatCard({
         <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
       </div>
       <div>
-        <p className={clsx("text-lg font-black tabular-nums", warn ? "text-rose-800" : highlight ? "text-waka-800" : "text-foreground")}>
+        <p className={clsx("text-lg font-black tabular-nums", warn ? "text-danger" : highlight ? "text-waka-800" : "text-foreground")}>
           {value}
         </p>
         {hint ? <p className="text-[10px] font-semibold text-muted-foreground">{hint}</p> : null}

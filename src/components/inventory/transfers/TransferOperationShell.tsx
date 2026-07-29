@@ -118,7 +118,7 @@ export function TransferOperationShell({
 
   return (
     <AppModalOverlay
-      className={clsx(zClassName, "flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center")}
+      className={clsx(zClassName, "flex items-end justify-center bg-overlay/50 backdrop-blur-[2px] sm:items-center")}
       role="dialog"
       aria-modal
       aria-labelledby={titleId}

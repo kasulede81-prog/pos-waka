@@ -105,7 +105,7 @@ export function HomeLauncherTile({
         </span>
       ) : null}
       {tile.badge !== undefined && tile.badge > 0 ? (
-        <span className="absolute right-3 top-3 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-black text-white">
+        <span className="absolute right-3 top-3 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-danger px-1.5 text-xs font-black text-white">
           {tile.badge > 99 ? "99+" : tile.badge}
         </span>
       ) : null}

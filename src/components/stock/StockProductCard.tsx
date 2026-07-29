@@ -71,7 +71,7 @@ export function StockProductCard({
           "rounded-xl border bg-card shadow-sm transition-all",
           density === "comfortable" ? "p-2" : "p-2.5",
           locked ? "border-border/80 opacity-55" : "border-border/90",
-          low && !locked && lowStockFocus && "border-rose-200/90 bg-rose-50/30",
+          low && !locked && lowStockFocus && "border-danger/30 bg-danger-muted/30",
         )}
       >
         <button
@@ -96,7 +96,7 @@ export function StockProductCard({
               ) : null}
               {pharmacyMode ? <ExpiryStatusBadge lang={lang} product={p} compact /> : null}
               {pharmacyMode && p.pharmacyMaster?.controlledDrug ? (
-                <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-violet-900">
+                <span className="rounded-full bg-trial-muted px-1.5 py-0.5 text-[8px] font-black uppercase text-trial">
                   {t(lang, "pharmacyControlledBadge")}
                 </span>
               ) : null}
@@ -111,7 +111,7 @@ export function StockProductCard({
                 </span>
               ) : null}
               {low && !locked && lowStockFocus ? (
-                <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-rose-800">
+                <span className="rounded-full bg-danger-muted px-1.5 py-0.5 text-[8px] font-black uppercase text-danger">
                   {t(lang, "cardLowStock")}
                 </span>
               ) : null}
@@ -122,7 +122,7 @@ export function StockProductCard({
               <span
                 className={clsx(
                   "text-[10px] font-bold",
-                  low && !locked ? "text-rose-700" : "text-muted-foreground",
+                  low && !locked ? "text-danger" : "text-muted-foreground",
                 )}
               >
                 {t(lang, "stockLabel")}: {stockText}

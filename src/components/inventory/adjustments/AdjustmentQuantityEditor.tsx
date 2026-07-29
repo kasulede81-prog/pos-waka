@@ -36,7 +36,7 @@ export function AdjustmentQuantityEditor({
             type="button"
             onClick={() => onDirectionChange("in")}
             className={`min-h-[48px] rounded-2xl border-2 text-sm font-black ${
-              direction === "in" ? "border-emerald-500 bg-emerald-600 text-white" : "border-border bg-card"
+              direction === "in" ? "border-success bg-success text-white" : "border-border bg-card"
             }`}
           >
             {t(lang, "adjDirectionIn")}
@@ -45,7 +45,7 @@ export function AdjustmentQuantityEditor({
             type="button"
             onClick={() => onDirectionChange("out")}
             className={`min-h-[48px] rounded-2xl border-2 text-sm font-black ${
-              direction === "out" ? "border-rose-500 bg-rose-600 text-white" : "border-border bg-card"
+              direction === "out" ? "border-danger bg-danger text-white" : "border-border bg-card"
             }`}
           >
             {t(lang, "adjDirectionOut")}

@@ -51,7 +51,7 @@ export function StockListToolbar({
             type="button"
             onClick={() => onListFilter("low")}
             className={`min-h-[32px] rounded-full px-3 py-1 text-xs font-black ${
-              listFilter === "low" ? "bg-rose-600 text-white shadow-sm" : "border border-border bg-card text-muted-foreground"
+              listFilter === "low" ? "bg-danger text-white shadow-sm" : "border border-border bg-card text-muted-foreground"
             }`}
           >
             {t(lang, "stockFilterLow")}

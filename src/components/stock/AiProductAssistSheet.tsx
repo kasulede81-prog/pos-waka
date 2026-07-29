@@ -99,7 +99,7 @@ export function AiProductAssistSheet({
 
   return (
     <AppModalOverlay
-      className="z-[58] flex items-end justify-center bg-black/55 sm:items-center"
+      className="z-[58] flex items-end justify-center bg-overlay/55 sm:items-center"
       role="dialog"
       aria-modal
       onClick={onClose}
@@ -110,7 +110,7 @@ export function AiProductAssistSheet({
       >
         <div className="shrink-0 border-b border-border px-5 pb-4 pt-5">
           <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-trial-muted text-trial">
               <Sparkles className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
@@ -143,22 +143,22 @@ export function AiProductAssistSheet({
           </label>
 
           {loading ? (
-            <p className="rounded-2xl bg-violet-50 px-4 py-3 text-center text-base font-bold text-violet-900">
+            <p className="rounded-2xl bg-trial-muted px-4 py-3 text-center text-base font-bold text-trial">
               {t(lang, "aiProductAssistLoading")}
             </p>
           ) : null}
 
           {failed && error ? (
-            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+            <p className="rounded-2xl bg-warning-muted px-4 py-3 text-sm font-semibold text-warning-foreground">
               {formatAiErrorMessage({ code: errorCode, detail: error })}
             </p>
           ) : null}
 
           {preview && prefill ? (
-            <div className="space-y-3 rounded-2xl border-2 border-violet-100 bg-violet-50/60 p-4">
-              <p className="text-sm font-bold text-violet-900">{t(lang, "aiProductAssistPreviewHint")}</p>
+            <div className="space-y-3 rounded-2xl border-2 border-trial/20 bg-trial-muted/60 p-4">
+              <p className="text-sm font-bold text-trial">{t(lang, "aiProductAssistPreviewHint")}</p>
               {fromCache ? (
-                <p className="text-xs font-semibold text-violet-700">{t(lang, "aiProductAssistFromCache")}</p>
+                <p className="text-xs font-semibold text-trial">{t(lang, "aiProductAssistFromCache")}</p>
               ) : null}
               <label className="block text-sm font-bold text-muted-foreground">
                 {t(lang, "stockEditNameLabel")}
@@ -204,7 +204,7 @@ export function AiProductAssistSheet({
               type="button"
               disabled={loading || !name.trim()}
               onClick={() => void handleSuggest()}
-              className="min-h-[56px] w-full rounded-2xl bg-violet-600 text-lg font-black text-white shadow-md disabled:opacity-50"
+              className="min-h-[56px] w-full rounded-2xl bg-trial text-lg font-black text-white shadow-md disabled:opacity-50"
             >
               {t(lang, "aiProductAssistGetSuggestions")}
             </button>

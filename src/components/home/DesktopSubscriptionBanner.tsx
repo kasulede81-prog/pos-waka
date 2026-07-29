@@ -23,10 +23,10 @@ export function DesktopSubscriptionBanner({ lang }: Props) {
 
   const tone =
     license.status === "active"
-      ? "border-emerald-300 bg-emerald-600 text-white shadow-[0_4px_20px_rgba(5,150,105,0.35)]"
+      ? "border-success/40 bg-success text-white shadow-[0_4px_20px_rgba(5,150,105,0.35)]"
       : license.status === "expiring_soon"
-        ? "border-amber-300 bg-amber-500 text-amber-950 shadow-[0_4px_20px_rgba(245,158,11,0.4)]"
-        : "border-rose-300 bg-rose-600 text-white shadow-[0_4px_20px_rgba(225,29,72,0.35)]";
+        ? "border-warning/40 bg-warning text-warning-foreground shadow-[0_4px_20px_rgba(245,158,11,0.4)]"
+        : "border-danger/40 bg-danger text-white shadow-[0_4px_20px_rgba(225,29,72,0.35)]";
 
   return (
     <Link
@@ -42,10 +42,10 @@ export function DesktopSubscriptionBanner({ lang }: Props) {
         className={clsx(
           "inline-block h-3 w-3 shrink-0 rounded-full",
           license.status === "active"
-            ? "bg-emerald-200"
+            ? "bg-success-muted"
             : license.status === "expiring_soon"
-              ? "bg-amber-950"
-              : "bg-rose-200",
+              ? "bg-warning-muted"
+              : "bg-danger-muted",
         )}
         aria-hidden
       />

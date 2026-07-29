@@ -98,7 +98,7 @@ export function DraftCartLineRow({
             {unitHint ? <p className="truncate text-[11px] font-semibold text-muted-foreground">{unitHint}</p> : null}
             {pharmacyMode ? <PharmacyFefoBatchChip lang={lang} line={line} onTap={onBatchTap} /> : null}
             {lineDiscountUgx(line) > 0 ? (
-              <p className="text-[11px] font-bold text-amber-800">
+              <p className="text-[11px] font-bold text-warning-foreground">
                 − UGX {lineDiscountUgx(line).toLocaleString()}
               </p>
             ) : null}
@@ -144,7 +144,7 @@ export function DraftCartLineRow({
             type="button"
             onClick={onRemove}
             aria-label={t(lang, "removeLine")}
-            className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-800"
+            className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-danger/30 bg-danger-muted text-sm font-black text-danger"
           >
             ✕
           </button>
@@ -161,7 +161,7 @@ export function DraftCartLineRow({
           {unitHint ? <p className="text-xs font-semibold text-muted-foreground">{unitHint}</p> : null}
           {pharmacyMode ? <PharmacyFefoBatchChip lang={lang} line={line} onTap={onBatchTap} /> : null}
           {lineDiscountUgx(line) > 0 ? (
-            <p className="text-xs font-bold text-amber-800">
+            <p className="text-xs font-bold text-warning-foreground">
               − UGX {lineDiscountUgx(line).toLocaleString()} {t(lang, "discountBtn").toLowerCase()}
             </p>
           ) : null}
@@ -212,7 +212,7 @@ export function DraftCartLineRow({
         <button
           type="button"
           onClick={onRemove}
-          className="min-h-[44px] rounded-xl border-2 border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-800"
+          className="min-h-[44px] rounded-xl border-2 border-danger/30 bg-danger-muted px-4 text-sm font-black text-danger"
         >
           ✕
         </button>

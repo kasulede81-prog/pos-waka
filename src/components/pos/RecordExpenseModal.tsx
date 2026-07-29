@@ -109,8 +109,8 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
             className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-border px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
           />
         </label>
-        {err ? <Body className="!text-sm text-danger-foreground">{err}</Body> : null}
-        {saved ? <Body className="!text-sm text-emerald-700">{t(lang, "cashExpenseSaved")}</Body> : null}
+        {err ? <Body className="!text-sm text-danger">{err}</Body> : null}
+        {saved ? <Body className="!text-sm text-success">{t(lang, "cashExpenseSaved")}</Body> : null}
         <div className="flex gap-3 pt-2">
           <WakaButton type="button" variant="secondary" className="flex-1" onClick={onClose}>
             {t(lang, "cancel")}

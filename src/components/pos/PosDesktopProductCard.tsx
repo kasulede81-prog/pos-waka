@@ -88,7 +88,7 @@ export function PosDesktopProductCard({
         <p
           className={clsx(
             "pos-ds-product-stock mt-0.5 truncate text-[10px] font-bold",
-            lowStock ? "text-rose-700" : "text-emerald-800",
+            lowStock ? "text-danger" : "text-success",
           )}
         >
           {stockLabel}: {formatStockLabel(product)}

@@ -16,20 +16,20 @@ export function EmptyShelfPanel({ lang, shelfLabel, canAdd, onAddProduct, compac
   return (
     <div
       className={clsx(
-        "rounded-xl border border-rose-200/90 bg-rose-50/40",
+        "rounded-xl border border-danger/30 bg-danger-muted/40",
         compact ? "px-3 py-4" : "px-4 py-6",
       )}
     >
       <div className="flex items-start gap-2.5">
         <span
-          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-700"
+          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger-muted text-danger"
           aria-hidden
         >
           <AlertTriangle className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-black text-rose-900">{t(lang, "shelfEmptyTitle")}</p>
-          <p className="mt-1 text-xs font-semibold leading-snug text-rose-800/90">
+          <p className="text-sm font-black text-danger">{t(lang, "shelfEmptyTitle")}</p>
+          <p className="mt-1 text-xs font-semibold leading-snug text-danger">
             {tTemplate(lang, "shelfEmptyDetail", { shelf: shelfLabel })}
           </p>
           {canAdd ? (

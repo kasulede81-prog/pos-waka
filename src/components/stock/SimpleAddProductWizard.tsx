@@ -65,10 +65,10 @@ const TOTAL_STEPS = STEPS.length;
 
 function WizardAutoConfiguredCard({ lang, value }: { lang: Language; value: string }) {
   return (
-    <div className="space-y-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-4 shadow-sm">
+    <div className="space-y-3 rounded-2xl border border-success/25 bg-success-muted0/5 px-4 py-4 shadow-sm">
       <p className="text-sm font-bold text-muted-foreground">{t(lang, "simpleAddPackTypeLabel")}</p>
       <p className="text-xl font-black text-foreground">{value}</p>
-      <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+      <p className="flex items-center gap-2 text-sm font-semibold text-success">
         <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
         {t(lang, "simpleAddAutoConfigured")}
       </p>
@@ -487,13 +487,13 @@ export function SimpleAddProductWizard({
                     <div
                       className={clsx(
                         WIZARD_INPUT_NUMERIC,
-                        "flex items-center border-emerald-500/25 bg-emerald-500/5 text-foreground",
+                        "flex items-center border-success/25 bg-success-muted0/5 text-foreground",
                       )}
                       aria-readonly
                     >
                       1
                     </div>
-                    <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-success">
                       <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
                       {t(lang, "simpleAddAutoConfigured")}
                     </p>

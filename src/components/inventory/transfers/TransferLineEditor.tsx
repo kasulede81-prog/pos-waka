@@ -59,7 +59,7 @@ export function TransferLineEditor({
         <button
           type="button"
           onClick={onRemove}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-rose-700"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-danger"
           aria-label={t(lang, "remove")}
         >
           <Trash2 className="h-4 w-4" aria-hidden />
@@ -87,10 +87,10 @@ export function TransferLineEditor({
       </label>
 
       {!validation.ok && qtyN > 0 ? (
-        <p className="mt-2 text-xs font-semibold text-rose-700">{t(lang, validation.errorKey ?? "invalid")}</p>
+        <p className="mt-2 text-xs font-semibold text-danger">{t(lang, validation.errorKey ?? "invalid")}</p>
       ) : null}
       {validation.warningKey && qtyN > 0 ? (
-        <p className="mt-2 text-xs font-semibold text-amber-800">{t(lang, validation.warningKey)}</p>
+        <p className="mt-2 text-xs font-semibold text-warning-foreground">{t(lang, validation.warningKey)}</p>
       ) : null}
 
       {qtyN > 0 && validation.ok ? (

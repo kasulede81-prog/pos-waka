@@ -21,14 +21,14 @@ export function VoidLineModal({ lang, open, line, onClose, onConfirm }: Props) {
   if (!open || !line) return null;
 
   return (
-    <AppModalOverlay className="z-[64] flex items-end justify-center bg-black/55 sm:items-center" role="dialog" aria-modal onClick={onClose}>
+    <AppModalOverlay className="z-[64] flex items-end justify-center bg-overlay/55 sm:items-center" role="dialog" aria-modal onClick={onClose}>
       <div
         className="w-full max-w-md rounded-t-[1.75rem] bg-card p-5 shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-black text-foreground">{t(lang, "voidTitle")}</h2>
         <p className="mt-1 text-sm font-semibold text-muted-foreground">{line.name}</p>
-        <p className="mt-1 text-lg font-black text-rose-700">UGX {line.lineTotalUgx.toLocaleString()}</p>
+        <p className="mt-1 text-lg font-black text-danger">UGX {line.lineTotalUgx.toLocaleString()}</p>
         <p className="mt-2 text-sm text-muted-foreground">{t(lang, "voidHint")}</p>
 
         <p className="mt-4 text-sm font-bold text-foreground">{t(lang, "voidReasonLabel")}</p>
@@ -40,7 +40,7 @@ export function VoidLineModal({ lang, open, line, onClose, onConfirm }: Props) {
               onClick={() => setReason(r)}
               className={clsx(
                 "flex min-h-[48px] w-full items-center rounded-2xl border-2 px-4 text-left text-base font-black",
-                reason === r ? "border-rose-500 bg-rose-50 text-rose-950" : "border-border text-foreground",
+                reason === r ? "border-danger bg-danger-muted text-danger" : "border-border text-foreground",
               )}
             >
               {t(lang, `voidReason_${r}`)}
@@ -65,7 +65,7 @@ export function VoidLineModal({ lang, open, line, onClose, onConfirm }: Props) {
           <button
             type="button"
             onClick={() => onConfirm(reason, note.trim())}
-            className="min-h-[52px] rounded-2xl bg-rose-600 py-3 font-black text-white"
+            className="min-h-[52px] rounded-2xl bg-danger py-3 font-black text-white"
           >
             {t(lang, "voidConfirm")}
           </button>

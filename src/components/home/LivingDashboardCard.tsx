@@ -103,7 +103,7 @@ export function LivingDashboardCard({
       ) : null}
 
       {tile.badge !== undefined && tile.badge > 0 ? (
-        <span className="absolute right-3 top-3 z-20 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-black text-white shadow-lg">
+        <span className="absolute right-3 top-3 z-20 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-danger px-1.5 text-xs font-black text-white shadow-lg">
           {tile.badge > 99 ? "99+" : tile.badge}
         </span>
       ) : null}
@@ -163,7 +163,7 @@ export function LivingDashboardCard({
               <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0">
                 <span className="text-sm font-black tabular-nums sm:text-base">{liveStat.value}</span>
                 {liveStat.trend ? (
-                  <span className="text-xs font-bold text-emerald-200">{liveStat.trend}</span>
+                  <span className="text-xs font-bold text-success">{liveStat.trend}</span>
                 ) : null}
               </div>
             </div>

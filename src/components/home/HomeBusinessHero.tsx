@@ -49,7 +49,7 @@ export function HomeBusinessHero({ lang, sellStat, onSell, heroActionLabelKey = 
               {t(lang, "builderLivePreview")}
             </span>
             {scene.isOpen ? (
-              <span className="rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+              <span className="rounded-full bg-success-muted0 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
                 {t(lang, "builderHomeOpen")}
               </span>
             ) : null}
@@ -76,7 +76,7 @@ export function HomeBusinessHero({ lang, sellStat, onSell, heroActionLabelKey = 
               <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
                 <span className="text-lg font-black tabular-nums text-white sm:text-xl">{sellStat.value}</span>
                 {sellStat.trend ? (
-                  <span className="text-xs font-bold text-emerald-200">{sellStat.trend}</span>
+                  <span className="text-xs font-bold text-success">{sellStat.trend}</span>
                 ) : null}
               </div>
             </div>

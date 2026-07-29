@@ -13,10 +13,10 @@ type Props = {
 
 const toneClass: Record<CommandCenterRecommendation["tone"], string> = {
   orange: "from-waka-50 to-waka-50 border-waka-100",
-  teal: "from-teal-50 to-emerald-50 border-teal-100",
+  teal: "from-success-muted to-success-muted/80 border-success/20",
   blue: "from-sky-50 to-indigo-50 border-sky-100",
-  rose: "from-rose-50 to-pink-50 border-rose-100",
-  amber: "from-amber-50 to-yellow-50 border-amber-100",
+  rose: "from-danger-muted to-danger-muted/80 border-danger/20",
+  amber: "from-warning-muted to-warning-muted/80 border-warning/20",
 };
 
 export function CommandCenterRecommendations({ lang, recommendations, sectionId }: Props) {
@@ -25,7 +25,7 @@ export function CommandCenterRecommendations({ lang, recommendations, sectionId 
   return (
     <section id={sectionId} className="rounded-3xl border border-border/90 bg-card p-4 shadow-sm sm:p-5">
       <div className="flex items-center gap-2">
-        <Lightbulb className="h-4 w-4 text-amber-500" aria-hidden />
+        <Lightbulb className="h-4 w-4 text-warning" aria-hidden />
         <h2 className="text-sm font-black text-foreground sm:text-base">{t(lang, "cmdCenterRecommendationsTitle")}</h2>
       </div>
       <ul className="mt-3 space-y-2">
@@ -42,7 +42,7 @@ export function CommandCenterRecommendations({ lang, recommendations, sectionId 
             </p>
             <Link
               to={rec.actionTo}
-              className="shrink-0 rounded-xl bg-white/90 px-3 py-2 text-xs font-black text-foreground shadow-sm ring-1 ring-border/80"
+              className="shrink-0 rounded-xl bg-card/90 px-3 py-2 text-xs font-black text-foreground shadow-sm ring-1 ring-border/80"
             >
               {t(lang, rec.actionLabelKey)}
             </Link>

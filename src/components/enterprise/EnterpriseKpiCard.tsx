@@ -38,11 +38,11 @@ function iconShellClasses(tone: EnterpriseKpiTone): string {
     case "highlight":
       return "bg-waka-600 text-white";
     case "success":
-      return clsx(statusTokens.success.badge, "text-success-foreground");
+      return statusTokens.success.icon;
     case "warning":
-      return clsx(statusTokens.warning.badge, "text-warning-foreground");
+      return statusTokens.warning.icon;
     case "danger":
-      return clsx(statusTokens.danger.badge, "text-danger-foreground");
+      return statusTokens.danger.icon;
     default:
       return "bg-muted text-muted-foreground";
   }
