@@ -27,7 +27,9 @@ export function isSettingsLauncherPath(pathname: string): boolean {
     pathname === "/settings" ||
     pathname.startsWith("/settings/") ||
     pathname === "/staff-access" ||
-    pathname === "/office/hardware"
+    pathname === "/office/hardware" ||
+    pathname === "/office/vision" ||
+    pathname.startsWith("/office/vision/")
   );
 }
 

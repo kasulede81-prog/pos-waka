@@ -113,6 +113,18 @@ const AuditCenterPage = lazy(() =>
 const HardwareSettingsPage = lazy(() =>
   import("./pages/HardwareSettingsPage").then((m) => ({ default: m.HardwareSettingsPage })),
 );
+const VisionCamerasPage = lazy(() =>
+  import("./pages/VisionCamerasPage").then((m) => ({ default: m.VisionCamerasPage })),
+);
+const VisionLiveViewPage = lazy(() =>
+  import("./pages/VisionLiveViewPage").then((m) => ({ default: m.VisionLiveViewPage })),
+);
+const VisionMonitorPage = lazy(() =>
+  import("./pages/VisionMonitorPage").then((m) => ({ default: m.VisionMonitorPage })),
+);
+const VisionProtectedRoute = lazy(() =>
+  import("./components/VisionProtectedRoute").then((m) => ({ default: m.VisionProtectedRoute })),
+);
 const MarketingAgentPage = lazy(() =>
   import("./pages/MarketingAgentPage").then((m) => ({ default: m.MarketingAgentPage })),
 );
@@ -551,6 +563,42 @@ function AppRoutes() {
                 <RoleProtectedRoute permission="settings.view">
                   <Suspense fallback={<LazyWait />}>
                     <HardwareSettingsPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/vision"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <VisionProtectedRoute lang={lang} mode="manage">
+                      <VisionCamerasPage lang={lang} />
+                    </VisionProtectedRoute>
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/vision/live"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <VisionProtectedRoute lang={lang} mode="live">
+                      <VisionLiveViewPage lang={lang} />
+                    </VisionProtectedRoute>
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/vision/monitor"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <VisionProtectedRoute lang={lang} mode="monitor">
+                      <VisionMonitorPage lang={lang} />
+                    </VisionProtectedRoute>
                   </Suspense>
                 </RoleProtectedRoute>
               }

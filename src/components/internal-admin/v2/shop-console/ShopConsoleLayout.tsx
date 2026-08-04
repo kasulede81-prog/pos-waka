@@ -16,6 +16,7 @@ const TAB_LABELS: Record<ShopConsoleTab, string> = {
   support: "Support",
   developer: "Developer",
   ai: "AI",
+  vision: "Vision",
 };
 
 export type ShopConsoleQuickHandlers = {

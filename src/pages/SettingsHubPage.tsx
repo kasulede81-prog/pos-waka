@@ -1,7 +1,7 @@
 import { actorHasPermission, actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, ShieldCheck, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
+import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Camera, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, ShieldCheck, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -22,6 +22,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { canSeeFinanceDiagnostics } from "../lib/financeVisibility";
+import { useShopVisionSettings } from "../hooks/useShopVisionSettings";
 
 export function SettingsHubPage({ lang }: { lang: Language }) {
   const [searchParams] = useSearchParams();
@@ -30,6 +31,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const hospitalityModeEnabled = usePosStore((s) => s.preferences.hospitalityModeEnabled);
   const pharmacyModeEnabled = usePosStore((s) => s.preferences.pharmacyModeEnabled);
   const { userId, snapshot, authMode } = useSubscription();
+  const { access: visionAccess } = useShopVisionSettings();
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const appVersion = import.meta.env.VITE_APP_VERSION?.trim() || "—";
   const preferences = usePosStore((s) => s.preferences);
@@ -196,6 +198,30 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
           title={t(lang, "officeCardHardware")}
           subtitle={t(lang, "officeCardHardwareSub")}
           Icon={Printer}
+        />
+        <OfficeNavCard
+          to="/office/vision"
+          title={t(lang, "officeCardVision")}
+          subtitle={
+            visionAccess.status === "included" || visionAccess.status === "local_bypass"
+              ? [
+                  visionAccess.status === "local_bypass"
+                    ? t(lang, "visionLicLocalBypass")
+                    : `${t(lang, "visionLicIncludedWith")} ${visionAccess.planLabel}`,
+                  visionAccess.maxCameras == null
+                    ? t(lang, "visionLicUnlimitedCams")
+                    : `${visionAccess.maxCameras} ${t(lang, "visionLicCameras")}`,
+                  visionAccess.maxDvrs == null
+                    ? t(lang, "visionLicUnlimitedDvrs")
+                    : `${visionAccess.maxDvrs} ${t(lang, "visionLicDvrs")}`,
+                ].join(" · ")
+              : visionAccess.status === "trial"
+                ? `${t(lang, "visionLicIncludedTrial")} · ${visionAccess.trialDaysRemaining ?? "—"} ${t(lang, "visionLicDaysLeft")}`
+                : visionAccess.status === "subscription_expired"
+                  ? t(lang, "visionLicSubExpired")
+                  : t(lang, "visionLicNotActivated")
+          }
+          Icon={Camera}
         />
       </OfficeNavSection>
 

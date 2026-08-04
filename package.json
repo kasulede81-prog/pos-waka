@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "vite --mode development",
     "dev:staging": "vite --mode staging",
+    "vision:edge": "node scripts/vision-edge-agent/server.mjs",
+    "vision:mediamtx": "docker run --rm -p 8554:8554 -p 8888:8888 -p 8889:8889 -p 9997:9997 -v \"$PWD/scripts/vision-edge-agent/mediamtx.yml:/mediamtx.yml\" bluenviron/mediamtx:latest /mediamtx.yml",
     "check:google-auth": "node scripts/check-google-auth-env.mjs",
     "build": "tsc -b && vite build --mode production && node scripts/verify-seo-assets.mjs",
     "build:staging": "tsc -b && vite build --mode staging",
@@ -99,6 +101,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.40.0",
     "hash-wasm": "^4.12.0",
+    "hls.js": "^1.6.16",
     "idb": "^8.0.3",
     "jspdf": "^3.0.4",
     "lottie-react": "^2.4.1",

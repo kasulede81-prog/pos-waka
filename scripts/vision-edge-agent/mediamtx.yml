@@ -1,0 +1,24 @@
+# Minimal MediaMTX config for WAKA Vision V1.2 (local only).
+# Paths are added dynamically by the Vision Edge Agent API.
+
+logLevel: info
+api: yes
+apiAddress: :9997
+
+rtsp: yes
+rtspAddress: :8554
+
+hls: yes
+hlsAddress: :8888
+hlsAlwaysRemux: no
+hlsVariant: lowLatency
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+
+# Allow browser on Vite/localhost to call WHEP
+webrtcAllowOrigins: ["*"]
+
+paths: {}

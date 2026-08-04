@@ -9,6 +9,7 @@ export const SHOP_CONSOLE_TABS = [
   "support",
   "developer",
   "ai",
+  "vision",
 ] as const;
 
 export type ShopConsoleTab = (typeof SHOP_CONSOLE_TABS)[number];

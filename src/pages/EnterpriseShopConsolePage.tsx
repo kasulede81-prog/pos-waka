@@ -64,6 +64,11 @@ const ShopConsoleAiTab = lazy(() =>
     default: m.ShopConsoleAiTab,
   })),
 );
+const ShopConsoleVisionTab = lazy(() =>
+  import("../components/internal-admin/v2/shop-console/tabs/ShopConsoleVisionTab").then((m) => ({
+    default: m.ShopConsoleVisionTab,
+  })),
+);
 
 type Props = {
   lang: Language;
@@ -395,6 +400,12 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
         return (
           <Suspense fallback={<TabFallback />}>
             <ShopConsoleAiTab ctx={ctx} />
+          </Suspense>
+        );
+      case "vision":
+        return (
+          <Suspense fallback={<TabFallback />}>
+            <ShopConsoleVisionTab ctx={ctx} />
           </Suspense>
         );
       default:
