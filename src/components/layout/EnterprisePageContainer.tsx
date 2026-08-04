@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import type { ReactNode } from "react";
+import { enterpriseSpace } from "../../lib/enterpriseSpacing";
 
 type Variant = "default" | "workspace" | "viewport" | "flush";
 
@@ -12,8 +13,8 @@ type Props = {
 };
 
 const VARIANT_CLASS: Record<Variant, string> = {
-  default: "enterprise-page space-y-4",
-  workspace: "enterprise-page enterprise-page--workspace space-y-3",
+  default: clsx("enterprise-page", enterpriseSpace.pageStack),
+  workspace: clsx("enterprise-page enterprise-page--workspace", enterpriseSpace.workspaceStack),
   viewport: "enterprise-page enterprise-page--viewport flex h-full min-h-0 flex-1 flex-col overflow-hidden",
   flush: "enterprise-page enterprise-page--flush min-w-0 max-w-full",
 };

@@ -42,6 +42,7 @@ import {
   shouldMountMobileCheckoutOverlay,
   shouldShowMinimizedCheckoutFab,
 } from "../../../lib/posCheckoutMount";
+import { PosDesktopCheckoutRail } from "../../pos/PosDesktopCheckoutRail";
 import { posSplitGridTemplateColumns } from "../../../lib/posDesktopSplit";
 import { useDisplayScale } from "../../../hooks/useDisplayScale";
 import { DISPLAY_SCALE_META } from "../../../lib/displayScale/scaleTokens";
@@ -196,10 +197,13 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
     draftLines.length,
     saleCheckoutMinimized,
   );
-  const useDesktopCatalogCheckoutDock = isFullDesktopPos && mountDesktopCheckoutSidebar;
+  const desktopCheckoutCollapsed = isFullDesktopPos && saleCheckoutMinimized && draftLines.length > 0;
+  const useDesktopCatalogCheckoutDock = isFullDesktopPos && mountDesktopCheckoutSidebar && !desktopCheckoutCollapsed;
   const posSplitColumns =
     mountDesktopCheckoutSidebar && isFullDesktopPos
-      ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier)
+      ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier, {
+          collapsed: desktopCheckoutCollapsed,
+        })
       : null;
   const mountCompactCheckoutSlideover = shouldMountCompactCheckoutSlideover(
     posLayoutMode,
@@ -315,6 +319,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
 
   const focusCatalogForAdd = useCallback(() => {
     setCatalogNumpadOpen(false);
+    // Phase 32.1 — collapse rail; keep checkout column mounted
     if (isFullDesktopPos) setSaleCheckoutMinimized(true);
     catalogRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [isFullDesktopPos]);
@@ -414,7 +419,6 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
             lang={lang}
             products={products}
             preferences={preferences}
-            ephemeralCategory
             onPick={(p) => handleMedicinePick(p.id)}
             onBarcodeNotFound={() => flash(t(lang, "posBarcodeNotFound"))}
             searchPlaceholder={t(lang, "pharmacyRxAddMedicinePh")}
@@ -424,14 +428,25 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
 
         {mountDesktopCheckoutSidebar ? (
           <aside className="sticky top-0 min-h-0 self-stretch">
-            <PharmacyCheckoutMetaStrip
-              lang={lang}
-              selectedRx={selectedRx}
-              products={products}
-              draftLines={draftLines}
-              dispenseMode={pharmacyDispenseMode}
-            />
-            <PosCheckoutPanel {...checkout.buildCheckoutPanelProps({ ...checkoutExtras, variant: "sidebar" })} />
+            {desktopCheckoutCollapsed ? (
+              <PosDesktopCheckoutRail
+                lang={lang}
+                productCount={checkout.draftCartStats.productCount}
+                payableUgx={checkout.draftPayable}
+                onExpand={() => setSaleCheckoutMinimized(false)}
+              />
+            ) : (
+              <>
+                <PharmacyCheckoutMetaStrip
+                  lang={lang}
+                  selectedRx={selectedRx}
+                  products={products}
+                  draftLines={draftLines}
+                  dispenseMode={pharmacyDispenseMode}
+                />
+                <PosCheckoutPanel {...checkout.buildCheckoutPanelProps({ ...checkoutExtras, variant: "sidebar" })} />
+              </>
+            )}
           </aside>
         ) : null}
       </div>

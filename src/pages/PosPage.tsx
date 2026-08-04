@@ -3,8 +3,8 @@ import { actorHasPermission } from "../lib/actorAuthorization";
 import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ArrowLeft, Banknote, ScanLine, Search, X } from "lucide-react";
-import type { Language, LineInputMode, PharmacySaleUnitType, PosShelfLayoutConfig, Product, SaleLine } from "../types";
+import { Banknote, ScanLine, Search, X } from "lucide-react";
+import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
@@ -17,6 +17,7 @@ import { usePosLayoutMode } from "../hooks/usePosLayoutMode";
 import { usePosViewportWidth } from "../hooks/usePosViewportWidth";
 import { posSplitGridTemplateColumns } from "../lib/posDesktopSplit";
 import { useCatalogContainerWidth } from "../hooks/useCatalogContainerWidth";
+import { catalogProductGridStyle } from "../lib/posProductGridColumns";
 import { resolveConfirmSaleAction } from "../lib/posCheckoutFocus";
 import { resolveScanToCartInput } from "../lib/posScanToCart";
 import {
@@ -33,8 +34,10 @@ import {
   shouldMountMobileCheckoutOverlay,
   shouldShowMinimizedCheckoutFab,
 } from "../lib/posCheckoutMount";
+import { resolvePosSellWorkspaceMode } from "../lib/posSellWorkspace";
 import { PosCompactCheckoutSlideover } from "../components/pos/PosCompactCheckoutSlideover";
 import { PosMinimizedCheckoutFab } from "../components/pos/PosMinimizedCheckoutFab";
+import { PosDesktopCheckoutRail } from "../components/pos/PosDesktopCheckoutRail";
 import { DiscountLineModal } from "../components/pos/DiscountLineModal";
 import { ShiftCloseModal } from "../components/pos/ShiftCloseModal";
 import { ShiftSellGateway } from "../components/pos/ShiftSellGateway";
@@ -59,7 +62,6 @@ import { PosSellCatalogShelfSection } from "../components/pos/PosSellCatalogShel
 import { PosExitConfirmModal } from "../components/pos/PosExitConfirmModal";
 import { registerPosExitHandler } from "../lib/posExitGuard";
 import { lineDiscountUgx } from "../lib/saleAdjustments";
-import { PosPageScrollSpacer } from "../components/layout/posScrollSpacer";
 import { PosScreenPortal } from "../components/layout/PosScreenPortal";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { useKeyboardInset } from "../hooks/useKeyboardInset";
@@ -82,16 +84,9 @@ import { pendingSales } from "../lib/saleStatus";
 import { useDeferredSales } from "../hooks/useDeferredSales";
 import {
   CATEGORY_FILTER_ALL,
-  UNCATEGORIZED_SENTINEL,
   productMatchesCategoryFilter,
-  shelfIconFor,
 } from "../lib/productCategories";
-import {
-  buildProductSellSearchIndex,
-  filterIndexedProductsForSellView,
-  filterProductsByCategoryOnly,
-  productMatchesIndexedSellSearch,
-} from "../lib/posProductSearch";
+import { useSellProductBrowseEngine } from "../hooks/useSellProductBrowseEngine";
 import { formatStockLabel, getPosSellPresets } from "../lib/sellingEngine";
 import {
   baseUnitsForSaleUnit,
@@ -140,23 +135,15 @@ import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from ".
 import { isNativePrintPlatform } from "../lib/nativeReceiptPrint";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
-import { posSearchAliases } from "../lib/pharmacyUx";
 import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
 import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
-import {
-  buildPosShelfDisplayCards,
-  buildQuickSellShelfCard,
-  QUICK_SELL_SHELF_KEY,
-  shelfMasonryGridClass,
-} from "../lib/posShelfLayout";
-import { PosShelfTile } from "../components/pos/PosShelfTile";
+import { PosShelfDrillDownHeader } from "../components/pos/PosShelfDrillDownHeader";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
 const POS_CHECKOUT_METHODS: PaymentMethod[] = ["cash", "atm", "mobile_money", "credit"];
 
-const EMPTY_SHELF_LAYOUT: Record<string, PosShelfLayoutConfig> = {};
 const EMPTY_QUICK_SELL_IDS: string[] = [];
 
 const Numpad = memo(function Numpad({
@@ -416,15 +403,22 @@ export function PosPage({ lang }: { lang: Language }) {
     draftLines.length,
     saleCheckoutMinimized,
   );
-  const useDesktopCatalogCheckoutDock = isFullDesktopPos && mountDesktopCheckoutSidebar;
+  const desktopCheckoutCollapsed = isFullDesktopPos && saleCheckoutMinimized && draftLines.length > 0;
+  const useDesktopCatalogCheckoutDock = isFullDesktopPos && mountDesktopCheckoutSidebar && !desktopCheckoutCollapsed;
   const posSplitColumns =
     mountDesktopCheckoutSidebar && isFullDesktopPos
-      ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier)
+      ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier, {
+          collapsed: desktopCheckoutCollapsed,
+        })
       : null;
   const { columnCount: productGridCols } = useCatalogContainerWidth(catalogWidthRef, {
     displayScale: displayScaleLevel,
     phoneBand: mobileSellFocus,
   });
+  const catalogGridFor = useCallback(
+    (productCount: number) => catalogProductGridStyle(productGridCols, productCount),
+    [productGridCols],
+  );
   const cartQtyByProductId = useMemo(() => {
     const map = new Map<string, number>();
     for (const line of draftLines) {
@@ -500,14 +494,25 @@ export function PosPage({ lang }: { lang: Language }) {
   const [cameraScanStatus, setCameraScanStatus] = useState("");
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
-  const shelfOrderKeys = preferences.posPinnedShelfKeys ?? [];
-  const shelfLayout = preferences.posShelfLayout ?? EMPTY_SHELF_LAYOUT;
-  const shelfDefaultScale = preferences.posShelfDefaultScale ?? 35;
+  const browse = useSellProductBrowseEngine({
+    lang,
+    products,
+    preferences: shopPreferences,
+    searchQuery,
+    setSearchQuery,
+  });
+  const sellCategoryKey = browse.sellCategoryKey;
+  const setSellCategoryFilter = browse.setSellCategoryFilter;
+  const filteredProducts = browse.filteredProducts;
+  const shelfCards = browse.shelfCards;
+  const sellSearchContext = browse.sellSearchContext;
+  const sellRowMatchesSearch = browse.sellRowMatchesSearch;
+  const selectedShelfLabel = browse.selectedShelfLabel;
+  const favoriteIdSet = browse.favoriteIdSet;
+
   const quickSellProductIds = preferences.posQuickSellProductIds ?? EMPTY_QUICK_SELL_IDS;
   const soldTodayByProduct = useMemo(() => scanTodaySalesHead(sales).unitsByProduct, [sales]);
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p] as const)), [products]);
-  const favoriteIdSet = useMemo(() => new Set(preferences.favoriteProductIds ?? []), [preferences.favoriteProductIds]);
 
   const favoriteIds = preferences.favoriteProductIds ?? [];
   const recentIds = preferences.recentProductIds ?? [];
@@ -668,48 +673,6 @@ export function PosPage({ lang }: { lang: Language }) {
     [products, soldTodayByProduct, sellCategoryKey],
   );
 
-  const setSellCategoryFilter = useCallback(
-    (next: string) => {
-      setPreferences({
-        posSellCategoryFilter:
-          next === CATEGORY_FILTER_ALL || next === "" ? undefined : next === UNCATEGORIZED_SENTINEL ? UNCATEGORIZED_SENTINEL : next,
-      });
-    },
-    [setPreferences],
-  );
-
-  const clearSellView = useCallback(() => {
-    setSellCategoryFilter(CATEGORY_FILTER_ALL);
-    setSearchQuery("");
-  }, [setSellCategoryFilter]);
-
-  const sellSearchContext = useMemo(() => {
-    const q = searchQuery.trim();
-    const qLower = q.toLowerCase();
-    const aliases = posSearchAliases(
-      shopPreferences.businessType,
-      shopPreferences.pharmacyModeEnabled,
-      shopPreferences.hospitalityModeEnabled,
-    );
-    const aliasSet = new Set<string>();
-    if (qLower && aliases[qLower]) {
-      for (const a of aliases[qLower]) aliasSet.add(a);
-    }
-    for (const tok of qLower.split(/\s+/).filter(Boolean)) {
-      const al = aliases[tok];
-      if (al) for (const x of al) aliasSet.add(x);
-    }
-    return { q, aliasTerms: [...aliasSet] };
-  }, [searchQuery, shopPreferences.businessType, shopPreferences.pharmacyModeEnabled]);
-
-  const productSearchIndex = useMemo(() => buildProductSellSearchIndex(products), [products]);
-
-  const sellRowMatchesSearch = useMemo(() => {
-    const { q, aliasTerms } = sellSearchContext;
-    if (!q) return () => true;
-    return (p: Product) => productMatchesIndexedSellSearch(productSearchIndex, p, q, aliasTerms);
-  }, [sellSearchContext, productSearchIndex]);
-
   const frequentTodayVisible = useMemo(
     () => frequentToday.filter(({ product }) => sellRowMatchesSearch(product)),
     [frequentToday, sellRowMatchesSearch],
@@ -725,24 +688,6 @@ export function PosPage({ lang }: { lang: Language }) {
     return recentProducts.filter((p) => sellRowMatchesSearch(p) && !fav.includes(p.id));
   }, [recentProducts, favoriteIds, sellRowMatchesSearch]);
 
-  const filteredProducts = useMemo(() => {
-    const { q, aliasTerms } = sellSearchContext;
-    if (!q) {
-      return filterProductsByCategoryOnly(products, sellCategoryKey, favoriteIdSet);
-    }
-    return filterIndexedProductsForSellView(productSearchIndex, sellCategoryKey, q, aliasTerms, favoriteIdSet);
-  }, [products, productSearchIndex, sellSearchContext, sellCategoryKey, favoriteIdSet]);
-
-  const shelfCards = useMemo(() => {
-    return buildPosShelfDisplayCards(
-      products,
-      t(lang, "posNoShelf"),
-      shelfLayout,
-      shelfOrderKeys,
-      shelfDefaultScale,
-    );
-  }, [products, lang, shelfLayout, shelfOrderKeys, shelfDefaultScale]);
-
   const quickSellProducts = useMemo(
     () =>
       quickSellProductIds
@@ -750,33 +695,6 @@ export function PosPage({ lang }: { lang: Language }) {
         .filter((p): p is Product => p != null && !isProductPlanLocked(p.id, lockedIds)),
     [quickSellProductIds, productById, lockedIds],
   );
-
-  const quickSellShelf = useMemo(
-    () =>
-      buildQuickSellShelfCard(
-        quickSellProductIds,
-        products,
-        t(lang, "posQuickSellShelf"),
-        shelfLayout[QUICK_SELL_SHELF_KEY],
-        shelfDefaultScale,
-      ),
-    [quickSellProductIds, products, lang, shelfLayout, shelfDefaultScale],
-  );
-
-  const showShelfBoxes =
-    products.length > 0 &&
-    sellCategoryKey === CATEGORY_FILTER_ALL &&
-    sellSearchContext.q.length === 0 &&
-    !isFullDesktopPos &&
-    !catalogSellMode;
-  const hasSellViewFilter = sellCategoryKey !== CATEGORY_FILTER_ALL || sellSearchContext.q.length > 0;
-
-  const selectedShelfLabel =
-    sellCategoryKey === UNCATEGORIZED_SENTINEL
-      ? t(lang, "posNoShelf")
-      : sellCategoryKey === CATEGORY_FILTER_ALL
-        ? t(lang, "posCategoryAll")
-        : sellCategoryKey;
 
   const openProduct = useCallback(
     (p: Product) => {
@@ -1317,6 +1235,13 @@ export function PosPage({ lang }: { lang: Language }) {
     draftLines.length,
     saleCheckoutMinimized,
   );
+  const sellWorkspaceMode = resolvePosSellWorkspaceMode({
+    receiptOpen: receiptSaleId !== null,
+    searchQuery,
+    draftLineCount: draftLines.length,
+    checkoutExpanded: !saleCheckoutMinimized,
+    paymentWorkspaceActive: showDesktopCatalogCheckoutDock || (checkoutPanelOpen && draftLines.length > 0),
+  });
 
   usePosAndroidBackStack({
     cameraScanOpen,
@@ -1544,10 +1469,11 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const focusCatalogForAdd = useCallback(() => {
     setCatalogNumpadOpen(false);
+    // Phase 32.1 — collapse to rail (sidebar stays mounted); do not unmount checkout.
     if (isFullDesktopPos) setSaleCheckoutMinimized(true);
     catalogRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     window.requestAnimationFrame(() => searchInputRef.current?.focus());
-  }, []);
+  }, [isFullDesktopPos]);
 
   const checkoutPanelCommon = {
     lang,
@@ -1606,7 +1532,6 @@ export function PosPage({ lang }: { lang: Language }) {
   /** Mobile + full desktop: open shelf products full-screen instead of below the grid. */
   const catalogShelfDrillDown = catalogSellMode && showCatalogProductsBelow;
   const showCatalogSearchResults = catalogSellMode && sellSearchContext.q.length > 0;
-  const showDesktopProductView = !catalogSellMode && hasSellViewFilter;
 
   const catalogShelfCards = shelfCards;
 
@@ -1676,11 +1601,17 @@ export function PosPage({ lang }: { lang: Language }) {
         />
       );
     }
+    const grid = catalogGridFor(filteredProducts.length);
     if (isFullDesktopPos) {
       return (
         <div
           className="grid gap-1.5"
-          style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
+          style={{
+            gridTemplateColumns: grid.gridTemplateColumns,
+            justifyContent: grid.justifyContent,
+          }}
+          data-pos-sparse-cols={grid.columns}
+          data-pos-sparse={grid.sparse ? "1" : undefined}
         >
           {filteredProducts.map((p) => (
             <PosDesktopProductCard
@@ -1702,7 +1633,12 @@ export function PosPage({ lang }: { lang: Language }) {
     return (
       <div
         className="grid gap-2"
-        style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
+        style={{
+          gridTemplateColumns: grid.gridTemplateColumns,
+          justifyContent: grid.justifyContent,
+        }}
+        data-pos-sparse-cols={grid.columns}
+        data-pos-sparse={grid.sparse ? "1" : undefined}
       >
         {filteredProducts.map((p) => (
           <PosSellProductCard
@@ -1816,6 +1752,7 @@ export function PosPage({ lang }: { lang: Language }) {
           ? "flex min-h-0 flex-1 flex-col overflow-hidden"
           : "space-y-2",
       )}
+      data-sell-workspace-mode={sellWorkspaceMode}
     >
       <PosOfflineBanner lang={lang} compact={catalogSellMode} />
       {isFullDesktopPos ? (
@@ -2021,36 +1958,8 @@ export function PosPage({ lang }: { lang: Language }) {
         <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} className="shrink-0" />
       ) : null}
 
-      {showDesktopCatalogCheckoutDock ? (
-        <PosDesktopCatalogCheckoutDock
-          lang={lang}
-          paymentMethod={paymentMethod}
-          catalogNumpadOpen={catalogNumpadOpen}
-          onCatalogNumpadOpenChange={setCatalogNumpadOpen}
-          cashInput={cashInput}
-          mobileMoneyInput={mobileMoneyInput}
-          checkoutAmountField={checkoutAmountField}
-          checkoutKeypadMode={checkoutKeypadMode}
-          changeDue={changeDue}
-          computedDebt={computedDebt}
-          saleCustomerId={saleCustomerId}
-          saleCustomerName={saleCustomerName}
-          saleCustomerPhone={saleCustomerPhone}
-          customers={customers}
-          customerSelectRef={customerSelectRef}
-          saveButtonRef={saveButtonRef}
-          saveSaleLabel={modeTerm("saveSale")}
-          saveDisabled={draftLines.length === 0}
-          onCheckoutInputField={handleCheckoutInputField}
-          onCheckoutKeypadModeChange={setCheckoutKeypadMode}
-          onAppendCheckoutDigit={appendCheckoutDigit}
-          onClearCheckoutAmount={clearCheckoutAmount}
-          onSaleCustomerId={setSaleCustomerId}
-          onSaleCustomerName={setSaleCustomerName}
-          onSaleCustomerPhone={setSaleCustomerPhone}
-          onFinishSale={finishSale}
-        />
-      ) : products.length === 0 && shelfCards.length === 0 ? (
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      {products.length === 0 && shelfCards.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-border bg-muted p-8 text-center">
           <p className="text-2xl font-black text-foreground">{t(lang, "posEmptyTitle")}</p>
           <p className="mt-2 text-lg text-muted-foreground">{t(lang, "posEmptySub")}</p>
@@ -2072,24 +1981,12 @@ export function PosPage({ lang }: { lang: Language }) {
             className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
             data-pos-catalog-scroll={catalogSellMode ? true : undefined}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-card/95 px-2.5 py-2 shadow-sm backdrop-blur">
-              <button
-                type="button"
-                onClick={() => setSellCategoryFilter(CATEGORY_FILTER_ALL)}
-                className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white shadow-sm active:bg-waka-700"
-              >
-                <ArrowLeft className="h-5 w-5" aria-hidden />
-                {t(lang, "posBackToShelves")}
-              </button>
-              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-foreground">
-                {shelfIconFor(selectedShelfLabel) ? (
-                  <span className="mr-1" aria-hidden>
-                    {shelfIconFor(selectedShelfLabel)}
-                  </span>
-                ) : null}
-                {selectedShelfLabel}
-              </p>
-            </div>
+            <PosShelfDrillDownHeader
+              lang={lang}
+              shelfLabel={selectedShelfLabel}
+              productCount={filteredProducts.length}
+              onBack={browse.backToShelves}
+            />
             {renderCatalogProductGrid()}
           </section>
         ) : (
@@ -2146,208 +2043,120 @@ export function PosPage({ lang }: { lang: Language }) {
               onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
               cartQtyByProductId={cartQtyByProductId}
             />
-          ) : isFullDesktopPos ? (
-            <div
-              className="grid gap-1.5"
-              style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
-            >
-              {filteredProducts.map((p) => (
-                <PosDesktopProductCard
-                  key={p.id}
-                  product={p}
-                  stockLabel={t(lang, "stockLabel")}
-                  sellLabel={t(lang, "addToSale")}
-                  locked={isProductPlanLocked(p.id, lockedIds)}
-                  lockedBadge={t(lang, "productLockedBadge")}
-                  favorite={favoriteIdSet.has(p.id)}
-                  cartQty={cartQtyByProductId.get(p.id) ?? 0}
-                  onPick={openProduct}
-                  onToggleFavorite={toggleFavoriteProduct}
-                />
-              ))}
-            </div>
           ) : (
-            <div
-              className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
-            >
-              {filteredProducts.map((p) => (
-                <PosSellProductCard
-                  key={p.id}
-                  product={p}
-                  stockLabel={t(lang, "stockLabel")}
-                  addLabel={t(lang, "addToSale")}
-                  locked={isProductPlanLocked(p.id, lockedIds)}
-                  lockedBadge={t(lang, "productLockedBadge")}
-                  cartQty={cartQtyByProductId.get(p.id) ?? 0}
-                  onPick={openProduct}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      ) : showShelfBoxes ? (
-        <section className="space-y-2.5">
-          <div className="flex items-center justify-end gap-2">
-            <p className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-black text-muted-foreground">
-              {products.length}
-            </p>
-          </div>
-
-          {quickSellProducts.length > 0 ? (
-            <div className="rounded-2xl border border-waka-200 bg-gradient-to-br from-waka-50 to-waka-50/80 p-2.5">
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-lg" aria-hidden>
-                  {quickSellShelf?.icon ?? "⚡"}
-                </span>
-                <p className="text-xs font-black uppercase tracking-wide text-waka-900">
-                  {quickSellShelf?.label ?? t(lang, "posQuickSellShelf")}
-                </p>
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
-                {quickSellProducts.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => quickTapAddProduct(p)}
-                    className="shrink-0 rounded-xl border border-waka-200/90 bg-card px-3 py-2 text-left shadow-sm active:border-waka-400 active:bg-waka-50"
-                  >
-                    <span className="block max-w-[7rem] truncate text-sm font-black text-foreground">{p.name}</span>
-                    <span className="text-[10px] font-bold text-waka-700">UGX {p.sellingPricePerUnitUgx.toLocaleString()}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <div className={shelfMasonryGridClass(mobileSellFocus)}>
-            {shelfCards.map((shelf) => (
-              <PosShelfTile
-                key={shelf.key}
-                shelf={shelf}
-                lang={lang}
-                mode="sell"
-                sellFocus={mobileSellFocus}
-                countLabel={t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
-                onClick={() => setSellCategoryFilter(shelf.key)}
-              />
-            ))}
-          </div>
-        </section>
-      ) : showDesktopProductView && filteredProducts.length === 0 ? (
-        <section className={clsx("space-y-2", isFullDesktopPos && "min-h-0 flex-1")}>
-          {hasSellViewFilter && !isFullDesktopPos ? (
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-card/95 px-2.5 py-2 shadow-sm backdrop-blur">
-              <button
-                type="button"
-                onClick={clearSellView}
-                className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white shadow-sm active:bg-waka-700"
-              >
-                <ArrowLeft className="h-5 w-5" aria-hidden />
-                {t(lang, "posBackToShelves")}
-              </button>
-              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-foreground">
-                {sellSearchContext.q ? t(lang, "posSearchResults") : selectedShelfLabel}
-              </p>
-            </div>
-          ) : null}
-          <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-lg font-bold text-warning-foreground">{t(lang, "posSellNoMatch")}</p>
-        </section>
-      ) : showDesktopProductView ? (
-        <section
-          ref={catalogRef}
-          className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
-          data-pos-catalog-scroll={catalogSellMode ? true : undefined}
-        >
-          {!isFullDesktopPos ? (
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-card/95 px-2.5 py-2 shadow-sm backdrop-blur">
-            <button
-              type="button"
-              onClick={clearSellView}
-              className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white shadow-sm active:bg-waka-700"
-            >
-              <ArrowLeft className="h-5 w-5" aria-hidden />
-              {t(lang, "posBackToShelves")}
-            </button>
-            <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-foreground">
-              {sellCategoryKey !== CATEGORY_FILTER_ALL && shelfIconFor(selectedShelfLabel) ? (
-                <span className="mr-1" aria-hidden>
-                  {shelfIconFor(selectedShelfLabel)}
-                </span>
-              ) : null}
-              {sellSearchContext.q ? t(lang, "posSearchResults") : selectedShelfLabel}
-            </p>
-          </div>
-          ) : null}
-          {filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
-            <VirtualizedProductGrid
-              products={filteredProducts}
-              columnCount={productGridCols}
-              onPick={openProduct}
-              stockLabel={t(lang, "stockLabel")}
-              noShelfLabel={t(lang, "posNoShelf")}
-              addLabel={t(lang, "addToSale")}
-              isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
-              lockedBadge={t(lang, "productLockedBadge")}
-              variant={isFullDesktopPos ? "sellDesktop" : "default"}
-              favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
-              onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
-              cartQtyByProductId={cartQtyByProductId}
-            />
-          ) : (
-            <div
-              className={clsx("grid", isFullDesktopPos ? "gap-1.5" : "gap-2.5")}
-              style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
-            >
-              {filteredProducts.map((p) => {
-                const locked = isProductPlanLocked(p.id, lockedIds);
-                if (isFullDesktopPos) {
-                  return (
+            (() => {
+              const searchGrid = catalogGridFor(filteredProducts.length);
+              return isFullDesktopPos ? (
+                <div
+                  className="grid gap-1.5"
+                  style={{
+                    gridTemplateColumns: searchGrid.gridTemplateColumns,
+                    justifyContent: searchGrid.justifyContent,
+                  }}
+                  data-pos-sparse-cols={searchGrid.columns}
+                  data-pos-sparse={searchGrid.sparse ? "1" : undefined}
+                >
+                  {filteredProducts.map((p) => (
                     <PosDesktopProductCard
                       key={p.id}
                       product={p}
                       stockLabel={t(lang, "stockLabel")}
                       sellLabel={t(lang, "addToSale")}
-                      locked={locked}
+                      locked={isProductPlanLocked(p.id, lockedIds)}
                       lockedBadge={t(lang, "productLockedBadge")}
                       favorite={favoriteIdSet.has(p.id)}
                       cartQty={cartQtyByProductId.get(p.id) ?? 0}
                       onPick={openProduct}
                       onToggleFavorite={toggleFavoriteProduct}
                     />
-                  );
-                }
-                return (
-                  <PosSellProductCard
-                    key={p.id}
-                    product={p}
-                    stockLabel={t(lang, "stockLabel")}
-                    addLabel={t(lang, "addToSale")}
-                    locked={locked}
-                    lockedBadge={t(lang, "productLockedBadge")}
-                    cartQty={cartQtyByProductId.get(p.id) ?? 0}
-                    onPick={openProduct}
-                  />
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="grid gap-2"
+                  style={{
+                    gridTemplateColumns: searchGrid.gridTemplateColumns,
+                    justifyContent: searchGrid.justifyContent,
+                  }}
+                  data-pos-sparse-cols={searchGrid.columns}
+                  data-pos-sparse={searchGrid.sparse ? "1" : undefined}
+                >
+                  {filteredProducts.map((p) => (
+                    <PosSellProductCard
+                      key={p.id}
+                      product={p}
+                      stockLabel={t(lang, "stockLabel")}
+                      addLabel={t(lang, "addToSale")}
+                      locked={isProductPlanLocked(p.id, lockedIds)}
+                      lockedBadge={t(lang, "productLockedBadge")}
+                      cartQty={cartQtyByProductId.get(p.id) ?? 0}
+                      onPick={openProduct}
+                    />
+                  ))}
+                </div>
+              );
+            })()
           )}
         </section>
       ) : null}
 
-        {!catalogSellMode ? <PosPageScrollSpacer minimizedCheckout={showMinimizedCheckoutFab} /> : null}
+      {showDesktopCatalogCheckoutDock ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex max-h-[min(55%,28rem)] flex-col justify-end p-1.5">
+          <div className="pointer-events-auto min-h-0 overflow-hidden rounded-xl shadow-2xl ring-1 ring-border/80">
+            <PosDesktopCatalogCheckoutDock
+              lang={lang}
+              paymentMethod={paymentMethod}
+              catalogNumpadOpen={catalogNumpadOpen}
+              onCatalogNumpadOpenChange={setCatalogNumpadOpen}
+              cashInput={cashInput}
+              mobileMoneyInput={mobileMoneyInput}
+              checkoutAmountField={checkoutAmountField}
+              checkoutKeypadMode={checkoutKeypadMode}
+              changeDue={changeDue}
+              computedDebt={computedDebt}
+              saleCustomerId={saleCustomerId}
+              saleCustomerName={saleCustomerName}
+              saleCustomerPhone={saleCustomerPhone}
+              customers={customers}
+              customerSelectRef={customerSelectRef}
+              saveButtonRef={saveButtonRef}
+              saveSaleLabel={modeTerm("saveSale")}
+              saveDisabled={draftLines.length === 0}
+              onCheckoutInputField={handleCheckoutInputField}
+              onCheckoutKeypadModeChange={setCheckoutKeypadMode}
+              onAppendCheckoutDigit={appendCheckoutDigit}
+              onClearCheckoutAmount={clearCheckoutAmount}
+              onSaleCustomerId={setSaleCustomerId}
+              onSaleCustomerName={setSaleCustomerName}
+              onSaleCustomerPhone={setSaleCustomerPhone}
+              onFinishSale={finishSale}
+            />
+          </div>
+        </div>
+      ) : null}
+      </div>
+
         </div>
 
         {mountDesktopCheckoutSidebar ? (
           <aside className={clsx(isFullDesktopPos ? "sticky top-0 min-h-0 self-stretch" : "sticky top-3")}>
-            <PosCheckoutPanel
-              variant="sidebar"
-              {...checkoutPanelCommon}
-              onAddItems={focusCatalogForAdd}
-              catalogDock={useDesktopCatalogCheckoutDock}
-              catalogNumpadOpen={catalogNumpadOpen}
-              onCatalogNumpadOpenChange={setCatalogNumpadOpen}
-            />
+            {desktopCheckoutCollapsed ? (
+              <PosDesktopCheckoutRail
+                lang={lang}
+                productCount={draftCartStats.productCount}
+                payableUgx={draftPayable}
+                onExpand={() => setSaleCheckoutMinimized(false)}
+              />
+            ) : (
+              <PosCheckoutPanel
+                variant="sidebar"
+                {...checkoutPanelCommon}
+                onAddItems={focusCatalogForAdd}
+                catalogDock={useDesktopCatalogCheckoutDock}
+                catalogNumpadOpen={catalogNumpadOpen}
+                onCatalogNumpadOpenChange={setCatalogNumpadOpen}
+              />
+            )}
           </aside>
         ) : null}
       </div>

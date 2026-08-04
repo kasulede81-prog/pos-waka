@@ -5,7 +5,7 @@ import { BusinessBuilderScene } from "../businessBuilder/BusinessBuilderScene";
 import { useBusinessBuilder } from "../../context/BusinessBuilderContext";
 import { useHomeBusinessSceneSync } from "../../hooks/useHomeBusinessSceneSync";
 import { useHomeDashboardAnimationPause } from "../../hooks/useHomeDashboardAnimationPause";
-import type { HomeTileLiveStat } from "../../hooks/useHomeDashboardMetrics";
+import type { HomeTileLiveStat } from "../../lib/homeExecutiveKpis";
 import { resolveHomeHeroPreviewBgColor } from "../../lib/shelfColor";
 import { usePosStore } from "../../store/usePosStore";
 import { t } from "../../lib/i18n";
@@ -18,8 +18,17 @@ type Props = {
   className?: string;
 };
 
-/** Living dashboard hero — same shop the user built during registration. */
-export function HomeBusinessHero({ lang, sellStat, onSell, heroActionLabelKey = "builderHomeTapSell", className }: Props) {
+/**
+ * Phase 34.1 — compact executive hero: context + status + primary action.
+ * Identity scene is secondary; KPIs/health own the scan path below.
+ */
+export function HomeBusinessHero({
+  lang,
+  sellStat,
+  onSell,
+  heroActionLabelKey = "builderHomeTapSell",
+  className,
+}: Props) {
   useHomeBusinessSceneSync();
   const animPaused = useHomeDashboardAnimationPause();
   const { scene } = useBusinessBuilder();
@@ -29,67 +38,60 @@ export function HomeBusinessHero({ lang, sellStat, onSell, heroActionLabelKey = 
   return (
     <section
       className={clsx(
-        "home-business-hero mb-4 overflow-hidden rounded-[28px] border border-waka-200/80 shadow-[0_20px_56px_-28px_rgba(234,88,12,0.35)] sm:mb-5 sm:rounded-[32px] lg:mb-6 dark:border-waka-800/50 dark:shadow-[0_20px_56px_-28px_rgba(234,88,12,0.25)]",
+        "home-business-hero mb-3 overflow-hidden rounded-2xl border border-border bg-card shadow-sm sm:mb-4",
         className,
       )}
       aria-label={t(lang, "builderHomeHeroAria")}
     >
-      <div className="flex flex-col lg:flex-row lg:items-stretch">
+      <div className="flex items-stretch gap-0">
         <div
-          className="home-business-hero__preview relative border-b border-waka-200/80 lg:w-[42%] lg:shrink-0 lg:border-b-0 lg:border-r dark:border-waka-800/50"
+          className="home-business-hero__preview relative hidden w-[88px] shrink-0 border-r border-border sm:block sm:w-[112px]"
           style={{ backgroundColor: previewBgColor }}
-          aria-live="polite"
+          aria-hidden
         >
-          <div className="flex items-center justify-between gap-2 px-4 pb-1 pt-3 lg:px-5 lg:pt-4">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-waka-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-waka-800 dark:bg-waka-500/25 dark:text-waka-200">
-              <span
-                className={clsx("builder-live-dot h-1.5 w-1.5 rounded-full bg-waka-500", animPaused && "!animate-none")}
-                aria-hidden
-              />
-              {t(lang, "builderLivePreview")}
-            </span>
-            {scene.isOpen ? (
-              <span className="rounded-full bg-success-muted0 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
-                {t(lang, "builderHomeOpen")}
-              </span>
-            ) : null}
-          </div>
-          <div className="px-3 pb-3 pt-1 lg:px-4 lg:pb-4">
-            <BusinessBuilderScene className="mx-auto max-h-[min(38vh,260px)] lg:max-h-none" lang={lang} />
+          <div className="flex h-full items-center justify-center px-1 py-2">
+            <BusinessBuilderScene className="mx-auto max-h-[72px] scale-90" lang={lang} />
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col justify-between gap-4 bg-gradient-to-br from-waka-500 via-waka-600 to-waka-700 p-4 sm:p-5 lg:p-6">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-waka-100/95">
-              {t(lang, "builderHomeHeroKicker")}
-            </p>
-            <h2 className="mt-1 text-xl font-black tracking-tight text-white sm:text-2xl">{shopLabel}</h2>
-            <p className="mt-1 text-sm font-medium text-waka-50/90">{t(lang, "builderHomeHeroSub")}</p>
-          </div>
-
-          {sellStat ? (
-            <div className="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 shadow-sm backdrop-blur-sm">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-waka-100/90">
-                {sellStat.label}
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-2.5 p-3 sm:flex-row sm:items-center sm:gap-4 sm:p-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {t(lang, "builderHomeHeroKicker")}
               </p>
-              <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
-                <span className="text-lg font-black tabular-nums text-white sm:text-xl">{sellStat.value}</span>
-                {sellStat.trend ? (
-                  <span className="text-xs font-bold text-success">{sellStat.trend}</span>
-                ) : null}
-              </div>
+              {scene.isOpen ? (
+                <span className="rounded-full bg-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                  {t(lang, "builderHomeOpen")}
+                </span>
+              ) : null}
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
+                <span
+                  className={clsx("builder-live-dot h-1.5 w-1.5 rounded-full bg-primary", animPaused && "!animate-none")}
+                  aria-hidden
+                />
+                {t(lang, "builderLivePreview")}
+              </span>
             </div>
-          ) : null}
+            <h2 className="mt-0.5 truncate text-lg font-bold tracking-tight text-foreground sm:text-xl">{shopLabel}</h2>
+            {sellStat ? (
+              <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
+                {sellStat.label}: <span className="tabular-nums text-foreground">{sellStat.value}</span>
+                {sellStat.trend ? <span className="ml-1 text-success">{sellStat.trend}</span> : null}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "builderHomeHeroSub")}</p>
+            )}
+          </div>
 
           {onSell ? (
             <button
               type="button"
               onClick={onSell}
-              className="inline-flex min-h-[60px] w-full items-center justify-center gap-2.5 rounded-[28px] bg-card px-6 py-4 text-base font-black text-waka-700 shadow-[0_14px_36px_-10px_rgba(0,0,0,0.25)] transition hover:bg-waka-50 active:scale-[0.99] motion-reduce:active:scale-100 sm:min-h-[64px] sm:text-lg"
+              className="inline-flex min-h-[48px] w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm transition-waka hover:bg-primary-hover active:scale-[0.99] motion-reduce:active:scale-100 sm:w-auto sm:min-w-[10.5rem] sm:text-base"
             >
               {t(lang, heroActionLabelKey)}
-              <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.5} aria-hidden />
+              <ArrowRight className="h-4 w-4" strokeWidth={2.25} aria-hidden />
             </button>
           ) : null}
         </div>

@@ -38,6 +38,7 @@ import { ModalSheet } from "../components/layout/ModalSheet";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
 import { VirtualizedCustomerDebtList } from "../components/debts/VirtualizedCustomerDebtList";
+import { CustomersDesktopTable } from "../components/debts/CustomersDesktopTable";
 import { DebtsStatGrid } from "../components/debts/DebtsStatGrid";
 import { DebtsFilterChips } from "../components/debts/DebtsFilterChips";
 import { DebtsSearchBar } from "../components/debts/DebtsSearchBar";
@@ -59,10 +60,13 @@ import {
 } from "../lib/debtsPageView";
 import { shareText } from "../lib/reportExport";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
+import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
 
 export function CustomersPage({ lang }: { lang: Language }) {
   const { run: runShopAction } = useShopAction();
   const actor = useSessionActor();
+  const layoutBand = useWakaLayoutBand();
+  const desktopTable = layoutBand === "desktop";
   const canView = actorHasPermission(actor, "customers.view");
   const canDebt = actorHasPermission(actor, "customers.debt");
   const customers = usePosStore((s) => s.customers);
@@ -376,14 +380,33 @@ export function CustomersPage({ lang }: { lang: Language }) {
               <option value="name_az">{t(lang, "debtsSortName")}</option>
             </select>
           </div>
-          <VirtualizedCustomerDebtList
-            lang={lang}
-            customers={filteredCustomers}
-            creditIndex={creditActivityIndex}
-            canDebt={canDebt}
-            onOpenDetail={setDetailCustomer}
-            onReceive={setPayCustomer}
-          />
+          {desktopTable ? (
+            <CustomersDesktopTable
+              lang={lang}
+              customers={filteredCustomers}
+              creditIndex={creditActivityIndex}
+              canDebt={canDebt}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              onOpenDetail={setDetailCustomer}
+              onReceive={setPayCustomer}
+              onExportSelected={(rows) => {
+                const text = rows
+                  .map((c) => `${c.name}\t${c.phone || ""}\tUGX ${c.debtBalanceUgx.toLocaleString()}`)
+                  .join("\n");
+                void shareText(text, t(lang, "customers"));
+              }}
+            />
+          ) : (
+            <VirtualizedCustomerDebtList
+              lang={lang}
+              customers={filteredCustomers}
+              creditIndex={creditActivityIndex}
+              canDebt={canDebt}
+              onOpenDetail={setDetailCustomer}
+              onReceive={setPayCustomer}
+            />
+          )}
         </section>
       ) : customers.length > 0 ? (
         <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">

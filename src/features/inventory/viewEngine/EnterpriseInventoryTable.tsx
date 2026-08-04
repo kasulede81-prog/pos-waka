@@ -1,7 +1,6 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Barcode, MoreHorizontal, Pencil, ShoppingCart, Package } from "lucide-react";
 import clsx from "clsx";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Language, Product, ShopPreferences } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { formatProductPriceLabel } from "../../../store/usePosStore";
@@ -10,17 +9,15 @@ import { formatPharmacyStockPrimary, isPharmacyPackagingActive } from "../../../
 import { normalizedCategoryKey } from "../../../lib/productCategories";
 import { formatMedicineListPrimary } from "../../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../../lib/pharmacy";
-import { WakaCheckbox } from "../../../components/enterprise/WakaCheckbox";
 import { StockProductActionSheet } from "../../../components/stock/StockProductActionSheet";
+import {
+  EnterpriseDataTable,
+  type EnterpriseDataColumn,
+  type EnterpriseDataSelectionApi,
+} from "../../../components/enterprise/data-table";
 import { useInventorySelectionOptional } from "../selection/InventorySelectionProvider";
 import { barcodeForProduct } from "../export/productLabelPrint";
 import type { InventoryListSortKey, InventoryRowAction } from "./types";
-
-const ROW_ESTIMATE = 44;
-const BOTTOM_SCROLL_GUTTER = 24;
-
-const GRID =
-  "grid-cols-[40px_minmax(140px,2fr)_minmax(88px,1fr)_minmax(88px,1fr)_minmax(64px,0.6fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_120px]";
 
 type Props = {
   lang: Language;
@@ -111,6 +108,7 @@ function TableRowQuickActions({
   );
 }
 
+/** Inventory desktop table — consumer of shared EnterpriseDataTable (Phase 30.1). */
 function EnterpriseInventoryTableInner({
   lang,
   products,
@@ -123,129 +121,122 @@ function EnterpriseInventoryTableInner({
   onOpenDetail,
   onVisibleIdsChange,
 }: Props) {
-  const parentRef = useRef<HTMLDivElement>(null);
-  const selection = useInventorySelectionOptional();
+  const invSelection = useInventorySelectionOptional();
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
 
-  const rowVirtualizer = useVirtualizer({
-    count: products.length,
-    getScrollElement: () =>
-      parentRef.current?.closest<HTMLElement>(".scroll-main-chrome") ??
-      document.querySelector<HTMLElement>(".scroll-main-chrome") ??
-      parentRef.current,
-    estimateSize: () => ROW_ESTIMATE,
-    overscan: 8,
-  });
+  const selection: EnterpriseDataSelectionApi | undefined = useMemo(() => {
+    if (!invSelection?.selectionMode) return undefined;
+    return {
+      enabled: true,
+      selectedIds: new Set(products.filter((p) => invSelection.isSelected(p.id)).map((p) => p.id)),
+      isSelected: invSelection.isSelected,
+      setSelected: invSelection.setSelected,
+      selectIds: (ids) => invSelection.selectPage(ids),
+      clear: invSelection.clear,
+      toggleAll: (ids, selected) => {
+        if (selected) invSelection.selectPage(ids);
+        else invSelection.clear();
+      },
+    };
+  }, [invSelection, products]);
 
-  const virtualItems = rowVirtualizer.getVirtualItems();
-
-  useEffect(() => {
-    onVisibleIdsChange?.(virtualItems.map((v) => products[v.index]?.id).filter(Boolean) as string[]);
-  }, [virtualItems, products, onVisibleIdsChange]);
-
-  const headerBtn = (key: InventoryListSortKey, label: string) => (
-    <button
-      type="button"
-      onClick={() => onSort(key)}
-      className={clsx(
-        "text-left text-[10px] font-black uppercase tracking-wide",
-        sort === key ? "text-waka-700" : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {label}
-      {sort === key ? " ▾" : ""}
-    </button>
+  const columns: EnterpriseDataColumn<Product>[] = useMemo(
+    () => [
+      {
+        id: "name_az",
+        header: t(lang, "inventoryTableProduct"),
+        width: "minmax(140px,2fr)",
+        sortable: true,
+        cell: (p) => (pharmacyMode ? formatMedicineListPrimary(p) : p.name),
+        className: "text-foreground",
+      },
+      {
+        id: "sku",
+        header: t(lang, "inventoryTableSku"),
+        width: "minmax(88px,1fr)",
+        hideBelow: "lg",
+        cell: (p) => p.sku?.trim() || "—",
+      },
+      {
+        id: "shelf",
+        header: t(lang, "inventoryTableShelf"),
+        width: "minmax(88px,1fr)",
+        hideBelow: "lg",
+        cell: (p) => (normalizedCategoryKey(p) ? p.category!.trim() : t(lang, "uncategorized")),
+      },
+      {
+        id: "stock_low",
+        header: t(lang, "inventoryTableStock"),
+        width: "minmax(64px,0.6fr)",
+        sortable: true,
+        cell: (p) => (
+          <span className={clsx("font-bold", isLowStock(p) ? "text-danger" : "text-muted-foreground")}>
+            {isPharmacyPackagingActive(p) ? formatPharmacyStockPrimary(p) : formatStockLabel(p)}
+          </span>
+        ),
+      },
+      {
+        id: "cost",
+        header: t(lang, "inventoryTableCost"),
+        width: "minmax(72px,0.7fr)",
+        hideBelow: "xl",
+        cell: (p) => formatCost(p),
+      },
+      {
+        id: "price",
+        header: t(lang, "inventoryTablePrice"),
+        width: "minmax(72px,0.7fr)",
+        cell: (p) => <span className="font-bold text-teal-700">{formatProductPriceLabel(p)}</span>,
+      },
+      {
+        id: "status",
+        header: t(lang, "inventoryTableStatus"),
+        width: "minmax(72px,0.7fr)",
+        cell: (p) =>
+          lockedIds.has(p.id) ? t(lang, "productLockedBadge") : isLowStock(p) ? t(lang, "cardLowStock") : "—",
+      },
+      {
+        id: "updated",
+        header: t(lang, "inventoryTableUpdated"),
+        width: "minmax(72px,0.7fr)",
+        sortable: true,
+        hideBelow: "xl",
+        cell: (p) => formatUpdated(p),
+      },
+    ],
+    [lang, pharmacyMode, lockedIds],
   );
 
   return (
-    <div ref={parentRef} className="w-full overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
-      <div className="min-w-[980px]">
-        <div className={clsx("sticky top-0 z-10 grid gap-2 border-b border-border bg-muted/95 px-3 py-2 backdrop-blur", GRID)}>
-          <div className="flex items-center justify-center">
-            {selection?.selectionMode ? (
-              <WakaCheckbox
-                row={false}
-                checked={products.length > 0 && products.every((p) => selection.isSelected(p.id))}
-                onCheckedChange={(checked) => {
-                  if (checked) selection.selectPage(products.map((p) => p.id));
-                  else selection.clear();
-                }}
-                aria-label={t(lang, "inventorySelectPage")}
-              />
-            ) : null}
-          </div>
-          <div>{headerBtn("name_az", t(lang, "inventoryTableProduct"))}</div>
-          <div className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "inventoryTableSku")}</div>
-          <div className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "inventoryTableShelf")}</div>
-          <div>{headerBtn("stock_low", t(lang, "inventoryTableStock"))}</div>
-          <div className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "inventoryTableCost")}</div>
-          <div className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "inventoryTablePrice")}</div>
-          <div className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "inventoryTableStatus")}</div>
-          <div>{headerBtn("updated", t(lang, "inventoryTableUpdated"))}</div>
-          <div className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "inventoryTableActions")}</div>
-        </div>
-        <div style={{ height: `${rowVirtualizer.getTotalSize() + BOTTOM_SCROLL_GUTTER}px`, position: "relative" }}>
-          {virtualItems.map((virtualRow) => {
-            const p = products[virtualRow.index];
-            if (!p) return null;
-            const locked = lockedIds.has(p.id);
-            const low = isLowStock(p);
-            const shelf = normalizedCategoryKey(p) ? p.category!.trim() : t(lang, "uncategorized");
-            const stockText = isPharmacyPackagingActive(p) ? formatPharmacyStockPrimary(p) : formatStockLabel(p);
-            const selected = selection?.isSelected(p.id) ?? false;
-            return (
-              <div
-                key={p.id}
-                className={clsx(
-                  "group absolute left-0 top-0 grid w-full gap-2 border-b border-border/60 px-3 py-2 text-xs",
-                  GRID,
-                  locked && "opacity-55",
-                  low && !locked && "bg-danger-muted/20",
-                  selected && "bg-indigo-50/40",
-                )}
-                style={{ transform: `translateY(${virtualRow.start}px)`, height: `${virtualRow.size}px` }}
-              >
-                <div className="flex items-center justify-center">
-                  {selection?.selectionMode ? (
-                    <WakaCheckbox
-                      row={false}
-                      checked={selected}
-                      onCheckedChange={(checked) => selection.setSelected(p.id, checked)}
-                      aria-label={p.name}
-                    />
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  disabled={!onOpenDetail}
-                  onClick={() => onOpenDetail?.(p)}
-                  className="truncate text-left font-bold text-foreground hover:text-waka-700"
-                >
-                  {pharmacyMode ? formatMedicineListPrimary(p) : p.name}
-                </button>
-                <span className="truncate font-semibold text-muted-foreground">{p.sku?.trim() || "—"}</span>
-                <span className="truncate font-semibold text-muted-foreground">{shelf}</span>
-                <span className={clsx("font-bold", low ? "text-danger" : "text-muted-foreground")}>{stockText}</span>
-                <span className="font-semibold text-muted-foreground">{formatCost(p)}</span>
-                <span className="font-black text-teal-700">{formatProductPriceLabel(p)}</span>
-                <span className="font-semibold text-muted-foreground">
-                  {locked ? t(lang, "productLockedBadge") : low ? t(lang, "cardLowStock") : "—"}
-                </span>
-                <span className="font-semibold text-muted-foreground">{formatUpdated(p)}</span>
-                <TableRowQuickActions
-                  lang={lang}
-                  product={p}
-                  locked={locked}
-                  canSell={canSell}
-                  onAction={(action) => onAction(p, action)}
-                  onOpenDetail={onOpenDetail}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+    <EnterpriseDataTable
+      rows={products}
+      columns={columns}
+      rowKey={(p) => p.id}
+      sortKey={sort}
+      onSort={(colId) => {
+        if (colId === "name_az" || colId === "stock_low" || colId === "updated") {
+          onSort(colId);
+        }
+      }}
+      selection={selection}
+      onRowActivate={onOpenDetail}
+      onVisibleIdsChange={onVisibleIdsChange}
+      minWidthPx={980}
+      ariaLabel={t(lang, "inventoryTableProduct")}
+      getRowClassName={(p) =>
+        clsx(lockedIds.has(p.id) && "opacity-55", isLowStock(p) && !lockedIds.has(p.id) && "bg-danger-muted/20")
+      }
+      rowActions={(p) => (
+        <TableRowQuickActions
+          lang={lang}
+          product={p}
+          locked={lockedIds.has(p.id)}
+          canSell={canSell}
+          onAction={(action) => onAction(p, action)}
+          onOpenDetail={onOpenDetail}
+        />
+      )}
+    />
   );
 }
 

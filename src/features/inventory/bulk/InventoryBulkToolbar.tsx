@@ -13,7 +13,8 @@ import {
 import { buildProductCatalogCsv, productCatalogExportFilename } from "../export/productCatalogExport";
 import { printProductLabels, exportProductLabelsHtml } from "../export/productLabelPrint";
 import { saveExportedFile } from "../../../lib/fileDownload";
-import { AppModalOverlay } from "../../../components/layout/AppModalOverlay";
+import { ModalSheet } from "../../../components/layout/ModalSheet";
+import { WakaButton } from "../../../components/ui/wakaPrimitives";
 
 type Props = {
   lang: Language;
@@ -115,132 +116,135 @@ export function InventoryBulkToolbar({
         </div>
       </div>
 
-      {sheet ? (
-        <AppModalOverlay className="z-[80] flex items-end justify-center bg-overlay/50 p-4 sm:items-center" onClick={() => setSheet(null)}>
-          <div
-            className="w-full max-w-md rounded-2xl bg-card p-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal
+      <ModalSheet
+        open={sheet != null}
+        onClose={() => setSheet(null)}
+        zIndexClass="z-[80]"
+        title={
+          sheet === "category"
+            ? t(lang, "inventoryBulkCategory")
+            : sheet === "stock"
+              ? t(lang, "inventoryBulkStock")
+              : sheet === "price"
+                ? t(lang, "inventoryBulkPrice")
+                : sheet === "more"
+                  ? t(lang, "inventoryBulkMore")
+                  : undefined
+        }
+        footer={
+          sheet === "category" ? (
+            <ModalActions
+              lang={lang}
+              busy={busy}
+              onCancel={() => setSheet(null)}
+              onConfirm={() => selectValue && void run({ kind: "category", category: selectValue })}
+            />
+          ) : sheet === "stock" ? (
+            <ModalActions
+              lang={lang}
+              busy={busy}
+              onCancel={() => setSheet(null)}
+              onConfirm={() => {
+                const v = Number(inputValue);
+                if (!Number.isFinite(v)) return;
+                const mode = (selectValue || "increase") as "increase" | "reduce" | "set";
+                void run({ kind: "stock", mode, value: v, reason: "Bulk inventory adjustment" });
+              }}
+            />
+          ) : sheet === "price" ? (
+            <ModalActions
+              lang={lang}
+              busy={busy}
+              onCancel={() => setSheet(null)}
+              onConfirm={() => {
+                const v = Number(inputValue);
+                if (!Number.isFinite(v)) return;
+                void run({ kind: "sellingPrice", mode: "set", valueUgx: v });
+              }}
+            />
+          ) : sheet === "more" ? (
+            <WakaButton type="button" variant="secondary" className="w-full" onClick={() => setSheet(null)}>
+              {t(lang, "cancel")}
+            </WakaButton>
+          ) : null
+        }
+      >
+        {sheet === "category" ? (
+          <select
+            value={selectValue}
+            onChange={(e) => setSelectValue(e.target.value)}
+            className="min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
           >
-            {sheet === "category" ? (
+            <option value="">{t(lang, "inventoryBulkChooseShelf")}</option>
+            {stockCategoryPicklist.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        ) : null}
+        {sheet === "stock" ? (
+          <div className="space-y-2">
+            <select
+              value={selectValue}
+              onChange={(e) => setSelectValue(e.target.value)}
+              className="min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
+            >
+              <option value="increase">{t(lang, "inventoryBulkStockIncrease")}</option>
+              <option value="reduce">{t(lang, "inventoryBulkStockReduce")}</option>
+              <option value="set">{t(lang, "inventoryBulkStockSet")}</option>
+            </select>
+            <input
+              type="number"
+              min={0}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder={t(lang, "inventoryBulkStockQty")}
+              className="min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
+            />
+          </div>
+        ) : null}
+        {sheet === "price" ? (
+          <input
+            type="number"
+            min={0}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={t(lang, "inventoryBulkPriceSet")}
+            className="min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
+          />
+        ) : null}
+        {sheet === "more" ? (
+          <div className="space-y-2">
+            <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void exportFiltered()}>
+              {t(lang, "inventoryExportFiltered")}
+            </button>
+            <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => exportProductLabelsHtml(lang, selected)}>
+              {t(lang, "inventoryExportLabels")}
+            </button>
+            {canEdit ? (
               <>
-                <h3 className="mb-3 text-sm font-black">{t(lang, "inventoryBulkCategory")}</h3>
-                <select
-                  value={selectValue}
-                  onChange={(e) => setSelectValue(e.target.value)}
-                  className="mb-3 min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
-                >
-                  <option value="">{t(lang, "inventoryBulkChooseShelf")}</option>
-                  {stockCategoryPicklist.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-                <ModalActions
-                  lang={lang}
-                  busy={busy}
-                  onCancel={() => setSheet(null)}
-                  onConfirm={() => selectValue && void run({ kind: "category", category: selectValue })}
-                />
-              </>
-            ) : null}
-            {sheet === "stock" ? (
-              <>
-                <h3 className="mb-3 text-sm font-black">{t(lang, "inventoryBulkStock")}</h3>
-                <select
-                  value={selectValue}
-                  onChange={(e) => setSelectValue(e.target.value)}
-                  className="mb-2 min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
-                >
-                  <option value="increase">{t(lang, "inventoryBulkStockIncrease")}</option>
-                  <option value="reduce">{t(lang, "inventoryBulkStockReduce")}</option>
-                  <option value="set">{t(lang, "inventoryBulkStockSet")}</option>
-                </select>
-                <input
-                  type="number"
-                  min={0}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  placeholder={t(lang, "inventoryBulkStockQty")}
-                  className="mb-3 min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
-                />
-                <ModalActions
-                  lang={lang}
-                  busy={busy}
-                  onCancel={() => setSheet(null)}
-                  onConfirm={() => {
-                    const v = Number(inputValue);
-                    if (!Number.isFinite(v)) return;
-                    const mode = (selectValue || "increase") as "increase" | "reduce" | "set";
-                    void run({ kind: "stock", mode, value: v, reason: "Bulk inventory adjustment" });
-                  }}
-                />
-              </>
-            ) : null}
-            {sheet === "price" ? (
-              <>
-                <h3 className="mb-3 text-sm font-black">{t(lang, "inventoryBulkPrice")}</h3>
-                <input
-                  type="number"
-                  min={0}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  placeholder={t(lang, "inventoryBulkPriceSet")}
-                  className="mb-3 min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
-                />
-                <ModalActions
-                  lang={lang}
-                  busy={busy}
-                  onCancel={() => setSheet(null)}
-                  onConfirm={() => {
-                    const v = Number(inputValue);
-                    if (!Number.isFinite(v)) return;
-                    void run({ kind: "sellingPrice", mode: "set", valueUgx: v });
-                  }}
-                />
-              </>
-            ) : null}
-            {sheet === "more" ? (
-              <>
-                <h3 className="mb-3 text-sm font-black">{t(lang, "inventoryBulkMore")}</h3>
-                <div className="space-y-2">
-                  <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void exportFiltered()}>
-                    {t(lang, "inventoryExportFiltered")}
-                  </button>
-                  <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => exportProductLabelsHtml(lang, selected)}>
-                    {t(lang, "inventoryExportLabels")}
-                  </button>
-                  {canEdit ? (
-                    <>
-                      <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "archive" })}>
-                        <Archive className="mr-1 inline h-3.5 w-3.5" />{t(lang, "inventoryBulkArchive")}
-                      </button>
-                      <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "unarchive" })}>
-                        {t(lang, "inventoryBulkUnarchive")}
-                      </button>
-                      <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "deactivate" })}>
-                        {t(lang, "inventoryBulkDeactivate")}
-                      </button>
-                      {suppliers[0] ? (
-                        <button
-                          type="button"
-                          className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold"
-                          onClick={() => void run({ kind: "supplier", supplierId: suppliers[0]!.id, supplierName: suppliers[0]!.name })}
-                        >
-                          {t(lang, "inventoryBulkSupplier")}
-                        </button>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
-                <button type="button" className="mt-3 w-full min-h-[40px] rounded-xl border border-border text-xs font-black" onClick={() => setSheet(null)}>
-                  {t(lang, "cancel")}
+                <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "archive" })}>
+                  <Archive className="mr-1 inline h-3.5 w-3.5" />{t(lang, "inventoryBulkArchive")}
                 </button>
+                <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "unarchive" })}>
+                  {t(lang, "inventoryBulkUnarchive")}
+                </button>
+                <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "deactivate" })}>
+                  {t(lang, "inventoryBulkDeactivate")}
+                </button>
+                {suppliers[0] ? (
+                  <button
+                    type="button"
+                    className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold"
+                    onClick={() => void run({ kind: "supplier", supplierId: suppliers[0]!.id, supplierName: suppliers[0]!.name })}
+                  >
+                    {t(lang, "inventoryBulkSupplier")}
+                  </button>
+                ) : null}
               </>
             ) : null}
           </div>
-        </AppModalOverlay>
-      ) : null}
+        ) : null}
+      </ModalSheet>
     </>
   );
 }
@@ -285,12 +289,12 @@ function ModalActions({
 }) {
   return (
     <div className="flex gap-2">
-      <button type="button" onClick={onCancel} className="min-h-[40px] flex-1 rounded-xl border border-border text-xs font-black">
+      <WakaButton type="button" variant="secondary" className="flex-1" onClick={onCancel}>
         {t(lang, "cancel")}
-      </button>
-      <button type="button" disabled={busy} onClick={onConfirm} className="min-h-[40px] flex-1 rounded-xl bg-waka-600 text-xs font-black text-white disabled:opacity-50">
+      </WakaButton>
+      <WakaButton type="button" variant="primary" className="flex-1" disabled={busy} onClick={onConfirm}>
         {t(lang, "apply")}
-      </button>
+      </WakaButton>
     </div>
   );
 }

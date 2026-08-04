@@ -1,4 +1,5 @@
 import type { FormEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle2, Package, X } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../../types";
@@ -6,6 +7,7 @@ import { t, tTemplate } from "../../../lib/i18n";
 import { AppModalOverlay } from "../../layout/AppModalOverlay";
 import { WizardProgress } from "./WizardProgress";
 import { WizardValidationBanner } from "./WizardValidationBanner";
+import { enterpriseTypeClass } from "../../../lib/enterpriseTypography";
 
 type Props = {
   lang: Language;
@@ -26,6 +28,10 @@ type Props = {
   zClassName?: string;
 };
 
+/**
+ * Add/edit product wizard chrome — full-height form with sticky footer.
+ * Portaled to document.body so hub sticky tabs cannot cover the dialog.
+ */
 export function ProductWizardShell({
   lang,
   open,
@@ -42,11 +48,11 @@ export function ProductWizardShell({
   children,
   footer,
   onSubmit,
-  zClassName = "z-[56]",
+  zClassName = "z-[80]",
 }: Props) {
   if (!open) return null;
 
-  return (
+  return createPortal(
     <AppModalOverlay
       className={clsx(
         zClassName,
@@ -64,17 +70,17 @@ export function ProductWizardShell({
       >
         <header className="shrink-0 border-b border-border/60 bg-card/95 px-4 pb-4 pt-4 backdrop-blur-md sm:px-5">
           <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-elev">
               {icon ?? <Package className="h-5 w-5" strokeWidth={2.25} aria-hidden />}
             </span>
             <div className="min-w-0 flex-1 pt-0.5">
-              <p id={descId} className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <p id={descId} className={enterpriseTypeClass("caption")}>
                 {tTemplate(lang, "simpleAddStepOf", {
                   n: String(stepIndex + 1),
                   total: String(totalSteps),
                 })}
               </p>
-              <h2 id={titleId} className="truncate text-lg font-black tracking-tight text-foreground">
+              <h2 id={titleId} className={enterpriseTypeClass("sectionTitle", "truncate text-lg")}>
                 {title}
               </h2>
             </div>
@@ -95,15 +101,13 @@ export function ProductWizardShell({
             {saveError ? <WizardValidationBanner message={saveError} /> : null}
             {savedFlash ? (
               <div
-                className="wizard-success-enter flex flex-col items-center gap-3 rounded-2xl border border-success/25 bg-success-muted0/10 px-6 py-8 text-center"
+                className="wizard-success-enter flex flex-col items-center gap-3 rounded-2xl border border-success/25 bg-success-muted/10 px-6 py-8 text-center"
                 role="status"
               >
-                <span className="wizard-check-pop flex h-14 w-14 items-center justify-center rounded-full bg-success-muted0/15 text-success">
+                <span className="wizard-check-pop flex h-14 w-14 items-center justify-center rounded-full bg-success-muted/15 text-success">
                   <CheckCircle2 className="h-8 w-8" strokeWidth={2.25} aria-hidden />
                 </span>
-                <p className="text-lg font-black text-success dark:text-success">
-                  {savedMessage ?? t(lang, "simpleAddSaved")}
-                </p>
+                <p className="text-lg font-bold text-success">{savedMessage ?? t(lang, "simpleAddSaved")}</p>
               </div>
             ) : (
               children
@@ -112,6 +116,7 @@ export function ProductWizardShell({
           {!savedFlash && footer ? footer : null}
         </form>
       </div>
-    </AppModalOverlay>
+    </AppModalOverlay>,
+    document.body,
   );
 }

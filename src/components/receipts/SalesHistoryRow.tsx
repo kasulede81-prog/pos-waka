@@ -220,6 +220,9 @@ type Props = {
   onReceiptPdf: (sale: Sale) => void;
   onReturn: (sale: Sale) => void;
   onVoidLine: (sale: Sale, lineIndex: number, line: SaleLine) => void;
+  /** Phase 30.1 — host action sheet from desktop table without showing the card. */
+  hideCard?: boolean;
+  forceOpenActions?: boolean;
 };
 
 export function SalesHistoryRow({
@@ -235,8 +238,10 @@ export function SalesHistoryRow({
   onReceiptPdf,
   onReturn,
   onVoidLine,
+  hideCard = false,
+  forceOpenActions = false,
 }: Props) {
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(forceOpenActions);
   const invoice = buildReceiptNumberForSale(sale, allSales);
   const saleReturns = returnRecords.filter((r) => r.saleId === sale.id);
   const badge = statusBadge(lang, sale, saleReturns.length > 0);
@@ -245,6 +250,10 @@ export function SalesHistoryRow({
   const discountBreakdown = completed ? computeSaleDiscountBreakdown(sale) : null;
   const voidableLines = sale.lines.map((line, lineIndex) => ({ line, lineIndex })).filter(({ line }) => !line.voided);
   const { day, time } = formatSaleDateTime(sale.createdAt, lang);
+
+  useEffect(() => {
+    if (forceOpenActions) setSheetOpen(true);
+  }, [forceOpenActions, sale.id]);
 
   useEffect(() => {
     if (!sheetOpen) return;
@@ -257,6 +266,7 @@ export function SalesHistoryRow({
 
   return (
     <>
+      {hideCard ? null : (
       <article className="rounded-xl border border-border/90 bg-card p-2.5 shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100">
         <div className="flex items-start gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -288,6 +298,7 @@ export function SalesHistoryRow({
           </button>
         </div>
       </article>
+      )}
 
       <SaleActionSheet
         lang={lang}

@@ -14,7 +14,8 @@ export type DisplayScaleMeta = {
 };
 
 export const DISPLAY_SCALE_META: Record<DisplayScaleLevel, DisplayScaleMeta> = {
-  compact: { labelKey: "displayScaleCompact", percent: 88, multiplier: 0.88, columnDelta: 2 },
+  // Phase 32.4.1 — +1 (was +2) so compact density does not stack as hard against smaller type
+  compact: { labelKey: "displayScaleCompact", percent: 88, multiplier: 0.88, columnDelta: 1 },
   normal: { labelKey: "displayScaleNormal", percent: 100, multiplier: 1, columnDelta: 0 },
   large: { labelKey: "displayScaleLarge", percent: 112, multiplier: 1.12, columnDelta: -2 },
   extra_large: { labelKey: "displayScaleExtraLarge", percent: 128, multiplier: 1.28, columnDelta: -3 },

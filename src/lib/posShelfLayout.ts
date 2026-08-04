@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { PosShelfBadge, PosShelfColor, PosShelfLayoutConfig, PosShelfSize, Product } from "../types";
-import { normalizeShelfHex, launcherBoldTileColorStyle } from "./shelfColor";
+import { normalizeShelfHex, launcherBoldTileColorStyle, shelfTileColorStyle } from "./shelfColor";
 import {
   UNCATEGORIZED_SENTINEL,
   distinctTrimmedCategories,
@@ -119,9 +119,10 @@ export function shelfScaleFromConfig(
   return featured ? Math.max(base, 72) : base;
 }
 
+/** Body layout bands aligned with grid spans (Phase 32.3). */
 export function scaleToShelfSize(scale: number): PosShelfSize {
-  if (scale >= 72) return "large";
-  if (scale >= 42) return "medium";
+  if (scale >= 78) return "large";
+  if (scale >= 45) return "medium";
   return "small";
 }
 
@@ -145,10 +146,11 @@ export function shelfTypographyFromScale(scale: number): {
 } {
   const t = clampShelfScale(scale) / 100;
   return {
-    iconRem: 0.72 + t * 0.48,
-    titleRem: 0.92 + t * 1.05,
-    countRem: 0.58 + t * 0.28,
-    paddingRem: 0.5 + t * 0.65,
+    // Phase 32.4.2 — title primary at full enterprise size; count more secondary
+    iconRem: 0.56 + t * 0.32,
+    titleRem: 1.12 + t * 1.0,
+    countRem: 0.6 + t * 0.2,
+    paddingRem: 0.55 + t * 0.45,
   };
 }
 
@@ -310,21 +312,50 @@ export function buildQuickSellShelfCard(
   return { ...merged, isQuickSell: true };
 }
 
-export function shelfColorClasses(color: PosShelfColor, featured: boolean): string {
+export type ShelfColorTone = "soft" | "bold";
+
+/**
+ * Phase 32.3 — soft browse-grid defaults; bold reserved for featured / selected emphasis.
+ * Avoids every shelf competing with product cards at full saturation.
+ */
+export function shelfColorClasses(
+  color: PosShelfColor,
+  featured: boolean,
+  tone: ShelfColorTone = "soft",
+): string {
+  const useBold = featured || tone === "bold";
   const ring = featured ? "ring-2 ring-inset ring-white/40" : "";
+  if (!useBold) {
+    const soft =
+      "border-border/70 text-foreground shadow-sm hover:brightness-[1.02] active:scale-[0.98]";
+    switch (color) {
+      case "red":
+        return `${soft} bg-gradient-to-br from-rose-100 to-rose-200/90 text-rose-950`;
+      case "orange":
+        return `${soft} bg-gradient-to-br from-orange-100 to-waka-200/80 text-waka-950`;
+      case "blue":
+        return `${soft} bg-gradient-to-br from-sky-100 to-sky-200/90 text-sky-950`;
+      case "green":
+        return `${soft} bg-gradient-to-br from-emerald-100 to-emerald-200/90 text-emerald-950`;
+      case "purple":
+        return `${soft} bg-gradient-to-br from-violet-100 to-violet-200/90 text-violet-950`;
+      default:
+        return `border-border/90 bg-gradient-to-br from-white to-muted text-foreground shadow-sm`;
+    }
+  }
   const bold =
     "border-white/30 text-white shadow-md hover:brightness-110 active:scale-[0.98]";
   switch (color) {
     case "red":
-      return `${bold} bg-gradient-to-br from-rose-500 to-rose-700 shadow-[0_6px_20px_rgba(225,29,72,0.38)] ${ring}`;
+      return `${bold} bg-gradient-to-br from-rose-500 to-rose-700 shadow-[0_6px_20px_rgba(225,29,72,0.32)] ${ring}`;
     case "orange":
-      return `${bold} bg-gradient-to-br from-waka-500 to-waka-700 shadow-[0_6px_24px_rgba(234,88,12,0.38)] ${ring}`;
+      return `${bold} bg-gradient-to-br from-waka-500 to-waka-700 shadow-[0_6px_24px_rgba(234,88,12,0.32)] ${ring}`;
     case "blue":
-      return `${bold} bg-gradient-to-br from-sky-500 to-sky-700 shadow-[0_6px_20px_rgba(2,132,199,0.38)] ${ring}`;
+      return `${bold} bg-gradient-to-br from-sky-500 to-sky-700 shadow-[0_6px_20px_rgba(2,132,199,0.32)] ${ring}`;
     case "green":
-      return `${bold} bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-[0_6px_20px_rgba(5,150,105,0.38)] ${ring}`;
+      return `${bold} bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-[0_6px_20px_rgba(5,150,105,0.32)] ${ring}`;
     case "purple":
-      return `${bold} bg-gradient-to-br from-violet-500 to-violet-700 shadow-[0_6px_20px_rgba(124,58,237,0.38)] ${ring}`;
+      return `${bold} bg-gradient-to-br from-violet-500 to-violet-700 shadow-[0_6px_20px_rgba(124,58,237,0.32)] ${ring}`;
     default:
       return `border-border/90 bg-gradient-to-br from-white to-muted text-foreground shadow-sm ${featured ? "ring-2 ring-border/80" : ""}`;
   }
@@ -332,8 +363,19 @@ export function shelfColorClasses(color: PosShelfColor, featured: boolean): stri
 
 export function shelfTileSurfaceStyle(
   shelf: Pick<PosShelfDisplayCard, "color" | "customColor" | "featured">,
+  tone: ShelfColorTone = "soft",
 ): CSSProperties | undefined {
   if (!shelf.customColor) return undefined;
+  const useBold = shelf.featured || tone === "bold";
+  if (!useBold) {
+    const soft = shelfTileColorStyle(shelf.customColor, false);
+    return {
+      background: soft.background,
+      borderColor: soft.borderColor,
+      color: soft.color,
+      ...(soft.boxShadow ? { boxShadow: soft.boxShadow } : {}),
+    };
+  }
   const bold = launcherBoldTileColorStyle(shelf.customColor, shelf.featured);
   return {
     background: bold.background,
@@ -392,12 +434,16 @@ export function shelfIconCircleClass(color: PosShelfColor): string {
   }
 }
 
-/** Shared masonry grid: fixed row tracks so row-span-2 large tiles get real height. */
+/**
+ * Shared masonry grid: fixed row tracks so row-span-2 large tiles get real height.
+ * Column count is applied via inline `gridTemplateColumns` (Phase 32.3 container-aware).
+ */
 export function shelfMasonryGridClass(sellFocusedMobile = false): string {
+  // Phase 32.4.2 — +~12–16px vs 32.3.1 for two-line shelf titles without ellipsis
   if (sellFocusedMobile) {
-    return "grid grid-flow-dense auto-rows-[7.5rem] grid-cols-2 items-stretch gap-3 sm:auto-rows-[5.75rem] sm:grid-cols-3 sm:gap-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6";
+    return "grid grid-flow-dense auto-rows-[9.25rem] items-stretch gap-3 sm:auto-rows-[7.5rem] sm:gap-2";
   }
-  return "grid grid-flow-dense auto-rows-[5.5rem] grid-cols-2 items-stretch gap-2 sm:auto-rows-[5.75rem] sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6";
+  return "grid grid-flow-dense auto-rows-[7.25rem] items-stretch gap-2 sm:auto-rows-[7.5rem]";
 }
 
 export function shelfMinHeightClass(_size: PosShelfSize): string {

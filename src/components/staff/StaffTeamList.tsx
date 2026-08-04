@@ -8,6 +8,8 @@ import { findRoleTemplate, isCustomRoleAssignable, roleTemplatesForBusinessType 
 import { isStaffLoginLocked } from "../../lib/staffSecret";
 import { getDeviceOnline } from "../../lib/deviceOnline";
 import { WakaCheckbox } from "../enterprise/WakaCheckbox";
+import { StaffDesktopTable } from "./StaffDesktopTable";
+import { useWakaLayoutBand } from "../../hooks/useWakaLayoutBand";
 
 type Props = {
   lang: Language;
@@ -80,6 +82,7 @@ export function StaffTeamList({
   const [query, setQuery] = useState("");
   const [manageId, setManageId] = useState<string | null>(null);
   const online = getDeviceOnline();
+  const desktopTable = useWakaLayoutBand() === "desktop";
 
   const roleOptions = useMemo(() => roleTemplatesForBusinessType(businessType), [businessType]);
   const assignableCustomRoles = useMemo(
@@ -142,8 +145,17 @@ export function StaffTeamList({
           {hydrating ? t(lang, "syncingShort") : t(lang, "staffTeamEmpty")}
         </p>
       ) : (
-        <ul className="space-y-2">
-          {ordered.map((s) => {
+        <>
+        {desktopTable ? (
+          <StaffDesktopTable
+            lang={lang}
+            staff={ordered}
+            customStaffRoles={customStaffRoles}
+            onManage={(s) => setManageId((prev) => (prev === s.id ? null : s.id))}
+          />
+        ) : null}
+        <ul className={clsx("space-y-2", desktopTable && !manageId && "hidden")}>
+          {ordered.filter((s) => !desktopTable || s.id === manageId).map((s) => {
             const open = manageId === s.id;
             const locked = isStaffLoginLocked(s);
             const isActiveSession = activeStaffId === s.id;
@@ -305,6 +317,7 @@ export function StaffTeamList({
             );
           })}
         </ul>
+        </>
       )}
     </section>
   );

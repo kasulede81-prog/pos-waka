@@ -6,7 +6,12 @@ import {
 } from "../lib/productCategories";
 import { buildPosShelfDisplayCards } from "../lib/posShelfLayout";
 import { posSearchAliases } from "../lib/pharmacyUx";
-import { buildProductSellSearchIndex, filterIndexedProductsForSellView, filterProductsByCategoryOnly } from "../lib/posProductSearch";
+import {
+  buildProductSellSearchIndex,
+  filterIndexedProductsForSellView,
+  filterProductsByCategoryOnly,
+  productMatchesIndexedSellSearch,
+} from "../lib/posProductSearch";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 
@@ -18,22 +23,38 @@ export type SellProductBrowseEngineOptions = {
   lang: Language;
   products: Product[];
   preferences: ShopPreferences;
-  /** When set, category filter is local (not persisted to preferences). */
+  /**
+   * When true, category filter is local only.
+   * Phase 32.3 default: false — Retail + Pharmacy share persisted preference.
+   */
   ephemeralCategory?: boolean;
   initialCategoryKey?: string;
+  /** Controlled search — when set, engine does not own search state. */
+  searchQuery?: string;
+  setSearchQuery?: (next: string) => void;
 };
 
+/**
+ * Shared Sell shelf/product browse engine (Phase 32.3).
+ * Retail PosPage and Pharmacy dispense share this runtime; business rules stay outside.
+ */
 export function useSellProductBrowseEngine({
   lang,
   products,
   preferences,
   ephemeralCategory = false,
   initialCategoryKey = CATEGORY_FILTER_ALL,
+  searchQuery: controlledSearchQuery,
+  setSearchQuery: controlledSetSearchQuery,
 }: SellProductBrowseEngineOptions) {
   const setPreferences = usePosStore((s) => s.setPreferences);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [internalSearchQuery, setInternalSearchQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [localCategoryKey, setLocalCategoryKey] = useState(initialCategoryKey);
+
+  const searchControlled = typeof controlledSetSearchQuery === "function";
+  const searchQuery = searchControlled ? (controlledSearchQuery ?? "") : internalSearchQuery;
+  const setSearchQuery = searchControlled ? controlledSetSearchQuery! : setInternalSearchQuery;
 
   const sellCategoryKey = ephemeralCategory
     ? localCategoryKey
@@ -58,7 +79,11 @@ export function useSellProductBrowseEngine({
       }
       setPreferences({
         posSellCategoryFilter:
-          normalized === CATEGORY_FILTER_ALL ? undefined : normalized === UNCATEGORIZED_SENTINEL ? UNCATEGORIZED_SENTINEL : normalized,
+          normalized === CATEGORY_FILTER_ALL
+            ? undefined
+            : normalized === UNCATEGORIZED_SENTINEL
+              ? UNCATEGORIZED_SENTINEL
+              : normalized,
       });
     },
     [ephemeralCategory, setPreferences],
@@ -67,7 +92,7 @@ export function useSellProductBrowseEngine({
   const clearSellView = useCallback(() => {
     setSellCategoryFilter(CATEGORY_FILTER_ALL);
     setSearchQuery("");
-  }, [setSellCategoryFilter]);
+  }, [setSellCategoryFilter, setSearchQuery]);
 
   const sellSearchContext = useMemo(() => {
     const q = searchQuery.trim();
@@ -90,6 +115,12 @@ export function useSellProductBrowseEngine({
 
   const productSearchIndex = useMemo(() => buildProductSellSearchIndex(products), [products]);
 
+  const sellRowMatchesSearch = useMemo(() => {
+    const { q, aliasTerms } = sellSearchContext;
+    if (!q) return () => true;
+    return (p: Product) => productMatchesIndexedSellSearch(productSearchIndex, p, q, aliasTerms);
+  }, [sellSearchContext, productSearchIndex]);
+
   const filteredProducts = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
     if (!q) {
@@ -109,31 +140,43 @@ export function useSellProductBrowseEngine({
 
   const selectedShelfLabel =
     sellCategoryKey === UNCATEGORIZED_SENTINEL
-      ? t(lang, "uncategorized")
+      ? t(lang, "posNoShelf")
       : sellCategoryKey === CATEGORY_FILTER_ALL
-        ? t(lang, "posAllProducts")
+        ? t(lang, "posCategoryAll")
         : sellCategoryKey;
 
-  const commitSearch = useCallback((raw: string) => {
-    const q = raw.trim();
-    if (!q) return;
-    setRecentSearches((prev) => [q, ...prev.filter((x) => x !== q)].slice(0, MAX_RECENT_SEARCHES));
-  }, []);
+  const commitSearch = useCallback(
+    (raw: string) => {
+      const q = raw.trim();
+      if (!q) return;
+      setRecentSearches((prev) => [q, ...prev.filter((x) => x !== q)].slice(0, MAX_RECENT_SEARCHES));
+    },
+    [],
+  );
+
+  const backToShelves = useCallback(() => {
+    setSellCategoryFilter(CATEGORY_FILTER_ALL);
+  }, [setSellCategoryFilter]);
 
   return {
     searchQuery,
     setSearchQuery,
     recentSearches,
+    setRecentSearches,
     commitSearch,
     sellCategoryKey,
     setSellCategoryFilter,
+    backToShelves,
     clearSellView,
     filteredProducts,
     shelfCards,
     sellSearchContext,
+    sellRowMatchesSearch,
+    productSearchIndex,
     hasSellViewFilter,
     showCatalogShelfGrid,
     catalogShelfDrillDown,
     selectedShelfLabel,
+    favoriteIdSet,
   };
 }

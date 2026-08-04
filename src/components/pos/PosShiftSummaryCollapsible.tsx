@@ -95,7 +95,7 @@ export function PosShiftSummaryCollapsible({
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
             <span className="inline-flex items-center gap-1 text-xs font-bold text-teal-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-success-muted0" aria-hidden />
+              <span className="h-1.5 w-1.5 rounded-full bg-success-muted" aria-hidden />
               Shift · {duration}
             </span>
             <span className="inline-flex items-center gap-1 text-xs font-bold text-foreground">

@@ -19,7 +19,21 @@ describe("posDesktopSplit", () => {
     expect(uhd).toBeLessThanOrEqual(460);
   });
 
-  it("builds grid template with fluid catalog column", () => {
-    expect(posSplitGridTemplateColumns(1280)).toMatch(/^minmax\(0, 1fr\) \d+px$/);
+  it("builds fluid grid template with catalog 1fr and checkout minmax", () => {
+    expect(posSplitGridTemplateColumns(1280)).toMatch(
+      /^minmax\(0, 1fr\) minmax\(\d+px, min\(\d+px, 26%\)\)$/,
+    );
+    expect(posSplitGridTemplateColumns(1440)).toMatch(
+      /^minmax\(0, 1fr\) minmax\(\d+px, min\(\d+px, 30%\)\)$/,
+    );
+  });
+
+  it("collapses to a narrow rail without unmounting the column", () => {
+    const rail = posCheckoutColumnWidthPx(1366, 1, { collapsed: true });
+    expect(rail).toBeGreaterThanOrEqual(88);
+    expect(rail).toBeLessThanOrEqual(112);
+    expect(posSplitGridTemplateColumns(1366, 1, { collapsed: true })).toMatch(
+      /^minmax\(0, 1fr\) \d+px$/,
+    );
   });
 });

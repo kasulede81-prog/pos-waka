@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { catalogColumnCount, POS_GRID_MAX_COLUMNS, POS_CATALOG_COL_BREAKPOINT_520, POS_CATALOG_COL_BREAKPOINT_640, POS_CATALOG_COL_BREAKPOINT_820, POS_CATALOG_COL_BREAKPOINT_980, POS_CATALOG_COL_BREAKPOINT_1160, POS_CATALOG_COL_BREAKPOINT_1400, POS_CATALOG_COL_BREAKPOINT_1900 } from "./posProductGridColumns";
+import {
+  catalogColumnCount,
+  POS_GRID_MAX_COLUMNS,
+  POS_CATALOG_COL_BREAKPOINT_520,
+  POS_CATALOG_COL_BREAKPOINT_640,
+  POS_CATALOG_COL_BREAKPOINT_820,
+  POS_CATALOG_COL_BREAKPOINT_980,
+  POS_CATALOG_COL_BREAKPOINT_1160,
+  POS_CATALOG_COL_BREAKPOINT_1400,
+  POS_CATALOG_COL_BREAKPOINT_1900,
+} from "./posProductGridColumns";
 
 describe("catalog grid width → column count", () => {
   it("never exceeds twelve columns at any catalog width", () => {
@@ -17,14 +27,20 @@ describe("catalog grid width → column count", () => {
     expect(catalogColumnCount(POS_CATALOG_COL_BREAKPOINT_640 - 1)).toBe(4);
   });
 
-  it("returns 5 columns from 640–819px", () => {
+  it("returns 5 columns from 640–679px", () => {
     expect(catalogColumnCount(POS_CATALOG_COL_BREAKPOINT_640)).toBe(5);
-    expect(catalogColumnCount(POS_CATALOG_COL_BREAKPOINT_820 - 1)).toBe(5);
+    expect(catalogColumnCount(679)).toBe(5);
   });
 
-  it("returns 6 columns from 820–979px", () => {
+  it("returns 6 columns from 680–859px (Phase 32.3 density band)", () => {
+    expect(catalogColumnCount(680)).toBe(6);
     expect(catalogColumnCount(POS_CATALOG_COL_BREAKPOINT_820)).toBe(6);
-    expect(catalogColumnCount(POS_CATALOG_COL_BREAKPOINT_980 - 1)).toBe(6);
+    expect(catalogColumnCount(859)).toBe(6);
+  });
+
+  it("returns 7 columns from 860–979px", () => {
+    expect(catalogColumnCount(860)).toBe(7);
+    expect(catalogColumnCount(POS_CATALOG_COL_BREAKPOINT_980 - 1)).toBe(7);
   });
 
   it("returns 8 columns from 980–1159px", () => {

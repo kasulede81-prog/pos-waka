@@ -4,7 +4,6 @@ import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
-import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import {
   buildInventoryCountVarianceReport,
@@ -18,10 +17,13 @@ import { CountProgress } from "../components/inventory/count/CountProgress";
 import { CountStatusStrip } from "../components/inventory/count/CountStatusStrip";
 import { CountSearchBar } from "../components/inventory/count/CountSearchBar";
 import { CountProductCard } from "../components/inventory/count/CountProductCard";
+import { CountDesktopTable } from "../components/inventory/count/CountDesktopTable";
 import { CountSummaryPanel } from "../components/inventory/count/CountSummaryPanel";
 import { CountApprovalDialog } from "../components/inventory/count/CountApprovalDialog";
 import { CountCompletionScreen } from "../components/inventory/count/CountCompletionScreen";
 import { WIZARD_BTN_FOOTER_BASE } from "../components/inventory/count/countTokens";
+import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
 import clsx from "clsx";
 
 type Props = { lang: Language };
@@ -30,6 +32,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const actor = useSessionActor();
+  const desktopTable = useWakaLayoutBand() === "desktop";
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
   const session = usePosStore((s) => s.inventoryCountSessions.find((row) => row.id === sessionId));
@@ -70,7 +73,13 @@ export function InventoryCountSessionPage({ lang }: Props) {
   if (!sessionId || !session) {
     return (
       <EnterprisePageContainer>
-        <PageHeader lang={lang} title={t(lang, "inventoryCountTitle")} backLabel={t(lang, "stockCountNav")} backFallback="/stock/count" />
+        <EnterprisePageHeader
+          lang={lang}
+          title={t(lang, "inventoryCountTitle")}
+          backLabel={t(lang, "stockCountNav")}
+          backFallback="/stock/count"
+          compact
+        />
         <p className="text-sm font-semibold text-muted-foreground">{t(lang, "invalid")}</p>
       </EnterprisePageContainer>
     );
@@ -120,12 +129,13 @@ export function InventoryCountSessionPage({ lang }: Props) {
 
   return (
     <EnterprisePageContainer>
-      <PageHeader
+      <EnterprisePageHeader
         lang={lang}
         title={tTemplate(lang, "inventoryCountSessionNumber", { n: String(session.sessionNumber) })}
         subtitle={t(lang, `inventoryCountStatus_${session.status}`)}
         backLabel={t(lang, "stockCountNav")}
         backFallback="/stock/count"
+        compact
       />
 
       <InventoryCountShell
@@ -224,25 +234,42 @@ export function InventoryCountSessionPage({ lang }: Props) {
 
             {canCount ? <CountSearchBar lang={lang} value={query} onChange={setQuery} /> : null}
 
-            <ul className="space-y-3">
-              {filteredLines.map((line) => (
-                <CountProductCard
-                  key={line.id}
-                  lang={lang}
-                  line={line}
-                  product={productById.get(line.productId)}
-                  businessType={preferences.businessType}
-                  pharmacyModeEnabled={preferences.pharmacyModeEnabled}
-                  showReview={showReview}
-                  canCount={canCount}
-                  qtyValue={qtyDraft[line.productId] ?? (line.countedQty != null ? String(line.countedQty) : "")}
-                  reasonValue={reasonDraft[line.productId] ?? line.reason}
-                  onQtyChange={(v) => setQtyDraft((d) => ({ ...d, [line.productId]: v }))}
-                  onReasonChange={(v) => setReasonDraft((d) => ({ ...d, [line.productId]: v }))}
-                  onSave={() => saveLine(line.productId)}
-                />
-              ))}
-            </ul>
+            {desktopTable ? (
+              <CountDesktopTable
+                lang={lang}
+                lines={filteredLines}
+                productById={productById}
+                businessType={preferences.businessType}
+                pharmacyModeEnabled={preferences.pharmacyModeEnabled}
+                showReview={showReview}
+                canCount={canCount}
+                qtyDraft={qtyDraft}
+                reasonDraft={reasonDraft}
+                onQtyChange={(productId, v) => setQtyDraft((d) => ({ ...d, [productId]: v }))}
+                onReasonChange={(productId, v) => setReasonDraft((d) => ({ ...d, [productId]: v }))}
+                onSave={saveLine}
+              />
+            ) : (
+              <ul className="space-y-3">
+                {filteredLines.map((line) => (
+                  <CountProductCard
+                    key={line.id}
+                    lang={lang}
+                    line={line}
+                    product={productById.get(line.productId)}
+                    businessType={preferences.businessType}
+                    pharmacyModeEnabled={preferences.pharmacyModeEnabled}
+                    showReview={showReview}
+                    canCount={canCount}
+                    qtyValue={qtyDraft[line.productId] ?? (line.countedQty != null ? String(line.countedQty) : "")}
+                    reasonValue={reasonDraft[line.productId] ?? line.reason}
+                    onQtyChange={(v) => setQtyDraft((d) => ({ ...d, [line.productId]: v }))}
+                    onReasonChange={(v) => setReasonDraft((d) => ({ ...d, [line.productId]: v }))}
+                    onSave={() => saveLine(line.productId)}
+                  />
+                ))}
+              </ul>
+            )}
           </>
         )}
       </InventoryCountShell>

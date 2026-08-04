@@ -12,6 +12,8 @@ import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useSessionActor } from "../context/SessionActorContext";
 import { VirtualizedReceiptList } from "../components/receipts/VirtualizedReceiptList";
+import { SalesHistoryDesktopTable } from "../components/receipts/SalesHistoryDesktopTable";
+import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
 import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
@@ -93,7 +95,9 @@ function paymentMethodsSummary(lang: Language, sales: Sale[]): string {
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
+  const desktopTable = useWakaLayoutBand() === "desktop";
   const { runProtected } = useProtectedAction();
+  const [desktopActionSale, setDesktopActionSale] = useState<Sale | null>(null);
   const {
     filter,
     setFilter,
@@ -463,11 +467,46 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         <SalesHistorySkeletonList />
       ) : listSales.length > 0 ? (
         <section className="transition-opacity duration-300 ease-out">
-          <VirtualizedReceiptList
-            items={listSales}
-            getKey={(sale) => sale.id}
-            renderItem={(sale) => renderSaleRow(sale)}
-          />
+          {desktopTable ? (
+            <>
+              <SalesHistoryDesktopTable
+                lang={lang}
+                sales={listSales}
+                allSales={sales}
+                customerNameFor={customerNameFor}
+                cashierLabelFor={soldByLabel}
+                onPrint={printSale}
+                onReceiptPdf={(s) => void runProtected("export_data", () => receiptPdfSale(s))}
+                onOpenActions={setDesktopActionSale}
+              />
+              {desktopActionSale ? (
+                <SalesHistoryRow
+                  lang={lang}
+                  sale={desktopActionSale}
+                  allSales={sales}
+                  returnRecords={allReturns}
+                  productById={productById}
+                  customerName={customerNameFor(desktopActionSale)}
+                  cashierLabel={soldByLabel(desktopActionSale)}
+                  canVoid={canVoid && isCompletedSale(desktopActionSale)}
+                  onPrint={printSale}
+                  onReceiptPdf={(s) => void runProtected("export_data", () => receiptPdfSale(s))}
+                  onReturn={(s) => void runProtected("refund_sale", () => setReturnSale(s))}
+                  onVoidLine={(s, lineIndex, line) =>
+                    void runProtected("void_sale", () => setVoidTarget({ sale: s, lineIndex, line }))
+                  }
+                  hideCard
+                  forceOpenActions
+                />
+              ) : null}
+            </>
+          ) : (
+            <VirtualizedReceiptList
+              items={listSales}
+              getKey={(sale) => sale.id}
+              renderItem={(sale) => renderSaleRow(sale)}
+            />
+          )}
         </section>
       ) : hasAnyInRange && searchQuery.trim() ? (
         <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">

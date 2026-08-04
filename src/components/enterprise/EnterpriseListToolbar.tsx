@@ -31,6 +31,8 @@ export type EnterpriseListToolbarProps = {
   exportLabel?: string;
   statusChips?: ReactNode;
   trailing?: ReactNode;
+  /** Phase 30.1 — desktop bulk / selection controls */
+  bulkActions?: ReactNode;
 };
 
 function ToolbarButton({
@@ -91,6 +93,7 @@ export function EnterpriseListToolbar({
   exportLabel,
   statusChips,
   trailing,
+  bulkActions,
 }: EnterpriseListToolbarProps) {
   const showSearch = onSearchChange != null;
   const showActions =
@@ -101,7 +104,8 @@ export function EnterpriseListToolbar({
     onRefresh ||
     onExport ||
     trailing ||
-    statusChips;
+    statusChips ||
+    bulkActions;
 
   if (!showSearch && !showActions) return null;
 
@@ -156,6 +160,7 @@ export function EnterpriseListToolbar({
               primary
             />
             {trailing}
+            {bulkActions}
           </div>
         </div>
       ) : null}

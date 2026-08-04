@@ -14,6 +14,17 @@ export type { EnterpriseSaveMode } from "./EnterpriseSaveIndicator";
 export { EnterpriseListFooter } from "./EnterpriseListFooter";
 export { EnterpriseListToolbar } from "./EnterpriseListToolbar";
 export type { EnterpriseListToolbarProps } from "./EnterpriseListToolbar";
+export {
+  EnterpriseDataTable,
+  EnterpriseDesktopBulkBar,
+  useEnterpriseTableSelection,
+  useEnterpriseTableKeyboard,
+} from "./data-table";
+export type {
+  EnterpriseDataColumn,
+  EnterpriseDataSelectionApi,
+  EnterpriseDataTableProps,
+} from "./data-table";
 export { SettingsAutoSaveShell } from "./SettingsAutoSaveShell";
 export { PreferencesAutoSaveProvider, usePreferencesPatch } from "./preferencesAutoSaveContext";
 export { usePreferencesAutoSave } from "./usePreferencesAutoSave";

@@ -17,6 +17,10 @@ import type { DateFilterValue } from "../../../lib/dateFilters";
 import { SalesHistoryDateFilterChips } from "../../../components/receipts/SalesHistoryDateFilterChips";
 import { purchaseStatusKind, formatShortUgx } from "../lib/overviewStats";
 import type { PurchaseStatusFilter } from "../types";
+import { PurchasesDesktopTable } from "./PurchasesDesktopTable";
+import { useWakaLayoutBand } from "../../../hooks/useWakaLayoutBand";
+import { WakaButton } from "../../../components/ui/wakaPrimitives";
+import { statusTokens } from "../../../lib/statusTokens";
 
 type Props = {
   lang: Language;
@@ -25,6 +29,7 @@ type Props = {
 };
 
 export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
+  const desktopTable = useWakaLayoutBand() === "desktop";
   const purchases = usePosStore((s) => s.purchases);
   const products = usePosStore((s) => s.products);
   const stockMovements = usePosStore((s) => s.stockMovements);
@@ -67,10 +72,10 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
   };
 
   const statusClass = (kind: ReturnType<typeof purchaseStatusKind>) => {
-    if (kind === "paid") return "bg-emerald-100 text-emerald-800";
-    if (kind === "partial") return "bg-amber-100 text-amber-900";
-    if (kind === "unpaid") return "bg-rose-100 text-rose-800";
-    return "bg-muted text-muted-foreground";
+    if (kind === "paid") return statusTokens.success.badge;
+    if (kind === "partial") return statusTokens.warning.badge;
+    if (kind === "unpaid") return statusTokens.danger.badge;
+    return statusTokens.draft.badge;
   };
 
   const statusLabel = (kind: ReturnType<typeof purchaseStatusKind>) => {
@@ -84,13 +89,9 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
-        <button
-          type="button"
-          onClick={onNewPurchase}
-          className="shrink-0 rounded-xl bg-waka-600 px-4 py-2 text-xs font-black text-white"
-        >
+        <WakaButton type="button" variant="primary" className="shrink-0 !min-h-[40px] !px-4 !text-xs" onClick={onNewPurchase}>
           + {t(lang, "ipActionNewPurchase")}
-        </button>
+        </WakaButton>
       </div>
 
       <input
@@ -107,8 +108,10 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
             type="button"
             onClick={() => setStatusFilter(s)}
             className={clsx(
-              "rounded-full px-3 py-1.5 text-[11px] font-black",
-              statusFilter === s ? "bg-waka-600 text-white" : "border border-border bg-card text-muted-foreground",
+              "rounded-full px-3 py-1.5 text-[11px] font-bold",
+              statusFilter === s
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-card text-muted-foreground",
             )}
           >
             {s === "all" ? t(lang, "ipFilterAll") : statusLabel(s as ReturnType<typeof purchaseStatusKind>)}
@@ -117,22 +120,31 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={exportBusy || rows.length === 0} onClick={() => void printPurchasesReport(lang, shopName, rows, exportStem)} className="min-h-[40px] rounded-xl bg-foreground px-3 text-xs font-black text-background disabled:opacity-50">
+        <WakaButton type="button" variant="secondary" className="!min-h-[40px] !text-xs" disabled={exportBusy || rows.length === 0} onClick={() => void printPurchasesReport(lang, shopName, rows, exportStem)}>
           {receiptPrintActionLabel(lang)}
-        </button>
-        <button type="button" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("csv")} className="min-h-[40px] rounded-xl border border-border px-3 text-xs font-black disabled:opacity-50">
+        </WakaButton>
+        <WakaButton type="button" variant="secondary" className="!min-h-[40px] !text-xs" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("csv")}>
           CSV
-        </button>
-        <button type="button" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("pdf")} className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50">
+        </WakaButton>
+        <WakaButton type="button" variant="primary" className="!min-h-[40px] !text-xs" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("pdf")}>
           PDF
-        </button>
-        {exportHint ? <p className="self-center text-xs font-bold text-waka-800">{exportHint}</p> : null}
+        </WakaButton>
+        {exportHint ? <p className="self-center text-xs font-bold text-primary">{exportHint}</p> : null}
       </div>
 
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border bg-muted px-4 py-10 text-center text-sm font-semibold text-muted-foreground">
           {t(lang, "purchasesEmpty")}
         </p>
+      ) : desktopTable ? (
+        <PurchasesDesktopTable
+          lang={lang}
+          rows={rows}
+          onOpenPurchase={onOpenPurchase}
+          onExportSelectedCsv={(selected) => {
+            void downloadPurchasesCsv(selected, `${exportStem}_selected`);
+          }}
+        />
       ) : (
         <ul className="space-y-2">
           {rows.map((row) => {

@@ -1,5 +1,3 @@
-import clsx from "clsx";
-import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   Boxes,
@@ -16,6 +14,9 @@ import { t, tTemplate } from "../../../lib/i18n";
 import { formatShortUgx } from "../../../features/inventory-purchasing/lib/overviewStats";
 import type { InventoryWorkspaceDashboardStats } from "../../../lib/inventoryWorkspaceStats";
 import type { InventoryWorkspaceMode } from "../../../lib/inventoryWorkspaceTiles";
+import { EnterpriseKpiCard } from "../../enterprise/EnterpriseKpiCard";
+import { enterpriseTypeClass } from "../../../lib/enterpriseTypography";
+import { enterpriseSpace } from "../../../lib/enterpriseSpacing";
 
 type Props = {
   lang: Language;
@@ -32,56 +33,6 @@ type Props = {
   onBatchIntegrity?: () => void;
   onControlledAlerts?: () => void;
 };
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  warn,
-  highlight,
-  onClick,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  hint?: string;
-  warn?: boolean;
-  highlight?: boolean;
-  onClick?: () => void;
-}) {
-  const Tag = onClick ? "button" : "div";
-  return (
-    <Tag
-      type={onClick ? "button" : undefined}
-      onClick={onClick}
-      className={clsx(
-        "flex min-h-[88px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-all",
-        highlight ? "border-waka-200 bg-gradient-to-br from-waka-50 to-waka-50/60" : "border-border/90 bg-card",
-        warn && !highlight && "border-danger/20 bg-danger-muted/40",
-        onClick && "active:scale-[0.98] motion-reduce:active:scale-100",
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <span
-          className={clsx(
-            "flex h-8 w-8 items-center justify-center rounded-xl",
-            highlight ? "bg-waka-600 text-white" : warn ? "bg-danger-muted text-danger" : "bg-muted text-muted-foreground",
-          )}
-        >
-          <Icon className="h-4 w-4" aria-hidden />
-        </span>
-        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
-      </div>
-      <div>
-        <p className={clsx("text-lg font-black tabular-nums", warn ? "text-danger" : highlight ? "text-waka-800" : "text-foreground")}>
-          {value}
-        </p>
-        {hint ? <p className="text-[10px] font-semibold text-muted-foreground">{hint}</p> : null}
-      </div>
-    </Tag>
-  );
-}
 
 export function InventoryDashboardCards({
   lang,
@@ -100,40 +51,40 @@ export function InventoryDashboardCards({
 }: Props) {
   const shared = (
     <>
-      <StatCard
+      <EnterpriseKpiCard
         icon={Package}
         label={t(lang, "stockStatTotalProducts")}
         value={String(stats.totalProducts)}
-        highlight
+        tone="highlight"
       />
-      <StatCard
+      <EnterpriseKpiCard
         icon={Boxes}
         label={t(lang, "stockStatValueShort")}
         value={formatShortUgx(stats.inventoryValueUgx)}
         hint={t(lang, "stockStatValueHint")}
       />
-      <StatCard
+      <EnterpriseKpiCard
         icon={AlertTriangle}
         label={t(lang, "ipStatLowStock")}
         value={String(stats.lowStockCount)}
         hint={t(lang, "ipStatLowStockHint")}
-        warn={stats.lowStockCount > 0}
+        tone={stats.lowStockCount > 0 ? "danger" : "default"}
         onClick={onLowStock}
       />
-      <StatCard
+      <EnterpriseKpiCard
         icon={Package}
         label={t(lang, "iwStatOutOfStock")}
         value={String(stats.outOfStockCount)}
-        warn={stats.outOfStockCount > 0}
+        tone={stats.outOfStockCount > 0 ? "danger" : "default"}
         onClick={onOutOfStock}
       />
-      <StatCard
+      <EnterpriseKpiCard
         icon={Receipt}
         label={t(lang, "ipStatOpenOrders")}
         value={String(stats.pendingPurchases)}
         onClick={onPendingPurchases}
       />
-      <StatCard
+      <EnterpriseKpiCard
         icon={ShoppingCart}
         label={t(lang, "iwStatTodayPurchases")}
         value={formatShortUgx(stats.todayPurchasesUgx)}
@@ -144,17 +95,17 @@ export function InventoryDashboardCards({
         }
         onClick={onTodayPurchases}
       />
-      <StatCard
+      <EnterpriseKpiCard
         icon={Users}
         label={t(lang, "ipStatActiveSuppliers")}
         value={String(stats.activeSuppliers)}
         onClick={onSuppliers}
       />
-      <StatCard
+      <EnterpriseKpiCard
         icon={CreditCard}
         label={t(lang, "iwStatInventoryAlerts")}
         value={String(stats.inventoryAlerts)}
-        warn={stats.inventoryAlerts > 0}
+        tone={stats.inventoryAlerts > 0 ? "warning" : "default"}
         onClick={onInventoryAlerts}
       />
     </>
@@ -163,43 +114,41 @@ export function InventoryDashboardCards({
   const pharmacyExtras =
     mode === "pharmacy" ? (
       <>
-        <StatCard
+        <EnterpriseKpiCard
           icon={Pill}
           label={t(lang, "iwStatNearExpiry")}
           value={String(stats.nearExpiryCount)}
-          warn={stats.nearExpiryCount > 0}
+          tone={stats.nearExpiryCount > 0 ? "warning" : "default"}
           onClick={onNearExpiry}
         />
-        <StatCard
+        <EnterpriseKpiCard
           icon={AlertTriangle}
           label={t(lang, "iwStatExpired")}
           value={String(stats.expiredCount)}
-          warn={stats.expiredCount > 0}
+          tone={stats.expiredCount > 0 ? "danger" : "default"}
           onClick={onExpired}
         />
-        <StatCard
+        <EnterpriseKpiCard
           icon={Shield}
           label={t(lang, "iwExtBatchIntegrity")}
           value={String(stats.batchIntegrityIssues)}
-          warn={stats.batchIntegrityIssues > 0}
+          tone={stats.batchIntegrityIssues > 0 ? "danger" : "default"}
           onClick={onBatchIntegrity}
         />
-        <StatCard
+        <EnterpriseKpiCard
           icon={Shield}
           label={t(lang, "iwStatControlledAlerts")}
           value={String(stats.controlledAlerts)}
-          warn={stats.controlledAlerts > 0}
+          tone={stats.controlledAlerts > 0 ? "warning" : "default"}
           onClick={onControlledAlerts}
         />
       </>
     ) : null;
 
   return (
-    <section className="space-y-2">
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-        {t(lang, "iwSectionDashboard")}
-      </h3>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+    <section className={enterpriseSpace.workspaceStack}>
+      <h3 className={enterpriseTypeClass("caption")}>{t(lang, "iwSectionDashboard")}</h3>
+      <div className={`${enterpriseSpace.kpiGrid} grid-cols-2 sm:grid-cols-3 lg:grid-cols-4`}>
         {shared}
         {pharmacyExtras}
       </div>

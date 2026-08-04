@@ -1,5 +1,5 @@
 import { memo, useRef } from "react";
-import { ArrowLeft, ScanLine, Search, X } from "lucide-react";
+import { ScanLine, Search, X } from "lucide-react";
 import clsx from "clsx";
 import type { Language, Product, ShopPreferences } from "../../types";
 import { t } from "../../lib/i18n";
@@ -12,6 +12,7 @@ import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { CATEGORY_FILTER_ALL } from "../../lib/productCategories";
 import { PosSellCatalogShelfSection } from "./PosSellCatalogShelfSection";
+import { PosShelfDrillDownHeader } from "./PosShelfDrillDownHeader";
 import { VirtualizedProductGrid } from "./VirtualizedProductGrid";
 
 export type SellProductBrowsePanelProps = {
@@ -22,7 +23,10 @@ export type SellProductBrowsePanelProps = {
   onBarcodeNotFound?: (code: string) => void;
   isLocked?: (product: Product) => boolean;
   lockedBadge?: string;
-  /** Pharmacy workspace uses ephemeral category (does not mutate POS prefs). */
+  /**
+   * @deprecated Phase 32.3 — Retail + Pharmacy share persisted shelf filter.
+   * Kept for call-site compatibility; ignored when omitted/false.
+   */
   ephemeralCategory?: boolean;
   className?: string;
   searchPlaceholder?: string;
@@ -36,7 +40,6 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
   onBarcodeNotFound,
   isLocked,
   lockedBadge,
-  ephemeralCategory = false,
   className,
   searchPlaceholder,
 }: SellProductBrowsePanelProps) {
@@ -44,6 +47,7 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
   const viewportWidth = usePosViewportWidth();
   const { columnCount } = useCatalogContainerWidth(catalogRef, {
     phoneBand: isWakaMobile(viewportWidth),
+    stabilizeDensity: true,
   });
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const modeTerm = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
@@ -52,7 +56,7 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
     lang,
     products,
     preferences,
-    ephemeralCategory,
+    ephemeralCategory: false,
   });
 
   const barcode = useSellBarcodeScanner({
@@ -69,7 +73,7 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
     (pharmacyMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder"));
 
   const showShelf = browse.showCatalogShelfGrid && browse.sellCategoryKey === CATEGORY_FILTER_ALL;
-  const showDrillDown = browse.sellCategoryKey !== CATEGORY_FILTER_ALL && browse.sellSearchContext.q.length === 0;
+  const showDrillDown = browse.catalogShelfDrillDown;
   const showSearchResults = browse.sellSearchContext.q.length > 0;
 
   return (
@@ -118,14 +122,12 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
         {showDrillDown || showSearchResults ? (
           <section className="space-y-2">
             {showDrillDown ? (
-              <button
-                type="button"
-                onClick={() => browse.setSellCategoryFilter(CATEGORY_FILTER_ALL)}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl px-2 text-sm font-black text-teal-800 touch-manipulation"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden />
-                {browse.selectedShelfLabel}
-              </button>
+              <PosShelfDrillDownHeader
+                lang={lang}
+                shelfLabel={browse.selectedShelfLabel}
+                productCount={browse.filteredProducts.length}
+                onBack={browse.backToShelves}
+              />
             ) : null}
             {browse.filteredProducts.length === 0 ? (
               <p className="py-10 text-center text-sm font-semibold text-muted-foreground">{t(lang, "posSellNoMatch")}</p>

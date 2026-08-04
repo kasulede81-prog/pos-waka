@@ -11,6 +11,7 @@ export const ENTERPRISE_UX_PRIMITIVES = [
   "EnterpriseTextField",
   "EnterpriseResponsiveTable",
   "ResponsiveDataTable",
+  "EnterpriseDataTable",
   "WakaButton",
   "WakaSwitch",
   "WakaCheckbox",

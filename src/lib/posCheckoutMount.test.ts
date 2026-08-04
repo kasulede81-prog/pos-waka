@@ -4,14 +4,15 @@ import {
   shouldMountCompactCheckoutSlideover,
   shouldMountDesktopCheckoutSidebar,
   shouldMountMobileCheckoutOverlay,
+  shouldShowDesktopCheckoutRail,
   shouldShowMinimizedCheckoutFab,
 } from "./posCheckoutMount";
 
 describe("posCheckoutMount", () => {
-  it("mounts desktop sidebar only on full desktop with an active sale", () => {
+  it("keeps desktop sidebar mounted for active sales even when collapsed", () => {
     expect(shouldMountDesktopCheckoutSidebar("full", true, 2, false)).toBe(true);
+    expect(shouldMountDesktopCheckoutSidebar("full", true, 2, true)).toBe(true);
     expect(shouldMountDesktopCheckoutSidebar("full", true, 0, false)).toBe(false);
-    expect(shouldMountDesktopCheckoutSidebar("full", true, 2, true)).toBe(false);
     expect(shouldMountDesktopCheckoutSidebar("compact", true, 2, false)).toBe(false);
     expect(shouldMountDesktopCheckoutSidebar("mobile", true, 2, false)).toBe(false);
     expect(shouldMountDesktopCheckoutSidebar("full", false, 2, false)).toBe(false);
@@ -31,12 +32,18 @@ describe("posCheckoutMount", () => {
     expect(shouldMountMobileCheckoutOverlay("mobile", 2, true)).toBe(false);
   });
 
-  it("shows minimized fab when checkout is minimized with items", () => {
+  it("shows minimized fab only on mobile/compact — not full desktop", () => {
     expect(shouldShowMinimizedCheckoutFab("mobile", 2, true)).toBe(true);
     expect(shouldShowMinimizedCheckoutFab("compact", 2, true)).toBe(true);
-    expect(shouldShowMinimizedCheckoutFab("full", 2, true)).toBe(true);
+    expect(shouldShowMinimizedCheckoutFab("full", 2, true)).toBe(false);
     expect(shouldShowMinimizedCheckoutFab("full", 2, false)).toBe(false);
     expect(shouldShowMinimizedCheckoutFab("compact", 0, true)).toBe(false);
+  });
+
+  it("shows desktop rail when full desktop checkout is collapsed", () => {
+    expect(shouldShowDesktopCheckoutRail("full", 2, true)).toBe(true);
+    expect(shouldShowDesktopCheckoutRail("full", 2, false)).toBe(false);
+    expect(shouldShowDesktopCheckoutRail("compact", 2, true)).toBe(false);
   });
 
   it("never mounts more than one checkout panel", () => {

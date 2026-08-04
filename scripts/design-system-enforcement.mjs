@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Phase 22.6 — Design system enforcement scanner + premium polish adoption metrics.
+ * Phase 22.6 + Phase 29.1 — Design system enforcement scanner + premium polish adoption metrics.
  * Run: npm run design-system:check
  */
 
@@ -82,6 +82,26 @@ const RULES = [
     pattern: /bg-rose-100 text-rose-9/g,
     message: "Use statusTokens.danger for badges",
   },
+  {
+    id: "module-spectacle-palette",
+    pattern: /\bborder-(emerald|violet|purple|fuchsia|indigo)-[0-9]{2,3}\b.*\bbg-(emerald|violet|purple|fuchsia|indigo)-/g,
+    message: "Personality unification: use statusTokens / EnterpriseKpiCard tones (not module-specific spectacle palettes)",
+  },
+  {
+    id: "truncated-waka-shade",
+    pattern: /\b(bg|text|border|from|to|via|ring)-waka-(?![0-9]|50\b|950\b)/g,
+    message: "Incomplete waka-* shade (e.g. bg-waka- without 50–950) — restore full Tailwind class",
+  },
+  {
+    id: "palette-typo-muted0",
+    pattern: /\b(bg|text|border)-(success|warning|danger|info)-muted0\b/g,
+    message: "Palette replace typo (*-muted0) — use *-muted or solid token",
+  },
+  {
+    id: "adhoc-card-shell",
+    pattern: /rounded-3xl border(?:-2)? border-(?:border|emerald|violet|amber|rose)/g,
+    message: "Prefer EnterpriseCard / themeUi.surface for production cards",
+  },
 ];
 
 const ADOPTION_SIGNALS = [
@@ -101,6 +121,8 @@ const ADOPTION_SIGNALS = [
   { id: "enterprise-action-sheet", pattern: /\bEnterpriseActionSheet\b/g, label: "EnterpriseActionSheet" },
   { id: "enterprise-motion", pattern: /enterpriseMotion\.|animate-enterprise-|transition-waka|waka-skeleton-bar/g, label: "Enterprise motion" },
   { id: "status-tokens", pattern: /statusTokens\./g, label: "statusTokens" },
+  { id: "enterprise-spacing", pattern: /enterpriseSpace\.|enterpriseSpaceCss/g, label: "enterpriseSpace" },
+  { id: "shadow-elev", pattern: /\bshadow-elev(-md)?\b/g, label: "shadow-elev tokens" },
 ];
 
 const LEGACY_SIGNALS = [
@@ -110,6 +132,8 @@ const LEGACY_SIGNALS = [
   { id: "legacy-fractional-type", pattern: /text-\[(8|9|10|11|13|15|17|18|22)px\]/g, label: "fractional typography" },
   { id: "legacy-pulse-skeleton", pattern: /animate-pulse bg-muted/g, label: "pulse skeleton (use waka-skeleton-bar)" },
   { id: "legacy-raw-spinner", pattern: /border-t-transparent|animate-spin rounded-full border-2/g, label: "raw CSS spinners" },
+  { id: "legacy-font-black", pattern: /\bfont-black\b/g, label: "font-black (prefer font-bold outside display)" },
+  { id: "legacy-module-spectacle", pattern: /\bbg-(emerald|violet|purple)-[0-9]{2,3}\b/g, label: "module spectacle fills" },
 ];
 
 function walk(dir, out = []) {
@@ -199,7 +223,7 @@ const adoptionPct =
 const businessPct =
   businessWorkspaceFiles > 0 ? Math.round((businessWorkspaceAdopted / businessWorkspaceFiles) * 100) : 0;
 
-console.log("design-system:check — Phase 22.6 premium polish adoption summary\n");
+console.log("design-system:check — Phase 29.1 enterprise token enforcement summary\n");
 console.log(`High-traffic module primitive adoption: ${highTrafficAdopted}/${highTrafficFiles} files (${adoptionPct}%)`);
 console.log(`Business workspace adoption (Suppliers/Expenses/Cash/Stock/CC): ${businessWorkspaceAdopted}/${businessWorkspaceFiles} files (${businessPct}%)`);
 console.log("\nEnterprise primitive references:");

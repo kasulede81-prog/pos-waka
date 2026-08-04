@@ -164,7 +164,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [qaBuyPackTotal, setQaBuyPackTotal] = useState("");
 
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
-  const [stockTab, setStockTab] = useState<StockHubTab>("overview");
+  const [stockTab, setStockTab] = useState<StockHubTab>(() => (workspaceEmbed ? "products" : "overview"));
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
@@ -210,7 +210,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   useEffect(() => {
     if (workspaceEmbed) {
       const view = searchParams.get("stockView");
-      if (view === "shelves" || view === "low" || view === "movements" || view === "overview") {
+      // Phase 31.1 — hub owns overview; never show nested overview inside products embed
+      if (view === "shelves" || view === "low" || view === "movements") {
         setStockTab(view);
       } else {
         setStockTab("products");
@@ -914,13 +915,18 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
               "md:sticky md:top-0 md:z-20 md:backdrop-blur-md",
             )}
           >
-            <StockSectionTabs lang={lang} active={stockTab} onChange={handleStockTabChange} />
+            <StockSectionTabs
+              lang={lang}
+              active={stockTab === "overview" && workspaceEmbed ? "products" : stockTab}
+              onChange={handleStockTabChange}
+              embedded={workspaceEmbed}
+            />
             {showPinnedSearch && !(isPhone && stockTab === "products") ? (
               <StockPinnedSearch lang={lang} value={listQuery} onChange={handlePinnedSearch} />
             ) : null}
           </div>
 
-          {stockTab === "overview" ? (
+          {stockTab === "overview" && !workspaceEmbed ? (
             <StockOverviewPanel
               lang={lang}
               canAdd={canAdd}

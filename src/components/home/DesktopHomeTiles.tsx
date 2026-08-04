@@ -1,5 +1,5 @@
 import { actorHasEffectivePermission, actorHasPermission } from "../../lib/actorAuthorization";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Share2 } from "lucide-react";
 import type { Language, Permission } from "../../types";
@@ -18,13 +18,15 @@ import { lockedProductIds } from "../../lib/productPlanLock";
 import { POS_SHOP_ROUTE } from "../../lib/posNavigation";
 import { prefetchOfficeHub } from "../../lib/prefetchRoutes";
 import { resolveHomeMenuTiles, type ResolvedHomeTile } from "../../lib/launcherTiles";
-import { prefetchHomeTileLotties } from "./HomeTileLottie";
+import { homeModuleBand } from "../../lib/homeModulePriority";
 import { LivingDashboardCard } from "./LivingDashboardCard";
 import { HomeBusinessHero } from "./HomeBusinessHero";
-import { useHomeDashboardAnimationPause } from "../../hooks/useHomeDashboardAnimationPause";
+import { HomeExecutiveKpiStrip } from "./HomeExecutiveKpiStrip";
+import { HomeBusinessHealthSection } from "./HomeBusinessHealthSection";
+import { HomeReportsPreview } from "./HomeReportsPreview";
 import { useHomeDashboardMetrics } from "../../hooks/useHomeDashboardMetrics";
-import { useHomeTileSpotlight } from "../../hooks/useHomeTileSpotlight";
 import { useSessionHydration } from "../../context/SessionHydrationContext";
+import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
 
 type Props = { lang: Language };
 
@@ -32,7 +34,6 @@ const EMPTY_ORDER: string[] = [];
 const EMPTY_LAYOUT = {};
 
 export function DesktopHomeTiles({ lang }: Props) {
-  const animPaused = useHomeDashboardAnimationPause();
   const navigate = useNavigate();
   const actor = useSessionActor();
   const tileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -62,7 +63,13 @@ export function DesktopHomeTiles({ lang }: Props) {
     [unlockedProducts],
   );
 
-  const liveStats = useHomeDashboardMetrics(lang, actor.role, actor.userId, lowStockCount, actor.permissions);
+  const { byTile: liveStats, executive } = useHomeDashboardMetrics(
+    lang,
+    actor.role,
+    actor.userId,
+    lowStockCount,
+    actor.permissions,
+  );
 
   const can = useCallback(
     (perm?: Permission) => {
@@ -146,27 +153,24 @@ export function DesktopHomeTiles({ lang }: Props) {
     return [agentTile, ...baseSecondary];
   }, [baseSecondary, isMarketingAgent]);
 
-  const profitTile = useMemo(() => secondary.find((tile) => tile.id === "profit"), [secondary]);
   const reportsTile = useMemo(() => secondary.find((tile) => tile.id === "reports"), [secondary]);
-  const sceneTiles = useMemo(
-    () => secondary.filter((tile) => tile.id !== "profit" && tile.id !== "reports"),
+  const moduleTiles = useMemo(
+    () => secondary.filter((tile) => tile.id !== "reports"),
     [secondary],
   );
 
-  const spotlightOrder = useMemo(() => {
-    const ids: string[] = [];
-    if (hero) ids.push("sell");
-    if (profitTile) ids.push("profit");
-    ids.push(...sceneTiles.map((tile) => tile.id));
-    if (reportsTile) ids.push("reports");
-    return ids;
-  }, [hero, profitTile, sceneTiles, reportsTile]);
-
-  const activeSpotlight = useHomeTileSpotlight(spotlightOrder, animPaused);
-
-  useEffect(() => {
-    prefetchHomeTileLotties(spotlightOrder);
-  }, [spotlightOrder]);
+  const primaryTiles = useMemo(
+    () => moduleTiles.filter((tile) => homeModuleBand(tile.id) === "primary"),
+    [moduleTiles],
+  );
+  const secondaryTiles = useMemo(
+    () => moduleTiles.filter((tile) => homeModuleBand(tile.id) === "secondary"),
+    [moduleTiles],
+  );
+  const adminTiles = useMemo(
+    () => moduleTiles.filter((tile) => homeModuleBand(tile.id) === "admin"),
+    [moduleTiles],
+  );
 
   const openTile = useCallback(
     (to: string) => {
@@ -176,12 +180,14 @@ export function DesktopHomeTiles({ lang }: Props) {
     [navigate],
   );
 
-  const renderCard = (tile: ResolvedHomeTile) => (
+  const renderCard = (tile: ResolvedHomeTile, density: "comfortable" | "compact" = "comfortable") => (
     <LivingDashboardCard
       key={tile.id}
       tile={tile}
       lang={lang}
-      spotlight={activeSpotlight === tile.id}
+      spotlight={false}
+      appearance="enterprise"
+      density={density}
       liveStat={liveStats[tile.id]}
       buttonRef={(el) => {
         tileRefs.current[tile.id] = el;
@@ -197,30 +203,61 @@ export function DesktopHomeTiles({ lang }: Props) {
   }
 
   return (
-    <div
-      className="w-full max-w-none"
-      role="navigation"
-      aria-label={t(lang, "desktopHomeNavLabel")}
-    >
+    <div className="w-full max-w-none" role="navigation" aria-label={t(lang, "desktopHomeNavLabel")}>
       <HomeBusinessHero
         lang={lang}
         sellStat={liveStats.sell}
         onSell={hero ? () => openTile(hero.to) : undefined}
         heroActionLabelKey={pharmacyMode ? "builderHomeTapDispense" : "builderHomeTapSell"}
       />
-      <div className="flex flex-col gap-3 sm:gap-4">
-        {profitTile ? (
-          <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
-            {renderCard(profitTile)}
+
+      <HomeExecutiveKpiStrip lang={lang} kpis={executive} />
+      <HomeBusinessHealthSection lang={lang} />
+
+      {reportsTile ? (
+        <div className="mb-4 sm:mb-5">
+          <HomeReportsPreview
+            lang={lang}
+            liveStat={liveStats.reports}
+            onOpen={() => openTile(reportsTile.to)}
+          />
+        </div>
+      ) : null}
+
+      {primaryTiles.length > 0 ? (
+        <section className="mb-4 sm:mb-5">
+          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+            {t(lang, "homeModulesPrimary")}
+          </SectionTitle>
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
+            {primaryTiles.map((tile) => renderCard(tile))}
           </div>
-        ) : null}
-        {sceneTiles.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {sceneTiles.map((tile) => renderCard(tile))}
+        </section>
+      ) : null}
+
+      {secondaryTiles.length > 0 ? (
+        <section className="mb-4 sm:mb-5">
+          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+            {t(lang, "homeModulesSecondary")}
+          </SectionTitle>
+          <Caption className="mb-2 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
+            {secondaryTiles.map((tile) => renderCard(tile))}
           </div>
-        ) : null}
-        {reportsTile ? renderCard(reportsTile) : null}
-      </div>
+        </section>
+      ) : null}
+
+      {adminTiles.length > 0 ? (
+        <section className="mb-2">
+          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+            {t(lang, "homeModulesAdmin")}
+          </SectionTitle>
+          <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-4 xl:grid-cols-5">
+            {adminTiles.map((tile) => renderCard(tile, "compact"))
+            }
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

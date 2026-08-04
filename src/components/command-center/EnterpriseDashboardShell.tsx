@@ -7,11 +7,12 @@ import { dashboardSlotsForSurface } from "./registry/dashboardCatalog";
 export function EnterpriseDashboardShell({ ctx }: { ctx: DashboardCenterContext }) {
   const renderSlot = useMemo(() => createDashboardSlotRenderer(ctx), [ctx]);
   const orderedSlots = dashboardSlotsForSurface(ctx.surface);
+  /** Phase 29.1 — one page stack rhythm across CC / pharmacy / ops */
   const className =
     ctx.className ??
     (ctx.surface === "pharmacy-operations"
-      ? "enterprise-page space-y-6 bg-muted/40"
-      : "enterprise-page space-y-4 sm:space-y-5");
+      ? "enterprise-page space-y-4 sm:space-y-6 bg-muted/40"
+      : "enterprise-page space-y-4 sm:space-y-6");
 
   if (ctx.surface === "pharmacy-operations") {
     return (

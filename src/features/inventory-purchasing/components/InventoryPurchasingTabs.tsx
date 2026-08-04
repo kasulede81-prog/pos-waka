@@ -30,10 +30,10 @@ export function InventoryPurchasingTabs({ lang, active, onChange, visibleTabs }:
             type="button"
             onClick={() => onChange(tab)}
             className={clsx(
-              "min-h-[40px] shrink-0 rounded-full px-3.5 py-1.5 text-xs font-black transition-all duration-150",
+              "min-h-[40px] shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-waka",
               active === tab
-                ? "bg-waka-600 text-white shadow-sm"
-                : "border border-border bg-card text-muted-foreground active:bg-muted",
+                ? "bg-primary text-primary-foreground shadow-elev"
+                : "border border-border bg-card text-muted-foreground hover:bg-muted active:bg-muted",
             )}
           >
             {t(lang, TAB_LABELS[tab] as "ipTabOverview")}

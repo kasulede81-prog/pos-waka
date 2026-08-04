@@ -18,15 +18,20 @@ import { resolveProfitVisibility } from "../lib/profitVisibility";
 import type { Language, Permission, UserRole } from "../types";
 import { useSubscription } from "../context/SubscriptionContext";
 import { t, tTemplate } from "../lib/i18n";
+import {
+  buildHomeExecutiveKpis,
+  type HomeExecutiveKpi,
+  type HomeTileIntensity,
+  type HomeTileLiveStat,
+} from "../lib/homeExecutiveKpis";
+import { POS_RECEIPTS_ROUTE } from "../lib/posNavigation";
+import { isPharmacyMode } from "../lib/pharmacy";
 
-export type HomeTileIntensity = "calm" | "normal" | "high" | "alert";
+export type { HomeTileIntensity, HomeTileLiveStat, HomeExecutiveKpi };
 
-export type HomeTileLiveStat = {
-  /** Resolved label (may include the current month name). */
-  label: string;
-  value: string;
-  trend?: string;
-  intensity: HomeTileIntensity;
+export type HomeDashboardMetrics = {
+  byTile: Record<string, HomeTileLiveStat | undefined>;
+  executive: HomeExecutiveKpi[];
 };
 
 function pctChange(current: number, prior: number): string | undefined {
@@ -48,7 +53,7 @@ export function useHomeDashboardMetrics(
   actorUserId: string,
   lowStockCount: number,
   actorPermissions?: Permission[] | null,
-): Record<string, HomeTileLiveStat | undefined> {
+): HomeDashboardMetrics {
   const sales = useReportingSales(false);
   const returns = useReportingReturnRecords(false);
   const products = usePosStore((s) => s.products);
@@ -56,11 +61,13 @@ export function useHomeDashboardMetrics(
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const todayKpiSnapshot = usePosStore((s) => s.todayKpiSnapshot);
   const salesHydrating = usePosStore((s) => s.salesHistoryHydration?.active ?? false);
+  const preferences = usePosStore((s) => s.preferences);
   const { snapshot, authMode } = useSubscription();
   const homeMetrics = resolveVisibleHomeMetrics(role);
   const profitVisibility = resolveProfitVisibility({ role, snapshot, authMode, actorPermissions });
   const { todayKey, monthKey, monthLabel } = useKampalaCalendarTick(lang);
   const drawer = useDrawerCashForDay(todayKey);
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
 
   const scope: HomeMetricScope = homeMetrics.scope;
   const scopedSales = useMemo(
@@ -90,11 +97,12 @@ export function useHomeDashboardMetrics(
     const canDebt = homeMetrics.showShopWideDebt;
     const canProfit = profitVisibility.canProfit;
     const canReports = homeMetrics.showShopWideRevenue;
+    const showTodayRevenue = homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue;
 
-    const stats: Record<string, HomeTileLiveStat | undefined> = {};
+    const byTile: Record<string, HomeTileLiveStat | undefined> = {};
 
-    if (homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue) {
-      stats.sell = {
+    if (showTodayRevenue) {
+      byTile.sell = {
         label: t(lang, "desktopHomeLiveTodaySales"),
         value: t(lang, "desktopHomeLiveTxnCount").replace("{count}", String(today.transactionCount)),
         intensity: today.transactionCount >= 40 ? "high" : today.transactionCount >= 10 ? "normal" : "calm",
@@ -102,7 +110,7 @@ export function useHomeDashboardMetrics(
     }
 
     if (canProfit) {
-      stats.profit = {
+      byTile.profit = {
         label: tTemplate(lang, "desktopHomeLiveMonthProfit", { month: monthLabel }),
         value: formatShortUgx(month.estimatedProfitUgx),
         trend:
@@ -114,7 +122,7 @@ export function useHomeDashboardMetrics(
     }
 
     if (homeMetrics.showInventoryMetrics) {
-      stats.inventory = {
+      byTile.inventory = {
         label: t(lang, "desktopHomeLiveLowStock"),
         value: t(lang, "desktopHomeLiveItemsCount").replace("{count}", String(lowStockCount)),
         intensity: lowStockCount >= 5 ? "alert" : lowStockCount > 0 ? "normal" : "calm",
@@ -122,12 +130,12 @@ export function useHomeDashboardMetrics(
     }
 
     if (canCash) {
-      stats.cash = {
+      byTile.cash = {
         label: t(lang, "desktopHomeLiveDrawer"),
         value: formatShortUgx(drawer.expectedDrawerCashUgx),
         intensity: drawer.expectedDrawerCashUgx >= 500_000 ? "high" : "normal",
       };
-      stats.cashPosition = {
+      byTile.cashPosition = {
         label: t(lang, "desktopHomeLiveExpectedCash"),
         value: formatShortUgx(drawer.expectedDrawerCashUgx),
         intensity: drawer.expectedDrawerCashUgx >= 500_000 ? "high" : "normal",
@@ -135,7 +143,7 @@ export function useHomeDashboardMetrics(
     }
 
     if (permissionsHasEffective(role, "owner.dashboard", snapshot, authMode, actorPermissions)) {
-      stats.commandCenter = {
+      byTile.commandCenter = {
         label: t(lang, "desktopHomeLiveTodaySales"),
         value: formatShortUgx(today.totalRevenueUgx),
         intensity: revenueIntensity(today.totalRevenueUgx),
@@ -143,7 +151,7 @@ export function useHomeDashboardMetrics(
     }
 
     if (homeMetrics.showRecentSalesList) {
-      stats.salesHistory = {
+      byTile.salesHistory = {
         label: t(lang, "desktopHomeLiveTodaySales"),
         value: t(lang, "desktopHomeLiveTxnCount").replace("{count}", String(today.transactionCount)),
         intensity: today.transactionCount >= 20 ? "high" : "normal",
@@ -151,7 +159,7 @@ export function useHomeDashboardMetrics(
     }
 
     if (canDebt) {
-      stats.debts = {
+      byTile.debts = {
         label: t(lang, "desktopHomeLiveTotalDue"),
         value: formatShortUgx(totalDebtUgx),
         intensity: totalDebtUgx >= 1_000_000 ? "alert" : totalDebtUgx > 0 ? "normal" : "calm",
@@ -159,7 +167,7 @@ export function useHomeDashboardMetrics(
     }
 
     if (canReports) {
-      stats.reports = {
+      byTile.reports = {
         label: tTemplate(lang, "desktopHomeLiveMonthSales", { month: monthLabel }),
         value: formatShortUgx(month.totalRevenueUgx),
         trend:
@@ -170,7 +178,25 @@ export function useHomeDashboardMetrics(
       };
     }
 
-    return stats;
+    const executive = buildHomeExecutiveKpis({
+      todayRevenueLabel: t(lang, "desktopHomeLiveTodaySales"),
+      todayRevenueValue: formatShortUgx(today.totalRevenueUgx),
+      todayRevenueIntensity: revenueIntensity(today.totalRevenueUgx),
+      showTodayRevenue,
+      transactions: byTile.sell,
+      profit: byTile.profit,
+      cash: byTile.cash,
+      inventory: byTile.inventory,
+      debts: byTile.debts,
+      reportsPath: pharmacyMode ? "/pharmacy/reports" : "/reports",
+      receiptsPath: pharmacyMode ? "/pharmacy/returns" : POS_RECEIPTS_ROUTE,
+      profitPath: "/office/profit",
+      cashPath: "/office/cash-drawer",
+      inventoryPath: pharmacyMode ? "/pharmacy/inventory" : "/stock",
+      debtsPath: "/debts",
+    });
+
+    return { byTile, executive };
   }, [
     lang,
     scopedSales,
@@ -191,5 +217,6 @@ export function useHomeDashboardMetrics(
     actorPermissions,
     todayKpiSnapshot,
     salesHydrating,
+    pharmacyMode,
   ]);
 }

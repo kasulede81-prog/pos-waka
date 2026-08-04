@@ -9,13 +9,22 @@ import {
   shelfMinHeightClass,
   shelfTileSurfaceStyle,
   shelfTypographyFromScale,
+  type ShelfColorTone,
 } from "../../lib/posShelfLayout";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { formatShelfDisplayLabel, shelfTitleScaleForLabel } from "../../lib/posShelfDisplayLabel";
 import {
   POS_ARRANGE_TOUCH_CLASS,
   POS_CATALOG_TILE_TOUCH_CLASS,
 } from "../../lib/posTouchInteraction";
+
+/**
+ * Phase 32.4.2 — two balanced lines; wrap at spaces first;
+ * break long words only as last resort (overflow-wrap: break-word).
+ */
+const SHELF_TITLE_WRAP_CLASS =
+  "line-clamp-2 hyphens-none [overflow-wrap:break-word] [word-break:normal]";
 
 type Props = {
   shelf: PosShelfDisplayCard;
@@ -29,6 +38,8 @@ type Props = {
   sellCatalogGrid?: boolean;
   /** Larger tiles in 5-col desktop catalog grid. */
   sellCatalogGridDesktop?: boolean;
+  /** Phase 32.3 — soft browse default; bold for featured/selected emphasis. */
+  colorTone?: ShelfColorTone;
   dragging?: boolean;
   dragOver?: boolean;
   selected?: boolean;
@@ -58,20 +69,39 @@ function ShelfTileBody({
 }): ReactNode {
   const layoutSize = scaleToShelfSize(shelf.scale);
   const arrangePad = isArrange ? "pr-7" : "";
-  const titleStyle: CSSProperties = { fontSize: `${typo.titleRem}rem`, fontWeight: 900, lineHeight: 1.08 };
-  const countStyle: CSSProperties = { fontSize: `${typo.countRem}rem`, fontWeight: 700, opacity: 0.78 };
-  const iconStyle: CSSProperties = { fontSize: `${typo.iconRem}rem`, lineHeight: 1 };
+  const displayLabel = formatShelfDisplayLabel(shelf.label);
+  const titleRem = shelfTitleScaleForLabel(displayLabel, typo.titleRem);
+  const titleStyle: CSSProperties = {
+    fontSize: `${titleRem}rem`,
+    fontWeight: 900,
+    lineHeight: 1.22,
+    overflowWrap: "break-word",
+    wordBreak: "normal",
+    hyphens: "none",
+  };
+  const countStyle: CSSProperties = {
+    fontSize: `${typo.countRem}rem`,
+    fontWeight: 600,
+    opacity: 0.62,
+    letterSpacing: "0.01em",
+  };
+  const iconStyle: CSSProperties = { fontSize: `${typo.iconRem}rem`, lineHeight: 1, opacity: 0.78 };
 
   if (layoutSize === "large") {
     return (
-      <span className={clsx("flex h-full min-h-0 flex-col justify-center overflow-hidden text-center", arrangePad)}>
-        <span className="line-clamp-3 break-words" style={titleStyle}>
-          {shelf.label}
-        </span>
-        <span className="mt-1 shrink-0 opacity-80" style={iconStyle} aria-hidden>
+      <span
+        className={clsx(
+          "flex h-full min-h-0 flex-col items-center justify-center gap-1.5 overflow-hidden text-center",
+          arrangePad,
+        )}
+      >
+        <span className="shrink-0 leading-none" style={iconStyle} aria-hidden>
           {shelf.icon ?? "📦"}
         </span>
-        <span className="mt-1 shrink-0 truncate" style={countStyle}>
+        <span className={clsx("min-w-0", SHELF_TITLE_WRAP_CLASS)} style={titleStyle}>
+          {displayLabel}
+        </span>
+        <span className="mt-0.5 shrink-0 truncate" style={countStyle}>
           {countLabel}
         </span>
       </span>
@@ -79,15 +109,15 @@ function ShelfTileBody({
   }
 
   return (
-    <span className={clsx("flex h-full min-h-0 items-center gap-1.5 overflow-hidden sm:gap-2", arrangePad)}>
-      <span className="shrink-0 leading-none opacity-85" style={iconStyle} aria-hidden>
+    <span className={clsx("flex h-full min-h-0 items-center gap-2 overflow-hidden sm:gap-2.5", arrangePad)}>
+      <span className="shrink-0 self-center leading-none" style={iconStyle} aria-hidden>
         {shelf.icon ?? "📦"}
       </span>
       <span className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
-        <span className="line-clamp-2 break-words" style={titleStyle}>
-          {shelf.label}
+        <span className={SHELF_TITLE_WRAP_CLASS} style={titleStyle}>
+          {displayLabel}
         </span>
-        <span className="mt-0.5 truncate" style={countStyle}>
+        <span className="mt-1.5 truncate" style={countStyle}>
           {countLabel}
         </span>
       </span>
@@ -103,6 +133,7 @@ export function PosShelfTile({
   sellFocus = false,
   sellCatalogGrid = false,
   sellCatalogGridDesktop = false,
+  colorTone = "soft",
   dragging = false,
   dragOver = false,
   selected = false,
@@ -113,10 +144,14 @@ export function PosShelfTile({
   const isArrange = mode === "arrange";
   const badge = badgeLabel(lang, shelf);
   const showEmptyWarning = emptyShelf && !isArrange && mode === "sell";
+  const effectiveTone: ShelfColorTone = selected || shelf.featured ? "bold" : colorTone;
   const typo = shelfTypographyFromScale(sellFocus && !isArrange && !sellCatalogGrid ? Math.max(shelf.scale, 58) : shelf.scale);
-  const customStyle = sellCatalogGrid ? undefined : shelfTileSurfaceStyle(shelf);
-  const isBold = !sellCatalogGrid && (Boolean(customStyle) || shelf.color !== "default");
-  const colorClass = sellCatalogGrid ? "" : customStyle ? "" : shelfColorClasses(shelf.color, shelf.featured);
+  const customStyle = sellCatalogGrid ? undefined : shelfTileSurfaceStyle(shelf, effectiveTone);
+  const isBold =
+    !sellCatalogGrid &&
+    (effectiveTone === "bold" || shelf.featured || selected) &&
+    (Boolean(customStyle) || shelf.color !== "default");
+  const colorClass = sellCatalogGrid ? "" : customStyle ? "" : shelfColorClasses(shelf.color, shelf.featured, effectiveTone);
   const heightClass = sellCatalogGrid
     ? sellCatalogGridDesktop
       ? "min-h-[96px]"
@@ -180,11 +215,11 @@ export function PosShelfTile({
       ) : showEmptyWarning ? (
         <span
           className={clsx(
-            "absolute right-2 top-2 max-w-[46%] truncate rounded-full bg-danger-muted px-1.5 py-0.5 font-black uppercase tracking-wide text-danger",
+            "absolute right-2 top-2 max-w-[46%] truncate rounded-full bg-amber-100 px-1.5 py-0.5 font-black uppercase tracking-wide text-amber-900",
             layoutSize === "large" ? "text-[10px] sm:text-xs" : "text-[9px]",
           )}
         >
-          {t(lang, "lowStockTitleFriendly")}
+          {t(lang, "shelfEmptyRestockLabel")}
         </span>
       ) : null}
       <ShelfTileBody shelf={shelf} countLabel={countLabel} isArrange={isArrange} typo={typo} />

@@ -56,6 +56,7 @@ export const swOverrides: Record<string, string> = {
   posShelvesHint: "Gusa rafu kuona bidhaa",
   posSellCategoryHeading: "Rafu",
   posShelfProductCount: "Bidhaa {{count}}",
+  posShelfProductCountOne: "Bidhaa {{count}}",
   posSearchResults: "Matokeo ya utafutaji",
   posSellNoMatch: "Hakuna kinacholingana na utafutaji. Jaribu maneno mengine.",
   posNoShelf: "Bila rafu",

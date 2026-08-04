@@ -1,10 +1,10 @@
 import type { FormEvent, ReactNode } from "react";
-import { Scale, X } from "lucide-react";
+import { Scale } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../../types";
-import { t } from "../../../lib/i18n";
-import { AppModalOverlay } from "../../layout/AppModalOverlay";
+import { ModalSheet } from "../../layout/ModalSheet";
 import { AdjustmentValidationBanner } from "./AdjustmentValidationBanner";
+import { enterpriseTypeClass } from "../../../lib/enterpriseTypography";
 
 type Props = {
   lang: Language;
@@ -25,8 +25,9 @@ type Props = {
   icon?: ReactNode;
 };
 
+/** Phase 31.1 — ModalSheet dialog policy for stock adjustments. */
 export function StockAdjustmentShell({
-  lang,
+  lang: _lang,
   variant = "modal",
   open = true,
   title,
@@ -43,6 +44,7 @@ export function StockAdjustmentShell({
   zClassName = "z-[65]",
   icon,
 }: Props) {
+  void _lang;
   const banner = error ? (
     <AdjustmentValidationBanner message={error} tone="error" />
   ) : success ? (
@@ -51,66 +53,56 @@ export function StockAdjustmentShell({
     <AdjustmentValidationBanner message={warning} tone="warning" />
   ) : null;
 
-  const body = (
-    <>
-      <header className="shrink-0 border-b border-border/60 bg-card/95 px-4 pb-4 pt-4 backdrop-blur-md sm:px-5">
-        <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
-            {icon ?? <Scale className="h-5 w-5" strokeWidth={2.25} aria-hidden />}
-          </span>
-          <div className="min-w-0 flex-1 pt-0.5">
-            {subtitle ? (
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{subtitle}</p>
-            ) : null}
-            <h2 id={titleId} className="truncate text-lg font-black tracking-tight text-foreground">
-              {title}
-            </h2>
-          </div>
-          {onRequestClose ? (
-            <button
-              type="button"
-              onClick={onRequestClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label={t(lang, "cancel")}
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </button>
-          ) : null}
-        </div>
-      </header>
-
-      <form className="flex min-h-0 flex-1 flex-col" onSubmit={onSubmit} noValidate>
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5">
-          {statusStrip}
-          {banner}
-          {children}
-        </div>
-        {footer}
-      </form>
-    </>
+  const formBody = (
+    <form className="space-y-5" onSubmit={onSubmit} noValidate>
+      {statusStrip}
+      {banner}
+      {children}
+    </form>
   );
 
   if (variant === "embedded") {
     if (!open) return null;
-    return <div className="space-y-4">{body}</div>;
+    return (
+      <div className="space-y-4">
+        <header>
+          {subtitle ? <p className={enterpriseTypeClass("caption")}>{subtitle}</p> : null}
+          <h2 id={titleId} className={enterpriseTypeClass("sectionTitle")}>
+            {title}
+          </h2>
+        </header>
+        {formBody}
+        {footer}
+      </div>
+    );
   }
 
-  if (!open) return null;
+  const titleNode = (
+    <div className="flex items-start gap-3">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-elev">
+        {icon ?? <Scale className="h-5 w-5" strokeWidth={2.25} aria-hidden />}
+      </span>
+      <div className="min-w-0 flex-1 pt-0.5">
+        {subtitle ? <p className={enterpriseTypeClass("caption")}>{subtitle}</p> : null}
+        <h2 id={titleId} className={clsx(enterpriseTypeClass("sectionTitle"), "truncate")}>
+          {title}
+        </h2>
+      </div>
+    </div>
+  );
 
   return (
-    <AppModalOverlay
-      className={clsx(zClassName, "flex items-end justify-center bg-overlay/50 backdrop-blur-[2px] sm:items-center")}
-      role="dialog"
-      aria-modal
+    <ModalSheet
+      open={open}
+      onClose={onRequestClose ?? (() => undefined)}
+      title={titleNode}
+      footer={footer}
+      zIndexClass={zClassName}
+      maxHeightClass="max-h-[min(94dvh,900px)]"
+      panelClassName="sm:max-w-lg"
       aria-labelledby={titleId}
-      onClick={onRequestClose}
     >
-      <div
-        className="flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-border/60 bg-card shadow-2xl sm:max-h-[90dvh] sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {body}
-      </div>
-    </AppModalOverlay>
+      {formBody}
+    </ModalSheet>
   );
 }

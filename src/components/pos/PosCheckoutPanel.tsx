@@ -11,7 +11,8 @@ import {
   type CheckoutKeypadMode,
 } from "../../lib/posCheckoutKeypad";
 import { DraftCartLineRow } from "./DraftCartLineRow";
-import { DraftCartSummary } from "./DraftCartSummary";
+import { DraftCartTotalsStack } from "./DraftCartTotalsStack";
+import { VirtualizedDraftCartList } from "./VirtualizedDraftCartList";
 import { POS_CHECKOUT_SCROLL_CLASS } from "../../lib/posTouchInteraction";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
@@ -204,7 +205,7 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           type="button"
           onClick={onClear}
           className={clsx(
-            "rounded-xl bg-danger-muted0 font-black text-white active:bg-danger",
+            "rounded-xl bg-danger font-black text-white active:bg-danger",
             sidebar ? "min-h-[44px] text-lg" : "min-h-[52px] text-xl",
           )}
         >
@@ -829,8 +830,6 @@ function CartDockBody({
   lang,
   draftLines,
   draftCartStats,
-  draftPayable,
-  checkoutTotals,
   productById,
   sidebarCompact = false,
   onIncrement,
@@ -845,8 +844,6 @@ function CartDockBody({
   lang: Language;
   draftLines: SaleLine[];
   draftCartStats: DraftCartStats;
-  draftPayable: number;
-  checkoutTotals: DraftCheckoutTotals;
   productById: Map<string, Product>;
   sidebarCompact?: boolean;
   onIncrement: (line: SaleLine) => void;
@@ -858,18 +855,22 @@ function CartDockBody({
   pharmacyMode?: boolean;
   onBatchTap?: (line: SaleLine) => void;
 }): ReactNode {
+  const unitShown = Number.isInteger(draftCartStats.unitCount)
+    ? String(draftCartStats.unitCount)
+    : draftCartStats.unitCount.toFixed(2).replace(/\.?0+$/, "");
+  const estimateRowPx = pharmacyMode ? (sidebarCompact ? 108 : 120) : sidebarCompact ? 92 : 104;
+
   return (
-    <>
-      <div className="flex items-center gap-1.5">
-        <div className="min-w-0 flex-1">
-          <DraftCartSummary
-            lang={lang}
-            stats={draftCartStats}
-            payableUgx={draftPayable}
-            cartDiscountUgx={checkoutTotals.cartDiscountUgx}
-            dock
-            sidebarCompact={sidebarCompact}
-          />
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div
+          className={clsx(
+            "min-w-0 flex-1 rounded-lg border border-waka-200 bg-waka-50/90 font-bold text-muted-foreground",
+            sidebarCompact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm",
+          )}
+        >
+          {draftCartStats.productCount} {t(lang, "posCartProductsShort").toLowerCase()} · {unitShown}{" "}
+          {t(lang, "posCartUnitsShort").toLowerCase()}
         </div>
         <button
           type="button"
@@ -882,26 +883,36 @@ function CartDockBody({
           {t(lang, "cartDiscountBtn")}
         </button>
       </div>
-      <ul className={clsx("rounded-lg border border-waka-200 bg-card shadow-sm", sidebarCompact ? "mt-1 px-1.5 py-0" : "mt-1.5 px-2 py-0.5")}>
-        {draftLines.map((line) => (
-          <DraftCartLineRow
-            key={line.productId}
-            lang={lang}
-            line={line}
-            product={productById.get(line.productId)}
-            dock
-            sidebarCompact={sidebarCompact}
-            pharmacyMode={pharmacyMode}
-            onBatchTap={onBatchTap ? () => onBatchTap(line) : undefined}
-            onIncrement={() => onIncrement(line)}
-            onDecrement={() => onDecrement(line)}
-            onQtyTap={() => onQtyTap(line)}
-            onDiscount={() => onLineDiscount(line)}
-            onRemove={() => onRemoveLine(line.productId)}
-          />
-        ))}
-      </ul>
-    </>
+      <div
+        className={clsx(
+          "mt-1.5 min-h-0 flex-1 overflow-hidden rounded-lg border border-waka-200 bg-card shadow-sm",
+          sidebarCompact ? "px-1.5" : "px-2",
+        )}
+      >
+        <VirtualizedDraftCartList
+          lines={draftLines}
+          estimateRowPx={estimateRowPx}
+          listAriaLabel={t(lang, "posCartProductsShort")}
+          className={clsx("h-full min-h-0", POS_CHECKOUT_SCROLL_CLASS)}
+          renderRow={(line) => (
+            <DraftCartLineRow
+              lang={lang}
+              line={line}
+              product={productById.get(line.productId)}
+              dock
+              sidebarCompact={sidebarCompact}
+              pharmacyMode={pharmacyMode}
+              onBatchTap={onBatchTap ? () => onBatchTap(line) : undefined}
+              onIncrement={() => onIncrement(line)}
+              onDecrement={() => onDecrement(line)}
+              onQtyTap={() => onQtyTap(line)}
+              onDiscount={() => onLineDiscount(line)}
+              onRemove={() => onRemoveLine(line.productId)}
+            />
+          )}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -1102,19 +1113,19 @@ export function PosCheckoutPanel({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* Phase 33.1 — cart list flexes + virtualizes; sticky totals sit outside the list. */}
           <div
             className={clsx(
-              POS_CHECKOUT_SCROLL_CLASS,
-              "border-b border-waka-200",
+              "flex min-h-0 flex-col border-b border-waka-200",
               catalogDock && isSidebar
-                ? "min-h-0 flex-1 shrink px-2 py-1.5"
+                ? "min-h-0 flex-1 px-2 py-1.5"
                 : clsx(
-                    "shrink-0",
+                    "min-h-[8rem] flex-1",
                     isSidebar
                       ? sidebarNumpadOpen
-                        ? "max-h-[min(28%,10rem)] px-2.5 py-2"
-                        : "max-h-[min(42%,15rem)] px-2.5 py-2"
-                      : "max-h-[min(36dvh,14rem)] px-3 py-2",
+                        ? "max-h-[min(40%,16rem)] px-2.5 py-2"
+                        : "px-2.5 py-2"
+                      : "px-3 py-2",
                   ),
             )}
           >
@@ -1122,8 +1133,6 @@ export function PosCheckoutPanel({
               lang={lang}
               draftLines={draftLines}
               draftCartStats={draftCartStats}
-              draftPayable={draftPayable}
-              checkoutTotals={checkoutTotals}
               productById={productById}
               sidebarCompact={catalogDock && isSidebar}
               onIncrement={onIncrement}
@@ -1138,9 +1147,22 @@ export function PosCheckoutPanel({
           </div>
           <div
             className={clsx(
-              catalogDock && isSidebar ? "shrink-0 px-2 py-1.5" : clsx(POS_CHECKOUT_SCROLL_CLASS, "min-h-0 flex-1"),
-              !catalogDock && isSidebar && "px-2.5 py-2",
-              !isSidebar && "px-3 py-2",
+              "shrink-0 border-b border-waka-200",
+              catalogDock && isSidebar ? "px-2 py-1.5" : isSidebar ? "px-2.5 py-2" : "px-3 py-2",
+            )}
+          >
+            <DraftCartTotalsStack
+              lang={lang}
+              checkoutTotals={checkoutTotals}
+              changeDue={changeDue}
+              sidebarCompact={catalogDock && isSidebar}
+            />
+          </div>
+          <div
+            className={clsx(
+              catalogDock && isSidebar ? "shrink-0 px-2 py-1.5" : clsx(POS_CHECKOUT_SCROLL_CLASS, "min-h-0 shrink-0"),
+              !catalogDock && isSidebar && "max-h-[min(42%,18rem)] px-2.5 py-2",
+              !isSidebar && "max-h-[min(38dvh,16rem)] px-3 py-2",
             )}
           >
             <PaymentBlock {...paymentProps} />

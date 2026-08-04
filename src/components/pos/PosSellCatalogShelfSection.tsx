@@ -1,7 +1,11 @@
+import { useRef } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { PosShelfDisplayCard } from "../../lib/posShelfLayout";
 import { shelfMasonryGridClass } from "../../lib/posShelfLayout";
+import { shelfGridTemplateColumns } from "../../lib/posShelfGridColumns";
+import { formatShelfProductCountLabel } from "../../lib/posShelfDisplayLabel";
+import { useShelfGridColumns } from "../../hooks/useShelfGridColumns";
 import { PosShelfTile } from "./PosShelfTile";
 
 type Props = {
@@ -12,12 +16,11 @@ type Props = {
   desktop?: boolean;
 };
 
-/** Mobile-style shelf catalog grid — used on mobile sell and full desktop sell. */
-export function PosSellCatalogShelfSection({
-  lang,
-  shelves,
-  onShelfTap,
-}: Props) {
+/** Shared shelf catalog grid — container-aware columns (Phase 32.3). */
+export function PosSellCatalogShelfSection({ lang, shelves, onShelfTap }: Props) {
+  const gridRef = useRef<HTMLDivElement>(null);
+  const columnCount = useShelfGridColumns(gridRef);
+
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-0.5">
@@ -28,7 +31,12 @@ export function PosSellCatalogShelfSection({
           {shelves.length}
         </p>
       </div>
-      <div className={shelfMasonryGridClass(true)}>
+      <div
+        ref={gridRef}
+        className={shelfMasonryGridClass(true)}
+        style={{ gridTemplateColumns: shelfGridTemplateColumns(columnCount) }}
+        data-shelf-columns={columnCount}
+      >
         {shelves.map((shelf) => (
           <PosShelfTile
             key={shelf.key}
@@ -36,11 +44,12 @@ export function PosSellCatalogShelfSection({
             lang={lang}
             mode="sell"
             sellFocus
+            colorTone="soft"
             emptyShelf={shelf.count === 0}
             countLabel={
               shelf.count === 0
                 ? t(lang, "shelfEmptyRestockLabel")
-                : t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))
+                : formatShelfProductCountLabel(lang, shelf.count)
             }
             onClick={() => onShelfTap(shelf.key)}
           />

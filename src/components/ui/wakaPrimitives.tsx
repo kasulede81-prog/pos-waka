@@ -15,14 +15,14 @@ const HEIGHT: Record<WakaButtonSize, string> = {
 };
 
 const BTN_VARIANT: Record<Exclude<WakaButtonVariant, "icon">, string> = {
-  primary: "bg-primary text-primary-foreground shadow-waka-sm hover:bg-primary-hover active:bg-waka-700",
-  secondary: "border border-border bg-card text-foreground shadow-sm hover:bg-muted active:bg-muted/80",
-  danger: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 active:opacity-90",
+  primary: "bg-primary text-primary-foreground shadow-elev hover:bg-primary-hover active:bg-waka-700",
+  secondary: "border border-border bg-card text-foreground shadow-elev hover:bg-muted active:bg-muted/80",
+  danger: "bg-destructive text-destructive-foreground shadow-elev hover:bg-destructive/90 active:opacity-90",
   ghost: "text-waka-700 hover:bg-muted active:bg-muted dark:text-waka-400",
 };
 
 const BASE =
-  "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50";
 
 export const WakaButton = forwardRef<
   HTMLButtonElement,
@@ -83,6 +83,7 @@ export const WakaButton = forwardRef<
   );
 });
 
+/** @deprecated Prefer EnterpriseCard — thin alias for legacy imports (Phase 29.1). */
 export function WakaCard({
   className,
   muted,
@@ -90,7 +91,7 @@ export function WakaCard({
   ...props
 }: HTMLAttributes<HTMLDivElement> & { muted?: boolean }) {
   return (
-    <div className={clsx(muted ? wakaUi.surfaceMuted : wakaUi.surface, enterpriseMotion.standard, className)} {...props}>
+    <div className={clsx(muted ? themeUi.surfaceMuted : themeUi.surface, enterpriseMotion.standard, "p-4 sm:p-5", className)} {...props}>
       {children}
     </div>
   );
@@ -105,7 +106,7 @@ export const WakaInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLIn
 
 export function WakaPage({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={clsx("min-h-0 space-y-4", wakaUi.pageBg, className)} {...props}>
+    <div className={clsx("min-h-0", themeUi.pageStack, themeUi.pageBg, className)} {...props}>
       {children}
     </div>
   );

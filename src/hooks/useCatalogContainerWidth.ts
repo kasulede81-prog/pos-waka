@@ -1,5 +1,5 @@
-import { useEffect, useState, type RefObject } from "react";
-import { catalogColumnCount } from "../lib/posProductGridColumns";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { catalogColumnCount, stabilizeCatalogColumnCount } from "../lib/posProductGridColumns";
 import type { DisplayScaleLevel } from "../lib/displayScale/scaleTokens";
 
 export type CatalogContainerMetrics = {
@@ -11,6 +11,11 @@ export type CatalogContainerWidthOptions = {
   displayScale?: DisplayScaleLevel;
   /** Phone layout band — forces 2/3 columns (Phase 28.1). */
   phoneBand?: boolean;
+  /**
+   * Phase 32.3 — when the catalog shrinks (checkout open), keep prior density
+   * until min-tile geometry requires a drop.
+   */
+  stabilizeDensity?: boolean;
 };
 
 function readLandscape(): boolean {
@@ -29,6 +34,8 @@ export function useCatalogContainerWidth(
       : displayScaleOrOptions;
   const displayScale = options.displayScale ?? "normal";
   const phoneBand = Boolean(options.phoneBand);
+  const stabilizeDensity = options.stabilizeDensity !== false;
+  const previousColsRef = useRef<number | null>(null);
 
   const [metrics, setMetrics] = useState<CatalogContainerMetrics>(() => ({
     containerWidth: 0,
@@ -45,13 +52,19 @@ export function useCatalogContainerWidth(
 
     const measure = () => {
       const width = el.getBoundingClientRect().width;
+      const raw = catalogColumnCount(width, {
+        displayScale,
+        phoneBand,
+        isLandscape: readLandscape(),
+      });
+      const columnCount =
+        phoneBand || !stabilizeDensity
+          ? raw
+          : stabilizeCatalogColumnCount(raw, previousColsRef.current, width);
+      previousColsRef.current = columnCount;
       setMetrics({
         containerWidth: width,
-        columnCount: catalogColumnCount(width, {
-          displayScale,
-          phoneBand,
-          isLandscape: readLandscape(),
-        }),
+        columnCount,
       });
     };
 
@@ -69,7 +82,7 @@ export function useCatalogContainerWidth(
       mq.removeEventListener("change", onOrientation);
       window.removeEventListener("resize", onOrientation);
     };
-  }, [catalogRef, displayScale, phoneBand]);
+  }, [catalogRef, displayScale, phoneBand, stabilizeDensity]);
 
   return metrics;
 }

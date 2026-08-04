@@ -1,16 +1,19 @@
 import type { PosLayoutMode } from "./posLayoutMode";
 
-/** Full desktop — checkout sidebar only when a sale is active (not empty cart). */
+/**
+ * Full desktop — checkout column stays mounted for the whole active sale.
+ * Phase 32.1: `saleCheckoutMinimized` collapses density (rail), it does not unmount.
+ */
 export function shouldMountDesktopCheckoutSidebar(
   layoutMode: PosLayoutMode,
   hasProducts: boolean,
   draftLineCount: number,
-  saleCheckoutMinimized: boolean,
+  _saleCheckoutMinimized?: boolean,
 ): boolean {
-  return layoutMode === "full" && hasProducts && draftLineCount > 0 && !saleCheckoutMinimized;
+  return layoutMode === "full" && hasProducts && draftLineCount > 0;
 }
 
-/** Compact desktop — slide-over checkout from the right. */
+/** Compact desktop — slide-over checkout from the right (catalog remains visible). */
 export function shouldMountCompactCheckoutSlideover(
   layoutMode: PosLayoutMode,
   draftLineCount: number,
@@ -28,12 +31,26 @@ export function shouldMountMobileCheckoutOverlay(
   return layoutMode === "mobile" && draftLineCount > 0 && !saleCheckoutMinimized;
 }
 
+/**
+ * Minimized FAB — mobile/compact only.
+ * Full desktop uses a collapsed checkout rail instead (sidebar stays mounted).
+ */
 export function shouldShowMinimizedCheckoutFab(
-  _layoutMode: PosLayoutMode,
+  layoutMode: PosLayoutMode,
   draftLineCount: number,
   saleCheckoutMinimized: boolean,
 ): boolean {
+  if (layoutMode === "full") return false;
   return draftLineCount > 0 && saleCheckoutMinimized;
+}
+
+/** Full desktop rail when sale is active but checkout is collapsed for browsing. */
+export function shouldShowDesktopCheckoutRail(
+  layoutMode: PosLayoutMode,
+  draftLineCount: number,
+  saleCheckoutMinimized: boolean,
+): boolean {
+  return layoutMode === "full" && draftLineCount > 0 && saleCheckoutMinimized;
 }
 
 export function checkoutPanelsAreExclusive(

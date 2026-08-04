@@ -2,6 +2,9 @@ import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../../offline/cloudSync";
+import { statusTokens } from "../../lib/statusTokens";
+import { enterpriseSpace } from "../../lib/enterpriseSpacing";
+import clsx from "clsx";
 
 type Props = { lang: Language };
 
@@ -9,10 +12,12 @@ type Props = { lang: Language };
 export function HomeTrustBanner({ lang }: Props) {
   const sync = useSyncStatus();
   const uploadIssues = countSalesWithSyncErrors();
+  const hasWarning = (sync.isOnline && sync.pendingCount > 0) || uploadIssues > 0;
+  const tone = !sync.isOnline ? statusTokens.info : hasWarning ? statusTokens.warning : statusTokens.success;
 
   return (
-    <section className="space-y-2 rounded-3xl border border-emerald-200/90 bg-emerald-50/90 p-3.5 shadow-sm">
-      <p className="text-sm font-bold text-emerald-950">{t(lang, "syncTrustSavedOnPhone")}</p>
+    <section className={clsx("space-y-2 shadow-elev", enterpriseSpace.kpiPad, tone.banner)}>
+      <p className="text-sm font-bold">{t(lang, "syncTrustSavedOnPhone")}</p>
       {!sync.isOnline ? (
         <>
           <p className="text-sm font-semibold text-foreground">{t(lang, "homeTrustOfflineSell")}</p>
@@ -20,20 +25,20 @@ export function HomeTrustBanner({ lang }: Props) {
         </>
       ) : null}
       {sync.syncing ? (
-        <p className="text-sm font-semibold text-waka-900">{t(lang, "homeTrustUploading")}</p>
+        <p className="text-sm font-semibold text-foreground">{t(lang, "homeTrustUploading")}</p>
       ) : null}
       {sync.isOnline && sync.pendingCount > 0 ? (
-        <p className="text-sm font-semibold text-amber-950">
+        <p className="text-sm font-semibold text-foreground">
           {tTemplate(lang, "posUploadPendingCount", { count: String(sync.pendingCount) })}
         </p>
       ) : null}
       {sync.isOnline && uploadIssues > 0 ? (
-        <p className="text-sm font-semibold text-amber-950">
+        <p className="text-sm font-semibold text-foreground">
           {tTemplate(lang, "homeTrustSalesNeedUpload", { count: String(uploadIssues) })}
         </p>
       ) : null}
       {sync.isOnline && sync.pendingCount === 0 && uploadIssues === 0 && !sync.syncing ? (
-        <p className="text-xs font-semibold text-emerald-900">{t(lang, "homeTrustAllUploaded")}</p>
+        <p className="text-xs font-semibold opacity-90">{t(lang, "homeTrustAllUploaded")}</p>
       ) : null}
     </section>
   );

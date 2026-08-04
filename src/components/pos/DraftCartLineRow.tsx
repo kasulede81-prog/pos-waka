@@ -43,21 +43,57 @@ export function DraftCartLineRow({
   const unitHint = product ? formatDraftLineUnitPrice(product, line) : null;
 
   if (dock) {
-    const btnSize = sidebarCompact ? "h-9 w-9" : "h-11 w-11";
+    // Phase 33.1 — enterprise dock row: spaced meta, discount cue, always-visible remove.
+    const btnSize = sidebarCompact ? "h-9 w-9 min-h-[36px] min-w-[36px]" : "h-10 w-10 min-h-[40px] min-w-[40px]";
     const iconSize = sidebarCompact ? "h-4 w-4" : "h-5 w-5";
+    const discount = lineDiscountUgx(line);
     return (
-      <li className={clsx("flex items-center gap-2 border-b border-border last:border-0", sidebarCompact ? "py-1.5" : "py-2.5")}>
-        <div className="min-w-0 flex-1">
-          <p className={clsx("truncate font-bold leading-tight text-foreground", sidebarCompact ? "text-sm" : "text-base")}>{line.name}</p>
-          <p className={clsx("truncate font-semibold text-muted-foreground", sidebarCompact ? "text-xs" : "text-sm")}>
-            {qtyLabel}
-            {unitHint ? ` · ${unitHint}` : ""}
-            {" · "}
-            UGX {line.lineTotalUgx.toLocaleString()}
-          </p>
-          {pharmacyMode ? <PharmacyFefoBatchChip lang={lang} line={line} onTap={onBatchTap} /> : null}
+      <div
+        className={clsx(
+          "border-b border-border last:border-0",
+          sidebarCompact ? "py-2" : "py-2.5",
+        )}
+      >
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p
+              className={clsx(
+                "truncate font-bold leading-snug text-foreground",
+                sidebarCompact ? "text-sm" : "text-[15px]",
+              )}
+            >
+              {line.name}
+            </p>
+            <div
+              className={clsx(
+                "mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-semibold text-muted-foreground",
+                sidebarCompact ? "text-[11px]" : "text-xs",
+              )}
+            >
+              <span>
+                {t(lang, "posQtyLabel")} {qtyLabel}
+              </span>
+              {unitHint ? <span className="text-muted-foreground/90">{unitHint}</span> : null}
+              <span className="font-black tabular-nums text-foreground">
+                UGX {line.lineTotalUgx.toLocaleString()}
+              </span>
+            </div>
+            {discount > 0 ? (
+              <button
+                type="button"
+                onClick={onDiscount}
+                className={clsx(
+                  "mt-1 inline-flex max-w-full truncate rounded-md bg-warning-muted px-1.5 py-0.5 font-bold text-warning-foreground active:brightness-95",
+                  sidebarCompact ? "text-[10px]" : "text-[11px]",
+                )}
+              >
+                − UGX {discount.toLocaleString()} {t(lang, "discountBtn").toLowerCase()}
+              </button>
+            ) : null}
+            {pharmacyMode ? <PharmacyFefoBatchChip lang={lang} line={line} onTap={onBatchTap} /> : null}
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className={clsx("flex items-center gap-1", sidebarCompact ? "mt-1.5" : "mt-2")}>
           <button
             type="button"
             onClick={onDecrement}
@@ -69,9 +105,10 @@ export function DraftCartLineRow({
           <button
             type="button"
             onClick={onQtyTap}
+            aria-label={`${t(lang, "posQtyLabel")}: ${qtyLabel}`}
             className={clsx(
-              "flex items-center justify-center rounded-lg border border-waka-300 bg-waka-50 font-black tabular-nums text-waka-950 active:bg-waka-100",
-              sidebarCompact ? "h-9 min-w-[2.5rem] px-1 text-sm" : "h-11 min-w-[3rem] px-1.5 text-base",
+              "flex flex-1 items-center justify-center rounded-lg border border-waka-300 bg-waka-50 font-black tabular-nums text-waka-950 active:bg-waka-100",
+              sidebarCompact ? "h-9 min-w-[2.5rem] px-1 text-sm" : "h-10 min-w-[3rem] px-1.5 text-base",
             )}
           >
             {qtyLabel}
@@ -84,8 +121,32 @@ export function DraftCartLineRow({
           >
             <Plus className={clsx("stroke-[3]", iconSize)} aria-hidden />
           </button>
+          {discount <= 0 ? (
+            <button
+              type="button"
+              onClick={onDiscount}
+              aria-label={t(lang, "discountBtn")}
+              className={clsx(
+                "flex shrink-0 items-center justify-center rounded-lg border border-waka-200 bg-card font-black text-waka-900 active:bg-waka-50",
+                sidebarCompact ? "h-9 min-w-[2.25rem] px-1.5 text-[10px]" : "h-10 min-w-[2.5rem] px-2 text-xs",
+              )}
+            >
+              %
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={t(lang, "removeLine")}
+            className={clsx(
+              "flex shrink-0 items-center justify-center rounded-lg border border-danger/30 bg-danger-muted font-black text-danger active:brightness-95",
+              btnSize,
+            )}
+          >
+            ✕
+          </button>
         </div>
-      </li>
+      </div>
     );
   }
 

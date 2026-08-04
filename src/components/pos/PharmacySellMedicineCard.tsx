@@ -22,6 +22,10 @@ type Props = {
   compact?: boolean;
 };
 
+/**
+ * Phase 32.4.3 — pharmacy sell tile, whole-card selection (no floating +).
+ * Hierarchy: Name → Price → Stock; clinical badges remain secondary.
+ */
 export function PharmacySellMedicineCard({
   lang,
   product: p,
@@ -38,31 +42,45 @@ export function PharmacySellMedicineCard({
   const stockText = isPharmacyPackagingActive(p) ? formatPharmacyStockPrimary(p) : formatStockLabel(p);
   const prescriptionRequired = master?.otcOrPrescription === "prescription";
   const controlled = Boolean(master?.controlledDrug);
+  const lowStock = p.stockOnHand <= p.minimumStockAlert;
+  const title = brand || formatMedicineListPrimary(p);
 
   return (
     <button
       type="button"
       onClick={() => onPick(p)}
       disabled={locked}
+      aria-label={`${t(lang, "add")}: ${title}`}
       className={clsx(
-        "relative flex w-full flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-waka",
+        "pos-ds-product-card pos-sell-direct-card relative flex w-full cursor-pointer flex-col rounded-xl border p-2.5 text-left shadow-sm",
+        "transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out motion-reduce:transition-none",
         POS_CATALOG_TILE_TOUCH_CLASS,
-        compact ? "min-h-[148px]" : "min-h-[168px]",
+        compact ? "min-h-[132px]" : "min-h-[148px]",
         locked
-          ? "border-border/80 bg-muted/90 opacity-55"
-          : "border-border bg-card hover:border-teal-300 hover:shadow-md active:scale-[0.98] motion-reduce:active:scale-100",
+          ? "cursor-not-allowed border-border/80 bg-muted/90 opacity-55"
+          : [
+              "border-border/90 bg-card",
+              "hover:border-teal-300/80 hover:shadow-md",
+              "active:scale-[0.985] active:border-teal-500 active:bg-teal-50/90 active:shadow-sm",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500",
+              "motion-reduce:active:scale-100",
+            ],
       )}
       style={{ contentVisibility: "auto" }}
     >
       {locked && lockedBadge ? (
-        <span className="absolute right-2 top-2 rounded-full bg-foreground/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-background">
+        <span className="absolute right-1.5 top-1.5 z-[1] rounded-full bg-foreground/90 px-1.5 py-0.5 text-[8px] font-black uppercase text-background">
           {lockedBadge}
         </span>
       ) : null}
-      <span className="min-w-0 pr-1">
-        <span className="line-clamp-3 text-base font-black leading-snug text-foreground">
-          {brand || formatMedicineListPrimary(p)}
-        </span>
+
+      <div className={clsx("flex min-h-0 min-w-0 flex-1 flex-col justify-center", locked ? "pr-7" : undefined)}>
+        <p className="pos-ds-product-name line-clamp-3 text-sm font-black leading-snug text-foreground">
+          {title}
+        </p>
+        <p className="pos-ds-product-price mt-1.5 text-xs font-black tabular-nums text-waka-800">
+          {formatProductPriceLabel(p)}
+        </p>
         {generic ? (
           <span className="mt-0.5 block truncate text-[11px] font-semibold text-muted-foreground">{generic}</span>
         ) : null}
@@ -82,11 +100,16 @@ export function PharmacySellMedicineCard({
             </span>
           ) : null}
         </span>
-        <span className="mt-1.5 block text-[11px] font-bold text-muted-foreground">
+        <span
+          className={clsx(
+            "pos-ds-product-stock mt-1.5 inline-block max-w-full truncate rounded-md px-1.5 py-0.5 text-[10px] font-bold",
+            lowStock ? "bg-danger-muted text-danger" : "bg-success-muted text-success",
+          )}
+        >
           {t(lang, "pharmacySellStock")}: {stockText}
         </span>
         {batchSummary ? (
-          <span className="mt-0.5 block text-[10px] font-semibold text-teal-800">
+          <span className="mt-0.5 block truncate text-[10px] font-semibold text-teal-800">
             {batchSummary.activeBatchCount > 0
               ? t(lang, "pharmacySellFefoBatches").replace("{count}", String(batchSummary.activeBatchCount))
               : t(lang, "pharmacySellNoBatches")}
@@ -95,8 +118,7 @@ export function PharmacySellMedicineCard({
               : null}
           </span>
         ) : null}
-      </span>
-      <span className="mt-2 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</span>
+      </div>
     </button>
   );
 }

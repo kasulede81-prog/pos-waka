@@ -230,6 +230,17 @@ body {
    * Fixed mobile chrome heights — keep in sync with AppShell nav + MobileScrollTail.
    */
   :root {
+    /* Phase 29.1 — enterprise spacing scale (8px rhythm) */
+    --space-micro: 0.25rem; /* 4px — chrome only */
+    --space-1: 0.5rem; /* 8px */
+    --space-2: 1rem; /* 16px */
+    --space-3: 1.5rem; /* 24px */
+    --space-4: 2rem; /* 32px */
+    /* Surface elevation — border + subtle shadow (not heavy drop-shadows) */
+    --elev-border: hsl(var(--border));
+    --elev-shadow-sm: 0 1px 2px rgb(28 25 23 / 0.05), 0 4px 12px rgb(28 25 23 / 0.04);
+    --elev-shadow-md: 0 1px 2px rgb(28 25 23 / 0.06), 0 8px 20px rgb(28 25 23 / 0.06);
+
     --waka-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
     --waka-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
     --waka-bottom-nav-h: 0px;
@@ -243,13 +254,16 @@ body {
     --waka-scroll-tail-stock: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 1.5rem);
     --waka-scroll-tail-pos: calc(var(--waka-bottom-nav-h) + var(--waka-pos-checkout-strip-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-pos-sale: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
-    /* Stacking: main scroll < FAB 35 < bottom nav 45 < POS sheets 52+ < receipt 65 */
+    /*
+     * Phase 32.1 — authoritative POS z-stack (low → high):
+     * scroll chrome < FAB 48 < bottom nav 45 < POS overlay 80 < receipt 85 < POS modal 90 < toast 100
+     */
     --waka-z-bottom-nav: 45;
     --waka-z-internal-admin: 60;
     --waka-z-internal-admin-modal: 70;
     --waka-z-pos-overlay: 80;
-    --waka-z-pos-modal: 90;
     --waka-z-pos-receipt: 85;
+    --waka-z-pos-modal: 90;
   }
 
   /** Sell screen on mobile — no bottom tab bar; checkout strip sits on safe area only. */
@@ -697,6 +711,7 @@ body {
     font-size: var(--ds-font-2xs);
   }
 
+  /* Phase 32.4.3 — Sell cards no longer render a CTA glyph; keep rule harmless if present. */
   html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-cta {
     width: var(--ds-touch-min);
     height: var(--ds-touch-min);
@@ -756,6 +771,9 @@ body {
 }
 
 .dark {
+  --elev-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35), 0 4px 12px rgb(0 0 0 / 0.25);
+  --elev-shadow-md: 0 2px 4px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+
   /* Phase 29.1: clearer bg → muted → card → dialog → elevated steps (no heavy shadows) */
   --background: 24 10% 6%;
   --foreground: 30 10% 96%;

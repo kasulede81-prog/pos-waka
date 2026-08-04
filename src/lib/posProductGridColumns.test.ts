@@ -22,14 +22,19 @@ describe("catalogColumnCount", () => {
     expect(catalogColumnCount(639)).toBe(4);
   });
 
-  it("returns 5 columns from 640px", () => {
+  it("returns 5 columns from 640px until the stable mid band", () => {
     expect(catalogColumnCount(640)).toBe(5);
-    expect(catalogColumnCount(819)).toBe(5);
+    expect(catalogColumnCount(679)).toBe(5);
   });
 
-  it("returns 6 columns from 820px", () => {
-    expect(catalogColumnCount(820)).toBe(6);
-    expect(catalogColumnCount(979)).toBe(6);
+  it("returns 6 columns from 680px (Phase 32.3 cart-density band)", () => {
+    expect(catalogColumnCount(680)).toBe(6);
+    expect(catalogColumnCount(859)).toBe(6);
+  });
+
+  it("returns 7 columns from 860px", () => {
+    expect(catalogColumnCount(860)).toBe(7);
+    expect(catalogColumnCount(979)).toBe(7);
   });
 
   it("returns 8 columns from 980px (1366 laptop catalog)", () => {
@@ -54,7 +59,7 @@ describe("catalogColumnCount", () => {
 
   it("adds columns for compact and removes for extra large at 980px", () => {
     expect(catalogColumnCount(980)).toBe(8);
-    expect(catalogColumnCount(980, { displayScale: "compact" })).toBe(10);
+    expect(catalogColumnCount(980, { displayScale: "compact" })).toBe(9);
     expect(catalogColumnCount(980, { displayScale: "extra_large" })).toBe(5);
   });
 

@@ -40,8 +40,10 @@ import { readDeviceDisplayAlias } from "../lib/deviceFleetLabels";
 import { readSyncCheckpoints } from "../lib/syncCheckpoints";
 import { usePosStore } from "../store/usePosStore";
 import { DeviceFleetCard } from "../components/device/DeviceFleetCard";
+import { DevicesDesktopTable } from "../components/device/DevicesDesktopTable";
 import { DeviceFleetDetailsPanel } from "../components/device/DeviceFleetDetailsPanel";
 import { DeviceFleetFilters } from "../components/device/DeviceFleetFilters";
+import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
 
 type Props = { lang: Language };
 
@@ -66,6 +68,7 @@ export function DeviceManagementPage({ lang }: Props) {
   const { refresh: refreshAuthority } = useDeviceAuthority();
   const { ensureAuthorized } = useSensitiveActionAuth();
   const { retry: retryActivation } = useDeviceActivation();
+  const desktopTable = useWakaLayoutBand() === "desktop";
   const staffAccounts = usePosStore((s) => s.preferences.staffAccounts ?? []);
   const [shopId, setShopId] = useState<string | null>(null);
   const [devices, setDevices] = useState<ShopDeviceRow[]>([]);
@@ -441,6 +444,15 @@ export function DeviceManagementPage({ lang }: Props) {
           description={t(lang, "deviceFleetNoMatchesSub")}
         />
       ) : (
+        desktopTable ? (
+          <DevicesDesktopTable
+            lang={lang}
+            devices={filteredDevices}
+            displayNameFor={(d) => resolveDisplayName(d) ?? d.label ?? d.device_fingerprint}
+            staffLabelFor={(d) => resolveStaffLabel(d) ?? "—"}
+            onSelect={setSelectedDevice}
+          />
+        ) : (
         <div className="space-y-6">
           {BUCKET_ORDER.map((bucket) => {
             const rows = grouped[bucket];
@@ -466,6 +478,7 @@ export function DeviceManagementPage({ lang }: Props) {
             );
           })}
         </div>
+        )
       )}
 
       {usage.atPlanLimit ? (

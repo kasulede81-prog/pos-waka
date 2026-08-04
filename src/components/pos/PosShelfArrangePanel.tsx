@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { Language, PosShelfColor, PosShelfLayoutConfig, PosShelfPresetId, Product } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { useShelfDragReorder } from "../../hooks/useShelfDragReorder";
+import { useShelfGridColumns } from "../../hooks/useShelfGridColumns";
 import {
   SHELF_ICON_OPTIONS,
   buildPosShelfDisplayCards,
@@ -16,6 +17,8 @@ import {
   shelfScaleFromConfig,
   updateShelfLayoutEntry,
 } from "../../lib/posShelfLayout";
+import { shelfGridTemplateColumns } from "../../lib/posShelfGridColumns";
+import { formatShelfProductCountLabel } from "../../lib/posShelfDisplayLabel";
 import { POS_SHELF_PRESET_IDS, applyShelfPreset } from "../../lib/posShelfPresets";
 import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
 import { PosShelfTile } from "./PosShelfTile";
@@ -67,6 +70,8 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [quickPickerOpen, setQuickPickerOpen] = useState(false);
+  const arrangeGridRef = useRef<HTMLDivElement>(null);
+  const arrangeColumnCount = useShelfGridColumns(arrangeGridRef);
 
   const shelfCards = useMemo(() => {
     const cards = buildPosShelfDisplayCards(
@@ -203,20 +208,26 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
       <p className="text-sm font-medium text-muted-foreground">{t(lang, "stockShelfArrangeSub")}</p>
 
-      <div className={shelfMasonryGridClass()}>
+      <div
+        ref={arrangeGridRef}
+        className={shelfMasonryGridClass(true)}
+        style={{ gridTemplateColumns: shelfGridTemplateColumns(arrangeColumnCount) }}
+        data-shelf-columns={arrangeColumnCount}
+      >
         {shelfCards.map((shelf) => (
           <PosShelfTile
             key={shelf.key}
             shelf={shelf}
             lang={lang}
             mode="arrange"
+            colorTone="soft"
             selected={selectedKey === shelf.key}
             dragging={dragKey === shelf.key}
             dragOver={overKey === shelf.key && dragKey !== shelf.key}
             countLabel={
               shelf.isQuickSell
                 ? t(lang, "posQuickSellCount").replace("{{count}}", String(shelf.count))
-                : t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))
+                : formatShelfProductCountLabel(lang, shelf.count)
             }
             onClick={() => selectShelf(shelf.key)}
             onDragPointerDown={(e) => startDrag(shelf.key, e)}

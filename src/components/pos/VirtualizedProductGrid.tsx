@@ -13,14 +13,18 @@ import { useDisplayScale } from "../../context/DisplayScaleProvider";
 import { requireCatalogScrollElement } from "../../lib/posCatalogScroll";
 import { reportPosVirtualizerOwner } from "../../lib/posInteractionDiagnostics";
 import { POS_CATALOG_TILE_TOUCH_CLASS } from "../../lib/posTouchInteraction";
+import { catalogProductGridStyle } from "../../lib/posProductGridColumns";
 import { PosSellProductCard } from "./PosSellProductCard";
 import { PosDesktopProductCard } from "./PosDesktopProductCard";
 import { PharmacySellMedicineCard } from "./PharmacySellMedicineCard";
 import type { Language } from "../../types";
 
-const ROW_ESTIMATE_DEFAULT = 148;
-const ROW_ESTIMATE_SELL_MOBILE = 128;
-const ROW_ESTIMATE_SELL_DESKTOP = 120;
+/** Phase 32.4.3 — estimates without floating + CTA (measureElement corrects live). */
+const ROW_ESTIMATE_DEFAULT = 168;
+const ROW_ESTIMATE_SELL_MOBILE = 152;
+const ROW_ESTIMATE_SELL_DESKTOP = 136;
+const ROW_ESTIMATE_PHARMACY_MOBILE = 140;
+const ROW_ESTIMATE_PHARMACY_DESKTOP = 156;
 const BOTTOM_SCROLL_GUTTER = 24;
 
 type Props = {
@@ -59,13 +63,17 @@ function VirtualizedProductGridInner({
   const parentRef = useRef<HTMLDivElement>(null);
   const { level: displayScaleLevel, featureEnabled: displayScaleOn } = useDisplayScale();
   const scaleMultiplier = displayScaleOn ? DISPLAY_SCALE_META[displayScaleLevel].multiplier : 1;
-  const cols = Math.max(2, columnCount);
-  const rowCount = Math.ceil(products.length / cols);
   const sellMobile = variant === "sellMobile";
   const sellDesktop = variant === "sellDesktop";
   const pharmacyMedicine = variant === "pharmacyMedicine";
+  // Phase 32.4.1/32.4.2 — sparse: balanced max-width cards; dense: fluid 1fr
+  const grid = catalogProductGridStyle(columnCount, products.length);
+  const cols = Math.max(1, grid.columns);
+  const rowCount = Math.ceil(products.length / cols);
   const baseRowEstimate = pharmacyMedicine
-    ? 168
+    ? sellMobile
+      ? ROW_ESTIMATE_PHARMACY_MOBILE
+      : ROW_ESTIMATE_PHARMACY_DESKTOP
     : sellMobile
       ? ROW_ESTIMATE_SELL_MOBILE
       : sellDesktop
@@ -81,6 +89,10 @@ function VirtualizedProductGridInner({
       return owner;
     },
     estimateSize: () => rowEstimate,
+    measureElement:
+      typeof window !== "undefined" && !/Firefox/i.test(navigator.userAgent)
+        ? (el) => el.getBoundingClientRect().height
+        : undefined,
     overscan: 5,
   });
 
@@ -100,11 +112,13 @@ function VirtualizedProductGridInner({
           return (
             <div
               key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={rowVirtualizer.measureElement}
               className={clsx("absolute left-0 top-0 grid w-full px-0.5", gapClass)}
               style={{
-                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                gridTemplateColumns: grid.gridTemplateColumns,
+                justifyContent: grid.justifyContent,
                 transform: `translateY(${virtualRow.start}px)`,
-                height: `${virtualRow.size}px`,
               }}
             >
               {slice.map((p) => {
@@ -117,6 +131,7 @@ function VirtualizedProductGridInner({
                       product={p}
                       locked={locked}
                       lockedBadge={lockedBadge}
+                      compact={sellMobile}
                       onPick={onPick}
                     />
                   );

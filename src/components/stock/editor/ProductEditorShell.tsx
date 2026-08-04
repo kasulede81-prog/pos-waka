@@ -1,10 +1,12 @@
 import type { FormEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Package, X } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { AppModalOverlay } from "../../layout/AppModalOverlay";
 import { WizardValidationBanner } from "../wizard/WizardValidationBanner";
+import { enterpriseTypeClass } from "../../../lib/enterpriseTypography";
 
 type Props = {
   lang: Language;
@@ -22,6 +24,10 @@ type Props = {
   icon?: ReactNode;
 };
 
+/**
+ * Product edit chrome — full-height form with sticky footer.
+ * Portaled to document.body so hub sticky tabs cannot cover the dialog.
+ */
 export function ProductEditorShell({
   lang,
   open,
@@ -34,7 +40,7 @@ export function ProductEditorShell({
   footer,
   onSubmit,
   onRequestClose,
-  zClassName = "z-[58]",
+  zClassName = "z-[80]",
   icon,
 }: Props) {
   if (!open) return null;
@@ -44,7 +50,7 @@ export function ProductEditorShell({
     onRequestClose();
   };
 
-  return (
+  return createPortal(
     <AppModalOverlay
       className={clsx(
         zClassName,
@@ -61,14 +67,12 @@ export function ProductEditorShell({
       >
         <header className="shrink-0 border-b border-border/60 bg-card/95 px-4 pb-4 pt-4 backdrop-blur-md sm:px-5">
           <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-elev">
               {icon ?? <Package className="h-5 w-5" strokeWidth={2.25} aria-hidden />}
             </span>
             <div className="min-w-0 flex-1 pt-0.5">
-              {subtitle ? (
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{subtitle}</p>
-              ) : null}
-              <h2 id={titleId} className="truncate text-lg font-black tracking-tight text-foreground">
+              {subtitle ? <p className={enterpriseTypeClass("caption")}>{subtitle}</p> : null}
+              <h2 id={titleId} className={enterpriseTypeClass("sectionTitle", "truncate text-lg")}>
                 {title}
               </h2>
             </div>
@@ -91,6 +95,7 @@ export function ProductEditorShell({
           {footer}
         </form>
       </div>
-    </AppModalOverlay>
+    </AppModalOverlay>,
+    document.body,
   );
 }

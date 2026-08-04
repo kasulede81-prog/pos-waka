@@ -13,15 +13,17 @@ export type EnterpriseTypeRole =
   | "caption"
   | "monoNumber";
 
-/** Tailwind class bundles for each role — light + dark safe via semantic tokens. */
+/** Tailwind class bundles for each role — light + dark safe via semantic tokens.
+ * Phase 29.1: `font-bold` for titles/numbers (reserve `font-black` for rare display emphasis).
+ */
 export const enterpriseType: Record<EnterpriseTypeRole, string> = {
   display:
-    "font-black tracking-tight text-foreground text-2xl sm:text-3xl lg:text-4xl",
-  pageTitle: "font-black tracking-tight text-foreground text-xl sm:text-2xl",
+    "font-bold tracking-tight text-foreground text-2xl sm:text-3xl lg:text-4xl",
+  pageTitle: "font-bold tracking-tight text-foreground text-xl sm:text-2xl",
   sectionTitle: "font-bold tracking-tight text-foreground text-base sm:text-lg",
   body: "font-medium text-foreground text-sm sm:text-base leading-relaxed",
   caption: "font-semibold text-muted-foreground text-xs uppercase tracking-wide",
-  monoNumber: "font-black tabular-nums lining-nums text-foreground tracking-tight",
+  monoNumber: "font-bold tabular-nums lining-nums text-foreground tracking-tight",
 };
 
 export function enterpriseTypeClass(role: EnterpriseTypeRole, className?: string): string {
