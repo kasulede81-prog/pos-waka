@@ -452,3 +452,72 @@ Usable for trained cashiers. Preflight lists and dual PIN paths (variance + sync
 ---
 
 *End of Phase 35.0 certification — read-only; no implementation in this phase.*
+
+---
+
+## Phase 35.1 — End-of-Day Closing Wizard
+
+**Mode:** Surgical orchestration / presentation (no ledger rewrite)  
+**Date:** 2026-08-04  
+
+### Before vs after workflow
+
+| Before | After |
+|--------|-------|
+| Fragmented Cash Position → Shift Close → Close Day → X Report | Single guided wizard on `/close-day` |
+| Preflight + count + PIN stacked on one long page | Steps: Start → Health → Cash → Summary → Reports → Review |
+| Operator guesses next action | Checklist rail + sticky Continue / Close |
+
+### Closing checklist
+
+Left rail (desktop) / step list (mobile) mirrors wizard steps and surfaces preflight pass/fail chips. Blocking close still enforced by existing `runDayClosePreflight` / `recordDayClose` — UI does not invent new gates.
+
+### Executive summary workspace
+
+Summary step shows total sales, transactions, refunds, expenses, cash in/out, opening float, expected cash, counted cash, and `CashVarianceSummary` — all from existing drawer/session math.
+
+### Business Health integration
+
+Health step embeds Phase 34.1 `HomeBusinessHealthSection` plus `CloseDayPreflightPanel` and sync-override controls (unchanged APIs).
+
+### Multi-tender preparation (P1)
+
+Cash step lists payment mix from `buildCashPositionReport` with clear **Counted** (cash) vs **Reported** (card/MoMo/credit/bank) badges. No change to expected-cash formula.
+
+### Desktop / mobile
+
+- Desktop: checklist column + step content + sticky actions  
+- Mobile: same linear steps; primary CTA always sticky, `min-h-[52px]`
+
+### Files
+
+| Path | Role |
+|------|------|
+| `src/lib/endOfDayWizard.ts` | Step model |
+| `src/hooks/useEndOfDayCloseSession.ts` | Shared close session (existing APIs) |
+| `src/components/eod/EndOfDayClosingWizard.tsx` | Guided UI |
+| `src/pages/CloseDayPage.tsx` | Hosts wizard + history/reopen |
+
+### Regression summary
+
+| Area | Changed? |
+|------|----------|
+| Cash / variance / PIN / audit / sync / DB / APIs | **No** |
+| `recordDayClose` / preflight evaluation | **No** (called as before) |
+| Close Day route & permissions | **No** |
+| Operator workflow presentation | **Yes** |
+
+### Verification
+
+- `npm run build` — passed  
+- `npm test` — suite green aside from known `pharmacyPatientProfile` age flake  
+
+### Success criteria — status
+
+| Criterion | Status |
+|-----------|--------|
+| Single guided EOD workflow | **Met** |
+| Health + cash + summary + review in one workspace | **Met** |
+| Accounting integrity unchanged | **Met** |
+| UI prepared for future declared tenders | **Met** |
+| Enterprise closing experience without ledger rewrite | **Met** |
