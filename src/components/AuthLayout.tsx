@@ -32,9 +32,9 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
       />
 
       <div className="auth-scroll-pane relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
-        <div className="mx-auto w-full max-w-md px-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-[max(1rem,env(safe-area-inset-top,0px))] sm:py-8">
+        <div className="mx-auto w-full max-w-md px-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-[max(1rem,env(safe-area-inset-top,0px))] sm:max-w-lg sm:py-10">
           <header className="flex items-center justify-between gap-3">
-            <Link to={brandHref} className="block min-w-0 rounded-2xl py-1">
+            <Link to={brandHref} className="block min-w-0 rounded-2xl py-1" aria-label={WAKA_BRAND_NAME}>
               <WakaPosLogo size="sm" className="max-w-[min(100%,220px)]" />
             </Link>
             <div className="flex shrink-0 items-center gap-2">
@@ -42,7 +42,7 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
               <button
                 type="button"
                 onClick={() => setLang(nextLanguage(lang))}
-                className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-2 text-sm font-semibold text-foreground shadow-sm active:bg-muted dark:bg-foreground dark:text-background"
+                className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground shadow-sm active:bg-muted"
               >
                 <Globe className="h-4 w-4 text-muted-foreground" aria-hidden />
                 <span>{languageToggleLabel(lang)}</span>

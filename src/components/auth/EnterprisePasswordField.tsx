@@ -95,7 +95,7 @@ export const EnterprisePasswordField = forwardRef<HTMLInputElement, EnterprisePa
               tabIndex={-1}
               disabled={disabled || loading}
               onClick={() => setVisible((v) => !v)}
-              className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+              className="absolute right-1.5 top-1/2 flex h-11 w-11 min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
               aria-label={visible ? t(lang, "enterprisePasswordHide") : t(lang, "enterprisePasswordShow")}
             >
               {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

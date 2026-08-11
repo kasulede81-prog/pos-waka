@@ -6,7 +6,11 @@ import type { User } from "@supabase/supabase-js";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { wipeAccountNamespace } from "./accountDataWipe";
 import type { HardDeleteVerificationReport } from "./hardDeleteReport";
-import { markOrganizationDeleted } from "./organizationDeletionState";
+import {
+  clearDeletionMarker,
+  isDeletionPending,
+  markOrganizationDeleted,
+} from "./organizationDeletionState";
 import {
   clearOwnerDeletePartialFailure,
   readOwnerDeletePartialFailure,
@@ -263,5 +267,32 @@ export function markOwnerDeletionInProgress(userId: string | null): void {
     userId: userId ?? undefined,
     source: "manual",
     pending: true,
+  });
+}
+
+/**
+ * Phase 39.1 — after a failed deletion (server still intact), clear transient pending marker
+ * so the device does not stay blocked indefinitely.
+ */
+export function clearOwnerDeletionPendingOnFailure(): void {
+  const accountKey = getActiveAccountKey();
+  if (!accountKey) return;
+  if (isDeletionPending(accountKey)) {
+    clearDeletionMarker(accountKey);
+  }
+}
+
+/**
+ * Phase 39.1 — cloud data removed but auth cleanup incomplete: escalate pending → deleted
+ * (keep ops blocked) without wiping local namespace yet.
+ */
+export function escalateOwnerDeletionPendingAfterPartialCloudSuccess(userId: string | null): void {
+  const accountKey = getActiveAccountKey();
+  if (!accountKey) return;
+  markOrganizationDeleted({
+    accountKey,
+    userId: userId ?? undefined,
+    source: "manual",
+    pending: false,
   });
 }

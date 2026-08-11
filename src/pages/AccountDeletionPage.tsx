@@ -10,6 +10,8 @@ import { SelfDeleteHealthPanel } from "../components/settings/SelfDeleteHealthPa
 import { usePosStore } from "../store/usePosStore";
 import { hasSupabaseConfig } from "../lib/supabase";
 import {
+  clearOwnerDeletionPendingOnFailure,
+  escalateOwnerDeletionPendingAfterPartialCloudSuccess,
   finalizeOwnerAccountDeletionLocally,
   markOwnerDeletionInProgress,
   ownerPermanentlyDeleteOwnAccount,
@@ -23,6 +25,12 @@ import {
   userRequiresPasswordReauth,
   userSupportsOAuthReauth,
 } from "../lib/ownerDeleteReauth";
+import {
+  EMPTY_OWNER_DELETION_BLAST_RADIUS,
+  loadOwnerDeletionBlastRadius,
+  matchesOwnerDeletionConfirmText,
+  type OwnerDeletionBlastRadius,
+} from "../lib/ownerDeletionBlastRadius";
 import { buildSelfDeleteHealthSnapshot } from "../lib/selfDeleteHealth";
 import { WakaCheckbox } from "../components/enterprise/WakaCheckbox";
 
@@ -46,6 +54,7 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
   const [backendReady, setBackendReady] = useState<boolean | null>(null);
   const [partialFailure, setPartialFailure] = useState(readOwnerDeletePartialFailure());
   const [reauthOk, setReauthOk] = useState(hasRecentOwnerDeleteReauth());
+  const [blast, setBlast] = useState<OwnerDeletionBlastRadius>(EMPTY_OWNER_DELETION_BLAST_RADIUS);
 
   const needsPassword = userRequiresPasswordReauth(user);
   const canUseGoogle = userSupportsOAuthReauth(user);
@@ -61,6 +70,16 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
       cancelled = true;
     };
   }, [actor.role, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadOwnerDeletionBlastRadius(userId).then((next) => {
+      if (!cancelled) setBlast(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   if (actor.role !== "owner") {
     return <Navigate to="/office/account" replace />;
@@ -120,15 +139,16 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
       return;
     }
     const typed = confirmText.trim();
-    const shopConfirm = shopName.trim();
-    if (typed !== "DELETE PERMANENTLY" && typed.toUpperCase() !== shopConfirm.toUpperCase()) {
+    const shopConfirm = shopName.trim() || blast.primaryShopName?.trim() || "";
+    const orgConfirm = blast.organizationName?.trim() || "";
+    if (!matchesOwnerDeletionConfirmText(typed, { shopName: shopConfirm, organizationName: orgConfirm })) {
       setError(t(lang, "accountDeletionConfirmHint"));
       return;
     }
     if (
       !window.confirm(
-        shopConfirm
-          ? t(lang, "accountDeletionFinalConfirm").replace("{{shop}}", shopConfirm)
+        orgConfirm
+          ? t(lang, "accountDeletionFinalConfirm").replace("{{org}}", orgConfirm)
           : t(lang, "accountDeletionFinalConfirmGeneric"),
       )
     ) {
@@ -147,7 +167,10 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
 
     setBusy(false);
     if (result.partial) {
+      escalateOwnerDeletionPendingAfterPartialCloudSuccess(userId);
       setPartialFailure(readOwnerDeletePartialFailure());
+    } else {
+      clearOwnerDeletionPendingOnFailure();
     }
     setError(result.message ?? t(lang, "accountDeletionFailed"));
   };
@@ -165,6 +188,8 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
     setBusy(false);
     setError(result.message ?? t(lang, "accountDeletionPartialRetryFailed"));
   };
+
+  const hasBlastCounts = blast.organizationId != null && blast.shopCount != null;
 
   if (partialFailure) {
     return (
@@ -258,18 +283,59 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
         </p>
       ) : null}
 
-      <article className="rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 shadow-sm">
-        <p className="text-[10px] font-black uppercase tracking-wide text-rose-800">{t(lang, "accountDeletionDanger")}</p>
+      <article
+        className="rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 shadow-sm"
+        aria-labelledby="account-deletion-blast-title"
+      >
+        <p
+          id="account-deletion-blast-title"
+          className="text-[10px] font-black uppercase tracking-wide text-rose-800"
+        >
+          {t(lang, "accountDeletionDanger")}
+        </p>
+        <h2 className="mt-2 text-base font-black text-rose-950">{t(lang, "accountDeletionBlastTitle")}</h2>
         <p className="mt-2 text-sm font-medium leading-relaxed text-rose-950">{t(lang, "accountDeletionBody")}</p>
+
+        {hasBlastCounts ? (
+          <dl className="mt-3 space-y-1.5 text-sm font-semibold text-rose-900">
+            <div className="flex flex-wrap justify-between gap-2">
+              <dt>{t(lang, "accountDeletionBlastOrg")}</dt>
+              <dd className="font-black text-rose-950">
+                {blast.organizationName || shopName || "—"}
+              </dd>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2">
+              <dt>{t(lang, "accountDeletionBlastShops")}</dt>
+              <dd className="font-black tabular-nums text-rose-950">{blast.shopCount}</dd>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2">
+              <dt>{t(lang, "accountDeletionBlastStaff")}</dt>
+              <dd className="font-black tabular-nums text-rose-950">
+                {blast.staffAuthCount == null ? "—" : blast.staffAuthCount}
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="mt-3 text-sm font-semibold text-rose-900">{t(lang, "accountDeletionBlastUnavailable")}</p>
+        )}
+
+        <p className="mt-3 rounded-xl border border-rose-200 bg-card/70 px-3 py-2 text-sm font-black text-rose-950">
+          {t(lang, "accountDeletionBlastStaffImportant")}
+        </p>
+
         <ul className="mt-3 list-inside list-disc space-y-1 text-sm font-semibold text-rose-900">
+          <li>{t(lang, "accountDeletionItemShops")}</li>
+          <li>{t(lang, "accountDeletionItemStaff")}</li>
           <li>{t(lang, "accountDeletionItemSales")}</li>
           <li>{t(lang, "accountDeletionItemProducts")}</li>
           <li>{t(lang, "accountDeletionItemCustomers")}</li>
           <li>{t(lang, "accountDeletionItemCloud")}</li>
+          <li>{t(lang, "accountDeletionItemSubscription")}</li>
           <li>{t(lang, "accountDeletionItemLogin")}</li>
           <li>{t(lang, "accountDeletionItemDevices")}</li>
         </ul>
-        <p className="mt-3 text-xs font-semibold text-rose-800">{t(lang, "accountDeletionReuseHint")}</p>
+        <p className="mt-3 text-xs font-semibold text-rose-800">{t(lang, "accountDeletionBillingNote")}</p>
+        <p className="mt-2 text-xs font-semibold text-rose-800">{t(lang, "accountDeletionReuseHint")}</p>
       </article>
 
       <WakaCheckbox
@@ -286,7 +352,9 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
           onChange={(e) => setConfirmText(e.target.value)}
           className="mt-2 w-full rounded-xl border-2 border-border px-4 py-3 text-base font-semibold"
           autoComplete="off"
-          placeholder={shopName ? shopName : "DELETE PERMANENTLY"}
+          placeholder={
+            blast.organizationName || shopName || blast.primaryShopName || "DELETE PERMANENTLY"
+          }
         />
       </label>
 
@@ -300,7 +368,9 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
             onChange={(e) => setPassword(e.target.value)}
             className="mt-2 w-full rounded-xl border-2 border-border px-4 py-3 text-base font-semibold"
           />
-          <span className="mt-1 block text-xs font-medium text-muted-foreground">{t(lang, "accountDeletionPasswordHint")}</span>
+          <span className="mt-1 block text-xs font-medium text-muted-foreground">
+            {t(lang, "accountDeletionPasswordHint")}
+          </span>
         </label>
       ) : null}
 
@@ -316,7 +386,7 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
       ) : null}
 
       {error ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-950">
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-950" role="alert">
           {error}
         </p>
       ) : null}
