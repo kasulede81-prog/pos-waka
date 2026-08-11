@@ -139,9 +139,10 @@ import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
 import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
 import { PosShelfDrillDownHeader } from "../components/pos/PosShelfDrillDownHeader";
-import { PosMobileShelfContinue } from "../components/pos/PosMobileShelfContinue";
+import { PosMobileShelfContinue, PosMobileShelfEndCue } from "../components/pos/PosMobileShelfContinue";
 import {
   isMobileShortShelf,
+  shouldShowMobileShelfEndCue,
   MOBILE_SHORT_SHELF_OTHER_SHELVES_MAX,
   MOBILE_SHORT_SHELF_POPULAR_MAX,
 } from "../lib/posMobileShortShelf";
@@ -2000,7 +2001,9 @@ export function PosPage({ lang }: { lang: Language }) {
               "space-y-2",
               catalogSellMode &&
                 (mobileSellFocus
-                  ? "pos-catalog-scroll-pane pos-catalog-scroll-pane--natural overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+                  ? isMobileShortShelf(filteredProducts.length)
+                    ? "pos-catalog-scroll-pane pos-catalog-scroll-pane--short-finish overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+                    : "pos-catalog-scroll-pane pos-catalog-scroll-pane--natural overscroll-y-contain [-webkit-overflow-scrolling:touch]"
                   : catalogScrollPaneClass),
             )}
             data-pos-catalog-scroll={catalogSellMode ? true : undefined}
@@ -2013,9 +2016,10 @@ export function PosPage({ lang }: { lang: Language }) {
               shelfLabel={selectedShelfLabel}
               productCount={filteredProducts.length}
               onBack={browse.backToShelves}
-              className={mobileSellFocus ? "rounded-xl px-2 py-1.5 shadow-none" : undefined}
+              compact={mobileSellFocus}
+              className="shrink-0"
             />
-            {renderCatalogProductGrid()}
+            <div className="shrink-0">{renderCatalogProductGrid()}</div>
             {mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? (
               <PosMobileShelfContinue
                 lang={lang}
@@ -2026,12 +2030,11 @@ export function PosPage({ lang }: { lang: Language }) {
                 popularProducts={popularOutsideOpenShelf}
                 onPickProduct={openProduct}
                 onBackToShelves={browse.backToShelves}
-                stockLabel={t(lang, "stockLabel")}
                 addLabel={t(lang, "addToSale")}
-                lockedBadge={t(lang, "productLockedBadge")}
                 lockedIds={lockedIds}
-                cartQtyByProductId={cartQtyByProductId}
               />
+            ) : mobileSellFocus && shouldShowMobileShelfEndCue(filteredProducts.length) ? (
+              <PosMobileShelfEndCue lang={lang} onBackToShelves={browse.backToShelves} />
             ) : null}
           </section>
         ) : (
