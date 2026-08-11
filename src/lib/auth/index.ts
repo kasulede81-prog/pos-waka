@@ -47,3 +47,9 @@ export {
   unlockLimiterScope,
 } from "./staffLoginLimiter";
 export { performStaffSwitch, prepareSwitchUserLock } from "./staffSwitchUser";
+export {
+  performEnterpriseLogout,
+  isExplicitLogoutInProgress,
+  clearPersistedSupabaseAuthTokens,
+  type EnterpriseLogoutOptions,
+} from "./enterpriseLogout";

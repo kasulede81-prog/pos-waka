@@ -1,4 +1,5 @@
 import type { Product } from "../types";
+import { findProductByBarcodeLookup } from "./productBarcodeIndex";
 
 export const MEDICINE_FORMS = [
   "Tablet",
@@ -93,8 +94,7 @@ export function productMatchesBarcode(product: Product, code: string): boolean {
   return barcodes.some((b) => b.trim().toLowerCase() === norm);
 }
 
+/** Exact barcode/SKU resolve — cached map per products-array identity (Phase 36.1). */
 export function findProductByBarcode(products: Product[], code: string): Product | undefined {
-  const trimmed = code.trim();
-  if (!trimmed) return undefined;
-  return products.find((p) => productMatchesBarcode(p, trimmed));
+  return findProductByBarcodeLookup(products, code);
 }

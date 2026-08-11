@@ -12,6 +12,7 @@ import { useShopPresenceHeartbeat } from "../../hooks/useShopPresenceHeartbeat";
 import { AppShellSyncLabel } from "./AppShellSyncLabel";
 import { useAndroidBackButton } from "../../hooks/useAndroidBackButton";
 import { useAndroidBackHandler } from "../../hooks/useAndroidBackHandler";
+import { useLogoutAction } from "../../hooks/useLogoutAction";
 import { ANDROID_BACK_PRIORITY } from "../../lib/androidBackStack";
 import { useShallow } from "zustand/react/shallow";
 import { usePosStore } from "../../store/usePosStore";
@@ -94,6 +95,7 @@ type Props = {
 export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staffSession = null }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout, loggingOut } = useLogoutAction(onSignOut);
   useAndroidBackButton();
   useShopPresenceHeartbeat();
   useStaffAutoLock(true);
@@ -482,11 +484,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     <button
                       type="button"
                       role="menuitem"
+                      disabled={loggingOut}
                       onClick={() => {
                         setMenuOpen(false);
-                        void onSignOut();
+                        logout();
                       }}
-                      className="mx-2 mb-1 block w-[calc(100%-1rem)] rounded-lg bg-foreground px-3 py-2.5 text-center text-sm font-semibold text-background hover:bg-foreground"
+                      className="mx-2 mb-1 block w-[calc(100%-1rem)] rounded-lg bg-foreground px-3 py-2.5 text-center text-sm font-semibold text-background hover:bg-foreground disabled:opacity-60"
                     >
                       {t(lang, "userMenuLogout")}
                     </button>
@@ -620,7 +623,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             }}
             onEmergencyLogout={() => {
               emergencyStaffLogout();
-              void onSignOut();
+              logout();
             }}
           />
         ) : null}

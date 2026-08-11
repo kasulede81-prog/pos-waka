@@ -6,6 +6,7 @@ import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { AccountSubscriptionCenter } from "../components/subscription/AccountSubscriptionCenter";
+import { useLogoutAction } from "../hooks/useLogoutAction";
 
 type Props = {
   lang: Language;
@@ -18,6 +19,7 @@ type Props = {
 
 export function AccountPage({ lang, email, shopName, onSignOut, user, authMode }: Props) {
   const actor = useSessionActor();
+  const { logout, loggingOut } = useLogoutAction(onSignOut);
 
   const displayName =
     String((user?.user_metadata as Record<string, unknown> | undefined)?.full_name ?? "").trim() ||
@@ -69,8 +71,9 @@ export function AccountPage({ lang, email, shopName, onSignOut, user, authMode }
 
       <button
         type="button"
-        onClick={() => onSignOut()}
-        className="min-h-[52px] w-full rounded-2xl bg-rose-600 py-3 text-lg font-black text-white"
+        disabled={loggingOut}
+        onClick={() => logout()}
+        className="min-h-[52px] w-full rounded-2xl bg-rose-600 py-3 text-lg font-black text-white disabled:opacity-60"
       >
         {t(lang, "logoutFromSettings")}
       </button>

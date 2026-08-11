@@ -7,11 +7,11 @@ import {
 import { buildPosShelfDisplayCards } from "../lib/posShelfLayout";
 import { posSearchAliases } from "../lib/pharmacyUx";
 import {
-  buildProductSellSearchIndex,
   filterIndexedProductsForSellView,
   filterProductsByCategoryOnly,
   productMatchesIndexedSellSearch,
 } from "../lib/posProductSearch";
+import { useReconciledProductSellSearchIndex } from "./useReconciledProductSearchIndex";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 
@@ -113,7 +113,7 @@ export function useSellProductBrowseEngine({
     return { q, aliasTerms: [...aliasSet] };
   }, [searchQuery, preferences.businessType, preferences.pharmacyModeEnabled, preferences.hospitalityModeEnabled]);
 
-  const productSearchIndex = useMemo(() => buildProductSellSearchIndex(products), [products]);
+  const productSearchIndex = useReconciledProductSellSearchIndex(products);
 
   const sellRowMatchesSearch = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;

@@ -22,11 +22,16 @@ export function PosSellCatalogShelfSection({ lang, shelves, onShelfTap }: Props)
   const columnCount = useShelfGridColumns(gridRef);
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between gap-2 px-0.5">
-        <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-          {t(lang, "posSellCategoryHeading")}
-        </p>
+    <section className="space-y-2" aria-label={t(lang, "posSellLandingShelves")}>
+      <div className="flex items-end justify-between gap-2 px-0.5">
+        <div className="min-w-0">
+          <p className="pos-ds-shelf-heading text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+            {t(lang, "posSellLandingShelves")}
+          </p>
+          <p className="truncate text-[11px] font-semibold text-muted-foreground">
+            {t(lang, "posSellLandingShelvesHint")}
+          </p>
+        </div>
         <p className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-black text-muted-foreground">
           {shelves.length}
         </p>

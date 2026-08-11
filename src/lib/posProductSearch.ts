@@ -4,6 +4,12 @@ import {
   productMatchesCategoryFilter,
 } from "./productCategories";
 import { medicineSearchHaystack, productMatchesBarcode } from "./pharmacyMedicine";
+import {
+  buildProductBarcodeLookup,
+  removeProductBarcodeLookup,
+  upsertProductBarcodeLookup,
+  type ProductBarcodeLookup,
+} from "./productBarcodeIndex";
 
 function normalizeSpacing(s: string): string {
   return s.toLowerCase().trim().replace(/\s+/g, " ");
@@ -24,7 +30,22 @@ export type ProductSellSearchEntry = {
 export type ProductSellSearchIndex = {
   entries: ProductSellSearchEntry[];
   byId: Map<string, ProductSellSearchEntry>;
+  /** code → productId for O(1) barcode resolve (Phase 36.1). */
+  byBarcode: ProductBarcodeLookup;
 };
+
+/** Precompute a single sell-search entry. */
+export function createProductSellSearchEntry(p: Product): ProductSellSearchEntry {
+  const cat = normalizeSpacing(p.category ?? "");
+  const name = normalizeSpacing(p.name);
+  return {
+    product: p,
+    cat,
+    catLoose: looseTokenForm(cat),
+    hay: `${name} · ${cat} · ${normalizeSpacing(`${p.baseUnit}`)} · ${normalizeSpacing(p.sku)} · ${normalizeSpacing(p.buyingUnit ?? "")} · ${normalizeSpacing(p.medicineStrength ?? "")} · ${normalizeSpacing(p.medicineForm ?? "")}`,
+    hayLoose: looseTokenForm(medicineSearchHaystack(p)),
+  };
+}
 
 /** Precompute sell-search haystacks once per catalog revision. */
 export function buildProductSellSearchIndex(products: readonly Product[]): ProductSellSearchIndex {
@@ -32,19 +53,81 @@ export function buildProductSellSearchIndex(products: readonly Product[]): Produ
   const byId = new Map<string, ProductSellSearchEntry>();
   for (let i = 0; i < products.length; i += 1) {
     const p = products[i]!;
-    const cat = normalizeSpacing(p.category ?? "");
-    const name = normalizeSpacing(p.name);
-    const entry: ProductSellSearchEntry = {
-      product: p,
-      cat,
-      catLoose: looseTokenForm(cat),
-      hay: `${name} · ${cat} · ${normalizeSpacing(`${p.baseUnit}`)} · ${normalizeSpacing(p.sku)} · ${normalizeSpacing(p.buyingUnit ?? "")} · ${normalizeSpacing(p.medicineStrength ?? "")} · ${normalizeSpacing(p.medicineForm ?? "")}`,
-      hayLoose: looseTokenForm(medicineSearchHaystack(p)),
-    };
+    const entry = createProductSellSearchEntry(p);
     entries[i] = entry;
     byId.set(p.id, entry);
   }
-  return { entries, byId };
+  return { entries, byId, byBarcode: buildProductBarcodeLookup(products) };
+}
+
+const RECONCILE_FULL_REBUILD_CHANGED = 48;
+
+/**
+ * Incrementally update the sell search index when few products changed.
+ * Falls back to a full rebuild when the diff is large (bulk replace / hydrate).
+ */
+export function reconcileProductSellSearchIndex(
+  prev: ProductSellSearchIndex | null | undefined,
+  prevProducts: readonly Product[] | null | undefined,
+  nextProducts: readonly Product[],
+): ProductSellSearchIndex {
+  if (!prev || !prevProducts) return buildProductSellSearchIndex(nextProducts);
+  if (prevProducts === nextProducts) return prev;
+
+  const prevById = new Map<string, Product>();
+  for (const p of prevProducts) prevById.set(p.id, p);
+
+  const nextById = new Map<string, Product>();
+  for (const p of nextProducts) nextById.set(p.id, p);
+
+  let changed = 0;
+  for (const p of nextProducts) {
+    if (prevById.get(p.id) !== p) changed += 1;
+  }
+  for (const p of prevProducts) {
+    if (!nextById.has(p.id)) changed += 1;
+  }
+
+  if (changed === 0) {
+    return prev.entries.length === nextProducts.length
+      ? prev
+      : buildProductSellSearchIndex(nextProducts);
+  }
+
+  if (changed > RECONCILE_FULL_REBUILD_CHANGED || changed > Math.max(32, nextProducts.length * 0.12)) {
+    return buildProductSellSearchIndex(nextProducts);
+  }
+
+  const byId = new Map(prev.byId);
+  let byBarcode = prev.byBarcode ?? buildProductBarcodeLookup(prevProducts);
+
+  for (const p of prevProducts) {
+    if (!nextById.has(p.id)) {
+      byId.delete(p.id);
+      byBarcode = removeProductBarcodeLookup(byBarcode, p.id);
+    }
+  }
+
+  const upserted: Product[] = [];
+  for (const p of nextProducts) {
+    if (prevById.get(p.id) !== p) upserted.push(p);
+  }
+
+  for (const p of upserted) {
+    const entry = createProductSellSearchEntry(p);
+    byId.set(p.id, entry);
+    byBarcode = upsertProductBarcodeLookup(byBarcode, p, nextById);
+  }
+
+  // Rebuild entries in nextProducts order so filters stay aligned with catalog order.
+  const entries: ProductSellSearchEntry[] = new Array(nextProducts.length);
+  for (let i = 0; i < nextProducts.length; i += 1) {
+    const p = nextProducts[i]!;
+    entries[i] = byId.get(p.id) ?? createProductSellSearchEntry(p);
+    if (!byId.has(p.id)) byId.set(p.id, entries[i]!);
+  }
+
+  return { entries, byId, byBarcode };
 }
 
 function hayContainsAllTokens(hay: string, hayLoose: string, tokens: string[], tokensLoose: string[]): boolean {

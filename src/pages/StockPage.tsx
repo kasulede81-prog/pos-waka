@@ -2,6 +2,7 @@ import { actorHasPermission } from "../lib/actorAuthorization";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
+import { useShallow } from "zustand/react/shallow";
 import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -28,10 +29,8 @@ import { StockListToolbar } from "../components/stock/StockListToolbar";
 import { InventoryViewProvider } from "../features/inventory/viewEngine/InventoryViewContext";
 import { InventoryViewSwitcher } from "../features/inventory/viewEngine/InventoryViewSwitcher";
 import { InventoryProductList } from "../features/inventory/viewEngine/InventoryProductList";
-import {
-  buildInventorySearchIndex,
-  queryInventoryProducts,
-} from "../features/inventory/viewEngine/inventoryProductListQuery";
+import { queryInventoryProducts } from "../features/inventory/viewEngine/inventoryProductListQuery";
+import { useReconciledInventorySearchIndex } from "../hooks/useReconciledProductSearchIndex";
 import { InventorySelectionProvider } from "../features/inventory/selection/InventorySelectionProvider";
 import { InventorySelectionToolbar } from "../features/inventory/selection/InventorySelectionToolbar";
 import { useInventorySavedFilters } from "../features/inventory/filters/InventoryFilterBar";
@@ -110,10 +109,14 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const canRestock = actorHasPermission(actor, "purchases.record");
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
 
-  const products = usePosStore((s) => s.products);
-  const suppliers = usePosStore((s) => s.suppliers);
-  const stockMovements = usePosStore((s) => s.stockMovements);
-  const preferences = usePosStore((s) => s.preferences);
+  const { products, suppliers, stockMovements, preferences } = usePosStore(
+    useShallow((s) => ({
+      products: s.products,
+      suppliers: s.suppliers,
+      stockMovements: s.stockMovements,
+      preferences: s.preferences,
+    })),
+  );
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const wholesaleMode = isWholesaleMode(preferences.businessType);
@@ -313,10 +316,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     [products, preferences.posPinnedShelfKeys, preferences.posShelfLayout],
   );
 
-  const productSearchIndex = useMemo(
-    () => buildInventorySearchIndex(products, preferences, stockMovements),
-    [products, preferences, stockMovements],
-  );
+  const productSearchIndex = useReconciledInventorySearchIndex(products, preferences, stockMovements);
 
   const lastSupplierByProductId = useMemo(() => {
     const names = new Map(suppliers.map((s) => [s.id, s.name]));
@@ -530,20 +530,32 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const applyStarter = () => {
     const cat = t(lang, "generalCategory");
     let left = productSlotsLeft ?? Number.POSITIVE_INFINITY;
+    const rows: Array<{
+      name: string;
+      priceUgx: number;
+      stockQty: number;
+      category: string;
+      inferName?: string;
+      sellingMode: StarterLine["sellingMode"];
+      baseUnit: string;
+      medicineStrength?: string | null;
+      medicineForm?: string | null;
+      costPricePerUnitUgx?: number;
+      expiryDate?: string | null;
+    }> = [];
     for (const row of starterRows) {
       if (left <= 0) break;
       if (!row.enabled) continue;
       const price = Math.max(0, Math.floor(Number(row.priceStr) || 0));
       const st = Math.max(0, Number(row.stockStr) || 0);
-      const displayName = t(lang, row.nameKey);
-      quickAddProduct({
-        name: displayName,
+      rows.push({
+        name: t(lang, row.nameKey),
         priceUgx: price,
         stockQty: st,
         category: row.category ?? cat,
         inferName: row.inferName,
         sellingMode: row.sellingMode,
-        baseUnit: row.baseUnit,
+        baseUnit: row.baseUnit ?? "ea",
         medicineStrength: row.medicineStrength ?? null,
         medicineForm: row.medicineForm ?? null,
         costPricePerUnitUgx:
@@ -555,6 +567,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       });
       left -= 1;
     }
+    if (rows.length) bulkQuickAddProducts(rows);
     setStarterOpen(false);
   };
 

@@ -51,6 +51,7 @@ import {
   type StaffLoginInput,
 } from "../lib/staffOfflineAuth";
 import { authenticateStaffLogin, startStaffSessionClock, tryRestorePersistedStaffSession } from "../lib/auth";
+import { isExplicitLogoutInProgress, performEnterpriseLogout } from "../lib/auth/enterpriseLogout";
 
 type LocalSession = { email: string };
 type StaffSession = {
@@ -537,10 +538,12 @@ export function useAuth() {
         return;
       }
       if (event === "SIGNED_OUT") {
+        const explicit =
+          explicitSignOutRef.current || isExplicitLogoutInProgress();
         if (
           shouldDeferSignedOut({
             cachedSession: readPersistedSupabaseSession(),
-            explicitSignOut: explicitSignOutRef.current,
+            explicitSignOut: explicit,
           })
         ) {
           const cached = readPersistedSupabaseSession();
@@ -927,36 +930,22 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(async () => {
-    appendPilotEvent("logout", "Sign out");
+    // Phase M0.1 — every UI entry point uses this single local-first logout.
     explicitSignOutRef.current = true;
     cancelSessionRefreshRetry();
     resetSessionConnectionState();
-    if (staffSession) {
-      flushPendingPersist();
-      const store = usePosStore.getState();
-      if (store.preferences.activeStaffId) {
-        store.switchStaffAccount(null, { force: true });
-        await flushPendingPersist();
-      }
-      clearStaffAuth();
-      applyAccountSwitchSync(null);
-      usePosStore.getState().resetForSignOut();
-      setStaffSession(null);
-      explicitSignOutRef.current = false;
-      return;
-    }
-    if (hasSupabaseConfig && supabase) {
-      await supabase.auth.signOut();
-      applyAccountSwitchSync(null);
-      setSession(null);
-      explicitSignOutRef.current = false;
-      return;
-    }
-    localStorage.removeItem(LOCAL_AUTH_KEY);
-    applyAccountSwitchSync(null);
+    setSession(null);
+    setStaffSession(null);
     setLocalEmail(null);
-    explicitSignOutRef.current = false;
-  }, [staffSession]);
+    await performEnterpriseLogout({
+      hardNavigate: true,
+      onLocalSessionCleared: () => {
+        setSession(null);
+        setStaffSession(null);
+        setLocalEmail(null);
+      },
+    });
+  }, []);
 
   const signInStaff = useCallback(async (input: StaffLoginInput) => {
     const auth = await authenticateStaffLogin(input);

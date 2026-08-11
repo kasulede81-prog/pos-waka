@@ -6,8 +6,19 @@ export type DisplayScaleLevel = (typeof DISPLAY_SCALE_LEVELS)[number];
 
 export const DEFAULT_DISPLAY_SCALE_LEVEL: DisplayScaleLevel = "normal";
 
+/**
+ * Phase M1.1 — cashier-facing density modes (no percentages).
+ * Maps onto existing tokens: Compact→compact, Balanced→normal, Comfortable→large.
+ * `extra_large` remains a valid stored token but collapses to Comfortable in the cashier UI.
+ */
+export const CASHIER_DENSITY_LEVELS = ["compact", "normal", "large"] as const;
+export type CashierDensityLevel = (typeof CASHIER_DENSITY_LEVELS)[number];
+
 export type DisplayScaleMeta = {
+  /** Legacy / admin label key */
   labelKey: string;
+  /** Cashier-facing mode label key (M1.1) */
+  cashierLabelKey: string;
   percent: number;
   multiplier: number;
   columnDelta: number;
@@ -15,10 +26,34 @@ export type DisplayScaleMeta = {
 
 export const DISPLAY_SCALE_META: Record<DisplayScaleLevel, DisplayScaleMeta> = {
   // Phase 32.4.1 — +1 (was +2) so compact density does not stack as hard against smaller type
-  compact: { labelKey: "displayScaleCompact", percent: 88, multiplier: 0.88, columnDelta: 1 },
-  normal: { labelKey: "displayScaleNormal", percent: 100, multiplier: 1, columnDelta: 0 },
-  large: { labelKey: "displayScaleLarge", percent: 112, multiplier: 1.12, columnDelta: -2 },
-  extra_large: { labelKey: "displayScaleExtraLarge", percent: 128, multiplier: 1.28, columnDelta: -3 },
+  compact: {
+    labelKey: "displayScaleCompact",
+    cashierLabelKey: "displayScaleModeCompact",
+    percent: 88,
+    multiplier: 0.88,
+    columnDelta: 1,
+  },
+  normal: {
+    labelKey: "displayScaleNormal",
+    cashierLabelKey: "displayScaleModeBalanced",
+    percent: 100,
+    multiplier: 1,
+    columnDelta: 0,
+  },
+  large: {
+    labelKey: "displayScaleLarge",
+    cashierLabelKey: "displayScaleModeComfortable",
+    percent: 112,
+    multiplier: 1.12,
+    columnDelta: -2,
+  },
+  extra_large: {
+    labelKey: "displayScaleExtraLarge",
+    cashierLabelKey: "displayScaleModeComfortable",
+    percent: 128,
+    multiplier: 1.28,
+    columnDelta: -3,
+  },
 };
 
 const MIN_TOUCH_PX = 48;
@@ -88,6 +123,25 @@ export function clampDisplayScaleLevel(level: string | null | undefined): Displa
   return DEFAULT_DISPLAY_SCALE_LEVEL;
 }
 
+/** Collapse legacy extra_large into Comfortable (large) for cashier stepping. */
+export function toCashierDensityLevel(level: DisplayScaleLevel): CashierDensityLevel {
+  if (level === "compact") return "compact";
+  if (level === "large" || level === "extra_large") return "large";
+  return "normal";
+}
+
+export function cashierDensityLabelKey(level: DisplayScaleLevel): string {
+  return DISPLAY_SCALE_META[toCashierDensityLevel(level)].cashierLabelKey;
+}
+
+/** Step Compact ↔ Balanced ↔ Comfortable (skips extra_large). */
+export function stepCashierDensityLevel(level: DisplayScaleLevel, direction: 1 | -1): DisplayScaleLevel {
+  const current = toCashierDensityLevel(level);
+  const idx = CASHIER_DENSITY_LEVELS.indexOf(current);
+  const next = Math.min(CASHIER_DENSITY_LEVELS.length - 1, Math.max(0, idx + direction));
+  return CASHIER_DENSITY_LEVELS[next] ?? DEFAULT_DISPLAY_SCALE_LEVEL;
+}
+
 export function stepDisplayScaleLevel(level: DisplayScaleLevel, direction: 1 | -1): DisplayScaleLevel {
   const idx = DISPLAY_SCALE_LEVELS.indexOf(level);
   const next = Math.min(DISPLAY_SCALE_LEVELS.length - 1, Math.max(0, idx + direction));
@@ -96,4 +150,17 @@ export function stepDisplayScaleLevel(level: DisplayScaleLevel, direction: 1 | -
 
 export function catalogColumnDeltaForScale(level: DisplayScaleLevel): number {
   return DISPLAY_SCALE_META[level].columnDelta;
+}
+
+/**
+ * Precedence (mobile Sell): Display Scale owns type/touch density.
+ * Shelf Scale may only nudge icon emphasis within a narrow band so stacks stay usable.
+ */
+export function dampenShelfScaleForDisplay(shelfScale: number, displayLevel: DisplayScaleLevel): number {
+  const base = 35;
+  const raw = Number.isFinite(shelfScale) ? shelfScale : base;
+  const clamped = Math.max(25, Math.min(100, Math.round(raw)));
+  const influence = displayLevel === "normal" ? 0.45 : 0.25;
+  const delta = (clamped - base) * influence;
+  return Math.max(28, Math.min(52, Math.round(base + delta)));
 }

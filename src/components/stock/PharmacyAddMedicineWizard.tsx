@@ -256,12 +256,11 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     });
     if (!r.ok) return false;
 
+    // Phase 36.1 — close immediately after local commit (no artificial delay).
     setSavedFlash(true);
-    window.setTimeout(() => {
-      onSaved();
-      onClose();
-      reset();
-    }, 600);
+    onSaved();
+    onClose();
+    reset();
     return true;
   };
 

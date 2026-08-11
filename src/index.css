@@ -360,6 +360,57 @@ body {
     padding-bottom: var(--waka-scroll-tail-pos);
   }
 
+  /**
+   * M1.1-R2 / M1.3 — phone Sell: content-sized catalog pane (no forced empty flex void).
+   * !important beats Tailwind flex-1/h-0 utilities on the same node.
+   */
+  @media (max-width: 767px) {
+    .app-shell--sell-focus .pos-catalog-scroll-pane {
+      flex: 0 1 auto !important;
+      height: auto !important;
+      min-height: 0;
+      max-height: 100%;
+      padding-bottom: max(0.75rem, var(--waka-safe-bottom, env(safe-area-inset-bottom, 0px)));
+    }
+
+    .app-shell--sell-focus .pos-catalog-scroll-pane--browse {
+      padding-bottom: max(0.75rem, var(--waka-safe-bottom, env(safe-area-inset-bottom, 0px)));
+    }
+
+    /* Cap Comfortable card inflation on phone — keep Compact/Balanced token mins. */
+    html.pos-display-scale-active .pos-ds-product-card {
+      min-height: min(var(--ds-product-card-min-h), 108px);
+    }
+  }
+
+  /**
+   * M1.3 — natural-height shelf drill-down (short shelves).
+   * Content-sized; scrolls only when products + secondary sections exceed the viewport.
+   */
+  .pos-catalog-scroll-pane--natural {
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    flex: 0 1 auto !important;
+    height: auto !important;
+    min-height: 0;
+    max-height: 100%;
+    padding-bottom: max(0.75rem, var(--waka-safe-bottom, env(safe-area-inset-bottom, 0px)));
+  }
+
+  /**
+   * M1.1-R5 — mobile checkout full-screen workspace.
+   * Owns the entire phone viewport; no catalog peek / partial-height sheet.
+   * Bottom safe-area / keyboard inset applied by PosPage (single owner).
+   */
+  .pos-mobile-checkout-workspace {
+    height: 100dvh;
+    max-height: 100dvh;
+    width: 100%;
+  }
+
   .pos-catalog-scroll-pane--browse {
     padding-bottom: var(--waka-scroll-tail-pos-sale);
   }
@@ -683,6 +734,41 @@ body {
       --ds-font-xs 200ms cubic-bezier(0.22, 1, 0.36, 1),
       --ds-gap-2 200ms cubic-bezier(0.22, 1, 0.36, 1),
       --ds-product-card-min-h 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* M1.1 — resist OS Dynamic Type compounding on Sell; Display Scale owns density. */
+  html.pos-display-scale-active .app-shell--sell-focus {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  html.pos-display-scale-active .pos-ds-density-btn {
+    min-height: var(--ds-touch-min);
+    min-width: var(--ds-touch-min);
+  }
+
+  html.pos-display-scale-active .pos-ds-density-label {
+    min-height: var(--ds-touch-min);
+    font-size: var(--ds-font-xs);
+  }
+
+  html.pos-display-scale-active .pos-ds-quick-chip {
+    min-height: max(44px, var(--ds-chip-min-h));
+    font-size: var(--ds-font-xs);
+    padding-inline: var(--ds-gap-3);
+    border-radius: 9999px;
+  }
+
+  html.pos-display-scale-active .pos-ds-checkout-strip {
+    padding: var(--ds-checkout-pad) var(--ds-gap-3);
+  }
+
+  html.pos-display-scale-active .pos-ds-shelf-heading {
+    font-size: var(--ds-font-2xs);
+  }
+
+  html.pos-display-scale-active .pos-ds-cart-sheet {
+    border-radius: var(--ds-radius-xl) var(--ds-radius-xl) 0 0;
   }
 
   html.pos-display-scale-active .pos-ds-product-card {

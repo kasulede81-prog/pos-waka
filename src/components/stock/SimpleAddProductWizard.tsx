@@ -272,6 +272,7 @@ export function SimpleAddProductWizard({
       window.setTimeout(() => setSavedFlash(false), 2200);
       return;
     }
+    // Local commit already succeeded — close immediately (Phase 36.1).
     onClose();
   };
 

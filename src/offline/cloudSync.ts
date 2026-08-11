@@ -3718,6 +3718,13 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
   }, delay);
 }
 
+/** Cancel a pending scheduled background sync (used by enterprise logout). */
+export function cancelBackgroundCloudSync(): void {
+  if (backgroundSyncTimer == null) return;
+  globalThis.clearTimeout(backgroundSyncTimer);
+  backgroundSyncTimer = null;
+}
+
 export function computeSyncSalesStats(sales: Sale[]): {
   unsyncedCount: number;
   errorCount: number;

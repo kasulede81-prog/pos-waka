@@ -12,8 +12,10 @@ import {
 } from "../../lib/posCheckoutKeypad";
 import { DraftCartLineRow } from "./DraftCartLineRow";
 import { DraftCartTotalsStack } from "./DraftCartTotalsStack";
+import { MobileSheetCartItems } from "./MobileSheetCartItems";
 import { VirtualizedDraftCartList } from "./VirtualizedDraftCartList";
 import { POS_CHECKOUT_SCROLL_CLASS } from "../../lib/posTouchInteraction";
+import { MOBILE_CHECKOUT_ITEMS_AUTO_SHOW_MAX } from "../../lib/posMobileCheckoutItems";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -824,6 +826,11 @@ export type PosCheckoutPanelProps = {
   catalogDock?: boolean;
   catalogNumpadOpen?: boolean;
   onCatalogNumpadOpenChange?: (open: boolean) => void;
+  /**
+   * M1.1-R2 — parent bottom sheet already owns safe-area / keyboard inset.
+   * When true, overlay footer must not apply env(safe-area-inset-bottom) again.
+   */
+  sheetInsetOwned?: boolean;
 };
 
 function CartDockBody({
@@ -970,10 +977,17 @@ export function PosCheckoutPanel({
   catalogDock = false,
   catalogNumpadOpen: catalogNumpadOpenProp,
   onCatalogNumpadOpenChange,
+  sheetInsetOwned = false,
 }: PosCheckoutPanelProps) {
   const isSidebar = variant === "sidebar";
   const isCompact = !isSidebar;
+  /**
+   * M1.1-R3 — mobile bottom-sheet composition zones.
+   * Only cart lines scroll. Totals, payment state, keypad, Complete Sale stay pinned.
+   */
+  const mobileSheetBudget = !isSidebar;
   const emptyCart = draftLines.length === 0;
+  const [sheetCartExpanded, setSheetCartExpanded] = useState(false);
   const [sidebarNumpadOpenLocal, setSidebarNumpadOpenLocal] = useState(false);
   const sidebarNumpadOpen = catalogDock ? (catalogNumpadOpenProp ?? false) : sidebarNumpadOpenLocal;
   const setSidebarNumpadOpen = catalogDock && onCatalogNumpadOpenChange ? onCatalogNumpadOpenChange : setSidebarNumpadOpenLocal;
@@ -982,6 +996,12 @@ export function PosCheckoutPanel({
   useEffect(() => {
     if (!needsAmountKeypad) setSidebarNumpadOpen(false);
   }, [needsAmountKeypad]);
+
+  useEffect(() => {
+    if (draftLines.length <= MOBILE_CHECKOUT_ITEMS_AUTO_SHOW_MAX) {
+      setSheetCartExpanded(false);
+    }
+  }, [draftLines.length]);
 
   const showAlphaToggle = paymentMethod === "credit";
   const numpadDockProps = {
@@ -1038,13 +1058,13 @@ export function PosCheckoutPanel({
         "pos-ds-checkout flex min-h-0 flex-col",
         isSidebar
           ? "h-full max-h-[calc(100dvh-5.25rem)] rounded-xl border border-waka-200 bg-waka-50/90 shadow-waka-sm"
-          : "h-full bg-waka-50",
+          : "min-h-0 flex-1 bg-waka-50",
       )}
     >
       <header
         className={clsx(
           "flex shrink-0 items-center gap-1.5 border-b border-waka-200 bg-waka-50",
-          isCompact ? "px-3 py-2.5" : catalogDock ? "px-2 py-2" : "px-3 py-3",
+          mobileSheetBudget ? "px-3 py-2" : isCompact ? "px-3 py-2.5" : catalogDock ? "px-2 py-2" : "px-3 py-3",
           isSidebar && "rounded-t-[1.35rem]",
         )}
       >
@@ -1073,11 +1093,11 @@ export function PosCheckoutPanel({
             type="button"
             onClick={onMinimize}
             className={clsx(
-              "shrink-0 rounded-full border border-waka-300 bg-card font-bold text-waka-900 shadow-sm active:bg-waka-50",
-              isCompact ? "px-3 py-2 text-sm" : "px-3 py-2 text-sm",
+              "pos-ds-dialog-btn shrink-0 rounded-full border border-waka-300 bg-card font-bold text-waka-900 shadow-sm active:bg-waka-50",
+              "min-h-[44px] px-3 py-2 text-sm",
             )}
           >
-            {t(lang, "posAddMoreItems")}
+            {t(lang, "posCheckoutSheetAddItems")}
           </button>
         ) : isSidebar && onAddItems ? (
           <button
@@ -1111,9 +1131,80 @@ export function PosCheckoutPanel({
         <div className={clsx("min-h-0 flex-1 p-4", POS_CHECKOUT_SCROLL_CLASS)}>
           <p className="py-8 text-center text-sm font-semibold text-muted-foreground">{t(lang, "posCartEmptyHint")}</p>
         </div>
+      ) : mobileSheetBudget ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/*
+            M1.1-R5 — remaining viewport → cart; pinned zones take intrinsic height first.
+            Only cart scrolls. Totals / payment / keypad / Complete Sale never leave the viewport.
+          */}
+          <div
+            className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden border-b border-waka-200 px-3 py-1.5"
+            data-pos-checkout-zone="cart"
+          >
+            <MobileSheetCartItems
+              lang={lang}
+              draftLines={draftLines}
+              draftCartStats={draftCartStats}
+              productById={productById}
+              expanded={sheetCartExpanded}
+              onExpandedChange={setSheetCartExpanded}
+              onIncrement={onIncrement}
+              onDecrement={onDecrement}
+              onQtyTap={onQtyTap}
+              onLineDiscount={onLineDiscount}
+              onRemoveLine={onRemoveLine}
+              onOpenCartDiscount={onOpenCartDiscount}
+              pharmacyMode={pharmacyMode}
+              onBatchTap={onBatchTap}
+            />
+          </div>
+          <div className="shrink-0 border-b border-waka-200 px-3 py-1.5" data-pos-checkout-zone="totals">
+            <DraftCartTotalsStack
+              lang={lang}
+              checkoutTotals={checkoutTotals}
+              changeDue={changeDue}
+              sidebarCompact
+            />
+          </div>
+          <div
+            className="max-h-[min(28dvh,12rem)] shrink-0 overflow-y-auto border-b border-waka-200 px-3 py-1.5"
+            data-pos-checkout-zone="payment"
+          >
+            <PaymentBlock {...paymentProps} sidebarCompact />
+          </div>
+          <div
+            className={clsx(
+              "shrink-0 border-t border-waka-200 bg-card shadow-[0_-4px_12px_rgba(0,0,0,0.06)]",
+              sheetInsetOwned ? "px-3 py-2" : "px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]",
+            )}
+            data-pos-checkout-zone="action"
+          >
+            {canSavePending && paymentMethod !== "credit" ? (
+              <button
+                type="button"
+                onClick={onSavePending}
+                className="mb-1.5 w-full rounded-lg border border-amber-300 bg-warning-muted py-1.5 text-xs font-black text-warning-foreground active:bg-warning-muted"
+              >
+                {savePendingLabel}
+              </button>
+            ) : null}
+            {needsAmountKeypad ? (
+              <CheckoutNumpadDock {...numpadDockProps} />
+            ) : (
+              <button
+                ref={saveButtonRef}
+                type="button"
+                onClick={onFinishSale}
+                disabled={emptyCart}
+                className="pos-ds-checkout-btn w-full rounded-xl bg-success py-3.5 text-lg font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
+              >
+                {saveSaleLabel}
+              </button>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {/* Phase 33.1 — cart list flexes + virtualizes; sticky totals sit outside the list. */}
           <div
             className={clsx(
               "flex min-h-0 flex-col border-b border-waka-200",

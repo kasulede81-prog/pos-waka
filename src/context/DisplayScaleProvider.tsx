@@ -13,7 +13,8 @@ import {
   clearDisplayScaleCssVars,
   DEFAULT_DISPLAY_SCALE_LEVEL,
   DISPLAY_SCALE_META,
-  stepDisplayScaleLevel,
+  stepCashierDensityLevel,
+  toCashierDensityLevel,
   type DisplayScaleLevel,
 } from "../lib/displayScale/scaleTokens";
 import { loadDisplayScaleLevel, saveDisplayScaleLevel } from "../lib/displayScale/displayScaleStorage";
@@ -21,7 +22,9 @@ import { fetchPlatformDisplayScaleSettings } from "../lib/displayScale/platformD
 
 type DisplayScaleContextValue = {
   level: DisplayScaleLevel;
+  /** @deprecated Cashier UI uses mode labels — percent kept for admin/diagnostics. */
   percent: number;
+  cashierMode: "compact" | "balanced" | "comfortable";
   featureEnabled: boolean;
   ready: boolean;
   setLevel: (level: DisplayScaleLevel) => void;
@@ -67,7 +70,7 @@ export function DisplayScaleProvider({ children }: { children: ReactNode }) {
 
   const stepUp = useCallback(() => {
     setLevelState((prev) => {
-      const next = stepDisplayScaleLevel(prev, 1);
+      const next = stepCashierDensityLevel(prev, 1);
       saveDisplayScaleLevel(next);
       return next;
     });
@@ -75,7 +78,7 @@ export function DisplayScaleProvider({ children }: { children: ReactNode }) {
 
   const stepDown = useCallback(() => {
     setLevelState((prev) => {
-      const next = stepDisplayScaleLevel(prev, -1);
+      const next = stepCashierDensityLevel(prev, -1);
       saveDisplayScaleLevel(next);
       return next;
     });
@@ -100,10 +103,15 @@ export function DisplayScaleProvider({ children }: { children: ReactNode }) {
     };
   }, [onPosRoute, featureEnabled, level]);
 
+  const cashierToken = toCashierDensityLevel(level);
+  const cashierMode =
+    cashierToken === "compact" ? "compact" : cashierToken === "large" ? "comfortable" : "balanced";
+
   const value = useMemo<DisplayScaleContextValue>(
     () => ({
       level,
       percent: DISPLAY_SCALE_META[level].percent,
+      cashierMode,
       featureEnabled,
       ready,
       setLevel,
@@ -111,7 +119,7 @@ export function DisplayScaleProvider({ children }: { children: ReactNode }) {
       stepDown,
       reset,
     }),
-    [level, featureEnabled, ready, setLevel, stepUp, stepDown, reset],
+    [level, cashierMode, featureEnabled, ready, setLevel, stepUp, stepDown, reset],
   );
 
   return <DisplayScaleContext.Provider value={value}>{children}</DisplayScaleContext.Provider>;
@@ -123,6 +131,7 @@ export function useDisplayScale(): DisplayScaleContextValue {
     return {
       level: DEFAULT_DISPLAY_SCALE_LEVEL,
       percent: 100,
+      cashierMode: "balanced",
       featureEnabled: false,
       ready: true,
       setLevel: () => undefined,

@@ -1034,8 +1034,19 @@ export type PosState = {
       inferName?: string;
       sellingMode?: SellingMode;
       baseUnit?: string;
+      buyingUnit?: string | null;
+      conversionRate?: number | null;
+      costPricePerUnitUgx?: number | null;
+      buyingPackCostUgx?: number | null;
       medicineStrength?: string | null;
       medicineForm?: string | null;
+      expiryDate?: string | null;
+      minimumStockAlert?: number;
+      primaryBarcode?: string | null;
+      pharmacyPackaging?: import("../types").PharmacyPackaging | null;
+      pharmacyMaster?: import("../types").PharmacyMedicineMaster | null;
+      quickPresetsMoneyUgx?: number[];
+      quickPresetsQty?: number[];
     }>,
   ) => { added: number; skipped: number };
   duplicateProduct: (productId: string, nameSuffix: string) => { ok: boolean; errorKey?: string };
@@ -1416,6 +1427,213 @@ function normalizeProduct(p: Product): Product {
     packCostUnitsDepleted: packAlloc ? resolvePackCostUnitsDepleted(p) : p.packCostUnitsDepleted,
     hospitality: p.hospitality ? normalizeProductHospitalityRouting(p.hospitality, p) : p.hospitality ?? null,
   };
+}
+
+type QuickAddProductDraftInput = {
+  name: string;
+  priceUgx: number;
+  stockQty: number;
+  category: string;
+  inferName?: string;
+  sellingMode?: SellingMode;
+  baseUnit?: string;
+  buyingUnit?: string | null;
+  conversionRate?: number | null;
+  costPricePerUnitUgx?: number | null;
+  buyingPackCostUgx?: number | null;
+  quickPresetsMoneyUgx?: number[];
+  quickPresetsQty?: number[];
+  medicineStrength?: string | null;
+  medicineForm?: string | null;
+  expiryDate?: string | null;
+  minimumStockAlert?: number;
+  pharmacyPackaging?: import("../types").PharmacyPackaging | null;
+  pharmacyMaster?: import("../types").PharmacyMedicineMaster | null;
+  openingBatch?: import("../types").PharmacyBatchReceiveInput | null;
+  primaryBarcode?: string | null;
+};
+
+/** Pure prepare for quick-add — no Zustand mutation (Phase 36.1). */
+function buildQuickAddProductDraft(
+  input: QuickAddProductDraftInput,
+  prefs: ShopPreferences,
+  actor: PosState["sessionActor"],
+): { ok: true; draft: Product } | { ok: false; errorKey: string } {
+  const trimmed = input.name.trim();
+  if (!trimmed) return { ok: false, errorKey: "invalid" };
+  const hint = (input.inferName ?? trimmed).trim();
+  const guess = inferProductGuess(hint, prefs.businessType, prefs.pharmacyModeEnabled);
+  const sellingMode = input.sellingMode ?? guess.sellingMode;
+  const baseUnit = (input.baseUnit ?? guess.baseUnit).trim() || "ea";
+  const buyingUnit = input.buyingUnit !== undefined ? input.buyingUnit : guess.buyingUnit;
+  const conversionRate = input.conversionRate !== undefined ? input.conversionRate : guess.conversionRate;
+  const price = Math.max(0, Math.floor(input.priceUgx));
+  if (price <= 0) return { ok: false, errorKey: "invalid" };
+  const stock = Math.max(0, Number(input.stockQty) || 0);
+  const pharmacyRequiresBuy = pharmacyQuickAddRequiresBuyPrice(prefs.businessType, prefs.pharmacyModeEnabled);
+  if (pharmacyRequiresBuy && stock <= 0) return { ok: false, errorKey: "pharmacyOpeningStockRequired" };
+  const costExplicit =
+    input.costPricePerUnitUgx !== undefined && input.costPricePerUnitUgx !== null
+      ? normalizeUnitCostUgx(input.costPricePerUnitUgx)
+      : null;
+  if (pharmacyRequiresBuy) {
+    if (costExplicit === null || costExplicit <= 0) return { ok: false, errorKey: "pharmacyBuyPriceRequired" };
+  }
+  const cost =
+    costExplicit !== null ? costExplicit : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
+  const minAlert =
+    input.minimumStockAlert !== undefined
+      ? Math.max(0, Math.floor(input.minimumStockAlert))
+      : sellingMode === "portion"
+        ? 1
+        : sellingMode === "weighted"
+          ? 3
+          : 5;
+  const presetMoney = input.quickPresetsMoneyUgx?.filter((x) => x > 0);
+  const presetQty = input.quickPresetsQty?.filter((x) => x > 0);
+  const sameShape =
+    sellingMode === guess.sellingMode &&
+    baseUnit === guess.baseUnit &&
+    !presetMoney?.length &&
+    !presetQty?.length;
+
+  let pharmacyPackaging = input.pharmacyPackaging ?? null;
+  let pharmacyMaster = input.pharmacyMaster ?? null;
+  const sku = input.primaryBarcode?.trim() || `SKU-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  const now = new Date().toISOString();
+
+  if (input.openingBatch && stock > 0) {
+    const batch = createBatchOnReceive({
+      ...input.openingBatch,
+      quantityBase: stock,
+      unitCostUgx: costExplicit ?? cost,
+      sellingPriceUgx: price,
+      at: now,
+      actorUserId: actor?.userId ?? null,
+      actorName: actor?.displayName ?? null,
+    });
+    const basePkg = pharmacyPackaging ?? {
+      enabled: false,
+      baseUnit,
+      sell: { tablet: true, strip: false, box: false },
+      batches: [],
+    };
+    pharmacyPackaging = { ...basePkg, batches: [batch] };
+    pharmacyMaster = { batchTracked: true, expiryTracked: true, ...pharmacyMaster };
+  }
+
+  const qp = defaultQuickPresetsForProduct({
+    sellingMode,
+    baseUnit,
+    sellingPricePerUnitUgx: price,
+  } as Product);
+  const row: Product = {
+    id: crypto.randomUUID(),
+    name: trimmed,
+    sellingMode,
+    baseUnit,
+    buyingUnit,
+    conversionRate,
+    sellingPricePerUnitUgx: price,
+    costPricePerUnitUgx: cost,
+    buyingPackCostUgx:
+      input.buyingPackCostUgx != null && input.buyingPackCostUgx > 0
+        ? Math.floor(input.buyingPackCostUgx)
+        : null,
+    stockOnHand: stock,
+    minimumStockAlert: minAlert,
+    category: input.category,
+    sku,
+    medicineStrength: normalizeMedicineStrength(input.medicineStrength ?? null),
+    medicineForm: normalizeMedicineForm(input.medicineForm ?? null),
+    expiryDate: normalizeExpiryDate(input.expiryDate ?? input.openingBatch?.expiryDate ?? null),
+    pharmacyPackaging,
+    pharmacyMaster,
+    quickPresetsMoneyUgx: presetMoney?.length
+      ? presetMoney
+      : sameShape
+        ? guess.quickPresetsMoneyUgx
+        : qp.quickPresetsMoneyUgx,
+    quickPresetsQty: presetQty?.length ? presetQty : sameShape ? guess.quickPresetsQty : qp.quickPresetsQty,
+    updatedAt: now,
+    version: 1,
+  };
+  return { ok: true, draft: normalizeProduct(row) };
+}
+
+/**
+ * Single Zustand commit for one or many new products (Phase 36.1).
+ * Sync enqueue + audit stay per-product; persist flushes once after the commit.
+ */
+type ProductAuditPush = (
+  action: AuditAction,
+  payloadSummary: string,
+  payload: Record<string, unknown>,
+) => void;
+
+function commitNewProducts(
+  get: () => PosState,
+  // Compatible with Zustand create() `set` (overloads make a precise type awkward here).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: (...args: any[]) => void,
+  drafts: Product[],
+  pushAudit: ProductAuditPush,
+): { ok: true; added: number } | { ok: false; errorKey: string; added: number } {
+  if (drafts.length === 0) return { ok: true, added: 0 };
+
+  const state = get();
+  const { snapshot, authMode } = getStoreSubscriptionContext();
+  const tier = resolveStorePlanTier(snapshot, authMode);
+  const accepted: Product[] = [];
+  for (let i = 0; i < drafts.length; i += 1) {
+    const cap = validateCanAddProduct(state.products.length + accepted.length, tier);
+    if (!cap.ok) {
+      if (accepted.length === 0) {
+        pushAudit("auth_forbidden", "Denied addProduct (plan product limit)", {
+          permission: "products.add",
+          action: "addProduct",
+          attemptedRole: state.sessionActor?.role ?? null,
+          errorKey: cap.errorKey,
+        });
+        return { ok: false, errorKey: cap.errorKey ?? "planProductLimit", added: 0 };
+      }
+      break;
+    }
+    accepted.push(drafts[i]!);
+  }
+  if (accepted.length === 0) return { ok: false, errorKey: "planProductLimit", added: 0 };
+
+  const shopKey = inventoryMovementNamespace();
+  const openingMovements = accepted
+    .map((p) => openingStockMovementFromProduct(shopKey, p, p.updatedAt))
+    .filter((m): m is NonNullable<typeof m> => Boolean(m));
+
+  set((s: PosState) => {
+    // Reverse so batch order matches N× prepend (last prepared appears first).
+    const products = [...accepted].reverse().concat(s.products);
+    const preferences = preferencesWithDefaultShelfLayout(s.preferences, products);
+    return {
+      products,
+      preferences,
+      ...(openingMovements.length ? movementMergePatch(s, openingMovements) : {}),
+    };
+  });
+
+  for (const row of accepted) {
+    void queueRemote("product", { id: row.id, isNew: true });
+    pushAudit("product_add", row.name, {
+      productId: row.id,
+      name: row.name,
+      category: row.category,
+      stock: row.stockOnHand,
+      priceUgx: row.sellingPricePerUnitUgx,
+      costUgx: row.costPricePerUnitUgx,
+    });
+  }
+
+  // Shrink native debounce kill-window after catalog creates.
+  queueMicrotask(() => flushPendingPersist());
+  return { ok: true, added: accepted.length };
 }
 
 function normalizeCustomer(c: Customer): Customer {
@@ -4876,126 +5094,72 @@ export const usePosStore = create<PosState>((set, get) => {
     const denied = denyUnlessEffectivePermission("products.add", "quickAddProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
-    const trimmed = input.name.trim();
-    if (!trimmed) return { ok: false, errorKey: "invalid" };
-    const hint = (input.inferName ?? trimmed).trim();
-    const prefs = get().preferences;
-    const guess = inferProductGuess(hint, prefs.businessType, prefs.pharmacyModeEnabled);
-    const sellingMode = input.sellingMode ?? guess.sellingMode;
-    const baseUnit = (input.baseUnit ?? guess.baseUnit).trim() || "ea";
-    const buyingUnit = input.buyingUnit !== undefined ? input.buyingUnit : guess.buyingUnit;
-    const conversionRate = input.conversionRate !== undefined ? input.conversionRate : guess.conversionRate;
-    const price = Math.max(0, Math.floor(input.priceUgx));
-    if (price <= 0) return { ok: false, errorKey: "invalid" };
-    const stock = Math.max(0, Number(input.stockQty) || 0);
-    const pharmacyRequiresBuy = pharmacyQuickAddRequiresBuyPrice(prefs.businessType, prefs.pharmacyModeEnabled);
-    if (pharmacyRequiresBuy && stock <= 0) return { ok: false, errorKey: "pharmacyOpeningStockRequired" };
-    const costExplicit =
-      input.costPricePerUnitUgx !== undefined && input.costPricePerUnitUgx !== null
-        ? normalizeUnitCostUgx(input.costPricePerUnitUgx)
-        : null;
-    if (pharmacyRequiresBuy) {
-      if (costExplicit === null || costExplicit <= 0) return { ok: false, errorKey: "pharmacyBuyPriceRequired" };
-    }
-    const cost =
-      costExplicit !== null ? costExplicit : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
-    const minAlert =
-      input.minimumStockAlert !== undefined
-        ? Math.max(0, Math.floor(input.minimumStockAlert))
-        : sellingMode === "portion"
-          ? 1
-          : sellingMode === "weighted"
-            ? 3
-            : 5;
-    const presetMoney = input.quickPresetsMoneyUgx?.filter((x) => x > 0);
-    const presetQty = input.quickPresetsQty?.filter((x) => x > 0);
-    const sameShape =
-      sellingMode === guess.sellingMode &&
-      baseUnit === guess.baseUnit &&
-      !presetMoney?.length &&
-      !presetQty?.length;
+    const built = buildQuickAddProductDraft(input, get().preferences, get().sessionActor);
+    if (!built.ok) return { ok: false, errorKey: built.errorKey };
 
-    let pharmacyPackaging = input.pharmacyPackaging ?? null;
-    let pharmacyMaster = input.pharmacyMaster ?? null;
-    const sku = input.primaryBarcode?.trim() || `SKU-${Date.now()}`;
-    const now = new Date().toISOString();
-    const actor = get().sessionActor;
-
-    if (input.openingBatch && stock > 0) {
-      const batch = createBatchOnReceive({
-        ...input.openingBatch,
-        quantityBase: stock,
-        unitCostUgx: costExplicit ?? cost,
-        sellingPriceUgx: price,
-        at: now,
-        actorUserId: actor?.userId ?? null,
-        actorName: actor?.displayName ?? null,
-      });
-      const basePkg = pharmacyPackaging ?? {
-        enabled: false,
-        baseUnit,
-        sell: { tablet: true, strip: false, box: false },
-        batches: [],
-      };
-      pharmacyPackaging = { ...basePkg, batches: [batch] };
-      pharmacyMaster = { batchTracked: true, expiryTracked: true, ...pharmacyMaster };
-    }
-
-    get().addProduct({
-      name: trimmed,
-      sellingMode,
-      baseUnit,
-      buyingUnit,
-      conversionRate,
-      sellingPricePerUnitUgx: price,
-      costPricePerUnitUgx: cost,
-      buyingPackCostUgx:
-        input.buyingPackCostUgx != null && input.buyingPackCostUgx > 0
-          ? Math.floor(input.buyingPackCostUgx)
-          : null,
-      stockOnHand: stock,
-      minimumStockAlert: minAlert,
-      category: input.category,
-      sku,
-      medicineStrength: normalizeMedicineStrength(input.medicineStrength ?? null),
-      medicineForm: normalizeMedicineForm(input.medicineForm ?? null),
-      expiryDate: normalizeExpiryDate(input.expiryDate ?? input.openingBatch?.expiryDate ?? null),
-      pharmacyPackaging,
-      pharmacyMaster,
-      quickPresetsMoneyUgx: presetMoney?.length ? presetMoney : sameShape ? guess.quickPresetsMoneyUgx : undefined,
-      quickPresetsQty: presetQty?.length ? presetQty : sameShape ? guess.quickPresetsQty : undefined,
-    });
+    const committed = commitNewProducts(get, set, [built.draft], pushAudit);
+    if (!committed.ok) return { ok: false, errorKey: committed.errorKey };
     return { ok: true };
   },
 
   bulkQuickAddProducts: (rows) => {
-    let added = 0;
-    let skipped = 0;
+    const denied = denyUnlessEffectivePermission("products.add", "quickAddProduct");
+    if (denied) return { added: 0, skipped: rows.length };
+
+    const prefs = get().preferences;
+    const actor = get().sessionActor;
     const cat = rows[0]?.category ?? "General";
+    const drafts: Product[] = [];
+    let skipped = 0;
+
     for (const row of rows) {
-      const r = get().quickAddProduct({
-        name: row.name,
-        priceUgx: row.priceUgx,
-        stockQty: row.stockQty,
-        category: row.category || cat,
-        inferName: row.inferName,
-        sellingMode: row.sellingMode,
-        baseUnit: row.baseUnit,
-        medicineStrength: row.medicineStrength ?? null,
-        medicineForm: row.medicineForm ?? null,
-      });
-      if (r.ok) added += 1;
-      else skipped += 1;
+      const built = buildQuickAddProductDraft(
+        {
+          name: row.name,
+          priceUgx: row.priceUgx,
+          stockQty: row.stockQty,
+          category: row.category || cat,
+          inferName: row.inferName,
+          sellingMode: row.sellingMode,
+          baseUnit: row.baseUnit,
+          buyingUnit: row.buyingUnit,
+          conversionRate: row.conversionRate,
+          costPricePerUnitUgx: row.costPricePerUnitUgx,
+          buyingPackCostUgx: row.buyingPackCostUgx,
+          medicineStrength: row.medicineStrength ?? null,
+          medicineForm: row.medicineForm ?? null,
+          expiryDate: row.expiryDate ?? null,
+          minimumStockAlert: row.minimumStockAlert,
+          primaryBarcode: row.primaryBarcode ?? null,
+          pharmacyPackaging: row.pharmacyPackaging ?? null,
+          pharmacyMaster: row.pharmacyMaster ?? null,
+          quickPresetsMoneyUgx: row.quickPresetsMoneyUgx,
+          quickPresetsQty: row.quickPresetsQty,
+        },
+        prefs,
+        actor,
+      );
+      if (!built.ok) {
+        skipped += 1;
+        continue;
+      }
+      drafts.push(built.draft);
     }
+
+    if (drafts.length === 0) return { added: 0, skipped };
+
+    const committed = commitNewProducts(get, set, drafts, pushAudit);
+    const added = committed.added;
+    const skippedTotal = skipped + (drafts.length - added);
     if (added > 0) {
       pushAudit("product_add", `Bulk added ${added} products`, {
         bulk: true,
         added,
-        skipped,
+        skipped: skippedTotal,
         category: cat,
       });
     }
-    return { added, skipped };
+    return { added, skipped: skippedTotal };
   },
 
   duplicateProduct: (productId, nameSuffix) => {
@@ -5057,20 +5221,6 @@ export const usePosStore = create<PosState>((set, get) => {
     const denied = denyUnlessEffectivePermission("products.add", "addProduct");
     if (denied) return;
 
-    const state = get();
-    const { snapshot, authMode } = getStoreSubscriptionContext();
-    const tier = resolveStorePlanTier(snapshot, authMode);
-    const cap = validateCanAddProduct(state.products.length, tier);
-    if (!cap.ok) {
-      pushAudit("auth_forbidden", "Denied addProduct (plan product limit)", {
-        permission: "products.add",
-        action: "addProduct",
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: cap.errorKey,
-      });
-      return;
-    }
-
     const now = new Date().toISOString();
     const qp = defaultQuickPresetsForProduct(p);
     const row: Product = {
@@ -5081,27 +5231,7 @@ export const usePosStore = create<PosState>((set, get) => {
       quickPresetsMoneyUgx: p.quickPresetsMoneyUgx ?? qp.quickPresetsMoneyUgx,
       quickPresetsQty: p.quickPresetsQty ?? qp.quickPresetsQty,
     };
-    const normalized = normalizeProduct(row);
-    const shopKey = inventoryMovementNamespace();
-    const openingMovement = openingStockMovementFromProduct(shopKey, normalized, now);
-    set((s) => {
-      const products = [normalized, ...s.products];
-      const preferences = preferencesWithDefaultShelfLayout(s.preferences, products);
-      return {
-        products,
-        preferences,
-        ...(openingMovement ? movementMergePatch(s, [openingMovement]) : {}),
-      };
-    });
-    void queueRemote("product", { id: row.id, isNew: true });
-    pushAudit("product_add", row.name, {
-      productId: row.id,
-      name: row.name,
-      category: row.category,
-      stock: row.stockOnHand,
-      priceUgx: row.sellingPricePerUnitUgx,
-      costUgx: row.costPricePerUnitUgx,
-    });
+    commitNewProducts(get, set, [normalizeProduct(row)], pushAudit);
   },
 
   updateProductQuickPresets: (productId, presets) => {

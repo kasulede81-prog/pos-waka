@@ -16,9 +16,9 @@ export function PosQuickProductChips({ lang, products, onTap, className }: Props
   if (products.length === 0) return null;
 
   return (
-    <section className={clsx("space-y-1", className)}>
-      <p className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-        {t(lang, "posFrequentToday")}
+    <section className={clsx("space-y-1", className)} aria-label={t(lang, "posSellLandingPopular")}>
+      <p className="pos-ds-shelf-heading px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+        {t(lang, "posSellLandingPopular")}
       </p>
       <div className={clsx("flex gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]", POS_HORIZONTAL_CHIP_TOUCH_CLASS)}>
         {products.map((p) => (
@@ -26,7 +26,8 @@ export function PosQuickProductChips({ lang, products, onTap, className }: Props
             key={p.id}
             type="button"
             onClick={() => onTap(p)}
-            className="shrink-0 rounded-full border border-border bg-card px-3 py-2 text-xs font-bold text-foreground shadow-sm transition-all active:scale-[0.97] active:border-waka-300 active:bg-waka-50 motion-reduce:active:scale-100"
+            aria-label={`${t(lang, "addToSale")}: ${p.name}`}
+            className="pos-ds-quick-chip pos-ds-category-chip shrink-0 rounded-full border border-border bg-card px-3 py-2.5 text-xs font-bold text-foreground shadow-sm transition-all active:scale-[0.97] active:border-waka-300 active:bg-waka-50 motion-reduce:active:scale-100"
           >
             {p.name}
           </button>

@@ -2,6 +2,7 @@ import type { Product, ShopPreferences, StockMovement } from "../../../types";
 import {
   buildProductSellSearchIndex,
   productMatchesIndexedSellSearch,
+  reconcileProductSellSearchIndex,
   type ProductSellSearchIndex,
 } from "../../../lib/posProductSearch";
 import { productMatchesCategoryFilter } from "../../../lib/productCategories";
@@ -37,6 +38,24 @@ function normalizeSpacing(s: string): string {
   return s.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
+function inventoryHayForProduct(
+  entryHay: string,
+  entryHayLoose: string,
+  product: Product,
+  preferences: ShopPreferences,
+  lastSupplier: ReturnType<typeof buildLastSupplierByProductId>,
+): string {
+  const parts = [entryHay, entryHayLoose];
+  const brand = productBrandLabel(product);
+  if (brand) parts.push(normalizeSpacing(brand));
+  const supplier = lastSupplier.get(product.id);
+  if (supplier?.supplierName) parts.push(normalizeSpacing(supplier.supplierName));
+  for (const tag of productTagsForId(preferences, product.id)) {
+    parts.push(normalizeSpacing(tag.replace("supplier:", "supplier ")));
+  }
+  return parts.join(" · ");
+}
+
 /** Build search index with inventory enrichment — still uses certified POS index core. */
 export function buildInventorySearchIndex(
   products: readonly Product[],
@@ -48,16 +67,54 @@ export function buildInventorySearchIndex(
   const inventoryHayById = new Map<string, string>();
 
   for (const entry of base.entries) {
-    const p = entry.product;
-    const parts = [entry.hay, entry.hayLoose];
-    const brand = productBrandLabel(p);
-    if (brand) parts.push(normalizeSpacing(brand));
-    const supplier = lastSupplier.get(p.id);
-    if (supplier?.supplierName) parts.push(normalizeSpacing(supplier.supplierName));
-    for (const tag of productTagsForId(preferences, p.id)) {
-      parts.push(normalizeSpacing(tag.replace("supplier:", "supplier ")));
-    }
-    inventoryHayById.set(p.id, parts.join(" · "));
+    inventoryHayById.set(
+      entry.product.id,
+      inventoryHayForProduct(entry.hay, entry.hayLoose, entry.product, preferences, lastSupplier),
+    );
+  }
+
+  return { ...base, inventoryHayById };
+}
+
+/**
+ * Incremental inventory index update (Phase 36.1).
+ * Full rebuild when preferences/movements change; otherwise upserts only touched products.
+ */
+export function reconcileInventorySearchIndex(
+  prev: InventorySearchIndex | null | undefined,
+  prevProducts: readonly Product[] | null | undefined,
+  nextProducts: readonly Product[],
+  preferences: ShopPreferences,
+  movements: readonly StockMovement[] = [],
+  prevPreferences?: ShopPreferences,
+  prevMovements?: readonly StockMovement[],
+): InventorySearchIndex {
+  if (
+    !prev ||
+    !prevProducts ||
+    preferences !== prevPreferences ||
+    movements !== prevMovements
+  ) {
+    return buildInventorySearchIndex(nextProducts, preferences, movements);
+  }
+  if (prevProducts === nextProducts) return prev;
+
+  const base = reconcileProductSellSearchIndex(prev, prevProducts, nextProducts);
+  const lastSupplier = buildLastSupplierByProductId(movements);
+  const inventoryHayById = new Map(prev.inventoryHayById);
+  const prevById = new Map(prevProducts.map((p) => [p.id, p]));
+
+  for (const p of prevProducts) {
+    if (!base.byId.has(p.id)) inventoryHayById.delete(p.id);
+  }
+  for (const p of nextProducts) {
+    if (prevById.get(p.id) === p && inventoryHayById.has(p.id)) continue;
+    const entry = base.byId.get(p.id);
+    if (!entry) continue;
+    inventoryHayById.set(
+      p.id,
+      inventoryHayForProduct(entry.hay, entry.hayLoose, p, preferences, lastSupplier),
+    );
   }
 
   return { ...base, inventoryHayById };

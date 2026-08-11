@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   catalogColumnDeltaForScale,
   clampDisplayScaleLevel,
+  dampenShelfScaleForDisplay,
   displayScaleCssVars,
   DISPLAY_SCALE_LEVELS,
   DISPLAY_SCALE_META,
+  stepCashierDensityLevel,
   stepDisplayScaleLevel,
+  toCashierDensityLevel,
 } from "./scaleTokens";
 
 describe("displayScaleCssVars", () => {
@@ -31,6 +34,25 @@ describe("stepDisplayScaleLevel", () => {
     expect(stepDisplayScaleLevel("large", 1)).toBe("extra_large");
     expect(stepDisplayScaleLevel("compact", -1)).toBe("compact");
     expect(stepDisplayScaleLevel("extra_large", 1)).toBe("extra_large");
+  });
+});
+
+describe("cashier density modes (M1.1)", () => {
+  it("maps extra_large to Comfortable (large)", () => {
+    expect(toCashierDensityLevel("extra_large")).toBe("large");
+    expect(toCashierDensityLevel("normal")).toBe("normal");
+  });
+
+  it("steps Compact ↔ Balanced ↔ Comfortable without percentages", () => {
+    expect(stepCashierDensityLevel("compact", 1)).toBe("normal");
+    expect(stepCashierDensityLevel("normal", 1)).toBe("large");
+    expect(stepCashierDensityLevel("large", 1)).toBe("large");
+    expect(stepCashierDensityLevel("extra_large", -1)).toBe("normal");
+  });
+
+  it("dampens extreme shelf scales under display density", () => {
+    expect(dampenShelfScaleForDisplay(100, "large")).toBeLessThanOrEqual(52);
+    expect(dampenShelfScaleForDisplay(25, "compact")).toBeGreaterThanOrEqual(28);
   });
 });
 

@@ -139,6 +139,12 @@ import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
 import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
 import { PosShelfDrillDownHeader } from "../components/pos/PosShelfDrillDownHeader";
+import { PosMobileShelfContinue } from "../components/pos/PosMobileShelfContinue";
+import {
+  isMobileShortShelf,
+  MOBILE_SHORT_SHELF_OTHER_SHELVES_MAX,
+  MOBILE_SHORT_SHELF_POPULAR_MAX,
+} from "../lib/posMobileShortShelf";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -677,6 +683,18 @@ export function PosPage({ lang }: { lang: Language }) {
     () => frequentToday.filter(({ product }) => sellRowMatchesSearch(product)),
     [frequentToday, sellRowMatchesSearch],
   );
+
+  /** M1.3 — popular today outside the open shelf (real sold-today data only). */
+  const popularOutsideOpenShelf = useMemo(() => {
+    if (!mobileSellFocus || sellCategoryKey === CATEGORY_FILTER_ALL) return [];
+    return products
+      .filter((p) => !productMatchesCategoryFilter(p, sellCategoryKey))
+      .map((p) => ({ product: p, qty: soldTodayByProduct.get(p.id) ?? 0 }))
+      .filter((r) => r.qty > 0)
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, MOBILE_SHORT_SHELF_POPULAR_MAX)
+      .map((r) => r.product);
+  }, [mobileSellFocus, products, soldTodayByProduct, sellCategoryKey]);
 
   const favoriteProductsVisible = useMemo(
     () => favoriteProducts.filter((p) => sellRowMatchesSearch(p)),
@@ -1978,16 +1996,43 @@ export function PosPage({ lang }: { lang: Language }) {
         catalogShelfDrillDown ? (
           <section
             ref={catalogRef}
-            className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
+            className={clsx(
+              "space-y-2",
+              catalogSellMode &&
+                (mobileSellFocus
+                  ? "pos-catalog-scroll-pane pos-catalog-scroll-pane--natural overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+                  : catalogScrollPaneClass),
+            )}
             data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+            data-pos-short-shelf={
+              mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? "1" : undefined
+            }
           >
             <PosShelfDrillDownHeader
               lang={lang}
               shelfLabel={selectedShelfLabel}
               productCount={filteredProducts.length}
               onBack={browse.backToShelves}
+              className={mobileSellFocus ? "rounded-xl px-2 py-1.5 shadow-none" : undefined}
             />
             {renderCatalogProductGrid()}
+            {mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? (
+              <PosMobileShelfContinue
+                lang={lang}
+                otherShelves={catalogShelfCards
+                  .filter((s) => s.key !== sellCategoryKey && s.count > 0)
+                  .slice(0, MOBILE_SHORT_SHELF_OTHER_SHELVES_MAX)}
+                onShelfTap={handleCatalogShelfTap}
+                popularProducts={popularOutsideOpenShelf}
+                onPickProduct={openProduct}
+                onBackToShelves={browse.backToShelves}
+                stockLabel={t(lang, "stockLabel")}
+                addLabel={t(lang, "addToSale")}
+                lockedBadge={t(lang, "productLockedBadge")}
+                lockedIds={lockedIds}
+                cartQtyByProductId={cartQtyByProductId}
+              />
+            ) : null}
           </section>
         ) : (
           <div
@@ -2000,8 +2045,25 @@ export function PosPage({ lang }: { lang: Language }) {
                 lang={lang}
                 products={quickProductChips}
                 onTap={quickTapAddProduct}
-                className="mb-2 shrink-0"
+                className="mb-3 shrink-0"
               />
+            ) : null}
+            {/* M1.1 — mobile landing: popular products before shelves so Sell never feels empty. */}
+            {mobileSellFocus && frequentTodayVisible.length > 0 ? (
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                {frequentTodayVisible.slice(0, 4).map(({ product }) => (
+                  <PosSellProductCard
+                    key={`landing-${product.id}`}
+                    product={product}
+                    stockLabel={t(lang, "stockLabel")}
+                    addLabel={t(lang, "addToSale")}
+                    locked={isProductPlanLocked(product.id, lockedIds)}
+                    lockedBadge={t(lang, "productLockedBadge")}
+                    cartQty={cartQtyByProductId.get(product.id) ?? 0}
+                    onPick={openProduct}
+                  />
+                ))}
+              </div>
             ) : null}
             <PosSellCatalogShelfSection
               lang={lang}
@@ -2179,9 +2241,15 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {mountMobileCheckoutOverlay ? (
         <PosScreenPortal>
+          {/*
+            M1.1-R5 — full-screen mobile checkout workspace (no catalog peek).
+            Owns 100dvh; single bottom inset owner (safe-area / keyboard).
+            Cart scrolls; totals + payment + keypad + Complete Sale stay pinned.
+          */}
           <div
-            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col pt-[env(safe-area-inset-top,0px)] md:hidden"
+            className="pos-ds-cart-sheet pos-mobile-checkout-workspace fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-card md:hidden"
             style={{
+              paddingTop: "env(safe-area-inset-top, 0px)",
               paddingBottom: checkoutBottomPad,
             }}
             role="dialog"
@@ -2190,8 +2258,13 @@ export function PosPage({ lang }: { lang: Language }) {
           >
             <PosCheckoutPanel
               variant="overlay"
+              sheetInsetOwned
               {...checkoutPanelCommon}
               onMinimize={() => setSaleCheckoutMinimized(true)}
+              onAddItems={() => {
+                setSaleCheckoutMinimized(true);
+                window.requestAnimationFrame(() => searchInputRef.current?.focus());
+              }}
             />
           </div>
         </PosScreenPortal>

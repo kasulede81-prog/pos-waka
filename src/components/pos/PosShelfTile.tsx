@@ -18,6 +18,8 @@ import {
   POS_ARRANGE_TOUCH_CLASS,
   POS_CATALOG_TILE_TOUCH_CLASS,
 } from "../../lib/posTouchInteraction";
+import { useDisplayScale } from "../../context/DisplayScaleProvider";
+import { dampenShelfScaleForDisplay } from "../../lib/displayScale/scaleTokens";
 
 /**
  * Phase 32.4.2 — two balanced lines; wrap at spaces first;
@@ -141,11 +143,19 @@ export function PosShelfTile({
   onClick,
   onDragPointerDown,
 }: Props) {
+  const { level: displayLevel } = useDisplayScale();
   const isArrange = mode === "arrange";
   const badge = badgeLabel(lang, shelf);
   const showEmptyWarning = emptyShelf && !isArrange && mode === "sell";
   const effectiveTone: ShelfColorTone = selected || shelf.featured ? "bold" : colorTone;
-  const typo = shelfTypographyFromScale(sellFocus && !isArrange && !sellCatalogGrid ? Math.max(shelf.scale, 58) : shelf.scale);
+  // M1.1 — Display Scale owns density; dampen Shelf Scale on Sell so stacks stay usable.
+  const sellShelfScale =
+    mode === "sell" && !isArrange
+      ? dampenShelfScaleForDisplay(shelf.scale, displayLevel)
+      : shelf.scale;
+  const typo = shelfTypographyFromScale(
+    sellFocus && !isArrange && !sellCatalogGrid ? Math.max(sellShelfScale, 48) : sellShelfScale,
+  );
   const customStyle = sellCatalogGrid ? undefined : shelfTileSurfaceStyle(shelf, effectiveTone);
   const isBold =
     !sellCatalogGrid &&

@@ -57,6 +57,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const { scene, patchScene } = useBusinessBuilder();
   const preferences = usePosStore((s) => s.preferences);
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
+  const bulkQuickAddProducts = usePosStore((s) => s.bulkQuickAddProducts);
   const { authMode } = useSubscription();
   const {
     settings: bizTypeSettings,
@@ -333,8 +334,8 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const starterProducts = useMemo(() => starterPackForBusinessType(businessType), [businessType]);
 
   const addAiStarterProducts = (rows: AiStarterProductRow[]) => {
-    for (const row of rows) {
-      quickAddProduct({
+    const { added } = bulkQuickAddProducts(
+      rows.map((row) => ({
         name: row.name,
         inferName: row.name,
         priceUgx: Math.max(0, Math.floor(row.suggestedPriceUgx)),
@@ -342,10 +343,10 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
         category: row.category || "General",
         sellingMode: row.sellingMode,
         baseUnit: row.unit,
-      });
-    }
-    setProductTally((n) => n + rows.length);
-    patchScene({ hasProducts: true, productCount: productTally + rows.length, hasShelves: true });
+      })),
+    );
+    setProductTally((n) => n + added);
+    patchScene({ hasProducts: true, productCount: productTally + added, hasShelves: true });
   };
 
   const addStarterProduct = (line: StarterLine) => {

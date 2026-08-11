@@ -98,6 +98,8 @@ export function shouldDeferSignedOut(opts: {
   explicitSignOut: boolean;
 }): boolean {
   if (opts.explicitSignOut) return false;
+  // Dynamic import avoided — callers also pass explicitSignOut from useAuth.
+  // enterpriseLogout clears tokens before SIGNED_OUT; if any remain, still defer only when not explicit.
   return isSessionLocallyRestorable(opts.cachedSession);
 }
 

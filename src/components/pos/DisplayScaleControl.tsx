@@ -1,11 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 import clsx from "clsx";
-import { Minus, Plus, SlidersHorizontal, X } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
-  DISPLAY_SCALE_LEVELS,
+  CASHIER_DENSITY_LEVELS,
   DISPLAY_SCALE_META,
+  cashierDensityLabelKey,
+  toCashierDensityLevel,
+  type DisplayScaleLevel,
 } from "../../lib/displayScale/scaleTokens";
 import { useDisplayScale } from "../../context/DisplayScaleProvider";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
@@ -20,18 +23,19 @@ type Props = {
   compact?: boolean;
 };
 
-/** Sell screen — adjust POS display density (not browser zoom). Lives in the POS header row. */
+/** Sell screen — cashier density selector (Comfortable / Balanced / Compact). Not browser zoom. */
 export function DisplayScaleControl({
   lang,
   variant = "header",
   inverted = false,
   compact = false,
 }: Props) {
-  const { level, percent, featureEnabled, setLevel, stepUp, stepDown, reset } = useDisplayScale();
+  const { level, featureEnabled, setLevel, stepUp, stepDown, reset } = useDisplayScale();
   const [sheetOpen, setSheetOpen] = useState(false);
   const lastTapAtRef = useRef(0);
+  const cashierLevel = toCashierDensityLevel(level);
 
-  const onPercentTap = useCallback(() => {
+  const onModeTap = useCallback(() => {
     const now = Date.now();
     if (now - lastTapAtRef.current < 350) {
       reset();
@@ -45,8 +49,9 @@ export function DisplayScaleControl({
   if (!featureEnabled || variant !== "header") return null;
 
   const btnClass = clsx(
-    "flex items-center justify-center rounded-lg transition disabled:opacity-40",
-    compact ? "h-8 w-8" : "h-9 w-9",
+    "pos-ds-density-btn flex items-center justify-center rounded-xl transition disabled:opacity-40",
+    "min-h-[48px] min-w-[48px]",
+    compact && "max-md:min-h-[44px] max-md:min-w-[44px]",
     inverted ? "text-white active:bg-white/15" : "text-muted-foreground active:bg-muted",
   );
 
@@ -54,11 +59,8 @@ export function DisplayScaleControl({
     <>
       <div
         className={clsx(
-          "flex shrink-0 items-center gap-0.5 rounded-xl border p-0.5",
-          compact ? "gap-0" : "gap-0.5",
-          inverted
-            ? "border-white/25 bg-white/10"
-            : "border-border/90 bg-card shadow-sm",
+          "pos-ds-density-control flex shrink-0 items-center gap-0.5 rounded-xl border p-0.5",
+          inverted ? "border-white/25 bg-white/10" : "border-border/90 bg-card shadow-sm",
         )}
         role="group"
         aria-label={t(lang, "displayScaleControlLabel")}
@@ -66,35 +68,35 @@ export function DisplayScaleControl({
         <button
           type="button"
           onClick={stepDown}
-          disabled={level === DISPLAY_SCALE_LEVELS[0]}
+          disabled={cashierLevel === "compact"}
           className={btnClass}
           aria-label={t(lang, "displayScaleDecrease")}
         >
-          <Minus className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden />
+          <Minus className="pos-ds-icon-sm h-4 w-4" aria-hidden />
         </button>
         <button
           type="button"
-          onClick={onPercentTap}
+          onClick={onModeTap}
           className={clsx(
-            "rounded-lg px-1.5 text-center font-black tabular-nums",
-            compact ? "min-h-[32px] min-w-[2.75rem] text-[10px]" : "min-h-[36px] min-w-[4.5rem] text-xs",
+            "pos-ds-density-label rounded-xl px-2 text-center font-black",
+            "min-h-[48px] min-w-[5.5rem] text-xs",
+            compact && "max-md:min-h-[44px] max-md:min-w-[4.75rem] max-md:text-[11px]",
             inverted ? "text-white active:bg-white/10" : "text-foreground active:bg-muted",
           )}
           title={t(lang, "displayScaleDoubleTapHint")}
+          aria-haspopup="dialog"
+          aria-expanded={sheetOpen}
         >
-          <span className={clsx(compact ? "hidden min-[400px]:inline" : "hidden sm:inline")}>
-            {t(lang, "displayScaleShort")}{" "}
-          </span>
-          <span className={inverted ? "text-waka-100" : "text-waka-700"}>{percent}%</span>
+          {t(lang, cashierDensityLabelKey(level))}
         </button>
         <button
           type="button"
           onClick={stepUp}
-          disabled={level === DISPLAY_SCALE_LEVELS[DISPLAY_SCALE_LEVELS.length - 1]}
+          disabled={cashierLevel === "large"}
           className={btnClass}
           aria-label={t(lang, "displayScaleIncrease")}
         >
-          <Plus className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden />
+          <Plus className="pos-ds-icon-sm h-4 w-4" aria-hidden />
         </button>
       </div>
 
@@ -104,20 +106,20 @@ export function DisplayScaleControl({
           onClick={() => setSheetOpen(false)}
         >
           <div
-            className="max-h-[min(85dvh,28rem)] w-full overflow-y-auto rounded-t-3xl bg-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl transition-transform duration-200"
+            className="pos-ds-dialog max-h-[min(85dvh,28rem)] w-full overflow-y-auto rounded-t-3xl bg-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal
             aria-labelledby="display-scale-sheet-title"
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 id="display-scale-sheet-title" className="text-lg font-black text-foreground">
+              <h2 id="display-scale-sheet-title" className="pos-ds-dialog-title text-lg font-black text-foreground">
                 {t(lang, "displayScaleSheetTitle")}
               </h2>
               <button
                 type="button"
                 onClick={() => setSheetOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                className="pos-ds-dialog-btn flex min-h-[48px] min-w-[48px] items-center justify-center rounded-full bg-muted text-muted-foreground"
                 aria-label={t(lang, "cancel")}
               >
                 <X className="h-4 w-4" />
@@ -125,23 +127,24 @@ export function DisplayScaleControl({
             </div>
             <p className="mb-3 text-xs font-semibold text-muted-foreground">{t(lang, "displayScaleSheetSub")}</p>
             <ul className="space-y-2">
-              {DISPLAY_SCALE_LEVELS.map((opt) => {
+              {CASHIER_DENSITY_LEVELS.map((opt) => {
                 const meta = DISPLAY_SCALE_META[opt];
-                const selected = level === opt;
+                const selected = cashierLevel === opt;
                 return (
                   <li key={opt}>
                     <button
                       type="button"
                       onClick={() => {
-                        setLevel(opt);
+                        setLevel(opt as DisplayScaleLevel);
                         setSheetOpen(false);
                       }}
                       className={clsx(
-                        "flex w-full min-h-[48px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition duration-200",
+                        "pos-ds-dialog-btn flex w-full min-h-[52px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition duration-200",
                         selected
                           ? "border-waka-500 bg-waka-50 ring-1 ring-waka-200"
                           : "border-border bg-card active:bg-muted",
                       )}
+                      aria-pressed={selected}
                     >
                       <span
                         className={clsx(
@@ -153,9 +156,11 @@ export function DisplayScaleControl({
                         {selected ? <span className="h-2.5 w-2.5 rounded-full bg-waka-600" /> : null}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-black text-foreground">{t(lang, meta.labelKey)}</span>
+                        <span className="block text-sm font-black text-foreground">
+                          {t(lang, meta.cashierLabelKey)}
+                        </span>
                         <span className="text-xs font-semibold text-muted-foreground">
-                          {t(lang, "displayScalePercentLabel").replace("{{percent}}", String(meta.percent))}
+                          {t(lang, `${meta.cashierLabelKey}Hint`)}
                         </span>
                       </span>
                     </button>
@@ -163,8 +168,7 @@ export function DisplayScaleControl({
                 );
               })}
             </ul>
-            <p className="mt-4 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
-              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <p className="mt-4 text-[11px] font-semibold text-muted-foreground">
               {t(lang, "displayScaleDoubleTapHint")}
             </p>
           </div>
