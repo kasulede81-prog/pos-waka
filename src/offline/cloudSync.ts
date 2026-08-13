@@ -19,6 +19,11 @@ import type {
   SupplierPayment,
 } from "../types";
 import { isPendingSale, saleStatusOf } from "../lib/saleStatus";
+import {
+  interpretCancelPendingSaleResult,
+  saleUploadRpcForLocalSale,
+  settleCancelPendingSaleQueueOps,
+} from "../lib/cancelPendingSaleAck";
 import { hydrateSaleFinancialsFromCloud } from "../lib/saleLineFinancialHydration";
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { decodeSaleLineFromCloud, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
@@ -889,6 +894,9 @@ export async function pushPendingSaleToCloud(
     markSaleSyncState(sale.id, false, "invalid_sale_id");
     return false;
   }
+  if (saleStatusOf(sale) === "cancelled") {
+    return pushCancelPendingSaleToCloud(sale.id, ctx);
+  }
   if (!isPendingSale(sale)) {
     return pushSaleToCloud(sale, ctx);
   }
@@ -959,16 +967,20 @@ export async function pushCancelPendingSaleToCloud(saleId: string, ctx: ShopCtx)
     p_shop_id: ctx.shopId,
     p_sale_id: saleId,
   });
-  if (error) {
-    markSaleSyncState(saleId, false, error.code ?? "cancel_pending_failed");
-    return false;
-  }
-  const result = data as { ok?: boolean; error?: string } | null;
-  if (!result?.ok) {
-    markSaleSyncState(saleId, false, result?.error ?? "cancel_pending_rejected");
+  const interpreted = interpretCancelPendingSaleResult(
+    error,
+    data as { ok?: boolean; error?: string; already_cancelled?: boolean } | null,
+  );
+  if (!interpreted.ok) {
+    markSaleSyncState(saleId, false, interpreted.error);
     return false;
   }
   markSaleSyncState(saleId, true, null);
+  try {
+    await settleCancelPendingSaleQueueOps(saleId);
+  } catch {
+    // Cloud already ACKed; a later queue drain retries cancel, which is now idempotent.
+  }
   return true;
 }
 
@@ -978,9 +990,10 @@ export async function pushSaleRowToCloud(
   ctx: ShopCtx,
   opts?: { baseUpdatedAt?: string | null; deletedLineIds?: string[] },
 ): Promise<boolean> {
-  if (isPendingSale(sale)) return pushPendingSaleToCloud(sale, ctx, opts);
-  if (saleStatusOf(sale) === "cancelled") return pushCancelPendingSaleToCloud(sale.id, ctx);
-  if (sale.saleVoidedAt && sale.pendingSync) {
+  const rpc = saleUploadRpcForLocalSale(sale);
+  if (rpc === "shop_push_pending_sale") return pushPendingSaleToCloud(sale, ctx, opts);
+  if (rpc === "shop_cancel_pending_sale") return pushCancelPendingSaleToCloud(sale.id, ctx);
+  if (rpc === "shop_patch_hospitality_sale_metadata") {
     return pushHospitalitySaleMetadataPatch(sale, ctx);
   }
   return pushSaleToCloud(sale, ctx);

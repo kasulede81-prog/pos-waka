@@ -71,7 +71,9 @@
     "src/lib/localQueuePreservation.test.ts",
     "src/lib/bootstrapDebtRecovery.test.ts",
     "src/lib/debtSyncIntegrity.test.ts",
-    "src/offline/cashExpenseEntityPersist.test.ts"
+    "src/offline/cashExpenseEntityPersist.test.ts",
+    "src/lib/cancelPendingSaleAck.test.ts",
+    "src/offline/cancelPendingSaleUpload.test.ts"
   ],
   "printing": [
     "src/lib/printQueue.test.ts",
