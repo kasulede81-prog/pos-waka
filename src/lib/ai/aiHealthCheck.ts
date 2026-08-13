@@ -21,6 +21,7 @@ const AI_EDGE_FUNCTIONS = [
   { id: "edge:ai-suggest-product", slug: "ai-suggest-product", label: "ai-suggest-product" },
   { id: "edge:ai-business-setup", slug: "ai-business-setup", label: "ai-business-setup" },
   { id: "edge:ai-bulk-inventory", slug: "ai-bulk-inventory", label: "ai-bulk-inventory" },
+  { id: "edge:ai-ask-waka", slug: "ai-ask-waka", label: "ai-ask-waka" },
   { id: "edge:ai-health", slug: "ai-health", label: "ai-health" },
 ] as const;
 

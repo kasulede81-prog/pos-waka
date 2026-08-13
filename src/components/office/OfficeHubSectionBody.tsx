@@ -20,6 +20,7 @@ import {
   Settings,
   UserCog,
   Receipt,
+  Sparkles,
 } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -31,6 +32,7 @@ import { countSalesWithSyncErrors } from "../../offline/cloudSync";
 import { useOfficeHubAccess } from "../../hooks/useOfficeHubAccess";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
+import { useAiFeatureGate } from "../../hooks/useAiFeatureGate";
 
 import { usePosStore } from "../../store/usePosStore";
 import { dateKeyKampala } from "../../lib/datesUg";
@@ -54,6 +56,7 @@ type Props = {
 export function OfficeHubSectionBody({ lang, section }: Props) {
   const access = useOfficeHubAccess();
   const actor = useSessionActor();
+  const askWakaGate = useAiFeatureGate("ask_waka");
   const { snapshot, authMode } = useSubscription();
   const preferences = usePosStore((s) => s.preferences);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
@@ -209,6 +212,15 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             title={t(lang, "receipts")}
             subtitle={t(lang, "officeCardReceiptsSub")}
             Icon={Receipt}
+          />
+        ) : null}
+        {askWakaGate.enabled && access.can("reports.view") ? (
+          <OfficeNavCard
+            to="/office/ask-waka"
+            title={t(lang, "officeCardAskWaka")}
+            subtitle={t(lang, "officeCardAskWakaSub")}
+            Icon={Sparkles}
+            highlight
           />
         ) : null}
         {access.can("reports.view") ? (

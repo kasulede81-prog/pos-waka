@@ -21,6 +21,7 @@ const FEATURE_FIELDS: Array<{ key: keyof ShopAiSettings; label: string }> = [
   { key: "inventory_assistant", label: "Inventory Assistant" },
   { key: "marketing_assistant", label: "Marketing Assistant" },
   { key: "marketplace_assistant", label: "Marketplace Assistant" },
+  { key: "ask_waka", label: "Ask WAKA" },
 ];
 
 function formatActivity(at: string | null): string {
@@ -87,6 +88,7 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
       inventory_assistant: draft.inventory_assistant,
       marketing_assistant: draft.marketing_assistant,
       marketplace_assistant: draft.marketplace_assistant,
+      ask_waka: draft.ask_waka,
       monthly_request_limit: draft.monthly_request_limit,
     });
     setSaving(false);

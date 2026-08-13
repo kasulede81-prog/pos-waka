@@ -74,3 +74,4 @@ build/icon.png
 *.sw?
 
 .vercel
+.local/

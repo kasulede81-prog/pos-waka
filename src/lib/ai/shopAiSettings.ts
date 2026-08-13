@@ -7,6 +7,7 @@ export const SHOP_MANAGED_AI_FEATURES = [
   "inventory_assistant",
   "marketing_assistant",
   "marketplace_assistant",
+  "ask_waka",
 ] as const;
 
 export type ShopManagedAiFeature = (typeof SHOP_MANAGED_AI_FEATURES)[number];
@@ -21,6 +22,7 @@ export type ShopAiSettings = {
   inventory_assistant: boolean;
   marketing_assistant: boolean;
   marketplace_assistant: boolean;
+  ask_waka: boolean;
   monthly_request_limit: number;
   plan_code: ShopAiPlanCode | null;
   created_at?: string;
@@ -39,6 +41,7 @@ export const DEFAULT_SHOP_AI_SETTINGS: Omit<ShopAiSettings, "shop_id"> = {
   inventory_assistant: false,
   marketing_assistant: false,
   marketplace_assistant: false,
+  ask_waka: false,
   monthly_request_limit: 500,
   plan_code: null,
 };
@@ -78,6 +81,7 @@ export function parseShopAiSettings(raw: unknown, shopIdFallback = ""): ShopAiSe
     inventory_assistant: bool("inventory_assistant"),
     marketing_assistant: bool("marketing_assistant"),
     marketplace_assistant: bool("marketplace_assistant"),
+    ask_waka: bool("ask_waka"),
     monthly_request_limit,
     plan_code,
     created_at: obj.created_at != null ? String(obj.created_at) : undefined,
@@ -87,4 +91,15 @@ export function parseShopAiSettings(raw: unknown, shopIdFallback = ""): ShopAiSe
 
 export function hasShopAiSettingsRow(settings: ShopAiSettings | null | undefined): settings is ShopAiSettings {
   return settings != null && Boolean(settings.shop_id);
+}
+
+/**
+ * ASK-6.1: one-shop Ask WAKA pilot requires an explicit shop_ai_settings row.
+ * If the row is missing, check_ai_feature_allowed skips the shop feature check
+ * (when pilot_rollout_mode is off). Do not enable platform ask_waka until the
+ * pilot shop has a row with ai_enabled + ask_waka, and other shops have rows
+ * with ask_waka=false (or are known to have rows from migration 101).
+ */
+export function isAskWakaPilotShopReady(settings: ShopAiSettings | null | undefined): boolean {
+  return hasShopAiSettingsRow(settings) && settings.ai_enabled === true && settings.ask_waka === true;
 }

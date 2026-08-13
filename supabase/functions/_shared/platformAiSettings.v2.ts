@@ -4,7 +4,13 @@ export type PlatformAiSettingsV2 = {
   schema_version: 2;
   enabled: boolean;
   provider: string;
-  provider_config: { deepseek_model?: string };
+  provider_config: {
+    deepseek_model?: string;
+    /** Optional Ollama base URL (Edge-reachable). Never commit secrets. */
+    ollama_base_url?: string;
+    /** Optional Ollama model id, e.g. qwen3:4b */
+    ollama_model?: string;
+  };
   product_assistant: boolean;
   product_scanner: boolean;
   ocr: boolean;
@@ -14,6 +20,7 @@ export type PlatformAiSettingsV2 = {
   restock_suggestions: boolean;
   marketing_assistant: boolean;
   marketplace_assistant: boolean;
+  ask_waka: boolean;
   monthly_request_limit: number;
   monthly_budget_limit: number;
   per_shop_limit: number;
@@ -36,6 +43,7 @@ const DEFAULTS: PlatformAiSettingsV2 = {
   restock_suggestions: false,
   marketing_assistant: false,
   marketplace_assistant: false,
+  ask_waka: false,
   monthly_request_limit: 20000,
   monthly_budget_limit: 50,
   per_shop_limit: 500,
@@ -64,6 +72,8 @@ export function parsePlatformAiSettingsV2(raw: unknown): PlatformAiSettingsV2 {
       ? (obj.provider_config as Record<string, unknown>)
       : {};
   const modelRaw = String(providerConfig.deepseek_model ?? obj.deepseek_model ?? "deepseek-chat");
+  const ollamaBase = String(providerConfig.ollama_base_url ?? "").trim();
+  const ollamaModel = String(providerConfig.ollama_model ?? "").trim();
 
   return {
     ...DEFAULTS,
@@ -71,6 +81,8 @@ export function parsePlatformAiSettingsV2(raw: unknown): PlatformAiSettingsV2 {
     provider: String(obj.provider ?? "deepseek"),
     provider_config: {
       deepseek_model: modelRaw === "deepseek-reasoner" ? "deepseek-reasoner" : "deepseek-chat",
+      ...(ollamaBase ? { ollama_base_url: ollamaBase } : {}),
+      ...(ollamaModel ? { ollama_model: ollamaModel } : {}),
     },
     product_assistant: boolField(obj, "product_assistant", "ai_product_assistant_enabled"),
     business_setup_assistant: boolField(obj, "business_setup_assistant", "ai_business_setup_enabled"),
@@ -81,6 +93,7 @@ export function parsePlatformAiSettingsV2(raw: unknown): PlatformAiSettingsV2 {
     restock_suggestions: obj.restock_suggestions === true,
     marketing_assistant: obj.marketing_assistant === true,
     marketplace_assistant: obj.marketplace_assistant === true,
+    ask_waka: obj.ask_waka === true,
     monthly_request_limit: numField(
       obj,
       "monthly_request_limit",
@@ -98,4 +111,24 @@ export function deepseekModelFromSettings(settings: PlatformAiSettingsV2): strin
   return settings.provider_config?.deepseek_model === "deepseek-reasoner"
     ? "deepseek-reasoner"
     : "deepseek-chat";
+}
+
+/** Resolve chat model for the active provider (DeepSeek default). */
+export function llmModelFromSettings(settings: PlatformAiSettingsV2): string {
+  const provider = String(settings.provider || "deepseek").toLowerCase();
+  if (provider === "ollama") {
+    const fromSettings = String(settings.provider_config?.ollama_model ?? "").trim();
+    if (fromSettings) return fromSettings;
+    const fromEnv = Deno.env.get("OLLAMA_MODEL");
+    return String(fromEnv || "qwen3:4b").trim() || "qwen3:4b";
+  }
+  return deepseekModelFromSettings(settings);
+}
+
+export function ollamaBaseUrlFromSettings(settings: PlatformAiSettingsV2): string | null {
+  const fromSettings = String(settings.provider_config?.ollama_base_url ?? "").trim();
+  if (fromSettings) return fromSettings;
+  const fromEnv = Deno.env.get("OLLAMA_BASE_URL");
+  const v = String(fromEnv || "").trim();
+  return v || null;
 }

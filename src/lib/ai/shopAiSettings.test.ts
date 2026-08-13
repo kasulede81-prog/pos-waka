@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canUseAi } from "./canUseAi";
 import { DEFAULT_PLATFORM_AI_SETTINGS_V2 } from "./platformAiSettings.v2";
-import { parseShopAiSettings } from "./shopAiSettings";
+import { parseShopAiSettings, isAskWakaPilotShopReady, hasShopAiSettingsRow } from "./shopAiSettings";
 
 const platformOn = {
   ...DEFAULT_PLATFORM_AI_SETTINGS_V2,
@@ -45,6 +45,54 @@ describe("canUseAi shop hierarchy", () => {
     const r = canUseAi("product_assistant", { settings: platformOn, shopSettings: shop });
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.code).toBe("shop_feature_disabled");
+  });
+
+  it("gates ask_waka via shop settings", () => {
+    const platformAsk = { ...platformOn, ask_waka: true };
+    const shopOff = parseShopAiSettings(
+      { shop_id: "s1", ai_enabled: true, ask_waka: false },
+      "s1",
+    );
+    const blocked = canUseAi("ask_waka", { settings: platformAsk, shopSettings: shopOff });
+    expect(blocked.allowed).toBe(false);
+    if (!blocked.allowed) expect(blocked.code).toBe("shop_feature_disabled");
+
+    const shopOn = parseShopAiSettings(
+      { shop_id: "s1", ai_enabled: true, ask_waka: true },
+      "s1",
+    );
+    expect(canUseAi("ask_waka", { settings: platformAsk, shopSettings: shopOn }).allowed).toBe(true);
+  });
+
+  it("keeps Ask WAKA off when the platform flag is false even if the shop is on", () => {
+    const shopOn = parseShopAiSettings(
+      { shop_id: "s1", ai_enabled: true, ask_waka: true },
+      "s1",
+    );
+    const r = canUseAi("ask_waka", {
+      settings: { ...platformOn, ask_waka: false },
+      shopSettings: shopOn,
+    });
+    expect(r.allowed).toBe(false);
+    if (!r.allowed) expect(r.code).toBe("feature_disabled");
+  });
+
+  it("documents the missing shop-row gap without changing canUseAi", () => {
+    const platformAsk = { ...platformOn, ask_waka: true };
+    const missing = canUseAi("ask_waka", { settings: platformAsk, shopSettings: null });
+    expect(missing.allowed).toBe(true);
+    expect(hasShopAiSettingsRow(null)).toBe(false);
+    expect(isAskWakaPilotShopReady(null)).toBe(false);
+    expect(
+      isAskWakaPilotShopReady(
+        parseShopAiSettings({ shop_id: "s1", ai_enabled: true, ask_waka: false }, "s1"),
+      ),
+    ).toBe(false);
+    expect(
+      isAskWakaPilotShopReady(
+        parseShopAiSettings({ shop_id: "s1", ai_enabled: true, ask_waka: true }, "s1"),
+      ),
+    ).toBe(true);
   });
 
   it("allows when no shop row and pilot off", () => {

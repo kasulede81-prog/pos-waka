@@ -216,6 +216,7 @@ const ShopRescueConsolePage = lazy(() =>
 );
 const CustomersPage = lazy(() => import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage })));
 const ProfitPage = lazy(() => import("./pages/ProfitPage").then((m) => ({ default: m.ProfitPage })));
+const AskWakaPage = lazy(() => import("./pages/AskWakaPage").then((m) => ({ default: m.AskWakaPage })));
 const ReportsPage = lazy(() => import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
 const PharmacyMarginReportPage = lazy(() =>
   import("./pages/PharmacyMarginReportPage").then((m) => ({ default: m.PharmacyMarginReportPage })),
@@ -499,6 +500,18 @@ function AppRoutes() {
                   <SensitiveActionGate lang={lang} kind="access_reports">
                     <Suspense fallback={<LazyWait />}>
                       <ProfitPage lang={lang} />
+                    </Suspense>
+                  </SensitiveActionGate>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/ask-waka"
+              element={
+                <RoleProtectedRoute permission="reports.view">
+                  <SensitiveActionGate lang={lang} kind="access_reports">
+                    <Suspense fallback={<LazyWait />}>
+                      <AskWakaPage lang={lang} />
                     </Suspense>
                   </SensitiveActionGate>
                 </RoleProtectedRoute>

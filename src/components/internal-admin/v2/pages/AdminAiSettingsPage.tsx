@@ -3,9 +3,10 @@ import { Loader2, Sparkles } from "lucide-react";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import { AI_FEATURES, type AiFeatureName } from "../../../../lib/ai/aiFeatures";
 import {
-  AI_PROVIDER_OPTIONS,
   DEEPSEEK_MODEL_OPTIONS,
   DEFAULT_PLATFORM_AI_SETTINGS_V2,
+  adminSelectableAiProviders,
+  coerceAdminSelectableProvider,
   type DeepSeekModel,
   type PlatformAiSettingsV2,
 } from "../../../../lib/ai/platformAiSettings.v2";
@@ -81,6 +82,7 @@ const SECTION_FEATURES: Array<{ title: string; keys: AiFeatureName[] }> = [
   { title: "Inventory AI", keys: ["inventory_assistant", "restock_suggestions"] },
   { title: "Marketing AI", keys: ["marketing_assistant"] },
   { title: "Marketplace AI", keys: ["marketplace_assistant"] },
+  { title: "Ask WAKA", keys: ["ask_waka"] },
 ];
 
 export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
@@ -288,16 +290,16 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
             AI Provider
             <select
               className={inputCls}
-              value={draft.provider}
+              value={coerceAdminSelectableProvider(draft.provider)}
               disabled={previewMode || masterOff}
               onChange={(e) =>
                 setDraft({
                   ...draft,
-                  provider: e.target.value as PlatformAiSettingsV2["provider"],
+                  provider: coerceAdminSelectableProvider(e.target.value),
                 })
               }
             >
-              {AI_PROVIDER_OPTIONS.map((p) => (
+              {adminSelectableAiProviders().map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>

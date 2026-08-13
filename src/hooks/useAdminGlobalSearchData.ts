@@ -14,7 +14,7 @@ import { internalListMarketingAgents } from "../lib/referralAgents";
 import { fetchPricingCampaigns, type PricingCampaign } from "../lib/pricingCampaignsAdmin";
 import { fetchGrowthCampaigns } from "../lib/growthCampaignsAdmin";
 import type { GrowthCampaign } from "../lib/growthCampaigns";
-import { AI_PROVIDER_OPTIONS } from "../lib/ai/platformAiSettings.v2";
+import { adminSelectableAiProviders } from "../lib/ai/platformAiSettings.v2";
 import type { AppReleaseSummary } from "../lib/releaseManagementAdmin";
 import type {
   FleetDeviceRow,
@@ -76,7 +76,7 @@ export function useAdminGlobalSearchData(previewMode: boolean): AdminGlobalSearc
   const [pricingCampaigns, setPricingCampaigns] = useState<PricingCampaign[]>([]);
   const [growthCampaigns, setGrowthCampaigns] = useState<GrowthCampaign[]>([]);
 
-  const aiProviders: AiProviderSearchRow[] = AI_PROVIDER_OPTIONS.map((p) => ({
+  const aiProviders: AiProviderSearchRow[] = adminSelectableAiProviders().map((p) => ({
     id: p,
     label: p.charAt(0).toUpperCase() + p.slice(1),
   }));

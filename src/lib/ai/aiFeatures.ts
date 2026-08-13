@@ -7,7 +7,8 @@ export type AiFeatureSection =
   | "business_setup"
   | "inventory"
   | "marketing"
-  | "marketplace";
+  | "marketplace"
+  | "business_qa";
 
 export type AiFeatureName =
   | "product_assistant"
@@ -18,7 +19,8 @@ export type AiFeatureName =
   | "inventory_assistant"
   | "restock_suggestions"
   | "marketing_assistant"
-  | "marketplace_assistant";
+  | "marketplace_assistant"
+  | "ask_waka";
 
 export type AiFeatureMeta = {
   label: string;
@@ -85,6 +87,13 @@ export const AI_FEATURES: Record<AiFeatureName, AiFeatureMeta> = {
     section: "marketplace",
     deployed: false,
     description: "Marketplace listing generator (coming soon).",
+  },
+  ask_waka: {
+    label: "Ask WAKA",
+    section: "business_qa",
+    edgeFunction: "ai-ask-waka",
+    deployed: true,
+    description: "Read-only AI business assistant for sales, inventory, expenses, and customers.",
   },
 };
 

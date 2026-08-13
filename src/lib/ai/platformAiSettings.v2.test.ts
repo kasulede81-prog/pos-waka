@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { parsePlatformAiSettingsV2 } from "./platformAiSettings.v2";
+import {
+  AI_PROVIDER_OPTIONS,
+  DEFAULT_PLATFORM_AI_SETTINGS_V2,
+  DEFAULT_PRODUCTION_AI_PROVIDER,
+  PRODUCTION_AI_PROVIDER_OPTIONS,
+  PRODUCTION_SUPABASE_PROJECT_REF,
+  adminSelectableAiProviders,
+  coerceAdminSelectableProvider,
+  isOllamaProviderSelectable,
+  isProductionSupabaseTarget,
+  parsePlatformAiSettingsV2,
+  settingsToAdminPayload,
+} from "./platformAiSettings.v2";
+
+const PROD_URL = `https://${PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`;
+const STAGING_URL = "https://wdirxwvbgsfzbdurmkbf.supabase.co";
 
 describe("parsePlatformAiSettingsV2", () => {
   it("maps legacy keys", () => {
@@ -15,5 +30,103 @@ describe("parsePlatformAiSettingsV2", () => {
     expect(s.product_assistant).toBe(false);
     expect(s.provider_config.deepseek_model).toBe("deepseek-reasoner");
     expect(s.monthly_request_limit).toBe(8000);
+  });
+
+  it("defaults Ask WAKA and pilot flags off with DeepSeek", () => {
+    const s = parsePlatformAiSettingsV2({});
+    expect(s.provider).toBe("deepseek");
+    expect(s.ask_waka).toBe(false);
+    expect(s.pilot_rollout_mode).toBe(false);
+    expect(s.pilot_auto_enable_new_shops).toBe(false);
+    expect(DEFAULT_PLATFORM_AI_SETTINGS_V2.ask_waka).toBe(false);
+    expect(DEFAULT_PLATFORM_AI_SETTINGS_V2.provider).toBe(DEFAULT_PRODUCTION_AI_PROVIDER);
+  });
+});
+
+describe("production AI provider isolation", () => {
+  it("keeps DeepSeek as the production default", () => {
+    expect(DEFAULT_PRODUCTION_AI_PROVIDER).toBe("deepseek");
+    expect(PRODUCTION_AI_PROVIDER_OPTIONS).toContain("deepseek");
+    expect(PRODUCTION_AI_PROVIDER_OPTIONS).not.toContain("ollama");
+  });
+
+  it("keeps Ollama in the architecture list for local development", () => {
+    expect(AI_PROVIDER_OPTIONS).toContain("ollama");
+    expect(AI_PROVIDER_OPTIONS).toContain("deepseek");
+  });
+
+  it("never treats the production project as an Ollama-selectable target", () => {
+    expect(isProductionSupabaseTarget(PROD_URL)).toBe(true);
+    expect(isProductionSupabaseTarget(STAGING_URL)).toBe(false);
+    expect(
+      isOllamaProviderSelectable({
+        DEV: true,
+        VITE_ALLOW_OLLAMA_PROVIDER: "true",
+        VITE_SUPABASE_URL: PROD_URL,
+      }),
+    ).toBe(false);
+  });
+
+  it("hides Ollama from production admin configuration", () => {
+    const env = { PROD: true, DEV: false, VITE_SUPABASE_URL: PROD_URL };
+    expect(adminSelectableAiProviders(env)).not.toContain("ollama");
+    expect(adminSelectableAiProviders(env)).toEqual(["deepseek", "openai", "gemini", "claude"]);
+    expect(coerceAdminSelectableProvider("ollama", env)).toBe("deepseek");
+    expect(coerceAdminSelectableProvider("deepseek", env)).toBe("deepseek");
+    expect(coerceAdminSelectableProvider("openai", env)).toBe("openai");
+  });
+
+  it("still offers Ollama in local development against a non-production target", () => {
+    const env = { DEV: true, PROD: false, VITE_SUPABASE_URL: STAGING_URL };
+    expect(isOllamaProviderSelectable(env)).toBe(true);
+    expect(adminSelectableAiProviders(env)).toContain("ollama");
+    expect(coerceAdminSelectableProvider("ollama", env)).toBe("ollama");
+  });
+
+  it("allows an explicit non-production override", () => {
+    const env = {
+      PROD: true,
+      DEV: false,
+      VITE_ALLOW_OLLAMA_PROVIDER: "true",
+      VITE_SUPABASE_URL: STAGING_URL,
+    };
+    expect(isOllamaProviderSelectable(env)).toBe(true);
+    expect(adminSelectableAiProviders(env)).toContain("ollama");
+  });
+
+  it("strips Ollama from production admin save payloads", () => {
+    const payload = settingsToAdminPayload(
+      {
+        ...DEFAULT_PLATFORM_AI_SETTINGS_V2,
+        provider: "ollama",
+        provider_config: {
+          deepseek_model: "deepseek-chat",
+          ollama_base_url: "http://127.0.0.1:11434",
+          ollama_model: "qwen3:4b",
+        },
+      },
+      { PROD: true, DEV: false, VITE_SUPABASE_URL: PROD_URL },
+    );
+    expect(payload.provider).toBe("deepseek");
+    expect((payload.provider_config as { ollama_base_url?: string }).ollama_base_url).toBeUndefined();
+    expect((payload.provider_config as { ollama_model?: string }).ollama_model).toBeUndefined();
+  });
+
+  it("preserves Ollama fields when saving in local development", () => {
+    const payload = settingsToAdminPayload(
+      {
+        ...DEFAULT_PLATFORM_AI_SETTINGS_V2,
+        provider: "ollama",
+        provider_config: {
+          ollama_base_url: "http://127.0.0.1:11434",
+          ollama_model: "qwen3:4b",
+        },
+      },
+      { DEV: true, PROD: false, VITE_SUPABASE_URL: STAGING_URL },
+    );
+    expect(payload.provider).toBe("ollama");
+    expect((payload.provider_config as { ollama_base_url?: string }).ollama_base_url).toBe(
+      "http://127.0.0.1:11434",
+    );
   });
 });
