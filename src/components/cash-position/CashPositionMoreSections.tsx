@@ -7,6 +7,10 @@ import { CASH_DRAWER_ADJUSTMENT_TYPES } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { cashDrawerAdjustmentTypeLabel } from "../../lib/cashDrawerLedger";
 import { CashDenominationCountField } from "../cash/CashDenominationCountField";
+import {
+  readDayCloseCashCountDraft,
+  writeDayCloseCashCountDraft,
+} from "../../lib/dayCloseCashCountDraft";
 import type {
   CashPositionAlert,
   CashPositionCashierDetail,
@@ -26,9 +30,15 @@ export function CashPositionCashCount({
   closeDateKey: string;
   onUseTotal: (total: number) => void;
 }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(() => readDayCloseCashCountDraft(closeDateKey) ?? "");
 
-  const activeTotal = Math.max(0, Math.floor(Number(value.replace(/\D/g, "")) || 0));
+  const persistCount = (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 12);
+    setValue(digits);
+    writeDayCloseCashCountDraft(closeDateKey, digits);
+    if (digits.length > 0) onUseTotal(Math.max(0, Math.floor(Number(digits) || 0)));
+  };
+
   const closeDayUrl = `/close-day?date=${encodeURIComponent(closeDateKey)}#cash-count`;
 
   return (
@@ -36,15 +46,13 @@ export function CashPositionCashCount({
       <CashDenominationCountField
         lang={lang}
         value={value}
-        onChange={setValue}
+        onChange={persistCount}
         expectedUgx={expectedUgx}
         showVariance
       />
       <Link
         to={closeDayUrl}
-        onClick={() => {
-          if (activeTotal > 0) onUseTotal(activeTotal);
-        }}
+        onClick={() => persistCount(value)}
         className="flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white"
       >
         {t(lang, "cashPositionSaveCountCloseDay")}

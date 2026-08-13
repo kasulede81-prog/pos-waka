@@ -23,6 +23,11 @@ import { useDrawerCashForDay } from "./useDrawerCashForDay";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
 import { useReportingSales } from "./useReportingSales";
 import { t } from "../lib/i18n";
+import {
+  clearDayCloseCashCountDraft,
+  readDayCloseCashCountDraft,
+  writeDayCloseCashCountDraft,
+} from "../lib/dayCloseCashCountDraft";
 
 /**
  * Phase 35.1 — shared close-day session state for the guided wizard.
@@ -76,7 +81,23 @@ export function useEndOfDayCloseSession(lang: Language) {
     [todayKey, dayCloses, allSales, shifts, dayDrawerOpens],
   );
 
-  const [counted, setCounted] = useState("");
+  const [counted, setCountedState] = useState("");
+  const countedDateRef = useRef<string | null>(null);
+  if (countedDateRef.current !== closeDateKey) {
+    countedDateRef.current = closeDateKey;
+    const draft = readDayCloseCashCountDraft(closeDateKey) ?? "";
+    if (draft !== counted) {
+      setCountedState(draft);
+    }
+  }
+  const setCounted = useCallback(
+    (value: string) => {
+      const digits = value.replace(/\D/g, "").slice(0, 12);
+      setCountedState(digits);
+      writeDayCloseCashCountDraft(closeDateKey, digits);
+    },
+    [closeDateKey],
+  );
   const [doneMsg, setDoneMsg] = useState(false);
   const [closeErrorKey, setCloseErrorKey] = useState<string | null>(null);
   const [managerPin, setManagerPin] = useState("");
@@ -86,20 +107,6 @@ export function useEndOfDayCloseSession(lang: Language) {
   const [reopenReason, setReopenReason] = useState("");
   const [preflight, setPreflight] = useState<DayClosePreflightSnapshot | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(true);
-
-  useEffect(() => {
-    try {
-      const prefill = sessionStorage.getItem("waka-close-day-prefill");
-      const prefillDate = sessionStorage.getItem("waka-close-day-prefill-date");
-      if (prefill && (!prefillDate || prefillDate === closeDateKey)) {
-        setCounted(prefill.replace(/\D/g, "").slice(0, 12));
-        sessionStorage.removeItem("waka-close-day-prefill");
-        sessionStorage.removeItem("waka-close-day-prefill-date");
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [closeDateKey]);
 
   const activeCloseToday = activeDayCloseForDate(dayCloses, closeDateKey);
   const dayReopenHistory = preferences.dayReopenHistory ?? [];
@@ -123,10 +130,11 @@ export function useEndOfDayCloseSession(lang: Language) {
     [drawer, sales, returnRecords, products, closeDateKey],
   );
 
-  const countedN = Math.max(0, Math.floor(Number(counted.replace(/\D/g, "")) || 0));
+  const countedDigits = counted.replace(/\D/g, "") || readDayCloseCashCountDraft(closeDateKey) || "";
+  const countedN = Math.max(0, Math.floor(Number(countedDigits) || 0));
   const varianceDiff = countedN - summary.expectedCash;
   const varianceFlagged =
-    counted.length > 0 && dayCloseVarianceIsFlagged(summary.expectedCash, varianceDiff, preferences);
+    countedDigits.length > 0 && dayCloseVarianceIsFlagged(summary.expectedCash, varianceDiff, preferences);
 
   const tenderReport = useMemo(
     () =>
@@ -184,12 +192,12 @@ export function useEndOfDayCloseSession(lang: Language) {
       },
       dateKey: closeDateKey,
       expectedCashUgx: summary.expectedCash,
-      countedCashUgx: counted.length > 0 ? countedN : null,
+      countedCashUgx: countedDigits.length > 0 ? countedN : null,
       queue,
       variancePreferences: preferences,
     });
     setPreflight(result.snapshot);
-  }, [closeDateKey, summary.expectedCash, counted, countedN, preferences]);
+  }, [closeDateKey, summary.expectedCash, countedDigits, countedN, preferences]);
 
   const refreshPreflightWithSync = useCallback(async () => {
     setPreflightLoading(true);
@@ -210,12 +218,12 @@ export function useEndOfDayCloseSession(lang: Language) {
       },
       dateKey: closeDateKey,
       expectedCashUgx: summary.expectedCash,
-      countedCashUgx: counted.length > 0 ? countedN : null,
+      countedCashUgx: countedDigits.length > 0 ? countedN : null,
       variancePreferences: preferences,
     });
     setPreflight(result.snapshot);
     setPreflightLoading(false);
-  }, [closeDateKey, summary.expectedCash, counted, countedN, preferences]);
+  }, [closeDateKey, summary.expectedCash, countedDigits, countedN, preferences]);
 
   const initialSyncDone = useRef(false);
   useEffect(() => {
@@ -260,6 +268,7 @@ export function useEndOfDayCloseSession(lang: Language) {
       return false;
     }
     setCounted("");
+    clearDayCloseCashCountDraft(closeDateKey);
     setManagerPin("");
     setEmergencyMode(false);
     setDoneMsg(true);
@@ -295,6 +304,8 @@ export function useEndOfDayCloseSession(lang: Language) {
       setCloseErrorKey(result.errorKey ?? "invalid");
       return false;
     }
+    setCounted("");
+    clearDayCloseCashCountDraft(closeDateKey);
     setDoneMsg(true);
     setEmergencyMode(false);
     return true;

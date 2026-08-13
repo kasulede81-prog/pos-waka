@@ -3556,7 +3556,7 @@ const en: Dict = {
   cashPositionSaveCountCloseDay: "Save count on Close Day",
   cashPositionReturnCloseDay: "Return to Close Day",
   cashPositionCountForDate: "Counting cash for {date}",
-  cashPositionCountPersistHint: "Counts are saved when you close the day — not from this preview alone.",
+  cashPositionCountPersistHint: "This count is kept for closing this business date.",
   cashPositionMovementReason: "Reason (required)",
   cashPositionMovementBy: "Recorded by",
   cashPositionNetSales: "Net sales",

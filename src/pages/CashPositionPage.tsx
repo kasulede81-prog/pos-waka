@@ -6,6 +6,7 @@ import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
+import { writeDayCloseCashCountDraft } from "../lib/dayCloseCashCountDraft";
 import { DEFAULT_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
 import {
   downloadCashPositionCsv,
@@ -272,6 +273,7 @@ export function CashPositionPage({ lang }: { lang: Language }) {
               closeDateKey={countDayKey}
               expectedUgx={drawerForCount.expectedDrawerCashUgx}
               onUseTotal={(total) => {
+                writeDayCloseCashCountDraft(countDayKey, String(total));
                 try {
                   sessionStorage.setItem("waka-close-day-prefill", String(total));
                   sessionStorage.setItem("waka-close-day-prefill-date", countDayKey);

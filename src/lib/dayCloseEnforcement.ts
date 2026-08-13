@@ -17,7 +17,6 @@ import { activeDayDrawerOpenForDate, isFormulaV2 } from "./dayDrawerOpen";
 import { activeDayCloseForDate } from "./dayCloseIdempotency";
 import { getDeviceOnline } from "./deviceOnline";
 import { activeSessions, sessionBillTotal, sessionDisplayLabel } from "./hospitalityStats";
-import { readSyncHealthMeta } from "./syncMeta";
 import { findUnclosedPriorBusinessDays } from "./sequentialBusinessDays";
 import { readSyncQueue } from "../offline/localDb";
 import { dayCloseVarianceIsFlagged } from "./dayCloseApprovals";
@@ -123,8 +122,6 @@ export type DayClosePreflightState = {
   cashExpenses: { pendingSync?: boolean; deletedAt?: string | null }[];
   inventoryCountSessions: { pendingSync?: boolean; status?: string }[];
 };
-
-const STALE_RECONCILIATION_MS = 15 * 60_000;
 
 function dateHasBusinessActivity(
   dateKey: string,
@@ -349,13 +346,9 @@ export function buildDayClosePreflightSnapshot(input: {
     dayDrawerOpens: state.dayDrawerOpens,
   });
 
-  const health = readSyncHealthMeta();
-  const queueUnhealthy = health.queueHealth !== "healthy" || pendingSync.total > 0;
-  const cloudStale =
-    input.cloudPullStale ??
-    (health.lastPullAt
-      ? Date.now() - new Date(health.lastPullAt).getTime() > STALE_RECONCILIATION_MS
-      : false);
+  const pendingUploads = (input.queue ?? []).length > 0;
+  /** Block only when something is actually waiting to upload — not a stale pull clock or leftover pendingSync flags. */
+  const cloudSyncBlocked = pendingUploads;
 
   const counted = input.countedCashUgx;
   const hasCount = counted != null && counted >= 0;
@@ -419,11 +412,11 @@ export function buildDayClosePreflightSnapshot(input: {
     },
     {
       id: "cloud_sync",
-      status: queueUnhealthy || cloudStale ? "fail" : "pass",
+      status: cloudSyncBlocked ? "fail" : "pass",
       labelKey: "dayCloseCheckCloudSync",
-      detailKey: queueUnhealthy ? "dayCloseCheckCloudSyncFail" : undefined,
+      detailKey: cloudSyncBlocked ? "dayCloseCheckCloudSyncFail" : undefined,
       navigateTo: "/settings",
-      blockClose: queueUnhealthy || cloudStale,
+      blockClose: cloudSyncBlocked,
       allowEmergencyOverride: true,
     },
     {
@@ -448,7 +441,7 @@ export function buildDayClosePreflightSnapshot(input: {
   if (hasPendingSales) blockReasons.push("pending_sales");
   if (unclosedPrior.length > 0) blockReasons.push("sequential_days");
   if (dayOpenRequired && !dayOpenSatisfied) blockReasons.push("day_not_open");
-  if (queueUnhealthy || cloudStale) blockReasons.push("sync_unhealthy");
+  if (cloudSyncBlocked) blockReasons.push("sync_unhealthy");
   if (!hasCount) blockReasons.push("cash_not_counted");
 
   const warnings: string[] = [];
@@ -460,7 +453,7 @@ export function buildDayClosePreflightSnapshot(input: {
     input.variancePreferences != null &&
     dayCloseVarianceIsFlagged(expectedCashUgx, diff, input.variancePreferences);
 
-  const requiresSyncOverride = queueUnhealthy || cloudStale;
+  const requiresSyncOverride = cloudSyncBlocked;
   const hardBlock = items.some((i) => i.blockClose && i.status === "fail");
   const canClose = !hardBlock && hasCount;
 
@@ -527,25 +520,21 @@ export async function runDayClosePreflight(input: {
   countedCashUgx: number | null;
   variancePreferences?: Pick<ShopPreferences, "cashVarianceThresholdPct" | "cashVarianceThresholdUgxFixed">;
 }): Promise<DayClosePreflightResult> {
-  let cloudPullStale = false;
-  const queue = await readSyncQueue();
+  let queue = await readSyncQueue();
 
   if (getDeviceOnline()) {
     try {
       const { syncShopWithCloud } = await import("../offline/cloudSync");
-      const result = await syncShopWithCloud({ pull: true });
-      if (result.queueFailed > 0 || result.push.fail > 0) {
-        cloudPullStale = true;
-      }
+      await syncShopWithCloud({ pull: true });
     } catch {
-      cloudPullStale = true;
+      /* A pull/push exception must not fail Close Day when the upload queue is already empty. */
     }
+    queue = await readSyncQueue();
   }
 
   return evaluateDayClosePreflightSync({
     ...input,
     queue,
-    cloudPullStale,
   });
 }
 

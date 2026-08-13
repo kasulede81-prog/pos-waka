@@ -49,7 +49,9 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
  * Orchestrates existing preflight / count / PIN / recordDayClose — no ledger rewrite.
  */
 export function EndOfDayClosingWizard({ lang, session }: Props) {
-  const [step, setStep] = useState<EodWizardStepId>("start");
+  const [step, setStep] = useState<EodWizardStepId>(() =>
+    typeof window !== "undefined" && window.location.hash === "#cash-count" ? "cash" : "start",
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const {

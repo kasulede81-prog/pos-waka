@@ -46,5 +46,41 @@ describe("dayClosePreflight adapter", () => {
     });
     expect(result.snapshot.pendingSync.total).toBeGreaterThan(0);
     expect(result.warnings.some((w) => w.startsWith("pending_sync_total:"))).toBe(true);
+    expect(result.snapshot.items.find((i) => i.id === "cloud_sync")?.status).toBe("pass");
+    expect(result.snapshot.items.find((i) => i.id === "cloud_sync")?.blockClose).toBe(false);
+  });
+
+  it("fails cloud_sync only when the upload queue still has work", () => {
+    const result = evaluateDayClosePreflightSync({
+      state: {
+        draftLines: { length: 0 },
+        activePendingSaleId: null,
+        sales: [],
+        preferences: { shifts: [], cashDrawerFormulaVersion: "v2" },
+        dayCloses: [],
+        dayDrawerOpens: [],
+        products: [],
+        returnRecords: [],
+        cashDrawerAdjustments: [],
+        cashExpenses: [],
+        inventoryCountSessions: [],
+      },
+      dateKey: "2026-06-10",
+      expectedCashUgx: 50_000,
+      countedCashUgx: 50_000,
+      queue: [
+        {
+          id: "q1",
+          kind: "pending_sales",
+          payload: {},
+          createdAt: "2026-06-10T18:00:00.000Z",
+          attempts: 0,
+        },
+      ],
+    });
+    const syncItem = result.snapshot.items.find((i) => i.id === "cloud_sync");
+    expect(syncItem?.status).toBe("fail");
+    expect(syncItem?.blockClose).toBe(true);
+    expect(result.snapshot.requiresSyncOverride).toBe(true);
   });
 });
