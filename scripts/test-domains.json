@@ -139,6 +139,7 @@
   "device": [
     "src/lib/androidPerformanceSprint.test.ts",
     "src/lib/androidBackStack.test.ts",
+    "src/lib/iosFormControlZoom.test.ts",
     "src/lib/firstTimeOwnerDevice.test.ts",
     "src/lib/deviceLifecycle.persistence.test.ts",
     "src/lib/nativePrintFallback.test.ts"

@@ -206,6 +206,27 @@ body {
   touch-action: manipulation;
 }
 
+/**
+ * MOBILE-UX-1.0 — iOS Safari auto-zooms when a focused control is under 16px,
+ * then often keeps that page scale after the keyboard closes (horizontal clip).
+ * Unlayered so this floor beats Tailwind text-sm/text-xs on iPhone only.
+ * Does not set user-scalable=no / maximum-scale=1. Pinch zoom stays available.
+ * Catalog tiles keep touch-pan-y on Android (Phase 25.2 scroll).
+ */
+@supports (-webkit-touch-callout: none) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+
+  .app-shell-root button,
+  .app-shell-root [role="button"],
+  .app-shell-root a {
+    touch-action: manipulation;
+  }
+}
+
 #root {
   min-height: 100dvh;
   max-width: 100vw;
@@ -859,6 +880,13 @@ body {
     min-height: var(--ds-input-min-h);
     font-size: var(--ds-font-base);
     border-radius: var(--ds-radius-lg);
+  }
+
+  /* iOS: Display Scale base is 14px (Compact ~12px) — below Safari's focus zoom threshold. */
+  @supports (-webkit-touch-callout: none) {
+    html.pos-display-scale-active .pos-ds-input {
+      font-size: max(16px, var(--ds-font-base));
+    }
   }
 
   html.pos-display-scale-active .pos-ds-dialog {
