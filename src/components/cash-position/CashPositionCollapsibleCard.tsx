@@ -18,12 +18,25 @@ type Props = {
   title: string;
   icon?: ReactNode;
   defaultOpen?: boolean;
+  forceOpen?: boolean;
   children: ReactNode;
   badge?: ReactNode;
 };
 
-export function CashPositionCollapsibleCard({ id, title, icon, defaultOpen = true, children, badge }: Props) {
-  const [open, setOpen] = useState(() => readSectionState()[id] ?? defaultOpen);
+export function CashPositionCollapsibleCard({
+  id,
+  title,
+  icon,
+  defaultOpen = true,
+  forceOpen = false,
+  children,
+  badge,
+}: Props) {
+  const [open, setOpen] = useState(() => (forceOpen ? true : (readSectionState()[id] ?? defaultOpen)));
+
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
 
   useEffect(() => {
     const all = readSectionState();

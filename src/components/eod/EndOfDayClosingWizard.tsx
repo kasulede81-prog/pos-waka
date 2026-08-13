@@ -96,6 +96,15 @@ export function EndOfDayClosingWizard({ lang, session }: Props) {
     () => (preflight?.items ?? []).filter((i) => i.status === "warn" || (i.status === "fail" && !i.blockClose)),
     [preflight],
   );
+  const preflightRailItems = useMemo(() => {
+    const items = (preflight?.items ?? []).filter((i) => i.id !== "ready");
+    const head = items.slice(0, 6);
+    const cash = items.find((i) => i.id === "cash_counted");
+    if (cash && !head.some((i) => i.id === "cash_counted")) {
+      return [...head.slice(0, 5), cash];
+    }
+    return head;
+  }, [preflight]);
 
   const goNext = () => {
     if (step === "cash" && !eodWizardCanLeaveCashStep(counted)) return;
@@ -190,22 +199,35 @@ export function EndOfDayClosingWizard({ lang, session }: Props) {
             <div className="mt-3 border-t border-border pt-3">
               <Caption className="normal-case">{t(lang, "eodWizardPreflightShort")}</Caption>
               <ul className="mt-1.5 space-y-1">
-                {preflight.items.slice(0, 6).map((item) => (
-                  <li key={item.id} className="flex items-center gap-1.5 text-[11px] font-semibold">
-                    {item.status === "pass" ? (
-                      <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
-                    ) : (
-                      <Circle
-                        className={clsx(
-                          "h-3.5 w-3.5",
-                          item.status === "fail" ? "text-rose-600" : "text-amber-600",
-                        )}
-                        aria-hidden
-                      />
-                    )}
-                    <span className="truncate text-muted-foreground">{t(lang, item.labelKey)}</span>
-                  </li>
-                ))}
+                {preflightRailItems.map((item) => {
+                  const cashLink =
+                    item.id === "cash_counted" && item.navigateTo && item.status !== "pass";
+                  return (
+                    <li key={item.id} className="flex items-center gap-1.5 text-[11px] font-semibold">
+                      {item.status === "pass" ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+                      ) : (
+                        <Circle
+                          className={clsx(
+                            "h-3.5 w-3.5",
+                            item.status === "fail" ? "text-rose-600" : "text-amber-600",
+                          )}
+                          aria-hidden
+                        />
+                      )}
+                      {cashLink ? (
+                        <Link
+                          to={item.navigateTo!}
+                          className="min-w-0 flex-1 truncate text-waka-800 underline"
+                        >
+                          {t(lang, item.labelKey)}
+                        </Link>
+                      ) : (
+                        <span className="truncate text-muted-foreground">{t(lang, item.labelKey)}</span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}

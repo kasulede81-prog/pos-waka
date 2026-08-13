@@ -37,6 +37,11 @@ export type DayClosePreflightItemId =
 
 export type DayClosePreflightItemStatus = "pass" | "fail" | "warn" | "pending";
 
+/** Cash count UI for the business day being closed — not today's cash-drawer hub. */
+export function dayCloseCashCountHref(dateKey: string): string {
+  return `/office/cash-position?date=${encodeURIComponent(dateKey)}&from=close-day#count`;
+}
+
 export type OpenShiftPreflightRow = {
   shiftId: string;
   actorUserId: string;
@@ -426,7 +431,7 @@ export function buildDayClosePreflightSnapshot(input: {
       status: hasCount ? "pass" : "pending",
       labelKey: "dayCloseCheckCashCounted",
       detailKey: !hasCount ? "dayCloseCheckCashCountedPending" : undefined,
-      navigateTo: `/office/cash-drawer?date=${encodeURIComponent(dateKey)}&from=close-day#count`,
+      navigateTo: dayCloseCashCountHref(dateKey),
       blockClose: !hasCount,
     },
     {

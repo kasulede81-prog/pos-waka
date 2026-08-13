@@ -1,6 +1,7 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
+import { dayCloseCashCountHref } from "../lib/dayCloseEnforcement";
 import {
   AlertTriangle,
   Banknote,
@@ -44,6 +45,15 @@ import { dateKeyKampala } from "../lib/datesUg";
 type Props = { lang: Language };
 
 export function CashManagementPage({ lang }: Props) {
+  const [searchParams] = useSearchParams();
+  const closeDayDate = searchParams.get("date");
+  if (searchParams.get("from") === "close-day" && closeDayDate && /^\d{4}-\d{2}-\d{2}$/.test(closeDayDate)) {
+    return <Navigate to={dayCloseCashCountHref(closeDayDate)} replace />;
+  }
+  return <CashManagementHub lang={lang} />;
+}
+
+function CashManagementHub({ lang }: Props) {
   usePageLoadMark("cash-management");
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);

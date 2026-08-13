@@ -69,12 +69,11 @@ export function CashPositionPage({ lang }: { lang: Language }) {
   }, [dateParam]);
 
   useEffect(() => {
-    if (fromCloseDay && window.location.hash === "#count") {
-      window.requestAnimationFrame(() => {
-        document.getElementById("count")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
-  }, [fromCloseDay, countDayKey]);
+    if (!fromCloseDay || !showCashCountSection || window.location.hash !== "#count") return;
+    window.requestAnimationFrame(() => {
+      document.getElementById("count")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [fromCloseDay, countDayKey, showCashCountSection]);
 
   const [exportHint, setExportHint] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
@@ -260,8 +259,14 @@ export function CashPositionPage({ lang }: { lang: Language }) {
       </CashPositionCollapsibleCard>
 
       {showCashCountSection ? (
-        <div ref={sectionRefs.count}>
-          <CashPositionCollapsibleCard id="count" title={t(lang, "cashPositionSectionCount")} icon="💰" defaultOpen>
+        <div id="count" ref={sectionRefs.count}>
+          <CashPositionCollapsibleCard
+            id="count"
+            title={t(lang, "cashPositionSectionCount")}
+            icon="💰"
+            defaultOpen
+            forceOpen={fromCloseDay}
+          >
             <CashPositionCashCount
               lang={lang}
               closeDateKey={countDayKey}

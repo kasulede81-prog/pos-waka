@@ -3,6 +3,7 @@ import {
   assertDayClosePreflightPassed,
   buildDayClosePreflightSnapshot,
   collectOpenShifts,
+  dayCloseCashCountHref,
 } from "./dayCloseEnforcement";
 import { assertBusinessDateNotLocked } from "./businessDateLock";
 import { findUnclosedPriorBusinessDays, resolvePrioritizedCloseDateKey } from "./sequentialBusinessDays";
@@ -220,7 +221,7 @@ describe("dayCloseEnforcement", () => {
     expect(key).toBe("2026-06-10");
   });
 
-  it("cash_counted checklist links to cash drawer for the same business date", () => {
+  it("cash_counted checklist links to that day's cash count, not today's cash-drawer hub", () => {
     const snapshot = buildDayClosePreflightSnapshot({
       state: {
         draftLines: { length: 0 },
@@ -243,6 +244,7 @@ describe("dayCloseEnforcement", () => {
     });
     const cashItem = snapshot.items.find((i) => i.id === "cash_counted");
     expect(cashItem?.status).toBe("pending");
-    expect(cashItem?.navigateTo).toBe(`/office/cash-drawer?date=${DAY}&from=close-day#count`);
+    expect(cashItem?.navigateTo).toBe(`/office/cash-position?date=${DAY}&from=close-day#count`);
+    expect(dayCloseCashCountHref(DAY)).toBe(cashItem?.navigateTo);
   });
 });

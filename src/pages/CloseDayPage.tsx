@@ -13,6 +13,7 @@ import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { downloadDayClosePdf, printDayCloseReport, shareDayClosePdf } from "../lib/dayCloseDocument";
 import { EndOfDayClosingWizard } from "../components/eod/EndOfDayClosingWizard";
 import { useEndOfDayCloseSession } from "../hooks/useEndOfDayCloseSession";
+import { dayCloseCashCountHref } from "../lib/dayCloseEnforcement";
 
 /**
  * Phase 35.1 — Close Day hosts the guided End-of-Day wizard.
@@ -88,7 +89,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
           {t(lang, "dayCloseXReportBtn")}
         </Link>
         <Link
-          to="/office/cash-position"
+          to={dayCloseCashCountHref(closeDateKey)}
           className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-2 text-sm font-black text-waka-800"
         >
           {t(lang, "eodOpenCashPosition")}
