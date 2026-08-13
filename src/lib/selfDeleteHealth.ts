@@ -73,6 +73,14 @@ export async function probeOwnerSelfDeleteEdge(): Promise<{ ok: boolean; detail:
   return { ok: false, detail: "Edge probe returned unexpected payload." };
 }
 
+export function ownerDeleteReadinessFromSnapshot(
+  snap: Pick<SelfDeleteHealthSnapshot, "routeAccessOk" | "rpcStatus" | "edgeStatus">,
+): "ready" | "unavailable" {
+  if (!snap.routeAccessOk) return "unavailable";
+  if (snap.rpcStatus !== "ok" || snap.edgeStatus !== "ok") return "unavailable";
+  return "ready";
+}
+
 export async function probeOwnerOrphanAuth(): Promise<boolean> {
   if (!supabase) return false;
   const { data, error } = await supabase.rpc("owner_self_delete_orphan_auth_status");

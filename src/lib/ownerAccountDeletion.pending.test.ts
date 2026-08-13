@@ -56,4 +56,15 @@ describe("ownerAccountDeletion pending marker (Phase 39.1)", () => {
     expect(isDeletionPending(accountKey)).toBe(false);
     expect(isDeletedOrganization(accountKey)).toBe(true);
   });
+
+  it("does not treat a normal failure as deleted", async () => {
+    const { markOwnerDeletionInProgress, clearOwnerDeletionPendingOnFailure } = await import(
+      "./ownerAccountDeletion"
+    );
+    const { isDeletedOrganization, isDeletionPending } = await import("./organizationDeletionState");
+    markOwnerDeletionInProgress("owner-39-1");
+    clearOwnerDeletionPendingOnFailure();
+    expect(isDeletionPending(accountKey)).toBe(false);
+    expect(isDeletedOrganization(accountKey)).toBe(false);
+  });
 });

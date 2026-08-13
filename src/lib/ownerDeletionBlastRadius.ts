@@ -70,18 +70,15 @@ export async function loadOwnerDeletionBlastRadius(userId: string | null | undef
   };
 }
 
-/** Typed confirm accepts permanent phrase, shop name, or organization name. */
+/** Typed confirm accepts the permanent phrase or the exact organization name. */
 export function matchesOwnerDeletionConfirmText(
   typed: string,
-  opts: { shopName?: string | null; organizationName?: string | null },
+  opts: { organizationName?: string | null; shopName?: string | null },
 ): boolean {
   const value = typed.trim();
   if (!value) return false;
   if (value === "DELETE PERMANENTLY") return true;
-  const upper = value.toUpperCase();
-  const shop = opts.shopName?.trim();
-  if (shop && upper === shop.toUpperCase()) return true;
   const org = opts.organizationName?.trim();
-  if (org && upper === org.toUpperCase()) return true;
+  if (org && value.toUpperCase() === org.toUpperCase()) return true;
   return false;
 }

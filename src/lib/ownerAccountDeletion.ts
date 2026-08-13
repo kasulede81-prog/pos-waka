@@ -17,16 +17,22 @@ import {
   writeOwnerDeletePartialFailure,
 } from "./ownerDeletePartialFailure";
 import { assertRecentOwnerDeleteReauth } from "./ownerDeleteReauth";
+import {
+  classifyOwnerDeletionFailure,
+  ownerFacingDeletionMessage,
+  sanitizeOwnerDeletionMessage,
+  type OwnerDeletionFailureKind,
+} from "./ownerDeletionErrors";
 import { supabase } from "./supabase";
 
 export type OwnerAccountDeletionErrorCode =
   | "reauth_required"
-  | "migration_not_deployed"
-  | "function_not_deployed"
+  | "function_unavailable"
   | "permission_denied"
   | "network"
   | "partial"
-  | "verification_failed"
+  | "validation"
+  | "delete_failed"
   | "unknown";
 
 export type OwnerAccountDeletionResult = {
@@ -56,36 +62,24 @@ type EdgeDeletePayload = {
   retry?: boolean;
 };
 
-function classifyDeletionError(
-  error: string | undefined,
-  detail: string | undefined,
-  message: string | undefined,
-  transportCode?: string,
-): OwnerAccountDeletionErrorCode {
-  const code = String(error ?? "").toLowerCase();
-  const blob = `${detail ?? ""} ${message ?? ""}`.toLowerCase();
-
-  if (code === "reauth_required" || blob.includes("reauth")) return "reauth_required";
-  if (
-    code === "migration_not_deployed" ||
-    blob.includes("migration 112") ||
-    blob.includes("migration 111") ||
-    blob.includes("health_probe")
-  ) {
-    return "migration_not_deployed";
+function kindToErrorCode(kind: OwnerDeletionFailureKind): OwnerAccountDeletionErrorCode {
+  switch (kind) {
+    case "REAUTH_REQUIRED":
+    case "AUTH_REQUIRED":
+      return "reauth_required";
+    case "FUNCTION_UNAVAILABLE":
+      return "function_unavailable";
+    case "NETWORK_ERROR":
+      return "network";
+    case "VALIDATION_ERROR":
+      return "validation";
+    case "PARTIAL_DELETE":
+      return "partial";
+    case "DELETE_FAILED":
+      return "delete_failed";
+    default:
+      return "unknown";
   }
-  if (transportCode === "function_not_deployed" || code === "function_not_deployed") {
-    return "function_not_deployed";
-  }
-  if (code === "forbidden" || code === "permission_denied" || blob.includes("forbidden")) {
-    return "permission_denied";
-  }
-  if (transportCode === "timeout" || blob.includes("timeout") || blob.includes("network")) {
-    return "network";
-  }
-  if (code === "verification_failed") return "verification_failed";
-  if (code === "auth_delete_failed" || code === "partial") return "partial";
-  return "unknown";
 }
 
 function mapEdgePayload(
@@ -96,69 +90,32 @@ function mapEdgePayload(
   if (j.ok) {
     return {
       ok: true,
-      message: j.message ?? "Account permanently deleted.",
+      message: "Account permanently deleted.",
       sales_deleted: j.sales_deleted,
       devices_deactivated: j.devices_deactivated,
       deletion_report: j.deletion_report,
     };
   }
 
-  const errorCode = classifyDeletionError(j.error, j.detail, j.message ?? transportMessage, transportCode);
-  const message =
-    j.message ?? j.detail ?? transportMessage ?? j.error ?? "Permanent delete failed.";
+  const kind = classifyOwnerDeletionFailure({
+    error: j.error,
+    detail: j.detail,
+    message: j.message ?? transportMessage,
+    transportCode,
+    partial: j.partial,
+  });
+  const errorCode = kindToErrorCode(kind);
+  const message = ownerFacingDeletionMessage(kind);
 
-  if (j.error === "confirmation_required") {
-    return { ok: false, message: j.detail ?? "Confirmation text did not match.", errorCode: "unknown" };
-  }
-  if (j.error === "forbidden") {
+  if (j.error === "forbidden" || j.error === "cannot_delete_internal_admin") {
     return {
       ok: false,
-      message: j.detail ?? "Only the shop owner can delete this account.",
+      message,
       errorCode: "permission_denied",
     };
   }
-  if (j.error === "cannot_delete_internal_admin") {
-    return {
-      ok: false,
-      message: j.detail ?? "This account cannot be self-deleted.",
-      errorCode: "permission_denied",
-    };
-  }
-  if (j.error === "migration_not_deployed") {
-    return {
-      ok: false,
-      message: j.detail ?? "Database migration not deployed. Contact Waka support or run supabase db push.",
-      errorCode: "migration_not_deployed",
-    };
-  }
-  if (j.error === "reauth_required") {
-    return {
-      ok: false,
-      message: j.detail ?? "Confirm your password or Google account, then retry.",
-      errorCode: "reauth_required",
-    };
-  }
-  if (j.error === "verification_failed") {
-    writeOwnerDeletePartialFailure({
-      shopId: j.shop_id ?? null,
-      shopName: j.shop_name ?? null,
-      organizationId: j.organization_id ?? null,
-      shopIds: j.shop_ids ?? [],
-      staffUserIds: j.staff_user_ids ?? [],
-      message,
-      deletionReport: j.deletion_report ?? null,
-    });
-    return {
-      ok: false,
-      partial: true,
-      message,
-      errorCode: "verification_failed",
-      deletion_report: j.deletion_report,
-      sales_deleted: j.sales_deleted,
-      devices_deactivated: j.devices_deactivated,
-    };
-  }
-  if (j.error === "auth_delete_failed" || j.partial) {
+
+  if (kind === "PARTIAL_DELETE") {
     writeOwnerDeletePartialFailure({
       shopId: j.shop_id ?? null,
       shopName: j.shop_name ?? null,
@@ -183,22 +140,26 @@ function mapEdgePayload(
     ok: false,
     message,
     errorCode,
-    partial: j.partial,
+    partial: false,
     deletion_report: j.deletion_report,
   };
 }
 
 async function invokeOwnerDeleteEdge(body: Record<string, unknown>): Promise<OwnerAccountDeletionResult> {
   const { invokeSupabaseEdgeFunction } = await import("./supabaseEdgeInvoke");
-  const r = await invokeSupabaseEdgeFunction<EdgeDeletePayload>("owner-permanently-delete-account", body, {
-    deployScript: "supabase:deploy:admin",
-  });
+  const r = await invokeSupabaseEdgeFunction<EdgeDeletePayload>("owner-permanently-delete-account", body);
 
   if (!r.ok) {
+    const kind = classifyOwnerDeletionFailure({
+      error: undefined,
+      detail: r.message,
+      message: r.message,
+      transportCode: r.errorCode,
+    });
     return {
       ok: false,
-      message: r.message,
-      errorCode: classifyDeletionError(undefined, r.message, r.message, r.errorCode),
+      message: sanitizeOwnerDeletionMessage(r.message, kind),
+      errorCode: kindToErrorCode(kind),
     };
   }
 
@@ -211,7 +172,7 @@ export async function ownerPermanentlyDeleteOwnAccount(
 ): Promise<OwnerAccountDeletionResult> {
   const reauth = assertRecentOwnerDeleteReauth(user);
   if (!reauth.ok) {
-    return { ok: false, message: reauth.message, errorCode: "reauth_required" };
+    return { ok: false, message: ownerFacingDeletionMessage("REAUTH_REQUIRED"), errorCode: "reauth_required" };
   }
 
   return invokeOwnerDeleteEdge({ confirmation: confirmation.trim() });
@@ -220,7 +181,7 @@ export async function ownerPermanentlyDeleteOwnAccount(
 export async function retryOwnerAuthDeletion(user: User | null): Promise<OwnerAccountDeletionResult> {
   const reauth = assertRecentOwnerDeleteReauth(user);
   if (!reauth.ok) {
-    return { ok: false, message: reauth.message, errorCode: "reauth_required" };
+    return { ok: false, message: ownerFacingDeletionMessage("REAUTH_REQUIRED"), errorCode: "reauth_required" };
   }
 
   const partial = readOwnerDeletePartialFailure();

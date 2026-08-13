@@ -23,6 +23,8 @@ export const HARD_DELETE_COUNT_LABELS: Array<{ key: keyof HardDeleteCounts; labe
   { key: "subscriptions", label: "Subscriptions" },
   { key: "audit_logs", label: "Audit logs" },
   { key: "support_requests", label: "Support requests" },
+  { key: "table_sessions", label: "Table sessions" },
+  { key: "stock_transfers", label: "Stock transfers" },
   { key: "owner_auth_account", label: "Owner auth account" },
   { key: "staff_auth_accounts", label: "Staff auth accounts" },
 ];

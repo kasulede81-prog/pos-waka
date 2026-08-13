@@ -163,10 +163,9 @@ export function formatAiErrorMessage(params: {
 export function classifyInvokeMessage(message: string, functionName?: string): AiErrorCode {
   const msg = message.toLowerCase();
   if (
-    msg.includes("not found") ||
-    msg.includes("404") ||
     msg.includes("requested function was not found") ||
-    msg.includes("deploy supabase edge function")
+    msg.includes("edge function not found") ||
+    (msg.includes("deploy supabase edge function") && msg.includes("then retry"))
   ) {
     return "function_not_deployed";
   }

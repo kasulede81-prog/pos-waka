@@ -130,8 +130,21 @@ export function userIdFromSupabaseAccountKey(accountKey: string): string | null 
   return accountKey.slice(3) || null;
 }
 
+export const PENDING_DELETION_TTL_MS = 15 * 60 * 1000;
+
+export function expireStalePendingDeletion(accountKey: string): boolean {
+  if (!accountKey) return false;
+  const marker = readDeletionMarker(accountKey);
+  if (!marker || marker.status !== "pending") return false;
+  const at = Date.parse(marker.markedAt);
+  if (!Number.isFinite(at) || Date.now() - at < PENDING_DELETION_TTL_MS) return false;
+  clearDeletionMarker(accountKey);
+  return true;
+}
+
 export function isDeletionPending(accountKey: string | null = getActiveAccountKey()): boolean {
   if (!accountKey) return false;
+  expireStalePendingDeletion(accountKey);
   const marker = readDeletionMarker(accountKey);
   return marker?.status === "pending";
 }
@@ -190,6 +203,8 @@ export async function refreshOrganizationDeletionState(
   if (!userId || !accountKey || accountKey.startsWith("local:")) {
     return isOrganizationBlocked(accountKey);
   }
+
+  expireStalePendingDeletion(accountKey);
 
   const org = await resolvePrimaryOrganizationForUser(userId);
   if (org?.organizationId) {

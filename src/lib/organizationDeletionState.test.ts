@@ -87,4 +87,18 @@ describe("organizationDeletionState", () => {
     markDeletionPending({ accountKey, userId });
     expect(isDeletionPending(accountKey)).toBe(true);
   });
+
+  it("expires a stale pending marker without marking deleted", async () => {
+    const { markDeletionPending, expireStalePendingDeletion, isDeletionPending, isDeletedOrganization, PENDING_DELETION_TTL_MS } =
+      await import("./organizationDeletionState");
+    markDeletionPending({ accountKey, userId });
+    const key = `waka.org.deletion.marker.v1::${accountKey}`;
+    const raw = JSON.parse(localStorage.getItem(key) ?? "{}") as { markedAt?: string };
+    raw.markedAt = new Date(Date.now() - PENDING_DELETION_TTL_MS - 1_000).toISOString();
+    localStorage.setItem(key, JSON.stringify(raw));
+
+    expect(expireStalePendingDeletion(accountKey)).toBe(true);
+    expect(isDeletionPending(accountKey)).toBe(false);
+    expect(isDeletedOrganization(accountKey)).toBe(false);
+  });
 });

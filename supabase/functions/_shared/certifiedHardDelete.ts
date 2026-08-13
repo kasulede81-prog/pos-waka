@@ -48,6 +48,15 @@ function asStringArray(raw: unknown): string[] {
   return raw.map((v) => String(v)).filter(Boolean);
 }
 
+export function isAuthUserAlreadyGone(message: string | undefined): boolean {
+  const m = (message ?? "").toLowerCase();
+  return (
+    m.includes("user not found") ||
+    m.includes("user does not exist") ||
+    m.includes("already deleted")
+  );
+}
+
 async function revokeAndDeleteAuthUsers(
   admin: SupabaseClient,
   userIds: string[],
@@ -62,7 +71,10 @@ async function revokeAndDeleteAuthUsers(
   const failures: string[] = [];
   for (const id of unique) {
     const { error } = await admin.auth.admin.deleteUser(id);
-    if (error) failures.push(`${id}: ${error.message}`);
+    if (!error) continue;
+    const gone = isAuthUserAlreadyGone(error.message);
+    if (gone) continue;
+    failures.push(`${id}: ${error.message}`);
   }
 
   let ownerRemaining = 0;
@@ -74,6 +86,10 @@ async function revokeAndDeleteAuthUsers(
     else staffRemaining += 1;
   }
 
+  if (ownerRemaining === 0 && staffRemaining === 0) {
+    return { ok: true, ownerRemaining, staffRemaining };
+  }
+
   if (failures.length > 0) {
     return {
       ok: false,
@@ -83,7 +99,7 @@ async function revokeAndDeleteAuthUsers(
     };
   }
 
-  return { ok: ownerRemaining === 0 && staffRemaining === 0, ownerRemaining, staffRemaining };
+  return { ok: false, ownerRemaining, staffRemaining };
 }
 
 export async function runCertifiedHardDelete(opts: {
@@ -127,11 +143,13 @@ export async function runCertifiedHardDelete(opts: {
 
   const exec = (execRes.data ?? {}) as ExecutePayload;
   if (!exec.ok) {
+    const orgGone =
+      exec.error === "verification_failed" && Number(exec.verification?.counts?.organizations ?? 1) === 0;
     return {
       ok: false,
       error: exec.error ?? "delete_failed",
       detail: exec.detail,
-      partial: exec.error === "verification_failed",
+      partial: orgGone,
       deletion_report: exec.verification,
       shop_name: exec.shop_name,
       sales_deleted: exec.sales_deleted,

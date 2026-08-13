@@ -53,10 +53,6 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "invalid_body" }, 400);
   }
 
-  if (body.probe === true) {
-    return json({ ok: true, probe: true, edge: "owner-permanently-delete-account" });
-  }
-
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -64,6 +60,10 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user?.id) {
     return json({ ok: false, error: "unauthorized" }, 401);
+  }
+
+  if (body.probe === true) {
+    return json({ ok: true, probe: true, edge: "owner-permanently-delete-account" });
   }
 
   const ownerId = userData.user.id;
