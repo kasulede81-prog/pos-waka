@@ -1,11 +1,15 @@
-import { jsPDF } from "jspdf";
 import type { Language } from "../types";
 import { t } from "./i18n";
-import { createPdfLayout, ensurePdfSpace, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
-import { downloadPdfBlob, sharePdfBlob } from "./documentPrint";
-import { printDocumentNativeFallback } from "./nativePrintFallback";
+import { sanitizePdfStem } from "./pdfLayout";
 import { downloadTextFile } from "./monthlyBusinessReport";
 import type { CashPositionReconciliation, CashPositionReport } from "./cashPosition";
+import {
+  statusFromAuthority,
+  ugxLabel,
+  type ReportDocumentModel,
+} from "./reportDocumentModel";
+import { renderReportDocumentPdf } from "./reportDocumentPdf";
+import { downloadReportPdfBlob, printReportPdfBlob, shareReportPdfBlob } from "./reportDocumentPrint";
 
 function paymentLabel(lang: Language, key: string): string {
   const map: Record<string, string> = {
@@ -34,6 +38,9 @@ function appendCashPositionSections(
   lines.push(`${t(lang, "cashPositionTransactions")}: ${report.summary.transactionCount}`);
   lines.push(`${t(lang, "cashPositionItemsSold")}: ${report.summary.itemsSold.toLocaleString()}`);
   lines.push("");
+  if (report.ledgerClosed) {
+    lines.push(t(lang, "dailyReportOperationalDetails"));
+  }
   lines.push(t(lang, "cashPositionSectionPayments"));
   for (const row of report.paymentMethods) {
     lines.push(
@@ -148,107 +155,89 @@ export function cashPositionToCsv(
   return "\uFEFF" + rows.join("\n");
 }
 
+export function buildCashPositionDocument(
+  lang: Language,
+  report: CashPositionReport,
+  reconciliation?: CashPositionReconciliation | null,
+): ReportDocumentModel {
+  const live = Boolean(report.ledgerClosed);
+  return {
+    kind: "cash_position",
+    lang,
+    shopName: report.shopName,
+    title: t(lang, "cashPositionTitle"),
+    periodLabel: report.dayKey,
+    status: statusFromAuthority(report.ledgerClosed ? "closed_snapshot" : "live", !report.dayKey.includes("…")),
+    generatedAtIso: report.generatedAt,
+    empty: report.summary.transactionCount === 0 && report.summary.totalSalesUgx === 0,
+    sections: [
+      {
+        title: report.ledgerClosed ? t(lang, "reportDocClosedHeadlines") : undefined,
+        rows: [
+          { label: t(lang, "cashPositionTotalSales"), value: ugxLabel(report.summary.totalSalesUgx), bold: true },
+          { label: t(lang, "cashPositionTransactions"), value: String(report.summary.transactionCount) },
+          { label: t(lang, "cashPositionCashSales"), value: ugxLabel(report.cashPosition.cashSalesUgx) },
+          { label: t(lang, "cashPositionDebtCollected"), value: ugxLabel(report.cashPosition.debtCollectedUgx) },
+          { label: t(lang, "cashPositionRefunds"), value: ugxLabel(report.cashPosition.refundsUgx) },
+          { label: t(lang, "cashPositionExpenses"), value: ugxLabel(report.cashPosition.expensesUgx) },
+          { label: t(lang, "cashPositionSupplierPayments"), value: ugxLabel(report.cashPosition.supplierPaymentsUgx) },
+          { label: t(lang, "cashPositionExpectedCash"), value: ugxLabel(report.cashPosition.expectedCashUgx), bold: true },
+          ...(reconciliation
+            ? [
+                { label: t(lang, "cashPositionPhysicalCount"), value: ugxLabel(reconciliation.physicalCountUgx) },
+                {
+                  label: t(lang, "cashPositionVariance"),
+                  value: `${reconciliation.varianceUgx >= 0 ? "+" : ""}${ugxLabel(Math.abs(reconciliation.varianceUgx))} · ${varianceLabel(lang, reconciliation.varianceKind)}`,
+                },
+              ]
+            : []),
+        ],
+      },
+      {
+        title: t(lang, "cashPositionSectionPayments"),
+        live,
+        rows: [
+          { label: t(lang, "cashPositionItemsSold"), value: report.summary.itemsSold.toLocaleString() },
+          ...report.paymentMethods.map((row) => ({
+            label: paymentLabel(lang, row.key),
+            value: `${ugxLabel(row.amountUgx)} (${row.percent}%) · ${row.transactionCount}`,
+          })),
+          ...(report.paymentAdjustmentUgx !== 0
+            ? [{ label: t(lang, "cashPositionPaymentAdjustment"), value: ugxLabel(report.paymentAdjustmentUgx) }]
+            : []),
+          { label: t(lang, "cashPositionGrandTotal"), value: ugxLabel(report.summary.totalSalesUgx), bold: true },
+        ],
+      },
+      {
+        title: t(lang, "cashPositionSectionCategories"),
+        live,
+        rows: report.categories.map((row) => ({
+          label: row.categoryLabel,
+          value: `${ugxLabel(row.amountUgx)} (${row.percent}%)`,
+        })),
+      },
+      {
+        title: t(lang, "cashPositionSectionCashiers"),
+        live,
+        rows: report.cashiers.map((row) => ({
+          label: row.name,
+          value: `${ugxLabel(row.salesUgx)} · ${row.transactionCount}`,
+        })),
+      },
+    ],
+  };
+}
+
 export function buildCashPositionPdfBlob(
   lang: Language,
   report: CashPositionReport,
   reconciliation?: CashPositionReconciliation | null,
 ): Blob {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const layout = createPdfLayout(doc);
-  pdfLine(layout, doc, report.shopName, { size: 14, bold: true });
-  pdfGap(layout, 4);
-  pdfLine(layout, doc, t(lang, "cashPositionTitle"), { size: 13, bold: true });
-  pdfLine(layout, doc, `${t(lang, "cashPositionToday")}: ${report.dayKey}`);
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, `${t(lang, "cashPositionTotalSales")}: UGX ${report.summary.totalSalesUgx.toLocaleString()}`, {
-    bold: true,
-  });
-  pdfLine(layout, doc, `${t(lang, "cashPositionTransactions")}: ${report.summary.transactionCount}`);
-  pdfLine(layout, doc, `${t(lang, "cashPositionItemsSold")}: ${report.summary.itemsSold.toLocaleString()}`);
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, t(lang, "cashPositionSectionPayments"), { bold: true });
-  for (const row of report.paymentMethods) {
-    pdfLine(
-      layout,
-      doc,
-      `${paymentLabel(lang, row.key)}: UGX ${row.amountUgx.toLocaleString()} (${row.percent}%) · ${row.transactionCount}`,
-    );
-  }
-  if (report.paymentAdjustmentUgx !== 0) {
-    pdfLine(
-      layout,
-      doc,
-      `${t(lang, "cashPositionPaymentAdjustment")}: UGX ${report.paymentAdjustmentUgx.toLocaleString()}`,
-    );
-  }
-  pdfLine(
-    layout,
-    doc,
-    `${t(lang, "cashPositionGrandTotal")}: UGX ${report.summary.totalSalesUgx.toLocaleString()}`,
-    { bold: true },
-  );
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, t(lang, "cashPositionSectionCash"), { bold: true });
-  pdfLine(layout, doc, `${t(lang, "cashPositionCashSales")}: UGX ${report.cashPosition.cashSalesUgx.toLocaleString()}`);
-  pdfLine(
-    layout,
-    doc,
-    `${t(lang, "cashPositionDebtCollected")}: UGX ${report.cashPosition.debtCollectedUgx.toLocaleString()}`,
-  );
-  pdfLine(layout, doc, `${t(lang, "cashPositionRefunds")}: UGX ${report.cashPosition.refundsUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "cashPositionExpenses")}: UGX ${report.cashPosition.expensesUgx.toLocaleString()}`);
-  pdfLine(
-    layout,
-    doc,
-    `${t(lang, "cashPositionSupplierPayments")}: UGX ${report.cashPosition.supplierPaymentsUgx.toLocaleString()}`,
-  );
-  pdfLine(
-    layout,
-    doc,
-    `${t(lang, "cashPositionExpectedCash")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
-    { bold: true },
-  );
-  if (reconciliation) {
-    pdfGap(layout, 6);
-    pdfLine(layout, doc, t(lang, "cashPositionSectionReconcile"), { bold: true });
-    pdfLine(
-      layout,
-      doc,
-      `${t(lang, "cashPositionPhysicalCount")}: UGX ${reconciliation.physicalCountUgx.toLocaleString()}`,
-    );
-    pdfLine(
-      layout,
-      doc,
-      `${t(lang, "cashPositionExpectedLabel")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
-    );
-    pdfLine(
-      layout,
-      doc,
-      `${t(lang, "cashPositionActualLabel")}: UGX ${reconciliation.physicalCountUgx.toLocaleString()}`,
-    );
-    pdfLine(
-      layout,
-      doc,
-      `${t(lang, "cashPositionVariance")}: ${reconciliation.varianceUgx >= 0 ? "+" : ""}UGX ${reconciliation.varianceUgx.toLocaleString()} · ${varianceLabel(lang, reconciliation.varianceKind)}`,
-    );
-  }
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, t(lang, "cashPositionSectionCategories"), { bold: true });
-  for (const row of report.categories) {
-    ensurePdfSpace(layout, doc, 14);
-    pdfLine(layout, doc, `${row.categoryLabel}: UGX ${row.amountUgx.toLocaleString()} (${row.percent}%)`);
-  }
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, t(lang, "cashPositionSectionCashiers"), { bold: true });
-  for (const row of report.cashiers) {
-    ensurePdfSpace(layout, doc, 14);
-    pdfLine(
-      layout,
-      doc,
-      `${row.name}: UGX ${row.salesUgx.toLocaleString()} · ${row.transactionCount}`,
-    );
-  }
-  return doc.output("blob");
+  return renderReportDocumentPdf(buildCashPositionDocument(lang, report, reconciliation));
+}
+
+function cashPositionPdfFilename(dayKey: string): string {
+  return sanitizePdfStem(`cash-position-${dayKey}`) + ".pdf";
 }
 
 export async function downloadCashPositionPdf(
@@ -257,13 +246,7 @@ export async function downloadCashPositionPdf(
   reconciliation?: CashPositionReconciliation | null,
 ): Promise<boolean> {
   const blob = buildCashPositionPdfBlob(lang, report, reconciliation);
-  const stem = sanitizePdfStem(`cash-position-${report.dayKey}`);
-  return downloadPdfBlob(`${stem}.pdf`, blob);
-}
-
-function cashPositionHtml(lang: Language, report: CashPositionReport, reconciliation?: CashPositionReconciliation | null): string {
-  const text = cashPositionToPlainText(lang, report, reconciliation);
-  return `<article><pre style="font-family:system-ui,sans-serif;white-space:pre-wrap">${text.replace(/</g, "&lt;")}</pre></article>`;
+  return downloadReportPdfBlob(cashPositionPdfFilename(report.dayKey), blob);
 }
 
 export async function printCashPositionReport(
@@ -271,13 +254,9 @@ export async function printCashPositionReport(
   report: CashPositionReport,
   reconciliation?: CashPositionReconciliation | null,
 ): Promise<boolean> {
-  const stem = sanitizePdfStem(`cash-position-${report.dayKey}`);
-  return printDocumentNativeFallback({
-    pdfFilename: `${stem}.pdf`,
-    buildPdfBlob: () => buildCashPositionPdfBlob(lang, report, reconciliation),
-    htmlBody: cashPositionHtml(lang, report, reconciliation),
-    paper: "a4",
-    title: "Cash position",
+  const blob = buildCashPositionPdfBlob(lang, report, reconciliation);
+  return printReportPdfBlob("cash_position", cashPositionPdfFilename(report.dayKey), blob, {
+    title: t(lang, "cashPositionTitle"),
     shareDialogTitle: "Print or share cash position",
   });
 }
@@ -288,8 +267,7 @@ export async function shareCashPositionPdf(
   reconciliation?: CashPositionReconciliation | null,
 ): Promise<boolean> {
   const blob = buildCashPositionPdfBlob(lang, report, reconciliation);
-  const stem = sanitizePdfStem(`cash-position-${report.dayKey}`);
-  return sharePdfBlob(`${stem}.pdf`, blob);
+  return shareReportPdfBlob(cashPositionPdfFilename(report.dayKey), blob, "Print or share cash position");
 }
 
 export function cashPositionReportPlainText(

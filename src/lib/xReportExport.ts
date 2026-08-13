@@ -1,43 +1,67 @@
-import { jsPDF } from "jspdf";
 import type { Language } from "../types";
 import { t } from "./i18n";
-import { createPdfLayout, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
-import { downloadPdfBlob, sharePdfBlob } from "./documentPrint";
-import { printDocumentNativeFallback } from "./nativePrintFallback";
+import { sanitizePdfStem } from "./pdfLayout";
 import { exportCsvFile } from "./reportExportEngine";
 import { formatXReportCsv, type XReportSnapshot } from "./xReport";
+import {
+  statusFromAuthority,
+  ugxLabel,
+  type ReportDocumentModel,
+} from "./reportDocumentModel";
+import { renderReportDocumentPdf } from "./reportDocumentPdf";
+import { downloadReportPdfBlob, printReportPdfBlob, shareReportPdfBlob } from "./reportDocumentPrint";
+
+export function buildXReportDocument(lang: Language, snapshot: XReportSnapshot): ReportDocumentModel {
+  return {
+    kind: "x_report",
+    lang,
+    shopName: snapshot.shopName,
+    title: t(lang, "xReportTitle"),
+    periodLabel: snapshot.dateKey,
+    status: statusFromAuthority(snapshot.ledgerClosed ? "closed_snapshot" : "live", true),
+    generatedAtIso: snapshot.generatedAt,
+    empty: snapshot.transactionCount === 0 && snapshot.totalSalesUgx === 0,
+    sections: [
+      {
+        title: snapshot.ledgerClosed ? t(lang, "reportDocClosedHeadlines") : undefined,
+        rows: [
+          { label: t(lang, "totalSales"), value: ugxLabel(snapshot.totalSalesUgx), bold: true },
+          { label: t(lang, "closeSalesCount"), value: String(snapshot.transactionCount) },
+          { label: t(lang, "closeDayExpectedTitle"), value: ugxLabel(snapshot.expectedDrawerCashUgx) },
+          { label: t(lang, "closeDayExpensesToday"), value: ugxLabel(snapshot.expensesUgx) },
+          { label: t(lang, "xReportRefunds"), value: ugxLabel(snapshot.refundsUgx) },
+        ],
+      },
+      {
+        title: t(lang, "dailyReportPaymentMethods"),
+        live: snapshot.ledgerClosed,
+        rows: [
+          { label: t(lang, "xReportCash"), value: ugxLabel(snapshot.payments.cashUgx) },
+          { label: t(lang, "xReportMoMo"), value: ugxLabel(snapshot.payments.mobileMoneyUgx) },
+          { label: t(lang, "xReportCard"), value: ugxLabel(snapshot.payments.cardUgx) },
+          { label: t(lang, "xReportCredit"), value: ugxLabel(snapshot.payments.creditUgx) },
+          { label: t(lang, "xReportVoids"), value: ugxLabel(snapshot.voidsUgx) },
+          { label: t(lang, "xReportDiscounts"), value: ugxLabel(snapshot.discountsUgx) },
+          ...(snapshot.tableOpenCount > 0
+            ? [
+                {
+                  label: t(lang, "xReportOpenTables"),
+                  value: `${snapshot.tableOpenCount} · ${ugxLabel(snapshot.tablePendingUgx)}`,
+                },
+              ]
+            : []),
+          ...snapshot.staffRows.slice(0, 10).map((row) => ({
+            label: row.label,
+            value: `${ugxLabel(row.salesUgx)} (${row.saleCount})`,
+          })),
+        ],
+      },
+    ],
+  };
+}
 
 export function buildXReportPdfBlob(lang: Language, snapshot: XReportSnapshot): Blob {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const layout = createPdfLayout(doc);
-  pdfLine(layout, doc, snapshot.shopName, { size: 14, bold: true });
-  pdfGap(layout, 4);
-  pdfLine(layout, doc, t(lang, "xReportTitle"), { size: 13, bold: true });
-  pdfLine(layout, doc, `${t(lang, "xReportDate")}: ${snapshot.dateKey}`);
-  pdfLine(layout, doc, `${t(lang, "xReportGenerated")}: ${new Date(snapshot.generatedAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" })}`);
-  pdfGap(layout, 8);
-  pdfLine(layout, doc, `${t(lang, "totalSales")}: UGX ${snapshot.totalSalesUgx.toLocaleString()}`, { bold: true });
-  pdfLine(layout, doc, `${t(lang, "closeSalesCount")}: ${snapshot.transactionCount}`);
-  pdfLine(layout, doc, `${t(lang, "closeDayExpectedTitle")}: UGX ${snapshot.expectedDrawerCashUgx.toLocaleString()}`);
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, `${t(lang, "xReportCash")}: UGX ${snapshot.payments.cashUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "xReportMoMo")}: UGX ${snapshot.payments.mobileMoneyUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "xReportCard")}: UGX ${snapshot.payments.cardUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "xReportCredit")}: UGX ${snapshot.payments.creditUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "closeDayExpensesToday")}: UGX ${snapshot.expensesUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "xReportRefunds")}: UGX ${snapshot.refundsUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "xReportVoids")}: UGX ${snapshot.voidsUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "xReportDiscounts")}: UGX ${snapshot.discountsUgx.toLocaleString()}`);
-  if (snapshot.tableOpenCount > 0) {
-    pdfGap(layout, 6);
-    pdfLine(layout, doc, `${t(lang, "xReportOpenTables")}: ${snapshot.tableOpenCount} · UGX ${snapshot.tablePendingUgx.toLocaleString()}`);
-  }
-  pdfGap(layout, 8);
-  pdfLine(layout, doc, t(lang, "xReportStaffSection"), { bold: true });
-  for (const row of snapshot.staffRows.slice(0, 10)) {
-    pdfLine(layout, doc, `${row.label}: UGX ${row.salesUgx.toLocaleString()} (${row.saleCount})`);
-  }
-  return doc.output("blob");
+  return renderReportDocumentPdf(buildXReportDocument(lang, snapshot));
 }
 
 function xReportPdfFilename(dateKey: string): string {
@@ -46,21 +70,18 @@ function xReportPdfFilename(dateKey: string): string {
 
 export async function downloadXReportPdf(lang: Language, snapshot: XReportSnapshot): Promise<boolean> {
   const blob = buildXReportPdfBlob(lang, snapshot);
-  return downloadPdfBlob(xReportPdfFilename(snapshot.dateKey), blob);
+  return downloadReportPdfBlob(xReportPdfFilename(snapshot.dateKey), blob);
 }
 
 export async function shareXReportPdf(lang: Language, snapshot: XReportSnapshot): Promise<boolean> {
   const blob = buildXReportPdfBlob(lang, snapshot);
-  return sharePdfBlob(xReportPdfFilename(snapshot.dateKey), blob);
+  return shareReportPdfBlob(xReportPdfFilename(snapshot.dateKey), blob, "Print or share X report");
 }
 
 export async function printXReport(lang: Language, snapshot: XReportSnapshot): Promise<boolean> {
-  return printDocumentNativeFallback({
-    pdfFilename: xReportPdfFilename(snapshot.dateKey),
-    buildPdfBlob: () => buildXReportPdfBlob(lang, snapshot),
-    htmlBody: `<article><h2>${snapshot.shopName}</h2><h3>${t(lang, "xReportTitle")}</h3><p>${snapshot.dateKey}</p></article>`,
-    paper: "a4",
-    title: "X Report",
+  const blob = buildXReportPdfBlob(lang, snapshot);
+  return printReportPdfBlob("x_report", xReportPdfFilename(snapshot.dateKey), blob, {
+    title: t(lang, "xReportTitle"),
     shareDialogTitle: "Print or share X report",
   });
 }

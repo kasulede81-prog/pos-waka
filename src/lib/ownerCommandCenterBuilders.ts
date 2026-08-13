@@ -38,6 +38,7 @@ import {
 } from "./dateFilters";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancialsFromScoped, type RevenueSalesIndex } from "./financialMetrics";
+import { overlayPeriodFinancials } from "./closedDayAuthority";
 import { buildInventoryCountVarianceReport } from "./inventoryCount";
 import { isLowStock } from "./sellingEngine";
 import { listSyncConflicts } from "./syncConflictLog";
@@ -252,16 +253,37 @@ function financialForBounds(
   products: Product[],
   bounds: DateFilterBounds,
   salesIndex?: RevenueSalesIndex,
+  dayCloses?: DayCloseSummary[],
 ): { revenueUgx: number; profitUgx: number; transactionCount: number } {
   const scopedSales = salesIndex
     ? revenueSalesInBoundsFromIndex(salesIndex, bounds)
     : revenueSalesInBounds(sales, bounds);
   const scopedReturns = returnsInBounds(returnRecords, bounds);
   const fin = getCompletedFinancialsFromScoped(scopedSales, scopedReturns, products);
+  if (!dayCloses?.length) {
+    return {
+      revenueUgx: fin.revenueUgx,
+      profitUgx: fin.profitUgx,
+      transactionCount: fin.transactionCount,
+    };
+  }
+  const overlaid = overlayPeriodFinancials({
+    live: {
+      revenueUgx: fin.revenueUgx,
+      profitUgx: fin.profitUgx,
+      transactionCount: fin.transactionCount,
+      debtIssuedUgx: 0,
+    },
+    dayCloses,
+    bounds,
+    sales,
+    returns: returnRecords,
+    products,
+  });
   return {
-    revenueUgx: fin.revenueUgx,
-    profitUgx: fin.profitUgx,
-    transactionCount: fin.transactionCount,
+    revenueUgx: overlaid.revenueUgx,
+    profitUgx: overlaid.profitUgx,
+    transactionCount: overlaid.transactionCount,
   };
 }
 
@@ -789,6 +811,7 @@ export function buildFinancialExtended(input: {
   cashExpenses: CashExpense[];
   bounds: DateFilterBounds;
   salesIndex?: RevenueSalesIndex;
+  dayCloses?: DayCloseSummary[];
   /** Reuse period financials from command-center context to avoid duplicate scans. */
   currentPeriod?: { revenueUgx: number; profitUgx: number; transactionCount: number };
 }): OwnerFinancialExtended {
@@ -800,6 +823,7 @@ export function buildFinancialExtended(input: {
       input.products,
       input.bounds,
       input.salesIndex,
+      input.dayCloses,
     );
 
   const mix = {
@@ -854,9 +878,9 @@ export function buildFinancialExtended(input: {
     isSingleDay: false,
   };
 
-  const priorDay = financialForBounds(input.sales, input.returnRecords, input.products, priorDayBounds, input.salesIndex);
-  const priorWeek = financialForBounds(input.sales, input.returnRecords, input.products, priorWeekBounds, input.salesIndex);
-  const priorMonth = financialForBounds(input.sales, input.returnRecords, input.products, priorMonthBounds, input.salesIndex);
+  const priorDay = financialForBounds(input.sales, input.returnRecords, input.products, priorDayBounds, input.salesIndex, input.dayCloses);
+  const priorWeek = financialForBounds(input.sales, input.returnRecords, input.products, priorWeekBounds, input.salesIndex, input.dayCloses);
+  const priorMonth = financialForBounds(input.sales, input.returnRecords, input.products, priorMonthBounds, input.salesIndex, input.dayCloses);
 
   let purchasesUgx = 0;
   for (const p of input.purchases) {

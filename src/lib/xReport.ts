@@ -5,6 +5,7 @@
 import type {
   CashDrawerAdjustment,
   CashExpense,
+  DayCloseSummary,
   DayDrawerOpen,
   DebtPayment,
   Product,
@@ -21,6 +22,7 @@ import { getDrawerCashForDayInput } from "./cashReconciliation";
 import { resolveCashDrawerFormulaVersion } from "./dayDrawerOpen";
 import { activeSessions } from "./hospitalityStats";
 import { pendingSaleTotal } from "./hospitality";
+import { resolveReportAuthority } from "./closedDayAuthority";
 
 export type XReportPaymentBreakdown = {
   cashUgx: number;
@@ -83,6 +85,7 @@ export type XReportSnapshot = {
   tablePendingUgx: number;
   hourly: XReportHourlyRow[];
   topProducts: XReportTopProduct[];
+  ledgerClosed: boolean;
 };
 
 function paymentBreakdownForDay(sales: Sale[], day: string): XReportPaymentBreakdown {
@@ -167,6 +170,7 @@ export function buildXReportSnapshot(input: {
   dayDrawerOpens: DayDrawerOpen[];
   shifts: ShiftRecord[];
   preferences: ShopPreferences;
+  dayCloses?: DayCloseSummary[];
 }): XReportSnapshot {
   const dateKey = input.dateKey ?? dateKeyKampala(new Date());
   const fin = getCompletedFinancials(input.sales, input.returns, input.products, { day: dateKey });
@@ -217,7 +221,7 @@ export function buildXReportSnapshot(input: {
       status: sh.endAt ? "CLOSED" : "ACTIVE",
     }));
 
-  return {
+  const snapshot: XReportSnapshot = {
     reportKind: "x_report",
     generatedAt: new Date().toISOString(),
     dateKey,
@@ -241,6 +245,27 @@ export function buildXReportSnapshot(input: {
     tablePendingUgx,
     hourly: hourlyForDay(input.sales, dateKey),
     topProducts: topProductsForDay(input.sales, dateKey),
+    ledgerClosed: false,
+  };
+  const auth = resolveReportAuthority(input.dayCloses, dateKey);
+  if (!auth.frozenTotals) return snapshot;
+  const tot = auth.frozenTotals;
+  return {
+    ...snapshot,
+    ledgerClosed: true,
+    totalSalesUgx: tot.totalSalesUgx,
+    transactionCount: tot.transactionCount ?? snapshot.transactionCount,
+    profitEstimateUgx: tot.profitEstimateUgx,
+    expensesUgx: tot.expenseUgx ?? snapshot.expensesUgx,
+    refundsUgx: tot.refundsUgx ?? snapshot.refundsUgx,
+    expectedDrawerCashUgx: tot.expectedCashUgx,
+    openingFloatUgx: tot.openingFloatUgx ?? snapshot.openingFloatUgx,
+    debtIssuedUgx: tot.totalDebtUgx,
+    debtCollectedUgx: tot.debtCollectedUgx ?? snapshot.debtCollectedUgx,
+    payments: {
+      ...snapshot.payments,
+      cashUgx: tot.cashSalesUgx ?? snapshot.payments.cashUgx,
+    },
   };
 }
 

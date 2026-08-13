@@ -37,6 +37,7 @@ function minimalCtx(mode: ReportsCenterContext["mode"], overrides: Partial<Repor
     legacyTabCleanup: () => {},
     report: {
       source: "local",
+      authority: "live",
       revenue: 0,
       cash: 0,
       profit: 0,

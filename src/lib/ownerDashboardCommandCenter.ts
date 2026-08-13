@@ -75,6 +75,7 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
     input.syncErrorCount,
     input.expectedCashUgx,
     input.pharmacyMode ? "rx" : "std",
+    input.dayCloses.length,
     input.devicesOnline ?? 0,
     input.devicesStale ?? 0,
   ].join(":");
@@ -218,6 +219,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
       cashExpenses: input.cashExpenses,
       bounds: input.bounds,
       salesIndex: revenueIndex,
+      dayCloses: input.dayCloses,
       currentPeriod: {
         revenueUgx: overview.revenueUgx,
         profitUgx: overview.profitUgx,

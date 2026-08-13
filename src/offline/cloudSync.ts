@@ -106,7 +106,7 @@ import {
 } from "../lib/stockMovementCloudSync";
 import { mergeStockMovementsFromCloudPull } from "../lib/stockMovementRecovery";
 import { mergeDayClosesFromCloudPull } from "../lib/dayCloseRecovery";
-import { pullDayClosesFromRpc, pushDayCloseToCloud } from "../lib/dayCloseCloudSync";
+import { applySuccessfulDayClosePush, pullDayClosesFromRpc, pushDayCloseToCloud } from "../lib/dayCloseCloudSync";
 import { normalizeUnitCostUgx, normalizePackCostUgx } from "../lib/costPrecision";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 import { pullCursorUntilExhausted, pullOffsetRangeUntilExhausted } from "../lib/cloudPullPagination";
@@ -1648,15 +1648,13 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       if (!closeId) return true;
       const close = usePosStore.getState().dayCloses.find((r) => r.id === closeId);
       if (!close) return true;
-      const ok = await pushDayCloseToCloud(close, ctx);
-      if (ok) {
+      const result = await pushDayCloseToCloud(close, ctx);
+      if (result.ok) {
         usePosStore.setState((s) => ({
-          dayCloses: s.dayCloses.map((row) =>
-            row.id === closeId ? { ...row, pendingSync: false } : row,
-          ),
+          dayCloses: applySuccessfulDayClosePush(s.dayCloses, closeId, result),
         }));
       }
-      return ok;
+      return result.ok;
     }
     case "pending_cash_expenses": {
       const expenseId = String(payload.expenseId ?? "");
@@ -3562,8 +3560,13 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
 
   for (const close of usePosStore.getState().dayCloses) {
     if (!close.pendingSync) continue;
-    if (await pushDayCloseToCloud(close, ctx)) ok += 1;
-    else fail += 1;
+    const result = await pushDayCloseToCloud(close, ctx);
+    if (result.ok) {
+      usePosStore.setState((s) => ({
+        dayCloses: applySuccessfulDayClosePush(s.dayCloses, close.id, result),
+      }));
+      ok += 1;
+    } else fail += 1;
   }
 
   return { ok, fail };

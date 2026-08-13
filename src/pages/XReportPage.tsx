@@ -22,6 +22,7 @@ export function XReportPage({ lang }: { lang: Language }) {
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
+  const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
@@ -44,6 +45,7 @@ export function XReportPage({ lang }: { lang: Language }) {
         dayDrawerOpens,
         shifts,
         preferences,
+        dayCloses,
       }),
     [
       todayKey,
@@ -59,6 +61,7 @@ export function XReportPage({ lang }: { lang: Language }) {
       dayDrawerOpens,
       shifts,
       preferences,
+      dayCloses,
     ],
   );
 

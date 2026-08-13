@@ -3,6 +3,7 @@
  */
 
 import type { DayCloseSummary } from "../types";
+import { collapseDuplicateActiveCloses, preserveFrozenCloseFields } from "./closedDayAuthority";
 import { recordSyncConflict } from "./syncConflictLog";
 
 export function mergeDayClosePair(local: DayCloseSummary, remote: DayCloseSummary): DayCloseSummary {
@@ -20,23 +21,25 @@ export function mergeDayClosePair(local: DayCloseSummary, remote: DayCloseSummar
       remoteUpdatedAt: remote.createdAt,
       resolution: remoteAt >= localAt ? "kept_remote" : "kept_local",
     });
-    return remoteAt >= localAt ? { ...remote, pendingSync: false } : local;
+    return remoteAt >= localAt ? preserveFrozenCloseFields(local, { ...remote, pendingSync: false }) : local;
   }
 
   if (remoteAt > localAt) {
-    return { ...local, ...remote, pendingSync: false };
+    return preserveFrozenCloseFields(local, remote);
   }
   return local;
 }
 
 export function mergeDayClosesFromCloudPull(local: DayCloseSummary[], cloud: DayCloseSummary[]): DayCloseSummary[] {
-  if (cloud.length === 0) return local;
+  if (cloud.length === 0) return collapseDuplicateActiveCloses(local);
   const map = new Map(local.map((d) => [d.id, d]));
   for (const row of cloud) {
     const prev = map.get(row.id);
     map.set(row.id, prev ? mergeDayClosePair(prev, row) : { ...row, pendingSync: false });
   }
-  return [...map.values()].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  return collapseDuplicateActiveCloses(
+    [...map.values()].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+  );
 }
 
 export function parseDayCloseRows(rows: unknown[]): DayCloseSummary[] {

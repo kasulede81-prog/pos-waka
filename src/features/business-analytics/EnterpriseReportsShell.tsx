@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { jsPDF } from "jspdf";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { actorHasPermission } from "../../lib/actorAuthorization";
@@ -16,9 +15,11 @@ import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../../lib/profitVisibility";
 import { buildDailyReportText, shareText } from "../../lib/reportExport";
-import { downloadDailyReportPdf } from "../../lib/dailyReportPdf";
+import { downloadDailyReportPdf, printDailyReportPdf, shareDailyReportPdf } from "../../lib/dailyReportPdf";
+import { statusFromAuthority, ugxLabel, type ReportDocumentModel } from "../../lib/reportDocumentModel";
+import { printReportDocumentModel } from "../../lib/reportDocumentPrint";
 import { buildAnalyticsReportRows } from "../../lib/analyticsReportExport";
-import { exportCsvFile, exportXlsxFile, printReportDocument } from "../../lib/reportExportEngine";
+import { exportCsvFile, exportXlsxFile } from "../../lib/reportExportEngine";
 import { filterPurchases } from "../../lib/purchaseReporting";
 import { computeHospitalityReports } from "../../lib/hospitalityReports";
 import { isHospitalityMode, totalOpenTablesPendingUgx } from "../../lib/hospitality";
@@ -54,6 +55,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const stockMovements = usePosStore((s) => s.stockMovements);
@@ -97,8 +99,9 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
         filter,
         cashExpenses,
         compareEnabled,
+        dayCloses,
       ),
-    [sales, products, customers, returnRecords, suppliers, filter, cashExpenses, compareEnabled],
+    [sales, products, customers, returnRecords, suppliers, filter, cashExpenses, compareEnabled, dayCloses],
   );
 
   const reportDayKey = selectedDayKeyForFilter(filter) ?? dateKeyKampala(new Date());
@@ -234,15 +237,17 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
 
   const exportSummaryText = useMemo(() => {
     if (!showDailyExport) {
-      return [
+      const lines = [
         pageTitle,
         periodLabel,
         `${t(lang, "receiptsRangeRevenue")}: UGX ${report.revenue.toLocaleString()}`,
         `${t(lang, "salesCount")}: ${report.count}`,
         canProfit ? `${t(lang, "estimatedProfit")}: UGX ${report.profit.toLocaleString()}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
+      ].filter(Boolean);
+      if (report.authority !== "live") {
+        lines.push(t(lang, "dailyReportClosedAuthorityNote"));
+      }
+      return lines.join("\n");
     }
     return buildDailyReportText(lang, reportDayKey, {
       sales,
@@ -254,6 +259,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       cashDrawerAdjustments,
       shifts,
       includeProfit: canProfit,
+      dayCloses,
     });
   }, [
     showDailyExport,
@@ -271,6 +277,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     supplierPayments,
     cashDrawerAdjustments,
     shifts,
+    dayCloses,
   ]);
 
   const legacyTabCleanup = useCallback(() => {
@@ -289,42 +296,50 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     [setCategory],
   );
 
+  const dailyPdfInput = useMemo(
+    () => ({
+      lang,
+      dateKey: reportDayKey,
+      shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+      sales,
+      products,
+      returnRecords,
+      debtPayments,
+      cashExpenses,
+      supplierPayments,
+      cashDrawerAdjustments,
+      shifts,
+      topProducts: report.topProducts,
+      includeProfit: canProfit,
+      dayCloses,
+    }),
+    [
+      lang,
+      reportDayKey,
+      preferences.shopDisplayName,
+      sales,
+      products,
+      returnRecords,
+      debtPayments,
+      cashExpenses,
+      supplierPayments,
+      cashDrawerAdjustments,
+      shifts,
+      report.topProducts,
+      canProfit,
+      dayCloses,
+    ],
+  );
+
   const onExportPdf = useCallback(() => {
     if (showDailyExport) {
-      void downloadDailyReportPdf({
-        lang,
-        dateKey: reportDayKey,
-        shopName: preferences.shopDisplayName?.trim() || "Waka POS",
-        sales,
-        products,
-        returnRecords,
-        debtPayments,
-        cashExpenses,
-        supplierPayments,
-        cashDrawerAdjustments,
-        shifts,
-        topProducts: report.topProducts,
-        includeProfit: canProfit,
-      }).then((ok) => setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")));
+      void downloadDailyReportPdf(dailyPdfInput).then((ok) =>
+        setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")),
+      );
     } else {
       setReportHint(t(lang, "baExportDailyOnly"));
     }
-  }, [
-    showDailyExport,
-    lang,
-    reportDayKey,
-    preferences.shopDisplayName,
-    sales,
-    products,
-    returnRecords,
-    debtPayments,
-    cashExpenses,
-    supplierPayments,
-    cashDrawerAdjustments,
-    shifts,
-    report.topProducts,
-    canProfit,
-  ]);
+  }, [showDailyExport, dailyPdfInput, lang]);
 
   const analyticsExportRows = useMemo(
     () =>
@@ -361,37 +376,50 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   }, [analyticsExportRows, lang, pageTitle]);
 
   const onPrint = useCallback(async () => {
-    const filename = `waka-report-${dateKeyKampala(new Date())}.pdf`;
-    const ok = await printReportDocument("reports", {
-      pdfFilename: filename,
-      buildPdfBlob: () => {
-        const doc = new jsPDF({ unit: "pt", format: "a4" });
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        let y = 40;
-        for (const line of exportSummaryText.split("\n")) {
-          doc.text(line, 40, y);
-          y += 14;
-          if (y > 760) {
-            doc.addPage();
-            y = 40;
-          }
-        }
-        return doc.output("blob");
-      },
-      htmlBody: `<pre style="font-family:system-ui;white-space:pre-wrap">${exportSummaryText.replace(/</g, "&lt;")}</pre>`,
-      paper: "a4",
-      title: pageTitle,
-      shareDialogTitle: pageTitle,
-    });
+    let ok = false;
+    if (showDailyExport) {
+      ok = await printDailyReportPdf(dailyPdfInput);
+    } else {
+      const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+      const model: ReportDocumentModel = {
+        kind: "daily",
+        lang,
+        shopName,
+        title: pageTitle,
+        periodLabel,
+        status: statusFromAuthority(report.authority, false),
+        generatedAtIso: new Date().toISOString(),
+        empty: report.count === 0 && report.revenue === 0,
+        sections: [
+          {
+            title: report.authority !== "live" ? t(lang, "reportDocClosedHeadlines") : undefined,
+            rows: [
+              { label: t(lang, "receiptsRangeRevenue"), value: ugxLabel(report.revenue), bold: true },
+              { label: t(lang, "salesCount"), value: String(report.count) },
+              ...(canProfit ? [{ label: t(lang, "estimatedProfit"), value: ugxLabel(report.profit) }] : []),
+            ],
+          },
+        ],
+      };
+      ok = await printReportDocumentModel("reports", `waka-report-${dateKeyKampala(new Date())}.pdf`, model, {
+        title: pageTitle,
+        shareDialogTitle: pageTitle,
+      });
+    }
     setReportHint(ok ? t(lang, "monthlyReportPrintOk") : t(lang, "monthlyReportPrintFail"));
-  }, [exportSummaryText, lang, pageTitle]);
+  }, [showDailyExport, dailyPdfInput, preferences.shopDisplayName, lang, pageTitle, periodLabel, report, canProfit]);
 
   const onShare = useCallback(() => {
+    if (showDailyExport) {
+      void shareDailyReportPdf(dailyPdfInput).then((ok) =>
+        setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")),
+      );
+      return;
+    }
     void shareText(exportSummaryText, pageTitle, "reports").then((ok) =>
       setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")),
     );
-  }, [exportSummaryText, lang, pageTitle]);
+  }, [showDailyExport, dailyPdfInput, exportSummaryText, lang, pageTitle]);
 
   const onCopy = useCallback(() => {
     void navigator.clipboard.writeText(exportSummaryText);

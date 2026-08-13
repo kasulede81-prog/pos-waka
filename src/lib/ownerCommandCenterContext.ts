@@ -25,6 +25,7 @@ import {
 } from "./dateFilters";
 import { filterAuditLogsInBounds, filterVoidsInBounds } from "./ownerCommandCenter";
 import { buildCombinedReportingIndex } from "./salesDayIndex";
+import { overlayPeriodFinancials } from "./closedDayAuthority";
 
 export type OwnerCommandCenterOverview = {
   revenueUgx: number;
@@ -78,6 +79,19 @@ export function buildOwnerCommandCenterContext(params: {
   const periodAuditLogs = filterAuditLogsInBounds(auditLogs, bounds);
 
   const finPeriod = getCompletedFinancialsFromScoped(periodSales, periodReturns, products);
+  const overlaid = overlayPeriodFinancials({
+    live: {
+      revenueUgx: finPeriod.revenueUgx,
+      profitUgx: finPeriod.profitUgx,
+      transactionCount: finPeriod.transactionCount,
+      debtIssuedUgx: finPeriod.debtIssuedUgx,
+    },
+    dayCloses,
+    bounds,
+    sales,
+    returns: returnRecords,
+    products,
+  });
   const closePrimary = dayCloses.find((d) => d.dateKey === periodKey && !d.supersededAt);
   const countedCashUgx = bounds.isSingleDay ? (closePrimary?.countedCashUgx ?? null) : null;
 
@@ -124,7 +138,7 @@ export function buildOwnerCommandCenterContext(params: {
     dayCloses,
     auditLogs: periodAuditLogs,
     preferences,
-    todayDebtUgx: finPeriod.debtIssuedUgx,
+    todayDebtUgx: overlaid.debtIssuedUgx,
     sales,
     todayKey: alertTodayKey,
     salesIndex,
@@ -146,9 +160,9 @@ export function buildOwnerCommandCenterContext(params: {
 
   return {
     overview: {
-      revenueUgx: finPeriod.revenueUgx,
-      profitUgx: finPeriod.profitUgx,
-      transactionCount: finPeriod.transactionCount,
+      revenueUgx: overlaid.revenueUgx,
+      profitUgx: overlaid.profitUgx,
+      transactionCount: overlaid.transactionCount,
       countedCashUgx,
     },
     ownerAlertsResolved,

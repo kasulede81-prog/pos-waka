@@ -39,12 +39,13 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
   const sales = useDeferredReportingSales(false);
-  const { preferences, products, salesCount, returnRecords } = usePosStore(
+  const { preferences, products, salesCount, returnRecords, dayCloses } = usePosStore(
     useShallow((s) => ({
       preferences: s.preferences,
       products: s.products,
       salesCount: s.sales.length,
       returnRecords: s.returnRecords,
+      dayCloses: s.dayCloses,
     })),
   );
 
@@ -87,8 +88,8 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const todayRevenue = useMemo(() => {
     if (!homeMetrics.showShopWideRevenue && !homeMetrics.showPersonalRevenue) return null;
     const scopedReturns = filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor.userId);
-    return localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey).totalRevenueUgx;
-  }, [homeMetrics, scopedSales, products, returnRecords, sales, actor.userId, todayKey]);
+    return localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey, dayCloses).totalRevenueUgx;
+  }, [homeMetrics, scopedSales, products, returnRecords, sales, actor.userId, todayKey, dayCloses]);
 
   const hasOpenSessions = (floor?.sessions.some((s) => s.status === "open" || s.status === "payment_pending") ?? false);
 

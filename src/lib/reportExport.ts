@@ -1,10 +1,11 @@
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
-import type { CashExpense, CashDrawerAdjustment, DebtPayment, Language, Product, ReturnRecord, Sale, ShiftRecord, SupplierPayment } from "../types";
+import type { CashExpense, CashDrawerAdjustment, DayCloseSummary, DebtPayment, Language, Product, ReturnRecord, Sale, ShiftRecord, SupplierPayment } from "../types";
 import { t } from "./i18n";
 import { dateKeyKampala } from "./datesUg";
 import { getDrawerCashForDayInput } from "./cashReconciliation";
 import { getCompletedFinancials } from "./financialMetrics";
+import { resolveReportAuthority } from "./closedDayAuthority";
 import { logShareOutcome } from "./reportExportEngine";
 import type { ReportExportKind } from "./reportExportDiagnostics";
 
@@ -19,6 +20,7 @@ export type DailyReportExportInput = {
   shifts?: ShiftRecord[];
   /** When false, profit line is omitted (Free tier). */
   includeProfit?: boolean;
+  dayCloses?: DayCloseSummary[];
 };
 
 /** Plain-text summary for WhatsApp / SMS / print */
@@ -68,17 +70,23 @@ export function buildDailyReportText(
     shifts: input.shifts ?? [],
     day: dateKey,
   });
-  const total = fin.revenueUgx;
-  const cash = fin.cashCollectedUgx;
-  const debt = fin.debtIssuedUgx;
-  const profit = fin.profitUgx;
+  const frozen = resolveReportAuthority(input.dayCloses, dateKey).frozenTotals;
+  const total = frozen?.totalSalesUgx ?? fin.revenueUgx;
+  const cash = frozen?.cashFromSalesUgx ?? fin.cashCollectedUgx;
+  const debt = frozen?.totalDebtUgx ?? fin.debtIssuedUgx;
+  const profit = frozen?.profitEstimateUgx ?? fin.profitUgx;
+  const txnCount = frozen?.transactionCount ?? fin.transactionCount;
+  const expectedCash = frozen?.expectedCashUgx ?? drawer.expectedDrawerCashUgx;
   const includeProfit = input.includeProfit !== false;
   const lines: string[] = [];
   lines.push(`${t(lang, "appName")} — ${t(lang, "exportReportHeading")} ${dateKey}`);
-  lines.push(`${t(lang, "salesCount")}: ${fin.transactionCount}`);
+  if (frozen) {
+    lines.push(t(lang, "dailyReportClosedAuthorityNote"));
+  }
+  lines.push(`${t(lang, "salesCount")}: ${txnCount}`);
   lines.push(`${t(lang, "totalSales")}: UGX ${total.toLocaleString()}`);
   lines.push(`${t(lang, "cashInHand")}: UGX ${cash.toLocaleString()}`);
-  lines.push(`${t(lang, "ownerCardExpectedCash")}: UGX ${drawer.expectedDrawerCashUgx.toLocaleString()}`);
+  lines.push(`${t(lang, "ownerCardExpectedCash")}: UGX ${expectedCash.toLocaleString()}`);
   lines.push(`${t(lang, "creditLabel")}: UGX ${debt.toLocaleString()}`);
   if (includeProfit) {
     lines.push(`${t(lang, "estimatedProfit")}: UGX ${profit.toLocaleString()}`);

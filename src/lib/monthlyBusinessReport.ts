@@ -1,12 +1,15 @@
-import { jsPDF } from "jspdf";
-import type { CashExpense, Language, Product, ReturnRecord, Sale, StaffAccount } from "../types";
+import type { CashExpense, DayCloseSummary, Language, Product, ReturnRecord, Sale, StaffAccount } from "../types";
 import { sumCashExpensesInMonth } from "./cashReconciliation";
-import { dateKeyKampala } from "./datesUg";
+import { dateKeyKampala, formatDateTimeKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesInMonth } from "./financialMetrics";
+import { boundsForMonthKey, overlayPeriodFinancials, resolvePeriodReportAuthority } from "./closedDayAuthority";
 import { inventoryValueAtCostUgx } from "./costPrecision";
 import { saveExportedFile } from "./fileDownload";
-import { printDocumentNativeFallback } from "./nativePrintFallback";
 import { t } from "./i18n";
+import { statusFromAuthority, ugxLabel, type ReportDocumentModel } from "./reportDocumentModel";
+import { renderReportDocumentPdf } from "./reportDocumentPdf";
+import { downloadReportPdfBlob, printReportPdfBlob } from "./reportDocumentPrint";
+import { sanitizePdfStem } from "./pdfLayout";
 
 export type MonthlyBusinessReport = {
   monthKey: string;
@@ -30,6 +33,7 @@ export type MonthlyBusinessReport = {
     stockValueAtCostUgx: number;
     lowStockCount: number;
   };
+  hasClosedDays: boolean;
 };
 
 function isValidMonthKey(monthKey: string): boolean {
@@ -54,12 +58,29 @@ export function buildMonthlyBusinessReport(params: {
   products: Product[];
   staffAccounts: StaffAccount[];
   cashExpenses?: CashExpense[];
+  dayCloses?: DayCloseSummary[];
 }): MonthlyBusinessReport {
-  const { monthKey, shopName, sales, returnRecords, products, staffAccounts, cashExpenses = [] } = params;
+  const { monthKey, shopName, sales, returnRecords, products, staffAccounts, cashExpenses = [], dayCloses } = params;
   const monthSales = salesInMonth(sales, monthKey);
   const monthReturns = returnsInMonth(returnRecords, monthKey);
   const fin = getCompletedFinancials(sales, returnRecords, products, { monthKey });
   const expensesUgx = sumCashExpensesInMonth(cashExpenses, monthKey);
+  const monthBounds = boundsForMonthKey(monthKey);
+  const overlaid = overlayPeriodFinancials({
+    live: {
+      revenueUgx: fin.revenueUgx,
+      profitUgx: fin.profitUgx,
+      transactionCount: fin.transactionCount,
+      debtIssuedUgx: fin.debtIssuedUgx,
+      cashCollectedUgx: fin.cashCollectedUgx,
+    },
+    dayCloses: dayCloses ?? [],
+    bounds: monthBounds,
+    sales,
+    returns: returnRecords,
+    products,
+  });
+  const hasClosedDays = resolvePeriodReportAuthority(dayCloses, monthBounds) !== "live";
 
   const productMap = new Map<string, { name: string; qty: number; revenueUgx: number }>();
   for (const sale of monthSales) {
@@ -95,15 +116,15 @@ export function buildMonthlyBusinessReport(params: {
     monthKey,
     shopName,
     generatedAt: new Date().toISOString(),
-    totalSalesUgx: fin.revenueUgx,
-    transactionCount: fin.transactionCount,
-    cashUgx: fin.cashCollectedUgx,
-    debtUgx: fin.debtIssuedUgx,
+    totalSalesUgx: overlaid.revenueUgx,
+    transactionCount: overlaid.transactionCount,
+    cashUgx: overlaid.cashCollectedUgx,
+    debtUgx: overlaid.debtIssuedUgx,
     discountsUgx: fin.discountsUgx,
     refundsUgx: monthReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0),
-    profitUgx: fin.profitUgx,
+    profitUgx: overlaid.profitUgx,
     cashExpensesUgx: expensesUgx,
-    netProfitUgx: fin.profitUgx - expensesUgx,
+    netProfitUgx: overlaid.profitUgx - expensesUgx,
     topProducts: [...productMap.values()].sort((a, b) => b.revenueUgx - a.revenueUgx).slice(0, 15),
     byCashier: [...cashierMap.values()].sort((a, b) => b.revenueUgx - a.revenueUgx),
     inventorySummary: {
@@ -111,6 +132,7 @@ export function buildMonthlyBusinessReport(params: {
       stockValueAtCostUgx,
       lowStockCount,
     },
+    hasClosedDays,
   };
 }
 
@@ -121,7 +143,7 @@ export function formatMonthlyReportPlain(
 ): string {
   const lines: string[] = [];
   lines.push(`${report.shopName} — ${t(lang, "monthlyReportTitle")} ${report.monthKey}`);
-  lines.push(`${t(lang, "monthlyReportGenerated")}: ${new Date(report.generatedAt).toLocaleString()}`);
+  lines.push(`${t(lang, "monthlyReportGenerated")}: ${formatDateTimeKampala(report.generatedAt).display}`);
   lines.push("");
   lines.push(`${t(lang, "totalSales")}: UGX ${report.totalSalesUgx.toLocaleString()}`);
   lines.push(`${t(lang, "monthlyReportTransactions")}: ${report.transactionCount}`);
@@ -131,6 +153,11 @@ export function formatMonthlyReportPlain(
   lines.push(`${t(lang, "monthlyReportRefunds")}: UGX ${report.refundsUgx.toLocaleString()}`);
   if (opts.includeProfit) {
     lines.push(`${t(lang, "estimatedProfit")}: UGX ${report.profitUgx.toLocaleString()}`);
+  }
+  if (report.hasClosedDays) {
+    lines.push("");
+    lines.push(t(lang, "dailyReportClosedAuthorityNote"));
+    lines.push(t(lang, "dailyReportOperationalDetails"));
   }
   lines.push("");
   lines.push(t(lang, "monthlyReportTopProducts"));
@@ -202,6 +229,9 @@ export function buildMonthlyReportHtml(
     ...(opts.includeProfit
       ? [[t(lang, "estimatedProfit"), `UGX ${report.profitUgx.toLocaleString()}`] as [string, string]]
       : []),
+    ...(report.hasClosedDays
+      ? [[t(lang, "dailyReportClosedAuthorityNote"), t(lang, "dailyReportOperationalDetails")] as [string, string]]
+      : []),
   ];
   const productRows = report.topProducts
     .slice(0, 15)
@@ -222,7 +252,7 @@ th{background:#f5f5f5}
 </style></head><body>
 <h1>${escapeHtml(report.shopName)}</h1>
 <p><strong>${escapeHtml(t(lang, "monthlyReportTitle"))}</strong> ${escapeHtml(report.monthKey)}<br>
-${escapeHtml(t(lang, "monthlyReportGenerated"))}: ${escapeHtml(new Date(report.generatedAt).toLocaleString())}</p>
+${escapeHtml(t(lang, "monthlyReportGenerated"))}: ${escapeHtml(formatDateTimeKampala(report.generatedAt).display)}</p>
 <table class="summary">${rows.map(([a, b]) => `<tr><td>${escapeHtml(a)}</td><td>${escapeHtml(b)}</td></tr>`).join("")}</table>
 <h2>${escapeHtml(t(lang, "monthlyReportTopProducts"))}</h2>
 <table><thead><tr><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead><tbody>${productRows}</tbody></table>
@@ -235,51 +265,60 @@ ${escapeHtml(t(lang, "monthlyReportLowStock"))}: ${report.inventorySummary.lowSt
 </body></html>`;
 }
 
+export function buildMonthlyReportDocument(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): ReportDocumentModel {
+  const authority = report.hasClosedDays ? "mixed" : "live";
+  return {
+    kind: "monthly",
+    lang,
+    shopName: report.shopName,
+    title: t(lang, "monthlyReportTitle"),
+    periodLabel: report.monthKey,
+    status: statusFromAuthority(authority, false),
+    generatedAtIso: report.generatedAt,
+    empty: report.transactionCount === 0 && report.totalSalesUgx === 0,
+    sections: [
+      {
+        title: report.hasClosedDays ? t(lang, "reportDocClosedHeadlines") : undefined,
+        rows: [
+          { label: t(lang, "totalSales"), value: ugxLabel(report.totalSalesUgx), bold: true },
+          { label: t(lang, "monthlyReportTransactions"), value: String(report.transactionCount) },
+          { label: t(lang, "cashInHand"), value: ugxLabel(report.cashUgx) },
+          { label: t(lang, "creditLabel"), value: ugxLabel(report.debtUgx) },
+          { label: t(lang, "monthlyReportDiscounts"), value: ugxLabel(report.discountsUgx) },
+          { label: t(lang, "monthlyReportRefunds"), value: ugxLabel(report.refundsUgx) },
+          ...(opts.includeProfit ? [{ label: t(lang, "estimatedProfit"), value: ugxLabel(report.profitUgx) }] : []),
+        ],
+      },
+      {
+        title: t(lang, "monthlyReportTopProducts"),
+        live: report.hasClosedDays,
+        rows: report.topProducts.slice(0, 12).map((p) => ({
+          label: p.name,
+          value: `${p.qty} · ${ugxLabel(p.revenueUgx)}`,
+        })),
+      },
+      {
+        title: t(lang, "monthlyReportByCashier"),
+        live: report.hasClosedDays,
+        rows: report.byCashier.map((c) => ({
+          label: c.label,
+          value: `${c.count} · ${ugxLabel(c.revenueUgx)}`,
+        })),
+      },
+    ],
+  };
+}
+
 export function buildMonthlyReportPdfBlob(
   lang: Language,
   report: MonthlyBusinessReport,
   opts: { includeProfit: boolean },
 ): Blob {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const margin = 48;
-  let y = margin;
-  const line = (text: string, size = 11, bold = false) => {
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setFontSize(size);
-    const lines = doc.splitTextToSize(text, 515);
-    for (const ln of lines) {
-      if (y > 760) {
-        doc.addPage();
-        y = margin;
-      }
-      doc.text(ln, margin, y);
-      y += size + 4;
-    }
-  };
-
-  line(`${report.shopName}`, 16, true);
-  line(`${t(lang, "monthlyReportTitle")} ${report.monthKey}`, 13, true);
-  y += 8;
-  line(`${t(lang, "totalSales")}: UGX ${report.totalSalesUgx.toLocaleString()}`, 11, true);
-  line(`${t(lang, "monthlyReportTransactions")}: ${report.transactionCount}`);
-  line(`${t(lang, "cashInHand")}: UGX ${report.cashUgx.toLocaleString()}`);
-  line(`${t(lang, "creditLabel")}: UGX ${report.debtUgx.toLocaleString()}`);
-  line(`${t(lang, "monthlyReportDiscounts")}: UGX ${report.discountsUgx.toLocaleString()}`);
-  line(`${t(lang, "monthlyReportRefunds")}: UGX ${report.refundsUgx.toLocaleString()}`);
-  if (opts.includeProfit) {
-    line(`${t(lang, "estimatedProfit")}: UGX ${report.profitUgx.toLocaleString()}`);
-  }
-  y += 10;
-  line(t(lang, "monthlyReportTopProducts"), 12, true);
-  for (const p of report.topProducts.slice(0, 12)) {
-    line(`  ${p.name} — ${p.qty} sold — UGX ${p.revenueUgx.toLocaleString()}`);
-  }
-  y += 8;
-  line(t(lang, "monthlyReportByCashier"), 12, true);
-  for (const c of report.byCashier) {
-    line(`  ${c.label} — ${c.count} sales — UGX ${c.revenueUgx.toLocaleString()}`);
-  }
-  return doc.output("blob");
+  return renderReportDocumentPdf(buildMonthlyReportDocument(lang, report, opts));
 }
 
 export async function printMonthlyReport(
@@ -287,13 +326,9 @@ export async function printMonthlyReport(
   report: MonthlyBusinessReport,
   opts: { includeProfit: boolean },
 ): Promise<boolean> {
-  const html = buildMonthlyReportHtml(lang, report, opts);
-  const filename = `waka-monthly-${report.monthKey}.pdf`;
-  return printDocumentNativeFallback({
-    pdfFilename: filename,
-    buildPdfBlob: () => buildMonthlyReportPdfBlob(lang, report, opts),
-    htmlBody: html.replace(/<\/?html[^>]*>|<\/?head[^>]*>|<\/?body[^>]*>/gi, ""),
-    paper: "a4",
+  const filename = sanitizePdfStem(`waka-monthly-${report.monthKey}`) + ".pdf";
+  const blob = buildMonthlyReportPdfBlob(lang, report, opts);
+  return printReportPdfBlob("monthly", filename, blob, {
     title: `${report.shopName} ${report.monthKey}`,
     shareDialogTitle: t(lang, "monthlyReportPrint"),
   });
@@ -314,9 +349,9 @@ export async function downloadMonthlyReportPdf(
   opts: { includeProfit: boolean },
 ): Promise<boolean> {
   try {
-    const filename = `waka-monthly-${report.monthKey}.pdf`;
+    const filename = sanitizePdfStem(`waka-monthly-${report.monthKey}`) + ".pdf";
     const pdfBlob = buildMonthlyReportPdfBlob(lang, report, opts);
-    return saveExportedFile(filename, pdfBlob, "application/pdf");
+    return downloadReportPdfBlob(filename, pdfBlob);
   } catch {
     return false;
   }

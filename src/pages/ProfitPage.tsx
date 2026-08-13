@@ -1,7 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { BarChart3, FileDown, Printer, Share2, TrendingUp } from "lucide-react";
-import { jsPDF } from "jspdf";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -43,7 +42,9 @@ import { formatDateFilterViewingLabel, selectedDayKeyForFilter } from "../lib/da
 import { dateKeyKampala } from "../lib/datesUg";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { buildProfitExportRows } from "../lib/analyticsReportExport";
-import { exportCsvFile, printReportDocument } from "../lib/reportExportEngine";
+import { exportCsvFile } from "../lib/reportExportEngine";
+import { overlayPeriodFinancials, resolvePeriodReportAuthority } from "../lib/closedDayAuthority";
+import { printProfitReportPdf } from "../lib/profitReportDocument";
 
 type Props = { lang: Language; embedded?: boolean };
 
@@ -66,6 +67,8 @@ export function ProfitPage({ lang, embedded }: Props) {
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const products = usePosStore((s) => s.products);
+  const dayCloses = usePosStore((s) => s.dayCloses);
+  const shopName = usePosStore((s) => s.preferences.shopDisplayName?.trim() || "Waka POS");
   const [searchQuery, setSearchQuery] = useState("");
   const [quickFilter, setQuickFilter] = useState<ProfitQuickFilter>("all");
   const [detailProduct, setDetailProduct] = useState<ProfitProductView | null>(null);
@@ -92,7 +95,23 @@ export function ProfitPage({ lang, embedded }: Props) {
   );
 
   const { groups, total } = report;
-  const marginPct = marginPercent(total.salesUgx, total.profitUgx);
+  const closedPeriod = resolvePeriodReportAuthority(dayCloses, bounds) !== "live";
+  const overlaid = overlayPeriodFinancials({
+    live: {
+      revenueUgx: total.salesUgx,
+      profitUgx: total.profitUgx,
+      transactionCount: filteredSales.length,
+      debtIssuedUgx: 0,
+    },
+    dayCloses,
+    bounds,
+    sales: filteredSales,
+    returns: filteredReturns,
+    products,
+  });
+  const headlineProfitUgx = overlaid.profitUgx;
+  const headlineRevenueUgx = overlaid.revenueUgx;
+  const marginPct = marginPercent(headlineRevenueUgx, headlineProfitUgx);
   const allProducts = useMemo(() => flattenProfitProducts(groups), [groups]);
   const bestShelf = groups[0]?.categoryLabel ?? null;
   const bestProduct = allProducts[0]?.name ?? null;
@@ -175,13 +194,13 @@ export function ProfitPage({ lang, embedded }: Props) {
       buildProfitExportRows({
         lang,
         periodLabel,
-        profitUgx: total.profitUgx,
-        revenueUgx: total.salesUgx,
+        profitUgx: headlineProfitUgx,
+        revenueUgx: headlineRevenueUgx,
         costUgx: total.costUgx,
         marginPct,
         groups,
       }),
-    [lang, periodLabel, total, marginPct, groups],
+    [lang, periodLabel, headlineProfitUgx, headlineRevenueUgx, total.costUgx, marginPct, groups],
   );
 
   if (!canViewProfit) {
@@ -202,6 +221,7 @@ export function ProfitPage({ lang, embedded }: Props) {
         products,
         returnRecords: filteredReturns,
         includeProfit: true,
+        dayCloses,
       });
       await shareText(body, t(lang, "profitPageTitle"), "profit");
       return;
@@ -211,28 +231,20 @@ export function ProfitPage({ lang, embedded }: Props) {
   };
 
   const printProfitReport = async () => {
-    const filename = `waka-profit-${dateKeyKampala(new Date())}.pdf`;
-    const body = exportProfitRows.map((row) => row.join("\t")).join("\n");
-    await printReportDocument("profit", {
-      pdfFilename: filename,
-      buildPdfBlob: () => {
-        const doc = new jsPDF({ unit: "pt", format: "a4" });
-        doc.setFontSize(10);
-        let y = 40;
-        for (const line of body.split("\n")) {
-          doc.text(line, 40, y);
-          y += 12;
-          if (y > 760) {
-            doc.addPage();
-            y = 40;
-          }
-        }
-        return doc.output("blob");
-      },
-      htmlBody: `<pre>${body.replace(/</g, "&lt;")}</pre>`,
-      paper: "a4",
-      title: t(lang, "profitPageTitle"),
-      shareDialogTitle: t(lang, "profitPageTitle"),
+    await printProfitReportPdf({
+      lang,
+      shopName,
+      periodLabel,
+      bounds,
+      sales: filteredSales,
+      returnRecords: filteredReturns,
+      products,
+      dayCloses,
+      profitUgx: headlineProfitUgx,
+      revenueUgx: headlineRevenueUgx,
+      costUgx: total.costUgx,
+      marginPct,
+      groups,
     });
   };
 
@@ -295,15 +307,22 @@ export function ProfitPage({ lang, embedded }: Props) {
       {salesRefreshing ? (
         <ProfitStatGridSkeleton />
       ) : hasData ? (
-        <ProfitStatGrid
-          lang={lang}
-          netProfitUgx={total.profitUgx}
-          revenueUgx={total.salesUgx}
-          costUgx={total.costUgx}
-          marginPct={marginPct}
-          bestShelf={bestShelf}
-          bestProduct={bestProduct}
-        />
+        <div className="space-y-2">
+          {closedPeriod ? (
+            <p className="rounded-xl border border-border bg-muted/70 px-3 py-2 text-xs font-semibold text-muted-foreground">
+              {t(lang, "reportDocClosedHeadlines")} — {t(lang, "dailyReportClosedAuthorityNote")}
+            </p>
+          ) : null}
+          <ProfitStatGrid
+            lang={lang}
+            netProfitUgx={headlineProfitUgx}
+            revenueUgx={headlineRevenueUgx}
+            costUgx={total.costUgx}
+            marginPct={marginPct}
+            bestShelf={bestShelf}
+            bestProduct={bestProduct}
+          />
+        </div>
       ) : null}
 
       {hasData ? (
@@ -353,6 +372,11 @@ export function ProfitPage({ lang, embedded }: Props) {
         <ProfitSkeletonList />
       ) : hasData ? (
         <div className="space-y-3 transition-opacity duration-300">
+          {closedPeriod ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
+              {t(lang, "reportDocLiveBreakdown")} — {t(lang, "reportDocLiveBreakdownHint")}
+            </p>
+          ) : null}
           {dailyTrend.length >= 2 ? <ProfitTrendChart lang={lang} points={dailyTrend} /> : null}
 
           {insights.length > 0 ? <ProfitInsightsPanel lang={lang} insights={insights} /> : null}

@@ -34,7 +34,7 @@ import {
   type DateFilterBounds,
   type DateFilterValue,
 } from "./dateFilters";
-import { activeDayCloseForDate } from "./dayCloseIdempotency";
+import { applyClosedDayToCashPositionReport, overlayPeriodFinancials, readClosedDayTotals, resolveReportAuthority } from "./closedDayAuthority";
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { isCompletedSale } from "./saleStatus";
 import { t, tTemplate } from "./i18n";
@@ -266,6 +266,7 @@ function aggregateReports(reports: CashPositionReport[], bounds: DateFilterBound
     adjustmentBreakdown,
     categories: mergeCategories(reports),
     cashiers: mergeCashiers(reports),
+    ledgerClosed: reports.some((r) => r.ledgerClosed),
   };
 }
 
@@ -490,7 +491,7 @@ export function buildCashPositionAlerts(input: {
   const alerts: CashPositionAlert[] = [];
   if (!input.isToday || !input.bounds.isSingleDay) return alerts;
 
-  const activeClose = activeDayCloseForDate(input.dayCloses, input.todayKey);
+  const activeClose = resolveReportAuthority(input.dayCloses, input.todayKey).snapshot;
   if (!activeClose) {
     alerts.push({
       id: "drawer-not-counted",
@@ -559,8 +560,8 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
   const isToday = bounds.isSingleDay && bounds.fromKey === todayKey;
   const days = enumerateDaysInBounds(bounds);
 
-  const reports = days.map((dayKey) =>
-    buildCashPositionReport({
+  const reports = days.map((dayKey) => {
+    const live = buildCashPositionReport({
       lang: input.lang,
       dayKey,
       shopName: input.shopName,
@@ -576,8 +577,10 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
       formulaVersion: input.formulaVersion,
       staffAccounts: input.staffAccounts,
       generalCategoryLabel: input.generalCategoryLabel,
-    }),
-  );
+    });
+    const auth = resolveReportAuthority(input.dayCloses, dayKey);
+    return auth.snapshot ? applyClosedDayToCashPositionReport(live, auth.snapshot) : live;
+  });
   const report = aggregateReports(reports, bounds);
 
   const scopedSales = input.sales.filter((s) => {
@@ -592,6 +595,22 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
     new Map(input.products.map((p) => [p.id, p])),
     scopedReturns,
   );
+  const singleClose = bounds.isSingleDay
+    ? resolveReportAuthority(input.dayCloses, bounds.fromKey).snapshot
+    : undefined;
+  const periodProfit = overlayPeriodFinancials({
+    live: {
+      revenueUgx: 0,
+      profitUgx: profit.profitUgx,
+      transactionCount: 0,
+      debtIssuedUgx: 0,
+    },
+    dayCloses: input.dayCloses,
+    bounds,
+    sales: input.sales,
+    returns: input.returnRecords,
+    products: input.products,
+  });
   const largestSaleUgx = scopedSales.reduce((max, s) => Math.max(max, s.totalUgx), 0);
   const averageSaleUgx =
     report.summary.transactionCount > 0
@@ -600,10 +619,10 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
 
   const extendedSummary: CashPositionExtendedSummary = {
     ...report.summary,
-    grossProfitUgx: profit.profitUgx,
+    grossProfitUgx: singleClose ? readClosedDayTotals(singleClose).profitEstimateUgx : periodProfit.profitUgx,
     averageSaleUgx,
     largestSaleUgx,
-    currentDrawerCashUgx: isToday ? report.cashPosition.expectedCashUgx : null,
+    currentDrawerCashUgx: isToday || Boolean(singleClose) ? report.cashPosition.expectedCashUgx : null,
   };
 
   const categories = buildCategoryDetails(report, input.sales, input.products, bounds);
@@ -639,18 +658,20 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
   });
 
   let drawerStatus: CashPositionDashboardResult["drawerStatus"] = null;
-  if (isToday) {
-    const activeClose = activeDayCloseForDate(input.dayCloses, todayKey);
+  if (bounds.isSingleDay) {
+    const activeClose = resolveReportAuthority(input.dayCloses, bounds.fromKey).snapshot;
     const expectedCashUgx = report.cashPosition.expectedCashUgx;
-    const countedCashUgx = activeClose?.countedCashUgx ?? null;
+    const countedCashUgx = activeClose ? readClosedDayTotals(activeClose).countedCashUgx : null;
     const variance =
       countedCashUgx != null ? cashPositionVariance(expectedCashUgx, countedCashUgx) : null;
-    drawerStatus = {
-      expectedCashUgx,
-      countedCashUgx,
-      varianceUgx: variance?.varianceUgx ?? null,
-      kind: variance?.kind ?? null,
-    };
+    if (activeClose || isToday) {
+      drawerStatus = {
+        expectedCashUgx,
+        countedCashUgx,
+        varianceUgx: variance?.varianceUgx ?? null,
+        kind: variance?.kind ?? null,
+      };
+    }
   }
 
   const previousCounts = input.dayCloses

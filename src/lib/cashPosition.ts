@@ -67,6 +67,8 @@ export type CashPositionReport = {
   adjustmentBreakdown: AdjustmentBreakdownByType;
   categories: CashPositionCategoryRow[];
   cashiers: CashPositionCashierRow[];
+  /** True when this report's headlines come from an active day close. */
+  ledgerClosed?: boolean;
 };
 
 export type CashPositionReconciliation = {

@@ -7224,14 +7224,26 @@ export const usePosStore = create<PosState>((set, get) => {
       closedByLabel,
       emergencyReason: emergency ? (emergencyReason ?? "").trim() : null,
     };
-    set((s) => ({
-      dayCloses: [
-        row,
-        ...s.dayCloses.map((d) =>
-          existing && d.id === existing.id ? { ...d, supersededAt: now, pendingSync: true, updatedAt: now } : d,
-        ),
-      ],
-    }));
+    let persistError: "dayCloseAlreadyExists" | null = null;
+    set((s) => {
+      const persistGate = canRecordDayClose(s.dayCloses, dateKey, override);
+      if (!persistGate.ok) {
+        persistError = persistGate.errorKey;
+        return s;
+      }
+      const existingNow = activeDayCloseForDate(s.dayCloses, dateKey);
+      return {
+        dayCloses: [
+          row,
+          ...s.dayCloses.map((d) =>
+            existingNow && d.id === existingNow.id
+              ? { ...d, supersededAt: now, pendingSync: true, updatedAt: now }
+              : d,
+          ),
+        ],
+      };
+    });
+    if (persistError) return { ok: false, errorKey: persistError };
     void queueRemote("pending_day_closes", { closeId: row.id });
     if (existing && override) {
       void queueRemote("pending_day_closes", { closeId: existing.id });

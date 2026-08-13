@@ -1,4 +1,4 @@
-import type { CashExpense, Customer, Product, ReturnRecord, Sale, Supplier } from "../../../types";
+import type { CashExpense, Customer, DayCloseSummary, Product, ReturnRecord, Sale, Supplier } from "../../../types";
 import type { DateFilterBounds, DateFilterValue } from "../../../lib/dateFilters";
 import { resolveSoldByUserId, type SoldByLabelContext } from "../../../lib/soldByLabels";
 import {
@@ -22,7 +22,8 @@ import {
   pctChangeLabel,
   type SparkPoint,
 } from "../../../lib/commandCenterPageView";
-import { sumCashExpensesInBounds } from "../../../lib/cashReconciliation";
+import { sumCashExpensesInBounds, sumCashExpensesOnDay } from "../../../lib/cashReconciliation";
+import { overlayClosedDayExpenses } from "../../../lib/closedDayAuthority";
 import type {
   AiInsightCard,
   AnalyticsKpiCard,
@@ -317,14 +318,26 @@ export function computeRangeAnalytics(
   filter: DateFilterValue,
   cashExpenses: CashExpense[],
   compareEnabled: boolean,
+  dayCloses?: DayCloseSummary[],
 ) {
   const bounds = resolveDateFilterBounds(filter);
-  const current = localGetRangeSummary(sales, products, customers, returns, suppliers, filter, cashExpenses);
+  const current = localGetRangeSummary(
+    sales,
+    products,
+    customers,
+    returns,
+    suppliers,
+    filter,
+    cashExpenses,
+    dayCloses,
+  );
   const priorFilter = previousPeriodFilter(filter);
   const priorBounds = resolveDateFilterBounds(priorFilter);
   const prior = compareEnabled
-    ? localGetRangeSummary(sales, products, customers, returns, suppliers, priorFilter, cashExpenses)
+    ? localGetRangeSummary(sales, products, customers, returns, suppliers, priorFilter, cashExpenses, dayCloses)
     : null;
+
+  const liveExpenses = sumCashExpensesInBounds(cashExpenses, bounds);
 
   return {
     current,
@@ -336,7 +349,9 @@ export function computeRangeAnalytics(
     sparkline: computeDailyRevenueSparkline(sales, 7),
     paymentMix: computePaymentMethodMix(sales, bounds),
     inventory: localGetInventoryInsights(products),
-    expensesUgx: sumCashExpensesInBounds(cashExpenses, bounds),
+    expensesUgx: overlayClosedDayExpenses(liveExpenses, dayCloses, bounds, (day) =>
+      sumCashExpensesOnDay(cashExpenses, day),
+    ),
     trendBars: trendBars(current.dailyTrend),
   };
 }

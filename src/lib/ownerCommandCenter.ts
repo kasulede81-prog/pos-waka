@@ -29,6 +29,7 @@ import {
   returnsInBounds,
 } from "./dateFilters";
 import { activeDayDrawerOpenForDate } from "./dayDrawerOpen";
+import { readClosedDayTotals } from "./closedDayAuthority";
 import { sumDebtPaymentsInBounds } from "./customerDebtActivity";
 import { sumCashExpensesInBounds } from "./cashReconciliation";
 import { isLowStock } from "./sellingEngine";
@@ -789,7 +790,8 @@ export function buildCashControlSnapshot(input: {
   }
   adjustmentFeed.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
-  const latestDayVarianceUgx = close?.differenceUgx ?? null;
+  const tot = close ? readClosedDayTotals(close) : null;
+  const latestDayVarianceUgx = tot?.varianceUgx ?? close?.differenceUgx ?? null;
   const hasUnresolvedVariance =
     (latestDayVarianceUgx != null && latestDayVarianceUgx !== 0) ||
     shortageShiftCount > 0 ||
@@ -799,10 +801,11 @@ export function buildCashControlSnapshot(input: {
     primaryDayKey: input.primaryDayKey,
     isPeriodRange: !input.bounds.isSingleDay,
     drawerOpen,
-    openingFloatUgx: drawerOpen?.openingFloatUgx ?? null,
+    openingFloatUgx: tot?.openingFloatUgx ?? drawerOpen?.openingFloatUgx ?? null,
     openedByLabel: drawerOpen?.countedByLabel ?? null,
-    periodExpectedCashUgx: input.expectedCashUgx,
-    latestCountedCashUgx: close?.countedCashUgx ?? null,
+    periodExpectedCashUgx:
+      input.bounds.isSingleDay && tot ? tot.expectedCashUgx : input.expectedCashUgx,
+    latestCountedCashUgx: tot?.countedCashUgx ?? close?.countedCashUgx ?? null,
     latestDayVarianceUgx,
     latestCountDayKey: input.primaryDayKey,
     shortageShiftCount,

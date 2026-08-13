@@ -47,6 +47,58 @@ export function monthKeyKampala(isoOrDate: string | Date): string {
   return dateKeyKampala(isoOrDate).slice(0, 7);
 }
 
+/** Previous calendar month key (YYYY-MM), independent of device timezone. */
+export function previousMonthKey(monthKey: string): string {
+  const parts = monthKey.split("-").map(Number);
+  const year = parts[0] ?? 2020;
+  const month = parts[1] ?? 1;
+  if (month <= 1) return `${year - 1}-12`;
+  return `${year}-${String(month - 1).padStart(2, "0")}`;
+}
+
+/** Recent Kampala month keys, newest first. */
+export function monthKeyOptionsKampala(count = 18, now: Date = new Date()): string[] {
+  const out: string[] = [];
+  const today = dateKeyKampala(now);
+  let year = Number(today.slice(0, 4));
+  let month = Number(today.slice(5, 7));
+  for (let i = 0; i < count; i++) {
+    out.push(`${year}-${String(month).padStart(2, "0")}`);
+    month -= 1;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    }
+  }
+  return out;
+}
+
+const KAMPALA_TIME_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Kampala",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+export const REPORT_TIMEZONE = "Africa/Kampala";
+
+/** Date, time, and timezone for report headers — always Kampala, never device local. */
+export function formatDateTimeKampala(isoOrDate: string | Date = new Date()): {
+  dateKey: string;
+  time: string;
+  timeZone: typeof REPORT_TIMEZONE;
+  display: string;
+} {
+  const dateKey = dateKeyKampala(isoOrDate);
+  const time = KAMPALA_TIME_FMT.format(typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate);
+  return {
+    dateKey,
+    time,
+    timeZone: REPORT_TIMEZONE,
+    display: `${dateKey} ${time} ${REPORT_TIMEZONE}`,
+  };
+}
+
 /** Monday-start week key (YYYY-MM-DD of Monday) in Kampala. */
 export function weekStartKeyKampala(isoOrDate: string | Date): string {
   const key = dateKeyKampala(isoOrDate);

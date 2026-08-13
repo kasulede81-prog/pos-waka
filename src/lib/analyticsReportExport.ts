@@ -33,6 +33,10 @@ export function buildAnalyticsReportRows(input: AnalyticsExportInput): Array<Arr
   if (canProfit) {
     rows.push([t(lang, "profitStatGrossProfit"), report.profit]);
   }
+  if (report.authority !== "live") {
+    rows.push([], [t(lang, "dailyReportClosedAuthorityNote")]);
+    rows.push([t(lang, "dailyReportOperationalDetails")]);
+  }
   rows.push([], [t(lang, "topProducts"), t(lang, "receiptsRangeRevenue")]);
   for (const p of report.topProducts.slice(0, 50)) {
     rows.push([p.name, p.revenueUgx]);

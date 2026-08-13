@@ -3,10 +3,17 @@
  */
 
 import type { DayCloseSummary } from "../types";
+import { collapseDuplicateActiveCloses } from "./closedDayAuthority";
 import { supabase } from "./supabase";
 import { parseDayCloseRows } from "./dayCloseRecovery";
 
 export type ShopCtx = { shopId: string; userId: string };
+
+export type DayClosePushResult = {
+  ok: boolean;
+  alreadyClosed?: boolean;
+  authoritativeId?: string;
+};
 
 function isMissingRpcError(error: unknown): boolean {
   const code = (error as { code?: string })?.code;
@@ -24,18 +31,42 @@ export function buildDayClosePushPayload(close: DayCloseSummary): Record<string,
   };
 }
 
-export async function pushDayCloseToCloud(close: DayCloseSummary, ctx: ShopCtx): Promise<boolean> {
-  if (!supabase) return false;
+export async function pushDayCloseToCloud(close: DayCloseSummary, ctx: ShopCtx): Promise<DayClosePushResult> {
+  if (!supabase) return { ok: false };
   const { data, error } = await supabase.rpc("shop_push_day_close", {
     p_shop_id: ctx.shopId,
     p_payload: buildDayClosePushPayload(close),
   });
   if (error) {
-    if (isMissingRpcError(error)) return true;
-    return false;
+    if (isMissingRpcError(error)) return { ok: true };
+    return { ok: false };
   }
-  const result = data as { ok?: boolean } | null;
-  return result?.ok === true;
+  const result = data as { ok?: boolean; already_closed?: boolean; id?: string } | null;
+  if (result?.ok === true) {
+    return {
+      ok: true,
+      alreadyClosed: result.already_closed === true,
+      authoritativeId: typeof result.id === "string" ? result.id : undefined,
+    };
+  }
+  return { ok: false };
+}
+
+/** Mark a successful push; a competing close is superseded locally, never deleted. */
+export function applySuccessfulDayClosePush(
+  rows: DayCloseSummary[],
+  pushedId: string,
+  result: DayClosePushResult,
+  nowIso = new Date().toISOString(),
+): DayCloseSummary[] {
+  const mapped = rows.map((row) => {
+    if (row.id !== pushedId) return row;
+    if (result.alreadyClosed && result.authoritativeId && result.authoritativeId !== pushedId) {
+      return { ...row, supersededAt: row.supersededAt ?? nowIso, pendingSync: false };
+    }
+    return { ...row, pendingSync: false };
+  });
+  return collapseDuplicateActiveCloses(mapped, nowIso);
 }
 
 export async function pullDayClosesFromRpc(

@@ -15,10 +15,12 @@ import {
 } from "../lib/localReporting";
 import { timedComputation } from "../lib/performanceMetrics";
 import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
+import type { PeriodReportAuthority } from "../lib/closedDayAuthority";
 
 export type ShopReportBundle = {
-  /** Financial totals always from canonical local helpers (getCompletedFinancials). */
+  /** Financial totals from local helpers, with closed-day overlay when a date is closed. */
   source: "local";
+  authority: PeriodReportAuthority;
   revenue: number;
   cash: number;
   profit: number;
@@ -57,15 +59,20 @@ export function useShopReportBundle(filter: DateFilterValue, includeArchived: bo
   const customers = usePosStore((s) => s.customers);
   const suppliers = usePosStore((s) => s.suppliers);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const dayCloses = usePosStore((s) => s.dayCloses);
 
   const local = useMemo(() => {
-    const fp = `${buildSalesFingerprint(sales)}:${products.length}:${customers.length}:${returns.length}:${suppliers.length}:${cashExpenses.length}:${reportFilterFingerprint(filter)}`;
+    const closesFp = dayCloses
+      .filter((d) => !d.supersededAt)
+      .map((d) => `${d.dateKey}:${d.id}:${d.totalSalesUgx}`)
+      .join(",");
+    const fp = `${buildSalesFingerprint(sales)}:${products.length}:${customers.length}:${returns.length}:${suppliers.length}:${cashExpenses.length}:${reportFilterFingerprint(filter)}:${closesFp}`;
     return getCachedComputation("localGetRangeSummary", fp, () =>
       timedComputation("localGetRangeSummary", () =>
-        localGetRangeSummary(sales, products, customers, returns, suppliers, filter, cashExpenses),
+        localGetRangeSummary(sales, products, customers, returns, suppliers, filter, cashExpenses, dayCloses),
       ),
     );
-  }, [sales, products, customers, returns, suppliers, filter, cashExpenses]);
+  }, [sales, products, customers, returns, suppliers, filter, cashExpenses, dayCloses]);
 
   const summary = local.summary;
   const cash =
@@ -77,6 +84,7 @@ export function useShopReportBundle(filter: DateFilterValue, includeArchived: bo
 
   return {
     source: "local",
+    authority: local.authority,
     revenue: summary.totalRevenueUgx,
     cash,
     profit: local.profitUgx,

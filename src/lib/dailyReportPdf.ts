@@ -1,7 +1,7 @@
-import { jsPDF } from "jspdf";
 import type {
   CashExpense,
   CashDrawerAdjustment,
+  DayCloseSummary,
   DebtPayment,
   Language,
   Product,
@@ -15,9 +15,17 @@ import { getCompletedFinancials } from "./financialMetrics";
 import { getDrawerCashForDayInput } from "./cashReconciliation";
 import { isCompletedSale } from "./saleStatus";
 import { t } from "./i18n";
-import { createPdfLayout, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
-import { downloadPdfBlob } from "./documentPrint";
+import { sanitizePdfStem } from "./pdfLayout";
 import type { ProductRank } from "./localReporting";
+import { resolveReportAuthority } from "./closedDayAuthority";
+import {
+  statusFromAuthority,
+  ugxLabel,
+  type ReportDocumentModel,
+  type ReportDocumentSection,
+} from "./reportDocumentModel";
+import { renderReportDocumentPdf } from "./reportDocumentPdf";
+import { downloadReportPdfBlob, printReportPdfBlob, shareReportPdfBlob } from "./reportDocumentPrint";
 
 export type DailyReportPdfInput = {
   lang: Language;
@@ -34,6 +42,8 @@ export type DailyReportPdfInput = {
   topProducts: ProductRank[];
   /** When false, profit line is omitted (Free tier). */
   includeProfit?: boolean;
+  dayCloses?: DayCloseSummary[];
+  organizationName?: string | null;
 };
 
 function paymentMethodBreakdown(sales: Sale[], day: string): Array<{ label: string; count: number; ugx: number }> {
@@ -59,7 +69,7 @@ function voidLineCount(sales: Sale[], day: string): number {
   return n;
 }
 
-export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
+export function buildDailyReportDocument(input: DailyReportPdfInput): ReportDocumentModel {
   const {
     lang,
     dateKey,
@@ -74,8 +84,12 @@ export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
     shifts = [],
     topProducts,
     includeProfit = true,
+    dayCloses,
+    organizationName,
   } = input;
   const fin = getCompletedFinancials(sales, returnRecords, products, { day: dateKey });
+  const auth = resolveReportAuthority(dayCloses, dateKey);
+  const frozen = auth.frozenTotals;
   const drawer = getDrawerCashForDayInput({
     sales,
     returns: returnRecords,
@@ -87,56 +101,91 @@ export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
     shifts,
     day: dateKey,
   });
-  const refundsUgx = drawer.cashRefundsUgx;
-  const expensesUgx = drawer.expenseUgx;
   const payments = paymentMethodBreakdown(sales, dateKey);
   const voids = voidLineCount(sales, dateKey);
+  const salesUgx = frozen?.totalSalesUgx ?? fin.revenueUgx;
+  const profitUgx = frozen?.profitEstimateUgx ?? fin.profitUgx;
+  const cashInHandUgx = frozen?.cashFromSalesUgx ?? fin.cashCollectedUgx;
+  const expectedCashUgx = frozen?.expectedCashUgx ?? drawer.expectedDrawerCashUgx;
+  const openingFloatUgx = frozen?.openingFloatUgx ?? drawer.openingFloatUgx;
+  const adjustmentInUgx = frozen?.adjustmentInflowsUgx ?? drawer.adjustmentInflowsUgx;
+  const adjustmentOutUgx = frozen?.adjustmentOutflowsUgx ?? drawer.adjustmentOutflowsUgx;
+  const supplierUgx = frozen?.supplierPaymentsUgx ?? drawer.supplierPaymentsUgx;
+  const debtUgx = frozen?.totalDebtUgx ?? fin.debtIssuedUgx;
+  const refundLineUgx = frozen?.cashRefundsUgx ?? drawer.cashRefundsUgx;
+  const expenseLineUgx = frozen?.expenseUgx ?? drawer.expenseUgx;
+  const txnCount = frozen?.transactionCount ?? fin.transactionCount;
 
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const layout = createPdfLayout(doc);
-  pdfLine(layout, doc, shopName, { size: 14, bold: true });
-  pdfGap(layout, 4);
-  pdfLine(layout, doc, t(lang, "dailyReportPdfTitle"), { size: 13, bold: true });
-  pdfLine(layout, doc, dateKey);
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, `${t(lang, "totalSales")}: UGX ${fin.revenueUgx.toLocaleString()}`, { bold: true });
-  if (includeProfit) {
-    pdfLine(layout, doc, `${t(lang, "estimatedProfit")}: UGX ${fin.profitUgx.toLocaleString()}`);
-  }
-  pdfLine(layout, doc, `${t(lang, "cashInHand")}: UGX ${fin.cashCollectedUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "ownerCardExpectedCash")}: UGX ${drawer.expectedDrawerCashUgx.toLocaleString()}`);
-  if (drawer.openingFloatUgx > 0) {
-    pdfLine(layout, doc, `${t(lang, "cashDrawerOpeningFloat")}: UGX ${drawer.openingFloatUgx.toLocaleString()}`);
-  }
-  if (drawer.adjustmentInflowsUgx > 0) {
-    pdfLine(layout, doc, `${t(lang, "cashDrawerAdjustmentIn")}: UGX ${drawer.adjustmentInflowsUgx.toLocaleString()}`);
-  }
-  if (drawer.adjustmentOutflowsUgx > 0) {
-    pdfLine(layout, doc, `${t(lang, "cashDrawerAdjustmentOut")}: UGX ${drawer.adjustmentOutflowsUgx.toLocaleString()}`);
-  }
-  if (drawer.supplierPaymentsUgx > 0) {
-    pdfLine(layout, doc, `${t(lang, "closeDaySupplierPaymentsToday")}: UGX ${drawer.supplierPaymentsUgx.toLocaleString()}`);
-  }
-  pdfLine(layout, doc, `${t(lang, "creditLabel")}: UGX ${fin.debtIssuedUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "dayCloseRefunds")}: UGX ${refundsUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "closeDayExpensesToday")}: UGX ${expensesUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "salesCount")}: ${fin.transactionCount}`);
-  pdfLine(layout, doc, `${t(lang, "dailyReportVoids")}: ${voids}`);
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, t(lang, "dailyReportPaymentMethods"), { bold: true });
-  for (const p of payments) {
-    pdfLine(layout, doc, `  ${p.label}: ${p.count} · UGX ${p.ugx.toLocaleString()}`, { size: 9 });
-  }
-  pdfGap(layout, 4);
-  pdfLine(layout, doc, t(lang, "dailyReportTopProducts"), { bold: true });
-  for (const p of topProducts.slice(0, 12)) {
-    pdfLine(layout, doc, `  ${p.name} — ${p.quantity} — UGX ${p.revenueUgx.toLocaleString()}`, { size: 9 });
-  }
-  return doc.output("blob");
+  const ledgerRows = [
+    { label: t(lang, "totalSales"), value: ugxLabel(salesUgx), bold: true },
+    ...(includeProfit ? [{ label: t(lang, "estimatedProfit"), value: ugxLabel(profitUgx) }] : []),
+    { label: t(lang, "cashInHand"), value: ugxLabel(cashInHandUgx) },
+    { label: t(lang, "ownerCardExpectedCash"), value: ugxLabel(expectedCashUgx) },
+    ...(openingFloatUgx > 0 ? [{ label: t(lang, "cashDrawerOpeningFloat"), value: ugxLabel(openingFloatUgx) }] : []),
+    ...(adjustmentInUgx > 0 ? [{ label: t(lang, "cashDrawerAdjustmentIn"), value: ugxLabel(adjustmentInUgx) }] : []),
+    ...(adjustmentOutUgx > 0 ? [{ label: t(lang, "cashDrawerAdjustmentOut"), value: ugxLabel(adjustmentOutUgx) }] : []),
+    ...(supplierUgx > 0 ? [{ label: t(lang, "closeDaySupplierPaymentsToday"), value: ugxLabel(supplierUgx) }] : []),
+    { label: t(lang, "creditLabel"), value: ugxLabel(debtUgx) },
+    { label: t(lang, "dayCloseRefunds"), value: ugxLabel(refundLineUgx) },
+    { label: t(lang, "closeDayExpensesToday"), value: ugxLabel(expenseLineUgx) },
+    { label: t(lang, "salesCount"), value: String(txnCount) },
+  ];
+
+  const liveSection: ReportDocumentSection = {
+    title: t(lang, "dailyReportPaymentMethods"),
+    live: auth.closed,
+    rows: [
+      { label: t(lang, "dailyReportVoids"), value: String(voids) },
+      ...payments.map((p) => ({ label: p.label, value: `${p.count} · ${ugxLabel(p.ugx)}` })),
+      ...topProducts.slice(0, 12).map((p) => ({
+        label: p.name,
+        value: `${p.quantity} — ${ugxLabel(p.revenueUgx)}`,
+      })),
+    ],
+  };
+
+  return {
+    kind: "daily",
+    lang,
+    shopName,
+    organizationName,
+    title: t(lang, "dailyReportPdfTitle"),
+    periodLabel: dateKey,
+    status: statusFromAuthority(auth.closed ? "closed_snapshot" : "live", true),
+    generatedAtIso: new Date().toISOString(),
+    empty: txnCount === 0 && payments.length === 0,
+    sections: [
+      {
+        title: auth.closed ? t(lang, "reportDocClosedHeadlines") : undefined,
+        rows: ledgerRows,
+      },
+      liveSection,
+    ],
+  };
+}
+
+export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
+  return renderReportDocumentPdf(buildDailyReportDocument(input));
+}
+
+function dailyPdfFilename(dateKey: string): string {
+  return sanitizePdfStem(`waka-daily-report-${dateKey}`) + ".pdf";
 }
 
 export async function downloadDailyReportPdf(input: DailyReportPdfInput): Promise<boolean> {
   const blob = buildDailyReportPdfBlob(input);
-  const name = sanitizePdfStem(`waka-daily-report-${input.dateKey}`) + ".pdf";
-  return downloadPdfBlob(name, blob);
+  return downloadReportPdfBlob(dailyPdfFilename(input.dateKey), blob);
+}
+
+export async function printDailyReportPdf(input: DailyReportPdfInput): Promise<boolean> {
+  const blob = buildDailyReportPdfBlob(input);
+  return printReportPdfBlob("reports", dailyPdfFilename(input.dateKey), blob, {
+    title: t(input.lang, "dailyReportPdfTitle"),
+    shareDialogTitle: t(input.lang, "dailyReportPdfTitle"),
+  });
+}
+
+export async function shareDailyReportPdf(input: DailyReportPdfInput): Promise<boolean> {
+  const blob = buildDailyReportPdfBlob(input);
+  return shareReportPdfBlob(dailyPdfFilename(input.dateKey), blob, t(input.lang, "dailyReportPdfTitle"));
 }

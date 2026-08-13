@@ -11,6 +11,7 @@ import {
   type HomeMetricScope,
 } from "../lib/homeVisibility";
 import { localGetDailySalesSummary, localGetMonthlySalesSummary } from "../lib/localReporting";
+import { authoritativeCloseForDate, readClosedDayTotals } from "../lib/closedDayAuthority";
 import { formatShortUgx } from "../lib/commandCenterPageView";
 import { resolveStableTodayKpi } from "../lib/todayKpiSnapshot";
 import { permissionsHasEffective } from "../lib/actorAuthorization";
@@ -60,6 +61,7 @@ export function useHomeDashboardMetrics(
   const customers = usePosStore((s) => s.customers);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const todayKpiSnapshot = usePosStore((s) => s.todayKpiSnapshot);
+  const dayCloses = usePosStore((s) => s.dayCloses);
   const salesHydrating = usePosStore((s) => s.salesHistoryHydration?.active ?? false);
   const preferences = usePosStore((s) => s.preferences);
   const { snapshot, authMode } = useSubscription();
@@ -80,17 +82,25 @@ export function useHomeDashboardMetrics(
   );
 
   return useMemo(() => {
-    const computedToday = localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey);
-    const stableToday = resolveStableTodayKpi(
-      todayKpiSnapshot,
-      {
-        transactionCount: computedToday.transactionCount,
-        totalRevenueUgx: computedToday.totalRevenueUgx,
-      },
-      todayKey,
-      salesHydrating,
-    );
+    const computedToday = localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey, dayCloses);
+    const todayClose = authoritativeCloseForDate(dayCloses, todayKey);
+    const stableToday = todayClose
+      ? {
+          transactionCount: computedToday.transactionCount,
+          totalRevenueUgx: computedToday.totalRevenueUgx,
+        }
+      : resolveStableTodayKpi(
+          todayKpiSnapshot,
+          {
+            transactionCount: computedToday.transactionCount,
+            totalRevenueUgx: computedToday.totalRevenueUgx,
+          },
+          todayKey,
+          salesHydrating,
+        );
     const today = { ...computedToday, ...stableToday };
+    const frozenDrawer = todayClose ? readClosedDayTotals(todayClose) : null;
+    const drawerCashUgx = frozenDrawer?.expectedCashUgx ?? drawer.expectedDrawerCashUgx;
     const month = localGetMonthlySalesSummary(scopedSales, products, scopedReturns, monthKey, cashExpenses);
     const totalDebtUgx = customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0);
     const canCash = permissionsHasEffective(role, "day.close", snapshot, authMode, actorPermissions);
@@ -132,13 +142,13 @@ export function useHomeDashboardMetrics(
     if (canCash) {
       byTile.cash = {
         label: t(lang, "desktopHomeLiveDrawer"),
-        value: formatShortUgx(drawer.expectedDrawerCashUgx),
-        intensity: drawer.expectedDrawerCashUgx >= 500_000 ? "high" : "normal",
+        value: formatShortUgx(drawerCashUgx),
+        intensity: drawerCashUgx >= 500_000 ? "high" : "normal",
       };
       byTile.cashPosition = {
         label: t(lang, "desktopHomeLiveExpectedCash"),
-        value: formatShortUgx(drawer.expectedDrawerCashUgx),
-        intensity: drawer.expectedDrawerCashUgx >= 500_000 ? "high" : "normal",
+        value: formatShortUgx(drawerCashUgx),
+        intensity: drawerCashUgx >= 500_000 ? "high" : "normal",
       };
     }
 
@@ -208,6 +218,7 @@ export function useHomeDashboardMetrics(
     monthKey,
     monthLabel,
     drawer.expectedDrawerCashUgx,
+    dayCloses,
     lowStockCount,
     homeMetrics,
     profitVisibility.canProfit,

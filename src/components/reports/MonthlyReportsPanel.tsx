@@ -17,21 +17,14 @@ import {
   monthlyReportToCsv,
   printMonthlyReport,
 } from "../../lib/monthlyBusinessReport";
-import { dateKeyKampala } from "../../lib/datesUg";
+import { dateKeyKampala, monthKeyOptionsKampala } from "../../lib/datesUg";
 
 function currentMonthKey(): string {
   return dateKeyKampala(new Date()).slice(0, 7);
 }
 
 function monthOptions(count = 18): string[] {
-  const out: string[] = [];
-  const d = new Date();
-  for (let i = 0; i < count; i++) {
-    const x = new Date(d.getFullYear(), d.getMonth() - i, 1);
-    const key = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`;
-    out.push(key);
-  }
-  return out;
+  return monthKeyOptionsKampala(count);
 }
 
 type Props = { lang: Language };
@@ -51,6 +44,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
   const returnRecords = useReportingReturnRecords(includeArchived);
   const products = usePosStore((s) => s.products);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
 
   const months = useMemo(() => monthOptions(), []);
@@ -65,8 +59,9 @@ export function MonthlyReportsPanel({ lang }: Props) {
         products,
         staffAccounts: preferences.staffAccounts ?? [],
         cashExpenses,
+        dayCloses,
       }),
-    [monthKey, preferences.shopDisplayName, preferences.staffAccounts, sales, returnRecords, products, cashExpenses],
+    [monthKey, preferences.shopDisplayName, preferences.staffAccounts, sales, returnRecords, products, cashExpenses, dayCloses],
   );
 
   const showToast = (msg: string) => {
