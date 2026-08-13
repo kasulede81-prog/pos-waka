@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearBootstrapSyncComplete,
   markBootstrapSyncComplete,
+  needsBootstrapPull,
   readSyncCheckpoints,
   writeSyncCheckpoints,
 } from "./syncCheckpoints";
@@ -44,5 +45,14 @@ describe("syncCheckpoints bootstrap rollback", () => {
     writeSyncCheckpoints({ lastProductsSyncAt: "2026-05-01T00:00:00.000Z", bootstrapComplete: true });
     clearBootstrapSyncComplete();
     expect(readSyncCheckpoints().lastProductsSyncAt).toBe("2026-05-01T00:00:00.000Z");
+  });
+
+  it("empty local state still requires a full bootstrap pull", () => {
+    expect(needsBootstrapPull(true)).toBe(true);
+  });
+
+  it("existing synchronized state uses incremental pull", () => {
+    markBootstrapSyncComplete("2026-08-13T00:00:00.000Z");
+    expect(needsBootstrapPull(false)).toBe(false);
   });
 });

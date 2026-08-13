@@ -26,6 +26,8 @@ const TIMING: Record<
     eventPullBypassMs: number;
     salePushConcurrency: number;
     queueFlushConcurrency: number;
+    incrementalPullConcurrency: number;
+    realtimeCoalesceMs: number;
     visibilityDelayMs: number;
     appResumeDelayMs: number;
     startupIdleMs: number;
@@ -45,6 +47,8 @@ const TIMING: Record<
     eventPullBypassMs: 2_000,
     salePushConcurrency: 4,
     queueFlushConcurrency: 3,
+    incrementalPullConcurrency: 4,
+    realtimeCoalesceMs: 300,
     visibilityDelayMs: 200,
     appResumeDelayMs: 250,
     startupIdleMs: 300,
@@ -63,6 +67,8 @@ const TIMING: Record<
     eventPullBypassMs: 1_500,
     salePushConcurrency: 5,
     queueFlushConcurrency: 4,
+    incrementalPullConcurrency: 4,
+    realtimeCoalesceMs: 300,
     visibilityDelayMs: 120,
     appResumeDelayMs: 180,
     startupIdleMs: 200,
@@ -81,6 +87,8 @@ const TIMING: Record<
     eventPullBypassMs: 1_000,
     salePushConcurrency: 6,
     queueFlushConcurrency: 5,
+    incrementalPullConcurrency: 5,
+    realtimeCoalesceMs: 250,
     visibilityDelayMs: 60,
     appResumeDelayMs: 60,
     startupIdleMs: 80,
@@ -131,6 +139,12 @@ export const SYNC_SALE_PUSH_CONCURRENCY = profile().salePushConcurrency;
 /** Parallel offline-queue operations (independent ops). */
 export const SYNC_QUEUE_FLUSH_CONCURRENCY = profile().queueFlushConcurrency;
 
+/** Bounded concurrent incremental entity pulls (not unlimited Promise.all). */
+export const SYNC_INCREMENTAL_PULL_CONCURRENCY = profile().incrementalPullConcurrency;
+
+/** Realtime event bursts collapse into one incremental pull. */
+export const SYNC_REALTIME_COALESCE_MS = profile().realtimeCoalesceMs;
+
 /** Delay before sync after app returns to foreground. */
 export function syncVisibilityDelayMs(): number {
   return profile().visibilityDelayMs;
@@ -139,6 +153,11 @@ export function syncVisibilityDelayMs(): number {
 /** Delay before sync after native app resume. */
 export function syncAppResumeDelayMs(): number {
   return profile().appResumeDelayMs;
+}
+
+/** Shared foreground debounce — long enough to collapse AppState + visibility, not a backoff. */
+export function syncForegroundDedupeMs(): number {
+  return Math.max(profile().visibilityDelayMs, profile().appResumeDelayMs);
 }
 
 /** Startup idle delay before first background sync. */

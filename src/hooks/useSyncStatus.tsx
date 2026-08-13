@@ -17,15 +17,15 @@ import { POS_PUSH_INTERVAL_MS, runPosPushOnlyUpload } from "../lib/posPushSchedu
 import { scheduleImmediatePull } from "../lib/immediateSync";
 import { markSyncReconnecting } from "../lib/syncDiagnostics";
 import { startRealtimeSyncPull, stopRealtimeSyncPull } from "../lib/realtimeSyncPull";
+import { scheduleForegroundSync } from "../lib/foregroundSync";
 import {
   SYNC_AUTO_DRAIN_MS,
   SYNC_MIN_FULL_INTERVAL_MS,
   SYNC_MIN_PUSH_INTERVAL_MS,
   SYNC_QUEUE_POLL_MS,
   SYNC_RECONNECT_DELAY_MS,
-  syncAppResumeDelayMs,
+  syncForegroundDedupeMs,
   syncStartupIdleMs,
-  syncVisibilityDelayMs,
 } from "../lib/syncTiming";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
@@ -113,7 +113,6 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
   const syncingRef = useRef(false);
   const lastPushAtRef = useRef(0);
   const lastFullSyncAtRef = useRef(0);
-  const visTimerRef = useRef<number | null>(null);
   const pendingRef = useRef(0);
   const wasOnlineRef = useRef(isOnline);
   const refreshQueue = useCallback(() => {
@@ -308,50 +307,49 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
     return () => window.clearInterval(id);
   }, [pullPaused, runPosPushFlush]);
 
+  const runForegroundResumeSync = useCallback(
+    (forcePush: boolean, forcePull: boolean) => {
+      scheduleForegroundSync(
+        (job) => {
+          runWhenIdle(
+            () => {
+              void runPosPushFlush({ showSpinner: false, force: job.forcePush });
+              scheduleBackgroundPull("resume", { force: job.forcePull });
+            },
+            0,
+          );
+        },
+        syncForegroundDedupeMs(),
+        { forcePush, forcePull },
+      );
+    },
+    [runPosPushFlush, scheduleBackgroundPull],
+  );
+
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== "visible" || !getDeviceOnline()) return;
-      if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
-      visTimerRef.current = window.setTimeout(() => {
-        runWhenIdle(
-          () => {
-            void runPosPushFlush({
-              showSpinner: false,
-              force: hasPendingSyncWork(pendingRef.current),
-            });
-            scheduleBackgroundPull("visibility", { force: hasPendingSyncWork(pendingRef.current) });
-          },
-          syncVisibilityDelayMs(),
-        );
-      }, syncVisibilityDelayMs());
+      const pending = hasPendingSyncWork(pendingRef.current);
+      runForegroundResumeSync(pending, pending);
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
-      if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
     };
-  }, [runPosPushFlush, scheduleBackgroundPull]);
+  }, [runForegroundResumeSync]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const sub = App.addListener("appStateChange", (s) => {
       if (s.isActive && getDeviceOnline()) {
         refreshQueue();
-        window.setTimeout(() => {
-          runWhenIdle(
-            () => {
-              void runPosPushFlush({ showSpinner: false, force: true });
-              scheduleBackgroundPull("resume", { force: true });
-            },
-            syncAppResumeDelayMs(),
-          );
-        }, syncAppResumeDelayMs());
+        runForegroundResumeSync(true, true);
       }
     });
     return () => {
       void sub.then((h) => h.remove());
     };
-  }, [refreshQueue, runPosPushFlush, scheduleBackgroundPull]);
+  }, [refreshQueue, runForegroundResumeSync]);
 
   let status: SyncStatus = "offline";
   if (isOnline) {

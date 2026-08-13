@@ -30,10 +30,21 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
 import { isCloudRecoveryLockActive } from "../lib/cloudRecoverySession";
-import { SYNC_EVENT_PULL_MIN_MS, SYNC_PULL_MIN_INTERVAL_MS } from "../lib/syncTiming";
+import { SYNC_EVENT_PULL_MIN_MS, SYNC_INCREMENTAL_PULL_CONCURRENCY, SYNC_PULL_MIN_INTERVAL_MS, SYNC_REALTIME_COALESCE_MS } from "../lib/syncTiming";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
-import { setCachedShopId } from "../lib/shopSyncContext";
+import { consumeOrResolveShopCtx, clearShopCtxTick, setCachedShopId } from "../lib/shopSyncContext";
+import {
+  ALL_INCREMENTAL_PULL_ENTITIES,
+  incrementalEntitiesForReason,
+  incrementalCheckpointPatch,
+  isEventPullReason,
+  shouldForceCloudPull,
+  shouldRunAncillaryCloudBundle,
+  type IncrementalPullEntity,
+} from "../lib/syncReasons";
+import { createIncrementalPullCoalescer } from "../lib/incrementalPullCoalesce";
+import { mapPool } from "../lib/asyncPool";
 import { pullEntitySafe } from "../lib/pullEntitySafe";
 import { recordEntityPullErrors } from "../lib/pullDiagnostics";
 import {
@@ -107,19 +118,20 @@ function isUuid(id: string): boolean {
 }
 
 export async function resolveShopCtx(): Promise<ShopCtx | null> {
-  if (!hasSupabaseConfig || !supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  const user = data.session?.user;
-  const userId = user?.id;
-  if (!userId || !user) return null;
-  if (!isSupabaseEmailVerified(user)) return null;
-  const orgShop = await resolvePrimaryOrganizationForUser(userId);
-  if (!orgShop) {
-    setCachedShopId(null);
-    return null;
-  }
-  setCachedShopId(orgShop.shopId);
-  return { shopId: orgShop.shopId, userId };
+  return consumeOrResolveShopCtx(async () => {
+    if (!hasSupabaseConfig || !supabase) return null;
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    const userId = user?.id;
+    if (!userId || !user) return null;
+    if (!isSupabaseEmailVerified(user)) return null;
+    const orgShop = await resolvePrimaryOrganizationForUser(userId);
+    if (!orgShop) {
+      setCachedShopId(null);
+      return null;
+    }
+    return { shopId: orgShop.shopId, userId };
+  });
 }
 
 function productSku(p: Product): string {
@@ -1760,6 +1772,8 @@ export type CloudPullResult = {
   stats: CloudPullStats;
   checkpoints?: CloudPullCheckpoints;
   recoveredAuditLogs?: AuditLogEntry[];
+  /** Entities that completed successfully — only these cursors may advance. */
+  pulledEntities: IncrementalPullEntity[];
 };
 
 const FULL_SALES_PAGE = 800;
@@ -2578,6 +2592,7 @@ async function pullCashExpensesFull(ctx: ShopCtx): Promise<{ cashExpenses: CashE
 export async function pullShopDataFromCloud(opts?: {
   mode?: CloudPullMode;
   forceFull?: boolean;
+  pullReason?: string;
   /** Store already hydrated from cloud snapshot — skip full re-download. */
   afterSnapshotRestore?: boolean;
   cloudRecovery?: boolean;
@@ -2630,6 +2645,7 @@ export async function pullShopDataFromCloud(opts?: {
 
   const entityErrors: Record<string, string> = {};
   let recoveredAuditLogs: AuditLogEntry[] = [];
+  const pulledEntities: IncrementalPullEntity[] = [];
 
   if (mode === "full") {
     const p = await pullEntitySafe("products", entityErrors, () => pullProductsFull(ctx));
@@ -2749,138 +2765,258 @@ export async function pullShopDataFromCloud(opts?: {
       stockMovementCount = smFull.movements.length;
       payloadBytes += smFull.bytes;
     }
+
+    for (const entity of ALL_INCREMENTAL_PULL_ENTITIES) {
+      if (!entityErrors[entity]) pulledEntities.push(entity);
+    }
   } else {
+    const wanted = new Set(incrementalEntitiesForReason(opts?.pullReason ?? "full_sync"));
     const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
     const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
     const sinceSales = cp.lastSalesSyncAt ?? new Date(0).toISOString();
     const sinceExpenses = cp.lastExpensesSyncAt ?? new Date(0).toISOString();
     const sinceReturns = cp.lastReturnsSyncAt ?? new Date(0).toISOString();
     const sinceDebtPayments = cp.lastDebtPaymentsSyncAt ?? new Date(0).toISOString();
-
-    const p = await pullEntitySafe("products", entityErrors, () => pullProductsIncremental(ctx, sinceProducts));
-    if (p) {
-      products = p.products;
-      deletedProductIds = p.deletedIds;
-      payloadBytes += p.bytes;
-    }
-
-    const c = await pullEntitySafe("customers", entityErrors, () => pullCustomersIncremental(ctx, sinceCustomers));
-    if (c) {
-      customers = c.customers;
-      payloadBytes += c.bytes;
-    }
-
-    const s = await pullEntitySafe("sales", entityErrors, () => pullSalesIncremental(ctx, sinceSales));
-    if (s) {
-      sales = s.sales;
-      voidedSaleIds = s.voidedIds;
-      payloadBytes += s.bytes;
-      if (s.truncated) {
-        salesTruncated = true;
-        lastSalesPullTruncated = true;
-      }
-    }
-
-    const ex = await pullEntitySafe("cash_expenses", entityErrors, () => pullExpensesIncremental(ctx, sinceExpenses));
-    if (ex) {
-      cashExpenses = ex.cashExpenses;
-      expenseCount = ex.count;
-      payloadBytes += ex.bytes;
-    }
-
-    const ret = await pullEntitySafe("returns", entityErrors, () => pullReturnsIncremental(ctx, sinceReturns));
-    if (ret) {
-      returnCloudRows = ret.returnRows;
-      returnCount = ret.returnRows.length;
-      payloadBytes += ret.bytes;
-    }
-
     const sincePurchases = cp.lastPurchasesSyncAt ?? new Date(0).toISOString();
     const sinceSuppliers = cp.lastSuppliersSyncAt ?? new Date(0).toISOString();
     const sinceSupplierPayments = cp.lastSupplierPaymentsSyncAt ?? new Date(0).toISOString();
-
-    const pur = await pullEntitySafe("purchases", entityErrors, () => pullPurchasesIncremental(ctx, sincePurchases));
-    if (pur) {
-      purchaseCloudRows = pur.purchaseRows;
-      purchaseCount = pur.purchaseRows.length;
-      payloadBytes += pur.bytes;
-    }
-
-    const sup = await pullEntitySafe("suppliers", entityErrors, () => pullSuppliersIncremental(ctx, sinceSuppliers));
-    if (sup) {
-      supplierCloudRows = sup.supplierRows;
-      supplierCount = sup.supplierRows.length;
-      payloadBytes += sup.bytes;
-    }
-
-    const pay = await pullEntitySafe("supplier_payments", entityErrors, () =>
-      pullSupplierPaymentsIncremental(ctx, sinceSupplierPayments),
-    );
-    if (pay) {
-      supplierPayments = pay.supplierPayments;
-      supplierPaymentCount = pay.supplierPayments.length;
-      payloadBytes += pay.bytes;
-    }
-
-    const dp = await pullEntitySafe("debt_payments", entityErrors, () =>
-      pullDebtPaymentsIncremental(ctx, sinceDebtPayments),
-    );
-    if (dp) {
-      debtPayments = dp.debtPayments;
-      debtPaymentCount = dp.debtPayments.length;
-      payloadBytes += dp.bytes;
-    }
-
     const sinceCashDrawerAdjustments = cp.lastCashDrawerAdjustmentsSyncAt ?? new Date(0).toISOString();
-    const adj = await pullEntitySafe("cash_drawer_adjustments", entityErrors, () =>
-      pullCashDrawerAdjustmentsIncremental(ctx, sinceCashDrawerAdjustments),
-    );
-    if (adj) {
-      cashDrawerAdjustments = adj.cashDrawerAdjustments;
-      payloadBytes += adj.bytes;
-    }
-
     const sinceDayDrawerOpens = cp.lastDayDrawerOpensSyncAt ?? new Date(0).toISOString();
-    const ddo = await pullEntitySafe("day_drawer_opens", entityErrors, () =>
-      pullDayDrawerOpensIncremental(ctx, sinceDayDrawerOpens),
-    );
-    if (ddo) {
-      dayDrawerOpens = ddo.dayDrawerOpens;
-      payloadBytes += ddo.bytes;
-    }
-
     const sinceIcs = cp.lastInventoryCountSessionsSyncAt ?? new Date(0).toISOString();
-    const ics = await pullEntitySafe("inventory_count_sessions", entityErrors, () =>
-      pullInventoryCountSessionsFromRpc(ctx, sinceIcs),
-    );
-    if (ics) {
-      inventoryCountSessions = ics.sessions;
-      payloadBytes += ics.bytes;
-    }
-
     const sinceShifts = cp.lastShiftsSyncAt ?? new Date(0).toISOString();
-    const sh = await pullEntitySafe("shifts", entityErrors, () => pullShiftsFromRpc(ctx, sinceShifts));
-    if (sh) {
-      shifts = sh.shifts;
-      payloadBytes += sh.bytes;
-    }
-
     const sinceDayCloses = cp.lastDayClosesSyncAt ?? new Date(0).toISOString();
-    const dc = await pullEntitySafe("day_closes", entityErrors, () => pullDayClosesFromRpc(ctx, sinceDayCloses));
-    if (dc) {
-      dayCloses = dc.dayCloses;
-      payloadBytes += dc.bytes;
+    const sinceStockMovements = cp.lastStockMovementsSyncAt ?? new Date(0).toISOString();
+
+    let p: Awaited<ReturnType<typeof pullProductsIncremental>> | undefined;
+    let c: Awaited<ReturnType<typeof pullCustomersIncremental>> | undefined;
+    let s: Awaited<ReturnType<typeof pullSalesIncremental>> | undefined;
+    let ex: Awaited<ReturnType<typeof pullExpensesIncremental>> | undefined;
+    let ret: Awaited<ReturnType<typeof pullReturnsIncremental>> | undefined;
+    let pur: Awaited<ReturnType<typeof pullPurchasesIncremental>> | undefined;
+    let sup: Awaited<ReturnType<typeof pullSuppliersIncremental>> | undefined;
+    let pay: Awaited<ReturnType<typeof pullSupplierPaymentsIncremental>> | undefined;
+    let dp: Awaited<ReturnType<typeof pullDebtPaymentsIncremental>> | undefined;
+    let adj: Awaited<ReturnType<typeof pullCashDrawerAdjustmentsIncremental>> | undefined;
+    let ddo: Awaited<ReturnType<typeof pullDayDrawerOpensIncremental>> | undefined;
+    let ics: Awaited<ReturnType<typeof pullInventoryCountSessionsFromRpc>> | undefined;
+    let sh: Awaited<ReturnType<typeof pullShiftsFromRpc>> | undefined;
+    let dc: Awaited<ReturnType<typeof pullDayClosesFromRpc>> | undefined;
+    let sm: Awaited<ReturnType<typeof pullStockMovementsIncremental>> | undefined;
+
+    const jobs: Array<{ entity: IncrementalPullEntity; run: () => Promise<void> }> = [];
+
+    if (wanted.has("products")) {
+      jobs.push({
+        entity: "products",
+        run: async () => {
+          p = await pullEntitySafe("products", entityErrors, () => pullProductsIncremental(ctx, sinceProducts));
+          if (!p) return;
+          products = p.products;
+          deletedProductIds = p.deletedIds;
+          pulledEntities.push("products");
+        },
+      });
+    }
+    if (wanted.has("customers")) {
+      jobs.push({
+        entity: "customers",
+        run: async () => {
+          c = await pullEntitySafe("customers", entityErrors, () => pullCustomersIncremental(ctx, sinceCustomers));
+          if (!c) return;
+          customers = c.customers;
+          pulledEntities.push("customers");
+        },
+      });
+    }
+    if (wanted.has("sales")) {
+      jobs.push({
+        entity: "sales",
+        run: async () => {
+          s = await pullEntitySafe("sales", entityErrors, () => pullSalesIncremental(ctx, sinceSales));
+          if (!s) return;
+          sales = s.sales;
+          voidedSaleIds = s.voidedIds;
+          if (s.truncated) {
+            salesTruncated = true;
+            lastSalesPullTruncated = true;
+          }
+          pulledEntities.push("sales");
+        },
+      });
+    }
+    if (wanted.has("cash_expenses")) {
+      jobs.push({
+        entity: "cash_expenses",
+        run: async () => {
+          ex = await pullEntitySafe("cash_expenses", entityErrors, () => pullExpensesIncremental(ctx, sinceExpenses));
+          if (!ex) return;
+          cashExpenses = ex.cashExpenses;
+          expenseCount = ex.count;
+          pulledEntities.push("cash_expenses");
+        },
+      });
+    }
+    if (wanted.has("returns")) {
+      jobs.push({
+        entity: "returns",
+        run: async () => {
+          ret = await pullEntitySafe("returns", entityErrors, () => pullReturnsIncremental(ctx, sinceReturns));
+          if (!ret) return;
+          returnCloudRows = ret.returnRows;
+          returnCount = ret.returnRows.length;
+          pulledEntities.push("returns");
+        },
+      });
+    }
+    if (wanted.has("purchases")) {
+      jobs.push({
+        entity: "purchases",
+        run: async () => {
+          pur = await pullEntitySafe("purchases", entityErrors, () => pullPurchasesIncremental(ctx, sincePurchases));
+          if (!pur) return;
+          purchaseCloudRows = pur.purchaseRows;
+          purchaseCount = pur.purchaseRows.length;
+          pulledEntities.push("purchases");
+        },
+      });
+    }
+    if (wanted.has("suppliers")) {
+      jobs.push({
+        entity: "suppliers",
+        run: async () => {
+          sup = await pullEntitySafe("suppliers", entityErrors, () => pullSuppliersIncremental(ctx, sinceSuppliers));
+          if (!sup) return;
+          supplierCloudRows = sup.supplierRows;
+          supplierCount = sup.supplierRows.length;
+          pulledEntities.push("suppliers");
+        },
+      });
+    }
+    if (wanted.has("supplier_payments")) {
+      jobs.push({
+        entity: "supplier_payments",
+        run: async () => {
+          pay = await pullEntitySafe("supplier_payments", entityErrors, () =>
+            pullSupplierPaymentsIncremental(ctx, sinceSupplierPayments),
+          );
+          if (!pay) return;
+          supplierPayments = pay.supplierPayments;
+          supplierPaymentCount = pay.supplierPayments.length;
+          pulledEntities.push("supplier_payments");
+        },
+      });
+    }
+    if (wanted.has("debt_payments")) {
+      jobs.push({
+        entity: "debt_payments",
+        run: async () => {
+          dp = await pullEntitySafe("debt_payments", entityErrors, () =>
+            pullDebtPaymentsIncremental(ctx, sinceDebtPayments),
+          );
+          if (!dp) return;
+          debtPayments = dp.debtPayments;
+          debtPaymentCount = dp.debtPayments.length;
+          pulledEntities.push("debt_payments");
+        },
+      });
+    }
+    if (wanted.has("cash_drawer_adjustments")) {
+      jobs.push({
+        entity: "cash_drawer_adjustments",
+        run: async () => {
+          adj = await pullEntitySafe("cash_drawer_adjustments", entityErrors, () =>
+            pullCashDrawerAdjustmentsIncremental(ctx, sinceCashDrawerAdjustments),
+          );
+          if (!adj) return;
+          cashDrawerAdjustments = adj.cashDrawerAdjustments;
+          pulledEntities.push("cash_drawer_adjustments");
+        },
+      });
+    }
+    if (wanted.has("day_drawer_opens")) {
+      jobs.push({
+        entity: "day_drawer_opens",
+        run: async () => {
+          ddo = await pullEntitySafe("day_drawer_opens", entityErrors, () =>
+            pullDayDrawerOpensIncremental(ctx, sinceDayDrawerOpens),
+          );
+          if (!ddo) return;
+          dayDrawerOpens = ddo.dayDrawerOpens;
+          pulledEntities.push("day_drawer_opens");
+        },
+      });
+    }
+    if (wanted.has("inventory_count_sessions")) {
+      jobs.push({
+        entity: "inventory_count_sessions",
+        run: async () => {
+          ics = await pullEntitySafe("inventory_count_sessions", entityErrors, () =>
+            pullInventoryCountSessionsFromRpc(ctx, sinceIcs),
+          );
+          if (!ics) return;
+          inventoryCountSessions = ics.sessions;
+          pulledEntities.push("inventory_count_sessions");
+        },
+      });
+    }
+    if (wanted.has("shifts")) {
+      jobs.push({
+        entity: "shifts",
+        run: async () => {
+          sh = await pullEntitySafe("shifts", entityErrors, () => pullShiftsFromRpc(ctx, sinceShifts));
+          if (!sh) return;
+          shifts = sh.shifts;
+          pulledEntities.push("shifts");
+        },
+      });
+    }
+    if (wanted.has("day_closes")) {
+      jobs.push({
+        entity: "day_closes",
+        run: async () => {
+          dc = await pullEntitySafe("day_closes", entityErrors, () => pullDayClosesFromRpc(ctx, sinceDayCloses));
+          if (!dc) return;
+          dayCloses = dc.dayCloses;
+          pulledEntities.push("day_closes");
+        },
+      });
+    }
+    if (wanted.has("stock_movements")) {
+      jobs.push({
+        entity: "stock_movements",
+        run: async () => {
+          sm = await pullEntitySafe("stock_movements", entityErrors, () =>
+            pullStockMovementsIncremental(ctx, sinceStockMovements),
+          );
+          if (!sm) return;
+          stockMovements = sm.movements;
+          stockMovementCount = sm.movements.length;
+          pulledEntities.push("stock_movements");
+        },
+      });
     }
 
-    const sinceStockMovements = cp.lastStockMovementsSyncAt ?? new Date(0).toISOString();
-    const sm = await pullEntitySafe("stock_movements", entityErrors, () =>
-      pullStockMovementsIncremental(ctx, sinceStockMovements),
-    );
-    if (sm) {
-      stockMovements = sm.movements;
-      stockMovementCount = sm.movements.length;
-      payloadBytes += sm.bytes;
-    }
+    await mapPool(jobs, SYNC_INCREMENTAL_PULL_CONCURRENCY, async (job) => {
+      await job.run();
+      return true;
+    });
+
+    payloadBytes =
+      (p?.bytes ?? 0) +
+      (c?.bytes ?? 0) +
+      (s?.bytes ?? 0) +
+      (ex?.bytes ?? 0) +
+      (ret?.bytes ?? 0) +
+      (pur?.bytes ?? 0) +
+      (sup?.bytes ?? 0) +
+      (pay?.bytes ?? 0) +
+      (dp?.bytes ?? 0) +
+      (adj?.bytes ?? 0) +
+      (ddo?.bytes ?? 0) +
+      (ics?.bytes ?? 0) +
+      (sh?.bytes ?? 0) +
+      (dc?.bytes ?? 0) +
+      (sm?.bytes ?? 0);
 
     pullCheckpoints = {
       salesAt: s?.checkpointAt ?? sinceSales,
@@ -2973,12 +3109,14 @@ export async function pullShopDataFromCloud(opts?: {
     stats,
     checkpoints: pullCheckpoints,
     recoveredAuditLogs: recoveredAuditLogs.length > 0 ? recoveredAuditLogs : undefined,
+    pulledEntities,
   };
 }
 
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
 export async function pullCloudAndMergeIntoStore(opts?: {
   forceFull?: boolean;
+  pullReason?: string;
   afterSnapshotRestore?: boolean;
   cloudRecovery?: boolean;
   onRecoveryStep?: (
@@ -3036,6 +3174,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   const checkpointStarted = performance.now();
   const cloud = await pullShopDataFromCloud({
     forceFull: opts?.forceFull,
+    pullReason: opts?.pullReason,
     afterSnapshotRestore: opts?.afterSnapshotRestore,
     onRecoveryStep: opts?.onRecoveryStep,
     cloudRecovery: opts?.cloudRecovery,
@@ -3081,38 +3220,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     }
     if (cloud.stats.mode === "full" && shouldMarkBootstrap) markBootstrapSyncComplete();
     else {
-      updateCheckpointsAfterIncrementalPull({
-        sales: true,
-        products: true,
-        customers: true,
-        debts: true,
-        expenses: true,
-        returns: true,
-        purchases: true,
-        suppliers: true,
-        supplierPayments: true,
-        cashDrawerAdjustments: true,
-        dayDrawerOpens: true,
-        inventoryCountSessions: true,
-        shifts: true,
-        dayCloses: true,
-        stockMovements: true,
-        salesAt: cloud.checkpoints?.salesAt,
-        productsAt: cloud.checkpoints?.productsAt,
-        customersAt: cloud.checkpoints?.customersAt,
-        debtPaymentsAt: cloud.checkpoints?.debtPaymentsAt,
-        expensesAt: cloud.checkpoints?.expensesAt,
-        returnsAt: cloud.checkpoints?.returnsAt,
-        purchasesAt: cloud.checkpoints?.purchasesAt,
-        suppliersAt: cloud.checkpoints?.suppliersAt,
-        supplierPaymentsAt: cloud.checkpoints?.supplierPaymentsAt,
-        cashDrawerAdjustmentsAt: cloud.checkpoints?.cashDrawerAdjustmentsAt,
-        dayDrawerOpensAt: cloud.checkpoints?.dayDrawerOpensAt,
-        inventoryCountSessionsAt: cloud.checkpoints?.inventoryCountSessionsAt,
-        shiftsAt: cloud.checkpoints?.shiftsAt,
-        dayClosesAt: cloud.checkpoints?.dayClosesAt,
-        stockMovementsAt: cloud.checkpoints?.stockMovementsAt,
-      });
+      updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
     }
     const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
     if (isDiagnosticsEnabled()) recordSyncDuration(cloud.stats.durationMs);
@@ -3350,41 +3458,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   if (cloud.stats.mode === "full") {
     if (shouldMarkBootstrap) markBootstrapSyncComplete();
   } else {
-    updateCheckpointsAfterIncrementalPull({
-      sales: true,
-      products: true,
-      customers: true,
-      debts: true,
-      expenses: cloud.stats.expenses > 0 || cloud.checkpoints?.expensesAt != null,
-      returns: cloud.stats.returns > 0 || cloud.checkpoints?.returnsAt != null,
-      purchases: cloud.stats.purchases > 0 || cloud.checkpoints?.purchasesAt != null,
-      suppliers: cloud.stats.suppliers > 0 || cloud.checkpoints?.suppliersAt != null,
-      supplierPayments:
-        cloud.stats.supplierPayments > 0 || cloud.checkpoints?.supplierPaymentsAt != null,
-      cashDrawerAdjustments:
-        cloud.cashDrawerAdjustments.length > 0 || cloud.checkpoints?.cashDrawerAdjustmentsAt != null,
-      dayDrawerOpens: cloud.dayDrawerOpens.length > 0 || cloud.checkpoints?.dayDrawerOpensAt != null,
-      inventoryCountSessions:
-        cloud.inventoryCountSessions.length > 0 || cloud.checkpoints?.inventoryCountSessionsAt != null,
-      shifts: cloud.shifts.length > 0 || cloud.checkpoints?.shiftsAt != null,
-      dayCloses: cloud.dayCloses.length > 0 || cloud.checkpoints?.dayClosesAt != null,
-      stockMovements: cloud.stockMovements.length > 0 || cloud.checkpoints?.stockMovementsAt != null,
-      salesAt: cloud.checkpoints?.salesAt,
-      productsAt: cloud.checkpoints?.productsAt,
-      customersAt: cloud.checkpoints?.customersAt,
-      debtPaymentsAt: cloud.checkpoints?.debtPaymentsAt,
-      expensesAt: cloud.checkpoints?.expensesAt,
-      returnsAt: cloud.checkpoints?.returnsAt,
-      purchasesAt: cloud.checkpoints?.purchasesAt,
-      suppliersAt: cloud.checkpoints?.suppliersAt,
-      supplierPaymentsAt: cloud.checkpoints?.supplierPaymentsAt,
-      cashDrawerAdjustmentsAt: cloud.checkpoints?.cashDrawerAdjustmentsAt,
-      dayDrawerOpensAt: cloud.checkpoints?.dayDrawerOpensAt,
-      inventoryCountSessionsAt: cloud.checkpoints?.inventoryCountSessionsAt,
-      shiftsAt: cloud.checkpoints?.shiftsAt,
-      dayClosesAt: cloud.checkpoints?.dayClosesAt,
-      stockMovementsAt: cloud.checkpoints?.stockMovementsAt,
-    });
+    updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
   }
 
   const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
@@ -3484,22 +3558,10 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
 
 const PULL_MIN_INTERVAL_MS = SYNC_PULL_MIN_INTERVAL_MS;
 
-function isEventPullReason(reason: string): boolean {
-  return (
-    reason === "realtime" ||
-    reason === "sale_ack" ||
-    reason === "reconnect" ||
-    reason === "foreground" ||
-    reason === "resume" ||
-    reason === "visibility" ||
-    reason === "startup"
-  );
-}
-
 function shouldAllowCloudPull(opts?: { force?: boolean; reason?: string }): boolean {
   if (shouldPausePosBackgroundPull()) return false;
   if (isCloudRecoveryLockActive()) return false;
-  if (opts?.force) return true;
+  if (shouldForceCloudPull(opts?.reason ?? "", opts?.force)) return true;
   const last = readSyncHealthMeta().lastPullAt;
   if (!last) return true;
   const age = Date.now() - new Date(last).getTime();
@@ -3518,56 +3580,63 @@ async function runCloudPullBundle(opts?: {
   forceFull?: boolean;
   pullReason?: string;
 }): Promise<boolean> {
-  const pulled = await pullCloudAndMergeIntoStore({ forceFull: opts?.forceFull });
-  if (getDeviceOnline()) {
-    const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
-    await pullHospitalityStateFromCloud(opts?.forceFull === true);
-    const { fetchDeviceAuthorityContext } = await import("../lib/deviceAuthority");
-    const deviceAuthority = await fetchDeviceAuthorityContext();
-    const { pullAndMergeStaffDuringCloudSync } = await import("../lib/staffRecovery");
-    await pullAndMergeStaffDuringCloudSync({
-      deviceAuthority,
-      force: opts?.forceFull === true,
-      reason: opts?.pullReason,
+  const reason = opts?.pullReason ?? "full_sync";
+  try {
+    const pulled = await pullCloudAndMergeIntoStore({
+      forceFull: opts?.forceFull,
+      pullReason: reason,
     });
-    const ctx = await resolveShopCtx().catch(() => null);
-    if (ctx?.shopId) {
-      const { hydrateShopSecurityPin } = await import("../lib/shopSecurityPinSync");
-      void hydrateShopSecurityPin(ctx.shopId).catch(() => "failed");
+    if (getDeviceOnline() && shouldRunAncillaryCloudBundle(reason)) {
+      const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
+      await pullHospitalityStateFromCloud(opts?.forceFull === true);
+      const { fetchDeviceAuthorityContext } = await import("../lib/deviceAuthority");
+      const deviceAuthority = await fetchDeviceAuthorityContext();
+      const { pullAndMergeStaffDuringCloudSync } = await import("../lib/staffRecovery");
+      await pullAndMergeStaffDuringCloudSync({
+        deviceAuthority,
+        force: opts?.forceFull === true,
+        reason,
+      });
+      const ctx = await resolveShopCtx().catch(() => null);
+      if (ctx?.shopId) {
+        const { hydrateShopSecurityPin } = await import("../lib/shopSecurityPinSync");
+        void hydrateShopSecurityPin(ctx.shopId).catch(() => "failed");
+      }
+      void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
+        flushPendingStaffSecurityEvents();
+      });
     }
-    void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
-      flushPendingStaffSecurityEvents();
-    });
+    return pulled;
+  } finally {
+    clearShopCtxTick();
   }
-  return pulled;
 }
 
-let incrementalPullTimer: ReturnType<typeof setTimeout> | null = null;
-let incrementalPullQueued = false;
+const incrementalPullCoalescer = createIncrementalPullCoalescer({
+  delayMsForReason: (reason) =>
+    reason === "realtime" || reason === "staff_realtime" ? SYNC_REALTIME_COALESCE_MS : 0,
+  run: (job) => runIncrementalCloudPull(job.reason, { force: shouldForceCloudPull(job.reason, job.force) }),
+});
 
 /** Event-driven incremental pull — independent from push pipeline (Phase 24.1B). */
 export function scheduleIncrementalCloudPull(reason: string, opts?: { force?: boolean }): void {
   void import("../lib/syncDiagnostics").then(({ logSync }) => {
-    logSync("pull_scheduled", { reason, force: opts?.force ?? false });
+    logSync("pull_scheduled", { reason, force: shouldForceCloudPull(reason, opts?.force) });
   });
-  if (incrementalPullTimer != null) clearTimeout(incrementalPullTimer);
-  incrementalPullTimer = globalThis.setTimeout(() => {
-    incrementalPullTimer = null;
-    void runIncrementalCloudPull(reason, opts);
-  }, 0);
+  incrementalPullCoalescer.schedule(reason, {
+    force: shouldForceCloudPull(reason, opts?.force),
+  });
 }
 
 async function runIncrementalCloudPull(reason: string, opts?: { force?: boolean }): Promise<boolean> {
   if (!hasSupabaseConfig || !getDeviceOnline()) return false;
   if (!shouldAllowCloudPull({ force: opts?.force, reason })) return false;
-  if (incrementalPullQueued) return false;
-  incrementalPullQueued = true;
   try {
     const { withPullSyncMutex } = await import("../lib/globalSyncMutex");
     const { logSync, recordPullDuration, recordMergeDuration, consumeRealtimeToPullLatency } =
       await import("../lib/syncDiagnostics");
     if (reason === "realtime") consumeRealtimeToPullLatency();
-    logSync("pull_start", { reason });
+    logSync("pull_start", { reason, scope: reason === "sale_ack" ? "sales" : "incremental_bundle" });
     const started = performance.now();
     const mergeStart = performance.now();
     const pulled = await withPullSyncMutex("pullCloud", () =>
@@ -3577,7 +3646,7 @@ async function runIncrementalCloudPull(reason: string, opts?: { force?: boolean 
     recordPullDuration(performance.now() - started);
     return pulled;
   } finally {
-    incrementalPullQueued = false;
+    clearShopCtxTick();
   }
 }
 

@@ -24,3 +24,17 @@ export async function mapPool<T>(
 
   return { ok, fail };
 }
+
+/** Bounded concurrent map that preserves result order. */
+export async function mapPoolResults<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  await mapPool(items, concurrency, async (item, index) => {
+    results[index] = await worker(item, index);
+    return true;
+  });
+  return results;
+}

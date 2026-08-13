@@ -57,7 +57,7 @@ export async function runImmediateSaleSync(saleId: string): Promise<void> {
   const ok = await syncSaleImmediately(saleId);
   recordPushIfNeeded(started);
   if (ok) {
-    scheduleImmediatePull("sale_ack", { force: true });
+    scheduleImmediatePull("sale_ack");
   }
   await (await import("./posPushScheduler")).runPosPushOnlyUpload({
     force: true,

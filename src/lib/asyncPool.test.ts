@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapPool } from "./asyncPool";
+import { mapPool, mapPoolResults } from "./asyncPool";
 
 describe("mapPool", () => {
   it("runs all items with limited concurrency", async () => {
@@ -11,5 +11,19 @@ describe("mapPool", () => {
     expect(order.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
     expect(ok).toBe(3);
     expect(fail).toBe(2);
+  });
+
+  it("never exceeds the bounded concurrency limit", async () => {
+    let current = 0;
+    let max = 0;
+    await mapPoolResults([1, 2, 3, 4, 5, 6, 7, 8], 3, async (n) => {
+      current += 1;
+      max = Math.max(max, current);
+      await new Promise((r) => setTimeout(r, 15));
+      current -= 1;
+      return n;
+    });
+    expect(max).toBeLessThanOrEqual(3);
+    expect(max).toBeGreaterThan(1);
   });
 });

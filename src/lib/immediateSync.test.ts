@@ -22,9 +22,17 @@ vi.mock("./syncTiming", () => ({
 describe("immediateSync", () => {
   beforeEach(() => {
     vi.resetModules();
-    mocks.syncSaleImmediately.mockClear();
-    mocks.runPosPushOnlyUpload.mockClear();
-    mocks.scheduleIncrementalCloudPull.mockClear();
+    mocks.syncSaleImmediately.mockReset();
+    mocks.syncSaleImmediately.mockResolvedValue(true);
+    mocks.runPosPushOnlyUpload.mockReset();
+    mocks.runPosPushOnlyUpload.mockResolvedValue({
+      ran: true,
+      skipped: false,
+      pushOk: 1,
+      pushFail: 0,
+      queueFailed: 0,
+    });
+    mocks.scheduleIncrementalCloudPull.mockReset();
   });
 
   it("routes sale enqueue through immediate sale sync", async () => {
@@ -34,19 +42,26 @@ describe("immediateSync", () => {
     await vi.waitFor(() => expect(mocks.runPosPushOnlyUpload).toHaveBeenCalled());
   });
 
-  it("schedules incremental pull on ack path", async () => {
+  it("schedules incremental pull on ack path without force", async () => {
     const { scheduleImmediatePull } = await import("./immediateSync");
-    scheduleImmediatePull("sale_ack", { force: true });
+    scheduleImmediatePull("sale_ack");
     await vi.waitFor(() =>
-      expect(mocks.scheduleIncrementalCloudPull).toHaveBeenCalledWith("sale_ack", { force: true }),
+      expect(mocks.scheduleIncrementalCloudPull).toHaveBeenCalledWith("sale_ack", undefined),
     );
   });
 
-  it("runs immediate sale push path", async () => {
+  it("runs immediate sale push path without a full-bundle force pull", async () => {
     const { runImmediateSaleSync } = await import("./immediateSync");
     await runImmediateSaleSync("sale-2");
     expect(mocks.syncSaleImmediately).toHaveBeenCalledWith("sale-2");
     await vi.waitFor(() => expect(mocks.runPosPushOnlyUpload).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(mocks.scheduleIncrementalCloudPull).toHaveBeenCalledWith("sale_ack", undefined),
+    );
+    expect(mocks.scheduleIncrementalCloudPull).not.toHaveBeenCalledWith(
+      "sale_ack",
+      expect.objectContaining({ force: true }),
+    );
   });
 
   it("schedules immediate push for P0 stock updates", async () => {
