@@ -24,6 +24,15 @@ function sessionRecentlyReauthenticated(lastSignInAt: string | undefined): boole
 }
 
 Deno.serve(async (req) => {
+  try {
+    return await handleOwnerPermanentDelete(req);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unhandled_error";
+    return json({ ok: false, error: "delete_failed", detail }, 500);
+  }
+});
+
+async function handleOwnerPermanentDelete(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -109,13 +118,17 @@ Deno.serve(async (req) => {
       staffUserIds,
     });
 
-    await userClient.rpc("owner_self_delete_auth_audit", {
-      p_owner_user_id: ownerId,
-      p_shop_id: null,
-      p_action: retry.ok ? "owner_retry_auth_delete_ok" : "owner_retry_auth_delete_failed",
-      p_ok: retry.ok,
-      p_detail: retry.detail ?? null,
-    }).catch(() => undefined);
+    try {
+      await userClient.rpc("owner_self_delete_auth_audit", {
+        p_owner_user_id: ownerId,
+        p_shop_id: null,
+        p_action: retry.ok ? "owner_retry_auth_delete_ok" : "owner_retry_auth_delete_failed",
+        p_ok: retry.ok,
+        p_detail: retry.detail ?? null,
+      });
+    } catch {
+      /* audit must not fail retry */
+    }
 
     if (!retry.ok) {
       return json({
@@ -162,13 +175,17 @@ Deno.serve(async (req) => {
       }),
   });
 
-  await userClient.rpc("owner_self_delete_auth_audit", {
-    p_owner_user_id: ownerId,
-    p_shop_id: null,
-    p_action: result.ok ? "owner_permanent_delete_auth_ok" : "owner_permanent_delete_auth_failed",
-    p_ok: result.ok,
-    p_detail: result.detail ?? null,
-  }).catch(() => undefined);
+  try {
+    await userClient.rpc("owner_self_delete_auth_audit", {
+      p_owner_user_id: ownerId,
+      p_shop_id: null,
+      p_action: result.ok ? "owner_permanent_delete_auth_ok" : "owner_permanent_delete_auth_failed",
+      p_ok: result.ok,
+      p_detail: result.detail ?? null,
+    });
+  } catch {
+    /* audit must not fail deletion */
+  }
 
   if (!result.ok) {
     return json({
@@ -197,4 +214,4 @@ Deno.serve(async (req) => {
     message: result.message ??
       "Your account, shop data, and all staff logins were permanently deleted. You can register again with the same email.",
   });
-});
+}

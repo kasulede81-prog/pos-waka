@@ -163,14 +163,23 @@ export async function runCertifiedHardDelete(opts: {
 
   const authResult = await revokeAndDeleteAuthUsers(opts.admin, userIds, ownerUserId);
 
-  const { data: merged, error: mergeErr } = await opts.userClient.rpc("hard_delete_merge_auth_verification", {
-    p_org_id: orgId,
-    p_shop_ids: shopIds,
-    p_owner_user_id: ownerUserId,
-    p_staff_user_ids: staffUserIds,
-    p_owner_auth_remaining: authResult.ownerRemaining,
-    p_staff_auth_remaining: authResult.staffRemaining,
-  });
+  let merged: unknown = null;
+  let mergeErr: { message?: string } | null = null;
+  try {
+    const mergeRes = await opts.userClient.rpc("hard_delete_merge_auth_verification", {
+      p_org_id: orgId,
+      p_shop_ids: shopIds,
+      p_owner_user_id: ownerUserId,
+      p_staff_user_ids: staffUserIds,
+      p_owner_auth_remaining: authResult.ownerRemaining,
+      p_staff_auth_remaining: authResult.staffRemaining,
+    });
+    merged = mergeRes.data;
+    mergeErr = mergeRes.error;
+  } catch (error) {
+    // Owner JWT is often invalid after auth.admin.deleteUser; fall back to execute verification.
+    mergeErr = { message: error instanceof Error ? error.message : "merge_verification_failed" };
+  }
 
   let deletionReport = (merged ?? exec.verification ?? {}) as HardDeleteVerificationReport;
 
@@ -234,14 +243,20 @@ export async function runCertifiedAuthRetry(opts: {
   const allIds = [opts.ownerId, ...opts.staffUserIds.filter((id) => id !== opts.ownerId)];
   const authResult = await revokeAndDeleteAuthUsers(opts.admin, allIds, opts.ownerId);
 
-  const { data: merged } = await opts.userClient.rpc("hard_delete_merge_auth_verification", {
-    p_org_id: opts.orgId,
-    p_shop_ids: opts.shopIds,
-    p_owner_user_id: opts.ownerId,
-    p_staff_user_ids: opts.staffUserIds,
-    p_owner_auth_remaining: authResult.ownerRemaining,
-    p_staff_auth_remaining: authResult.staffRemaining,
-  });
+  let merged: unknown = null;
+  try {
+    const mergeRes = await opts.userClient.rpc("hard_delete_merge_auth_verification", {
+      p_org_id: opts.orgId,
+      p_shop_ids: opts.shopIds,
+      p_owner_user_id: opts.ownerId,
+      p_staff_user_ids: opts.staffUserIds,
+      p_owner_auth_remaining: authResult.ownerRemaining,
+      p_staff_auth_remaining: authResult.staffRemaining,
+    });
+    merged = mergeRes.data;
+  } catch {
+    merged = null;
+  }
 
   const deletionReport = (merged ?? {}) as HardDeleteVerificationReport;
 
