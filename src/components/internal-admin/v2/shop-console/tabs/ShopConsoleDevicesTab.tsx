@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
   RescueActionButton,
 } from "../../../rescue/RescuePrimitives";
@@ -13,6 +13,7 @@ import { filterActiveRescueDevices, isRescueDeviceOnline } from "../../../../../
 import { t } from "../../../../../lib/i18n";
 import { runShopConsoleRescueAction } from "../rescueRun";
 import type { ShopConsoleState } from "../useShopConsoleState";
+import { RemoteSupportConnectControl } from "../../../../remote-support/RemoteSupportConnectControl";
 
 type Props = { ctx: ShopConsoleState };
 
@@ -22,7 +23,7 @@ function fmtTime(iso: string | null | undefined): string {
 }
 
 export function ShopConsoleDevicesTab({ ctx }: Props) {
-  const { lang, detail, canSupport, busy, executeAction, loadRescueData, loadShop, rescue, setRescueField } = ctx;
+  const { lang, detail, canSupport, busy, executeAction, loadRescueData, loadShop, rescue, setRescueField, perms, adminRow, previewMode } = ctx;
 
   useEffect(() => {
     void loadRescueData();
@@ -113,6 +114,17 @@ export function ShopConsoleDevicesTab({ ctx }: Props) {
                 })
               }
               onRefresh={() => void refreshDiagnostics()}
+              remoteSupport={
+                <RemoteSupportConnectControl
+                  lang={lang}
+                  shopId={detail.shop.id}
+                  shopName={detail.shop.name}
+                  device={d}
+                  technicianName={adminRow?.full_name || adminRow?.email || "WAKA Support"}
+                  canRemoteSupport={perms.canRemoteSupport}
+                  previewMode={previewMode}
+                />
+              }
             />
           ))}
         </ul>
@@ -144,6 +156,7 @@ function DeviceRow({
   onRevokeTrust,
   onResetSync,
   onRefresh,
+  remoteSupport,
 }: {
   device: ShopDeviceRow;
   busy: boolean;
@@ -155,6 +168,7 @@ function DeviceRow({
   onRevokeTrust: () => void;
   onResetSync: () => void;
   onRefresh: () => void;
+  remoteSupport?: ReactNode;
 }) {
   const online = isRescueDeviceOnline(device.last_seen_at);
 
@@ -227,6 +241,7 @@ function DeviceRow({
             </RescueActionButton>
           </div>
         ) : null}
+        {remoteSupport}
       </div>
     </li>
   );

@@ -13,6 +13,7 @@ import { adminPermissions } from "../adminRoles";
 import { AppVersionPanel, DeviceFleetCard } from "../ops/OpsWidgets";
 import { EmptyState } from "../primitives";
 import { AdminDeviceForensicsPanel } from "../../ops/AdminDeviceForensicsPanel";
+import { RemoteSupportConnectControl } from "../../../remote-support/RemoteSupportConnectControl";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -118,6 +119,15 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
                 canManage={perms.canShopSupport && !previewMode}
                 onOpenShop={() => navigate(internalAdminShopHref(d.shop_id, previewMode))}
                 onAction={(action) => void runDeviceAction(d.id, d.shop_id, action)}
+              />
+              <RemoteSupportConnectControl
+                lang="en"
+                shopId={d.shop_id}
+                shopName={d.shop_name}
+                device={d}
+                technicianName={adminRow?.full_name || adminRow?.email || "WAKA Support"}
+                canRemoteSupport={perms.canRemoteSupport}
+                previewMode={previewMode}
               />
               {busyId === d.id ? <p className="text-center text-xs font-bold text-muted-foreground">Updating…</p> : null}
             </li>

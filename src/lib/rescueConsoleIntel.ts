@@ -188,7 +188,7 @@ function auditCategory(action: string): string {
   if (action.includes("password") || action.includes("pin") || action.includes("verification")) return "account";
   if (action.includes("sync") || action.includes("device")) return "sync";
   if (action.includes("subscription") || action.includes("plan") || action.includes("payment")) return "billing";
-  if (action.includes("rescue") || action.includes("support")) return "support";
+  if (action.includes("rescue") || action.includes("support") || action.includes("remote_support")) return "support";
   if (action.includes("suspend") || action.includes("active")) return "shop";
   return "admin";
 }

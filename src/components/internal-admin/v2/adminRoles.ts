@@ -61,6 +61,11 @@ export function canManageAppReleases(role: string): boolean {
   return role === "super_admin" || role === "operations_admin";
 }
 
+/** Remote Support request/revoke — not inherited from tickets or shop rescue. */
+export function canRemoteSupport(role: string): boolean {
+  return role === "super_admin" || role === "support_admin";
+}
+
 export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
   const role = normalizeAdminRole(adminRow?.role);
   return {
@@ -76,6 +81,7 @@ export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
     canManageAppReleases: canManageAppReleases(role),
     canEditShopProfile: canEditShopProfile(role),
     canPermanentlyDeleteShopAccount: canPermanentlyDeleteShopAccount(role),
+    canRemoteSupport: canRemoteSupport(role),
     districtCount: adminRow?.assigned_district_ids?.length ?? 0,
   };
 }

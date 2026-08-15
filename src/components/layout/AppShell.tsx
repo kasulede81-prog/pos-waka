@@ -73,6 +73,7 @@ import {
   useStaffCredentialRecoveryOwnerNotice,
 } from "../security/StaffCredentialRecoveryBanner";
 import { PwaUpdateBanner } from "../app-update/AppUpdateControls";
+import { RemoteSupportHost } from "../remote-support/RemoteSupportHost";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -331,6 +332,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         )}
       >
         <PwaUpdateBanner lang={lang} />
+        <RemoteSupportHost lang={lang} />
         {shopSecurityPinRecoveryNotice &&
         actor.role === "owner" &&
         !isBackOfficePinConfigured(preferences.backOfficePin) &&

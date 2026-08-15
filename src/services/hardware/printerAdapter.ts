@@ -26,20 +26,6 @@ export type PrinterCapabilities = {
 const BT_PRINTER_SERVICES = [0xffe0, 0x18f0];
 const BT_PRINTER_CHARS = [0xffe1, 0x2af1];
 
-declare global {
-  interface Window {
-    wakaDesktop?: {
-      platform?: string;
-      print?: (opts?: { silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
-      escPosNetwork?: (opts: {
-        host: string;
-        port: number;
-        data: number[];
-      }) => Promise<{ ok: boolean; error?: string }>;
-    };
-  }
-}
-
 function resolvePlatform(): PrinterPlatform {
   if (typeof navigator === "undefined") return "unknown";
   const ua = navigator.userAgent.toLowerCase();

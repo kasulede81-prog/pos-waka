@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { registerRemoteSupportIpc } = require("./remoteSupport/ipcHandlers.cjs");
 
 const APP_NAME = "WAKA POS";
 let mainWindow = null;
@@ -66,6 +67,8 @@ ipcMain.handle("waka-print", async (_event, opts) => {
     );
   });
 });
+
+registerRemoteSupportIpc(ipcMain);
 
 ipcMain.handle("waka-printer-diagnostics", async () => {
   const win = mainWindow ?? BrowserWindow.getFocusedWindow();

@@ -607,6 +607,8 @@ export type ShopDeviceRow = {
   last_login_at?: string | null;
   device_authority?: "primary" | "secondary" | null;
   is_active: boolean;
+  status?: string | null;
+  approval_status?: string | null;
   trusted: boolean;
   suspicious_flag: boolean;
   created_at: string;
@@ -1144,6 +1146,8 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
               ? d.device_authority
               : null,
           is_active: Boolean(d.is_active),
+          status: (d.status as string) ?? null,
+          approval_status: (d.approval_status as string) ?? null,
           trusted: Boolean(d.trusted),
           suspicious_flag: Boolean(d.suspicious_flag),
           created_at: (d.created_at as string) ?? "",
@@ -1257,7 +1261,7 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
   const { data: devRows } = await supabase
     .from("shop_devices")
     .select(
-      "id,shop_id,device_fingerprint,label,platform,app_version,last_seen_at,last_login_at,device_authority,is_active,trusted,suspicious_flag,created_at",
+      "id,shop_id,device_fingerprint,label,platform,app_version,last_seen_at,last_login_at,device_authority,is_active,status,approval_status,trusted,suspicious_flag,created_at",
     )
     .eq("shop_id", shopId)
     .order("last_seen_at", { ascending: false })
@@ -1808,7 +1812,7 @@ export async function fetchFleetDevices(limit = 120): Promise<FleetDeviceRow[]> 
   const cap = Math.min(Math.max(limit, 1), 200);
   const { data: devices, error } = await supabase
     .from("shop_devices")
-    .select("id, shop_id, device_fingerprint, label, platform, app_version, last_seen_at, is_active, trusted, suspicious_flag, created_at")
+    .select("id, shop_id, device_fingerprint, label, platform, app_version, last_seen_at, is_active, status, approval_status, trusted, suspicious_flag, created_at")
     .order("last_seen_at", { ascending: false, nullsFirst: false })
     .limit(cap);
   if (error || !devices?.length) return [];
@@ -1846,6 +1850,8 @@ export async function fetchFleetDevices(limit = 120): Promise<FleetDeviceRow[]> 
       app_version: (r.app_version as string) ?? null,
       last_seen_at: (r.last_seen_at as string) ?? null,
       is_active: Boolean(r.is_active),
+      status: (r.status as string) ?? null,
+      approval_status: (r.approval_status as string) ?? null,
       trusted: Boolean(r.trusted),
       suspicious_flag: Boolean(r.suspicious_flag),
       created_at: (r.created_at as string) ?? "",
@@ -1874,6 +1880,25 @@ export const ADMIN_PASSWORD_RESET_AUDIT_ACTIONS = [
   "admin_set_owner_password",
   "admin_password_reset_email_sent",
   "admin_password_reset_email_failed",
+] as const;
+
+export const REMOTE_SUPPORT_AUDIT_ACTIONS = [
+  "remote_support_request_created",
+  "remote_support_request_delivered",
+  "remote_support_request_expired",
+  "remote_support_customer_approved",
+  "remote_support_customer_declined",
+  "remote_support_customer_ended",
+  "remote_support_technician_cancelled",
+  "remote_support_admin_revoked",
+  "remote_support_transport_start_requested",
+  "remote_support_transport_start_authorized",
+  "remote_support_transport_started",
+  "remote_support_transport_connection_failed",
+  "remote_support_transport_disconnected",
+  "remote_support_transport_stopped",
+  "remote_support_transport_credential_rotated",
+  "remote_support_transport_error",
 ] as const;
 
 function auditLogRowToOpsRow(row: {
@@ -1947,7 +1972,7 @@ export async function fetchShopAuditTimeline(shopId: string, limit = 25): Promis
       .from("audit_logs")
       .select("id, shop_id, actor_user_id, action, payload, created_at")
       .eq("shop_id", shopId)
-      .in("action", [...ADMIN_PASSWORD_RESET_AUDIT_ACTIONS])
+      .in("action", [...ADMIN_PASSWORD_RESET_AUDIT_ACTIONS, ...REMOTE_SUPPORT_AUDIT_ACTIONS])
       .order("created_at", { ascending: false })
       .limit(cap),
   ]);

@@ -3,20 +3,6 @@ import { saveExportedFile } from "./fileDownload";
 import { isNativePrintPlatform } from "./nativeReceiptPrint";
 import { paperCss } from "./receiptPrint";
 
-declare global {
-  interface Window {
-    wakaDesktop?: {
-      platform?: string;
-      print?: (opts?: { silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
-      escPosNetwork?: (opts: {
-        host: string;
-        port: number;
-        data: number[];
-      }) => Promise<{ ok: boolean; error?: string }>;
-    };
-  }
-}
-
 function wrapPrintHtml(bodyHtml: string, paper: ReceiptPaperSize, title: string): string {
   const css = paperCss(paper);
   return `<!doctype html>

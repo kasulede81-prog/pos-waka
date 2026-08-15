@@ -1,7 +1,7 @@
-import { Capacitor } from "@capacitor/core";
 import { appendDeviceAuditEntry } from "./deviceAudit";
 import { setDeviceApprovalStatus } from "./deviceAuthority";
 import { getOrCreateDeviceId } from "./deviceId";
+import { presenceLabel, presencePlatform } from "./shopPresence";
 import {
   notifyOwnerNewDeviceActivation,
   reportDeviceFingerprintChangeIfNeeded,
@@ -17,19 +17,6 @@ import {
   nextActivationAttempt,
   type ActivationFailureKind,
 } from "./deviceActivationDiagnostics";
-
-function presencePlatform(): string {
-  if (typeof window === "undefined") return "server";
-  if (Capacitor.isNativePlatform()) return Capacitor.getPlatform();
-  return "web";
-}
-
-function presenceLabel(): string {
-  const platform = presencePlatform();
-  if (platform === "android") return "Android POS";
-  if (platform === "ios") return "iOS POS";
-  return "Web POS";
-}
 
 export type DeviceLimitContextDevice = {
   id: string;

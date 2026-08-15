@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { getDeviceOnline } from "./deviceOnline";
 import { getOrCreateDeviceId } from "./deviceId";
+import { isElectronDesktop } from "./electronDesktop";
 import { supabase } from "./supabase";
 
 const HEARTBEAT_MIN_INTERVAL_MS = 3 * 60 * 1000;
@@ -30,6 +31,7 @@ function writeLastHeartbeatMs(ms: number): void {
 export function presencePlatform(): string {
   if (typeof window === "undefined") return "server";
   if (Capacitor.isNativePlatform()) return Capacitor.getPlatform();
+  if (isElectronDesktop()) return "windows";
   return "web";
 }
 
@@ -37,6 +39,7 @@ export function presenceLabel(): string {
   const platform = presencePlatform();
   if (platform === "android") return "Android POS";
   if (platform === "ios") return "iOS POS";
+  if (platform === "windows") return "Windows POS";
   return "Web POS";
 }
 
