@@ -13,6 +13,8 @@ type Props = {
   deviceLabel: string;
   technicianName: string;
   busy?: boolean;
+  initialReasonCode?: RemoteSupportReasonCode;
+  initialReasonText?: string;
   onCancel: () => void;
   onSubmit: (reasonCode: RemoteSupportReasonCode, reasonText: string) => void;
 };
@@ -23,11 +25,13 @@ export function RemoteSupportRequestDialog({
   deviceLabel,
   technicianName,
   busy,
+  initialReasonCode,
+  initialReasonText,
   onCancel,
   onSubmit,
 }: Props) {
-  const [reasonCode, setReasonCode] = useState<RemoteSupportReasonCode>("other");
-  const [reasonText, setReasonText] = useState("");
+  const [reasonCode, setReasonCode] = useState<RemoteSupportReasonCode>(initialReasonCode ?? "other");
+  const [reasonText, setReasonText] = useState(initialReasonText ?? "");
   const trimmed = reasonText.trim();
   const canSend = trimmed.length >= 3 && !busy;
 

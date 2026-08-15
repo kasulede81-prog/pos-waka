@@ -138,6 +138,10 @@ export function remoteSupportErrorMessage(result: RemoteSupportRpcResult): strin
       return "That WAKA POS device was not found.";
     case "device_shop_mismatch":
       return "That device does not belong to this shop.";
+    case "support_request_shop_mismatch":
+      return "That support ticket belongs to a different shop.";
+    case "support_request_not_found":
+      return "That support ticket was not found.";
     case "device_not_eligible":
     case "device_no_longer_eligible":
       return "This device is not eligible for remote support.";

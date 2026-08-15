@@ -74,6 +74,7 @@ import {
 } from "../security/StaffCredentialRecoveryBanner";
 import { PwaUpdateBanner } from "../app-update/AppUpdateControls";
 import { RemoteSupportHost } from "../remote-support/RemoteSupportHost";
+import { PosNeedHelpHost } from "../support/PosNeedHelpHost";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -333,6 +334,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       >
         <PwaUpdateBanner lang={lang} />
         <RemoteSupportHost lang={lang} />
+        {fullDesktopSell ? (
+          <PosNeedHelpHost
+            lang={lang}
+            shopId={shopId}
+            role={actor.role}
+            authenticated={Boolean(user) || authMode === "local"}
+            internalAdminRoute={internalAdminRoute}
+            posLocked={Boolean(preferences.posLocked)}
+            placement="floating"
+            inverted={isLauncherHome}
+          />
+        ) : null}
         {shopSecurityPinRecoveryNotice &&
         actor.role === "owner" &&
         !isBackOfficePinConfigured(preferences.backOfficePin) &&
@@ -383,6 +396,16 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               {onSellScreen ? (
                 <DisplayScaleControl lang={lang} inverted={isLauncherHome} compact={!isDesktopLayout} />
               ) : null}
+              <PosNeedHelpHost
+                lang={lang}
+                shopId={shopId}
+                role={actor.role}
+                authenticated={Boolean(user) || authMode === "local"}
+                internalAdminRoute={internalAdminRoute}
+                posLocked={Boolean(preferences.posLocked)}
+                placement="inline"
+                inverted={isLauncherHome}
+              />
               <AppThemeToggle lang={lang} inverted={isLauncherHome} />
               <div ref={userMenuRef} className="relative">
                 <button

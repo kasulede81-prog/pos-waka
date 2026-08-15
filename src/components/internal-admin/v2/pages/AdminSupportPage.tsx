@@ -13,6 +13,7 @@ import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, SupportTicketCard } from "../primitives";
+import { RemoteSupportTicketConnect } from "../../../remote-support/RemoteSupportTicketConnect";
 import { AdminPasswordResetLogPanel } from "../../AdminPasswordResetLogPanel";
 import { SupportPasswordResetPanel } from "../../SupportPasswordResetPanel";
 import { AdminDiagnosticsImportPanel } from "../../ops/AdminDiagnosticsImportPanel";
@@ -140,6 +141,20 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
                         }
                       : undefined
                   }
+                />
+                {tk.device_fingerprint || tk.app_version ? (
+                  <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                    {tk.issue_type ? `${tk.issue_type} · ` : ""}
+                    {tk.app_version ? `v${tk.app_version}` : ""}
+                    {tk.device_fingerprint ? ` · ${tk.device_fingerprint.slice(0, 18)}` : ""}
+                  </p>
+                ) : null}
+                <RemoteSupportTicketConnect
+                  lang={lang}
+                  ticket={tk}
+                  technicianName={adminRow?.full_name || adminRow?.email || "WAKA Support"}
+                  canRemoteSupport={perms.canRemoteSupport}
+                  previewMode={previewMode}
                 />
                 {tk.issue_type === "pilot_support" && tk.diagnostics_json ? (
                   <details className="mt-2 rounded-xl border border-teal-200 bg-teal-50/50 p-2 text-xs">

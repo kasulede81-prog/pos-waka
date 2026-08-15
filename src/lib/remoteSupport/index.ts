@@ -32,6 +32,14 @@ export {
 } from "./deviceBinding";
 export { assertRemoteSupportGrant, consumeRemoteSupportGrant } from "./grant";
 export {
+  assertTicketDeviceResolution,
+  mapTicketIssueToReason,
+  resolveTicketShopDevice,
+  ticketDeviceFingerprint,
+  ticketRemoteSupportPayload,
+} from "./resolveTicketDevice";
+export type { ResolvedTicketDevice, TicketDeviceLookup } from "./resolveTicketDevice";
+export {
   approveRemoteSupport,
   assertRemoteSupportGrantRpc,
   cancelRemoteSupport,

@@ -2,9 +2,11 @@ import { useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
+  cancelRemoteSupport,
   evaluateRemoteSupportEligibility,
   remoteSupportErrorMessage,
   requestRemoteSupport,
+  ticketRemoteSupportPayload,
   type RemoteSupportEligibilityDevice,
   type RemoteSupportReasonCode,
 } from "../../lib/remoteSupport";
@@ -19,6 +21,9 @@ type Props = {
   technicianName: string;
   canRemoteSupport: boolean;
   previewMode?: boolean;
+  supportRequestId?: string | null;
+  initialReasonCode?: RemoteSupportReasonCode;
+  initialReasonText?: string;
   onRequested?: (requestId: string) => void;
 };
 
@@ -30,11 +35,15 @@ export function RemoteSupportConnectControl({
   technicianName,
   canRemoteSupport,
   previewMode,
+  supportRequestId,
+  initialReasonCode,
+  initialReasonText,
   onRequested,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const eligibility = evaluateRemoteSupportEligibility(device);
   const deviceLabel = device.label || (device.platform === "windows" ? "Windows POS" : device.platform || "POS");
@@ -48,12 +57,15 @@ export function RemoteSupportConnectControl({
     }
     setBusy(true);
     setError(null);
-    const result = await requestRemoteSupport({
-      shopId,
-      shopDeviceId: device.id,
-      reasonCode,
-      reasonText,
-    });
+    const result = await requestRemoteSupport(
+      ticketRemoteSupportPayload({
+        shopId,
+        shopDeviceId: device.id,
+        supportRequestId: supportRequestId ?? "",
+        reasonCode,
+        reasonText,
+      }),
+    );
     setBusy(false);
     if (!result.ok) {
       setError(remoteSupportErrorMessage(result));
@@ -62,7 +74,7 @@ export function RemoteSupportConnectControl({
         action: "remote_support_request_created",
         result: "failed",
         reason: result.message ?? result.error,
-        metadata: { deviceId: device.id, reasonCode },
+        metadata: { deviceId: device.id, reasonCode, supportRequestId: supportRequestId ?? null },
       });
       return;
     }
@@ -71,11 +83,27 @@ export function RemoteSupportConnectControl({
       action: "remote_support_request_created",
       result: "ok",
       reason: reasonText,
-      metadata: { requestId: result.request_id, deviceId: device.id, reasonCode },
+      metadata: { requestId: result.request_id, deviceId: device.id, reasonCode, supportRequestId: supportRequestId ?? null },
     });
     setOpen(false);
     setWaiting(true);
-    if (result.request_id) onRequested?.(result.request_id);
+    if (result.request_id) {
+      setRequestId(result.request_id);
+      onRequested?.(result.request_id);
+    }
+  };
+
+  const cancelWaiting = async () => {
+    if (!requestId || previewMode) {
+      setWaiting(false);
+      setRequestId(null);
+      return;
+    }
+    setBusy(true);
+    await cancelRemoteSupport(requestId);
+    setBusy(false);
+    setWaiting(false);
+    setRequestId(null);
   };
 
   return (
@@ -89,6 +117,16 @@ export function RemoteSupportConnectControl({
       >
         {waiting ? t(lang, "remoteSupportWaiting") : t(lang, "remoteSupportConnect")}
       </button>
+      {waiting ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void cancelWaiting()}
+          className="min-h-[36px] rounded-xl border border-border px-3 text-[11px] font-black disabled:opacity-40"
+        >
+          {t(lang, "remoteSupportCancel")}
+        </button>
+      ) : null}
       {!eligibility.eligible ? (
         <p className="text-[10px] font-semibold text-muted-foreground">{eligibility.explanation}</p>
       ) : null}
@@ -100,6 +138,8 @@ export function RemoteSupportConnectControl({
           deviceLabel={deviceLabel}
           technicianName={technicianName}
           busy={busy}
+          initialReasonCode={initialReasonCode}
+          initialReasonText={initialReasonText}
           onCancel={() => setOpen(false)}
           onSubmit={(code, text) => void submit(code, text)}
         />
