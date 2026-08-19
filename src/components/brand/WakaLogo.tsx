@@ -1,7 +1,8 @@
 import type { ImgHTMLAttributes } from "react";
 import clsx from "clsx";
+import { publicAssetUrl } from "../../lib/publicAssetUrl";
 
-const LOGO_SRC = "/waka-logo.png";
+const LOGO_SRC = publicAssetUrl("waka-logo.png");
 
 type LogoProps = ImgHTMLAttributes<HTMLImageElement> & {
   /** Tailwind height class, e.g. `h-12` */
@@ -20,11 +21,11 @@ const SIZE_CLASS: Record<NonNullable<LogoProps["size"]>, string> = {
 };
 
 const SYMBOL_BY_SIZE: Record<NonNullable<LogoProps["size"]>, string> = {
-  xs: "/brand/w-icon-32-cream.png",
-  sm: "/brand/w-icon-48-cream.png",
-  md: "/brand/w-icon-64-cream.png",
-  lg: "/brand/w-icon-96-cream.png",
-  xl: "/brand/w-icon-128-cream.png",
+  xs: publicAssetUrl("brand/w-icon-32-cream.png"),
+  sm: publicAssetUrl("brand/w-icon-48-cream.png"),
+  md: publicAssetUrl("brand/w-icon-64-cream.png"),
+  lg: publicAssetUrl("brand/w-icon-96-cream.png"),
+  xl: publicAssetUrl("brand/w-icon-128-cream.png"),
   splash: LOGO_SRC,
 };
 

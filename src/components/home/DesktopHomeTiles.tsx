@@ -18,7 +18,11 @@ import { lockedProductIds } from "../../lib/productPlanLock";
 import { POS_SHOP_ROUTE } from "../../lib/posNavigation";
 import { prefetchOfficeHub } from "../../lib/prefetchRoutes";
 import { resolveHomeMenuTiles, type ResolvedHomeTile } from "../../lib/launcherTiles";
-import { homeModuleBand } from "../../lib/homeModulePriority";
+import {
+  HOME_MODULE_GRID_CLASS,
+  HOME_MODULE_SECTION_SPACING,
+  presentHomeMenuTiles,
+} from "../../lib/homePresentation";
 import { LivingDashboardCard } from "./LivingDashboardCard";
 import { HomeBusinessHero } from "./HomeBusinessHero";
 import { HomeExecutiveKpiStrip } from "./HomeExecutiveKpiStrip";
@@ -153,24 +157,8 @@ export function DesktopHomeTiles({ lang }: Props) {
     return [agentTile, ...baseSecondary];
   }, [baseSecondary, isMarketingAgent]);
 
-  const reportsTile = useMemo(() => secondary.find((tile) => tile.id === "reports"), [secondary]);
-  const moduleTiles = useMemo(
-    () => secondary.filter((tile) => tile.id !== "reports"),
-    [secondary],
-  );
-
-  const primaryTiles = useMemo(
-    () => moduleTiles.filter((tile) => homeModuleBand(tile.id) === "primary"),
-    [moduleTiles],
-  );
-  const secondaryTiles = useMemo(
-    () => moduleTiles.filter((tile) => homeModuleBand(tile.id) === "secondary"),
-    [moduleTiles],
-  );
-  const adminTiles = useMemo(
-    () => moduleTiles.filter((tile) => homeModuleBand(tile.id) === "admin"),
-    [moduleTiles],
-  );
+  const { reports: reportsTile, primary: primaryTiles, secondary: secondaryTiles, admin: adminTiles } =
+    useMemo(() => presentHomeMenuTiles({ hero, secondary }), [hero, secondary]);
 
   const openTile = useCallback(
     (to: string) => {
@@ -203,7 +191,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   }
 
   return (
-    <div className="w-full max-w-none" role="navigation" aria-label={t(lang, "desktopHomeNavLabel")}>
+    <div className="w-full" role="navigation" aria-label={t(lang, "desktopHomeNavLabel")}>
       <HomeBusinessHero
         lang={lang}
         sellStat={liveStats.sell}
@@ -215,9 +203,10 @@ export function DesktopHomeTiles({ lang }: Props) {
       <HomeBusinessHealthSection lang={lang} />
 
       {reportsTile ? (
-        <div className="mb-4 sm:mb-5">
+        <div className={HOME_MODULE_SECTION_SPACING.standard}>
           <HomeReportsPreview
             lang={lang}
+            tile={reportsTile}
             liveStat={liveStats.reports}
             onOpen={() => openTile(reportsTile.to)}
           />
@@ -225,34 +214,34 @@ export function DesktopHomeTiles({ lang }: Props) {
       ) : null}
 
       {primaryTiles.length > 0 ? (
-        <section className="mb-4 sm:mb-5">
+        <section className={HOME_MODULE_SECTION_SPACING.standard}>
           <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
             {t(lang, "homeModulesPrimary")}
           </SectionTitle>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
+          <div className={HOME_MODULE_GRID_CLASS.comfortable}>
             {primaryTiles.map((tile) => renderCard(tile))}
           </div>
         </section>
       ) : null}
 
       {secondaryTiles.length > 0 ? (
-        <section className="mb-4 sm:mb-5">
+        <section className={HOME_MODULE_SECTION_SPACING.standard}>
           <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
             {t(lang, "homeModulesSecondary")}
           </SectionTitle>
           <Caption className="mb-2 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
+          <div className={HOME_MODULE_GRID_CLASS.comfortable}>
             {secondaryTiles.map((tile) => renderCard(tile))}
           </div>
         </section>
       ) : null}
 
       {adminTiles.length > 0 ? (
-        <section className="mb-2">
+        <section className={HOME_MODULE_SECTION_SPACING.admin}>
           <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
             {t(lang, "homeModulesAdmin")}
           </SectionTitle>
-          <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-4 xl:grid-cols-5">
+          <div className={HOME_MODULE_GRID_CLASS.compact}>
             {adminTiles.map((tile) => renderCard(tile, "compact"))
             }
           </div>

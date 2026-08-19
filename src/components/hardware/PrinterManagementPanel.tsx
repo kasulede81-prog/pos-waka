@@ -5,6 +5,7 @@ import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { resolveHospitalityHardware } from "../../lib/hospitalityHardware";
 import { stationLabel } from "../../lib/printerRegistry";
+import { testNetworkPrinterConnection } from "../../services/hardware/printerAdapter";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 const ROLE_OPTIONS: PrinterStationRole[] = [
@@ -178,10 +179,23 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                     type="button"
                     className="rounded-xl border-2 border-border px-3 py-1 text-xs font-black"
                     onClick={() => {
-                      setStatus(t(lang, "hardwarePrinterTesting"));
-                      void testConfiguredPrinter(p.id).then((r) =>
-                        setStatus(r.ok ? t(lang, "hardwarePrinterTestOk") : (r.error ?? t(lang, "hardwarePrinterTestFail"))),
-                      );
+                      void (async () => {
+                        if (p.connectionType === "network") {
+                          setStatus("Connecting...");
+                          const probe = await testNetworkPrinterConnection(p);
+                          if (!probe.ok) {
+                            setStatus(probe.error ?? "Could not connect to printer");
+                            return;
+                          }
+                        }
+                        setStatus(t(lang, "hardwarePrinterTesting"));
+                        const r = await testConfiguredPrinter(p.id);
+                        setStatus(
+                          r.ok
+                            ? "Printer connected"
+                            : (r.error ?? t(lang, "hardwarePrinterTestFail") ?? "Could not connect to printer"),
+                        );
+                      })();
                     }}
                   >
                     {t(lang, "hardwarePrinterTest")}

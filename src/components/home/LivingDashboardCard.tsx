@@ -1,6 +1,5 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent, Ref } from "react";
 import clsx from "clsx";
-import type { Ref } from "react";
 import { ChevronRight } from "lucide-react";
 import type { ResolvedHomeTile } from "../../lib/launcherTiles";
 import { homeDashboardTheme } from "../../config/homeDashboardTheme";
@@ -11,6 +10,8 @@ import { hapticTap } from "../../lib/nativeFeedback";
 import { usePosStore } from "../../store/usePosStore";
 import { enterpriseIconClass, ENTERPRISE_ICON_STROKE } from "../../lib/enterpriseIcons";
 import { enterpriseMotion } from "../../lib/enterpriseMotion";
+import { resolveHomeTileAccent } from "../../lib/homeTileAccent";
+import { HomeTileAccentWell } from "./HomeTileAccentWell";
 
 type Props = {
   tile: ResolvedHomeTile;
@@ -19,6 +20,7 @@ type Props = {
   liveStat?: HomeTileLiveStat;
   buttonRef?: Ref<HTMLButtonElement>;
   onClick?: () => void;
+  onPointerDown?: (e: PointerEvent<HTMLButtonElement>) => void;
   /** Phase 34.1 — calm enterprise cards by default; living = legacy gradient art. */
   appearance?: "enterprise" | "living";
   /** Slightly denser for admin band. */
@@ -36,6 +38,7 @@ export function LivingDashboardCard({
   liveStat,
   buttonRef,
   onClick,
+  onPointerDown,
   appearance = "enterprise",
   density = "comfortable",
 }: Props) {
@@ -49,6 +52,7 @@ export function LivingDashboardCard({
   };
 
   if (appearance === "enterprise") {
+    const accent = resolveHomeTileAccent(tile);
     return (
       <button
         ref={buttonRef}
@@ -56,24 +60,30 @@ export function LivingDashboardCard({
         data-launcher-key={tile.id}
         data-tile-intensity={liveStat?.intensity ?? "calm"}
         onClick={handleClick}
+        onPointerDown={onPointerDown}
         className={clsx(
-          "group relative flex w-full touch-manipulation flex-col rounded-2xl border border-border bg-card text-left shadow-sm",
+          "group relative flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm",
           enterpriseMotion.standard,
           enterpriseMotion.cardInteractive,
           enterpriseMotion.focus,
           density === "compact" ? "min-h-[96px] p-3" : "min-h-[112px] p-3.5 sm:p-4",
         )}
       >
+        <span
+          className="pointer-events-none absolute inset-y-0 left-0 w-1"
+          style={accent.railStyle}
+          aria-hidden
+        />
         {tile.badge !== undefined && tile.badge > 0 ? (
           <span className="absolute right-2.5 top-2.5 z-10 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-danger px-1.5 text-[10px] font-black text-white">
             {tile.badge > 99 ? "99+" : tile.badge}
           </span>
         ) : null}
 
-        <div className="flex items-start gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
-            <Icon className={enterpriseIconClass("md")} strokeWidth={ENTERPRISE_ICON_STROKE} aria-hidden />
-          </span>
+        <div className="flex items-start gap-2.5 pl-1">
+          <HomeTileAccentWell accent={accent}>
+            <Icon className={clsx(enterpriseIconClass("md"), "text-current")} strokeWidth={ENTERPRISE_ICON_STROKE} aria-hidden />
+          </HomeTileAccentWell>
           <div className="min-w-0 flex-1 pr-4">
             <span className="block truncate text-sm font-black text-foreground sm:text-base">{t(lang, tile.labelKey)}</span>
             <span className="mt-0.5 line-clamp-2 text-[11px] font-medium leading-snug text-muted-foreground sm:text-xs">

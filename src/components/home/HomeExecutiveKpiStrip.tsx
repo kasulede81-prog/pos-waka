@@ -45,7 +45,7 @@ export function HomeExecutiveKpiStrip({ lang, kpis }: Props) {
           <Caption className="normal-case">{t(lang, "homeExecutiveKpiSub")}</Caption>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid auto-rows-min grid-cols-2 items-start gap-2 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-6">
         {kpis.map((kpi) => (
           <EnterpriseKpiCard
             key={kpi.id}

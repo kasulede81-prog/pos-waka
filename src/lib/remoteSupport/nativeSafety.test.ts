@@ -56,6 +56,10 @@ describe("RS-4B native safety", () => {
     expect(main).toContain("contextIsolation: true");
     expect(main).toContain("nodeIntegration: false");
     expect(main).toContain("sandbox: true");
+    expect(main).toContain("requestSingleInstanceLock");
+    expect(main).toContain("will-navigate");
+    expect(main).toContain("render-process-gone");
+    expect(main).not.toContain("openDevTools");
   });
 
   it("does not expose spawn, exec, or transport credentials to the renderer", () => {
@@ -71,9 +75,16 @@ describe("RS-4B native safety", () => {
     expect(preload).not.toContain("service_role");
     expect(preload).not.toMatch(/rustdesk/i);
     expect(preload).not.toMatch(/hbbs|hbbr/i);
-    expect(preload).not.toMatch(/spawn|execFile|exec\(|runCommand|shell/i);
+    expect(preload).not.toMatch(/spawn|execFile|exec\(|runCommand|openExternal/i);
     expect(preload).toContain("startAuthorizedTransport");
     expect(preload).toContain("stopTransport");
+    expect(preload).toContain("reloadApp");
+    expect(preload).toContain("waka:shell:reload-app");
+    expect(preload).toContain("hardware");
+    expect(preload).toContain("printEscPos");
+    expect(preload).toContain("escPosNetwork");
+    expect(preload).not.toContain("node:net");
+    expect(preload).not.toContain("createConnection");
   });
 
   it("does not introduce service-role credentials", () => {
@@ -88,5 +99,11 @@ describe("RS-4B native safety", () => {
   it("does not add a generic execute IPC channel", () => {
     const channels = read(join(RS_DIR, "channels.cjs"));
     expect(channels).not.toMatch(/spawn|exec|runCommand|shell/i);
+    const main = read(join(ROOT, "electron/main.cjs"));
+    expect(main).not.toMatch(/ipcMain\.handle\(["']waka:exec/);
+    expect(main).not.toMatch(/ipcMain\.handle\(["']invoke/);
+    const printerChannels = read(join(ROOT, "electron/hardware/channels.cjs"));
+    expect(printerChannels).toContain("waka:hardware:printer:print-escpos");
+    expect(printerChannels).not.toMatch(/spawn|exec|runCommand/i);
   });
 });

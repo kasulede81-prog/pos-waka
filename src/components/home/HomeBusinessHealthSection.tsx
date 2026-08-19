@@ -163,7 +163,7 @@ export function HomeBusinessHealthSection({ lang }: Props) {
               <Link
                 to={item.to}
                 className={clsx(
-                  "flex min-h-[40px] items-center gap-1.5 rounded-xl px-2 py-1.5 text-[11px] font-bold ring-1 ring-inset transition-colors",
+                  "flex min-h-[44px] items-center gap-1.5 rounded-xl px-2 py-1.5 text-[11px] font-bold ring-1 ring-inset transition-colors",
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-waka-500",
                   healthStatusBadge(item.status),
                 )}

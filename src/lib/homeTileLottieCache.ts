@@ -1,9 +1,11 @@
 /** In-memory cache for lazily fetched home tile Lottie JSON (PWA also caches /lottie/*). */
+import { publicAssetUrl } from "./publicAssetUrl";
+
 const cache = new Map<string, object>();
 const inflight = new Map<string, Promise<object | null>>();
 
 export function getHomeTileLottiePath(tileId: string): string {
-  return `/lottie/home/${tileId}.json`;
+  return publicAssetUrl(`lottie/home/${tileId}.json`);
 }
 
 export async function fetchHomeTileLottie(tileId: string): Promise<object | null> {

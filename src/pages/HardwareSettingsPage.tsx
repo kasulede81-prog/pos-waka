@@ -6,6 +6,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { printReceiptWithFallback } from "../lib/receiptPrint";
 import { printElectronWindow } from "../lib/documentPrint";
+import { canNativePrint } from "../platform";
 import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
 import { detectPrinterCapabilities } from "../services/hardware/printerAdapter";
 import { PrinterManagementPanel } from "../components/hardware/PrinterManagementPanel";
@@ -217,7 +218,7 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
             {printerCaps.networkAvailable ? "yes" : "no"} · {printerCaps.platform}
           </p>
         ) : null}
-        {typeof window !== "undefined" && window.wakaDesktop?.print ? (
+        {canNativePrint() ? (
           <button
             type="button"
             className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-border bg-card py-2 text-sm font-black text-foreground"

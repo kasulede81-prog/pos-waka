@@ -8,6 +8,11 @@ import { runWhenIdle } from "../lib/uiYield";
 import { DesktopHomeTiles } from "../components/home/DesktopHomeTiles";
 import { DesktopLicenseBar } from "../components/home/DesktopLicenseBar";
 import { useSessionActor } from "../context/SessionActorContext";
+import {
+  HOME_CONTENT_MEASURE_CLASS,
+  HOME_FOOTER_GUTTER_CLASS,
+  HOME_PAGE_GUTTER_CLASS,
+} from "../lib/homePresentation";
 
 type Props = { lang: Language };
 
@@ -33,9 +38,9 @@ export function DesktopHomePage({ lang }: Props) {
   const firstName = actor.displayName?.trim().split(/\s+/)[0];
 
   return (
-    <div className="flex min-h-full flex-col lg:min-h-[calc(100dvh-4.5rem)]">
-      <div className="flex flex-1 flex-col items-center px-4 py-4 sm:px-8 sm:py-6 lg:px-10 xl:px-14">
-        <header className="mb-3 w-full max-w-none text-center sm:mb-4 sm:text-left">
+    <div className="flex flex-col">
+      <div className={`${HOME_CONTENT_MEASURE_CLASS} ${HOME_PAGE_GUTTER_CLASS} flex flex-col`}>
+        <header className="mb-3 w-full text-center sm:mb-4 sm:text-left">
           {firstName ? (
             <h1 className="text-lg font-black tracking-tight text-foreground sm:text-xl">
               {t(lang, greetingKey).replace("{name}", firstName)}
@@ -50,8 +55,8 @@ export function DesktopHomePage({ lang }: Props) {
         </header>
         <DesktopHomeTiles lang={lang} />
       </div>
-      <footer className="shrink-0 border-t border-border bg-card/90 px-4 py-3 backdrop-blur-sm sm:px-8 lg:px-10 xl:px-14">
-        <div className="mx-auto w-full max-w-none">
+      <footer className="border-t border-border bg-card/90 backdrop-blur-sm">
+        <div className={`${HOME_CONTENT_MEASURE_CLASS} ${HOME_FOOTER_GUTTER_CLASS}`}>
           <DesktopLicenseBar lang={lang} />
         </div>
       </footer>

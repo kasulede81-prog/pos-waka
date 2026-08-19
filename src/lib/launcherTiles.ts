@@ -284,10 +284,6 @@ export function launcherScaleFromConfig(config?: LauncherTileConfig): number {
   return 35;
 }
 
-export function launcherMasonryGridClass(): string {
-  return "grid grid-flow-dense auto-rows-[6.5rem] grid-cols-2 gap-3 sm:auto-rows-[7rem] lg:grid-cols-4";
-}
-
 export function launcherTileColorClasses(color: LauncherTileColor, pinned: boolean): string {
   const ring = pinned ? "ring-2 ring-inset ring-white/40" : "";
   const bold =

@@ -1690,3 +1690,57 @@ html[data-home-anim-paused] .builder-spotlight-active {
   }
 }
 
+/* Phase 5A — Electron desktop POS terminal layout (platform === desktop only) */
+[data-desktop-pos-terminal] {
+  --desktop-pos-rail-width: 10.5rem;
+  --desktop-pos-cart-width: min(22rem, 30vw);
+}
+
+.desktop-pos-terminal__body {
+  grid-template-columns: var(--desktop-pos-rail-width) minmax(0, 1fr) var(--desktop-pos-cart-width);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+@media (max-width: 1279px) {
+  [data-desktop-pos-terminal] {
+    --desktop-pos-rail-width: 9rem;
+    --desktop-pos-cart-width: min(20rem, 34vw);
+  }
+}
+
+.desktop-pos-terminal__rail {
+  width: var(--desktop-pos-rail-width);
+}
+
+.desktop-pos-terminal__cart {
+  width: var(--desktop-pos-cart-width);
+}
+
+.desktop-pos-terminal__catalog-scroll {
+  scrollbar-gutter: stable;
+}
+
+.desktop-pos-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.desktop-pos-key:active:not(:disabled) {
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.14);
+}
+
+.desktop-pos-cart-panel .pos-ds-checkout {
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.desktop-pos-product-grid .pos-ds-product-card {
+  min-height: 104px;
+}
+
+.desktop-pos-osk:focus {
+  outline: none;
+}
+

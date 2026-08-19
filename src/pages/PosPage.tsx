@@ -3,7 +3,7 @@ import { actorHasPermission } from "../lib/actorAuthorization";
 import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Banknote, ScanLine, Search, X } from "lucide-react";
+import { Banknote, Keyboard, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
@@ -47,8 +47,8 @@ import { PosQuickProductChips } from "../components/pos/PosQuickProductChips";
 import { PosDesktopCatalogCheckoutDock } from "../components/pos/PosDesktopCatalogCheckoutDock";
 import {
   applyCheckoutAlphaKey,
-  applyCheckoutNumericKey,
   applyCheckoutPhoneKey,
+  applyCheckoutNumericKey,
   preferredKeypadModeForField,
   type CheckoutInputField,
   type CheckoutKeypadMode,
@@ -57,6 +57,22 @@ import { PosDesktopCompactHeader } from "../components/pos/PosDesktopCompactHead
 import { EmptyShelfPanel } from "../components/stock/EmptyShelfPanel";
 import { PosDesktopProductCard } from "../components/pos/PosDesktopProductCard";
 import { PosDesktopStatusBar } from "../components/pos/PosDesktopStatusBar";
+import {
+  DesktopCartPanel,
+  DesktopCategoryRail,
+  DesktopOnScreenKeyboard,
+  DesktopPaymentPanel,
+  DesktopPosHeader,
+  DesktopPosShell,
+  DesktopQuickActions,
+  DesktopStatusBar,
+} from "../components/pos/desktop";
+import {
+  isDesktopPosCatalogUi,
+  isDesktopPosTerminal,
+  isWebFullDesktopPos,
+  useDesktopPosSplitLayout,
+} from "../lib/desktopPosTerminal";
 import { PosSellProductCard } from "../components/pos/PosSellProductCard";
 import { PosSellCatalogShelfSection } from "../components/pos/PosSellCatalogShelfSection";
 import { PosExitConfirmModal } from "../components/pos/PosExitConfirmModal";
@@ -397,10 +413,14 @@ export function PosPage({ lang }: { lang: Language }) {
     useDisplayScale();
   const displayScaleMultiplier = DISPLAY_SCALE_META[displayScaleLevel].multiplier;
   const isFullDesktopPos = posLayoutMode === "full";
+  const isDesktopPosTerminalUi = isDesktopPosTerminal();
+  const isWebFullDesktopPosLayout = isWebFullDesktopPos(isFullDesktopPos);
+  const useDesktopSplitLayout = useDesktopPosSplitLayout(isFullDesktopPos);
+  const isDesktopCatalogUi = isDesktopPosCatalogUi(isFullDesktopPos);
   const mobileSellFocus = posLayoutMode === "mobile";
   const compactSellFocus = posLayoutMode === "compact";
   /** Mobile, compact tablet, and full desktop share the catalog scroll pane model (Phase 25.3). */
-  const catalogSellMode = mobileSellFocus || isFullDesktopPos || compactSellFocus;
+  const catalogSellMode = mobileSellFocus || useDesktopSplitLayout || compactSellFocus;
   const catalogViewportLayout = catalogSellMode;
   const catalogScrollPaneClass =
     "pos-catalog-scroll-pane h-0 min-h-0 flex-1 overscroll-y-contain [-webkit-overflow-scrolling:touch]";
@@ -410,10 +430,10 @@ export function PosPage({ lang }: { lang: Language }) {
     draftLines.length,
     saleCheckoutMinimized,
   );
-  const desktopCheckoutCollapsed = isFullDesktopPos && saleCheckoutMinimized && draftLines.length > 0;
-  const useDesktopCatalogCheckoutDock = isFullDesktopPos && mountDesktopCheckoutSidebar && !desktopCheckoutCollapsed;
+  const desktopCheckoutCollapsed = useDesktopSplitLayout && saleCheckoutMinimized && draftLines.length > 0;
+  const useDesktopCatalogCheckoutDock = useDesktopSplitLayout && mountDesktopCheckoutSidebar && !desktopCheckoutCollapsed;
   const posSplitColumns =
-    mountDesktopCheckoutSidebar && isFullDesktopPos
+    mountDesktopCheckoutSidebar && useDesktopSplitLayout
       ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier, {
           collapsed: desktopCheckoutCollapsed,
         })
@@ -444,6 +464,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const posExitResolverRef = useRef<((choice: "lock" | "continue" | "cancel") => void) | null>(null);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [desktopOskOpen, setDesktopOskOpen] = useState(false);
+  const [desktopOskLayer, setDesktopOskLayer] = useState<"alpha" | "numeric">("alpha");
 
   useEffect(() => {
     if (paymentMethod === "credit" && !canIssueDebt) setPaymentMethod("cash");
@@ -1381,7 +1403,7 @@ export function PosPage({ lang }: { lang: Language }) {
           searchInputRef.current?.focus();
           break;
         case "focus_checkout":
-          if (isFullDesktopPos) {
+          if (useDesktopSplitLayout) {
             saveButtonRef.current?.focus();
           } else if (draftLines.length > 0) {
             setSaleCheckoutMinimized(false);
@@ -1480,19 +1502,19 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const prevDraftLineCountRef = useRef(draftLines.length);
   useEffect(() => {
-    if (isFullDesktopPos && prevDraftLineCountRef.current === 0 && draftLines.length > 0) {
+    if (useDesktopSplitLayout && prevDraftLineCountRef.current === 0 && draftLines.length > 0) {
       setSaleCheckoutMinimized(false);
     }
     prevDraftLineCountRef.current = draftLines.length;
-  }, [draftLines.length, isFullDesktopPos]);
+  }, [draftLines.length, useDesktopSplitLayout]);
 
   const focusCatalogForAdd = useCallback(() => {
     setCatalogNumpadOpen(false);
     // Phase 32.1 — collapse to rail (sidebar stays mounted); do not unmount checkout.
-    if (isFullDesktopPos) setSaleCheckoutMinimized(true);
+    if (useDesktopSplitLayout) setSaleCheckoutMinimized(true);
     catalogRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     window.requestAnimationFrame(() => searchInputRef.current?.focus());
-  }, [isFullDesktopPos]);
+  }, [useDesktopSplitLayout]);
 
   const checkoutPanelCommon = {
     lang,
@@ -1555,7 +1577,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const catalogShelfCards = shelfCards;
 
   const quickProductChips = useMemo(() => {
-    if (!catalogSellMode || isFullDesktopPos) return [];
+    if (!catalogSellMode || isDesktopCatalogUi) return [];
     const seen = new Set<string>();
     const out: Product[] = [];
     for (const p of quickSellProducts) {
@@ -1571,7 +1593,7 @@ export function PosPage({ lang }: { lang: Language }) {
       }
     }
     return out.slice(0, 12);
-  }, [catalogSellMode, isFullDesktopPos, quickSellProducts, frequentToday]);
+  }, [catalogSellMode, isDesktopCatalogUi, quickSellProducts, frequentToday]);
 
   const handleCatalogShelfTap = useCallback(
     (shelfKey: string) => {
@@ -1613,15 +1635,15 @@ export function PosPage({ lang }: { lang: Language }) {
           addLabel={t(lang, "addToSale")}
           isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
           lockedBadge={t(lang, "productLockedBadge")}
-          variant={isFullDesktopPos ? "sellDesktop" : "sellMobile"}
-          favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
-          onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
+          variant={isDesktopCatalogUi ? "sellDesktop" : "sellMobile"}
+          favoriteIds={isDesktopCatalogUi ? favoriteIdSet : undefined}
+          onToggleFavorite={isDesktopCatalogUi ? toggleFavoriteProduct : undefined}
           cartQtyByProductId={cartQtyByProductId}
         />
       );
     }
     const grid = catalogGridFor(filteredProducts.length);
-    if (isFullDesktopPos) {
+    if (isDesktopCatalogUi) {
       return (
         <div
           className="grid gap-1.5"
@@ -1680,7 +1702,447 @@ export function PosPage({ lang }: { lang: Language }) {
       return;
     }
     scrollCatalogToTop(catalogRef.current);
-  }, [catalogSellMode, isFullDesktopPos, sellCategoryKey, sellSearchContext.q]);
+  }, [catalogSellMode, isDesktopCatalogUi, sellCategoryKey, sellSearchContext.q]);
+
+  const handleDesktopOskKey = useCallback(
+    (key: string) => {
+      if (key === "close") {
+        setDesktopOskOpen(false);
+        return;
+      }
+      if (checkoutAmountField === "customerName" || checkoutAmountField === "customerPhone") {
+        if (key === "enter") return;
+        if (checkoutAmountField === "customerName") {
+          setSaleCustomerName((cur) => (key === "C" ? "" : applyCheckoutAlphaKey(cur, key)));
+        } else {
+          setSaleCustomerPhone((cur) => (key === "C" ? "" : applyCheckoutPhoneKey(cur, key)));
+        }
+        return;
+      }
+      if (key === "enter") {
+        commitSearch(searchQuery);
+        return;
+      }
+      if (key === "C") setSearchQuery("");
+      else if (key === "back") setSearchQuery((q) => q.slice(0, -1));
+      else if (key === "space") setSearchQuery((q) => `${q} `);
+      else setSearchQuery((q) => (q + key).slice(0, 80));
+    },
+    [checkoutAmountField, commitSearch, searchQuery],
+  );
+
+  const renderPosSearchBar = () =>
+    products.length > 0 ? (
+      <div
+        className={clsx(
+          mobileSellFocus || compactSellFocus
+            ? "sticky top-0 z-20 shrink-0 -mx-0.5 space-y-0 bg-muted/95 pb-1.5 pt-0.5 backdrop-blur-md"
+            : isDesktopCatalogUi
+              ? "shrink-0 space-y-1"
+              : "space-y-1.5 rounded-[1.35rem] border border-border bg-card p-2 shadow-waka-sm",
+        )}
+      >
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onBlur={(e) => commitSearch(e.target.value)}
+            onFocus={() => {
+              if (isDesktopPosTerminalUi) {
+                setDesktopOskLayer("alpha");
+                setDesktopOskOpen(true);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitSearch(searchQuery);
+            }}
+            placeholder={
+              isDesktopCatalogUi
+                ? t(lang, "posDesktopSearchPlaceholder")
+                : pharmacyMode || hospitalityMode || wholesaleMode
+                  ? modeTerm("searchPlaceholder")
+                  : t(lang, "posSellSearchPlaceholder")
+            }
+            aria-label={
+              isDesktopCatalogUi
+                ? t(lang, "posDesktopSearchPlaceholder")
+                : pharmacyMode || hospitalityMode || wholesaleMode
+                  ? modeTerm("searchPlaceholder")
+                  : t(lang, "posSellSearchPlaceholder")
+            }
+            className={clsx(
+              "pos-ds-input w-full rounded-2xl border border-border bg-card pl-9 font-semibold text-foreground outline-none ring-waka-200 placeholder:text-muted-foreground transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
+              isDesktopPosTerminalUi ? "h-11 pr-[5.5rem] bg-muted/90 text-sm focus:bg-card focus:ring-1" : "pr-10",
+              mobileSellFocus
+                ? "h-12 text-base shadow-sm"
+                : isDesktopCatalogUi
+                  ? "h-10 bg-muted/90 text-sm focus:bg-card focus:ring-1"
+                  : "h-11 bg-muted/90 text-base focus:bg-card focus:ring-1",
+            )}
+          />
+          {isDesktopPosTerminalUi ? (
+            <button
+              type="button"
+              className="absolute right-12 top-1/2 flex h-10 min-h-[40px] w-10 min-w-[40px] -translate-y-1/2 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground active:bg-muted"
+              onClick={() => {
+                setDesktopOskLayer("alpha");
+                setDesktopOskOpen((v) => !v);
+                searchInputRef.current?.focus();
+              }}
+              aria-label={t(lang, "posKeypadAlpha")}
+            >
+              <Keyboard className="h-4 w-4" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
+            onClick={() => {
+              if (searchQuery.trim()) setSearchQuery("");
+              else if (detectBarcodeCapabilities().cameraScan) setCameraScanOpen(true);
+            }}
+            aria-label={searchQuery.trim() ? t(lang, "posClearSearch") : t(lang, "posBarcodeSoon")}
+          >
+            {searchQuery.trim() ? <X className="h-4 w-4" /> : <ScanLine className="h-4 w-4" />}
+          </button>
+        </div>
+        {!mobileSellFocus && !isDesktopCatalogUi && recentSearches.length > 0 ? (
+          <ul
+            className="m-0 flex max-w-full list-none gap-1 overflow-x-auto p-0 pb-0.5"
+            aria-label={t(lang, "posRecentSearches")}
+          >
+            {recentSearches.map((item) => (
+              <li key={item} className="shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery(item)}
+                  className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground active:bg-muted"
+                >
+                  {item}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {!mobileSellFocus && !isDesktopCatalogUi && frequentTodayVisible.length > 0 ? (
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFrequentToday")}</p>
+            <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
+              {frequentTodayVisible.map(({ product, qty }) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onClick={() => openProduct(product)}
+                  className="shrink-0 rounded-full border border-warning/30 bg-warning-muted px-2.5 py-1 text-xs font-bold text-warning-foreground active:bg-warning-muted"
+                >
+                  {product.name} · {qty}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {!mobileSellFocus && !isDesktopCatalogUi && favoriteProductsVisible.length > 0 ? (
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFavorites")}</p>
+            <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
+              {favoriteProductsVisible.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => openProduct(p)}
+                  className="shrink-0 rounded-full border border-waka-300 bg-waka-50 px-2 py-0.5 text-xs font-bold text-waka-950 active:bg-waka-100"
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {!mobileSellFocus && !isDesktopCatalogUi && recentProductsVisible.length > 0 ? (
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posRecentProducts")}</p>
+            <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
+              {recentProductsVisible.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => openProduct(p)}
+                  className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-foreground active:bg-muted"
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    ) : null;
+
+  const renderCatalogPane = () => (
+    <>
+      {mobileSellFocus && quickProductChips.length > 0 && !showCatalogShelfGrid ? (
+        <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} className="shrink-0" />
+      ) : null}
+
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {products.length === 0 && shelfCards.length === 0 ? (
+          <section className="rounded-3xl border-2 border-dashed border-border bg-muted p-8 text-center">
+            <p className="text-2xl font-black text-foreground">{t(lang, "posEmptyTitle")}</p>
+            <p className="mt-2 text-lg text-muted-foreground">{t(lang, "posEmptySub")}</p>
+            {actorHasPermission(actor, "products.add") ? (
+              <Link
+                to="/stock"
+                className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"
+              >
+                {t(lang, "posEmptyCtaProducts")}
+              </Link>
+            ) : (
+              <p className="mt-4 text-base font-semibold text-muted-foreground">{t(lang, "posEmptyAskOwner")}</p>
+            )}
+          </section>
+        ) : showCatalogShelfGrid ? (
+          catalogShelfDrillDown ? (
+            <section
+              ref={catalogRef}
+              className={clsx(
+                "space-y-2",
+                catalogSellMode &&
+                  (mobileSellFocus
+                    ? isMobileShortShelf(filteredProducts.length)
+                      ? "pos-catalog-scroll-pane pos-catalog-scroll-pane--short-finish overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+                      : "pos-catalog-scroll-pane pos-catalog-scroll-pane--natural overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+                    : catalogScrollPaneClass),
+              )}
+              data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+              data-pos-short-shelf={
+                mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? "1" : undefined
+              }
+            >
+              <PosShelfDrillDownHeader
+                lang={lang}
+                shelfLabel={selectedShelfLabel}
+                productCount={filteredProducts.length}
+                onBack={browse.backToShelves}
+                compact={mobileSellFocus}
+                className="shrink-0"
+              />
+              <div className="shrink-0">{renderCatalogProductGrid()}</div>
+              {mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? (
+                <PosMobileShelfContinue
+                  lang={lang}
+                  otherShelves={catalogShelfCards
+                    .filter((s) => s.key !== sellCategoryKey && s.count > 0)
+                    .slice(0, MOBILE_SHORT_SHELF_OTHER_SHELVES_MAX)}
+                  onShelfTap={handleCatalogShelfTap}
+                  popularProducts={popularOutsideOpenShelf}
+                  onPickProduct={openProduct}
+                  onBackToShelves={browse.backToShelves}
+                  addLabel={t(lang, "addToSale")}
+                  lockedIds={lockedIds}
+                />
+              ) : mobileSellFocus && shouldShowMobileShelfEndCue(filteredProducts.length) ? (
+                <PosMobileShelfEndCue lang={lang} onBackToShelves={browse.backToShelves} />
+              ) : null}
+            </section>
+          ) : (
+            <div
+              ref={catalogRef}
+              className={clsx(catalogSellMode && catalogScrollPaneClass, (mobileSellFocus || compactSellFocus) && "mt-2")}
+              data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+            >
+              {catalogSellMode && !isDesktopCatalogUi && quickProductChips.length > 0 ? (
+                <PosQuickProductChips
+                  lang={lang}
+                  products={quickProductChips}
+                  onTap={quickTapAddProduct}
+                  className="mb-3 shrink-0"
+                />
+              ) : null}
+              {mobileSellFocus && frequentTodayVisible.length > 0 ? (
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  {frequentTodayVisible.slice(0, 4).map(({ product }) => (
+                    <PosSellProductCard
+                      key={`landing-${product.id}`}
+                      product={product}
+                      stockLabel={t(lang, "stockLabel")}
+                      addLabel={t(lang, "addToSale")}
+                      locked={isProductPlanLocked(product.id, lockedIds)}
+                      lockedBadge={t(lang, "productLockedBadge")}
+                      cartQty={cartQtyByProductId.get(product.id) ?? 0}
+                      onPick={openProduct}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <PosSellCatalogShelfSection
+                lang={lang}
+                shelves={catalogShelfCards}
+                onShelfTap={handleCatalogShelfTap}
+                desktop={isDesktopCatalogUi}
+              />
+            </div>
+          )
+        ) : showCatalogSearchResults ? (
+          <section
+            ref={catalogRef}
+            className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
+            data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+          >
+            <p className="px-0.5 text-xs font-black text-muted-foreground">
+              {t(lang, "posSearchResults")}
+              <span className="font-semibold text-muted-foreground"> · {t(lang, "posMasterSearchAll")}</span>
+              {filteredProducts.length > 0 ? (
+                <span className="font-semibold text-muted-foreground"> ({filteredProducts.length})</span>
+              ) : null}
+            </p>
+            {filteredProducts.length === 0 ? (
+              <p className="rounded-xl bg-warning-muted px-3 py-4 text-center text-sm font-bold text-warning-foreground">
+                {t(lang, "posSellNoMatch")}
+              </p>
+            ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
+              <VirtualizedProductGrid
+                products={filteredProducts}
+                columnCount={productGridCols}
+                onPick={openProduct}
+                stockLabel={t(lang, "stockLabel")}
+                noShelfLabel={t(lang, "posNoShelf")}
+                addLabel={t(lang, "addToSale")}
+                isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
+                lockedBadge={t(lang, "productLockedBadge")}
+                variant={isDesktopCatalogUi ? "sellDesktop" : "sellMobile"}
+                favoriteIds={isDesktopCatalogUi ? favoriteIdSet : undefined}
+                onToggleFavorite={isDesktopCatalogUi ? toggleFavoriteProduct : undefined}
+                cartQtyByProductId={cartQtyByProductId}
+              />
+            ) : (
+              (() => {
+                const searchGrid = catalogGridFor(filteredProducts.length);
+                return isDesktopCatalogUi ? (
+                  <div
+                    className="grid gap-1.5"
+                    style={{
+                      gridTemplateColumns: searchGrid.gridTemplateColumns,
+                      justifyContent: searchGrid.justifyContent,
+                    }}
+                    data-pos-sparse-cols={searchGrid.columns}
+                    data-pos-sparse={searchGrid.sparse ? "1" : undefined}
+                  >
+                    {filteredProducts.map((p) => (
+                      <PosDesktopProductCard
+                        key={p.id}
+                        product={p}
+                        stockLabel={t(lang, "stockLabel")}
+                        sellLabel={t(lang, "addToSale")}
+                        locked={isProductPlanLocked(p.id, lockedIds)}
+                        lockedBadge={t(lang, "productLockedBadge")}
+                        favorite={favoriteIdSet.has(p.id)}
+                        cartQty={cartQtyByProductId.get(p.id) ?? 0}
+                        onPick={openProduct}
+                        onToggleFavorite={toggleFavoriteProduct}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    className="grid gap-2"
+                    style={{
+                      gridTemplateColumns: searchGrid.gridTemplateColumns,
+                      justifyContent: searchGrid.justifyContent,
+                    }}
+                    data-pos-sparse-cols={searchGrid.columns}
+                    data-pos-sparse={searchGrid.sparse ? "1" : undefined}
+                  >
+                    {filteredProducts.map((p) => (
+                      <PosSellProductCard
+                        key={p.id}
+                        product={p}
+                        stockLabel={t(lang, "stockLabel")}
+                        addLabel={t(lang, "addToSale")}
+                        locked={isProductPlanLocked(p.id, lockedIds)}
+                        lockedBadge={t(lang, "productLockedBadge")}
+                        cartQty={cartQtyByProductId.get(p.id) ?? 0}
+                        onPick={openProduct}
+                      />
+                    ))}
+                  </div>
+                );
+              })()
+            )}
+          </section>
+        ) : sellCategoryKey !== CATEGORY_FILTER_ALL ? (
+          <div ref={catalogRef} className={clsx(catalogSellMode && catalogScrollPaneClass)} data-pos-catalog-scroll={catalogSellMode ? true : undefined}>
+            {renderCatalogProductGrid()}
+          </div>
+        ) : null}
+
+        {showDesktopCatalogCheckoutDock ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex max-h-[min(55%,28rem)] flex-col justify-end p-1.5">
+            <div className="pointer-events-auto min-h-0 overflow-hidden rounded-xl shadow-2xl ring-1 ring-border/80">
+              <PosDesktopCatalogCheckoutDock
+                lang={lang}
+                paymentMethod={paymentMethod}
+                catalogNumpadOpen={catalogNumpadOpen}
+                onCatalogNumpadOpenChange={setCatalogNumpadOpen}
+                cashInput={cashInput}
+                mobileMoneyInput={mobileMoneyInput}
+                checkoutAmountField={checkoutAmountField}
+                checkoutKeypadMode={checkoutKeypadMode}
+                changeDue={changeDue}
+                computedDebt={computedDebt}
+                saleCustomerId={saleCustomerId}
+                saleCustomerName={saleCustomerName}
+                saleCustomerPhone={saleCustomerPhone}
+                customers={customers}
+                customerSelectRef={customerSelectRef}
+                saveButtonRef={saveButtonRef}
+                saveSaleLabel={modeTerm("saveSale")}
+                saveDisabled={draftLines.length === 0}
+                onCheckoutInputField={(field) => {
+                  handleCheckoutInputField(field);
+                  if (isDesktopPosTerminalUi && (field === "customerName" || field === "customerPhone")) {
+                    setDesktopOskLayer("alpha");
+                    setDesktopOskOpen(true);
+                  }
+                }}
+                onCheckoutKeypadModeChange={setCheckoutKeypadMode}
+                onAppendCheckoutDigit={appendCheckoutDigit}
+                onClearCheckoutAmount={clearCheckoutAmount}
+                onSaleCustomerId={setSaleCustomerId}
+                onSaleCustomerName={setSaleCustomerName}
+                onSaleCustomerPhone={setSaleCustomerPhone}
+                onFinishSale={finishSale}
+              />
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+
+  const renderCheckoutAside = () =>
+    mountDesktopCheckoutSidebar ? (
+      <aside className={clsx(useDesktopSplitLayout ? "sticky top-0 min-h-0 self-stretch" : "sticky top-3")}>
+        {desktopCheckoutCollapsed ? (
+          <PosDesktopCheckoutRail
+            lang={lang}
+            productCount={draftCartStats.productCount}
+            payableUgx={draftPayable}
+            onExpand={() => setSaleCheckoutMinimized(false)}
+          />
+        ) : (
+          <PosCheckoutPanel
+            variant="sidebar"
+            {...checkoutPanelCommon}
+            onAddItems={focusCatalogForAdd}
+            catalogDock={useDesktopCatalogCheckoutDock}
+            catalogNumpadOpen={catalogNumpadOpen}
+            onCatalogNumpadOpenChange={setCatalogNumpadOpen}
+          />
+        )}
+      </aside>
+    ) : null;
 
   const sellActionFooter =
     draftLines.length > 0 ||
@@ -1774,7 +2236,7 @@ export function PosPage({ lang }: { lang: Language }) {
       data-sell-workspace-mode={sellWorkspaceMode}
     >
       <PosOfflineBanner lang={lang} compact={catalogSellMode} />
-      {isFullDesktopPos ? (
+      {isWebFullDesktopPosLayout ? (
         <PosDesktopCompactHeader
           lang={lang}
           sellLabelKey={sellNavLabelKey}
@@ -1806,8 +2268,8 @@ export function PosPage({ lang }: { lang: Language }) {
           onCloseShift={() => setShiftCloseOpen(true)}
         />
       ) : null}
-      {!isFullDesktopPos ? <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} /> : null}
-      {!mobileSellFocus && !isFullDesktopPos ? (
+      {!useDesktopSplitLayout ? <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} /> : null}
+      {!mobileSellFocus && !useDesktopSplitLayout ? (
         <PosSellHeroCard
           lang={lang}
           sellLabel={t(lang, sellNavLabelKey)}
@@ -1831,402 +2293,93 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      <div
-        ref={catalogSplitRef}
-        className={clsx(
-          catalogSellMode && "min-h-0 flex-1 overflow-hidden",
-          mountDesktopCheckoutSidebar && isFullDesktopPos
-            ? "grid items-stretch gap-2"
-            : catalogSellMode && "flex flex-col",
-        )}
-        style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
-      >
-        <div
-          ref={catalogWidthRef}
-          className={clsx(isFullDesktopPos ? "flex min-h-0 min-w-0 flex-col gap-1.5" : catalogSellMode ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : "min-w-0 space-y-2")}
-        >
-
-      {products.length > 0 ? (
-        <div
-          className={clsx(
-            mobileSellFocus || compactSellFocus
-              ? "sticky top-0 z-20 shrink-0 -mx-0.5 space-y-0 bg-muted/95 pb-1.5 pt-0.5 backdrop-blur-md"
-              : isFullDesktopPos
-                ? "shrink-0 space-y-1"
-                : "space-y-1.5 rounded-[1.35rem] border border-border bg-card p-2 shadow-waka-sm",
-          )}
-        >
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              ref={searchInputRef}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onBlur={(e) => commitSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitSearch(searchQuery);
-              }}
-              placeholder={
-                isFullDesktopPos
-                  ? t(lang, "posDesktopSearchPlaceholder")
-                  : pharmacyMode || hospitalityMode || wholesaleMode
-                    ? modeTerm("searchPlaceholder")
-                    : t(lang, "posSellSearchPlaceholder")
-              }
-              aria-label={
-                isFullDesktopPos
-                  ? t(lang, "posDesktopSearchPlaceholder")
-                  : pharmacyMode || hospitalityMode || wholesaleMode
-                    ? modeTerm("searchPlaceholder")
-                    : t(lang, "posSellSearchPlaceholder")
-              }
-              className={clsx(
-                "pos-ds-input w-full rounded-2xl border border-border bg-card pl-9 pr-10 font-semibold text-foreground outline-none ring-waka-200 placeholder:text-muted-foreground transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
-                mobileSellFocus
-                  ? "h-12 text-base shadow-sm"
-                  : isFullDesktopPos
-                    ? "h-10 bg-muted/90 text-sm focus:bg-card focus:ring-1"
-                    : "h-11 bg-muted/90 text-base focus:bg-card focus:ring-1",
-              )}
-            />
-            <button
-              type="button"
-              className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
-              onClick={() => {
-                if (searchQuery.trim()) setSearchQuery("");
-                else if (detectBarcodeCapabilities().cameraScan) setCameraScanOpen(true);
-              }}
-              aria-label={searchQuery.trim() ? t(lang, "posClearSearch") : t(lang, "posBarcodeSoon")}
-            >
-              {searchQuery.trim() ? <X className="h-4 w-4" /> : <ScanLine className="h-4 w-4" />}
-            </button>
-          </div>
-          {!mobileSellFocus && !isFullDesktopPos && recentSearches.length > 0 ? (
-            <ul
-              className="m-0 flex max-w-full list-none gap-1 overflow-x-auto p-0 pb-0.5"
-              aria-label={t(lang, "posRecentSearches")}
-            >
-              {recentSearches.map((item) => (
-                <li key={item} className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery(item)}
-                    className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground active:bg-muted"
-                  >
-                    {item}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {!mobileSellFocus && !isFullDesktopPos && frequentTodayVisible.length > 0 ? (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFrequentToday")}</p>
-              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-                {frequentTodayVisible.map(({ product, qty }) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() => openProduct(product)}
-                    className="shrink-0 rounded-full border border-warning/30 bg-warning-muted px-2.5 py-1 text-xs font-bold text-warning-foreground active:bg-warning-muted"
-                  >
-                    {product.name} · {qty}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {!mobileSellFocus && !isFullDesktopPos && favoriteProductsVisible.length > 0 ? (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFavorites")}</p>
-              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-                {favoriteProductsVisible.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => openProduct(p)}
-                    className="shrink-0 rounded-full border border-waka-300 bg-waka-50 px-2 py-0.5 text-xs font-bold text-waka-950 active:bg-waka-100"
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {!mobileSellFocus && !isFullDesktopPos && recentProductsVisible.length > 0 ? (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posRecentProducts")}</p>
-              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-                {recentProductsVisible.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => openProduct(p)}
-                      className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-foreground active:bg-muted"
-                    >
-                      {p.name}
-                    </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {mobileSellFocus && quickProductChips.length > 0 && !showCatalogShelfGrid ? (
-        <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} className="shrink-0" />
-      ) : null}
-
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      {products.length === 0 && shelfCards.length === 0 ? (
-        <section className="rounded-3xl border-2 border-dashed border-border bg-muted p-8 text-center">
-          <p className="text-2xl font-black text-foreground">{t(lang, "posEmptyTitle")}</p>
-          <p className="mt-2 text-lg text-muted-foreground">{t(lang, "posEmptySub")}</p>
-          {actorHasPermission(actor, "products.add") ? (
-            <Link
-              to="/stock"
-              className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"
-            >
-              {t(lang, "posEmptyCtaProducts")}
-            </Link>
-          ) : (
-            <p className="mt-4 text-base font-semibold text-muted-foreground">{t(lang, "posEmptyAskOwner")}</p>
-          )}
-        </section>
-      ) : showCatalogShelfGrid ? (
-        catalogShelfDrillDown ? (
-          <section
-            ref={catalogRef}
-            className={clsx(
-              "space-y-2",
-              catalogSellMode &&
-                (mobileSellFocus
-                  ? isMobileShortShelf(filteredProducts.length)
-                    ? "pos-catalog-scroll-pane pos-catalog-scroll-pane--short-finish overscroll-y-contain [-webkit-overflow-scrolling:touch]"
-                    : "pos-catalog-scroll-pane pos-catalog-scroll-pane--natural overscroll-y-contain [-webkit-overflow-scrolling:touch]"
-                  : catalogScrollPaneClass),
-            )}
-            data-pos-catalog-scroll={catalogSellMode ? true : undefined}
-            data-pos-short-shelf={
-              mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? "1" : undefined
-            }
-          >
-            <PosShelfDrillDownHeader
+      {isDesktopPosTerminalUi ? (
+        <DesktopPosShell
+          header={
+            <DesktopPosHeader
               lang={lang}
-              shelfLabel={selectedShelfLabel}
-              productCount={filteredProducts.length}
-              onBack={browse.backToShelves}
-              compact={mobileSellFocus}
-              className="shrink-0"
+              sellLabelKey={sellNavLabelKey}
+              cashierName={actor.displayName ?? actor.userId}
+              shift={activeShift}
+              todaySaleCount={todaySalesSummary.count}
+              todaySalesUgx={todaySalesSummary.total}
+              pendingCount={pendingCount}
+              onCloseShift={() => setShiftCloseOpen(true)}
             />
-            <div className="shrink-0">{renderCatalogProductGrid()}</div>
-            {mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? (
-              <PosMobileShelfContinue
-                lang={lang}
-                otherShelves={catalogShelfCards
-                  .filter((s) => s.key !== sellCategoryKey && s.count > 0)
-                  .slice(0, MOBILE_SHORT_SHELF_OTHER_SHELVES_MAX)}
-                onShelfTap={handleCatalogShelfTap}
-                popularProducts={popularOutsideOpenShelf}
-                onPickProduct={openProduct}
-                onBackToShelves={browse.backToShelves}
-                addLabel={t(lang, "addToSale")}
-                lockedIds={lockedIds}
-              />
-            ) : mobileSellFocus && shouldShowMobileShelfEndCue(filteredProducts.length) ? (
-              <PosMobileShelfEndCue lang={lang} onBackToShelves={browse.backToShelves} />
-            ) : null}
-          </section>
-        ) : (
-          <div
-            ref={catalogRef}
-            className={clsx(catalogSellMode && catalogScrollPaneClass, (mobileSellFocus || compactSellFocus) && "mt-2")}
-            data-pos-catalog-scroll={catalogSellMode ? true : undefined}
-          >
-            {catalogSellMode && !isFullDesktopPos && quickProductChips.length > 0 ? (
-              <PosQuickProductChips
-                lang={lang}
-                products={quickProductChips}
-                onTap={quickTapAddProduct}
-                className="mb-3 shrink-0"
-              />
-            ) : null}
-            {/* M1.1 — mobile landing: popular products before shelves so Sell never feels empty. */}
-            {mobileSellFocus && frequentTodayVisible.length > 0 ? (
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                {frequentTodayVisible.slice(0, 4).map(({ product }) => (
-                  <PosSellProductCard
-                    key={`landing-${product.id}`}
-                    product={product}
-                    stockLabel={t(lang, "stockLabel")}
-                    addLabel={t(lang, "addToSale")}
-                    locked={isProductPlanLocked(product.id, lockedIds)}
-                    lockedBadge={t(lang, "productLockedBadge")}
-                    cartQty={cartQtyByProductId.get(product.id) ?? 0}
-                    onPick={openProduct}
-                  />
-                ))}
-              </div>
-            ) : null}
-            <PosSellCatalogShelfSection
+          }
+          categoryRail={
+            <DesktopCategoryRail
               lang={lang}
               shelves={catalogShelfCards}
-              onShelfTap={handleCatalogShelfTap}
-              desktop={isFullDesktopPos}
+              selectedKey={sellCategoryKey}
+              onSelect={handleCatalogShelfTap}
             />
-          </div>
-        )
-      ) : showCatalogSearchResults ? (
-        <section
-          ref={catalogRef}
-          className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
-          data-pos-catalog-scroll={catalogSellMode ? true : undefined}
-        >
-          <p className="px-0.5 text-xs font-black text-muted-foreground">
-            {t(lang, "posSearchResults")}
-            <span className="font-semibold text-muted-foreground"> · {t(lang, "posMasterSearchAll")}</span>
-            {filteredProducts.length > 0 ? (
-              <span className="font-semibold text-muted-foreground"> ({filteredProducts.length})</span>
-            ) : null}
-          </p>
-          {filteredProducts.length === 0 ? (
-            <p className="rounded-xl bg-warning-muted px-3 py-4 text-center text-sm font-bold text-warning-foreground">
-              {t(lang, "posSellNoMatch")}
-            </p>
-          ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
-            <VirtualizedProductGrid
-              products={filteredProducts}
-              columnCount={productGridCols}
-              onPick={openProduct}
-              stockLabel={t(lang, "stockLabel")}
-              noShelfLabel={t(lang, "posNoShelf")}
-              addLabel={t(lang, "addToSale")}
-              isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
-              lockedBadge={t(lang, "productLockedBadge")}
-              variant={isFullDesktopPos ? "sellDesktop" : "sellMobile"}
-              favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
-              onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
-              cartQtyByProductId={cartQtyByProductId}
-            />
-          ) : (
-            (() => {
-              const searchGrid = catalogGridFor(filteredProducts.length);
-              return isFullDesktopPos ? (
-                <div
-                  className="grid gap-1.5"
-                  style={{
-                    gridTemplateColumns: searchGrid.gridTemplateColumns,
-                    justifyContent: searchGrid.justifyContent,
-                  }}
-                  data-pos-sparse-cols={searchGrid.columns}
-                  data-pos-sparse={searchGrid.sparse ? "1" : undefined}
-                >
-                  {filteredProducts.map((p) => (
-                    <PosDesktopProductCard
-                      key={p.id}
-                      product={p}
-                      stockLabel={t(lang, "stockLabel")}
-                      sellLabel={t(lang, "addToSale")}
-                      locked={isProductPlanLocked(p.id, lockedIds)}
-                      lockedBadge={t(lang, "productLockedBadge")}
-                      favorite={favoriteIdSet.has(p.id)}
-                      cartQty={cartQtyByProductId.get(p.id) ?? 0}
-                      onPick={openProduct}
-                      onToggleFavorite={toggleFavoriteProduct}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div
-                  className="grid gap-2"
-                  style={{
-                    gridTemplateColumns: searchGrid.gridTemplateColumns,
-                    justifyContent: searchGrid.justifyContent,
-                  }}
-                  data-pos-sparse-cols={searchGrid.columns}
-                  data-pos-sparse={searchGrid.sparse ? "1" : undefined}
-                >
-                  {filteredProducts.map((p) => (
-                    <PosSellProductCard
-                      key={p.id}
-                      product={p}
-                      stockLabel={t(lang, "stockLabel")}
-                      addLabel={t(lang, "addToSale")}
-                      locked={isProductPlanLocked(p.id, lockedIds)}
-                      lockedBadge={t(lang, "productLockedBadge")}
-                      cartQty={cartQtyByProductId.get(p.id) ?? 0}
-                      onPick={openProduct}
-                    />
-                  ))}
-                </div>
-              );
-            })()
-          )}
-        </section>
-      ) : null}
-
-      {showDesktopCatalogCheckoutDock ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex max-h-[min(55%,28rem)] flex-col justify-end p-1.5">
-          <div className="pointer-events-auto min-h-0 overflow-hidden rounded-xl shadow-2xl ring-1 ring-border/80">
-            <PosDesktopCatalogCheckoutDock
+          }
+          quickActions={
+            <DesktopQuickActions
               lang={lang}
-              paymentMethod={paymentMethod}
-              catalogNumpadOpen={catalogNumpadOpen}
-              onCatalogNumpadOpenChange={setCatalogNumpadOpen}
-              cashInput={cashInput}
-              mobileMoneyInput={mobileMoneyInput}
-              checkoutAmountField={checkoutAmountField}
-              checkoutKeypadMode={checkoutKeypadMode}
-              changeDue={changeDue}
-              computedDebt={computedDebt}
-              saleCustomerId={saleCustomerId}
-              saleCustomerName={saleCustomerName}
-              saleCustomerPhone={saleCustomerPhone}
-              customers={customers}
-              customerSelectRef={customerSelectRef}
-              saveButtonRef={saveButtonRef}
-              saveSaleLabel={modeTerm("saveSale")}
-              saveDisabled={draftLines.length === 0}
-              onCheckoutInputField={handleCheckoutInputField}
-              onCheckoutKeypadModeChange={setCheckoutKeypadMode}
-              onAppendCheckoutDigit={appendCheckoutDigit}
-              onClearCheckoutAmount={clearCheckoutAmount}
-              onSaleCustomerId={setSaleCustomerId}
-              onSaleCustomerName={setSaleCustomerName}
-              onSaleCustomerPhone={setSaleCustomerPhone}
-              onFinishSale={finishSale}
+              canSavePending={canSavePending}
+              pendingCount={pendingCount}
+              hasCartDiscount={draftCartDiscountUgx > 0}
+              onHold={handleSavePending}
+              onCartDiscount={() => setCartSaleDiscountOpen(true)}
             />
-          </div>
-        </div>
-      ) : null}
-      </div>
-
-        </div>
-
-        {mountDesktopCheckoutSidebar ? (
-          <aside className={clsx(isFullDesktopPos ? "sticky top-0 min-h-0 self-stretch" : "sticky top-3")}>
-            {desktopCheckoutCollapsed ? (
-              <PosDesktopCheckoutRail
-                lang={lang}
-                productCount={draftCartStats.productCount}
-                payableUgx={draftPayable}
-                onExpand={() => setSaleCheckoutMinimized(false)}
-              />
-            ) : (
-              <PosCheckoutPanel
-                variant="sidebar"
-                {...checkoutPanelCommon}
-                onAddItems={focusCatalogForAdd}
-                catalogDock={useDesktopCatalogCheckoutDock}
-                catalogNumpadOpen={catalogNumpadOpen}
-                onCatalogNumpadOpenChange={setCatalogNumpadOpen}
-              />
+          }
+          searchBar={renderPosSearchBar()}
+          catalog={renderCatalogPane()}
+          cart={<DesktopCartPanel>{renderCheckoutAside()}</DesktopCartPanel>}
+          paymentBar={
+            <DesktopPaymentPanel
+              lang={lang}
+              payableUgx={draftPayable}
+              paymentMethod={paymentMethod}
+              checkoutMethods={checkoutMethods}
+              onPaymentMethod={(m) => setPaymentMethod(m)}
+              onCompleteSale={finishSale}
+              completeDisabled={draftLines.length === 0 || Boolean(checkoutBlockMessage)}
+              completeLabel={modeTerm("saveSale")}
+            />
+          }
+          statusBar={<DesktopStatusBar lang={lang} cashierName={actor.displayName ?? actor.userId} />}
+          onScreenKeyboard={
+            <DesktopOnScreenKeyboard
+              lang={lang}
+              visible={desktopOskOpen}
+              onClose={() => setDesktopOskOpen(false)}
+              onKey={handleDesktopOskKey}
+              initialLayer={desktopOskLayer}
+            />
+          }
+        />
+      ) : (
+        <div
+          ref={catalogSplitRef}
+          className={clsx(
+            catalogSellMode && "min-h-0 flex-1 overflow-hidden",
+            mountDesktopCheckoutSidebar && useDesktopSplitLayout
+              ? "grid items-stretch gap-2"
+              : catalogSellMode && "flex flex-col",
+          )}
+          style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
+        >
+          <div
+            ref={catalogWidthRef}
+            className={clsx(
+              isDesktopCatalogUi
+                ? "flex min-h-0 min-w-0 flex-col gap-1.5"
+                : catalogSellMode
+                  ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+                  : "min-w-0 space-y-2",
             )}
-          </aside>
-        ) : null}
-      </div>
+          >
+            {renderPosSearchBar()}
+            {renderCatalogPane()}
+          </div>
+          {renderCheckoutAside()}
+        </div>
+      )}
 
-      {isFullDesktopPos ? <PosDesktopStatusBar lang={lang} /> : null}
+      {isWebFullDesktopPosLayout ? <PosDesktopStatusBar lang={lang} /> : null}
 
       {mountCompactCheckoutSlideover ? (
         <PosCompactCheckoutSlideover

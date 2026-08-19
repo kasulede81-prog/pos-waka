@@ -1,5 +1,7 @@
 /** Public brand, SEO, and legal identity for waka.ug / pos.waka.ug */
 
+import { publicAssetUrl } from "../lib/publicAssetUrl";
+
 /** Marketing site (home, about, legal pages served from same app). */
 export const WAKA_SITE_URL = "https://waka.ug";
 
@@ -50,7 +52,7 @@ export const FOUNDER_NAME = "Kasule Denis";
 export const FOUNDER_ROLE = "Founder & CEO";
 export const FOUNDER_BIRTH_PLACE = "Uganda";
 export const FOUNDER_BASE = "Uganda / Italy";
-export const FOUNDER_PHOTO_SRC = "/founder-kasule-denis.jpg";
+export const FOUNDER_PHOTO_SRC = publicAssetUrl("founder-kasule-denis.jpg.jpeg");
 export const FOUNDER_PHOTO_ALT = "Kasule Denis, founder of Waka Technologies and Waka POS";
 
 export const FOUNDER_BIO_SHORT =

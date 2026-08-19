@@ -152,21 +152,66 @@ async function transferNetwork(
   const host = profile.networkHost?.trim();
   const port = profile.networkPort ?? 9100;
   if (!host) return { ok: false, error: "Network printer host not set." };
-  if (typeof window !== "undefined" && window.wakaDesktop?.escPosNetwork) {
+
+  const payload = {
+    host,
+    port,
+    data: Array.from(bytes),
+  };
+
+  const printerApi = typeof window !== "undefined" ? window.wakaDesktop?.hardware?.printer : undefined;
+  if (printerApi && typeof printerApi.printEscPos === "function") {
     try {
-      const result = await window.wakaDesktop.escPosNetwork({
-        host,
-        port,
-        data: Array.from(bytes),
-      });
-      return result.ok ? { ok: true } : { ok: false, error: result.error ?? "Network print failed." };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Network print failed." };
+      const result = await printerApi.printEscPos(payload);
+      return result.ok
+        ? { ok: true }
+        : { ok: false, error: result.error ?? result.message ?? "Could not connect to printer" };
+    } catch {
+      return { ok: false, error: "Could not connect to printer" };
     }
   }
+
+  if (typeof window !== "undefined" && typeof window.wakaDesktop?.escPosNetwork === "function") {
+    try {
+      const result = await window.wakaDesktop.escPosNetwork(payload);
+      return result.ok
+        ? { ok: true }
+        : { ok: false, error: result.error ?? "Could not connect to printer" };
+    } catch {
+      return { ok: false, error: "Could not connect to printer" };
+    }
+  }
+
   return {
     ok: false,
     error: "LAN ESC/POS needs the Waka desktop app or a print server bridge.",
+  };
+}
+
+/** Probe TCP reachability via the desktop bridge (no sale/checkout side effects). */
+export async function testNetworkPrinterConnection(
+  profile: Pick<PrinterProfile, "networkHost" | "networkPort">,
+): Promise<{ ok: boolean; error?: string; message?: string }> {
+  const host = profile.networkHost?.trim();
+  const port = profile.networkPort ?? 9100;
+  if (!host) return { ok: false, error: "Network printer host not set." };
+
+  const printerApi = typeof window !== "undefined" ? window.wakaDesktop?.hardware?.printer : undefined;
+  if (printerApi && typeof printerApi.testConnection === "function") {
+    try {
+      const result = await printerApi.testConnection({ host, port });
+      if (result.ok) {
+        return { ok: true, message: result.message ?? "Printer connected" };
+      }
+      return { ok: false, error: result.error ?? "Could not connect to printer" };
+    } catch {
+      return { ok: false, error: "Could not connect to printer" };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "LAN ESC/POS needs the Waka desktop app.",
   };
 }
 
@@ -175,7 +220,11 @@ export async function detectPrinterCapabilities(): Promise<PrinterCapabilities> 
   const bluetoothAvailable = hasNavigator && "bluetooth" in navigator;
   const usbAvailable = hasNavigator && "usb" in navigator;
   const platform = resolvePlatform();
-  const networkAvailable = platform === "electron" || Boolean(typeof window !== "undefined" && window.wakaDesktop?.escPosNetwork);
+  const networkAvailable = Boolean(
+    typeof window !== "undefined" &&
+      (typeof window.wakaDesktop?.hardware?.printer?.printEscPos === "function" ||
+        typeof window.wakaDesktop?.escPosNetwork === "function"),
+  );
   const sunmiBuiltIn = false;
   const { state, stateReason, escPosAvailable } = resolveCapabilityState(platform, bluetoothAvailable, usbAvailable);
   return {
