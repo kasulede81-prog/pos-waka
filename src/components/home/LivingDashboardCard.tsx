@@ -85,7 +85,7 @@ export function LivingDashboardCard({
             <Icon className={clsx(enterpriseIconClass("md"), "text-current")} strokeWidth={ENTERPRISE_ICON_STROKE} aria-hidden />
           </HomeTileAccentWell>
           <div className="min-w-0 flex-1 pr-4">
-            <span className="block truncate text-sm font-black text-foreground sm:text-base">{t(lang, tile.labelKey)}</span>
+            <span className="block truncate text-sm font-bold text-foreground sm:text-base">{t(lang, tile.labelKey)}</span>
             <span className="mt-0.5 line-clamp-2 text-[11px] font-medium leading-snug text-muted-foreground sm:text-xs">
               {t(lang, theme.subtitleKey)}
             </span>

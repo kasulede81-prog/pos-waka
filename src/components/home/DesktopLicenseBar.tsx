@@ -50,7 +50,7 @@ export function DesktopLicenseBar({ lang }: Props) {
       <div className="flex min-w-0 items-center gap-4">
         <WakaPosLogo size="sm" variant="symbol" className="h-10 w-10 shrink-0" />
         <div className="min-w-0 text-left">
-          <p className="truncate text-base font-black text-waka-950">{productLine}</p>
+          <p className="truncate text-base font-bold text-waka-950">{productLine}</p>
           <p className="mt-0.5 text-sm font-semibold text-waka-800/80">{detailLine}</p>
         </div>
       </div>

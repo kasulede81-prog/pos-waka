@@ -758,7 +758,7 @@ body {
   }
 
   .waka-btn-primary {
-    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-600 px-4 py-2.5 text-sm font-black text-white shadow-waka-sm transition-waka active:bg-waka-700 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-600 px-4 py-2.5 text-sm font-bold text-white shadow-waka-sm transition-waka active:bg-waka-700 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .waka-btn-secondary {

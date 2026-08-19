@@ -42,7 +42,7 @@ export function DesktopHomePage({ lang }: Props) {
       <div className={`${HOME_CONTENT_MEASURE_CLASS} ${HOME_PAGE_GUTTER_CLASS} flex flex-col`}>
         <header className="mb-3 w-full text-center sm:mb-4 sm:text-left">
           {firstName ? (
-            <h1 className="text-lg font-black tracking-tight text-foreground sm:text-xl">
+            <h1 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">
               {t(lang, greetingKey).replace("{name}", firstName)}
             </h1>
           ) : (

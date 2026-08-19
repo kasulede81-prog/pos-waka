@@ -11,6 +11,8 @@ import {
   HOME_MODULE_GRID_CLASS,
   HOME_MODULE_SECTION_SPACING,
   presentHomeMenuTiles,
+  visibleHomeRegionOrder,
+  type HomeBodyRegionId,
 } from "../../lib/homePresentation";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { HOME_HERO_PREVIEW_BG_PRESETS, PRESET_SHELF_HEX, resolveHomeHeroPreviewBgColor } from "../../lib/shelfColor";
@@ -21,6 +23,8 @@ import { WakaSwitch } from "../enterprise/WakaSwitch";
 import { HomeBusinessHero } from "./HomeBusinessHero";
 import { HomeReportsPreview } from "./HomeReportsPreview";
 import { LivingDashboardCard } from "./LivingDashboardCard";
+import { HomeOrderedRegions } from "./HomeOrderedRegions";
+import { useHomeRegionLayout } from "../../hooks/useHomeRegionLayout";
 import { ShelfColorWheel } from "../pos/ShelfColorWheel";
 import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
 
@@ -85,6 +89,7 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
   const layout = layoutRaw ?? EMPTY_LAYOUT;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { largeScreen } = useHomeRegionLayout();
 
   const can = useCallback(
     (perm?: Permission) =>
@@ -190,7 +195,7 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
 
       <section className="space-y-3 rounded-2xl border-2 border-border bg-card p-4">
         <div>
-          <p className="text-sm font-black text-foreground">{t(lang, "homeMenuPreviewBgTitle")}</p>
+          <p className="text-sm font-bold text-foreground">{t(lang, "homeMenuPreviewBgTitle")}</p>
           <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "homeMenuPreviewBgSub")}</p>
         </div>
         <div>
@@ -218,91 +223,113 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
         </div>
       </section>
 
-      {presentation.hero ? (
-        <section className="space-y-2">
-          <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-            {t(lang, "homeMenuSellLocked")}
-          </p>
-          <ArrangeChrome
-            tileId="sell"
-            selected={false}
-            hidden={false}
-            dragging={false}
-            dragOver={false}
-            hiddenLabel={t(lang, "homeMenuTileHidden")}
-          >
-            <HomeBusinessHero
-              lang={lang}
-              onSell={() => undefined}
-              heroActionLabelKey={pharmacyMode ? "builderHomeTapDispense" : "builderHomeTapSell"}
-            />
-          </ArrangeChrome>
-        </section>
-      ) : null}
-
-      {presentation.reports ? (
-        <section className={HOME_MODULE_SECTION_SPACING.standard}>
-          <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">
-            {t(lang, "homeMenuReportsLocked")}
-          </p>
-          <ArrangeChrome
-            tileId={presentation.reports.id}
-            selected={selectedId === presentation.reports.id}
-            hidden={presentation.reports.hidden}
-            dragging={false}
-            dragOver={false}
-            hiddenLabel={t(lang, "homeMenuTileHidden")}
-          >
-            <HomeReportsPreview
-              lang={lang}
-              tile={presentation.reports}
-              onOpen={() => selectTile(presentation.reports!.id, () => false)}
-            />
-          </ArrangeChrome>
-        </section>
-      ) : null}
-
-      {presentation.primary.length > 0 ? (
-        <section className={HOME_MODULE_SECTION_SPACING.standard}>
-          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
-            {t(lang, "homeModulesPrimary")}
-          </SectionTitle>
-          <div className={HOME_MODULE_GRID_CLASS.comfortable}>
-            {presentation.primary.map((tile) =>
-              renderArrangeCard(tile, "comfortable", primaryDrag, "data-home-primary-key"),
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      {presentation.secondary.length > 0 ? (
-        <section className={HOME_MODULE_SECTION_SPACING.standard}>
-          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
-            {t(lang, "homeModulesSecondary")}
-          </SectionTitle>
-          <Caption className="mb-2 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
-          <div className={HOME_MODULE_GRID_CLASS.comfortable}>
-            {presentation.secondary.map((tile) =>
-              renderArrangeCard(tile, "comfortable", secondaryDrag, "data-home-secondary-key"),
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      {presentation.admin.length > 0 ? (
-        <section className={HOME_MODULE_SECTION_SPACING.admin}>
-          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
-            {t(lang, "homeModulesAdmin")}
-          </SectionTitle>
-          <div className={HOME_MODULE_GRID_CLASS.compact}>
-            {presentation.admin.map((tile) => renderArrangeCard(tile, "compact", adminDrag, "data-home-admin-key"))}
-          </div>
-        </section>
-      ) : null}
+      <HomeOrderedRegions
+        order={visibleHomeRegionOrder({
+          largeScreen,
+          hasHero: Boolean(presentation.hero),
+          hasKpis: false,
+          hasHealth: false,
+          hasPrimary: presentation.primary.length > 0,
+          hasReports: Boolean(presentation.reports),
+          hasOperations: presentation.secondary.length > 0,
+          hasAdmin: presentation.admin.length > 0,
+        })}
+        packExecutiveScan={false}
+        renderRegion={(id: HomeBodyRegionId) => {
+          switch (id) {
+            case "hero":
+              return presentation.hero ? (
+                <section className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    {t(lang, "homeMenuSellLocked")}
+                  </p>
+                  <ArrangeChrome
+                    tileId="sell"
+                    selected={false}
+                    hidden={false}
+                    dragging={false}
+                    dragOver={false}
+                    hiddenLabel={t(lang, "homeMenuTileHidden")}
+                  >
+                    <HomeBusinessHero
+                      lang={lang}
+                      onSell={() => undefined}
+                      heroActionLabelKey={pharmacyMode ? "builderHomeTapDispense" : "builderHomeTapSell"}
+                    />
+                  </ArrangeChrome>
+                </section>
+              ) : null;
+            case "reports":
+              return presentation.reports ? (
+                <section className={HOME_MODULE_SECTION_SPACING.standard}>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    {t(lang, "homeMenuReportsLocked")}
+                  </p>
+                  <ArrangeChrome
+                    tileId={presentation.reports.id}
+                    selected={selectedId === presentation.reports.id}
+                    hidden={presentation.reports.hidden}
+                    dragging={false}
+                    dragOver={false}
+                    hiddenLabel={t(lang, "homeMenuTileHidden")}
+                  >
+                    <HomeReportsPreview
+                      lang={lang}
+                      tile={presentation.reports}
+                      onOpen={() => selectTile(presentation.reports!.id, () => false)}
+                    />
+                  </ArrangeChrome>
+                </section>
+              ) : null;
+            case "primary":
+              return presentation.primary.length > 0 ? (
+                <section className={HOME_MODULE_SECTION_SPACING.standard}>
+                  <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+                    {t(lang, "homeModulesPrimary")}
+                  </SectionTitle>
+                  <div className={HOME_MODULE_GRID_CLASS.comfortable}>
+                    {presentation.primary.map((tile) =>
+                      renderArrangeCard(tile, "comfortable", primaryDrag, "data-home-primary-key"),
+                    )}
+                  </div>
+                </section>
+              ) : null;
+            case "operations":
+              return presentation.secondary.length > 0 ? (
+                <section className={HOME_MODULE_SECTION_SPACING.standard}>
+                  <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+                    {t(lang, "homeModulesSecondary")}
+                  </SectionTitle>
+                  <Caption className="mb-2 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
+                  <div className={HOME_MODULE_GRID_CLASS.comfortable}>
+                    {presentation.secondary.map((tile) =>
+                      renderArrangeCard(tile, "comfortable", secondaryDrag, "data-home-secondary-key"),
+                    )}
+                  </div>
+                </section>
+              ) : null;
+            case "admin":
+              return presentation.admin.length > 0 ? (
+                <section className={HOME_MODULE_SECTION_SPACING.admin}>
+                  <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+                    {t(lang, "homeModulesAdmin")}
+                  </SectionTitle>
+                  <div className={HOME_MODULE_GRID_CLASS.compact}>
+                    {presentation.admin.map((tile) =>
+                      renderArrangeCard(tile, "compact", adminDrag, "data-home-admin-key"),
+                    )}
+                  </div>
+                </section>
+              ) : null;
+            default:
+              return null;
+          }
+        }}
+      />
 
       {selectedId && selectedTile ? (
         <section className="space-y-3 rounded-2xl border-2 border-waka-200 bg-card p-4">
-          <p className="text-sm font-black text-foreground">
+          <p className="text-sm font-bold text-foreground">
             {t(lang, "homeMenuEditHeading")}: {t(lang, selectedTile.labelKey)}
           </p>
           {selectedTile.hideable ? (
@@ -359,7 +386,7 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
 
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-base font-black text-foreground">{t(lang, "homeMenuArrangeTitle")}</p>
+      <p className="text-base font-bold text-foreground">{t(lang, "homeMenuArrangeTitle")}</p>
       <div className="mt-4">{content}</div>
     </article>
   );

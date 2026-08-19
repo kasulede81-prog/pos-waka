@@ -22,13 +22,17 @@ import {
   HOME_MODULE_GRID_CLASS,
   HOME_MODULE_SECTION_SPACING,
   presentHomeMenuTiles,
+  visibleHomeRegionOrder,
+  type HomeBodyRegionId,
 } from "../../lib/homePresentation";
 import { LivingDashboardCard } from "./LivingDashboardCard";
 import { HomeBusinessHero } from "./HomeBusinessHero";
 import { HomeExecutiveKpiStrip } from "./HomeExecutiveKpiStrip";
 import { HomeBusinessHealthSection } from "./HomeBusinessHealthSection";
 import { HomeReportsPreview } from "./HomeReportsPreview";
+import { HomeOrderedRegions } from "./HomeOrderedRegions";
 import { useHomeDashboardMetrics } from "../../hooks/useHomeDashboardMetrics";
+import { useHomeRegionLayout } from "../../hooks/useHomeRegionLayout";
 import { useSessionHydration } from "../../context/SessionHydrationContext";
 import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
 
@@ -41,6 +45,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   const navigate = useNavigate();
   const actor = useSessionActor();
   const tileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const { largeScreen, packExecutiveScan } = useHomeRegionLayout();
   const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
   const preferences = usePosStore((s) => s.preferences);
   const pharmacyPrescriptions = usePosStore((s) => s.pharmacyPrescriptions);
@@ -190,63 +195,89 @@ export function DesktopHomeTiles({ lang }: Props) {
     );
   }
 
+  const regionOrder = visibleHomeRegionOrder({
+    largeScreen,
+    hasHero: Boolean(hero),
+    hasKpis: executive.length > 0,
+    hasHealth: true,
+    hasPrimary: primaryTiles.length > 0,
+    hasReports: Boolean(reportsTile),
+    hasOperations: secondaryTiles.length > 0,
+    hasAdmin: adminTiles.length > 0,
+  });
+
+  const renderRegion = (id: HomeBodyRegionId) => {
+    switch (id) {
+      case "hero":
+        return (
+          <HomeBusinessHero
+            lang={lang}
+            sellStat={liveStats.sell}
+            onSell={hero ? () => openTile(hero.to) : undefined}
+            heroActionLabelKey={pharmacyMode ? "builderHomeTapDispense" : "builderHomeTapSell"}
+          />
+        );
+      case "kpi":
+        return <HomeExecutiveKpiStrip lang={lang} kpis={executive} />;
+      case "health":
+        return <HomeBusinessHealthSection lang={lang} />;
+      case "reports":
+        return reportsTile ? (
+          <div className={HOME_MODULE_SECTION_SPACING.standard}>
+            <HomeReportsPreview
+              lang={lang}
+              tile={reportsTile}
+              liveStat={liveStats.reports}
+              onOpen={() => openTile(reportsTile.to)}
+            />
+          </div>
+        ) : null;
+      case "primary":
+        return primaryTiles.length > 0 ? (
+          <section className={HOME_MODULE_SECTION_SPACING.standard}>
+            <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+              {t(lang, "homeModulesPrimary")}
+            </SectionTitle>
+            <div className={HOME_MODULE_GRID_CLASS.comfortable}>
+              {primaryTiles.map((tile) => renderCard(tile))}
+            </div>
+          </section>
+        ) : null;
+      case "operations":
+        return secondaryTiles.length > 0 ? (
+          <section className={HOME_MODULE_SECTION_SPACING.standard}>
+            <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+              {t(lang, "homeModulesSecondary")}
+            </SectionTitle>
+            <Caption className="mb-2 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
+            <div className={HOME_MODULE_GRID_CLASS.comfortable}>
+              {secondaryTiles.map((tile) => renderCard(tile))}
+            </div>
+          </section>
+        ) : null;
+      case "admin":
+        return adminTiles.length > 0 ? (
+          <section className={HOME_MODULE_SECTION_SPACING.admin}>
+            <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+              {t(lang, "homeModulesAdmin")}
+            </SectionTitle>
+            <div className={HOME_MODULE_GRID_CLASS.compact}>
+              {adminTiles.map((tile) => renderCard(tile, "compact"))}
+            </div>
+          </section>
+        ) : null;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="w-full" role="navigation" aria-label={t(lang, "desktopHomeNavLabel")}>
-      <HomeBusinessHero
-        lang={lang}
-        sellStat={liveStats.sell}
-        onSell={hero ? () => openTile(hero.to) : undefined}
-        heroActionLabelKey={pharmacyMode ? "builderHomeTapDispense" : "builderHomeTapSell"}
+      <HomeOrderedRegions
+        order={regionOrder}
+        packExecutiveScan={packExecutiveScan}
+        renderRegion={renderRegion}
       />
-
-      <HomeExecutiveKpiStrip lang={lang} kpis={executive} />
-      <HomeBusinessHealthSection lang={lang} />
-
-      {reportsTile ? (
-        <div className={HOME_MODULE_SECTION_SPACING.standard}>
-          <HomeReportsPreview
-            lang={lang}
-            tile={reportsTile}
-            liveStat={liveStats.reports}
-            onOpen={() => openTile(reportsTile.to)}
-          />
-        </div>
-      ) : null}
-
-      {primaryTiles.length > 0 ? (
-        <section className={HOME_MODULE_SECTION_SPACING.standard}>
-          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
-            {t(lang, "homeModulesPrimary")}
-          </SectionTitle>
-          <div className={HOME_MODULE_GRID_CLASS.comfortable}>
-            {primaryTiles.map((tile) => renderCard(tile))}
-          </div>
-        </section>
-      ) : null}
-
-      {secondaryTiles.length > 0 ? (
-        <section className={HOME_MODULE_SECTION_SPACING.standard}>
-          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
-            {t(lang, "homeModulesSecondary")}
-          </SectionTitle>
-          <Caption className="mb-2 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
-          <div className={HOME_MODULE_GRID_CLASS.comfortable}>
-            {secondaryTiles.map((tile) => renderCard(tile))}
-          </div>
-        </section>
-      ) : null}
-
-      {adminTiles.length > 0 ? (
-        <section className={HOME_MODULE_SECTION_SPACING.admin}>
-          <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
-            {t(lang, "homeModulesAdmin")}
-          </SectionTitle>
-          <div className={HOME_MODULE_GRID_CLASS.compact}>
-            {adminTiles.map((tile) => renderCard(tile, "compact"))
-            }
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

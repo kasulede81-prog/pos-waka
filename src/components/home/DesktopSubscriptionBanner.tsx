@@ -49,7 +49,7 @@ export function DesktopSubscriptionBanner({ lang }: Props) {
         )}
         aria-hidden
       />
-      <span className="text-base font-black tracking-wide sm:text-lg">{headline}</span>
+      <span className="text-base font-bold tracking-wide sm:text-lg">{headline}</span>
     </Link>
   );
 }

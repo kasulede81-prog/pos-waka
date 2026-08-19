@@ -52,7 +52,7 @@ export function HomeReportsPreview({ lang, tile, liveStat, onOpen }: Props) {
             </div>
           ) : null}
         </div>
-        <span className="flex shrink-0 items-center gap-1 self-center text-xs font-black text-waka-900">
+        <span className="flex shrink-0 items-center gap-1 self-center text-xs font-bold text-waka-900">
           {t(lang, "desktopHomeCtaViewReports")}
           <ArrowRight className="h-4 w-4" aria-hidden />
         </span>

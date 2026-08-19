@@ -5,8 +5,13 @@ import {
   homePresentationStructure,
   HOME_MODULE_GRID_CLASS,
   presentHomeMenuTiles,
+  resolveHomeFirstScreenOrder,
   resolveHomePresentation,
+  resolveHomeRegionLayout,
+  resolveHomeRegionOrder,
+  resolveHomeSettingsRegionOrder,
   visibleHomePresentationStructure,
+  visibleHomeRegionOrder,
 } from "./homePresentation";
 import { homeModuleBand } from "./homeModulePriority";
 import type { LauncherTileConfig } from "../types";
@@ -255,5 +260,140 @@ describe("HOME-DENSITY-1.1 layout tokens", () => {
     expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("xl:grid-cols-4");
     expect(HOME_MODULE_GRID_CLASS.compact).toContain("lg:grid-cols-4");
     expect(HOME_MODULE_GRID_CLASS.compact).toContain("xl:grid-cols-5");
+  });
+});
+
+describe("HOME-DENSITY-1.2 region order", () => {
+  const ownerFlags = {
+    hasHero: true,
+    hasKpis: true,
+    hasHealth: true,
+    hasPrimary: true,
+    hasReports: true,
+    hasOperations: true,
+    hasAdmin: true,
+  };
+
+  it("A — small-screen owner order: greeting, sell, primary, reports, kpi, health, operations, admin", () => {
+    expect(resolveHomeFirstScreenOrder(false)).toEqual([
+      "greeting",
+      "hero",
+      "primary",
+      "reports",
+      "kpi",
+      "health",
+      "operations",
+      "admin",
+    ]);
+  });
+
+  it("B — large-screen owner order: greeting, sell, kpi, health, primary, reports, operations, admin", () => {
+    expect(resolveHomeFirstScreenOrder(true)).toEqual([
+      "greeting",
+      "hero",
+      "kpi",
+      "health",
+      "primary",
+      "reports",
+      "operations",
+      "admin",
+    ]);
+  });
+
+  it("C — Reports stays a dedicated HomeReportsPreview region, not a band tile", () => {
+    const presentation = resolveHomePresentation({
+      savedOrder: ["reports", "inventory"],
+      layout: {},
+      hasPermission: allowAll,
+    });
+    expect(homePresentationStructure(presentation).reportsRenderer).toBe("HomeReportsPreview");
+    expect(resolveHomeRegionOrder(false).indexOf("reports")).toBeGreaterThan(
+      resolveHomeRegionOrder(false).indexOf("primary"),
+    );
+    expect(presentation.primary.map((t) => t.id)).not.toContain("reports");
+  });
+
+  it("D — Sell remains locked hero and is not a band region", () => {
+    const presentation = resolveHomePresentation({
+      savedOrder: ["inventory"],
+      layout: {},
+      hasPermission: allowAll,
+    });
+    expect(homePresentationStructure(presentation).heroLocked).toBe(true);
+    expect(resolveHomeRegionOrder(false)[0]).toBe("hero");
+    expect(resolveHomeRegionOrder(true)[0]).toBe("hero");
+    expect(presentation.primary.map((t) => t.id)).not.toContain("sell");
+  });
+
+  it("E — Settings preview uses the same order with KPI/Health stripped", () => {
+    expect(resolveHomeSettingsRegionOrder(false)).toEqual([
+      "hero",
+      "primary",
+      "reports",
+      "operations",
+      "admin",
+    ]);
+    expect(resolveHomeSettingsRegionOrder(true)).toEqual([
+      "hero",
+      "primary",
+      "reports",
+      "operations",
+      "admin",
+    ]);
+    expect(visibleHomeRegionOrder({ ...ownerFlags, largeScreen: false, hasKpis: false, hasHealth: false })).toEqual(
+      resolveHomeSettingsRegionOrder(false),
+    );
+    expect(visibleHomeRegionOrder({ ...ownerFlags, largeScreen: true, hasKpis: false, hasHealth: false })).toEqual(
+      resolveHomeSettingsRegionOrder(true),
+    );
+  });
+
+  it("F — hidden Reports leaves no reports region", () => {
+    expect(visibleHomeRegionOrder({ ...ownerFlags, largeScreen: false, hasReports: false })).not.toContain(
+      "reports",
+    );
+    expect(visibleHomeRegionOrder({ ...ownerFlags, largeScreen: true, hasReports: false })).not.toContain(
+      "reports",
+    );
+  });
+
+  it("G — absent KPI collapses with no placeholder", () => {
+    const order = visibleHomeRegionOrder({ ...ownerFlags, largeScreen: true, hasKpis: false });
+    expect(order).toEqual(["hero", "health", "primary", "reports", "operations", "admin"]);
+    expect(order).not.toContain("kpi");
+  });
+
+  it("H — cashier-style thin Home: sell + inventory, no empty reports/admin slots", () => {
+    const order = visibleHomeRegionOrder({
+      largeScreen: false,
+      hasHero: true,
+      hasKpis: true,
+      hasHealth: true,
+      hasPrimary: true,
+      hasReports: false,
+      hasOperations: true,
+      hasAdmin: false,
+    });
+    expect(order).toEqual(["hero", "primary", "kpi", "health", "operations"]);
+    expect(order[0]).toBe("hero");
+    expect(order[1]).toBe("primary");
+  });
+
+  it("I — within-band Primary order is unchanged by region reorder", () => {
+    const presentation = resolveHomePresentation({
+      savedOrder: ["inventory", "cash", "cashPosition"],
+      layout: {},
+      hasPermission: allowAll,
+    });
+    expect(presentation.primary.map((t) => t.id)).toEqual(["inventory", "cash", "cashPosition"]);
+  });
+
+  it("packs executive scan only between lg and xl (1024–1279)", () => {
+    expect(resolveHomeRegionLayout(390).packExecutiveScan).toBe(false);
+    expect(resolveHomeRegionLayout(768).packExecutiveScan).toBe(false);
+    expect(resolveHomeRegionLayout(1024).packExecutiveScan).toBe(true);
+    expect(resolveHomeRegionLayout(1279).packExecutiveScan).toBe(true);
+    expect(resolveHomeRegionLayout(1280).packExecutiveScan).toBe(false);
+    expect(resolveHomeRegionLayout(1440).packExecutiveScan).toBe(false);
   });
 });

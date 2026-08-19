@@ -4,6 +4,7 @@ import {
   type ResolvedHomeTile,
 } from "./launcherTiles";
 import type { LauncherTileConfig, Permission } from "../types";
+import { WAKA_DESKTOP_MIN_PX, WAKA_POS_WIDE_MIN_PX } from "./responsiveBreakpoints";
 
 export type HomePresentation = {
   hero: ResolvedHomeTile | null;
@@ -65,6 +66,99 @@ export const HOME_MODULE_SECTION_SPACING = {
   standard: "mb-4 sm:mb-5",
   admin: "mb-2",
 } as const;
+
+/**
+ * HOME-DENSITY-1.2 — first-screen body regions (greeting lives on DesktopHomePage).
+ * DOM order must match this list so keyboard focus follows the visual scan.
+ */
+export type HomeBodyRegionId =
+  | "hero"
+  | "kpi"
+  | "health"
+  | "primary"
+  | "reports"
+  | "operations"
+  | "admin";
+
+export const HOME_REGION_ORDER_SMALL: readonly HomeBodyRegionId[] = [
+  "hero",
+  "primary",
+  "reports",
+  "kpi",
+  "health",
+  "operations",
+  "admin",
+];
+
+export const HOME_REGION_ORDER_LARGE: readonly HomeBodyRegionId[] = [
+  "hero",
+  "kpi",
+  "health",
+  "primary",
+  "reports",
+  "operations",
+  "admin",
+];
+
+/** Tile regions Settings can preview. KPI/Health are live-only chrome, filtered from this list. */
+export const HOME_SETTINGS_PREVIEW_REGIONS: readonly HomeBodyRegionId[] = [
+  "hero",
+  "primary",
+  "reports",
+  "operations",
+  "admin",
+];
+
+export type HomeRegionLayout = {
+  largeScreen: boolean;
+  /** KPI | Health two-column pack — only 1024–1279 where 2-row KPI still clips Primary. */
+  packExecutiveScan: boolean;
+};
+
+export function resolveHomeRegionLayout(widthPx: number): HomeRegionLayout {
+  const largeScreen = widthPx >= WAKA_DESKTOP_MIN_PX;
+  return {
+    largeScreen,
+    packExecutiveScan: largeScreen && widthPx < WAKA_POS_WIDE_MIN_PX,
+  };
+}
+
+export function resolveHomeRegionOrder(largeScreen: boolean): HomeBodyRegionId[] {
+  return [...(largeScreen ? HOME_REGION_ORDER_LARGE : HOME_REGION_ORDER_SMALL)];
+}
+
+export function resolveHomeFirstScreenOrder(largeScreen: boolean): Array<"greeting" | HomeBodyRegionId> {
+  return ["greeting", ...resolveHomeRegionOrder(largeScreen)];
+}
+
+export function resolveHomeSettingsRegionOrder(largeScreen: boolean): HomeBodyRegionId[] {
+  const allowed = new Set<HomeBodyRegionId>(HOME_SETTINGS_PREVIEW_REGIONS);
+  return resolveHomeRegionOrder(largeScreen).filter((id) => allowed.has(id));
+}
+
+export type VisibleHomeRegionFlags = {
+  largeScreen: boolean;
+  hasHero: boolean;
+  hasKpis: boolean;
+  hasHealth: boolean;
+  hasPrimary: boolean;
+  hasReports: boolean;
+  hasOperations: boolean;
+  hasAdmin: boolean;
+};
+
+export function visibleHomeRegionOrder(flags: VisibleHomeRegionFlags): HomeBodyRegionId[] {
+  const include: Record<HomeBodyRegionId, boolean> = {
+    hero: flags.hasHero,
+    kpi: flags.hasKpis,
+    health: flags.hasHealth,
+    primary: flags.hasPrimary,
+    reports: flags.hasReports,
+    operations: flags.hasOperations,
+    admin: flags.hasAdmin,
+  };
+  return resolveHomeRegionOrder(flags.largeScreen).filter((id) => include[id]);
+}
 
 /**
  * Phase 34.1 live Home composition: Sell hero, dedicated Reports card,
