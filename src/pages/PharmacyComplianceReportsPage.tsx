@@ -6,6 +6,7 @@ import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { computeComplianceReports } from "../lib/pharmacyComplianceReports";
+import { printHtmlDocument } from "../lib/documentPrint";
 
 function ReportBlock({
   title,
@@ -51,7 +52,37 @@ export function PharmacyComplianceReportsPage({ lang }: { lang: Language }) {
 
   const printReport = (kind: string) => {
     recordRegulatoryExport(kind);
-    window.print();
+    const sections =
+      kind === "daily_controlled"
+        ? [{ title: t(lang, "pharmacyComplianceReportDaily"), rows: bundle.dailyControlled }]
+        : [
+            { title: t(lang, "pharmacyComplianceReportDaily"), rows: bundle.dailyControlled },
+            { title: t(lang, "pharmacyComplianceReportDispensing"), rows: bundle.dispensingRegister },
+            { title: t(lang, "pharmacyComplianceReportReturns"), rows: bundle.returns },
+            { title: t(lang, "pharmacyComplianceReportDestroyed"), rows: bundle.destroyed },
+            { title: t(lang, "pharmacyComplianceReportOverrides"), rows: bundle.overrides },
+            { title: t(lang, "pharmacyComplianceReportWitness"), rows: bundle.witnessLog },
+          ];
+    const body = sections
+      .map((section) => {
+        const items =
+          section.rows.length === 0
+            ? `<p>${t(lang, "pharmacyComplianceRegisterEmpty")}</p>`
+            : `<ul>${section.rows
+                .slice(0, 80)
+                .map(
+                  (r) =>
+                    `<li>${r.productName}${r.patientName ? ` · ${r.patientName}` : ""} — ×${r.quantity}</li>`,
+                )
+                .join("")}</ul>`;
+        return `<h2>${section.title}</h2>${items}`;
+      })
+      .join("");
+    printHtmlDocument(
+      `<article><h1>${t(lang, "pharmacyComplianceReportsTitle")}</h1>${body}</article>`,
+      "a4",
+      t(lang, "pharmacyComplianceReportsTitle"),
+    );
   };
 
   return (

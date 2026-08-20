@@ -1736,7 +1736,7 @@ export function PosPage({ lang }: { lang: Language }) {
       <div
         className={clsx(
           mobileSellFocus || compactSellFocus
-            ? "sticky top-0 z-20 shrink-0 -mx-0.5 space-y-0 bg-muted/95 pb-1.5 pt-0.5 backdrop-blur-md"
+            ? "sticky top-0 z-20 shrink-0 -mx-0.5 space-y-0 bg-muted/95 px-2 pb-1 pt-0 backdrop-blur-md"
             : isDesktopCatalogUi
               ? "shrink-0 space-y-1"
               : "space-y-1.5 rounded-[1.35rem] border border-border bg-card p-2 shadow-waka-sm",
@@ -1776,7 +1776,7 @@ export function PosPage({ lang }: { lang: Language }) {
               "pos-ds-input w-full rounded-2xl border border-border bg-card pl-9 font-semibold text-foreground outline-none ring-waka-200 placeholder:text-muted-foreground transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
               isDesktopPosTerminalUi ? "h-11 pr-[5.5rem] bg-muted/90 text-sm focus:bg-card focus:ring-1" : "pr-10",
               mobileSellFocus
-                ? "h-12 text-base shadow-sm"
+                ? "h-10 rounded-xl text-sm shadow-sm"
                 : isDesktopCatalogUi
                   ? "h-10 bg-muted/90 text-sm focus:bg-card focus:ring-1"
                   : "h-11 bg-muted/90 text-base focus:bg-card focus:ring-1",
@@ -1949,7 +1949,7 @@ export function PosPage({ lang }: { lang: Language }) {
           ) : (
             <div
               ref={catalogRef}
-              className={clsx(catalogSellMode && catalogScrollPaneClass, (mobileSellFocus || compactSellFocus) && "mt-2")}
+              className={clsx(catalogSellMode && catalogScrollPaneClass, (mobileSellFocus || compactSellFocus) && "mt-1")}
               data-pos-catalog-scroll={catalogSellMode ? true : undefined}
             >
               {catalogSellMode && !isDesktopCatalogUi && quickProductChips.length > 0 ? (

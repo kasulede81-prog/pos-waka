@@ -92,9 +92,12 @@ import {
   PharmacyBatchAdjustmentSheet,
   type PharmacyBatchAdjustmentKind,
 } from "../components/pharmacy/PharmacyBatchAdjustmentSheet";
-import { findProductByBarcode } from "../lib/pharmacyMedicine";
+import { findProductByBarcode, formatMedicineFullLabel } from "../lib/pharmacyMedicine";
+import { getProductBatches } from "../lib/pharmacyBatches";
+import { printHtmlDocument } from "../lib/documentPrint";
 import { usePosViewportWidth } from "../hooks/usePosViewportWidth";
 import { isWakaMobile } from "../lib/responsiveBreakpoints";
+
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
 export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceEmbed?: boolean }) {
@@ -651,9 +654,24 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         setDetailProduct(null);
         navigate("/stock/transfer");
         break;
-      case "print":
-        window.print();
+      case "print": {
+        const batches = getProductBatches(p);
+        const lines =
+          batches.length === 0
+            ? `<p>—</p>`
+            : `<ul>${batches
+                .map(
+                  (b) =>
+                    `<li>${b.batchNumber} · ${b.expiryDate ?? "—"} · ${b.quantityRemaining}</li>`,
+                )
+                .join("")}</ul>`;
+        printHtmlDocument(
+          `<article><h1>${formatMedicineFullLabel(p)}</h1>${lines}</article>`,
+          "80mm",
+          t(lang, "pharmacyQuickPrintBatch"),
+        );
         break;
+      }
       default:
         break;
     }

@@ -39,8 +39,15 @@ export function canSeePosNeedHelp(input: {
   authenticated: boolean;
   internalAdminRoute?: boolean;
   posLocked?: boolean;
+  /** Platform Remote Support master switch. Fail closed when missing or off. */
+  remoteSupportEnabled?: boolean;
 }): boolean {
-  return input.authenticated === true && input.internalAdminRoute !== true && input.posLocked !== true;
+  return (
+    input.authenticated === true &&
+    input.internalAdminRoute !== true &&
+    input.posLocked !== true &&
+    input.remoteSupportEnabled === true
+  );
 }
 
 /** Opens the existing Need Help form. Does not start Remote Support. */

@@ -55,7 +55,7 @@ export function AdminRemoteSupportSettingsPage({ adminRow, previewMode = false }
       <div>
         <h1 className="text-xl font-black text-foreground">Remote Support</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Master switch for technician remote assistance. Default is off. Need Help tickets stay available.
+          Master switch for technician remote assistance. Default is off. The POS Help button is hidden while this is off.
         </p>
       </div>
 
@@ -79,7 +79,7 @@ export function AdminRemoteSupportSettingsPage({ adminRow, previewMode = false }
           <p className="mt-2 text-sm font-semibold text-muted-foreground">
             {enabled
               ? "Connect Remotely and Electron lab transport follow the existing authorization flow."
-              : "Customers cannot start remote sessions. Connect Remotely is hidden. Native transport is rejected."}
+              : "Customers cannot start remote sessions. The Help button is hidden. Connect Remotely is hidden. Native transport is rejected."}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <button

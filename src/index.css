@@ -292,6 +292,23 @@ body {
     .app-shell--sell-focus {
       --waka-bottom-nav-h: 0px;
     }
+
+    /**
+     * Phone chrome: sit header controls in the bar instead of leaving a vacant
+     * band under the status / URL bar. Installed PWA still needs the notch inset.
+     */
+    .app-shell-root > header.app-shell-mobile-header {
+      padding-top: 0.125rem;
+    }
+    @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+      .app-shell-root > header.app-shell-mobile-header {
+        padding-top: env(safe-area-inset-top, 0px);
+      }
+    }
+    /* Android WebView already sits below the system status bar — don't pad it twice. */
+    html.waka-android .app-shell-root > header.app-shell-mobile-header {
+      padding-top: 0.125rem;
+    }
   }
 
   /** POS sell — bounded flex column so the catalog scroll pane gets a real height on Android WebView. */

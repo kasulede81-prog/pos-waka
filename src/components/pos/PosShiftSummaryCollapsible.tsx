@@ -83,34 +83,30 @@ export function PosShiftSummaryCollapsible({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full min-h-[50px] items-center gap-2 rounded-xl border border-border/90 bg-card px-2.5 py-2 text-left shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100"
+        className="mx-2 mt-1 flex min-h-9 w-[calc(100%-1rem)] items-center gap-1.5 rounded-xl border border-border/90 bg-card px-2 py-1 text-left shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100"
+        aria-label={t(lang, "posShiftSummaryTitle")}
       >
         <ChevronDown
-          className={clsx("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", expanded && "rotate-180")}
+          className={clsx("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200", expanded && "rotate-180")}
           aria-hidden
         />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-            {t(lang, "posShiftSummaryTitle")}
-          </p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-teal-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-success-muted" aria-hidden />
-              Shift · {duration}
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-foreground">
-              <ShoppingCart className="h-3 w-3 text-teal-700" aria-hidden />
-              {todaySaleCount}
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs font-black text-teal-800">
-              <Wallet className="h-3 w-3" aria-hidden />
-              {fmt(todaySalesUgx)}
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground">
-              <Clock className="h-3 w-3" aria-hidden />
-              {pendingCount}
-            </span>
-          </div>
+        <div className="flex min-w-0 flex-1 items-center gap-x-2.5 overflow-hidden">
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-teal-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-success-muted" aria-hidden />
+            {duration}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-foreground">
+            <ShoppingCart className="h-3 w-3 text-teal-700" aria-hidden />
+            {todaySaleCount}
+          </span>
+          <span className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] font-black text-teal-800">
+            <Wallet className="h-3 w-3 shrink-0" aria-hidden />
+            <span className="truncate">{fmt(todaySalesUgx)}</span>
+          </span>
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-muted-foreground">
+            <Clock className="h-3 w-3" aria-hidden />
+            {pendingCount}
+          </span>
         </div>
       </button>
 

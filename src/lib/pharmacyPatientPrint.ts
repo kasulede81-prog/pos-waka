@@ -3,17 +3,16 @@ import { t } from "./i18n";
 import { computePatientAge, ensurePharmacyPatientProfile, patientDisplayId } from "./pharmacyPatientProfile";
 import { activeChronicMedications } from "./pharmacyChronicMeds";
 
+import { printIsolatedHtmlDocument } from "./isolatedPrint";
+
 function printHtml(title: string, body: string): void {
   const html = `<!DOCTYPE html><html><head><title>${title}</title>
 <style>body{font-family:system-ui;padding:24px;max-width:800px;margin:0 auto}
 h1,h2{margin:0 0 8px}table{width:100%;border-collapse:collapse;margin-top:12px}
 td,th{border:1px solid #ddd;padding:8px;text-align:left;font-size:14px}
 .muted{color:#666;font-size:13px}ul{margin:8px 0;padding-left:20px}</style></head><body>${body}
-<script>window.print();</script></body></html>`;
-  const w = window.open("", "_blank", "width=720,height=900");
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
+</body></html>`;
+  printIsolatedHtmlDocument(html);
 }
 
 export function printPatientSummary(

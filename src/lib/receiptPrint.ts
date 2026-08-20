@@ -7,6 +7,7 @@ import { buildReceiptLineQuantityDisplay, formatReceiptLineCalculation } from ".
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { customerPaidUgxForSaleLine } from "./refundBreakdown";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
+import { printIsolatedHtmlDocument } from "./isolatedPrint";
 import { isNativePrintPlatform } from "./nativeReceiptPrint";
 
 export type ReceiptLabels = {
@@ -560,56 +561,11 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 <body><pre>${safe}</pre></body></html>`;
 }
 
-/** Print via hidden iframe (avoids popup blockers; works with AirPrint / system dialog). */
+/** Print via isolated document (popup or full-size iframe — never the live POS UI). */
 export function printReceiptText(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): boolean {
   if (typeof document === "undefined") return false;
   if (isNativePrintPlatform()) return false;
-
-  const html = receiptHtml(receiptPlain, paper);
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("title", "Waka receipt print");
-  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
-  document.body.appendChild(iframe);
-
-  const win = iframe.contentWindow;
-  const doc = iframe.contentDocument ?? win?.document;
-  if (!win || !doc) {
-    document.body.removeChild(iframe);
-    return false;
-  }
-
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  const cleanup = () => {
-    window.setTimeout(() => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    }, 800);
-  };
-
-  const doPrint = () => {
-    try {
-      win.focus();
-      win.print();
-      cleanup();
-    } catch {
-      cleanup();
-      return false;
-    }
-    return true;
-  };
-
-  if (doc.readyState === "complete") {
-    window.setTimeout(doPrint, 150);
-    return true;
-  }
-
-  iframe.onload = () => {
-    window.setTimeout(doPrint, 150);
-  };
-
-  return true;
+  return printIsolatedHtmlDocument(receiptHtml(receiptPlain, paper));
 }
 
 function toThermalWidth(paper: ReceiptPaperSize): PrinterPaperWidth {

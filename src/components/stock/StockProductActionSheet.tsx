@@ -42,7 +42,8 @@ export function StockProductActionSheet({
       onClose={onClose}
       title={productName}
       cancelLabel={t(lang, "cancel")}
-      clearNav={false}
+      clearNav
+      zIndexClass="z-[var(--waka-z-pos-overlay,80)]"
       actions={actions.map((item) => ({
         id: item.id,
         label: item.label,

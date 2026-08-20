@@ -33,21 +33,28 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("POS Need Help visibility", () => {
-  it("lets a cashier see Help on the POS", () => {
-    expect(canSeePosNeedHelp({ authenticated: true, internalAdminRoute: false })).toBe(true);
-    expect(canSeePosNeedHelp({ authenticated: true })).toBe(true);
+  it("lets a cashier see Help on the POS when Remote Support is enabled", () => {
+    expect(
+      canSeePosNeedHelp({ authenticated: true, internalAdminRoute: false, remoteSupportEnabled: true }),
+    ).toBe(true);
+    expect(canSeePosNeedHelp({ authenticated: true, remoteSupportEnabled: true })).toBe(true);
   });
 
-  it("lets any authenticated POS user open the form", () => {
+  it("lets any authenticated POS user open the form when Remote Support is enabled", () => {
     for (const role of ["cashier", "waiter", "manager", "owner"]) {
-      expect(canSeePosNeedHelp({ authenticated: true }), role).toBe(true);
+      expect(canSeePosNeedHelp({ authenticated: true, remoteSupportEnabled: true }), role).toBe(true);
     }
   });
 
   it("hides Help when signed out, on internal admin, or when the POS is locked", () => {
-    expect(canSeePosNeedHelp({ authenticated: false })).toBe(false);
-    expect(canSeePosNeedHelp({ authenticated: true, internalAdminRoute: true })).toBe(false);
-    expect(canSeePosNeedHelp({ authenticated: true, posLocked: true })).toBe(false);
+    expect(canSeePosNeedHelp({ authenticated: false, remoteSupportEnabled: true })).toBe(false);
+    expect(canSeePosNeedHelp({ authenticated: true, internalAdminRoute: true, remoteSupportEnabled: true })).toBe(false);
+    expect(canSeePosNeedHelp({ authenticated: true, posLocked: true, remoteSupportEnabled: true })).toBe(false);
+  });
+
+  it("hides Help when the Remote Support master switch is off or unknown", () => {
+    expect(canSeePosNeedHelp({ authenticated: true })).toBe(false);
+    expect(canSeePosNeedHelp({ authenticated: true, remoteSupportEnabled: false })).toBe(false);
   });
 });
 

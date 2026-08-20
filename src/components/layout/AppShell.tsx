@@ -2,7 +2,7 @@ import { actorHasPermission } from "../../lib/actorAuthorization";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, CircleHelp } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
@@ -75,6 +75,8 @@ import {
 import { PwaUpdateBanner } from "../app-update/AppUpdateControls";
 import { RemoteSupportHost } from "../remote-support/RemoteSupportHost";
 import { PosNeedHelpHost } from "../support/PosNeedHelpHost";
+import { canSeePosNeedHelp, openPosNeedHelpForm } from "../../lib/posSupportRequest";
+import { useRemoteSupportPlatformEnabled } from "../../hooks/useRemoteSupportPlatformEnabled";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -127,6 +129,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const shifts = usePosStore((s) => s.preferences.shifts);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { enabled: remoteSupportEnabled } = useRemoteSupportPlatformEnabled();
   useAndroidBackHandler("app-menu-drawer", ANDROID_BACK_PRIORITY.menuDrawer, menuOpen, () => setMenuOpen(false));
   const [lockSetupHint, setLockSetupHint] = useState<string | null>(null);
   const [staffSwitchShiftOpen, setStaffSwitchShiftOpen] = useState(false);
@@ -273,6 +276,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const isLauncherHome = location.pathname === "/";
   const desktopTerminalHome = isDesktopLayout && isLauncherHome;
   const onSellScreen = isPosSellPath(location.pathname);
+  const phoneChrome = !isDesktopLayout;
+  const sellMobileChrome = onSellScreen && phoneChrome;
+  /** Home keeps the full toolbar; every other phone screen folds extras into one menu. */
+  const headerToolsCollapsed = phoneChrome && !isLauncherHome;
   const fullDesktopSell = onSellScreen && posLayoutMode === "full";
   const independentModule = isIndependentModuleRoute(location.pathname);
   /** lg+ terminal layout: full-width chrome outside the classic back-office column. */
@@ -317,6 +324,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const showMobileModuleExit =
     bottomChrome.mode === "module-exit" && bottomChrome.showMobileBar && !internalAdminRoute;
   const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout) && !onTerminalHome;
+  const showPosHelp = canSeePosNeedHelp({
+    authenticated: Boolean(user) || authMode === "local",
+    internalAdminRoute,
+    posLocked: Boolean(preferences.posLocked),
+    remoteSupportEnabled,
+  });
 
   return (
     <SessionHydrationProvider roleReady={roleReady}>
@@ -360,31 +373,36 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <header
           className={clsx(
             "relative z-20 shrink-0 overflow-visible border-b shadow-sm backdrop-blur",
+            phoneChrome && "app-shell-mobile-header",
             isLauncherHome
               ? "border-waka-700/30 bg-waka-600/95 text-white supports-[backdrop-filter]:bg-waka-600/90"
-              : onSellScreen && !isDesktopLayout
+              : sellMobileChrome
                 ? "border-border/80 bg-gradient-to-b from-waka-50/90 via-card to-card supports-[backdrop-filter]:from-waka-50/80"
                 : "border-border/90 bg-card/95 supports-[backdrop-filter]:bg-card/90",
           )}
         >
           <div
             className={clsx(
-              "mx-auto flex flex-wrap items-center justify-between gap-2 sm:px-4",
-              onSellScreen && !isDesktopLayout
-                ? "max-w-none px-2 pb-1 pt-[max(0.25rem,env(safe-area-inset-top,0px))]"
-                : "px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
+              "app-shell-header-bar mx-auto flex items-center justify-between",
+              phoneChrome
+                ? "max-w-none flex-nowrap gap-1 px-2 pb-0.5 pt-0.5"
+                : "flex-wrap gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
               desktopTerminalMode || desktopTerminalHome || independentModule || isLauncherHome ? "max-w-none lg:px-8 xl:px-10" : !onSellScreen || isDesktopLayout ? "max-w-6xl" : "",
             )}
           >
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+            <div className={clsx("flex min-w-0 flex-1 items-center", phoneChrome ? "gap-1" : "gap-1.5 sm:gap-2")}>
               {showHeaderExitButton ? (
-                <HeaderExitButton lang={lang} variant={onSellScreen && !isDesktopLayout ? "sellOrange" : "default"} />
+                <HeaderExitButton
+                  lang={lang}
+                  variant={sellMobileChrome ? "sellOrange" : "default"}
+                  className={phoneChrome ? "!min-h-8 gap-1 px-2.5 py-1" : undefined}
+                />
               ) : null}
               {showHeaderExit ? <HeaderBackButton lang={lang} /> : null}
-              {onSellScreen && !isDesktopLayout ? null : <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />}
+              {sellMobileChrome ? null : <WakaSymbolIcon size="xs" className={clsx("shrink-0", phoneChrome ? "h-7 w-7" : "h-8 w-8")} />}
               <div className="min-w-0">
-                {onSellScreen && !isDesktopLayout ? (
-                  <h1 className="truncate text-base font-black tracking-tight text-foreground sm:text-lg">
+                {sellMobileChrome ? (
+                  <h1 className="truncate text-sm font-black tracking-tight text-foreground">
                     {t(lang, sellNavLabelKey)}
                   </h1>
                 ) : (
@@ -392,9 +410,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 )}
               </div>
             </div>
-            <div className="flex shrink-0 items-center justify-end gap-1.5">
-              {onSellScreen ? (
-                <DisplayScaleControl lang={lang} inverted={isLauncherHome} compact={!isDesktopLayout} />
+            <div className={clsx("flex shrink-0 items-center justify-end", phoneChrome ? "gap-1" : "gap-1.5")}>
+              {!headerToolsCollapsed && onSellScreen ? (
+                <DisplayScaleControl lang={lang} inverted={isLauncherHome} compact={phoneChrome} />
               ) : null}
               <PosNeedHelpHost
                 lang={lang}
@@ -403,18 +421,28 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 authenticated={Boolean(user) || authMode === "local"}
                 internalAdminRoute={internalAdminRoute}
                 posLocked={Boolean(preferences.posLocked)}
-                placement="inline"
+                placement={headerToolsCollapsed ? "event-only" : "inline"}
                 inverted={isLauncherHome}
+                iconOnly={false}
               />
-              <AppThemeToggle lang={lang} inverted={isLauncherHome} />
-              <div ref={userMenuRef} className="relative">
+              {headerToolsCollapsed ? null : (
+                <AppThemeToggle
+                  lang={lang}
+                  inverted={isLauncherHome}
+                  className={phoneChrome ? "!h-8 !w-8" : undefined}
+                />
+              )}
+              <div ref={userMenuRef} className="relative min-w-0">
                 <button
                   type="button"
                   aria-expanded={menuOpen}
                   aria-haspopup="menu"
                   onClick={() => setMenuOpen((v) => !v)}
                   className={clsx(
-                    "flex min-h-[38px] max-w-[12rem] touch-manipulation items-center gap-1.5 truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm sm:max-w-[14rem]",
+                    "flex touch-manipulation items-center truncate rounded-xl border font-bold shadow-sm",
+                    phoneChrome
+                      ? "min-h-8 max-w-[7.5rem] gap-0.5 px-2 py-1 text-[11px]"
+                      : "min-h-[38px] max-w-[12rem] gap-1.5 px-3 py-1.5 text-xs sm:max-w-[14rem]",
                     isLauncherHome
                       ? "border-waka-400/50 bg-waka-700/50 text-white active:bg-waka-700"
                       : "border-border bg-card text-foreground active:bg-muted",
@@ -433,8 +461,49 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 {menuOpen ? (
                   <div
                     role="menu"
-                    className="absolute right-0 top-[calc(100%+0.35rem)] z-50 w-52 origin-top-right rounded-xl border border-border bg-card py-1 shadow-lg ring-1 ring-foreground/5"
+                    className={clsx(
+                      "absolute right-0 top-[calc(100%+0.35rem)] z-50 origin-top-right rounded-xl border border-border bg-card py-1 shadow-lg ring-1 ring-foreground/5",
+                      headerToolsCollapsed ? "w-64" : "w-52",
+                    )}
                   >
+                    {headerToolsCollapsed && onSellScreen ? (
+                      <div className="px-2 pb-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                        <p className="mb-1 px-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                          {t(lang, "displayScaleControlLabel")}
+                        </p>
+                        <DisplayScaleControl lang={lang} compact={false} />
+                      </div>
+                    ) : null}
+                    {headerToolsCollapsed && showPosHelp ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          openPosNeedHelpForm();
+                        }}
+                      >
+                        <CircleHelp className="h-4 w-4 shrink-0" aria-hidden />
+                        {t(lang, "posHelpButton")}
+                      </button>
+                    ) : null}
+                    {headerToolsCollapsed ? (
+                      <>
+                        <div className="px-2 py-1">
+                          <AppThemeToggle lang={lang} variant="inline" className="w-full justify-start shadow-none" />
+                        </div>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
+                          onClick={() => setLang(nextLanguage(lang))}
+                        >
+                          {languageToggleLabel(lang)}
+                        </button>
+                        <div className="my-1 border-t border-border" />
+                      </>
+                    ) : null}
                     <button
                       type="button"
                       role="menuitem"
@@ -521,11 +590,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   </div>
                 ) : null}
               </div>
+              {headerToolsCollapsed ? null : (
               <button
                 type="button"
                 onClick={() => setLang(nextLanguage(lang))}
                 className={clsx(
-                  "min-h-[38px] max-w-[7.5rem] truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm",
+                  "truncate rounded-xl border font-bold shadow-sm",
+                  phoneChrome
+                    ? "min-h-8 max-w-[6.5rem] px-2 py-1 text-[11px]"
+                    : "min-h-[38px] max-w-[7.5rem] px-3 py-1.5 text-xs",
                   isLauncherHome
                     ? "border-waka-400/50 bg-waka-700/50 text-white active:bg-waka-700"
                     : "border-border bg-card text-foreground active:bg-muted",
@@ -534,6 +607,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               >
                 {languageToggleLabel(lang)}
               </button>
+              )}
             </div>
           </div>
         </header>

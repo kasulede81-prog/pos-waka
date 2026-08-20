@@ -6,7 +6,7 @@ import {
   printReceiptWithFallback,
   type ReceiptLabels,
 } from "./receiptPrint";
-import { printHtmlDocumentWithDesktop } from "./documentPrint";
+import { printHtmlDocument } from "./documentPrint";
 import { isNativePrintPlatform } from "./nativePrintPlatform";
 import { sharePlainReceiptForPrint } from "./nativeReceiptPrint";
 import { dateKeyKampala } from "./datesUg";
@@ -138,27 +138,24 @@ export function receiptPdfFilename(kind: "sale" | "return" | "debt", id: string)
 
 export async function printSaleReceipt(ctx: SaleReceiptContext): Promise<{ ok: boolean }> {
   const paper = ctx.paper ?? "80mm";
-  const plain = saleReceiptPlain(ctx);
   const html = saleReceiptHtml(ctx);
 
-  if (isNativePrintPlatform()) {
-    const result = await printReceiptWithFallback(plain, paper);
-    if (result.ok) return { ok: true };
-
-    const shared = await sharePlainReceiptForPrint(plain, paper, `receipt-${ctx.sale.id.slice(0, 8)}`);
-    if (shared) return { ok: true };
-
-    const { shareSaleReceiptPdf } = await import("./receiptPdfDocuments");
-    return { ok: await shareSaleReceiptPdf(ctx) };
+  if (!isNativePrintPlatform()) {
+    if (printHtmlDocument(html, paper, "Waka receipt")) return { ok: true };
+    const plain = saleReceiptPlain(ctx);
+    if (printReceiptText(plain, paper)) return { ok: true };
+    return { ok: false };
   }
 
-  const htmlOk = await printHtmlDocumentWithDesktop(html, paper, "Waka receipt");
-  if (htmlOk) return { ok: true };
-
+  const plain = saleReceiptPlain(ctx);
   const result = await printReceiptWithFallback(plain, paper);
   if (result.ok) return { ok: true };
 
-  return { ok: false };
+  const shared = await sharePlainReceiptForPrint(plain, paper, `receipt-${ctx.sale.id.slice(0, 8)}`);
+  if (shared) return { ok: true };
+
+  const { shareSaleReceiptPdf } = await import("./receiptPdfDocuments");
+  return { ok: await shareSaleReceiptPdf(ctx) };
 }
 
 export async function downloadSaleReceiptPdf(ctx: SaleReceiptContext): Promise<boolean> {
@@ -173,13 +170,11 @@ export async function shareSaleReceiptPdf(ctx: SaleReceiptContext): Promise<bool
 
 export async function printReturnReceipt(ctx: ReturnReceiptContext): Promise<{ ok: boolean }> {
   const paper = ctx.paper ?? "80mm";
-  if (isNativePrintPlatform()) {
-    const { shareReturnReceiptPdf } = await import("./receiptPdfDocuments");
-    return { ok: await shareReturnReceiptPdf(ctx) };
+  if (!isNativePrintPlatform()) {
+    return { ok: printHtmlDocument(returnReceiptHtml(ctx), paper, "Return receipt") };
   }
-  const htmlOk = await printHtmlDocumentWithDesktop(returnReceiptHtml(ctx), paper, "Return receipt");
-  if (htmlOk) return { ok: true };
-  return { ok: false };
+  const { shareReturnReceiptPdf } = await import("./receiptPdfDocuments");
+  return { ok: await shareReturnReceiptPdf(ctx) };
 }
 
 export async function downloadReturnReceiptPdf(ctx: ReturnReceiptContext): Promise<boolean> {
@@ -194,13 +189,11 @@ export async function shareReturnReceiptPdf(ctx: ReturnReceiptContext): Promise<
 
 export async function printDebtPaymentReceipt(ctx: DebtPaymentReceiptContext): Promise<{ ok: boolean }> {
   const paper = ctx.paper ?? "80mm";
-  if (isNativePrintPlatform()) {
-    const { shareDebtPaymentReceiptPdf } = await import("./receiptPdfDocuments");
-    return { ok: await shareDebtPaymentReceiptPdf(ctx) };
+  if (!isNativePrintPlatform()) {
+    return { ok: printHtmlDocument(debtReceiptHtml(ctx), paper, "Debt payment receipt") };
   }
-  const htmlOk = await printHtmlDocumentWithDesktop(debtReceiptHtml(ctx), paper, "Debt payment receipt");
-  if (htmlOk) return { ok: true };
-  return { ok: false };
+  const { shareDebtPaymentReceiptPdf } = await import("./receiptPdfDocuments");
+  return { ok: await shareDebtPaymentReceiptPdf(ctx) };
 }
 
 export async function downloadDebtPaymentReceiptPdf(ctx: DebtPaymentReceiptContext): Promise<boolean> {

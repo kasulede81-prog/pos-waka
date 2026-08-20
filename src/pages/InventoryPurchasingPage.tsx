@@ -16,10 +16,10 @@ import { InventoryWorkspaceOverview } from "../components/inventory/workspace/In
 import { PurchasesTab } from "../features/inventory-purchasing/components/PurchasesTab";
 import { SuppliersTab } from "../features/inventory-purchasing/components/SuppliersTab";
 import { PaymentsTab } from "../features/inventory-purchasing/components/PaymentsTab";
-import { PurchaseDetailSheet } from "../features/inventory-purchasing/components/PurchaseDetailSheet";
-import { SupplierDetailSheet } from "../features/inventory-purchasing/components/SupplierDetailSheet";
 import { useInventoryPurchasingTab } from "../features/inventory-purchasing/hooks/useInventoryPurchasingTab";
 import type { InventoryPurchasingTab } from "../features/inventory-purchasing/types";
+import { PurchaseDetailPage } from "./PurchaseDetailPage";
+import { SupplierDetailPage } from "./SupplierDetailPage";
 import { RestockPage } from "./RestockPage";
 
 export function InventoryPurchasingPage({ lang }: { lang: Language }) {
@@ -94,8 +94,9 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
       ) : null}
 
       {tab === "purchases" && (canPurchasesView || canPurchasesRecord) ? (
-        openNewPurchase && canPurchasesRecord ? (
-          /* Phase 31.1 — single receive workflow surface (no ModalSheet → page nesting) */
+        purchaseId && canPurchasesView ? (
+          <PurchaseDetailPage lang={lang} purchaseId={purchaseId} embedded onClose={() => setPurchaseId(null)} />
+        ) : openNewPurchase && canPurchasesRecord ? (
           <RestockPage lang={lang} embedded onSaved={() => setOpenNewPurchase(false)} />
         ) : (
           <PurchasesTab lang={lang} onOpenPurchase={setPurchaseId} onNewPurchase={() => setOpenNewPurchase(true)} />
@@ -103,7 +104,21 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
       ) : null}
 
       {tab === "suppliers" && canSuppliers ? (
-        <SuppliersTab lang={lang} onOpenSupplier={setSupplierId} />
+        supplierId ? (
+          <SupplierDetailPage
+            lang={lang}
+            supplierId={supplierId}
+            embedded
+            onClose={() => setSupplierId(null)}
+            onOpenPurchase={(id) => {
+              setSupplierId(null);
+              setPurchaseId(id);
+              setTab("purchases");
+            }}
+          />
+        ) : (
+          <SuppliersTab lang={lang} onOpenSupplier={setSupplierId} />
+        )
       ) : null}
 
       {tab === "products" && canStock ? <StockPage lang={lang} workspaceEmbed /> : null}
@@ -112,24 +127,7 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
         <PaymentsTab
           lang={lang}
           onRecordPayment={() => setTab("suppliers")}
-          onOpenSupplier={setSupplierId}
-        />
-      ) : null}
-
-      {canPurchasesView ? (
-        <PurchaseDetailSheet lang={lang} purchaseId={purchaseId} onClose={() => setPurchaseId(null)} />
-      ) : null}
-
-      {canSuppliers ? (
-        <SupplierDetailSheet
-          lang={lang}
-          supplierId={supplierId}
-          onClose={() => setSupplierId(null)}
-          onOpenPurchase={(id) => {
-            setSupplierId(null);
-            setPurchaseId(id);
-            setTab("purchases");
-          }}
+          onOpenSupplier={(id) => setTab("suppliers", { supplierId: id })}
         />
       ) : null}
     </EnterprisePageContainer>

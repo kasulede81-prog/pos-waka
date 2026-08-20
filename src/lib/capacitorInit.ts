@@ -8,6 +8,8 @@ import { registerNativeAuthDeepLinkHandler } from "./nativeAuthDeepLink";
  */
 export async function initCapacitorShell(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
+  document.documentElement.classList.add("waka-native");
+  document.documentElement.classList.add(`waka-${Capacitor.getPlatform()}`);
   registerNativeAuthDeepLinkHandler();
   await prepareNativeSplash();
   scheduleSplashMaxDuration();

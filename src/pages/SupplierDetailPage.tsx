@@ -30,6 +30,7 @@ import { isWalkInSupplierId } from "../lib/walkInSupplier";
 import { dateMatchesFilter, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 import { useShopAction } from "../hooks/useShopAction";
 import { ModalSheet } from "../components/layout/ModalSheet";
+import { MobileScrollTail } from "../components/layout/MobileScrollTail";
 
 export function SupplierDetailPage({
   lang,
@@ -450,11 +451,16 @@ export function SupplierDetailPage({
   );
 
   if (embedded) {
-    return <div className="space-y-5 pb-16">{content}</div>;
+    return (
+      <div className="space-y-5">
+        {content}
+        <MobileScrollTail />
+      </div>
+    );
   }
 
   return (
-    <EnterprisePageContainer className="space-y-5 pb-16">
+    <EnterprisePageContainer className="space-y-5">
       {content}
     </EnterprisePageContainer>
   );

@@ -1,12 +1,14 @@
 import type { ReceiptPaperSize } from "../types";
 import { saveExportedFile } from "./fileDownload";
+import { printIsolatedHtmlDocument, printIsolatedPdfBlob } from "./isolatedPrint";
 import { isNativePrintPlatform } from "./nativeReceiptPrint";
 import { paperCss } from "./receiptPrint";
 
 function wrapPrintHtml(bodyHtml: string, paper: ReceiptPaperSize, title: string): string {
   const css = paperCss(paper);
+  const safeTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return `<!doctype html>
-<html><head><meta charset="utf-8"/><title>${title}</title>
+<html><head><meta charset="utf-8"/><title>${safeTitle}</title>
 <style>
 ${css}
 body { font-family: Inter, system-ui, sans-serif; padding: 8px; color: #111; margin: 0; }
@@ -17,53 +19,8 @@ body { font-family: Inter, system-ui, sans-serif; padding: 8px; color: #111; mar
 
 export function printHtmlDocument(bodyHtml: string, paper: ReceiptPaperSize = "80mm", title = "Waka document"): boolean {
   if (typeof document === "undefined") return false;
-  /** Android/iOS WebView: iframe window.print() is a no-op — use share PDF fallback instead. */
   if (isNativePrintPlatform()) return false;
-
-  const html = wrapPrintHtml(bodyHtml, paper, title);
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("title", title);
-  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
-  document.body.appendChild(iframe);
-
-  const win = iframe.contentWindow;
-  const doc = iframe.contentDocument ?? win?.document;
-  if (!win || !doc) {
-    iframe.remove();
-    return false;
-  }
-
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  const cleanup = () => {
-    window.setTimeout(() => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    }, 800);
-  };
-
-  const doPrint = () => {
-    try {
-      win.focus();
-      win.print();
-      cleanup();
-      return true;
-    } catch {
-      cleanup();
-      return false;
-    }
-  };
-
-  if (doc.readyState === "complete") {
-    window.setTimeout(doPrint, 150);
-    return true;
-  }
-
-  iframe.onload = () => {
-    window.setTimeout(doPrint, 150);
-  };
-  return true;
+  return printIsolatedHtmlDocument(wrapPrintHtml(bodyHtml, paper, title));
 }
 
 export async function printHtmlDocumentWithDesktop(
@@ -78,42 +35,7 @@ export async function printHtmlDocumentWithDesktop(
 export function printPdfBlobWithDesktop(blob: Blob, title = "Waka report"): boolean {
   if (typeof document === "undefined") return false;
   if (isNativePrintPlatform()) return false;
-
-  const url = URL.createObjectURL(blob);
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("title", title);
-  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
-  document.body.appendChild(iframe);
-  iframe.src = url;
-
-  const cleanup = () => {
-    window.setTimeout(() => {
-      URL.revokeObjectURL(url);
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    }, 1200);
-  };
-
-  const doPrint = () => {
-    const win = iframe.contentWindow;
-    if (!win) {
-      cleanup();
-      return false;
-    }
-    try {
-      win.focus();
-      win.print();
-      cleanup();
-      return true;
-    } catch {
-      cleanup();
-      return false;
-    }
-  };
-
-  iframe.onload = () => {
-    window.setTimeout(doPrint, 200);
-  };
-  return true;
+  return printIsolatedPdfBlob(blob);
 }
 
 /** Electron: print focused window via main process (diagnostics / optional). */

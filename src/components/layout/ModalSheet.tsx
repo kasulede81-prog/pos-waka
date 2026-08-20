@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { createPortal } from "react-dom";
 import type { CSSProperties, FocusEvent, MouseEvent, ReactNode } from "react";
 import { useVisualViewportBounds } from "../../hooks/useVisualViewportBounds";
 import { AppModalOverlay } from "./AppModalOverlay";
@@ -30,7 +31,7 @@ const DEFAULT_MAX_H = "max-h-[min(92dvh,720px)]";
 
 /**
  * Universal modal/sheet — scrollable body, sticky footer, safe-area + keyboard insets.
- * Overlay tracks the visual viewport so the sheet stays above the on-screen keyboard.
+ * Always portaled to document.body so overflow ancestors cannot clip the menu.
  */
 export function ModalSheet({
   open,
@@ -39,7 +40,7 @@ export function ModalSheet({
   footer,
   title,
   align = "bottom",
-  zIndexClass = "z-[var(--waka-z-modal,60)]",
+  zIndexClass = "z-[var(--waka-z-pos-overlay,80)]",
   clearNav = true,
   maxHeightClass = DEFAULT_MAX_H,
   panelClassName,
@@ -53,14 +54,17 @@ export function ModalSheet({
 
   if (!open) return null;
 
-  const overlayStyle: CSSProperties = {
-    top: viewport.offsetTop,
-    left: viewport.offsetLeft,
-    width: viewport.width,
-    height: viewport.height,
-    right: "auto",
-    bottom: "auto",
-  };
+  const keyboardOpen = viewport.keyboardGap >= 80;
+  const overlayStyle: CSSProperties | undefined = keyboardOpen
+    ? {
+        top: viewport.offsetTop,
+        left: viewport.offsetLeft,
+        width: viewport.width,
+        height: viewport.height,
+        right: "auto",
+        bottom: "auto",
+      }
+    : undefined;
 
   const panelMaxHeightPx = Math.min(Math.round(viewport.height * 0.92), 720);
   const panelStyle: CSSProperties = { maxHeight: panelMaxHeightPx };
@@ -78,7 +82,7 @@ export function ModalSheet({
     });
   };
 
-  return (
+  const overlay = (
     <AppModalOverlay
       clearNav={clearNav}
       role={role}
@@ -133,4 +137,7 @@ export function ModalSheet({
       </div>
     </AppModalOverlay>
   );
+
+  if (typeof document === "undefined") return overlay;
+  return createPortal(overlay, document.body);
 }

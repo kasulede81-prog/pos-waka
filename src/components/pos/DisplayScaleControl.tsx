@@ -48,10 +48,10 @@ export function DisplayScaleControl({
 
   if (!featureEnabled || variant !== "header") return null;
 
+  const modeLabel = t(lang, cashierDensityLabelKey(level));
   const btnClass = clsx(
     "pos-ds-density-btn flex items-center justify-center rounded-xl transition disabled:opacity-40",
-    "min-h-[48px] min-w-[48px]",
-    compact && "max-md:min-h-[44px] max-md:min-w-[44px]",
+    compact ? "h-8 w-8 min-h-8 min-w-8" : "min-h-[48px] min-w-[48px]",
     inverted ? "text-white active:bg-white/15" : "text-muted-foreground active:bg-muted",
   );
 
@@ -59,7 +59,8 @@ export function DisplayScaleControl({
     <>
       <div
         className={clsx(
-          "pos-ds-density-control flex shrink-0 items-center gap-0.5 rounded-xl border p-0.5",
+          "pos-ds-density-control flex shrink-0 items-center rounded-xl border",
+          compact ? "gap-0 p-0" : "gap-0.5 p-0.5",
           inverted ? "border-white/25 bg-white/10" : "border-border/90 bg-card shadow-sm",
         )}
         role="group"
@@ -72,22 +73,24 @@ export function DisplayScaleControl({
           className={btnClass}
           aria-label={t(lang, "displayScaleDecrease")}
         >
-          <Minus className="pos-ds-icon-sm h-4 w-4" aria-hidden />
+          <Minus className={clsx("pos-ds-icon-sm", compact ? "h-3.5 w-3.5" : "h-4 w-4")} aria-hidden />
         </button>
         <button
           type="button"
           onClick={onModeTap}
           className={clsx(
-            "pos-ds-density-label rounded-xl px-2 text-center font-black",
-            "min-h-[48px] min-w-[5.5rem] text-xs",
-            compact && "max-md:min-h-[44px] max-md:min-w-[4.75rem] max-md:text-[11px]",
+            "pos-ds-density-label rounded-xl text-center font-black",
+            compact
+              ? "h-8 min-h-8 min-w-[2.25rem] px-1 text-[10px] leading-none"
+              : "min-h-[48px] min-w-[5.5rem] px-2 text-xs",
             inverted ? "text-white active:bg-white/10" : "text-foreground active:bg-muted",
           )}
           title={t(lang, "displayScaleDoubleTapHint")}
+          aria-label={modeLabel}
           aria-haspopup="dialog"
           aria-expanded={sheetOpen}
         >
-          {t(lang, cashierDensityLabelKey(level))}
+          {compact ? "Aa" : modeLabel}
         </button>
         <button
           type="button"
@@ -96,7 +99,7 @@ export function DisplayScaleControl({
           className={btnClass}
           aria-label={t(lang, "displayScaleIncrease")}
         >
-          <Plus className="pos-ds-icon-sm h-4 w-4" aria-hidden />
+          <Plus className={clsx("pos-ds-icon-sm", compact ? "h-3.5 w-3.5" : "h-4 w-4")} aria-hidden />
         </button>
       </div>
 

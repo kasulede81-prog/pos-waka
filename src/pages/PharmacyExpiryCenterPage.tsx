@@ -18,6 +18,7 @@ import { AdjustmentMovementPreview } from "../components/inventory/adjustments/A
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { Pill } from "lucide-react";
+import { printHtmlDocument } from "../lib/documentPrint";
 
 const BUCKETS = ["expired", "today", "d7", "d30", "d60", "d90"] as const;
 
@@ -171,7 +172,19 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => {
+              const items = rows
+                .map(
+                  (row) =>
+                    `<li>${row.productName} · ${row.batchNumber} · ${row.expiryDate} · ${row.quantity} · ${formatUgx(row.valueUgx)}</li>`,
+                )
+                .join("");
+              printHtmlDocument(
+                `<article><h1>${t(lang, "pharmacyExpiryCenterTitle")}</h1><h2>${t(lang, BUCKET_LABEL[activeBucket])}</h2><ul>${items || `<li>${t(lang, "pharmacyExpiryEmpty")}</li>`}</ul></article>`,
+                "a4",
+                t(lang, "pharmacyExpiryCenterTitle"),
+              );
+            }}
             className="inline-flex min-h-[48px] items-center rounded-2xl border border-border bg-card px-4 text-sm font-black text-foreground touch-manipulation"
           >
             {t(lang, "pharmacyExpiryPrint")}
