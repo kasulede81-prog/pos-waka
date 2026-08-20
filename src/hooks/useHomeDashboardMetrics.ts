@@ -4,6 +4,7 @@ import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
 import { useDrawerCashForDay } from "./useDrawerCashForDay";
 import { useKampalaCalendarTick } from "./useKampalaCalendarTick";
+import { useShopHomeKpiOverlay } from "./useShopHomeKpiOverlay";
 import {
   filterReturnsForHomeScope,
   filterSalesForHomeScope,
@@ -11,6 +12,7 @@ import {
   type HomeMetricScope,
 } from "../lib/homeVisibility";
 import { localGetDailySalesSummary, localGetMonthlySalesSummary } from "../lib/localReporting";
+import { mergeHomeKpisWithShopOverlay } from "../lib/homeShopKpiOverlay";
 import { authoritativeCloseForDate, readClosedDayTotals } from "../lib/closedDayAuthority";
 import { formatShortUgx } from "../lib/commandCenterPageView";
 import { resolveStableTodayKpi } from "../lib/todayKpiSnapshot";
@@ -70,6 +72,11 @@ export function useHomeDashboardMetrics(
   const { todayKey, monthKey, monthLabel } = useKampalaCalendarTick(lang);
   const drawer = useDrawerCashForDay(todayKey);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const shopOverlay = useShopHomeKpiOverlay({
+    enabled: authMode === "supabase" && homeMetrics.scope === "shop_wide",
+    todayKey,
+    monthKey,
+  });
 
   const scope: HomeMetricScope = homeMetrics.scope;
   const scopedSales = useMemo(
@@ -100,8 +107,28 @@ export function useHomeDashboardMetrics(
         );
     const today = { ...computedToday, ...stableToday };
     const frozenDrawer = todayClose ? readClosedDayTotals(todayClose) : null;
-    const drawerCashUgx = frozenDrawer?.expectedCashUgx ?? drawer.expectedDrawerCashUgx;
+    const localDrawerCashUgx = frozenDrawer?.expectedCashUgx ?? drawer.expectedDrawerCashUgx;
     const month = localGetMonthlySalesSummary(scopedSales, products, scopedReturns, monthKey, cashExpenses);
+    const merged = mergeHomeKpisWithShopOverlay(
+      {
+        todayTransactionCount: today.transactionCount,
+        todayRevenueUgx: today.totalRevenueUgx,
+        todayExpectedCashUgx: localDrawerCashUgx,
+        monthRevenueUgx: month.totalRevenueUgx,
+        monthProfitUgx: month.estimatedProfitUgx,
+        previousMonthRevenueUgx: month.previousMonthRevenueUgx,
+        revenueGrowthPct: month.revenueGrowthPct,
+      },
+      shopOverlay,
+      { todayKey, monthKey, freezeToday: Boolean(todayClose) },
+    );
+    today.transactionCount = merged.todayTransactionCount;
+    today.totalRevenueUgx = merged.todayRevenueUgx;
+    const drawerCashUgx = merged.todayExpectedCashUgx;
+    month.totalRevenueUgx = merged.monthRevenueUgx;
+    month.estimatedProfitUgx = merged.monthProfitUgx;
+    month.previousMonthRevenueUgx = merged.previousMonthRevenueUgx;
+    month.revenueGrowthPct = merged.revenueGrowthPct;
     const totalDebtUgx = customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0);
     const canCash = permissionsHasEffective(role, "day.close", snapshot, authMode, actorPermissions);
     const canDebt = homeMetrics.showShopWideDebt;
@@ -114,7 +141,7 @@ export function useHomeDashboardMetrics(
     if (showTodayRevenue) {
       byTile.sell = {
         label: t(lang, "desktopHomeLiveTodaySales"),
-        value: t(lang, "desktopHomeLiveTxnCount").replace("{count}", String(today.transactionCount)),
+        value: tTemplate(lang, "desktopHomeLiveTxnCount", { count: today.transactionCount }),
         intensity: today.transactionCount >= 40 ? "high" : today.transactionCount >= 10 ? "normal" : "calm",
       };
     }
@@ -134,7 +161,7 @@ export function useHomeDashboardMetrics(
     if (homeMetrics.showInventoryMetrics) {
       byTile.inventory = {
         label: t(lang, "desktopHomeLiveLowStock"),
-        value: t(lang, "desktopHomeLiveItemsCount").replace("{count}", String(lowStockCount)),
+        value: tTemplate(lang, "desktopHomeLiveItemsCount", { count: lowStockCount }),
         intensity: lowStockCount >= 5 ? "alert" : lowStockCount > 0 ? "normal" : "calm",
       };
     }
@@ -163,7 +190,7 @@ export function useHomeDashboardMetrics(
     if (homeMetrics.showRecentSalesList) {
       byTile.salesHistory = {
         label: t(lang, "desktopHomeLiveTodaySales"),
-        value: t(lang, "desktopHomeLiveTxnCount").replace("{count}", String(today.transactionCount)),
+        value: tTemplate(lang, "desktopHomeLiveTxnCount", { count: today.transactionCount }),
         intensity: today.transactionCount >= 20 ? "high" : "normal",
       };
     }
@@ -229,5 +256,6 @@ export function useHomeDashboardMetrics(
     todayKpiSnapshot,
     salesHydrating,
     pharmacyMode,
+    shopOverlay,
   ]);
 }

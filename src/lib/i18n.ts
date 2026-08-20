@@ -13593,11 +13593,13 @@ const dictionaries: Record<Language, Dict> = { en, lg, sw };
 export const t = (lang: Language, key: string) =>
   dictionaries[lang][key] ?? dictionaries.en[key] ?? key;
 
-/** Replace `{name}`-style placeholders in a dictionary string. */
+/** Replace `{{name}}` then `{name}` placeholders in a dictionary string. */
 export function tTemplate(lang: Language, key: string, vars: Record<string, string | number>): string {
   let out = dictionaries[lang][key] ?? dictionaries.en[key] ?? key;
   for (const [k, v] of Object.entries(vars)) {
-    out = out.split(`{${k}}`).join(String(v));
+    const value = String(v);
+    out = out.split(`{{${k}}}`).join(value);
+    out = out.split(`{${k}}`).join(value);
   }
   return out;
 }
