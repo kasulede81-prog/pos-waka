@@ -1,6 +1,6 @@
 import { memo, useEffect, useState, type ReactNode, type RefObject } from "react";
 import clsx from "clsx";
-import { Check } from "lucide-react";
+import { Check, Keyboard } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DraftCartStats, DraftCheckoutTotals } from "../../lib/draftCart";
@@ -261,6 +261,8 @@ type PaymentBlockProps = {
   hideCreditDockPanel?: boolean;
   /** Desktop sidebar with external catalog dock — tighter payment strip. */
   sidebarCompact?: boolean;
+  /** Open the on-screen keypad to type cash received (cash / pay-later). */
+  onOpenAmountKeypad?: () => void;
 };
 
 function PaymentBlock({
@@ -292,6 +294,7 @@ function PaymentBlock({
   onSaleCustomerPhone,
   hideCreditDockPanel = false,
   sidebarCompact = false,
+  onOpenAmountKeypad,
 }: PaymentBlockProps) {
   const amountBtnClass = enterprise
     ? "mt-1 flex min-h-[40px] w-full items-center justify-end rounded-lg border-2 px-3 py-1.5 text-lg font-black"
@@ -386,7 +389,10 @@ function PaymentBlock({
           </p>
           <button
             type="button"
-            onClick={() => onCheckoutInputField("cash")}
+            onClick={() => {
+              onCheckoutInputField("cash");
+              onOpenAmountKeypad?.();
+            }}
             className={clsx(
               amountBtnClass,
               sidebarCompact && "mt-1 min-h-[36px] rounded-lg px-2 py-1 text-base",
@@ -1049,6 +1055,9 @@ export function PosCheckoutPanel({
     onSaleCustomerId,
     onSaleCustomerName,
     onSaleCustomerPhone,
+    onOpenAmountKeypad: () => {
+      if (needsAmountKeypad) setSidebarNumpadOpen(true);
+    },
   };
 
   return (
@@ -1188,18 +1197,45 @@ export function PosCheckoutPanel({
                 {savePendingLabel}
               </button>
             ) : null}
-            {needsAmountKeypad ? (
-              <CheckoutNumpadDock {...numpadDockProps} />
+            {paymentMethod === "credit" || (paymentMethod === "cash" && sidebarNumpadOpen) ? (
+              <>
+                <CheckoutNumpadDock {...numpadDockProps} />
+                {paymentMethod === "cash" ? (
+                  <button
+                    type="button"
+                    onClick={() => setSidebarNumpadOpen(false)}
+                    className="mt-1.5 w-full rounded-lg py-1 text-center text-[11px] font-bold text-muted-foreground active:text-foreground"
+                  >
+                    {t(lang, "posKeypadHide")}
+                  </button>
+                ) : null}
+              </>
             ) : (
-              <button
-                ref={saveButtonRef}
-                type="button"
-                onClick={onFinishSale}
-                disabled={emptyCart}
-                className="pos-ds-checkout-btn w-full rounded-xl bg-success py-3.5 text-lg font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
-              >
-                {saveSaleLabel}
-              </button>
+              <div className="flex gap-2">
+                {paymentMethod === "cash" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCheckoutInputField("cash");
+                      setSidebarNumpadOpen(true);
+                    }}
+                    aria-label={t(lang, "posKeypadShow")}
+                    title={t(lang, "posKeypadShow")}
+                    className="flex h-[52px] w-14 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground shadow-sm active:bg-muted/80"
+                  >
+                    <Keyboard className="h-6 w-6" aria-hidden />
+                  </button>
+                ) : null}
+                <button
+                  ref={saveButtonRef}
+                  type="button"
+                  onClick={onFinishSale}
+                  disabled={emptyCart}
+                  className="pos-ds-checkout-btn min-h-[52px] flex-1 rounded-xl bg-success py-3.5 text-lg font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
+                >
+                  {saveSaleLabel}
+                </button>
+              </div>
             )}
           </div>
         </div>

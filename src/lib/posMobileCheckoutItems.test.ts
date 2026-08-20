@@ -6,7 +6,7 @@ import {
 } from "./posMobileCheckoutItems";
 
 describe("resolveMobileCheckoutItemsVisibility (M1.1-R4)", () => {
-  it("shows all lines without disclosure for 1–3 products", () => {
+  it("shows all lines without disclosure for 1–3 products (editable qty/discount rows)", () => {
     for (const n of [1, 2, 3] as const) {
       const v = resolveMobileCheckoutItemsVisibility(n, false);
       expect(v.showAllLines).toBe(true);
