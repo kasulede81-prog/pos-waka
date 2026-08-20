@@ -12,6 +12,8 @@ type Props = {
   businessDate?: string;
   purchaseReference?: string;
   inventoryValueUgx?: number;
+  paidNowUgx?: number;
+  balanceDueUgx?: number;
 };
 
 export function ReceiveSummaryPanel({
@@ -23,9 +25,15 @@ export function ReceiveSummaryPanel({
   businessDate,
   purchaseReference,
   inventoryValueUgx,
+  paidNowUgx,
+  balanceDueUgx,
 }: Props) {
   const rows = [
     { label: t(lang, "receiveSummaryInvoiceTotal"), value: formatShortUgx(invoiceTotalUgx) },
+    paidNowUgx != null ? { label: t(lang, "restockPaidToday"), value: formatShortUgx(paidNowUgx) } : null,
+    balanceDueUgx != null && balanceDueUgx > 0
+      ? { label: t(lang, "ipBalance"), value: formatShortUgx(balanceDueUgx) }
+      : null,
     productCount != null ? { label: t(lang, "receiveSummaryProducts"), value: String(productCount) } : null,
     unitsReceived != null ? { label: t(lang, "receiveSummaryUnits"), value: unitsReceived.toLocaleString() } : null,
     inventoryValueUgx != null

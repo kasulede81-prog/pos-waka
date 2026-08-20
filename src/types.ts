@@ -1660,7 +1660,7 @@ export type Purchase = {
   /** Added to supplier balance: totalCost - amountPaid (can be negative if overpaying old debt) */
   balanceDeltaUgx: number;
   notes: string;
-  /** Optional supplier invoice reference (future-ready). */
+  /** Optional supplier invoice / bill number. */
   invoiceNumber?: string;
   /** Set when voided — purchase is never hard-deleted. */
   voidedAt?: string | null;

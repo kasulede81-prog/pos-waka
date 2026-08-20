@@ -161,7 +161,10 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-foreground">{row.purchase.supplierName}</p>
                       <p className="text-[11px] font-semibold text-muted-foreground">
-                        {dateKeyKampala(row.purchase.createdAt)} · {row.productCount} {t(lang, "purchasesColProducts").toLowerCase()}
+                        {dateKeyKampala(row.purchase.createdAt)}
+                        {row.purchase.invoiceNumber?.trim() ? ` · ${row.purchase.invoiceNumber.trim()}` : ""}
+                        {" · "}
+                        {row.productCount} {t(lang, "purchasesColProducts").toLowerCase()}
                       </p>
                     </div>
                     <span className={clsx("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase", statusClass(kind))}>

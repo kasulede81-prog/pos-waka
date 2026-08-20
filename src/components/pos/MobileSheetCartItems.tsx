@@ -132,7 +132,7 @@ export function MobileSheetCartItems({
         )}
       >
         {visibility.showAllLines ? (
-          <VirtualizedDraftCartList>
+          <VirtualizedDraftCartList
             lines={draftLines}
             estimateRowPx={pharmacyMode ? 108 : 92}
             listAriaLabel={t(lang, "posCartProductsShort")}

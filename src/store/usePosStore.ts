@@ -1225,6 +1225,7 @@ export type PosState = {
     }>;
     amountPaidUgx: number;
     notes?: string;
+    invoiceNumber?: string;
   }) => { ok: boolean; errorKey?: string };
 
   /** Move old sales / activity to archive per retention policy (never auto-deletes). */
@@ -1715,10 +1716,12 @@ function normalizeSupplier(s: Supplier): Supplier {
 }
 
 function normalizePurchase(p: Purchase): Purchase {
+  const invoiceNumber = p.invoiceNumber?.trim();
   return {
     ...p,
     pendingSync: p.pendingSync !== false,
     notes: p.notes ?? "",
+    invoiceNumber: invoiceNumber ? invoiceNumber : undefined,
     lines: Array.isArray(p.lines) ? p.lines : [],
     voidedAt: p.voidedAt ?? null,
     voidReason: p.voidReason ?? undefined,
@@ -6598,6 +6601,7 @@ export const usePosStore = create<PosState>((set, get) => {
       amountPaidUgx,
       balanceDeltaUgx,
       notes: (input.notes ?? "").trim(),
+      invoiceNumber: (input.invoiceNumber ?? "").trim() || undefined,
       createdAt,
       pendingSync: true,
     };
@@ -6618,7 +6622,7 @@ export const usePosStore = create<PosState>((set, get) => {
 
     set({
       products,
-      purchases: [purchase, ...state.purchases],
+      purchases: [normalizePurchase(purchase), ...state.purchases],
       suppliers: suppliers.map(normalizeSupplier),
       ...movementMergePatch(state, movements),
     });

@@ -286,6 +286,11 @@ export function SupplierDetailPage({
             label={t(lang, "supplierTotalBuy")}
             value={`UGX ${supplier.totalPurchasesUgx.toLocaleString()}`}
           />
+          <EnterpriseKpiCard
+            icon={ArrowDownLeft}
+            label={t(lang, "supplierPaidSoFar")}
+            value={`UGX ${Math.max(0, supplier.totalPurchasesUgx - supplier.balanceOwedUgx).toLocaleString()}`}
+          />
           {supplier.lastSupplyAt ? (
             <div className="col-span-2">
               <EnterpriseKpiCard

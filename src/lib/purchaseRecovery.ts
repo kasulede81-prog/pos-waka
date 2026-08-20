@@ -59,6 +59,7 @@ function parsePurchaseLines(raw: unknown): PurchaseLine[] {
 
 /** Build cloud push payload for shop_push_purchase RPC. */
 export function buildPurchaseCloudPushPayload(purchase: Purchase): Record<string, unknown> {
+  const invoice = purchase.invoiceNumber?.trim();
   const payload: Record<string, unknown> = {
     id: purchase.id,
     supplier_id: purchase.supplierId,
@@ -69,7 +70,10 @@ export function buildPurchaseCloudPushPayload(purchase: Purchase): Record<string
     notes: purchase.notes,
     created_at: purchase.createdAt,
     lines: purchase.lines.map(serializePurchaseLineForCloud),
-    metadata: { wakaClient: true },
+    metadata: {
+      wakaClient: true,
+      ...(invoice ? { invoiceNumber: invoice } : {}),
+    },
   };
   if (purchase.voidedAt) {
     payload.voided_at = purchase.voidedAt;
@@ -89,6 +93,9 @@ export function rowToPurchase(row: Record<string, unknown>): CloudPurchaseRow | 
   const updatedAt = String(row.updated_at ?? createdAt);
   const totalCostUgx = Math.max(0, Math.floor(Number(row.total_cost_ugx ?? 0)));
   const voidFields = parseVoidFields(row);
+  const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {};
+  const invoiceRaw = row.invoice_number ?? meta.invoiceNumber ?? meta.invoice_number;
+  const invoiceNumber = invoiceRaw != null && String(invoiceRaw).trim() ? String(invoiceRaw).trim() : undefined;
 
   const record: Purchase = {
     id,
@@ -99,6 +106,7 @@ export function rowToPurchase(row: Record<string, unknown>): CloudPurchaseRow | 
     amountPaidUgx: Math.max(0, Math.floor(Number(row.amount_paid_ugx ?? 0))),
     balanceDeltaUgx: Math.floor(Number(row.balance_delta_ugx ?? totalCostUgx)),
     notes: String(row.notes ?? ""),
+    ...(invoiceNumber ? { invoiceNumber } : {}),
     createdAt,
     pendingSync: false,
     ...voidFields,

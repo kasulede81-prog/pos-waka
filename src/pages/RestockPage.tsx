@@ -19,6 +19,10 @@ import { ReceiveFooter } from "../components/inventory/receive/ReceiveFooter";
 import { ReceiveStatusStrip } from "../components/inventory/receive/ReceiveStatusStrip";
 import { WIZARD_INPUT_TEXT } from "../components/inventory/receive/receiveTokens";
 import { RECEIVE_FIELD_LABEL } from "../components/inventory/receive/receiveTokens";
+import {
+  paidUgxForReceiveStatus,
+  type ReceivePayStatus,
+} from "../components/inventory/receive/receivePaymentStatus";
 
 type BuySource = "town" | "supplier";
 
@@ -41,6 +45,8 @@ export function RestockPage({
   const [lines, setLines] = useState<RestockLineRow[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [payStatus, setPayStatus] = useState<ReceivePayStatus>("unpaid");
   const [paidStr, setPaidStr] = useState("");
   const [notes, setNotes] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -74,7 +80,8 @@ export function RestockPage({
     return { sum, units, count: lines.length };
   }, [lines, productById]);
 
-  const paidAmount = Math.floor(Number(paidStr.replace(/\D/g, "")) || 0);
+  const typedPaid = Math.floor(Number(paidStr.replace(/\D/g, "")) || 0);
+  const paidAmount = walkIn ? totals.sum : paidUgxForReceiveStatus(payStatus, totals.sum, typedPaid);
   const balanceOwed = walkIn ? 0 : Math.max(0, totals.sum - paidAmount);
 
   useEffect(() => {
@@ -125,6 +132,7 @@ export function RestockPage({
     }
 
     const paid = walkIn ? totals.sum : paidAmount;
+    const invoice = invoiceNumber.trim().slice(0, 40);
 
     const r = recordPurchase({
       supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
@@ -132,6 +140,7 @@ export function RestockPage({
       lines: built,
       amountPaidUgx: paid,
       notes: notes.trim(),
+      invoiceNumber: invoice || undefined,
     });
 
     if (!r.ok) {
@@ -142,6 +151,8 @@ export function RestockPage({
 
     setLines([]);
     setPaidStr("");
+    setPayStatus("unpaid");
+    setInvoiceNumber("");
     setNotes("");
     setTownPlace("");
     setBuySource("town");
@@ -184,11 +195,31 @@ export function RestockPage({
           supplierId={supplierId}
           onSupplierIdChange={setSupplierId}
           buySource={buySource}
-          onBuySourceChange={setBuySource}
+          onBuySourceChange={(next) => {
+            setBuySource(next);
+            if (next === "town") {
+              setPayStatus("paid");
+              setPaidStr("");
+            } else {
+              setPayStatus("unpaid");
+              setPaidStr("");
+            }
+          }}
           townPlace={townPlace}
           onTownPlaceChange={setTownPlace}
           addSupplierHref="/stock?tab=suppliers"
         />
+
+        <label className="block">
+          <span className={RECEIVE_FIELD_LABEL}>{t(lang, "restockInvoiceNumber")}</span>
+          <input
+            value={invoiceNumber}
+            onChange={(e) => setInvoiceNumber(e.target.value.slice(0, 40))}
+            placeholder={t(lang, "restockInvoiceNumberPh")}
+            className={`${WIZARD_INPUT_TEXT} mt-2 text-base`}
+            autoComplete="off"
+          />
+        </label>
 
         <section className="space-y-3">
           <ReceiveHeader title={t(lang, "restockProductsTitle")} />
@@ -232,6 +263,11 @@ export function RestockPage({
               lang={lang}
               totalUgx={totals.sum}
               showPartialPayment={!walkIn}
+              payStatus={payStatus}
+              onPayStatusChange={(status) => {
+                setPayStatus(status);
+                if (status !== "partial") setPaidStr("");
+              }}
               paidStr={paidStr}
               onPaidChange={setPaidStr}
               balanceOwedUgx={balanceOwed}
@@ -243,7 +279,9 @@ export function RestockPage({
               unitsReceived={totals.units}
               supplierName={supplierName}
               businessDate={dateKeyKampala(new Date())}
-              purchaseReference={notes.trim() || undefined}
+              purchaseReference={invoiceNumber.trim() || notes.trim() || undefined}
+              paidNowUgx={paidAmount}
+              balanceDueUgx={balanceOwed}
             />
           </>
         ) : null}

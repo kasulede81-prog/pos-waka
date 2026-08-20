@@ -35,6 +35,28 @@ function basePurchase(overrides: Partial<Purchase> = {}): Purchase {
 }
 
 describe("purchaseVoidCloudSync", () => {
+  it("push payload stores invoice number in metadata without a schema change", () => {
+    const payload = buildPurchaseCloudPushPayload(basePurchase({ invoiceNumber: "INV-001" }));
+    expect(payload.metadata).toEqual({ wakaClient: true, invoiceNumber: "INV-001" });
+  });
+
+  it("pull parser reads invoice number from metadata", () => {
+    const parsed = rowToPurchase({
+      id: PURCHASE_ID,
+      supplier_id: SUPPLIER_ID,
+      supplier_name: "Wholesaler",
+      total_cost_ugx: 24_000,
+      amount_paid_ugx: 10_000,
+      balance_delta_ugx: 14_000,
+      notes: "",
+      lines: [{ productId: PRODUCT_ID, name: "Rice", qtyBuyingUnits: 2, costPerBuyingUnitUgx: 12_000 }],
+      created_at: "2026-06-01T10:00:00.000Z",
+      updated_at: "2026-06-01T10:00:00.000Z",
+      metadata: { wakaClient: true, invoiceNumber: "INV-001" },
+    });
+    expect(parsed?.record.invoiceNumber).toBe("INV-001");
+  });
+
   it("push payload includes voided_at and void_reason", () => {
     const purchase = basePurchase({
       voidedAt: "2026-06-01T11:00:00.000Z",
