@@ -75,3 +75,4 @@ build/icon.png
 
 .vercel
 .local/
+scripts/lab/remote-support-lab.env
