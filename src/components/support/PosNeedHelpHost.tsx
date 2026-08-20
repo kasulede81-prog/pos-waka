@@ -79,6 +79,9 @@ export function PosNeedHelpHost({
     setBusy(false);
     submitting.current = false;
     if (!result.ok) {
+      if (import.meta.env.DEV) {
+        console.error("Support request failed", result);
+      }
       setError(errorCopy(lang, result));
       return;
     }

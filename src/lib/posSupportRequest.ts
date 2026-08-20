@@ -107,11 +107,22 @@ export async function submitPosSupportTicket(input: {
     p_issue_type: parsed.category ?? "pos_support",
     p_diagnostics: diagnostics,
   });
-  if (error) return { ok: false, error: "failed", message: error.message };
+  if (error) {
+    if (import.meta.env.DEV) {
+      console.error("Support request failed", error);
+    }
+    return { ok: false, error: "failed", message: error.message };
+  }
   const j = data as { ok?: boolean; ticket_id?: string; error?: string };
   if (j?.ok && j.ticket_id) return { ok: true, ticketId: String(j.ticket_id) };
   if (j?.error === "forbidden" || j?.error === "not_authenticated" || j?.error === "description_required") {
+    if (import.meta.env.DEV) {
+      console.error("Support request failed", j);
+    }
     return { ok: false, error: j.error };
+  }
+  if (import.meta.env.DEV) {
+    console.error("Support request failed", j);
   }
   return { ok: false, error: "failed", message: j?.error ?? "Failed" };
 }
