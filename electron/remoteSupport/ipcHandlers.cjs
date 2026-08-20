@@ -5,6 +5,9 @@ const { createSupportAgent } = require("./supportAgent.cjs");
 const { readPartitionAuthorizationMaterial } = require("./partitionReader.cjs");
 const { fetchRemoteSupportInboxFromControlPlane } = require("./controlPlaneClient.cjs");
 const { sanitizePublicResult } = require("./transportTypes.cjs");
+const { logRemoteSupportEvent } = require("./log.cjs");
+
+const liveAgents = new Set();
 
 function safeResult(result) {
   return sanitizePublicResult(result);
@@ -19,9 +22,37 @@ async function loadSnapshotFromSender(webContents) {
   });
   return {
     deviceFingerprint: material.deviceFingerprint,
+    remoteSupportEnabled: inbox.enabled === true,
     controlPlaneError: inbox.error || null,
     inbox: { request: inbox.request, session: inbox.session },
   };
+}
+
+function trackRemoteSupportAgent(agent, webContents) {
+  liveAgents.add(agent);
+  if (webContents && typeof webContents.once === "function") {
+    webContents.once("destroyed", () => {
+      liveAgents.delete(agent);
+      void Promise.resolve()
+        .then(() => agent.stopTransport())
+        .catch(() => {});
+    });
+  }
+}
+
+async function stopAllRemoteSupportTransports() {
+  const list = [...liveAgents];
+  liveAgents.clear();
+  if (list.length > 0) {
+    logRemoteSupportEvent("transport_stopped", { error: "app_quit_cleanup" });
+  }
+  for (const agent of list) {
+    try {
+      await agent.stopTransport();
+    } catch {
+      logRemoteSupportEvent("transport_error", { error: "stop_failed" });
+    }
+  }
 }
 
 function registerRemoteSupportIpc(ipcMain) {
@@ -34,6 +65,7 @@ function registerRemoteSupportIpc(ipcMain) {
         loadSnapshot: () => loadSnapshotFromSender(webContents),
       });
       agentBySender.set(webContents, agent);
+      trackRemoteSupportAgent(agent, webContents);
     }
     return agent;
   }
@@ -63,4 +95,9 @@ function registerRemoteSupportIpc(ipcMain) {
   );
 }
 
-module.exports = { registerRemoteSupportIpc, loadSnapshotFromSender };
+module.exports = {
+  registerRemoteSupportIpc,
+  loadSnapshotFromSender,
+  stopAllRemoteSupportTransports,
+  trackRemoteSupportAgent,
+};

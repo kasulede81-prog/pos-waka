@@ -10,6 +10,14 @@ export const SHOP_MANAGED_AI_FEATURES = [
   "ask_waka",
 ] as const;
 
+/** Live shop switches — undeployed columns stay in the table but are not admin-toggleable. */
+export const SHOP_LIVE_AI_FEATURES = [
+  "ask_waka",
+  "product_assistant",
+  "inventory_assistant",
+  "business_setup_assistant",
+] as const;
+
 export type ShopManagedAiFeature = (typeof SHOP_MANAGED_AI_FEATURES)[number];
 
 export type ShopAiPlanCode = "free" | "standard" | "premium" | "enterprise";
@@ -94,11 +102,8 @@ export function hasShopAiSettingsRow(settings: ShopAiSettings | null | undefined
 }
 
 /**
- * ASK-6.1: one-shop Ask WAKA pilot requires an explicit shop_ai_settings row.
- * If the row is missing, check_ai_feature_allowed skips the shop feature check
- * (when pilot_rollout_mode is off). Do not enable platform ask_waka until the
- * pilot shop has a row with ai_enabled + ask_waka, and other shops have rows
- * with ask_waka=false (or are known to have rows from migration 101).
+ * AI-AUTH-1: missing shop_ai_settings or ai_enabled !== true is deny (fail-closed).
+ * Ask WAKA still requires ask_waka=true on the authorized shop row.
  */
 export function isAskWakaPilotShopReady(settings: ShopAiSettings | null | undefined): boolean {
   return hasShopAiSettingsRow(settings) && settings.ai_enabled === true && settings.ask_waka === true;

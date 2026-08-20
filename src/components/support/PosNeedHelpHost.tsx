@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CircleHelp } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../types";
@@ -7,6 +7,7 @@ import { AppModalOverlay } from "../layout/AppModalOverlay";
 import {
   POS_SUPPORT_CATEGORIES,
   POS_SUPPORT_CATEGORY_LABEL_KEYS,
+  POS_NEED_HELP_OPEN_EVENT,
   canSeePosNeedHelp,
   submitPosSupportTicket,
   tryBeginPosHelpSubmit,
@@ -20,7 +21,7 @@ type Props = {
   authenticated: boolean;
   internalAdminRoute: boolean;
   posLocked: boolean;
-  placement: "inline" | "floating";
+  placement: "inline" | "floating" | "event-only";
   inverted?: boolean;
 };
 
@@ -48,6 +49,17 @@ export function PosNeedHelpHost({
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
+
+  useEffect(() => {
+    const onOpen = () => {
+      if (busy) return;
+      setOpen(true);
+      setSent(false);
+      setError(null);
+    };
+    window.addEventListener(POS_NEED_HELP_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(POS_NEED_HELP_OPEN_EVENT, onOpen);
+  }, [busy]);
 
   if (!canSeePosNeedHelp({ authenticated, internalAdminRoute, posLocked })) return null;
 
@@ -90,6 +102,7 @@ export function PosNeedHelpHost({
 
   return (
     <>
+      {placement === "event-only" ? null : (
       <button
         type="button"
         onClick={() => {
@@ -110,6 +123,7 @@ export function PosNeedHelpHost({
         <CircleHelp className="h-4 w-4" strokeWidth={2.25} aria-hidden />
         {t(lang, "posHelpButton")}
       </button>
+      )}
 
       {open ? (
         <AppModalOverlay className="z-[80] flex items-center justify-center bg-overlay/55 p-4" role="dialog" aria-modal>

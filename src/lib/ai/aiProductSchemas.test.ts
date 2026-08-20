@@ -50,7 +50,7 @@ describe("parsePlatformAiSettings", () => {
     expect(s.monthly_request_limit).toBe(250);
   });
 
-  it("gates features via canUse helpers", () => {
+  it("gates features via canUse helpers including shop authorization", () => {
     expect(isAiProductAssistantActive({ ...DEFAULT_PLATFORM_AI_SETTINGS, enabled: true })).toBe(false);
     expect(
       isAiProductAssistantActive({
@@ -58,7 +58,7 @@ describe("parsePlatformAiSettings", () => {
         enabled: true,
         product_assistant: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(isAiBusinessSetupActive({ ...DEFAULT_PLATFORM_AI_SETTINGS, enabled: true })).toBe(false);
     expect(
       isAiInventoryAssistantActive({
@@ -66,7 +66,7 @@ describe("parsePlatformAiSettings", () => {
         enabled: true,
         inventory_assistant: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

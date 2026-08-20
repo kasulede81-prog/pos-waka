@@ -6,13 +6,13 @@ import type { ShopConsoleState } from "../useShopConsoleState";
 type Props = { ctx: ShopConsoleState };
 
 export function ShopConsoleAiTab({ ctx }: Props) {
-  const { detail, canSubs, previewMode } = ctx;
+  const { detail, perms, previewMode } = ctx;
   if (!detail) return null;
 
   return (
     <div className="space-y-3">
       <AdminCollapsible title="Shop AI settings" summary="Per-shop AI access and limits" defaultOpen>
-        <ShopAiSettingsPanel shopId={detail.shop.id} canManage={canSubs} previewMode={previewMode} />
+        <ShopAiSettingsPanel shopId={detail.shop.id} canManage={perms.canManageAi} previewMode={previewMode} />
       </AdminCollapsible>
 
       <AdminCollapsible title="AI business setup" summary="Onboarding templates">
@@ -20,7 +20,7 @@ export function ShopConsoleAiTab({ ctx }: Props) {
           shopId={detail.shop.id}
           shopName={detail.shop.name}
           businessType={detail.shop.business_type ?? "kiosk_duka"}
-          canManage={canSubs}
+          canManage={perms.canManageShopAiSetup}
           previewMode={previewMode}
         />
       </AdminCollapsible>

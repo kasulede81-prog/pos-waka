@@ -61,6 +61,16 @@ export function canManageAppReleases(role: string): boolean {
   return role === "super_admin" || role === "operations_admin";
 }
 
+/** Platform AI Control Center + shop AI settings RPCs. */
+export function canManageAi(role: string): boolean {
+  return role === "super_admin" || role === "operations_admin";
+}
+
+/** Admin reset of shop AI onboarding templates (RPC includes support_admin). */
+export function canManageShopAiSetup(role: string): boolean {
+  return canManageAi(role) || role === "support_admin";
+}
+
 /** Remote Support request/revoke — not inherited from tickets or shop rescue. */
 export function canRemoteSupport(role: string): boolean {
   return role === "super_admin" || role === "support_admin";
@@ -79,6 +89,8 @@ export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
     canShopSubs: canShopSubs(role),
     canFieldOps: canFieldOps(role),
     canManageAppReleases: canManageAppReleases(role),
+    canManageAi: canManageAi(role),
+    canManageShopAiSetup: canManageShopAiSetup(role),
     canEditShopProfile: canEditShopProfile(role),
     canPermanentlyDeleteShopAccount: canPermanentlyDeleteShopAccount(role),
     canRemoteSupport: canRemoteSupport(role),

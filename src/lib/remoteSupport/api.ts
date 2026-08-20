@@ -1,5 +1,10 @@
 import { supabase } from "../supabase";
 import type { RemoteSupportInbox, RemoteSupportReasonCode, RemoteSupportRpcResult } from "./types";
+import {
+  DEFAULT_REMOTE_SUPPORT_PLATFORM_SETTINGS,
+  parseRemoteSupportPlatformSettings,
+  type RemoteSupportPlatformSettings,
+} from "./masterSwitch";
 
 function parseRpc(data: unknown, error: { message: string } | null): RemoteSupportRpcResult {
   if (error) return { ok: false, error: "rpc_error", message: error.message };
@@ -130,8 +135,30 @@ export async function fetchRemoteSupportCustomerInbox(deviceFingerprint: string)
   return parseInbox(data);
 }
 
+export async function fetchRemoteSupportPlatformSettings(): Promise<RemoteSupportPlatformSettings> {
+  if (!supabase) return { ...DEFAULT_REMOTE_SUPPORT_PLATFORM_SETTINGS };
+  const { data, error } = await supabase.rpc("get_remote_support_platform_settings");
+  if (error || !data) return { ...DEFAULT_REMOTE_SUPPORT_PLATFORM_SETTINGS };
+  return parseRemoteSupportPlatformSettings(data);
+}
+
+export async function adminUpdateRemoteSupportPlatformEnabled(
+  enabled: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "offline" };
+  const { data, error } = await supabase.rpc("admin_update_remote_support_platform_settings", {
+    p_enabled: enabled,
+  });
+  if (error) return { ok: false, error: error.message };
+  const row = data as { ok?: boolean; error?: string } | null;
+  if (!row?.ok) return { ok: false, error: row?.error ?? "not_authorized" };
+  return { ok: true };
+}
+
 export function remoteSupportErrorMessage(result: RemoteSupportRpcResult): string {
   switch (result.error) {
+    case "remote_support_disabled":
+      return "Remote support is turned off.";
     case "not_authorized":
       return "You do not have permission to request remote support.";
     case "device_not_found":

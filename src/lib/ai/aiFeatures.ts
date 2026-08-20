@@ -99,6 +99,28 @@ export const AI_FEATURES: Record<AiFeatureName, AiFeatureMeta> = {
 
 export const AI_FEATURE_NAMES = Object.keys(AI_FEATURES) as AiFeatureName[];
 
+/** Live Edge-backed features — admin switches and Edge/RPC allowlist. */
+export const LIVE_AI_FEATURES: readonly AiFeatureName[] = [
+  "ask_waka",
+  "product_assistant",
+  "inventory_assistant",
+  "business_setup_assistant",
+] as const;
+
+/** Registered but not deployed — Control Center shows these as coming soon, never as switches. */
+export const COMING_SOON_AI_FEATURES: readonly AiFeatureName[] = [
+  "product_scanner",
+  "ocr",
+  "barcode_detection",
+  "restock_suggestions",
+  "marketing_assistant",
+  "marketplace_assistant",
+] as const;
+
 export function isAiFeatureName(value: string): value is AiFeatureName {
   return value in AI_FEATURES;
+}
+
+export function isLiveAiFeature(value: string): value is AiFeatureName {
+  return (LIVE_AI_FEATURES as readonly string[]).includes(value);
 }

@@ -1,4 +1,6 @@
-import type { AiFeatureName } from "./aiFeatures";
+import { COMING_SOON_AI_FEATURES, type AiFeatureName } from "./aiFeatures";
+import { DEFAULT_AI_PLAN_LIMITS, parseAiPlanLimits, type AiPlanLimits } from "./aiPlanEntitlements";
+import { DEFAULT_AI_ROLE_ACCESS, parseAiRoleAccess, type AiRoleAccess } from "./aiAuthorization";
 
 export type AiProviderName = "deepseek" | "ollama" | "openai" | "gemini" | "claude";
 
@@ -12,13 +14,11 @@ export const DEEPSEEK_MODEL_OPTIONS: DeepSeekModel[] = ["deepseek-chat", "deepse
  */
 export const AI_PROVIDER_OPTIONS: AiProviderName[] = ["deepseek", "ollama", "openai", "gemini", "claude"];
 
-/** Providers that may be persisted/selected in production (Ollama excluded). */
-export const PRODUCTION_AI_PROVIDER_OPTIONS: AiProviderName[] = [
-  "deepseek",
-  "openai",
-  "gemini",
-  "claude",
-];
+/** Providers the Edge can actually call in production. Others are listed as unavailable. */
+export const PRODUCTION_AI_PROVIDER_OPTIONS: AiProviderName[] = ["deepseek"];
+
+/** Shown in admin as locked — no Edge client or secrets wired. */
+export const UNAVAILABLE_PRODUCTION_AI_PROVIDERS: AiProviderName[] = ["openai", "gemini", "claude"];
 
 export const DEFAULT_PRODUCTION_AI_PROVIDER: AiProviderName = "deepseek";
 
@@ -66,8 +66,9 @@ export function isOllamaProviderSelectable(env?: AiProviderEnv): boolean {
 }
 
 export function adminSelectableAiProviders(env?: AiProviderEnv): AiProviderName[] {
-  if (isOllamaProviderSelectable(env)) return [...AI_PROVIDER_OPTIONS];
-  return PRODUCTION_AI_PROVIDER_OPTIONS.filter((p) => AI_PROVIDER_OPTIONS.includes(p));
+  const live: AiProviderName[] = [...PRODUCTION_AI_PROVIDER_OPTIONS];
+  if (isOllamaProviderSelectable(env) && !live.includes("ollama")) live.push("ollama");
+  return live;
 }
 
 /** Coerce a stored provider to one the current admin UI may save. */
@@ -102,6 +103,8 @@ export type PlatformAiSettingsV2 = {
   monthly_budget_limit: number;
   per_shop_limit: number;
   per_user_limit: number;
+  plan_limits: AiPlanLimits;
+  role_access: AiRoleAccess;
   pilot_rollout_mode: boolean;
   pilot_auto_enable_new_shops: boolean;
 };
@@ -125,6 +128,8 @@ export const DEFAULT_PLATFORM_AI_SETTINGS_V2: PlatformAiSettingsV2 = {
   monthly_budget_limit: 50,
   per_shop_limit: 500,
   per_user_limit: 100,
+  plan_limits: { ...DEFAULT_AI_PLAN_LIMITS },
+  role_access: { ...DEFAULT_AI_ROLE_ACCESS },
   pilot_rollout_mode: false,
   pilot_auto_enable_new_shops: false,
 };
@@ -198,6 +203,8 @@ export function parsePlatformAiSettingsV2(raw: unknown): PlatformAiSettingsV2 {
     monthly_budget_limit: numField(obj, "monthly_budget_limit", DEFAULT_PLATFORM_AI_SETTINGS_V2.monthly_budget_limit),
     per_shop_limit: numField(obj, "per_shop_limit", DEFAULT_PLATFORM_AI_SETTINGS_V2.per_shop_limit),
     per_user_limit: numField(obj, "per_user_limit", DEFAULT_PLATFORM_AI_SETTINGS_V2.per_user_limit),
+    plan_limits: parseAiPlanLimits(obj.plan_limits),
+    role_access: parseAiRoleAccess(obj.role_access),
     pilot_rollout_mode: obj.pilot_rollout_mode === true,
     pilot_auto_enable_new_shops: obj.pilot_auto_enable_new_shops === true,
   };
@@ -213,5 +220,6 @@ export function settingsToAdminPayload(
     delete provider_config.ollama_base_url;
     delete provider_config.ollama_model;
   }
-  return { ...settings, provider, provider_config };
+  const undeployedOff = Object.fromEntries(COMING_SOON_AI_FEATURES.map((k) => [k, false]));
+  return { ...settings, ...undeployedOff, provider, provider_config };
 }

@@ -74,6 +74,7 @@ const deviceB = "device-bbbb-2222";
 function snapshot(fp: string, sessionStatus?: string, requestStatus?: string) {
   return {
     deviceFingerprint: fp,
+    remoteSupportEnabled: true,
     inbox: {
       request: requestStatus
         ? { status: requestStatus, device_fingerprint: fp }
@@ -166,6 +167,7 @@ describe("compromised renderer cannot manufacture authorization", () => {
     const result = decideFromControlPlane(
       {
         deviceFingerprint: deviceB,
+        remoteSupportEnabled: true,
         inbox: {
           request: { status: "approved", device_fingerprint: deviceA },
           session: { status: "connecting" },
@@ -223,6 +225,37 @@ describe("control-plane authorization", () => {
     await stub.requestAuthorizationCheck();
     expect(await stub.stopSession()).toMatchObject({ ok: true, status: "stopped", transportInstalled: false });
     expect(stub.getStatus().status).toBe("stopped");
+  });
+});
+
+describe("RS-FREEZE-1 master switch", () => {
+  it("denies native authorization when the platform switch is off", async () => {
+    const result = decideFromControlPlane(
+      {
+        deviceFingerprint: deviceA,
+        remoteSupportEnabled: false,
+        inbox: {
+          request: null,
+          session: { status: "connecting" },
+        },
+      },
+      null,
+    );
+    expect(result.authorized).toBe(false);
+    expect(result.error).toBe("remote_support_disabled");
+  });
+
+  it("does not start transport when the platform switch is missing (fail closed)", async () => {
+    const stub = createRemoteSupportAgentStub({
+      loadSnapshot: async () => ({
+        deviceFingerprint: deviceA,
+        inbox: { request: null, session: { status: "connecting" } },
+      }),
+    });
+    const started = await stub.startAuthorizedTransport();
+    expect(started.ok).toBe(false);
+    expect(started.error).toBe("remote_support_disabled");
+    expect(started.transportStatus).not.toBe("transport_active");
   });
 });
 
@@ -334,6 +367,7 @@ describe("RS-4A transport start is fail-closed", () => {
     const stub = createRemoteSupportAgentStub({
       loadSnapshot: async () => ({
         deviceFingerprint: deviceA,
+        remoteSupportEnabled: true,
         controlPlaneError: "control_plane_unavailable",
         inbox: { request: null, session: null },
       }),

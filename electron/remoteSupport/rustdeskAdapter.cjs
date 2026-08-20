@@ -64,7 +64,7 @@ function createRustDeskTransportAdapter(options = {}) {
       fs: options.fs,
       rendererPayload: options.rendererPayload,
     });
-    const plan = buildLabLaunchPlan({ env });
+    const plan = buildLabLaunchPlan({ env, fs: options.fs });
     if (!exe.ok) {
       state = "transport_unavailable";
       lastError = exe.error;
@@ -111,7 +111,7 @@ function createRustDeskTransportAdapter(options = {}) {
         fs: options.fs,
         rendererPayload,
       });
-      const plan = buildLabLaunchPlan({ env });
+      const plan = buildLabLaunchPlan({ env, fs: options.fs, writeConfig: true });
       if (!exe.ok) {
         lastError = exe.error;
         state = "transport_unavailable";
@@ -123,7 +123,10 @@ function createRustDeskTransportAdapter(options = {}) {
         return publicStatus(false);
       }
       state = "transport_starting";
-      const spawned = supervisor.start(exe.path, plan.args);
+      const spawned = supervisor.start(exe.path, plan.args, {
+        cwd: plan.cwd,
+        env: plan.childEnv,
+      });
       if (!spawned.ok) {
         lastError = spawned.error;
         state = spawned.error === "transport_failed" ? "transport_failed" : "transport_unavailable";

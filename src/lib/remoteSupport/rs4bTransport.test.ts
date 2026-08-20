@@ -31,7 +31,7 @@ const { createSupportAgent } = require("../../../electron/remoteSupport/supportA
 };
 const { createProcessSupervisor } = require("../../../electron/remoteSupport/processSupervisor.cjs") as {
   createProcessSupervisor: (deps?: Record<string, unknown>) => {
-    start: (exe: string, args: string[]) => { ok: boolean; error?: string };
+    start: (exe: string, args: string[], opts?: Record<string, unknown>) => { ok: boolean; error?: string };
     stop: () => Promise<{ ok: boolean }>;
     isRunning: () => boolean;
     hasCrashed: () => boolean;
@@ -66,6 +66,7 @@ const labExe = `${labDir}/rustdesk.exe`;
 function snapshot(fp: string, sessionStatus?: string) {
   return {
     deviceFingerprint: fp,
+    remoteSupportEnabled: true,
     inbox: {
       request: null,
       session: sessionStatus ? { status: sessionStatus } : null,
@@ -86,9 +87,18 @@ function labEnv(extra: Record<string, string> = {}) {
 }
 
 function fakeFs() {
+  const files = new Map<string, string>();
   return {
-    existsSync: (value: string) => String(value) === labExe,
-    statSync: () => ({ isFile: () => true }),
+    files,
+    existsSync: (value: string) => String(value) === labExe || files.has(String(value)),
+    statSync: () => ({ isFile: () => true, isSymbolicLink: () => false }),
+    mkdirSync: () => undefined,
+    writeFileSync: (p: string, body: string) => {
+      files.set(String(p), String(body));
+    },
+    chmodSync: () => undefined,
+    lstatSync: () => ({ isSymbolicLink: () => false, isFile: () => true, isDirectory: () => false }),
+    realpathSync: (value: string) => String(value),
   };
 }
 
@@ -115,10 +125,12 @@ function fakeChild() {
 
 function trackingSupervisor() {
   const launches: string[][] = [];
+  const spawnOpts: Array<Record<string, unknown> | undefined> = [];
   let current: ReturnType<typeof fakeChild> | null = null;
   const supervisor = createProcessSupervisor({
-    spawn: (exe: string, args: string[]) => {
+    spawn: (exe: string, args: string[], opts?: Record<string, unknown>) => {
       launches.push([exe, ...args]);
+      spawnOpts.push(opts);
       current = fakeChild();
       return current;
     },
@@ -126,6 +138,7 @@ function trackingSupervisor() {
   return {
     supervisor,
     launches,
+    spawnOpts,
     crash() {
       current?.emit("exit", 1);
     },
@@ -199,6 +212,11 @@ describe("RS-4B authorization gate", () => {
     expect(started.ok).toBe(true);
     expect(tracked.launches).toHaveLength(1);
     expect(tracked.launches[0][0]).toBe(labExe);
+    const key = labEnv().WAKA_RUSTDESK_KEY;
+    expect(tracked.launches[0].includes(key)).toBe(false);
+    expect(tracked.launches[0].join(" ")).not.toContain(key);
+    const childEnv = tracked.spawnOpts[0]?.env as Record<string, string> | undefined;
+    expect(childEnv?.WAKA_RUSTDESK_KEY).toBeUndefined();
     expect(started.transportStatus).toBe("transport_ready");
     expect(started.uiPhase).not.toBe("active");
   });
@@ -225,6 +243,7 @@ describe("RS-4B authorization gate", () => {
     const agent = createSupportAgent({
       loadSnapshot: async () => ({
         deviceFingerprint: deviceB,
+        remoteSupportEnabled: true,
         inbox: {
           request: { status: "approved", device_fingerprint: deviceA },
           session: { status: "connecting" },
@@ -356,6 +375,7 @@ describe("RS-4B server pin and boot persistence", () => {
     expect(plan.args).not.toContain("--password");
     expect(plan.args).not.toContain("--install-service");
     expect(plan.args).not.toContain("--silent-install");
+    expect(plan.args).not.toContain(labEnv().WAKA_RUSTDESK_KEY);
     expect(plan.credentialLifecycleUnsupported).toBe(true);
   });
 });

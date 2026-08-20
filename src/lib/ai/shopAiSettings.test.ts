@@ -53,7 +53,7 @@ describe("canUseAi shop hierarchy", () => {
       { shop_id: "s1", ai_enabled: true, ask_waka: false },
       "s1",
     );
-    const blocked = canUseAi("ask_waka", { settings: platformAsk, shopSettings: shopOff });
+    const blocked = canUseAi("ask_waka", { settings: platformAsk, shopSettings: shopOff, userRole: "owner" });
     expect(blocked.allowed).toBe(false);
     if (!blocked.allowed) expect(blocked.code).toBe("shop_feature_disabled");
 
@@ -61,7 +61,7 @@ describe("canUseAi shop hierarchy", () => {
       { shop_id: "s1", ai_enabled: true, ask_waka: true },
       "s1",
     );
-    expect(canUseAi("ask_waka", { settings: platformAsk, shopSettings: shopOn }).allowed).toBe(true);
+    expect(canUseAi("ask_waka", { settings: platformAsk, shopSettings: shopOn, userRole: "owner" }).allowed).toBe(true);
   });
 
   it("keeps Ask WAKA off when the platform flag is false even if the shop is on", () => {
@@ -77,10 +77,15 @@ describe("canUseAi shop hierarchy", () => {
     if (!r.allowed) expect(r.code).toBe("feature_disabled");
   });
 
-  it("documents the missing shop-row gap without changing canUseAi", () => {
+  it("fails closed when the shop row is missing", () => {
     const platformAsk = { ...platformOn, ask_waka: true };
-    const missing = canUseAi("ask_waka", { settings: platformAsk, shopSettings: null });
-    expect(missing.allowed).toBe(true);
+    const missing = canUseAi("ask_waka", {
+      settings: platformAsk,
+      shopSettings: null,
+      userRole: "owner",
+    });
+    expect(missing.allowed).toBe(false);
+    if (!missing.allowed) expect(missing.code).toBe("shop_not_authorized");
     expect(hasShopAiSettingsRow(null)).toBe(false);
     expect(isAskWakaPilotShopReady(null)).toBe(false);
     expect(
@@ -95,9 +100,14 @@ describe("canUseAi shop hierarchy", () => {
     ).toBe(true);
   });
 
-  it("allows when no shop row and pilot off", () => {
-    const r = canUseAi("product_assistant", { settings: platformOn, shopSettings: null });
-    expect(r.allowed).toBe(true);
+  it("blocks when no shop row even if pilot is off", () => {
+    const r = canUseAi("product_assistant", {
+      settings: platformOn,
+      shopSettings: null,
+      userRole: "owner",
+    });
+    expect(r.allowed).toBe(false);
+    if (!r.allowed) expect(r.code).toBe("shop_not_authorized");
   });
 
   it("blocks pilot when shop not approved", () => {
@@ -117,6 +127,7 @@ describe("canUseAi shop hierarchy", () => {
     const r = canUseAi("product_assistant", {
       settings: platformOn,
       shopSettings: shop,
+      userRole: "owner",
       usage: { shopRequests: 100 },
     });
     expect(r.allowed).toBe(false);

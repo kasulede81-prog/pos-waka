@@ -43,6 +43,14 @@ export function canSeePosNeedHelp(input: {
   return input.authenticated === true && input.internalAdminRoute !== true && input.posLocked !== true;
 }
 
+/** Opens the existing Need Help form. Does not start Remote Support. */
+export const POS_NEED_HELP_OPEN_EVENT = "waka:pos-need-help:open";
+
+export function openPosNeedHelpForm(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(POS_NEED_HELP_OPEN_EVENT));
+}
+
 export function normalizePosSupportCategory(raw: string | null | undefined): PosSupportCategory | null {
   const value = String(raw ?? "").trim().toLowerCase();
   return (POS_SUPPORT_CATEGORIES as readonly string[]).includes(value) ? (value as PosSupportCategory) : null;

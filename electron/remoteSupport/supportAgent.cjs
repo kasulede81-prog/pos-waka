@@ -5,6 +5,8 @@ const { createTransportFromFlag } = require("./transportFactory.cjs");
 const { sanitizePublicResult, uiPhaseFromNative } = require("./transportTypes.cjs");
 const { logRemoteSupport, logRemoteSupportEvent } = require("./log.cjs");
 
+const DEFAULT_WATCHDOG_MS = 15_000;
+
 /**
  * In-process Support Agent.
  *
@@ -16,6 +18,8 @@ function createSupportAgent(deps = {}) {
   let nativeStatus = "idle";
   let boundFingerprint = null;
   let agentState = "not_running";
+  let watchdogTimer = null;
+  let stopping = false;
   function createBoundTransport() {
     return createTransportFromFlag(deps.env, {
       mode: deps.transportMode,
@@ -28,6 +32,31 @@ function createSupportAgent(deps = {}) {
 
   let transport = deps.transport || createBoundTransport();
   const loadSnapshot = deps.loadSnapshot;
+
+  function watchdogIntervalMs() {
+    const raw = deps.watchdogMs;
+    if (raw === 0 || raw === "0") return 0;
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+    return DEFAULT_WATCHDOG_MS;
+  }
+
+  function stopWatchdog() {
+    if (watchdogTimer) {
+      clearInterval(watchdogTimer);
+      watchdogTimer = null;
+    }
+  }
+
+  function startWatchdog() {
+    stopWatchdog();
+    const intervalMs = watchdogIntervalMs();
+    if (intervalMs <= 0) return;
+    watchdogTimer = setInterval(() => {
+      void requestAuthorizationCheck();
+    }, intervalMs);
+    if (typeof watchdogTimer.unref === "function") watchdogTimer.unref();
+  }
 
   function transportPublic() {
     const raw = transport.getSessionStatus();
@@ -82,6 +111,11 @@ function createSupportAgent(deps = {}) {
   }
 
   async function failClosedStop(status, error) {
+    if (stopping) {
+      return publicResult(true, { status: status || nativeStatus, error });
+    }
+    stopping = true;
+    stopWatchdog();
     const disconnectFields = { status: status || nativeStatus };
     if (error) disconnectFields.error = error;
     logRemoteSupportEvent("transport_disconnected", disconnectFields);
@@ -119,6 +153,7 @@ function createSupportAgent(deps = {}) {
     nativeStatus = status || "stopped";
     logRemoteSupportEvent("transport_stopped", { status: nativeStatus });
     logRemoteSupport("agent exited");
+    stopping = false;
     return publicResult(true, { status: nativeStatus, error, credentialRotationUnsupported: rotationUnsupported });
   }
 
@@ -128,7 +163,7 @@ function createSupportAgent(deps = {}) {
     if (!result.authorized) {
       nativeStatus = result.status || "not_authorized";
       if (agentState === "running") {
-        await failClosedStop(nativeStatus, result.error || "remote_support_not_authorized");
+        await failClosedStop(nativeStatus, result.reason || result.error || "remote_support_not_authorized");
       }
       if (result.error === "wrong_device") {
         logRemoteSupport("authorization rejected: wrong device");
@@ -224,6 +259,7 @@ function createSupportAgent(deps = {}) {
       });
     }
     logRemoteSupportEvent("transport_started", { status: current.transportStatus });
+    startWatchdog();
     return publicResult(true);
   }
 

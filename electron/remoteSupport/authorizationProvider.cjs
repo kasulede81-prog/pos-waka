@@ -18,6 +18,14 @@ function ignoreRendererAuthorizationInput(_raw) {
 }
 
 function decideFromControlPlane(snapshot, boundFingerprint) {
+  if (snapshot?.remoteSupportEnabled !== true) {
+    return {
+      authorized: false,
+      reason: "remote_support_disabled",
+      status: "not_authorized",
+      error: "remote_support_disabled",
+    };
+  }
   if (snapshot?.controlPlaneError === "control_plane_unavailable") {
     return {
       authorized: false,

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { usePosStore } from "../store/usePosStore";
-import { lockPos, isStaffSessionExpired, touchStaffActivity, resolveStaffAutoLockMinutes, staffRequirePinAfterIdle } from "../lib/auth";
+import { lockPos, isStaffSessionExpired, touchStaffActivity, resolveStaffAutoLockMinutes, staffRequirePinAfterIdle, isPosAutoLockEnabled } from "../lib/auth";
 
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "touchstart", "scroll"] as const;
 
@@ -38,6 +38,7 @@ export function useStaffAutoLock(enabled: boolean): void {
 
     const expiryTimer = window.setInterval(() => {
       const state = usePosStore.getState();
+      if (!isPosAutoLockEnabled(state.preferences)) return;
       if (!isStaffSessionExpired(state.preferences)) return;
       if (state.preferences.posLocked) return;
       lockPos("session_expired");
@@ -58,6 +59,10 @@ export function useStaffSessionBootstrap(enabled: boolean): void {
     if (!enabled || typeof window === "undefined") return;
     const state = usePosStore.getState();
     const prefs = state.preferences;
+    if (!isPosAutoLockEnabled(prefs)) {
+      if (prefs.posLocked) state.setPosLocked(false);
+      return;
+    }
     if (prefs.staffRememberSession === false) return;
     if (isStaffSessionExpired(prefs)) {
       if (!prefs.posLocked && (prefs.activeStaffId || state.sessionActor?.userId.startsWith("staff:"))) {

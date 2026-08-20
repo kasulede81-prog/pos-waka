@@ -2,6 +2,7 @@ import { activeStaffCanUnlock, canLockPos } from "./lockPos";
 import { usePosStore } from "../store/usePosStore";
 import type { ShopPreferences } from "../types";
 import { PHARMACY_DISPENSE_ROUTE } from "./pharmacyNav";
+import { isPosAutoLockEnabled } from "./auth/staffSession";
 
 export function isPosSellPath(pathname: string): boolean {
   return (
@@ -15,10 +16,14 @@ export function canLockAfterSellExit(preferences: Pick<ShopPreferences, "backOff
   return canLockPos(preferences) || activeStaffCanUnlock(preferences.staffAccounts ?? []);
 }
 
-/** Require PIN/password again after leaving the sell screen. */
+export function shouldLockAfterSellExit(preferences: ShopPreferences): boolean {
+  return isPosAutoLockEnabled(preferences) && canLockAfterSellExit(preferences);
+}
+
+/** Require PIN/password again after leaving the sell screen — skipped when Auto-lock is Never. */
 export function lockPosAfterSellExit(): void {
   const prefs = usePosStore.getState().preferences;
-  if (!canLockAfterSellExit(prefs)) return;
+  if (!shouldLockAfterSellExit(prefs)) return;
   usePosStore.getState().setPosLocked(true);
 }
 

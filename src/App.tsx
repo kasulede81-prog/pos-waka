@@ -426,6 +426,10 @@ function AppRoutes() {
                     path="internal/waka/display-scale"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
+                  <Route
+                    path="internal/waka/remote-support"
+                    element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
+                  />
                   <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/shop/:shopId/rescue" element={<ShopRescueConsolePage lang={lang} email={auth.email} />} />
                 </Route>

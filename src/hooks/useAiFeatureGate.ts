@@ -4,18 +4,20 @@ import { canUseAi, canUseAiAllowed } from "../lib/ai/canUseAi";
 import { useActiveShopId } from "./useActiveShopId";
 import { usePlatformAiSettings } from "./usePlatformAiSettings";
 import { useShopAiSettings } from "./useShopAiSettings";
+import { useSessionActor } from "../context/SessionActorContext";
 
-/** Combined platform + shop AI gate for POS features. */
+/** Combined platform + shop + role AI gate for POS features. */
 export function useAiFeatureGate(feature: AiFeatureName) {
   const { settings, loading: platformLoading } = usePlatformAiSettings();
   const { shopId, loading: shopIdLoading } = useActiveShopId();
   const { settings: shopSettings, loading: shopSettingsLoading } = useShopAiSettings(shopId);
+  const actor = useSessionActor();
 
   const loading = platformLoading || shopIdLoading || shopSettingsLoading;
 
   const result = useMemo(
-    () => canUseAi(feature, { settings, shopSettings }),
-    [feature, settings, shopSettings],
+    () => canUseAi(feature, { settings, shopSettings, userRole: actor.role }),
+    [feature, settings, shopSettings, actor.role],
   );
 
   return {
@@ -34,16 +36,17 @@ export function useAiFeatureGates(features: AiFeatureName[]) {
   const { settings, loading: platformLoading } = usePlatformAiSettings();
   const { shopId, loading: shopIdLoading } = useActiveShopId();
   const { settings: shopSettings, loading: shopSettingsLoading } = useShopAiSettings(shopId);
+  const actor = useSessionActor();
 
   const loading = platformLoading || shopIdLoading || shopSettingsLoading;
 
   const gates = useMemo(() => {
     const map = {} as Record<AiFeatureName, boolean>;
     for (const f of features) {
-      map[f] = canUseAiAllowed(f, settings, shopSettings);
+      map[f] = canUseAiAllowed(f, settings, shopSettings, actor.role);
     }
     return map;
-  }, [features, settings, shopSettings]);
+  }, [features, settings, shopSettings, actor.role]);
 
   return { gates, loading, shopId, shopSettings, platformSettings: settings };
 }

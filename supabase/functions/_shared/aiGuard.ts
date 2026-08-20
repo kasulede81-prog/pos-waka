@@ -1,6 +1,13 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { parsePlatformAiSettingsV2 } from "./platformAiSettings.v2.ts";
 
+const LIVE_AI_FEATURES = new Set([
+  "product_assistant",
+  "business_setup_assistant",
+  "inventory_assistant",
+  "ask_waka",
+]);
+
 export type AiGuardContext = {
   userId: string;
   shopId: string | null;
@@ -22,6 +29,21 @@ export async function assertAiFeatureAllowed(
   }
 
   const settings = parsePlatformAiSettingsV2(settingsRaw);
+
+  if (settings.enabled !== true) {
+    return { allowed: false, reason: "AI platform is disabled.", code: "ai_platform_disabled" };
+  }
+
+  if (!LIVE_AI_FEATURES.has(feature)) {
+    return { allowed: false, reason: "AI feature is not deployed", code: "feature_not_deployed" };
+  }
+
+  if (!ctx.shopId) {
+    return { allowed: false, reason: "Shop is not authorized for AI", code: "shop_not_authorized" };
+  }
+  if (!ctx.userId) {
+    return { allowed: false, reason: "Your role is not authorized for AI", code: "user_not_authorized" };
+  }
 
   const { data: checkRaw, error: checkErr } = await admin.rpc("check_ai_feature_allowed", {
     p_feature: feature,

@@ -3,7 +3,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
-const { registerRemoteSupportIpc } = require("./remoteSupport/ipcHandlers.cjs");
+const { registerRemoteSupportIpc, stopAllRemoteSupportTransports } = require("./remoteSupport/ipcHandlers.cjs");
 const { registerPrinterIpc } = require("./hardware/printerIpc.cjs");
 const { classifyNavigation, isHttpOrHttps } = require("./shell/navigationSecurity.cjs");
 const { sanitizeShellError } = require("./shell/errors.cjs");
@@ -15,6 +15,7 @@ const isDev = !app.isPackaged;
 let mainWindow = null;
 let isQuitting = false;
 let rendererRecoveryInFlight = false;
+let remoteSupportQuitCleanupStarted = false;
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
@@ -285,8 +286,16 @@ if (gotSingleInstanceLock) {
     });
   });
 
-  app.on("before-quit", () => {
+  app.on("before-quit", (event) => {
     isQuitting = true;
+    if (remoteSupportQuitCleanupStarted) return;
+    remoteSupportQuitCleanupStarted = true;
+    event.preventDefault();
+    void stopAllRemoteSupportTransports()
+      .catch(() => {})
+      .finally(() => {
+        app.quit();
+      });
   });
 
   app.on("window-all-closed", () => {

@@ -75,6 +75,8 @@ Required keys (Electron **process** env, not Vite):
 
 Filled copies are gitignored (`scripts/lab/remote-support-lab.env`). Never put these in `.env.production.local`.
 
+Slice A: pin ID/relay/public key in the **Windows process** env only. Do not put them in React, Vite, or the Remote Assistance card. Production EXE default remains `off`.
+
 ---
 
 ## 4. Windows launch
@@ -105,12 +107,17 @@ The launcher **refuses** to start if transport is not `lab`, if `rustdesk.exe` i
 1. Lab roots = `WAKA_REMOTE_SUPPORT_LAB_DIR` only in the packaged app (`appPaths` unused).
 2. Path must be absolute, no `..`, no NUL.
 3. File must exist, be a file, basename `rustdesk.exe` or `rustdesk`.
-4. File must sit **inside** the lab root.
-5. Renderer `command` / `path` / `password` are ignored.
+4. Symlinks/junctions are rejected (`executable_symlink_rejected`).
+5. `realpath` of the file must stay **inside** the real lab root (`executable_path_rejected` on escape).
+6. Renderer `command` / `path` / `password` are ignored.
 
-Errors: `lab_dir_not_configured`, `executable_path_rejected`, `executable_not_allowlisted`.
+Errors: `lab_dir_not_configured`, `executable_path_rejected`, `executable_symlink_rejected`, `executable_not_allowlisted`.
 
-Isolated server pin errors: `server_pin_required`, `public_server_forbidden`, `server_key_invalid`.
+Isolated server pin errors: `server_pin_required`, `public_server_forbidden`, `unknown_host_forbidden`, `server_key_invalid`.
+
+The public key is written to `remote-support-lab/appdata/RustDesk/config/RustDesk2.toml` (mode 0600) and is **not** passed on process argv or child env. ID/relay hosts must be the configured lab server (IPv4 or DNS, optional port). Public `rustdesk.com` and URL/path hosts are rejected.
+
+Main-process watchdog re-checks WAKA `remote_support_session` authorization about every 15s and stops RustDesk on expire/revoke. `before-quit` and window destroy stop the transport and kill the spawned process.
 
 Process start → `transport_ready`, **not** `transport_active`. That is not proof of a live desktop session.
 

@@ -17,6 +17,7 @@ import {
   type AdminNavGroupId,
 } from "../../../lib/adminNavState";
 import { themeUi } from "../../../lib/themeTokens";
+import { canManageAi, normalizeAdminRole } from "./adminRoles";
 
 function useLockUnderlyingAppScroll(active: boolean) {
   useEffect(() => {
@@ -52,6 +53,7 @@ export type AdminSectionId =
   | "subscription_settings"
   | "releases"
   | "display_scale"
+  | "remote_support"
   | "shop";
 
 type TabDef = {
@@ -59,6 +61,7 @@ type TabDef = {
   path: string;
   label: string;
   superOnly?: boolean;
+  aiAdmin?: boolean;
 };
 
 type NavGroup = {
@@ -92,7 +95,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: "platform",
     label: "Platform",
     tabs: [
-      { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI", superOnly: true },
+      { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI", aiAdmin: true },
       { id: "subscription_settings", path: "/internal/waka/subscription-settings", label: "Subscriptions", superOnly: true },
       { id: "releases", path: "/internal/waka/releases", label: "Releases", superOnly: true },
       { id: "business_types", path: "/internal/waka/business-types", label: "Business Types", superOnly: true },
@@ -113,6 +116,7 @@ const NAV_GROUPS: NavGroup[] = [
     tabs: [
       { id: "activations", path: "/internal/waka/activations", label: "Activations" },
       { id: "pilot", path: "/internal/waka/pilot", label: "Pilot" },
+      { id: "remote_support", path: "/internal/waka/remote-support", label: "Remote Support" },
     ],
   },
 ];
@@ -126,8 +130,12 @@ type Props = {
   children: ReactNode;
 };
 
-function filterTabs(tabs: TabDef[], isSuper: boolean): TabDef[] {
-  return tabs.filter((tab) => !tab.superOnly || isSuper);
+function filterTabs(tabs: TabDef[], opts: { isSuper: boolean; canManageAi: boolean }): TabDef[] {
+  return tabs.filter((tab) => {
+    if (tab.superOnly && !opts.isSuper) return false;
+    if (tab.aiAdmin && !opts.canManageAi) return false;
+    return true;
+  });
 }
 
 export function AdminShell({ lang, adminRow, loading, active, previewMode = false, children }: Props) {
@@ -137,12 +145,16 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
   const searchData = useAdminGlobalSearchData(previewMode);
 
   const isSuper = adminRow?.role === "super_admin";
+  const manageAi = canManageAi(normalizeAdminRole(adminRow?.role)) || previewMode;
   const tabTo = (path: string) => (previewMode ? internalAdminPreviewHref(path) : path);
 
   const visibleGroups = useMemo(
     () =>
-      NAV_GROUPS.map((g) => ({ ...g, tabs: filterTabs(g.tabs, isSuper) })).filter((g) => g.tabs.length > 0),
-    [isSuper],
+      NAV_GROUPS.map((g) => ({
+        ...g,
+        tabs: filterTabs(g.tabs, { isSuper, canManageAi: manageAi }),
+      })).filter((g) => g.tabs.length > 0),
+    [isSuper, manageAi],
   );
 
   const [expandedGroups, setExpandedGroups] = useState(readAdminNavGroupsExpanded);

@@ -30,6 +30,7 @@ export {
   staffAllowSwitchUser,
   staffRememberSessionEnabled,
   staffRequirePinAfterIdle,
+  isPosAutoLockEnabled,
   startStaffSessionClock,
   touchStaffActivity,
   tryRestorePersistedStaffSession,

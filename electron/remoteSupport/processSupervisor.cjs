@@ -5,6 +5,7 @@
  * Used solely for the lab transport executable. Not exposed to React.
  */
 
+const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { logRemoteSupportEvent } = require("./log.cjs");
 
@@ -62,7 +63,7 @@ function createProcessSupervisor(deps = {}) {
     hasCrashed() {
       return crashed;
     },
-    start(executable, args) {
+    start(executable, args, spawnOpts = {}) {
       if (crashed) return { ok: false, error: "transport_failed" };
       if (running()) return { ok: false, error: "already_running" };
       if (typeof executable !== "string" || !executable) {
@@ -72,12 +73,18 @@ function createProcessSupervisor(deps = {}) {
       if (argv.some((part) => /[|&;<>`$]/.test(part))) {
         return { ok: false, error: "unsafe_argument" };
       }
+      const cwdRaw = typeof spawnOpts.cwd === "string" ? spawnOpts.cwd.trim() : "";
+      const cwd =
+        cwdRaw && path.isAbsolute(cwdRaw) && !cwdRaw.includes("..") ? cwdRaw : undefined;
+      const env = spawnOpts.env && typeof spawnOpts.env === "object" ? spawnOpts.env : undefined;
       let spawned;
       try {
         spawned = spawnFn(executable, argv, {
           shell: false,
           windowsHide: true,
           stdio: ["ignore", "pipe", "pipe"],
+          ...(cwd ? { cwd } : {}),
+          ...(env ? { env } : {}),
         });
       } catch {
         return { ok: false, error: "spawn_failed" };

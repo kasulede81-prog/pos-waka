@@ -26,6 +26,8 @@ import {
   submitPosSupportTicket,
   tryBeginPosHelpSubmit,
   validatePosSupportForm,
+  openPosNeedHelpForm,
+  POS_NEED_HELP_OPEN_EVENT,
 } from "./posSupportRequest";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -128,6 +130,13 @@ describe("POS Need Help submission", () => {
     expect(diagnostics.deviceId).toBe("device-aaaa-1111");
     expect(getOrCreateDeviceId).toHaveBeenCalled();
     expect(posSupportSubject("Scanner will not beep", "scanner")).toBe("scanner: Scanner will not beep");
+  });
+});
+
+describe("Need Help open event", () => {
+  it("does not start Remote Support when requesting help from Settings", () => {
+    expect(POS_NEED_HELP_OPEN_EVENT).toBe("waka:pos-need-help:open");
+    expect(typeof openPosNeedHelpForm).toBe("function");
   });
 });
 

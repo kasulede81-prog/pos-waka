@@ -1,22 +1,33 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
-import { AI_FEATURES, type AiFeatureName } from "../../../../lib/ai/aiFeatures";
+import {
+  AI_FEATURES,
+  COMING_SOON_AI_FEATURES,
+  LIVE_AI_FEATURES,
+  type AiFeatureName,
+} from "../../../../lib/ai/aiFeatures";
 import {
   DEEPSEEK_MODEL_OPTIONS,
   DEFAULT_PLATFORM_AI_SETTINGS_V2,
+  UNAVAILABLE_PRODUCTION_AI_PROVIDERS,
   adminSelectableAiProviders,
   coerceAdminSelectableProvider,
+  isOllamaProviderSelectable,
   type DeepSeekModel,
   type PlatformAiSettingsV2,
 } from "../../../../lib/ai/platformAiSettings.v2";
+import { DEFAULT_AI_PLAN_LIMITS } from "../../../../lib/ai/aiPlanEntitlements";
+import { DEFAULT_AI_ROLE_ACCESS, type AiRoleAccess } from "../../../../lib/ai/aiAuthorization";
 import { fetchPlatformAiSettings } from "../../../../lib/ai/platformAiSettings";
 import {
   adminUpdatePlatformAiSettings,
+  fetchAiAuthorizationSnapshot,
   fetchAiPlatformMetrics,
+  type AiAuthorizationSnapshot,
   type AiPlatformMetrics,
 } from "../../../../lib/ai/platformAiAdmin";
-import { isSuperAdmin, normalizeAdminRole } from "../adminRoles";
+import { canManageAi, normalizeAdminRole } from "../adminRoles";
 import { WakaSwitch } from "../../../enterprise/WakaSwitch";
 import { AiStatusCard } from "../AiStatusCard";
 import { runAiHealthCheck, type AiHealthReport } from "../../../../lib/ai/aiHealthCheck";
@@ -33,14 +44,12 @@ const labelCls = "block text-[11px] font-black uppercase tracking-wide text-mute
 function FeatureToggle({
   label,
   description,
-  deployed,
   checked,
   disabled,
   onChange,
 }: {
   label: string;
   description?: string;
-  deployed?: boolean;
   checked: boolean;
   disabled?: boolean;
   onChange: (v: boolean) => void;
@@ -52,16 +61,7 @@ function FeatureToggle({
         disabled={disabled}
         onCheckedChange={onChange}
         label={label}
-        description={
-          <>
-            {description}
-            {deployed === false ? (
-              <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-900">
-                Not deployed
-              </span>
-            ) : null}
-          </>
-        }
+        description={description}
       />
     </div>
   );
@@ -75,22 +75,17 @@ function setFeature(settings: PlatformAiSettingsV2, key: AiFeatureName, value: b
   return { ...settings, [key]: value };
 }
 
-const SECTION_FEATURES: Array<{ title: string; keys: AiFeatureName[] }> = [
-  { title: "Product AI", keys: ["product_assistant"] },
-  { title: "Vision AI", keys: ["product_scanner", "ocr", "barcode_detection"] },
-  { title: "Business Setup AI", keys: ["business_setup_assistant"] },
-  { title: "Inventory AI", keys: ["inventory_assistant", "restock_suggestions"] },
-  { title: "Marketing AI", keys: ["marketing_assistant"] },
-  { title: "Marketplace AI", keys: ["marketplace_assistant"] },
-  { title: "Ask WAKA", keys: ["ask_waka"] },
-];
+function formatPlanLimit(n: number | null): string {
+  return n == null ? "Unlimited / custom" : `${n.toLocaleString()} requests/month`;
+}
 
 export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
   const role = normalizeAdminRole(adminRow?.role);
-  const canEdit = isSuperAdmin(role) || role === "operations_admin" || previewMode;
+  const canEdit = canManageAi(role) || previewMode;
 
   const [draft, setDraft] = useState<PlatformAiSettingsV2>(DEFAULT_PLATFORM_AI_SETTINGS_V2);
   const [metrics, setMetrics] = useState<AiPlatformMetrics | null>(null);
+  const [authz, setAuthz] = useState<AiAuthorizationSnapshot | null>(null);
   const [loading, setLoading] = useState(!previewMode);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -125,6 +120,7 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
         product_assistant: true,
         business_setup_assistant: true,
         inventory_assistant: true,
+        ask_waka: true,
       });
       setMetrics({
         totals: {
@@ -136,6 +132,7 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
           estimatedCostUsd: 4.2,
           avgLatencyMs: 840,
         },
+        today: { requests: 12, failed: 1, estimatedCostUsd: 0.08 },
         limits: {
           monthlyRequestLimit: 20000,
           monthlyBudgetLimit: 50,
@@ -147,14 +144,59 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
           { feature: "inventory_assistant", count: 80, costUsd: 2.5 },
         ],
         byShop: [{ shop_id: "preview", shop_name: "Demo Shop", count: 45 }],
+        byError: [{ reason: "quota exceeded", count: 3 }],
+      });
+      setAuthz({
+        enabled: true,
+        roleAccess: { ...DEFAULT_AI_ROLE_ACCESS },
+        authorizedShopCount: 1,
+        authorizedUserCount: 2,
+        authorizedShops: [
+          {
+            shopId: "preview",
+            shopName: "Demo Shop",
+            productAssistant: true,
+            inventoryAssistant: true,
+            businessSetupAssistant: true,
+            askWaka: true,
+            monthlyRequestLimit: 500,
+            planCode: "starter",
+            requestsThisMonth: 45,
+          },
+        ],
+        authorizedUsers: [
+          {
+            userId: "u1",
+            fullName: "Shop Owner",
+            role: "owner",
+            roleBucket: "owner",
+            shopId: "preview",
+            shopName: "Demo Shop",
+            requestsThisMonth: 30,
+          },
+          {
+            userId: "u2",
+            fullName: "Store Manager",
+            role: "manager",
+            roleBucket: "manager",
+            shopId: "preview",
+            shopName: "Demo Shop",
+            requestsThisMonth: 15,
+          },
+        ],
       });
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [{ settings }, m] = await Promise.all([fetchPlatformAiSettings(true), fetchAiPlatformMetrics(30)]);
+    const [{ settings }, m, a] = await Promise.all([
+      fetchPlatformAiSettings(true),
+      fetchAiPlatformMetrics(30),
+      fetchAiAuthorizationSnapshot(),
+    ]);
     setDraft(settings);
     setMetrics(m);
+    setAuthz(a);
     setLoading(false);
     void runHealth(true);
   }, [previewMode, runHealth]);
@@ -195,6 +237,11 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
   }
 
   const masterOff = !draft.enabled;
+  const selectable = adminSelectableAiProviders();
+  const liveProvider = coerceAdminSelectableProvider(draft.provider);
+  const unimplementedStored =
+    draft.provider !== "deepseek" && draft.provider !== "ollama";
+  const planLimits = draft.plan_limits ?? DEFAULT_AI_PLAN_LIMITS;
 
   return (
     <div className="space-y-4">
@@ -204,7 +251,7 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
           AI Control Center
         </h1>
         <p className="text-xs font-semibold text-muted-foreground">
-          Single source of truth for all AI features, limits, and providers. All flags default off.
+          Master switch and live features only. Default is off. No provider secrets in this app.
         </p>
       </div>
 
@@ -219,6 +266,41 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
         </div>
       ) : null}
 
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">AI system</p>
+        <p className={`mt-1 text-lg font-black ${draft.enabled ? "text-emerald-700" : "text-rose-800"}`}>
+          {draft.enabled ? "ENABLED" : "DISABLED"}
+        </p>
+        <p className="mt-2 text-sm font-semibold text-muted-foreground">
+          {draft.enabled
+            ? "Edge AI may run only for live features on authorized shops and authorized shop roles."
+            : "No Edge calls, no generation, no AI spend. All features are blocked."}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={previewMode || draft.enabled}
+            onClick={() => setDraft({ ...draft, enabled: true })}
+            className="min-h-[40px] rounded-xl bg-waka-600 px-4 text-xs font-black text-white disabled:bg-muted disabled:text-muted-foreground"
+          >
+            Enable AI
+          </button>
+          <button
+            type="button"
+            disabled={previewMode || !draft.enabled}
+            onClick={() => setDraft({ ...draft, enabled: false })}
+            className="min-h-[40px] rounded-xl border border-border px-4 text-xs font-black disabled:opacity-40"
+          >
+            Disable AI
+          </button>
+        </div>
+        {previewMode ? (
+          <p className="mt-3 text-xs font-semibold text-amber-800">Preview mode — master switch is read-only.</p>
+        ) : (
+          <p className="mt-3 text-xs font-semibold text-muted-foreground">Save to apply. Super admin and operations admin only.</p>
+        )}
+      </section>
+
       <AiStatusCard
         report={healthReport}
         loading={healthLoading}
@@ -227,17 +309,13 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
 
       {metrics ? (
         <section className="rounded-2xl border border-border bg-card p-4">
-          <h2 className="mb-3 text-sm font-black text-foreground">Usage &amp; cost (this month)</h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <h2 className="mb-3 text-sm font-black text-foreground">AI usage</h2>
+          <p className="mb-3 text-[11px] font-black uppercase tracking-wide text-muted-foreground">Today</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {[
-              { label: "Total requests", value: metrics.totals.requests.toLocaleString() },
-              { label: "Successful", value: metrics.totals.successful.toLocaleString() },
-              { label: "Failed", value: metrics.totals.failed.toLocaleString() },
-              { label: "Cache hits", value: metrics.totals.cacheHits.toLocaleString() },
-              { label: "Cache misses", value: metrics.totals.cacheMisses.toLocaleString() },
-              { label: "Est. cost (USD)", value: `$${metrics.totals.estimatedCostUsd.toFixed(2)}` },
-              { label: "Avg latency", value: `${Math.round(metrics.totals.avgLatencyMs)} ms` },
-              { label: "Requests left", value: metrics.limits.remainingRequests.toLocaleString() },
+              { label: "Requests", value: metrics.today.requests.toLocaleString() },
+              { label: "Estimated cost", value: `$${metrics.today.estimatedCostUsd.toFixed(2)}` },
+              { label: "Errors", value: metrics.today.failed.toLocaleString() },
             ].map((m) => (
               <div key={m.label} className="rounded-xl border border-border bg-muted px-3 py-3">
                 <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{m.label}</p>
@@ -245,6 +323,52 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
               </div>
             ))}
           </div>
+          <p className="mb-3 mt-4 text-[11px] font-black uppercase tracking-wide text-muted-foreground">This month</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { label: "Total requests", value: metrics.totals.requests.toLocaleString() },
+              { label: "Successful", value: metrics.totals.successful.toLocaleString() },
+              { label: "Failed", value: metrics.totals.failed.toLocaleString() },
+              { label: "Est. cost (USD)", value: `$${metrics.totals.estimatedCostUsd.toFixed(2)}` },
+              { label: "Cache hits", value: metrics.totals.cacheHits.toLocaleString() },
+              { label: "Avg latency", value: `${Math.round(metrics.totals.avgLatencyMs)} ms` },
+              { label: "Requests left", value: metrics.limits.remainingRequests.toLocaleString() },
+              { label: "Budget left", value: `$${metrics.limits.remainingBudgetUsd.toFixed(2)}` },
+            ].map((m) => (
+              <div key={m.label} className="rounded-xl border border-border bg-muted px-3 py-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{m.label}</p>
+                <p className="mt-1 text-lg font-black text-foreground">{m.value}</p>
+              </div>
+            ))}
+          </div>
+          {metrics.byShop.length > 0 ? (
+            <div className="mt-4">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Top shops</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {metrics.byShop.map((r, i) => (
+                  <li key={r.shop_id} className="flex justify-between font-semibold text-foreground">
+                    <span className="truncate">
+                      {i + 1}. {r.shop_name}
+                    </span>
+                    <span>{r.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {metrics.byError.length > 0 ? (
+            <div className="mt-4">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Errors</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {metrics.byError.map((r) => (
+                  <li key={r.reason} className="flex justify-between gap-3 font-semibold text-foreground">
+                    <span className="truncate">{r.reason}</span>
+                    <span>{r.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {metrics.byFeature.length > 0 ? (
             <div className="mt-4">
               <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">By feature</p>
@@ -260,37 +384,43 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
               </ul>
             </div>
           ) : null}
-          {metrics.byShop.length > 0 ? (
-            <div className="mt-4">
-              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Top shops</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {metrics.byShop.map((r) => (
-                  <li key={r.shop_id} className="flex justify-between font-semibold text-foreground">
-                    <span className="truncate">{r.shop_name}</span>
-                    <span>{r.count}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </section>
       ) : null}
 
       <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-black text-foreground">General</h2>
-        <div className="space-y-3">
-          <FeatureToggle
-            label="Enable AI Platform"
-            description="Master switch — when off, all AI is blocked and no provider costs are incurred."
-            checked={draft.enabled}
-            disabled={previewMode}
-            onChange={(v) => setDraft({ ...draft, enabled: v })}
-          />
-          <label className={labelCls}>
-            AI Provider
+        <h2 className="mb-3 text-sm font-black text-foreground">Provider</h2>
+        <ul className="space-y-2">
+          <li className="flex items-center justify-between rounded-xl border border-border bg-muted px-4 py-3">
+            <span className="text-sm font-bold text-foreground">DeepSeek</span>
+            <span className="text-xs font-black uppercase tracking-wide text-emerald-700">Available</span>
+          </li>
+          {UNAVAILABLE_PRODUCTION_AI_PROVIDERS.map((p) => (
+            <li
+              key={p}
+              className="flex items-center justify-between rounded-xl border border-border bg-muted/60 px-4 py-3"
+            >
+              <span className="text-sm font-bold capitalize text-muted-foreground">{p}</span>
+              <span className="text-xs font-black uppercase tracking-wide text-muted-foreground">Not configured</span>
+            </li>
+          ))}
+          {isOllamaProviderSelectable() ? (
+            <li className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <span className="text-sm font-bold text-foreground">Ollama</span>
+              <span className="text-xs font-black uppercase tracking-wide text-amber-900">Local / staging only</span>
+            </li>
+          ) : null}
+        </ul>
+        {unimplementedStored ? (
+          <p className="mt-3 text-xs font-semibold text-amber-900">
+            Stored provider is not implemented. Saving will switch to DeepSeek.
+          </p>
+        ) : null}
+        {selectable.includes("ollama") ? (
+          <label className={`${labelCls} mt-3`}>
+            Active provider (staging / local)
             <select
               className={inputCls}
-              value={coerceAdminSelectableProvider(draft.provider)}
+              value={liveProvider}
               disabled={previewMode || masterOff}
               onChange={(e) =>
                 setDraft({
@@ -299,62 +429,197 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
                 })
               }
             >
-              {adminSelectableAiProviders().map((p) => (
+              {selectable.map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>
               ))}
             </select>
           </label>
-          {draft.provider === "deepseek" ? (
-            <label className={labelCls}>
-              DeepSeek model
-              <select
-                className={inputCls}
-                value={draft.provider_config.deepseek_model ?? "deepseek-chat"}
+        ) : null}
+        {liveProvider === "deepseek" || draft.provider === "deepseek" ? (
+          <label className={`${labelCls} mt-3`}>
+            DeepSeek model
+            <select
+              className={inputCls}
+              value={draft.provider_config.deepseek_model ?? "deepseek-chat"}
+              disabled={previewMode || masterOff}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  provider_config: {
+                    ...draft.provider_config,
+                    deepseek_model: e.target.value as DeepSeekModel,
+                  },
+                })
+              }
+            >
+              {DEEPSEEK_MODEL_OPTIONS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <p className="mt-3 text-xs text-muted-foreground">
+          Set <code className="rounded bg-muted px-1">DEEPSEEK_API_KEY</code> in Supabase Edge secrets. Never paste keys here.
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-black text-foreground">Live AI features</h2>
+        <p className="mb-3 text-xs font-semibold text-muted-foreground">
+          Only deployed Edge features can be enabled. Master switch must be on.
+        </p>
+        <div className="space-y-2">
+          {LIVE_AI_FEATURES.map((key) => {
+            const meta = AI_FEATURES[key];
+            return (
+              <FeatureToggle
+                key={key}
+                label={meta.label}
+                description={meta.description}
+                checked={featureValue(draft, key)}
                 disabled={previewMode || masterOff}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    provider_config: {
-                      ...draft.provider_config,
-                      deepseek_model: e.target.value as DeepSeekModel,
-                    },
-                  })
-                }
-              >
-                {DEEPSEEK_MODEL_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
+                onChange={(v) => setDraft(setFeature(draft, key, v))}
+              />
+            );
+          })}
         </div>
       </section>
 
-      {SECTION_FEATURES.map((section) => (
-        <section key={section.title} className="rounded-2xl border border-border bg-card p-4">
-          <h2 className="mb-3 text-sm font-black text-foreground">{section.title}</h2>
-          <div className="space-y-2">
-            {section.keys.map((key) => {
-              const meta = AI_FEATURES[key];
-              return (
-                <FeatureToggle
-                  key={key}
-                  label={meta.label}
-                  description={meta.description}
-                  deployed={meta.deployed}
-                  checked={featureValue(draft, key)}
-                  disabled={previewMode || masterOff}
-                  onChange={(v) => setDraft(setFeature(draft, key, v))}
-                />
-              );
-            })}
+      <section className="rounded-2xl border border-dashed border-border bg-muted/40 p-4">
+        <h2 className="mb-1 text-sm font-black text-muted-foreground">Coming soon</h2>
+        <p className="mb-3 text-xs font-semibold text-muted-foreground">Not deployed. These cannot be turned on.</p>
+        <ul className="space-y-2">
+          {COMING_SOON_AI_FEATURES.map((key) => (
+            <li
+              key={key}
+              className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3"
+            >
+              <span className="text-sm font-bold text-muted-foreground">{AI_FEATURES[key].label}</span>
+              <span className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Not deployed</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-black text-foreground">Shop &amp; user authorization</h2>
+        <p className="mb-3 text-xs font-semibold text-muted-foreground">
+          Shops must be explicitly authorized. Users inherit access from their shop membership role. Cashiers are off
+          by default. The server enforces this — the POS UI is only a preview.
+        </p>
+        <div className="mb-4 space-y-2">
+          {(
+            [
+              ["owner", "Owner"],
+              ["manager", "Manager / supervisor"],
+              ["cashier", "Cashier and other shop roles"],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key} className="rounded-xl border border-border bg-muted px-4 py-3">
+              <WakaSwitch
+                checked={draft.role_access?.[key] ?? DEFAULT_AI_ROLE_ACCESS[key]}
+                disabled={previewMode || masterOff}
+                onCheckedChange={(v) =>
+                  setDraft({
+                    ...draft,
+                    role_access: {
+                      ...(draft.role_access ?? DEFAULT_AI_ROLE_ACCESS),
+                      [key]: v,
+                    } satisfies AiRoleAccess,
+                  })
+                }
+                label={label}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-border bg-muted px-3 py-3">
+            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Authorized shops</p>
+            <p className="mt-1 text-lg font-black text-foreground">{authz?.authorizedShopCount ?? 0}</p>
           </div>
-        </section>
-      ))}
+          <div className="rounded-xl border border-border bg-muted px-3 py-3">
+            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Authorized users</p>
+            <p className="mt-1 text-lg font-black text-foreground">{authz?.authorizedUserCount ?? 0}</p>
+          </div>
+        </div>
+        {authz?.authorizedShops.length ? (
+          <div className="mt-4">
+            <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Authorized shops</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {authz.authorizedShops.map((s) => (
+                <li key={s.shopId} className="flex justify-between gap-3 font-semibold text-foreground">
+                  <span className="truncate">
+                    {s.shopName}
+                    <span className="ml-2 text-xs font-bold text-muted-foreground">{s.planCode}</span>
+                  </span>
+                  <span className="shrink-0 text-xs">{s.requestsThisMonth} req</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">
+              Toggle a shop in Shop Console → AI. New shops stay off until authorized.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs font-semibold text-muted-foreground">
+            No authorized shops yet. Enable AI on a shop in Shop Console → AI.
+          </p>
+        )}
+        {authz?.authorizedUsers.length ? (
+          <div className="mt-4">
+            <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Authorized users</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {authz.authorizedUsers.map((u) => (
+                <li key={`${u.userId}-${u.shopId}`} className="flex justify-between gap-3 font-semibold text-foreground">
+                  <span className="truncate">
+                    {u.fullName}
+                    <span className="ml-2 text-xs font-bold capitalize text-muted-foreground">
+                      {u.role} · {u.shopName}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs">{u.requestsThisMonth} req</span>
+                </li>
+              ))}
+            </ul>
+            {authz.authorizedUserCount > authz.authorizedUsers.length ? (
+              <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                Showing {authz.authorizedUsers.length} of {authz.authorizedUserCount}.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-black text-foreground">Subscription entitlements</h2>
+        <p className="mb-3 text-xs font-semibold text-muted-foreground">
+          Enforced server-side as a shop monthly ceiling from the shop&apos;s WAKA plan. Enterprise is unlimited unless
+          a shop monthly limit is set.
+        </p>
+        <ul className="space-y-2 text-sm font-semibold text-foreground">
+          <li className="flex justify-between rounded-xl border border-border bg-muted px-4 py-2">
+            <span>Free</span>
+            <span>{formatPlanLimit(planLimits.free)}</span>
+          </li>
+          <li className="flex justify-between rounded-xl border border-border bg-muted px-4 py-2">
+            <span>Starter</span>
+            <span>{formatPlanLimit(planLimits.starter)}</span>
+          </li>
+          <li className="flex justify-between rounded-xl border border-border bg-muted px-4 py-2">
+            <span>Business</span>
+            <span>{formatPlanLimit(planLimits.business)}</span>
+          </li>
+          <li className="flex justify-between rounded-xl border border-border bg-muted px-4 py-2">
+            <span>Enterprise</span>
+            <span>{formatPlanLimit(planLimits.enterprise)}</span>
+          </li>
+        </ul>
+      </section>
 
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-black text-foreground">Limits &amp; cost controls</h2>
@@ -386,8 +651,6 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
           ))}
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Set <code className="rounded bg-muted px-1">DEEPSEEK_API_KEY</code> in Supabase Edge secrets, then run{" "}
-          <code className="rounded bg-muted px-1">npm run supabase:deploy:ai</code>.
           Cache hits count toward request limits but not budget limits.
         </p>
       </section>

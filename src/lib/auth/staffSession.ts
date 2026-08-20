@@ -78,6 +78,11 @@ export function staffRequirePinAfterIdle(preferences: ShopPreferences): boolean 
   return preferences.staffRequirePinAfterIdle !== false;
 }
 
+/** Idle / leave-sell / session-expiry may lock only when Auto-lock is not Never. */
+export function isPosAutoLockEnabled(preferences: ShopPreferences): boolean {
+  return resolveStaffAutoLockMinutes(preferences) > 0 && staffRequirePinAfterIdle(preferences);
+}
+
 export function touchStaffActivity(at = new Date().toISOString()): void {
   writeIso(ACTIVITY_KEY, at);
 }

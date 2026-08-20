@@ -1,5 +1,6 @@
 import { isPosSellPath, lockPosAfterSellExit } from "./posSellExit";
 import { confirmLeaveActiveSaleIfNeeded } from "./posLeaveGuard";
+import { lockPos } from "./auth";
 
 export type PosExitChoice = "lock" | "continue" | "cancel";
 
@@ -29,6 +30,6 @@ export async function confirmLeavePosIfNeeded(fromPath: string, toPath: string):
   }
   const choice = await exitHandler.confirmPosExit();
   if (choice === "cancel") return false;
-  if (choice === "lock") lockPosAfterSellExit();
+  if (choice === "lock") lockPos("manual");
   return true;
 }

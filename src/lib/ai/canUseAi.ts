@@ -1,4 +1,4 @@
-import type { AiFeatureName } from "./aiFeatures";
+import { isLiveAiFeature, type AiFeatureName } from "./aiFeatures";
 import {
   DEFAULT_PLATFORM_AI_SETTINGS_V2,
   isFeatureEnabledInSettings,
@@ -9,14 +9,20 @@ import {
   isFeatureEnabledInShopSettings,
   type ShopAiSettings,
 } from "./shopAiSettings";
+import { DEFAULT_AI_ROLE_ACCESS, isAiRoleAuthorized, type AiRoleAccess } from "./aiAuthorization";
+import { resolveAiPlanRequestLimit } from "./aiPlanEntitlements";
+import type { UserRole } from "../../types";
 
 export type AiBlockCode =
   | "ai_platform_disabled"
   | "feature_disabled"
   | "pilot_not_approved"
   | "shop_ai_disabled"
+  | "shop_not_authorized"
   | "shop_feature_disabled"
+  | "user_not_authorized"
   | "shop_monthly_limit_reached"
+  | "plan_limit_reached"
   | "monthly_request_limit_reached"
   | "monthly_budget_limit_reached"
   | "per_shop_limit_reached"
@@ -44,6 +50,9 @@ export function canUseAi(
   options?: {
     settings?: PlatformAiSettingsV2;
     shopSettings?: ShopAiSettings | null;
+    userRole?: UserRole | string | null;
+    roleAccess?: AiRoleAccess;
+    wakaPlanCode?: string | null;
     usage?: AiUsageSnapshot;
     isCacheHit?: boolean;
     requireDeployed?: boolean;
@@ -53,28 +62,37 @@ export function canUseAi(
   const shopSettings = options?.shopSettings;
   const hasShopRow = hasShopAiSettingsRow(shopSettings);
   const requireDeployed = options?.requireDeployed !== false;
+  const roleAccess = options?.roleAccess ?? settings.role_access ?? DEFAULT_AI_ROLE_ACCESS;
 
   if (!settings.enabled) {
     return { allowed: false, reason: "AI platform is disabled.", code: "ai_platform_disabled" };
+  }
+
+  if (requireDeployed && !isLiveAiFeature(feature)) {
+    return { allowed: false, reason: "AI feature is not deployed.", code: "feature_not_deployed" };
   }
 
   if (!isFeatureEnabledInSettings(settings, feature)) {
     return { allowed: false, reason: "AI feature disabled", code: "feature_disabled" };
   }
 
-  if (settings.pilot_rollout_mode) {
-    if (!hasShopRow || !shopSettings.ai_enabled) {
-      return {
-        allowed: false,
-        reason: "Shop is not approved for AI pilot",
-        code: "pilot_not_approved",
-      };
-    }
-  } else if (hasShopRow && !shopSettings.ai_enabled) {
-    return { allowed: false, reason: "Shop AI disabled", code: "shop_ai_disabled" };
+  if (!hasShopRow) {
+    return {
+      allowed: false,
+      reason: "Shop is not authorized for AI",
+      code: settings.pilot_rollout_mode ? "pilot_not_approved" : "shop_not_authorized",
+    };
   }
 
-  if (hasShopRow && !isFeatureEnabledInShopSettings(shopSettings, feature)) {
+  if (!shopSettings.ai_enabled) {
+    return {
+      allowed: false,
+      reason: settings.pilot_rollout_mode ? "Shop is not approved for AI pilot" : "Shop AI disabled",
+      code: settings.pilot_rollout_mode ? "pilot_not_approved" : "shop_ai_disabled",
+    };
+  }
+
+  if (!isFeatureEnabledInShopSettings(shopSettings, feature)) {
     return {
       allowed: false,
       reason: "AI feature disabled for this shop",
@@ -82,18 +100,34 @@ export function canUseAi(
     };
   }
 
+  if (!isAiRoleAuthorized(options?.userRole, roleAccess)) {
+    return { allowed: false, reason: "Your role is not authorized for AI", code: "user_not_authorized" };
+  }
+
   if (settings.provider !== "deepseek") {
     return { allowed: false, reason: "AI provider is not configured.", code: "provider_not_configured" };
   }
 
   const usage = options?.usage;
-  const shopLimit = hasShopRow ? shopSettings.monthly_request_limit : 0;
+  const shopLimit = shopSettings.monthly_request_limit;
   if (shopLimit > 0 && usage?.shopRequests != null && usage.shopRequests >= shopLimit) {
     return {
       allowed: false,
       reason: "Shop monthly AI limit reached",
       code: "shop_monthly_limit_reached",
     };
+  }
+
+  const planSource = options?.wakaPlanCode ?? shopSettings.plan_code;
+  if (planSource) {
+    const planCap = resolveAiPlanRequestLimit(planSource, settings.plan_limits);
+    if (planCap != null && usage?.shopRequests != null && usage.shopRequests >= planCap) {
+      return {
+        allowed: false,
+        reason: "Plan AI request limit reached",
+        code: "plan_limit_reached",
+      };
+    }
   }
 
   if (usage?.monthlyRequests != null && usage.monthlyRequests >= settings.monthly_request_limit) {
@@ -120,7 +154,6 @@ export function canUseAi(
     }
   }
 
-  void requireDeployed;
   return { allowed: true };
 }
 
@@ -128,6 +161,7 @@ export function canUseAiAllowed(
   feature: AiFeatureName,
   settings?: PlatformAiSettingsV2,
   shopSettings?: ShopAiSettings | null,
+  userRole?: UserRole | string | null,
 ): boolean {
-  return canUseAi(feature, { settings, shopSettings }).allowed;
+  return canUseAi(feature, { settings, shopSettings, userRole }).allowed;
 }

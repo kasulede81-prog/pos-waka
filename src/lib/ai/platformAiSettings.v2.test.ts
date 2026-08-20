@@ -38,6 +38,8 @@ describe("parsePlatformAiSettingsV2", () => {
     expect(s.ask_waka).toBe(false);
     expect(s.pilot_rollout_mode).toBe(false);
     expect(s.pilot_auto_enable_new_shops).toBe(false);
+    expect(s.role_access.cashier).toBe(false);
+    expect(s.role_access.owner).toBe(true);
     expect(DEFAULT_PLATFORM_AI_SETTINGS_V2.ask_waka).toBe(false);
     expect(DEFAULT_PLATFORM_AI_SETTINGS_V2.provider).toBe(DEFAULT_PRODUCTION_AI_PROVIDER);
   });
@@ -46,8 +48,8 @@ describe("parsePlatformAiSettingsV2", () => {
 describe("production AI provider isolation", () => {
   it("keeps DeepSeek as the production default", () => {
     expect(DEFAULT_PRODUCTION_AI_PROVIDER).toBe("deepseek");
-    expect(PRODUCTION_AI_PROVIDER_OPTIONS).toContain("deepseek");
-    expect(PRODUCTION_AI_PROVIDER_OPTIONS).not.toContain("ollama");
+    expect(PRODUCTION_AI_PROVIDER_OPTIONS).toEqual(["deepseek"]);
+    expect(PRODUCTION_AI_PROVIDER_OPTIONS).not.toContain("openai");
   });
 
   it("keeps Ollama in the architecture list for local development", () => {
@@ -70,16 +72,17 @@ describe("production AI provider isolation", () => {
   it("hides Ollama from production admin configuration", () => {
     const env = { PROD: true, DEV: false, VITE_SUPABASE_URL: PROD_URL };
     expect(adminSelectableAiProviders(env)).not.toContain("ollama");
-    expect(adminSelectableAiProviders(env)).toEqual(["deepseek", "openai", "gemini", "claude"]);
+    expect(adminSelectableAiProviders(env)).toEqual(["deepseek"]);
     expect(coerceAdminSelectableProvider("ollama", env)).toBe("deepseek");
     expect(coerceAdminSelectableProvider("deepseek", env)).toBe("deepseek");
-    expect(coerceAdminSelectableProvider("openai", env)).toBe("openai");
+    expect(coerceAdminSelectableProvider("openai", env)).toBe("deepseek");
   });
 
   it("still offers Ollama in local development against a non-production target", () => {
     const env = { DEV: true, PROD: false, VITE_SUPABASE_URL: STAGING_URL };
     expect(isOllamaProviderSelectable(env)).toBe(true);
     expect(adminSelectableAiProviders(env)).toContain("ollama");
+    expect(adminSelectableAiProviders(env)).not.toContain("openai");
     expect(coerceAdminSelectableProvider("ollama", env)).toBe("ollama");
   });
 
@@ -128,5 +131,18 @@ describe("production AI provider isolation", () => {
     expect((payload.provider_config as { ollama_base_url?: string }).ollama_base_url).toBe(
       "http://127.0.0.1:11434",
     );
+  });
+
+  it("forces coming-soon feature flags off on save", () => {
+    const payload = settingsToAdminPayload({
+      ...DEFAULT_PLATFORM_AI_SETTINGS_V2,
+      marketing_assistant: true,
+      product_scanner: true,
+      ocr: true,
+    });
+    expect(payload.marketing_assistant).toBe(false);
+    expect(payload.product_scanner).toBe(false);
+    expect(payload.ocr).toBe(false);
+    expect(payload.provider).toBe("deepseek");
   });
 });

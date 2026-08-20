@@ -45,6 +45,8 @@ export type FeatureFlagSearchRow = {
 export const INTERNAL_ADMIN_FEATURE_FLAGS: FeatureFlagSearchRow[] = [
   { id: "pilot", label: "Pilot cohort", path: "/internal/waka/pilot" },
   { id: "display_scale", label: "POS display scale", path: "/internal/waka/display-scale" },
+  { id: "remote_support", label: "Remote Support", path: "/internal/waka/remote-support" },
+  { id: "ai_settings", label: "AI Control Center", path: "/internal/waka/ai-settings" },
   { id: "business_types", label: "Business types", path: "/internal/waka/business-types" },
 ];
 

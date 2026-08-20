@@ -64,6 +64,7 @@ const deviceA = "device-aaaa-1111";
 function snapshot(sessionStatus?: string) {
   return {
     deviceFingerprint: deviceA,
+    remoteSupportEnabled: true,
     inbox: {
       request: null,
       session: sessionStatus ? { status: sessionStatus } : null,

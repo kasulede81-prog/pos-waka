@@ -10,8 +10,12 @@ export type AiErrorCode =
   | "feature_disabled"
   | "pilot_not_approved"
   | "shop_ai_disabled"
+  | "shop_not_authorized"
   | "shop_feature_disabled"
   | "shop_monthly_limit_reached"
+  | "user_not_authorized"
+  | "plan_limit_reached"
+  | "feature_not_deployed"
   | "permission_check_failed"
   | "settings_unavailable"
   | "rpc_missing"
@@ -39,8 +43,12 @@ const FRIENDLY: Record<string, string> = {
   feature_disabled: "Couldn't get suggestions. You can still add the product yourself.",
   pilot_not_approved: "Couldn't get suggestions. You can still add the product yourself.",
   shop_ai_disabled: "Couldn't get suggestions. You can still add the product yourself.",
+  shop_not_authorized: "Couldn't get suggestions. You can still add the product yourself.",
   shop_feature_disabled: "Couldn't get suggestions. You can still add the product yourself.",
   shop_monthly_limit_reached: "AI is temporarily unavailable. Try again later or add the product manually.",
+  user_not_authorized: "Couldn't get suggestions. You can still add the product yourself.",
+  plan_limit_reached: "AI is temporarily unavailable. Try again later or add the product manually.",
+  feature_not_deployed: "Couldn't get suggestions. You can still add the product yourself.",
   permission_check_failed: "Couldn't get suggestions. You can still add the product yourself.",
   settings_unavailable: "Couldn't get suggestions. You can still add the product yourself.",
   rpc_missing: "Couldn't get suggestions. You can still add the product yourself.",
@@ -69,8 +77,12 @@ const DEV_LABEL: Record<string, string> = {
   feature_disabled: "AI feature disabled",
   pilot_not_approved: "Shop not approved for AI pilot",
   shop_ai_disabled: "Shop AI disabled",
+  shop_not_authorized: "Shop not authorized for AI",
   shop_feature_disabled: "Feature disabled for shop",
   shop_monthly_limit_reached: "Shop rate limit reached",
+  user_not_authorized: "Role not authorized for AI",
+  plan_limit_reached: "Plan AI request limit reached",
+  feature_not_deployed: "AI feature is not deployed",
   permission_check_failed: "Permission check failed",
   settings_unavailable: "AI settings unavailable",
   rpc_missing: "RPC missing",
@@ -108,8 +120,12 @@ export function normalizeAiErrorCode(code?: string | null, message?: string | nu
   if (raw === "feature_disabled") return "feature_disabled";
   if (raw === "pilot_not_approved") return "pilot_not_approved";
   if (raw === "shop_ai_disabled") return "shop_ai_disabled";
+  if (raw === "shop_not_authorized") return "shop_not_authorized";
   if (raw === "shop_feature_disabled") return "shop_feature_disabled";
   if (raw === "shop_monthly_limit_reached") return "shop_monthly_limit_reached";
+  if (raw === "user_not_authorized") return "user_not_authorized";
+  if (raw === "plan_limit_reached") return "plan_limit_reached";
+  if (raw === "feature_not_deployed") return "feature_not_deployed";
   if (raw === "permission_check_failed") return "permission_check_failed";
   if (raw === "settings_unavailable") return "settings_unavailable";
   if (raw === "monthly_request_limit_reached") return "monthly_request_limit_reached";

@@ -37,6 +37,28 @@ function isInsideRoot(candidate, root) {
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
+function realpathOrNull(io, value) {
+  if (!value) return null;
+  if (typeof io.realpathSync === "function") {
+    try {
+      return path.resolve(io.realpathSync(value));
+    } catch {
+      return null;
+    }
+  }
+  return path.resolve(value);
+}
+
+function isSymlinkOrJunction(io, value) {
+  if (typeof io.lstatSync !== "function") return false;
+  try {
+    const st = io.lstatSync(value);
+    return typeof st.isSymbolicLink === "function" && st.isSymbolicLink() === true;
+  } catch {
+    return false;
+  }
+}
+
 function resolveLabExecutable(input = {}) {
   ignoreRendererLaunchInput(input.rendererPayload);
   const env = input.env || process.env;
@@ -44,6 +66,11 @@ function resolveLabExecutable(input = {}) {
   const roots = labRootsFromNativeConfig(env, input.appPaths || {});
   if (roots.length === 0) {
     return { ok: false, error: "lab_dir_not_configured" };
+  }
+
+  const realRoots = [];
+  for (const root of roots) {
+    realRoots.push(realpathOrNull(io, root) || path.resolve(root));
   }
 
   const configured = String(env?.WAKA_RUSTDESK_EXECUTABLE_PATH ?? "").trim();
@@ -54,15 +81,16 @@ function resolveLabExecutable(input = {}) {
     }
     candidates.push(path.resolve(configured));
   } else {
-    for (const root of roots) {
+    for (const root of realRoots) {
       candidates.push(path.join(root, "rustdesk.exe"), path.join(root, "rustdesk"));
     }
   }
 
   for (const candidate of candidates) {
-    const allowed = roots.some((root) => isInsideRoot(candidate, root));
-    if (!allowed) continue;
     if (!io.existsSync(candidate)) continue;
+    if (isSymlinkOrJunction(io, candidate)) {
+      return { ok: false, error: "executable_symlink_rejected" };
+    }
     let stat;
     try {
       stat = io.statSync(candidate);
@@ -72,7 +100,19 @@ function resolveLabExecutable(input = {}) {
     if (!stat.isFile()) continue;
     const name = path.basename(candidate).toLowerCase();
     if (!EXPECTED_FILENAMES.has(name)) continue;
-    return { ok: true, path: candidate };
+    const realFile = realpathOrNull(io, candidate);
+    if (!realFile) {
+      return { ok: false, error: "executable_path_rejected" };
+    }
+    const inside = realRoots.some((root) => isInsideRoot(realFile, root));
+    if (!inside) {
+      return { ok: false, error: "executable_path_rejected" };
+    }
+    const realName = path.basename(realFile).toLowerCase();
+    if (!EXPECTED_FILENAMES.has(realName)) {
+      return { ok: false, error: "executable_not_allowlisted" };
+    }
+    return { ok: true, path: realFile };
   }
 
   return { ok: false, error: "executable_not_allowlisted" };
@@ -83,4 +123,5 @@ module.exports = {
   ignoreRendererLaunchInput,
   labRootsFromNativeConfig,
   resolveLabExecutable,
+  isInsideRoot,
 };

@@ -22,6 +22,7 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
           onChange={(e) =>
             savePreferences({
               staffAutoLockMinutes: Number(e.target.value) as (typeof STAFF_AUTO_LOCK_OPTIONS)[number],
+              ...(Number(e.target.value) === 0 ? { posLocked: false } : {}),
             })
           }
           className="mt-1.5 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
@@ -37,7 +38,12 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
 
       <WakaSwitch
         checked={preferences.staffRequirePinAfterIdle !== false}
-        onCheckedChange={(checked) => savePreferences({ staffRequirePinAfterIdle: checked })}
+        onCheckedChange={(checked) =>
+          savePreferences({
+            staffRequirePinAfterIdle: checked,
+            ...(!checked ? { posLocked: false } : {}),
+          })
+        }
         label={t(lang, "settingsStaffRequirePinIdle")}
       />
       <WakaSwitch

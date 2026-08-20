@@ -11,6 +11,7 @@ import {
   type RemoteSupportReasonCode,
 } from "../../lib/remoteSupport";
 import { logInternalAdminAudit } from "../../lib/rescueSupportActions";
+import { useRemoteSupportPlatformEnabled } from "../../hooks/useRemoteSupportPlatformEnabled";
 import { RemoteSupportRequestDialog } from "./RemoteSupportRequestDialog";
 
 type Props = {
@@ -47,8 +48,9 @@ export function RemoteSupportConnectControl({
   const [error, setError] = useState<string | null>(null);
   const eligibility = evaluateRemoteSupportEligibility(device);
   const deviceLabel = device.label || (device.platform === "windows" ? "Windows POS" : device.platform || "POS");
+  const { enabled: platformEnabled } = useRemoteSupportPlatformEnabled();
 
-  if (!canRemoteSupport) return null;
+  if (!canRemoteSupport || !platformEnabled) return null;
 
   const submit = async (reasonCode: RemoteSupportReasonCode, reasonText: string) => {
     if (previewMode) {
