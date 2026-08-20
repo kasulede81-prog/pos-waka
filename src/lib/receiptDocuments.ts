@@ -3,6 +3,7 @@ import {
   buildReceiptDisplayData,
   buildSaleReceiptHtml,
   buildSaleReceiptText,
+  printReceiptText,
   printReceiptWithFallback,
   type ReceiptLabels,
 } from "./receiptPrint";

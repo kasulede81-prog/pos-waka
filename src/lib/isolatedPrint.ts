@@ -13,12 +13,12 @@ export function printIsolatedHtmlDocument(fullHtml: string): boolean {
   return printViaIframe(fullHtml);
 }
 
-export function printIsolatedPdfBlob(blob: Blob): boolean {
+export function printIsolatedPdfBlob(blob: Blob, title = "Waka report"): boolean {
   if (typeof window === "undefined" || typeof document === "undefined") return false;
   const url = URL.createObjectURL(blob);
   const opened = printViaPopupUrl(url, () => URL.revokeObjectURL(url));
   if (opened) return true;
-  return printPdfViaIframe(url);
+  return printPdfViaIframe(url, title);
 }
 
 function printViaPopup(fullHtml: string): boolean {
@@ -103,9 +103,9 @@ function printViaIframe(fullHtml: string): boolean {
   return true;
 }
 
-function printPdfViaIframe(url: string): boolean {
+function printPdfViaIframe(url: string, title = "Waka print"): boolean {
   const iframe = document.createElement("iframe");
-  iframe.setAttribute("title", "Waka print");
+  iframe.setAttribute("title", title);
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
     "position:fixed;inset:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;z-index:-1;";

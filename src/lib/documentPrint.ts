@@ -35,7 +35,7 @@ export async function printHtmlDocumentWithDesktop(
 export function printPdfBlobWithDesktop(blob: Blob, title = "Waka report"): boolean {
   if (typeof document === "undefined") return false;
   if (isNativePrintPlatform()) return false;
-  return printIsolatedPdfBlob(blob);
+  return printIsolatedPdfBlob(blob, title);
 }
 
 /** Electron: print focused window via main process (diagnostics / optional). */
