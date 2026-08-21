@@ -25,10 +25,21 @@ export function clearChunkReloadAttempted(): void {
   }
 }
 
+export async function clearServiceWorkerCaches(): Promise<void> {
+  if (typeof caches === "undefined") return;
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function unregisterServiceWorkers(): Promise<void> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
   const registrations = await navigator.serviceWorker.getRegistrations();
   await Promise.all(registrations.map((r) => r.unregister()));
+  await clearServiceWorkerCaches();
 }
 
 async function deleteIndexedDb(name: string): Promise<void> {

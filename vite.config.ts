@@ -105,8 +105,8 @@ export default defineConfig(({ mode }) => {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
-          globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
-          /** Internal admin bundle is online-only; exclude from SW precache (exceeds 2 MiB default). */
+          // Shell only — full JS/CSS precache blocked the tab for minutes on every Vercel deploy.
+          globPatterns: ["index.html", "manifest.webmanifest", "favicon.svg", "icons/icon-192.webp"],
           globIgnores: ["**/internal-admin-*.js"],
           navigateFallback: "/index.html",
           navigateFallbackDenylist: [
@@ -117,6 +117,22 @@ export default defineConfig(({ mode }) => {
             /^\/robots\.txt$/,
           ],
           runtimeCaching: [
+            {
+              urlPattern: /\/assets\/.+\.(js|css)$/i,
+              handler: "CacheFirst",
+              options: {
+                cacheName: "waka-hashed-assets",
+                expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              },
+            },
+            {
+              urlPattern: /\/assets\/.+\.woff2$/i,
+              handler: "CacheFirst",
+              options: {
+                cacheName: "waka-fonts",
+                expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              },
+            },
             {
               urlPattern: /^https:\/\/.*supabase\.co\/.*/i,
               handler: "NetworkFirst",
