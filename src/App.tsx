@@ -1244,9 +1244,7 @@ function AppRoutes() {
               path="settings/pin"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsChangeGate lang={lang}>
-                    <SettingsPinPage lang={lang} />
-                  </SettingsChangeGate>
+                  <SettingsPinPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

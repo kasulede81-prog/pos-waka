@@ -29,7 +29,7 @@ import {
   EnterpriseSecurityDialog,
   type EnterpriseSecurityDialogMode,
 } from "../components/security/EnterpriseSecurityDialog";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { defaultSecurityAuditLogger } from "../lib/enterpriseSecurity/audit";
 
@@ -62,6 +62,7 @@ function dialogModeForKind(kind: SensitiveActionKind): EnterpriseSecurityDialogM
 }
 
 export function SensitiveActionAuthProvider({ lang, children }: { lang: Language; children: ReactNode }) {
+  const navigate = useNavigate();
   const biometricAuthEnabled = usePosStore((s) => s.preferences.biometricAuthEnabled);
   const { isUnlocked: backOfficeUnlocked } = useBackOfficeSession();
   const [pending, setPending] = useState<PendingRequest | null>(null);
@@ -253,6 +254,11 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
     finish(false);
   }, [finish]);
 
+  const goSetShopPin = useCallback(() => {
+    finish(false);
+    navigate("/settings/pin");
+  }, [finish, navigate]);
+
   const value = useMemo(
     (): Ctx => ({
       isSessionActive: () => isSecuritySessionActive(),
@@ -275,13 +281,13 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
               {t(lang, "shopSecurityPinRecoveryCreateNew")}
             </p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <Link
-                to="/settings/pin"
+              <button
+                type="button"
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
-                onClick={() => finish(false)}
+                onClick={goSetShopPin}
               >
                 {t(lang, "shopSecurityPinRecoveryBannerAction")}
-              </Link>
+              </button>
               <button
                 type="button"
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-border px-4 text-sm font-black text-foreground"

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, beforeEach } from "vitest";
 import { usePosStore } from "../store/usePosStore";
 import type { SessionActor } from "./sessionActor";
@@ -134,9 +137,34 @@ describe("usePosStore — setPreferences authorization", () => {
     expect(usePosStore.getState().preferences.biometricAuthEnabled).not.toBe(true);
   });
 
+  it("removing the shop PIN also turns biometric off", () => {
+    usePosStore.setState({
+      sessionActor: actor("owner"),
+      preferences: {
+        ...usePosStore.getState().preferences,
+        backOfficePin: "argon2id:testhash",
+        biometricAuthEnabled: true,
+      },
+    });
+    usePosStore.getState().setPreferences({ backOfficePin: null });
+    expect(usePosStore.getState().preferences.backOfficePin).toBeNull();
+    expect(usePosStore.getState().preferences.biometricAuthEnabled).toBe(false);
+  });
+
   it("manager can mutate receipt settings", () => {
     usePosStore.setState({ sessionActor: actor("manager") });
     usePosStore.getState().setPreferences({ receiptCustomHeaderText: "Manager header" });
     expect(usePosStore.getState().preferences.receiptCustomHeaderText).toBe("Manager header");
+  });
+});
+
+describe("shop PIN setup route", () => {
+  it("does not wrap /settings/pin in SettingsChangeGate", () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../App.tsx"), "utf8");
+    const start = src.indexOf('path="settings/pin"');
+    const end = src.indexOf('path="settings/biometric"');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(src.slice(start, end)).not.toContain("SettingsChangeGate");
   });
 });

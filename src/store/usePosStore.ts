@@ -2062,6 +2062,9 @@ export const usePosStore = create<PosState>((set, get) => {
       }
       return;
     }
+    if (p.backOfficePin === null || p.backOfficePin === "") {
+      p = { ...p, backOfficePin: null, biometricAuthEnabled: false };
+    }
     if (p.biometricAuthEnabled === true) {
       const pin = p.backOfficePin ?? state.preferences.backOfficePin;
       if (!canEnableBiometricAuth({ backOfficePin: pin })) {
