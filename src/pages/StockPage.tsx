@@ -1,5 +1,5 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { useShallow } from "zustand/react/shallow";
@@ -24,6 +24,10 @@ import { mapBulkRowsToQuickAdd } from "../lib/ai/bulkInventoryAi";
 import { useAiFeatureGate } from "../hooks/useAiFeatureGate";
 import { inferProductGuess, uiPlaceholder } from "../lib/pharmacyUx";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
+import {
+  clearProductWizardSessionDraft,
+  readProductWizardSessionDraft,
+} from "../lib/productWizardSessionDraft";
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
 import { InventoryViewProvider } from "../features/inventory/viewEngine/InventoryViewContext";
@@ -194,6 +198,28 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [visibleProductIds, setVisibleProductIds] = useState<string[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { presets: savedFilterPresets, save: saveFilterPreset } = useInventorySavedFilters();
+
+  useLayoutEffect(() => {
+    const draft = readProductWizardSessionDraft();
+    if (!draft) return;
+    if (draft.kind === "pharmacy") {
+      if (!pharmacyMode) return;
+      setBulkOpen(true);
+      return;
+    }
+    if (pharmacyMode) return;
+    if (draft.fields.editingProductId) {
+      const p = usePosStore.getState().products.find((row) => row.id === draft.fields.editingProductId);
+      if (!p) {
+        clearProductWizardSessionDraft();
+        return;
+      }
+      setEditingProduct(p);
+    }
+    setBulkOpen(true);
+    // PRODUCT-CREATE-FLOW-1.1 — restore once when StockPage remounts after a hub tab switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const caps = detectBarcodeCapabilities();

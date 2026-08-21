@@ -30,6 +30,13 @@ import {
   wizardChoiceButtonClass,
 } from "./wizard/wizardTokens";
 import { RETAIL_PRODUCT_WIZARD_STEPS } from "../../lib/productWizardSteps";
+import {
+  clearProductWizardSessionDraft,
+  isRetailWizardDirty,
+  readProductWizardSessionDraft,
+  writeProductWizardSessionDraft,
+  type RetailWizardSessionFields,
+} from "../../lib/productWizardSessionDraft";
 
 export type SimpleAddWizardStep =
   | "name"
@@ -174,6 +181,41 @@ export function SimpleAddProductWizard({
     setSaveError(null);
   };
 
+  const captureFields = (): RetailWizardSessionFields => ({
+    step,
+    name,
+    shelf,
+    sellUnit,
+    sellUnitCustom,
+    hasPack,
+    packKind,
+    packCustom,
+    piecesPerPack,
+    stockCount,
+    sellPrice,
+    buyPackPrice,
+    auditReason,
+    editingProductId: editingProduct?.id ?? null,
+  });
+
+  const applyFields = (fields: RetailWizardSessionFields) => {
+    setStep(fields.step);
+    setName(fields.name);
+    setShelf(fields.shelf);
+    setSellUnit(fields.sellUnit);
+    setSellUnitCustom(fields.sellUnitCustom);
+    setHasPack(fields.hasPack);
+    setPackKind(fields.packKind);
+    setPackCustom(fields.packCustom);
+    setPiecesPerPack(fields.piecesPerPack);
+    setStockCount(fields.stockCount);
+    setSellPrice(fields.sellPrice);
+    setBuyPackPrice(fields.buyPackPrice);
+    setAuditReason(fields.auditReason);
+    setSavedFlash(false);
+    setSaveError(null);
+  };
+
   useEffect(() => {
     if (!open) return;
     if (prefill) {
@@ -195,8 +237,49 @@ export function SimpleAddProductWizard({
       setSaveError(null);
       return;
     }
+    const draft = readProductWizardSessionDraft();
+    if (
+      draft?.kind === "retail" &&
+      (draft.fields.editingProductId ?? null) === (editingProduct?.id ?? null)
+    ) {
+      applyFields(draft.fields);
+      return;
+    }
     reset();
-  }, [open, prefill, initialStep, shelves]);
+    // PRODUCT-CREATE-FLOW-1.1 — do not reset when `shelves` / products refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefill, initialStep, editingProduct?.id]);
+
+  useEffect(() => {
+    if (!open || savedFlash) return;
+    const fields = captureFields();
+    if (!isRetailWizardDirty(fields)) return;
+    writeProductWizardSessionDraft({ v: 1, kind: "retail", fields });
+  }, [
+    open,
+    savedFlash,
+    step,
+    name,
+    shelf,
+    sellUnit,
+    sellUnitCustom,
+    hasPack,
+    packKind,
+    packCustom,
+    piecesPerPack,
+    stockCount,
+    sellPrice,
+    buyPackPrice,
+    auditReason,
+    editingProduct?.id,
+  ]);
+
+  const dirty = !savedFlash && isRetailWizardDirty(captureFields());
+
+  const finishClose = () => {
+    clearProductWizardSessionDraft();
+    onClose();
+  };
 
   const shelfValue = shelf.trim() || generalCategoryLabel;
   const isLastStep = step === "buyPrice";
@@ -256,6 +339,7 @@ export function SimpleAddProductWizard({
     }
     setSaveError(null);
     if (addAnother) {
+      clearProductWizardSessionDraft();
       setSavedFlash(true);
       setName("");
       setShelf("");
@@ -273,7 +357,7 @@ export function SimpleAddProductWizard({
       return;
     }
     // Local commit already succeeded — close immediately (Phase 36.1).
-    onClose();
+    finishClose();
   };
 
   const goNext = () => {
@@ -309,7 +393,8 @@ export function SimpleAddProductWizard({
     <ProductWizardShell
       lang={lang}
       open={open}
-      onClose={onClose}
+      onClose={finishClose}
+      dirty={dirty}
       title={t(lang, isEdit ? "simpleAddEditTitle" : "simpleAddTitle")}
       titleId={titleId}
       descId={descId}

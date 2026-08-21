@@ -28,6 +28,13 @@ import { WizardPricingPanel } from "./wizard/WizardPricingPanel";
 import { WIZARD_INPUT_NUMERIC, WIZARD_INPUT_TEXT } from "./wizard/wizardTokens";
 import { PHARMACY_PRODUCT_WIZARD_STEPS } from "../../lib/productWizardSteps";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
+import {
+  clearProductWizardSessionDraft,
+  isPharmacyWizardDirty,
+  readProductWizardSessionDraft,
+  writeProductWizardSessionDraft,
+  type PharmacyWizardSessionFields,
+} from "../../lib/productWizardSessionDraft";
 
 type Step = (typeof PHARMACY_PRODUCT_WIZARD_STEPS)[number];
 
@@ -115,9 +122,120 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     setManufactureDate("");
   };
 
+  const captureFields = (): PharmacyWizardSessionFields => ({
+    step,
+    name,
+    category,
+    strength,
+    medicineForm,
+    expiryDate,
+    minAlert,
+    packagingEnabled,
+    baseUnit,
+    level1Enabled,
+    level1Unit,
+    level1Qty,
+    level2Enabled,
+    level2Unit,
+    level2Qty,
+    receivedOuterQty,
+    openingStock,
+    totalAmountPaid,
+    sellTablet,
+    sellStrip,
+    sellBox,
+    tabletPrice,
+    stripPrice,
+    boxPrice,
+    masterState: { ...masterState },
+    batchNumber,
+    manufactureDate,
+  });
+
+  const applyFields = (fields: PharmacyWizardSessionFields) => {
+    setStep(fields.step);
+    setName(fields.name);
+    setCategory(fields.category);
+    setStrength(fields.strength);
+    setMedicineForm(fields.medicineForm);
+    setExpiryDate(fields.expiryDate);
+    setMinAlert(fields.minAlert);
+    setPackagingEnabled(fields.packagingEnabled);
+    setBaseUnit(fields.baseUnit);
+    setLevel1Enabled(fields.level1Enabled);
+    setLevel1Unit(fields.level1Unit);
+    setLevel1Qty(fields.level1Qty);
+    setLevel2Enabled(fields.level2Enabled);
+    setLevel2Unit(fields.level2Unit);
+    setLevel2Qty(fields.level2Qty);
+    setReceivedOuterQty(fields.receivedOuterQty);
+    setOpeningStock(fields.openingStock);
+    setTotalAmountPaid(fields.totalAmountPaid);
+    setSellTablet(fields.sellTablet);
+    setSellStrip(fields.sellStrip);
+    setSellBox(fields.sellBox);
+    setTabletPrice(fields.tabletPrice);
+    setStripPrice(fields.stripPrice);
+    setBoxPrice(fields.boxPrice);
+    setMasterState({ ...masterStateFromProduct(null), ...fields.masterState });
+    setBatchNumber(fields.batchNumber);
+    setManufactureDate(fields.manufactureDate);
+    setSavedFlash(false);
+  };
+
   useEffect(() => {
-    if (!open) reset();
+    if (!open) return;
+    const draft = readProductWizardSessionDraft();
+    if (draft?.kind === "pharmacy") {
+      applyFields(draft.fields);
+      return;
+    }
+    reset();
   }, [open]);
+
+  useEffect(() => {
+    if (!open || savedFlash) return;
+    const fields = captureFields();
+    if (!isPharmacyWizardDirty(fields)) return;
+    writeProductWizardSessionDraft({ v: 1, kind: "pharmacy", fields });
+  }, [
+    open,
+    savedFlash,
+    step,
+    name,
+    category,
+    strength,
+    medicineForm,
+    expiryDate,
+    minAlert,
+    packagingEnabled,
+    baseUnit,
+    level1Enabled,
+    level1Unit,
+    level1Qty,
+    level2Enabled,
+    level2Unit,
+    level2Qty,
+    receivedOuterQty,
+    openingStock,
+    totalAmountPaid,
+    sellTablet,
+    sellStrip,
+    sellBox,
+    tabletPrice,
+    stripPrice,
+    boxPrice,
+    masterState,
+    batchNumber,
+    manufactureDate,
+  ]);
+
+  const dirty = !savedFlash && isPharmacyWizardDirty(captureFields());
+
+  const finishClose = () => {
+    clearProductWizardSessionDraft();
+    onClose();
+  };
 
   const stepIndex = STEPS.indexOf(step);
   const resolvedCategory = () => category.trim() || t(lang, "generalCategory");
@@ -259,7 +377,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     // Phase 36.1 — close immediately after local commit (no artificial delay).
     setSavedFlash(true);
     onSaved();
-    onClose();
+    finishClose();
     reset();
     return true;
   };
@@ -321,7 +439,8 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     <ProductWizardShell
       lang={lang}
       open={open}
-      onClose={onClose}
+      onClose={finishClose}
+      dirty={dirty}
       title={t(lang, "pharmacyPage_addMedicine")}
       titleId="pharmacy-add-medicine-title"
       stepIndex={stepIndex}
