@@ -48,6 +48,8 @@ function staff(partial: Partial<StaffAccount> & { id: string; name: string }): S
     active: true,
     pinHash: "hash",
     linkedAuthUserId: null,
+    createdAt: "2026-08-23T00:00:00.000Z",
+    updatedAt: "2026-08-23T00:00:00.000Z",
     ...partial,
   };
 }

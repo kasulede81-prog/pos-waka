@@ -36,7 +36,9 @@ export function normalizeLinkedAuthUserId(raw: string | null | undefined): strin
  * Commercial seller Auth UUID for cloud push.
  * Prefer explicit link; Auth cashiers already use UUID `userId`.
  */
-export function commercialAuthUserIdFromActor(actor: SessionActor | null | undefined): string | null {
+export function commercialAuthUserIdFromActor(
+  actor: Pick<SessionActor, "userId" | "linkedAuthUserId"> | null | undefined,
+): string | null {
   if (!actor) return null;
   const linked = normalizeLinkedAuthUserId(actor.linkedAuthUserId);
   if (linked) return linked;
