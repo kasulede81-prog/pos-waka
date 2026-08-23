@@ -37,6 +37,7 @@ import type {
   InventoryCountSession,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
+import { commercialAuthUserIdFromActor } from "../lib/sessionActor";
 import { checkStorePermissionEffective } from "../lib/storeAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import {
@@ -1696,6 +1697,7 @@ function normalizeSale(s: Sale): Sale {
     estimatedProfitUgx,
     customerId: s.customerId ?? null,
     soldByUserId: s.soldByUserId ?? null,
+    soldByAuthUserId: s.soldByAuthUserId ?? null,
     waiterStaffId: s.waiterStaffId ?? null,
     waiterName: s.waiterName ?? null,
     referenceLabel: s.referenceLabel ?? null,
@@ -3128,6 +3130,7 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel,
       soldByUserId: actor?.userId ?? null,
+      soldByAuthUserId: commercialAuthUserIdFromActor(actor),
       waiterStaffId: actor?.userId ?? null,
       waiterName: actor?.displayName ?? null,
     });
@@ -3205,6 +3208,7 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel: label,
       soldByUserId: actor?.userId ?? null,
+      soldByAuthUserId: commercialAuthUserIdFromActor(actor),
       waiterStaffId: actor?.userId ?? null,
       waiterName: actor?.displayName ?? null,
     });
@@ -3284,6 +3288,8 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId ?? existing?.tableSessionId ?? null,
       referenceLabel: existing?.referenceLabel ?? null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+      soldByAuthUserId:
+        commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
       waiterStaffId: existing?.waiterStaffId ?? tableWaiter.waiterStaffId,
       waiterName: existing?.waiterName ?? tableWaiter.waiterName,
       existing: existing ?? null,
@@ -3350,6 +3356,8 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel: existing?.referenceLabel ?? null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+      soldByAuthUserId:
+        commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
       existing: existing ?? null,
     });
     let nextFloor = state.preferences.hospitalityFloor;
@@ -3397,6 +3405,8 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel: existing?.referenceLabel ?? null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+      soldByAuthUserId:
+        commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
       existing: existing ?? null,
     });
     let nextFloor = state.preferences.hospitalityFloor;
@@ -3505,6 +3515,7 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: target.id,
       referenceLabel: targetSale.referenceLabel,
       soldByUserId: targetSale.soldByUserId ?? null,
+      soldByAuthUserId: targetSale.soldByAuthUserId ?? null,
       existing: targetSale,
     });
     const cancelledSource: Sale = { ...sourceSale, status: "cancelled", updatedAt: new Date().toISOString(), pendingSync: true };
@@ -4016,6 +4027,8 @@ export const usePosStore = create<PosState>((set, get) => {
       cartDiscountUgx: state.draftCartDiscountUgx,
       referenceLabel: referenceLabel?.trim() || existing?.referenceLabel || null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+      soldByAuthUserId:
+        commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
       existing: existing ?? null,
     });
     set({
@@ -4284,6 +4297,8 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const actorId = state.sessionActor?.userId ?? null;
     const actor = state.sessionActor;
+    const soldByAuthUserId =
+      commercialAuthUserIdFromActor(actor) ?? existingPending?.soldByAuthUserId ?? null;
     const todayKey = dateKeyKampala(new Date());
     const receiptSeq = scanTodaySalesHead(state.sales, todayKey).nextReceiptSeq;
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
@@ -4315,6 +4330,7 @@ export const usePosStore = create<PosState>((set, get) => {
       lastSyncError: null,
       customerId: customerId ?? null,
       soldByUserId: actorId,
+      soldByAuthUserId,
       waiterStaffId:
         existingPending?.waiterStaffId ?? sessionWaiter.waiterStaffId ?? null,
       waiterName: existingPending?.waiterName ?? sessionWaiter.waiterName ?? null,

@@ -13,6 +13,7 @@ import type { AdjustmentBreakdownByType } from "./cashDrawerLedger";
 import { dateKeyKampala } from "./datesUg";
 import { t } from "./i18n";
 import { isCompletedSale } from "./saleStatus";
+import { normalizeLinkedAuthUserId } from "./sessionActor";
 
 export type CashPositionPaymentKey = "cash" | "mobile_money" | "card" | "bank_transfer" | "credit";
 
@@ -164,6 +165,7 @@ export function attributeSalePaymentBuckets(sale: Sale): Record<CashPositionPaym
 type StaffLookup = {
   nameById: Map<string, string>;
   activeById: Map<string, boolean>;
+  nameByAuthUserId: Map<string, string>;
 };
 
 function resolveCashierRow(
@@ -196,6 +198,10 @@ function resolveCashierRow(
   }
   if (uid === "unknown") {
     return { cashierId: uid, name: t(lang, "cashPositionUnknownCashier"), kind: "unknown" };
+  }
+  const linkedName = staff.nameByAuthUserId.get(uid);
+  if (linkedName) {
+    return { cashierId: uid, name: linkedName, kind: "staff" };
   }
   const label = uid.length > 12 ? `${uid.slice(0, 10)}…` : uid;
   return { cashierId: uid, name: label, kind: "legacy" };
@@ -323,6 +329,14 @@ export function buildCashPositionReport(params: {
   const staffLookup: StaffLookup = {
     nameById: new Map(staffAccounts.map((s) => [s.id, s.name])),
     activeById: new Map(staffAccounts.map((s) => [s.id, s.active])),
+    nameByAuthUserId: new Map(
+      staffAccounts
+        .map((s) => {
+          const linked = normalizeLinkedAuthUserId(s.linkedAuthUserId);
+          return linked && s.name?.trim() ? ([linked, s.name.trim()] as const) : null;
+        })
+        .filter((row): row is readonly [string, string] => row != null),
+    ),
   };
 
   const cashierLabels = new Map<string, Pick<CashPositionCashierRow, "cashierId" | "name" | "kind">>();

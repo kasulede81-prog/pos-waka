@@ -21,7 +21,7 @@ export type StaffMergeApplyStats = {
 };
 
 function staffRowSignature(row: StaffAccount): string {
-  return `${row.id}:${row.updatedAt}:${row.active}:${row.name}:${row.pendingCloudSync ? 1 : 0}`;
+  return `${row.id}:${row.updatedAt}:${row.active}:${row.name}:${row.linkedAuthUserId ?? ""}:${row.pendingCloudSync ? 1 : 0}`;
 }
 
 function staffListsEqual(a: StaffAccount[], b: StaffAccount[]): boolean {

@@ -317,6 +317,8 @@ export function buildPendingSaleFromDraft(input: {
   tableSessionId?: string | null;
   referenceLabel?: string | null;
   soldByUserId?: string | null;
+  /** Linked Auth seller for cloud attribution when soldByUserId is staff:<id>. */
+  soldByAuthUserId?: string | null;
   waiterStaffId?: string | null;
   waiterName?: string | null;
   existing?: Sale | null;
@@ -345,6 +347,7 @@ export function buildPendingSaleFromDraft(input: {
     lastSyncError: null,
     customerId: input.existing?.customerId ?? null,
     soldByUserId: input.soldByUserId ?? input.existing?.soldByUserId ?? null,
+    soldByAuthUserId: input.soldByAuthUserId ?? input.existing?.soldByAuthUserId ?? null,
     waiterStaffId: input.waiterStaffId ?? input.existing?.waiterStaffId ?? null,
     waiterName: input.waiterName ?? input.existing?.waiterName ?? null,
     billDraft: input.existing?.billDraft ?? null,

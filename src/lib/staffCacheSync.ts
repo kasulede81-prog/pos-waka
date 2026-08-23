@@ -61,6 +61,7 @@ function cloudRowToStaff(row: CloudStaffRow): StaffAccount {
     failureWindowStartedAt: row.failure_window_started_at,
     pinChangedAt: row.pin_changed_at,
     passwordChangedAt: row.password_changed_at,
+    linkedAuthUserId: row.user_id ?? null,
   };
 }
 

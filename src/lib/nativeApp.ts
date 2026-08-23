@@ -47,6 +47,7 @@ export const NATIVE_PUBLIC_PATHS = new Set([
   "/register",
   "/forgot-password",
   "/verify-email",
+  "/staff/accept",
   "/auth/callback",
   "/auth/recovery",
   "/reset-password",

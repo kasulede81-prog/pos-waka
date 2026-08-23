@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, RefreshCw, Search, Shield, UserPlus } from "lucide-react";
+import { AlertTriangle, Cloud, RefreshCw, Search, Shield, UserPlus } from "lucide-react";
 import clsx from "clsx";
 import type { BusinessType, CustomStaffRole, Language, StaffAccount, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
@@ -7,6 +7,12 @@ import { staffInitials } from "../../lib/staffRoleCatalog";
 import { findRoleTemplate, isCustomRoleAssignable, roleTemplatesForBusinessType } from "../../lib/enterpriseRoles";
 import { isStaffLoginLocked } from "../../lib/staffSecret";
 import { getDeviceOnline } from "../../lib/deviceOnline";
+import {
+  isLegacyPinStaffUpgradeable,
+  staffHasPendingUpgradeInvite,
+  type StaffInvitationRow,
+} from "../../lib/staffInvite";
+import { normalizeLinkedAuthUserId } from "../../lib/sessionActor";
 import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 import { StaffDesktopTable } from "./StaffDesktopTable";
 import { useWakaLayoutBand } from "../../hooks/useWakaLayoutBand";
@@ -29,6 +35,11 @@ type Props = {
   activeStaffId?: string | null;
   hydrating?: boolean;
   onRefresh?: () => void;
+  /** Owner-only Phase 9 upgrade action */
+  canUpgradeToCloud?: boolean;
+  pendingInvites?: StaffInvitationRow[];
+  pendingUpgradeStaffIds?: string[];
+  onUpgradeToCloud?: (staff: StaffAccount) => void;
 };
 
 function staffRoleDisplayName(
@@ -78,6 +89,10 @@ export function StaffTeamList({
   activeStaffId,
   hydrating = false,
   onRefresh,
+  canUpgradeToCloud = false,
+  pendingInvites = [],
+  pendingUpgradeStaffIds = [],
+  onUpgradeToCloud,
 }: Props) {
   const [query, setQuery] = useState("");
   const [manageId, setManageId] = useState<string | null>(null);
@@ -191,6 +206,20 @@ export function StaffTeamList({
                         {t(lang, "staffSecurityLocked")}
                       </span>
                     ) : null}
+                    {normalizeLinkedAuthUserId(s.linkedAuthUserId) ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-black uppercase text-sky-900">
+                        <Cloud className="h-3 w-3" />
+                        {t(lang, "staffUpgradeCloudLinked")}
+                      </span>
+                    ) : pendingUpgradeStaffIds.includes(s.id) || staffHasPendingUpgradeInvite(s, pendingInvites) ? (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black uppercase text-violet-900">
+                        {t(lang, "staffUpgradePending")}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-black uppercase text-muted-foreground">
+                        {t(lang, "staffUpgradeLegacyPin")}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -285,6 +314,16 @@ export function StaffTeamList({
                     <button type="button" className="rounded-xl border-2 border-border px-3 py-2 text-sm font-bold" onClick={() => onResetPassword(s.id)}>
                       {t(lang, "staffResetPassword")}
                     </button>
+                    {canUpgradeToCloud && onUpgradeToCloud && isLegacyPinStaffUpgradeable(s) ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-xl border-2 border-sky-200 bg-sky-50 px-3 py-2 text-sm font-bold text-sky-900"
+                        onClick={() => onUpgradeToCloud(s)}
+                      >
+                        <Cloud className="h-4 w-4" />
+                        {t(lang, "staffUpgradeAction")}
+                      </button>
+                    ) : null}
                     {locked ? (
                       <button
                         type="button"

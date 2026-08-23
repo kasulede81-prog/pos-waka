@@ -67,8 +67,19 @@ describe("filterSalesForHomeScope", () => {
     expect(filterSalesForHomeScope(sales, "personal", "staff:b")).toHaveLength(1);
   });
 
-  it("inventory returns no sales", () => {
-    expect(filterSalesForHomeScope(sales, "inventory", "staff:a")).toHaveLength(0);
+  it("personal Path S matches Auth seller UUID after pull", () => {
+    const cashier = "22222222-2222-4222-8222-222222222222";
+    const sales = [
+      sale("s1", cashier),
+      sale("s2", "staff:other"),
+      sale("s3", "11111111-1111-4111-8111-111111111111"),
+    ];
+    expect(
+      filterSalesForHomeScope(sales, "personal", {
+        userId: "staff:a",
+        linkedAuthUserId: cashier,
+      }),
+    ).toHaveLength(1);
   });
 });
 

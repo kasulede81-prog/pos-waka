@@ -81,15 +81,15 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   }, [floor, sales]);
 
   const scopedSales = useMemo(
-    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor.userId),
-    [sales, homeMetrics.scope, actor.userId],
+    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor),
+    [sales, homeMetrics.scope, actor],
   );
 
   const todayRevenue = useMemo(() => {
     if (!homeMetrics.showShopWideRevenue && !homeMetrics.showPersonalRevenue) return null;
-    const scopedReturns = filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor.userId);
+    const scopedReturns = filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor);
     return localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey, dayCloses).totalRevenueUgx;
-  }, [homeMetrics, scopedSales, products, returnRecords, sales, actor.userId, todayKey, dayCloses]);
+  }, [homeMetrics, scopedSales, products, returnRecords, sales, actor, todayKey, dayCloses]);
 
   const hasOpenSessions = (floor?.sessions.some((s) => s.status === "open" || s.status === "payment_pending") ?? false);
 

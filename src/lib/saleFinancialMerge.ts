@@ -4,6 +4,7 @@
 
 import type { Sale, SaleLine } from "../types";
 import { isCompletedSale } from "./saleStatus";
+import { mergeCommercialSellerFields } from "./sellerIdentity";
 
 export type SaleFinancialFields = Pick<
   Sale,
@@ -92,6 +93,7 @@ function mergeCompletedSaleMetadata(financialBase: Sale, other: Sale): Sale {
   const newerIsRemote = recencyMs(other) > recencyMs(financialBase);
   const meta = newerIsRemote ? other : financialBase;
   const fin = financialFields(financialBase);
+  const seller = mergeCommercialSellerFields(financialBase, other);
   return {
     ...financialBase,
     ...fin,
@@ -100,7 +102,8 @@ function mergeCompletedSaleMetadata(financialBase: Sale, other: Sale): Sale {
     tableSessionId: meta.tableSessionId ?? financialBase.tableSessionId,
     updatedAt: meta.updatedAt ?? financialBase.updatedAt,
     receiptSeq: meta.receiptSeq ?? financialBase.receiptSeq,
-    soldByUserId: meta.soldByUserId ?? financialBase.soldByUserId,
+    soldByUserId: seller.soldByUserId,
+    soldByAuthUserId: seller.soldByAuthUserId,
     customerId: meta.customerId ?? financialBase.customerId,
     paymentMethod: meta.paymentMethod ?? financialBase.paymentMethod,
     amountPaidUgx: meta.amountPaidUgx ?? financialBase.amountPaidUgx,

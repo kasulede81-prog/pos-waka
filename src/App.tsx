@@ -14,6 +14,7 @@ import { AuthRecoveryPage } from "./pages/AuthRecoveryPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
+import { StaffAcceptPage } from "./pages/StaffAcceptPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { SettingsHubPage } from "./pages/SettingsHubPage";
 import { SettingsCashDrawerPage } from "./pages/SettingsCashDrawerPage";
@@ -252,6 +253,17 @@ function AppRoutes() {
       <Routes>
         <Route element={<NativePublicGuard isAuthenticated={auth.isAuthenticated} />}>
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route
+          path="/staff/accept"
+          element={
+            <StaffAcceptPage
+              lang={lang}
+              isAuthenticated={auth.isAuthenticated}
+              initializing={auth.initializing}
+              onLogin={auth.signIn}
+            />
+          }
+        />
 
         <Route
           path="/login"

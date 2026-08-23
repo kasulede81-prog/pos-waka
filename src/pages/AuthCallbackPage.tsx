@@ -12,6 +12,7 @@ import {
   resolvePostAuthDestination,
 } from "../lib/firstTimeOwnerDevice";
 import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
+import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
 import { resetCloudRecoverySessionForRetry } from "../lib/cloudRecoverySession";
 import { logStartupPhase } from "../lib/startupDiagnostics";
 import { supabase } from "../lib/supabase";
@@ -107,11 +108,18 @@ export function AuthCallbackPage() {
           emailConfirmed: Boolean(session.user.email_confirmed_at),
         });
 
+        const inviteGate = await resolveStaffInviteBeforeOwnerBootstrap(session);
+
         try {
-          await bootTraceAsync("BOOT-008", "bootstrap_owner_workspace", () =>
-            withTimeout(ensureOwnerWorkspaceIfNeeded(session), 12_000, undefined),
-          );
-          logStartupPhase("workspace_ready", { userId: session.user.id });
+          if (!inviteGate.skipOwnerBootstrap) {
+            await bootTraceAsync("BOOT-008", "bootstrap_owner_workspace", () =>
+              withTimeout(ensureOwnerWorkspaceIfNeeded(session), 12_000, undefined),
+            );
+          }
+          logStartupPhase("workspace_ready", {
+            userId: session.user.id,
+            via: inviteGate.skipOwnerBootstrap ? "staff_invite_gate" : "owner_bootstrap",
+          });
         } catch (e) {
           authDevLog("error", "Auth callback workspace bootstrap deferred", e);
           logStartupPhase("workspace_ready", {
@@ -121,9 +129,15 @@ export function AuthCallbackPage() {
           });
         }
 
-        markFirstTimeOwnerOnDevice(session.user.id);
+        if (!inviteGate.skipOwnerBootstrap) {
+          markFirstTimeOwnerOnDevice(session.user.id);
+        }
 
-        const nextPath = postCallbackDestination(session.user.id);
+        const nextPath = inviteGate.skipOwnerBootstrap
+          ? inviteGate.accepted
+            ? "/"
+            : "/staff/accept"
+          : postCallbackDestination(session.user.id);
         resetCloudRecoverySessionForRetry();
         logStartupPhase("onboarding_required", {
           userId: session.user.id,

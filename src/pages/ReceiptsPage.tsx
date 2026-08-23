@@ -49,6 +49,7 @@ import { SalesHistorySkeletonList } from "../components/receipts/SalesHistorySke
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { buildReceiptNumberForSale } from "../lib/receiptPrint";
 import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabels";
+import { saleSoldByMatchesActor } from "../lib/sellerIdentity";
 
 function countItemsSold(sales: Sale[]): number {
   let count = 0;
@@ -201,8 +202,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const filteredInRange = useMemo(() => {
     const inRange = sales.filter((s) => saleMatchesFilter(s, bounds));
     if (actor.role !== "cashier") return inRange;
-    return inRange.filter((s) => s.soldByUserId && s.soldByUserId === actor.userId);
-  }, [sales, bounds, actor.role, actor.userId]);
+    return inRange.filter((s) => saleSoldByMatchesActor(s, actor));
+  }, [sales, bounds, actor]);
 
   const partitioned = useMemo(() => partitionReceiptsSales(filteredInRange), [filteredInRange]);
 

@@ -75,7 +75,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   const { byTile: liveStats, executive } = useHomeDashboardMetrics(
     lang,
     actor.role,
-    actor.userId,
+    actor,
     lowStockCount,
     actor.permissions,
   );

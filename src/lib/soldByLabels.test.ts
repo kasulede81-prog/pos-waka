@@ -27,6 +27,29 @@ describe("soldByLabels", () => {
     expect(resolveSoldByUserId("en", ownerId, map)).toBe("Super Admin");
   });
 
+  it("maps linkedAuthUserId Auth UUID to staff name", () => {
+    const cashier = "22222222-2222-4222-8222-222222222222";
+    const map = buildSoldByNameByUserId({
+      staffAccounts: [
+        {
+          id: "abc",
+          name: "Jane",
+          role: "cashier",
+          active: true,
+          createdAt: "",
+          updatedAt: "",
+          linkedAuthUserId: cashier,
+        },
+      ],
+      ownerUserId: "11111111-1111-4111-8111-111111111111",
+      ownerDisplayName: "Owner",
+    });
+    expect(resolveSoldByUserId("en", cashier, map)).toBe("Jane");
+    expect(resolveSoldByUserId("en", "33333333-3333-4333-8333-333333333333", map)).toBe(
+      "Unknown seller",
+    );
+  });
+
   it("computeTopCashiers shows cashier name instead of uuid", () => {
     const ownerId = "f20ae9a3-8b5a-4f66-bf71-12c728a89c0c";
     const sale: Sale = {

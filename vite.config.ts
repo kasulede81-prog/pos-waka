@@ -113,6 +113,7 @@ export default defineConfig(({ mode }) => {
             /^\/auth\/callback/,
             /^\/auth\/recovery/,
             /^\/reset-password/,
+            /^\/staff\/accept/,
             /^\/sitemap\.xml$/,
             /^\/robots\.txt$/,
           ],

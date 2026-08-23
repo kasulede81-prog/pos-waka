@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail, UserPlus, Users } from "lucide-react";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
@@ -10,6 +10,7 @@ import { EnterprisePasswordField } from "../components/auth/EnterprisePasswordFi
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { t } from "../lib/i18n";
 import { formatAuthError, consumeAuthRedirectError } from "../lib/authConfig";
+import { staffAcceptReturnPath } from "../lib/staffInvite";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../lib/staffOfflineAuth";
@@ -44,6 +45,7 @@ export function LoginPage({
   onClearRememberedStaff,
   mode,
 }: Props) {
+  const [searchParams] = useSearchParams();
   const [view, setView] = useState<"owner" | "staff">("owner");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,9 +54,10 @@ export function LoginPage({
   const [googleBusy, setGoogleBusy] = useState(false);
 
   const showGoogle = mode === "supabase" && hasSupabaseConfig && isGoogleAuthUiAvailable();
+  const staffInviteNext = staffAcceptReturnPath(searchParams.get("next"));
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={staffInviteNext ?? "/"} replace />;
   }
 
   const canOwnerSignIn = mode === "supabase" || mode === "local";

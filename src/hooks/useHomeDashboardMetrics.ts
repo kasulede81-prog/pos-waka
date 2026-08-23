@@ -29,6 +29,7 @@ import {
 } from "../lib/homeExecutiveKpis";
 import { POS_RECEIPTS_ROUTE } from "../lib/posNavigation";
 import { isPharmacyMode } from "../lib/pharmacy";
+import type { SellerMatchActor } from "../lib/sellerIdentity";
 
 export type { HomeTileIntensity, HomeTileLiveStat, HomeExecutiveKpi };
 
@@ -53,7 +54,7 @@ function revenueIntensity(revenueUgx: number): HomeTileIntensity {
 export function useHomeDashboardMetrics(
   lang: Language,
   role: UserRole,
-  actorUserId: string,
+  actor: SellerMatchActor | string,
   lowStockCount: number,
   actorPermissions?: Permission[] | null,
 ): HomeDashboardMetrics {
@@ -79,13 +80,23 @@ export function useHomeDashboardMetrics(
   });
 
   const scope: HomeMetricScope = homeMetrics.scope;
+  const actorUserId = typeof actor === "string" ? actor : actor.userId;
+  const linkedAuthUserId = typeof actor === "string" ? null : actor.linkedAuthUserId ?? null;
   const scopedSales = useMemo(
-    () => filterSalesForHomeScope(sales, scope, actorUserId),
-    [sales, scope, actorUserId],
+    () =>
+      filterSalesForHomeScope(sales, scope, {
+        userId: actorUserId,
+        linkedAuthUserId,
+      }),
+    [sales, scope, actorUserId, linkedAuthUserId],
   );
   const scopedReturns = useMemo(
-    () => filterReturnsForHomeScope(returns, sales, scope, actorUserId),
-    [returns, sales, scope, actorUserId],
+    () =>
+      filterReturnsForHomeScope(returns, sales, scope, {
+        userId: actorUserId,
+        linkedAuthUserId,
+      }),
+    [returns, sales, scope, actorUserId, linkedAuthUserId],
   );
 
   return useMemo(() => {

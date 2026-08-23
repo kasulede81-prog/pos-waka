@@ -1865,6 +1865,11 @@ export type Sale = {
   customerId?: string | null;
   /** Staff who completed the sale (session actor); drives cashier performance on owner dashboard */
   soldByUserId?: string | null;
+  /**
+   * Auth UUID for commercial seller when PIN actor is `staff:<id>` but the profile is linked.
+   * Used for cloud `sold_by_user_id` only — does not replace local `soldByUserId`.
+   */
+  soldByAuthUserId?: string | null;
   /** Assigned waiter from table session — used for hospitality KPIs (not the bill closer). */
   waiterStaffId?: string | null;
   waiterName?: string | null;
@@ -2109,6 +2114,11 @@ export type StaffAccount = {
   passwordChangedAt?: string | null;
   /** Set when internal admin bulk credential recovery invalidates secrets. */
   credentialsInvalidatedAt?: string | null;
+  /**
+   * Linked Supabase Auth user for this PIN profile (`shop_pos_staff.user_id`).
+   * NULL = legacy unlinked PIN. Used for cloud seller attribution on shared terminals.
+   */
+  linkedAuthUserId?: string | null;
 };
 
 /** Receipt printer paper — 58mm / 80mm thermal, or A4 for office printers. */

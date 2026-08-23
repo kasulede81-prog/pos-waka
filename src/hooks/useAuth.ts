@@ -17,6 +17,9 @@ import { appendPilotEvent } from "../lib/pilotEventLog";
 import { setCrashReportingUser } from "../lib/crashReporting";
 import type { BusinessType, UserRole } from "../types";
 import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
+import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
+import { hydrateStaffAuthWorkspace, isNonOwnerShopMemberRole } from "../lib/staffAuthHydrate";
+import { fetchShopMemberRoleForUser } from "../lib/shopMemberRole";
 import { isShopOnboardingComplete } from "../lib/onboardingState";
 import { hasFirstTimeOwnerMarker, markFirstTimeOwnerOnDevice } from "../lib/firstTimeOwnerDevice";
 import { logStartupPhase } from "../lib/startupDiagnostics";
@@ -190,6 +193,40 @@ export function useAuth() {
       if (inFlight) return inFlight;
 
       const promise = (async () => {
+        const inviteGate = await resolveStaffInviteBeforeOwnerBootstrap(next);
+
+        const finishStaffAuthWorkspace = async (reason: string) => {
+          markWorkspaceBootstrapped(uid);
+          markWorkspaceEnsured(uid);
+          await tryApplyPendingReferral(next);
+          logStartupPhase("workspace_ready", { userId: uid, via: reason });
+          await hydrateStaffAuthWorkspace(uid);
+        };
+
+        if (inviteGate.accepted) {
+          await finishStaffAuthWorkspace("staff_invite_accepted");
+          return;
+        }
+
+        // Membership may already exist (returning Auth staff). Prefer shop_members
+        // before any owner repair/bootstrap so cashiers never get a new empty shop.
+        const existingEarly = await resolvePrimaryOrganizationForUser(uid);
+        if (existingEarly?.shopId) {
+          const memberRole = await fetchShopMemberRoleForUser(uid);
+          const knownOwner = memberRole === "owner" && !inviteGate.skipOwnerBootstrap;
+          if (!knownOwner) {
+            await finishStaffAuthWorkspace(
+              memberRole && memberRole !== "owner" ? "staff_member_hydrate" : "staff_membership_hydrate",
+            );
+            return;
+          }
+        } else if (inviteGate.skipOwnerBootstrap) {
+          markWorkspaceEnsured(uid);
+          await tryApplyPendingReferral(next);
+          logStartupPhase("workspace_ready", { userId: uid, via: "staff_invite_pending" });
+          return;
+        }
+
         const alreadyEnsured =
           workspaceEnsuredForUserRef.current === uid ||
           bootstrappedUserIdsRef.current[uid] ||
@@ -233,6 +270,11 @@ export function useAuth() {
 
           const existing = await resolvePrimaryOrganizationForUser(uid);
           if (existing?.shopId) {
+            const memberRole = await fetchShopMemberRoleForUser(uid);
+            if (isNonOwnerShopMemberRole(memberRole)) {
+              await finishStaffAuthWorkspace("staff_member_hydrate");
+              return;
+            }
             markWorkspaceBootstrapped(uid);
             markWorkspaceEnsured(uid);
             await tryApplyPendingReferral(next);

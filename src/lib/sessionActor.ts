@@ -13,7 +13,35 @@ export type SessionActor = {
   roleTemplateId?: string | null;
   customRoleId?: string | null;
   customRoleName?: string | null;
+  /**
+   * Commercial Auth seller for shared-terminal PIN (Path S).
+   * Set when `userId` is `staff:<id>` and the profile has `linkedAuthUserId`.
+   * Never replaces `userId`.
+   */
+  linkedAuthUserId?: string | null;
 };
+
+function isAuthUuid(id: string | null | undefined): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
+/** Normalize a linked Auth UUID from staff profile or session. */
+export function normalizeLinkedAuthUserId(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim() ?? "";
+  return isAuthUuid(trimmed) ? trimmed : null;
+}
+
+/**
+ * Commercial seller Auth UUID for cloud push.
+ * Prefer explicit link; Auth cashiers already use UUID `userId`.
+ */
+export function commercialAuthUserIdFromActor(actor: SessionActor | null | undefined): string | null {
+  if (!actor) return null;
+  const linked = normalizeLinkedAuthUserId(actor.linkedAuthUserId);
+  if (linked) return linked;
+  return isAuthUuid(actor.userId) ? actor.userId : null;
+}
 
 function devOverrideAllowed(): boolean {
   return !hasSupabaseConfig || Boolean(import.meta.env.DEV);
@@ -38,9 +66,15 @@ export function resolveSessionActor(params: {
     permissions?: Permission[];
     roleTemplateId?: string | null;
     customRoleId?: string | null;
+    linkedAuthUserId?: string | null;
   } | null;
 }): SessionActor {
   if (params.staffSession) {
+    const fromSession = normalizeLinkedAuthUserId(params.staffSession.linkedAuthUserId);
+    const fromAccount = normalizeLinkedAuthUserId(
+      (params.preferences.staffAccounts ?? []).find((s) => s.id === params.staffSession!.staffId)
+        ?.linkedAuthUserId,
+    );
     return {
       userId: `staff:${params.staffSession.staffId}`,
       role: params.staffSession.role,
@@ -48,6 +82,7 @@ export function resolveSessionActor(params: {
       permissions: params.staffSession.permissions,
       roleTemplateId: params.staffSession.roleTemplateId,
       customRoleId: params.staffSession.customRoleId,
+      linkedAuthUserId: fromSession ?? fromAccount,
     };
   }
 
@@ -96,5 +131,8 @@ export function resolveSessionActor(params: {
     roleTemplateId: activeStaff?.roleTemplateId,
     customRoleId: activeStaff?.customRoleId,
     customRoleName,
+    linkedAuthUserId: activeStaff
+      ? normalizeLinkedAuthUserId(activeStaff.linkedAuthUserId)
+      : normalizeLinkedAuthUserId(params.user?.id),
   };
 }

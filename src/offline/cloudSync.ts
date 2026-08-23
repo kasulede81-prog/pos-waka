@@ -28,6 +28,10 @@ import { hydrateSaleFinancialsFromCloud } from "../lib/saleLineFinancialHydratio
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { decodeSaleLineFromCloud, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
 import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
+import {
+  soldByAuthUserIdFromCloudSaleRow,
+  soldByUserIdFromCloudSaleRow,
+} from "../lib/sellerIdentity";
 import { normalizeProductMenu } from "../lib/menuModifiers";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
@@ -120,6 +124,16 @@ function isMissingTableError(error: unknown): boolean {
 
 function isUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
+/**
+ * Phase 8 — commercial seller for cloud `sold_by_user_id`.
+ * Prefer stamped linked Auth UUID (shared-terminal PIN); else Auth UUID in soldByUserId.
+ */
+export function resolveSoldByAuthUserIdForPush(sale: Sale): string | null {
+  if (sale.soldByAuthUserId && isUuid(sale.soldByAuthUserId)) return sale.soldByAuthUserId;
+  if (sale.soldByUserId && isUuid(sale.soldByUserId)) return sale.soldByUserId;
+  return null;
 }
 
 export async function resolveShopCtx(): Promise<ShopCtx | null> {
@@ -354,7 +368,8 @@ function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null
     pendingSync: false,
     lastSyncError: null,
     customerId: (row.customer_id as string | null) ?? null,
-    soldByUserId: (row.created_by as string | null) ?? null,
+    soldByUserId: soldByUserIdFromCloudSaleRow(row),
+    soldByAuthUserId: soldByAuthUserIdFromCloudSaleRow(row),
     billDraft: parseBillDraftFromMeta(meta),
     saleVoidedAt: meta.saleVoidedAt != null ? String(meta.saleVoidedAt) : null,
     saleVoidReason: meta.saleVoidReason != null ? String(meta.saleVoidReason) : null,
@@ -706,7 +721,7 @@ async function resolveReturnForSync(returnId: string): Promise<ReturnRecord | nu
   return fromArchiveDisk ?? null;
 }
 
-function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
+export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
   const qtyByProduct = new Map<string, number>();
   for (const line of sale.lines) {
     if (line.voided || !isUuid(line.productId)) continue;
@@ -726,7 +741,8 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
       cash_amount_ugx: sale.cashPaidUgx,
       debt_amount_ugx: sale.debtUgx,
       issue_receipt: false,
-      created_by: sale.soldByUserId && isUuid(sale.soldByUserId) ? sale.soldByUserId : ctx.userId,
+      created_by: ctx.userId,
+      sold_by_user_id: resolveSoldByAuthUserIdForPush(sale),
       completed_at: sale.createdAt,
       metadata: {
         ...hospitalitySaleMetadata(sale),
@@ -772,7 +788,7 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
   };
 }
 
-function buildPendingSalePushPayload(
+export function buildPendingSalePushPayload(
   sale: Sale,
   ctx: ShopCtx,
   opts?: { baseUpdatedAt?: string | null; deletedLineIds?: string[] },
@@ -791,7 +807,8 @@ function buildPendingSalePushPayload(
       total_ugx: sale.totalUgx,
       reference_label: sale.referenceLabel ?? null,
       table_session_id: sale.tableSessionId && isUuid(sale.tableSessionId) ? sale.tableSessionId : null,
-      created_by: sale.soldByUserId && isUuid(sale.soldByUserId) ? sale.soldByUserId : ctx.userId,
+      created_by: ctx.userId,
+      sold_by_user_id: resolveSoldByAuthUserIdForPush(sale),
       created_at: sale.createdAt,
       updated_at: sale.updatedAt ?? sale.createdAt,
       metadata: hospitalitySaleMetadata(sale),

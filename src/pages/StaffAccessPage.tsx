@@ -10,7 +10,7 @@ import { Body } from "../components/enterprise/EnterpriseTypography";
 import { WakaButton } from "../components/ui/wakaPrimitives";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { statusTokens } from "../lib/statusTokens";
-import type { Language } from "../types";
+import type { Language, StaffAccount } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 
@@ -20,10 +20,15 @@ import { usePosStore } from "../store/usePosStore";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { supabase } from "../lib/supabase";
 import { StaffCreateWizard } from "../components/staff/StaffCreateWizard";
+import { StaffCloudInviteCard } from "../components/staff/StaffCloudInviteCard";
+import { StaffLegacyUpgradeDialog } from "../components/staff/StaffLegacyUpgradeDialog";
 import { StaffTeamList } from "../components/staff/StaffTeamList";
 import { StaffPinResetDialog, StaffPasswordResetDialog } from "../components/auth/StaffCredentialResetDialog";
 import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
 import type { StaffCreateRole } from "../lib/staffRoleCatalog";
+import { listStaffInvitations, type StaffInvitationRow } from "../lib/staffInvite";
+import { resolveShopCtx } from "../offline/cloudSync";
+import { normalizeLinkedAuthUserId } from "../lib/sessionActor";
 
 export function StaffAccessPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -46,6 +51,23 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const [resetPinStaffId, setResetPinStaffId] = useState<string | null>(null);
   const [resetPasswordStaffId, setResetPasswordStaffId] = useState<string | null>(null);
   const [staffHydrating, setStaffHydrating] = useState(false);
+  const [upgradeStaff, setUpgradeStaff] = useState<StaffAccount | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<StaffInvitationRow[]>([]);
+  const [pendingUpgradeStaffIds, setPendingUpgradeStaffIds] = useState<string[]>([]);
+
+  const refreshPendingInvites = useCallback(async () => {
+    if (authMode !== "supabase" || actor.role !== "owner") {
+      setPendingInvites([]);
+      return;
+    }
+    const ctx = await resolveShopCtx();
+    if (!ctx) {
+      setPendingInvites([]);
+      return;
+    }
+    const rows = await listStaffInvitations(ctx.shopId);
+    setPendingInvites(rows.filter((i) => !i.accepted_at && !i.revoked_at));
+  }, [authMode, actor.role]);
 
   const hydrateStaffFromCloud = useCallback(async () => {
     if (authMode !== "supabase" || !supabase) return;
@@ -55,10 +77,18 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
       if (!data.user || !isSupabaseEmailVerified(data.user)) return;
       const { hydrateStaffTeamFromCloud } = await import("../lib/staffRecovery");
       await hydrateStaffTeamFromCloud({ force: true });
+      await refreshPendingInvites();
+      const accounts = usePosStore.getState().preferences.staffAccounts ?? [];
+      setPendingUpgradeStaffIds((prev) =>
+        prev.filter((id) => {
+          const row = accounts.find((s) => s.id === id);
+          return row != null && normalizeLinkedAuthUserId(row.linkedAuthUserId) == null;
+        }),
+      );
     } finally {
       setStaffHydrating(false);
     }
-  }, [authMode]);
+  }, [authMode, refreshPendingInvites]);
 
   useEffect(() => {
     void hydrateStaffFromCloud();
@@ -155,6 +185,10 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         ))}
       </div>
 
+      {authMode === "supabase" && actor.role === "owner" ? (
+        <StaffCloudInviteCard lang={lang} staff={staff} />
+      ) : null}
+
       <StaffTeamList
         lang={lang}
         businessType={preferences.businessType}
@@ -164,6 +198,10 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         activeStaffId={activeStaffId}
         hydrating={staffHydrating}
         onRefresh={() => void hydrateStaffFromCloud()}
+        canUpgradeToCloud={authMode === "supabase" && actor.role === "owner"}
+        pendingInvites={pendingInvites}
+        pendingUpgradeStaffIds={pendingUpgradeStaffIds}
+        onUpgradeToCloud={(row) => setUpgradeStaff(row)}
         onAddStaff={() => setCreating(true)}
         onToggleActive={(id, active) => updateStaffAccount(id, { active })}
         onUpdateRoleTemplate={(id, roleTemplateId, role) => updateStaffAccount(id, { role, roleTemplateId, customRoleId: null })}
@@ -189,6 +227,21 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         onDelete={(id) => {
           if (!window.confirm(t(lang, "staffDeleteConfirm"))) return;
           removeStaffAccount(id);
+        }}
+      />
+
+      <StaffLegacyUpgradeDialog
+        lang={lang}
+        staff={upgradeStaff}
+        open={upgradeStaff != null}
+        onClose={() => setUpgradeStaff(null)}
+        onSent={() => {
+          if (upgradeStaff) {
+            setPendingUpgradeStaffIds((prev) =>
+              prev.includes(upgradeStaff.id) ? prev : [...prev, upgradeStaff.id],
+            );
+          }
+          void refreshPendingInvites();
         }}
       />
 

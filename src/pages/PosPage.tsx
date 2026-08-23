@@ -268,9 +268,9 @@ export function PosPage({ lang }: { lang: Language }) {
       summarizeTodaySales(
         sales,
         new Date(),
-        actor.role === "cashier" ? { soldByUserId: actor.userId } : undefined,
+        actor.role === "cashier" ? { matchActor: actor } : undefined,
       ),
-    [sales, actor.role, actor.userId],
+    [sales, actor.role, actor.userId, actor.linkedAuthUserId],
   );
   const customers = usePosStore(useShallow((s) => s.customers));
   const preferences = usePosStore(

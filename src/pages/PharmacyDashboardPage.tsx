@@ -64,12 +64,12 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const showRevenue = homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue;
 
   const scopedSales = useMemo(
-    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor.userId),
-    [sales, homeMetrics.scope, actor.userId],
+    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor),
+    [sales, homeMetrics.scope, actor],
   );
   const scopedReturns = useMemo(
-    () => filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor.userId),
-    [returnRecords, sales, homeMetrics.scope, actor.userId],
+    () => filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor),
+    [returnRecords, sales, homeMetrics.scope, actor],
   );
 
   const stats = useMemo(

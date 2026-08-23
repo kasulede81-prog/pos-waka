@@ -2,6 +2,7 @@ import type { Session } from "@supabase/supabase-js";
 import type { BusinessType } from "../types";
 import { normalizeUgPhoneE164 } from "./businessProfile";
 import { resolvePrimaryOrganizationForUser } from "./fetchShopSubscription";
+import { resolveStaffInviteBeforeOwnerBootstrap } from "./staffInviteOnboarding";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "./workspaceBootstrapCache";
 import { logStartupPhase } from "./startupDiagnostics";
@@ -22,10 +23,30 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
     /* JWT may still be updating right after email confirmation */
   }
 
+  const inviteGate = await resolveStaffInviteBeforeOwnerBootstrap(session);
+  if (inviteGate.accepted) {
+    markWorkspaceBootstrapped(uid);
+    logStartupPhase("workspace_ready", { userId: uid, via: "staff_invite_accepted" });
+    const { hydrateStaffAuthWorkspace } = await import("./staffAuthHydrate");
+    await hydrateStaffAuthWorkspace(uid);
+    return;
+  }
+
   const existing = await resolvePrimaryOrganizationForUser(uid);
   if (existing?.shopId) {
     markWorkspaceBootstrapped(uid);
     logStartupPhase("workspace_ready", { userId: uid, shopId: existing.shopId, via: "existing_org" });
+    const { fetchShopMemberRoleForUser } = await import("./shopMemberRole");
+    const { hydrateStaffAuthWorkspace, isNonOwnerShopMemberRole } = await import("./staffAuthHydrate");
+    const role = await fetchShopMemberRoleForUser(uid);
+    if (isNonOwnerShopMemberRole(role) || inviteGate.skipOwnerBootstrap) {
+      await hydrateStaffAuthWorkspace(uid);
+    }
+    return;
+  }
+
+  if (inviteGate.skipOwnerBootstrap) {
+    logStartupPhase("workspace_ready", { userId: uid, via: "staff_invite_pending" });
     return;
   }
 

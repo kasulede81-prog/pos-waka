@@ -53,6 +53,9 @@ verify_jwt = false
 [functions.ai-ask-waka]
 verify_jwt = true
 
+[functions.staff-invite]
+verify_jwt = true
+
 # Branded auth emails via Resend (auth-send-email edge function).
 [auth.hook.send_email]
 enabled = true
