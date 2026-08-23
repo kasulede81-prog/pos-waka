@@ -4,6 +4,7 @@ import type { Language } from "../types";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
+import { authOperatorRole } from "../lib/sessionActor";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { AccountSubscriptionCenter } from "../components/subscription/AccountSubscriptionCenter";
 import { useLogoutAction } from "../hooks/useLogoutAction";
@@ -57,7 +58,7 @@ export function AccountPage({ lang, email, shopName, onSignOut, user, authMode }
         </p>
       </article>
 
-      {hasSupabaseConfig && actor.role === "owner" ? (
+      {hasSupabaseConfig && authOperatorRole(actor) === "owner" ? (
         <article className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 shadow-sm">
           <p className="text-sm font-semibold text-rose-950">{t(lang, "accountDeletionCardHint")}</p>
           <Link

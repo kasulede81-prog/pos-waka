@@ -12,6 +12,7 @@ import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { statusTokens } from "../lib/statusTokens";
 import type { Language, StaffAccount } from "../types";
 import { t, tTemplate } from "../lib/i18n";
+import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { useSubscription } from "../context/SubscriptionContext";
@@ -56,7 +57,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const [pendingUpgradeStaffIds, setPendingUpgradeStaffIds] = useState<string[]>([]);
 
   const refreshPendingInvites = useCallback(async () => {
-    if (authMode !== "supabase" || actor.role !== "owner") {
+    if (authMode !== "supabase" || authOperatorRole(actor) !== "owner") {
       setPendingInvites([]);
       return;
     }
@@ -67,7 +68,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
     }
     const rows = await listStaffInvitations(ctx.shopId);
     setPendingInvites(rows.filter((i) => !i.accepted_at && !i.revoked_at));
-  }, [authMode, actor.role]);
+  }, [authMode, actor.authRole, actor.role]);
 
   const hydrateStaffFromCloud = useCallback(async () => {
     if (authMode !== "supabase" || !supabase) return;
@@ -185,7 +186,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         ))}
       </div>
 
-      {authMode === "supabase" && actor.role === "owner" ? (
+      {authMode === "supabase" && authOperatorRole(actor) === "owner" ? (
         <StaffCloudInviteCard lang={lang} staff={staff} />
       ) : null}
 
@@ -198,7 +199,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         activeStaffId={activeStaffId}
         hydrating={staffHydrating}
         onRefresh={() => void hydrateStaffFromCloud()}
-        canUpgradeToCloud={authMode === "supabase" && actor.role === "owner"}
+        canUpgradeToCloud={authMode === "supabase" && authOperatorRole(actor) === "owner"}
         pendingInvites={pendingInvites}
         pendingUpgradeStaffIds={pendingUpgradeStaffIds}
         onUpgradeToCloud={(row) => setUpgradeStaff(row)}

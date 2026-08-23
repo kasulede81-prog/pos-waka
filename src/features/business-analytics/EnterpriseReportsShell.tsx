@@ -14,6 +14,7 @@ import { formatDateFilterViewingLabel, isSingleDayFilter, selectedDayKeyForFilte
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../../lib/profitVisibility";
+import { authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
 import { buildDailyReportText, shareText } from "../../lib/reportExport";
 import { downloadDailyReportPdf, printDailyReportPdf, shareDailyReportPdf } from "../../lib/dailyReportPdf";
 import { statusFromAuthority, ugxLabel, type ReportDocumentModel } from "../../lib/reportDocumentModel";
@@ -86,7 +87,12 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
 
   const can = useCallback((perm: Parameters<typeof actorHasPermission>[1]) => actorHasPermission(actor, perm), [actor]);
   const canViewReports = actorHasPermission(actor, "reports.view");
-  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
+  const { canProfit } = resolveProfitVisibility({
+    role: authOperatorRole(actor),
+    snapshot,
+    authMode,
+    actorPermissions: authOperatorPermissions(actor),
+  });
 
   const analytics = useMemo(
     () =>
@@ -201,11 +207,11 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
         staffAccounts: preferences.staffAccounts,
         shifts,
         auditLogs,
-        ownerUserId: actor.userId.startsWith("staff:") ? null : actor.userId,
+        ownerUserId: actor.authUserId ?? (actor.userId.startsWith("staff:") ? null : actor.userId),
         ownerDisplayName: actor.displayName,
         shopDisplayName: preferences.shopDisplayName,
       }),
-    [preferences.staffAccounts, preferences.shopDisplayName, shifts, auditLogs, actor.userId, actor.displayName],
+    [preferences.staffAccounts, preferences.shopDisplayName, shifts, auditLogs, actor.authUserId, actor.userId, actor.displayName],
   );
 
   const searchNeedle = searchQuery.trim().toLowerCase();

@@ -155,7 +155,55 @@ describe("usePosStore shift enforcement", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("staff switch protection blocks silent shift termination", () => {
+  it("owner Path S: staff switch allowed with writer shift open", () => {
+    const OWNER_UUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    seedStore(false);
+    usePosStore.setState({
+      sessionActor: {
+        userId: "staff:1",
+        role: "cashier",
+        displayName: "A",
+        authUserId: OWNER_UUID,
+        authRole: "owner",
+        activeStaffId: "1",
+      },
+      preferences: {
+        ...usePosStore.getState().preferences,
+        activeStaffId: "1",
+        shifts: [openShift({ actorUserId: OWNER_UUID, role: "owner" })],
+        staffAccounts: [
+          {
+            id: "1",
+            name: "A",
+            role: "cashier",
+            active: true,
+            username: "a",
+            phone: "",
+            permissions: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "2",
+            name: "B",
+            role: "cashier",
+            active: true,
+            username: "b",
+            phone: "",
+            permissions: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    });
+    const r = usePosStore.getState().switchStaffAccount("2");
+    expect(r.ok).toBe(true);
+    expect(usePosStore.getState().preferences.activeStaffId).toBe("2");
+    expect(usePosStore.getState().preferences.shifts?.find((s) => !s.endAt)?.actorUserId).toBe(OWNER_UUID);
+  });
+
+  it("staff switch protection blocks silent shift termination for dedicated cashier", () => {
     seedStore(true);
     usePosStore.setState({
       preferences: {

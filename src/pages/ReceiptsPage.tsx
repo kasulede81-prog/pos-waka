@@ -11,6 +11,7 @@ import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useSessionActor } from "../context/SessionActorContext";
+import { authOperatorPermissions, authOperatorRole } from "../lib/sessionActor";
 import { VirtualizedReceiptList } from "../components/receipts/VirtualizedReceiptList";
 import { SalesHistoryDesktopTable } from "../components/receipts/SalesHistoryDesktopTable";
 import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
@@ -126,7 +127,12 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const term = hospitalityMode ? ht : pharmacyMode ? pt : null;
   const canVoid = actorHasPermission(actor, "sale_void");
-  const { canProfit, canShopWideFinancials } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
+  const { canProfit, canShopWideFinancials } = resolveProfitVisibility({
+    role: authOperatorRole(actor),
+    snapshot,
+    authMode,
+    actorPermissions: authOperatorPermissions(actor),
+  });
   const showProfit = canProfit;
   const showShopSummaries = canShopWideFinancials;
   const products = usePosStore((s) => s.products);
@@ -151,11 +157,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         staffAccounts,
         shifts,
         auditLogs,
-        ownerUserId: actor.userId.startsWith("staff:") ? null : actor.userId,
+        ownerUserId: actor.authUserId ?? (actor.userId.startsWith("staff:") ? null : actor.userId),
         ownerDisplayName: actor.displayName,
         shopDisplayName: preferences.shopDisplayName,
       }),
-    [staffAccounts, shifts, auditLogs, actor.userId, actor.displayName, preferences.shopDisplayName],
+    [staffAccounts, shifts, auditLogs, actor.authUserId, actor.userId, actor.displayName, preferences.shopDisplayName],
   );
 
   const soldByLabel = (sale: Sale): string =>
@@ -201,7 +207,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const filteredInRange = useMemo(() => {
     const inRange = sales.filter((s) => saleMatchesFilter(s, bounds));
-    if (actor.role !== "cashier") return inRange;
+    if (authOperatorRole(actor) !== "cashier") return inRange;
     return inRange.filter((s) => saleSoldByMatchesActor(s, actor));
   }, [sales, bounds, actor]);
 

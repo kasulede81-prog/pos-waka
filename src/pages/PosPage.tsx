@@ -91,7 +91,9 @@ import {
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
+import { useTerminalIdentity } from "../hooks/useTerminalIdentity";
 import { useSessionActor } from "../context/SessionActorContext";
+import { shiftOwnerUserId, authOperatorRole } from "../lib/sessionActor";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { gateDraftSaleStockBeforeFinalize } from "../lib/preFinalizeStockGate";
@@ -235,6 +237,7 @@ function parseDisplayQty(s: string): number {
 
 export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const terminalIdentity = useTerminalIdentity();
   const canSavePending = actorHasPermission(actor, "pending_sales.manage");
   const canIssueDebt = actorHasPermission(actor, "customers.debt");
   const checkoutMethods = useMemo(
@@ -242,6 +245,8 @@ export function PosPage({ lang }: { lang: Language }) {
     [canIssueDebt],
   );
   const shopPreferences = usePosStore((s) => s.preferences);
+  const terminalLabel = shopPreferences.shopDisplayName?.trim() || null;
+  const sellerDisplayName = terminalIdentity.sellerName;
   const pt = usePharmacyTerms(lang, shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
   const wt = useWholesaleTerms(lang, shopPreferences.businessType);
@@ -268,9 +273,9 @@ export function PosPage({ lang }: { lang: Language }) {
       summarizeTodaySales(
         sales,
         new Date(),
-        actor.role === "cashier" ? { matchActor: actor } : undefined,
+        authOperatorRole(actor) === "cashier" ? { matchActor: actor } : undefined,
       ),
-    [sales, actor.role, actor.userId, actor.linkedAuthUserId],
+    [sales, actor.authRole, actor.role, actor.userId, actor.linkedAuthUserId],
   );
   const customers = usePosStore(useShallow((s) => s.customers));
   const preferences = usePosStore(
@@ -454,10 +459,11 @@ export function PosPage({ lang }: { lang: Language }) {
     return map;
   }, [draftLines]);
   const tapAddGuardRef = useRef<{ productId: string; at: number } | null>(null);
-  const activeShift = useMemo(
-    () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
-    [preferences.shifts, actor.userId],
-  );
+  const activeShift = useMemo(() => {
+    const ownerId = shiftOwnerUserId(actor);
+    if (!ownerId) return null;
+    return (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === ownerId) ?? null;
+  }, [preferences.shifts, actor.authUserId, actor.userId]);
   const [discountLine, setDiscountLine] = useState<SaleLine | null>(null);
   const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
   const [posExitOpen, setPosExitOpen] = useState(false);
@@ -2240,7 +2246,8 @@ export function PosPage({ lang }: { lang: Language }) {
         <PosDesktopCompactHeader
           lang={lang}
           sellLabelKey={sellNavLabelKey}
-          cashierName={actor.displayName ?? actor.userId}
+          identity={terminalIdentity}
+          terminalLabel={terminalLabel}
           shift={activeShift}
           todaySaleCount={todaySalesSummary.count}
           todaySalesUgx={todaySalesSummary.total}
@@ -2251,7 +2258,7 @@ export function PosPage({ lang }: { lang: Language }) {
         <PosShiftSummaryCollapsible
           lang={lang}
           shift={activeShift}
-          cashierName={actor.displayName ?? actor.userId}
+          cashierName={sellerDisplayName}
           todaySaleCount={todaySalesSummary.count}
           todaySalesUgx={todaySalesSummary.total}
           pendingCount={pendingCount}
@@ -2264,7 +2271,7 @@ export function PosPage({ lang }: { lang: Language }) {
         <ActiveShiftBanner
           lang={lang}
           shift={activeShift}
-          cashierName={actor.displayName ?? actor.userId}
+          cashierName={sellerDisplayName}
           onCloseShift={() => setShiftCloseOpen(true)}
         />
       ) : null}
@@ -2299,7 +2306,8 @@ export function PosPage({ lang }: { lang: Language }) {
             <DesktopPosHeader
               lang={lang}
               sellLabelKey={sellNavLabelKey}
-              cashierName={actor.displayName ?? actor.userId}
+              identity={terminalIdentity}
+              terminalLabel={terminalLabel}
               shift={activeShift}
               todaySaleCount={todaySalesSummary.count}
               todaySalesUgx={todaySalesSummary.total}
@@ -2340,7 +2348,9 @@ export function PosPage({ lang }: { lang: Language }) {
               completeLabel={modeTerm("saveSale")}
             />
           }
-          statusBar={<DesktopStatusBar lang={lang} cashierName={actor.displayName ?? actor.userId} />}
+          statusBar={
+            <DesktopStatusBar lang={lang} identity={terminalIdentity} terminalLabel={terminalLabel} />
+          }
           onScreenKeyboard={
             <DesktopOnScreenKeyboard
               lang={lang}
@@ -2379,7 +2389,9 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       )}
 
-      {isWebFullDesktopPosLayout ? <PosDesktopStatusBar lang={lang} /> : null}
+      {isWebFullDesktopPosLayout ? (
+        <PosDesktopStatusBar lang={lang} identity={terminalIdentity} terminalLabel={terminalLabel} />
+      ) : null}
 
       {mountCompactCheckoutSlideover ? (
         <PosCompactCheckoutSlideover

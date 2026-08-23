@@ -4,6 +4,7 @@ import { t } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../../lib/profitVisibility";
+import { authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
 import { usePosStore } from "../../store/usePosStore";
 import { useDeferredReportingSales } from "../../hooks/useDeferredReportingSales";
 import { useReportingReturnRecords } from "../../hooks/useReportingReturnRecords";
@@ -33,7 +34,12 @@ type Props = { lang: Language };
 export function MonthlyReportsPanel({ lang }: Props) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
+  const { canProfit } = resolveProfitVisibility({
+    role: authOperatorRole(actor),
+    snapshot,
+    authMode,
+    actorPermissions: authOperatorPermissions(actor),
+  });
   const exportOpts = { includeProfit: canProfit };
   const [includeArchived, setIncludeArchived] = useState(true);
   const [monthKey, setMonthKey] = useState(currentMonthKey);

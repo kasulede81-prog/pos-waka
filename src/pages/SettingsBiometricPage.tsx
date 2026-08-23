@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
+import { authOperatorRole } from "../lib/sessionActor";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { BiometricAuthSettingsForm } from "../components/settings/BiometricAuthSettingsForm";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
@@ -9,7 +10,7 @@ import { EnterprisePageContainer } from "../components/layout/EnterprisePageCont
 export function SettingsBiometricPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
 
-  if (actor.role !== "owner") {
+  if (authOperatorRole(actor) !== "owner") {
     return <Navigate to="/settings" replace />;
   }
 

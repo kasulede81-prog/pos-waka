@@ -14,6 +14,7 @@ import { downloadDayClosePdf, printDayCloseReport, shareDayClosePdf } from "../l
 import { EndOfDayClosingWizard } from "../components/eod/EndOfDayClosingWizard";
 import { useEndOfDayCloseSession } from "../hooks/useEndOfDayCloseSession";
 import { dayCloseCashCountHref } from "../lib/dayCloseEnforcement";
+import { authOperatorRole } from "../lib/sessionActor";
 
 /**
  * Phase 35.1 — Close Day hosts the guided End-of-Day wizard.
@@ -98,7 +99,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       <EndOfDayClosingWizard lang={lang} session={session} />
 
-      {activeCloseToday && actor.role === "owner" ? (
+      {activeCloseToday && authOperatorRole(actor) === "owner" ? (
         <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
           <h2 className="text-base font-black text-amber-950">{t(lang, "dayCloseReopenTitle")}</h2>
           <input

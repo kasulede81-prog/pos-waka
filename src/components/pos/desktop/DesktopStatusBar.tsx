@@ -4,6 +4,8 @@ import { CheckCircle2, CloudOff, Printer, RefreshCw, Wifi } from "lucide-react";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
+import type { TerminalIdentityView } from "../../../lib/terminalIdentity";
+import { TerminalIdentityStrip } from "../TerminalIdentityStrip";
 import { useSyncStatus } from "../../../hooks/useSyncStatus";
 import { useOfflineStatus } from "../../../hooks/useOfflineStatus";
 import { countSalesWithSyncErrors } from "../../../offline/cloudSync";
@@ -11,12 +13,13 @@ import { hasCapability } from "../../../platform";
 
 type Props = {
   lang: Language;
-  cashierName: string;
+  identity: TerminalIdentityView;
+  terminalLabel?: string | null;
   className?: string;
 };
 
-/** Desktop POS status bar — shop, cashier, connectivity, sync, time. */
-export function DesktopStatusBar({ lang, cashierName, className }: Props) {
+/** Desktop POS status bar — shop, operator/seller, connectivity, sync, time. */
+export function DesktopStatusBar({ lang, identity, terminalLabel, className }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const sync = useSyncStatus();
   const { isOnline } = useOfflineStatus();
@@ -61,7 +64,7 @@ export function DesktopStatusBar({ lang, cashierName, className }: Props) {
       <span className="hidden truncate sm:inline" title={shopName}>
         {shopName}
       </span>
-      <span className="truncate">{cashierName}</span>
+      <TerminalIdentityStrip lang={lang} identity={identity} terminalLabel={terminalLabel} compact />
 
       <span
         className={clsx(

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Share2 } from "lucide-react";
 import type { Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
+import { authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { useOwnerRiskCards } from "../../hooks/useOwnerRiskCards";
@@ -74,10 +75,10 @@ export function DesktopHomeTiles({ lang }: Props) {
 
   const { byTile: liveStats, executive } = useHomeDashboardMetrics(
     lang,
-    actor.role,
+    authOperatorRole(actor),
     actor,
     lowStockCount,
-    actor.permissions,
+    authOperatorPermissions(actor),
   );
 
   const can = useCallback(

@@ -1,4 +1,5 @@
 import { usePosStore } from "../store/usePosStore";
+import { shiftOwnerUserId } from "../lib/sessionActor";
 import type { ShiftRecord } from "../types";
 
 /** Injects an active v1 shift without store side-effects (no IndexedDB / sync queue). */
@@ -7,9 +8,12 @@ export function openTestShift(openingFloatUgx = 10_000): { ok: boolean } {
   const actor = state.sessionActor;
   if (!actor) return { ok: false };
 
+  const writerId = shiftOwnerUserId(actor);
+  if (!writerId) return { ok: false };
+
   const row: ShiftRecord = {
     id: "test-shift-1",
-    actorUserId: actor.userId,
+    actorUserId: writerId,
     actorName: actor.displayName,
     role: actor.role,
     startAt: "2026-06-11T08:00:00.000Z",
@@ -34,7 +38,7 @@ export function openTestShift(openingFloatUgx = 10_000): { ok: boolean } {
     preferences: {
       ...state.preferences,
       cashDrawerFormulaVersion: "v1",
-      shifts: [row, ...(state.preferences.shifts ?? []).filter((s) => s.actorUserId !== actor.userId || s.endAt)],
+      shifts: [row, ...(state.preferences.shifts ?? []).filter((s) => s.actorUserId !== writerId || s.endAt)],
     },
   });
   return { ok: true };

@@ -7,6 +7,8 @@ import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
 import { isPharmacyMode } from "../../../lib/pharmacy";
 import { useSessionActor } from "../../../context/SessionActorContext";
+import { shiftOwnerUserId } from "../../../lib/sessionActor";
+import { useTerminalIdentity } from "../../../hooks/useTerminalIdentity";
 
 import { useSubscription } from "../../../context/SubscriptionContext";
 import {
@@ -69,8 +71,10 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   const patientParam = searchParams.get("patient");
 
   const actor = useSessionActor();
+  const terminalIdentity = useTerminalIdentity();
   const { snapshot, authMode } = useSubscription();
   const preferences = usePosStore((s) => s.preferences);
+  const terminalLabel = preferences.shopDisplayName?.trim() || null;
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const sales = usePosStore((s) => s.sales);
@@ -123,10 +127,11 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   const canDispense = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
   const todaySalesSummary = useMemo(() => summarizeTodaySales(sales), [sales]);
   const pendingCount = useMemo(() => pendingSales(sales).length, [sales]);
-  const activeShift = useMemo(
-    () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
-    [preferences.shifts, actor.userId],
-  );
+  const activeShift = useMemo(() => {
+    const ownerId = shiftOwnerUserId(actor);
+    if (!ownerId) return null;
+    return (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === ownerId) ?? null;
+  }, [preferences.shifts, actor.authUserId, actor.userId]);
 
   const queue = useMemo(() => activePrescriptionQueue(prescriptions), [prescriptions]);
   const selectedRx = useMemo(
@@ -345,7 +350,8 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
         <PosDesktopCompactHeader
           lang={lang}
           sellLabelKey="navDispense"
-          cashierName={actor.displayName ?? actor.userId}
+          identity={terminalIdentity}
+          terminalLabel={terminalLabel}
           shift={activeShift}
           todaySaleCount={todaySalesSummary.count}
           todaySalesUgx={todaySalesSummary.total}

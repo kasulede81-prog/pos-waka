@@ -107,7 +107,7 @@ describe("STAFF-V2 Phase 8 shared terminal PIN attribution", () => {
     const cashierKey = computeAccountKey({ mode: "supabase", userId: CASHIER_UUID });
     expect(ownerKey).toBe(`sb:${OWNER_UUID}`);
     expect(ownerKey).not.toBe(cashierKey);
-    expect(SESSION_ACTOR).toMatch(/userId: `staff:\$\{params\.staffSession\.staffId\}`/);
+    expect(SESSION_ACTOR).toMatch(/const staffUserId = `staff:\$\{params\.staffSession\.staffId\}`/);
     expect(SESSION_ACTOR).toMatch(/linkedAuthUserId/);
     expect(USE_AUTH).toMatch(/await supabase\.auth\.signOut\(\)/);
   });

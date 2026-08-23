@@ -11,6 +11,7 @@ import { isCompletedSale } from "../lib/saleStatus";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
+import { authOperatorPermissions, authOperatorRole } from "../lib/sessionActor";
 import { computeProfitGroupedByCategory } from "../lib/homeProfit";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -73,7 +74,12 @@ export function ProfitPage({ lang, embedded }: Props) {
   const [quickFilter, setQuickFilter] = useState<ProfitQuickFilter>("all");
   const [detailProduct, setDetailProduct] = useState<ProfitProductView | null>(null);
 
-  const { canProfit: canViewProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
+  const { canProfit: canViewProfit } = resolveProfitVisibility({
+    role: authOperatorRole(actor),
+    snapshot,
+    authMode,
+    actorPermissions: authOperatorPermissions(actor),
+  });
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const generalLabel = t(lang, "uncategorized");

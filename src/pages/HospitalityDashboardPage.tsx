@@ -6,6 +6,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 
@@ -53,7 +54,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const hospitality = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const todayKey = dateKeyKampala(new Date());
 
-  const homeMetrics = resolveVisibleHomeMetrics(actor.role);
+  const homeMetrics = resolveVisibleHomeMetrics(authOperatorRole(actor));
   const canFloor = actorHasEffectivePermission(actor, "hospitality.floor", snapshot, authMode);
   const kitchenEnabled = isKitchenEnabledForHospitality(
     preferences.businessType,

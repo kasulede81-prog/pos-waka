@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Capacitor } from "@capacitor/core";
 import { Fingerprint, LogOut, RefreshCw, Wifi, WifiOff } from "lucide-react";
-import type { Language, ShopPreferences, UserRole } from "../../types";
+import type { Language, ShopPreferences } from "../../types";
 import { t } from "../../lib/i18n";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { EnterprisePinPad } from "./EnterprisePinPad";
@@ -14,13 +14,14 @@ import { checkBiometricCapability, promptNativeBiometric } from "../../lib/biome
 import { isBiometricAuthFeatureEnabled } from "../../lib/sensitiveActionAuth";
 import { getUnlockLockoutStatus, unlockLimiterScope } from "../../lib/auth/staffLoginLimiter";
 import { staffAllowSwitchUser as resolveAllowSwitchUser } from "../../lib/auth/staffSession";
+import { refreshStaffCacheOnLockScreenOpen } from "../../lib/auth/staffLockScreen";
+import type { TerminalIdentityView } from "../../lib/terminalIdentity";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 
 type Props = {
   lang: Language;
   preferences: ShopPreferences;
-  actorName: string;
-  actorRole: UserRole;
+  identity: TerminalIdentityView;
   businessName: string;
   canSwitchUser: boolean;
   isInternalAdmin?: boolean;
@@ -59,8 +60,7 @@ function isUnlockingCurrentSession(staffId: string, activeStaffId: string | null
 export function EnterpriseStaffLockScreen({
   lang,
   preferences,
-  actorName,
-  actorRole,
+  identity,
   businessName,
   canSwitchUser,
   isInternalAdmin = false,
@@ -94,6 +94,10 @@ export function EnterpriseStaffLockScreen({
     () => (preferences.staffAccounts ?? []).filter((s) => s.active),
     [preferences.staffAccounts],
   );
+
+  useEffect(() => {
+    refreshStaffCacheOnLockScreenOpen();
+  }, []);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setFadeIn(true));
@@ -208,11 +212,38 @@ export function EnterpriseStaffLockScreen({
           </div>
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur lg:mt-8 lg:p-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t(lang, "enterpriseLockSignedInAs")}</p>
-            <p className="mt-1 text-xl font-black lg:text-2xl">{actorName}</p>
-            <p className="mt-1 inline-flex rounded-full bg-waka-600/30 px-3 py-1 text-xs font-black text-waka-200">
-              {t(lang, `role_${actorRole}`)}
-            </p>
+            {identity.splitIdentity ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    {t(lang, "terminalDeviceOwner")}
+                  </p>
+                  <p className="mt-1 text-xl font-black lg:text-2xl">{identity.operatorName}</p>
+                  <p className="mt-1 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white/90">
+                    {t(lang, `role_${identity.operatorRole}`)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    {t(lang, "terminalSellingAs")}
+                  </p>
+                  <p className="mt-1 text-xl font-black lg:text-2xl">{identity.sellerName}</p>
+                  <p className="mt-1 inline-flex rounded-full bg-waka-600/30 px-3 py-1 text-xs font-black text-waka-200">
+                    {t(lang, `role_${identity.sellerRole}`)}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  {t(lang, "terminalOperator")}
+                </p>
+                <p className="mt-1 text-xl font-black lg:text-2xl">{identity.operatorName}</p>
+                <p className="mt-1 inline-flex rounded-full bg-waka-600/30 px-3 py-1 text-xs font-black text-waka-200">
+                  {t(lang, `role_${identity.operatorRole}`)}
+                </p>
+              </>
+            )}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground lg:mt-6">{statusPills}</div>
@@ -221,11 +252,13 @@ export function EnterpriseStaffLockScreen({
         <section className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain rounded-t-3xl bg-card p-4 shadow-2xl dark:bg-foreground sm:p-6 lg:max-h-full lg:flex-none lg:overflow-visible lg:rounded-3xl lg:p-7">
           <div className="mx-auto flex w-full max-w-md flex-1 flex-col lg:max-w-none">
             <h2 className="text-xl font-black text-foreground dark:text-background sm:text-2xl">{t(lang, "lockPosTitle")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">{t(lang, "lockPosSub")}</p>
+            <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
+              {allowSwitch ? t(lang, "lockPosSubSeller") : t(lang, "lockPosSub")}
+            </p>
 
             {allowSwitch && activeStaff.length > 0 ? (
               <label className="mt-3 block text-sm font-bold text-muted-foreground dark:text-muted-foreground sm:mt-4">
-                {t(lang, "switchUser")}
+                {t(lang, "switchSeller")}
                 <select
                   value={staffId}
                   onChange={(e) => {
@@ -288,7 +321,7 @@ export function EnterpriseStaffLockScreen({
                   className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-border font-bold"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  {t(lang, "switchUser")}
+                  {t(lang, "switchSeller")}
                 </button>
               ) : null}
               <button

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
+import { authOperatorRole } from "../../lib/sessionActor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { checkBiometricCapability } from "../../lib/biometricAuth";
 import {
@@ -14,7 +15,7 @@ export function BiometricAuthSettingsForm({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
-  const isOwner = actor.role === "owner";
+  const isOwner = authOperatorRole(actor) === "owner";
   const enabled = isBiometricAuthFeatureEnabled(preferences);
   const pinConfigured = isBackOfficePinConfigured(preferences.backOfficePin);
 

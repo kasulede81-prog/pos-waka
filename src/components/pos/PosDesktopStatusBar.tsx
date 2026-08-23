@@ -5,10 +5,13 @@ import { usePosStore } from "../../store/usePosStore";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 
-type Props = { lang: Language };
+import type { TerminalIdentityView } from "../../lib/terminalIdentity";
+import { TerminalIdentityStrip } from "./TerminalIdentityStrip";
+
+type Props = { lang: Language; identity: TerminalIdentityView; terminalLabel?: string | null };
 
 /** Thin status bar at the bottom of enterprise desktop POS. */
-export function PosDesktopStatusBar({ lang }: Props) {
+export function PosDesktopStatusBar({ lang, identity, terminalLabel }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const sync = useSyncStatus();
   const { isOnline } = useOfflineStatus();
@@ -32,6 +35,7 @@ export function PosDesktopStatusBar({ lang }: Props) {
       role="contentinfo"
     >
       <span className="truncate">Waka POS · {t(lang, "posDesktopStatusDesktop")}</span>
+      <TerminalIdentityStrip lang={lang} identity={identity} terminalLabel={terminalLabel} className="hidden min-w-0 sm:flex" />
       <span className="hidden truncate sm:inline">
         {isOnline ? t(lang, "posDesktopStatusOnline") : t(lang, "posDesktopStatusOffline")}
         {sync.syncing ? ` · ${t(lang, "posDesktopStatusSyncing")}` : ""}

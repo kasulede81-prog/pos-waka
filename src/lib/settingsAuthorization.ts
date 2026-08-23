@@ -5,6 +5,7 @@
 
 import type { Permission, ShopPreferences } from "../types";
 import type { SessionActor } from "./sessionActor";
+import { authOperatorRole } from "./sessionActor";
 import {
   checkStorePermission,
   checkStorePermissionEffective,
@@ -167,7 +168,7 @@ export function authorizePreferencesPatch(
   for (const key of Object.keys(patch) as (keyof ShopPreferences)[]) {
     const perm = permissionForPreferenceKey(key);
     if (!perm) continue;
-    if (OWNER_ONLY_PREFERENCE_KEYS.has(key) && (!actor || actor.role !== "owner")) {
+    if (OWNER_ONLY_PREFERENCE_KEYS.has(key) && (!actor || authOperatorRole(actor) !== "owner")) {
       return { ok: false, errorKey: "forbidden" };
     }
     const effectiveCheck =

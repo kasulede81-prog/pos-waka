@@ -4,6 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
+import { authOperatorRole } from "../lib/sessionActor";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { usePosStore } from "../store/usePosStore";
 import { hasSupabaseConfig } from "../lib/supabase";
@@ -76,7 +77,7 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
 
   useEffect(() => {
     let cancelled = false;
-    void buildSelfDeleteHealthSnapshot({ isOwner: actor.role === "owner", user }).then((snap) => {
+    void buildSelfDeleteHealthSnapshot({ isOwner: authOperatorRole(actor) === "owner", user }).then((snap) => {
       if (!cancelled) {
         setBackendReady(ownerDeleteReadinessFromSnapshot(snap) === "ready");
       }
@@ -96,7 +97,7 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
     };
   }, [userId]);
 
-  if (actor.role !== "owner") {
+  if (authOperatorRole(actor) !== "owner") {
     return <Navigate to="/office/account" replace />;
   }
 

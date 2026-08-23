@@ -6,6 +6,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
+import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
@@ -48,12 +49,12 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const canShop = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
   const canDrawerSettings = actorHasEffectivePermission(actor, "day.open_drawer", snapshot, authMode);
   const canOwnerFinanceDiagnostics =
-    canSeeFinanceDiagnostics(actor.role) &&
+    canSeeFinanceDiagnostics(authOperatorRole(actor)) &&
     actorHasEffectivePermission(actor, "owner.dashboard", snapshot, authMode);
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
   const canReceipt = actorHasPermission(actor, "settings.receipt");
   const canDevices = actorHasPermission(actor, "settings.devices");
-  const pilotActive = isPilotModeActive(actor.role, preferences);
+  const pilotActive = isPilotModeActive(authOperatorRole(actor), preferences);
   const showFloorSetup = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
   const showPharmacySettings = canShop && isPharmacyMode(businessType, pharmacyModeEnabled);
   const showHospitalitySettings = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
@@ -155,7 +156,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={MonitorSmartphone}
           />
         ) : null}
-        {canShop && actor.role === "owner" ? (
+        {canShop && authOperatorRole(actor) === "owner" ? (
           <OfficeNavCard
             to="/settings/biometric"
             title={t(lang, "settingsHubBiometric")}
@@ -298,8 +299,8 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
         ) : null}
       </OfficeNavSection>
 
-      {canTogglePilotMode(actor.role) ? <PilotModeToggle lang={lang} /> : null}
-      {canTogglePilotMode(actor.role) ? (
+      {canTogglePilotMode(authOperatorRole(actor)) ? <PilotModeToggle lang={lang} /> : null}
+      {canTogglePilotMode(authOperatorRole(actor)) ? (
         <OfficeNavCard
           to="/pilot-support"
           title={t(lang, "pilotSupportCenterTitle")}

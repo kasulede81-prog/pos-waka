@@ -1,5 +1,5 @@
 import { actorHasPermission } from "../../lib/actorAuthorization";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ChevronDown, CircleHelp } from "lucide-react";
@@ -17,7 +17,8 @@ import { ANDROID_BACK_PRIORITY } from "../../lib/androidBackStack";
 import { useShallow } from "zustand/react/shallow";
 import { usePosStore } from "../../store/usePosStore";
 import type { ShopPreferences } from "../../types";
-import { resolveSessionActor } from "../../lib/sessionActor";
+import { resolveSessionActor, authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
+import { resolveTerminalIdentityView } from "../../lib/terminalIdentity";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { SessionHydrationProvider } from "../../context/SessionHydrationContext";
 
@@ -38,7 +39,6 @@ import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { readCachedShopMemberRole, writeCachedShopMemberRole } from "../../lib/shopMemberRoleCache";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured, shouldSuppressPosLockScreen } from "../../lib/lockPos";
-import { ShiftCloseModal } from "../pos/ShiftCloseModal";
 import { DisplayScaleControl } from "../pos/DisplayScaleControl";
 import { EnterpriseStaffLockScreen } from "../auth/EnterpriseStaffLockScreen";
 import {
@@ -126,18 +126,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const { noticeAt: staffCredentialRecoveryNotice, dismissNotice: dismissStaffCredentialRecoveryNotice } =
     useStaffCredentialRecoveryOwnerNotice(shopId);
   const setPosLocked = usePosStore((s) => s.setPosLocked);
-  const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
-  const shifts = usePosStore((s) => s.preferences.shifts);
   const [menuOpen, setMenuOpen] = useState(false);
   const { enabled: remoteSupportEnabled } = useRemoteSupportPlatformEnabled();
   useAndroidBackHandler("app-menu-drawer", ANDROID_BACK_PRIORITY.menuDrawer, menuOpen, () => setMenuOpen(false));
   const [lockSetupHint, setLockSetupHint] = useState<string | null>(null);
-  const [staffSwitchShiftOpen, setStaffSwitchShiftOpen] = useState(false);
-  const [staffSwitchCloseOpen, setStaffSwitchCloseOpen] = useState(false);
-  const [pendingStaffUnlock, setPendingStaffUnlock] = useState<{
-    staffId: string | null;
-    secret: string;
-  } | null>(null);
   const [isInternalAdmin, setIsInternalAdmin] = useState(false);
   const [shopMemberRole, setShopMemberRole] = useState<UserRole | null>(() => {
     if (authMode !== "supabase" || !user?.id) return null;
@@ -198,7 +190,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       }),
     [authMode, user, email, preferences, staffSession, shopMemberRole],
   );
-  const pilotActive = isPilotModeActive(actor.role, preferences as ShopPreferences);
+  const pilotActive = isPilotModeActive(authOperatorRole(actor), preferences as ShopPreferences);
   const tier = resolveEffectivePlanTier(snapshot);
   const canSwitchUser = tier === "business" || tier === "waka_plus";
 
@@ -206,16 +198,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     usePosStore.getState().setSessionActor(actor);
   }, [actor]);
 
-  const activeShiftForActor = useMemo(
-    () => (shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
-    [shifts, actor.userId],
-  );
+  const jwtOperatorName = useMemo(() => {
+    const meta = user?.user_metadata as Record<string, string> | undefined;
+    return meta?.full_name?.trim() || user?.email?.trim() || email?.trim() || null;
+  }, [user, email]);
 
-  const completeStaffUnlock = useCallback((staffId: string | null) => {
-    const r = completePosUnlock(staffId);
-    if (!r.ok) return;
-    setPendingStaffUnlock(null);
-  }, []);
+  const terminalIdentity = useMemo(
+    () => resolveTerminalIdentityView(actor, preferences as ShopPreferences, jwtOperatorName),
+    [actor, preferences, jwtOperatorName],
+  );
 
   useEffect(() => {
     setMenuOpen(false);
@@ -271,7 +262,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const wholesaleNav = isWholesaleMode(preferences.businessType);
-  const terminalHome = resolveTerminalHomePath(preferences, actor.role, actor.permissions);
+  const terminalHome = resolveTerminalHomePath(
+    preferences,
+    authOperatorRole(actor),
+    authOperatorPermissions(actor) ?? actor.permissions,
+  );
   const onTerminalHome = location.pathname === terminalHome;
   const isLauncherHome = location.pathname === "/";
   const desktopTerminalHome = isDesktopLayout && isLauncherHome;
@@ -360,12 +355,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           />
         ) : null}
         {shopSecurityPinRecoveryNotice &&
-        actor.role === "owner" &&
+        authOperatorRole(actor) === "owner" &&
         !isBackOfficePinConfigured(preferences.backOfficePin) &&
         !internalAdminRoute ? (
           <ShopSecurityPinRecoveryBanner lang={lang} onDismiss={dismissShopSecurityPinRecoveryNotice} />
         ) : null}
-        {staffCredentialRecoveryNotice && actor.role === "owner" && !internalAdminRoute ? (
+        {staffCredentialRecoveryNotice && authOperatorRole(actor) === "owner" && !internalAdminRoute ? (
           <StaffCredentialRecoveryBanner lang={lang} onDismiss={dismissStaffCredentialRecoveryNotice} />
         ) : null}
         {pilotActive ? <PilotModeBanner lang={lang} /> : null}
@@ -561,7 +556,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     >
                       {t(lang, "settingsHubAppearance")}
                     </button>
-                    {authMode === "supabase" && !staffSession && actor.role === "owner" ? (
+                    {authMode === "supabase" && !staffSession && authOperatorRole(actor) === "owner" ? (
                       <button
                         type="button"
                         role="menuitem"
@@ -670,8 +665,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           <EnterpriseStaffLockScreen
             lang={lang}
             preferences={preferences as ShopPreferences}
-            actorName={actor.displayName ?? t(lang, "role_owner")}
-            actorRole={actor.role}
+            identity={terminalIdentity}
             businessName={preferences.shopDisplayName ?? ""}
             canSwitchUser={canSwitchUser}
             isInternalAdmin={isInternalAdmin}
@@ -693,11 +687,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               });
               if (!verify.ok) {
                 return { ok: false as const, errorKey: verify.errorKey };
-              }
-              if (verify.switched && activeShiftForActor) {
-                setPendingStaffUnlock({ staffId: verify.staffId, secret });
-                setStaffSwitchShiftOpen(true);
-                return { ok: true as const };
               }
               const unlock = completePosUnlock(verify.staffId);
               if (!unlock.ok) {
@@ -726,54 +715,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             }}
           />
         ) : null}
-        {staffSwitchShiftOpen ? (
-          <AppModalOverlay className="z-[125] flex items-center justify-center bg-overlay/85 p-4">
-            <div className="w-full max-w-md rounded-3xl bg-card p-6 shadow-2xl">
-              <p className="text-xl font-black text-foreground">{t(lang, "staffSwitchShiftTitle")}</p>
-              <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "staffSwitchShiftBody")}</p>
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStaffSwitchShiftOpen(false);
-                    setPendingStaffUnlock(null);
-                  }}
-                  className="min-h-[48px] rounded-2xl border-2 font-bold"
-                >
-                  {t(lang, "cancel")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStaffSwitchShiftOpen(false);
-                    setStaffSwitchCloseOpen(true);
-                  }}
-                  className="min-h-[48px] rounded-2xl bg-waka-600 font-black text-white"
-                >
-                  {t(lang, "shiftCloseBtn")}
-                </button>
-              </div>
-            </div>
-          </AppModalOverlay>
-        ) : null}
-        <ShiftCloseModal
-          lang={lang}
-          open={staffSwitchCloseOpen}
-          shift={activeShiftForActor}
-          onClose={() => {
-            setStaffSwitchCloseOpen(false);
-            setPendingStaffUnlock(null);
-          }}
-          onConfirm={(counted, handoff) => {
-            const r = closeShiftWithCashCount(counted, handoff);
-            if (!r.ok) {
-              return { ok: false };
-            }
-            setStaffSwitchCloseOpen(false);
-            if (pendingStaffUnlock) completeStaffUnlock(pendingStaffUnlock.staffId);
-            return { ok: true };
-          }}
-        />
         {lockSetupHint ? (
           <AppModalOverlay className="z-[115] flex items-center justify-center bg-overlay/70 p-4">
             <div className="w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">

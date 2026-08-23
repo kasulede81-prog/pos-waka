@@ -12,11 +12,14 @@ import { useUiLanguage } from "../../../hooks/useUiLanguage";
 import { languageToggleLabel, nextLanguage } from "../../../lib/language";
 import { DisplayScaleControl } from "../DisplayScaleControl";
 import { DesktopPosButton } from "./DesktopPosButton";
+import type { TerminalIdentityView } from "../../../lib/terminalIdentity";
+import { TerminalIdentityStrip } from "../TerminalIdentityStrip";
 
 type Props = {
   lang: Language;
   sellLabelKey: string;
-  cashierName: string;
+  identity: TerminalIdentityView;
+  terminalLabel?: string | null;
   shift: ShiftRecord | null;
   todaySaleCount: number;
   todaySalesUgx: number;
@@ -30,7 +33,8 @@ type Props = {
 export function DesktopPosHeader({
   lang,
   sellLabelKey,
-  cashierName,
+  identity,
+  terminalLabel,
   shift,
   todaySaleCount,
   todaySalesUgx,
@@ -82,12 +86,7 @@ export function DesktopPosHeader({
       <div className="mx-1 hidden h-8 w-px shrink-0 bg-border lg:block" aria-hidden />
 
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden text-xs">
-        <div className="min-w-0 shrink">
-          <p className="truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-            {t(lang, "activeShiftCashier")}
-          </p>
-          <p className="truncate font-black text-foreground">{cashierName}</p>
-        </div>
+        <TerminalIdentityStrip lang={lang} identity={identity} terminalLabel={terminalLabel} compact />
         <div className="hidden min-w-0 items-center gap-1 text-muted-foreground md:flex">
           <Clock className="h-3.5 w-3.5 shrink-0 text-waka-600" aria-hidden />
           <span className="truncate font-bold">{duration}</span>

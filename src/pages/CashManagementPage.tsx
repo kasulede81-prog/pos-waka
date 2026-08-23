@@ -14,6 +14,7 @@ import {
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
@@ -94,7 +95,7 @@ function CashManagementHub({ lang }: Props) {
 
   const canOpen = actorHasPermission(actor, "day.open_drawer");
   const canClose = actorHasPermission(actor, "day.close");
-  const canShifts = actor.role === "owner" || actor.role === "manager";
+  const canShifts = authOperatorRole(actor) === "owner" || authOperatorRole(actor) === "manager";
   const canHistory = actorHasPermission(actor, "owner.cash_history");
   const needsDayOpen = isFormulaV2(preferences) && !snapshot.drawerOpen && canOpen;
 
@@ -122,7 +123,7 @@ function CashManagementHub({ lang }: Props) {
   );
   const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
 
-  if (!canAccessCashManagement(actor.role)) {
+  if (!canAccessCashManagement(authOperatorRole(actor))) {
     return <Navigate to="/office" replace />;
   }
 

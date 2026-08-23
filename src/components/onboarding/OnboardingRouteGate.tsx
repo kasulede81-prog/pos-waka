@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { bootTrace } from "../../lib/bootTrace";
-import { resolveSessionActor } from "../../lib/sessionActor";
+import { resolveSessionActor, authOperatorRole } from "../../lib/sessionActor";
 import { isShopOnboardingComplete } from "../../lib/onboardingState";
 import { logOnboardingRequired } from "../../lib/firstTimeOwnerDevice";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
@@ -55,13 +55,13 @@ export function OnboardingRouteGate({ authMode, user, email, staffSession = null
       complete: isShopOnboardingComplete(preferences),
       role: actor.role,
     });
-    if (authMode !== "supabase" || !user?.id || actor.role !== "owner") return;
+    if (authMode !== "supabase" || !user?.id || authOperatorRole(actor) !== "owner") return;
     logOnboardingRequired(user.id);
     bootTrace("BOOT-016", "OnboardingRouteGate", "SUCCESS", { required: !isShopOnboardingComplete(preferences) });
   }, [authMode, user?.id, actor.role, preferences.onboardingWizardDone, preferences.onboardingDone, location.pathname, preferences, actor.role]);
 
   // Auth staff (shop_members non-owner) and PIN staff never enter owner onboarding.
-  if (actor.role !== "owner") return <Outlet />;
+  if (authOperatorRole(actor) !== "owner") return <Outlet />;
   if (shopMemberRole && shopMemberRole !== "owner") return <Outlet />;
 
   const complete = isShopOnboardingComplete(preferences);

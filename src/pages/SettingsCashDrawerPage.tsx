@@ -4,6 +4,7 @@ import type { CashDrawerFormulaVersion, Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
+import { authOperatorRole } from "../lib/sessionActor";
 import { authorizePreferencesPatch } from "../lib/settingsAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
@@ -20,7 +21,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
-  const isOwner = actor.role === "owner";
+  const isOwner = authOperatorRole(actor) === "owner";
 
   const [pct, setPct] = useState(String(preferences.cashVarianceThresholdPct ?? 5));
   const [fixed, setFixed] = useState(String(preferences.cashVarianceThresholdUgxFixed ?? 10_000));

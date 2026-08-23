@@ -23,6 +23,7 @@ import { assertBusinessDateNotLocked } from "../lib/businessDateLock";
 import { resolveFloatVerifyOverride } from "../lib/managerFloatVerify";
 import { type ShiftCashContext } from "../lib/saleAdjustments";
 import { assertCanCloseShift } from "../lib/shiftEnforcement";
+import { authOperatorRole, shiftOwnerUserId } from "../lib/sessionActor";
 import {
   assertCanRecoverShift,
   authorizeShiftClose,
@@ -301,7 +302,10 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     const actor = state.sessionActor;
     if (!actor) return { ok: false as const, errorKey: "noSelection" };
 
-    const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
+    const writerId = shiftOwnerUserId(actor);
+    if (!writerId) return { ok: false as const, errorKey: "noSelection" };
+
+    const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === writerId);
     if (open) return { ok: false as const, errorKey: "invalid" };
 
     const todayKey = dateKeyKampala(new Date());
@@ -412,9 +416,9 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     const now = new Date().toISOString();
     const row: ShiftRecord = {
       id: crypto.randomUUID(),
-      actorUserId: actor.userId,
+      actorUserId: writerId,
       actorName: actor.displayName,
-      role: actor.role,
+      role: authOperatorRole(actor),
       startAt: now,
       endAt: null,
       salesTotalUgx: 0,
@@ -457,7 +461,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     }));
     pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, {
       shiftId: row.id,
-      actorUserId: actor.userId,
+      actorUserId: writerId,
       verifiedFloatUgx: verified,
       segmentBaselineUgx: segmentBaseline,
       dayOpenId,
@@ -480,15 +484,18 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     const actor = state.sessionActor;
     if (!actor) return { ok: false as const, errorKey: "noSelection" };
 
-    const target = resolveShiftCloseTarget(state.preferences.shifts, actor.userId, input.shiftId);
+    const writerId = shiftOwnerUserId(actor);
+    if (!writerId) return { ok: false as const, errorKey: "noSelection" };
+
+    const target = resolveShiftCloseTarget(state.preferences.shifts, writerId, input.shiftId);
     if (!target.ok) return { ok: false as const, errorKey: target.errorKey };
 
     const hasPermission = (permission: import("../types").Permission) =>
       denyUnlessEffectivePermission(permission, "closeShiftWithCashCount") === null;
     const authz = authorizeShiftClose(
       {
-        actorUserId: actor.userId,
-        actorRole: actor.role,
+        actorUserId: writerId,
+        actorRole: authOperatorRole(actor),
         actorDisplayName: actor.displayName,
         hasPermission,
       },

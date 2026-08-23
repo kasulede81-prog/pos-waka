@@ -3,6 +3,7 @@ import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { resolveEnterpriseBottomChrome } from "../../lib/enterpriseBottomChrome";
 import { isPosSellPath } from "../../lib/posSellExit";
 import { usePosStore } from "../../store/usePosStore";
+import { authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { resolveTerminalHomePath } from "../../lib/terminalHome";
 import { isHospitalityMode } from "../../lib/hospitality";
@@ -18,7 +19,11 @@ export function MobileScrollTail() {
   const preferences = usePosStore((s) => s.preferences);
   const actor = useSessionActor();
   const isDesktopLayout = usePosDesktopLayout();
-  const terminalHome = resolveTerminalHomePath(preferences, actor.role, actor.permissions);
+  const terminalHome = resolveTerminalHomePath(
+    preferences,
+    authOperatorRole(actor),
+    authOperatorPermissions(actor) ?? actor.permissions,
+  );
   const isPos = isPosSellPath(pathname);
   const isInternalAdmin = isInternalAdminAppPath(pathname);
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { authOperatorRole } from "../../lib/sessionActor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { buildSelfDeleteHealthSnapshot, type SelfDeleteHealthSnapshot } from "../../lib/selfDeleteHealth";
 import type { User } from "@supabase/supabase-js";
@@ -33,7 +34,7 @@ export function SelfDeleteHealthPanel({ lang, user }: Props) {
     setBusy(true);
     try {
       const next = await buildSelfDeleteHealthSnapshot({
-        isOwner: actor.role === "owner",
+        isOwner: authOperatorRole(actor) === "owner",
         user,
       });
       setSnap(next);
@@ -44,9 +45,9 @@ export function SelfDeleteHealthPanel({ lang, user }: Props) {
 
   useEffect(() => {
     void refresh();
-  }, [actor.role, user?.id]);
+  }, [actor.authRole, actor.role, user?.id]);
 
-  if (actor.role !== "owner") return null;
+  if (authOperatorRole(actor) !== "owner") return null;
 
   return (
     <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">

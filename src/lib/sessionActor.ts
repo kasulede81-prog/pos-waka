@@ -5,10 +5,12 @@ import { resolveStaffPermissions } from "./enterpriseRoles";
 import type { User } from "@supabase/supabase-js";
 
 export type SessionActor = {
+  /** Commercial seller id — `staff:<id>` on shared-terminal PIN (Path S); frozen. */
   userId: string;
+  /** Seller-facing role for POS sell context (may differ from authenticated operator). */
   role: UserRole;
   displayName?: string;
-  /** Effective permissions when acting as staff (custom roles / cached snapshot). */
+  /** Seller permission snapshot (custom staff roles / cached snapshot). */
   permissions?: Permission[];
   roleTemplateId?: string | null;
   customRoleId?: string | null;
@@ -19,7 +21,40 @@ export type SessionActor = {
    * Never replaces `userId`.
    */
   linkedAuthUserId?: string | null;
+  /** Authenticated writer / device operator (JWT or Path L staff session). */
+  authUserId?: string;
+  /** Shop membership role — never downgraded when owner selects PIN staff. */
+  authRole?: UserRole;
+  /** Operator permission snapshot; falls back to role matrix when absent. */
+  authPermissions?: Permission[];
+  /** Active PIN staff on shared terminal (`preferences.activeStaffId`). */
+  activeStaffId?: string | null;
 };
+
+/** Operator role for permissions and owner gates (Phase 11a). */
+export function authOperatorRole(actor: Pick<SessionActor, "authRole" | "role">): UserRole {
+  return actor.authRole ?? actor.role;
+}
+
+/** Operator permissions for authorization checks (Phase 11a) — never seller `permissions`. */
+export function authOperatorPermissions(
+  actor: Pick<SessionActor, "authPermissions">,
+): Permission[] | undefined {
+  return actor.authPermissions;
+}
+
+/**
+ * Shift owner id — authenticated writer (Phase 11b).
+ * Path S: owner UUID while seller is `staff:<id>`. Path L / Auth cashier: same as `userId`.
+ */
+export function shiftOwnerUserId(
+  actor: Pick<SessionActor, "authUserId" | "userId"> | null | undefined,
+): string | null {
+  if (!actor) return null;
+  const writer = actor.authUserId?.trim() ?? "";
+  if (writer) return writer;
+  return actor.userId;
+}
 
 function isAuthUuid(id: string | null | undefined): boolean {
   if (!id) return false;
@@ -77,14 +112,19 @@ export function resolveSessionActor(params: {
       (params.preferences.staffAccounts ?? []).find((s) => s.id === params.staffSession!.staffId)
         ?.linkedAuthUserId,
     );
+    const staffUserId = `staff:${params.staffSession.staffId}`;
     return {
-      userId: `staff:${params.staffSession.staffId}`,
+      userId: staffUserId,
       role: params.staffSession.role,
       displayName: params.staffSession.staffName,
       permissions: params.staffSession.permissions,
       roleTemplateId: params.staffSession.roleTemplateId,
       customRoleId: params.staffSession.customRoleId,
       linkedAuthUserId: fromSession ?? fromAccount,
+      authUserId: staffUserId,
+      authRole: params.staffSession.role,
+      authPermissions: params.staffSession.permissions,
+      activeStaffId: params.staffSession.staffId,
     };
   }
 
@@ -136,5 +176,8 @@ export function resolveSessionActor(params: {
     linkedAuthUserId: activeStaff
       ? normalizeLinkedAuthUserId(activeStaff.linkedAuthUserId)
       : normalizeLinkedAuthUserId(params.user?.id),
+    authUserId: baseUserId,
+    authRole: simulatedRole,
+    activeStaffId: activeStaff?.id ?? params.preferences.activeStaffId ?? null,
   };
 }

@@ -17,6 +17,12 @@ import {
 import { isPosAutoLockEnabled, resolveStaffMaxFailedAttempts, touchStaffActivity } from "./staffSession";
 import { performStaffSwitch } from "./staffSwitchUser";
 
+export function refreshStaffCacheOnLockScreenOpen(): void {
+  void import("../staffCacheSync").then(({ refreshStaffCacheBackground }) =>
+    refreshStaffCacheBackground({ force: false }).catch(() => undefined),
+  );
+}
+
 export type LockPosReason = "manual" | "auto" | "session_expired";
 
 export function lockPos(reason: LockPosReason = "manual"): void {

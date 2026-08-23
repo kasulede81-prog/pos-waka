@@ -18,6 +18,7 @@ import {
 } from "../lib/sequentialBusinessDays";
 import { readSyncQueue } from "../offline/localDb";
 import { ensureAllActiveSalesLoaded, usePosStore } from "../store/usePosStore";
+import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useDrawerCashForDay } from "./useDrawerCashForDay";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
@@ -317,7 +318,7 @@ export function useEndOfDayCloseSession(lang: Language) {
     Boolean(preferences.backOfficePin?.trim()) ||
     (preferences.staffAccounts ?? []).some((s) => Boolean(s.pinHash || s.pin));
   const sessionCanApproveWithoutPin =
-    !pinConfigured && ["owner", "manager", "supervisor"].includes(actor.role);
+    !pinConfigured && ["owner", "manager", "supervisor"].includes(authOperatorRole(actor));
   const canSubmitNormal = Boolean(
     preflight?.canClose &&
       (!needsManagerPin || managerPin.trim().length > 0 || sessionCanApproveWithoutPin) &&

@@ -37,7 +37,7 @@ import type {
   InventoryCountSession,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
-import { commercialAuthUserIdFromActor } from "../lib/sessionActor";
+import { commercialAuthUserIdFromActor, authOperatorPermissions, authOperatorRole, shiftOwnerUserId } from "../lib/sessionActor";
 import { checkStorePermissionEffective } from "../lib/storeAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import {
@@ -215,6 +215,7 @@ import {
 import {
   assertCanCloseShift,
   getActiveShiftForActor,
+  rekeySharedTerminalOpenShifts,
   requireActiveShift,
 } from "../lib/shiftEnforcement";
 import {
@@ -2042,7 +2043,17 @@ export const usePosStore = create<PosState>((set, get) => {
     });
   },
 
-  setSessionActor: (actor) => set({ sessionActor: actor }),
+  setSessionActor: (actor) => {
+    set({ sessionActor: actor });
+    if (!actor) return;
+    const writerId = shiftOwnerUserId(actor);
+    if (!writerId || writerId.startsWith("staff:")) return;
+    const state = get();
+    const rekeyed = rekeySharedTerminalOpenShifts(state.preferences.shifts, writerId);
+    if (rekeyed && rekeyed !== state.preferences.shifts) {
+      set((s) => ({ preferences: { ...s.preferences, shifts: rekeyed } }));
+    }
+  },
 
   setPreferences: (p, opts) => {
     const state = get();
@@ -2681,9 +2692,12 @@ export const usePosStore = create<PosState>((set, get) => {
     const staff = state.preferences.staffAccounts ?? [];
     if (!opts?.force && prev !== id) {
       const actor = state.sessionActor;
-      if (actor) {
-        const open = getActiveShiftForActor(state.preferences.shifts, actor.userId);
-        if (open) return { ok: false, errorKey: "staffSwitchShiftOpen" };
+      if (actor && authOperatorRole(actor) !== "owner") {
+        const writerId = shiftOwnerUserId(actor);
+        if (writerId) {
+          const open = getActiveShiftForActor(state.preferences.shifts, writerId);
+          if (open) return { ok: false, errorKey: "staffSwitchShiftOpen" };
+        }
       }
     }
     if (prev && prev !== id) {
@@ -2707,7 +2721,7 @@ export const usePosStore = create<PosState>((set, get) => {
   acknowledgeOwnerAlert: (alertId) => {
     const state = get();
     const actor = state.sessionActor;
-    if (!actor || actor.role !== "owner") return;
+    if (!actor || authOperatorRole(actor) !== "owner") return;
     const trimmed = String(alertId).trim();
     if (!trimmed) return;
     const next = appendAcknowledgement(state.preferences.ownerAlertAcknowledgements, trimmed, actor.userId);
@@ -2727,14 +2741,16 @@ export const usePosStore = create<PosState>((set, get) => {
     const s = get();
     const actor = s.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    const open = s.preferences.shifts?.find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
+    const writerId = shiftOwnerUserId(actor);
+    if (!writerId) return { ok: false, errorKey: "noSelection" };
+    const open = s.preferences.shifts?.find((sh) => !sh.endAt && sh.actorUserId === writerId);
     if (open) return { ok: false, errorKey: "invalid" };
     const floatAmt = openingFloatUgx != null ? Math.max(0, Math.floor(openingFloatUgx)) : 0;
     const row: ShiftRecord = {
       id: crypto.randomUUID(),
-      actorUserId: actor.userId,
+      actorUserId: writerId,
       actorName: actor.displayName,
-      role: actor.role,
+      role: authOperatorRole(actor),
       startAt: new Date().toISOString(),
       endAt: null,
       salesTotalUgx: 0,
@@ -2758,7 +2774,7 @@ export const usePosStore = create<PosState>((set, get) => {
         shifts: [row, ...(st.preferences.shifts ?? [])],
       },
     }));
-    pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, { shiftId: row.id, actorUserId: actor.userId });
+    pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, { shiftId: row.id, actorUserId: writerId });
     void queueRemote("pending_shifts", { shiftId: row.id });
     return { ok: true };
   },
@@ -2766,7 +2782,7 @@ export const usePosStore = create<PosState>((set, get) => {
   endActiveShift: (actorUserId) => {
     const s = get();
     const actor = s.sessionActor;
-    const uid = actorUserId ?? actor?.userId;
+    const uid = actorUserId ?? (actor ? shiftOwnerUserId(actor) : null);
     if (!uid) return;
     const open = (s.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === uid);
     if (!open) return;
@@ -4432,10 +4448,11 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     }
     if (actor) {
+      const writerId = shiftOwnerUserId(actor);
       nextPreferences = {
         ...nextPreferences,
         shifts: (nextPreferences.shifts ?? []).map((sh) =>
-          !sh.endAt && sh.actorUserId === actor.userId
+          !sh.endAt && writerId && sh.actorUserId === writerId
             ? {
                 ...sh,
                 salesTotalUgx: sh.salesTotalUgx + total,
@@ -4680,7 +4697,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const amount = line.lineTotalUgx;
     const cashReduce = Math.min(amount, sale.cashPaidUgx);
     const debtReduce = creditDebtReductionFromSaleAdjustment(sale, amount);
-    const openShift = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
+    const openShift = (state.preferences.shifts ?? []).find(
+      (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(actor),
+    );
     const at = new Date().toISOString();
 
     const voidRec: VoidRecord = {
@@ -4861,7 +4880,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const product = state.products.find((p) => p.id === productId);
     if (!product) return { ok: false, errorKey: "missingProduct" };
 
-    const openShift = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
+    const openShift = (state.preferences.shifts ?? []).find(
+      (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(actor),
+    );
     const at = new Date().toISOString();
 
     const linkedSale = saleId ? state.sales.find((s) => s.id === saleId) : undefined;
@@ -5023,15 +5044,19 @@ export const usePosStore = create<PosState>((set, get) => {
       });
     }
 
-    const target = resolveShiftCloseTarget(state.preferences.shifts, actor.userId, opts?.shiftId);
+    const target = resolveShiftCloseTarget(
+      state.preferences.shifts,
+      shiftOwnerUserId(actor) ?? actor.userId,
+      opts?.shiftId,
+    );
     if (!target.ok) return { ok: false, errorKey: target.errorKey };
 
     const hasPermission = (permission: import("../types").Permission) =>
       denyUnlessEffectivePermission(permission, "closeShiftWithCashCount") === null;
     const authz = authorizeShiftClose(
       {
-        actorUserId: actor.userId,
-        actorRole: actor.role,
+        actorUserId: shiftOwnerUserId(actor) ?? actor.userId,
+        actorRole: authOperatorRole(actor),
         actorDisplayName: actor.displayName,
         hasPermission,
       },
@@ -6210,11 +6235,12 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const actor = state.sessionActor;
     if (actor) {
+      const writerId = shiftOwnerUserId(actor);
       set((st) => ({
         preferences: {
           ...st.preferences,
           shifts: (st.preferences.shifts ?? []).map((sh) =>
-            !sh.endAt && sh.actorUserId === actor.userId
+            !sh.endAt && writerId && sh.actorUserId === writerId
               ? {
                   ...sh,
                   debtPaymentsTotalUgx: (sh.debtPaymentsTotalUgx ?? 0) + pay,
@@ -6293,7 +6319,7 @@ export const usePosStore = create<PosState>((set, get) => {
 
   removeSupplier: (supplierId) => {
     const actor = get().sessionActor;
-    if (!actor || actor.role !== "owner") {
+    if (!actor || authOperatorRole(actor) !== "owner") {
       pushAudit("auth_forbidden", "Denied removeSupplier (owner only)", {
         permission: "suppliers.manage",
         action: "removeSupplier",
@@ -6794,11 +6820,11 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    if (!canRecordCashExpenses(actor.role, state.preferences, actor.permissions)) {
+    if (!canRecordCashExpenses(authOperatorRole(actor), state.preferences, authOperatorPermissions(actor))) {
       pushAudit("auth_forbidden", "Denied addCashExpense", {
         permission: "expenses.record",
         action: "addCashExpense",
-        attemptedRole: actor.role,
+        attemptedRole: authOperatorRole(actor),
       });
       return { ok: false, errorKey: "forbidden" };
     }
@@ -6809,7 +6835,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!category) return { ok: false, errorKey: "cashExpenseCategoryRequired" };
     const now = new Date().toISOString();
     const paidOn = dateKeyKampala(new Date());
-    const approvalStatus = resolveNewExpenseApprovalStatus(actor.role, state.preferences);
+    const approvalStatus = resolveNewExpenseApprovalStatus(authOperatorRole(actor), state.preferences);
     const row: CashExpense = {
       id: crypto.randomUUID(),
       category,

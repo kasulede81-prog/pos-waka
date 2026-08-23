@@ -5,6 +5,7 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 import { usePosStore } from "../../store/usePosStore";
+import { authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { resolveTerminalHomePath } from "../../lib/terminalHome";
 
@@ -20,7 +21,11 @@ export function HeaderExitButton({
   const navigate = useNavigate();
   const preferences = usePosStore((s) => s.preferences);
   const actor = useSessionActor();
-  const homeRoute = resolveTerminalHomePath(preferences, actor.role, actor.permissions);
+  const homeRoute = resolveTerminalHomePath(
+    preferences,
+    authOperatorRole(actor),
+    authOperatorPermissions(actor) ?? actor.permissions,
+  );
 
   const handleClick = useCallback(
     (event: MouseEvent) => {
