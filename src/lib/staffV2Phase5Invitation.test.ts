@@ -83,7 +83,7 @@ describe("STAFF-V2 Phase 5 invitation system", () => {
     expect(CLOUD_SYNC).toMatch(/created_by: ctx\.userId/);
     expect(CLOUD_SYNC).toMatch(/sold_by_user_id: resolveSoldByAuthUserIdForPush\(sale\)/);
     expect(CLOUD_SYNC).toMatch(/soldByUserId: soldByUserIdFromCloudSaleRow\(row\)/);
-    expect(SESSION_ACTOR).toMatch(/userId: `staff:\$\{params\.staffSession\.staffId\}`/);
+    expect(SESSION_ACTOR).toMatch(/staff:\$\{params\.staffSession\.staffId\}/);
     expect(USE_AUTH).toMatch(/await supabase\.auth\.signOut\(\)/);
     expect(MERGE).not.toMatch(/sold_by_user_id/);
   });

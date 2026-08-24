@@ -53,7 +53,8 @@ describe("staff invite accept flow", () => {
     expect(result).toEqual({ ok: false, error: "network_failed" });
   });
 
-  it("I4 handles unexpected post-accept exception", async () => {
+  it("I4 hydrate failure after RPC success is degraded success (not spinner trap)", async () => {
+    const clear = vi.fn();
     const result = await runStaffInviteAcceptFlow({
       token: "valid-token",
       acceptInviteToken: async () => ({
@@ -67,9 +68,10 @@ describe("staff invite accept flow", () => {
       hydrateStaffWorkspace: async () => {
         throw new Error("hydrate_failed");
       },
-      clearStoredInviteToken: () => undefined,
+      clearStoredInviteToken: clear,
     });
-    expect(result).toEqual({ ok: false, error: "hydrate_failed" });
+    expect(result).toEqual({ ok: true, hydrateDegraded: true });
+    expect(clear).toHaveBeenCalledTimes(1);
   });
 
   it("I8 returns timeout for unresolved acceptance request", async () => {

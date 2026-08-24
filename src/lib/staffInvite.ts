@@ -196,3 +196,15 @@ export function staffAcceptReturnPath(raw: string | null | undefined): string | 
   }
   return null;
 }
+
+/**
+ * Same-browser login return that preserves the invitation token in `next`.
+ * Token is also mirrored to sessionStorage by StaffAcceptPage; this keeps URL recovery intact.
+ */
+export function staffAcceptLoginHref(token: string | null | undefined): string {
+  const trimmed = (token ?? "").trim();
+  const next = trimmed
+    ? `/staff/accept?token=${encodeURIComponent(trimmed)}`
+    : "/staff/accept";
+  return `/login?next=${encodeURIComponent(next)}`;
+}

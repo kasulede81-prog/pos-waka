@@ -1,4 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
+import { isStaffAcceptPagePath } from "./staffInviteAcceptAttempt";
 import { logStartupPhase } from "./startupDiagnostics";
 import {
   acceptStaffInviteToken,
@@ -16,6 +17,8 @@ export type StaffInviteBootstrapGate = {
  * Accept a stored staff invite (if any) before owner workspace bootstrap.
  * A pending invite for this email also skips bootstrap so an invitee cannot
  * become owner of a new empty shop.
+ *
+ * On `/staff/accept`, the page owns acceptance — bootstrap must not race the RPC.
  */
 export async function resolveStaffInviteBeforeOwnerBootstrap(
   session: Session | null,
@@ -24,8 +27,18 @@ export async function resolveStaffInviteBeforeOwnerBootstrap(
     return { skipOwnerBootstrap: false, accepted: false };
   }
 
+  const onAcceptPage =
+    typeof window !== "undefined" && isStaffAcceptPagePath(window.location.pathname);
+
   const token = peekStaffInviteToken();
   if (token) {
+    if (onAcceptPage) {
+      logStartupPhase("staff_invite_pending_skip_owner_bootstrap", {
+        userId: session.user.id,
+        via: "staff_accept_page_owns_token",
+      });
+      return { skipOwnerBootstrap: true, accepted: false };
+    }
     const accepted = await acceptStaffInviteToken(token);
     if (accepted.ok) {
       clearStaffInviteToken();

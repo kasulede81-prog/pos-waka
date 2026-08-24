@@ -1,14 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { EnterpriseSpinner } from "../components/enterprise/EnterpriseSpinner";
 import { getAuthEmailCallbackUrl } from "../lib/authConfig";
+import { reportAuthIssue } from "../lib/monitoring";
 import {
   acceptStaffInviteToken,
   clearStaffInviteToken,
   persistStaffInviteToken,
+  staffAcceptLoginHref,
 } from "../lib/staffInvite";
+import {
+  createStaffInviteAcceptAttemptController,
+  shouldStartStaffInviteAccept,
+} from "../lib/staffInviteAcceptAttempt";
 import { runStaffInviteAcceptFlow } from "../lib/staffInviteAcceptFlow";
 import { hydrateStaffAuthWorkspace } from "../lib/staffAuthHydrate";
 import { supabase } from "../lib/supabase";
@@ -34,19 +40,60 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
   const [phase, setPhase] = useState<Phase>("ready");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const attemptRef = useRef(createStaffInviteAcceptAttemptController());
+  const langRef = useRef(lang);
+  langRef.current = lang;
 
   useEffect(() => {
     if (tokenFromUrl) persistStaffInviteToken(tokenFromUrl);
   }, [tokenFromUrl]);
 
-  const token = tokenFromUrl || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("waka.staffInvite.token") : null) || "";
+  const token =
+    tokenFromUrl ||
+    (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("waka.staffInvite.token") : null) ||
+    "";
 
   useEffect(() => {
-    if (initializing || !isAuthenticated || !token || phase === "success" || phase === "accepting") return;
-    let cancelled = false;
+    reportAuthIssue("invite_accept_page_open", { hasToken: Boolean(tokenFromUrl || token) });
+  }, []);
+
+  // True unmount only — dependency rerenders must not cancel in-flight acceptance.
+  useEffect(() => {
+    const controller = attemptRef.current;
+    controller.noteMounted();
+    return () => {
+      controller.markUnmounted();
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = attemptRef.current;
+    if (
+      !shouldStartStaffInviteAccept({
+        initializing,
+        isAuthenticated,
+        token,
+        inFlight: controller.isInFlight(),
+        settledToken: controller.settledToken(),
+      })
+    ) {
+      if (initializing) {
+        reportAuthIssue("invite_auth_wait", {});
+      } else if (isAuthenticated && token) {
+        reportAuthIssue("invite_auth_ready", {});
+      }
+      return;
+    }
+
+    const attemptId = controller.tryBegin(token);
+    if (attemptId == null) return;
+
+    reportAuthIssue("invite_accept_start", {});
     setPhase("accepting");
     setMessage(null);
+
     void (async () => {
+      reportAuthIssue("invite_rpc_start", {});
       const result = await runStaffInviteAcceptFlow({
         token,
         acceptInviteToken: acceptStaffInviteToken,
@@ -54,21 +101,38 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
           const { data } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
           return data.user?.id ?? null;
         },
-        hydrateStaffWorkspace: hydrateStaffAuthWorkspace,
+        hydrateStaffWorkspace: async (userId) => {
+          reportAuthIssue("invite_hydrate_start", {});
+          await hydrateStaffAuthWorkspace(userId);
+        },
         clearStoredInviteToken: clearStaffInviteToken,
       });
-      if (cancelled) return;
-      if (result.ok) {
-        setPhase("success");
-        return;
-      }
-      setPhase("error");
-      setMessage(acceptErrorMessage(lang, result.error));
+
+      controller.complete(attemptId, () => {
+        controller.markSettled(token);
+        if (result.ok) {
+          if (result.hydrateDegraded) {
+            reportAuthIssue("invite_hydrate_timeout", {});
+          } else {
+            reportAuthIssue("invite_rpc_success", {});
+          }
+          reportAuthIssue("invite_success", {});
+          setPhase("success");
+          return;
+        }
+
+        reportAuthIssue("invite_rpc_error", {
+          error: result.error === "timeout" ? "timeout" : "accept_failed",
+        });
+        if (result.error === "timeout") {
+          reportAuthIssue("invite_timeout", {});
+        }
+        reportAuthIssue("invite_error", {});
+        setPhase("error");
+        setMessage(acceptErrorMessage(langRef.current, result.error));
+      });
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [initializing, isAuthenticated, token, phase, lang]);
+  }, [initializing, isAuthenticated, token]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -94,19 +158,25 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
         return;
       }
       if (data.session) {
-        const accepted = await acceptStaffInviteToken(token);
+        setPhase("accepting");
+        const accepted = await runStaffInviteAcceptFlow({
+          token,
+          acceptInviteToken: acceptStaffInviteToken,
+          getAuthUserId: async () => data.session?.user?.id ?? null,
+          hydrateStaffWorkspace: hydrateStaffAuthWorkspace,
+          clearStoredInviteToken: clearStaffInviteToken,
+        });
         if (accepted.ok) {
-          clearStaffInviteToken();
-          if (data.session.user?.id) {
-            await hydrateStaffAuthWorkspace(data.session.user.id);
-          }
+          attemptRef.current.markSettled(token);
           setPhase("success");
           return;
         }
+        attemptRef.current.markSettled(token);
         setPhase("error");
         setMessage(acceptErrorMessage(lang, accepted.error));
         return;
       }
+      // Same-browser: token remains in sessionStorage; AuthCallback returns to /staff/accept.
       setPhase("need_verify");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : t(lang, "staffInviteAcceptFailed"));
@@ -186,7 +256,7 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
               {busy ? t(lang, "staffInviteWorking") : mode === "login" ? t(lang, "staffInviteSignIn") : t(lang, "staffInviteCreateAccount")}
             </button>
             <p className="text-center text-xs text-muted-foreground">
-              <Link to={`/login?next=/staff/accept`} className="font-semibold text-waka-700">
+              <Link to={staffAcceptLoginHref(token)} className="font-semibold text-waka-700">
                 {t(lang, "staffInviteUseFullLogin")}
               </Link>
             </p>
@@ -198,9 +268,18 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
 }
 
 export function acceptErrorMessage(lang: Language, error: string): string {
-  if (error === "email_mismatch") return t(lang, "staffInviteEmailMismatch");
-  if (error === "expired") return t(lang, "staffInviteExpired");
-  if (error === "revoked" || error === "already_accepted") return t(lang, "staffInviteUsed");
-  if (error === "invalid_token") return t(lang, "staffInviteMissingToken");
+  const code = error.trim().toLowerCase();
+  if (code === "email_mismatch") return t(lang, "staffInviteEmailMismatch");
+  if (code === "expired") return t(lang, "staffInviteExpired");
+  if (code === "revoked" || code === "already_accepted" || code === "already_member") {
+    return t(lang, "staffInviteUsed");
+  }
+  if (code === "invalid_token") return t(lang, "staffInviteMissingToken");
+  if (code === "email_not_verified" || code.includes("email_not_verified")) {
+    return t(lang, "staffInviteVerifyEmail");
+  }
+  if (code === "timeout" || code === "staff_link_failed") {
+    return t(lang, "staffInviteAcceptFailed");
+  }
   return t(lang, "staffInviteAcceptFailed");
 }
