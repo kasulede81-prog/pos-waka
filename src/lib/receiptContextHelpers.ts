@@ -6,7 +6,6 @@ import { t } from "./i18n";
 import { buildSoldByNameByUserId, resolveSoldByUserId } from "./soldByLabels";
 import type { SaleReceiptContext } from "./receiptDocuments";
 import type { SubscriptionPlanCode } from "./subscriptionEntitlements";
-import { saleSoldByMatchesActor } from "./sellerIdentity";
 
 export function receiptLabels(lang: Language): ReceiptLabels {
   return {
@@ -52,15 +51,11 @@ export function buildSaleReceiptContext(params: {
   customerBalanceUgx?: number | null;
   planTier?: SubscriptionPlanCode;
 }): SaleReceiptContext {
-  const { lang, sale, allSales, preferences, products, actor, customerName, customerPhone, customerBalanceUgx, planTier } =
+  const { lang, sale, allSales, preferences, products, actor: _actor, customerName, customerPhone, customerBalanceUgx, planTier } =
     params;
   const branding = brandingFromSale(sale, preferences, planTier ?? "waka_plus");
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
-  const cashier =
-    saleSoldByMatchesActor(sale, actor)
-      ? actor.displayName?.trim() ||
-        soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName)
-      : soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName);
+  const cashier = soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName);
 
   const resolvedCustomerName = sale.receiptCustomerName ?? customerName ?? null;
   const resolvedCustomerPhone = sale.receiptCustomerPhone ?? customerPhone ?? null;

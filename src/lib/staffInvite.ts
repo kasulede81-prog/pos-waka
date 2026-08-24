@@ -82,26 +82,33 @@ export async function acceptStaffInviteToken(token: string): Promise<StaffInvite
   const raw = token.trim();
   if (!raw) return { ok: false, error: "invalid_token" };
 
-  const { data, error } = await supabase.rpc("shop_accept_staff_invite", { p_token: raw });
-  const row = (data ?? {}) as {
-    ok?: boolean;
-    error?: string;
-    shop_id?: string;
-    membership_role?: string;
-    staff_id?: string | null;
-    linked_existing?: boolean;
-  };
-  if (error) return { ok: false, error: error.message || "accept_failed" };
-  if (row.ok !== true || !row.shop_id) {
-    return { ok: false, error: String(row.error ?? "accept_failed") };
+  try {
+    const { data, error } = await supabase.rpc("shop_accept_staff_invite", { p_token: raw });
+    const row = (data ?? {}) as {
+      ok?: boolean;
+      error?: string;
+      shop_id?: string;
+      membership_role?: string;
+      staff_id?: string | null;
+      linked_existing?: boolean;
+    };
+    if (error) return { ok: false, error: error.message || "accept_failed" };
+    if (row.ok !== true || !row.shop_id) {
+      return { ok: false, error: String(row.error ?? "accept_failed") };
+    }
+    return {
+      ok: true,
+      shopId: row.shop_id,
+      membershipRole: String(row.membership_role ?? ""),
+      staffId: row.staff_id ?? null,
+      linkedExisting: row.linked_existing === true,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error && err.message.trim() ? err.message : "accept_failed",
+    };
   }
-  return {
-    ok: true,
-    shopId: row.shop_id,
-    membershipRole: String(row.membership_role ?? ""),
-    staffId: row.staff_id ?? null,
-    linkedExisting: row.linked_existing === true,
-  };
 }
 
 export async function hasPendingStaffInviteForMe(): Promise<boolean> {

@@ -9,6 +9,7 @@ import {
   clearStaffInviteToken,
   persistStaffInviteToken,
 } from "../lib/staffInvite";
+import { runStaffInviteAcceptFlow } from "../lib/staffInviteAcceptFlow";
 import { hydrateStaffAuthWorkspace } from "../lib/staffAuthHydrate";
 import { supabase } from "../lib/supabase";
 import { WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
@@ -44,20 +45,26 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
     if (initializing || !isAuthenticated || !token || phase === "success" || phase === "accepting") return;
     let cancelled = false;
     setPhase("accepting");
-    void acceptStaffInviteToken(token).then(async (result) => {
+    setMessage(null);
+    void (async () => {
+      const result = await runStaffInviteAcceptFlow({
+        token,
+        acceptInviteToken: acceptStaffInviteToken,
+        getAuthUserId: async () => {
+          const { data } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
+          return data.user?.id ?? null;
+        },
+        hydrateStaffWorkspace: hydrateStaffAuthWorkspace,
+        clearStoredInviteToken: clearStaffInviteToken,
+      });
       if (cancelled) return;
       if (result.ok) {
-        clearStaffInviteToken();
-        const { data } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
-        if (data.user?.id) {
-          await hydrateStaffAuthWorkspace(data.user.id);
-        }
-        if (!cancelled) setPhase("success");
+        setPhase("success");
         return;
       }
       setPhase("error");
       setMessage(acceptErrorMessage(lang, result.error));
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -190,7 +197,7 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
   );
 }
 
-function acceptErrorMessage(lang: Language, error: string): string {
+export function acceptErrorMessage(lang: Language, error: string): string {
   if (error === "email_mismatch") return t(lang, "staffInviteEmailMismatch");
   if (error === "expired") return t(lang, "staffInviteExpired");
   if (error === "revoked" || error === "already_accepted") return t(lang, "staffInviteUsed");

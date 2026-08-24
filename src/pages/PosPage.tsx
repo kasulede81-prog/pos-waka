@@ -152,6 +152,7 @@ import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../lib/auditRe
 import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from "../lib/receiptDocuments";
 import { isNativePrintPlatform } from "../lib/nativeReceiptPrint";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
+import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabels";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
@@ -600,19 +601,25 @@ export function PosPage({ lang }: { lang: Language }) {
   const receiptSale = useMemo(() => sales.find((s) => s.id === receiptSaleId) ?? null, [sales, receiptSaleId]);
 
   const staffAccounts = preferences.staffAccounts ?? [];
-  const staffNameById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of staffAccounts) m.set(s.id, s.name);
-    return m;
-  }, [staffAccounts]);
+  const shifts = preferences.shifts ?? [];
+  const auditLogs = usePosStore((s) => s.auditLogs);
+  const soldByNameByUserId = useMemo(
+    () =>
+      buildSoldByNameByUserId({
+        staffAccounts,
+        shifts,
+        auditLogs,
+        ownerUserId: actor.authUserId ?? (actor.userId.startsWith("staff:") ? null : actor.userId),
+        ownerDisplayName: actor.displayName,
+        shopDisplayName: preferences.shopDisplayName,
+      }),
+    [staffAccounts, shifts, auditLogs, actor.authUserId, actor.userId, actor.displayName, preferences.shopDisplayName],
+  );
 
   const receiptCashierLabel = useCallback(
-    (sale: { soldByUserId?: string | null }) => {
-      const id = sale.soldByUserId ?? "";
-      if (id.startsWith("staff:")) return staffNameById.get(id.slice("staff:".length)) ?? t(lang, "role_cashier");
-      return actor.displayName ?? t(lang, "role_owner");
-    },
-    [actor.displayName, lang, staffNameById],
+    (sale: { soldByUserId?: string | null }) =>
+      resolveSoldByUserId(lang, sale.soldByUserId, soldByNameByUserId, preferences.shopDisplayName),
+    [lang, soldByNameByUserId, preferences.shopDisplayName],
   );
 
   const receiptDisplay = useMemo(() => {
