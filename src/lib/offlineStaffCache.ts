@@ -25,8 +25,11 @@ type EncryptedStaffCachePayload = {
 
 const CACHE_STORE = "staffCache";
 
-async function deriveCacheKey(shopId: string): Promise<CryptoKey> {
-  const accountKey = getActiveAccountKey() ?? "anon";
+/**
+ * AES key material is bound to shopId + the shop's accountKey namespace.
+ * Never fall back to "anon" — shared-terminal PIN login has no active owner session.
+ */
+async function deriveCacheKey(shopId: string, accountKey: string): Promise<CryptoKey> {
   const material = `${getOrCreateDeviceId()}:${shopId}:${accountKey}:waka-staff-cache-v1`;
   const raw = new TextEncoder().encode(material);
   const keyBytes = new Uint8Array(32);
@@ -41,8 +44,14 @@ function cacheDbKey(accountKey: string, shopId: string): string | null {
   return `${accountKey}::${shopId}`;
 }
 
+function resolveAccountKeyForCache(accountKey?: string | null): string | null {
+  const acc = (accountKey ?? getActiveAccountKey())?.trim() || null;
+  if (!acc || acc.startsWith("demo:")) return null;
+  return acc;
+}
+
 function cacheKeyForShop(shopId: string, accountKey?: string | null): string | null {
-  const acc = accountKey ?? getActiveAccountKey();
+  const acc = resolveAccountKeyForCache(accountKey);
   if (!acc) return null;
   return cacheDbKey(acc, shopId);
 }
@@ -56,9 +65,12 @@ export function sanitizeStaffForCache(staff: StaffAccount[]): StaffAccount[] {
   }));
 }
 
-async function encryptRecord(record: OfflineStaffCacheRecord): Promise<EncryptedStaffCachePayload> {
+async function encryptRecord(
+  record: OfflineStaffCacheRecord,
+  accountKey: string,
+): Promise<EncryptedStaffCachePayload> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveCacheKey(record.shopId);
+  const key = await deriveCacheKey(record.shopId, accountKey);
   const plaintext = JSON.stringify({
     ...record,
     staff: sanitizeStaffForCache(record.staff),
@@ -78,11 +90,12 @@ async function encryptRecord(record: OfflineStaffCacheRecord): Promise<Encrypted
 async function decryptRecord(
   shopId: string,
   payload: EncryptedStaffCachePayload,
+  accountKey: string,
 ): Promise<OfflineStaffCacheRecord | null> {
   try {
     const iv = Uint8Array.from(atob(payload.iv), (c) => c.charCodeAt(0));
     const data = Uint8Array.from(atob(payload.ciphertext), (c) => c.charCodeAt(0));
-    const key = await deriveCacheKey(shopId);
+    const key = await deriveCacheKey(shopId, accountKey);
     const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
     const parsed = JSON.parse(new TextDecoder().decode(decrypted)) as OfflineStaffCacheRecord;
     if (!parsed.shopId || !Array.isArray(parsed.staff)) return null;
@@ -96,15 +109,16 @@ export async function readOfflineStaffCache(
   shopId: string,
   accountKey?: string | null,
 ): Promise<OfflineStaffCacheRecord | null> {
-  const key = cacheKeyForShop(shopId, accountKey);
-  if (!key) return null;
+  const acc = resolveAccountKeyForCache(accountKey);
+  const key = acc ? cacheDbKey(acc, shopId) : null;
+  if (!acc || !key) return null;
   try {
     const db = await getLocalDb();
     const row = (await db.get(CACHE_STORE, key)) as
       | { shopId: string; payload: EncryptedStaffCachePayload }
       | undefined;
     if (!row?.payload) return null;
-    const record = await decryptRecord(row.shopId, row.payload);
+    const record = await decryptRecord(row.shopId, row.payload, acc);
     if (record) {
       logStaffCacheEvent("staff_cache_loaded", {
         shopId,
@@ -134,7 +148,7 @@ export async function listStaffCacheRecordsForAccount(
         | { shopId: string; payload: EncryptedStaffCachePayload }
         | undefined;
       if (!row?.payload) continue;
-      const record = await decryptRecord(row.shopId, row.payload);
+      const record = await decryptRecord(row.shopId, row.payload, accountKey);
       if (record) records.push(record);
     }
     return records;
@@ -147,9 +161,10 @@ export async function writeOfflineStaffCache(
   record: OfflineStaffCacheRecord,
   accountKey?: string | null,
 ): Promise<void> {
-  const key = cacheKeyForShop(record.shopId, accountKey);
-  if (!key) return;
-  const payload = await encryptRecord(record);
+  const acc = resolveAccountKeyForCache(accountKey);
+  const key = acc ? cacheDbKey(acc, record.shopId) : null;
+  if (!acc || !key) return;
+  const payload = await encryptRecord(record, acc);
   const db = await getLocalDb();
   await db.put(CACHE_STORE, { shopId: record.shopId, payload }, key);
   logStaffCacheEvent("staff_cache_refresh", {

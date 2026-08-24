@@ -150,7 +150,7 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
         password,
         options: {
           emailRedirectTo: getAuthEmailCallbackUrl(),
-          data: { staff_invite: true, pos_role: "staff" },
+          data: { staff_invite: true, invite_type: "staff" },
         },
       });
       if (error) {

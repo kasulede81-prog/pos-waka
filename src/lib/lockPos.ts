@@ -1,3 +1,4 @@
+import type { UserRole } from "../types";
 import { isShopSecurityPinConfigured } from "./enterpriseSecurity/shopPinSecret";
 
 export function isBackOfficePinConfigured(pin: string | null | undefined): boolean {
@@ -17,6 +18,34 @@ export function activeStaffCanUnlock(accounts: import("../types").ShopPreference
 
 export function canLockPos(preferences: Pick<import("../types").ShopPreferences, "backOfficePin">): boolean {
   return isBackOfficePinConfigured(preferences.backOfficePin);
+}
+
+/**
+ * Shared-terminal operators may use Choose seller / PIN lock.
+ * Personal Path L staff (cashier/manager email login) must not.
+ */
+export function isSharedTerminalLockOperator(input: {
+  authOperatorRole: UserRole;
+  hasPathSStaffSession: boolean;
+}): boolean {
+  return input.authOperatorRole === "owner" || input.hasPathSStaffSession;
+}
+
+/**
+ * Whether AppShell should render EnterpriseStaffLockScreen.
+ * Shop `posLocked` alone is not enough — personal staff devices may inherit it from cloud.
+ */
+export function shouldShowEnterpriseStaffLockScreen(input: {
+  posLocked: boolean;
+  authOperatorRole: UserRole;
+  hasPathSStaffSession: boolean;
+  pathname: string;
+  canManageShopSettings: boolean;
+}): boolean {
+  if (!input.posLocked) return false;
+  if (!isSharedTerminalLockOperator(input)) return false;
+  if (shouldSuppressPosLockScreen(input.pathname, input.canManageShopSettings)) return false;
+  return true;
 }
 
 /** Owner staff/setup screens — do not cover with POS lock overlay (same PIN pad UX). */

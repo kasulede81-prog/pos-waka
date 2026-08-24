@@ -1,6 +1,24 @@
 import { hydrateAccountFromCloud } from "./postAuthCloudHydrate";
 import { logStartupPhase } from "./startupDiagnostics";
+import { usePosStore } from "../store/usePosStore";
 import { markWorkspaceBootstrapped } from "./workspaceBootstrapCache";
+
+/**
+ * Path L personal staff: clear shared-terminal runtime flags that may arrive via
+ * shop cloud snapshot (`posLocked`, `activeStaffId`). Does not remove shop settings
+ * (PIN hashes, staffAccounts, auto-lock minutes, etc.).
+ */
+export function clearPersonalStaffTerminalRuntimeState(): void {
+  const prefs = usePosStore.getState().preferences;
+  if (!prefs.posLocked && !prefs.activeStaffId) return;
+  usePosStore.setState((s) => ({
+    preferences: {
+      ...s.preferences,
+      posLocked: false,
+      activeStaffId: null,
+    },
+  }));
+}
 
 /**
  * Phase 6: Auth staff (invitee / non-owner member) must hydrate into their own
@@ -18,6 +36,7 @@ export async function hydrateStaffAuthWorkspace(userId: string): Promise<void> {
       error: e instanceof Error ? e.message : String(e),
     });
   }
+  clearPersonalStaffTerminalRuntimeState();
   void import("./staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {
     scheduleStaffCacheProvisioning();
   });

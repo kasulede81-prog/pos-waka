@@ -2,8 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Store } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import type { CachedShop, RememberedStaffDevice, StaffLoginInput, StaffCredentialRecoveryRequiredError } from "../../lib/staffOfflineAuth";
+import type {
+  CachedShop,
+  RememberedStaffDevice,
+  StaffLoginInput,
+  StaffCredentialRecoveryRequiredError,
+} from "../../lib/staffOfflineAuth";
+import { listActiveSellersForStaffLogin } from "../../lib/staffOfflineAuth";
+import { isStaffLoginRole } from "../../lib/staffLoginRoles";
+import type { SellerPickerOption } from "../../lib/staffSellerPicker";
+import { findSellerPickerOption } from "../../lib/staffSellerPicker";
 import { StaffRecoveryCredentialSetup } from "./StaffRecoveryCredentialSetup";
+import { SellerPicker } from "./SellerPicker";
 import { EnterprisePinPad } from "./EnterprisePinPad";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
@@ -28,7 +38,10 @@ export function EnterpriseStaffLoginPanel({
   const [shops, setShops] = useState<CachedShop[]>([]);
   const [loadingShops, setLoadingShops] = useState(true);
   const [businessName, setBusinessName] = useState(rememberedStaffDevice?.businessName ?? "");
-  const [identifier, setIdentifier] = useState(rememberedStaffDevice?.identifier ?? "");
+  const [selectedShop, setSelectedShop] = useState<CachedShop | null>(null);
+  const [sellers, setSellers] = useState<SellerPickerOption[]>([]);
+  const [loadingSellers, setLoadingSellers] = useState(false);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [rememberDevice, setRememberDevice] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,11 +58,49 @@ export function EnterpriseStaffLoginPanel({
       if (cancelled) return;
       setShops(rows);
       setLoadingShops(false);
+      const remembered = rememberedStaffDevice?.businessName?.trim();
+      if (remembered) {
+        const match = rows.find((s) => s.businessName.toLowerCase() === remembered.toLowerCase());
+        if (match) {
+          setSelectedShop(match);
+          setBusinessName(match.businessName);
+        }
+      } else if (rows.length === 1) {
+        setSelectedShop(rows[0]!);
+        setBusinessName(rows[0]!.businessName);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [listStaffShops]);
+  }, [listStaffShops, rememberedStaffDevice?.businessName]);
+
+  useEffect(() => {
+    if (!selectedShop) {
+      setSellers([]);
+      setSelectedStaffId(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSellers(true);
+    setError(null);
+    void listActiveSellersForStaffLogin(selectedShop).then((rows) => {
+      if (cancelled) return;
+      setSellers(rows);
+      setLoadingSellers(false);
+      const rememberedId = rememberedStaffDevice?.identifier?.trim();
+      if (rememberedId) {
+        const byId = rows.find((s) => s.id === rememberedId);
+        const byName = rows.find((s) => s.name.toLowerCase() === rememberedId.toLowerCase());
+        setSelectedStaffId(byId?.id ?? byName?.id ?? null);
+      } else {
+        setSelectedStaffId(null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedShop, rememberedStaffDevice?.identifier]);
 
   const shopSuggestions = useMemo(() => {
     const probe = businessName.trim().toLowerCase();
@@ -57,10 +108,23 @@ export function EnterpriseStaffLoginPanel({
     return shops.filter((s) => s.businessName.toLowerCase().includes(probe)).slice(0, 6);
   }, [businessName, shops]);
 
+  const selectedSeller = findSellerPickerOption(sellers, selectedStaffId);
+  const pinStep = Boolean(selectedShop && selectedSeller);
+
+  const pickShopFromInput = useCallback(() => {
+    const probe = businessName.trim().toLowerCase();
+    if (!probe) return;
+    const match = shops.find((s) => s.businessName.toLowerCase() === probe);
+    if (match) {
+      setSelectedShop(match);
+      setBusinessName(match.businessName);
+    }
+  }, [businessName, shops]);
+
   const submitWithPin = useCallback(
     async (pin: string) => {
       if (busy) return false;
-      if (!businessName.trim() || !identifier.trim()) {
+      if (!selectedShop || !selectedSeller) {
         setError(t(lang, "staffLoginMissingFields"));
         setPinResetSignal((n) => n + 1);
         return false;
@@ -69,9 +133,9 @@ export function EnterpriseStaffLoginPanel({
       setError(null);
       try {
         await onSubmit({
-          businessName: businessName.trim(),
-          role: "cashier",
-          identifier: identifier.trim(),
+          businessName: selectedShop.businessName,
+          role: isStaffLoginRole(selectedSeller.role) ? selectedSeller.role : "cashier",
+          identifier: selectedSeller.id,
           pinOrPassword: pin,
           rememberDevice,
         });
@@ -101,7 +165,7 @@ export function EnterpriseStaffLoginPanel({
         setBusy(false);
       }
     },
-    [busy, businessName, identifier, rememberDevice, onSubmit, lang],
+    [busy, selectedShop, selectedSeller, rememberDevice, onSubmit, lang],
   );
 
   return (
@@ -120,7 +184,9 @@ export function EnterpriseStaffLoginPanel({
           <WakaSymbolIcon size="md" className="!h-10 !w-10" />
         </div>
         <h2 className="mt-4 text-2xl font-black text-foreground dark:text-background">{t(lang, "staffLoginTitle")}</h2>
-        <p className="mt-1 text-sm font-medium text-muted-foreground dark:text-muted-foreground">{t(lang, "staffLoginSub")}</p>
+        <p className="mt-1 whitespace-pre-line text-sm font-medium text-muted-foreground dark:text-muted-foreground">
+          {t(lang, "staffLoginSub")}
+        </p>
       </div>
 
       <form
@@ -136,10 +202,22 @@ export function EnterpriseStaffLoginPanel({
             <input
               list="staff-shop-suggestions"
               value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setBusinessName(next);
+                const match = shops.find((s) => s.businessName.toLowerCase() === next.trim().toLowerCase());
+                if (match) {
+                  setSelectedShop(match);
+                } else {
+                  setSelectedShop(null);
+                  setSelectedStaffId(null);
+                }
+              }}
+              onBlur={pickShopFromInput}
               required
               placeholder={t(lang, "staffLoginBusinessName")}
               className="w-full min-h-[48px] rounded-xl border border-border bg-card py-3 pl-10 pr-4 text-base dark:bg-foreground"
+              data-testid="staff-login-shop"
             />
             <datalist id="staff-shop-suggestions">
               {shopSuggestions.map((s) => (
@@ -152,29 +230,58 @@ export function EnterpriseStaffLoginPanel({
           </p>
         </label>
 
-        <label className="block text-sm font-bold text-foreground dark:text-muted-foreground">
-          {t(lang, "staffLoginName")}
-          <input
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            required
-            placeholder={t(lang, "staffLoginNamePh")}
-            className="mt-1.5 w-full min-h-[48px] rounded-xl border border-border bg-card px-4 py-3 text-base dark:bg-foreground"
-          />
-        </label>
+        {selectedShop && !pinStep ? (
+          <div className="space-y-2">
+            <p className="text-sm font-bold text-foreground">{t(lang, "switchSeller")}</p>
+            {loadingSellers ? (
+              <p className="text-xs font-medium text-muted-foreground">{t(lang, "staffLoginLoadingShops")}</p>
+            ) : (
+              <SellerPicker
+                lang={lang}
+                sellers={sellers}
+                selectedStaffId={selectedStaffId}
+                onSelect={(id) => {
+                  setSelectedStaffId(id);
+                  setError(null);
+                  setPinResetSignal((n) => n + 1);
+                }}
+              />
+            )}
+          </div>
+        ) : null}
 
-        <div>
-          <p className="text-sm font-bold text-foreground dark:text-muted-foreground">{t(lang, "staffLoginPin")}</p>
-          <EnterprisePinPad
-            lang={lang}
-            disabled={busy}
-            verifying={busy}
-            errorMessage={error}
-            resetSignal={pinResetSignal}
-            onComplete={(pin) => submitWithPin(pin)}
-            className="mt-3"
-          />
-        </div>
+        {pinStep && selectedSeller ? (
+          <div className="space-y-3" data-testid="staff-login-pin-step">
+            <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-center">
+              <p className="text-lg font-black text-foreground">{selectedSeller.name}</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                {t(lang, `role_${selectedSeller.role}`)}
+              </p>
+            </div>
+            <p className="text-center text-sm font-bold text-foreground">{t(lang, "sellerPickerEnterPin")}</p>
+            <EnterprisePinPad
+              lang={lang}
+              disabled={busy}
+              verifying={busy}
+              errorMessage={error}
+              resetSignal={pinResetSignal}
+              onComplete={(pin) => submitWithPin(pin)}
+              className="mt-1"
+            />
+            <p className="text-center text-xs font-semibold text-muted-foreground">{t(lang, "staffLoginSubmit")}</p>
+            <button
+              type="button"
+              className="w-full min-h-[44px] text-sm font-bold text-waka-700"
+              onClick={() => {
+                setSelectedStaffId(null);
+                setError(null);
+                setPinResetSignal((n) => n + 1);
+              }}
+            >
+              {t(lang, "sellerPickerChangeSeller")}
+            </button>
+          </div>
+        ) : null}
 
         <WakaSwitch
           checked={rememberDevice}

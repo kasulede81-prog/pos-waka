@@ -10,6 +10,7 @@ import {
   readOfflineStaffCache,
 } from "./offlineStaffCache";
 import { logStaffCacheEvent } from "./staffCacheDiagnostics";
+import { filterActiveSellersForPicker, type SellerPickerOption } from "./staffSellerPicker";
 
 const REMEMBER_DEVICE_KEY = "waka.staff.remembered.v1";
 const PENDING_STAFF_KEY = "waka.staff.pending.v1";
@@ -118,14 +119,25 @@ async function resolveStaffRowsForShop(
     fromCache: true as const,
   });
 
+  const hasSelectableSellers = (staff: StaffAccount[]) => filterActiveSellersForPicker(staff).length > 0;
+
   if (shopId) {
     const record = await readOfflineStaffCache(shopId, accountKey);
-    if (record?.staff.length) return readCacheStaff(record);
+    // Only early-return when the cache has picker-eligible sellers (not merely any rows).
+    if (record?.staff.length && hasSelectableSellers(record.staff)) {
+      return readCacheStaff(record);
+    }
   }
 
   const cacheRecords = await listStaffCacheRecordsForAccount(accountKey);
-  if (cacheRecords.length > 0 && cacheRecords[0]!.staff.length > 0) {
-    return readCacheStaff(cacheRecords[0]!);
+  const eligibleForShop =
+    shopId != null
+      ? cacheRecords.find((r) => r.shopId === shopId && hasSelectableSellers(r.staff))
+      : undefined;
+  const eligibleAny = cacheRecords.find((r) => hasSelectableSellers(r.staff));
+  const eligible = eligibleForShop ?? eligibleAny;
+  if (eligible) {
+    return readCacheStaff(eligible);
   }
 
   const db = await getLocalDb();
@@ -133,6 +145,12 @@ async function resolveStaffRowsForShop(
   const prefs = snap?.preferences;
   const staffRows = prefs?.staffAccounts ?? [];
   return { staffRows, shopId: shopId ?? null, fromCache: false };
+}
+
+/** Active sellers for shared-terminal picker on the offline staff login path. */
+export async function listActiveSellersForStaffLogin(shop: CachedShop): Promise<SellerPickerOption[]> {
+  const { staffRows } = await resolveStaffRowsForShop(shop.accountKey, shop.shopId);
+  return filterActiveSellersForPicker(staffRows);
 }
 
 async function findBlockedShopByBusinessName(businessName: string): Promise<CachedShop | null> {
@@ -173,15 +191,25 @@ export async function listCachedShopsForStaffLogin(): Promise<CachedShop[]> {
     if (!businessName) continue;
 
     const cacheRecords = await listStaffCacheRecordsForAccount(accountKey);
-    const cacheRecord = cacheRecords.find((r) => keysEqual(r.businessName ?? "", businessName)) ?? cacheRecords[0];
-    const hasStaff =
-      (cacheRecord?.staff.length ?? 0) > 0 || (snapshot.preferences.staffAccounts?.length ?? 0) > 0;
-    if (!hasStaff) continue;
+    const snapshotStaff = snapshot.preferences.staffAccounts ?? [];
+    const cacheRecord =
+      cacheRecords.find(
+        (r) =>
+          keysEqual(r.businessName ?? "", businessName) &&
+          filterActiveSellersForPicker(r.staff).length > 0,
+      ) ??
+      cacheRecords.find((r) => filterActiveSellersForPicker(r.staff).length > 0) ??
+      cacheRecords.find((r) => keysEqual(r.businessName ?? "", businessName)) ??
+      cacheRecords[0];
+    const hasSelectableSellers =
+      filterActiveSellersForPicker(cacheRecord?.staff ?? []).length > 0 ||
+      filterActiveSellersForPicker(snapshotStaff).length > 0;
+    if (!hasSelectableSellers) continue;
 
     shops.set(accountKey, {
       accountKey,
       businessName,
-      shopId: cacheRecord?.shopId,
+      shopId: filterActiveSellersForPicker(cacheRecord?.staff ?? []).length > 0 ? cacheRecord?.shopId : undefined,
     });
   }
 

@@ -247,17 +247,20 @@ export function LoginPage({
               <p className="px-1 text-xs font-medium text-muted-foreground">{t(lang, "loginStaffPinHint")}</p>
             </div>
 
-            <Link
-              to="/register"
-              className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground transition active:bg-muted"
-              data-testid="login-register-shop"
-            >
-              <span className="inline-flex items-center gap-2">
-                <UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden />
-                {t(lang, "loginCreateNewAccount")}
-              </span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
-            </Link>
+            <div className="space-y-1.5">
+              <Link
+                to="/register"
+                className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground transition active:bg-muted"
+                data-testid="login-register-shop"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  {t(lang, "loginCreateNewAccount")}
+                </span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+              </Link>
+              <p className="px-1 text-xs font-medium text-muted-foreground">{t(lang, "loginRegisterShopHint")}</p>
+            </div>
           </div>
         ) : null}
 

@@ -38,7 +38,13 @@ import { AppModalOverlay } from "./AppModalOverlay";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { readCachedShopMemberRole, writeCachedShopMemberRole } from "../../lib/shopMemberRoleCache";
-import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured, shouldSuppressPosLockScreen } from "../../lib/lockPos";
+import {
+  activeStaffCanUnlock,
+  canLockPos,
+  isBackOfficePinConfigured,
+  isSharedTerminalLockOperator,
+  shouldShowEnterpriseStaffLockScreen,
+} from "../../lib/lockPos";
 import { DisplayScaleControl } from "../pos/DisplayScaleControl";
 import { EnterpriseStaffLockScreen } from "../auth/EnterpriseStaffLockScreen";
 import {
@@ -50,6 +56,7 @@ import {
 } from "../../lib/auth";
 import { getUnlockLockoutStatus, unlockLimiterScope } from "../../lib/auth/staffLoginLimiter";
 import { useStaffAutoLock, useStaffSessionBootstrap } from "../../hooks/useStaffAutoLock";
+import { clearPersonalStaffTerminalRuntimeState } from "../../lib/staffAuthHydrate";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { MobileModuleExitBar } from "./MobileModuleExitBar";
@@ -102,8 +109,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const { logout, loggingOut } = useLogoutAction(onSignOut);
   useAndroidBackButton();
   useShopPresenceHeartbeat();
-  useStaffAutoLock(true);
-  useStaffSessionBootstrap(true);
+  const hasPathSStaffSession = Boolean(staffSession);
   const preferences = usePosStore(
     useShallow((s) => ({
       devRoleOverride: s.preferences.devRoleOverride,
@@ -190,6 +196,26 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       }),
     [authMode, user, email, preferences, staffSession, shopMemberRole],
   );
+  const sharedTerminalLockOperator = isSharedTerminalLockOperator({
+    authOperatorRole: authOperatorRole(actor),
+    hasPathSStaffSession,
+  });
+  useStaffAutoLock(sharedTerminalLockOperator);
+  useStaffSessionBootstrap(sharedTerminalLockOperator);
+
+  useEffect(() => {
+    // Wait for membership before treating fail-closed waiter as Path L personal staff.
+    if (authMode === "supabase" && !roleReady) return;
+    if (sharedTerminalLockOperator) return;
+    clearPersonalStaffTerminalRuntimeState();
+  }, [
+    authMode,
+    roleReady,
+    sharedTerminalLockOperator,
+    preferences.posLocked,
+    preferences.activeStaffId,
+  ]);
+
   const pilotActive = isPilotModeActive(authOperatorRole(actor), preferences as ShopPreferences);
   const tier = resolveEffectivePlanTier(snapshot);
   const canSwitchUser = tier === "business" || tier === "waka_plus";
@@ -244,6 +270,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   }, [preferences.posLocked, preferences.backOfficePin, preferences.staffAccounts, setPosLocked]);
 
   const requestPosLock = () => {
+    if (!sharedTerminalLockOperator) return;
     setLockSetupHint(null);
     if (!canLockPos(preferences)) {
       if (actorHasPermission(actor, "settings.shop")) {
@@ -499,41 +526,45 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                         <div className="my-1 border-t border-border" />
                       </>
                     ) : null}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={!canSwitchUser}
-                      title={canSwitchUser ? undefined : t(lang, "userMenuComingSoon")}
-                      className={clsx(
-                        "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold",
-                        canSwitchUser
-                          ? "text-foreground hover:bg-muted"
-                          : "cursor-not-allowed text-muted-foreground",
-                      )}
-                      onClick={() => {
-                        if (!canSwitchUser) return;
-                        requestPosLock();
-                        setMenuOpen(false);
-                      }}
-                    >
-                      {t(lang, "userMenuSwitchUser")}
-                      {!canSwitchUser ? (
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                          {t(lang, "userMenuComingSoon")}
-                        </span>
-                      ) : null}
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
-                      onClick={() => {
-                        requestPosLock();
-                        setMenuOpen(false);
-                      }}
-                    >
-                      {t(lang, "userMenuLockTerminal")}
-                    </button>
+                    {sharedTerminalLockOperator ? (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={!canSwitchUser}
+                          title={canSwitchUser ? undefined : t(lang, "userMenuComingSoon")}
+                          className={clsx(
+                            "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold",
+                            canSwitchUser
+                              ? "text-foreground hover:bg-muted"
+                              : "cursor-not-allowed text-muted-foreground",
+                          )}
+                          onClick={() => {
+                            if (!canSwitchUser) return;
+                            requestPosLock();
+                            setMenuOpen(false);
+                          }}
+                        >
+                          {t(lang, "userMenuSwitchUser")}
+                          {!canSwitchUser ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                              {t(lang, "userMenuComingSoon")}
+                            </span>
+                          ) : null}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
+                          onClick={() => {
+                            requestPosLock();
+                            setMenuOpen(false);
+                          }}
+                        >
+                          {t(lang, "userMenuLockTerminal")}
+                        </button>
+                      </>
+                    ) : null}
                     <button
                       type="button"
                       role="menuitem"
@@ -661,7 +692,13 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <HospitalityMobileNav lang={lang} visible={showHospitalityMobileNav} />
         <PharmacyMobileNav lang={lang} visible={showPharmacyMobileNav} />
         <EnterpriseScrollControls enabled={!viewportLocked} />
-        {preferences.posLocked && !shouldSuppressPosLockScreen(location.pathname, actorHasPermission(actor, "settings.shop")) ? (
+        {shouldShowEnterpriseStaffLockScreen({
+          posLocked: Boolean(preferences.posLocked),
+          authOperatorRole: authOperatorRole(actor),
+          hasPathSStaffSession,
+          pathname: location.pathname,
+          canManageShopSettings: actorHasPermission(actor, "settings.shop"),
+        }) ? (
           <EnterpriseStaffLockScreen
             lang={lang}
             preferences={preferences as ShopPreferences}
@@ -710,6 +747,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               prepareSwitchUserLock();
             }}
             onEmergencyLogout={() => {
+              // Phase 11l: "Sign in with another account" — full terminal context clear → /login email.
               emergencyStaffLogout();
               logout();
             }}

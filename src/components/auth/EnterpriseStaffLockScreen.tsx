@@ -16,7 +16,9 @@ import { getUnlockLockoutStatus, unlockLimiterScope } from "../../lib/auth/staff
 import { staffAllowSwitchUser as resolveAllowSwitchUser } from "../../lib/auth/staffSession";
 import { refreshStaffCacheOnLockScreenOpen } from "../../lib/auth/staffLockScreen";
 import type { TerminalIdentityView } from "../../lib/terminalIdentity";
+import { filterActiveSellersForPicker } from "../../lib/staffSellerPicker";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
+import { SellerPicker } from "./SellerPicker";
 
 type Props = {
   lang: Language;
@@ -90,8 +92,8 @@ export function EnterpriseStaffLockScreen({
   const showBiometric =
     Boolean(onBiometricUnlock) && biometricEnabled && biometricAvailable && unlockingCurrent;
 
-  const activeStaff = useMemo(
-    () => (preferences.staffAccounts ?? []).filter((s) => s.active),
+  const pickerSellers = useMemo(
+    () => filterActiveSellersForPicker(preferences.staffAccounts),
     [preferences.staffAccounts],
   );
 
@@ -255,27 +257,30 @@ export function EnterpriseStaffLockScreen({
             <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
               {allowSwitch ? t(lang, "lockPosSubSeller") : t(lang, "lockPosSub")}
             </p>
+            <p
+              className="mt-2 rounded-xl border border-border/80 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground dark:bg-white/5"
+              role="note"
+              data-testid="lock-screen-account-escape-hint"
+            >
+              {t(lang, "enterpriseLockAccountEscapeHint")}
+            </p>
 
-            {allowSwitch && activeStaff.length > 0 ? (
-              <label className="mt-3 block text-sm font-bold text-muted-foreground dark:text-muted-foreground sm:mt-4">
-                {t(lang, "switchSeller")}
-                <select
-                  value={staffId}
-                  onChange={(e) => {
-                    setStaffId(e.target.value);
+            {allowSwitch ? (
+              <div className="mt-3 space-y-2 sm:mt-4">
+                <p className="text-sm font-bold text-muted-foreground dark:text-muted-foreground">
+                  {t(lang, "switchSeller")}
+                </p>
+                <SellerPicker
+                  lang={lang}
+                  sellers={pickerSellers}
+                  selectedStaffId={staffId || null}
+                  ownerOption={{ id: "__owner__", label: t(lang, "role_owner") }}
+                  onSelect={(id) => {
+                    setStaffId(id);
                     setError(null);
                   }}
-                  className="mt-1 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
-                >
-                  <option value="">{t(lang, "staffPickAccount")}</option>
-                  <option value="__owner__">{t(lang, "role_owner")}</option>
-                  {activeStaff.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({t(lang, `role_${s.role}`)})
-                    </option>
-                  ))}
-                </select>
-              </label>
+                />
+              </div>
             ) : null}
 
             {showBiometric ? (
@@ -327,6 +332,7 @@ export function EnterpriseStaffLockScreen({
               <button
                 type="button"
                 onClick={onEmergencyLogout}
+                data-testid="lock-screen-sign-in-another-account"
                 className={clsx(
                   "inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-rose-200 font-bold text-rose-800 dark:border-rose-900 dark:text-rose-300",
                   !allowSwitch && "col-span-2",

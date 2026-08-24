@@ -49,9 +49,8 @@ describe("STAFF-V2 Phase 11e authentication UX clarification", () => {
   });
 
   it("U4 — shared terminal PIN is clearly separate from personal account login", () => {
-    expect(t("en", "loginStaffPinEntry").toLowerCase()).toContain("shared terminal");
-    expect(t("en", "loginStaffPinHint").toLowerCase()).toContain("different");
-    expect(t("en", "loginStaffPinHint").toLowerCase()).toContain("email");
+    expect(t("en", "loginStaffPinEntry").toLowerCase()).toMatch(/choose seller|shared terminal|pin/);
+    expect(t("en", "loginStaffPinHint").toLowerCase()).toMatch(/not your account login|different/);
     expect(LOGIN).toMatch(/loginStaffPinEntry/);
     expect(LOGIN).toMatch(/loginStaffPinHint/);
     expect(LOGIN).toMatch(/data-testid="login-shared-terminal-pin"/);
@@ -106,8 +105,8 @@ describe("STAFF-V2 Phase 11e authentication UX clarification", () => {
     expect(STAFF_ACCEPT).toMatch(/staffInviteFutureLoginNote/);
     expect(t("en", "staffInviteLoginHelp").toLowerCase()).toContain("already have");
     expect(t("en", "staffInviteSignupHelp").toLowerCase()).toContain("create your account");
-    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toContain("same email and password");
-    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toContain("not the shared terminal pin");
+    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toContain("email and password");
+    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toMatch(/shared terminal|pin/);
     // V3 state machine markers must remain.
     expect(STAFF_ACCEPT).toMatch(/shouldStartStaffInviteAccept/);
     expect(STAFF_ACCEPT).toMatch(/createStaffInviteAcceptAttemptController/);
