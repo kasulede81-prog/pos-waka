@@ -56,7 +56,8 @@ describe("STAFF-V2 Phase 6 independent Auth staff login", () => {
   it("does not rewrite PIN / SessionActor; seller push uses Phase 8 writer split", () => {
     expect(USE_AUTH).toMatch(/const signInStaff = useCallback/);
     expect(USE_AUTH).toMatch(/await supabase\.auth\.signOut\(\)/);
-    expect(SESSION_ACTOR).toMatch(/userId: `staff:\$\{params\.staffSession\.staffId\}`/);
+    expect(SESSION_ACTOR).toMatch(/const staffUserId = `staff:\$\{params\.staffSession\.staffId\}`/);
+    expect(SESSION_ACTOR).toMatch(/userId: staffUserId/);
     expect(CLOUD_SYNC).toMatch(/created_by: ctx\.userId/);
     expect(CLOUD_SYNC).toMatch(/sold_by_user_id: resolveSoldByAuthUserIdForPush\(sale\)/);
     expect(CLOUD_SYNC).toMatch(/soldByUserId: soldByUserIdFromCloudSaleRow\(row\)/);

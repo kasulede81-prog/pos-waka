@@ -228,6 +228,9 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
                 {t(lang, "staffInviteCreateAccount")}
               </button>
             </div>
+            <p className="text-xs font-medium text-muted-foreground">
+              {mode === "login" ? t(lang, "staffInviteLoginHelp") : t(lang, "staffInviteSignupHelp")}
+            </p>
             <input
               type="email"
               required
@@ -247,6 +250,7 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
               placeholder={t(lang, "staffInvitePasswordPh")}
               className="w-full min-h-[48px] rounded-xl border border-border bg-card px-3 text-sm font-semibold"
             />
+            <p className="text-xs font-medium text-muted-foreground">{t(lang, "staffInviteFutureLoginNote")}</p>
             {message ? <p className="text-sm font-semibold text-red-700">{message}</p> : null}
             <button
               type="submit"
