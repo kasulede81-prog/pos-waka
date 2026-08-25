@@ -89,7 +89,7 @@ describe("OBS-1 syncDiagnostics", () => {
     expect(() =>
       diag.observeCurrentQueueMetrics([
         {
-          get kind() {
+          get kind(): string {
             throw new Error("kind boom");
           },
           attempts: 0,
