@@ -9,7 +9,13 @@ import { StaffRolesCenter, countStaffWithCustomRole } from "../components/staff/
 import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 
-export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
+export function SettingsStaffRolesPage({
+  lang,
+  embedded = false,
+}: {
+  lang: Language;
+  embedded?: boolean;
+}) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
   const addCustomStaffRole = usePosStore((s) => s.addCustomStaffRole);
@@ -21,6 +27,32 @@ export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
     return <Navigate to="/settings" replace />;
   }
 
+  const center = (
+    <StaffRolesCenter
+      lang={lang}
+      businessType={preferences.businessType}
+      customRoles={preferences.customStaffRoles ?? []}
+      staffCountByRole={(roleId) => countStaffWithCustomRole(preferences.staffAccounts, roleId)}
+      onCreate={(input) => addCustomStaffRole(input)}
+      onUpdate={(id, patch) => updateCustomStaffRole(id, patch)}
+      onRemove={(id) => removeCustomStaffRole(id)}
+      onCloneTemplate={(templateId, name) => cloneCustomStaffRole({ kind: "template", id: templateId }, name)}
+      onCloneRole={(roleId, name) => cloneCustomStaffRole({ kind: "custom", id: roleId }, name)}
+    />
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-black text-foreground">{t(lang, "staffCenterTabRoles")}</h2>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "enterpriseRolesPageSub")}</p>
+        </div>
+        {center}
+      </div>
+    );
+  }
+
   return (
     <DeviceApprovedGate lang={lang}>
       <EnterprisePageContainer>
@@ -29,17 +61,7 @@ export function SettingsStaffRolesPage({ lang }: { lang: Language }) {
           title={t(lang, "enterpriseRolesPageTitle")}
           subtitle={t(lang, "enterpriseRolesPageSub")}
         />
-        <StaffRolesCenter
-          lang={lang}
-          businessType={preferences.businessType}
-          customRoles={preferences.customStaffRoles ?? []}
-          staffCountByRole={(roleId) => countStaffWithCustomRole(preferences.staffAccounts, roleId)}
-          onCreate={(input) => addCustomStaffRole(input)}
-          onUpdate={(id, patch) => updateCustomStaffRole(id, patch)}
-          onRemove={(id) => removeCustomStaffRole(id)}
-          onCloneTemplate={(templateId, name) => cloneCustomStaffRole({ kind: "template", id: templateId }, name)}
-          onCloneRole={(roleId, name) => cloneCustomStaffRole({ kind: "custom", id: roleId }, name)}
-        />
+        {center}
       </EnterprisePageContainer>
     </DeviceApprovedGate>
   );

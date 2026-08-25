@@ -31,7 +31,7 @@ import { listStaffInvitations, type StaffInvitationRow } from "../lib/staffInvit
 import { resolveShopCtx } from "../offline/cloudSync";
 import { normalizeLinkedAuthUserId } from "../lib/sessionActor";
 
-export function StaffAccessPage({ lang }: { lang: Language }) {
+export function StaffAccessPage({ lang, embedded = false }: { lang: Language; embedded?: boolean }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
   const canManage = actorHasPermission(actor, "settings.shop");
@@ -106,17 +106,25 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   if (!canManage) return <Navigate to="/" replace />;
 
   if (maxStaff <= 0) {
-    return (
-      <EnterprisePageContainer>
-        <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
+    const limited = (
+      <>
+        {!embedded ? (
+          <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
+        ) : (
+          <div>
+            <h2 className="text-lg font-black text-foreground">{t(lang, "staffCenterTabTeam")}</h2>
+            <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "staffAccessSub")}</p>
+          </div>
+        )}
         <EnterpriseCard muted>
           <Body>{t(lang, "upgradeWhyStaff")} → {t(lang, "upgradeWhyStaffPlan")}</Body>
         </EnterpriseCard>
         <Link to="/upgrade">
           <WakaButton variant="primary">{t(lang, "officePremiumUpgrade")} →</WakaButton>
         </Link>
-      </EnterprisePageContainer>
+      </>
     );
+    return embedded ? <div className="space-y-4">{limited}</div> : <EnterprisePageContainer>{limited}</EnterprisePageContainer>;
   }
 
   if (creating) {
@@ -165,10 +173,16 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
     );
   }
 
-  return (
-    <DeviceApprovedGate lang={lang}>
-      <EnterprisePageContainer>
-      <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
+  const main = (
+    <div className={embedded ? "space-y-5" : undefined}>
+      {!embedded ? (
+        <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
+      ) : (
+        <div>
+          <h2 className="text-lg font-black text-foreground">{t(lang, "staffCenterTabTeam")}</h2>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "staffAccessSub")}</p>
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {[
@@ -290,7 +304,12 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           }
         }}
       />
-      </EnterprisePageContainer>
+    </div>
+  );
+
+  return (
+    <DeviceApprovedGate lang={lang}>
+      {embedded ? main : <EnterprisePageContainer>{main}</EnterprisePageContainer>}
     </DeviceApprovedGate>
   );
 }

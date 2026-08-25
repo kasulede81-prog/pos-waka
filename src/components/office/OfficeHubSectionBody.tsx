@@ -291,7 +291,7 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
       <ul className={listClass}>
         {access.canShopSettings ? (
           <OfficeNavCard
-            to="/staff-access"
+            to="/staff-center"
             title={t(lang, "officeCardStaffAccess")}
             subtitle={t(lang, "officeCardStaffAccessSub")}
             Icon={UserCog}

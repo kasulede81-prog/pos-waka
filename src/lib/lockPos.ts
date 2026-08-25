@@ -55,6 +55,7 @@ export function shouldSuppressPosLockScreen(
 ): boolean {
   if (!canManageShopSettings) return false;
   if (pathname === "/staff-access") return true;
+  if (pathname.startsWith("/staff-center")) return true;
   if (pathname.startsWith("/settings/")) return true;
   if (pathname === "/close-day" || pathname.startsWith("/office/")) return true;
   return false;

@@ -78,6 +78,8 @@ import { CashPositionPage } from "./pages/CashPositionPage";
 import { DayOpenPage } from "./pages/DayOpenPage";
 import { CashExpensesPage } from "./pages/CashExpensesPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
+import { StaffCenterLayout } from "./pages/StaffCenterLayout";
+import { StaffCenterActivityPage } from "./pages/StaffCenterActivityPage";
 import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
 import { PilotSupportCenterPage } from "./pages/PilotSupportCenterPage";
@@ -971,15 +973,36 @@ function AppRoutes() {
               }
             />
             <Route
-              path="staff-access"
+              path="staff-center"
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SensitiveActionGate lang={lang} kind="manage_users" deniedTo="/settings">
-                    <StaffAccessPage lang={lang} />
+                    <StaffCenterLayout lang={lang} />
                   </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
-            />
+            >
+              <Route index element={<Navigate to="team" replace />} />
+              <Route path="team" element={<StaffAccessPage lang={lang} embedded />} />
+              <Route
+                path="roles"
+                element={
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsStaffRolesPage lang={lang} embedded />
+                  </SettingsChangeGate>
+                }
+              />
+              <Route path="activity" element={<StaffCenterActivityPage lang={lang} />} />
+              <Route
+                path="security"
+                element={
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsStaffSecurityPage lang={lang} embedded />
+                  </SettingsChangeGate>
+                }
+              />
+            </Route>
+            <Route path="staff-access" element={<Navigate to="/staff-center/team" replace />} />
             <Route
               path="owner"
               element={
@@ -1232,26 +1255,8 @@ function AppRoutes() {
                 </RoleProtectedRoute>
               }
             />
-            <Route
-              path="settings/staff-roles"
-              element={
-                <RoleProtectedRoute permission="settings.shop">
-                  <SettingsChangeGate lang={lang}>
-                    <SettingsStaffRolesPage lang={lang} />
-                  </SettingsChangeGate>
-                </RoleProtectedRoute>
-              }
-            />
-            <Route
-              path="settings/staff-security"
-              element={
-                <RoleProtectedRoute permission="settings.shop">
-                  <SettingsChangeGate lang={lang}>
-                    <SettingsStaffSecurityPage lang={lang} />
-                  </SettingsChangeGate>
-                </RoleProtectedRoute>
-              }
-            />
+            <Route path="settings/staff-roles" element={<Navigate to="/staff-center/roles" replace />} />
+            <Route path="settings/staff-security" element={<Navigate to="/staff-center/security" replace />} />
             <Route
               path="settings/pin"
               element={

@@ -6,7 +6,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { Navigate } from "react-router-dom";
 import { STAFF_AUTO_LOCK_OPTIONS, lockPos } from "../lib/auth";
 import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSaveShell";
-import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
+import { PreferencesAutoSaveProvider, usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 
 function StaffSecurityBody({ lang }: { lang: Language }) {
@@ -97,10 +97,29 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
   );
 }
 
-export function SettingsStaffSecurityPage({ lang }: { lang: Language }) {
+export function SettingsStaffSecurityPage({
+  lang,
+  embedded = false,
+}: {
+  lang: Language;
+  embedded?: boolean;
+}) {
   const actor = useSessionActor();
   if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
+  }
+  if (embedded) {
+    return (
+      <PreferencesAutoSaveProvider lang={lang}>
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-black text-foreground">{t(lang, "staffCenterTabSecurity")}</h2>
+            <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "settingsStaffSecuritySub")}</p>
+          </div>
+          <StaffSecurityBody lang={lang} />
+        </div>
+      </PreferencesAutoSaveProvider>
+    );
   }
   return (
     <SettingsAutoSaveShell

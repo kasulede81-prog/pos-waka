@@ -9,6 +9,7 @@ const PREFIXES = [
   "/owner",
   "/close-day",
   "/staff-access",
+  "/staff-center",
   "/office",
   "/customers",
   "/debts",
@@ -27,6 +28,7 @@ export function isSettingsLauncherPath(pathname: string): boolean {
     pathname === "/settings" ||
     pathname.startsWith("/settings/") ||
     pathname === "/staff-access" ||
+    pathname.startsWith("/staff-center") ||
     pathname === "/office/hardware" ||
     pathname === "/office/vision" ||
     pathname.startsWith("/office/vision/")

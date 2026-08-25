@@ -8,6 +8,7 @@ import {
 describe("shouldSuppressPosLockScreen", () => {
   it("suppresses on staff setup for shop managers", () => {
     expect(shouldSuppressPosLockScreen("/staff-access", true)).toBe(true);
+    expect(shouldSuppressPosLockScreen("/staff-center/team", true)).toBe(true);
     expect(shouldSuppressPosLockScreen("/settings/staff-security", true)).toBe(true);
   });
 

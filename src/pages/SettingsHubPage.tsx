@@ -1,7 +1,7 @@
 import { actorHasPermission, actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Camera, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, ShieldCheck, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
+import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Camera, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -86,7 +86,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
         {canShop ? (
           <OfficeNavCard
-            to="/staff-access"
+            to="/staff-center"
             title={t(lang, "officeCardStaffAccess")}
             subtitle={t(lang, "officeCardStaffAccessSub")}
             Icon={UserCog}
@@ -162,22 +162,6 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubBiometric")}
             subtitle={t(lang, "settingsHubBiometricSub")}
             Icon={Fingerprint}
-          />
-        ) : null}
-        {canShop ? (
-          <OfficeNavCard
-            to="/settings/staff-roles"
-            title={t(lang, "enterpriseRolesPageTitle")}
-            subtitle={t(lang, "enterpriseRolesPageSub")}
-            Icon={ShieldCheck}
-          />
-        ) : null}
-        {canShop ? (
-          <OfficeNavCard
-            to="/settings/staff-security"
-            title={t(lang, "settingsStaffSecurityTitle")}
-            subtitle={t(lang, "settingsStaffSecuritySub")}
-            Icon={Lock}
           />
         ) : null}
         {canShop ? (
