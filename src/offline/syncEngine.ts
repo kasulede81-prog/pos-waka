@@ -77,6 +77,18 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
 
   await mapPool(ready, SYNC_QUEUE_FLUSH_CONCURRENCY, async (op) => {
     try {
+      // OBS-1 D2 — sale queue-drain attempt (fire-and-forget; never awaited).
+      if (op.kind === "pending_sales" || op.kind === "sale") {
+        void import("../lib/syncDiagnostics")
+          .then((m) => {
+            try {
+              m.recordSalePushQueueAttempt();
+            } catch {
+              /* isolated */
+            }
+          })
+          .catch(() => {});
+      }
       const ok = await processOne(op);
       if (ok) {
         await removeSyncOperation(op.id);

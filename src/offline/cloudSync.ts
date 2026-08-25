@@ -3535,6 +3535,17 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   const ctx = await resolveShopCtx();
   if (!ctx) return { ok: 0, fail: 0 };
 
+  // OBS-1 E — scan push attempt (terminology: scan, not recovery-only).
+  void import("../lib/syncDiagnostics")
+    .then((m) => {
+      try {
+        m.recordPendingSyncScanPushAttempt();
+      } catch {
+        /* isolated */
+      }
+    })
+    .catch(() => {});
+
   const { mapPool } = await import("../lib/asyncPool");
   const { SYNC_SALE_PUSH_CONCURRENCY } = await import("../lib/syncTiming");
 
@@ -3542,9 +3553,19 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   let fail = 0;
   const { sales } = usePosStore.getState();
   const pendingSales = sales.filter((s) => s.pendingSync);
-  const saleResults = await mapPool(pendingSales, SYNC_SALE_PUSH_CONCURRENCY, async (s) =>
-    pushSaleRowToCloud(s, ctx),
-  );
+  const saleResults = await mapPool(pendingSales, SYNC_SALE_PUSH_CONCURRENCY, async (s) => {
+    // OBS-1 D3 — pendingSync-scan sale push attempt (not deduped with other paths).
+    void import("../lib/syncDiagnostics")
+      .then((m) => {
+        try {
+          m.recordSalePushPendingSyncAttempt();
+        } catch {
+          /* isolated */
+        }
+      })
+      .catch(() => {});
+    return pushSaleRowToCloud(s, ctx);
+  });
   ok += saleResults.ok;
   fail += saleResults.fail;
 

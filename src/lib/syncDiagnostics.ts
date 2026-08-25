@@ -1,6 +1,10 @@
 /**
  * Phase 24.1B — sync timeline diagnostics ([waka-sync]).
  * No credentials or business-sensitive payloads are logged.
+ *
+ * OBS-1 (bounded, best-effort): queue gauges + sale/scan attempt counters.
+ * Diagnostics observe sync; they must NEVER influence queue/retry/scheduler.
+ * In-memory only — reset on restart is expected.
  */
 
 export type SyncDiagEvent =
@@ -18,9 +22,20 @@ export type SyncDiagEvent =
   | "retry"
   | "coalesce"
   | "queue_depth"
-  | "checkpoint";
+  | "checkpoint"
+  /** OBS-1 attempt markers (diagnostic only; never drive sync). */
+  | "sale_push_immediate_attempt"
+  | "sale_push_queue_attempt"
+  | "sale_push_pending_sync_attempt"
+  | "pending_sync_scan_push_attempt";
 
 export type SyncConnectionQuality = "excellent" | "good" | "slow" | "offline" | "reconnecting";
+
+/** Minimal queue row fields for OBS-1 gauges — never include payloads. */
+export type Obs1QueueRowView = {
+  kind: string;
+  attempts: number;
+};
 
 type Mark = {
   event: SyncDiagEvent;
@@ -45,6 +60,23 @@ let lastCheckpointDurationMs: number | null = null;
 let lastRealtimeEventAt: number | null = null;
 let reconnectingUntilMs: number | null = null;
 
+/** OBS-1: point-in-time depth by SyncOperationKind (gauge; not historical). */
+let lastQueueDepthByKind: Record<string, number> = {};
+/**
+ * OBS-1: histogram of current queue row `attempts` values only.
+ * Not historical retry telemetry — rebuilt from each queue snapshot.
+ */
+let lastCurrentQueueAttemptsHistogram: Record<string, number> = {};
+/**
+ * OBS-1: current rows with attempts >= 100 (retained soft-stop, NOT dead-letter).
+ */
+let lastSoftStopRetainedCount = 0;
+/** OBS-1 attempt counters (in-memory; intentional multi-path counting). */
+let salePushImmediateAttempts = 0;
+let salePushQueueAttempts = 0;
+let salePushPendingSyncAttempts = 0;
+let pendingSyncScanPushAttempts = 0;
+
 const timelineMs: Record<string, number | null> = {
   commitToQueue: null,
   queueToUpload: null,
@@ -60,6 +92,15 @@ function shouldLog(): boolean {
     return globalThis.localStorage?.getItem("waka.sync.log") === "1";
   } catch {
     return false;
+  }
+}
+
+/** Isolate observer work so throws never reach sync callers. */
+export function safeObserve(fn: () => void): void {
+  try {
+    fn();
+  } catch {
+    /* OBS-1 must never alter sync */
   }
 }
 
@@ -116,6 +157,83 @@ export function recordQueueDepth(depth: number): void {
   logSync("queue_depth", { depth });
 }
 
+/**
+ * OBS-1 A/B/C — rebuild gauges from a queue snapshot (kind + attempts only).
+ * Point-in-time; concurrent mutation may make the snapshot stale (acceptable).
+ * Does not mutate queue rows. Does not inspect payloads.
+ */
+export function observeCurrentQueueMetrics(rows: ReadonlyArray<Obs1QueueRowView>): void {
+  safeObserve(() => {
+    const depthByKind: Record<string, number> = {};
+    const histogram: Record<string, number> = {};
+    let softStopRetained = 0;
+    for (const row of rows) {
+      const kind = String(row.kind);
+      depthByKind[kind] = (depthByKind[kind] ?? 0) + 1;
+      const attempts = Number(row.attempts);
+      const n = Number.isFinite(attempts) ? Math.max(0, Math.floor(attempts)) : 0;
+      const bucket = n >= 100 ? "100+" : String(n);
+      histogram[bucket] = (histogram[bucket] ?? 0) + 1;
+      if (n >= 100) softStopRetained += 1;
+    }
+    lastQueueDepthByKind = depthByKind;
+    lastCurrentQueueAttemptsHistogram = histogram;
+    lastSoftStopRetainedCount = softStopRetained;
+    lastQueueDepth = rows.length;
+    logSync("queue_depth", {
+      depth: rows.length,
+      soft_stop_retained: softStopRetained,
+      kinds: Object.keys(depthByKind).length,
+    });
+  });
+}
+
+/** OBS-1 D1 — SALE_PUSH_IMMEDIATE_ATTEMPT (attempt counter; not a business event). */
+export function recordSalePushImmediateAttempt(): void {
+  safeObserve(() => {
+    salePushImmediateAttempts += 1;
+    logSync("sale_push_immediate_attempt", { count: salePushImmediateAttempts });
+  });
+}
+
+/** OBS-1 D2 — SALE_PUSH_QUEUE_ATTEMPT (attempt counter; not a business event). */
+export function recordSalePushQueueAttempt(): void {
+  safeObserve(() => {
+    salePushQueueAttempts += 1;
+    logSync("sale_push_queue_attempt", { count: salePushQueueAttempts });
+  });
+}
+
+/** OBS-1 D3 — SALE_PUSH_PENDING_SYNC_ATTEMPT (attempt counter; not a business event). */
+export function recordSalePushPendingSyncAttempt(): void {
+  safeObserve(() => {
+    salePushPendingSyncAttempts += 1;
+    logSync("sale_push_pending_sync_attempt", { count: salePushPendingSyncAttempts });
+  });
+}
+
+/**
+ * OBS-1 E — PENDING_SYNC_SCAN_PUSH_ATTEMPT
+ * Counts an invocation of the pendingSync scan push path (not labeled "recovery").
+ */
+export function recordPendingSyncScanPushAttempt(): void {
+  safeObserve(() => {
+    pendingSyncScanPushAttempts += 1;
+    logSync("pending_sync_scan_push_attempt", { count: pendingSyncScanPushAttempts });
+  });
+}
+
+/** Test helper — OBS-1 in-memory state only. */
+export function resetObs1DiagnosticsForTests(): void {
+  lastQueueDepthByKind = {};
+  lastCurrentQueueAttemptsHistogram = {};
+  lastSoftStopRetainedCount = 0;
+  salePushImmediateAttempts = 0;
+  salePushQueueAttempts = 0;
+  salePushPendingSyncAttempts = 0;
+  pendingSyncScanPushAttempts = 0;
+}
+
 export function recordSyncRetry(kind: string, attempts: number): void {
   lastRetryCount = attempts;
   logSync("retry", { kind, attempts });
@@ -151,6 +269,17 @@ export function readSyncDiagnosticsSnapshot(): {
   lastRetryCount: number;
   lastCheckpointDurationMs: number | null;
   timelineMs: Readonly<typeof timelineMs>;
+  /** OBS-1 gauges / attempt counters (diagnostic only). */
+  obs1: {
+    queueDepthByKind: Readonly<Record<string, number>>;
+    /** Current-row attempts histogram — not historical retry telemetry. */
+    currentQueueAttemptsHistogram: Readonly<Record<string, number>>;
+    softStopRetainedCount: number;
+    salePushImmediateAttempts: number;
+    salePushQueueAttempts: number;
+    salePushPendingSyncAttempts: number;
+    pendingSyncScanPushAttempts: number;
+  };
 } {
   return {
     marks: [...marks],
@@ -164,6 +293,15 @@ export function readSyncDiagnosticsSnapshot(): {
     lastRetryCount,
     lastCheckpointDurationMs,
     timelineMs: { ...timelineMs },
+    obs1: {
+      queueDepthByKind: { ...lastQueueDepthByKind },
+      currentQueueAttemptsHistogram: { ...lastCurrentQueueAttemptsHistogram },
+      softStopRetainedCount: lastSoftStopRetainedCount,
+      salePushImmediateAttempts,
+      salePushQueueAttempts,
+      salePushPendingSyncAttempts,
+      pendingSyncScanPushAttempts,
+    },
   };
 }
 

@@ -15,7 +15,7 @@ import {
 } from "../offline/cloudSync";
 import { POS_PUSH_INTERVAL_MS, runPosPushOnlyUpload } from "../lib/posPushScheduler";
 import { scheduleImmediatePull } from "../lib/immediateSync";
-import { markSyncReconnecting } from "../lib/syncDiagnostics";
+import { markSyncReconnecting, observeCurrentQueueMetrics } from "../lib/syncDiagnostics";
 import { startRealtimeSyncPull, stopRealtimeSyncPull } from "../lib/realtimeSyncPull";
 import { scheduleForegroundSync } from "../lib/foregroundSync";
 import {
@@ -98,6 +98,12 @@ async function pendingUploadStats(): Promise<{ total: number; breakdown: Pending
   for (const op of queue) {
     const bucket = bucketForKind(op.kind);
     breakdown[bucket] += 1;
+  }
+  // OBS-1 A/B/C: reuse this existing queue scan (kind + attempts only; never payloads).
+  try {
+    observeCurrentQueueMetrics(queue.map((op) => ({ kind: op.kind, attempts: op.attempts ?? 0 })));
+  } catch {
+    /* observer failure must not block sync status */
   }
   const total = Object.values(breakdown).reduce((sum, n) => sum + n, 0);
   return { total, breakdown, queueHealth: deriveQueueHealth(queue) };
