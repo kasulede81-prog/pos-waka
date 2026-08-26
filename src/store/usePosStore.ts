@@ -1720,6 +1720,9 @@ function normalizeSupplier(s: Supplier): Supplier {
 
 function normalizePurchase(p: Purchase): Purchase {
   const invoiceNumber = p.invoiceNumber?.trim();
+  const stockSyncedProductIds = Array.isArray(p.stockSyncedProductIds)
+    ? [...new Set(p.stockSyncedProductIds.filter((id) => typeof id === "string" && id))]
+    : undefined;
   return {
     ...p,
     pendingSync: p.pendingSync !== false,
@@ -1728,6 +1731,8 @@ function normalizePurchase(p: Purchase): Purchase {
     lines: Array.isArray(p.lines) ? p.lines : [],
     voidedAt: p.voidedAt ?? null,
     voidReason: p.voidReason ?? undefined,
+    stockSyncedProductIds: stockSyncedProductIds?.length ? stockSyncedProductIds : undefined,
+    stockSyncedAt: p.stockSyncedAt ?? null,
   };
 }
 
@@ -6672,8 +6677,11 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(state, movements),
     });
 
+    // Single authoritative sync path — syncPurchaseBundle pushes purchase + stock.
+    // Do not also enqueue pending_stock_updates(purchase): dual delivery double-counted
+    // stock via non-idempotent deltas (Restock Double-Count Fix R1). Legacy dual ops
+    // already in the queue remain safe via purchase-note idempotency + line markers.
     void queueRemote("pending_purchases", { purchaseId: purchase.id });
-    void queueRemote("pending_stock_updates", { kind: "purchase", purchaseId: purchase.id });
     if (!walkIn) void queueRemote("supplier", { id: supplierId });
     pushAudit("purchase_saved", `Restock UGX ${totalCostUgx.toLocaleString()} · ${supplierName}`, {
       purchaseId: purchase.id,

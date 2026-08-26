@@ -79,6 +79,12 @@ import { isWalkInSupplierId } from "../lib/walkInSupplier";
 import { isPurchaseVoided } from "../lib/purchaseCorrections";
 import { purchaseLineBaseUnitsIn } from "../lib/purchaseLineSync";
 import {
+  isPurchaseStockLineSynced,
+  purchaseStockLinesNeedingCloudPush,
+  purchaseStockSyncNote,
+  withPurchaseStockLineSynced,
+} from "../lib/purchaseStockSyncIdempotency";
+import {
   mergeProductFromCloudPull,
   patchProductsWithServerStock,
   type ServerProductStockRow,
@@ -1352,6 +1358,14 @@ async function syncPurchaseVoidBundle(purchaseId: string, ctx: ShopCtx): Promise
   return true;
 }
 
+function markPurchaseStockLineSynced(purchaseId: string, productId: string): void {
+  usePosStore.setState((s) => ({
+    purchases: s.purchases.map((p) =>
+      p.id === purchaseId ? withPurchaseStockLineSynced(p, productId) : p,
+    ),
+  }));
+}
+
 async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boolean> {
   const purchase = usePosStore.getState().purchases.find((p) => p.id === purchaseId);
   if (!purchase) return true;
@@ -1360,20 +1374,27 @@ async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boo
   const purchaseOk = await pushPurchaseToCloud(purchase, ctx);
   if (!purchaseOk) return false;
 
-  for (const ln of purchase.lines) {
-    const product = usePosStore.getState().products.find((p) => p.id === ln.productId);
+  // Re-read after purchase upsert — another queue op may have progressed markers.
+  let current = usePosStore.getState().purchases.find((p) => p.id === purchaseId) ?? purchase;
+  const needing = purchaseStockLinesNeedingCloudPush(current, usePosStore.getState().products);
+
+  for (const item of needing) {
+    current = usePosStore.getState().purchases.find((p) => p.id === purchaseId) ?? current;
+    if (isPurchaseStockLineSynced(current, item.productId)) continue;
+
+    const product = usePosStore.getState().products.find((p) => p.id === item.productId);
     if (!product) continue;
-    const baseIn = purchaseLineBaseUnitsIn(product, ln);
-    if (baseIn <= 0) continue;
     const catalogOk = await pushProductCatalogToCloud(product, ctx);
     if (!catalogOk) return false;
     const stockOk = await pushProductStockToCloud(product.id, ctx, {
-      delta: baseIn,
-      note: `purchase:${purchase.id}`,
+      delta: item.delta,
+      note: item.note || purchaseStockSyncNote(purchaseId),
       baseUpdatedAt: product.updatedAt,
-      baseStockOnHand: product.stockOnHand - baseIn,
+      baseStockOnHand: product.stockOnHand - item.delta,
     });
     if (!stockOk) return false;
+    // Persist line ack before the next line / before a duplicate queue op can re-enter.
+    markPurchaseStockLineSynced(purchaseId, item.productId);
   }
 
   if (!isWalkInSupplierId(purchase.supplierId)) {
@@ -1384,7 +1405,7 @@ async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boo
     }
   }
 
-  markPurchaseSynced(purchaseId);
+  markPurchaseSynced(purchaseId, { stockSyncedAt: new Date().toISOString() });
   return true;
 }
 

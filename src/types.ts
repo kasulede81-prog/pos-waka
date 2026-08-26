@@ -1669,6 +1669,13 @@ export type Purchase = {
   preVoidCloudSynced?: boolean;
   /** Set after void stock reversal is pushed to cloud (prevents double subtraction). */
   voidStockSyncedAt?: string | null;
+  /**
+   * Client-only: product IDs whose purchase stock-in delta was acknowledged by cloud.
+   * Prevents duplicate queue paths / partial-bundle retries from re-pushing the same line.
+   */
+  stockSyncedProductIds?: string[];
+  /** Client-only: set when every purchase line's stock-in delta has been cloud-acked. */
+  stockSyncedAt?: string | null;
   createdAt: string;
   pendingSync: boolean;
 };

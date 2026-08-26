@@ -168,14 +168,32 @@ export function mergePurchaseRecord(local: Purchase, remote: Purchase): Purchase
   const localVoid = isPurchaseVoided(local);
   const remoteVoid = isPurchaseVoided(remote);
 
-  if (localVoid && !remoteVoid) return local;
-  if (remoteVoid && !localVoid) return remote;
-  if (localVoid && remoteVoid) {
-    return voidRecencyMs(remote) >= voidRecencyMs(local) ? remote : local;
+  let winner: Purchase;
+  if (localVoid && !remoteVoid) winner = local;
+  else if (remoteVoid && !localVoid) winner = remote;
+  else if (localVoid && remoteVoid) {
+    winner = voidRecencyMs(remote) >= voidRecencyMs(local) ? remote : local;
+  } else if (recencyMs(local.createdAt) <= recencyMs(remote.createdAt)) {
+    winner = remote;
+  } else {
+    winner = local;
   }
 
-  if (recencyMs(local.createdAt) <= recencyMs(remote.createdAt)) return remote;
-  return local;
+  // Preserve client-only stock-sync progress across cloud pull merges.
+  const ids = [
+    ...(Array.isArray(local.stockSyncedProductIds) ? local.stockSyncedProductIds : []),
+    ...(Array.isArray(winner.stockSyncedProductIds) ? winner.stockSyncedProductIds : []),
+  ];
+  const stockSyncedProductIds = [...new Set(ids.filter(Boolean))];
+  const stockSyncedAt = local.stockSyncedAt ?? winner.stockSyncedAt ?? null;
+  const voidStockSyncedAt = local.voidStockSyncedAt ?? winner.voidStockSyncedAt ?? null;
+
+  return {
+    ...winner,
+    ...(stockSyncedProductIds.length ? { stockSyncedProductIds } : {}),
+    stockSyncedAt,
+    voidStockSyncedAt,
+  };
 }
 
 export function mergePurchasesForRecovery(local: Purchase[], remote: CloudPurchaseRow[]): Purchase[] {
