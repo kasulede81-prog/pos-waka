@@ -138,6 +138,13 @@ export function receiptPdfFilename(kind: "sale" | "return" | "debt", id: string)
 }
 
 export async function printSaleReceipt(ctx: SaleReceiptContext): Promise<{ ok: boolean }> {
+  // Phase 1B: post-sale / reprint only — try existing thermal queue when a
+  // suitable default receipt printer is already configured and transportable.
+  // Failure never blocks or alters the sale; fall through to HTML/PDF/share.
+  const { tryEnqueueRetailSaleReceiptEscPos } = await import("./retailReceiptPrint");
+  const thermal = await tryEnqueueRetailSaleReceiptEscPos(ctx);
+  if (thermal.enqueued) return { ok: true };
+
   const paper = ctx.paper ?? "80mm";
   const html = saleReceiptHtml(ctx);
 
