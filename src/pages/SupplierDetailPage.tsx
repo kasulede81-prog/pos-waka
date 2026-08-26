@@ -58,6 +58,7 @@ export function SupplierDetailPage({
   const auditLogs = usePosStore((s) => s.auditLogs);
   const updateSupplier = usePosStore((s) => s.updateSupplier);
   const removeSupplier = usePosStore((s) => s.removeSupplier);
+  const addSupplierPayment = usePosStore((s) => s.addSupplierPayment);
   const purchases = usePosStore((s) => s.purchases);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const preferences = usePosStore((s) => s.preferences);
@@ -72,6 +73,8 @@ export function SupplierDetailPage({
   const [editNotes, setEditNotes] = useState("");
   const [editSaved, setEditSaved] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState("");
   const [statementFilter, setStatementFilter] = useState<DateFilterValue>({ kind: "preset", preset: "this_month" });
 
   const statementBounds = useMemo(() => resolveDateFilterBounds(statementFilter), [statementFilter]);
@@ -185,6 +188,24 @@ export function SupplierDetailPage({
     }
   };
 
+  const openPay = () => {
+    setPayAmount(String(Math.min(supplier.balanceOwedUgx, 50_000)));
+    setPayOpen(true);
+  };
+
+  const submitPay = async (e: FormEvent) => {
+    e.preventDefault();
+    const n = Math.floor(Number(payAmount) || 0);
+    const r = await runShopAction(
+      { lang, action: "supplier.payment", permitted: canManage },
+      () => addSupplierPayment(supplier.id, n),
+    );
+    if (r.ok) {
+      setPayOpen(false);
+      setPayAmount("");
+    }
+  };
+
   const content = (
     <>
       {!embedded ? (
@@ -208,6 +229,11 @@ export function SupplierDetailPage({
         {canManage && !editOpen ? (
           <WakaButton type="button" variant="secondary" onClick={openEdit} className="mb-4 w-full">
             {t(lang, "supplierEditTitle")}
+          </WakaButton>
+        ) : null}
+        {canManage && !editOpen && supplier.balanceOwedUgx > 0 ? (
+          <WakaButton type="button" variant="primary" onClick={openPay} className="mb-4 w-full">
+            {t(lang, "supplierPayButton")}
           </WakaButton>
         ) : null}
         {canDelete && !editOpen ? (
@@ -427,6 +453,24 @@ export function SupplierDetailPage({
           </ul>
         )}
       </EnterpriseCard>
+
+      <ModalSheet open={payOpen} onClose={() => setPayOpen(false)} title={t(lang, "supplierPayTitle")}>
+        <form onSubmit={(e) => void submitPay(e)} className="space-y-3">
+          <SectionTitle as="p" className="!text-sm">{supplier.name}</SectionTitle>
+          <Caption>
+            {t(lang, "supplierBalanceLabel")}: UGX {supplier.balanceOwedUgx.toLocaleString()}
+          </Caption>
+          <EnterpriseTextField
+            value={payAmount}
+            onChange={(e) => setPayAmount(e.target.value)}
+            inputMode="numeric"
+            pos
+          />
+          <WakaButton type="submit" variant="primary" className="w-full">
+            {t(lang, "supplierPaySave")}
+          </WakaButton>
+        </form>
+      </ModalSheet>
 
       <ModalSheet
         open={deleteOpen}

@@ -23,8 +23,10 @@ import {
   paidUgxForReceiveStatus,
   type ReceivePayStatus,
 } from "../components/inventory/receive/receivePaymentStatus";
-
-type BuySource = "town" | "supplier";
+import {
+  defaultReceiveBuySource,
+  type ReceiveBuySource,
+} from "../components/inventory/receive/receiveBuySourceDefault";
 
 export function RestockPage({
   lang,
@@ -39,14 +41,18 @@ export function RestockPage({
   const products = usePosStore((s) => s.products);
   const recordPurchase = usePosStore((s) => s.recordPurchase);
 
-  const [buySource, setBuySource] = useState<BuySource>("town");
+  const [buySource, setBuySource] = useState<ReceiveBuySource>(() =>
+    defaultReceiveBuySource(usePosStore.getState().suppliers),
+  );
   const [supplierId, setSupplierId] = useState("");
   const [townPlace, setTownPlace] = useState("");
   const [lines, setLines] = useState<RestockLineRow[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [payStatus, setPayStatus] = useState<ReceivePayStatus>("unpaid");
+  const [payStatus, setPayStatus] = useState<ReceivePayStatus>(() =>
+    defaultReceiveBuySource(usePosStore.getState().suppliers) === "supplier" ? "unpaid" : "paid",
+  );
   const [paidStr, setPaidStr] = useState("");
   const [notes, setNotes] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -151,11 +157,12 @@ export function RestockPage({
 
     setLines([]);
     setPaidStr("");
-    setPayStatus("unpaid");
     setInvoiceNumber("");
     setNotes("");
     setTownPlace("");
-    setBuySource("town");
+    const nextSource = defaultReceiveBuySource(usePosStore.getState().suppliers);
+    setBuySource(nextSource);
+    setPayStatus(nextSource === "supplier" ? "unpaid" : "paid");
     setMsgTone("ok");
     setMsg(t(lang, "restockSavedShort"));
     onSaved?.();

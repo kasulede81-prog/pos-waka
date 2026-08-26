@@ -70,8 +70,10 @@ export function ReceiveTotalsPanel({
             </label>
           ) : null}
 
+          <p className="mt-3 text-sm font-semibold text-muted-foreground">{t(lang, "restockPaidHint")}</p>
+
           {payStatus === "paid" ? (
-            <p className="mt-3 text-sm font-bold text-success-foreground">{t(lang, "restockPayPaidHint")}</p>
+            <p className="mt-2 text-sm font-bold text-success-foreground">{t(lang, "restockPayPaidHint")}</p>
           ) : null}
 
           {balanceOwedUgx != null && balanceOwedUgx > 0 ? (
