@@ -16,10 +16,10 @@ import { MobileSheetCartItems } from "./MobileSheetCartItems";
 import { VirtualizedDraftCartList } from "./VirtualizedDraftCartList";
 import { POS_CHECKOUT_SCROLL_CLASS } from "../../lib/posTouchInteraction";
 import { MOBILE_CHECKOUT_ITEMS_AUTO_SHOW_MAX } from "../../lib/posMobileCheckoutItems";
-import { isEditableTextTarget } from "../../lib/posKeyboardShortcuts";
 import {
   mapEventToNumericKeypad,
   setPosCashKeypadHardwareCapture,
+  shouldCaptureCashKeypadHardwareKey,
 } from "../../lib/desktopPosKeyHandlers";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
@@ -147,9 +147,8 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   useEffect(() => {
     setPosCashKeypadHardwareCapture(true);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!shouldCaptureCashKeypadHardwareKey(e)) return;
       if (keypadMode === "alpha") {
-        if (isEditableTextTarget(e.target)) return;
         if (e.key === "Enter" || e.code === "NumpadEnter") {
           e.preventDefault();
           e.stopImmediatePropagation();

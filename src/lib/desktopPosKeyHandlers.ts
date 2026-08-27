@@ -1,9 +1,20 @@
+import { isEditableTextTarget } from "./posKeyboardShortcuts";
+
 /**
  * Maps physical keyboard events to POS keypad / on-screen keyboard keys.
  * Does not mutate state — callers apply via existing checkout handlers.
  */
 
 export type DesktopKeypadKey = string;
+
+/** False while a form/modal field is focused — Backspace must edit that field, not cashInput. */
+export function shouldCaptureCashKeypadHardwareKey(
+  e: Pick<KeyboardEvent, "ctrlKey" | "metaKey" | "altKey" | "target">,
+): boolean {
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  if (isEditableTextTarget(e.target)) return false;
+  return true;
+}
 
 export const POS_CASH_KEYPAD_CAPTURE_ATTR = "posCashKeypad";
 

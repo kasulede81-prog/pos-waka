@@ -4,6 +4,7 @@ import {
   mapEventToAlphaKey,
   mapEventToNumericKeypad,
   setPosCashKeypadHardwareCapture,
+  shouldCaptureCashKeypadHardwareKey,
 } from "./desktopPosKeyHandlers";
 
 function keyEvent(key: string): KeyboardEvent {
@@ -35,5 +36,29 @@ describe("desktopPosKeyHandlers", () => {
     expect(isPosCashKeypadHardwareCapture()).toBe(true);
     setPosCashKeypadHardwareCapture(false);
     expect(isPosCashKeypadHardwareCapture()).toBe(false);
+  });
+
+  it("does not steal Backspace or digits from a focused money/discount input", () => {
+    const input = { tagName: "INPUT", isContentEditable: false } as unknown as EventTarget;
+    expect(
+      shouldCaptureCashKeypadHardwareKey({
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        target: input,
+      }),
+    ).toBe(false);
+  });
+
+  it("still captures hardware keys when focus is not in a field", () => {
+    const body = { tagName: "BODY", isContentEditable: false } as unknown as EventTarget;
+    expect(
+      shouldCaptureCashKeypadHardwareKey({
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        target: body,
+      }),
+    ).toBe(true);
   });
 });

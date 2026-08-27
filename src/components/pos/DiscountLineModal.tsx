@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Language, SaleLine } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { ModalSheet } from "../layout/ModalSheet";
@@ -19,12 +19,20 @@ type Props = {
 
 export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props) {
   const [newPriceInput, setNewPriceInput] = useState("");
+  const priceInputRef = useRef<HTMLInputElement>(null);
 
   const list = line ? listPriceForLine(line) : 0;
 
   useEffect(() => {
     if (!open || !line) return;
     setNewPriceInput(String(line.lineTotalUgx > 0 ? line.lineTotalUgx : list));
+    const id = window.requestAnimationFrame(() => {
+      const el = priceInputRef.current;
+      if (!el) return;
+      el.focus();
+      el.select();
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [open, line, list]);
 
   const quickPrices = useMemo(
@@ -75,8 +83,10 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
         <label className="mt-5 block">
           <span className="text-sm font-bold text-muted-foreground">{t(lang, "discountNewPrice")}</span>
           <MoneyInput
+            ref={priceInputRef}
             value={newPriceInput}
             onChange={(e) => setNewPriceInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            onFocus={(e) => e.currentTarget.select()}
             autoFocus
             className="mt-2 min-h-[60px] w-full rounded-2xl border-2 border-border px-4 text-center text-3xl font-black text-foreground outline-none ring-waka-300 focus:border-waka-400 focus:ring-2"
           />
