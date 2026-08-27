@@ -111,5 +111,36 @@ describe("planShelfRename", () => {
     expect(result.toKey).toBe("Drinks");
     expect(result.productIds).toEqual(["a"]);
     expect(result.layout.Drinks?.color).toBe("red");
+    expect(result.layout.drinks).toBeUndefined();
+    expect(result.orderKeys).toEqual(["Drinks"]);
+  });
+
+  it("drops case-variant layout and order keys while keeping unrelated empty shelves", () => {
+    const result = planShelfRename({
+      fromKey: "DELL",
+      toName: "DELL LAPTOPS",
+      products: [product("DELL", "a"), product("DELL", "b")],
+      layout: {
+        DELL: { color: "blue" },
+        Dell: { icon: "💻" },
+        dell: { color: "red" },
+        HP: { color: "orange" },
+        Accessories: { color: "green" },
+      },
+      orderKeys: ["dell", "HP", "DELL", "Accessories", "Dell"],
+      sellCategoryFilter: "Dell",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.toKey).toBe("DELL LAPTOPS");
+    expect(result.productIds).toEqual(["a", "b"]);
+    expect(result.layout["DELL LAPTOPS"]?.color).toBe("blue");
+    expect(result.layout.DELL).toBeUndefined();
+    expect(result.layout.Dell).toBeUndefined();
+    expect(result.layout.dell).toBeUndefined();
+    expect(result.layout.HP?.color).toBe("orange");
+    expect(result.layout.Accessories?.color).toBe("green");
+    expect(result.orderKeys).toEqual(["DELL LAPTOPS", "HP", "Accessories"]);
+    expect(result.sellCategoryFilter).toBe("DELL LAPTOPS");
   });
 });

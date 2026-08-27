@@ -106,18 +106,27 @@ export function planShelfRename(input: PlanShelfRenameInput): PlanShelfRenameRes
     };
   }
 
+  const isRetiredShelfKey = (key: string) => {
+    const trimmed = key.trim();
+    return Boolean(trimmed) && sameShelfKey(trimmed, fromKey) && trimmed !== toKey;
+  };
+
   const layout: Record<string, PosShelfLayoutConfig> = {};
+  const retiredLayout: PosShelfLayoutConfig[] = [];
   for (const [key, value] of Object.entries(input.layout)) {
-    if (key === fromKey) continue;
+    if (isRetiredShelfKey(key)) {
+      retiredLayout.push(value);
+      continue;
+    }
     layout[key] = value;
   }
-  const prev = input.layout[fromKey] ?? {};
+  const prev = input.layout[fromKey] ?? retiredLayout[0] ?? layout[toKey] ?? {};
   layout[toKey] = { ...prev, displayName: toKey };
 
   const seen = new Set<string>();
   const orderKeys: string[] = [];
   for (const key of input.orderKeys) {
-    const next = key === fromKey ? toKey : key;
+    const next = isRetiredShelfKey(key) ? toKey : key;
     if (seen.has(next)) continue;
     seen.add(next);
     orderKeys.push(next);
@@ -125,7 +134,9 @@ export function planShelfRename(input: PlanShelfRenameInput): PlanShelfRenameRes
   if (!seen.has(toKey)) orderKeys.push(toKey);
 
   const sellCategoryFilter =
-    input.sellCategoryFilter === fromKey ? toKey : input.sellCategoryFilter ?? undefined;
+    input.sellCategoryFilter != null && isRetiredShelfKey(input.sellCategoryFilter)
+      ? toKey
+      : input.sellCategoryFilter ?? undefined;
 
   return {
     ok: true,
