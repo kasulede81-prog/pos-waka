@@ -15,6 +15,8 @@ import { printProductLabels, exportProductLabelsHtml } from "../export/productLa
 import { saveExportedFile } from "../../../lib/fileDownload";
 import { ModalSheet } from "../../../components/layout/ModalSheet";
 import { WakaButton } from "../../../components/ui/wakaPrimitives";
+import { isCatalogHierarchyEnabled } from "../../../lib/catalogHierarchy";
+import { ShelfDestinationPicker } from "../../../components/stock/ShelfDestinationPicker";
 
 type Props = {
   lang: Language;
@@ -170,16 +172,25 @@ export function InventoryBulkToolbar({
         }
       >
         {sheet === "category" ? (
-          <select
-            value={selectValue}
-            onChange={(e) => setSelectValue(e.target.value)}
-            className="min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
-          >
-            <option value="">{t(lang, "inventoryBulkChooseShelf")}</option>
-            {stockCategoryPicklist.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          isCatalogHierarchyEnabled(preferences) ? (
+            <ShelfDestinationPicker
+              lang={lang}
+              options={stockCategoryPicklist}
+              value={selectValue}
+              onChange={setSelectValue}
+            />
+          ) : (
+            <select
+              value={selectValue}
+              onChange={(e) => setSelectValue(e.target.value)}
+              className="min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
+            >
+              <option value="">{t(lang, "inventoryBulkChooseShelf")}</option>
+              {stockCategoryPicklist.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          )
         ) : null}
         {sheet === "stock" ? (
           <div className="space-y-2">

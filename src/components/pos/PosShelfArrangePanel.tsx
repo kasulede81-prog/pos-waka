@@ -20,6 +20,7 @@ import {
 import { shelfGridTemplateColumns } from "../../lib/posShelfGridColumns";
 import { formatShelfProductCountLabel } from "../../lib/posShelfDisplayLabel";
 import { UNCATEGORIZED_SENTINEL } from "../../lib/productCategories";
+import { isCatalogHierarchyEnabled } from "../../lib/catalogHierarchy";
 import { POS_SHELF_PRESET_IDS, applyShelfPreset } from "../../lib/posShelfPresets";
 import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
 import { PosShelfTile } from "./PosShelfTile";
@@ -27,6 +28,7 @@ import { ShelfColorWheel } from "./ShelfColorWheel";
 import { ShelfScaleSlider } from "./ShelfScaleSlider";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
 import { WakaCheckbox } from "../enterprise/WakaCheckbox";
+import { EmptyShelvesPanel } from "./EmptyShelvesPanel";
 
 const PRESET_LABEL_KEY: Record<
   PosShelfPresetId,
@@ -70,6 +72,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   const setPreferences = usePosStore((s) => s.setPreferences);
   const renameShelfCategory = usePosStore((s) => s.renameShelfCategory);
   const deleteEmptyShelf = usePosStore((s) => s.deleteEmptyShelf);
+  const hierarchyOn = usePosStore((s) => isCatalogHierarchyEnabled(s.preferences));
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
@@ -221,14 +224,32 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   if (shelfCards.length === 0) {
     return (
-      <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-sm font-semibold text-warning-foreground">
-        {t(lang, "posEmptySub")}
-      </p>
+      <div className="space-y-4">
+        <section className="rounded-2xl border border-border bg-card p-3">
+          <WakaSwitch
+            checked={hierarchyOn}
+            onCheckedChange={(checked) => setPreferences({ catalogHierarchyEnabled: checked })}
+            label={<span className="text-sm font-black text-foreground">{t(lang, "catalogHierarchyEnable")}</span>}
+            description={<span className="text-sm font-medium text-muted-foreground">{t(lang, "catalogHierarchyEnableHint")}</span>}
+          />
+        </section>
+        <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-sm font-semibold text-warning-foreground">
+          {t(lang, "posEmptySub")}
+        </p>
+      </div>
     );
   }
 
   const content = (
     <div className="space-y-4">
+      <section className="rounded-2xl border border-border bg-card p-3">
+        <WakaSwitch
+          checked={hierarchyOn}
+          onCheckedChange={(checked) => setPreferences({ catalogHierarchyEnabled: checked })}
+          label={<span className="text-sm font-black text-foreground">{t(lang, "catalogHierarchyEnable")}</span>}
+          description={<span className="text-sm font-medium text-muted-foreground">{t(lang, "catalogHierarchyEnableHint")}</span>}
+        />
+      </section>
       <section className="rounded-2xl border border-border bg-card p-3">
         <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posShelfDefaultScaleTitle")}</p>
         <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "posShelfDefaultScaleSub")}</p>
@@ -473,6 +494,8 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
           ) : null}
         </section>
       ) : null}
+
+      <EmptyShelvesPanel lang={lang} />
     </div>
   );
 

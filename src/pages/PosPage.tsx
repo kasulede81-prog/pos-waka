@@ -75,6 +75,7 @@ import {
   isWebFullDesktopPos,
   useDesktopPosSplitLayout,
 } from "../lib/desktopPosTerminal";
+import { desktopCategoryRailModel, isSellHierarchyCatalogNav } from "../lib/desktopCategoryNav";
 import { PosSellProductCard } from "../components/pos/PosSellProductCard";
 import { PosSellCatalogShelfSection } from "../components/pos/PosSellCatalogShelfSection";
 import { PosExitConfirmModal } from "../components/pos/PosExitConfirmModal";
@@ -548,6 +549,12 @@ export function PosPage({ lang }: { lang: Language }) {
   const sellRowMatchesSearch = browse.sellRowMatchesSearch;
   const selectedShelfLabel = browse.selectedShelfLabel;
   const favoriteIdSet = browse.favoriteIdSet;
+  const hierarchyEnabled = browse.hierarchyEnabled;
+  const hierarchyAtRoot = browse.hierarchyAtRoot;
+  const hierarchyPath = browse.hierarchyPath;
+  const hierarchyFolderCards = browse.hierarchyFolderCards;
+  const openCatalogFolder = browse.openCatalogFolder;
+  const jumpCatalogPath = browse.jumpCatalogPath;
 
   const quickSellProductIds = preferences.posQuickSellProductIds ?? EMPTY_QUICK_SELL_IDS;
   const soldTodayByProduct = useMemo(() => scanTodaySalesHead(sales).unitsByProduct, [sales]);
@@ -1588,15 +1595,34 @@ export function PosPage({ lang }: { lang: Language }) {
     onFinishSale: finishSale,
   };
 
+  const hierarchyCatalogNav = isSellHierarchyCatalogNav({
+    catalogHierarchyEnabled: hierarchyEnabled,
+    searchQueryLength: sellSearchContext.q.length,
+    mobileSellFocus,
+    isDesktopCatalogUi,
+  });
+  const hierarchyCatalogNested = hierarchyCatalogNav && !hierarchyAtRoot;
+  const catalogLandingCards = hierarchyCatalogNav ? hierarchyFolderCards : shelfCards;
+
   const showCatalogShelfGrid =
-    catalogSellMode && shelfCards.length > 0 && sellSearchContext.q.length === 0;
+    catalogSellMode &&
+    sellSearchContext.q.length === 0 &&
+    (hierarchyCatalogNested || catalogLandingCards.length > 0);
   const showCatalogProductsBelow =
     showCatalogShelfGrid && sellCategoryKey !== CATEGORY_FILTER_ALL;
   /** Mobile + full desktop: open shelf products full-screen instead of below the grid. */
-  const catalogShelfDrillDown = catalogSellMode && showCatalogProductsBelow;
+  const catalogShelfDrillDown =
+    catalogSellMode && (hierarchyCatalogNested || (!hierarchyCatalogNav && showCatalogProductsBelow));
   const showCatalogSearchResults = catalogSellMode && sellSearchContext.q.length > 0;
 
-  const catalogShelfCards = shelfCards;
+  const catalogShelfCards = hierarchyCatalogNav ? hierarchyFolderCards : shelfCards;
+  const desktopRail = desktopCategoryRailModel({
+    hierarchyEnabled,
+    atRoot: hierarchyAtRoot,
+    sellCategoryKey,
+    hierarchyFolderCards,
+    legacyShelfCards: shelfCards,
+  });
 
   const quickProductChips = useMemo(() => {
     if (!catalogSellMode || isDesktopCatalogUi) return [];
@@ -1619,9 +1645,24 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const handleCatalogShelfTap = useCallback(
     (shelfKey: string) => {
+      if (hierarchyEnabled && (mobileSellFocus || isDesktopCatalogUi)) {
+        if (shelfKey === CATEGORY_FILTER_ALL) {
+          jumpCatalogPath(null);
+          return;
+        }
+        openCatalogFolder(shelfKey);
+        return;
+      }
       setSellCategoryFilter(shelfKey);
     },
-    [setSellCategoryFilter],
+    [
+      hierarchyEnabled,
+      mobileSellFocus,
+      isDesktopCatalogUi,
+      jumpCatalogPath,
+      openCatalogFolder,
+      setSellCategoryFilter,
+    ],
   );
 
   const renderCatalogProductGrid = () => {
@@ -1909,7 +1950,9 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {products.length === 0 && shelfCards.length === 0 ? (
+        {products.length === 0 &&
+        shelfCards.length === 0 &&
+        !(hierarchyCatalogNav && hierarchyFolderCards.length > 0) ? (
           <section className="rounded-3xl border-2 border-dashed border-border bg-muted p-8 text-center">
             <p className="text-2xl font-black text-foreground">{t(lang, "posEmptyTitle")}</p>
             <p className="mt-2 text-lg text-muted-foreground">{t(lang, "posEmptySub")}</p>
@@ -1949,9 +1992,23 @@ export function PosPage({ lang }: { lang: Language }) {
                 onBack={browse.backToShelves}
                 compact={mobileSellFocus}
                 className="shrink-0"
+                path={hierarchyCatalogNested ? hierarchyPath : undefined}
+                onPathSelect={hierarchyCatalogNested ? jumpCatalogPath : undefined}
               />
-              <div className="shrink-0">{renderCatalogProductGrid()}</div>
-              {mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? (
+              {hierarchyCatalogNested && hierarchyFolderCards.length > 0 ? (
+                <PosSellCatalogShelfSection
+                  lang={lang}
+                  shelves={hierarchyFolderCards}
+                  onShelfTap={handleCatalogShelfTap}
+                  nested
+                />
+              ) : null}
+              {hierarchyCatalogNested &&
+              filteredProducts.length === 0 &&
+              hierarchyFolderCards.length > 0 ? null : (
+                <div className="shrink-0">{renderCatalogProductGrid()}</div>
+              )}
+              {!hierarchyCatalogNav && mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? (
                 <PosMobileShelfContinue
                   lang={lang}
                   otherShelves={catalogShelfCards
@@ -1964,7 +2021,9 @@ export function PosPage({ lang }: { lang: Language }) {
                   addLabel={t(lang, "addToSale")}
                   lockedIds={lockedIds}
                 />
-              ) : mobileSellFocus && shouldShowMobileShelfEndCue(filteredProducts.length) ? (
+              ) : !hierarchyCatalogNav &&
+                mobileSellFocus &&
+                shouldShowMobileShelfEndCue(filteredProducts.length) ? (
                 <PosMobileShelfEndCue lang={lang} onBackToShelves={browse.backToShelves} />
               ) : null}
             </section>
@@ -2335,9 +2394,13 @@ export function PosPage({ lang }: { lang: Language }) {
           categoryRail={
             <DesktopCategoryRail
               lang={lang}
-              shelves={catalogShelfCards}
-              selectedKey={sellCategoryKey}
+              shelves={desktopRail.shelves}
+              selectedKey={desktopRail.selectedKey}
               onSelect={handleCatalogShelfTap}
+              preserveOrder={desktopRail.preserveOrder}
+              showAll={desktopRail.showAll}
+              showBack={desktopRail.showBack}
+              onBack={browse.backToShelves}
             />
           }
           quickActions={

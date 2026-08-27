@@ -13,12 +13,14 @@ import { filterTransferProducts } from "../lib/transferWorkspace";
 import {
   cancelTransferDraftCloud,
   dispatchTransferCloud,
+  listDestinationShopProductsCloud,
   listTransfersForShopCloud,
   queueTransferDispatch,
   queueTransferReceive,
   receiveTransferCloud,
   upsertTransferDraftCloud,
   type CloudTransfer,
+  type DestinationShopProductOption,
 } from "../lib/enterprise/stockTransferSync";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { hasSupabaseConfig } from "../lib/supabase";
@@ -38,9 +40,10 @@ export function InventoryTransferPage({ lang }: Props) {
   const activeShopId = getActiveShopId();
   const [branches, setBranches] = useState<UserShopRow[]>([]);
   const [destShopId, setDestShopId] = useState("");
+  const [destProducts, setDestProducts] = useState<DestinationShopProductOption[]>([]);
+  const [destProductsLoading, setDestProductsLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
-  const [destProductPick, setDestProductPick] = useState<Record<string, string>>({});
   const [draftTransferId, setDraftTransferId] = useState<string | null>(null);
   const [inTransit, setInTransit] = useState<CloudTransfer[]>([]);
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
@@ -48,6 +51,9 @@ export function InventoryTransferPage({ lang }: Props) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const sourceShopLabel = preferences.shopDisplayName?.trim() || (activeShopId ? `Shop ${activeShopId.slice(0, 8)}…` : "—");
+  const destShopLabel = branches.find((b) => b.shop_id === destShopId)?.shop_name || destShopId;
 
   const loadBranches = useCallback(async () => {
     const rows = await listUserShops();
@@ -60,14 +66,40 @@ export function InventoryTransferPage({ lang }: Props) {
     setInTransit(rows);
   }, [activeShopId]);
 
+  const loadDestProducts = useCallback(async (shopId: string) => {
+    if (!shopId) {
+      setDestProducts([]);
+      return;
+    }
+    setDestProductsLoading(true);
+    const rows = await listDestinationShopProductsCloud(shopId);
+    setDestProducts(rows);
+    setDestProductsLoading(false);
+  }, []);
+
   useEffect(() => {
     void loadBranches();
     void loadInTransit();
   }, [loadBranches, loadInTransit]);
 
+  useEffect(() => {
+    void loadDestProducts(destShopId);
+    setDraftLines((rows) =>
+      rows.map((r) => ({
+        ...r,
+        destinationProductId: "",
+      })),
+    );
+  }, [destShopId, loadDestProducts]);
+
   const sourceProducts = useMemo(
     () => filterTransferProducts(products, search),
     [products, search],
+  );
+
+  const selectedDestinationIds = useMemo(
+    () => new Set(draftLines.map((l) => l.destinationProductId).filter(Boolean)),
+    [draftLines],
   );
 
   const selectedTransfer = inTransit.find((x) => x.id === selectedTransferId) ?? null;
@@ -81,12 +113,18 @@ export function InventoryTransferPage({ lang }: Props) {
         ...prev,
         {
           sourceProductId: productId,
-          destinationProductId: destProductPick[productId] ?? "",
+          destinationProductId: "",
           quantity: 1,
           sourceName: p.name,
         },
       ];
     });
+  };
+
+  const setDestinationProduct = (sourceProductId: string, destinationProductId: string) => {
+    setDraftLines((rows) =>
+      rows.map((r) => (r.sourceProductId === sourceProductId ? { ...r, destinationProductId } : r)),
+    );
   };
 
   const saveDraft = async () => {
@@ -100,7 +138,11 @@ export function InventoryTransferPage({ lang }: Props) {
     }
     for (const line of draftLines) {
       if (!line.destinationProductId) {
-        setErr(lang === "lg" ? "Londa product ku dduuka erigenda." : "Map each line to a destination product ID.");
+        setErr(lang === "lg" ? "Londa product ku dduuka erigenda." : "Select a destination product for each line.");
+        return;
+      }
+      if (!destProducts.some((p) => p.id === line.destinationProductId)) {
+        setErr(lang === "lg" ? "Product erigenda si ya dduuka eryo." : "Destination product must belong to the selected branch.");
         return;
       }
       if (line.quantity <= 0) {
@@ -212,8 +254,14 @@ export function InventoryTransferPage({ lang }: Props) {
       <PageHeader lang={lang} title={t(lang, "xferPageTitle")} subtitle={t(lang, "xferPageSub")} />
       <TransferOperationShell
         lang={lang}
-        title={preferences.shopDisplayName?.trim() || "Transfer"}
-        subtitle={activeShopId ? `Shop ${activeShopId.slice(0, 8)}…` : undefined}
+        title={sourceShopLabel}
+        subtitle={
+          destShopId
+            ? `${lang === "lg" ? "Okuva" : "From"} ${sourceShopLabel} → ${lang === "lg" ? "Okugenda" : "To"} ${destShopLabel}`
+            : lang === "lg"
+              ? `Edduuka eririwo: ${sourceShopLabel}`
+              : `Active branch: ${sourceShopLabel}`
+        }
         error={err}
         success={msg}
         footer={
@@ -238,7 +286,9 @@ export function InventoryTransferPage({ lang }: Props) {
         }
       >
         <section className="space-y-2 rounded-2xl border border-border p-4">
-          <p className="text-sm font-black">{lang === "lg" ? "Edduuka erigenda" : "Destination branch"}</p>
+          <p className="text-sm font-black">{lang === "lg" ? "Edduuka eririwo (source)" : "Source branch (active)"}</p>
+          <p className="rounded-xl bg-muted/40 px-3 py-3 text-sm font-semibold">{sourceShopLabel}</p>
+          <p className="pt-2 text-sm font-black">{lang === "lg" ? "Edduuka erigenda" : "Destination branch"}</p>
           <select
             className="w-full min-h-[48px] rounded-xl border border-border px-3"
             value={destShopId}
@@ -252,6 +302,17 @@ export function InventoryTransferPage({ lang }: Props) {
               </option>
             ))}
           </select>
+          {destShopId ? (
+            <p className="text-xs font-semibold text-muted-foreground">
+              {destProductsLoading
+                ? lang === "lg"
+                  ? "Okukola products…"
+                  : "Loading destination products…"
+                : lang === "lg"
+                  ? `Products ${destProducts.length} ku dduuka erigenda`
+                  : `${destProducts.length} products at destination`}
+            </p>
+          ) : null}
         </section>
 
         <TransferProductSelector
@@ -269,20 +330,37 @@ export function InventoryTransferPage({ lang }: Props) {
             {draftLines.map((line) => (
               <div key={line.sourceProductId} className="grid gap-2 rounded-xl bg-muted/30 p-3 md:grid-cols-3">
                 <p className="text-sm font-bold">{line.sourceName}</p>
-                <input
+                <select
                   className="min-h-[44px] rounded-lg border border-border px-3"
-                  placeholder={lang === "lg" ? "Product ID erigenda" : "Destination product UUID"}
                   value={line.destinationProductId}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setDestProductPick((m) => ({ ...m, [line.sourceProductId]: v }));
-                    setDraftLines((rows) =>
-                      rows.map((r) =>
-                        r.sourceProductId === line.sourceProductId ? { ...r, destinationProductId: v } : r,
-                      ),
+                  disabled={busy || !destShopId || destProductsLoading}
+                  onChange={(e) => setDestinationProduct(line.sourceProductId, e.target.value)}
+                >
+                  <option value="">
+                    {!destShopId
+                      ? lang === "lg"
+                        ? "Sooka olonde edduuka…"
+                        : "Select destination branch first…"
+                      : destProductsLoading
+                        ? lang === "lg"
+                          ? "Loading…"
+                          : "Loading…"
+                        : lang === "lg"
+                          ? "Londa product erigenda…"
+                          : "Select destination product…"}
+                  </option>
+                  {destProducts.map((p) => {
+                    const takenByOther =
+                      selectedDestinationIds.has(p.id) && line.destinationProductId !== p.id;
+                    return (
+                      <option key={p.id} value={p.id} disabled={takenByOther}>
+                        {p.name}
+                        {p.sku ? ` · ${p.sku}` : ""} · stock {p.stockOnHand}
+                        {takenByOther ? (lang === "lg" ? " (eyakozesebwa)" : " (in use)") : ""}
+                      </option>
                     );
-                  }}
-                />
+                  })}
+                </select>
                 <input
                   type="number"
                   min={1}

@@ -2176,6 +2176,22 @@ export type PosShelfColor = "default" | "red" | "orange" | "blue" | "green" | "p
 /** Optional shelf badge on Sell screen. */
 export type PosShelfBadge = "fast_moving" | "promotion";
 
+/**
+ * Shop-scoped catalog folder overlay. Assignment identity is still
+ * `Product.category` via `legacyShelfKey`. Ignored when hierarchy is off.
+ */
+export type CatalogNode = {
+  id: string;
+  shopId: string;
+  parentId: string | null;
+  /** Matches Product.category. Not a display-only alias. */
+  legacyShelfKey: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 /** Per-shelf visual layout (keyed by category name or sentinel). */
 export type PosShelfLayoutConfig = {
   displayName?: string;
@@ -2317,6 +2333,13 @@ export type ShopPreferences = {
   posPinnedShelfKeys?: string[];
   /** Per-shelf display overrides (name, color, icon, size, featured). */
   posShelfLayout?: Record<string, PosShelfLayoutConfig>;
+  /**
+   * Optional product-folder overlay. Missing / false = existing flat shelves.
+   * Sell/Stock nested browse is not gated on this in v1 — Add Product picker is.
+   */
+  catalogHierarchyEnabled?: boolean;
+  /** Hierarchy overlay nodes. Ignored by Sell/Stock discovery while the flag is off. */
+  posCatalogNodes?: CatalogNode[];
   /** Product ids on the Quick Sell strip (one-tap add on Sell screen). */
   posQuickSellProductIds?: string[];
   /** Last applied shop shelf preset id. */

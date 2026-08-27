@@ -3,7 +3,7 @@ import clsx from "clsx";
 import type { Language, PharmacyPackaging } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
-import { CategoryShelfPicker } from "./CategoryShelfPicker";
+import { ShelfDestinationPicker } from "./ShelfDestinationPicker";
 import { MedicineFormSelect } from "./MedicineFormSelect";
 import {
   buildPharmacyMasterFromState,
@@ -481,7 +481,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
             <div>
               <p className={labelClass}>{t(lang, "pharmacyTerm_medicineCategory")} *</p>
               <div className="mt-2">
-                <CategoryShelfPicker
+                <ShelfDestinationPicker
                   lang={lang}
                   options={categoryOptions}
                   value={category}

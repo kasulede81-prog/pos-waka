@@ -3,7 +3,7 @@ import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { WIZARD_INPUT_TEXT } from "../wizard/wizardTokens";
 import { EditorSection } from "./EditorSection";
-import { CategoryShelfPicker } from "../CategoryShelfPicker";
+import { ShelfDestinationPicker } from "../ShelfDestinationPicker";
 import { MedicineFormSelect } from "../MedicineFormSelect";
 
 type Props = {
@@ -58,7 +58,7 @@ export function EditorIdentitySection({
 
       <div>
         <p className={labelClass}>{shelfLabel}</p>
-        <CategoryShelfPicker
+        <ShelfDestinationPicker
           lang={lang}
           options={categorySuggestions ?? []}
           value={category}

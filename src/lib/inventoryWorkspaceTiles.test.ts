@@ -4,32 +4,39 @@ import {
   resolveInventoryExtensionTiles,
   resolveInventoryNavTiles,
   resolveInventoryOverviewQuickActions,
+  resolveInventoryQuickActions,
 } from "./inventoryWorkspaceTiles";
 
-describe("inventoryWorkspaceTiles (Phase 27.1)", () => {
-  it("keeps Transfer out of production navigation while disabled", () => {
-    expect(INVENTORY_TRANSFER_ENABLED).toBe(false);
+describe("inventoryWorkspaceTiles (MB-4C transfer enabled)", () => {
+  it("exposes Transfer in production navigation with enterprise.transfers gate", () => {
+    expect(INVENTORY_TRANSFER_ENABLED).toBe(true);
     const nav = resolveInventoryNavTiles("retail", "/stock");
-    expect(nav.some((t) => t.id === "transfer")).toBe(false);
+    const transfer = nav.find((t) => t.id === "transfer");
+    expect(transfer).toMatchObject({
+      href: "/stock/transfer",
+      perm: "enterprise.transfers",
+    });
     const quick = resolveInventoryOverviewQuickActions("retail");
-    expect(quick.some((a) => a.id === "transfer")).toBe(false);
+    expect(quick.find((a) => a.id === "transfer")?.perm).toBe("enterprise.transfers");
+    expect(resolveInventoryQuickActions("retail").find((a) => a.id === "transfer")?.href).toBe("/stock/transfer");
   });
 
   it("exposes Add Product and Receive on the hub overview quick actions", () => {
     const quick = resolveInventoryOverviewQuickActions("retail");
     expect(quick.map((a) => a.id)).toEqual(
-      expect.arrayContaining(["receive", "newProduct", "adjust", "count"]),
+      expect.arrayContaining(["receive", "newProduct", "adjust", "count", "transfer"]),
     );
     expect(quick.find((a) => a.id === "newProduct")?.primary).toBe(true);
     expect(quick.find((a) => a.id === "receive")?.primary).toBe(true);
   });
 
-  it("mounts completed hub destinations only", () => {
+  it("mounts completed hub destinations including transfer", () => {
     const nav = resolveInventoryNavTiles("retail", "/stock");
     expect(nav.map((t) => t.id)).toEqual([
       "products",
       "purchases",
       "count",
+      "transfer",
       "movements",
       "categories",
       "suppliers",

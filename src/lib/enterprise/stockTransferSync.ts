@@ -103,6 +103,52 @@ export async function listTransfersForShopCloud(
   return Array.isArray(data) ? (data as CloudTransfer[]) : [];
 }
 
+export type DestinationShopProductOption = {
+  id: string;
+  name: string;
+  sku: string;
+  stockOnHand: number;
+};
+
+/** Read-only destination-shop catalog for transfer mapping (RLS: user_can_access_shop). */
+export async function listDestinationShopProductsCloud(
+  destinationShopId: string,
+): Promise<DestinationShopProductOption[]> {
+  if (!supabase || !destinationShopId) return [];
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, name, sku, stock_on_hand, is_active, shop_id")
+    .eq("shop_id", destinationShopId)
+    .eq("is_active", true)
+    .order("name", { ascending: true })
+    .limit(500);
+  if (error || !Array.isArray(data)) return [];
+  return filterDestinationShopProductRows(destinationShopId, data);
+}
+
+/** Pure filter: never return a product row that does not belong to the destination shop. */
+export function filterDestinationShopProductRows(
+  destinationShopId: string,
+  rows: unknown[],
+): DestinationShopProductOption[] {
+  return rows
+    .map((row) => row as {
+      id?: string;
+      name?: string | null;
+      sku?: string | null;
+      stock_on_hand?: number | null;
+      shop_id?: string | null;
+      is_active?: boolean | null;
+    })
+    .filter((row) => String(row.shop_id ?? "") === destinationShopId && row.is_active !== false && Boolean(row.id))
+    .map((r) => ({
+      id: String(r.id),
+      name: String(r.name ?? "").trim() || String(r.id).slice(0, 8),
+      sku: String(r.sku ?? "").trim(),
+      stockOnHand: Number(r.stock_on_hand ?? 0),
+    }));
+}
+
 /** Queue dispatch for offline-first retry (MB-1 shop stamp at enqueue). */
 export async function queueTransferDispatch(transferId: string, fromShopId?: string | null): Promise<void> {
   const shopId = fromShopId ?? getActiveShopId();

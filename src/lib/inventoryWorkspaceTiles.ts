@@ -57,10 +57,10 @@ export function inventoryWorkspaceBasePath(mode: InventoryWorkspaceMode): string
 }
 
 /**
- * Stock Transfer UI exists as a placeholder only (`InventoryTransferPage`).
- * Keep false until persistence is shipped — never surface Transfer in production nav.
+ * Stock Transfer UI is productionized (MB-4C) on the deployed migration 167 engine.
+ * Keep gated by `enterprise.transfers` on tiles and routes.
  */
-export const INVENTORY_TRANSFER_ENABLED = false;
+export const INVENTORY_TRANSFER_ENABLED = true;
 
 function tabHref(base: string, tab: string, extra?: Record<string, string>): string {
   const p = new URLSearchParams({ tab, ...extra });
@@ -123,7 +123,7 @@ export function resolveInventoryNavTiles(
       labelKey: "iwNavTransfer",
       Icon: ArrowLeftRight,
       href: "/stock/transfer",
-      perm: "stock.view",
+      perm: "enterprise.transfers",
     });
   }
   if (mode === "wholesale") {
@@ -174,7 +174,7 @@ export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMo
       labelKey: "iwQuickTransfer",
       Icon: ArrowLeftRight,
       href: "/stock/transfer",
-      perm: "stock.view",
+      perm: "enterprise.transfers",
     });
   }
   return actions;
@@ -233,7 +233,7 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
       labelKey: "iwQuickTransfer",
       Icon: ArrowLeftRight,
       href: "/stock/transfer",
-      perm: "stock.view",
+      perm: "enterprise.transfers",
     });
   }
 

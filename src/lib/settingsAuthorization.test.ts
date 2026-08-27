@@ -58,6 +58,8 @@ describe("settingsAuthorization — permission map", () => {
     expect(requiredPermissionsForPreferencesPatch({ posPinnedShelfKeys: ["cat:General"] })).toEqual([
       "settings.shop",
     ]);
+    expect(requiredPermissionsForPreferencesPatch({ catalogHierarchyEnabled: true })).toEqual(["settings.shop"]);
+    expect(requiredPermissionsForPreferencesPatch({ posCatalogNodes: [] })).toEqual(["settings.shop"]);
     expect(authorizePreferencesPatch(actor("owner"), { posPinnedShelfKeys: ["cat:General"] }).ok).toBe(true);
     expect(authorizePreferencesPatch(actor("manager"), { posPinnedShelfKeys: ["cat:General"] }).ok).toBe(false);
   });

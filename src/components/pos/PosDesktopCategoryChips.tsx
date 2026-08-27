@@ -6,6 +6,7 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { CATEGORY_FILTER_ALL } from "../../lib/productCategories";
 import type { PosShelfCard } from "../../lib/posShelfOrder";
+import { desktopCategoryShelvesForDisplay } from "../../lib/desktopCategoryNav";
 
 type Props = {
   lang: Language;
@@ -13,17 +14,31 @@ type Props = {
   selectedKey: string;
   onSelect: (key: string) => void;
   canAddProduct?: boolean;
+  preserveOrder?: boolean;
+  showBack?: boolean;
+  onBack?: () => void;
+  showAll?: boolean;
 };
 
 const VISIBLE_DESKTOP = 10;
 
 /** Horizontal shelf/category chips for enterprise desktop POS. */
-export function PosDesktopCategoryChips({ lang, shelves, selectedKey, onSelect, canAddProduct }: Props) {
+export function PosDesktopCategoryChips({
+  lang,
+  shelves,
+  selectedKey,
+  onSelect,
+  canAddProduct,
+  preserveOrder = false,
+  showBack = false,
+  onBack,
+  showAll = true,
+}: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const sorted = useMemo(
-    () => [...shelves].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" })),
-    [shelves],
+    () => desktopCategoryShelvesForDisplay(shelves, preserveOrder),
+    [shelves, preserveOrder],
   );
 
   const visible = sorted.slice(0, VISIBLE_DESKTOP);
@@ -39,9 +54,16 @@ export function PosDesktopCategoryChips({ lang, shelves, selectedKey, onSelect, 
 
   return (
     <div className="flex min-h-[2.25rem] items-center gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
-      <button type="button" onClick={() => onSelect(CATEGORY_FILTER_ALL)} className={chipClass(selectedKey === CATEGORY_FILTER_ALL)}>
-        {t(lang, "posCategoryAll")}
-      </button>
+      {showBack ? (
+        <button type="button" onClick={() => onBack?.()} className={chipClass(false)}>
+          ← {t(lang, "posSellCategoryHeading")}
+        </button>
+      ) : null}
+      {showAll ? (
+        <button type="button" onClick={() => onSelect(CATEGORY_FILTER_ALL)} className={chipClass(selectedKey === CATEGORY_FILTER_ALL)}>
+          {t(lang, "posCategoryAll")}
+        </button>
+      ) : null}
 
       {visible.map((shelf) => (
         <button

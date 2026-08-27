@@ -89,6 +89,7 @@ import {
   defaultHospitalityFloor,
   defaultKitchenEnabledForBusinessType,
   isHospitalityBusinessType,
+  isHospitalityMode,
 } from "../lib/hospitality";
 import { sessionWaiterAttribution } from "../lib/waiterAttribution";
 import { isPharmacyBusinessType, isPharmacyMode } from "../lib/pharmacy";
@@ -285,6 +286,19 @@ import { isLocalStockFresh } from "../lib/stockFreshness";
 import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } from "../lib/settingsAuthorization";
 import { planShelfRename } from "../lib/renameShelfCategory";
 import { planDeleteEmptyShelf } from "../lib/deleteEmptyShelf";
+import {
+  bulkDeleteEmptyShelvesPreferencePatch,
+  planBulkDeleteEmptyShelves,
+} from "../lib/planBulkDeleteEmptyShelves";
+import { planRefillEmptyShelf } from "../lib/emptyShelfManager";
+import {
+  catalogShopIdFromPreferences,
+  isCatalogHierarchyEnabled,
+  normalizeCatalogNodes,
+  planCreateCatalogShelf,
+  remapCatalogNodesForRename,
+  retireCatalogNodesForDeletedShelf,
+} from "../lib/catalogHierarchy";
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
@@ -700,6 +714,24 @@ export type PosState = {
   renameShelfCategory: (fromKey: string, toName: string) => { ok: boolean; errorKey?: string; toKey?: string };
   /** Owner/manager: remove an empty shelf from layout/order only. Never mutates products. */
   deleteEmptyShelf: (shelfKey: string) => { ok: boolean; errorKey?: string };
+  /** Owner/manager: remove several empty shelves in one preference update. Never mutates products. */
+  deleteEmptyShelves: (shelfKeys: string[]) => {
+    ok: boolean;
+    errorKey?: string;
+    deletedCount?: number;
+    skippedOccupiedCount?: number;
+    skippedBlockedCount?: number;
+  };
+  /** Catalog move onto an empty shelf. Only Product.category changes; stock is untouched. */
+  refillEmptyShelf: (
+    destinationKey: string,
+    productIds: string[],
+  ) => { ok: boolean; errorKey?: string; movedCount: number; failedCount: number };
+  /** Persist a catalog folder/shelf without creating a product or stock. */
+  createCatalogShelf: (input: {
+    name: string;
+    parentId?: string | null;
+  }) => { ok: boolean; errorKey?: string; legacyShelfKey?: string };
   addStaffAccount: (input: {
     name: string;
     username?: string;
@@ -2140,6 +2172,13 @@ export const usePosStore = create<PosState>((set, get) => {
     if (plan.sellCategoryFilter !== undefined) {
       prefPatch.posSellCategoryFilter = plan.sellCategoryFilter;
     }
+    if (!plan.unchanged) {
+      prefPatch.posCatalogNodes = remapCatalogNodesForRename(
+        state.preferences.posCatalogNodes ?? [],
+        plan.fromKey,
+        plan.toKey,
+      );
+    }
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
       snapshot,
@@ -2198,6 +2237,11 @@ export const usePosStore = create<PosState>((set, get) => {
     if (plan.clearSellCategoryFilter) {
       prefPatch.posSellCategoryFilter = null;
     }
+    const existingNodes = state.preferences.posCatalogNodes ?? [];
+    const retiredNodes = retireCatalogNodesForDeletedShelf(existingNodes, plan.shelfKey);
+    if (retiredNodes !== existingNodes) {
+      prefPatch.posCatalogNodes = retiredNodes;
+    }
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
       snapshot,
@@ -2218,6 +2262,123 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: { ...s.preferences, ...prefPatch },
     }));
     return { ok: true };
+  },
+
+  deleteEmptyShelves: (shelfKeys) => {
+    const denied = denyUnlessEffectivePermission("shelves.customize", "deleteEmptyShelves");
+    if (denied) return { ok: false, errorKey: denied.errorKey, deletedCount: 0, skippedOccupiedCount: 0, skippedBlockedCount: 0 };
+
+    const state = get();
+    const plan = planBulkDeleteEmptyShelves({
+      shelfKeys,
+      products: state.products,
+      layout: state.preferences.posShelfLayout ?? {},
+      orderKeys: state.preferences.posPinnedShelfKeys ?? [],
+      sellCategoryFilter: state.preferences.posSellCategoryFilter,
+      nodes: state.preferences.posCatalogNodes ?? [],
+      hierarchyEnabled: isCatalogHierarchyEnabled(state.preferences),
+      shopId: catalogShopIdFromPreferences(state.preferences),
+      pharmacyMode: isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled),
+      hospitalityMode: isHospitalityMode(state.preferences.businessType, state.preferences.hospitalityModeEnabled),
+      businessType: state.preferences.businessType,
+    });
+    const skippedOccupiedCount = plan.skipped.filter((s) => s.reason === "occupied").length;
+    const skippedBlockedCount = plan.skipped.filter((s) => s.reason !== "occupied" && s.reason !== "emptyKey").length;
+    const prefPatch = bulkDeleteEmptyShelvesPreferencePatch(plan);
+    if (!prefPatch) {
+      return {
+        ok: true,
+        deletedCount: 0,
+        skippedOccupiedCount,
+        skippedBlockedCount,
+      };
+    }
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: state.preferences.staffAccounts ?? [],
+    });
+    if (!prefAuth.ok) {
+      pushAudit("auth_forbidden", "Denied deleteEmptyShelves preferences", {
+        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
+        action: "deleteEmptyShelves",
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: prefAuth.errorKey,
+      });
+      return { ok: false, errorKey: prefAuth.errorKey, deletedCount: 0, skippedOccupiedCount, skippedBlockedCount };
+    }
+
+    set((s) => ({
+      preferences: { ...s.preferences, ...prefPatch },
+    }));
+    return {
+      ok: true,
+      deletedCount: plan.deletedKeys.length,
+      skippedOccupiedCount,
+      skippedBlockedCount,
+    };
+  },
+
+  refillEmptyShelf: (destinationKey, productIds) => {
+    const plan = planRefillEmptyShelf({
+      destinationKey,
+      productIds,
+      products: get().products,
+    });
+    if (!plan.ok) return { ok: false, errorKey: plan.errorKey, movedCount: 0, failedCount: 0 };
+
+    let movedCount = 0;
+    let failedCount = plan.skippedMissing.length;
+    for (const productId of plan.moveIds) {
+      const r = get().updateProduct(productId, { category: plan.destinationKey });
+      if (r.ok) movedCount += 1;
+      else failedCount += 1;
+    }
+    return { ok: true, movedCount, failedCount };
+  },
+
+  createCatalogShelf: (input) => {
+    const denied = denyUnlessEffectivePermission("shelves.customize", "createCatalogShelf");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const shopId = catalogShopIdFromPreferences(state.preferences);
+    const plan = planCreateCatalogShelf({
+      name: input.name,
+      parentId: input.parentId ?? null,
+      nodes: state.preferences.posCatalogNodes ?? [],
+      shopId,
+      layout: state.preferences.posShelfLayout ?? {},
+      orderKeys: state.preferences.posPinnedShelfKeys ?? [],
+    });
+    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
+
+    const prefPatch: Partial<ShopPreferences> = {
+      posCatalogNodes: plan.nodes,
+      posShelfLayout: plan.layout,
+      posPinnedShelfKeys: plan.orderKeys,
+    };
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: state.preferences.staffAccounts ?? [],
+    });
+    if (!prefAuth.ok) {
+      pushAudit("auth_forbidden", "Denied createCatalogShelf preferences", {
+        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
+        action: "createCatalogShelf",
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: prefAuth.errorKey,
+      });
+      return { ok: false, errorKey: prefAuth.errorKey };
+    }
+
+    set((s) => ({
+      preferences: { ...s.preferences, ...prefPatch },
+    }));
+    return { ok: true, legacyShelfKey: plan.node.legacyShelfKey };
   },
 
   addStaffAccount: async (input) => {
@@ -7829,6 +7990,11 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
       : base.posPinnedShelfKeys ?? [],
     posShelfLayout:
       p.posShelfLayout === undefined ? (base.posShelfLayout ?? {}) : normalizePosShelfLayoutFromStore(p.posShelfLayout),
+    catalogHierarchyEnabled: p.catalogHierarchyEnabled === true,
+    posCatalogNodes:
+      p.posCatalogNodes === undefined
+        ? (base.posCatalogNodes ?? [])
+        : normalizeCatalogNodes(p.posCatalogNodes, String(p.wakaShopId ?? base.wakaShopId ?? "local")),
     posQuickSellProductIds: Array.isArray(p.posQuickSellProductIds)
       ? (p.posQuickSellProductIds as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 24)
       : base.posQuickSellProductIds ?? [],

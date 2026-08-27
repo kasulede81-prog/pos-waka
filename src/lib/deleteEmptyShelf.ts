@@ -25,17 +25,31 @@ export type PlanDeleteEmptyShelfErr = {
 
 export type PlanDeleteEmptyShelfResult = PlanDeleteEmptyShelfOk | PlanDeleteEmptyShelfErr;
 
-function sameShelfKey(a: string, b: string): boolean {
-  return a.localeCompare(b, undefined, { sensitivity: "base" }) === 0;
-}
-
 function isReservedShelfKey(key: string): boolean {
   return key === QUICK_SELL_SHELF_KEY || key === UNCATEGORIZED_SENTINEL;
 }
 
+export function sameShelfIdentity(a: string, b: string): boolean {
+  return a.localeCompare(b, undefined, { sensitivity: "base" }) === 0;
+}
+
+export function isReservedEmptyShelfKey(key: string): boolean {
+  return isReservedShelfKey(key.trim());
+}
+
+/** Occupancy used by Delete Empty Shelf — includes archived rows still in `products`. */
+export function shelfIdentityIsOccupied(products: readonly Product[], shelfKey: string): boolean {
+  const key = shelfKey.trim();
+  if (!key) return false;
+  return products.some((p) => {
+    const cat = (p.category ?? "").trim();
+    return Boolean(cat) && sameShelfIdentity(cat, key);
+  });
+}
+
 function isRetiredShelfKey(key: string, shelfKey: string): boolean {
   const trimmed = key.trim();
-  return Boolean(trimmed) && sameShelfKey(trimmed, shelfKey);
+  return Boolean(trimmed) && sameShelfIdentity(trimmed, shelfKey);
 }
 
 /**
@@ -48,11 +62,9 @@ export function planDeleteEmptyShelf(input: PlanDeleteEmptyShelfInput): PlanDele
   if (!shelfKey) return { ok: false, errorKey: "shelfDeleteEmpty" };
   if (isReservedShelfKey(shelfKey)) return { ok: false, errorKey: "shelfDeleteReserved" };
 
-  const blocking = input.products.some((p) => {
-    const cat = (p.category ?? "").trim();
-    return Boolean(cat) && sameShelfKey(cat, shelfKey);
-  });
-  if (blocking) return { ok: false, errorKey: "shelfDeleteNotEmpty" };
+  if (shelfIdentityIsOccupied(input.products, shelfKey)) {
+    return { ok: false, errorKey: "shelfDeleteNotEmpty" };
+  }
 
   const layout: Record<string, PosShelfLayoutConfig> = {};
   for (const [key, value] of Object.entries(input.layout)) {

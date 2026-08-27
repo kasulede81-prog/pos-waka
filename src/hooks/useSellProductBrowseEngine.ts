@@ -4,7 +4,7 @@ import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
 } from "../lib/productCategories";
-import { buildPosShelfDisplayCards } from "../lib/posShelfLayout";
+import { buildPosShelfDisplayCards, type PosShelfDisplayCard } from "../lib/posShelfLayout";
 import { posSearchAliases } from "../lib/pharmacyUx";
 import {
   filterIndexedProductsForSellView,
@@ -14,9 +14,23 @@ import {
 import { useReconciledProductSellSearchIndex } from "./useReconciledProductSearchIndex";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import {
+  catalogShopIdFromPreferences,
+  isCatalogHierarchyEnabled,
+} from "../lib/catalogHierarchy";
+import {
+  buildCatalogBrowseIndex,
+  jumpCatalogBrowseToIdentity,
+  popCatalogBrowseIdentity,
+  pushCatalogBrowseIdentity,
+  resolveSellCatalogHierarchyView,
+  type CatalogBrowsePathEntry,
+} from "../lib/catalogBrowse";
 
 const EMPTY_SHELF_LAYOUT: Record<string, never> = {};
 const EMPTY_SHELF_ORDER: string[] = [];
+const EMPTY_CATALOG_NODES: never[] = [];
+const EMPTY_HIERARCHY_CARDS: PosShelfDisplayCard[] = [];
 const MAX_RECENT_SEARCHES = 4;
 
 export type SellProductBrowseEngineOptions = {
@@ -37,6 +51,9 @@ export type SellProductBrowseEngineOptions = {
 /**
  * Shared Sell shelf/product browse engine (Phase 32.3).
  * Retail PosPage and Pharmacy dispense share this runtime; business rules stay outside.
+ *
+ * Hierarchy folder navigation is session-only (mobile H2b + desktop/Electron H2c).
+ * Flag-off still uses buildPosShelfDisplayCards + exact Product.category filtering.
  */
 export function useSellProductBrowseEngine({
   lang,
@@ -51,10 +68,13 @@ export function useSellProductBrowseEngine({
   const [internalSearchQuery, setInternalSearchQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [localCategoryKey, setLocalCategoryKey] = useState(initialCategoryKey);
+  const [hierarchyPathIds, setHierarchyPathIds] = useState<string[]>([]);
 
   const searchControlled = typeof controlledSetSearchQuery === "function";
   const searchQuery = searchControlled ? (controlledSearchQuery ?? "") : internalSearchQuery;
   const setSearchQuery = searchControlled ? controlledSetSearchQuery! : setInternalSearchQuery;
+
+  const hierarchyEnabled = isCatalogHierarchyEnabled(preferences);
 
   const sellCategoryKey = ephemeralCategory
     ? localCategoryKey
@@ -64,6 +84,8 @@ export function useSellProductBrowseEngine({
   const shelfLayout = preferences.posShelfLayout ?? EMPTY_SHELF_LAYOUT;
   const shelfDefaultScale = preferences.posShelfDefaultScale ?? 35;
   const favoriteIdSet = useMemo(() => new Set(preferences.favoriteProductIds ?? []), [preferences.favoriteProductIds]);
+  const catalogNodes = preferences.posCatalogNodes ?? EMPTY_CATALOG_NODES;
+  const catalogShopId = catalogShopIdFromPreferences(preferences);
 
   const setSellCategoryFilter = useCallback(
     (next: string) => {
@@ -91,6 +113,7 @@ export function useSellProductBrowseEngine({
 
   const clearSellView = useCallback(() => {
     setSellCategoryFilter(CATEGORY_FILTER_ALL);
+    setHierarchyPathIds([]);
     setSearchQuery("");
   }, [setSellCategoryFilter, setSearchQuery]);
 
@@ -134,16 +157,49 @@ export function useSellProductBrowseEngine({
     [products, lang, shelfLayout, shelfOrderKeys, shelfDefaultScale],
   );
 
+  const catalogBrowseIndex = useMemo(() => {
+    if (!hierarchyEnabled) return null;
+    return buildCatalogBrowseIndex({
+      products,
+      layout: shelfLayout,
+      orderKeys: shelfOrderKeys,
+      nodes: catalogNodes,
+      shopId: catalogShopId,
+      uncategorizedLabel: t(lang, "posNoShelf"),
+    });
+  }, [hierarchyEnabled, products, shelfLayout, shelfOrderKeys, catalogNodes, catalogShopId, lang]);
+
+  const hierarchyView = useMemo(
+    () =>
+      resolveSellCatalogHierarchyView({
+        enabled: hierarchyEnabled,
+        path: hierarchyPathIds,
+        searchQuery: sellSearchContext.q,
+        index: catalogBrowseIndex,
+        layout: shelfLayout,
+        defaultScale: shelfDefaultScale,
+      }),
+    [
+      hierarchyEnabled,
+      hierarchyPathIds,
+      sellSearchContext.q,
+      catalogBrowseIndex,
+      shelfLayout,
+      shelfDefaultScale,
+    ],
+  );
+
   const hasSellViewFilter = sellCategoryKey !== CATEGORY_FILTER_ALL || sellSearchContext.q.length > 0;
   const showCatalogShelfGrid = sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
   const catalogShelfDrillDown = sellCategoryKey !== CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
 
   const selectedShelfLabel =
-    sellCategoryKey === UNCATEGORIZED_SENTINEL
+    hierarchyView?.currentLabel ??
+    (sellCategoryKey === UNCATEGORIZED_SENTINEL
       ? t(lang, "posNoShelf")
       : sellCategoryKey === CATEGORY_FILTER_ALL
         ? t(lang, "posCategoryAll")
-        : sellCategoryKey;
+        : sellCategoryKey);
 
   const commitSearch = useCallback(
     (raw: string) => {
@@ -154,9 +210,48 @@ export function useSellProductBrowseEngine({
     [],
   );
 
+  const applyHierarchyPath = useCallback(
+    (nextPath: string[]) => {
+      setHierarchyPathIds(nextPath);
+      const identity = nextPath[nextPath.length - 1];
+      setSellCategoryFilter(identity ?? CATEGORY_FILTER_ALL);
+    },
+    [setSellCategoryFilter],
+  );
+
+  const openCatalogFolder = useCallback(
+    (identity: string) => {
+      if (!hierarchyEnabled || !catalogBrowseIndex) {
+        setSellCategoryFilter(identity);
+        return;
+      }
+      applyHierarchyPath(pushCatalogBrowseIdentity(catalogBrowseIndex, hierarchyPathIds, identity));
+    },
+    [hierarchyEnabled, catalogBrowseIndex, hierarchyPathIds, applyHierarchyPath, setSellCategoryFilter],
+  );
+
+  const jumpCatalogPath = useCallback(
+    (identity: string | null) => {
+      if (!hierarchyEnabled || !catalogBrowseIndex) {
+        setSellCategoryFilter(identity ?? CATEGORY_FILTER_ALL);
+        return;
+      }
+      applyHierarchyPath(jumpCatalogBrowseToIdentity(catalogBrowseIndex, hierarchyPathIds, identity));
+    },
+    [hierarchyEnabled, catalogBrowseIndex, hierarchyPathIds, applyHierarchyPath, setSellCategoryFilter],
+  );
+
   const backToShelves = useCallback(() => {
+    if (hierarchyEnabled && hierarchyPathIds.length > 0) {
+      applyHierarchyPath(popCatalogBrowseIdentity(hierarchyPathIds));
+      return;
+    }
     setSellCategoryFilter(CATEGORY_FILTER_ALL);
-  }, [setSellCategoryFilter]);
+  }, [hierarchyEnabled, hierarchyPathIds, applyHierarchyPath, setSellCategoryFilter]);
+
+  const hierarchyFolderCards: PosShelfDisplayCard[] = hierarchyView?.folderCards ?? EMPTY_HIERARCHY_CARDS;
+  const hierarchyPath: CatalogBrowsePathEntry[] = hierarchyView?.path ?? [];
+  const hierarchyAtRoot = !hierarchyView || hierarchyView.atRoot;
 
   return {
     searchQuery,
@@ -178,5 +273,11 @@ export function useSellProductBrowseEngine({
     catalogShelfDrillDown,
     selectedShelfLabel,
     favoriteIdSet,
+    hierarchyEnabled,
+    hierarchyAtRoot,
+    hierarchyPath,
+    hierarchyFolderCards: hierarchyEnabled ? hierarchyFolderCards : EMPTY_HIERARCHY_CARDS,
+    openCatalogFolder,
+    jumpCatalogPath,
   };
 }

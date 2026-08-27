@@ -1,5 +1,5 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { useShallow } from "zustand/react/shallow";
@@ -74,16 +74,31 @@ import {
 import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
-  distinctTrimmedCategories,
   normalizedCategoryKey,
 } from "../lib/productCategories";
 import {
   QUICK_SELL_SHELF_KEY,
-  collectShelfCategoryKeys,
   shelfHasUncategorizedSlot,
 } from "../lib/posShelfLayout";
-import { defaultMenuCategoriesForBusinessType, isHospitalityMode } from "../lib/hospitality";
-import { defaultPharmacyCategoriesForBusinessType, isPharmacyMode } from "../lib/pharmacy";
+import { isHospitalityMode } from "../lib/hospitality";
+import { isPharmacyMode } from "../lib/pharmacy";
+import {
+  buildStockCatalogBrowseIndex,
+  resolveStockCatalogHierarchyView,
+  stockCatalogShopId,
+  stockDirectProductCountsByCategory,
+  stockHierarchyBrowseOrderKeys,
+  stockHierarchyCurrentInclusiveCount,
+  stockHierarchyEnabled,
+  stockHierarchyFolderTiles,
+  stockLegacyCategoryPicklist,
+  stockLegacyShelfFolderKeys,
+} from "../lib/stockCatalogBrowse";
+import {
+  jumpCatalogBrowseToIdentity,
+  popCatalogBrowseIdentity,
+  pushCatalogBrowseIdentity,
+} from "../lib/catalogBrowse";
 import { shouldTrackBatchesForProduct } from "../lib/pharmacyStoreBatch";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
@@ -176,6 +191,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
   const [stockTab, setStockTab] = useState<StockHubTab>(() => (workspaceEmbed ? "products" : "overview"));
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
+  const [hierarchyPathIds, setHierarchyPathIds] = useState<string[]>([]);
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [receiveProduct, setReceiveProduct] = useState<Product | null>(null);
@@ -318,23 +334,25 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     );
   }, [preferences.posPinnedShelfKeys, preferences.posShelfLayout]);
 
-  const stockCategoryPicklist = useMemo(() => {
-    const fromProducts = distinctTrimmedCategories(products);
-    const fromSaved = savedShelfKeys.filter((k) => k !== UNCATEGORIZED_SENTINEL);
-    if (isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
-      const presets = defaultMenuCategoriesForBusinessType(preferences.businessType);
-      return [...new Set([...fromProducts, ...fromSaved, ...presets])].sort((a, b) =>
-        a.localeCompare(b, undefined, { sensitivity: "base" }),
-      );
-    }
-    if (pharmacyMode) {
-      const presets = defaultPharmacyCategoriesForBusinessType(preferences.businessType);
-      return [...new Set([...fromProducts, ...fromSaved, ...presets])].sort((a, b) =>
-        a.localeCompare(b, undefined, { sensitivity: "base" }),
-      );
-    }
-    return collectShelfCategoryKeys(products, savedShelfKeys, preferences.posShelfLayout ?? {});
-  }, [products, preferences.businessType, preferences.hospitalityModeEnabled, preferences.posShelfLayout, pharmacyMode, savedShelfKeys]);
+  const stockCategoryPicklist = useMemo(
+    () =>
+      stockLegacyCategoryPicklist({
+        products,
+        savedShelfKeys,
+        layout: preferences.posShelfLayout ?? {},
+        businessType: preferences.businessType,
+        hospitalityModeEnabled: preferences.hospitalityModeEnabled,
+        pharmacyMode,
+      }),
+    [
+      products,
+      savedShelfKeys,
+      preferences.posShelfLayout,
+      preferences.businessType,
+      preferences.hospitalityModeEnabled,
+      pharmacyMode,
+    ],
+  );
   const stockHasUncategorized = useMemo(
     () =>
       shelfHasUncategorizedSlot(
@@ -387,29 +405,65 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const inventoryValueUgx = useMemo(() => inventoryValueAtCostUgx(unlockedProducts), [unlockedProducts]);
   const lowStockProducts = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)), [unlockedProducts]);
 
-  const shelfFolders = useMemo(() => {
-    const keys = [...stockCategoryPicklist];
-    if (stockHasUncategorized) keys.push(UNCATEGORIZED_SENTINEL);
-    return keys.sort((a, b) => {
-      if (a === UNCATEGORIZED_SENTINEL) return 1;
-      if (b === UNCATEGORIZED_SENTINEL) return -1;
-      return a.localeCompare(b, undefined, { sensitivity: "base" });
+  const hierarchyEnabled = stockHierarchyEnabled(preferences);
+  const catalogBrowseIndex = useMemo(() => {
+    if (!hierarchyEnabled) return null;
+    return buildStockCatalogBrowseIndex({
+      products: unlockedProducts,
+      layout: preferences.posShelfLayout ?? {},
+      nodes: preferences.posCatalogNodes ?? [],
+      shopId: stockCatalogShopId(preferences),
+      orderKeys: stockHierarchyBrowseOrderKeys({
+        savedShelfKeys,
+        businessType: preferences.businessType,
+        hospitalityModeEnabled: preferences.hospitalityModeEnabled,
+        pharmacyMode,
+      }),
+      uncategorizedLabel: t(lang, "uncategorized"),
     });
-  }, [stockCategoryPicklist, stockHasUncategorized]);
+  }, [
+    hierarchyEnabled,
+    unlockedProducts,
+    preferences,
+    savedShelfKeys,
+    pharmacyMode,
+    lang,
+  ]);
 
-  const shelfProductCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of unlockedProducts) {
-      const g = normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL;
-      m.set(g, (m.get(g) ?? 0) + 1);
-    }
-    return m;
-  }, [unlockedProducts]);
+  const resolvedHierarchyPath =
+    hierarchyEnabled && catalogBrowseIndex && hierarchyPathIds.length === 0 && selectedShelf
+      ? jumpCatalogBrowseToIdentity(catalogBrowseIndex, [], selectedShelf)
+      : hierarchyPathIds;
+
+  const hierarchyView = useMemo(
+    () =>
+      resolveStockCatalogHierarchyView({
+        enabled: hierarchyEnabled,
+        path: resolvedHierarchyPath,
+        index: catalogBrowseIndex,
+        layout: preferences.posShelfLayout ?? {},
+      }),
+    [hierarchyEnabled, resolvedHierarchyPath, catalogBrowseIndex, preferences.posShelfLayout],
+  );
+
+  const shelfFolders = useMemo(
+    () => stockLegacyShelfFolderKeys(stockCategoryPicklist, stockHasUncategorized),
+    [stockCategoryPicklist, stockHasUncategorized],
+  );
+
+  const shelfProductCounts = useMemo(
+    () => stockDirectProductCountsByCategory(unlockedProducts),
+    [unlockedProducts],
+  );
+
+  const activeShelf = hierarchyEnabled ? (hierarchyView?.currentIdentity ?? null) : selectedShelf;
+  const hierarchyFolderTiles = hierarchyView ? stockHierarchyFolderTiles(hierarchyView) : [];
+  const hierarchyAtRoot = !hierarchyView || hierarchyView.atRoot;
 
   const productsInSelectedShelf = useMemo(() => {
-    if (!selectedShelf) return [];
+    if (!activeShelf) return [];
     const shelfProducts = unlockedProducts.filter(
-      (p) => (normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL) === selectedShelf,
+      (p) => (normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL) === activeShelf,
     );
     return queryInventoryProducts({
       products: shelfProducts,
@@ -422,7 +476,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       filterContext,
       stockMovements,
     });
-  }, [selectedShelf, unlockedProducts, listQuery, productSearchIndex, advancedFilters, filterContext, stockMovements]);
+  }, [activeShelf, unlockedProducts, listQuery, productSearchIndex, advancedFilters, filterContext, stockMovements]);
 
   const recentMovements = useMemo(
     () => [...stockMovements].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
@@ -867,6 +921,39 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       })),
     [shelfFolders, shelfProductCounts, lang, preferences.posShelfLayout],
   );
+  const displayedShelves = hierarchyEnabled ? hierarchyFolderTiles : shelfGridItems;
+
+  const openStockShelf = useCallback(
+    (key: string) => {
+      if (hierarchyEnabled && catalogBrowseIndex) {
+        setHierarchyPathIds((prev) => pushCatalogBrowseIdentity(catalogBrowseIndex, prev, key));
+        return;
+      }
+      setSelectedShelf(key);
+    },
+    [hierarchyEnabled, catalogBrowseIndex],
+  );
+
+  const backStockShelf = useCallback(() => {
+    if (hierarchyEnabled) {
+      const next = popCatalogBrowseIdentity(hierarchyPathIds);
+      setHierarchyPathIds(next);
+      if (next.length === 0) setSelectedShelf(null);
+      return;
+    }
+    setSelectedShelf(null);
+  }, [hierarchyEnabled, hierarchyPathIds]);
+
+  const jumpStockShelf = useCallback(
+    (identity: string) => {
+      if (hierarchyEnabled && catalogBrowseIndex) {
+        setHierarchyPathIds((prev) => jumpCatalogBrowseToIdentity(catalogBrowseIndex, prev, identity));
+        return;
+      }
+      setSelectedShelf(identity);
+    },
+    [hierarchyEnabled, catalogBrowseIndex],
+  );
 
   const handlePinnedSearch = (q: string) => {
     setListQuery(q);
@@ -879,7 +966,10 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   const handleStockTabChange = (tab: StockHubTab) => {
     setStockTab(tab);
-    if (tab !== "shelves") setSelectedShelf(null);
+    if (tab !== "shelves") {
+      setSelectedShelf(null);
+      setHierarchyPathIds([]);
+    }
   };
 
   return (
@@ -1059,13 +1149,24 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           {stockTab === "shelves" ? (
             <StockShelfGrid
               lang={lang}
-              shelves={shelfGridItems}
-              selectedShelf={selectedShelf}
+              shelves={displayedShelves}
+              selectedShelf={activeShelf}
               canArrangeShelves={canArrangeShelves}
-              onSelectShelf={setSelectedShelf}
-              onBack={() => setSelectedShelf(null)}
+              onSelectShelf={openStockShelf}
+              onBack={backStockShelf}
+              path={hierarchyEnabled && hierarchyView && !hierarchyAtRoot ? hierarchyView.path : undefined}
+              onPathSelect={hierarchyEnabled && !hierarchyAtRoot ? jumpStockShelf : undefined}
+              nestedFolders={hierarchyEnabled && !hierarchyAtRoot ? hierarchyFolderTiles : undefined}
+              selectedLabel={
+                hierarchyEnabled ? hierarchyView?.currentLabel ?? undefined : undefined
+              }
+              selectedCount={
+                hierarchyEnabled && hierarchyView && !hierarchyAtRoot
+                  ? stockHierarchyCurrentInclusiveCount(hierarchyView)
+                  : undefined
+              }
               shelfDetailHeader={
-                selectedShelf ? (
+                activeShelf ? (
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <StockListToolbar
@@ -1088,19 +1189,20 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 ) : undefined
               }
             >
-              {selectedShelf ? (
-                productsInSelectedShelf.length === 0 ? (
+              {activeShelf ? (
+                productsInSelectedShelf.length === 0 &&
+                !(hierarchyEnabled && hierarchyFolderTiles.length > 0) ? (
                   <EmptyShelfPanel
                     lang={lang}
                     shelfLabel={
-                      selectedShelf === UNCATEGORIZED_SENTINEL
+                      activeShelf === UNCATEGORIZED_SENTINEL
                         ? t(lang, "uncategorized")
-                        : selectedShelf
+                        : hierarchyView?.currentLabel || activeShelf
                     }
                     canAdd={canAdd && !freeProductLimitReached}
-                    onAddProduct={() => openAddProductForShelf(selectedShelf)}
+                    onAddProduct={() => openAddProductForShelf(activeShelf)}
                   />
-                ) : (
+                ) : productsInSelectedShelf.length === 0 ? null : (
                   renderProductList(productsInSelectedShelf)
                 )
               ) : null}

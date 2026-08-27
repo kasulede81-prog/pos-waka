@@ -16,6 +16,11 @@ type ShelfFolder = {
   count: number;
 };
 
+type PathCrumb = {
+  identity: string;
+  label: string;
+};
+
 type Props = {
   lang: Language;
   shelves: ShelfFolder[];
@@ -25,7 +30,65 @@ type Props = {
   onBack: () => void;
   shelfDetailHeader?: ReactNode;
   children?: ReactNode;
+  /** Hierarchy path labels only — never UUIDs. Flag-off omits this. */
+  path?: PathCrumb[];
+  onPathSelect?: (identity: string) => void;
+  /** Current-level child folders when nested. Flag-off omits this. */
+  nestedFolders?: ShelfFolder[];
+  selectedLabel?: string;
+  selectedCount?: number;
 };
+
+function renderFolderTiles(
+  lang: Language,
+  folders: ShelfFolder[],
+  onSelectShelf: (key: string) => void,
+  desktopTable: boolean,
+) {
+  if (folders.length === 0) return null;
+  if (desktopTable) {
+    return <ShelvesDesktopTable lang={lang} shelves={folders} onSelectShelf={onSelectShelf} />;
+  }
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+      {folders.map((shelf) => {
+        const icon = shelfIconFor(shelf.label) ?? "📦";
+        const empty = shelf.count === 0;
+        return (
+          <button
+            key={shelf.key}
+            type="button"
+            onClick={() => onSelectShelf(shelf.key)}
+            className={clsx(
+              "flex min-h-[88px] flex-col items-center justify-center rounded-xl border p-2.5 text-center shadow-sm",
+              "transition-all active:scale-[0.97] motion-reduce:active:scale-100",
+              empty
+                ? "border-danger/30 bg-danger-muted/30 active:border-danger/40 active:shadow-md"
+                : "border-border/90 bg-card active:border-primary/40 active:shadow-md",
+            )}
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-lg leading-none">
+              {icon}
+            </span>
+            <span className="mt-1.5 line-clamp-2 w-full text-xs font-bold leading-tight text-foreground">
+              {shelf.label}
+            </span>
+            <span
+              className={clsx(
+                "mt-0.5 text-[10px] font-semibold",
+                empty ? "font-bold text-danger" : "text-muted-foreground",
+              )}
+            >
+              {empty
+                ? t(lang, "shelfEmptyRestockLabel")
+                : tTemplate(lang, "stockShelfProductCount", { count: String(shelf.count) })}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function StockShelfGrid({
   lang,
@@ -36,13 +99,23 @@ export function StockShelfGrid({
   onBack,
   shelfDetailHeader,
   children,
+  path,
+  onPathSelect,
+  nestedFolders,
+  selectedLabel,
+  selectedCount,
 }: Props) {
   const desktopTable = useWakaLayoutBand() === "desktop";
 
   if (selectedShelf) {
     const label =
-      selectedShelf === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : selectedShelf;
+      selectedLabel ??
+      (selectedShelf === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : selectedShelf);
     const icon = shelfIconFor(label) ?? "📦";
+    const count =
+      selectedCount ?? shelves.find((s) => s.key === selectedShelf)?.count ?? 0;
+    const crumbs = (path ?? []).filter((entry) => entry.identity && entry.label);
+    const showPath = crumbs.length > 1;
     return (
       <section className="space-y-3">
         <button
@@ -61,11 +134,51 @@ export function StockShelfGrid({
             <h2 className={clsx("truncate text-base text-foreground", enterpriseType.sectionTitle)}>{label}</h2>
             <p className="text-xs font-semibold text-muted-foreground">
               {tTemplate(lang, "stockShelfProductCount", {
-                count: String(shelves.find((s) => s.key === selectedShelf)?.count ?? 0),
+                count: String(count),
               })}
             </p>
           </div>
         </div>
+        {showPath ? (
+          <nav
+            className="min-w-0 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label={t(lang, "posCatalogBrowsePath")}
+          >
+            <ol className="flex w-max max-w-none items-center gap-1 whitespace-nowrap">
+              {crumbs.map((crumb, index) => {
+                const current = index === crumbs.length - 1;
+                return (
+                  <li key={crumb.identity} className="flex shrink-0 items-center gap-1">
+                    {index > 0 ? (
+                      <span className="text-[10px] font-bold text-muted-foreground" aria-hidden>
+                        /
+                      </span>
+                    ) : null}
+                    {current || !onPathSelect ? (
+                      <span
+                        className={clsx(
+                          "text-[11px] font-bold",
+                          current ? "text-foreground" : "text-muted-foreground",
+                        )}
+                      >
+                        {crumb.label}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onPathSelect(crumb.identity)}
+                        className="min-h-[32px] rounded-md px-0.5 text-[11px] font-bold text-primary active:opacity-70"
+                      >
+                        {crumb.label}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+        ) : null}
+        {renderFolderTiles(lang, nestedFolders ?? [], onSelectShelf, desktopTable)}
         {shelfDetailHeader}
         {children}
       </section>
@@ -86,47 +199,7 @@ export function StockShelfGrid({
         ) : null}
       </div>
 
-      {desktopTable ? (
-        <ShelvesDesktopTable lang={lang} shelves={shelves} onSelectShelf={onSelectShelf} />
-      ) : (
-        <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-          {shelves.map((shelf) => {
-            const icon = shelfIconFor(shelf.label) ?? "📦";
-            const empty = shelf.count === 0;
-            return (
-              <button
-                key={shelf.key}
-                type="button"
-                onClick={() => onSelectShelf(shelf.key)}
-                className={clsx(
-                  "flex min-h-[88px] flex-col items-center justify-center rounded-xl border p-2.5 text-center shadow-sm",
-                  "transition-all active:scale-[0.97] motion-reduce:active:scale-100",
-                  empty
-                    ? "border-danger/30 bg-danger-muted/30 active:border-danger/40 active:shadow-md"
-                    : "border-border/90 bg-card active:border-primary/40 active:shadow-md",
-                )}
-              >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-lg leading-none">
-                  {icon}
-                </span>
-                <span className="mt-1.5 line-clamp-2 w-full text-xs font-bold leading-tight text-foreground">
-                  {shelf.label}
-                </span>
-                <span
-                  className={clsx(
-                    "mt-0.5 text-[10px] font-semibold",
-                    empty ? "font-bold text-danger" : "text-muted-foreground",
-                  )}
-                >
-                  {empty
-                    ? t(lang, "shelfEmptyRestockLabel")
-                    : tTemplate(lang, "stockShelfProductCount", { count: String(shelf.count) })}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {renderFolderTiles(lang, shelves, onSelectShelf, desktopTable)}
     </section>
   );
 }

@@ -3,7 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { CategoryShelfPicker } from "./CategoryShelfPicker";
+import { ShelfDestinationPicker } from "./ShelfDestinationPicker";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
 import { usePosStore } from "../../store/usePosStore";
 import {
@@ -455,7 +455,7 @@ export function SimpleAddProductWizard({
                     preferences.hospitalityModeEnabled,
                   )}
                 />
-                <CategoryShelfPicker
+                <ShelfDestinationPicker
                   lang={lang}
                   options={shelves}
                   value={shelf}

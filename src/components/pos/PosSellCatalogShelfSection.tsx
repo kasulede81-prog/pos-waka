@@ -14,28 +14,32 @@ type Props = {
   onShelfTap: (key: string) => void;
   /** @deprecated Parent scroll pane handles overflow — kept for call-site compatibility. */
   desktop?: boolean;
+  /** Nested hierarchy: hide landing copy so folders sit above products. */
+  nested?: boolean;
 };
 
 /** Shared shelf catalog grid — container-aware columns (Phase 32.3). */
-export function PosSellCatalogShelfSection({ lang, shelves, onShelfTap }: Props) {
+export function PosSellCatalogShelfSection({ lang, shelves, onShelfTap, nested = false }: Props) {
   const gridRef = useRef<HTMLDivElement>(null);
   const columnCount = useShelfGridColumns(gridRef);
 
   return (
     <section className="space-y-2" aria-label={t(lang, "posSellLandingShelves")}>
-      <div className="flex items-end justify-between gap-2 px-0.5">
-        <div className="min-w-0">
-          <p className="pos-ds-shelf-heading text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-            {t(lang, "posSellLandingShelves")}
-          </p>
-          <p className="truncate text-[11px] font-semibold text-muted-foreground">
-            {t(lang, "posSellLandingShelvesHint")}
+      {nested ? null : (
+        <div className="flex items-end justify-between gap-2 px-0.5">
+          <div className="min-w-0">
+            <p className="pos-ds-shelf-heading text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+              {t(lang, "posSellLandingShelves")}
+            </p>
+            <p className="truncate text-[11px] font-semibold text-muted-foreground">
+              {t(lang, "posSellLandingShelvesHint")}
+            </p>
+          </div>
+          <p className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-black text-muted-foreground">
+            {shelves.length}
           </p>
         </div>
-        <p className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-black text-muted-foreground">
-          {shelves.length}
-        </p>
-      </div>
+      )}
       <div
         ref={gridRef}
         className={shelfMasonryGridClass(true)}

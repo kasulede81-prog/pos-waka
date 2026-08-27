@@ -75,6 +75,8 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "lastMonthlyReportPromptMonth",
   "posPinnedShelfKeys",
   "posShelfLayout",
+  "catalogHierarchyEnabled",
+  "posCatalogNodes",
   "posQuickSellProductIds",
   "posShelfPresetId",
   "posShelfDefaultScale",
