@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { Language, PosShelfColor, PosShelfLayoutConfig, PosShelfPresetId, Product } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { useShelfDragReorder } from "../../hooks/useShelfDragReorder";
 import { useShelfGridColumns } from "../../hooks/useShelfGridColumns";
@@ -69,6 +69,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   const defaultScale = clampShelfScale(defaultScaleRaw ?? 35);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const renameShelfCategory = usePosStore((s) => s.renameShelfCategory);
+  const deleteEmptyShelf = usePosStore((s) => s.deleteEmptyShelf);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
@@ -164,6 +165,28 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
     if (result.toKey) setSelectedKey(result.toKey);
     setNameSaved(true);
   }, [lang, nameDraft, patchSelected, renameShelfCategory, selectedKey]);
+
+  const canDeleteSelectedShelf =
+    Boolean(selectedKey) &&
+    selectedKey !== UNCATEGORIZED_SENTINEL &&
+    selectedKey !== QUICK_SELL_SHELF_KEY &&
+    (selectedCard?.count ?? 0) === 0 &&
+    !selectedCard?.isQuickSell;
+
+  const confirmDeleteSelectedShelf = useCallback(() => {
+    if (!selectedKey || !canDeleteSelectedShelf) return;
+    setNameError(null);
+    setNameSaved(false);
+    const label = nameDraft.trim() || selectedCard?.label || selectedKey;
+    const ok = window.confirm(tTemplate(lang, "posShelfDeleteConfirm", { name: label }));
+    if (!ok) return;
+    const result = deleteEmptyShelf(selectedKey);
+    if (!result.ok) {
+      setNameError(t(lang, result.errorKey ?? "invalid"));
+      return;
+    }
+    setSelectedKey(null);
+  }, [canDeleteSelectedShelf, deleteEmptyShelf, lang, nameDraft, selectedCard, selectedKey]);
 
   const applyPreset = useCallback(
     (presetId: PosShelfPresetId) => {
@@ -313,6 +336,16 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
               {t(lang, "posShelfRenameSave")}
             </button>
           </label>
+
+          {canDeleteSelectedShelf ? (
+            <button
+              type="button"
+              onClick={confirmDeleteSelectedShelf}
+              className="min-h-[40px] w-full rounded-xl border-2 border-danger/40 bg-danger-muted px-4 text-xs font-black text-danger active:opacity-80 sm:w-auto"
+            >
+              {t(lang, "posShelfDelete")}
+            </button>
+          ) : null}
 
           <div>
             <p className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditColor")}</p>

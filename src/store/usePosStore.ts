@@ -284,6 +284,7 @@ import { assertCanFinalizeStockSale } from "../lib/primaryRegisterMode";
 import { isLocalStockFresh } from "../lib/stockFreshness";
 import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } from "../lib/settingsAuthorization";
 import { planShelfRename } from "../lib/renameShelfCategory";
+import { planDeleteEmptyShelf } from "../lib/deleteEmptyShelf";
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
@@ -697,6 +698,8 @@ export type PosState = {
   setPreferences: (p: Partial<ShopPreferences>, opts?: { silent?: boolean }) => void;
   /** Owner/manager: rename a shelf category everywhere (products + Sell layout). */
   renameShelfCategory: (fromKey: string, toName: string) => { ok: boolean; errorKey?: string; toKey?: string };
+  /** Owner/manager: remove an empty shelf from layout/order only. Never mutates products. */
+  deleteEmptyShelf: (shelfKey: string) => { ok: boolean; errorKey?: string };
   addStaffAccount: (input: {
     name: string;
     username?: string;
@@ -2172,6 +2175,49 @@ export const usePosStore = create<PosState>((set, get) => {
       });
     }
     return { ok: true, toKey: plan.toKey };
+  },
+
+  deleteEmptyShelf: (shelfKey) => {
+    const denied = denyUnlessEffectivePermission("shelves.customize", "deleteEmptyShelf");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const plan = planDeleteEmptyShelf({
+      shelfKey,
+      products: state.products,
+      layout: state.preferences.posShelfLayout ?? {},
+      orderKeys: state.preferences.posPinnedShelfKeys ?? [],
+      sellCategoryFilter: state.preferences.posSellCategoryFilter,
+    });
+    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
+
+    const prefPatch: Partial<ShopPreferences> = {
+      posShelfLayout: plan.layout,
+      posPinnedShelfKeys: plan.orderKeys,
+    };
+    if (plan.clearSellCategoryFilter) {
+      prefPatch.posSellCategoryFilter = null;
+    }
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: state.preferences.staffAccounts ?? [],
+    });
+    if (!prefAuth.ok) {
+      pushAudit("auth_forbidden", "Denied deleteEmptyShelf preferences", {
+        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
+        action: "deleteEmptyShelf",
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: prefAuth.errorKey,
+      });
+      return { ok: false, errorKey: prefAuth.errorKey };
+    }
+
+    set((s) => ({
+      preferences: { ...s.preferences, ...prefPatch },
+    }));
+    return { ok: true };
   },
 
   addStaffAccount: async (input) => {
