@@ -212,7 +212,7 @@ export function InventoryTransferPage({ lang }: Props) {
       <PageHeader lang={lang} title={t(lang, "xferPageTitle")} subtitle={t(lang, "xferPageSub")} />
       <TransferOperationShell
         lang={lang}
-        title={preferences.shopName || "Transfer"}
+        title={preferences.shopDisplayName?.trim() || "Transfer"}
         subtitle={activeShopId ? `Shop ${activeShopId.slice(0, 8)}…` : undefined}
         error={err}
         success={msg}

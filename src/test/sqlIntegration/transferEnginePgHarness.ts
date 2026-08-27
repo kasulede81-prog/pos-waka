@@ -31,14 +31,14 @@ export async function createTransferEngineSqlHarness(): Promise<SqlExec> {
     const client = new pg.Client({ connectionString: url });
     await client.connect();
     const exec: SqlExec = {
-      query: async (sql, params = []) => {
+      async query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: unknown[] = []) {
         const res = await client.query(sql, params);
-        return { rows: res.rows as Record<string, unknown>[] };
+        return { rows: res.rows as unknown as T[] };
       },
-      exec: async (sql) => {
+      async exec(sql: string) {
         await client.query(sql);
       },
-      close: async () => {
+      async close() {
         await client.end();
       },
     };
@@ -49,14 +49,14 @@ export async function createTransferEngineSqlHarness(): Promise<SqlExec> {
 
   const db = new PGlite();
   const exec: SqlExec = {
-    query: async (sql, params = []) => {
+    async query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: unknown[] = []) {
       const res = await db.query(sql, params);
-      return { rows: res.rows as Record<string, unknown>[] };
+      return { rows: res.rows as unknown as T[] };
     },
-    exec: async (sql) => {
+    async exec(sql: string) {
       await db.exec(sql);
     },
-    close: async () => {
+    async close() {
       await db.close();
     },
   };

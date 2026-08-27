@@ -26,10 +26,6 @@ export type CloudTransfer = {
   lines: CloudTransferLine[];
 };
 
-function rpcOk(data: unknown): data is { ok: true; idempotent?: boolean; transfer_id?: string; status?: string } {
-  return Boolean(data && typeof data === "object" && (data as { ok?: boolean }).ok === true);
-}
-
 export async function upsertTransferDraftCloud(payload: {
   id?: string;
   clientId?: string;

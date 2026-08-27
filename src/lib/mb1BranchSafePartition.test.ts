@@ -179,9 +179,7 @@ describe("MB-1 shop scope utilities", () => {
   });
 
   it("builds persistence namespace sb:user:shop", async () => {
-    const { buildPersistenceNamespace, setActiveShopId, getPersistenceNamespace } = await import(
-      "../offline/shopScope"
-    );
+    const { buildPersistenceNamespace, setActiveShopId } = await import("../offline/shopScope");
     vi.doMock("../offline/accountScope", () => ({
       getActiveAccountKey: () => "sb:alice",
     }));

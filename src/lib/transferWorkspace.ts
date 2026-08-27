@@ -151,6 +151,7 @@ export function toEnterpriseTransferShape(
       return {
         id: `line-${i}`,
         productId: ln.productId,
+        destinationProductId: null,
         productName: p?.name ?? ln.productId,
         quantity: ln.quantity,
         batchId: ln.batchId ?? null,
