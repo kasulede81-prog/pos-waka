@@ -283,6 +283,7 @@ import { mergeRemoteInventoryStock, validateDraftSaleStockBeforeFinalize } from 
 import { assertCanFinalizeStockSale } from "../lib/primaryRegisterMode";
 import { isLocalStockFresh } from "../lib/stockFreshness";
 import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } from "../lib/settingsAuthorization";
+import { planShelfRename } from "../lib/renameShelfCategory";
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
@@ -694,6 +695,8 @@ export type PosState = {
   setSessionActor: (actor: SessionActor | null) => void;
 
   setPreferences: (p: Partial<ShopPreferences>, opts?: { silent?: boolean }) => void;
+  /** Owner/manager: rename a shelf category everywhere (products + Sell layout). */
+  renameShelfCategory: (fromKey: string, toName: string) => { ok: boolean; errorKey?: string; toKey?: string };
   addStaffAccount: (input: {
     name: string;
     username?: string;
@@ -2110,6 +2113,65 @@ export const usePosStore = create<PosState>((set, get) => {
       merged = ensureHardwarePrefsOnBootstrap(merged);
       return { preferences: merged };
     });
+  },
+
+  renameShelfCategory: (fromKey, toName) => {
+    const denied = denyUnlessEffectivePermission("shelves.customize", "renameShelfCategory");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const plan = planShelfRename({
+      fromKey,
+      toName,
+      products: state.products,
+      layout: state.preferences.posShelfLayout ?? {},
+      orderKeys: state.preferences.posPinnedShelfKeys ?? [],
+      sellCategoryFilter: state.preferences.posSellCategoryFilter,
+    });
+    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
+
+    const prefPatch: Partial<ShopPreferences> = {
+      posShelfLayout: plan.layout,
+      posPinnedShelfKeys: plan.orderKeys,
+    };
+    if (plan.sellCategoryFilter !== undefined) {
+      prefPatch.posSellCategoryFilter = plan.sellCategoryFilter;
+    }
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: state.preferences.staffAccounts ?? [],
+    });
+    if (!prefAuth.ok) {
+      pushAudit("auth_forbidden", "Denied renameShelfCategory preferences", {
+        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
+        action: "renameShelfCategory",
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: prefAuth.errorKey,
+      });
+      return { ok: false, errorKey: prefAuth.errorKey };
+    }
+
+    const idSet = new Set(plan.productIds);
+    const at = new Date().toISOString();
+    set((s) => ({
+      products: s.products.map((p) =>
+        idSet.has(p.id) ? { ...p, category: plan.toKey, updatedAt: at, version: p.version + 1 } : p,
+      ),
+      preferences: { ...s.preferences, ...prefPatch },
+    }));
+    for (const id of plan.productIds) {
+      void queueRemote("product", { id, catalogOnly: true });
+    }
+    if (!plan.unchanged || plan.productIds.length > 0) {
+      pushAudit("product_update", `Renamed shelf ${plan.fromKey} → ${plan.toKey}`, {
+        fromKey: plan.fromKey,
+        toKey: plan.toKey,
+        productCount: plan.productIds.length,
+      });
+    }
+    return { ok: true, toKey: plan.toKey };
   },
 
   addStaffAccount: async (input) => {

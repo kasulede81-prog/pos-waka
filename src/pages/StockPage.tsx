@@ -859,10 +859,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     () =>
       shelfFolders.map((key) => ({
         key,
-        label: key === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : key,
+        label:
+          key === UNCATEGORIZED_SENTINEL
+            ? t(lang, "uncategorized")
+            : preferences.posShelfLayout?.[key]?.displayName?.trim() || key,
         count: shelfProductCounts.get(key) ?? 0,
       })),
-    [shelfFolders, shelfProductCounts, lang],
+    [shelfFolders, shelfProductCounts, lang, preferences.posShelfLayout],
   );
 
   const handlePinnedSearch = (q: string) => {

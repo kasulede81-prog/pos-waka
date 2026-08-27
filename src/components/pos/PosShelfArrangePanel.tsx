@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { Language, PosShelfColor, PosShelfLayoutConfig, PosShelfPresetId, Product } from "../../types";
 import { t } from "../../lib/i18n";
@@ -19,6 +19,7 @@ import {
 } from "../../lib/posShelfLayout";
 import { shelfGridTemplateColumns } from "../../lib/posShelfGridColumns";
 import { formatShelfProductCountLabel } from "../../lib/posShelfDisplayLabel";
+import { UNCATEGORIZED_SENTINEL } from "../../lib/productCategories";
 import { POS_SHELF_PRESET_IDS, applyShelfPreset } from "../../lib/posShelfPresets";
 import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
 import { PosShelfTile } from "./PosShelfTile";
@@ -67,8 +68,12 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   const quickSellIds = quickSellIdsRaw ?? EMPTY_SHELF_ORDER;
   const defaultScale = clampShelfScale(defaultScaleRaw ?? 35);
   const setPreferences = usePosStore((s) => s.setPreferences);
+  const renameShelfCategory = usePosStore((s) => s.renameShelfCategory);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [nameSaved, setNameSaved] = useState(false);
   const [quickPickerOpen, setQuickPickerOpen] = useState(false);
   const arrangeGridRef = useRef<HTMLDivElement>(null);
   const arrangeColumnCount = useShelfGridColumns(arrangeGridRef);
@@ -109,6 +114,20 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   const isQuickSellSelected = selectedKey === QUICK_SELL_SHELF_KEY;
 
   const selectedCard = selectedKey ? shelfCards.find((c) => c.key === selectedKey) : null;
+
+  useEffect(() => {
+    if (!selectedKey) {
+      setNameDraft("");
+      setNameError(null);
+      setNameSaved(false);
+      return;
+    }
+    const card = shelfCards.find((c) => c.key === selectedKey);
+    const layoutName = shelfLayout[selectedKey]?.displayName?.trim();
+    setNameDraft(layoutName || card?.label || selectedKey);
+    setNameError(null);
+    setNameSaved(false);
+  }, [selectedKey]);
   const selectedScale = selectedConfig
     ? shelfScaleFromConfig(selectedConfig, Boolean(selectedConfig.featured), defaultScale)
     : defaultScale;
@@ -123,6 +142,28 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
     },
     [selectedKey, setPreferences, shelfLayout],
   );
+
+  const saveShelfName = useCallback(() => {
+    if (!selectedKey) return;
+    setNameError(null);
+    setNameSaved(false);
+    if (selectedKey === UNCATEGORIZED_SENTINEL) {
+      setNameError(t(lang, "shelfRenameUncategorized"));
+      return;
+    }
+    if (selectedKey === QUICK_SELL_SHELF_KEY) {
+      patchSelected({ displayName: nameDraft.trim() || undefined });
+      setNameSaved(true);
+      return;
+    }
+    const result = renameShelfCategory(selectedKey, nameDraft);
+    if (!result.ok) {
+      setNameError(t(lang, result.errorKey ?? "invalid"));
+      return;
+    }
+    if (result.toKey) setSelectedKey(result.toKey);
+    setNameSaved(true);
+  }, [lang, nameDraft, patchSelected, renameShelfCategory, selectedKey]);
 
   const applyPreset = useCallback(
     (presetId: PosShelfPresetId) => {
@@ -241,13 +282,36 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
           <label className="block space-y-1">
             <span className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditName")}</span>
+            <p className="text-[11px] font-medium text-muted-foreground">{t(lang, "posShelfRenameHint")}</p>
             <input
               type="text"
-              value={selectedConfig.displayName ?? ""}
-              placeholder={shelfCards.find((c) => c.key === selectedKey)?.label ?? ""}
-              onChange={(e) => patchSelected({ displayName: e.target.value })}
-              className="w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold"
+              value={nameDraft}
+              maxLength={80}
+              disabled={selectedKey === UNCATEGORIZED_SENTINEL}
+              placeholder={selectedCard?.label ?? ""}
+              onChange={(e) => {
+                setNameDraft(e.target.value);
+                setNameError(null);
+                setNameSaved(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  saveShelfName();
+                }
+              }}
+              className="w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold disabled:opacity-50"
             />
+            {nameError ? <p className="text-xs font-bold text-danger">{nameError}</p> : null}
+            {nameSaved ? <p className="text-xs font-bold text-success">{t(lang, "posShelfRenamed")}</p> : null}
+            <button
+              type="button"
+              disabled={selectedKey === UNCATEGORIZED_SENTINEL}
+              onClick={saveShelfName}
+              className="mt-1 min-h-[40px] rounded-xl bg-waka-600 px-4 text-xs font-black text-white active:bg-waka-700 disabled:opacity-40"
+            >
+              {t(lang, "posShelfRenameSave")}
+            </button>
           </label>
 
           <div>
