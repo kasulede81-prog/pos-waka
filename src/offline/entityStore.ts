@@ -18,7 +18,7 @@ import type {
   SupplierPayment,
   VoidRecord,
 } from "../types";
-import { getActiveAccountKey } from "./accountScope";
+import { getPersistenceNamespace } from "./shopScope";
 import { getLocalDb, readKv, type PersistedSnapshot, writeKv } from "./localDb";
 import { recordBootstrapIdbRead } from "../lib/performanceMetrics";
 import {
@@ -80,9 +80,9 @@ export type EntityManifest = {
 const MANIFEST_KV_KEY = "entity-manifest";
 
 function accountOrNull(): string | null {
-  const acc = getActiveAccountKey();
-  if (!acc || acc.startsWith("demo:")) return null;
-  return acc;
+  const ns = getPersistenceNamespace();
+  if (!ns || ns.startsWith("demo:")) return null;
+  return ns;
 }
 
 export function entityKey(accountKey: string, bucket: EntityBucket, entityId: string): string {

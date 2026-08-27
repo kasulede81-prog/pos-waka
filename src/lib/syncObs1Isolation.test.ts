@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * OBS-1 isolation: observer failure must not alter sync path outcomes.
  */
 
+const TEST_SHOP = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
 const mocks = vi.hoisted(() => ({
   syncSaleImmediately: vi.fn().mockResolvedValue(true),
   runPosPushOnlyUpload: vi.fn().mockResolvedValue({
@@ -64,8 +66,11 @@ vi.mock("./supabase", () => ({
 }));
 
 describe("OBS-1 isolation + path counters", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
+    const { resetActiveShopForTests, setActiveShopId } = await import("../offline/shopScope");
+    resetActiveShopForTests();
+    setActiveShopId(TEST_SHOP);
     mocks.syncSaleImmediately.mockReset().mockResolvedValue(true);
     mocks.runPosPushOnlyUpload.mockReset().mockResolvedValue({
       ran: true,
@@ -120,6 +125,7 @@ describe("OBS-1 isolation + path counters", () => {
           attempts: 0,
           createdAt: "2026-01-01T00:00:00Z",
           payload: { saleId: "s1" },
+          shopId: TEST_SHOP,
         },
       ])
       .mockResolvedValueOnce([]);
@@ -147,6 +153,7 @@ describe("OBS-1 isolation + path counters", () => {
           attempts: 0,
           createdAt: "2026-01-01T00:00:00Z",
           payload: { saleId: "s2" },
+          shopId: TEST_SHOP,
         },
       ])
       .mockResolvedValueOnce([]);

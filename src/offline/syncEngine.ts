@@ -5,10 +5,14 @@ import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "../li
 import { sortSyncQueueByPriority } from "../lib/syncQueuePriority";
 import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
+import { getActiveShopId } from "./shopScope";
+import { inferShopIdFromQueueRow } from "./shopScopeMigration";
 
 export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attempts?: number }): Promise<void> {
+  const shopId = op.shopId ?? getActiveShopId() ?? undefined;
   const full: SyncOperation = {
     ...op,
+    shopId,
     attempts: op.attempts ?? 0,
     lastAttemptAt: op.lastAttemptAt ?? null,
   };
@@ -34,8 +38,19 @@ async function processOne(op: SyncOperation): Promise<boolean> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) return false;
 
+  const opShopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
+  if (!opShopId) {
+    reportSyncIssue("sync_quarantined_no_shop", { kind: op.kind, opId: op.id });
+    return false;
+  }
+
+  const activeShop = getActiveShopId();
+  if (activeShop && opShopId !== activeShop) {
+    return false;
+  }
+
   try {
-    return await processCloudSyncOperation(op);
+    return await processCloudSyncOperation({ ...op, shopId: opShopId });
   } catch {
     return false;
   }

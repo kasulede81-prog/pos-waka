@@ -132,6 +132,9 @@ const MarketingAgentPage = lazy(() =>
   import("./pages/MarketingAgentPage").then((m) => ({ default: m.MarketingAgentPage })),
 );
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
+const InventoryTransferPage = lazy(() =>
+  import("./pages/InventoryTransferPage").then((m) => ({ default: m.InventoryTransferPage })),
+);
 const PosPage = lazy(() => import("./pages/PosPage").then((m) => ({ default: m.PosPage })));
 const OfficeHubPage = lazy(() => import("./pages/OfficeHubPage").then((m) => ({ default: m.OfficeHubPage })));
 const OfficeHubSectionPage = lazy(() =>
@@ -708,7 +711,13 @@ function AppRoutes() {
             />
             <Route
               path="stock/transfer"
-              element={<Navigate to="/stock" replace />}
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.transfers">
+                  <Suspense fallback={<LazyWait />}>
+                    <InventoryTransferPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
+              }
             />
             <Route path="suppliers" element={<Navigate to="/stock?tab=suppliers" replace />} />
             <Route path="suppliers/:supplierId" element={<LegacySupplierDetailRedirect />} />

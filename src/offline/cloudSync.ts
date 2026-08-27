@@ -42,7 +42,7 @@ import { isCloudRecoveryLockActive } from "../lib/cloudRecoverySession";
 import { SYNC_EVENT_PULL_MIN_MS, SYNC_INCREMENTAL_PULL_CONCURRENCY, SYNC_PULL_MIN_INTERVAL_MS, SYNC_REALTIME_COALESCE_MS } from "../lib/syncTiming";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
-import { consumeOrResolveShopCtx, clearShopCtxTick, setCachedShopId } from "../lib/shopSyncContext";
+import { consumeOrResolveShopCtx, clearShopCtxTick, rememberShopCtxForTick, setCachedShopId } from "../lib/shopSyncContext";
 import {
   ALL_INCREMENTAL_PULL_ENTITIES,
   incrementalEntitiesForReason,
@@ -120,6 +120,8 @@ import { applySuccessfulDayClosePush, pullDayClosesFromRpc, pushDayCloseToCloud 
 import { normalizeUnitCostUgx, normalizePackCostUgx } from "../lib/costPrecision";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 import { pullCursorUntilExhausted, pullOffsetRangeUntilExhausted } from "../lib/cloudPullPagination";
+import { getActiveShopId } from "./shopScope";
+import { inferShopIdFromQueueRow } from "./shopScopeMigration";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -150,6 +152,13 @@ export async function resolveShopCtx(): Promise<ShopCtx | null> {
     const userId = user?.id;
     if (!userId || !user) return null;
     if (!isSupabaseEmailVerified(user)) return null;
+
+    const active = getActiveShopId();
+    if (active) {
+      setCachedShopId(active);
+      return { shopId: active, userId };
+    }
+
     const orgShop = await resolvePrimaryOrganizationForUser(userId);
     if (!orgShop) {
       setCachedShopId(null);
@@ -157,6 +166,19 @@ export async function resolveShopCtx(): Promise<ShopCtx | null> {
     }
     return { shopId: orgShop.shopId, userId };
   });
+}
+
+/** MB-1 — shop identity from operation stamp; never falls back to current active shop. */
+export async function resolveShopCtxForOperation(op: SyncOperation): Promise<ShopCtx | null> {
+  if (!hasSupabaseConfig || !supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (!userId) return null;
+
+  const shopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
+  if (!shopId) return null;
+
+  return rememberShopCtxForTick({ shopId, userId });
 }
 
 function productSku(p: Product): string {
@@ -1523,7 +1545,7 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     return false;
   }
 
-  const ctx = await resolveShopCtx();
+  const ctx = await resolveShopCtxForOperation(op);
   if (!ctx) return false;
 
   const payload = op.payload as Record<string, unknown>;
@@ -1559,6 +1581,29 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       if (!purchaseId) return true;
       if (payload.void === true) return syncPurchaseVoidBundle(purchaseId, ctx);
       return syncPurchaseBundle(purchaseId, ctx);
+    }
+    case "pending_transfer_dispatch": {
+      const transferId = String(payload.transferId ?? "");
+      if (!transferId) return true;
+      const { syncTransferDispatchFromQueue } = await import("../lib/enterprise/stockTransferSync");
+      return syncTransferDispatchFromQueue(transferId);
+    }
+    case "pending_transfer_receive": {
+      const transferId = String(payload.transferId ?? "");
+      const receiveEventId = String(payload.receiveEventId ?? "");
+      const lines = Array.isArray(payload.lines) ? payload.lines : [];
+      if (!transferId || !receiveEventId) return false;
+      const { syncTransferReceiveFromQueue } = await import("../lib/enterprise/stockTransferSync");
+      return syncTransferReceiveFromQueue({
+        transferId,
+        receiveEventId,
+        lines: lines
+          .map((row) => {
+            const r = row as { lineId?: string; quantity?: number };
+            return { lineId: String(r.lineId ?? ""), quantity: Number(r.quantity ?? 0) };
+          })
+          .filter((r) => r.lineId && r.quantity > 0),
+      });
     }
     case "purchase": {
       const purchaseId = String(payload.purchaseId ?? payload.id ?? "");

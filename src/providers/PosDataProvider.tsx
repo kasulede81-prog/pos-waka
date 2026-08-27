@@ -17,6 +17,7 @@ import { forceHideNativeSplash, hideNativeSplashWhenReady, scheduleSplashMaxDura
 import { hasSupabaseConfig } from "../lib/supabase";
 
 import { isLocalShopDataEmpty } from "../lib/cloudSnapshotSync";
+import { initializeActiveShopForAccount } from "../lib/initializeActiveShop";
 import {
   logOnboardingRequired,
   shouldRunCloudRecoveryForAccount,
@@ -237,6 +238,8 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
         usePosStore.getState().resetForSignOut();
         setActiveAccountKey(accountKey);
       }
+
+      await initializeActiveShopForAccount(userId);
 
       if (isStoreReadyForAccount(accountKey)) {
         const stage = usePosStore.getState().hydrationStage;

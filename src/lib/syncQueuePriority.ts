@@ -18,6 +18,8 @@ export function syncKindPriority(kind: SyncOperationKind): 0 | 1 | 2 {
     case "customer":
     case "pending_purchases":
     case "purchase":
+    case "pending_transfer_dispatch":
+    case "pending_transfer_receive":
     case "supplier":
     case "pending_staff":
     case "pending_inventory_counts":

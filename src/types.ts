@@ -2454,6 +2454,8 @@ export type SyncOperationKind =
   | "pending_shifts"
   | "pending_day_closes"
   | "pending_purchases"
+  | "pending_transfer_dispatch"
+  | "pending_transfer_receive"
   | "pending_hospitality"
   | "pending_staff"
   /** Legacy queue kinds kept for backward compatibility */
@@ -2473,6 +2475,8 @@ export type SyncOperation = {
   attempts: number;
   /** ISO time of last failed upload attempt — used for exponential backoff. */
   lastAttemptAt?: string | null;
+  /** MB-1 — immutable shop identity stamped at enqueue; never rewritten at flush. */
+  shopId?: string;
 };
 
 /** High-level connectivity for the tiny header strip */

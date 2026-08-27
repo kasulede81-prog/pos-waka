@@ -27,6 +27,7 @@ import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { repairOwnerWorkspaceIfNeeded } from "../lib/workspaceHealth";
 import { assertAccountSwitchAllowed, isOrganizationDeletedError, ORGANIZATION_DELETED_MESSAGE, refreshOrganizationDeletionState } from "../lib/organizationDeletionState";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
+import { clearActiveShopOnSignOut } from "../lib/activeShopSwitch";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { cachePendingRegistrationProfile } from "../lib/registrationProfileCache";
@@ -86,6 +87,7 @@ function applyAccountSwitchSync(nextKey: string | null): void {
   if (nextKey) assertAccountSwitchAllowed(nextKey);
   flushPendingPersist();
   usePosStore.getState().resetForSignOut();
+  clearActiveShopOnSignOut();
   setActiveAccountKey(nextKey);
 }
 

@@ -20,6 +20,7 @@ import type {
   VoidRecord,
 } from "../types";
 import { getActiveAccountKey } from "./accountScope";
+import { getPersistenceNamespace } from "./shopScope";
 
 /**
  * IndexedDB layout (multi-account safe):
@@ -135,10 +136,10 @@ function isSnapshotShape(v: unknown): v is PersistedSnapshot {
 }
 
 function scopedKey(name: string): string | null {
-  const acc = getActiveAccountKey();
-  if (!acc) return null;
-  if (acc.startsWith("demo:")) return null;
-  return `${acc}::${name}`;
+  const ns = getPersistenceNamespace();
+  if (!ns) return null;
+  if (ns.startsWith("demo:")) return null;
+  return `${ns}::${name}`;
 }
 
 /** Open IndexedDB early (e.g. from main.tsx) so first sign-in reads faster. */
@@ -257,7 +258,7 @@ export async function readSnapshotWithFallback(): Promise<Partial<PersistedSnaps
  * Returns the legacy snapshot if it was claimed in this call, otherwise null.
  */
 export async function claimLegacySnapshotForCurrentAccount(): Promise<Partial<PersistedSnapshot> | null> {
-  const acc = getActiveAccountKey();
+  const acc = getPersistenceNamespace() ?? getActiveAccountKey();
   if (!acc) return null;
   if (typeof window === "undefined") return null;
   let claimed: { accountKey?: string } | null = null;
@@ -326,18 +327,18 @@ export async function writeSnapshot(
 }
 
 export async function readSyncQueue(): Promise<SyncOperation[]> {
-  const acc = getActiveAccountKey();
-  if (!acc) return [];
+  const ns = getPersistenceNamespace();
+  if (!ns) return [];
   const db = await getLocalDb();
   const all = await db.getAll("syncQueue");
-  return all.filter((op) => (op as SyncOperation & { accountKey?: string }).accountKey === acc);
+  return all.filter((op) => (op as SyncOperation & { accountKey?: string }).accountKey === ns);
 }
 
 export async function appendSyncOperation(op: SyncOperation): Promise<void> {
-  const acc = getActiveAccountKey();
-  if (!acc) return;
+  const ns = getPersistenceNamespace();
+  if (!ns) return;
   const db = await getLocalDb();
-  const row: SyncOperation & { accountKey: string } = { ...op, accountKey: acc };
+  const row: SyncOperation & { accountKey: string } = { ...op, accountKey: ns };
   await db.put("syncQueue", row);
 }
 
@@ -347,13 +348,13 @@ export async function removeSyncOperation(id: string): Promise<void> {
 }
 
 export async function clearSyncQueue(): Promise<void> {
-  const acc = getActiveAccountKey();
-  if (!acc) return;
+  const ns = getPersistenceNamespace();
+  if (!ns) return;
   const db = await getLocalDb();
   const all = await db.getAll("syncQueue");
   const tx = db.transaction("syncQueue", "readwrite");
   for (const op of all) {
-    if ((op as SyncOperation & { accountKey?: string }).accountKey === acc) {
+    if ((op as SyncOperation & { accountKey?: string }).accountKey === ns) {
       await tx.objectStore("syncQueue").delete(op.id);
     }
   }
@@ -371,7 +372,7 @@ function restoreQueueArchiveKey(accountKey: string): string {
 
 /** Move pending sync ops to archive and clear queue — used after backup restore. */
 export async function archiveAndClearSyncQueue(): Promise<{ clearedCount: number; archivedCount: number }> {
-  const acc = getActiveAccountKey();
+  const acc = getPersistenceNamespace();
   if (!acc) return { clearedCount: 0, archivedCount: 0 };
   const queue = await readSyncQueue();
   const clearedCount = queue.length;
@@ -391,7 +392,7 @@ export async function archiveAndClearSyncQueue(): Promise<{ clearedCount: number
 }
 
 export async function countArchivedRestoreQueueOps(): Promise<number> {
-  const acc = getActiveAccountKey();
+  const acc = getPersistenceNamespace();
   if (!acc) return 0;
   const db = await getLocalDb();
   const archives = (await db.get("kv", restoreQueueArchiveKey(acc))) as RestoreQueueArchiveEntry[] | undefined;
@@ -400,14 +401,14 @@ export async function countArchivedRestoreQueueOps(): Promise<number> {
 }
 
 export async function appendBackupRecord(rec: LocalBackupRecord): Promise<void> {
-  const acc = getActiveAccountKey();
+  const acc = getPersistenceNamespace();
   if (!acc) return;
   const db = await getLocalDb();
   await db.put("backups", { ...rec, accountKey: acc });
 }
 
 export async function listBackupRecords(): Promise<LocalBackupRecord[]> {
-  const acc = getActiveAccountKey();
+  const acc = getPersistenceNamespace();
   if (!acc) return [];
   const db = await getLocalDb();
   if (!db.objectStoreNames.contains("backups")) return [];
@@ -418,7 +419,7 @@ export async function listBackupRecords(): Promise<LocalBackupRecord[]> {
 }
 
 export async function getBackupRecord(id: string): Promise<LocalBackupRecord | null> {
-  const acc = getActiveAccountKey();
+  const acc = getPersistenceNamespace();
   if (!acc) return null;
   const db = await getLocalDb();
   if (!db.objectStoreNames.contains("backups")) return null;

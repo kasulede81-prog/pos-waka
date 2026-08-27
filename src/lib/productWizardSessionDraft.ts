@@ -1,4 +1,5 @@
-import { getActiveAccountKey, scopedStorageKey } from "../offline/accountScope";
+import { scopedStorageKey as accountScopedStorageKey } from "../offline/accountScope";
+import { getPersistenceNamespace } from "../offline/shopScope";
 import type { PackKind, SellUnitKind } from "./simpleProductWizard";
 import type { PharmacyProductWizardStep, RetailProductWizardStep } from "./productWizardSteps";
 
@@ -57,7 +58,9 @@ export type ProductWizardSessionDraft =
   | { v: typeof VERSION; kind: "pharmacy"; fields: PharmacyWizardSessionFields };
 
 function storageKey(): string | null {
-  return scopedStorageKey(BASE_KEY, getActiveAccountKey());
+  const ns = getPersistenceNamespace();
+  if (!ns) return null;
+  return accountScopedStorageKey(BASE_KEY, ns);
 }
 
 function parseDraft(raw: string | null): ProductWizardSessionDraft | null {

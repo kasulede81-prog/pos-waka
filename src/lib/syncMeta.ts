@@ -1,13 +1,13 @@
 /** Local-only sync health hints for owners (no PII). Account-scoped. */
 
-import { getActiveAccountKey } from "../offline/accountScope";
+import { getPersistenceNamespace } from "../offline/shopScope";
 
 const BASE_KEY = "waka.sync.health.v1";
 
 function scopedKey(): string | null {
-  const acc = getActiveAccountKey();
-  if (!acc) return null;
-  return `${BASE_KEY}::${acc}`;
+  const ns = getPersistenceNamespace();
+  if (!ns) return null;
+  return `${BASE_KEY}::${ns}`;
 }
 
 export type SyncHealthMeta = {

@@ -1,6 +1,6 @@
 /** Per-entity cloud pull checkpoints (account-scoped, local only). */
 
-import { getActiveAccountKey } from "../offline/accountScope";
+import { getPersistenceNamespace } from "../offline/shopScope";
 
 const BASE_KEY = "waka.sync.checkpoints.v1";
 
@@ -52,9 +52,9 @@ const empty: SyncCheckpoints = {
 };
 
 function scopedKey(): string | null {
-  const acc = getActiveAccountKey();
-  if (!acc) return null;
-  return `${BASE_KEY}::${acc}`;
+  const ns = getPersistenceNamespace();
+  if (!ns) return null;
+  return `${BASE_KEY}::${ns}`;
 }
 
 export function readSyncCheckpoints(): SyncCheckpoints {
