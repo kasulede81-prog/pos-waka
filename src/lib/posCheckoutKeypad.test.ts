@@ -4,6 +4,7 @@ import {
   applyCheckoutNumericKey,
   applyCheckoutPhoneKey,
   CHECKOUT_ALPHA_ROWS,
+  POS_CATALOG_KEYPAD_OVERLAY_CLASS,
   preferredKeypadModeForField,
 } from "./posCheckoutKeypad";
 
@@ -28,6 +29,12 @@ describe("posCheckoutKeypad", () => {
   it("prefers alpha mode for customer name field", () => {
     expect(preferredKeypadModeForField("customerName")).toBe("alpha");
     expect(preferredKeypadModeForField("cash")).toBe("numeric");
+  });
+
+  it("catalog keypad overlay is height-capped with dvh so Windows web cannot clip keys", () => {
+    expect(POS_CATALOG_KEYPAD_OVERLAY_CLASS).toContain("h-[min(56dvh,28rem)]");
+    expect(POS_CATALOG_KEYPAD_OVERLAY_CLASS).toContain("overflow-hidden");
+    expect(POS_CATALOG_KEYPAD_OVERLAY_CLASS).not.toContain("h-[min(48dvh,24rem)]");
   });
 
   it("alpha rows include every letter once", () => {

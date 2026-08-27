@@ -50,6 +50,8 @@ import {
   applyCheckoutPhoneKey,
   applyCheckoutNumericKey,
   preferredKeypadModeForField,
+  POS_CATALOG_KEYPAD_OVERLAY_CLASS,
+  POS_CATALOG_KEYPAD_OVERLAY_INNER_CLASS,
   type CheckoutInputField,
   type CheckoutKeypadMode,
 } from "../lib/posCheckoutKeypad";
@@ -113,6 +115,7 @@ import {
   isPharmacyPackagingActive,
 } from "../lib/pharmacyPackaging";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
+import { addDenominationToCashInput } from "../lib/cashDenominations";
 import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import { brandingFromSale } from "../lib/receiptBranding";
@@ -1083,6 +1086,12 @@ export function PosPage({ lang }: { lang: Language }) {
     },
     [checkoutAmountField, checkoutKeypadMode],
   );
+
+  const addCheckoutCashNote = useCallback((ugx: number) => {
+    setCheckoutAmountField("cash");
+    setCheckoutKeypadMode("numeric");
+    setCashInput((prev) => addDenominationToCashInput(prev, ugx));
+  }, []);
 
   const clearCheckoutAmount = useCallback(() => {
     switch (checkoutAmountField) {
@@ -2091,8 +2100,8 @@ export function PosPage({ lang }: { lang: Language }) {
         ) : null}
 
         {showDesktopCatalogCheckoutDock ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex max-h-[min(55%,28rem)] flex-col justify-end p-1.5">
-            <div className="pointer-events-auto min-h-0 overflow-hidden rounded-xl shadow-2xl ring-1 ring-border/80">
+          <div className={POS_CATALOG_KEYPAD_OVERLAY_CLASS} data-pos-catalog-keypad-overlay>
+            <div className={POS_CATALOG_KEYPAD_OVERLAY_INNER_CLASS}>
               <PosDesktopCatalogCheckoutDock
                 lang={lang}
                 paymentMethod={paymentMethod}
@@ -2121,6 +2130,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 }}
                 onCheckoutKeypadModeChange={setCheckoutKeypadMode}
                 onAppendCheckoutDigit={appendCheckoutDigit}
+                onAddCashNote={addCheckoutCashNote}
                 onClearCheckoutAmount={clearCheckoutAmount}
                 onSaleCustomerId={setSaleCustomerId}
                 onSaleCustomerName={setSaleCustomerName}

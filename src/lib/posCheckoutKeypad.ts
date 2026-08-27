@@ -1,6 +1,17 @@
 export type CheckoutInputField = "cash" | "mobile" | "customerName" | "customerPhone";
 export type CheckoutKeypadMode = "numeric" | "alpha";
 
+/**
+ * Catalog cash keypad overlay — must stay fully on-screen on Windows web
+ * (short CSS viewport from browser chrome + 125–150% display scaling).
+ * `dvh` tracks the visible viewport; 28rem caps large monitors.
+ */
+export const POS_CATALOG_KEYPAD_OVERLAY_CLASS =
+  "pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex h-[min(56dvh,28rem)] max-h-[min(56dvh,28rem)] flex-col overflow-hidden p-1.5";
+
+export const POS_CATALOG_KEYPAD_OVERLAY_INNER_CLASS =
+  "pointer-events-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl shadow-2xl ring-1 ring-border/80";
+
 /** Compact QWERTY rows — same footprint as the numeric keypad (3 letter rows + bottom controls). */
 export const CHECKOUT_ALPHA_ROWS = [
   ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],

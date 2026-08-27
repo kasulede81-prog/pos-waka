@@ -1,4 +1,6 @@
 /** Barcode scanner / label bridge — camera, HID keyboard wedge, desktop/browser. */
+import { isPosCashKeypadHardwareCapture } from "../../lib/desktopPosKeyHandlers";
+
 export type BarcodeScanMode = "camera" | "hid" | "sunmi";
 
 export type BarcodeCapabilities = {
@@ -28,6 +30,7 @@ function isDedicatedBarcodeField(target: EventTarget | null): boolean {
 /** Skip HID wedge buffering while typing in form fields (search, customer, discounts). */
 export function shouldBufferHidWedgeKey(event: Pick<KeyboardEvent, "target">): boolean {
   if (isDedicatedBarcodeField(event.target)) return true;
+  if (isPosCashKeypadHardwareCapture()) return false;
   if (!event.target || typeof event.target !== "object") return true;
   const el = event.target as HTMLElement;
   if (typeof el.tagName !== "string") return true;

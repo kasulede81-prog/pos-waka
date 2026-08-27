@@ -25,4 +25,18 @@ describe("publicAssetUrl", () => {
     expect(src).not.toMatch(/LOGO_SRC\s*=\s*["']\/waka-logo\.png["']/);
     expect(src).not.toMatch(/["']\/brand\/w-icon-/);
   });
+
+  it("checkout note picker uses local publicAssetUrl paths, not hotlinks", () => {
+    const src = readFileSync(join(ROOT, "src/components/pos/CheckoutNotePicker.tsx"), "utf8");
+    expect(src).toContain("publicAssetUrl");
+    expect(src).toContain("checkoutNoteAssetPath");
+    expect(src).toContain("checkoutCoinAssetPath");
+    expect(src).toContain("Add UGX");
+    expect(src).toContain("Add UGX ${formatDenominationLabel(denom)} coin");
+    expect(src).not.toMatch(/https?:\/\//);
+    expect(src).toContain("object-contain");
+    expect(src).toContain("rounded-full");
+    expect(src).toContain("grid-cols-3");
+    expect(src).not.toContain("grid-cols-6");
+  });
 });

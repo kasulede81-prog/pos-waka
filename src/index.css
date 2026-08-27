@@ -1761,3 +1761,12 @@ html[data-home-anim-paused] .builder-spotlight-active {
   outline: none;
 }
 
+/* Web catalog cash keypad — stay fully visible above the status bar on short Windows viewports. */
+[data-pos-catalog-keypad-overlay] {
+  max-height: min(56dvh, 28rem);
+}
+[data-pos-catalog-checkout-dock] {
+  min-height: 0;
+  height: 100%;
+}
+

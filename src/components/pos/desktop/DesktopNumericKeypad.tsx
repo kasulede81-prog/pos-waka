@@ -39,6 +39,12 @@ export const DesktopNumericKeypad = memo(function DesktopNumericKeypad({
     if (!el) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (onEscape) onEscape();
+        else onClear();
+        return;
+      }
       const mapped = mapEventToNumericKeypad(e, allowDecimal);
       if (!mapped) return;
       e.preventDefault();
@@ -49,7 +55,7 @@ export const DesktopNumericKeypad = memo(function DesktopNumericKeypad({
 
     el.addEventListener("keydown", onKeyDown);
     return () => el.removeEventListener("keydown", onKeyDown);
-  }, [allowDecimal, listenPhysicalKeyboard, onClear, onDigit, onEnter]);
+  }, [allowDecimal, listenPhysicalKeyboard, onClear, onDigit, onEnter, onEscape]);
 
   const handleKey = (key: string) => {
     if (key === "back") onDigit("back");

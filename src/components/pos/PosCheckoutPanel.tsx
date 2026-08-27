@@ -16,6 +16,11 @@ import { MobileSheetCartItems } from "./MobileSheetCartItems";
 import { VirtualizedDraftCartList } from "./VirtualizedDraftCartList";
 import { POS_CHECKOUT_SCROLL_CLASS } from "../../lib/posTouchInteraction";
 import { MOBILE_CHECKOUT_ITEMS_AUTO_SHOW_MAX } from "../../lib/posMobileCheckoutItems";
+import { isEditableTextTarget } from "../../lib/posKeyboardShortcuts";
+import {
+  mapEventToNumericKeypad,
+  setPosCashKeypadHardwareCapture,
+} from "../../lib/desktopPosKeyHandlers";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -99,6 +104,8 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveDisabled,
   saveButtonRef,
   sidebar = false,
+  /** Fill remaining overlay height so 7–9 / 0 are not clipped on short Windows web viewports. */
+  fluid = false,
   keypadMode = "numeric",
   onKeypadModeChange,
   showAlphaToggle = false,
@@ -111,36 +118,145 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveDisabled: boolean;
   saveButtonRef?: RefObject<HTMLButtonElement | null>;
   sidebar?: boolean;
+  fluid?: boolean;
   keypadMode?: CheckoutKeypadMode;
   onKeypadModeChange?: (mode: CheckoutKeypadMode) => void;
   showAlphaToggle?: boolean;
 }) {
-  const keyClass = sidebar
-    ? "min-h-[44px] rounded-lg bg-muted py-1 text-xl font-bold text-foreground active:bg-muted"
-    : "min-h-[52px] rounded-xl bg-muted py-1.5 text-2xl font-bold text-foreground active:bg-muted";
-  const alphaKeyClass = sidebar
+  const keyClass = fluid
+    ? "min-h-0 h-full rounded-lg bg-muted text-lg font-bold text-foreground active:bg-muted sm:text-xl"
+    : sidebar
+      ? "min-h-[44px] rounded-lg bg-muted py-1 text-xl font-bold text-foreground active:bg-muted"
+      : "min-h-[52px] rounded-xl bg-muted py-1.5 text-2xl font-bold text-foreground active:bg-muted";
+  const alphaKeyClass = sidebar || fluid
     ? "min-h-[28px] rounded-md bg-muted py-0 text-[10px] font-bold leading-none text-foreground active:bg-muted"
     : "min-h-[32px] rounded-lg bg-muted py-0 text-[11px] font-bold leading-none text-foreground active:bg-muted sm:min-h-[34px] sm:text-xs";
   const modeToggleClass = clsx(
     "rounded-lg font-black active:opacity-90",
-    sidebar ? "min-h-[28px] text-[10px]" : "min-h-[32px] text-[10px] sm:min-h-[34px] sm:text-xs",
+    sidebar || fluid ? "min-h-[28px] text-[10px]" : "min-h-[32px] text-[10px] sm:min-h-[34px] sm:text-xs",
     keypadMode === "alpha" ? "bg-waka-600 text-white" : "bg-muted text-foreground",
   );
+  const gapClass = sidebar ? "gap-0.5" : fluid ? "gap-1.5" : "gap-1";
+  const numericGapClass = sidebar ? "gap-1.5" : fluid ? "gap-1.5" : "gap-2";
 
   const pressKey = (k: string) => {
     if (k === "⌫") onDigit("back");
     else onDigit(k);
   };
 
+  useEffect(() => {
+    setPosCashKeypadHardwareCapture(true);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (keypadMode === "alpha") {
+        if (isEditableTextTarget(e.target)) return;
+        if (e.key === "Enter" || e.code === "NumpadEnter") {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (!saveDisabled) onSave();
+          return;
+        }
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          onDigit("back");
+          return;
+        }
+        if (e.key === "Delete") {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          onClear();
+          return;
+        }
+        if (e.key === " " || e.key === "Spacebar") {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          onDigit("space");
+          return;
+        }
+        if (/^[a-zA-Z]$/.test(e.key)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          onDigit(e.key);
+        }
+        return;
+      }
+      const mapped = mapEventToNumericKeypad(e, false);
+      if (!mapped) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (mapped === "enter") {
+        if (!saveDisabled) onSave();
+        return;
+      }
+      if (mapped === "C") {
+        onClear();
+        return;
+      }
+      onDigit(mapped);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      setPosCashKeypadHardwareCapture(false);
+    };
+  }, [keypadMode, onClear, onDigit, onSave, saveDisabled]);
+
+  const numericKeys = (
+    <>
+      <div className={clsx("grid min-h-0 grid-cols-3", numericGapClass, fluid && "h-full grid-rows-3")}>
+        {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
+          <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
+            {k}
+          </button>
+        ))}
+      </div>
+      <div className={clsx("grid min-h-0 grid-cols-3", numericGapClass, fluid && "h-full")}>
+        {showAlphaToggle ? (
+          <button
+            type="button"
+            onClick={() => onKeypadModeChange?.("alpha")}
+            className={clsx(keyClass, "text-sm font-black uppercase tracking-wide")}
+            aria-label={t(lang, "posKeypadAlpha")}
+          >
+            abcd
+          </button>
+        ) : (
+          <button type="button" onClick={() => onDigit("00")} className={keyClass}>
+            00
+          </button>
+        )}
+        <button type="button" onClick={() => onDigit("0")} className={keyClass}>
+          0
+        </button>
+        <button type="button" onClick={() => onDigit("back")} className={keyClass}>
+          ⌫
+        </button>
+      </div>
+    </>
+  );
+
   return (
-    <div className={clsx("grid gap-2", sidebar ? "grid-cols-[1fr_4.25rem]" : "grid-cols-[1fr_5rem]")}>
-      <div className={clsx("flex min-h-0 flex-col", sidebar ? "gap-0.5" : "gap-1")}>
+    <div
+      className={clsx(
+        "grid min-h-0",
+        fluid ? "h-full grid-cols-[minmax(0,1fr)_4.5rem] gap-1.5" : sidebar ? "grid-cols-[1fr_4.25rem] gap-2" : "grid-cols-[1fr_5rem] gap-2",
+      )}
+      data-pos-checkout-numpad={fluid ? "fluid" : sidebar ? "sidebar" : "sheet"}
+    >
+      <div
+        className={
+          fluid && keypadMode === "numeric"
+            ? "grid h-full min-h-0 grid-rows-[3fr_1fr] gap-1.5"
+            : clsx("flex min-h-0 flex-col", gapClass)
+        }
+      >
         {keypadMode === "alpha" ? (
           <>
             {CHECKOUT_ALPHA_ROWS.map((row, rowIdx) => (
               <div
                 key={rowIdx}
-                className={clsx("grid", sidebar ? "gap-0.5" : "gap-1")}
+                className={clsx("grid", sidebar || fluid ? "gap-0.5" : "gap-1")}
                 style={{ gridTemplateColumns: `repeat(${CHECKOUT_ALPHA_ROW_COLS[rowIdx]}, minmax(0, 1fr))` }}
               >
                 {row.map((k) => (
@@ -150,7 +266,7 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
                 ))}
               </div>
             ))}
-            <div className={clsx("grid grid-cols-3", sidebar ? "gap-0.5" : "gap-1")}>
+            <div className={clsx("grid grid-cols-3", sidebar || fluid ? "gap-0.5" : "gap-1")}>
               <button
                 type="button"
                 onClick={() => onKeypadModeChange?.("numeric")}
@@ -169,46 +285,16 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
             </div>
           </>
         ) : (
-          <>
-            <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
-              {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
-                <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
-                  {k}
-                </button>
-              ))}
-            </div>
-            <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
-              {showAlphaToggle ? (
-                <button
-                  type="button"
-                  onClick={() => onKeypadModeChange?.("alpha")}
-                  className={clsx(keyClass, "text-sm font-black uppercase tracking-wide")}
-                  aria-label={t(lang, "posKeypadAlpha")}
-                >
-                  abcd
-                </button>
-              ) : (
-                <button type="button" onClick={() => onDigit("00")} className={keyClass}>
-                  00
-                </button>
-              )}
-              <button type="button" onClick={() => onDigit("0")} className={keyClass}>
-                0
-              </button>
-              <button type="button" onClick={() => onDigit("back")} className={keyClass}>
-                ⌫
-              </button>
-            </div>
-          </>
+          numericKeys
         )}
       </div>
-      <div className="flex min-h-0 flex-col gap-2 self-start">
+      <div className={clsx("flex min-h-0 flex-col gap-1.5", fluid ? "h-full" : "self-start gap-2")}>
         <button
           type="button"
           onClick={onClear}
           className={clsx(
             "rounded-xl bg-danger font-black text-white active:bg-danger",
-            sidebar ? "min-h-[44px] text-lg" : "min-h-[52px] text-xl",
+            fluid ? "min-h-[2.25rem] shrink-0 text-lg" : sidebar ? "min-h-[44px] text-lg" : "min-h-[52px] text-xl",
           )}
         >
           C
@@ -219,11 +305,17 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           onClick={onSave}
           disabled={saveDisabled}
           className={clsx(
-            "flex flex-col items-center justify-center gap-1 rounded-xl bg-success px-1 py-2 font-black leading-tight text-white shadow-md active:bg-success/90 disabled:opacity-40",
-            sidebar ? "min-h-[7.5rem] text-xs" : keypadMode === "alpha" ? "min-h-[8.5rem] text-sm" : "min-h-0 flex-1",
+            "flex min-h-0 flex-col items-center justify-center gap-1 rounded-xl bg-success px-1 py-2 font-black leading-tight text-white shadow-md active:bg-success/90 disabled:opacity-40",
+            fluid
+              ? "flex-1 text-xs"
+              : sidebar
+                ? "min-h-[7.5rem] text-xs"
+                : keypadMode === "alpha"
+                  ? "min-h-[8.5rem] text-sm"
+                  : "min-h-0 flex-1",
           )}
         >
-          <Check className={clsx("stroke-[3]", sidebar ? "h-6 w-6" : "h-7 w-7")} aria-hidden />
+          <Check className={clsx("stroke-[3]", sidebar || fluid ? "h-6 w-6" : "h-7 w-7")} aria-hidden />
           <span className="text-center">{saveLabel}</span>
         </button>
       </div>
