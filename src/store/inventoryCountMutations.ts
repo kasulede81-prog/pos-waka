@@ -14,6 +14,7 @@ import {
   withInventoryCountLineCounted,
   nextInventoryCountSessionNumber,
 } from "../lib/inventoryCount";
+import { r3InventoryCountStockPayload } from "../lib/stockDurableSync";
 import { emitInventoryStockChanges } from "../lib/inventorySyncChannel";
 import type { PosState } from "./usePosStore";
 
@@ -240,14 +241,6 @@ export function createInventoryCountStoreActions(deps: Deps) {
         };
         movements.push(row.movement);
         stockBroadcast.push(products[idx]!);
-
-        void queueRemote("pending_stock_updates", {
-          productId: row.line.productId,
-          delta: row.stockDelta,
-          note: `inventory_count:${sessionId}`,
-          baseUpdatedAt: prev.updatedAt,
-          baseStockOnHand: prev.stockOnHand,
-        });
       }
 
       const appliedSession = normalizeInventoryCountSession({
@@ -266,6 +259,22 @@ export function createInventoryCountStoreActions(deps: Deps) {
         inventoryCountSessions: s.inventoryCountSessions.map((row) => (row.id === sessionId ? appliedSession : row)),
       }));
 
+      void queueRemote("pending_inventory_counts", { sessionId });
+      for (const row of plan.lines) {
+        const prev = state.products.find((p) => p.id === row.line.productId);
+        if (!prev) continue;
+        void queueRemote(
+          "pending_stock_updates",
+          r3InventoryCountStockPayload({
+            productId: row.line.productId,
+            delta: row.stockDelta,
+            sessionId,
+            baseUpdatedAt: prev.updatedAt,
+            baseStockOnHand: prev.stockOnHand,
+          }),
+        );
+      }
+
       if (stockBroadcast.length > 0) {
         emitInventoryStockChanges(
           stockBroadcast.map((p) => ({ productId: p.id, newStock: p.stockOnHand, version: p.version })),
@@ -279,7 +288,6 @@ export function createInventoryCountStoreActions(deps: Deps) {
         actorUserId: actor.userId,
         movementCount: movements.length,
       });
-      void queueRemote("pending_inventory_counts", { sessionId });
       return { ok: true as const, movementCount: movements.length };
     },
 

@@ -122,6 +122,7 @@ import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 import { pullCursorUntilExhausted, pullOffsetRangeUntilExhausted } from "../lib/cloudPullPagination";
 import { getActiveShopId } from "./shopScope";
 import { inferShopIdFromQueueRow } from "./shopScopeMigration";
+import { classifyPendingStockPayload, shouldAckR3StockResult } from "../lib/stockDurableSync";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -623,6 +624,76 @@ export async function pushProductStockToCloud(
     ),
   }));
   return true;
+}
+
+async function pushR3DurableStockRpc(
+  rpcName: "shop_apply_stock_adjustment" | "shop_apply_inventory_count_stock",
+  productId: string,
+  ctx: ShopCtx,
+  payload: Record<string, unknown>,
+): Promise<boolean> {
+  if (!supabase || !isUuid(productId)) return false;
+  const { data, error } = await supabase.rpc(rpcName, {
+    p_shop_id: ctx.shopId,
+    p_payload: payload,
+  });
+  if (error) {
+    reportSyncIssue("r3_stock_rpc_failed", { productId, rpc: rpcName, code: error.code ?? "unknown" });
+    return false;
+  }
+  const result = data as {
+    ok?: boolean;
+    error?: string;
+    idempotent?: boolean;
+    stock_on_hand?: number;
+    updated_at?: string;
+  } | null;
+  if (!shouldAckR3StockResult(result)) {
+    reportSyncIssue("r3_stock_rpc_rejected", {
+      productId,
+      rpc: rpcName,
+      error: result?.error ?? "unknown",
+    });
+    return false;
+  }
+  const serverStock = Number(result?.stock_on_hand ?? 0);
+  const serverUpdatedAt = String(result?.updated_at ?? new Date().toISOString());
+  usePosStore.setState((s) => ({
+    products: s.products.map((p) =>
+      p.id === productId
+        ? { ...p, stockOnHand: serverStock, updatedAt: serverUpdatedAt, version: p.version + 1 }
+        : p,
+    ),
+  }));
+  return true;
+}
+
+export async function pushR3StockAdjustmentToCloud(
+  productId: string,
+  ctx: ShopCtx,
+  opts: { delta: number; referenceId: string; note?: string },
+): Promise<boolean> {
+  return pushR3DurableStockRpc("shop_apply_stock_adjustment", productId, ctx, {
+    product_id: productId,
+    adjustment_id: opts.referenceId,
+    reference_id: opts.referenceId,
+    delta: opts.delta,
+    note: opts.note ?? "",
+  });
+}
+
+export async function pushR3InventoryCountStockToCloud(
+  productId: string,
+  ctx: ShopCtx,
+  opts: { delta: number; referenceId: string; note?: string },
+): Promise<boolean> {
+  return pushR3DurableStockRpc("shop_apply_inventory_count_stock", productId, ctx, {
+    product_id: productId,
+    session_id: opts.referenceId,
+    reference_id: opts.referenceId,
+    delta: opts.delta,
+    note: opts.note ?? "",
+  });
 }
 
 export async function pushAuditLogToCloud(entry: AuditLogEntry, ctx: ShopCtx): Promise<boolean> {
@@ -1623,32 +1694,60 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     }
     case "pending_stock_updates":
     case "stock_move": {
-      if (payload.kind === "purchase_void") {
-        const purchaseId = String(payload.purchaseId ?? "");
-        if (!purchaseId) return true;
-        return syncPurchaseVoidBundle(purchaseId, ctx);
+      const classified = classifyPendingStockPayload(payload);
+      if (classified.route === "purchase_void") {
+        if (!classified.purchaseId) return true;
+        return syncPurchaseVoidBundle(classified.purchaseId, ctx);
       }
-      if (payload.kind === "purchase") {
-        const purchaseId = String(payload.purchaseId ?? "");
-        if (!purchaseId) return true;
-        return syncPurchaseBundle(purchaseId, ctx);
+      if (classified.route === "purchase") {
+        if (!classified.purchaseId) return true;
+        return syncPurchaseBundle(classified.purchaseId, ctx);
       }
-      const productId = String(payload.productId ?? payload.id ?? "");
-      const delta = Number(payload.delta ?? 0);
-      if (isUuid(productId) && delta !== 0) {
-        return pushProductStockToCloud(productId, ctx, {
-          delta,
-          note: typeof payload.note === "string" ? payload.note : "",
+      if (classified.route === "purchase_note") {
+        return pushProductStockToCloud(classified.productId, ctx, {
+          delta: classified.delta,
+          note: classified.note,
           baseUpdatedAt: typeof payload.baseUpdatedAt === "string" ? payload.baseUpdatedAt : null,
           baseStockOnHand: typeof payload.baseStockOnHand === "number" ? payload.baseStockOnHand : undefined,
         });
       }
-      if (payload.catalogOnly === true && isUuid(productId)) {
-        const product = usePosStore.getState().products.find((p) => p.id === productId);
+      if (classified.route === "r3_adjustment") {
+        return pushR3StockAdjustmentToCloud(classified.productId, ctx, {
+          delta: classified.delta,
+          referenceId: classified.referenceId,
+          note: classified.note,
+        });
+      }
+      if (classified.route === "r3_count") {
+        return pushR3InventoryCountStockToCloud(classified.productId, ctx, {
+          delta: classified.delta,
+          referenceId: classified.referenceId,
+          note: classified.note,
+        });
+      }
+      if (classified.route === "legacy_void") {
+        return pushProductStockToCloud(classified.productId, ctx, {
+          delta: classified.delta,
+          note: classified.note,
+          baseUpdatedAt: typeof payload.baseUpdatedAt === "string" ? payload.baseUpdatedAt : null,
+          baseStockOnHand: typeof payload.baseStockOnHand === "number" ? payload.baseStockOnHand : undefined,
+        });
+      }
+      if (classified.route === "catalog_only") {
+        const product = usePosStore.getState().products.find((p) => p.id === classified.productId);
         if (!product) return true;
         return pushProductCatalogToCloud(product, ctx);
       }
-      reportSyncIssue("stock_update_missing_delta", { productId, kind: op.kind });
+      if (classified.route === "quarantine") {
+        reportSyncIssue("sync_quarantined_stock_no_reference", {
+          kind: op.kind,
+          opId: op.id,
+          reason: classified.reason,
+          productId: classified.productId ?? "",
+        });
+        return false;
+      }
+      reportSyncIssue("stock_update_missing_delta", { productId: classified.productId, kind: op.kind });
       return false;
     }
     case "pending_sales":

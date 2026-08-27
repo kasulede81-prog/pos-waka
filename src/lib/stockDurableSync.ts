@@ -1,0 +1,154 @@
+/**
+ * Sync R3 — durable stock identity for adjustments and inventory counts.
+ * Classification only; cloud RPCs are the authority.
+ */
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isStockDurableUuid(id: string | null | undefined): id is string {
+  return typeof id === "string" && UUID_RE.test(id.trim());
+}
+
+export const R3_REF_ADJUSTMENT = "adjustment" as const;
+export const R3_REF_INVENTORY_COUNT = "inventory_count" as const;
+
+export type R3StockReferenceType = typeof R3_REF_ADJUSTMENT | typeof R3_REF_INVENTORY_COUNT;
+
+export type R3StockQueuePayload = {
+  productId: string;
+  delta: number;
+  note: string;
+  baseUpdatedAt: string | null;
+  baseStockOnHand?: number;
+  referenceType: R3StockReferenceType;
+  referenceId: string;
+};
+
+export function r3AdjustmentStockPayload(input: {
+  productId: string;
+  delta: number;
+  adjustmentId: string;
+  note?: string;
+  baseUpdatedAt?: string | null;
+  baseStockOnHand?: number;
+}): R3StockQueuePayload {
+  return {
+    productId: input.productId,
+    delta: input.delta,
+    note: input.note ?? "",
+    baseUpdatedAt: input.baseUpdatedAt ?? null,
+    baseStockOnHand: input.baseStockOnHand,
+    referenceType: R3_REF_ADJUSTMENT,
+    referenceId: input.adjustmentId,
+  };
+}
+
+export function r3InventoryCountStockPayload(input: {
+  productId: string;
+  delta: number;
+  sessionId: string;
+  baseUpdatedAt?: string | null;
+  baseStockOnHand?: number;
+}): R3StockQueuePayload {
+  return {
+    productId: input.productId,
+    delta: input.delta,
+    note: `inventory_count:${input.sessionId}`,
+    baseUpdatedAt: input.baseUpdatedAt ?? null,
+    baseStockOnHand: input.baseStockOnHand,
+    referenceType: R3_REF_INVENTORY_COUNT,
+    referenceId: input.sessionId,
+  };
+}
+
+export type PendingStockRoute =
+  | { route: "purchase_void"; purchaseId: string }
+  | { route: "purchase"; purchaseId: string }
+  | { route: "purchase_note"; productId: string; delta: number; note: string }
+  | { route: "r3_adjustment"; productId: string; delta: number; referenceId: string; note: string }
+  | { route: "r3_count"; productId: string; delta: number; referenceId: string; note: string }
+  | { route: "legacy_void"; productId: string; delta: number; note: string }
+  | { route: "catalog_only"; productId: string }
+  | { route: "quarantine"; reason: string; productId?: string }
+  | { route: "missing_delta"; productId: string };
+
+function readNote(payload: Record<string, unknown>): string {
+  return typeof payload.note === "string" ? payload.note : "";
+}
+
+function isPurchaseNote(note: string): boolean {
+  return note.startsWith("purchase:") && !note.startsWith("purchase_void:");
+}
+
+function isSaleVoidPayload(payload: Record<string, unknown>, note: string): boolean {
+  return payload.kind === "void" || note === "void";
+}
+
+/**
+ * Route a pending_stock_updates payload.
+ * R3 domain without an explicit durable reference is fail-closed (quarantine).
+ * Purchase (166) and sale-void (frozen) keep their existing paths.
+ */
+export function classifyPendingStockPayload(payload: Record<string, unknown>): PendingStockRoute {
+  if (payload.kind === "purchase_void") {
+    const purchaseId = String(payload.purchaseId ?? "");
+    return { route: "purchase_void", purchaseId };
+  }
+  if (payload.kind === "purchase") {
+    const purchaseId = String(payload.purchaseId ?? "");
+    return { route: "purchase", purchaseId };
+  }
+
+  const productId = String(payload.productId ?? payload.id ?? "");
+  const delta = Number(payload.delta ?? 0);
+  const note = readNote(payload);
+  const referenceType = typeof payload.referenceType === "string" ? payload.referenceType : "";
+  const referenceId = typeof payload.referenceId === "string" ? payload.referenceId.trim() : "";
+
+  if (isPurchaseNote(note) && isStockDurableUuid(productId) && delta !== 0) {
+    return { route: "purchase_note", productId, delta, note };
+  }
+
+  const hasR3Type = referenceType === R3_REF_ADJUSTMENT || referenceType === R3_REF_INVENTORY_COUNT;
+  if (hasR3Type && !isStockDurableUuid(referenceId)) {
+    return { route: "quarantine", reason: "r3_missing_reference", productId };
+  }
+
+  if (
+    referenceType === R3_REF_ADJUSTMENT &&
+    isStockDurableUuid(referenceId) &&
+    isStockDurableUuid(productId) &&
+    delta !== 0
+  ) {
+    return { route: "r3_adjustment", productId, delta, referenceId, note };
+  }
+
+  if (
+    referenceType === R3_REF_INVENTORY_COUNT &&
+    isStockDurableUuid(referenceId) &&
+    isStockDurableUuid(productId) &&
+    delta !== 0
+  ) {
+    return { route: "r3_count", productId, delta, referenceId, note };
+  }
+
+  if (payload.catalogOnly === true && isStockDurableUuid(productId)) {
+    return { route: "catalog_only", productId };
+  }
+
+  if (isStockDurableUuid(productId) && delta !== 0 && isSaleVoidPayload(payload, note)) {
+    return { route: "legacy_void", productId, delta, note };
+  }
+
+  if (isStockDurableUuid(productId) && delta !== 0) {
+    return { route: "quarantine", reason: "r3_legacy_generic_delta", productId };
+  }
+
+  return { route: "missing_delta", productId };
+}
+
+/** Client retry model for R3 RPCs: never rebase-and-resend the delta. */
+export function shouldAckR3StockResult(result: { ok?: boolean; idempotent?: boolean } | null): boolean {
+  return result?.ok === true;
+}

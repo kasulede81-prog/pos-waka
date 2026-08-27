@@ -170,6 +170,37 @@ describe("MB-1 branch-safe partition", () => {
     expect(state.queue[0]?.shopId).toBe(SHOP_A);
     expect(state.queue[0]?.accountKey).toBe(`sb:test-user:${SHOP_A}`);
   });
+
+  it("T20 — R3 adjustment shopId is immutable across active-shop switch", async () => {
+    const { enqueueSync } = await import("../offline/syncEngine");
+    const { setActiveShopId } = await import("../offline/shopScope");
+    await enqueueSync({
+      id: "r3-adj-a",
+      kind: "pending_stock_updates",
+      payload: {
+        productId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        delta: -1,
+        referenceType: "adjustment",
+        referenceId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      },
+      createdAt: new Date().toISOString(),
+      shopId: SHOP_A,
+    });
+    expect(state.queue[0]?.shopId).toBe(SHOP_A);
+
+    state.activeShopId = SHOP_B;
+    setActiveShopId(SHOP_B);
+    const { flushSyncQueueInner } = await import("../offline/syncEngine");
+    await flushSyncQueueInner();
+    expect(state.processCalls).toHaveLength(0);
+    expect(state.queue[0]?.shopId).toBe(SHOP_A);
+
+    state.activeShopId = SHOP_A;
+    setActiveShopId(SHOP_A);
+    await flushSyncQueueInner();
+    expect(state.processCalls).toEqual([{ shopId: SHOP_A, kind: "pending_stock_updates" }]);
+    expect(state.queue.find((o) => o.id === "r3-adj-a")).toBeUndefined();
+  });
 });
 
 describe("MB-1 shop scope utilities", () => {

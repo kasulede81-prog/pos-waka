@@ -62,6 +62,7 @@
     "test:printing": "node scripts/run-test-domain.mjs printing",
     "test:inventory": "node scripts/run-test-domain.mjs inventory",
     "test:transfer-engine": "vitest run src/lib/enterprise/stockTransferEngine.test.ts src/lib/enterprise/stockTransferEngine.sql.integration.test.ts src/lib/mb1BranchSafePartition.test.ts src/lib/purchaseStockSyncIdempotency.test.ts --no-file-parallelism",
+    "test:r3": "vitest run src/lib/stockDurableSync.test.ts src/lib/stockDurableSync.sql.integration.test.ts src/lib/mb1BranchSafePartition.test.ts src/lib/purchaseStockSyncIdempotency.test.ts src/lib/enterprise/stockTransferEngine.test.ts src/lib/enterprise/stockTransferEngine.sql.integration.test.ts --no-file-parallelism",
     "test:staff": "node scripts/run-test-domain.mjs staff",
     "test:reports": "node scripts/run-test-domain.mjs reports",
     "test:compliance": "node scripts/run-test-domain.mjs compliance",

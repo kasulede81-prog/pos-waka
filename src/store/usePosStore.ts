@@ -66,6 +66,8 @@ import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
 import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
 import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
+import { getActiveShopId } from "../offline/shopScope";
+import { r3AdjustmentStockPayload } from "../lib/stockDurableSync";
 import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
@@ -1387,12 +1389,14 @@ export function flushPendingPersist(): void {
 
 async function queueRemote(kind: SyncOperationKind, payload: unknown) {
   if (getActiveAccountKey()?.startsWith("demo:")) return;
+  const shopId = getActiveShopId() ?? undefined;
   await enqueueSync({
     id: crypto.randomUUID(),
     kind,
     payload,
     createdAt: new Date().toISOString(),
     attempts: 0,
+    shopId,
   });
 }
 
@@ -5452,14 +5456,18 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     });
 
-    if (Math.abs(stockDelta) > 1e-6) {
-      void queueRemote("pending_stock_updates", {
-        productId,
-        delta: stockDelta,
-        note: "count",
-        baseUpdatedAt: prev.updatedAt,
-        baseStockOnHand: prevStock,
-      });
+    if (Math.abs(stockDelta) > 1e-6 && movement) {
+      void queueRemote(
+        "pending_stock_updates",
+        r3AdjustmentStockPayload({
+          productId,
+          delta: stockDelta,
+          adjustmentId: movement.id,
+          note: "count",
+          baseUpdatedAt: prev.updatedAt,
+          baseStockOnHand: prevStock,
+        }),
+      );
     }
     void queueRemote("product", { id: productId, catalogOnly: true });
     const changes = diffProductCatalog(prev, normalized);
@@ -5521,13 +5529,17 @@ export const usePosStore = create<PosState>((set, get) => {
       ),
       ...movementMergePatch(s, [movement]),
     }));
-    void queueRemote("pending_stock_updates", {
-      productId,
-      delta,
-      note: reason ?? "",
-      baseUpdatedAt: prev?.updatedAt ?? null,
-      baseStockOnHand: prev?.stockOnHand,
-    });
+    void queueRemote(
+      "pending_stock_updates",
+      r3AdjustmentStockPayload({
+        productId,
+        delta,
+        adjustmentId: movement.id,
+        note: reason ?? "",
+        baseUpdatedAt: prev?.updatedAt ?? null,
+        baseStockOnHand: prev?.stockOnHand,
+      }),
+    );
     pushAudit("stock_adjust", `${auditReason} ${delta >= 0 ? "+" : ""}${delta} · ${prev?.name ?? productId}`, {
       productId,
       delta,
@@ -5614,13 +5626,17 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(s, [movement]),
     }));
 
-    void queueRemote("pending_stock_updates", {
-      productId,
-      delta,
-      note: `writeoff_${writeReason}`,
-      baseUpdatedAt: p.updatedAt,
-      baseStockOnHand: p.stockOnHand,
-    });
+    void queueRemote(
+      "pending_stock_updates",
+      r3AdjustmentStockPayload({
+        productId,
+        delta,
+        adjustmentId: movement.id,
+        note: `writeoff_${writeReason}`,
+        baseUpdatedAt: p.updatedAt,
+        baseStockOnHand: p.stockOnHand,
+      }),
+    );
 
     pushAudit("pharmacy_batch_writeoff", `Write-off ${p.name} −${qty} · ${writeReason} · UGX ${lossValueUgx.toLocaleString()}`, {
       writeOffId,
@@ -5687,13 +5703,17 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(s, [movement]),
     }));
 
-    void queueRemote("pending_stock_updates", {
-      productId,
-      delta,
-      note: "supplier_return",
-      baseUpdatedAt: p.updatedAt,
-      baseStockOnHand: p.stockOnHand,
-    });
+    void queueRemote(
+      "pending_stock_updates",
+      r3AdjustmentStockPayload({
+        productId,
+        delta,
+        adjustmentId: movement.id,
+        note: "supplier_return",
+        baseUpdatedAt: p.updatedAt,
+        baseStockOnHand: p.stockOnHand,
+      }),
+    );
 
     pushAudit("pharmacy_batch_return", `Supplier return ${p.name} −${writtenOff}`, {
       returnId,
@@ -6099,14 +6119,18 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(s, movements),
     }));
 
-    if (restoresStock) {
-      void queueRemote("pending_stock_updates", {
-        productId: product.id,
-        delta: qty,
-        note: "controlled_return",
-        baseUpdatedAt: product.updatedAt,
-        baseStockOnHand: product.stockOnHand,
-      });
+    if (restoresStock && movements[0]) {
+      void queueRemote(
+        "pending_stock_updates",
+        r3AdjustmentStockPayload({
+          productId: product.id,
+          delta: qty,
+          adjustmentId: movements[0].id,
+          note: "controlled_return",
+          baseUpdatedAt: product.updatedAt,
+          baseStockOnHand: product.stockOnHand,
+        }),
+      );
     }
 
     pushAudit(action, `${storeDisposition} ${product.name}`, {
