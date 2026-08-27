@@ -2,6 +2,7 @@ import type { Product, SaleLine } from "../types";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { formatQuantityWithFractions, roundSaleQuantity } from "./formatQuantityWithFractions";
 import { packLabelFromProduct, baseUnitsPerBuyingUnit } from "./sellingEngine";
+import { moneyLineAmountForQuantity } from "./saleAdjustments";
 
 export type ReceiptLineQuantityDisplay = {
   quantityLabel: string;
@@ -10,7 +11,9 @@ export type ReceiptLineQuantityDisplay = {
 
 /**
  * Quantity sold for display — for custom-amount (money) lines, derive from
- * total ÷ unit price so receipts never show the UGX amount as the quantity.
+ * list amount ÷ unit price so receipts never show the UGX amount as the quantity.
+ * A later price discount must not shrink quantity (1 piece at 300,000 discounted
+ * to 20,000 is still 1 piece, not 0.067).
  */
 export function resolveSaleLineQuantity(line: SaleLine): number {
   const stored = roundSaleQuantity(Math.max(0, Number(line.quantity) || 0));
@@ -19,7 +22,7 @@ export function resolveSaleLineQuantity(line: SaleLine): number {
   const unitPrice = Math.max(0, Math.floor(Number(line.unitPriceUgx) || 0));
   if (unitPrice <= 0) return stored;
 
-  const amount = Math.max(0, Math.floor(Number(line.moneyAmountUgx ?? line.lineTotalUgx) || 0));
+  const amount = moneyLineAmountForQuantity(line);
   if (amount <= 0) return stored;
 
   const derived = roundSaleQuantity(amount / unitPrice);

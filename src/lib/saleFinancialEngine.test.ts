@@ -246,6 +246,29 @@ describe("ensureMoneySaleQuantity", () => {
     );
     expect(fixed.quantity).toBe(3.25);
   });
+
+  it("does not shrink quantity when a money line was later price-discounted", () => {
+    const product = baseProduct({
+      sellingPricePerUnitUgx: 300_000,
+      costPricePerUnitUgx: 200_000,
+      baseUnit: "piece",
+    });
+    const fixed = ensureMoneySaleQuantity(
+      draftLine({
+        inputMode: "money",
+        quantity: 1,
+        unitPriceUgx: 300_000,
+        lineTotalUgx: 20_000,
+        moneyAmountUgx: 20_000,
+        originalLineTotalUgx: 300_000,
+        discountUgx: 280_000,
+      }),
+      product,
+    );
+    expect(fixed.quantity).toBe(1);
+    expect(fixed.lineTotalUgx).toBe(20_000);
+    expect(fixed.originalLineTotalUgx).toBe(300_000);
+  });
 });
 
 describe("applyCartDiscountSnapshot", () => {

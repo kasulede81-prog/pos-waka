@@ -68,6 +68,21 @@ describe("resolveSaleLineQuantity", () => {
     };
     expect(resolveSaleLineQuantity(line)).toBe(2);
   });
+
+  it("does not treat a discounted selling price as a smaller quantity", () => {
+    expect(
+      resolveSaleLineQuantity(
+        moneyLine({
+          quantity: 1,
+          unitPriceUgx: 300_000,
+          lineTotalUgx: 20_000,
+          moneyAmountUgx: 20_000,
+          originalLineTotalUgx: 300_000,
+          discountUgx: 280_000,
+        }),
+      ),
+    ).toBe(1);
+  });
 });
 
 describe("buildReceiptLineQuantityDisplay", () => {

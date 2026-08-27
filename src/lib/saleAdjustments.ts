@@ -10,6 +10,13 @@ export function lineDiscountUgx(line: SaleLine): number {
   return Math.max(0, line.discountUgx ?? listPriceForLine(line) - line.lineTotalUgx);
 }
 
+/** List/original money used to compute how much product was sold — never the discounted payable. */
+export function moneyLineAmountForQuantity(line: SaleLine): number {
+  const list = Math.max(0, Math.floor(Number(line.originalLineTotalUgx) || 0));
+  if (list > 0) return list;
+  return Math.max(0, Math.floor(Number(line.moneyAmountUgx ?? line.lineTotalUgx) || 0));
+}
+
 export function applyDiscountToLine(line: SaleLine, mode: DiscountMode, rawValue: number): SaleLine | null {
   const list = listPriceForLine(line);
   if (list <= 0) return null;
@@ -37,13 +44,16 @@ export function applyDiscountToLine(line: SaleLine, mode: DiscountMode, rawValue
   }
 
   const discount = list - nextTotal;
+  const originalMoney = line.inputMode === "money" ? (line.moneyAmountUgx ?? list) : line.moneyAmountUgx;
   return {
     ...line,
+    quantity: line.quantity,
+    inputMode: line.inputMode,
     originalLineTotalUgx: list,
     discountUgx: discount,
     lineTotalUgx: nextTotal,
     estimatedProfitUgx: Math.round(nextTotal - line.quantity * line.unitCostUgx),
-    moneyAmountUgx: line.inputMode === "money" ? nextTotal : line.moneyAmountUgx,
+    moneyAmountUgx: originalMoney,
   };
 }
 
