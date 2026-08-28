@@ -8,6 +8,7 @@ import {
   isPharmacyWizardDirty,
   isRetailWizardDirty,
   readProductWizardSessionDraft,
+  retailWizardAfterSaveAndAddAnother,
   writeProductWizardSessionDraft,
   type PharmacyWizardSessionFields,
   type RetailWizardSessionFields,
@@ -137,6 +138,28 @@ describe("productWizardSessionDraft", () => {
     expect(isRetailWizardDirty(emptyRetail({ step: "shelf" }))).toBe(true);
   });
 
+  it("Save & add another keeps the shelf identity and returns to the name step", () => {
+    const next = retailWizardAfterSaveAndAddAnother(
+      emptyRetail({
+        step: "buyPrice",
+        name: "Dell Latitude 5420",
+        shelf: "LATITUDE",
+        sellPrice: "2500000",
+        stockCount: "3",
+      }),
+    );
+    expect(next.step).toBe("name");
+    expect(next.name).toBe("");
+    expect(next.shelf).toBe("LATITUDE");
+    expect(next.shelf).not.toContain("/");
+    expect(next.sellPrice).toBe("");
+    expect(next.stockCount).toBe("");
+  });
+
+  it("Save & add another preserves a flat DELL destination when hierarchy is unused", () => {
+    expect(retailWizardAfterSaveAndAddAnother(emptyRetail({ shelf: "DELL" })).shelf).toBe("DELL");
+  });
+
   it("treats a blank pharmacy create form as clean", () => {
     expect(isPharmacyWizardDirty(emptyPharmacy())).toBe(false);
   });
@@ -146,6 +169,8 @@ describe("PRODUCT-CREATE-FLOW-1.1 wiring", () => {
   it("does not reset SimpleAddProductWizard when shelves identity changes", () => {
     const src = readFileSync(join(ROOT, "src/components/stock/SimpleAddProductWizard.tsx"), "utf8");
     expect(src).not.toMatch(/\[open, prefill, initialStep, shelves\]/);
+    expect(src).toContain("retailWizardAfterSaveAndAddAnother");
+    expect(src).not.toMatch(/if \(addAnother\) \{[\s\S]*setShelf\(""\)/);
   });
 
   it("asks before discarding the product wizard", () => {

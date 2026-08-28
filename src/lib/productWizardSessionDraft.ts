@@ -109,6 +109,28 @@ export function clearProductWizardSessionDraft(): void {
   }
 }
 
+/** After Save & add another: reset product fields, keep the shelf/folder identity. */
+export function retailWizardAfterSaveAndAddAnother(
+  fields: RetailWizardSessionFields,
+): RetailWizardSessionFields {
+  return {
+    step: "name",
+    name: "",
+    shelf: fields.shelf,
+    sellUnit: "piece",
+    sellUnitCustom: "",
+    hasPack: false,
+    packKind: "crate",
+    packCustom: "",
+    piecesPerPack: "",
+    stockCount: "",
+    sellPrice: "",
+    buyPackPrice: "",
+    auditReason: "",
+    editingProductId: null,
+  };
+}
+
 export function isRetailWizardDirty(fields: RetailWizardSessionFields): boolean {
   return (
     fields.step !== "name" ||

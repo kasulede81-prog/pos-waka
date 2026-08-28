@@ -10,15 +10,18 @@ import {
   catalogItemMatchesQuery,
   catalogNodesForShop,
   catalogShopIdFromPreferences,
+  findCatalogPickerItemByIdentity,
   hierarchyPickerChrome,
   isCatalogHierarchyEnabled,
   LOCAL_CATALOG_SHOP_ID,
+  nextDestinationAfterCatalogCreate,
   normalizeCatalogNodes,
   planCreateCatalogNode,
   planCreateCatalogShelf,
   remapCatalogNodesForRename,
   retireCatalogNodesForDeletedShelf,
   searchCatalogPickerItems,
+  selectedCatalogDestinationPath,
 } from "./catalogHierarchy";
 
 function product(category: string, id: string = crypto.randomUUID()): Product {
@@ -64,6 +67,14 @@ describe("catalog hierarchy feature flag", () => {
 
   it("flag ON activates hierarchy-aware Add Product chrome", () => {
     expect(hierarchyPickerChrome(true)).toEqual({ showSearch: true, showCreate: true, mode: "hierarchy" });
+  });
+
+  it("hides Create when the actor cannot persist CatalogNodes", () => {
+    expect(hierarchyPickerChrome(true, false)).toEqual({
+      showSearch: true,
+      showCreate: false,
+      mode: "hierarchy",
+    });
   });
 });
 
@@ -227,10 +238,18 @@ describe("Add Product picker search and create", () => {
       nodes,
       shopId: LOCAL_CATALOG_SHOP_ID,
     });
-    const leaf = searchCatalogPickerItems(items, "latitude");
-    expect(leaf.some((i) => i.legacyShelfKey === "Latitude")).toBe(true);
+    const leaf = items.find((i) => i.legacyShelfKey === "Latitude");
+    expect(leaf).toBeTruthy();
+    expect(catalogItemMatchesQuery(leaf!, "latitude")).toBe(true);
+    expect(searchCatalogPickerItems(items, "latitude").some((i) => i.legacyShelfKey === "Latitude")).toBe(true);
     const path = items.filter((i) => catalogItemMatchesQuery(i, "Dell Latitude"));
     expect(path.some((i) => i.legacyShelfKey === "Latitude")).toBe(true);
+    expect(selectedCatalogDestinationPath(items, "Latitude")).toBe(
+      "ELECTRONICS / COMPUTERS / LAPTOPS / DELL / Latitude",
+    );
+    expect(assignmentCategoryFromPickerItem(leaf!)).toBe("Latitude");
+    expect(assignmentCategoryFromPickerItem(leaf!)).not.toContain("/");
+    expect(findCatalogPickerItemByIdentity(items, "latitude")?.legacyShelfKey).toBe("Latitude");
   });
 
   it("create plan selects the new identity and can nest under a parent", () => {
@@ -257,6 +276,29 @@ describe("Add Product picker search and create", () => {
     expect(created.node.legacyShelfKey).toBe("DELL");
     expect(created.layout.DELL).toBeTruthy();
     expect(created.orderKeys).toContain("DELL");
+  });
+
+  it("create failure keeps the current destination and does not assign the typed name", () => {
+    expect(
+      nextDestinationAfterCatalogCreate({
+        ok: false,
+        legacyShelfKey: undefined,
+        currentValue: "LATITUDE",
+      }),
+    ).toEqual({ value: "LATITUDE", assigned: false });
+    expect(
+      nextDestinationAfterCatalogCreate({
+        ok: false,
+        currentValue: "LATITUDE",
+      }).value,
+    ).not.toBe("INSPIRON");
+    expect(
+      nextDestinationAfterCatalogCreate({
+        ok: true,
+        legacyShelfKey: "LATITUDE",
+        currentValue: "DELL",
+      }),
+    ).toEqual({ value: "LATITUDE", assigned: true });
   });
 });
 

@@ -333,15 +333,49 @@ export function assignmentCategoryFromPickerItem(item: CatalogPickerItem): strin
   return item.legacyShelfKey;
 }
 
+/** Match a picker row to Product.category / legacyShelfKey without treating path as identity. */
+export function findCatalogPickerItemByIdentity(
+  items: readonly CatalogPickerItem[],
+  identity: string,
+): CatalogPickerItem | undefined {
+  const key = identity.trim();
+  if (!key) return undefined;
+  return items.find((i) => sameShelfKey(i.legacyShelfKey, key) || sameShelfKey(i.name, key));
+}
+
+/** Display-only path. Never write this string to Product.category. */
+export function selectedCatalogDestinationPath(
+  items: readonly CatalogPickerItem[],
+  identity: string,
+): string {
+  const item = findCatalogPickerItemByIdentity(items, identity);
+  return item ? catalogItemPathText(item) : "";
+}
+
+/**
+ * After Create new shelf: keep the current destination unless create succeeded.
+ * Failed create must not assign the typed name as Product.category.
+ */
+export function nextDestinationAfterCatalogCreate(input: {
+  ok: boolean;
+  legacyShelfKey?: string;
+  currentValue: string;
+}): { value: string; assigned: boolean } {
+  if (!input.ok || !input.legacyShelfKey?.trim()) {
+    return { value: input.currentValue, assigned: false };
+  }
+  return { value: input.legacyShelfKey.trim(), assigned: true };
+}
+
 export type HierarchyPickerChrome = {
   showSearch: boolean;
   showCreate: boolean;
   mode: "flat" | "hierarchy";
 };
 
-export function hierarchyPickerChrome(enabled: boolean): HierarchyPickerChrome {
-  if (!enabled) return { showSearch: false, showCreate: false, mode: "flat" };
-  return { showSearch: true, showCreate: true, mode: "hierarchy" };
+export function hierarchyPickerChrome(enabled: boolean, canCreate = true): HierarchyPickerChrome {
+  if (enabled !== true) return { showSearch: false, showCreate: false, mode: "flat" };
+  return { showSearch: true, showCreate: canCreate === true, mode: "hierarchy" };
 }
 
 export function applySharedCategoryToRows<T extends { category: string }>(
@@ -355,4 +389,200 @@ export function applySharedCategoryToRows<T extends { category: string }>(
     if (selected && !selected.has(i)) return row;
     return { ...row, category: next };
   });
+}
+
+export function settingsCatalogFoldersVisible(enabled: boolean): boolean {
+  return enabled === true;
+}
+
+export type CatalogFolderTreeRow = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  legacyShelfKey: string;
+  depth: number;
+  pathLabels: string[];
+  pathText: string;
+  hasChildren: boolean;
+  childCount: number;
+  directProductCount: number;
+  inclusiveProductCount: number;
+  sortOrder: number;
+};
+
+function identityProductCount(products: readonly Product[], identity: string): number {
+  return products.reduce((n, p) => {
+    const cat = (p.category ?? "").trim();
+    return cat && sameShelfKey(cat, identity) ? n + 1 : n;
+  }, 0);
+}
+
+export function buildCatalogFolderTreeRows(input: {
+  nodes: readonly CatalogNode[];
+  shopId: string;
+  products?: readonly Product[];
+}): CatalogFolderTreeRow[] {
+  const scoped = catalogNodesForShop(input.nodes, input.shopId);
+  const products = input.products ?? [];
+  const rows: CatalogFolderTreeRow[] = [];
+  const walk = (parentId: string | null, depth: number, pathLabels: string[]) => {
+    for (const n of catalogChildren(scoped, parentId)) {
+      const labels = [...pathLabels, n.name];
+      const kids = catalogChildren(scoped, n.id);
+      const descendantIds = catalogDescendantIds(scoped, n.id);
+      const descendantKeys = descendantIds
+        .map((id) => scoped.find((x) => x.id === id)?.legacyShelfKey)
+        .filter(Boolean) as string[];
+      const directProductCount = identityProductCount(products, n.legacyShelfKey);
+      const inclusiveProductCount =
+        directProductCount +
+        descendantKeys.reduce((sum, key) => sum + identityProductCount(products, key), 0);
+      rows.push({
+        id: n.id,
+        parentId: n.parentId,
+        name: n.name,
+        legacyShelfKey: n.legacyShelfKey,
+        depth,
+        pathLabels: labels,
+        pathText: labels.join(" / "),
+        hasChildren: kids.length > 0,
+        childCount: kids.length,
+        directProductCount,
+        inclusiveProductCount,
+        sortOrder: n.sortOrder,
+      });
+      walk(n.id, depth + 1, labels);
+    }
+  };
+  walk(null, 0, []);
+  return rows;
+}
+
+export function visibleCatalogFolderTreeRows(
+  rows: readonly CatalogFolderTreeRow[],
+  expandedIds: ReadonlySet<string>,
+  query: string,
+): CatalogFolderTreeRow[] {
+  const q = query.trim();
+  if (q) {
+    const keep = new Set<string>();
+    for (const row of rows) {
+      const item: CatalogPickerItem = {
+        id: row.id,
+        parentId: row.parentId,
+        name: row.name,
+        legacyShelfKey: row.legacyShelfKey,
+        depth: row.depth,
+        pathLabels: row.pathLabels,
+        persisted: true,
+        sortOrder: row.sortOrder,
+      };
+      if (!catalogItemMatchesQuery(item, q)) continue;
+      keep.add(row.id);
+      let parentId = row.parentId;
+      while (parentId) {
+        keep.add(parentId);
+        parentId = rows.find((r) => r.id === parentId)?.parentId ?? null;
+      }
+    }
+    return rows.filter((r) => keep.has(r.id));
+  }
+
+  const hidden = new Set<string>();
+  for (const row of rows) {
+    if (row.parentId && (hidden.has(row.parentId) || !expandedIds.has(row.parentId))) {
+      hidden.add(row.id);
+    }
+  }
+  return rows.filter((r) => !hidden.has(r.id));
+}
+
+export function catalogReparentTargets(
+  nodes: readonly CatalogNode[],
+  shopId: string,
+  nodeId: string,
+): CatalogNode[] {
+  const scoped = catalogNodesForShop(nodes, shopId);
+  const blocked = new Set([nodeId, ...catalogDescendantIds(scoped, nodeId)]);
+  return scoped.filter((n) => !blocked.has(n.id));
+}
+
+export type PlanReparentCatalogNodeErr = {
+  ok: false;
+  errorKey: "catalogNodeMissing" | "catalogParentMissing" | "catalogReparentCycle";
+};
+
+export type PlanReparentCatalogNodeOk = {
+  ok: true;
+  nodes: CatalogNode[];
+  nodeId: string;
+  parentId: string | null;
+};
+
+export function planReparentCatalogNode(input: {
+  nodeId: string;
+  parentId: string | null;
+  nodes: readonly CatalogNode[];
+  shopId: string;
+  now?: string;
+}): PlanReparentCatalogNodeOk | PlanReparentCatalogNodeErr {
+  const shopId = input.shopId.trim() || LOCAL_CATALOG_SHOP_ID;
+  const scoped = catalogNodesForShop(input.nodes, shopId);
+  const node = scoped.find((n) => n.id === input.nodeId);
+  if (!node) return { ok: false, errorKey: "catalogNodeMissing" };
+  const parentId = input.parentId?.trim() || null;
+  if (parentId === node.id) return { ok: false, errorKey: "catalogReparentCycle" };
+  if (parentId) {
+    const parent = scoped.find((n) => n.id === parentId);
+    if (!parent) return { ok: false, errorKey: "catalogParentMissing" };
+    if (catalogDescendantIds(scoped, node.id).includes(parentId)) {
+      return { ok: false, errorKey: "catalogReparentCycle" };
+    }
+  }
+  if (node.parentId === parentId) {
+    return { ok: true, nodes: input.nodes as CatalogNode[], nodeId: node.id, parentId };
+  }
+  const siblings = catalogChildren(scoped, parentId).filter((n) => n.id !== node.id);
+  const sortOrder = siblings.reduce((max, n) => Math.max(max, n.sortOrder), -1) + 1;
+  const now = input.now ?? new Date().toISOString();
+  const next = input.nodes.map((n) =>
+    n.id === node.id ? { ...n, parentId, sortOrder, updatedAt: now } : n,
+  );
+  return { ok: true, nodes: next, nodeId: node.id, parentId };
+}
+
+export type PlanReorderCatalogSiblingsErr = {
+  ok: false;
+  errorKey: "catalogReorderInvalid";
+};
+
+export type PlanReorderCatalogSiblingsOk = {
+  ok: true;
+  nodes: CatalogNode[];
+};
+
+export function planReorderCatalogSiblings(input: {
+  parentId: string | null;
+  orderedIds: readonly string[];
+  nodes: readonly CatalogNode[];
+  shopId: string;
+  now?: string;
+}): PlanReorderCatalogSiblingsOk | PlanReorderCatalogSiblingsErr {
+  const shopId = input.shopId.trim() || LOCAL_CATALOG_SHOP_ID;
+  const scoped = catalogNodesForShop(input.nodes, shopId);
+  const siblings = catalogChildren(scoped, input.parentId);
+  if (siblings.length !== input.orderedIds.length) return { ok: false, errorKey: "catalogReorderInvalid" };
+  const current = new Set(siblings.map((n) => n.id));
+  const nextIds = [...input.orderedIds];
+  if (nextIds.some((id) => !current.has(id)) || new Set(nextIds).size !== nextIds.length) {
+    return { ok: false, errorKey: "catalogReorderInvalid" };
+  }
+  const now = input.now ?? new Date().toISOString();
+  const order = new Map(nextIds.map((id, i) => [id, i]));
+  const next = input.nodes.map((n) => {
+    const sortOrder = order.get(n.id);
+    if (sortOrder == null) return n;
+    return { ...n, sortOrder, updatedAt: now };
+  });
+  return { ok: true, nodes: next };
 }

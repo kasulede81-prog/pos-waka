@@ -7,6 +7,7 @@ import type { SessionActor } from "./sessionActor";
 import { setStoreSubscriptionContext } from "./storeSubscriptionContext";
 import {
   authorizePreferencesPatch,
+  canPersistCatalogShelfPreferences,
   requiredPermissionsForPreferencesPatch,
 } from "./settingsAuthorization";
 
@@ -62,6 +63,14 @@ describe("settingsAuthorization — permission map", () => {
     expect(requiredPermissionsForPreferencesPatch({ posCatalogNodes: [] })).toEqual(["settings.shop"]);
     expect(authorizePreferencesPatch(actor("owner"), { posPinnedShelfKeys: ["cat:General"] }).ok).toBe(true);
     expect(authorizePreferencesPatch(actor("manager"), { posPinnedShelfKeys: ["cat:General"] }).ok).toBe(false);
+  });
+
+  it("create CatalogNode persist matches createCatalogShelf gates", () => {
+    const ctx = { snapshot: { kind: "local_full" as const }, authMode: "local" as const };
+    expect(canPersistCatalogShelfPreferences(actor("owner"), ctx)).toBe(true);
+    expect(canPersistCatalogShelfPreferences(actor("manager"), ctx)).toBe(false);
+    expect(canPersistCatalogShelfPreferences(actor("stock_keeper"), ctx)).toBe(false);
+    expect(canPersistCatalogShelfPreferences(actor("cashier"), ctx)).toBe(false);
   });
 
   it("cash drawer settings require day.open_drawer (not Business shop tier)", () => {

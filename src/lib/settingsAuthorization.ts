@@ -192,3 +192,26 @@ export function authorizePreferencesPatch(
 
   return { ok: true };
 }
+
+/**
+ * Same gates as createCatalogShelf: shelves.customize (effective) plus
+ * authorizePreferencesPatch for posCatalogNodes (settings.shop).
+ * UI must not offer Create new shelf unless this is true.
+ */
+export function canPersistCatalogShelfPreferences(
+  actor: SessionActor | null | undefined,
+  input?: {
+    snapshot: SubscriptionSnapshot;
+    authMode: "supabase" | "local";
+  },
+): boolean {
+  const ctx = input ?? getStoreSubscriptionContext();
+  const customize = checkStorePermissionEffective(
+    actor ?? null,
+    "shelves.customize",
+    ctx.snapshot,
+    ctx.authMode,
+  );
+  if (!customize.ok) return false;
+  return authorizePreferencesPatch(actor ?? null, { posCatalogNodes: [] }, ctx).ok;
+}

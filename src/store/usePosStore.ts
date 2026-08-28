@@ -290,12 +290,14 @@ import {
   bulkDeleteEmptyShelvesPreferencePatch,
   planBulkDeleteEmptyShelves,
 } from "../lib/planBulkDeleteEmptyShelves";
-import { planRefillEmptyShelf } from "../lib/emptyShelfManager";
+import { catalogIdentityHasChildFolders, planRefillEmptyShelf } from "../lib/emptyShelfManager";
 import {
   catalogShopIdFromPreferences,
   isCatalogHierarchyEnabled,
   normalizeCatalogNodes,
   planCreateCatalogShelf,
+  planReorderCatalogSiblings,
+  planReparentCatalogNode,
   remapCatalogNodesForRename,
   retireCatalogNodesForDeletedShelf,
 } from "../lib/catalogHierarchy";
@@ -732,6 +734,16 @@ export type PosState = {
     name: string;
     parentId?: string | null;
   }) => { ok: boolean; errorKey?: string; legacyShelfKey?: string };
+  /** Overlay-only: change CatalogNode.parentId. Never mutates products or stock. */
+  reparentCatalogShelf: (
+    nodeId: string,
+    parentId: string | null,
+  ) => { ok: boolean; errorKey?: string };
+  /** Overlay-only: reorder CatalogNode siblings by sortOrder. Never mutates products. */
+  reorderCatalogSiblings: (
+    parentId: string | null,
+    orderedIds: string[],
+  ) => { ok: boolean; errorKey?: string };
   addStaffAccount: (input: {
     name: string;
     username?: string;
@@ -2221,6 +2233,16 @@ export const usePosStore = create<PosState>((set, get) => {
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
+    if (
+      isCatalogHierarchyEnabled(state.preferences) &&
+      catalogIdentityHasChildFolders(
+        state.preferences.posCatalogNodes ?? [],
+        catalogShopIdFromPreferences(state.preferences),
+        shelfKey,
+      )
+    ) {
+      return { ok: false, errorKey: "catalogFoldersCannotDeleteChildren" };
+    }
     const plan = planDeleteEmptyShelf({
       shelfKey,
       products: state.products,
@@ -2379,6 +2401,68 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: { ...s.preferences, ...prefPatch },
     }));
     return { ok: true, legacyShelfKey: plan.node.legacyShelfKey };
+  },
+
+  reparentCatalogShelf: (nodeId, parentId) => {
+    const denied = denyUnlessEffectivePermission("shelves.customize", "reparentCatalogShelf");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const plan = planReparentCatalogNode({
+      nodeId,
+      parentId,
+      nodes: state.preferences.posCatalogNodes ?? [],
+      shopId: catalogShopIdFromPreferences(state.preferences),
+    });
+    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
+    const prefPatch: Partial<ShopPreferences> = { posCatalogNodes: plan.nodes };
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: state.preferences.staffAccounts ?? [],
+    });
+    if (!prefAuth.ok) {
+      pushAudit("auth_forbidden", "Denied reparentCatalogShelf preferences", {
+        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
+        action: "reparentCatalogShelf",
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: prefAuth.errorKey,
+      });
+      return { ok: false, errorKey: prefAuth.errorKey };
+    }
+    set((s) => ({ preferences: { ...s.preferences, ...prefPatch } }));
+    return { ok: true };
+  },
+
+  reorderCatalogSiblings: (parentId, orderedIds) => {
+    const denied = denyUnlessEffectivePermission("shelves.customize", "reorderCatalogSiblings");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const plan = planReorderCatalogSiblings({
+      parentId,
+      orderedIds,
+      nodes: state.preferences.posCatalogNodes ?? [],
+      shopId: catalogShopIdFromPreferences(state.preferences),
+    });
+    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
+    const prefPatch: Partial<ShopPreferences> = { posCatalogNodes: plan.nodes };
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: state.preferences.staffAccounts ?? [],
+    });
+    if (!prefAuth.ok) {
+      pushAudit("auth_forbidden", "Denied reorderCatalogSiblings preferences", {
+        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
+        action: "reorderCatalogSiblings",
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: prefAuth.errorKey,
+      });
+      return { ok: false, errorKey: prefAuth.errorKey };
+    }
+    set((s) => ({ preferences: { ...s.preferences, ...prefPatch } }));
+    return { ok: true };
   },
 
   addStaffAccount: async (input) => {

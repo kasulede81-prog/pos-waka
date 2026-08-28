@@ -34,6 +34,7 @@ import {
   clearProductWizardSessionDraft,
   isRetailWizardDirty,
   readProductWizardSessionDraft,
+  retailWizardAfterSaveAndAddAnother,
   writeProductWizardSessionDraft,
   type RetailWizardSessionFields,
 } from "../../lib/productWizardSessionDraft";
@@ -340,19 +341,21 @@ export function SimpleAddProductWizard({
     setSaveError(null);
     if (addAnother) {
       clearProductWizardSessionDraft();
+      const next = retailWizardAfterSaveAndAddAnother(captureFields());
+      setStep(next.step);
+      setName(next.name);
+      setShelf(next.shelf);
+      setSellUnit(next.sellUnit);
+      setSellUnitCustom(next.sellUnitCustom);
+      setHasPack(next.hasPack);
+      setPackKind(next.packKind);
+      setPackCustom(next.packCustom);
+      setPiecesPerPack(next.piecesPerPack);
+      setStockCount(next.stockCount);
+      setSellPrice(next.sellPrice);
+      setBuyPackPrice(next.buyPackPrice);
+      setAuditReason(next.auditReason);
       setSavedFlash(true);
-      setName("");
-      setShelf("");
-      setSellUnit("piece");
-      setSellUnitCustom("");
-      setHasPack(false);
-      setPackKind("crate");
-      setPackCustom("");
-      setPiecesPerPack("");
-      setStockCount("");
-      setSellPrice("");
-      setBuyPackPrice("");
-      setStep("name");
       window.setTimeout(() => setSavedFlash(false), 2200);
       return;
     }

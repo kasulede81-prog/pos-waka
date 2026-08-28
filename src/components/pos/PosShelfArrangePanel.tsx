@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { Language, PosShelfColor, PosShelfLayoutConfig, PosShelfPresetId, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -29,6 +29,7 @@ import { ShelfScaleSlider } from "./ShelfScaleSlider";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
 import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 import { EmptyShelvesPanel } from "./EmptyShelvesPanel";
+import { CatalogFoldersPanel } from "./CatalogFoldersPanel";
 
 const PRESET_LABEL_KEY: Record<
   PosShelfPresetId,
@@ -75,6 +76,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   const hierarchyOn = usePosStore((s) => isCatalogHierarchyEnabled(s.preferences));
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [nameDraftKey, setNameDraftKey] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameSaved, setNameSaved] = useState(false);
@@ -119,19 +121,18 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   const selectedCard = selectedKey ? shelfCards.find((c) => c.key === selectedKey) : null;
 
-  useEffect(() => {
+  if (selectedKey !== nameDraftKey) {
+    setNameDraftKey(selectedKey);
     if (!selectedKey) {
       setNameDraft("");
-      setNameError(null);
-      setNameSaved(false);
-      return;
+    } else {
+      const card = shelfCards.find((c) => c.key === selectedKey);
+      const layoutName = shelfLayout[selectedKey]?.displayName?.trim();
+      setNameDraft(layoutName || card?.label || selectedKey);
     }
-    const card = shelfCards.find((c) => c.key === selectedKey);
-    const layoutName = shelfLayout[selectedKey]?.displayName?.trim();
-    setNameDraft(layoutName || card?.label || selectedKey);
     setNameError(null);
     setNameSaved(false);
-  }, [selectedKey]);
+  }
   const selectedScale = selectedConfig
     ? shelfScaleFromConfig(selectedConfig, Boolean(selectedConfig.featured), defaultScale)
     : defaultScale;
@@ -233,6 +234,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
             description={<span className="text-sm font-medium text-muted-foreground">{t(lang, "catalogHierarchyEnableHint")}</span>}
           />
         </section>
+        {hierarchyOn ? <CatalogFoldersPanel lang={lang} /> : null}
         <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-sm font-semibold text-warning-foreground">
           {t(lang, "posEmptySub")}
         </p>
@@ -247,9 +249,10 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
           checked={hierarchyOn}
           onCheckedChange={(checked) => setPreferences({ catalogHierarchyEnabled: checked })}
           label={<span className="text-sm font-black text-foreground">{t(lang, "catalogHierarchyEnable")}</span>}
-          description={<span className="text-sm font-medium text-muted-foreground">{t(lang, "catalogHierarchyEnableHint")}</span>}
-        />
-      </section>
+            description={<span className="text-sm font-medium text-muted-foreground">{t(lang, "catalogHierarchyEnableHint")}</span>}
+          />
+        </section>
+      {hierarchyOn ? <CatalogFoldersPanel lang={lang} /> : null}
       <section className="rounded-2xl border border-border bg-card p-3">
         <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posShelfDefaultScaleTitle")}</p>
         <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "posShelfDefaultScaleSub")}</p>
