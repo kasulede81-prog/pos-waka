@@ -2,25 +2,31 @@ import type { Sale } from "../types";
 import { saleReportingDayKey } from "./datesUg";
 import { getCompletedRevenue } from "./financialMetrics";
 import type { Product, ReturnRecord } from "../types";
-import { isCompletedSale, isPendingSale, saleStatusOf } from "./saleStatus";
+import { isCompletedSale, isPendingSale, isPreCompletionVoidedSale, saleStatusOf } from "./saleStatus";
 
 export type ReceiptsPartition = {
   completed: Sale[];
   pending: Sale[];
   cancelled: Sale[];
+  voided: Sale[];
 };
 
 export function partitionReceiptsSales(sales: Sale[]): ReceiptsPartition {
   const completed: Sale[] = [];
   const pending: Sale[] = [];
   const cancelled: Sale[] = [];
+  const voided: Sale[] = [];
   for (const s of sales) {
+    if (isPreCompletionVoidedSale(s)) {
+      voided.push(s);
+      continue;
+    }
     const status = saleStatusOf(s);
     if (status === "completed") completed.push(s);
     else if (status === "pending") pending.push(s);
     else cancelled.push(s);
   }
-  return { completed, pending, cancelled };
+  return { completed, pending, cancelled, voided };
 }
 
 export type ReceiptDayGroup = {

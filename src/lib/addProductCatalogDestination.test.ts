@@ -10,6 +10,7 @@ import { retailWizardAfterSaveAndAddAnother } from "./productWizardSessionDraft"
 import {
   assignmentCategoryFromPickerItem,
   buildCatalogPickerItems,
+  catalogCreateInsideParentId,
   LOCAL_CATALOG_SHOP_ID,
   nextDestinationAfterCatalogCreate,
   selectedCatalogDestinationPath,
@@ -191,6 +192,45 @@ describe("H3 Add Product catalog destination", () => {
     );
   });
 
+  it("create inside selected folder uses that folder as parent and assigns only the child identity", () => {
+    const dell = usePosStore.getState().preferences.posCatalogNodes?.find((n) => n.legacyShelfKey === "DELL");
+    expect(dell).toBeTruthy();
+    expect(catalogCreateInsideParentId({ id: dell!.id, persisted: true })).toBe(dell!.id);
+    const created = usePosStore.getState().createCatalogShelf({
+      name: "XPS",
+      parentId: catalogCreateInsideParentId({ id: dell!.id, persisted: true }) || null,
+    });
+    expect(created.ok).toBe(true);
+    expect(created.legacyShelfKey).toBe("XPS");
+    const next = nextDestinationAfterCatalogCreate({
+      ok: created.ok,
+      legacyShelfKey: created.legacyShelfKey,
+      currentValue: "DELL",
+    });
+    expect(next).toEqual({ value: "XPS", assigned: true });
+    expect(next.value).not.toContain("/");
+    const built = buildProductFromSimpleWizard(
+      {
+        name: "Dell XPS 15",
+        shelf: next.value,
+        sellUnit: "piece",
+        sellUnitCustom: "",
+        hasPack: false,
+        packKind: "crate",
+        packCustom: "",
+        piecesPerPack: "",
+        stockCount: "1",
+        sellPriceUgx: "2500000",
+        buyPackPriceUgx: "",
+      },
+      lang,
+    );
+    expect(built?.category).toBe("XPS");
+    expect("catalogNodeId" in (built ?? {})).toBe(false);
+    const child = usePosStore.getState().preferences.posCatalogNodes?.find((n) => n.legacyShelfKey === "XPS");
+    expect(child?.parentId).toBe(dell!.id);
+  });
+
   it("8. create folder success persists a node and selects its identity", () => {
     const created = usePosStore.getState().createCatalogShelf({
       name: "INSPIRON",
@@ -255,7 +295,9 @@ describe("H3 Add Product catalog destination", () => {
     const src = readFileSync(join(ROOT, "src/components/stock/HierarchyShelfPicker.tsx"), "utf8");
     expect(src).toContain("canPersistCatalogShelfPreferences");
     expect(src).toContain("nextDestinationAfterCatalogCreate");
-    expect(src).toContain("catalogSelectedFolder");
+    expect(src).toContain("catalogProductFolderBanner");
+    expect(src).toContain("catalogCreateInside");
+    expect(src).toContain("catalogCreateInsideParentId");
     expect(src).not.toMatch(/onChange\(fallback\)/);
     expect(src).not.toMatch(/if \(fallback\) onChange/);
   });

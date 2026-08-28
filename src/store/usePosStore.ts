@@ -194,6 +194,19 @@ import type { PosShelfPresetId } from "../types";
 import { assertBackupRestoreNotAborted, cancelBackupRestoreSession } from "../lib/backupRestoreSession";
 import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
 import { clearPersistedDraft, readPersistedDraft, resolveDraftFromPersisted, writePersistedDraft } from "../offline/draftStorage";
+import {
+  buildUnsavedCartVoidedSale,
+  emptyDraftCheckoutFields,
+  isDraftPaymentMethod,
+  resolveFinalizeCompletionTarget,
+  resolvePersistedDraftSaleBinding,
+  resumeWouldOverwriteUnrelatedCart,
+  stableVoidLineIdentity,
+  unsavedCartVoidPersistSucceeded,
+  stableVoidLineMovementId,
+  stableVoidRecordId,
+  type DraftPaymentMethod,
+} from "../lib/saleLifecycle";
 import type { PersistedSnapshot } from "../offline/localDb";
 import { tryMigrateLegacyLocalStorage, clearLegacyLocalStorage } from "../offline/migrateLegacyStore";
 import { enqueueSync } from "../offline/syncEngine";
@@ -309,7 +322,7 @@ import {
   StaffAccountAuthorizationError,
 } from "../lib/staffAccountAuthorization";
 import { isDeviceAuthorizedForManagementSync } from "../lib/deviceAuthority";
-import { isCompletedSale } from "../lib/saleStatus";
+import { isCompletedSale, isPendingSale } from "../lib/saleStatus";
 import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
 import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
 import { canRecordCashExpenses, resolveNewExpenseApprovalStatus } from "../lib/cashExpenses";
@@ -610,6 +623,12 @@ export type PosState = {
   draftCartDiscountUgx: number;
   /** When set, draft cart belongs to an open table / pending sale */
   activePendingSaleId: string | null;
+  draftSaleCustomerId: string;
+  draftSaleCustomerName: string;
+  draftSaleCustomerPhone: string;
+  draftPaymentMethod: DraftPaymentMethod;
+  setDraftPaymentMethod: (method: DraftPaymentMethod) => void;
+  setDraftSaleCustomer: (input: { customerId?: string; customerName?: string; customerPhone?: string }) => void;
   /** Phase 8.4 — active prescription in dispensing workspace. */
   activePharmacyPrescriptionId: string | null;
   /** Phase 8.4 — OTC vs prescription dispensing mode. */
@@ -842,6 +861,8 @@ export type PosState = {
   applyDraftLineDiscount: (productId: string, mode: DiscountMode, value: number) => { ok: boolean; errorKey?: string };
   setDraftCartDiscount: (amountUgx: number) => { ok: boolean; errorKey?: string };
   clearDraft: () => void;
+  /** Confirmed cashier Void Sale: unsaved cart → historical VOIDED record; resumed pending → cancelPendingSale. Never voidSaleLine. */
+  voidCurrentCart: () => { ok: boolean; kind: "unsaved" | "pending"; errorKey?: string; saleId?: string; noop?: boolean };
   ensureHospitalityFloor: () => void;
   openTable: (input: {
     tableId: string;
@@ -1052,7 +1073,7 @@ export type PosState = {
     tipUgx?: number;
     taxUgx?: number;
     billPayments?: import("../types").BillPaymentRecord[] | null;
-  }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string };
+  }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string; idempotent?: boolean };
 
   addProduct: (p: Omit<Product, "id" | "updatedAt" | "version"> & Partial<Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty">>) => void;
   quickAddProduct: (input: {
@@ -1312,6 +1333,22 @@ let pendingPersistNext: PosState | null = null;
 let persistSuspended = 0;
 let snapshotWriteInFlight = false;
 let snapshotWriteQueued = false;
+const finalizeInFlightKeys = new Set<string>();
+let voidCartInFlight = false;
+
+function completionLockKey(pendingId: string | null | undefined): string {
+  return pendingId?.trim() || "__draft__";
+}
+
+function emptyDraftPatch() {
+  return {
+    draftLines: [] as SaleLine[],
+    draftInput: null as DraftLineInput | null,
+    draftCartDiscountUgx: 0,
+    activePendingSaleId: null as string | null,
+    ...emptyDraftCheckoutFields(),
+  };
+}
 
 /** Pause debounced snapshot writes during heavy store mutations. */
 export function suspendStorePersist(): () => void {
@@ -1387,7 +1424,16 @@ function fireDraftWrite(s: PosState): void {
   const input = s.draftInput
     ? { productId: s.draftInput.product.id, inputMode: s.draftInput.inputMode, value: s.draftInput.value }
     : null;
-  void writePersistedDraft(s.draftLines, input, s.draftCartDiscountUgx);
+  void writePersistedDraft({
+    lines: s.draftLines,
+    input,
+    cartDiscountUgx: s.draftCartDiscountUgx,
+    activePendingSaleId: s.activePendingSaleId,
+    draftSaleCustomerId: s.draftSaleCustomerId,
+    draftSaleCustomerName: s.draftSaleCustomerName,
+    draftSaleCustomerPhone: s.draftSaleCustomerPhone,
+    draftPaymentMethod: s.draftPaymentMethod,
+  });
 }
 
 function schedulePersist(prev: PosState, next: PosState) {
@@ -1890,6 +1936,7 @@ export const usePosStore = create<PosState>((set, get) => {
   draftInput: null,
   draftCartDiscountUgx: 0,
   activePendingSaleId: null,
+  ...emptyDraftCheckoutFields(),
   activePharmacyPrescriptionId: null,
   pharmacyDispenseMode: null,
   pharmacyPrescriptions: [],
@@ -2001,8 +2048,11 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   hydrateRemainder: (data) =>
-    set((s) => ({
-      sales: data.sales ? data.sales.map(normalizeSale) : s.sales,
+    set((s) => {
+      const sales = data.sales ? data.sales.map(normalizeSale) : s.sales;
+      return {
+      sales,
+      activePendingSaleId: resolvePersistedDraftSaleBinding(sales, s.activePendingSaleId, true),
       debtPayments: data.debtPayments ?? s.debtPayments,
       dayCloses: data.dayCloses ?? s.dayCloses,
       auditLogs: mergeAuditLogs(data.auditLogs ?? [], s.auditLogs),
@@ -2038,7 +2088,8 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedVoidRecords: data.archivedVoidRecords ?? s.archivedVoidRecords,
       archivedReturnRecords: data.archivedReturnRecords ?? s.archivedReturnRecords,
       hydrationStage: s.hydrationStage === "none" ? "background" : s.hydrationStage,
-    })),
+    };
+    }),
 
   applyRestoredSnapshot: (snap) => {
     void applyRestoredSnapshotFromBackup(snap);
@@ -2077,9 +2128,7 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedVoidRecords: [],
       archivedReturnRecords: [],
       sessionActor: null,
-      draftLines: [],
-      draftInput: null,
-      draftCartDiscountUgx: 0,
+      ...emptyDraftPatch(),
       salesHistoryHydration: null,
       hydrationStage: "none",
       todayKpiSnapshot: null,
@@ -3466,9 +3515,93 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
+  setDraftPaymentMethod: (method) => {
+    const next = isDraftPaymentMethod(method) ? method : "cash";
+    set({ draftPaymentMethod: next });
+    scheduleDraftPersist(get);
+  },
+
+  setDraftSaleCustomer: (input) => {
+    set({
+      draftSaleCustomerId: input.customerId ?? get().draftSaleCustomerId,
+      draftSaleCustomerName: input.customerName ?? get().draftSaleCustomerName,
+      draftSaleCustomerPhone: input.customerPhone ?? get().draftSaleCustomerPhone,
+    });
+    scheduleDraftPersist(get);
+  },
+
   clearDraft: () => {
-    set({ draftLines: [], draftInput: null, draftCartDiscountUgx: 0, activePendingSaleId: null });
+    set(emptyDraftPatch());
     void clearPersistedDraft();
+  },
+
+  voidCurrentCart: () => {
+    const pendingId = get().activePendingSaleId?.trim() || null;
+    if (pendingId) {
+      const cancelled = get().cancelPendingSale(pendingId);
+      if (!cancelled.ok) {
+        return { ok: false, kind: "pending" as const, errorKey: cancelled.errorKey };
+      }
+      return { ok: true, kind: "pending" as const, saleId: pendingId };
+    }
+
+    const state = get();
+    if (!state.draftLines.length) {
+      get().clearDraft();
+      return { ok: true, kind: "unsaved" as const, noop: true };
+    }
+    if (voidCartInFlight) {
+      return { ok: false, kind: "unsaved" as const, errorKey: "saleInProgress" };
+    }
+    voidCartInFlight = true;
+    try {
+      const snapshotLines = state.draftLines.map((l) => ({ ...l }));
+      const snapshotDiscount = state.draftCartDiscountUgx;
+      const snapshotCustomerId = state.draftSaleCustomerId;
+      const snapshotCustomerName = state.draftSaleCustomerName;
+      const snapshotCustomerPhone = state.draftSaleCustomerPhone;
+      const snapshotPayment = state.draftPaymentMethod;
+      const snapshotInput = state.draftInput;
+      const at = new Date().toISOString();
+      const saleId = crypto.randomUUID();
+      const actor = state.sessionActor;
+      const record = buildUnsavedCartVoidedSale({
+        saleId,
+        lines: snapshotLines,
+        cartDiscountUgx: snapshotDiscount,
+        at,
+        actorUserId: actor?.userId ?? null,
+        actorLabel: actor?.displayName?.trim() || null,
+        customerId: snapshotCustomerId,
+        customerName: snapshotCustomerName,
+        customerPhone: snapshotCustomerPhone,
+        paymentMethod: snapshotPayment,
+      });
+      set({
+        sales: [record, ...state.sales.filter((s) => s.id !== saleId)],
+        ...emptyDraftPatch(),
+      });
+      if (!unsavedCartVoidPersistSucceeded(get().sales, saleId, get().draftLines.length)) {
+        set({
+          sales: get().sales.filter((s) => s.id !== saleId),
+          draftLines: snapshotLines,
+          draftInput: snapshotInput,
+          draftCartDiscountUgx: snapshotDiscount,
+          draftSaleCustomerId: snapshotCustomerId,
+          draftSaleCustomerName: snapshotCustomerName,
+          draftSaleCustomerPhone: snapshotCustomerPhone,
+          draftPaymentMethod: snapshotPayment,
+          activePendingSaleId: null,
+        });
+        return { ok: false, kind: "unsaved" as const, errorKey: "saleError" };
+      }
+      void clearPersistedDraft();
+      void queueRemote("pending_sales", { saleId, kind: "pending_cancel" });
+      flushPendingPersist();
+      return { ok: true, kind: "unsaved" as const, saleId };
+    } finally {
+      voidCartInFlight = false;
+    }
   },
 
   ensureHospitalityFloor: () => {
@@ -3552,6 +3685,7 @@ export const usePosStore = create<PosState>((set, get) => {
       draftCartDiscountUgx: 0,
       activePendingSaleId: saleId,
     });
+    scheduleDraftPersist(get);
     void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
     queueHospitalityChange({ sessionIds: [sessionId] });
     flushPendingPersist();
@@ -3613,6 +3747,7 @@ export const usePosStore = create<PosState>((set, get) => {
       draftCartDiscountUgx: 0,
       activePendingSaleId: saleId,
     });
+    scheduleDraftPersist(get);
     void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
     queueHospitalityChange({ sessionIds: [sessionId] });
     flushPendingPersist();
@@ -3643,6 +3778,7 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: { ...fresh.preferences, activeTableSessionId: sessionId },
       draftInput: null,
     });
+    scheduleDraftPersist(get);
     return { ok: true };
   },
 
@@ -3833,10 +3969,7 @@ export const usePosStore = create<PosState>((set, get) => {
 
   clearActiveTableOrder: () => {
     set({
-      activePendingSaleId: null,
-      draftLines: [],
-      draftInput: null,
-      draftCartDiscountUgx: 0,
+      ...emptyDraftPatch(),
       preferences: { ...get().preferences, activeTableSessionId: null },
     });
     void clearPersistedDraft();
@@ -4411,10 +4544,8 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     set({
       sales: [pendingSale, ...state.sales.filter((s) => s.id !== saleId)],
+      ...emptyDraftPatch(),
       activePendingSaleId: saleId,
-      draftLines: [],
-      draftInput: null,
-      draftCartDiscountUgx: 0,
     });
     void clearPersistedDraft();
     void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
@@ -4422,14 +4553,22 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true, saleId };
   },
 
+  // SL-09: pending_sales.manage is shop-wide. Hospitality tables and counter holds
+  // are shared work, so we do not add soldBy ownership checks here.
   resumePendingSale: (saleId) => {
     const denied = denyUnlessEffectivePermission("pending_sales.manage", "resumePendingSale");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
-    if (state.draftLines.length && !state.activePendingSaleId) {
+    if (
+      resumeWouldOverwriteUnrelatedCart({
+        draftLineCount: state.draftLines.length,
+        activePendingSaleId: state.activePendingSaleId,
+        resumeSaleId: saleId,
+      })
+    ) {
       return { ok: false, errorKey: "invalid" };
     }
-    const sale = state.sales.find((s) => s.id === saleId && s.status === "pending");
+    const sale = state.sales.find((s) => s.id === saleId && isPendingSale(s));
     if (!sale) return { ok: false, errorKey: "invalid" };
     set({
       draftLines: sale.lines.map((l) => ({ ...l })),
@@ -4441,6 +4580,8 @@ export const usePosStore = create<PosState>((set, get) => {
         activeTableSessionId: sale.tableSessionId ?? null,
       },
     });
+    scheduleDraftPersist(get);
+    flushPendingPersist();
     return { ok: true };
   },
 
@@ -4463,9 +4604,7 @@ export const usePosStore = create<PosState>((set, get) => {
     set({
       sales: [cancelled, ...state.sales.filter((s) => s.id !== saleId)],
       preferences: nextPrefs,
-      ...(state.activePendingSaleId === saleId
-        ? { activePendingSaleId: null, draftLines: [], draftInput: null, draftCartDiscountUgx: 0 }
-        : {}),
+      ...(state.activePendingSaleId === saleId ? emptyDraftPatch() : {}),
     });
     void queueRemote("pending_sales", { saleId, kind: "pending_cancel" });
     flushPendingPersist();
@@ -4493,6 +4632,25 @@ export const usePosStore = create<PosState>((set, get) => {
     if (dateLock) return dateLock;
 
     const state = get();
+    const target = resolveFinalizeCompletionTarget(state.sales, state.activePendingSaleId);
+    if (target.kind === "already_completed") {
+      set(emptyDraftPatch());
+      void clearPersistedDraft();
+      return { ok: true, saleId: target.sale.id, idempotent: true };
+    }
+    if (target.kind === "cancelled") {
+      return { ok: false, errorKey: "saleCancelledCannotComplete" };
+    }
+    if (target.kind === "stale_reference") {
+      return { ok: false, errorKey: "stalePendingCannotComplete" };
+    }
+
+    const lockKey = completionLockKey(state.activePendingSaleId);
+    if (finalizeInFlightKeys.has(lockKey)) {
+      return { ok: false, errorKey: "saleInProgress" };
+    }
+    finalizeInFlightKeys.add(lockKey);
+    try {
     const shiftGuard = requireActiveShift(state);
     if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
@@ -4978,10 +5136,7 @@ export const usePosStore = create<PosState>((set, get) => {
     set({
       products,
       sales: [sale, ...state.sales.filter((s) => s.id !== sale.id)],
-      draftLines: [],
-      draftInput: null,
-      draftCartDiscountUgx: 0,
-      activePendingSaleId: null,
+      ...emptyDraftPatch(),
       activePharmacyPrescriptionId: nextActiveRxId,
       pharmacyDispenseMode: nextDispenseMode,
       pharmacyPrescriptions: nextPharmacyPrescriptions,
@@ -5033,7 +5188,15 @@ export const usePosStore = create<PosState>((set, get) => {
       }
     });
     flushPendingPersist();
+    void import("../lib/efris/outbox")
+      .then(({ enqueueEfrisAfterCompletedSale }) => {
+        enqueueEfrisAfterCompletedSale(sale.id, sale.status);
+      })
+      .catch(() => undefined);
     return { ok: true, firstSale: isFirstSale, saleId: sale.id };
+    } finally {
+      finalizeInFlightKeys.delete(lockKey);
+    }
   },
 
   voidSaleLine: ({ saleId, lineIndex, reason, note }) => {
@@ -5053,6 +5216,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
     const sale = saleForLock;
+    if (!isCompletedSale(sale)) return { ok: false, errorKey: "invalid" };
     const line = sale.lines[lineIndex];
     if (!line || line.voided) return { ok: false, errorKey: "invalid" };
 
@@ -5063,9 +5227,21 @@ export const usePosStore = create<PosState>((set, get) => {
       (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(actor),
     );
     const at = new Date().toISOString();
+    const shopKey = inventoryMovementNamespace();
+    const lineIdentity = stableVoidLineIdentity(saleId, lineIndex, line.id);
+    const voidRecordId = stableVoidRecordId(shopKey, saleId, lineIdentity);
+    const movementId = stableVoidLineMovementId(shopKey, saleId, lineIdentity, line.productId);
+    if (
+      state.voidRecords.some((v) => v.id === voidRecordId) ||
+      (state.archivedVoidRecords ?? []).some((v) => v.id === voidRecordId) ||
+      state.stockMovements.some((m) => m.id === movementId) ||
+      (state.archivedStockMovements ?? []).some((m) => m.id === movementId)
+    ) {
+      return { ok: false, errorKey: "invalid" };
+    }
 
     const voidRec: VoidRecord = {
-      id: crypto.randomUUID(),
+      id: voidRecordId,
       saleId,
       lineIndex,
       productId: line.productId,
@@ -5107,7 +5283,7 @@ export const usePosStore = create<PosState>((set, get) => {
     }
 
     const movement: StockMovement = {
-      id: crypto.randomUUID(),
+      id: movementId,
       at,
       productId: line.productId,
       productName: line.name,
@@ -8183,12 +8359,32 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
   const draft = await readPersistedDraft();
   if (!draft) return;
   const products = usePosStore.getState().products;
-  const { draftLines, draftInput } = resolveDraftFromPersisted(draft, products);
-  if (draftLines.length > 0 || draftInput || (draft.draftCartDiscountUgx ?? 0) > 0) {
+  const resolved = resolveDraftFromPersisted(draft, products);
+  const salesReady = usePosStore.getState().hydrationStage === "complete";
+  const activePendingSaleId = resolvePersistedDraftSaleBinding(
+    usePosStore.getState().sales,
+    resolved.activePendingSaleId,
+    salesReady,
+  );
+  if (
+    resolved.draftLines.length > 0 ||
+    resolved.draftInput ||
+    (draft.draftCartDiscountUgx ?? 0) > 0 ||
+    activePendingSaleId ||
+    resolved.draftSaleCustomerId ||
+    resolved.draftSaleCustomerName ||
+    resolved.draftSaleCustomerPhone ||
+    resolved.draftPaymentMethod !== "cash"
+  ) {
     usePosStore.setState({
-      draftLines,
-      draftInput,
+      draftLines: resolved.draftLines,
+      draftInput: resolved.draftInput,
       draftCartDiscountUgx: Math.max(0, Math.floor(draft.draftCartDiscountUgx ?? 0)),
+      activePendingSaleId,
+      draftSaleCustomerId: resolved.draftSaleCustomerId,
+      draftSaleCustomerName: resolved.draftSaleCustomerName,
+      draftSaleCustomerPhone: resolved.draftSaleCustomerPhone,
+      draftPaymentMethod: resolved.draftPaymentMethod,
     });
   }
 }

@@ -36,7 +36,7 @@ import { partitionReceiptsSales } from "../lib/receiptsGrouping";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { expenseCountsInDrawer } from "../lib/cashExpenses";
 import { inventoryValueAtCostUgx } from "../lib/purchaseRecovery";
-import { isCompletedSale } from "../lib/saleStatus";
+import { isCompletedSale, isPreCompletionVoidedSale, voidedSaleHistoryNumber } from "../lib/saleStatus";
 import { SalesHistoryRow } from "../components/receipts/SalesHistoryRow";
 import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { sumDebtPaymentsInBounds } from "../lib/customerDebtActivity";
@@ -234,20 +234,22 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const itemsSoldCount = useMemo(() => countItemsSold(partitioned.completed), [partitioned.completed]);
 
   const listSales = useMemo(() => {
-    const primary = [...partitioned.completed, ...partitioned.pending];
+    const primary = [...partitioned.completed, ...partitioned.pending, ...partitioned.voided];
     primary.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 
     const q = searchQuery.trim().toLowerCase();
     if (!q) return primary;
 
     return primary.filter((sale) => {
-      const invoice = buildReceiptNumberForSale(sale, sales).toLowerCase();
+      const invoice = (
+        isPreCompletionVoidedSale(sale) ? voidedSaleHistoryNumber(sale) : buildReceiptNumberForSale(sale, sales)
+      ).toLowerCase();
       if (invoice.includes(q)) return true;
       if (customerNameFor(sale).toLowerCase().includes(q)) return true;
       if (soldByLabel(sale).toLowerCase().includes(q)) return true;
       return sale.lines.some((line) => line.name.toLowerCase().includes(q));
     });
-  }, [partitioned.completed, partitioned.pending, searchQuery, sales, customers, soldByNameByUserId, lang]);
+  }, [partitioned.completed, partitioned.pending, partitioned.voided, searchQuery, sales, customers, soldByNameByUserId, lang]);
 
   const selectedDay = selectedDayKeyForFilter(filter);
   const isSingleDay = selectedDay != null;

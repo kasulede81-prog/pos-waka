@@ -5,7 +5,7 @@ import type { Language, Sale } from "../../types";
 import { t } from "../../lib/i18n";
 import { buildReceiptNumberForSale } from "../../lib/receiptPrint";
 import { receiptPrintActionLabel } from "../../lib/printActionLabels";
-import { isCompletedSale, saleStatusOf } from "../../lib/saleStatus";
+import { isCompletedSale, isPreCompletionVoidedSale, saleStatusOf, voidedSaleHistoryNumber } from "../../lib/saleStatus";
 import { statusTokens } from "../../lib/statusTokens";
 import {
   EnterpriseDataTable,
@@ -63,7 +63,8 @@ export function SalesHistoryDesktopTable({
         id: "receipt",
         header: t(lang, "receipts"),
         width: "minmax(100px,1fr)",
-        cell: (sale) => buildReceiptNumberForSale(sale, allSales),
+        cell: (sale) =>
+          isPreCompletionVoidedSale(sale) ? voidedSaleHistoryNumber(sale) : buildReceiptNumberForSale(sale, allSales),
         className: "text-foreground",
       },
       {
@@ -109,6 +110,9 @@ export function SalesHistoryDesktopTable({
         cell: (sale) => {
           const status = saleStatusOf(sale);
           if (status === "pending") return <span className={statusTokens.warning.badge}>{t(lang, "salesHistoryStatusPending")}</span>;
+          if (isPreCompletionVoidedSale(sale)) {
+            return <span className={statusTokens.danger.badge}>{t(lang, "salesHistoryStatusVoided")}</span>;
+          }
           if (status === "cancelled") return <span className={statusTokens.draft.badge}>{t(lang, "salesHistoryStatusCancelled")}</span>;
           return <span className={statusTokens.success.badge}>{t(lang, "salesHistoryStatusCompleted")}</span>;
         },

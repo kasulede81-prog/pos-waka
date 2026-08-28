@@ -4,17 +4,22 @@ import { ChevronDown, ChevronRight, FolderPlus, Search } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
+import { useSubscription } from "../../context/SubscriptionContext";
+import { canPersistCatalogShelfPreferences } from "../../lib/settingsAuthorization";
 import {
   buildCatalogFolderTreeRows,
   buildCatalogPickerItems,
   catalogChildren,
+  catalogCreateIntentParentId,
   catalogItemPathText,
   catalogReparentTargets,
   catalogShopIdFromPreferences,
+  expandAncestorsForCreatedFolder,
   visibleCatalogFolderTreeRows,
   type CatalogFolderTreeRow,
 } from "../../lib/catalogHierarchy";
 import { formatShelfProductCountLabel } from "../../lib/posShelfDisplayLabel";
+import { CatalogCreateFolderForm } from "./CatalogCreateFolderForm";
 
 type Props = {
   lang: Language;
@@ -23,11 +28,14 @@ type Props = {
 export function CatalogFoldersPanel({ lang }: Props) {
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
+  const sessionActor = usePosStore((s) => s.sessionActor);
   const createCatalogShelf = usePosStore((s) => s.createCatalogShelf);
   const reparentCatalogShelf = usePosStore((s) => s.reparentCatalogShelf);
   const reorderCatalogSiblings = usePosStore((s) => s.reorderCatalogSiblings);
   const renameShelfCategory = usePosStore((s) => s.renameShelfCategory);
   const deleteEmptyShelf = usePosStore((s) => s.deleteEmptyShelf);
+  const { snapshot, authMode } = useSubscription();
+  const canCreate = canPersistCatalogShelfPreferences(sessionActor, { snapshot, authMode });
 
   const shopId = catalogShopIdFromPreferences(preferences);
   const nodes = useMemo(() => preferences.posCatalogNodes ?? [], [preferences.posCatalogNodes]);
@@ -57,6 +65,7 @@ export function CatalogFoldersPanel({ lang }: Props) {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
+  const [parentLocked, setParentLocked] = useState(false);
   const [newName, setNewName] = useState("");
   const [parentId, setParentId] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
@@ -75,6 +84,9 @@ export function CatalogFoldersPanel({ lang }: Props) {
   const selected = allRows.find((r) => r.id === selectedId) ?? null;
   const persistedParents = pickerItems.filter((i) => i.persisted);
   const moveTargets = movingId ? catalogReparentTargets(nodes, shopId, movingId) : [];
+  const parentRow = parentId ? allRows.find((r) => r.id === parentId) : null;
+  const insideLabel = parentRow?.pathText || t(lang, "catalogFolderInsideTop");
+  const creatingChild = creating && Boolean(parentId);
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -85,7 +97,40 @@ export function CatalogFoldersPanel({ lang }: Props) {
     });
   };
 
+  const openCreateTopLevel = () => {
+    if (!canCreate) return;
+    setCreating(true);
+    setParentLocked(false);
+    setParentId(catalogCreateIntentParentId("top-level", selectedId) ?? "");
+    setNewName("");
+    setCreateError(null);
+    setStatus(null);
+  };
+
+  const openCreateChild = (folderId: string) => {
+    if (!canCreate) return;
+    const parent = catalogCreateIntentParentId("child", folderId);
+    if (!parent) return;
+    setSelectedId(folderId);
+    const row = allRows.find((r) => r.id === folderId);
+    if (row) setRenameDraft(row.name);
+    setCreating(true);
+    setParentLocked(true);
+    setParentId(parent);
+    setNewName("");
+    setCreateError(null);
+    setStatus(null);
+  };
+
+  const closeCreate = () => {
+    setCreating(false);
+    setNewName("");
+    setCreateError(null);
+    setParentLocked(false);
+  };
+
   const submitCreate = () => {
+    if (!canCreate) return;
     setCreateError(null);
     const result = createCatalogShelf({
       name: newName,
@@ -95,26 +140,14 @@ export function CatalogFoldersPanel({ lang }: Props) {
       setCreateError(t(lang, result.errorKey ?? "shelfRenameEmpty"));
       return;
     }
-    setCreating(false);
-    setNewName("");
-    setParentId("");
+    closeCreate();
     setStatus(tTemplate(lang, "catalogFoldersCreated", { name: result.legacyShelfKey ?? newName.trim() }));
-    const created = (usePosStore.getState().preferences.posCatalogNodes ?? []).find(
-      (n) => n.legacyShelfKey === result.legacyShelfKey,
-    );
+    const latest = usePosStore.getState().preferences.posCatalogNodes ?? [];
+    const created = latest.find((n) => n.legacyShelfKey === result.legacyShelfKey);
     if (created) {
       setSelectedId(created.id);
-      if (created.parentId) {
-        setExpanded((prev) => {
-          const next = new Set(prev);
-          let pid: string | null = created.parentId;
-          while (pid) {
-            next.add(pid);
-            pid = nodes.find((n) => n.id === pid)?.parentId ?? null;
-          }
-          return next;
-        });
-      }
+      setRenameDraft(created.name);
+      setExpanded((prev) => expandAncestorsForCreatedFolder(latest, created.parentId, prev));
     }
   };
 
@@ -173,6 +206,7 @@ export function CatalogFoldersPanel({ lang }: Props) {
   };
 
   const makeFolder = (legacyShelfKey: string) => {
+    if (!canCreate) return;
     const result = createCatalogShelf({ name: legacyShelfKey, parentId: null });
     if (!result.ok) {
       setStatus(t(lang, result.errorKey ?? "invalid"));
@@ -180,6 +214,23 @@ export function CatalogFoldersPanel({ lang }: Props) {
     }
     setStatus(tTemplate(lang, "catalogFoldersPromoted", { name: legacyShelfKey }));
   };
+
+  const createForm = (
+    <CatalogCreateFolderForm
+      lang={lang}
+      newName={newName}
+      onNameChange={setNewName}
+      parentId={parentId}
+      onParentChange={setParentId}
+      parentOptions={persistedParents.map((item) => ({ id: item.id, path: catalogItemPathText(item) }))}
+      insideLabel={insideLabel}
+      parentLocked={parentLocked}
+      onUnlockParent={() => setParentLocked(false)}
+      error={createError}
+      onCancel={closeCreate}
+      onSubmit={submitCreate}
+    />
+  );
 
   return (
     <section className="space-y-3 overflow-x-hidden rounded-2xl border-2 border-waka-200 bg-card p-3">
@@ -204,75 +255,25 @@ export function CatalogFoldersPanel({ lang }: Props) {
         />
       </label>
 
-      <button
-        type="button"
-        onClick={() => {
-          setCreating((open) => !open);
-          setCreateError(null);
-          setStatus(null);
-        }}
-        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-waka-600 px-4 text-sm font-black text-white active:bg-waka-700"
-      >
-        <FolderPlus className="h-5 w-5" aria-hidden />
-        {t(lang, "catalogFoldersCreate")}
-      </button>
-
-      {creating ? (
-        <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-3">
-          <p className="text-sm font-medium text-muted-foreground">{t(lang, "catalogShelfCreatedHint")}</p>
-          <label className="block space-y-1">
-            <span className="text-xs font-bold text-muted-foreground">{t(lang, "catalogShelfName")}</span>
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={t(lang, "catalogFoldersNamePh")}
-              autoFocus
-              autoComplete="off"
-              className="min-h-[44px] w-full rounded-xl border-2 border-border px-3 text-sm font-semibold"
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-bold text-muted-foreground">{t(lang, "catalogShelfParent")}</span>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className="min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 text-sm font-semibold"
-            >
-              <option value="">{t(lang, "catalogShelfParentNone")}</option>
-              {persistedParents.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {catalogItemPathText(item)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {createError ? <p className="text-xs font-bold text-danger">{createError}</p> : null}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setCreating(false);
-                setNewName("");
-                setCreateError(null);
-              }}
-              className="min-h-[44px] rounded-xl border border-border px-3 text-sm font-black"
-            >
-              {t(lang, "cancel")}
-            </button>
-            <button
-              type="button"
-              onClick={submitCreate}
-              className="min-h-[44px] rounded-xl bg-waka-600 px-3 text-sm font-black text-white"
-            >
-              {t(lang, "catalogFoldersCreateAction")}
-            </button>
-          </div>
-        </div>
+      {canCreate ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (creating && !parentId) closeCreate();
+            else openCreateTopLevel();
+          }}
+          className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-waka-600 px-4 text-sm font-black text-white active:bg-waka-700"
+        >
+          <FolderPlus className="h-5 w-5" aria-hidden />
+          {t(lang, "catalogFoldersCreate")}
+        </button>
       ) : null}
+
+      {creating && !creatingChild ? createForm : null}
 
       {visibleRows.length === 0 ? (
         <p className="text-sm font-semibold text-muted-foreground">
-          {allRows.length === 0 ? t(lang, "catalogFoldersEmpty") : t(lang, "catalogShelfNoMatches")}
+          {allRows.length === 0 ? t(lang, "catalogFoldersEmpty") : t(lang, "catalogFolderNoMatches")}
         </p>
       ) : (
         <ul className="space-y-1">
@@ -295,12 +296,12 @@ export function CatalogFoldersPanel({ lang }: Props) {
                         type="button"
                         aria-expanded={open}
                         onClick={() => toggleExpand(row.id)}
-                        className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg active:bg-muted"
+                        className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg active:bg-muted"
                       >
                         {open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                       </button>
                     ) : (
-                      <span className="h-10 w-10 shrink-0" aria-hidden />
+                      <span className="h-11 w-11 shrink-0" aria-hidden />
                     )}
                     <button
                       type="button"
@@ -311,7 +312,7 @@ export function CatalogFoldersPanel({ lang }: Props) {
                       }}
                       className="min-h-[44px] min-w-0 flex-1 py-1 text-left"
                     >
-                      <span className="block break-words text-sm font-black uppercase text-foreground">{row.name}</span>
+                      <span className="block break-words text-sm font-black text-foreground">{row.name}</span>
                       <span className="mt-0.5 block break-words text-xs font-medium text-muted-foreground">
                         {row.pathText}
                       </span>
@@ -341,6 +342,16 @@ export function CatalogFoldersPanel({ lang }: Props) {
                       </button>
                     </div>
                   </div>
+                  {canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => openCreateChild(row.id)}
+                      className="mt-1 flex min-h-[44px] w-full items-center justify-center gap-1 rounded-xl border border-waka-300 px-3 text-sm font-black text-waka-900 active:bg-waka-50"
+                    >
+                      <FolderPlus className="h-4 w-4" aria-hidden />
+                      {t(lang, "catalogFoldersAddChild")}
+                    </button>
+                  ) : null}
                 </div>
               </li>
             );
@@ -350,33 +361,46 @@ export function CatalogFoldersPanel({ lang }: Props) {
 
       {selected ? (
         <div className="space-y-3 rounded-2xl border border-waka-200 bg-waka-50/50 p-3">
-          <p className="text-sm font-black text-foreground">{selected.name}</p>
+          <p className="break-words text-sm font-black text-foreground">{selected.name}</p>
+          {canCreate ? (
+            <button
+              type="button"
+              onClick={() => openCreateChild(selected.id)}
+              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-waka-600 px-4 text-sm font-black text-white active:bg-waka-700"
+            >
+              <FolderPlus className="h-5 w-5" aria-hidden />
+              {t(lang, "catalogFoldersAddChild")}
+            </button>
+          ) : null}
+          {creatingChild ? createForm : null}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMovingId(selected.id);
+                setMoveParentId(selected.parentId ?? "");
+                setMoveError(null);
+              }}
+              className="min-h-[44px] rounded-xl border-2 border-waka-300 px-4 text-sm font-black text-waka-900"
+            >
+              {t(lang, "catalogFoldersMove")}
+            </button>
+            <button
+              type="button"
+              onClick={submitRename}
+              className="min-h-[44px] rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
+            >
+              {t(lang, "catalogFoldersRename")}
+            </button>
+          </div>
           <label className="block space-y-1">
-            <span className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditName")}</span>
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "catalogFolderName")}</span>
             <input
               value={renameDraft}
               onChange={(e) => setRenameDraft(e.target.value)}
               className="min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-semibold"
             />
           </label>
-          <button
-            type="button"
-            onClick={submitRename}
-            className="min-h-[44px] w-full rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
-          >
-            {t(lang, "posShelfRenameSave")}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMovingId(selected.id);
-              setMoveParentId(selected.parentId ?? "");
-              setMoveError(null);
-            }}
-            className="min-h-[44px] w-full rounded-xl border-2 border-waka-300 px-4 text-sm font-black text-waka-900"
-          >
-            {t(lang, "catalogFoldersMove")}
-          </button>
           {selected.hasChildren ? (
             <p className="text-xs font-bold text-muted-foreground">{t(lang, "catalogFoldersCannotDeleteChildren")}</p>
           ) : (
@@ -389,19 +413,21 @@ export function CatalogFoldersPanel({ lang }: Props) {
             </button>
           )}
         </div>
+      ) : creatingChild ? (
+        createForm
       ) : null}
 
       {movingId ? (
         <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-3">
           <p className="text-sm font-black text-foreground">{t(lang, "catalogFoldersMoveTitle")}</p>
           <label className="block space-y-1">
-            <span className="text-xs font-bold text-muted-foreground">{t(lang, "catalogShelfParent")}</span>
+            <span className="text-xs font-bold text-muted-foreground">{t(lang, "catalogFolderInside")}</span>
             <select
               value={moveParentId}
               onChange={(e) => setMoveParentId(e.target.value)}
               className="min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 text-sm font-semibold"
             >
-              <option value="">{t(lang, "catalogShelfParentNone")}</option>
+              <option value="">{t(lang, "catalogFolderInsideTop")}</option>
               {moveTargets.map((n) => {
                 const row = allRows.find((r) => r.id === n.id);
                 return (
@@ -432,7 +458,7 @@ export function CatalogFoldersPanel({ lang }: Props) {
         </div>
       ) : null}
 
-      {virtualItems.length > 0 ? (
+      {canCreate && virtualItems.length > 0 ? (
         <div className="space-y-2 rounded-2xl border border-dashed border-border p-3">
           <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
             {t(lang, "catalogFoldersLegacyTitle")}

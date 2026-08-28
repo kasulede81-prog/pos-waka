@@ -11,6 +11,7 @@ export type PosModalState = {
   checkoutBlockModalOpen: boolean;
   receiptOpen: boolean;
   shiftCloseOpen: boolean;
+  cartVoidOpen?: boolean;
 };
 
 export type PosShortcutAction =
@@ -37,7 +38,8 @@ export function isPosModalOpen(state: PosModalState): boolean {
     state.expiryWarnOpen ||
     state.checkoutBlockModalOpen ||
     state.receiptOpen ||
-    state.shiftCloseOpen
+    state.shiftCloseOpen ||
+    Boolean(state.cartVoidOpen)
   );
 }
 

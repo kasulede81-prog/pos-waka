@@ -3,7 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { ShelfDestinationPicker } from "./ShelfDestinationPicker";
+import { isCatalogHierarchyEnabled } from "../../lib/catalogHierarchy";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
 import { usePosStore } from "../../store/usePosStore";
 import {
@@ -19,6 +19,7 @@ import {
 import { validateAuditReason } from "../../lib/auditReasons";
 import type { WizardPrefillFromAi } from "../../lib/ai/mapAiSuggestionToWizard";
 import { CostValidationPreview } from "./CostValidationPreview";
+import { ShelfDestinationPicker } from "./ShelfDestinationPicker";
 import { ProductWizardShell } from "./wizard/ProductWizardShell";
 import { WizardFooter } from "./wizard/WizardFooter";
 import { WizardStepHeading } from "./wizard/WizardStepHeading";
@@ -449,14 +450,18 @@ export function SimpleAddProductWizard({
             {!savedFlash && step === "shelf" ? (
               <div key="shelf" className="wizard-step-enter space-y-5">
                 <WizardStepHeading
-                  title={t(lang, "simpleAddStep2Title")}
-                  hint={uiPlaceholder(
-                    lang,
-                    preferences.businessType,
-                    "simpleAddStep2Hint",
-                    preferences.pharmacyModeEnabled,
-                    preferences.hospitalityModeEnabled,
-                  )}
+                  title={t(lang, isCatalogHierarchyEnabled(preferences) ? "catalogAddProductFolderTitle" : "simpleAddStep2Title")}
+                  hint={
+                    isCatalogHierarchyEnabled(preferences)
+                      ? t(lang, "catalogAddProductFolderHint")
+                      : uiPlaceholder(
+                          lang,
+                          preferences.businessType,
+                          "simpleAddStep2Hint",
+                          preferences.pharmacyModeEnabled,
+                          preferences.hospitalityModeEnabled,
+                        )
+                  }
                 />
                 <ShelfDestinationPicker
                   lang={lang}

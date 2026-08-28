@@ -28,7 +28,7 @@ describe("isPosModalOpen", () => {
     expect(isPosModalOpen({ ...closedModals, cartSaleDiscountOpen: true })).toBe(true);
     expect(isPosModalOpen({ ...closedModals, cameraScanOpen: true })).toBe(true);
     expect(isPosModalOpen({ ...closedModals, expenseModalOpen: true })).toBe(true);
-    expect(isPosModalOpen({ ...closedModals, firstSaleOpen: true })).toBe(true);
+    expect(isPosModalOpen({ ...closedModals, cartVoidOpen: true })).toBe(true);
     expect(isPosModalOpen({ ...closedModals, productLockedOpen: true })).toBe(true);
   });
 });

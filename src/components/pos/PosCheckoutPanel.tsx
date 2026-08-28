@@ -1168,17 +1168,23 @@ export function PosCheckoutPanel({
           isSidebar && "rounded-t-[1.35rem]",
         )}
       >
-        <button
-          type="button"
-          onClick={onClearDraft}
-          disabled={emptyCart}
-          className={clsx(
-            "shrink-0 rounded-full border border-border bg-card font-semibold text-muted-foreground shadow-sm active:bg-muted disabled:opacity-40",
-            catalogDock && isSidebar ? "px-2.5 py-1 text-xs" : "px-3 py-2 text-sm",
-          )}
-        >
-          {clearSaleLabel}
-        </button>
+        {emptyCart ? (
+          <span
+            className={clsx("shrink-0", catalogDock && isSidebar ? "w-10" : isCompact ? "w-12" : "w-[4.5rem]")}
+            aria-hidden
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={onClearDraft}
+            className={clsx(
+              "shrink-0 rounded-full border border-rose-200 bg-card font-semibold text-rose-800 shadow-sm active:bg-rose-50",
+              catalogDock && isSidebar ? "px-2.5 py-1 text-xs" : "px-3 py-2 text-sm",
+            )}
+          >
+            {clearSaleLabel}
+          </button>
+        )}
         <h2
           id="pos-checkout-title"
           className={clsx(

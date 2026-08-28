@@ -5,7 +5,7 @@
 
 import type { Sale } from "../types";
 import { dateKeyKampala } from "./datesUg";
-import { isCompletedSale } from "./saleStatus";
+import { isRevenueSale } from "./saleStatus";
 
 export type CashDrawerSalesInput = {
   cashSalesUgx: number;
@@ -51,7 +51,7 @@ function cardCollectedFromSale(sale: Sale): number {
   return sale.paymentMethod === "atm" ? collected : 0;
 }
 
-/** Sum physical-cash vs electronic buckets for completed sales on a Kampala day. */
+/** Sum physical-cash vs electronic buckets for revenue sales on a Kampala day. */
 export function getCashDrawerSalesInput(sales: Sale[], day: string): CashDrawerSalesInput {
   let cashSalesUgx = 0;
   let mobileMoneySalesUgx = 0;
@@ -59,7 +59,7 @@ export function getCashDrawerSalesInput(sales: Sale[], day: string): CashDrawerS
   let bankTransferSalesUgx = 0;
 
   for (const s of sales) {
-    if (!isCompletedSale(s) || dateKeyKampala(s.createdAt) !== day) continue;
+    if (!isRevenueSale(s) || dateKeyKampala(s.createdAt) !== day) continue;
     cashSalesUgx += physicalCashCollectedFromSale(s);
     mobileMoneySalesUgx += mobileMoneyCollectedFromSale(s);
     cardSalesUgx += cardCollectedFromSale(s);

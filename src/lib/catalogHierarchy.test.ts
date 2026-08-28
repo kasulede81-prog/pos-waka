@@ -14,6 +14,9 @@ import {
   hierarchyPickerChrome,
   isCatalogHierarchyEnabled,
   LOCAL_CATALOG_SHOP_ID,
+  catalogCreateInsideParentId,
+  catalogCreateIntentParentId,
+  expandAncestorsForCreatedFolder,
   nextDestinationAfterCatalogCreate,
   normalizeCatalogNodes,
   planCreateCatalogNode,
@@ -299,6 +302,37 @@ describe("Add Product picker search and create", () => {
         currentValue: "DELL",
       }),
     ).toEqual({ value: "LATITUDE", assigned: true });
+  });
+});
+
+describe("folder create UX helpers", () => {
+  it("top-level create ignores the selected folder", () => {
+    expect(catalogCreateIntentParentId("top-level", "n-el")).toBeNull();
+    expect(catalogCreateIntentParentId("top-level", null)).toBeNull();
+  });
+
+  it("add-child uses the selected persisted folder as parent", () => {
+    expect(catalogCreateIntentParentId("child", "n-el")).toBe("n-el");
+    expect(catalogCreateIntentParentId("child", "  ")).toBeNull();
+    expect(catalogCreateIntentParentId("child", null)).toBeNull();
+  });
+
+  it("Add Product create-inside uses the selected persisted folder, else top level", () => {
+    expect(catalogCreateInsideParentId({ id: "n-dell", persisted: true })).toBe("n-dell");
+    expect(catalogCreateInsideParentId({ id: "virtual-DELL", persisted: false })).toBe("");
+    expect(catalogCreateInsideParentId(null)).toBe("");
+  });
+
+  it("expands every ancestor so a new child is visible", () => {
+    const nodes = [
+      node({ id: "n-el", legacyShelfKey: "Electronics" }),
+      node({ id: "n-comp", parentId: "n-el", legacyShelfKey: "Computers" }),
+      node({ id: "n-lap", parentId: "n-comp", legacyShelfKey: "Laptops" }),
+    ];
+    const expanded = expandAncestorsForCreatedFolder(nodes, "n-lap", new Set());
+    expect(expanded.has("n-el")).toBe(true);
+    expect(expanded.has("n-comp")).toBe(true);
+    expect(expanded.has("n-lap")).toBe(true);
   });
 });
 

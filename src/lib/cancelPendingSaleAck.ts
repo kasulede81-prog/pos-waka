@@ -6,6 +6,16 @@
 import type { Sale, SyncOperation } from "../types";
 import { isPendingSale, saleStatusOf } from "./saleStatus";
 
+/** Cloud has no draft row for this id — upsert as pending, then cancel. */
+export function shouldUpsertDraftBeforeCancel(error: string | null | undefined): boolean {
+  return error === "not_found_or_not_draft";
+}
+
+/** Clone for shop_push_pending_sale. Never upload cancelled status as a draft upsert. */
+export function pendingCloneForUnsavedCartVoidUpload(sale: Sale): Sale {
+  return { ...sale, status: "pending", pendingSync: true };
+}
+
 export type CancelPendingSaleRpcData = {
   ok?: boolean;
   error?: string;

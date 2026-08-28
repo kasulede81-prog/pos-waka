@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { FolderPlus, Search } from "lucide-react";
 import type { Language } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { canPersistCatalogShelfPreferences } from "../../lib/settingsAuthorization";
 import {
   assignmentCategoryFromPickerItem,
   buildCatalogPickerItems,
+  catalogCreateInsideParentId,
   catalogItemPathText,
   catalogShopIdFromPreferences,
   findCatalogPickerItemByIdentity,
@@ -20,6 +21,7 @@ import {
   type CatalogPickerItem,
 } from "../../lib/catalogHierarchy";
 import { wizardChoiceButtonClass, WIZARD_INPUT_TEXT } from "./wizard/wizardTokens";
+import { CatalogCreateFolderForm } from "../pos/CatalogCreateFolderForm";
 
 type Props = {
   lang: Language;
@@ -36,6 +38,7 @@ export function HierarchyShelfPicker({ lang, value, onChange, inputClass }: Prop
   const { snapshot, authMode } = useSubscription();
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [parentLocked, setParentLocked] = useState(false);
   const [newName, setNewName] = useState("");
   const [parentId, setParentId] = useState<string>("");
   const [createError, setCreateError] = useState<string | null>(null);
@@ -60,9 +63,20 @@ export function HierarchyShelfPicker({ lang, value, onChange, inputClass }: Prop
   const selectedItem = findCatalogPickerItemByIdentity(items, value);
   const selectedPath = selectedCatalogDestinationPath(items, value);
   const selectedKey = value.trim();
+  const parentItem = persistedParents.find((item) => item.id === parentId);
+  const insideLabel = parentItem ? catalogItemPathText(parentItem) : t(lang, "catalogFolderInsideTop");
 
   const selectItem = (item: CatalogPickerItem) => {
     onChange(assignmentCategoryFromPickerItem(item));
+  };
+
+  const openCreate = () => {
+    const nextParent = catalogCreateInsideParentId(selectedItem);
+    setParentId(nextParent);
+    setParentLocked(Boolean(nextParent));
+    setCreating(true);
+    setNewName("");
+    setCreateError(null);
   };
 
   const submitCreate = () => {
@@ -86,14 +100,20 @@ export function HierarchyShelfPicker({ lang, value, onChange, inputClass }: Prop
     setCreating(false);
     setNewName("");
     setParentId("");
+    setParentLocked(false);
   };
+
+  const createLabel =
+    selectedItem?.persisted
+      ? tTemplate(lang, "catalogCreateInside", { name: selectedItem.name })
+      : t(lang, "catalogFoldersCreate");
 
   return (
     <div className="space-y-3 overflow-x-hidden">
       {selectedItem && selectedPath ? (
         <div className="w-full min-w-0 overflow-hidden rounded-xl border border-waka-200 bg-waka-50/80 px-3 py-2">
           <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            {t(lang, "catalogSelectedFolder")}
+            {t(lang, "catalogProductFolderBanner")}
           </p>
           <p className="mt-0.5 break-words text-sm font-black leading-snug text-foreground">{selectedPath}</p>
         </div>
@@ -103,12 +123,12 @@ export function HierarchyShelfPicker({ lang, value, onChange, inputClass }: Prop
         <label className="block">
           <span className="mb-1.5 flex items-center gap-2 text-sm font-bold text-foreground">
             <Search className="h-4 w-4" aria-hidden />
-            {t(lang, "catalogShelfSearch")}
+            {t(lang, "catalogFoldersSearch")}
           </span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t(lang, "catalogShelfSearchPlaceholder")}
+            placeholder={t(lang, "catalogFoldersSearchPlaceholder")}
             autoComplete="off"
             className={inputClass ?? WIZARD_INPUT_TEXT}
           />
@@ -119,68 +139,48 @@ export function HierarchyShelfPicker({ lang, value, onChange, inputClass }: Prop
         <button
           type="button"
           onClick={() => {
-            setCreating((open) => !open);
-            setCreateError(null);
+            if (creating) {
+              setCreating(false);
+              setCreateError(null);
+              return;
+            }
+            openCreate();
           }}
           className={clsx(wizardChoiceButtonClass(creating), "flex w-full items-center justify-center gap-2")}
         >
           <FolderPlus className="h-5 w-5" aria-hidden />
-          {t(lang, "catalogShelfCreate")}
+          {createLabel}
         </button>
       ) : null}
 
       {chrome.showCreate && creating ? (
-        <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-3">
-          <p className="text-sm font-medium text-muted-foreground">{t(lang, "catalogShelfCreatedHint")}</p>
-          <label className="block space-y-1">
-            <span className="text-xs font-bold text-muted-foreground">{t(lang, "catalogShelfName")}</span>
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={t(lang, "simpleAddShelfPlaceholder")}
-              autoFocus
-              autoComplete="off"
-              className={inputClass ?? WIZARD_INPUT_TEXT}
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-bold text-muted-foreground">{t(lang, "catalogShelfParent")}</span>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className={clsx(inputClass ?? WIZARD_INPUT_TEXT, "bg-card")}
-            >
-              <option value="">{t(lang, "catalogShelfParentNone")}</option>
-              {persistedParents.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {catalogItemPathText(item)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {createError ? <p className="text-xs font-bold text-danger">{createError}</p> : null}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setCreating(false);
-                setNewName("");
-                setCreateError(null);
-              }}
-              className={wizardChoiceButtonClass(false)}
-            >
-              {t(lang, "cancel")}
-            </button>
-            <button type="button" onClick={submitCreate} className={wizardChoiceButtonClass(true)}>
-              {t(lang, "catalogShelfCreateAction")}
-            </button>
-          </div>
-        </div>
+        <CatalogCreateFolderForm
+          lang={lang}
+          newName={newName}
+          onNameChange={setNewName}
+          parentId={parentId}
+          onParentChange={setParentId}
+          parentOptions={persistedParents.map((item) => ({ id: item.id, path: catalogItemPathText(item) }))}
+          insideLabel={insideLabel}
+          parentLocked={parentLocked}
+          onUnlockParent={() => setParentLocked(false)}
+          error={createError}
+          onCancel={() => {
+            setCreating(false);
+            setNewName("");
+            setCreateError(null);
+          }}
+          onSubmit={submitCreate}
+          nameClassName={inputClass ?? WIZARD_INPUT_TEXT}
+          selectClassName={clsx(inputClass ?? WIZARD_INPUT_TEXT, "bg-card")}
+          cancelClassName={wizardChoiceButtonClass(false)}
+          submitClassName={wizardChoiceButtonClass(true)}
+        />
       ) : null}
 
       {visible.length === 0 ? (
         <p className="text-sm font-medium text-muted-foreground">
-          {items.length === 0 ? t(lang, "catalogShelfEmpty") : t(lang, "catalogShelfNoMatches")}
+          {items.length === 0 ? t(lang, "catalogFoldersEmpty") : t(lang, "catalogFolderNoMatches")}
         </p>
       ) : (
         <div className="grid gap-2">

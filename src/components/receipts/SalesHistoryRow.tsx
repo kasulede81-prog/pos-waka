@@ -5,7 +5,7 @@ import type { Language, Product, ReturnRecord, Sale, SaleLine } from "../../type
 import { t, tTemplate } from "../../lib/i18n";
 import { buildReceiptNumberForSale } from "../../lib/receiptPrint";
 import { receiptPrintActionLabel } from "../../lib/printActionLabels";
-import { isCompletedSale, isPendingSale, saleStatusOf } from "../../lib/saleStatus";
+import { isCompletedSale, isPendingSale, isPreCompletionVoidedSale, saleStatusOf, voidedSaleHistoryNumber } from "../../lib/saleStatus";
 import { customerPaidUgxForSaleLine } from "../../lib/refundBreakdown";
 import { computeSaleDiscountBreakdown } from "../../lib/discountBreakdown";
 import { formatSaleLineQuantity } from "../../lib/saleQuantityLabel";
@@ -39,6 +39,9 @@ function statusBadge(
   const status = saleStatusOf(sale);
   if (status === "pending") {
     return { label: t(lang, "salesHistoryStatusPending"), className: "bg-amber-100 text-amber-900" };
+  }
+  if (isPreCompletionVoidedSale(sale)) {
+    return { label: t(lang, "salesHistoryStatusVoided"), className: "bg-rose-100 text-rose-800" };
   }
   if (status === "cancelled") {
     return { label: t(lang, "salesHistoryStatusCancelled"), className: "bg-muted text-muted-foreground" };
@@ -91,7 +94,10 @@ function SaleActionSheet({
     fn();
   };
 
-  const actions = [
+  const voidedBeforeComplete = isPreCompletionVoidedSale(sale);
+  const actions = voidedBeforeComplete
+    ? []
+    : [
     {
       icon: Printer,
       label: receiptPrintActionLabel(lang),
@@ -124,6 +130,14 @@ function SaleActionSheet({
         <p className="text-xs font-semibold text-muted-foreground">
           {t(lang, "receiptCashier")}: {cashierLabel}
         </p>
+        {isPreCompletionVoidedSale(sale) ? (
+          <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-900">
+            {t(lang, "salesHistoryVoidedBeforeCompletion")}
+            {sale.saleVoidedByLabel?.trim()
+              ? ` · ${t(lang, "salesHistoryVoidedBy")}: ${sale.saleVoidedByLabel.trim()}`
+              : null}
+          </p>
+        ) : null}
 
         <div className="mt-3 rounded-xl bg-muted p-3">
           <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
@@ -242,7 +256,9 @@ export function SalesHistoryRow({
   forceOpenActions = false,
 }: Props) {
   const [sheetOpen, setSheetOpen] = useState(forceOpenActions);
-  const invoice = buildReceiptNumberForSale(sale, allSales);
+  const invoice = isPreCompletionVoidedSale(sale)
+    ? voidedSaleHistoryNumber(sale)
+    : buildReceiptNumberForSale(sale, allSales);
   const saleReturns = returnRecords.filter((r) => r.saleId === sale.id);
   const badge = statusBadge(lang, sale, saleReturns.length > 0);
   const completed = isCompletedSale(sale);

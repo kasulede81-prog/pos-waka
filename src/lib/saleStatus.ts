@@ -33,3 +33,28 @@ export function completedSales(sales: Sale[]): Sale[] {
 export function pendingSales(sales: Sale[]): Sale[] {
   return sales.filter(isPendingSale);
 }
+
+/**
+ * Cart voided before completion. Canonical store is cancelled + void metadata —
+ * not Sale.status "voided" and not DB status "void" (cloud pull treats "void" as a tombstone).
+ */
+export const UNSAVED_CART_VOID_REASON = "unsaved_cart_before_completion";
+
+export function isPreCompletionVoidedSale(s: Sale): boolean {
+  return (
+    saleStatusOf(s) === "cancelled" &&
+    Boolean(s.saleVoidedAt?.trim()) &&
+    s.saleVoidReason === UNSAVED_CART_VOID_REASON
+  );
+}
+
+/** Pending-order cancel — cancelled without the unsaved-cart void marker. */
+export function isCancelledPendingSale(s: Sale): boolean {
+  return saleStatusOf(s) === "cancelled" && !isPreCompletionVoidedSale(s);
+}
+
+/** History reference that does not consume completed-sale receiptSeq. */
+export function voidedSaleHistoryNumber(sale: Sale): string {
+  const compact = sale.id.replace(/-/g, "").slice(0, 8).toUpperCase();
+  return `VOID-${compact || sale.id.slice(0, 8).toUpperCase()}`;
+}

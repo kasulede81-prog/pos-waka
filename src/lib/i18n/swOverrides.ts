@@ -19,7 +19,7 @@ export const swOverrides: Record<string, string> = {
   cancel: "Ghairi",
   save: "Hifadhi",
   seeAll: "Ona zote",
-  clearSale: "Futa mauzo",
+  clearSale: "Futa",
   addToSale: "Ongeza kwenye mauzo",
   totalLabel: "Jumla",
   stockLabel: "Hifadhi",

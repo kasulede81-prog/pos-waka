@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { usePosStore } from "../store/usePosStore";
 import { createDefaultPreferences } from "../data/defaultSeed";
 import { setStoreSubscriptionContext } from "./storeSubscriptionContext";
-import { isCatalogHierarchyEnabled } from "./catalogHierarchy";
+import {
+  catalogCreateIntentParentId,
+  expandAncestorsForCreatedFolder,
+  isCatalogHierarchyEnabled,
+} from "./catalogHierarchy";
 
 describe("createCatalogShelf inventory safety", () => {
   beforeEach(() => {
@@ -169,6 +173,41 @@ describe("createCatalogShelf inventory safety", () => {
     expect(usePosStore.getState().preferences.posCatalogNodes?.some((n) => n.legacyShelfKey === "ELECTRONICS")).toBe(
       true,
     );
+  });
+
+  it("sequential Add child folder builds Electronics → Latitude without hunting a parent", () => {
+    let selectedId: string | null = null;
+    let expanded = new Set<string>();
+    const names = ["Electronics", "Computers", "Laptops", "Dell", "Latitude"];
+    for (const name of names) {
+      const parentId = catalogCreateIntentParentId(selectedId ? "child" : "top-level", selectedId);
+      const result = usePosStore.getState().createCatalogShelf({
+        name,
+        parentId,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.legacyShelfKey).toBe(name);
+      const nodes = usePosStore.getState().preferences.posCatalogNodes ?? [];
+      const created = nodes.find((n) => n.legacyShelfKey === name);
+      expect(created).toBeTruthy();
+      selectedId = created!.id;
+      expanded = expandAncestorsForCreatedFolder(nodes, created!.parentId, expanded);
+    }
+    const nodes = usePosStore.getState().preferences.posCatalogNodes ?? [];
+    const byName = Object.fromEntries(nodes.map((n) => [n.legacyShelfKey, n]));
+    expect(byName.Electronics?.parentId).toBeNull();
+    expect(byName.Computers?.parentId).toBe(byName.Electronics?.id);
+    expect(byName.Laptops?.parentId).toBe(byName.Computers?.id);
+    expect(byName.Dell?.parentId).toBe(byName.Laptops?.id);
+    expect(byName.Latitude?.parentId).toBe(byName.Dell?.id);
+    expect(selectedId).toBe(byName.Latitude?.id);
+    expect(expanded.has(byName.Electronics!.id)).toBe(true);
+    expect(expanded.has(byName.Computers!.id)).toBe(true);
+    expect(expanded.has(byName.Laptops!.id)).toBe(true);
+    expect(expanded.has(byName.Dell!.id)).toBe(true);
+    expect(usePosStore.getState().products[0]?.category).toBe("DELL");
+    expect(usePosStore.getState().products[0]?.stockOnHand).toBe(7);
+    expect(usePosStore.getState().products.every((p) => !("catalogNodeId" in p))).toBe(true);
   });
 
   it("26. cashier cannot create or reparent catalog folders", () => {

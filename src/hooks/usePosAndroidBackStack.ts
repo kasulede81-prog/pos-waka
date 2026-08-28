@@ -28,6 +28,8 @@ export type PosBackStackState = {
   closeExpiryWarn: () => void;
   firstSaleOpen: boolean;
   dismissFirstSale: () => void;
+  cartVoidOpen: boolean;
+  onDismissCartVoid: () => void;
 };
 
 /** Wires POS overlay priority for hardware back — never clears draft on back. */
@@ -85,4 +87,10 @@ export function usePosAndroidBackStack(state: PosBackStackState): void {
   );
   useAndroidBackHandler("pos-expiry-warn", modalPri + 7, state.expiryWarnOpen, state.closeExpiryWarn);
   useAndroidBackHandler("pos-first-sale", modalPri + 8, state.firstSaleOpen, state.dismissFirstSale);
+  useAndroidBackHandler(
+    "pos-cart-void",
+    modalPri + 9,
+    state.cartVoidOpen,
+    () => state.onDismissCartVoid(),
+  );
 }

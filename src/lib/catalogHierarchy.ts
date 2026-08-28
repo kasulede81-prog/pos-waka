@@ -367,6 +367,42 @@ export function nextDestinationAfterCatalogCreate(input: {
   return { value: input.legacyShelfKey.trim(), assigned: true };
 }
 
+/** Top-level create ignores the selected folder. Add-child uses it as parent. */
+export function catalogCreateIntentParentId(
+  intent: "top-level" | "child",
+  selectedFolderId: string | null | undefined,
+): string | null {
+  if (intent !== "child") return null;
+  const id = selectedFolderId?.trim();
+  return id || null;
+}
+
+/** Add Product: create inside the selected persisted folder, otherwise top level. */
+export function catalogCreateInsideParentId(
+  selectedItem: { id: string; persisted: boolean } | null | undefined,
+): string {
+  if (selectedItem?.persisted && selectedItem.id.trim()) return selectedItem.id;
+  return "";
+}
+
+/** Expand every ancestor of a newly created folder so the child is visible. */
+export function expandAncestorsForCreatedFolder(
+  nodes: readonly Pick<CatalogNode, "id" | "parentId">[],
+  createdParentId: string | null,
+  expanded: ReadonlySet<string>,
+): Set<string> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const next = new Set(expanded);
+  let pid: string | null = createdParentId;
+  const seen = new Set<string>();
+  while (pid && !seen.has(pid)) {
+    seen.add(pid);
+    next.add(pid);
+    pid = byId.get(pid)?.parentId ?? null;
+  }
+  return next;
+}
+
 export type HierarchyPickerChrome = {
   showSearch: boolean;
   showCreate: boolean;

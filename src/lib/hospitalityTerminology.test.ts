@@ -5,6 +5,7 @@ import { t } from "./i18n";
 describe("hospitality terminology isolation", () => {
   it("uses order vocabulary in hospitality mode", () => {
     expect(hospitalityTerm("en", "restaurant", "sell", true).toLowerCase()).toContain("order");
+    expect(hospitalityTerm("en", "bar", "clearSale", true).toLowerCase()).toContain("clear");
     expect(hospitalityTerm("en", "bar", "clearSale", true).toLowerCase()).toContain("order");
     expect(hospitalityTerm("en", "restaurant_bar", "saveSale", true).toLowerCase()).toContain("order");
     expect(hospitalityTerm("en", "restaurant", "thisSale", true).toLowerCase()).toContain("order");

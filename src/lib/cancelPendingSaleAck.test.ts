@@ -5,7 +5,9 @@ import {
   cancelAckPullReason,
   interpretCancelPendingSaleResult,
   matchingCancelQueueOpIds,
+  pendingCloneForUnsavedCartVoidUpload,
   saleUploadRpcForLocalSale,
+  shouldUpsertDraftBeforeCancel,
 } from "./cancelPendingSaleAck";
 import { computeSyncBackoffMs, deriveQueueHealth, shouldRetrySyncOp } from "./autoSync";
 import {
@@ -160,5 +162,15 @@ describe("SYNC-1.1-R2 cancel upload ACK", () => {
       ok: false,
       error: "PGRST301",
     });
+  });
+
+  it("unsaved-cart VOIDED cancel may upsert a draft only when the row is missing", () => {
+    expect(shouldUpsertDraftBeforeCancel("not_found_or_not_draft")).toBe(true);
+    expect(shouldUpsertDraftBeforeCancel("forbidden")).toBe(false);
+    expect(shouldUpsertDraftBeforeCancel("already_cancelled")).toBe(false);
+    const clone = pendingCloneForUnsavedCartVoidUpload(cancelledSale());
+    expect(clone.status).toBe("pending");
+    expect(clone.id).toBe(SALE_ID);
+    expect(saleUploadRpcForLocalSale(cancelledSale())).toBe("shop_cancel_pending_sale");
   });
 });

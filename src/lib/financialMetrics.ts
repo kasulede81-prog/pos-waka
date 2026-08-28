@@ -7,7 +7,7 @@ import type { Product, ReturnRecord, Sale } from "../types";
 import { dateKeyKampala, saleReportingDayKey } from "./datesUg";
 import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
 import { computeTodayProfitBreakdown } from "./homeProfit";
-import { isCompletedSale } from "./saleStatus";
+import { isRevenueSale } from "./saleStatus";
 
 /** Pre-index revenue sales and returns by Kampala day — one pass, identical scoped results. */
 export type RevenueSalesIndex = {
@@ -18,7 +18,7 @@ export type RevenueSalesIndex = {
 export function buildRevenueSalesIndex(sales: Sale[], returns: ReturnRecord[]): RevenueSalesIndex {
   const salesByDay = new Map<string, Sale[]>();
   for (const s of sales) {
-    if (!isCompletedSale(s)) continue;
+    if (!isRevenueSale(s)) continue;
     const dk = saleReportingDayKey(s);
     const bucket = salesByDay.get(dk);
     if (bucket) bucket.push(s);
@@ -71,10 +71,8 @@ function scopedReturnsFromIndex(
   return returns;
 }
 
-/** Sales that count toward revenue (completed only). */
-export function isRevenueSale(s: Sale): boolean {
-  return isCompletedSale(s);
-}
+/** Sales that count toward revenue (completed and not whole-bill voided). */
+export { isRevenueSale } from "./saleStatus";
 
 export function revenueSales(sales: Sale[]): Sale[] {
   return sales.filter(isRevenueSale);

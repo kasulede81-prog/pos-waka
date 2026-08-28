@@ -113,6 +113,35 @@ describe("isRevenueSale and completed-only metrics", () => {
     expect(isRevenueSaleFromStatus(pending)).toBe(false);
   });
 
+  it("completed + saleVoidedAt is not a revenue sale (hospitality whole-bill void)", () => {
+    const voided = sale({
+      status: "completed",
+      totalUgx: 80_000,
+      saleVoidedAt: `${DAY}T12:00:00.000Z`,
+    });
+    expect(isRevenueSale(voided)).toBe(false);
+    expect(isRevenueSaleFromStatus(voided)).toBe(false);
+    expect(getCompletedRevenue([completed, voided], [], products, DAY)).toBe(100_000);
+    expect(getCompletedSalesCount([completed, voided], DAY)).toBe(1);
+    expect(revenueSalesOnDay([completed, voided], DAY)).toHaveLength(1);
+    expect(revenueSalesOnDay([completed, voided], DAY)[0]!.id).toBe(completed.id);
+  });
+
+  it("cancelled + unsaved-cart void metadata is not a revenue sale", () => {
+    const voidedCart = sale({
+      status: "cancelled",
+      totalUgx: 125_000,
+      cashPaidUgx: 0,
+      debtUgx: 0,
+      saleVoidedAt: `${DAY}T15:42:00.000Z`,
+      saleVoidReason: "unsaved_cart_before_completion",
+    });
+    expect(isRevenueSale(voidedCart)).toBe(false);
+    expect(isRevenueSaleFromStatus(voidedCart)).toBe(false);
+    expect(getCompletedRevenue([completed, voidedCart], [], products, DAY)).toBe(100_000);
+    expect(getCompletedSalesCount([completed, voidedCart], DAY)).toBe(1);
+  });
+
   it("hospitality scenario: open 200k + completed 100k => revenue 100k only", () => {
     const openBill = sale({ status: "pending", totalUgx: 200_000, cashPaidUgx: 0, debtUgx: 0 });
     const settled = sale({ status: "completed", totalUgx: 100_000 });

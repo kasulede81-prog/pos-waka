@@ -6,6 +6,9 @@ import clsx from "clsx";
 import { Banknote, Keyboard, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
+import type { CartVoidMode } from "../lib/saleLifecycle";
+import { CartVoidConfirmDialog } from "../components/pos/CartVoidConfirmDialog";
+import { useCartAbandonVoid } from "../hooks/useCartAbandonVoid";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
 import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
@@ -160,7 +163,6 @@ import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabel
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
-import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
 import { PosShelfDrillDownHeader } from "../components/pos/PosShelfDrillDownHeader";
 import { PosMobileShelfContinue, PosMobileShelfEndCue } from "../components/pos/PosMobileShelfContinue";
 import {
@@ -319,14 +321,24 @@ export function PosPage({ lang }: { lang: Language }) {
   const setDraftInput = usePosStore((s) => s.setDraftInput);
   const addDraftLineFromInput = usePosStore((s) => s.addDraftLineFromInput);
   const removeDraftLine = usePosStore((s) => s.removeDraftLine);
-  const setDraftLineQuantity = usePosStore((s) => s.setDraftLineQuantity);
   const setDraftLineBatchOverride = usePosStore((s) => s.setDraftLineBatchOverride);
-  const adjustDraftLineQuantity = usePosStore((s) => s.adjustDraftLineQuantity);
   const applyDraftLineDiscount = usePosStore((s) => s.applyDraftLineDiscount);
   const draftCartDiscountUgx = usePosStore((s) => s.draftCartDiscountUgx);
   const setDraftCartDiscount = usePosStore((s) => s.setDraftCartDiscount);
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
-  const clearDraft = usePosStore((s) => s.clearDraft);
+  const cartVoidMode: CartVoidMode = hospitalityMode
+    ? "hospitality"
+    : wholesaleMode
+      ? "wholesale"
+      : pharmacyMode
+        ? "pharmacy"
+        : "retail";
+  const setDraftPaymentMethod = usePosStore((s) => s.setDraftPaymentMethod);
+  const setDraftSaleCustomer = usePosStore((s) => s.setDraftSaleCustomer);
+  const storedDraftPaymentMethod = usePosStore((s) => s.draftPaymentMethod);
+  const saleCustomerId = usePosStore((s) => s.draftSaleCustomerId);
+  const saleCustomerName = usePosStore((s) => s.draftSaleCustomerName);
+  const saleCustomerPhone = usePosStore((s) => s.draftSaleCustomerPhone);
   const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
   const savePendingSale = usePosStore((s) => s.savePendingSale);
   const setPreferences = usePosStore((s) => s.setPreferences);
@@ -474,13 +486,31 @@ export function PosPage({ lang }: { lang: Language }) {
   const [posExitOpen, setPosExitOpen] = useState(false);
   const posExitResolverRef = useRef<((choice: "lock" | "continue" | "cancel") => void) | null>(null);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const paymentMethod: PaymentMethod =
+    storedDraftPaymentMethod === "voucher" || (storedDraftPaymentMethod === "credit" && !canIssueDebt)
+      ? "cash"
+      : storedDraftPaymentMethod;
+  const setPaymentMethod = useCallback(
+    (method: PaymentMethod) => {
+      setDraftPaymentMethod(method);
+    },
+    [setDraftPaymentMethod],
+  );
+  const setSaleCustomerId = useCallback(
+    (id: string) => setDraftSaleCustomer({ customerId: id }),
+    [setDraftSaleCustomer],
+  );
+  const setSaleCustomerName = useCallback(
+    (name: string) => setDraftSaleCustomer({ customerName: name }),
+    [setDraftSaleCustomer],
+  );
+  const setSaleCustomerPhone = useCallback(
+    (phone: string) => setDraftSaleCustomer({ customerPhone: phone }),
+    [setDraftSaleCustomer],
+  );
   const [desktopOskOpen, setDesktopOskOpen] = useState(false);
   const [desktopOskLayer, setDesktopOskLayer] = useState<"alpha" | "numeric">("alpha");
-
-  useEffect(() => {
-    if (paymentMethod === "credit" && !canIssueDebt) setPaymentMethod("cash");
-  }, [paymentMethod, canIssueDebt]);
+  const finishSaleInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!displayScaleOn) return;
@@ -511,9 +541,6 @@ export function PosPage({ lang }: { lang: Language }) {
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
   const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutInputField>("cash");
   const [checkoutKeypadMode, setCheckoutKeypadMode] = useState<CheckoutKeypadMode>("numeric");
-  const [saleCustomerId, setSaleCustomerId] = useState<string>("");
-  const [saleCustomerName, setSaleCustomerName] = useState("");
-  const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
   const selectedPatientForGate = useMemo(() => {
     if (!saleCustomerId) return saleCustomerName.trim() || null;
     return customers.find((c) => c.id === saleCustomerId)?.name ?? (saleCustomerName.trim() || null);
@@ -1021,30 +1048,6 @@ export function PosPage({ lang }: { lang: Language }) {
     [selected, pharmacyPackActive, setDraftInput, addDraftLineFromInput, lang, afterAddToCart, runWithExpiredGuard],
   );
 
-  const handleDraftQtyStep = useCallback(
-    (line: SaleLine, backwards: boolean) => {
-      const product = productById.get(line.productId);
-      const delta = product ? draftLineQuantityStep(product, backwards) : backwards ? -1 : 1;
-      const res = adjustDraftLineQuantity(line.productId, delta);
-      if (!res.ok) {
-        setToast(t(lang, res.errorKey ?? "saleError"));
-        window.setTimeout(() => setToast(null), 2200);
-      } else if (hapticsOn) void hapticTap();
-    },
-    [productById, adjustDraftLineQuantity, lang, hapticsOn],
-  );
-
-  const handleDraftQtyConfirm = useCallback(
-    (productId: string, quantity: number) => {
-      const res = setDraftLineQuantity(productId, quantity);
-      if (!res.ok) {
-        setToast(t(lang, res.errorKey ?? "saleError"));
-        window.setTimeout(() => setToast(null), 2200);
-      } else if (hapticsOn) void hapticTap();
-    },
-    [setDraftLineQuantity, lang, hapticsOn],
-  );
-
   const totalPaidInput = useMemo(() => {
     const cash = parseDisplayMoney(cashInput);
     const mobile = parseDisplayMoney(mobileMoneyInput);
@@ -1072,7 +1075,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const appendCheckoutDigit = useCallback(
     (d: string) => {
       if (checkoutKeypadMode === "alpha" && checkoutAmountField === "customerName") {
-        setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
+        setSaleCustomerName(applyCheckoutAlphaKey(saleCustomerName, d));
         return;
       }
       const applyNumeric = (prev: string) => applyCheckoutNumericKey(prev, d);
@@ -1082,16 +1085,16 @@ export function PosPage({ lang }: { lang: Language }) {
           setMobileMoneyInput(applyPhone);
           break;
         case "customerPhone":
-          setSaleCustomerPhone(applyPhone);
+          setSaleCustomerPhone(applyPhone(saleCustomerPhone));
           break;
         case "customerName":
-          setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
+          setSaleCustomerName(applyCheckoutAlphaKey(saleCustomerName, d));
           break;
         default:
           setCashInput(applyNumeric);
       }
     },
-    [checkoutAmountField, checkoutKeypadMode],
+    [checkoutAmountField, checkoutKeypadMode, saleCustomerName, saleCustomerPhone, setSaleCustomerName, setSaleCustomerPhone],
   );
 
   const addCheckoutCashNote = useCallback((ugx: number) => {
@@ -1107,14 +1110,16 @@ export function PosPage({ lang }: { lang: Language }) {
         break;
       case "customerPhone":
         setSaleCustomerPhone("");
+        setDraftSaleCustomer({ customerPhone: "" });
         break;
       case "customerName":
         setSaleCustomerName("");
+        setDraftSaleCustomer({ customerName: "" });
         break;
       default:
         setCashInput("");
     }
-  }, [checkoutAmountField]);
+  }, [checkoutAmountField, setDraftSaleCustomer]);
 
   const commitSearch = useCallback((raw: string) => {
     const q = raw.trim();
@@ -1128,6 +1133,17 @@ export function PosPage({ lang }: { lang: Language }) {
     (r: ReturnType<typeof finalizeDraftSale>) => {
       setCheckoutBlockMessage(null);
       setCheckoutBlockModalOpen(false);
+      if (r.idempotent) {
+        setCashInput("");
+        setMobileMoneyInput("");
+        setSaleCustomerId("");
+        setSaleCustomerName("");
+        setSaleCustomerPhone("");
+        setCheckoutAmountField("cash");
+        setCheckoutKeypadMode("numeric");
+        setPaymentMethod("cash");
+        return;
+      }
       if (hapticsOn) void hapticSaleComplete();
       if (soundOn) playSaleSuccessTone();
 
@@ -1180,6 +1196,9 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const finishSale = useCallback(() => {
     void (async () => {
+    if (finishSaleInFlightRef.current) return;
+    finishSaleInFlightRef.current = true;
+    try {
     if (paymentMethod === "cash" && parseDisplayMoney(cashInput) > 0 && parseDisplayMoney(cashInput) < draftPayable) {
       setToast(t(lang, "paymentCashTooLow"));
       window.setTimeout(() => setToast(null), 2200);
@@ -1230,6 +1249,9 @@ export function PosPage({ lang }: { lang: Language }) {
       return;
     }
     applyFinalizeSuccess(r);
+    } finally {
+      finishSaleInFlightRef.current = false;
+    }
     })();
   }, [
     paymentMethod,
@@ -1287,6 +1309,50 @@ export function PosPage({ lang }: { lang: Language }) {
     setExpiryWarnProduct(null);
   }, []);
 
+  const resetCheckoutAfterCartVoid = useCallback(() => {
+    setCashInput("");
+    setMobileMoneyInput("");
+    setSaleCustomerId("");
+    setSaleCustomerName("");
+    setSaleCustomerPhone("");
+    setPaymentMethod("cash");
+  }, [setSaleCustomerId, setSaleCustomerName, setSaleCustomerPhone, setPaymentMethod]);
+
+  const cartAbandon = useCartAbandonVoid({
+    lang,
+    mode: cartVoidMode,
+    onAfterSuccessfulVoid: resetCheckoutAfterCartVoid,
+    onError: (message) => {
+      setToast(message);
+      window.setTimeout(() => setToast(null), 2200);
+    },
+  });
+
+  const handleDraftQtyStep = useCallback(
+    (line: SaleLine, backwards: boolean) => {
+      const product = productById.get(line.productId);
+      const delta = product ? draftLineQuantityStep(product, backwards) : backwards ? -1 : 1;
+      const nextQty = Math.round((line.quantity + delta) * 10000) / 10000;
+      const res = cartAbandon.requestSetLineQuantity(line.productId, nextQty);
+      if (!res.ok) {
+        setToast(t(lang, res.errorKey ?? "saleError"));
+        window.setTimeout(() => setToast(null), 2200);
+      } else if (hapticsOn) void hapticTap();
+    },
+    [productById, cartAbandon.requestSetLineQuantity, lang, hapticsOn],
+  );
+
+  const handleDraftQtyConfirm = useCallback(
+    (productId: string, quantity: number) => {
+      const res = cartAbandon.requestSetLineQuantity(productId, quantity);
+      if (!res.ok) {
+        setToast(t(lang, res.errorKey ?? "saleError"));
+        window.setTimeout(() => setToast(null), 2200);
+      } else if (hapticsOn) void hapticTap();
+    },
+    [cartAbandon.requestSetLineQuantity, lang, hapticsOn],
+  );
+
   const showDesktopCatalogCheckoutDock =
     useDesktopCatalogCheckoutDock && (catalogNumpadOpen || paymentMethod === "credit");
   const mountCompactCheckoutSlideover = shouldMountCompactCheckoutSlideover(
@@ -1338,18 +1404,9 @@ export function PosPage({ lang }: { lang: Language }) {
     closeExpiryWarn,
     firstSaleOpen,
     dismissFirstSale,
+    cartVoidOpen: cartAbandon.open,
+    onDismissCartVoid: cartAbandon.keep,
   });
-
-  useEffect(() => {
-    return registerPosLeaveGuard({
-      hasActiveSale: () => draftLines.length > 0,
-      confirmLeave: async () => {
-        const ok = window.confirm(t(lang, "posLeaveActiveSaleConfirm"));
-        if (ok) usePosStore.getState().clearDraft();
-        return ok;
-      },
-    });
-  }, [draftLines.length, lang]);
 
   useEffect(() => {
     return registerPosExitHandler({
@@ -1419,6 +1476,7 @@ export function PosPage({ lang }: { lang: Language }) {
         checkoutBlockModalOpen,
         receiptOpen: receiptSaleId !== null,
         shiftCloseOpen,
+        cartVoidOpen: cartAbandon.open,
       };
       const modalOpen = isPosShortcutModalOpen(shortcutModalState);
 
@@ -1466,7 +1524,8 @@ export function PosPage({ lang }: { lang: Language }) {
           }
           break;
         case "close":
-          if (receiptSaleId) setReceiptSaleId(null);
+          if (cartAbandon.open) cartAbandon.keep();
+          else if (receiptSaleId) setReceiptSaleId(null);
           else if (cameraScanOpen) setCameraScanOpen(false);
           else if (checkoutBlockModalOpen) setCheckoutBlockModalOpen(false);
           else if (cartSaleDiscountOpen) setCartSaleDiscountOpen(false);
@@ -1516,6 +1575,8 @@ export function PosPage({ lang }: { lang: Language }) {
     sellPresets.length,
     sheetOpen,
     shiftCloseOpen,
+    cartAbandon.open,
+    cartAbandon.keep,
     showAdvanced,
   ]);
 
@@ -1574,12 +1635,12 @@ export function PosPage({ lang }: { lang: Language }) {
     customerSelectRef,
     saveButtonRef,
     checkoutPanelRef,
-    onClearDraft: clearDraft,
+    onClearDraft: cartAbandon.requestClear,
     onIncrement: (line: SaleLine) => handleDraftQtyStep(line, false),
     onDecrement: (line: SaleLine) => handleDraftQtyStep(line, true),
     onQtyTap: setQtyEditLine,
     onLineDiscount: setDiscountLine,
-    onRemoveLine: removeDraftLine,
+    onRemoveLine: cartAbandon.requestRemoveLine,
     onOpenCartDiscount: () => setCartSaleDiscountOpen(true),
     pharmacyMode,
     onBatchTap: pharmacyMode ? setBatchPickerLine : undefined,
@@ -1776,9 +1837,9 @@ export function PosPage({ lang }: { lang: Language }) {
       if (checkoutAmountField === "customerName" || checkoutAmountField === "customerPhone") {
         if (key === "enter") return;
         if (checkoutAmountField === "customerName") {
-          setSaleCustomerName((cur) => (key === "C" ? "" : applyCheckoutAlphaKey(cur, key)));
+          setSaleCustomerName(key === "C" ? "" : applyCheckoutAlphaKey(saleCustomerName, key));
         } else {
-          setSaleCustomerPhone((cur) => (key === "C" ? "" : applyCheckoutPhoneKey(cur, key)));
+          setSaleCustomerPhone(key === "C" ? "" : applyCheckoutPhoneKey(saleCustomerPhone, key));
         }
         return;
       }
@@ -1791,7 +1852,7 @@ export function PosPage({ lang }: { lang: Language }) {
       else if (key === "space") setSearchQuery((q) => `${q} `);
       else setSearchQuery((q) => (q + key).slice(0, 80));
     },
-    [checkoutAmountField, commitSearch, searchQuery],
+    [checkoutAmountField, commitSearch, searchQuery, saleCustomerName, saleCustomerPhone, setSaleCustomerName, setSaleCustomerPhone],
   );
 
   const renderPosSearchBar = () =>
@@ -2234,7 +2295,7 @@ export function PosPage({ lang }: { lang: Language }) {
       mobileSellFocus ? (
         <PosSellActionChips>
           {draftLines.length > 0 ? (
-            <PosSellActionChip onClick={() => clearDraft()}>{modeTerm("clearSale")}</PosSellActionChip>
+            <PosSellActionChip onClick={cartAbandon.requestClear}>{modeTerm("clearSale")}</PosSellActionChip>
           ) : null}
           {canSavePending ? (
             <Link to="/pending-sales" className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-bold text-foreground active:bg-muted">
@@ -2261,7 +2322,7 @@ export function PosPage({ lang }: { lang: Language }) {
           {draftLines.length > 0 ? (
             <button
               type="button"
-              onClick={() => clearDraft()}
+              onClick={cartAbandon.requestClear}
               className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
             >
               {modeTerm("clearSale")}
@@ -2422,7 +2483,7 @@ export function PosPage({ lang }: { lang: Language }) {
               payableUgx={draftPayable}
               paymentMethod={paymentMethod}
               checkoutMethods={checkoutMethods}
-              onPaymentMethod={(m) => setPaymentMethod(m)}
+              onPaymentMethod={setPaymentMethod}
               onCompleteSale={finishSale}
               completeDisabled={draftLines.length === 0 || Boolean(checkoutBlockMessage)}
               completeLabel={modeTerm("saveSale")}
@@ -2842,6 +2903,14 @@ export function PosPage({ lang }: { lang: Language }) {
           }
           setCartSaleDiscountOpen(false);
         }}
+      />
+
+      <CartVoidConfirmDialog
+        lang={lang}
+        open={cartAbandon.open}
+        copy={cartAbandon.copy}
+        onKeep={cartAbandon.keep}
+        onConfirm={cartAbandon.apply}
       />
 
       <ShiftCloseModal

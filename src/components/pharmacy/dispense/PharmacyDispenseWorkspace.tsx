@@ -22,6 +22,7 @@ import { PharmacyControlledDispenseGate } from "../compliance/PharmacyControlled
 import { PharmacyFefoBatchPicker } from "../PharmacyFefoBatchPicker";
 import { SellProductBrowsePanel } from "../../pos/SellProductBrowsePanel";
 import { PosCheckoutPanel } from "../../pos/PosCheckoutPanel";
+import { CartVoidConfirmDialog } from "../../pos/CartVoidConfirmDialog";
 import { PosDesktopCompactHeader } from "../../pos/PosDesktopCompactHeader";
 import { PosOfflineBanner } from "../../trust/PosOfflineBanner";
 import { ShiftSellGateway } from "../../pos/ShiftSellGateway";
@@ -585,6 +586,14 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
           }}
         />
       ) : null}
+
+      <CartVoidConfirmDialog
+        lang={lang}
+        open={checkout.cartVoidOpen}
+        copy={checkout.cartVoidCopy}
+        onKeep={checkout.keepCartVoid}
+        onConfirm={checkout.applyCartVoid}
+      />
 
       <DiscountLineModal
         lang={lang}

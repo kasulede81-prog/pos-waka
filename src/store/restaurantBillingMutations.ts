@@ -27,6 +27,10 @@ import { cartDiscountFromPendingSale } from "../lib/draftCart";
 import { verifyOwnerPin } from "../lib/sensitiveActionAuth";
 import { dateKeyKampala } from "../lib/datesUg";
 import { canRoleBypassDiscountApproval } from "../lib/discountGovernance";
+import { inventoryMovementNamespace } from "../lib/shopSyncContext";
+import { planWholeBillVoid } from "../lib/voidCompletedSale";
+import { shiftOwnerUserId } from "../lib/sessionActor";
+import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
 import type { PosState } from "./usePosStore";
 
 type StoreGet = () => PosState;
@@ -449,25 +453,43 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
 
       const sale = state.sales.find((s) => s.id === session.saleId);
       if (!sale || sale.status === "pending") return { ok: false as const, errorKey: "invalid" };
-      if (sale.saleVoidedAt) return { ok: false as const, errorKey: "invalid" };
 
       const actor = state.sessionActor;
       const at = new Date().toISOString();
+      const openShift = actor
+        ? (state.preferences.shifts ?? []).find(
+            (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(actor),
+          )
+        : undefined;
+      const planned = planWholeBillVoid({
+        sale,
+        products: state.products,
+        customers: state.customers,
+        shopKey: inventoryMovementNamespace(),
+        at,
+        reason: "other",
+        note: reason,
+        actorUserId: actor?.userId ?? "unknown",
+        actorName: actor?.displayName,
+        shiftId: openShift?.id ?? null,
+      });
+      if (!planned.ok) return { ok: false as const, errorKey: planned.errorKey };
+
       const voidedSale: Sale = {
-        ...sale,
-        saleVoidedAt: at,
-        saleVoidReason: reason,
-        saleVoidedByUserId: actor?.userId ?? null,
-        saleVoidedByLabel: actor?.displayName ?? null,
+        ...planned.plan.sale,
         billDraft: mergeBillDraft(sale.billDraft, {
           voidedAt: at,
           voidedByUserId: actor?.userId ?? null,
           voidedByLabel: actor?.displayName ?? null,
           voidReason: reason,
         }, state.preferences),
-        updatedAt: at,
-        pendingSync: true,
       };
+
+      const mergedMovements = mergeStockMovementsWithArchive(
+        state.stockMovements,
+        planned.plan.movements,
+        state.archivedStockMovements ?? [],
+      );
 
       if (actor) {
         const nextFloor = auditBilling(
@@ -478,15 +500,54 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
           { saleId: sale.id, grandTotalUgx: sale.totalUgx },
           reason,
         );
+        let nextPrefs = { ...state.preferences, hospitalityFloor: nextFloor };
+        if (openShift) {
+          nextPrefs = {
+            ...nextPrefs,
+            shifts: (nextPrefs.shifts ?? []).map((sh) =>
+              sh.id === openShift.id
+                ? {
+                    ...sh,
+                    estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - planned.plan.cashReduce),
+                    voidsTotalUgx: (sh.voidsTotalUgx ?? 0) + planned.plan.amountVoidedUgx,
+                    refundsUgx: sh.refundsUgx + planned.plan.amountVoidedUgx,
+                  }
+                : sh,
+            ),
+          };
+        }
         set({
           sales: state.sales.map((s) => (s.id === sale.id ? voidedSale : s)),
-          preferences: { ...state.preferences, hospitalityFloor: nextFloor },
+          products: planned.plan.products,
+          customers: planned.plan.customers,
+          voidRecords: [...planned.plan.voidRecords, ...state.voidRecords],
+          stockMovements: mergedMovements.stockMovements,
+          archivedStockMovements: mergedMovements.archivedStockMovements,
+          preferences: nextPrefs,
         });
       } else {
-        set({ sales: state.sales.map((s) => (s.id === sale.id ? voidedSale : s)) });
+        set({
+          sales: state.sales.map((s) => (s.id === sale.id ? voidedSale : s)),
+          products: planned.plan.products,
+          customers: planned.plan.customers,
+          voidRecords: [...planned.plan.voidRecords, ...state.voidRecords],
+          stockMovements: mergedMovements.stockMovements,
+          archivedStockMovements: mergedMovements.archivedStockMovements,
+        });
       }
 
-      void queueRemote("pending_sales", { saleId: sale.id, kind: "pending_upsert" });
+      void queueRemote("sale", { saleId: sale.id });
+      for (const movement of planned.plan.movements) {
+        const pre = state.products.find((p) => p.id === movement.productId);
+        void queueRemote("pending_stock_updates", {
+          productId: movement.productId,
+          delta: movement.deltaBaseUnits,
+          note: "void",
+          baseUpdatedAt: pre?.updatedAt ?? at,
+          baseStockOnHand: pre?.stockOnHand,
+        });
+      }
+      if (sale.customerId) void queueRemote("customer", { id: sale.customerId });
       queueHospitalityChange({ sessionIds: [input.sessionId] });
       flushPendingPersist();
 

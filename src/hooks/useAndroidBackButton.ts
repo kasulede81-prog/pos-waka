@@ -31,7 +31,7 @@ export function useAndroidBackButton() {
         const leavingPos = isPosSellPath(location.pathname);
         if (leavingPos) {
           const fallback = getBackFallbackPath(location.pathname);
-          const target = historyCanGoBack() ? location.pathname : fallback;
+          const target = historyCanGoBack() ? "/" : fallback;
           if (!(await confirmLeavePosIfNeeded(location.pathname, target))) return;
         }
 

@@ -18,11 +18,13 @@ import type {
   Supplier,
   SupplierPayment,
 } from "../types";
-import { isPendingSale, saleStatusOf } from "../lib/saleStatus";
+import { isPendingSale, isPreCompletionVoidedSale, saleStatusOf } from "../lib/saleStatus";
 import {
   interpretCancelPendingSaleResult,
+  pendingCloneForUnsavedCartVoidUpload,
   saleUploadRpcForLocalSale,
   settleCancelPendingSaleQueueOps,
+  shouldUpsertDraftBeforeCancel,
 } from "../lib/cancelPendingSaleAck";
 import { hydrateSaleFinancialsFromCloud } from "../lib/saleLineFinancialHydration";
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
@@ -1011,6 +1013,7 @@ export async function pushPendingSaleToCloud(
     return false;
   }
   if (saleStatusOf(sale) === "cancelled") {
+    if (isPreCompletionVoidedSale(sale)) return pushUnsavedCartVoidToCloud(sale, ctx);
     return pushCancelPendingSaleToCloud(sale.id, ctx);
   }
   if (!isPendingSale(sale)) {
@@ -1100,6 +1103,26 @@ export async function pushCancelPendingSaleToCloud(saleId: string, ctx: ShopCtx)
   return true;
 }
 
+/**
+ * Unsaved-cart VOIDED record: cancel the draft if it exists; otherwise upsert as pending
+ * then cancel. Never completes the sale (no shop_push_sale_complete / EFRIS).
+ */
+export async function pushUnsavedCartVoidToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean> {
+  if (!isPreCompletionVoidedSale(sale)) {
+    return pushCancelPendingSaleToCloud(sale.id, ctx);
+  }
+  const cancelled = await pushCancelPendingSaleToCloud(sale.id, ctx);
+  if (cancelled) return true;
+  const error =
+    usePosStore.getState().sales.find((s) => s.id === sale.id)?.lastSyncError ??
+    usePosStore.getState().archivedSales.find((s) => s.id === sale.id)?.lastSyncError ??
+    sale.lastSyncError;
+  if (!shouldUpsertDraftBeforeCancel(error)) return false;
+  const upserted = await pushPendingSaleToCloud(pendingCloneForUnsavedCartVoidUpload(sale), ctx);
+  if (!upserted) return false;
+  return pushCancelPendingSaleToCloud(sale.id, ctx);
+}
+
 /** Route draft vs completed sales to the correct cloud RPC. */
 export async function pushSaleRowToCloud(
   sale: Sale,
@@ -1108,7 +1131,10 @@ export async function pushSaleRowToCloud(
 ): Promise<boolean> {
   const rpc = saleUploadRpcForLocalSale(sale);
   if (rpc === "shop_push_pending_sale") return pushPendingSaleToCloud(sale, ctx, opts);
-  if (rpc === "shop_cancel_pending_sale") return pushCancelPendingSaleToCloud(sale.id, ctx);
+  if (rpc === "shop_cancel_pending_sale") {
+    if (isPreCompletionVoidedSale(sale)) return pushUnsavedCartVoidToCloud(sale, ctx);
+    return pushCancelPendingSaleToCloud(sale.id, ctx);
+  }
   if (rpc === "shop_patch_hospitality_sale_metadata") {
     return pushHospitalitySaleMetadataPatch(sale, ctx);
   }
@@ -1152,6 +1178,7 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
     return pushPendingSaleToCloud(sale, ctx);
   }
   if (saleStatusOf(sale) === "cancelled") {
+    if (isPreCompletionVoidedSale(sale)) return pushUnsavedCartVoidToCloud(sale, ctx);
     return pushCancelPendingSaleToCloud(sale.id, ctx);
   }
 
@@ -1755,6 +1782,10 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       if (payload.kind === "day_close") return true;
       const saleId = String(payload.saleId ?? "");
       if (payload.kind === "pending_cancel") {
+        const sale = await resolveSaleForSync(saleId);
+        if (sale && isPreCompletionVoidedSale(sale)) {
+          return pushUnsavedCartVoidToCloud(sale, ctx);
+        }
         return pushCancelPendingSaleToCloud(saleId, ctx);
       }
       const sale = await resolveSaleForSync(saleId);
