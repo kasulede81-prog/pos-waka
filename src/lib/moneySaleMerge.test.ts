@@ -36,10 +36,10 @@ describe("shouldMergeDraftSaleLines", () => {
     expect(shouldMergeDraftSaleLines(qty, buildSaleLine(rice, "quantity", 1).line!)).toBe(true);
   });
 
-  it("never merges money mode lines (Option A)", () => {
+  it("merges money mode lines for the same product (tap/scan count-up)", () => {
     const m1 = moneyLine(5000);
     const m2 = moneyLine(5000);
-    expect(shouldMergeDraftSaleLines(m1, m2)).toBe(false);
+    expect(shouldMergeDraftSaleLines(m1, m2)).toBe(true);
   });
 
   it("never merges money with quantity", () => {
@@ -50,7 +50,7 @@ describe("shouldMergeDraftSaleLines", () => {
   });
 });
 
-describe("money sale merge — Option A (keep separate)", () => {
+describe("money sale merge — separate lines only when merge is skipped", () => {
   it("two UGX 5,000 money sales stay as separate lines when not merged", () => {
     const m1 = moneyLine(5000);
     const m2 = moneyLine(5000);
@@ -92,9 +92,15 @@ describe("money sale merge — Option B (explicit merge)", () => {
 });
 
 describe("rebuildDraftLineQuantity", () => {
-  it("refuses to rebuild a money-mode line", () => {
+  it("converts a money-mode line to quantity when cashier uses +/-", () => {
     const m = moneyLine(5000);
-    expect(rebuildDraftLineQuantity(rice, 2, m)).toBeNull();
+    const rebuilt = rebuildDraftLineQuantity(rice, 2, m);
+    expect(rebuilt).not.toBeNull();
+    expect(rebuilt!.inputMode).toBe("quantity");
+    expect(rebuilt!.quantity).toBe(2);
+    expect(rebuilt!.lineTotalUgx).toBe(8_000);
+    expect(rebuilt!.moneyAmountUgx).toBeNull();
+    expect(rebuilt!.id).toBe(m.id);
   });
 
   it("quantity merge preserves quantity mode", () => {

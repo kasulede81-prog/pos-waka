@@ -3441,12 +3441,9 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!built.line || built.error) {
       return { ok: false, errorKey: built.error ?? "invalid" };
     }
-    const existing =
-      built.line!.inputMode === "quantity"
-        ? get().draftLines.find(
-            (l) => l.productId === built.line!.productId && shouldMergeDraftSaleLines(l, built.line!),
-          )
-        : undefined;
+    const existing = get().draftLines.find(
+      (l) => l.productId === built.line!.productId && shouldMergeDraftSaleLines(l, built.line!),
+    );
     const nextQty = totalDraftQuantityForProduct(
       get().draftLines,
       built.line!.productId,
@@ -3510,7 +3507,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!rebuilt) return { ok: false, errorKey: "invalidQty" };
     const next = withPharmacyFefoPreview(rebuilt, product, line.pharmacyBatchOverrideId);
     set((s) => ({
-      draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
+      draftLines: s.draftLines.map((l) => (l === line || (l.id != null && l.id === line.id) ? next : l)),
     }));
     scheduleDraftPersist(get);
     return { ok: true };
@@ -3527,7 +3524,7 @@ export const usePosStore = create<PosState>((set, get) => {
       batchId,
     );
     set((s) => ({
-      draftLines: s.draftLines.map((l) => (l.productId === productId ? updated : l)),
+      draftLines: s.draftLines.map((l) => (l === line || (l.id != null && l.id === line.id) ? updated : l)),
     }));
     scheduleDraftPersist(get);
     return { ok: true };
