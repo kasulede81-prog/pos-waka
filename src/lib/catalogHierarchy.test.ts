@@ -27,6 +27,7 @@ import {
   retireCatalogNodesForDeletedShelf,
   searchCatalogPickerItems,
   selectedCatalogDestinationPath,
+  type CatalogPickerItem,
 } from "./catalogHierarchy";
 
 function product(category: string, id: string = crypto.randomUUID()): Product {

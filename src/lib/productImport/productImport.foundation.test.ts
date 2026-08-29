@@ -11,6 +11,7 @@ import { commitNormalizedProductImport } from "./commitNormalizedProductImport";
 import { createNormalizedProductImportRow } from "./createNormalizedRow";
 import { evaluateNormalizedProductRows, importHasBlockingIssues } from "./evaluateNormalizedProductRows";
 import { mapNormalizedRowsToBulkQuickAdd } from "./mapNormalizedRowsToBulkQuickAdd";
+import type { BulkQuickAddProductRow } from "./types";
 
 const sodaA: CatalogPickerItem = {
   id: "a",
@@ -159,7 +160,7 @@ describe("normalized product import foundation", () => {
   });
 
   it("successful import calls bulkQuickAddProducts and writes opening stock + provided cost", () => {
-    const wrapped = vi.fn((rows: Parameters<typeof bulk>[0]) => usePosStore.getState().bulkQuickAddProducts(rows));
+    const wrapped = vi.fn((rows: BulkQuickAddProductRow[]) => usePosStore.getState().bulkQuickAddProducts(rows));
 
     const row = createNormalizedProductImportRow({
       name: "Imported Tea",
