@@ -169,6 +169,7 @@ export function incrementalCheckpointPatch(
   shiftsAt?: string;
   dayClosesAt?: string;
   stockMovementsAt?: string;
+  catalogAt?: string;
 } {
   const pulled = new Set(pulledEntities);
   return {

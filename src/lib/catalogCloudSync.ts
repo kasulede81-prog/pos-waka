@@ -621,7 +621,10 @@ export async function processCatalogSyncOperation(ctx: { shopId: string }): Prom
       },
     });
     const { reportSyncIssue } = await import("./monitoring");
-    reportSyncIssue("catalog_sync_conflict_deleted", { ids: result.rejectedNodeIds });
+    reportSyncIssue("catalog_sync_conflict_deleted", {
+      count: result.rejectedNodeIds.length,
+      ids: result.rejectedNodeIds.join(","),
+    });
   }
   const { scheduleImmediatePull } = await import("./immediateSync");
   scheduleImmediatePull("catalog_change");
