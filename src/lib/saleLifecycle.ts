@@ -94,7 +94,7 @@ export function cartVoidKind(activePendingSaleId: string | null | undefined): Ca
 /**
  * Cashier-facing Void Sale copy.
  * Unsaved cart → persist cancelled+void history record, then clear draft.
- * Resumed pending → cancelPendingSale (pending → cancelled, no stock reversal).
+ * Resumed pending → cancelPendingSale (pending → cancelled + VOIDED history, no stock reversal).
  */
 export function cartVoidCopyKeys(input: {
   activePendingSaleId: string | null | undefined;
@@ -331,6 +331,24 @@ export function buildUnsavedCartVoidedSale(input: {
     receiptCustomerName: customerName,
     receiptCustomerPhone: customerPhone,
     paymentMethod: input.paymentMethod ?? "cash",
+    saleVoidedAt: input.at,
+    saleVoidReason: UNSAVED_CART_VOID_REASON,
+    saleVoidedByUserId: input.actorUserId,
+    saleVoidedByLabel: input.actorLabel,
+  };
+}
+
+/** Parked/pending sale the cashier chose not to complete — same VOIDED history marker as an unsaved cart. */
+export function markPendingSaleAsPreCompletionVoid(
+  sale: Sale,
+  input: { at: string; actorUserId: string | null; actorLabel: string | null },
+): Sale {
+  return {
+    ...sale,
+    status: "cancelled",
+    updatedAt: input.at,
+    pendingSync: true,
+    lastSyncError: null,
     saleVoidedAt: input.at,
     saleVoidReason: UNSAVED_CART_VOID_REASON,
     saleVoidedByUserId: input.actorUserId,

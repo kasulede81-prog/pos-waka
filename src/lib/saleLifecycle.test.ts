@@ -3,6 +3,7 @@ import type { Sale } from "../types";
 import { t } from "./i18n";
 import {
   buildUnsavedCartVoidedSale,
+  markPendingSaleAsPreCompletionVoid,
   cartVoidCopyKeys,
   cartVoidKind,
   leaveSellConfirmKey,
@@ -134,8 +135,8 @@ describe("cartVoidCopyKeys", () => {
     expect(copy.storeAction).toBe("cancelPendingSale");
     expect(t("en", copy.labelKey)).toBe("Void pending sale");
     expect(t("en", copy.titleKey)).toBe("Void this pending sale?");
-    expect(t("en", copy.bodyKey)).toMatch(/cancelled/);
-    expect(t("en", copy.bodyKey)).toMatch(/No stock, cash, or debt will be affected/);
+    expect(t("en", copy.bodyKey)).toMatch(/recorded as VOIDED in Sales History/);
+    expect(t("en", copy.bodyKey)).toMatch(/No stock, cash, debt, or revenue will be affected/);
     expect(t("lg", copy.labelKey)).toContain("etannaggwa");
   });
 
@@ -297,5 +298,48 @@ describe("buildUnsavedCartVoidedSale", () => {
     expect(unsavedCartVoidPersistSucceeded([record], PENDING_ID, 0)).toBe(true);
     expect(unsavedCartVoidPersistSucceeded([record], PENDING_ID, 1)).toBe(false);
     expect(unsavedCartVoidPersistSucceeded([], PENDING_ID, 0)).toBe(false);
+  });
+});
+
+describe("markPendingSaleAsPreCompletionVoid", () => {
+  it("keeps the pending sale id and stamps VOIDED metadata without changing cash, debt, or lines", () => {
+    const at = "2026-08-29T09:15:00.000Z";
+    const pending = sale({
+      id: PENDING_ID,
+      status: "pending",
+      totalUgx: 40_000,
+      cashPaidUgx: 0,
+      debtUgx: 0,
+      lines: [
+        {
+          id: "line-1",
+          productId: "prod-1",
+          name: "Coca-Cola",
+          inputMode: "quantity",
+          quantity: 2,
+          unitPriceUgx: 20_000,
+          unitCostUgx: 8_000,
+          lineTotalUgx: 40_000,
+          estimatedProfitUgx: 24_000,
+          updatedAt: at,
+        },
+      ],
+    });
+    const record = markPendingSaleAsPreCompletionVoid(pending, {
+      at,
+      actorUserId: "cashier:1",
+      actorLabel: "Sarah",
+    });
+    expect(record.id).toBe(PENDING_ID);
+    expect(record.status).toBe("cancelled");
+    expect(record.saleVoidReason).toBe(UNSAVED_CART_VOID_REASON);
+    expect(isPreCompletionVoidedSale(record)).toBe(true);
+    expect(record.lines).toHaveLength(1);
+    expect(record.totalUgx).toBe(40_000);
+    expect(record.cashPaidUgx).toBe(0);
+    expect(record.debtUgx).toBe(0);
+    expect(record.saleVoidedAt).toBe(at);
+    expect(record.saleVoidedByUserId).toBe("cashier:1");
+    expect(record.saleVoidedByLabel).toBe("Sarah");
   });
 });

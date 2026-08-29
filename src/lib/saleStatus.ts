@@ -48,7 +48,7 @@ export function isPreCompletionVoidedSale(s: Sale): boolean {
   );
 }
 
-/** Pending-order cancel — cancelled without the unsaved-cart void marker. */
+/** Cancelled without the pre-completion VOIDED marker (legacy / non-cart cancels). */
 export function isCancelledPendingSale(s: Sale): boolean {
   return saleStatusOf(s) === "cancelled" && !isPreCompletionVoidedSale(s);
 }

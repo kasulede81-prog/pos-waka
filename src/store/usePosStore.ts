@@ -199,6 +199,7 @@ import {
   buildUnsavedCartVoidedSale,
   emptyDraftCheckoutFields,
   isDraftPaymentMethod,
+  markPendingSaleAsPreCompletionVoid,
   resolveFinalizeCompletionTarget,
   resolvePersistedDraftSaleBinding,
   resumeWouldOverwriteUnrelatedCart,
@@ -4591,7 +4592,13 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const sale = state.sales.find((s) => s.id === saleId && s.status === "pending");
     if (!sale) return { ok: false, errorKey: "invalid" };
-    const cancelled: Sale = { ...sale, status: "cancelled", updatedAt: new Date().toISOString(), pendingSync: true };
+    const at = new Date().toISOString();
+    const actor = state.sessionActor;
+    const cancelled = markPendingSaleAsPreCompletionVoid(sale, {
+      at,
+      actorUserId: actor?.userId ?? null,
+      actorLabel: actor?.displayName?.trim() || null,
+    });
     let nextPrefs = state.preferences;
     if (sale.tableSessionId && nextPrefs.hospitalityFloor) {
       nextPrefs = {

@@ -1,12 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useNavigate } from "react-router-dom";
-import type { Language, Sale } from "../types";
+import type { BusinessType, Language, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { formatUgx } from "../lib/formatUgx";
 import { pendingSales } from "../lib/saleStatus";
+import { cartVoidCopyKeys, type CartVoidMode } from "../lib/saleLifecycle";
+import { isHospitalityMode } from "../lib/hospitality";
+import { isPharmacyMode } from "../lib/pharmacy";
+import { isWholesaleMode } from "../lib/wholesale";
 import { usePosStore } from "../store/usePosStore";
 import { PageBackBar } from "../components/layout/PageBackBar";
+import { CartVoidConfirmDialog } from "../components/pos/CartVoidConfirmDialog";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useProtectedAction } from "../hooks/useProtectedAction";
 
@@ -18,6 +23,21 @@ function formatWhen(iso: string): string {
   }
 }
 
+function pendingCancelVoidMode(
+  sale: Sale | null,
+  prefs: {
+    businessType: BusinessType;
+    pharmacyModeEnabled?: boolean | null;
+    hospitalityModeEnabled?: boolean | null;
+  },
+): CartVoidMode {
+  if (sale?.tableSessionId) return "hospitality";
+  if (isPharmacyMode(prefs.businessType, prefs.pharmacyModeEnabled)) return "pharmacy";
+  if (isWholesaleMode(prefs.businessType)) return "wholesale";
+  if (isHospitalityMode(prefs.businessType, prefs.hospitalityModeEnabled)) return "hospitality";
+  return "retail";
+}
+
 export function PendingSalesPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
@@ -25,9 +45,20 @@ export function PendingSalesPage({ lang }: { lang: Language }) {
   const sales = usePosStore((s) => s.sales);
   const resumePendingSale = usePosStore((s) => s.resumePendingSale);
   const cancelPendingSale = usePosStore((s) => s.cancelPendingSale);
-  const floor = usePosStore((s) => s.preferences.hospitalityFloor);
+  const preferences = usePosStore((s) => s.preferences);
+  const floor = preferences.hospitalityFloor;
+  const [voidingSale, setVoidingSale] = useState<Sale | null>(null);
 
   const rows = useMemo(() => pendingSales(sales).sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt)), [sales]);
+
+  const voidCopy = useMemo(
+    () =>
+      cartVoidCopyKeys({
+        activePendingSaleId: voidingSale?.id ?? "pending",
+        mode: pendingCancelVoidMode(voidingSale, preferences),
+      }),
+    [voidingSale, preferences],
+  );
 
   const resume = (sale: Sale) => {
     const res = resumePendingSale(sale.id);
@@ -82,11 +113,7 @@ export function PendingSalesPage({ lang }: { lang: Language }) {
                     {canCancel ? (
                       <button
                         type="button"
-                        onClick={() =>
-                          void runProtected("delete_transaction", () => {
-                            cancelPendingSale(sale.id);
-                          })
-                        }
+                        onClick={() => setVoidingSale(sale)}
                         className="min-h-10 rounded-xl border border-rose-200 px-4 text-xs font-black text-rose-800"
                       >
                         {t(lang, "pendingSalesCancel")}
@@ -99,6 +126,21 @@ export function PendingSalesPage({ lang }: { lang: Language }) {
           })}
         </ul>
       )}
+
+      <CartVoidConfirmDialog
+        lang={lang}
+        open={Boolean(voidingSale)}
+        copy={voidCopy}
+        onKeep={() => setVoidingSale(null)}
+        onConfirm={() => {
+          const saleId = voidingSale?.id;
+          if (!saleId) return;
+          void runProtected("delete_transaction", () => {
+            const res = cancelPendingSale(saleId);
+            if (res.ok) setVoidingSale(null);
+          });
+        }}
+      />
     </div>
   );
 }

@@ -84,6 +84,17 @@ describe("cashier cart-exit Void UX wiring", () => {
     expect(prefs).not.toContain("CartVoidConfirmDialog");
   });
 
+  it("Pending Sales Cancel uses the same Void confirmation, then cancelPendingSale", () => {
+    const page = src("src/pages/PendingSalesPage.tsx");
+    expect(page).toContain("CartVoidConfirmDialog");
+    expect(page).toContain("cartVoidCopyKeys");
+    expect(page).toContain("cancelPendingSale");
+    expect(page).toContain("pendingSalesCancel");
+    expect(page).not.toContain("voidSaleLine");
+    expect(page).not.toContain("voidCurrentCart");
+    expect(page).not.toMatch(/window\.confirm/);
+  });
+
   it("checkout Clear is labeled Clear, not a dedicated Void sale button", () => {
     const panel = src("src/components/pos/PosCheckoutPanel.tsx");
     expect(panel).toContain("clearSaleLabel");

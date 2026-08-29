@@ -171,14 +171,22 @@ describe("sale lifecycle integrity", () => {
     expect(usePosStore.getState().resumePendingSale(save.saleId!).ok).toBe(true);
   });
 
-  it("cancel pending has no inventory reversal", () => {
+  it("cancel pending stamps VOIDED history on the same sale with no inventory reversal", () => {
     const save = usePosStore.getState().savePendingSale("Hold");
     const before = snapshotIntegrity();
     expect(usePosStore.getState().cancelPendingSale(save.saleId!).ok).toBe(true);
     const after = snapshotIntegrity();
+    const held = usePosStore.getState().sales.find((s) => s.id === save.saleId);
+    expect(held?.status).toBe("cancelled");
+    expect(isPreCompletionVoidedSale(held!)).toBe(true);
+    expect(isCancelledPendingSale(held!)).toBe(false);
+    expect(usePosStore.getState().sales.filter((s) => s.id === save.saleId)).toHaveLength(1);
     expect(after.stock).toBe(before.stock);
     expect(after.movements).toBe(before.movements);
+    expect(after.debt).toBe(before.debt);
+    expect(after.cashShift).toBe(before.cashShift);
     expect(after.pending).toBe(0);
+    expect(after.sales).toBe(before.sales);
   });
 
   it("draft restore keeps activePendingSaleId and finalize completes P without creating C", () => {
@@ -372,9 +380,10 @@ describe("sale lifecycle integrity", () => {
     expect(res.kind).toBe("pending");
     const held = usePosStore.getState().sales.find((s) => s.id === save.saleId);
     expect(held?.status).toBe("cancelled");
-    expect(isPreCompletionVoidedSale(held!)).toBe(false);
-    expect(isCancelledPendingSale(held!)).toBe(true);
-    expect(usePosStore.getState().sales.filter(isPreCompletionVoidedSale)).toHaveLength(0);
+    expect(isPreCompletionVoidedSale(held!)).toBe(true);
+    expect(isCancelledPendingSale(held!)).toBe(false);
+    expect(usePosStore.getState().sales.filter(isPreCompletionVoidedSale)).toHaveLength(1);
+    expect(usePosStore.getState().sales.filter((s) => s.id === save.saleId)).toHaveLength(1);
     expect(snapshotIntegrity().stock).toBe(before.stock);
     expect(snapshotIntegrity().movements).toBe(before.movements);
     expect(snapshotIntegrity().debt).toBe(before.debt);
@@ -589,7 +598,8 @@ describe("sale lifecycle integrity", () => {
     expect(res.ok).toBe(true);
     expect(res.kind).toBe("pending");
     expect(usePosStore.getState().sales.find((s) => s.id === save.saleId)?.status).toBe("cancelled");
-    expect(usePosStore.getState().sales.filter(isPreCompletionVoidedSale)).toHaveLength(0);
+    expect(isPreCompletionVoidedSale(usePosStore.getState().sales.find((s) => s.id === save.saleId)!)).toBe(true);
+    expect(usePosStore.getState().sales.filter(isPreCompletionVoidedSale)).toHaveLength(1);
     expect(usePosStore.getState().sales.filter((s) => s.id === save.saleId)).toHaveLength(1);
   });
 

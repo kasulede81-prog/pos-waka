@@ -5306,7 +5306,7 @@ const en: Dict = {
   voidPendingSaleLabel: "Void pending sale",
   voidPendingSaleTitle: "Void this pending sale?",
   voidPendingSaleBody:
-    "This order will remain in your records as cancelled. No stock, cash, or debt will be affected.",
+    "This sale will be recorded as VOIDED in Sales History. No stock, cash, debt, or revenue will be affected.",
   voidPendingSaleConfirm: "Void pending sale",
   voidCartKeepOrder: "Keep order",
   voidUnsavedOrderTitle: "Void this order?",
@@ -5316,7 +5316,7 @@ const en: Dict = {
   voidPendingOrderLabel: "Void pending order",
   voidPendingOrderTitle: "Void this pending order?",
   voidPendingOrderBody:
-    "This order will remain in your records as cancelled. No stock, cash, or debt will be affected.",
+    "This order will be recorded as VOIDED in Sales History. No stock, cash, debt, or revenue will be affected.",
   voidPendingOrderConfirm: "Void pending order",
   voidCartKeepBasket: "Keep basket",
   voidUnsavedBasketTitle: "Void this basket?",
@@ -5326,7 +5326,7 @@ const en: Dict = {
   voidPendingBasketLabel: "Void pending basket",
   voidPendingBasketTitle: "Void this pending basket?",
   voidPendingBasketBody:
-    "This basket will remain in your records as cancelled. No stock, cash, or debt will be affected.",
+    "This basket will be recorded as VOIDED in Sales History. No stock, cash, debt, or revenue will be affected.",
   voidPendingBasketConfirm: "Void pending basket",
   voidCartKeepInvoice: "Keep invoice",
   voidUnsavedInvoiceTitle: "Void this invoice?",
@@ -5336,7 +5336,7 @@ const en: Dict = {
   voidPendingInvoiceLabel: "Void pending invoice",
   voidPendingInvoiceTitle: "Void this pending invoice?",
   voidPendingInvoiceBody:
-    "This invoice will remain in your records as cancelled. No stock, cash, or debt will be affected.",
+    "This invoice will be recorded as VOIDED in Sales History. No stock, cash, debt, or revenue will be affected.",
   voidPendingInvoiceConfirm: "Void pending invoice",
   thisSale: "This sale",
   posAddMoreItems: "Add items",
@@ -12011,7 +12011,7 @@ const lg: Dict = {
   voidPendingSaleLabel: "Sazaamu sale etannaggwa",
   voidPendingSaleTitle: "Osazaamu sale eno etannaggwa?",
   voidPendingSaleBody:
-    "Order eno ejja kusigala mu recodi nga eyasaziddwamu. Stock, ssente, n'edeni tebikyuka.",
+    "Okutunda kuno kujja kuwandikibwa nga VOIDED mu Sales History. Stock, ssente, deni, n'omuwendo ogutundiddwa tebikyuka.",
   voidPendingSaleConfirm: "Sazaamu sale etannaggwa",
   voidCartKeepOrder: "Sigala n'order",
   voidUnsavedOrderTitle: "Osazaamu order eno?",
@@ -12021,7 +12021,7 @@ const lg: Dict = {
   voidPendingOrderLabel: "Sazaamu order etannaggwa",
   voidPendingOrderTitle: "Osazaamu order eno etannaggwa?",
   voidPendingOrderBody:
-    "Order eno ejja kusigala mu recodi nga eyasaziddwamu. Stock, ssente, n'edeni tebikyuka.",
+    "Order eno ejja kuwandikibwa nga VOIDED mu Sales History. Stock, ssente, deni, n'omuwendo ogutundiddwa tebikyuka.",
   voidPendingOrderConfirm: "Sazaamu order etannaggwa",
   voidCartKeepBasket: "Sigala ne basket",
   voidUnsavedBasketTitle: "Osazaamu basket eno?",
@@ -12031,7 +12031,7 @@ const lg: Dict = {
   voidPendingBasketLabel: "Sazaamu basket etannaggwa",
   voidPendingBasketTitle: "Osazaamu basket eno etannaggwa?",
   voidPendingBasketBody:
-    "Basket eno ejja kusigala mu recodi nga eyasaziddwamu. Stock, ssente, n'edeni tebikyuka.",
+    "Basket eno ejja kuwandikibwa nga VOIDED mu Sales History. Stock, ssente, deni, n'omuwendo ogutundiddwa tebikyuka.",
   voidPendingBasketConfirm: "Sazaamu basket etannaggwa",
   voidCartKeepInvoice: "Sigala ne invoice",
   voidUnsavedInvoiceTitle: "Osazaamu invoice eno?",
@@ -12041,7 +12041,7 @@ const lg: Dict = {
   voidPendingInvoiceLabel: "Sazaamu invoice etannaggwa",
   voidPendingInvoiceTitle: "Osazaamu invoice eno etannaggwa?",
   voidPendingInvoiceBody:
-    "Invoice eno ejja kusigala mu recodi nga eyasaziddwamu. Stock, ssente, n'edeni tebikyuka.",
+    "Invoice eno ejja kuwandikibwa nga VOIDED mu Sales History. Stock, ssente, deni, n'omuwendo ogutundiddwa tebikyuka.",
   voidPendingInvoiceConfirm: "Sazaamu invoice etannaggwa",
   thisSale: "Okutunda kuno",
   posAddMoreItems: "Yongerako ebintu",
