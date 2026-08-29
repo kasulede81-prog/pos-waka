@@ -1,4 +1,5 @@
 import type { NormalizedProductImportRow, ProductImportSource } from "./types";
+import { defaultPackMode } from "./packImportSemantics";
 
 export function newImportClientId(): string {
   return crypto.randomUUID();
@@ -17,8 +18,10 @@ export function createNormalizedProductImportRow(
     category: partial.category ?? "",
     baseUnit: (partial.baseUnit ?? "piece").trim() || "piece",
     sellingMode: partial.sellingMode,
+    packMode: partial.packMode ?? defaultPackMode(),
     buyingUnit: partial.buyingUnit,
     conversionRate: partial.conversionRate,
+    openingPacks: partial.openingPacks,
     stockQty: Math.max(0, Number(partial.stockQty) || 0),
     sellingPriceUgx: Math.max(0, Math.floor(Number(partial.sellingPriceUgx) || 0)),
     costPricePerUnitUgx: partial.costPricePerUnitUgx,

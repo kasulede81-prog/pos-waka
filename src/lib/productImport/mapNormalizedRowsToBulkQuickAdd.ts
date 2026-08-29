@@ -1,5 +1,6 @@
 import { resolveCatalogSectionInput, type CatalogPickerItem } from "../catalogHierarchy";
 import { isImportCostProvided } from "./createNormalizedRow";
+import { syncPackedImportDerivedFields } from "./packImportSemantics";
 import type { BulkQuickAddProductRow, NormalizedProductImportRow } from "./types";
 
 export type MapImportRowsOptions = {
@@ -10,6 +11,7 @@ export type MapImportRowsOptions = {
 /**
  * Maps review-approved normalized rows to `bulkQuickAddProducts` input.
  * Omits cost when missing so `buildQuickAddProductDraft` applies the 72% fallback.
+ * Packed rows keep wizard-derived sell-unit stock and pack cost fields.
  */
 export function mapNormalizedRowsToBulkQuickAdd(
   rows: readonly NormalizedProductImportRow[],
@@ -20,7 +22,8 @@ export function mapNormalizedRowsToBulkQuickAdd(
 
   return rows
     .filter((r) => r.enabled)
-    .map((row) => {
+    .map((raw) => {
+      const row = raw.packMode === "packed" ? syncPackedImportDerivedFields(raw) : raw;
       const sectionQuery = (row.categoryInput || row.category).trim();
       const resolved = resolveCatalogSectionInput(pickerItems, sectionQuery);
       let category = row.category.trim();
@@ -39,15 +42,23 @@ export function mapNormalizedRowsToBulkQuickAdd(
         sellingMode: row.sellingMode,
       };
 
-      if (row.buyingUnit !== undefined) payload.buyingUnit = row.buyingUnit;
-      if (row.conversionRate != null && Number(row.conversionRate) > 1) {
-        payload.conversionRate = Number(row.conversionRate);
-      }
-      if (row.buyingPackCostUgx != null && Number(row.buyingPackCostUgx) > 0) {
-        payload.buyingPackCostUgx = Math.floor(Number(row.buyingPackCostUgx));
-      }
-      if (isImportCostProvided(row)) {
-        payload.costPricePerUnitUgx = Number(row.costPricePerUnitUgx);
+      if (row.packMode === "packed") {
+        const label = (row.buyingUnit ?? "").trim().toLowerCase();
+        if (label) payload.buyingUnit = label;
+        if (row.conversionRate != null && Number(row.conversionRate) > 1) {
+          payload.conversionRate = Number(row.conversionRate);
+        }
+        if (row.buyingPackCostUgx != null && Number(row.buyingPackCostUgx) > 0) {
+          payload.buyingPackCostUgx = Math.floor(Number(row.buyingPackCostUgx));
+        }
+        if (isImportCostProvided(row)) {
+          payload.costPricePerUnitUgx = Number(row.costPricePerUnitUgx);
+        }
+      } else {
+        // Template A / no-pack: never pass pack fields.
+        if (isImportCostProvided(row)) {
+          payload.costPricePerUnitUgx = Number(row.costPricePerUnitUgx);
+        }
       }
 
       return payload;

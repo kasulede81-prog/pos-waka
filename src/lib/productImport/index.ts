@@ -6,6 +6,7 @@ export type {
   ImportRowIssueKind,
   ImportRowIssueSeverity,
   NormalizedProductImportRow,
+  ProductImportPackMode,
   ProductImportSource,
 } from "./types";
 export { createNormalizedProductImportRow, isImportCostProvided, newImportClientId } from "./createNormalizedRow";
@@ -28,6 +29,32 @@ export {
   parseImportNumber,
 } from "./parseProductImportCsv";
 export type { ParseProductImportCsvResult, ProductImportCsvIssue } from "./parseProductImportCsv";
-export { buildWakaProductImportTemplateCsv, buildWakaProductImportExampleCsv } from "./csvTemplate";
-export { officialCsvImportHeaders, CSV_IMPORT_COLUMNS } from "./csvColumns";
-export { CSV_IMPORT_MAX_ROWS, CSV_IMPORT_MAX_BYTES, CSV_IMPORT_TEMPLATE_FILENAME } from "./csvLimits";
+export {
+  buildWakaProductImportTemplateCsv,
+  buildWakaProductImportExampleCsv,
+  buildWakaProductImportNoPackTemplateCsv,
+  buildWakaProductImportWithPackTemplateCsv,
+  buildWakaProductImportNoPackExampleCsv,
+  buildWakaProductImportWithPackExampleCsv,
+} from "./csvTemplate";
+export {
+  officialCsvImportHeaders,
+  officialCsvImportHeadersNoPack,
+  officialCsvImportHeadersWithPack,
+  CSV_IMPORT_COLUMNS,
+  CSV_TEMPLATE_A_COLUMNS,
+  CSV_TEMPLATE_B_COLUMNS,
+  detectCsvImportTemplate,
+} from "./csvColumns";
+export {
+  CSV_IMPORT_MAX_ROWS,
+  CSV_IMPORT_MAX_BYTES,
+  CSV_IMPORT_TEMPLATE_FILENAME,
+  CSV_IMPORT_NO_PACK_TEMPLATE_FILENAME,
+  CSV_IMPORT_WITH_PACK_TEMPLATE_FILENAME,
+} from "./csvLimits";
+export {
+  sellUnitsFromOpeningPacks,
+  unitCostFromImportPackCost,
+  syncPackedImportDerivedFields,
+} from "./packImportSemantics";

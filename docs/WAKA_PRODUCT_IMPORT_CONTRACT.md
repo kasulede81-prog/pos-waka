@@ -1,10 +1,11 @@
 # WAKA POS — Product Import Contract
 
-**Phase:** 2 — Normalized rows + review + CSV adapter (no OCR)  
+**Phase:** 2 — Normalized rows + review + two CSV templates (no OCR)  
 **Date:** 2026-08-29  
-**Save path (mandatory):** `bulkQuickAddProducts` → `buildQuickAddProductDraft` → `commitNewProducts`
+**Save path (mandatory):** `bulkQuickAddProducts` → `buildQuickAddProductDraft` → `commitNewProducts`  
+**CSV detail:** `docs/WAKA_CSV_PRODUCT_IMPORT.md` · **Wizard parity:** `docs/WAKA_CSV_WIZARD_PARITY.md`
 
-This contract is the only allowed way for CSV and future paper/OCR adapters to create products. CSV details: `docs/WAKA_CSV_PRODUCT_IMPORT.md`.
+This contract is the only allowed way for CSV and future paper/OCR adapters to create products.
 
 ---
 
@@ -15,71 +16,68 @@ Type: `NormalizedProductImportRow` (`src/lib/productImport/types.ts`)
 | Field | WAKA destination | Required? | Notes |
 |-------|------------------|-----------|--------|
 | `clientId` | Review only | Yes | Not stored on `Product` |
-| `source` | Review / debug only | Yes | `manual` \| `ai` \| `csv` \| `paper_ocr`. Does not change pricing, stock, or permissions |
+| `source` | Review / debug only | Yes | `manual` \| `ai` \| `csv` \| `paper_ocr` |
 | `enabled` | Skipped if false | Yes | Review checkbox |
 | `name` | `Product.name` | Yes | Same as wizard / draft |
 | `categoryInput` | Resolution input | Yes to type | Leaf name, path, or `legacyShelfKey` |
 | `category` | `Product.category` | After resolve | Catalog `legacyShelfKey`, not folder path |
 | `baseUnit` | `Product.baseUnit` | Default `piece` | Sell unit |
 | `sellingMode` | `Product.sellingMode` | Optional | Else name guess in draft |
-| `buyingUnit` | `Product.buyingUnit` | Optional | Pack label |
-| `conversionRate` | `Product.conversionRate` | Optional | Pack size (units per pack), must be > 0 if set |
-| `stockQty` | `Product.stockOnHand` | Default 0 | Opening qty in sell units |
-| `sellingPriceUgx` | `Product.sellingPricePerUnitUgx` | Yes, > 0 | Integer UGX |
-| `costPricePerUnitUgx` | `Product.costPricePerUnitUgx` | Optional | `null`/omit = **missing** (72% fallback). `0` is explicit zero |
-| `buyingPackCostUgx` | `Product.buyingPackCostUgx` | Optional | Pack invoice total |
-| `sourceRowNumber` | Review only | Optional | 1-based CSV record (header = 1). Not stored on `Product` |
+| `packMode` | Import / review only | Yes | `"none"` (Template A) or `"packed"` (Template B). Default `"none"` for non-CSV |
+| `buyingUnit` | `Product.buyingUnit` | Required if packed | Pack label |
+| `conversionRate` | `Product.conversionRate` | Required > 1 if packed | Pack size (sell units per pack) |
+| `openingPacks` | Derives `stockQty` | Packed template | Wizard “how many packs”; not stored on Product |
+| `stockQty` | `Product.stockOnHand` | Default 0 | **Always sell units** (after packs × size when packed) |
+| `sellingPriceUgx` | `Product.sellingPricePerUnitUgx` | Yes, > 0 | Integer UGX per sell unit |
+| `costPricePerUnitUgx` | `Product.costPricePerUnitUgx` | Optional | Per sell unit. `null`/omit = missing (72% fallback). For packed + pack cost, derived via `unitCostFromPackTotal` |
+| `buyingPackCostUgx` | `Product.buyingPackCostUgx` | Optional | Pack invoice total (Template B / wizard pack buy) |
+| `sourceRowNumber` | Review only | Optional | 1-based CSV record (header = 1) |
 
-Not on the row (WAKA generates or ignores on create): SKU, id, tax, image, supplier, `openingBatch` (pharmacy wizard-only; bulk API does not take it).
+Not on the row: SKU, id, tax, image, supplier, `openingBatch` (pharmacy wizard-only).
 
 ---
 
 ## Required vs optional
 
-**Blocking (must fix or uncheck before import):**
+**Blocking:**
 
 - Non-empty name  
 - Selling price > 0  
-- Non-negative opening quantity  
-- Pack size > 0 if provided  
+- Non-negative opening quantity / opening packs  
+- Packed: pack size > 1, non-empty pack label  
+- No-pack rows must not carry `conversionRate > 1`  
 - Non-negative cost if provided  
-- Section required when catalog picker destinations exist (same idea as wizard Next)  
-- Ambiguous folder leaf (multiple `legacyShelfKey`s)  
+- Section required when catalog destinations exist  
+- Ambiguous folder leaf  
 - Duplicate names in this batch  
-- Pharmacy mode: opening stock > 0 and explicit cost > 0  
+- Pharmacy: opening stock > 0 and explicit cost > 0  
 
-**Warnings (import still allowed after confirm):**
+**Warnings:**
 
-- Cost missing → existing ~72% fallback (`cost_fallback`)  
-- Unresolved section string (new shelf name)  
-- Duplicate of an existing catalog product name  
-- Cost > selling price  
+- Cost missing → ~72% fallback (`cost_fallback`)  
+- Unresolved section  
+- Duplicate of existing catalog name  
+- Unit cost > selling price  
 
 ---
 
 ## Validation
 
-`evaluateNormalizedProductRows` mirrors `buildQuickAddProductDraft` rules (name, price, pharmacy stock/cost, pack numeric). It does **not** insert products.
+`evaluateNormalizedProductRows` mirrors draft rules. Commit refused while any **enabled** row has severity `error`.
 
-Commit is refused while any **enabled** row has severity `error`.
+`mapNormalizedRowsToBulkQuickAdd`:
 
-Then `mapNormalizedRowsToBulkQuickAdd` omits `costPricePerUnitUgx` when cost is missing so the draft applies `defaultWizardUnitCostUgx` (same 72% as `quickAddProduct`).
+- Omits `costPricePerUnitUgx` when cost missing → draft 72% fallback  
+- Packed: passes `buyingUnit`, `conversionRate`, `buyingPackCostUgx`, derived unit cost  
+- No-pack: never passes pack fields  
+
+Pack sell-unit / cost derivation: `packImportSemantics.ts` (same math as `buildProductFromSimpleWizard`).
 
 ---
 
 ## Category / folder resolution
 
-`resolveCatalogSectionInput` (`catalogHierarchy.ts`):
-
-| Input | Result |
-|-------|--------|
-| Empty, destinations exist | `missing_category` (block) |
-| Empty, no destinations | Maps to General |
-| Unique `legacyShelfKey`, unique path, or unique leaf | `resolved` → that key |
-| Same leaf name, two+ different keys | `ambiguous` (block) — operator must type the path or exact key |
-| No match | `unresolved` — typed string saved as `Product.category` (current bulk behavior), warning only |
-
-Never pick an arbitrary match when the leaf is ambiguous.
+`resolveCatalogSectionInput` — unchanged (see prior contract). Never auto-pick an ambiguous leaf.
 
 ---
 
@@ -87,18 +85,20 @@ Never pick an arbitrary match when the leaf is ambiguous.
 
 | Review | Draft |
 |--------|--------|
-| Cost provided | Passed through; `importCostProvidedHint` |
-| Cost missing | Warning + placeholder showing `defaultWizardUnitCostUgx(sell)`. Confirm dialog if any selected row is missing cost. Field omitted on bulk payload → **unchanged** 72% fallback |
+| Cost provided (unit, or pack-derived unit) | Passed through |
+| Cost / cost-per-pack missing | Warning + 72% fallback via draft |
 
-Do not pass `0` to mean missing.
+Do not pass `0` to mean missing. Do not put pack totals into `costPricePerUnitUgx` without deriving unit cost.
 
 ---
 
 ## Opening stock
 
-`stockQty` maps to `bulkQuickAddProducts[].stockQty` → `Product.stockOnHand`.
+`stockQty` (sell units) → `bulkQuickAddProducts[].stockQty` → `Product.stockOnHand`.
 
-`commitNewProducts` still emits local `opening_stock` movements only when stock > 0. No new movement kind.
+Packed CSV: `stockQty = openingPacks × conversionRate` before map/commit.
+
+`commitNewProducts` emits local `opening_stock` only when stock > 0.
 
 ---
 
@@ -106,79 +106,44 @@ Do not pass `0` to mean missing.
 
 ```
 NormalizedProductImportRow[]
-  → ProductImportReviewSheet (operator)
+  → ProductImportReviewSheet
   → commitNormalizedProductImport
-       evaluateNormalizedProductRows (block errors)
+       evaluateNormalizedProductRows
        mapNormalizedRowsToBulkQuickAdd
-       bulkQuickAddProducts(payload)   // existing store API
+       bulkQuickAddProducts(payload)
          buildQuickAddProductDraft
          commitNewProducts
 ```
 
-No `public.products` writes. Permission remains `products.add` inside `bulkQuickAddProducts`.
+No `public.products` writes. Permission `products.add` inside `bulkQuickAddProducts`.
 
 ---
 
-## Permissions
-
-Same as today: `products.add`. Folder create in a future review picker still uses `shelves.customize`. No new permission.
-
-CSV/OCR **generate** steps must not grant extra create rights. AI generate gates stay on AI features only.
-
----
-
-## Error behavior
-
-| Case | Result |
-|------|--------|
-| Blocking issues | `{ blocked: true, added: 0 }` — bulk **not** called |
-| Empty enabled set | Blocked |
-| Plan cap / invalid drafts | Store `{ added, skipped }` as today |
-| Offline | Local commit + sync queue, same as wizard |
-| Duplicate SKU | Not checked here (SKU auto-generated) |
-
----
-
-## Source metadata
-
-`source` is stored on the review row only. Adapters set:
-
-- CSV adapter: `"csv"` (`parseProductImportCsv`)
-- Paper/OCR adapter (later): `"paper_ocr"`
-- AI list (optional later): `"ai"`
-- Manual paste: `"manual"`
-
----
-
-## CSV adapter (Phase 2)
+## CSV adapter
 
 ```
 .csv bytes
-  → parseProductImportCsv (source: "csv")
+  → detectCsvImportTemplate (header sets)
+  → parseProductImportCsv (source: "csv", packMode set)
   → ProductImportReviewSheet
   → commitNormalizedProductImport({ bulkQuickAddProducts })
 ```
 
-Official headers: Product name, Section, Unit, Pack size, Opening quantity, Cost price, Selling price.
+| Template | Headers |
+|----------|---------|
+| No Packs | Product name, Section, Unit, Opening quantity, Cost price, Selling price |
+| With Packs | Product name, Section, Unit, Pack, Pack size, Opening packs, Cost per pack, Selling price |
 
-The parser does **not** invent cost. Blank cost stays missing until the existing draft 72% fallback.
+Legacy mixed 7-column header → reject (not wizard-parity for packs).
 
-Limits: 500 rows, 256 KB. Excel workbooks are not parsed.
+Limits: 500 rows, 256 KB. Excel not parsed.
 
-Stock entry: **Import CSV** (permission `products.add`) → template download + file picker → shared review sheet.
+Stock entry: **Import CSV** → two template downloads + file picker → shared review.
 
-Existing AI bulk modal is **unchanged**.
+Existing AI bulk modal is **unchanged**. Add Product wizard is **unchanged**.
 
 ---
 
-## Extension points (do not implement in this phase)
+## Extension points (do not implement here)
 
-**Paper / OCR**
-
-```
-image → (future OCR) → NormalizedProductImportRow[]  source: "paper_ocr"
-  → ProductImportReviewSheet
-  → commitNormalizedProductImport({ bulkQuickAddProducts })
-```
-
-Do not add a second product creation engine.
+**Paper / OCR** → same `NormalizedProductImportRow[]` → same review → same commit. Do not add a second product creation engine.

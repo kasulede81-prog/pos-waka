@@ -4,11 +4,14 @@ import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { saveExportedFile } from "../../lib/fileDownload";
 import {
-  buildWakaProductImportTemplateCsv,
+  buildWakaProductImportNoPackTemplateCsv,
+  buildWakaProductImportWithPackTemplateCsv,
   CSV_IMPORT_MAX_BYTES,
   CSV_IMPORT_MAX_ROWS,
-  CSV_IMPORT_TEMPLATE_FILENAME,
-  officialCsvImportHeaders,
+  CSV_IMPORT_NO_PACK_TEMPLATE_FILENAME,
+  CSV_IMPORT_WITH_PACK_TEMPLATE_FILENAME,
+  officialCsvImportHeadersNoPack,
+  officialCsvImportHeadersWithPack,
   parseProductImportCsvFile,
   type ProductImportCsvIssue,
 } from "../../lib/productImport";
@@ -49,10 +52,18 @@ export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) 
     onClose();
   };
 
-  const downloadTemplate = async () => {
+  const downloadNoPack = async () => {
     await saveExportedFile(
-      CSV_IMPORT_TEMPLATE_FILENAME,
-      buildWakaProductImportTemplateCsv(),
+      CSV_IMPORT_NO_PACK_TEMPLATE_FILENAME,
+      buildWakaProductImportNoPackTemplateCsv(),
+      "text/csv;charset=utf-8",
+    );
+  };
+
+  const downloadWithPack = async () => {
+    await saveExportedFile(
+      CSV_IMPORT_WITH_PACK_TEMPLATE_FILENAME,
+      buildWakaProductImportWithPackTemplateCsv(),
       "text/csv;charset=utf-8",
     );
   };
@@ -102,19 +113,44 @@ export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) 
           maxKb: String(Math.floor(CSV_IMPORT_MAX_BYTES / 1024)),
         })}
       </p>
-      <div className="mb-3 rounded-2xl border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground">
-        <p className="mb-1 font-black uppercase tracking-wide">{t(lang, "csvImportColumnsLabel")}</p>
-        <p>{officialCsvImportHeaders().join(" · ")}</p>
+
+      <div className="mb-3 rounded-2xl border border-border bg-muted/50 px-3 py-3 text-sm font-semibold text-foreground">
+        <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">
+          {t(lang, "csvImportWhichTemplate")}
+        </p>
+        <p className="mb-3 text-sm text-muted-foreground">{t(lang, "csvImportWhichTemplateHint")}</p>
+
+        <div className="mb-3 space-y-1 rounded-xl bg-card/80 px-3 py-2">
+          <p className="font-black text-foreground">{t(lang, "csvImportNoPackTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t(lang, "csvImportNoPackDesc")}</p>
+          <p className="text-[11px] text-muted-foreground">{officialCsvImportHeadersNoPack().join(" · ")}</p>
+          <WakaButton
+            type="button"
+            variant="secondary"
+            className="mt-2 w-full"
+            iconLeft={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
+            onClick={() => void downloadNoPack()}
+          >
+            {t(lang, "csvImportDownloadNoPack")}
+          </WakaButton>
+        </div>
+
+        <div className="space-y-1 rounded-xl bg-card/80 px-3 py-2">
+          <p className="font-black text-foreground">{t(lang, "csvImportWithPackTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t(lang, "csvImportWithPackDesc")}</p>
+          <p className="text-[11px] text-muted-foreground">{officialCsvImportHeadersWithPack().join(" · ")}</p>
+          <WakaButton
+            type="button"
+            variant="secondary"
+            className="mt-2 w-full"
+            iconLeft={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
+            onClick={() => void downloadWithPack()}
+          >
+            {t(lang, "csvImportDownloadWithPack")}
+          </WakaButton>
+        </div>
       </div>
-      <WakaButton
-        type="button"
-        variant="secondary"
-        className="mb-4 w-full"
-        iconLeft={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
-        onClick={() => void downloadTemplate()}
-      >
-        {t(lang, "csvImportDownloadTemplate")}
-      </WakaButton>
+
       <button
         type="button"
         onClick={() => inputRef.current?.click()}

@@ -7,9 +7,19 @@ import type { SellingMode } from "../../types";
 export type ProductImportSource = "manual" | "ai" | "csv" | "paper_ocr";
 
 /**
- * Shared import row. Maps 1:1 onto `bulkQuickAddProducts` fields that the
+ * Wizard pack mode mirrored on the import row.
+ * `none` = Template A / unpacked wizard. `packed` = Template B / pack wizard.
+ */
+export type ProductImportPackMode = "none" | "packed";
+
+/**
+ * Shared import row. Maps onto `bulkQuickAddProducts` fields that the
  * retail create engine actually consumes. Extra columns (tax, images, SKU)
  * are omitted because WAKA generate/skips them on create.
+ *
+ * For packed rows, `stockQty` is always sell units after wizard conversion
+ * (`openingPacks × conversionRate`). `buyingPackCostUgx` is cost per pack;
+ * `costPricePerUnitUgx` is derived via `unitCostFromPackTotal` when pack cost is set.
  */
 export type NormalizedProductImportRow = {
   clientId: string;
@@ -26,20 +36,31 @@ export type NormalizedProductImportRow = {
   /** Sell unit — `Product.baseUnit`. */
   baseUnit: string;
   sellingMode?: SellingMode;
-  /** Pack label — `Product.buyingUnit`. */
+  /**
+   * Distinguishes no-pack vs packed CSV / wizard semantics.
+   * Default `none` for non-CSV / AI / manual rows.
+   */
+  packMode: ProductImportPackMode;
+  /** Pack label — `Product.buyingUnit`. Required when `packMode === "packed"`. */
   buyingUnit?: string | null;
-  /** Units per pack — `Product.conversionRate`. */
+  /** Units per pack — `Product.conversionRate`. Required > 1 when packed. */
   conversionRate?: number | null;
+  /**
+   * Opening packs from Template B / wizard stock step (pack mode ON).
+   * Not stored on Product; used to derive `stockQty`.
+   */
+  openingPacks?: number | null;
   /** Opening quantity in sell units — `Product.stockOnHand`. */
   stockQty: number;
   /** `Product.sellingPricePerUnitUgx`. */
   sellingPriceUgx: number;
   /**
-   * Unit cost. `null` / omitted = cost missing → existing 72% draft fallback.
+   * Unit cost (per sell unit). `null` / omitted = cost missing → existing 72% draft fallback.
    * `0` is an explicit zero cost, not missing.
+   * For packed rows with pack cost, this is derived — do not put pack totals here.
    */
   costPricePerUnitUgx?: number | null;
-  /** Invoice total for one pack when pack-priced. */
+  /** Invoice total for one pack when pack-priced (wizard buy-pack field). */
   buyingPackCostUgx?: number | null;
   /** 1-based source record number (CSV header = 1). Adapter-only; not stored on Product. */
   sourceRowNumber?: number;
@@ -53,6 +74,7 @@ export type ImportRowIssueKind =
   | "invalid_stock"
   | "invalid_cost"
   | "invalid_pack"
+  | "missing_pack_label"
   | "missing_category"
   | "ambiguous_category"
   | "unresolved_category"

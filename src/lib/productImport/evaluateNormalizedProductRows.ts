@@ -47,6 +47,10 @@ export function evaluateNormalizedProductRows(input: EvaluateImportRowsInput): E
     const costProvided = isImportCostProvided(row);
     const costUnreadable =
       row.costPricePerUnitUgx != null && !Number.isFinite(Number(row.costPricePerUnitUgx));
+    const packCostUnreadable =
+      row.packMode === "packed" &&
+      row.buyingPackCostUgx != null &&
+      !Number.isFinite(Number(row.buyingPackCostUgx));
     const costStatus = costProvided ? ("provided" as const) : ("missing_fallback" as const);
     const fallbackCostUgx = price > 0 ? defaultWizardUnitCostUgx(price) : null;
 
@@ -60,14 +64,34 @@ export function evaluateNormalizedProductRows(input: EvaluateImportRowsInput): E
       issues.push({ clientId: row.clientId, kind: "invalid_stock", severity: "error" });
     }
 
-    const rate = row.conversionRate;
-    if (row.enabled && rate != null && rate !== undefined) {
-      if (!Number.isFinite(Number(rate)) || Number(rate) <= 0) {
+    if (row.enabled && row.packMode === "packed") {
+      const rate = Number(row.conversionRate);
+      if (!Number.isFinite(rate) || rate <= 1) {
         issues.push({ clientId: row.clientId, kind: "invalid_pack", severity: "error" });
+      }
+      if (!(row.buyingUnit ?? "").trim()) {
+        issues.push({ clientId: row.clientId, kind: "missing_pack_label", severity: "error" });
+      }
+      const packs = row.openingPacks;
+      if (packs != null && (!Number.isFinite(Number(packs)) || Number(packs) < 0)) {
+        issues.push({ clientId: row.clientId, kind: "invalid_stock", severity: "error" });
+      }
+    } else if (row.enabled && row.packMode === "none") {
+      // Template A must not silently become packed.
+      const rate = row.conversionRate;
+      if (rate != null && Number.isFinite(Number(rate)) && Number(rate) > 1) {
+        issues.push({ clientId: row.clientId, kind: "invalid_pack", severity: "error" });
+      }
+    } else if (row.enabled) {
+      const rate = row.conversionRate;
+      if (rate != null && rate !== undefined) {
+        if (!Number.isFinite(Number(rate)) || Number(rate) <= 0) {
+          issues.push({ clientId: row.clientId, kind: "invalid_pack", severity: "error" });
+        }
       }
     }
 
-    if (row.enabled && costUnreadable) {
+    if (row.enabled && (costUnreadable || packCostUnreadable)) {
       issues.push({ clientId: row.clientId, kind: "invalid_cost", severity: "error" });
     } else if (row.enabled && costProvided && Number(row.costPricePerUnitUgx) < 0) {
       issues.push({ clientId: row.clientId, kind: "invalid_cost", severity: "error" });
@@ -94,7 +118,7 @@ export function evaluateNormalizedProductRows(input: EvaluateImportRowsInput): E
       issues.push({ clientId: row.clientId, kind: "pharmacy_cost_required", severity: "error" });
     }
 
-    if (row.enabled && !costProvided && !costUnreadable && !pharmacy && price > 0) {
+    if (row.enabled && !costProvided && !costUnreadable && !packCostUnreadable && !pharmacy && price > 0) {
       issues.push({ clientId: row.clientId, kind: "cost_fallback", severity: "warning" });
     }
 

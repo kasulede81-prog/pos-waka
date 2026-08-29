@@ -10,6 +10,7 @@ import {
 } from "../../lib/productImport/evaluateNormalizedProductRows";
 import { applyCategoryResolutionToRow } from "../../lib/productImport/resolveImportCategory";
 import { isImportCostProvided } from "../../lib/productImport/createNormalizedRow";
+import { syncPackedImportDerivedFields } from "../../lib/productImport/packImportSemantics";
 import type {
   ImportRowIssueKind,
   NormalizedProductImportRow,
@@ -22,6 +23,7 @@ const ISSUE_I18N: Record<ImportRowIssueKind, string> = {
   invalid_stock: "importIssueInvalidStock",
   invalid_cost: "importIssueInvalidCost",
   invalid_pack: "importIssueInvalidPack",
+  missing_pack_label: "importIssueMissingPackLabel",
   missing_category: "importIssueMissingCategory",
   ambiguous_category: "importIssueAmbiguousCategory",
   unresolved_category: "importIssueUnresolvedCategory",
@@ -52,7 +54,11 @@ function patchRow(
   clientId: string,
   patch: Partial<NormalizedProductImportRow>,
 ): NormalizedProductImportRow[] {
-  return rows.map((row) => (row.clientId === clientId ? { ...row, ...patch } : row));
+  return rows.map((row) => {
+    if (row.clientId !== clientId) return row;
+    const next = { ...row, ...patch };
+    return next.packMode === "packed" ? syncPackedImportDerivedFields(next) : next;
+  });
 }
 
 export function ProductImportReviewTable({
@@ -73,6 +79,7 @@ export function ProductImportReviewTable({
     pharmacyModeEnabled,
     generalCategoryLabel,
   });
+  const packedView = rows.some((r) => r.packMode === "packed");
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-border">
@@ -83,9 +90,19 @@ export function ProductImportReviewTable({
             <th className="px-2 py-2">{t(lang, "stockEditNameLabel")}</th>
             <th className="px-2 py-2">{t(lang, "importColSection")}</th>
             <th className="px-2 py-2">{t(lang, "importColUnit")}</th>
-            <th className="px-2 py-2">{t(lang, "importColPack")}</th>
-            <th className="px-2 py-2">{t(lang, "stockEditStockLabel")}</th>
-            <th className="px-2 py-2">{t(lang, "importColCost")}</th>
+            {packedView ? (
+              <>
+                <th className="px-2 py-2">{t(lang, "importColPackLabel")}</th>
+                <th className="px-2 py-2">{t(lang, "importColPack")}</th>
+                <th className="px-2 py-2">{t(lang, "importColOpeningPacks")}</th>
+                <th className="px-2 py-2">{t(lang, "importColCostPerPack")}</th>
+              </>
+            ) : (
+              <>
+                <th className="px-2 py-2">{t(lang, "stockEditStockLabel")}</th>
+                <th className="px-2 py-2">{t(lang, "importColCost")}</th>
+              </>
+            )}
             <th className="px-2 py-2">{t(lang, "stockEditPriceLabel")}</th>
           </tr>
         </thead>
@@ -120,10 +137,7 @@ export function ProductImportReviewTable({
                     value={row.categoryInput}
                     onChange={(e) => {
                       const categoryInput = e.target.value;
-                      const next = applyCategoryResolutionToRow(
-                        { ...row, categoryInput },
-                        pickerItems,
-                      );
+                      const next = applyCategoryResolutionToRow({ ...row, categoryInput }, pickerItems);
                       onChange(patchRow(rows, row.clientId, { categoryInput, category: next.category }));
                     }}
                     className={clsx(INPUT, "min-w-[110px]")}
@@ -139,58 +153,132 @@ export function ProductImportReviewTable({
                     className={clsx(INPUT, "w-20")}
                   />
                 </td>
-                <td className="px-2 py-2">
-                  <input
-                    value={row.conversionRate != null ? String(row.conversionRate) : ""}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^\d.]/g, "");
-                      onChange(
-                        patchRow(rows, row.clientId, {
-                          conversionRate: raw === "" ? null : Number(raw),
-                        }),
-                      );
-                    }}
-                    inputMode="numeric"
-                    className={clsx(INPUT, "w-16")}
-                    placeholder="—"
-                  />
-                </td>
-                <td className="px-2 py-2">
-                  <input
-                    value={String(row.stockQty)}
-                    onChange={(e) =>
-                      onChange(
-                        patchRow(rows, row.clientId, {
-                          stockQty: Math.max(0, Number(e.target.value.replace(/[^\d.]/g, "")) || 0),
-                        }),
-                      )
-                    }
-                    inputMode="decimal"
-                    className={clsx(INPUT, "w-16")}
-                  />
-                </td>
-                <td className="px-2 py-2">
-                  <input
-                    value={isImportCostProvided(row) ? String(Math.floor(Number(row.costPricePerUnitUgx))) : ""}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/\D/g, "");
-                      onChange(
-                        patchRow(rows, row.clientId, {
-                          costPricePerUnitUgx: raw === "" ? null : Math.floor(Number(raw)),
-                        }),
-                      );
-                    }}
-                    inputMode="numeric"
-                    className={clsx(INPUT, "w-24")}
-                    placeholder={costStatus === "missing_fallback" && fallbackCostUgx != null ? String(fallbackCostUgx) : ""}
-                    aria-label={t(lang, "importColCost")}
-                  />
-                  {costStatus === "missing_fallback" && !issues.some((i) => i.kind === "invalid_cost") ? (
-                    <p className="mt-1 text-[11px] font-bold text-warning">{t(lang, "importCostFallbackHint")}</p>
-                  ) : isImportCostProvided(row) ? (
-                    <p className="mt-1 text-[11px] font-bold text-success">{t(lang, "importCostProvidedHint")}</p>
-                  ) : null}
-                </td>
+                {packedView ? (
+                  <>
+                    <td className="px-2 py-2">
+                      <input
+                        value={row.buyingUnit ?? ""}
+                        onChange={(e) =>
+                          onChange(patchRow(rows, row.clientId, { buyingUnit: e.target.value.toLowerCase() }))
+                        }
+                        className={clsx(INPUT, "w-20")}
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        value={row.conversionRate != null ? String(row.conversionRate) : ""}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^\d.]/g, "");
+                          onChange(
+                            patchRow(rows, row.clientId, {
+                              conversionRate: raw === "" ? null : Number(raw),
+                            }),
+                          );
+                        }}
+                        inputMode="numeric"
+                        className={clsx(INPUT, "w-16")}
+                        placeholder="—"
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        value={row.openingPacks != null ? String(row.openingPacks) : "0"}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^\d.]/g, "");
+                          onChange(
+                            patchRow(rows, row.clientId, {
+                              openingPacks: raw === "" ? 0 : Number(raw),
+                            }),
+                          );
+                        }}
+                        inputMode="decimal"
+                        className={clsx(INPUT, "w-16")}
+                      />
+                      <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                        {t(lang, "importPackedStockHint")}: {Number.isFinite(row.stockQty) ? row.stockQty : "—"}{" "}
+                        {row.baseUnit || "piece"}
+                      </p>
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        value={
+                          row.buyingPackCostUgx != null && Number.isFinite(Number(row.buyingPackCostUgx))
+                            ? String(Math.floor(Number(row.buyingPackCostUgx)))
+                            : ""
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, "");
+                          onChange(
+                            patchRow(rows, row.clientId, {
+                              buyingPackCostUgx: raw === "" ? null : Math.floor(Number(raw)),
+                            }),
+                          );
+                        }}
+                        inputMode="numeric"
+                        className={clsx(INPUT, "w-24")}
+                        placeholder={
+                          costStatus === "missing_fallback" && fallbackCostUgx != null
+                            ? String(fallbackCostUgx)
+                            : ""
+                        }
+                        aria-label={t(lang, "importColCostPerPack")}
+                      />
+                      {costStatus === "missing_fallback" && !issues.some((i) => i.kind === "invalid_cost") ? (
+                        <p className="mt-1 text-[11px] font-bold text-warning">{t(lang, "importPackCostFallbackHint")}</p>
+                      ) : isImportCostProvided(row) ? (
+                        <p className="mt-1 text-[11px] font-bold text-success">
+                          {t(lang, "importCostProvidedHint")}
+                          {row.costPricePerUnitUgx != null
+                            ? ` · ${Math.round(Number(row.costPricePerUnitUgx) * 100) / 100}/${row.baseUnit || "unit"}`
+                            : ""}
+                        </p>
+                      ) : null}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-2 py-2">
+                      <input
+                        value={String(row.stockQty)}
+                        onChange={(e) =>
+                          onChange(
+                            patchRow(rows, row.clientId, {
+                              stockQty: Math.max(0, Number(e.target.value.replace(/[^\d.]/g, "")) || 0),
+                            }),
+                          )
+                        }
+                        inputMode="decimal"
+                        className={clsx(INPUT, "w-16")}
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        value={isImportCostProvided(row) ? String(Math.floor(Number(row.costPricePerUnitUgx))) : ""}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, "");
+                          onChange(
+                            patchRow(rows, row.clientId, {
+                              costPricePerUnitUgx: raw === "" ? null : Math.floor(Number(raw)),
+                            }),
+                          );
+                        }}
+                        inputMode="numeric"
+                        className={clsx(INPUT, "w-24")}
+                        placeholder={
+                          costStatus === "missing_fallback" && fallbackCostUgx != null
+                            ? String(fallbackCostUgx)
+                            : ""
+                        }
+                        aria-label={t(lang, "importColCost")}
+                      />
+                      {costStatus === "missing_fallback" && !issues.some((i) => i.kind === "invalid_cost") ? (
+                        <p className="mt-1 text-[11px] font-bold text-warning">{t(lang, "importCostFallbackHint")}</p>
+                      ) : isImportCostProvided(row) ? (
+                        <p className="mt-1 text-[11px] font-bold text-success">{t(lang, "importCostProvidedHint")}</p>
+                      ) : null}
+                    </td>
+                  </>
+                )}
                 <td className="px-2 py-2">
                   <input
                     value={String(row.sellingPriceUgx)}
