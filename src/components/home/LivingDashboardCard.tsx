@@ -95,9 +95,9 @@ export function LivingDashboardCard({
 
         {liveStat ? (
           <div className="mt-auto border-t border-border/70 pt-2">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{liveStat.label}</p>
+            <p className="living-dashboard-card__stat-label text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{liveStat.label}</p>
             <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
-              <span className="text-sm font-black tabular-nums text-foreground">{liveStat.value}</span>
+              <span className="living-dashboard-card__stat-value text-sm font-black tabular-nums text-foreground">{liveStat.value}</span>
               {liveStat.trend ? <span className="text-xs font-bold text-success">{liveStat.trend}</span> : null}
             </div>
           </div>
@@ -131,8 +131,8 @@ export function LivingDashboardCard({
         <span className="line-clamp-2 text-xs font-medium opacity-80">{t(lang, theme.subtitleKey)}</span>
         {liveStat ? (
           <div className="mt-1 rounded-xl bg-black/15 px-2.5 py-1.5">
-            <p className="text-[10px] font-bold uppercase text-white/65">{liveStat.label}</p>
-            <span className="text-sm font-black tabular-nums">{liveStat.value}</span>
+            <p className="living-dashboard-card__stat-label text-[10px] font-bold uppercase text-white/65">{liveStat.label}</p>
+            <span className="living-dashboard-card__stat-value text-sm font-black tabular-nums">{liveStat.value}</span>
           </div>
         ) : null}
       </div>

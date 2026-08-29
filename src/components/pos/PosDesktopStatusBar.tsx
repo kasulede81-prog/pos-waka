@@ -31,7 +31,7 @@ export function PosDesktopStatusBar({ lang, identity, terminalLabel }: Props) {
 
   return (
     <footer
-      className="flex h-7 shrink-0 items-center justify-between gap-2 border-t border-border/90 bg-muted/90 px-3 text-[10px] font-semibold text-muted-foreground"
+      className="pos-desktop-status-bar flex h-7 shrink-0 items-center justify-between gap-2 border-t border-border/90 bg-muted/90 px-3 text-[10px] font-semibold text-muted-foreground"
       role="contentinfo"
     >
       <span className="truncate">Waka POS · {t(lang, "posDesktopStatusDesktop")}</span>

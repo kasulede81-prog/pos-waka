@@ -16,8 +16,10 @@ import {
   LOCAL_CATALOG_SHOP_ID,
   catalogCreateInsideParentId,
   catalogCreateIntentParentId,
+  catalogPickerItemsMatchingSection,
   expandAncestorsForCreatedFolder,
   nextDestinationAfterCatalogCreate,
+  resolveCatalogSectionInput,
   normalizeCatalogNodes,
   planCreateCatalogNode,
   planCreateCatalogShelf,
@@ -390,5 +392,47 @@ describe("legacy discovery is independent of overlay rows", () => {
     const withNodes = collectShelfCategoryKeys(products, order, layout);
     expect(withNodes).toEqual(without);
     expect(without).toEqual(expect.arrayContaining(["DELL", "HP", "LENOVO", "Accessories"]));
+  });
+});
+
+describe("catalog section matching for import", () => {
+  const sodaA: CatalogPickerItem = {
+    id: "a",
+    parentId: "drinks",
+    name: "Soda",
+    legacyShelfKey: "SODA-COLD",
+    depth: 1,
+    pathLabels: ["Drinks", "Soda"],
+    persisted: true,
+    sortOrder: 0,
+  };
+  const sodaB = {
+    id: "b",
+    parentId: "snacks",
+    name: "Soda",
+    legacyShelfKey: "SODA-SNACKS",
+    depth: 1,
+    pathLabels: ["Snacks", "Soda"],
+    persisted: true,
+    sortOrder: 1,
+  };
+
+  it("resolves a unique legacy key", () => {
+    const r = resolveCatalogSectionInput([sodaA, sodaB], "SODA-COLD");
+    expect(r.status).toBe("resolved");
+    expect(r.category).toBe("SODA-COLD");
+  });
+
+  it("marks the same leaf name in two folders as ambiguous", () => {
+    const r = resolveCatalogSectionInput([sodaA, sodaB], "Soda");
+    expect(r.status).toBe("ambiguous");
+    expect(r.category).toBe("");
+    expect(catalogPickerItemsMatchingSection([sodaA, sodaB], "Soda")).toHaveLength(2);
+  });
+
+  it("resolves a unique path", () => {
+    const r = resolveCatalogSectionInput([sodaA, sodaB], "Drinks / Soda");
+    expect(r.status).toBe("resolved");
+    expect(r.category).toBe("SODA-COLD");
   });
 });

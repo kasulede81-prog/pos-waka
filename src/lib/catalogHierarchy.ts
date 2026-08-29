@@ -343,6 +343,64 @@ export function findCatalogPickerItemByIdentity(
   return items.find((i) => sameShelfKey(i.legacyShelfKey, key) || sameShelfKey(i.name, key));
 }
 
+/**
+ * All picker destinations matching a typed section (leaf name, legacy key, or path).
+ * Leaf names are not assumed unique — callers must handle multiple legacyShelfKeys.
+ */
+export function catalogPickerItemsMatchingSection(
+  items: readonly CatalogPickerItem[],
+  sectionInput: string,
+): CatalogPickerItem[] {
+  const key = sectionInput.trim();
+  if (!key) return [];
+  const pathNorm = normalizeSearchHay(key);
+  const matched = items.filter(
+    (i) =>
+      sameShelfKey(i.legacyShelfKey, key) ||
+      sameShelfKey(i.name, key) ||
+      normalizeSearchHay(catalogItemPathText(i)) === pathNorm,
+  );
+  const seen = new Set<string>();
+  const out: CatalogPickerItem[] = [];
+  for (const item of matched) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+
+export type CatalogSectionResolveStatus = "empty" | "resolved" | "unresolved" | "ambiguous";
+
+export type CatalogSectionResolveResult = {
+  status: CatalogSectionResolveStatus;
+  /** Product.category / legacyShelfKey when resolved; typed string when unresolved; empty when empty/ambiguous. */
+  category: string;
+  matches: CatalogPickerItem[];
+};
+
+/**
+ * Resolve a typed section to a single Product.category identity.
+ * Ambiguous when two or more destinations share the leaf/path query but differ in legacyShelfKey.
+ */
+export function resolveCatalogSectionInput(
+  items: readonly CatalogPickerItem[],
+  sectionInput: string,
+): CatalogSectionResolveResult {
+  const key = sectionInput.trim();
+  if (!key) return { status: "empty", category: "", matches: [] };
+  const matches = catalogPickerItemsMatchingSection(items, key);
+  const uniqueKeys: string[] = [];
+  for (const item of matches) {
+    if (!uniqueKeys.some((k) => sameShelfKey(k, item.legacyShelfKey))) {
+      uniqueKeys.push(item.legacyShelfKey);
+    }
+  }
+  if (uniqueKeys.length > 1) return { status: "ambiguous", category: "", matches };
+  if (uniqueKeys.length === 1) return { status: "resolved", category: uniqueKeys[0]!, matches };
+  return { status: "unresolved", category: key, matches: [] };
+}
+
 /** Display-only path. Never write this string to Product.category. */
 export function selectedCatalogDestinationPath(
   items: readonly CatalogPickerItem[],

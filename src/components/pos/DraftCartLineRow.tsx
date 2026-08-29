@@ -50,7 +50,7 @@ export function DraftCartLineRow({
     return (
       <div
         className={clsx(
-          "border-b border-border last:border-0",
+          "pos-ds-cart-line border-b border-border last:border-0",
           sidebarCompact ? "py-2" : "py-2.5",
         )}
       >
@@ -58,7 +58,7 @@ export function DraftCartLineRow({
           <div className="min-w-0 flex-1">
             <p
               className={clsx(
-                "truncate font-bold leading-snug text-foreground",
+                "pos-ds-cart-line-name truncate font-bold leading-snug text-foreground",
                 sidebarCompact ? "text-sm" : "text-[15px]",
               )}
             >
@@ -66,7 +66,7 @@ export function DraftCartLineRow({
             </p>
             <div
               className={clsx(
-                "mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-semibold text-muted-foreground",
+                "pos-ds-cart-line-meta mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-semibold text-muted-foreground",
                 sidebarCompact ? "text-[11px]" : "text-xs",
               )}
             >
@@ -74,7 +74,7 @@ export function DraftCartLineRow({
                 {t(lang, "posQtyLabel")} {qtyLabel}
               </span>
               {unitHint ? <span className="text-muted-foreground/90">{unitHint}</span> : null}
-              <span className="font-black tabular-nums text-foreground">
+              <span className="pos-ds-cart-line-price font-black tabular-nums text-foreground">
                 UGX {line.lineTotalUgx.toLocaleString()}
               </span>
             </div>
@@ -107,7 +107,7 @@ export function DraftCartLineRow({
             onClick={onQtyTap}
             aria-label={`${t(lang, "posQtyLabel")}: ${qtyLabel}`}
             className={clsx(
-              "flex flex-1 items-center justify-center rounded-lg border border-waka-300 bg-waka-50 font-black tabular-nums text-waka-950 active:bg-waka-100",
+              "pos-ds-cart-line-qty flex flex-1 items-center justify-center rounded-lg border border-waka-300 bg-waka-50 font-black tabular-nums text-waka-950 active:bg-waka-100",
               sidebarCompact ? "h-9 min-w-[2.5rem] px-1 text-sm" : "h-10 min-w-[3rem] px-1.5 text-base",
             )}
           >

@@ -21,7 +21,7 @@ export function InventorySelectionToolbar({ lang, visibleIds, filteredIds, class
   return (
     <div
       className={clsx(
-        "flex flex-wrap items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/90 px-3 py-2",
+        "inventory-selection-toolbar flex flex-wrap items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/90 px-3 py-2",
         className,
       )}
       role="toolbar"

@@ -129,10 +129,10 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
       ? "min-h-[44px] rounded-lg bg-muted py-1 text-xl font-bold text-foreground active:bg-muted"
       : "min-h-[52px] rounded-xl bg-muted py-1.5 text-2xl font-bold text-foreground active:bg-muted";
   const alphaKeyClass = sidebar || fluid
-    ? "min-h-[28px] rounded-md bg-muted py-0 text-[10px] font-bold leading-none text-foreground active:bg-muted"
-    : "min-h-[32px] rounded-lg bg-muted py-0 text-[11px] font-bold leading-none text-foreground active:bg-muted sm:min-h-[34px] sm:text-xs";
+    ? "pos-ds-keypad-label min-h-[28px] rounded-md bg-muted py-0 text-[10px] font-bold leading-none text-foreground active:bg-muted"
+    : "pos-ds-keypad-label min-h-[32px] rounded-lg bg-muted py-0 text-[11px] font-bold leading-none text-foreground active:bg-muted sm:min-h-[34px] sm:text-xs";
   const modeToggleClass = clsx(
-    "rounded-lg font-black active:opacity-90",
+    "pos-ds-keypad-label rounded-lg font-black active:opacity-90",
     sidebar || fluid ? "min-h-[28px] text-[10px]" : "min-h-[32px] text-[10px] sm:min-h-[34px] sm:text-xs",
     keypadMode === "alpha" ? "bg-waka-600 text-white" : "bg-muted text-foreground",
   );

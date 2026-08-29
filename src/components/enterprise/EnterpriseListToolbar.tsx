@@ -112,7 +112,7 @@ export function EnterpriseListToolbar({
   return (
     <div
       className={clsx(
-        "space-y-2 rounded-2xl border border-border/80 bg-card/95 p-3 shadow-sm backdrop-blur-sm",
+        "enterprise-list-toolbar space-y-2 rounded-2xl border border-border/80 bg-card/95 p-3 shadow-sm backdrop-blur-sm",
         sticky && "sticky top-0 z-20",
         className,
       )}

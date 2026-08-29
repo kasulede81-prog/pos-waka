@@ -1770,3 +1770,240 @@ html[data-home-anim-paused] .builder-spotlight-active {
   height: 100%;
 }
 
+/**
+ * Desktop UI density — Web ≥1024 and Electron only (`html.waka-desktop-density`).
+ * Capacitor / phone web never receive this class. Do not pair these rules with
+ * unguarded `@media (min-width: 1024px)` typography.
+ */
+html.waka-desktop-density {
+  --dd-font-table-header: 12px;
+  --dd-font-table-cell: 14px;
+  --dd-font-table-number: 15px;
+  --dd-font-product-name: 15px;
+  --dd-font-product-price: 14px;
+  --dd-font-product-stock: 12px;
+  --dd-font-cart-name: 15px;
+  --dd-font-cart-qty: 13px;
+  --dd-font-cart-price: 15px;
+  --dd-font-cart-total: 17px;
+  --dd-font-keypad-label: 13px;
+  --dd-font-status: 12px;
+  --dd-font-chip: 13px;
+  --dd-font-kpi-value: 20px;
+  --dd-font-kpi-label: 12px;
+  --dd-font-section: 1.125rem;
+  --dd-icon-header: 20px;
+  --dd-icon-toolbar: 18px;
+  --dd-icon-nav: 22px;
+  --dd-icon-status: 16px;
+  --dd-btn-font: 0.9375rem;
+  --dd-btn-min-h: 44px;
+}
+
+html.waka-desktop-density .enterprise-data-table {
+  max-width: 100%;
+}
+
+html.waka-desktop-density .enterprise-data-table__header-cell {
+  font-size: var(--dd-font-table-header);
+  line-height: 1.3;
+}
+
+html.waka-desktop-density .enterprise-data-table__row {
+  font-size: var(--dd-font-table-cell);
+  line-height: 1.35;
+}
+
+html.waka-desktop-density .enterprise-data-table__row .tabular-nums {
+  font-size: var(--dd-font-table-number);
+}
+
+html.waka-desktop-density .enterprise-data-table__actions svg {
+  width: var(--dd-icon-toolbar);
+  height: var(--dd-icon-toolbar);
+}
+
+html.waka-desktop-density .waka-data-table {
+  font-size: var(--dd-font-table-cell);
+}
+
+html.waka-desktop-density .waka-data-table--sticky-head thead th {
+  font-size: var(--dd-font-table-header);
+}
+
+html.waka-desktop-density .pos-ds-product-card .pos-ds-product-name {
+  font-size: var(--dd-font-product-name);
+}
+
+html.waka-desktop-density .pos-ds-product-card .pos-ds-product-price {
+  font-size: var(--dd-font-product-price);
+}
+
+html.waka-desktop-density .pos-ds-product-card .pos-ds-product-stock {
+  font-size: var(--dd-font-product-stock);
+}
+
+html.waka-desktop-density .desktop-pos-product-grid .pos-ds-product-card,
+html.waka-desktop-density .pos-ds-product-card {
+  min-height: 108px;
+}
+
+html.waka-desktop-density.pos-display-scale-active .pos-ds-product-card {
+  min-height: max(108px, var(--ds-product-card-min-h));
+}
+
+html.waka-desktop-density.pos-display-scale-active .pos-ds-product-card .pos-ds-product-name {
+  font-size: max(15px, var(--ds-font-base));
+}
+
+html.waka-desktop-density.pos-display-scale-active .pos-ds-product-card .pos-ds-product-price {
+  font-size: max(14px, var(--ds-font-sm));
+}
+
+html.waka-desktop-density.pos-display-scale-active .pos-ds-product-card .pos-ds-product-stock {
+  font-size: max(12px, var(--ds-font-2xs));
+}
+
+html.waka-desktop-density.pos-display-scale-active .pos-ds-checkout {
+  font-size: max(15px, var(--ds-font-base));
+}
+
+html.waka-desktop-density.pos-display-scale-active .pos-ds-shelf-heading {
+  font-size: max(12px, var(--ds-font-2xs));
+}
+
+html.waka-desktop-density .pos-ds-cart-line-name {
+  font-size: var(--dd-font-cart-name);
+}
+
+html.waka-desktop-density .pos-ds-cart-line-meta {
+  font-size: var(--dd-font-cart-qty);
+}
+
+html.waka-desktop-density .pos-ds-cart-line-qty {
+  font-size: var(--dd-font-cart-qty);
+}
+
+html.waka-desktop-density .pos-ds-cart-line-price {
+  font-size: var(--dd-font-cart-price);
+}
+
+html.waka-desktop-density .pos-ds-cart-totals {
+  font-size: 13px;
+}
+
+html.waka-desktop-density .pos-ds-cart-payable {
+  font-size: var(--dd-font-cart-total);
+}
+
+html.waka-desktop-density .pos-ds-keypad-label {
+  font-size: var(--dd-font-keypad-label);
+}
+
+html.waka-desktop-density .desktop-pos-header {
+  font-size: 13px;
+}
+
+html.waka-desktop-density .desktop-pos-header button svg {
+  width: var(--dd-icon-header);
+  height: var(--dd-icon-header);
+}
+
+html.waka-desktop-density .desktop-pos-status-bar,
+html.waka-desktop-density .pos-desktop-status-bar {
+  font-size: var(--dd-font-status);
+  min-height: 2.25rem;
+  height: auto;
+}
+
+html.waka-desktop-density .desktop-pos-status-bar svg {
+  width: var(--dd-icon-status);
+  height: var(--dd-icon-status);
+}
+
+html.waka-desktop-density .desktop-pos-quick-actions span {
+  font-size: var(--dd-font-chip);
+}
+
+html.waka-desktop-density .desktop-pos-quick-actions svg {
+  width: var(--dd-icon-toolbar);
+  height: var(--dd-icon-toolbar);
+}
+
+html.waka-desktop-density .desktop-pos-payment-bar > div:first-child > p:first-child {
+  font-size: var(--dd-font-status);
+}
+
+html.waka-desktop-density .desktop-pos-payment-bar .desktop-pos-btn span {
+  font-size: var(--dd-font-chip);
+}
+
+html.waka-desktop-density .enterprise-nav-back svg {
+  width: var(--dd-icon-header);
+  height: var(--dd-icon-header);
+}
+
+html.waka-desktop-density .enterprise-list-toolbar button {
+  font-size: var(--dd-font-chip);
+  min-height: var(--dd-btn-min-h);
+}
+
+html.waka-desktop-density .enterprise-list-toolbar svg {
+  width: var(--dd-icon-toolbar);
+  height: var(--dd-icon-toolbar);
+}
+
+html.waka-desktop-density .inventory-selection-toolbar button,
+html.waka-desktop-density .inventory-bulk-toolbar button {
+  font-size: var(--dd-font-chip);
+}
+
+html.waka-desktop-density .inventory-bulk-toolbar svg {
+  width: var(--dd-icon-toolbar);
+  height: var(--dd-icon-toolbar);
+}
+
+html.waka-desktop-density .waka-chip {
+  font-size: var(--dd-font-chip);
+}
+
+html.waka-desktop-density .waka-btn-primary,
+html.waka-desktop-density .waka-btn-secondary {
+  font-size: var(--dd-btn-font);
+  min-height: var(--dd-btn-min-h);
+}
+
+html.waka-desktop-density .enterprise-kpi-card .enterprise-kpi-value {
+  font-size: var(--dd-font-kpi-value);
+}
+
+html.waka-desktop-density .enterprise-kpi-card .enterprise-kpi-label {
+  font-size: var(--dd-font-kpi-label);
+}
+
+html.waka-desktop-density .living-dashboard-card__stat-label {
+  font-size: var(--dd-font-kpi-label);
+}
+
+html.waka-desktop-density .living-dashboard-card__stat-value {
+  font-size: var(--dd-font-kpi-value);
+}
+
+html.waka-desktop-density .home-executive-kpi-strip h2 {
+  font-size: var(--dd-font-section);
+}
+
+html.waka-desktop-density .pharmacy-desktop-nav svg {
+  width: var(--dd-icon-nav);
+  height: var(--dd-icon-nav);
+}
+
+html.waka-desktop-density .pos-desktop-compact-header svg {
+  width: var(--dd-icon-header);
+  height: var(--dd-icon-header);
+}
+
+html.waka-desktop-density .pos-desktop-header-metric-label {
+  font-size: var(--dd-font-status);
+}
+

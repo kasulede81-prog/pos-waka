@@ -88,7 +88,7 @@ export function InventoryBulkToolbar({
         role="toolbar"
         aria-label={t(lang, "inventoryBulkToolbarLabel")}
       >
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-300 bg-indigo-950 px-3 py-2.5 text-white shadow-2xl">
+        <div className="inventory-bulk-toolbar flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-300 bg-indigo-950 px-3 py-2.5 text-white shadow-2xl">
           <span className="text-xs font-black">
             {t(lang, "inventoryBulkSelected").replace("{count}", String(count))}
           </span>

@@ -59,7 +59,7 @@ export function EnterpriseKpiCard({ icon: Icon, label, value, hint, tone = "defa
       type={onClick ? "button" : undefined}
       onClick={onClick}
       className={clsx(
-        "flex min-h-[80px] flex-col justify-between rounded-2xl border text-left shadow-elev",
+        "enterprise-kpi-card flex min-h-[80px] flex-col justify-between rounded-2xl border text-left shadow-elev",
         enterpriseSpace.kpiPad,
         enterpriseMotion.standard,
         shellClasses(tone),
@@ -71,11 +71,11 @@ export function EnterpriseKpiCard({ icon: Icon, label, value, hint, tone = "defa
         <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", iconShellClasses(tone))}>
           <Icon className={enterpriseIconClass("sm")} strokeWidth={ENTERPRISE_ICON_STROKE} aria-hidden />
         </span>
-        <Caption className="line-clamp-2 normal-case leading-tight">{label}</Caption>
+        <Caption className="enterprise-kpi-label line-clamp-2 normal-case leading-tight">{label}</Caption>
       </div>
       <div>
         {typeof value === "string" || typeof value === "number" ? (
-          <MonoNumber className="text-base sm:text-lg">{value}</MonoNumber>
+          <MonoNumber className="enterprise-kpi-value text-base sm:text-lg">{value}</MonoNumber>
         ) : (
           value
         )}

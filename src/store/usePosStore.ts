@@ -94,6 +94,7 @@ import {
 import { sessionWaiterAttribution } from "../lib/waiterAttribution";
 import { isPharmacyBusinessType, isPharmacyMode } from "../lib/pharmacy";
 import { inferProductGuess } from "../lib/pharmacyUx";
+import { defaultWizardUnitCostUgx } from "../lib/simpleProductWizard";
 import { isProductExpired, normalizeExpiryDate, shouldBlockExpiredSale } from "../lib/pharmacyExpiry";
 import { pharmacyQuickAddRequiresBuyPrice } from "../lib/pharmacyCostIntegrity";
 import { buildPharmacySaleLine, buyingUnitFromPackaging } from "../lib/pharmacyPackaging";
@@ -1582,8 +1583,7 @@ function buildQuickAddProductDraft(
   if (pharmacyRequiresBuy) {
     if (costExplicit === null || costExplicit <= 0) return { ok: false, errorKey: "pharmacyBuyPriceRequired" };
   }
-  const cost =
-    costExplicit !== null ? costExplicit : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
+  const cost = costExplicit !== null ? costExplicit : defaultWizardUnitCostUgx(price);
   const minAlert =
     input.minimumStockAlert !== undefined
       ? Math.max(0, Math.floor(input.minimumStockAlert))

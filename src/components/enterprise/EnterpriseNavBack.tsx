@@ -74,7 +74,7 @@ export function EnterpriseNavBack({
       : clsx(themeUi.backLink, themeUi.focusRing, enterpriseMotion.standard);
 
   return (
-    <button type="button" onClick={handleBack} className={clsx(baseClass, className)}>
+    <button type="button" onClick={handleBack} className={clsx("enterprise-nav-back", baseClass, className)}>
       <ArrowLeft
         className={enterpriseIconClass(variant === "header" ? "sm" : "sm")}
         strokeWidth={ENTERPRISE_ICON_STROKE}

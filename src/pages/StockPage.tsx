@@ -20,8 +20,16 @@ import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { SimpleAddProductWizard, type SimpleAddWizardPrefill, type SimpleAddWizardStep } from "../components/stock/SimpleAddProductWizard";
 import { AiProductAssistSheet } from "../components/stock/AiProductAssistSheet";
 import { BulkInventoryAiModal } from "../components/stock/BulkInventoryAiModal";
+import { ProductCsvImportSheet } from "../components/stock/ProductCsvImportSheet";
+import { ProductImportReviewSheet } from "../components/stock/ProductImportReviewSheet";
 import { mapBulkRowsToQuickAdd } from "../lib/ai/bulkInventoryAi";
 import { useAiFeatureGate } from "../hooks/useAiFeatureGate";
+import { useToast } from "../context/ToastProvider";
+import {
+  buildCatalogPickerItems,
+  catalogShopIdFromPreferences,
+} from "../lib/catalogHierarchy";
+import type { NormalizedProductImportRow } from "../lib/productImport/types";
 import { inferProductGuess, uiPlaceholder } from "../lib/pharmacyUx";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
 import {
@@ -122,6 +130,7 @@ type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stock
 export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceEmbed?: boolean }) {
   usePageLoadMark("stock");
   const actor = useSessionActor();
+  const toast = useToast();
   const { snapshot } = useSubscription();
   const canRemove = actorHasPermission(actor, "products.remove");
   const canAdjust = actorHasPermission(actor, "stock.adjust");
@@ -176,6 +185,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [bulkOpen, setBulkOpen] = useState(false);
   const [aiAssistOpen, setAiAssistOpen] = useState(false);
   const [bulkAiOpen, setBulkAiOpen] = useState(false);
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [importReviewOpen, setImportReviewOpen] = useState(false);
+  const [importReviewRows, setImportReviewRows] = useState<NormalizedProductImportRow[]>([]);
   const [wizardPrefill, setWizardPrefill] = useState<SimpleAddWizardPrefill | undefined>();
   const [wizardInitialStep, setWizardInitialStep] = useState<SimpleAddWizardStep | undefined>();
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -362,6 +374,19 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       ),
     [products, preferences.posPinnedShelfKeys, preferences.posShelfLayout],
   );
+
+  const importPickerItems = useMemo(
+    () =>
+      buildCatalogPickerItems({
+        products,
+        layout: preferences.posShelfLayout ?? {},
+        orderKeys: preferences.posPinnedShelfKeys ?? [],
+        nodes: preferences.posCatalogNodes ?? [],
+        shopId: catalogShopIdFromPreferences(preferences),
+      }),
+    [products, preferences],
+  );
+  const existingImportNames = useMemo(() => products.map((p) => p.name), [products]);
 
   const productSearchIndex = useReconciledInventorySearchIndex(products, preferences, stockMovements);
 
@@ -583,6 +608,44 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const openBulkInventoryAi = () => {
     if (freeProductLimitReached || !aiInventoryAssistantEnabled) return;
     setBulkAiOpen(true);
+  };
+
+  const openCsvImport = () => {
+    if (!canAdd || freeProductLimitReached) return;
+    setCsvImportOpen(true);
+  };
+
+  const handleCsvParsed = (rows: NormalizedProductImportRow[]) => {
+    setCsvImportOpen(false);
+    setImportReviewRows(rows);
+    setImportReviewOpen(true);
+  };
+
+  const handleImportReviewClose = () => {
+    setImportReviewOpen(false);
+    setImportReviewRows([]);
+  };
+
+  const handleNormalizedImported = (result: { added: number; skipped: number }) => {
+    if (result.added > 0 && result.skipped > 0) {
+      toast.warning(
+        tTemplate(lang, "importResultCombined", {
+          added: String(result.added),
+          skipped: String(result.skipped),
+        }),
+      );
+      return;
+    }
+    if (result.added > 0) {
+      toast.success(tTemplate(lang, "importResultSuccess", { added: String(result.added) }));
+      return;
+    }
+    toast.error(
+      tTemplate(lang, "importResultCombined", {
+        added: "0",
+        skipped: String(result.skipped),
+      }),
+    );
   };
 
   const handleBulkAiImport = (rows: ReturnType<typeof mapBulkRowsToQuickAdd>) => bulkQuickAddProducts(rows);
@@ -1033,6 +1096,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
               <WakaButton type="button" disabled={freeProductLimitReached} onClick={openAddProductSheet}>
                 {modeTerm("stockAddProduct")}
               </WakaButton>
+              <WakaButton type="button" variant="secondary" disabled={freeProductLimitReached} onClick={openCsvImport}>
+                {t(lang, "stockQuickImportCsv")}
+              </WakaButton>
               {aiProductAssistantEnabled ? (
                 <WakaButton type="button" variant="secondary" disabled={freeProductLimitReached} onClick={openAiProductAssist}>
                   {t(lang, "aiProductAssistBtn")}
@@ -1086,6 +1152,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
               onAddProduct={openAddProductSheet}
               showImport={aiInventoryAssistantEnabled}
               onImportProducts={openBulkInventoryAi}
+              showCsvImport={canAdd}
+              onCsvImport={openCsvImport}
             />
           ) : null}
 
@@ -1123,6 +1191,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 stockHasUncategorized={stockHasUncategorized}
                 groupByCategory={groupByCategory}
                 onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
+                canImportCsv={canAdd}
+                onImportCsv={openCsvImport}
+                csvImportDisabled={freeProductLimitReached}
               />
               <InventorySelectionToolbar
                 lang={lang}
@@ -1403,6 +1474,30 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           onImport={handleBulkAiImport}
         />
       ) : null}
+
+      {canAdd ? (
+        <ProductCsvImportSheet
+          lang={lang}
+          open={csvImportOpen}
+          onClose={() => setCsvImportOpen(false)}
+          onParsed={handleCsvParsed}
+        />
+      ) : null}
+
+      <ProductImportReviewSheet
+        lang={lang}
+        open={importReviewOpen}
+        onClose={handleImportReviewClose}
+        rows={importReviewRows}
+        onChange={setImportReviewRows}
+        pickerItems={importPickerItems}
+        existingProductNames={existingImportNames}
+        businessType={preferences.businessType}
+        pharmacyModeEnabled={preferences.pharmacyModeEnabled}
+        generalCategoryLabel={t(lang, "generalCategory")}
+        bulkQuickAddProducts={bulkQuickAddProducts}
+        onImported={handleNormalizedImported}
+      />
 
       {aiProductAssistantEnabled ? (
         <AiProductAssistSheet

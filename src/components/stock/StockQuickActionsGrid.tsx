@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { FolderPlus, PackagePlus, Upload, Package } from "lucide-react";
+import { FolderPlus, PackagePlus, Upload, Package, Sparkles } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 
@@ -12,6 +12,8 @@ type Props = {
   onAddProduct: () => void;
   onImportProducts?: () => void;
   showImport?: boolean;
+  onCsvImport?: () => void;
+  showCsvImport?: boolean;
 };
 
 export function StockQuickActionsGrid({
@@ -23,6 +25,8 @@ export function StockQuickActionsGrid({
   onAddProduct,
   onImportProducts,
   showImport,
+  onCsvImport,
+  showCsvImport,
 }: Props) {
   const actions = [
     canAdd
@@ -50,11 +54,20 @@ export function StockQuickActionsGrid({
           href: "/settings/shelves",
         }
       : null,
+    showCsvImport && onCsvImport
+      ? {
+          key: "csv",
+          label: t(lang, "stockQuickImportCsv"),
+          icon: Upload,
+          onClick: onCsvImport,
+          disabled: freeProductLimitReached,
+        }
+      : null,
     showImport && onImportProducts
       ? {
           key: "import",
-          label: t(lang, "stockQuickImport"),
-          icon: Upload,
+          label: t(lang, "aiBulkBtn"),
+          icon: Sparkles,
           onClick: onImportProducts,
           disabled: freeProductLimitReached,
         }

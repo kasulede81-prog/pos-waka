@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, Filter, MoreHorizontal, Printer } from "lucide-react";
+import { Download, Filter, MoreHorizontal, Printer, Upload } from "lucide-react";
 import type { Language, Product, Supplier } from "../../types";
 import { t } from "../../lib/i18n";
 import { ModalSheet } from "../../components/layout/ModalSheet";
@@ -41,6 +41,9 @@ type Props = {
   stockHasUncategorized: boolean;
   groupByCategory: boolean;
   onGroupByCategory: (v: boolean) => void;
+  canImportCsv?: boolean;
+  onImportCsv?: () => void;
+  csvImportDisabled?: boolean;
 };
 
 /**
@@ -77,6 +80,9 @@ export function InventoryProductsControlBar(props: Props) {
     stockHasUncategorized,
     groupByCategory,
     onGroupByCategory,
+    canImportCsv,
+    onImportCsv,
+    csvImportDisabled,
   } = props;
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -134,6 +140,17 @@ export function InventoryProductsControlBar(props: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <InventorySelectionModeButton lang={lang} />
             <InventoryViewSwitcher lang={lang} variant="toolbar" />
+            {canImportCsv && onImportCsv ? (
+              <button
+                type="button"
+                disabled={csvImportDisabled}
+                onClick={onImportCsv}
+                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-black text-muted-foreground hover:bg-muted disabled:opacity-50"
+              >
+                <Upload className="h-3.5 w-3.5" aria-hidden />
+                {t(lang, "stockQuickImportCsv")}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void exportFiltered()}
@@ -245,6 +262,17 @@ export function InventoryProductsControlBar(props: Props) {
         title={t(lang, "stockMoreActions")}
         cancelLabel={t(lang, "cancel")}
         actions={[
+          ...(canImportCsv && onImportCsv
+            ? [
+                {
+                  id: "csv",
+                  label: t(lang, "stockQuickImportCsv"),
+                  icon: <Upload className="h-4 w-4" aria-hidden />,
+                  onClick: onImportCsv,
+                  disabled: csvImportDisabled,
+                },
+              ]
+            : []),
           {
             id: "export",
             label: t(lang, "inventoryExportFiltered"),

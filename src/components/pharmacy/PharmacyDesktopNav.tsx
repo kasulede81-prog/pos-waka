@@ -48,7 +48,7 @@ export function PharmacyDesktopNav({ lang, visible }: Props) {
 
   return (
     <nav
-      className="relative z-10 shrink-0 border-b border-teal-200/70 bg-teal-50/90 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-teal-50/80 sm:px-4 lg:px-8 xl:px-10"
+      className="pharmacy-desktop-nav relative z-10 shrink-0 border-b border-teal-200/70 bg-teal-50/90 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-teal-50/80 sm:px-4 lg:px-8 xl:px-10"
       aria-label={t(lang, "navGroupPharmacy")}
     >
       <div className="mx-auto flex max-w-none gap-1.5 overflow-x-auto pb-0.5">

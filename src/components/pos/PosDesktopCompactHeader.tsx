@@ -38,7 +38,7 @@ type Props = {
 function MetricCell({ label, value, emphasize }: { label: string; value: string; emphasize?: boolean }) {
   return (
     <div className="hidden min-w-0 xl:block">
-      <p className="truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="pos-desktop-header-metric-label truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={clsx("truncate text-xs font-black leading-tight", emphasize ? "text-waka-800" : "text-foreground")}>
         {value}
       </p>
@@ -101,7 +101,7 @@ export function PosDesktopCompactHeader({
   };
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/90 bg-card px-2 shadow-sm sm:gap-3 sm:px-3">
+    <header className="pos-desktop-compact-header flex h-14 shrink-0 items-center gap-2 border-b border-border/90 bg-card px-2 shadow-sm sm:gap-3 sm:px-3">
       <button
         type="button"
         onClick={handleExit}
@@ -114,7 +114,7 @@ export function PosDesktopCompactHeader({
       <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
       <div className="hidden min-w-0 sm:block">
         <p className="truncate text-sm font-black text-foreground">Waka POS</p>
-        <p className="truncate text-[10px] font-bold text-waka-700">{t(lang, sellLabelKey)}</p>
+        <p className="pos-desktop-header-metric-label truncate text-[10px] font-bold text-waka-700">{t(lang, sellLabelKey)}</p>
       </div>
 
       <div className="mx-1 hidden h-8 w-px shrink-0 bg-muted lg:block" aria-hidden />

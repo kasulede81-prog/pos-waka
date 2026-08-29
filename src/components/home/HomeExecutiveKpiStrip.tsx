@@ -36,7 +36,7 @@ export function HomeExecutiveKpiStrip({ lang, kpis }: Props) {
   if (kpis.length === 0) return null;
 
   return (
-    <section className="mb-4 sm:mb-5" aria-label={t(lang, "homeExecutiveKpiTitle")}>
+    <section className="home-executive-kpi-strip mb-4 sm:mb-5" aria-label={t(lang, "homeExecutiveKpiTitle")}>
       <div className="mb-2 flex items-end justify-between gap-2">
         <div>
           <SectionTitle as="h2" className="!text-sm sm:!text-base">

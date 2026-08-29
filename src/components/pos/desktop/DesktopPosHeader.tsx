@@ -80,7 +80,7 @@ export function DesktopPosHeader({
       <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
       <div className="hidden min-w-0 sm:block">
         <p className="truncate text-sm font-black text-foreground">WAKA POS</p>
-        <p className="truncate text-[10px] font-bold text-waka-700">{t(lang, sellLabelKey)}</p>
+        <p className="pos-desktop-header-metric-label truncate text-[10px] font-bold text-waka-700">{t(lang, sellLabelKey)}</p>
       </div>
 
       <div className="mx-1 hidden h-8 w-px shrink-0 bg-border lg:block" aria-hidden />
@@ -92,12 +92,12 @@ export function DesktopPosHeader({
           <span className="truncate font-bold">{duration}</span>
         </div>
         <div className="hidden min-w-0 xl:block">
-          <p className="truncate text-[9px] font-bold uppercase text-muted-foreground">{t(lang, "salesHistoryTodaySales")}</p>
+          <p className="pos-desktop-header-metric-label truncate text-[9px] font-bold uppercase text-muted-foreground">{t(lang, "salesHistoryTodaySales")}</p>
           <p className="truncate font-black">{todaySaleCount} · {fmt(todaySalesUgx)}</p>
         </div>
         {pendingCount > 0 ? (
           <div className="hidden min-w-0 xl:block">
-            <p className="truncate text-[9px] font-bold uppercase text-muted-foreground">{t(lang, "pendingSalesLink")}</p>
+            <p className="pos-desktop-header-metric-label truncate text-[9px] font-bold uppercase text-muted-foreground">{t(lang, "pendingSalesLink")}</p>
             <p className="truncate font-black text-warning-foreground">{pendingCount}</p>
           </div>
         ) : null}

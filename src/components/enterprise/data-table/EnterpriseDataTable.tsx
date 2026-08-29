@@ -5,8 +5,10 @@ import { WakaCheckbox } from "../WakaCheckbox";
 import { EnterpriseSkeletonTable } from "../EnterpriseSkeleton";
 import { useEnterpriseTableKeyboard } from "./useEnterpriseTableKeyboard";
 import type { EnterpriseDataTableProps } from "./types";
+import { useDesktopDensityEnabled } from "../../../hooks/useDesktopDensityClass";
+import { MOBILE_TABLE_ROW_H, resolveEnterpriseTableRowHeight } from "../../../lib/desktopDensity";
 
-const DEFAULT_ROW_H = 44;
+const DEFAULT_ROW_H = MOBILE_TABLE_ROW_H;
 const BOTTOM_SCROLL_GUTTER = 24;
 
 function hideClass(hideBelow?: "lg" | "xl"): string | undefined {
@@ -29,7 +31,7 @@ export function EnterpriseDataTable<T>({
   selection,
   onRowActivate,
   rowActions,
-  estimateRowHeight = DEFAULT_ROW_H,
+  estimateRowHeight,
   minWidthPx = 960,
   emptyState,
   loading,
@@ -44,6 +46,8 @@ export function EnterpriseDataTable<T>({
   const [focusedIndexLocal, setFocusedIndexLocal] = useState(0);
   const focusedIndex = focusedIndexProp ?? focusedIndexLocal;
   const setFocusedIndex = onFocusedIndexChange ?? setFocusedIndexLocal;
+  const desktopDensity = useDesktopDensityEnabled();
+  const rowHeight = resolveEnterpriseTableRowHeight(estimateRowHeight, desktopDensity, DEFAULT_ROW_H);
 
   const gridTemplate = useMemo(() => {
     const tracks: string[] = [];
@@ -59,9 +63,15 @@ export function EnterpriseDataTable<T>({
       parentRef.current?.closest<HTMLElement>(".scroll-main-chrome") ??
       document.querySelector<HTMLElement>(".scroll-main-chrome") ??
       parentRef.current,
-    estimateSize: () => estimateRowHeight,
+    estimateSize: () => rowHeight,
     overscan: 8,
   });
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+    // Virtualizer identity is stable; re-measure only when the density row height changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowHeight]);
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
@@ -112,7 +122,7 @@ export function EnterpriseDataTable<T>({
           type="button"
           onClick={() => onSort(colId)}
           className={clsx(
-            "w-full text-[10px] font-bold uppercase tracking-wide",
+            "enterprise-data-table__header-cell w-full text-[10px] font-bold uppercase tracking-wide",
             alignCls,
             hideClass(hideBelow),
             sortKey === colId ? "text-waka-700" : "text-muted-foreground hover:text-foreground",
@@ -124,7 +134,7 @@ export function EnterpriseDataTable<T>({
       );
     }
     return (
-      <div className={clsx("text-[10px] font-bold uppercase tracking-wide text-muted-foreground", alignCls, hideClass(hideBelow))}>
+      <div className={clsx("enterprise-data-table__header-cell text-[10px] font-bold uppercase tracking-wide text-muted-foreground", alignCls, hideClass(hideBelow))}>
         {label}
       </div>
     );
@@ -138,7 +148,7 @@ export function EnterpriseDataTable<T>({
       tabIndex={0}
       onKeyDown={onKeyDown}
       className={clsx(
-        "w-full overflow-x-auto rounded-xl border border-border bg-card shadow-elev outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "enterprise-data-table w-full overflow-x-auto rounded-xl border border-border bg-card shadow-elev outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
     >
@@ -164,7 +174,7 @@ export function EnterpriseDataTable<T>({
             </div>
           ))}
           {rowActions ? (
-            <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Actions</div>
+            <div className="enterprise-data-table__header-cell text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Actions</div>
           ) : null}
         </div>
 
@@ -181,7 +191,7 @@ export function EnterpriseDataTable<T>({
                 role="row"
                 aria-selected={selected || focused}
                 className={clsx(
-                  "group absolute left-0 top-0 grid w-full gap-2 border-b border-border/60 px-3 py-2 text-xs",
+                  "enterprise-data-table__row group absolute left-0 top-0 grid w-full gap-2 border-b border-border/60 px-3 py-2 text-xs",
                   selected && "bg-waka-50/80 dark:bg-waka-950/30",
                   focused && "ring-1 ring-inset ring-waka-400/70",
                   getRowClassName?.(row),
@@ -234,7 +244,7 @@ export function EnterpriseDataTable<T>({
                   );
                 })}
                 {rowActions ? (
-                  <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="enterprise-data-table__actions flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
                     {rowActions(row)}
                   </div>
                 ) : null}

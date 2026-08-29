@@ -23,9 +23,11 @@ import { reportPwaIssue } from "./lib/monitoring";
 import { installChunkLoadRecovery } from "./lib/siteDataRecovery";
 import { warmupLocalDb } from "./offline/localDb";
 import { bootstrapAppThemeClass } from "./lib/appTheme";
+import { bootstrapDesktopDensityClass } from "./lib/desktopDensity";
 import { queryClient } from "./lib/queryClient";
 
 bootstrapAppThemeClass();
+bootstrapDesktopDensityClass();
 
 initCrashReporting();
 installGlobalErrorHandlers();
