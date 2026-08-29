@@ -14,21 +14,18 @@ const SALE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const SHOP_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const SHOP_B = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
-function mockDeps(overrides: Partial<EfrisEnqueueDeps> = {}): EfrisEnqueueDeps & {
-  enqueueRpc: ReturnType<typeof vi.fn>;
-  invokeSubmitStub: ReturnType<typeof vi.fn>;
-  readEnabled: ReturnType<typeof vi.fn>;
-} {
-  const enqueueRpc =
+function mockDeps(overrides: Partial<EfrisEnqueueDeps> = {}) {
+  const enqueueRpc = vi.fn(
     overrides.enqueueRpc ??
-    vi.fn(async () => ({
-      ok: true as const,
-      enqueued: true,
-      created: true,
-      efris_state: "PENDING",
-    }));
-  const invokeSubmitStub = overrides.invokeSubmitStub ?? vi.fn(async () => undefined);
-  const readEnabled = overrides.readEnabled ?? vi.fn(async () => false);
+      (async () => ({
+        ok: true as const,
+        enqueued: true,
+        created: true,
+        efris_state: "PENDING",
+      })),
+  );
+  const invokeSubmitStub = vi.fn(overrides.invokeSubmitStub ?? (async () => undefined));
+  const readEnabled = vi.fn(overrides.readEnabled ?? (async () => false));
   return {
     getShopId: overrides.getShopId ?? (() => SHOP_ID),
     hasCloud: overrides.hasCloud ?? (() => true),
