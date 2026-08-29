@@ -6,7 +6,9 @@
 export {
   resolveSessionActor,
   authOperatorRole,
+  authMembershipRole,
   authOperatorPermissions,
+  isPathSOperatingStaff,
   shiftOwnerUserId,
   normalizeLinkedAuthUserId,
   commercialAuthUserIdFromActor,

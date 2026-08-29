@@ -12,6 +12,7 @@ describe("syncQueuePriority", () => {
   it("assigns P1 to catalog and people", () => {
     expect(syncKindPriority("customer")).toBe(1);
     expect(syncKindPriority("pending_purchases")).toBe(1);
+    expect(syncKindPriority("pending_catalog")).toBe(1);
   });
 
   it("assigns P2 to settings-like kinds", () => {
@@ -32,5 +33,6 @@ describe("syncQueuePriority", () => {
     expect(coalesceKeyForOp("product", { id: "p1" })).toBe("product:p1");
     expect(coalesceKeyForOp("sale", { saleId: "s1" })).toBe("sale:s1");
     expect(coalesceKeyForOp("pending_staff", { staff: { id: "staff-1" } })).toBe("pending_staff:staff-1");
+    expect(coalesceKeyForOp("pending_catalog", { type: "catalog" })).toBe("pending_catalog:shop");
   });
 });

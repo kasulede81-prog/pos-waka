@@ -23,6 +23,9 @@ export function canLockPos(preferences: Pick<import("../types").ShopPreferences,
 /**
  * Shared-terminal operators may use Choose seller / PIN lock.
  * Personal Path L staff (cashier/manager email login) must not.
+ *
+ * Pass JWT membership role (`authMembershipRole`), not Path S effective
+ * `authOperatorRole` — a PIN cashier still runs on the owner terminal.
  */
 export function isSharedTerminalLockOperator(input: {
   authOperatorRole: UserRole;

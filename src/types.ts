@@ -2204,6 +2204,26 @@ export type PosShelfLayoutConfig = {
   scale?: number;
   featured?: boolean;
   badge?: PosShelfBadge | null;
+  /** Last local/cloud mutation time for this shelf key (catalog sync). */
+  updatedAt?: string;
+};
+
+/** Tombstone for a deleted CatalogNode.id — prevents offline devices from resurrecting folders. */
+export type CatalogNodeTombstone = {
+  id: string;
+  deletedAt: string;
+};
+
+/** Tombstone for a removed Sell-shelf layout key. */
+export type CatalogLayoutTombstone = {
+  shelfKey: string;
+  deletedAt: string;
+};
+
+/** Per-key pin revision so concurrent pin/unpin merges without whole-array LWW. */
+export type PinnedShelfKeyRevision = {
+  pinned: boolean;
+  updatedAt: string;
 };
 
 /** Shop template for initial shelf layout. */
@@ -2331,6 +2351,10 @@ export type ShopPreferences = {
   posSellCategoryFilter?: string | null;
   /** Shop-wide Sell screen shelf order (set in stock/back office). */
   posPinnedShelfKeys?: string[];
+  /** Last mutation time for `posPinnedShelfKeys` order (catalog sync). */
+  posPinnedShelfKeysUpdatedAt?: string;
+  /** Per-key pin/unpin revisions for multi-device merge. */
+  posPinnedShelfKeyRevisions?: Record<string, PinnedShelfKeyRevision>;
   /** Per-shelf display overrides (name, color, icon, size, featured). */
   posShelfLayout?: Record<string, PosShelfLayoutConfig>;
   /**
@@ -2338,8 +2362,14 @@ export type ShopPreferences = {
    * Sell/Stock nested browse is not gated on this in v1 — Add Product picker is.
    */
   catalogHierarchyEnabled?: boolean;
+  /** Last mutation time for `catalogHierarchyEnabled` (shop-level LWW). */
+  catalogHierarchyEnabledUpdatedAt?: string;
   /** Hierarchy overlay nodes. Ignored by Sell/Stock discovery while the flag is off. */
   posCatalogNodes?: CatalogNode[];
+  /** Deleted catalog node ids. Must persist across restarts so reconnect cannot resurrect. */
+  posCatalogTombstones?: CatalogNodeTombstone[];
+  /** Deleted shelf layout keys. */
+  posShelfLayoutTombstones?: CatalogLayoutTombstone[];
   /** Product ids on the Quick Sell strip (one-tap add on Sell screen). */
   posQuickSellProductIds?: string[];
   /** Last applied shop shelf preset id. */
@@ -2480,6 +2510,7 @@ export type SyncOperationKind =
   | "pending_transfer_dispatch"
   | "pending_transfer_receive"
   | "pending_hospitality"
+  | "pending_catalog"
   | "pending_staff"
   /** Legacy queue kinds kept for backward compatibility */
   | "sale"

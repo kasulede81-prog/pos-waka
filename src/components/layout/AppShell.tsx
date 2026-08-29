@@ -17,7 +17,12 @@ import { ANDROID_BACK_PRIORITY } from "../../lib/androidBackStack";
 import { useShallow } from "zustand/react/shallow";
 import { usePosStore } from "../../store/usePosStore";
 import type { ShopPreferences } from "../../types";
-import { resolveSessionActor, authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
+import {
+  resolveSessionActor,
+  authOperatorPermissions,
+  authOperatorRole,
+  authMembershipRole,
+} from "../../lib/sessionActor";
 import { resolveTerminalIdentityView } from "../../lib/terminalIdentity";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { SessionHydrationProvider } from "../../context/SessionHydrationContext";
@@ -197,7 +202,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     [authMode, user, email, preferences, staffSession, shopMemberRole],
   );
   const sharedTerminalLockOperator = isSharedTerminalLockOperator({
-    authOperatorRole: authOperatorRole(actor),
+    authOperatorRole: authMembershipRole(actor),
     hasPathSStaffSession,
   });
   useStaffAutoLock(sharedTerminalLockOperator);
@@ -694,7 +699,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <EnterpriseScrollControls enabled={!viewportLocked} />
         {shouldShowEnterpriseStaffLockScreen({
           posLocked: Boolean(preferences.posLocked),
-          authOperatorRole: authOperatorRole(actor),
+          authOperatorRole: authMembershipRole(actor),
           hasPathSStaffSession,
           pathname: location.pathname,
           canManageShopSettings: actorHasPermission(actor, "settings.shop"),

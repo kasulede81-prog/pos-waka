@@ -24,6 +24,7 @@ export function syncKindPriority(kind: SyncOperationKind): 0 | 1 | 2 {
     case "pending_staff":
     case "pending_inventory_counts":
     case "pending_hospitality":
+    case "pending_catalog":
       return 1;
     default:
       return 2;
@@ -54,6 +55,9 @@ export function coalesceKeyForOp(kind: SyncOperationKind, payload: unknown): str
     const staffPayload = payload as { staff?: { id?: string } } | null;
     const staffId = String(staffPayload?.staff?.id ?? "");
     return staffId ? `pending_staff:${staffId}` : null;
+  }
+  if (kind === "pending_catalog") {
+    return "pending_catalog:shop";
   }
   return null;
 }

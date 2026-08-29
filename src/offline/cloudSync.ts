@@ -113,6 +113,13 @@ import {
 import { mergeShiftsFromCloudPull } from "../lib/shiftRecovery";
 import { pullShiftsFromRpc, pushShiftToCloud } from "../lib/shiftCloudSync";
 import {
+  applyCatalogDocumentToPreferences,
+  catalogDocumentFromPreferences,
+  mergeCatalogDocuments,
+  pullCatalogFromRpc,
+  type CatalogCloudDocument,
+} from "../lib/catalogCloudSync";
+import {
   pullStockMovementsFull,
   pullStockMovementsIncremental,
 } from "../lib/stockMovementCloudSync";
@@ -508,6 +515,17 @@ async function mergeByIdChunked<T extends { id: string }>(
     await yieldUiTick();
   }
   return [...map.values()];
+}
+
+function mergeCatalogPreferences(
+  prefs: import("../types").ShopPreferences,
+  catalog: CatalogCloudDocument | null | undefined,
+): import("../types").ShopPreferences {
+  if (!catalog) return prefs;
+  return applyCatalogDocumentToPreferences(
+    prefs,
+    mergeCatalogDocuments(catalogDocumentFromPreferences(prefs), catalog),
+  );
 }
 
 function markSaleSyncState(saleId: string, synced: boolean, errorCode: string | null): void {
@@ -1907,6 +1925,10 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       const { processHospitalitySyncOperation } = await import("./hospitalityCloudSync");
       return processHospitalitySyncOperation(payload);
     }
+    case "pending_catalog": {
+      const { processCatalogSyncOperation } = await import("../lib/catalogCloudSync");
+      return processCatalogSyncOperation(ctx);
+    }
     case "pending_staff": {
       const { processPendingStaffSync } = await import("../lib/staffSyncQueue");
       const staffPayload = payload as import("../lib/staffSyncQueue").PendingStaffSyncPayload;
@@ -1970,6 +1992,7 @@ export type CloudPullCheckpoints = {
   shiftsAt: string;
   dayClosesAt: string;
   stockMovementsAt: string;
+  catalogAt: string;
 };
 
 export type CloudPullResult = {
@@ -1991,6 +2014,7 @@ export type CloudPullResult = {
   shifts: ShiftRecord[];
   dayCloses: DayCloseSummary[];
   stockMovements: StockMovement[];
+  catalog?: CatalogCloudDocument | null;
   deletedProductIds: string[];
   voidedSaleIds: string[];
   stats: CloudPullStats;
@@ -2851,6 +2875,7 @@ export async function pullShopDataFromCloud(opts?: {
   let shifts: ShiftRecord[] = [];
   let dayCloses: DayCloseSummary[] = [];
   let stockMovements: StockMovement[] = [];
+  let catalog: CatalogCloudDocument | null = null;
   let returnCloudRows: CloudReturnRow[] = [];
   let purchaseCloudRows: CloudPurchaseRow[] = [];
   let supplierCloudRows: CloudSupplierRow[] = [];
@@ -2990,6 +3015,12 @@ export async function pullShopDataFromCloud(opts?: {
       payloadBytes += smFull.bytes;
     }
 
+    const catFull = await pullEntitySafe("catalog", entityErrors, () => pullCatalogFromRpc(ctx, null));
+    if (catFull) {
+      catalog = catFull.document;
+      payloadBytes += catFull.bytes;
+    }
+
     for (const entity of ALL_INCREMENTAL_PULL_ENTITIES) {
       if (!entityErrors[entity]) pulledEntities.push(entity);
     }
@@ -3010,6 +3041,7 @@ export async function pullShopDataFromCloud(opts?: {
     const sinceShifts = cp.lastShiftsSyncAt ?? new Date(0).toISOString();
     const sinceDayCloses = cp.lastDayClosesSyncAt ?? new Date(0).toISOString();
     const sinceStockMovements = cp.lastStockMovementsSyncAt ?? new Date(0).toISOString();
+    const sinceCatalog = cp.lastCatalogSyncAt ?? new Date(0).toISOString();
 
     let p: Awaited<ReturnType<typeof pullProductsIncremental>> | undefined;
     let c: Awaited<ReturnType<typeof pullCustomersIncremental>> | undefined;
@@ -3026,6 +3058,7 @@ export async function pullShopDataFromCloud(opts?: {
     let sh: Awaited<ReturnType<typeof pullShiftsFromRpc>> | undefined;
     let dc: Awaited<ReturnType<typeof pullDayClosesFromRpc>> | undefined;
     let sm: Awaited<ReturnType<typeof pullStockMovementsIncremental>> | undefined;
+    let cat: Awaited<ReturnType<typeof pullCatalogFromRpc>> | undefined;
 
     const jobs: Array<{ entity: IncrementalPullEntity; run: () => Promise<void> }> = [];
 
@@ -3219,6 +3252,17 @@ export async function pullShopDataFromCloud(opts?: {
         },
       });
     }
+    if (wanted.has("catalog")) {
+      jobs.push({
+        entity: "catalog",
+        run: async () => {
+          cat = await pullEntitySafe("catalog", entityErrors, () => pullCatalogFromRpc(ctx, sinceCatalog));
+          if (!cat) return;
+          catalog = cat.document;
+          pulledEntities.push("catalog");
+        },
+      });
+    }
 
     await mapPool(jobs, SYNC_INCREMENTAL_PULL_CONCURRENCY, async (job) => {
       await job.run();
@@ -3240,7 +3284,8 @@ export async function pullShopDataFromCloud(opts?: {
       (ics?.bytes ?? 0) +
       (sh?.bytes ?? 0) +
       (dc?.bytes ?? 0) +
-      (sm?.bytes ?? 0);
+      (sm?.bytes ?? 0) +
+      (cat?.bytes ?? 0);
 
     pullCheckpoints = {
       salesAt: s?.checkpointAt ?? sinceSales,
@@ -3258,6 +3303,7 @@ export async function pullShopDataFromCloud(opts?: {
       shiftsAt: sh?.checkpointAt ?? sinceShifts,
       dayClosesAt: dc?.checkpointAt ?? sinceDayCloses,
       stockMovementsAt: sm?.checkpointAt ?? sinceStockMovements,
+      catalogAt: cat?.checkpointAt ?? sinceCatalog,
     };
   }
 
@@ -3328,6 +3374,7 @@ export async function pullShopDataFromCloud(opts?: {
     shifts,
     dayCloses,
     stockMovements,
+    catalog,
     deletedProductIds,
     voidedSaleIds,
     stats,
@@ -3427,7 +3474,9 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     cloud.dayCloses.length > 0 ||
     cloud.stockMovements.length > 0 ||
     cloud.deletedProductIds.length > 0 ||
-    cloud.voidedSaleIds.length > 0;
+    cloud.voidedSaleIds.length > 0 ||
+    Boolean(cloud.catalog) ||
+    cloud.pulledEntities.includes("catalog");
   const localEmpty =
     state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
 
@@ -3502,7 +3551,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       products: cloud.products,
       customers,
       sales: cloud.sales,
-      preferences: { ...state.preferences, shifts: mergedShifts },
+      preferences: mergeCatalogPreferences({ ...state.preferences, shifts: mergedShifts }, cloud.catalog),
       debtPayments,
       dayCloses: mergedDayCloses,
       auditLogs: state.auditLogs,
@@ -3653,7 +3702,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       inventoryCountSessions: mergedInventoryCounts,
       dayCloses: mergedDayCloses,
       stockMovements: mergedStockMovements,
-      preferences: { ...state.preferences, shifts: mergedShifts },
+      preferences: mergeCatalogPreferences({ ...state.preferences, shifts: mergedShifts }, cloud.catalog),
       returnRecords,
       purchases: purchaseRecovery.purchases,
       suppliers: purchaseRecovery.suppliers,

@@ -24,6 +24,7 @@ const OPERATIONAL_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "posSellCategoryFilter",
   "celebratedFirstSale",
   "posLocked",
+  "activeStaffId",
   "activeTableSessionId",
 ]);
 
@@ -74,9 +75,14 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "lastArchiveRunAt",
   "lastMonthlyReportPromptMonth",
   "posPinnedShelfKeys",
+  "posPinnedShelfKeysUpdatedAt",
+  "posPinnedShelfKeyRevisions",
   "posShelfLayout",
   "catalogHierarchyEnabled",
+  "catalogHierarchyEnabledUpdatedAt",
   "posCatalogNodes",
+  "posCatalogTombstones",
+  "posShelfLayoutTombstones",
   "posQuickSellProductIds",
   "posShelfPresetId",
   "posShelfDefaultScale",

@@ -37,7 +37,8 @@ import type {
   InventoryCountSession,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
-import { commercialAuthUserIdFromActor, authOperatorPermissions, authOperatorRole, shiftOwnerUserId } from "../lib/sessionActor";
+import { commercialAuthUserIdFromActor, authOperatorPermissions, authOperatorRole, authMembershipRole, shiftOwnerUserId } from "../lib/sessionActor";
+import { staffSwitchCartPlan, STAFF_SWITCH_HOLD_LABEL } from "../lib/staffSwitchCartPolicy";
 import { checkStorePermissionEffective } from "../lib/storeAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import {
@@ -316,6 +317,12 @@ import {
   remapCatalogNodesForRename,
   retireCatalogNodesForDeletedShelf,
 } from "../lib/catalogHierarchy";
+import {
+  appendCatalogTombstones,
+  preferencesPatchTouchesCatalog,
+  retiredCatalogNodeIds,
+  stampCatalogPreferencePatch,
+} from "../lib/catalogCloudSync";
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
@@ -1498,6 +1505,29 @@ async function queueRemote(kind: SyncOperationKind, payload: unknown) {
   });
 }
 
+function queueCatalogCloudSync() {
+  void queueRemote("pending_catalog", { type: "catalog" });
+  flushPendingPersist();
+}
+
+function catalogPrefPatch(prev: ShopPreferences, patch: Partial<ShopPreferences>, now = new Date().toISOString()): Partial<ShopPreferences> {
+  let next = stampCatalogPreferencePatch(prev, patch, now);
+  if (patch.posCatalogNodes) {
+    const retired = retiredCatalogNodeIds(prev.posCatalogNodes ?? [], patch.posCatalogNodes);
+    if (retired.length > 0) {
+      next = {
+        ...next,
+        posCatalogTombstones: appendCatalogTombstones(
+          patch.posCatalogTombstones ?? prev.posCatalogTombstones,
+          retired,
+          now,
+        ),
+      };
+    }
+  }
+  return next;
+}
+
 function defaultQuickPresetsForProduct(p: Omit<Product, "id" | "updatedAt" | "version">): Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty"> {
   if (p.quickPresetsMoneyUgx?.length || p.quickPresetsQty?.length) {
     return { quickPresetsMoneyUgx: p.quickPresetsMoneyUgx, quickPresetsQty: p.quickPresetsQty };
@@ -2201,6 +2231,9 @@ export const usePosStore = create<PosState>((set, get) => {
         return;
       }
     }
+    if (preferencesPatchTouchesCatalog(p)) {
+      p = catalogPrefPatch(state.preferences, p);
+    }
     set((s) => {
       let merged = { ...s.preferences, ...p };
       const role = s.sessionActor?.role ?? "cashier";
@@ -2210,6 +2243,9 @@ export const usePosStore = create<PosState>((set, get) => {
       merged = ensureHardwarePrefsOnBootstrap(merged);
       return { preferences: merged };
     });
+    if (preferencesPatchTouchesCatalog(p)) {
+      queueCatalogCloudSync();
+    }
   },
 
   renameShelfCategory: (fromKey, toName) => {
@@ -2227,7 +2263,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
 
-    const prefPatch: Partial<ShopPreferences> = {
+    let prefPatch: Partial<ShopPreferences> = {
       posShelfLayout: plan.layout,
       posPinnedShelfKeys: plan.orderKeys,
     };
@@ -2241,6 +2277,7 @@ export const usePosStore = create<PosState>((set, get) => {
         plan.toKey,
       );
     }
+    prefPatch = catalogPrefPatch(state.preferences, prefPatch);
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
       snapshot,
@@ -2268,6 +2305,7 @@ export const usePosStore = create<PosState>((set, get) => {
     for (const id of plan.productIds) {
       void queueRemote("product", { id, catalogOnly: true });
     }
+    queueCatalogCloudSync();
     if (!plan.unchanged || plan.productIds.length > 0) {
       pushAudit("product_update", `Renamed shelf ${plan.fromKey} → ${plan.toKey}`, {
         fromKey: plan.fromKey,
@@ -2302,7 +2340,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
 
-    const prefPatch: Partial<ShopPreferences> = {
+    let prefPatch: Partial<ShopPreferences> = {
       posShelfLayout: plan.layout,
       posPinnedShelfKeys: plan.orderKeys,
     };
@@ -2314,6 +2352,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (retiredNodes !== existingNodes) {
       prefPatch.posCatalogNodes = retiredNodes;
     }
+    prefPatch = catalogPrefPatch(state.preferences, prefPatch);
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
       snapshot,
@@ -2333,6 +2372,7 @@ export const usePosStore = create<PosState>((set, get) => {
     set((s) => ({
       preferences: { ...s.preferences, ...prefPatch },
     }));
+    queueCatalogCloudSync();
     return { ok: true };
   },
 
@@ -2356,8 +2396,8 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     const skippedOccupiedCount = plan.skipped.filter((s) => s.reason === "occupied").length;
     const skippedBlockedCount = plan.skipped.filter((s) => s.reason !== "occupied" && s.reason !== "emptyKey").length;
-    const prefPatch = bulkDeleteEmptyShelvesPreferencePatch(plan);
-    if (!prefPatch) {
+    const prefPatchRaw = bulkDeleteEmptyShelvesPreferencePatch(plan);
+    if (!prefPatchRaw) {
       return {
         ok: true,
         deletedCount: 0,
@@ -2365,6 +2405,7 @@ export const usePosStore = create<PosState>((set, get) => {
         skippedBlockedCount,
       };
     }
+    const prefPatch = catalogPrefPatch(state.preferences, prefPatchRaw);
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
       snapshot,
@@ -2384,6 +2425,7 @@ export const usePosStore = create<PosState>((set, get) => {
     set((s) => ({
       preferences: { ...s.preferences, ...prefPatch },
     }));
+    queueCatalogCloudSync();
     return {
       ok: true,
       deletedCount: plan.deletedKeys.length,
@@ -2426,11 +2468,11 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
 
-    const prefPatch: Partial<ShopPreferences> = {
+    const prefPatch: Partial<ShopPreferences> = catalogPrefPatch(state.preferences, {
       posCatalogNodes: plan.nodes,
       posShelfLayout: plan.layout,
       posPinnedShelfKeys: plan.orderKeys,
-    };
+    });
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
       snapshot,
@@ -2450,6 +2492,7 @@ export const usePosStore = create<PosState>((set, get) => {
     set((s) => ({
       preferences: { ...s.preferences, ...prefPatch },
     }));
+    queueCatalogCloudSync();
     return { ok: true, legacyShelfKey: plan.node.legacyShelfKey };
   },
 
@@ -2464,7 +2507,7 @@ export const usePosStore = create<PosState>((set, get) => {
       shopId: catalogShopIdFromPreferences(state.preferences),
     });
     if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
-    const prefPatch: Partial<ShopPreferences> = { posCatalogNodes: plan.nodes };
+    const prefPatch: Partial<ShopPreferences> = catalogPrefPatch(state.preferences, { posCatalogNodes: plan.nodes });
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
       snapshot,
@@ -2481,6 +2524,7 @@ export const usePosStore = create<PosState>((set, get) => {
       return { ok: false, errorKey: prefAuth.errorKey };
     }
     set((s) => ({ preferences: { ...s.preferences, ...prefPatch } }));
+    queueCatalogCloudSync();
     return { ok: true };
   },
 
@@ -2495,7 +2539,7 @@ export const usePosStore = create<PosState>((set, get) => {
       shopId: catalogShopIdFromPreferences(state.preferences),
     });
     if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
-    const prefPatch: Partial<ShopPreferences> = { posCatalogNodes: plan.nodes };
+    const prefPatch: Partial<ShopPreferences> = catalogPrefPatch(state.preferences, { posCatalogNodes: plan.nodes });
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
       snapshot,
@@ -2512,6 +2556,7 @@ export const usePosStore = create<PosState>((set, get) => {
       return { ok: false, errorKey: prefAuth.errorKey };
     }
     set((s) => ({ preferences: { ...s.preferences, ...prefPatch } }));
+    queueCatalogCloudSync();
     return { ok: true };
   },
 
@@ -3102,9 +3147,15 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const prev = state.preferences.activeStaffId ?? null;
     const staff = state.preferences.staffAccounts ?? [];
+    if (id && id !== prev) {
+      const nextStaff = staff.find((s) => s.id === id && s.active);
+      if (!nextStaff) return { ok: false, errorKey: "noSelection" };
+    }
     if (!opts?.force && prev !== id) {
       const actor = state.sessionActor;
-      if (actor && authOperatorRole(actor) !== "owner") {
+      // Path L / Auth cashier: personal device cannot switch staff mid-shift.
+      // Path S shared terminal uses JWT owner membership — PIN switch stays allowed.
+      if (actor && authMembershipRole(actor) !== "owner") {
         const writerId = shiftOwnerUserId(actor);
         if (writerId) {
           const open = getActiveShiftForActor(state.preferences.shifts, writerId);
@@ -3112,11 +3163,46 @@ export const usePosStore = create<PosState>((set, get) => {
         }
       }
     }
+    const cartPlan = staffSwitchCartPlan({
+      prevStaffId: prev,
+      nextStaffId: id,
+      draftLineCount: state.draftLines.length,
+      activePendingSaleId: state.activePendingSaleId,
+      activeTableSessionId: state.preferences.activeTableSessionId,
+    });
+    let nextSales = state.sales;
+    if (cartPlan === "park_and_detach" && state.draftLines.length > 0) {
+      const saleId = state.activePendingSaleId ?? crypto.randomUUID();
+      const existing = state.sales.find((s) => s.id === saleId);
+      const pendingSale = buildPendingSaleFromDraft({
+        saleId,
+        lines: state.draftLines,
+        cartDiscountUgx: state.draftCartDiscountUgx,
+        tableSessionId: state.preferences.activeTableSessionId ?? existing?.tableSessionId ?? null,
+        referenceLabel: existing?.referenceLabel?.trim() || STAFF_SWITCH_HOLD_LABEL,
+        soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+        soldByAuthUserId:
+          commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
+        existing: existing ?? null,
+      });
+      nextSales = [pendingSale, ...state.sales.filter((s) => s.id !== saleId)];
+      void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
+    }
     if (prev && prev !== id) {
       const prevStaff = staff.find((s) => s.id === prev);
       pushAudit("staff_logout", prevStaff?.name ?? prev, { staffId: prev, staffName: prevStaff?.name });
     }
-    set((s) => ({ preferences: { ...s.preferences, activeStaffId: id } }));
+    const detachCart = cartPlan !== "none";
+    set((s) => ({
+      sales: nextSales,
+      ...(detachCart ? emptyDraftPatch() : {}),
+      preferences: {
+        ...s.preferences,
+        activeStaffId: id,
+        ...(detachCart ? { activeTableSessionId: null } : {}),
+      },
+    }));
+    if (detachCart) void clearPersistedDraft();
     if (id && prev !== id) {
       const nextStaff = staff.find((s) => s.id === id);
       pushAudit("staff_login", nextStaff?.name ?? id, { staffId: id, staffName: nextStaff?.name, role: nextStaff?.role });
@@ -8255,13 +8341,58 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
     posPinnedShelfKeys: Array.isArray(p.posPinnedShelfKeys)
       ? (p.posPinnedShelfKeys as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 40)
       : base.posPinnedShelfKeys ?? [],
+    posPinnedShelfKeysUpdatedAt:
+      typeof p.posPinnedShelfKeysUpdatedAt === "string" && p.posPinnedShelfKeysUpdatedAt.trim()
+        ? p.posPinnedShelfKeysUpdatedAt
+        : base.posPinnedShelfKeysUpdatedAt,
+    posPinnedShelfKeyRevisions:
+      p.posPinnedShelfKeyRevisions && typeof p.posPinnedShelfKeyRevisions === "object"
+        ? Object.fromEntries(
+            Object.entries(p.posPinnedShelfKeyRevisions)
+              .map(([key, rev]) => {
+                if (!rev || typeof rev !== "object") return null;
+                const updatedAt = String((rev as { updatedAt?: unknown }).updatedAt ?? "").trim();
+                if (!key.trim() || !updatedAt) return null;
+                return [key, { pinned: (rev as { pinned?: unknown }).pinned !== false, updatedAt }] as const;
+              })
+              .filter((row): row is readonly [string, { pinned: boolean; updatedAt: string }] => row != null),
+          )
+        : base.posPinnedShelfKeyRevisions,
     posShelfLayout:
       p.posShelfLayout === undefined ? (base.posShelfLayout ?? {}) : normalizePosShelfLayoutFromStore(p.posShelfLayout),
     catalogHierarchyEnabled: p.catalogHierarchyEnabled === true,
+    catalogHierarchyEnabledUpdatedAt:
+      typeof p.catalogHierarchyEnabledUpdatedAt === "string" && p.catalogHierarchyEnabledUpdatedAt.trim()
+        ? p.catalogHierarchyEnabledUpdatedAt
+        : base.catalogHierarchyEnabledUpdatedAt,
     posCatalogNodes:
       p.posCatalogNodes === undefined
         ? (base.posCatalogNodes ?? [])
         : normalizeCatalogNodes(p.posCatalogNodes, String(p.wakaShopId ?? base.wakaShopId ?? "local")),
+    posCatalogTombstones: Array.isArray(p.posCatalogTombstones)
+      ? p.posCatalogTombstones
+          .map((row) => {
+            if (!row || typeof row !== "object") return null;
+            const id = String((row as { id?: unknown }).id ?? "").trim();
+            const deletedAt = String((row as { deletedAt?: unknown }).deletedAt ?? "").trim();
+            if (!id || !deletedAt) return null;
+            return { id, deletedAt };
+          })
+          .filter((row): row is { id: string; deletedAt: string } => row != null)
+          .slice(0, 400)
+      : base.posCatalogTombstones,
+    posShelfLayoutTombstones: Array.isArray(p.posShelfLayoutTombstones)
+      ? p.posShelfLayoutTombstones
+          .map((row) => {
+            if (!row || typeof row !== "object") return null;
+            const shelfKey = String((row as { shelfKey?: unknown }).shelfKey ?? "").trim();
+            const deletedAt = String((row as { deletedAt?: unknown }).deletedAt ?? "").trim();
+            if (!shelfKey || !deletedAt) return null;
+            return { shelfKey, deletedAt };
+          })
+          .filter((row): row is { shelfKey: string; deletedAt: string } => row != null)
+          .slice(0, 400)
+      : base.posShelfLayoutTombstones,
     posQuickSellProductIds: Array.isArray(p.posQuickSellProductIds)
       ? (p.posQuickSellProductIds as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 24)
       : base.posQuickSellProductIds ?? [],

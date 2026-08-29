@@ -14,6 +14,7 @@ import {
   Truck,
   Users,
   UtensilsCrossed,
+  Upload,
   Warehouse,
 } from "lucide-react";
 import type { BusinessType, Permission } from "../types";
@@ -150,6 +151,14 @@ export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMo
       labelKey: "stockAddProductBtn",
       Icon: Package,
       actionId: "newProduct",
+      perm: "products.add",
+      primary: true,
+    },
+    {
+      id: "importCsv",
+      labelKey: "stockQuickImportCsv",
+      Icon: Upload,
+      actionId: "importCsv",
       perm: "products.add",
       primary: true,
     },

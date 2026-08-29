@@ -218,7 +218,7 @@ describe("STAFF-V2 Phase 11b writer-keyed shift model", () => {
     );
     expect(payload.sale.created_by).toBe(OWNER_UUID);
     expect(payload.sale.sold_by_user_id).toBeNull();
-    expect(actorHasPermission(legacyActor, "settings.shop")).toBe(true);
+    expect(actorHasPermission(legacyActor, "settings.shop")).toBe(false);
   });
 
   it("rekeys orphaned staff: open shift to writer UUID", () => {

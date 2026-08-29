@@ -27,9 +27,11 @@ type Props = {
   onReceiveStock: () => void;
   /** Opens Add Product on the Products tab (≤2 taps from hub). */
   onAddProduct: () => void;
+  /** Opens existing CSV import on the Products tab. */
+  onImportCsv: () => void;
 };
 
-export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onAddProduct }: Props) {
+export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onAddProduct, onImportCsv }: Props) {
   const navigate = useNavigate();
   const { products, purchases, supplierPayments, suppliers, preferences, pharmacyComplianceAlerts } = usePosStore(
     useShallow((s) => ({
@@ -79,6 +81,9 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onA
         break;
       case "newProduct":
         onAddProduct();
+        break;
+      case "importCsv":
+        onImportCsv();
         break;
       case "adjustStock":
         setAdjustOpen(true);

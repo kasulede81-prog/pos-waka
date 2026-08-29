@@ -32,6 +32,12 @@ describe("syncReasons", () => {
     expect(incrementalEntitiesForReason("sale_ack")).toHaveLength(1);
   });
 
+  it("scopes catalog ACK to catalog plus products", () => {
+    expect(incrementalEntitiesForReason("catalog_change")).toEqual(["catalog", "products"]);
+    expect(shouldRunAncillaryCloudBundle("catalog_change")).toBe(false);
+    expect(shouldForceCloudPull("catalog_change", true)).toBe(false);
+  });
+
   it("merges a sale ACK into a broader resume pull", () => {
     expect(mergeSyncPullReasons("sale_ack", "resume")).toBe("resume");
     expect(isPullReasonSubset("sale_ack", "resume")).toBe(true);
@@ -44,6 +50,14 @@ describe("syncReasons", () => {
     expect(patch.products).toBe(false);
     expect(patch.customers).toBe(false);
     expect(patch.stockMovements).toBe(false);
+    expect(patch.catalog).toBe(false);
     expect(patch.salesAt).toBe("2026-08-13T00:00:00.000Z");
+  });
+
+  it("advances the catalog cursor when catalog was pulled", () => {
+    const patch = incrementalCheckpointPatch(["catalog"], { catalogAt: "2026-08-29T12:00:00.000Z" });
+    expect(patch.catalog).toBe(true);
+    expect(patch.catalogAt).toBe("2026-08-29T12:00:00.000Z");
+    expect(patch.sales).toBe(false);
   });
 });

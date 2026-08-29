@@ -278,14 +278,22 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       }
       const q = searchParams.get("q");
       if (q) setListQuery(q);
-      if (searchParams.get("add") === "1" && canAdd && !freeProductLimitReached) {
+      const openAdd = searchParams.get("add") === "1" && canAdd && !freeProductLimitReached;
+      const importRequested = searchParams.get("import") === "csv";
+      if (openAdd) {
         setWizardPrefill(undefined);
         setWizardInitialStep(undefined);
         setBulkOpen(true);
+      }
+      if (importRequested && canAdd && !freeProductLimitReached) {
+        setCsvImportOpen(true);
+      }
+      if (openAdd || importRequested) {
         setSearchParams(
           (prev) => {
             const p = new URLSearchParams(prev);
-            p.delete("add");
+            if (openAdd) p.delete("add");
+            if (importRequested) p.delete("import");
             return p;
           },
           { replace: true },

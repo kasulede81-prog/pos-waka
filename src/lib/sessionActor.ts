@@ -23,23 +23,56 @@ export type SessionActor = {
   linkedAuthUserId?: string | null;
   /** Authenticated writer / device operator (JWT or Path L staff session). */
   authUserId?: string;
-  /** Shop membership role — never downgraded when owner selects PIN staff. */
+  /**
+   * Shop membership / JWT role — never downgraded when owner selects PIN staff.
+   * Not the permission operator on Path S; use `authOperatorRole`.
+   */
   authRole?: UserRole;
-  /** Operator permission snapshot; falls back to role matrix when absent. */
+  /** JWT/membership permission snapshot (Path L / Auth cashier). */
   authPermissions?: Permission[];
   /** Active PIN staff on shared terminal (`preferences.activeStaffId`). */
   activeStaffId?: string | null;
 };
 
-/** Operator role for permissions and owner gates (Phase 11a). */
-export function authOperatorRole(actor: Pick<SessionActor, "authRole" | "role">): UserRole {
+/**
+ * Owner JWT + PIN staff on a shared terminal (Path S).
+ * `authUserId` stays the shop account; `userId` is `staff:<id>`.
+ */
+export function isPathSOperatingStaff(
+  actor: Pick<SessionActor, "userId" | "authUserId">,
+): boolean {
+  const authId = actor.authUserId?.trim() ?? "";
+  const userId = actor.userId?.trim() ?? "";
+  return Boolean(authId && userId.startsWith("staff:") && authId !== userId);
+}
+
+/**
+ * JWT / shop_members role — never downgraded on Path S PIN.
+ * Use for shared-terminal lock detection and cloud writer identity, not UI permission gates.
+ */
+export function authMembershipRole(actor: Pick<SessionActor, "authRole" | "role">): UserRole {
   return actor.authRole ?? actor.role;
 }
 
-/** Operator permissions for authorization checks (Phase 11a) — never seller `permissions`. */
+/**
+ * Effective operating role for routes, store actions, home, and receipts.
+ * Path S PIN staff uses seller `role` (least privilege). Auth cashier / Path L unchanged.
+ */
+export function authOperatorRole(
+  actor: Pick<SessionActor, "authRole" | "role" | "userId" | "authUserId">,
+): UserRole {
+  if (isPathSOperatingStaff(actor)) return actor.role;
+  return actor.authRole ?? actor.role;
+}
+
+/**
+ * Effective operator permission snapshot.
+ * Path S PIN staff uses the staff row snapshot; otherwise JWT `authPermissions`.
+ */
 export function authOperatorPermissions(
-  actor: Pick<SessionActor, "authPermissions">,
+  actor: Pick<SessionActor, "authPermissions" | "permissions" | "userId" | "authUserId">,
 ): Permission[] | undefined {
+  if (isPathSOperatingStaff(actor)) return actor.permissions;
   return actor.authPermissions;
 }
 

@@ -148,6 +148,7 @@ describe("STAFF-V2 Phase 11k personal device lock hardening", () => {
   it("wiring — AppShell gates lock + clears personal terminal runtime; invite metadata", () => {
     expect(APP_SHELL).toMatch(/shouldShowEnterpriseStaffLockScreen/);
     expect(APP_SHELL).toMatch(/isSharedTerminalLockOperator/);
+    expect(APP_SHELL).toMatch(/authMembershipRole\(actor\)/);
     expect(APP_SHELL).toMatch(/clearPersonalStaffTerminalRuntimeState/);
     expect(STAFF_HYDRATE).toMatch(/clearPersonalStaffTerminalRuntimeState\(\)/);
     expect(STAFF_ACCEPT).toMatch(/invite_type:\s*"staff"/);

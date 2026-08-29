@@ -89,7 +89,8 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
           lang={lang}
           onSetTab={setTab}
           onReceiveStock={openNewPurchaseFlow}
-          onAddProduct={() => setTab("products", { add: "1", stockView: null })}
+          onAddProduct={() => setTab("products", { add: "1", stockView: null, import: null })}
+          onImportCsv={() => setTab("products", { import: "csv", stockView: null, add: null })}
         />
       ) : null}
 

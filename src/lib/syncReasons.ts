@@ -34,7 +34,8 @@ export type IncrementalPullEntity =
   | "inventory_count_sessions"
   | "shifts"
   | "day_closes"
-  | "stock_movements";
+  | "stock_movements"
+  | "catalog";
 
 export const ALL_INCREMENTAL_PULL_ENTITIES: readonly IncrementalPullEntity[] = [
   "products",
@@ -52,25 +53,31 @@ export const ALL_INCREMENTAL_PULL_ENTITIES: readonly IncrementalPullEntity[] = [
   "shifts",
   "day_closes",
   "stock_movements",
+  "catalog",
 ] as const;
 
 /** Sale ACK: sales only. Stock is already applied locally on checkout. */
 const SALE_ACK_ENTITIES: readonly IncrementalPullEntity[] = ["sales"];
 
+/** After a catalog push ACK: catalog tree plus product category rows (rename). */
+const CATALOG_CHANGE_ENTITIES: readonly IncrementalPullEntity[] = ["catalog", "products"];
+
 export function incrementalEntitiesForReason(reason: string): IncrementalPullEntity[] {
   if (reason === "sale_ack") return [...SALE_ACK_ENTITIES];
+  if (reason === "catalog_change") return [...CATALOG_CHANGE_ENTITIES];
   return [...ALL_INCREMENTAL_PULL_ENTITIES];
 }
 
 /** Hospitality / staff / device / PIN belong on resume/reconnect/startup, not sale ACK. */
 export function shouldRunAncillaryCloudBundle(reason: string): boolean {
-  return reason !== "sale_ack";
+  return reason !== "sale_ack" && reason !== "catalog_change";
 }
 
 export function isEventPullReason(reason: string): boolean {
   return (
     reason === "realtime" ||
     reason === "sale_ack" ||
+    reason === "catalog_change" ||
     reason === "reconnect" ||
     reason === "foreground" ||
     reason === "resume" ||
@@ -86,7 +93,7 @@ export function isEventPullReason(reason: string): boolean {
  * Startup / resume / reconnect / recovery / realtime may still force.
  */
 export function shouldForceCloudPull(reason: string, requestedForce?: boolean): boolean {
-  if (reason === "sale_ack") return false;
+  if (reason === "sale_ack" || reason === "catalog_change") return false;
   return requestedForce === true;
 }
 
@@ -123,6 +130,7 @@ export type IncrementalCheckpointTimes = {
   shiftsAt?: string;
   dayClosesAt?: string;
   stockMovementsAt?: string;
+  catalogAt?: string;
 };
 
 /** Only advance cursors for entities that were actually pulled. */
@@ -145,6 +153,7 @@ export function incrementalCheckpointPatch(
   shifts?: boolean;
   dayCloses?: boolean;
   stockMovements?: boolean;
+  catalog?: boolean;
   salesAt?: string;
   productsAt?: string;
   customersAt?: string;
@@ -178,6 +187,7 @@ export function incrementalCheckpointPatch(
     shifts: pulled.has("shifts"),
     dayCloses: pulled.has("day_closes"),
     stockMovements: pulled.has("stock_movements"),
+    catalog: pulled.has("catalog"),
     salesAt: checkpoints?.salesAt,
     productsAt: checkpoints?.productsAt,
     customersAt: checkpoints?.customersAt,
@@ -193,5 +203,6 @@ export function incrementalCheckpointPatch(
     shiftsAt: checkpoints?.shiftsAt,
     dayClosesAt: checkpoints?.dayClosesAt,
     stockMovementsAt: checkpoints?.stockMovementsAt,
+    catalogAt: checkpoints?.catalogAt,
   };
 }

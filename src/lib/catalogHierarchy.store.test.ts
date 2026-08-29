@@ -78,9 +78,20 @@ describe("createCatalogShelf inventory safety", () => {
     expect(after.products[0]?.category).toBe("DELL LAPTOPS");
     expect(after.products[0]?.stockOnHand).toBe(beforeStock);
     expect(after.preferences.posCatalogNodes?.some((n) => n.legacyShelfKey === "DELL LAPTOPS")).toBe(true);
+    expect(after.preferences.posCatalogNodes?.some((n) => n.legacyShelfKey === "DELL")).toBe(false);
   });
 
-  it("deleting an empty CatalogNode does not modify products", () => {
+  it("cashier cannot persist catalog mutations", () => {
+    usePosStore.setState({
+      sessionActor: { userId: "cashier:1", role: "cashier", displayName: "Cashier" },
+    });
+    const before = usePosStore.getState().preferences.posCatalogNodes ?? [];
+    const created = usePosStore.getState().createCatalogShelf({ name: "ELECTRONICS" });
+    expect(created.ok).toBe(false);
+    expect(usePosStore.getState().preferences.posCatalogNodes ?? []).toEqual(before);
+  });
+
+  it("deleting an empty CatalogNode records a tombstone so reconnect cannot resurrect it", () => {
     usePosStore.getState().createCatalogShelf({ name: "SPARE" });
     const productSnap = usePosStore.getState().products.map((p) => ({ ...p }));
     const r = usePosStore.getState().deleteEmptyShelf("SPARE");
@@ -89,6 +100,8 @@ describe("createCatalogShelf inventory safety", () => {
     expect(usePosStore.getState().preferences.posCatalogNodes?.some((n) => n.legacyShelfKey === "SPARE")).toBe(
       false,
     );
+    const tombstones = usePosStore.getState().preferences.posCatalogTombstones ?? [];
+    expect(tombstones.length).toBeGreaterThan(0);
   });
 
   it("flag remains off for shops that never opted in", () => {

@@ -63,19 +63,18 @@ describe("STAFF-V2 Phase 11c read visibility scope", () => {
     expect(resolveVisibleHomeMetrics(authOperatorRole(actor)).scope).toBe("shop_wide");
   });
 
-  it("B — owner + John PIN: operator owner, seller cashier, shop-wide visibility", () => {
+  it("B — owner + John PIN: effective cashier, personal home visibility", () => {
     const actor = ownerActor(STAFF_JOHN);
     expect(actor.authRole).toBe("owner");
     expect(actor.role).toBe("cashier");
+    expect(authOperatorRole(actor)).toBe("cashier");
     const scope = resolveVisibleHomeMetrics(authOperatorRole(actor));
-    expect(scope.scope).toBe("shop_wide");
+    expect(scope.scope).toBe("personal");
     const sales = [
       sale({ id: "s-john", soldByUserId: `staff:${STAFF_JOHN}` }),
       sale({ id: "s-mary", soldByUserId: `staff:${STAFF_MARY}`, soldByAuthUserId: null }),
     ];
-    expect(filterSalesForHomeScope(sales, scope.scope, actor)).toHaveLength(2);
-    const personal = summarizeTodaySales(sales, new Date("2026-08-23T12:00:00.000Z"));
-    expect(personal.count).toBe(2);
+    expect(filterSalesForHomeScope(sales, scope.scope, actor).map((s) => s.id)).toEqual(["s-john"]);
   });
 
   it("C — John Auth login: personal cashier scope", () => {
@@ -102,9 +101,9 @@ describe("STAFF-V2 Phase 11c read visibility scope", () => {
     expect(today.count).toBe(1);
   });
 
-  it("D — seller labels preserved under owner operator", () => {
+  it("D — seller labels preserved under Path S PIN cashier", () => {
     const actor = ownerActor(STAFF_JOHN);
-    expect(authOperatorRole(actor)).toBe("owner");
+    expect(authOperatorRole(actor)).toBe("cashier");
     expect(actor.displayName).toBe("John");
     const map = buildSoldByNameByUserId({
       staffAccounts: staffPrefs(STAFF_JOHN).staffAccounts,
@@ -119,8 +118,8 @@ describe("STAFF-V2 Phase 11c read visibility scope", () => {
   it("E — legacy PIN: no crash; writer owner; seller unknown on label map", () => {
     const actor = ownerActor(STAFF_JOHN);
     const legacy = { ...actor, linkedAuthUserId: null };
-    expect(authOperatorRole(legacy)).toBe("owner");
-    expect(resolveVisibleHomeMetrics(authOperatorRole(legacy)).scope).toBe("shop_wide");
+    expect(authOperatorRole(legacy)).toBe("cashier");
+    expect(resolveVisibleHomeMetrics(authOperatorRole(legacy)).scope).toBe("personal");
     const map = buildSoldByNameByUserId({
       staffAccounts: staffPrefs(STAFF_JOHN).staffAccounts,
       ownerUserId: OWNER_UUID,

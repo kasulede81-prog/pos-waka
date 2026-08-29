@@ -24,10 +24,24 @@ describe("inventoryWorkspaceTiles (MB-4C transfer enabled)", () => {
   it("exposes Add Product and Receive on the hub overview quick actions", () => {
     const quick = resolveInventoryOverviewQuickActions("retail");
     expect(quick.map((a) => a.id)).toEqual(
-      expect.arrayContaining(["receive", "newProduct", "adjust", "count", "transfer"]),
+      expect.arrayContaining(["receive", "newProduct", "importCsv", "adjust", "count", "transfer"]),
     );
     expect(quick.find((a) => a.id === "newProduct")?.primary).toBe(true);
     expect(quick.find((a) => a.id === "receive")?.primary).toBe(true);
+  });
+
+  it("places Import CSV beside Add Product on hub overview, gated by products.add", () => {
+    const quick = resolveInventoryOverviewQuickActions("retail");
+    const addIdx = quick.findIndex((a) => a.id === "newProduct");
+    const csvIdx = quick.findIndex((a) => a.id === "importCsv");
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(csvIdx).toBe(addIdx + 1);
+    expect(quick[csvIdx]).toMatchObject({
+      labelKey: "stockQuickImportCsv",
+      actionId: "importCsv",
+      perm: "products.add",
+      primary: true,
+    });
   });
 
   it("mounts completed hub destinations including transfer", () => {

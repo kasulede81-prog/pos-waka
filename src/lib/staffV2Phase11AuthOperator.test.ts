@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { actorHasPermission } from "./actorAuthorization";
 import {
   commercialAuthUserIdFromActor,
+  authMembershipRole,
+  authOperatorRole,
   resolveSessionActor,
   type SessionActor,
 } from "./sessionActor";
@@ -43,7 +45,7 @@ describe("STAFF-V2 Phase 11a auth operator identity split", () => {
     expect(actor.activeStaffId).toBeNull();
   });
 
-  it("B — owner switches John: operator stays owner, seller becomes staff", () => {
+  it("B — owner switches John: JWT stays owner, effective operator is cashier", () => {
     const actor = resolveSessionActor({
       mode: "supabase",
       user: { id: OWNER_UUID, email: "owner@waka.invalid" } as never,
@@ -56,6 +58,8 @@ describe("STAFF-V2 Phase 11a auth operator identity split", () => {
     expect(actor.userId).toBe(`staff:${STAFF_ROW_ID}`);
     expect(actor.role).toBe("cashier");
     expect(actor.activeStaffId).toBe(STAFF_ROW_ID);
+    expect(authOperatorRole(actor)).toBe("cashier");
+    expect(authMembershipRole(actor)).toBe("owner");
   });
 
   it("C — seller attribution unchanged on Path S switch", () => {
@@ -72,7 +76,7 @@ describe("STAFF-V2 Phase 11a auth operator identity split", () => {
     expect(actor.authUserId).toBe(OWNER_UUID);
   });
 
-  it("D — owner permissions preserved while selling as John", () => {
+  it("D — Path S PIN cashier does not inherit owner permissions", () => {
     const actor = resolveSessionActor({
       mode: "supabase",
       user: { id: OWNER_UUID, email: "owner@waka.invalid" } as never,
@@ -80,10 +84,15 @@ describe("STAFF-V2 Phase 11a auth operator identity split", () => {
       shopMemberRole: "owner",
       preferences: ownerPreferences(STAFF_ROW_ID) as never,
     });
-    expect(actorHasPermission(actor, "settings.shop")).toBe(true);
-    expect(actorHasPermission(actor, "reports.view")).toBe(true);
-    expect(actorHasPermission(actor, "owner.dashboard")).toBe(true);
     expect(actor.role).toBe("cashier");
+    expect(authOperatorRole(actor)).toBe("cashier");
+    expect(actor.displayName).toBe("John");
+    expect(actorHasPermission(actor, "settings.shop")).toBe(false);
+    expect(actorHasPermission(actor, "settings.devices")).toBe(false);
+    expect(actorHasPermission(actor, "reports.view")).toBe(false);
+    expect(actorHasPermission(actor, "owner.dashboard")).toBe(false);
+    expect(actorHasPermission(actor, "pos.sell")).toBe(true);
+    expect(actorHasPermission(actor, "receipts.view")).toBe(true);
   });
 
   it("E — dedicated Auth cashier login unchanged", () => {
