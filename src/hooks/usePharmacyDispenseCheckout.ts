@@ -4,6 +4,7 @@ import { usePosStore } from "../store/usePosStore";
 import { usePharmacyControlledCheckout } from "./usePharmacyControlledCheckout";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep } from "../lib/draftCart";
 import { parseDisplayMoney } from "../lib/posCheckoutMoney";
+import { addDenominationToCashInput } from "../lib/cashDenominations";
 import {
   applyCheckoutAlphaKey,
   applyCheckoutNumericKey,
@@ -173,6 +174,12 @@ export function usePharmacyDispenseCheckout({
     },
     [checkoutAmountField, checkoutKeypadMode, saleCustomerName, saleCustomerPhone, setSaleCustomerName, setSaleCustomerPhone],
   );
+
+  const addCheckoutCashNote = useCallback((ugx: number) => {
+    setCheckoutAmountField("cash");
+    setCheckoutKeypadMode("numeric");
+    setCashInput((prev) => addDenominationToCashInput(prev, ugx));
+  }, []);
 
   const clearCheckoutAmount = useCallback(() => {
     switch (checkoutAmountField) {
@@ -410,6 +417,7 @@ export function usePharmacyDispenseCheckout({
       onSaleCustomerPhone: setSaleCustomerPhone,
       onSavePending: handleSavePending,
       onFinishSale: finishSale,
+      onAddCashNote: addCheckoutCashNote,
       onMinimize: extras.onMinimize,
       onAddItems: extras.onAddItems,
       catalogDock: extras.catalogDock,
@@ -441,6 +449,7 @@ export function usePharmacyDispenseCheckout({
       cartAbandon.requestClear,
       handleSavePending,
       finishSale,
+      addCheckoutCashNote,
       handleCheckoutInputField,
       appendCheckoutDigit,
       clearCheckoutAmount,

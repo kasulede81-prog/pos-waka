@@ -19,23 +19,26 @@ describe("checkout cash workspace isolation", () => {
     expect(src).toContain("backdrop-blur-md");
   });
 
-  it("compact checkout slideover does not import or render the cash picker", () => {
+  it("compact checkout slideover still does not own the picker (panel child does)", () => {
     const src = readSrc("src/components/pos/PosCompactCheckoutSlideover.tsx");
     expect(src).not.toContain("CheckoutNotePicker");
     expect(src).not.toContain("onAddCashNote");
     expect(src).not.toContain("currency/ugx");
   });
 
-  it("mobile/shared checkout panel does not import the visual cash picker", () => {
+  it("mobile/shared checkout panel mounts the visual cash picker for cash tender", () => {
     const src = readSrc("src/components/pos/PosCheckoutPanel.tsx");
-    expect(src).not.toContain("CheckoutNotePicker");
-    expect(src).not.toContain("checkoutNoteAssetPath");
-    expect(src).not.toContain("checkoutCoinAssetPath");
+    expect(src).toContain('from "./CheckoutNotePicker"');
+    expect(src).toContain("onAddCashNote");
+    expect(src).toContain('density="touch"');
+    expect(src).toContain('data-checkout-cash-workspace="mobile"');
+    expect(src).toContain("cashWorkspaceView");
   });
 
-  it("PosPage wires denomination taps only into the desktop catalog dock", () => {
+  it("PosPage wires denomination taps into desktop dock and shared checkout panel", () => {
     const src = readSrc("src/pages/PosPage.tsx");
     expect(src).toContain("onAddCashNote={addCheckoutCashNote}");
+    expect(src).toContain("onAddCashNote: addCheckoutCashNote");
     expect(src).not.toContain('from "../components/pos/CheckoutNotePicker"');
   });
 
@@ -53,8 +56,15 @@ describe("checkout cash workspace isolation", () => {
     expect(src).toContain("data-checkout-note-grid");
     expect(src).toContain("data-checkout-coin-row");
     expect(src).toContain("grid-rows-2");
+    expect(src).toContain('density = "desktop"');
     expect(src).toContain("Add UGX ${formatDenominationLabel(denom)} cash note");
     expect(src).toContain("Add UGX ${formatDenominationLabel(denom)} coin");
     expect(src).toContain("onAddNote(denom)");
+  });
+
+  it("desktop dock still uses default desktop density (no touch override)", () => {
+    const src = readSrc("src/components/pos/PosDesktopCatalogCheckoutDock.tsx");
+    expect(src).toContain("<CheckoutNotePicker onAddNote={onAddCashNote} />");
+    expect(src).not.toContain('density="touch"');
   });
 });

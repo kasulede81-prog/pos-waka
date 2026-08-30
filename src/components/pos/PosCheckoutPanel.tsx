@@ -1,6 +1,6 @@
 import { memo, useEffect, useState, type ReactNode, type RefObject } from "react";
 import clsx from "clsx";
-import { Check, Keyboard } from "lucide-react";
+import { Banknote, Check, Keyboard } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DraftCartStats, DraftCheckoutTotals } from "../../lib/draftCart";
@@ -14,6 +14,7 @@ import { DraftCartLineRow } from "./DraftCartLineRow";
 import { DraftCartTotalsStack } from "./DraftCartTotalsStack";
 import { MobileSheetCartItems } from "./MobileSheetCartItems";
 import { VirtualizedDraftCartList } from "./VirtualizedDraftCartList";
+import { CheckoutNotePicker } from "./CheckoutNotePicker";
 import { POS_CHECKOUT_SCROLL_CLASS } from "../../lib/posTouchInteraction";
 import { MOBILE_CHECKOUT_ITEMS_AUTO_SHOW_MAX } from "../../lib/posMobileCheckoutItems";
 import {
@@ -21,6 +22,8 @@ import {
   setPosCashKeypadHardwareCapture,
   shouldCaptureCashKeypadHardwareKey,
 } from "../../lib/desktopPosKeyHandlers";
+
+type CashWorkspaceView = "currency" | "keypad";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -917,6 +920,11 @@ export type PosCheckoutPanelProps = {
   onSaleCustomerPhone: (phone: string) => void;
   onSavePending: () => void;
   onFinishSale: () => void;
+  /**
+   * Add one banknote/coin to existing `cashInput` (same helper as desktop catalog dock).
+   * When set on mobile/compact cash checkout, the pull affordance opens the currency workspace.
+   */
+  onAddCashNote?: (ugx: number) => void;
   /** Desktop sidebar — focus catalog to add more products. */
   onAddItems?: () => void;
   /** Full desktop — numpad + pay-later render in the catalog column. */
@@ -1070,6 +1078,7 @@ export function PosCheckoutPanel({
   onSaleCustomerPhone,
   onSavePending,
   onFinishSale,
+  onAddCashNote,
   onAddItems,
   catalogDock = false,
   catalogNumpadOpen: catalogNumpadOpenProp,
@@ -1086,13 +1095,27 @@ export function PosCheckoutPanel({
   const emptyCart = draftLines.length === 0;
   const [sheetCartExpanded, setSheetCartExpanded] = useState(false);
   const [sidebarNumpadOpenLocal, setSidebarNumpadOpenLocal] = useState(false);
+  const [cashWorkspaceView, setCashWorkspaceView] = useState<CashWorkspaceView>("currency");
   const sidebarNumpadOpen = catalogDock ? (catalogNumpadOpenProp ?? false) : sidebarNumpadOpenLocal;
   const setSidebarNumpadOpen = catalogDock && onCatalogNumpadOpenChange ? onCatalogNumpadOpenChange : setSidebarNumpadOpenLocal;
   const needsAmountKeypad = paymentMethod === "cash" || paymentMethod === "credit";
+  const mobileCashCurrencyEnabled = Boolean(mobileSheetBudget && onAddCashNote);
+  const showMobileCashCurrencyWorkspace =
+    mobileCashCurrencyEnabled && paymentMethod === "cash" && sidebarNumpadOpen;
+
+  const openMobileCashWorkspace = (view: CashWorkspaceView = "currency") => {
+    onCheckoutInputField("cash");
+    setCashWorkspaceView(mobileCashCurrencyEnabled ? view : "keypad");
+    setSidebarNumpadOpen(true);
+  };
 
   useEffect(() => {
     if (!needsAmountKeypad) setSidebarNumpadOpen(false);
   }, [needsAmountKeypad]);
+
+  useEffect(() => {
+    if (!sidebarNumpadOpen) setCashWorkspaceView("currency");
+  }, [sidebarNumpadOpen]);
 
   useEffect(() => {
     if (draftLines.length <= MOBILE_CHECKOUT_ITEMS_AUTO_SHOW_MAX) {
@@ -1147,7 +1170,12 @@ export function PosCheckoutPanel({
     onSaleCustomerName,
     onSaleCustomerPhone,
     onOpenAmountKeypad: () => {
-      if (needsAmountKeypad) setSidebarNumpadOpen(true);
+      if (!needsAmountKeypad) return;
+      if (mobileCashCurrencyEnabled && paymentMethod === "cash") {
+        openMobileCashWorkspace("currency");
+        return;
+      }
+      setSidebarNumpadOpen(true);
     },
   };
 
@@ -1294,7 +1322,71 @@ export function PosCheckoutPanel({
                 {savePendingLabel}
               </button>
             ) : null}
-            {paymentMethod === "credit" || (paymentMethod === "cash" && sidebarNumpadOpen) ? (
+            {showMobileCashCurrencyWorkspace && onAddCashNote ? (
+              <div className="space-y-1.5" data-checkout-cash-workspace="mobile">
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCheckoutInputField("cash");
+                      setCashWorkspaceView("currency");
+                    }}
+                    aria-label="Add Ugandan cash denominations"
+                    aria-pressed={cashWorkspaceView === "currency"}
+                    className={clsx(
+                      "flex h-11 flex-1 items-center justify-center rounded-xl border shadow-sm active:opacity-90",
+                      cashWorkspaceView === "currency"
+                        ? "border-waka-500 bg-waka-50 text-waka-950"
+                        : "border-border bg-muted text-foreground",
+                    )}
+                  >
+                    <Banknote className="h-6 w-6" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCheckoutInputField("cash");
+                      setCashWorkspaceView("keypad");
+                    }}
+                    aria-label={t(lang, "posKeypadShow")}
+                    aria-pressed={cashWorkspaceView === "keypad"}
+                    className={clsx(
+                      "flex h-11 flex-1 items-center justify-center rounded-xl border shadow-sm active:opacity-90",
+                      cashWorkspaceView === "keypad"
+                        ? "border-waka-500 bg-waka-50 text-waka-950"
+                        : "border-border bg-muted text-foreground",
+                    )}
+                  >
+                    <Keyboard className="h-6 w-6" aria-hidden />
+                  </button>
+                </div>
+                {cashWorkspaceView === "currency" ? (
+                  <div className="max-h-[min(34dvh,17rem)] overflow-y-auto overscroll-y-contain">
+                    <CheckoutNotePicker density="touch" onAddNote={onAddCashNote} />
+                  </div>
+                ) : (
+                  <CheckoutNumpadDock {...numpadDockProps} />
+                )}
+                {cashWorkspaceView === "currency" ? (
+                  <button
+                    ref={saveButtonRef}
+                    type="button"
+                    onClick={onFinishSale}
+                    disabled={emptyCart}
+                    className="pos-ds-checkout-btn min-h-[52px] w-full rounded-xl bg-success py-3.5 text-lg font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
+                  >
+                    {saveSaleLabel}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setSidebarNumpadOpen(false)}
+                  className="w-full rounded-lg py-1 text-center text-[11px] font-bold text-muted-foreground active:text-foreground"
+                >
+                  {t(lang, "posKeypadHide")}
+                </button>
+              </div>
+            ) : paymentMethod === "credit" || (paymentMethod === "cash" && sidebarNumpadOpen) ? (
               <>
                 <CheckoutNumpadDock {...numpadDockProps} />
                 {paymentMethod === "cash" ? (
@@ -1312,15 +1404,24 @@ export function PosCheckoutPanel({
                 {paymentMethod === "cash" ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      onCheckoutInputField("cash");
-                      setSidebarNumpadOpen(true);
-                    }}
-                    aria-label={t(lang, "posKeypadShow")}
-                    title={t(lang, "posKeypadShow")}
+                    onClick={() => openMobileCashWorkspace(mobileCashCurrencyEnabled ? "currency" : "keypad")}
+                    aria-label={
+                      mobileCashCurrencyEnabled
+                        ? "Add Ugandan cash denominations"
+                        : t(lang, "posKeypadShow")
+                    }
+                    title={
+                      mobileCashCurrencyEnabled
+                        ? "Add Ugandan cash denominations"
+                        : t(lang, "posKeypadShow")
+                    }
                     className="flex h-[52px] w-14 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground shadow-sm active:bg-muted/80"
                   >
-                    <Keyboard className="h-6 w-6" aria-hidden />
+                    {mobileCashCurrencyEnabled ? (
+                      <Banknote className="h-6 w-6" aria-hidden />
+                    ) : (
+                      <Keyboard className="h-6 w-6" aria-hidden />
+                    )}
                   </button>
                 ) : null}
                 <button

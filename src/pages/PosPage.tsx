@@ -1654,6 +1654,7 @@ export function PosPage({ lang }: { lang: Language }) {
     onSaleCustomerPhone: setSaleCustomerPhone,
     onSavePending: handleSavePending,
     onFinishSale: finishSale,
+    onAddCashNote: addCheckoutCashNote,
   };
 
   const hierarchyCatalogNav = isSellHierarchyCatalogNav({
