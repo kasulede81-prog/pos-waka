@@ -68,7 +68,7 @@ import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
 import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { getActiveShopId } from "../offline/shopScope";
-import { r3AdjustmentStockPayload } from "../lib/stockDurableSync";
+import { r3AdjustmentStockPayload, r3SaleVoidStockPayload } from "../lib/stockDurableSync";
 import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
@@ -5463,13 +5463,16 @@ export const usePosStore = create<PosState>((set, get) => {
         actorRole: actor.role,
       });
     }
-    void queueRemote("pending_stock_updates", {
-      productId: line.productId,
-      delta: line.quantity,
-      note: "void",
-      baseUpdatedAt: preVoidProduct?.updatedAt ?? at,
-      baseStockOnHand: preVoidProduct?.stockOnHand,
-    });
+    void queueRemote(
+      "pending_stock_updates",
+      r3SaleVoidStockPayload({
+        productId: line.productId,
+        delta: line.quantity,
+        voidRecordId: voidRec.id,
+        baseUpdatedAt: preVoidProduct?.updatedAt ?? at,
+        baseStockOnHand: preVoidProduct?.stockOnHand,
+      }),
+    );
     void queueRemote("sale", { saleId });
     if (sale.customerId && debtReduce > 0) {
       void queueRemote("customer", { id: sale.customerId });

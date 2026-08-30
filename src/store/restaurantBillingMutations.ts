@@ -29,6 +29,7 @@ import { dateKeyKampala } from "../lib/datesUg";
 import { canRoleBypassDiscountApproval } from "../lib/discountGovernance";
 import { inventoryMovementNamespace } from "../lib/shopSyncContext";
 import { planWholeBillVoid } from "../lib/voidCompletedSale";
+import { r3SaleVoidStockPayload } from "../lib/stockDurableSync";
 import { shiftOwnerUserId } from "../lib/sessionActor";
 import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
 import type { PosState } from "./usePosStore";
@@ -539,13 +540,18 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
       void queueRemote("sale", { saleId: sale.id });
       for (const movement of planned.plan.movements) {
         const pre = state.products.find((p) => p.id === movement.productId);
-        void queueRemote("pending_stock_updates", {
-          productId: movement.productId,
-          delta: movement.deltaBaseUnits,
-          note: "void",
-          baseUpdatedAt: pre?.updatedAt ?? at,
-          baseStockOnHand: pre?.stockOnHand,
-        });
+        const voidRecordId = movement.refId;
+        if (!voidRecordId) continue;
+        void queueRemote(
+          "pending_stock_updates",
+          r3SaleVoidStockPayload({
+            productId: movement.productId,
+            delta: movement.deltaBaseUnits,
+            voidRecordId,
+            baseUpdatedAt: pre?.updatedAt ?? at,
+            baseStockOnHand: pre?.stockOnHand,
+          }),
+        );
       }
       if (sale.customerId) void queueRemote("customer", { id: sale.customerId });
       queueHospitalityChange({ sessionIds: [input.sessionId] });

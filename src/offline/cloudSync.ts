@@ -647,7 +647,10 @@ export async function pushProductStockToCloud(
 }
 
 async function pushR3DurableStockRpc(
-  rpcName: "shop_apply_stock_adjustment" | "shop_apply_inventory_count_stock",
+  rpcName:
+    | "shop_apply_stock_adjustment"
+    | "shop_apply_inventory_count_stock"
+    | "shop_apply_sale_void_stock",
   productId: string,
   ctx: ShopCtx,
   payload: Record<string, unknown>,
@@ -710,6 +713,21 @@ export async function pushR3InventoryCountStockToCloud(
   return pushR3DurableStockRpc("shop_apply_inventory_count_stock", productId, ctx, {
     product_id: productId,
     session_id: opts.referenceId,
+    reference_id: opts.referenceId,
+    delta: opts.delta,
+    note: opts.note ?? "",
+  });
+}
+
+/** SALE-VOID-STOCK-1.0 — durable void restock; never stale_version rebase. */
+export async function pushSaleVoidStockToCloud(
+  productId: string,
+  ctx: ShopCtx,
+  opts: { delta: number; referenceId: string; note?: string },
+): Promise<boolean> {
+  return pushR3DurableStockRpc("shop_apply_sale_void_stock", productId, ctx, {
+    product_id: productId,
+    void_record_id: opts.referenceId,
     reference_id: opts.referenceId,
     delta: opts.delta,
     note: opts.note ?? "",
@@ -1770,12 +1788,11 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
           note: classified.note,
         });
       }
-      if (classified.route === "legacy_void") {
-        return pushProductStockToCloud(classified.productId, ctx, {
+      if (classified.route === "sale_void") {
+        return pushSaleVoidStockToCloud(classified.productId, ctx, {
           delta: classified.delta,
+          referenceId: classified.referenceId,
           note: classified.note,
-          baseUpdatedAt: typeof payload.baseUpdatedAt === "string" ? payload.baseUpdatedAt : null,
-          baseStockOnHand: typeof payload.baseStockOnHand === "number" ? payload.baseStockOnHand : undefined,
         });
       }
       if (classified.route === "catalog_only") {
