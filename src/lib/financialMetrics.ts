@@ -94,6 +94,8 @@ export type CompletedFinancialSnapshot = {
   debtIssuedUgx: number;
   discountsUgx: number;
   averageTransactionUgx: number;
+  /** True when any sale-time COGS line lacks trustworthy historical unit cost. */
+  costIncomplete: boolean;
 };
 
 export function getCompletedFinancialsFromScoped(
@@ -104,7 +106,7 @@ export function getCompletedFinancialsFromScoped(
 ): CompletedFinancialSnapshot {
   const productById = new Map(products.map((p) => [p.id, p]));
   const breakdown = opts?.skipProfit
-    ? { profitUgx: 0, salesUgx: 0, costUgx: 0, linesMissingCost: 0 }
+    ? { profitUgx: 0, salesUgx: 0, costUgx: 0, linesMissingCost: 0, costIncomplete: false }
     : computeTodayProfitBreakdown(scoped, productById, returnScoped);
   const tx = scoped.length;
   const revenue = computeCanonicalRevenueUgx(scoped, returnScoped);
@@ -126,6 +128,7 @@ export function getCompletedFinancialsFromScoped(
     debtIssuedUgx,
     discountsUgx,
     averageTransactionUgx: tx > 0 ? Math.round(revenue / tx) : 0,
+    costIncomplete: breakdown.costIncomplete,
   };
 }
 

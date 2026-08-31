@@ -25,6 +25,7 @@ function homeGreetingKey(hour: number): string {
 /**
  * Phase 34.1 — executive Home shell.
  * Health/subscription live above the fold inside DesktopHomeTiles; footer keeps license only.
+ * HOME CINEMATIC DENSITY V1 — tighter greeting + measure; tiles own the pulse composition.
  */
 export function DesktopHomePage({ lang }: Props) {
   const shopName = usePosStore((s) => s.preferences.shopDisplayName?.trim());
@@ -38,17 +39,17 @@ export function DesktopHomePage({ lang }: Props) {
   const firstName = actor.displayName?.trim().split(/\s+/)[0];
 
   return (
-    <div className="flex flex-col">
+    <div className="home-cinematic-shell flex flex-col">
       <div className={`${HOME_CONTENT_MEASURE_CLASS} ${HOME_PAGE_GUTTER_CLASS} flex flex-col`}>
-        <header className="mb-3 w-full text-center sm:mb-4 sm:text-left">
+        <header className="home-cinematic-greeting mb-2 w-full text-center sm:mb-2.5 sm:text-left">
           {firstName ? (
-            <h1 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">
+            <h1 className="text-base font-bold tracking-tight text-foreground sm:text-lg">
               {t(lang, greetingKey).replace("{name}", firstName)}
             </h1>
           ) : (
             <h1 className="sr-only">{t(lang, "desktopHomeTitle")}</h1>
           )}
-          <p className="mt-0.5 text-sm font-medium text-muted-foreground">
+          <p className="mt-0.5 text-xs font-medium text-muted-foreground sm:text-sm">
             {shopName ? `${shopName} · ` : ""}
             {t(lang, "desktopHomeGreetingSub")}
           </p>

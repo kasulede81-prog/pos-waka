@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Product, Purchase } from "../types";
 import {
   computeVoidStockDeltas,
@@ -105,5 +107,20 @@ describe("purchaseVoidStockSync", () => {
       voidStockSyncedAt: "2026-06-01T11:05:00.000Z",
     });
     expect(shouldPushVoidStockReversal(purchase)).toBe(false);
+  });
+});
+
+describe("PURCHASE-VOID-STOCK-1.0 — payable/stock separation (architectural)", () => {
+  it("T11 — durable stock sync source does not mutate supplier balances", () => {
+    const src = readFileSync(join(process.cwd(), "src/offline/cloudSync.ts"), "utf8");
+    const start = src.indexOf("async function syncPurchaseVoidStockReversal");
+    const end = src.indexOf("async function syncPurchaseVoidBundle", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain("pushPurchaseVoidStockToCloud");
+    expect(body).not.toContain("pushProductStockToCloud");
+    expect(body).not.toContain("pushSupplierToCloud");
+    expect(body).not.toContain("balanceOwedUgx");
   });
 });

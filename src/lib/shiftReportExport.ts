@@ -1,4 +1,4 @@
-import type { Language, ShiftRecord } from "../types";
+import type { CashDrawerFormulaVersion, Language, ShiftRecord } from "../types";
 import { jsPDF } from "jspdf";
 import { t } from "./i18n";
 import { exportCsvFile, printReportDocument } from "./reportExportEngine";
@@ -12,7 +12,11 @@ export type ShiftSummaryRow = {
   refundsUgx: number;
 };
 
-export function buildShiftSummaryRows(shifts: ShiftRecord[], nowMs = Date.now()): ShiftSummaryRow[] {
+export function buildShiftSummaryRows(
+  shifts: ShiftRecord[],
+  nowMs = Date.now(),
+  formulaVersion: CashDrawerFormulaVersion = "v2",
+): ShiftSummaryRow[] {
   return [...shifts]
     .sort((a, b) => b.startAt.localeCompare(a.startAt))
     .map((shift) => ({
@@ -20,7 +24,7 @@ export function buildShiftSummaryRows(shifts: ShiftRecord[], nowMs = Date.now())
       durationLabel: shift.endAt
         ? formatShiftDuration(shift.startAt, new Date(shift.endAt).getTime())
         : formatShiftDuration(shift.startAt, nowMs),
-      expectedCashUgx: shiftExpectedCash(shift),
+      expectedCashUgx: shiftExpectedCash(shift, { formulaVersion }),
       refundsUgx: (shift.returnsTotalUgx ?? 0) + (shift.voidsTotalUgx ?? 0),
     }));
 }

@@ -4,6 +4,7 @@ import {
   creditDebtReductionFromSaleAdjustment,
   reduceSaleTotalsByAmount,
 } from "./saleAdjustments";
+import { cashReduceFromRefund } from "./cashDrawerSales";
 import { hasPackCostAllocation, retractPackCostUnitsDepleted } from "./costPrecision";
 import { isCompletedSale, isVoidedSale } from "./saleStatus";
 import { stableVoidLineIdentity, stableVoidLineMovementId, stableVoidRecordId } from "./saleLifecycle";
@@ -60,7 +61,7 @@ export function planWholeBillVoid(input: {
   sale.lines.forEach((line, lineIndex) => {
     if (line.voided) return;
     const amount = line.lineTotalUgx;
-    cashReduce += Math.min(amount, sale.cashPaidUgx);
+    cashReduce += cashReduceFromRefund(sale, amount);
     const identity = stableVoidLineIdentity(sale.id, lineIndex, line.id);
     const voidRec: VoidRecord = {
       id: stableVoidRecordId(input.shopKey, sale.id, identity),
@@ -104,7 +105,7 @@ export function planWholeBillVoid(input: {
 
   const leftover = Math.max(0, sale.totalUgx);
   if (leftover > 0) {
-    cashReduce += Math.min(leftover, sale.cashPaidUgx);
+    cashReduce += cashReduceFromRefund(sale, leftover);
     const debtReduce = creditDebtReductionFromSaleAdjustment(sale, leftover);
     const totals = reduceSaleTotalsByAmount(sale, leftover);
     customers = applyCustomerDebtDelta(customers, sale.customerId, -debtReduce);

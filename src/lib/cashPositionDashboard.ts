@@ -26,6 +26,7 @@ import {
   type CashPositionVariance,
 } from "./cashPosition";
 import { cashDrawerAdjustmentTypeLabel, isCashDrawerInflow } from "./cashDrawerLedger";
+import { expenseCountsInDrawer } from "./cashExpenses";
 import { dateKeyKampala } from "./datesUg";
 import {
   dateMatchesFilter,
@@ -38,6 +39,115 @@ import { applyClosedDayToCashPositionReport, overlayPeriodFinancials, readClosed
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { isCompletedSale } from "./saleStatus";
 import { t, tTemplate } from "./i18n";
+
+function contentHash(parts: string[]): string {
+  let h = 0;
+  for (const part of parts) {
+    for (let i = 0; i < part.length; i++) {
+      h = (Math.imul(31, h) + part.charCodeAt(i)) | 0;
+    }
+  }
+  return `${parts.length}:${h}`;
+}
+
+/** Stable fingerprint for Cash Position dashboard cache invalidation (shop-scoped). */
+export function buildCashPositionDashboardFingerprint(input: {
+  shopId: string | null | undefined;
+  filter: DateFilterValue;
+  sales: Array<{ id: string; updatedAt?: string | null; totalUgx?: number; debtUgx?: number; paymentMethod?: string | null }>;
+  products: Array<{ id: string; category?: string | null; costPricePerUnitUgx?: number; version?: number; updatedAt?: string }>;
+  staffAccounts: Array<{ id: string; name?: string; active?: boolean; linkedAuthUserId?: string | null }>;
+  returnRecords: Array<{ id: string; refundAmountUgx?: number; updatedAt?: string | null; createdAt?: string }>;
+  debtPayments: Array<{ id: string; amountUgx?: number; createdAt?: string }>;
+  cashExpenses: Array<{
+    id: string;
+    amountUgx?: number;
+    approvalStatus?: string | null;
+    deletedAt?: string | null;
+    paidOn?: string;
+  }>;
+  supplierPayments: Array<{ id: string; amountUgx?: number; createdAt?: string }>;
+  cashDrawerAdjustments: Array<{
+    id: string;
+    amountUgx?: number;
+    type?: string;
+    deletedAt?: string | null;
+    updatedAt?: string;
+  }>;
+  dayDrawerOpens: Array<{ id: string; openingFloatUgx?: number; status?: string; updatedAt?: string }>;
+  dayCloses: Array<{ id: string; expectedCashUgx?: number; countedCashUgx?: number; supersededAt?: string | null }>;
+  shifts: Array<{ id: string; estimatedCashUgx?: number; endAt?: string | null }>;
+  formulaVersion: string;
+  cashSafeLimitUgx?: number | null;
+  lang: string;
+  shopName: string;
+  generalCategoryLabel: string;
+  todayKey: string;
+}): string {
+  const filterPart =
+    input.filter.kind === "preset"
+      ? `preset:${input.filter.preset}`
+      : input.filter.kind === "day"
+        ? `day:${input.filter.dateKey}`
+        : `range:${input.filter.fromKey}:${input.filter.toKey}`;
+  return [
+    `shop:${input.shopId ?? ""}`,
+    filterPart,
+    contentHash(
+      input.sales.map(
+        (s) =>
+          `${s.id}:${s.updatedAt ?? ""}:${s.totalUgx ?? 0}:${s.debtUgx ?? 0}:${s.paymentMethod ?? ""}`,
+      ),
+    ),
+    contentHash(
+      input.products.map(
+        (p) =>
+          `${p.id}:${p.category ?? ""}:${p.costPricePerUnitUgx ?? 0}:${p.version ?? 0}:${p.updatedAt ?? ""}`,
+      ),
+    ),
+    contentHash(
+      input.staffAccounts.map(
+        (s) => `${s.id}:${s.name ?? ""}:${s.active === false ? "0" : "1"}:${s.linkedAuthUserId ?? ""}`,
+      ),
+    ),
+    contentHash(
+      input.returnRecords.map(
+        (r) => `${r.id}:${r.refundAmountUgx ?? 0}:${r.createdAt ?? ""}:${r.updatedAt ?? ""}`,
+      ),
+    ),
+    contentHash(input.debtPayments.map((d) => `${d.id}:${d.amountUgx ?? 0}:${d.createdAt ?? ""}`)),
+    contentHash(
+      input.cashExpenses.map(
+        (e) =>
+          `${e.id}:${e.amountUgx ?? 0}:${e.approvalStatus ?? ""}:${e.deletedAt ?? ""}:${e.paidOn ?? ""}`,
+      ),
+    ),
+    contentHash(input.supplierPayments.map((p) => `${p.id}:${p.amountUgx ?? 0}:${p.createdAt ?? ""}`)),
+    contentHash(
+      input.cashDrawerAdjustments.map(
+        (a) => `${a.id}:${a.type ?? ""}:${a.amountUgx ?? 0}:${a.deletedAt ?? ""}:${a.updatedAt ?? ""}`,
+      ),
+    ),
+    contentHash(
+      input.dayDrawerOpens.map(
+        (o) => `${o.id}:${o.openingFloatUgx ?? 0}:${o.status ?? ""}:${o.updatedAt ?? ""}`,
+      ),
+    ),
+    contentHash(
+      input.dayCloses.map(
+        (c) =>
+          `${c.id}:${c.expectedCashUgx ?? 0}:${c.countedCashUgx ?? 0}:${c.supersededAt ?? ""}`,
+      ),
+    ),
+    contentHash(input.shifts.map((s) => `${s.id}:${s.estimatedCashUgx ?? 0}:${s.endAt ?? ""}`)),
+    `fv:${input.formulaVersion}`,
+    `safe:${input.cashSafeLimitUgx ?? ""}`,
+    `lang:${input.lang}`,
+    `shopName:${input.shopName}`,
+    `cat:${input.generalCategoryLabel}`,
+    `today:${input.todayKey}`,
+  ].join("|");
+}
 
 export type CashPositionExtendedSummary = CashPositionReport["summary"] & {
   grossProfitUgx: number;
@@ -228,7 +338,7 @@ function aggregateReports(reports: CashPositionReport[], bounds: DateFilterBound
       cashRefundsUgx: acc.cashRefundsUgx + r.cashPosition.cashRefundsUgx,
       expensesUgx: acc.expensesUgx + r.cashPosition.expensesUgx,
       supplierPaymentsUgx: acc.supplierPaymentsUgx + r.cashPosition.supplierPaymentsUgx,
-      expectedCashUgx: 0,
+      expectedCashUgx: null as number | null,
     }),
     {
       openingFloatUgx: 0,
@@ -240,7 +350,7 @@ function aggregateReports(reports: CashPositionReport[], bounds: DateFilterBound
       cashRefundsUgx: 0,
       expensesUgx: 0,
       supplierPaymentsUgx: 0,
-      expectedCashUgx: 0,
+      expectedCashUgx: null as number | null,
     },
   );
   const paymentAdjustmentUgx = reports.reduce((s, r) => s + r.paymentAdjustmentUgx, 0);
@@ -261,7 +371,8 @@ function aggregateReports(reports: CashPositionReport[], bounds: DateFilterBound
     paymentAdjustmentUgx,
     cashPosition: {
       ...cashAgg,
-      expectedCashUgx: bounds.isSingleDay ? last.cashPosition.expectedCashUgx : 0,
+      // Day-scoped drawer balance is not meaningful across a multi-day range.
+      expectedCashUgx: bounds.isSingleDay ? last.cashPosition.expectedCashUgx : null,
     },
     adjustmentBreakdown,
     categories: mergeCategories(reports),
@@ -337,6 +448,7 @@ export function buildCashActivityTimeline(input: {
   }
 
   for (const exp of input.cashExpenses) {
+    if (!expenseCountsInDrawer(exp)) continue;
     if (!dateMatchesFilter(exp.paidOn, input.bounds)) continue;
     events.push({
       id: `exp-${exp.id}`,
@@ -463,7 +575,9 @@ function buildCashierDetails(
 
   return report.cashiers.map((row, idx) => {
     const refundsUgx = refundsByCashier.get(row.cashierId) ?? 0;
-    const netSalesUgx = Math.max(0, row.salesUgx - refundsUgx);
+    // salesUgx already reflects linked same-day returns on sale.totalUgx; do not subtract again.
+    // External refunds remain informational via refundsUgx (canonical revenue subtracts those once at day level).
+    const netSalesUgx = Math.max(0, row.salesUgx);
     const averageSaleUgx =
       row.transactionCount > 0 ? Math.round(row.salesUgx / row.transactionCount) : 0;
     return {
@@ -513,7 +627,12 @@ export function buildCashPositionAlerts(input: {
   }
 
   const expected = input.report.cashPosition.expectedCashUgx;
-  if (input.cashSafeLimitUgx != null && input.cashSafeLimitUgx > 0 && expected > input.cashSafeLimitUgx) {
+  if (
+    expected != null &&
+    input.cashSafeLimitUgx != null &&
+    input.cashSafeLimitUgx > 0 &&
+    expected > input.cashSafeLimitUgx
+  ) {
     alerts.push({
       id: "safe-limit",
       severity: "warning",
@@ -543,7 +662,7 @@ export function buildCashPositionAlerts(input: {
     });
   }
 
-  if (expected < 0) {
+  if (expected != null && expected < 0) {
     alerts.push({
       id: "negative-cash",
       severity: "critical",
@@ -622,7 +741,10 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
     grossProfitUgx: singleClose ? readClosedDayTotals(singleClose).profitEstimateUgx : periodProfit.profitUgx,
     averageSaleUgx,
     largestSaleUgx,
-    currentDrawerCashUgx: isToday || Boolean(singleClose) ? report.cashPosition.expectedCashUgx : null,
+    currentDrawerCashUgx:
+      (isToday || Boolean(singleClose)) && report.cashPosition.expectedCashUgx != null
+        ? report.cashPosition.expectedCashUgx
+        : null,
   };
 
   const categories = buildCategoryDetails(report, input.sales, input.products, bounds);
@@ -658,7 +780,7 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
   });
 
   let drawerStatus: CashPositionDashboardResult["drawerStatus"] = null;
-  if (bounds.isSingleDay) {
+  if (bounds.isSingleDay && report.cashPosition.expectedCashUgx != null) {
     const activeClose = resolveReportAuthority(input.dayCloses, bounds.fromKey).snapshot;
     const expectedCashUgx = report.cashPosition.expectedCashUgx;
     const countedCashUgx = activeClose ? readClosedDayTotals(activeClose).countedCashUgx : null;
@@ -688,7 +810,8 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
       };
     });
 
-  const currentCashUgx = isToday ? report.cashPosition.expectedCashUgx : 0;
+  const currentCashUgx =
+    isToday && report.cashPosition.expectedCashUgx != null ? report.cashPosition.expectedCashUgx : 0;
   const limit = input.cashSafeLimitUgx ?? null;
   const safeLimit = {
     limitUgx: limit,

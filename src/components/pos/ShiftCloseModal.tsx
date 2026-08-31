@@ -3,7 +3,7 @@ import type { Language, ShiftRecord } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { ModalSheet } from "../layout/ModalSheet";
 import { shiftExpectedCashLabelParts } from "../../lib/saleAdjustments";
-import { isFormulaV2 } from "../../lib/dayDrawerOpen";
+import { isFormulaV2, resolveCashDrawerFormulaVersion } from "../../lib/dayDrawerOpen";
 import { usePosStore } from "../../store/usePosStore";
 import { CashVarianceSummary } from "../cash/CashVarianceSummary";
 
@@ -22,7 +22,7 @@ export function ShiftCloseModal({ lang, open, shift, recoveryOperatorLabel, onCl
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const preferences = usePosStore((s) => s.preferences);
   const v2 = isFormulaV2(preferences);
-  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
+  const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
 
   const parts = useMemo(
     () => (shift ? shiftExpectedCashLabelParts(shift, { formulaVersion }) : null),

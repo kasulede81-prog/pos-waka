@@ -172,7 +172,7 @@ export function getDrawerCashForDayInput(input: DrawerCashInput): DrawerCashSnap
     supplierPayments = [],
     shifts = [],
     dayDrawerOpens = [],
-    formulaVersion = "v1",
+    formulaVersion = "v2",
     day,
   } = input;
   const expenseUgx = sumCashExpensesOnDay(cashExpenses, day);
@@ -204,7 +204,7 @@ export function getDrawerCashForDay(
   cashDrawerAdjustments: CashDrawerAdjustment[] = [],
   shifts: ShiftRecord[] = [],
   dayDrawerOpens: DayDrawerOpen[] = [],
-  formulaVersion: CashDrawerFormulaVersion = "v1",
+  formulaVersion: CashDrawerFormulaVersion = "v2",
 ): DrawerCashSnapshot {
   const fin = getCompletedFinancials(sales, returns, products, { day });
   const daySales = revenueSalesOnDay(sales, day);

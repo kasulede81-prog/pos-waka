@@ -2,6 +2,7 @@ import type { CashExpense, DayCloseSummary, Language, Product, ReturnRecord, Sal
 import { sumCashExpensesInMonth } from "./cashReconciliation";
 import { dateKeyKampala, formatDateTimeKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesInMonth } from "./financialMetrics";
+import { physicalCashCollectedFromSale } from "./cashDrawerSales";
 import { boundsForMonthKey, overlayPeriodFinancials, resolvePeriodReportAuthority } from "./closedDayAuthority";
 import { inventoryValueAtCostUgx } from "./costPrecision";
 import { saveExportedFile } from "./fileDownload";
@@ -72,7 +73,7 @@ export function buildMonthlyBusinessReport(params: {
       profitUgx: fin.profitUgx,
       transactionCount: fin.transactionCount,
       debtIssuedUgx: fin.debtIssuedUgx,
-      cashCollectedUgx: fin.cashCollectedUgx,
+      cashCollectedUgx: monthSales.reduce((sum, s) => sum + physicalCashCollectedFromSale(s), 0),
     },
     dayCloses: dayCloses ?? [],
     bounds: monthBounds,

@@ -20,6 +20,7 @@ import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesOnDay } from "./financialMetrics";
 import { getDrawerCashForDayInput } from "./cashReconciliation";
 import { resolveCashDrawerFormulaVersion } from "./dayDrawerOpen";
+import { attributeSalePaymentBuckets } from "./cashPosition";
 import { activeSessions } from "./hospitalityStats";
 import { pendingSaleTotal } from "./hospitality";
 import { resolveReportAuthority } from "./closedDayAuthority";
@@ -97,13 +98,13 @@ function paymentBreakdownForDay(sales: Sale[], day: string): XReportPaymentBreak
     otherUgx: 0,
   };
   for (const s of revenueSalesOnDay(sales, day)) {
-    const method = (s.paymentMethod ?? (s.debtUgx > 0 ? "credit" : "cash")).toLowerCase();
-    const total = s.totalUgx;
-    if (method.includes("momo") || method.includes("mobile")) out.mobileMoneyUgx += total;
-    else if (method.includes("card")) out.cardUgx += total;
-    else if (method === "credit" || s.debtUgx > 0) out.creditUgx += total;
-    else if (method === "cash") out.cashUgx += s.cashPaidUgx;
-    else out.otherUgx += total;
+    // Same revenue→tender attribution as Cash Position (ATM→card, mixed collected→cash).
+    const buckets = attributeSalePaymentBuckets(s);
+    out.cashUgx += buckets.cash;
+    out.mobileMoneyUgx += buckets.mobile_money;
+    out.cardUgx += buckets.card;
+    out.creditUgx += buckets.credit;
+    out.otherUgx += buckets.bank_transfer;
   }
   return out;
 }

@@ -1,6 +1,7 @@
 /**
- * Sync R3 + SALE-VOID-STOCK-1.0 — durable stock identity for adjustments,
- * inventory counts, and sale voids. Classification only; cloud RPCs are the authority.
+ * Sync R3 + SALE-VOID-STOCK-1.0 + PURCHASE-VOID-STOCK-1.0 — durable stock identity
+ * for adjustments, inventory counts, sale voids, and purchase voids.
+ * Classification only; cloud RPCs are the authority.
  */
 
 const UUID_RE =
@@ -13,9 +14,13 @@ export function isStockDurableUuid(id: string | null | undefined): id is string 
 export const R3_REF_ADJUSTMENT = "adjustment" as const;
 export const R3_REF_INVENTORY_COUNT = "inventory_count" as const;
 export const R3_REF_SALE_VOID = "sale_void" as const;
+export const R3_REF_PURCHASE_VOID = "purchase_void" as const;
 
 export type R3StockReferenceType = typeof R3_REF_ADJUSTMENT | typeof R3_REF_INVENTORY_COUNT;
-export type DurableStockReferenceType = R3StockReferenceType | typeof R3_REF_SALE_VOID;
+export type DurableStockReferenceType =
+  | R3StockReferenceType
+  | typeof R3_REF_SALE_VOID
+  | typeof R3_REF_PURCHASE_VOID;
 
 export type R3StockQueuePayload = {
   productId: string;
@@ -84,8 +89,32 @@ export function r3SaleVoidStockPayload(input: {
   };
 }
 
+/**
+ * PURCHASE-VOID-STOCK-1.0 — purchase.id uniquely identifies the void event
+ * (a purchase may be voided at most once). Delta must be negative.
+ */
+export function r3PurchaseVoidStockPayload(input: {
+  productId: string;
+  delta: number;
+  purchaseId: string;
+  note?: string;
+  baseUpdatedAt?: string | null;
+  baseStockOnHand?: number;
+}): R3StockQueuePayload {
+  return {
+    productId: input.productId,
+    delta: input.delta,
+    note: input.note ?? "purchase_void",
+    baseUpdatedAt: input.baseUpdatedAt ?? null,
+    baseStockOnHand: input.baseStockOnHand,
+    referenceType: R3_REF_PURCHASE_VOID,
+    referenceId: input.purchaseId,
+  };
+}
+
 export type PendingStockRoute =
   | { route: "purchase_void"; purchaseId: string }
+  | { route: "purchase_void_line"; productId: string; delta: number; referenceId: string; note: string }
   | { route: "purchase"; purchaseId: string }
   | { route: "purchase_note"; productId: string; delta: number; note: string }
   | { route: "r3_adjustment"; productId: string; delta: number; referenceId: string; note: string }
@@ -107,14 +136,21 @@ function isSaleVoidPayload(payload: Record<string, unknown>, note: string): bool
   return payload.kind === "void" || note === "void" || payload.referenceType === R3_REF_SALE_VOID;
 }
 
+function isLegacyPurchaseVoidNote(note: string): boolean {
+  return note.startsWith("purchase_void:");
+}
+
 /**
  * Route a pending_stock_updates payload.
- * R3 / sale-void without an explicit durable reference is fail-closed (quarantine).
- * Purchase (166) keeps its existing path. Purchase void remains a separate milestone.
+ * R3 / sale-void / purchase-void without an explicit durable reference is fail-closed.
+ * Purchase RECEIVE (166) keeps its existing path.
  */
 export function classifyPendingStockPayload(payload: Record<string, unknown>): PendingStockRoute {
   if (payload.kind === "purchase_void") {
-    const purchaseId = String(payload.purchaseId ?? "");
+    const purchaseId = String(payload.purchaseId ?? payload.referenceId ?? "").trim();
+    if (!isStockDurableUuid(purchaseId)) {
+      return { route: "quarantine", reason: "purchase_void_missing_reference" };
+    }
     return { route: "purchase_void", purchaseId };
   }
   if (payload.kind === "purchase") {
@@ -130,6 +166,11 @@ export function classifyPendingStockPayload(payload: Record<string, unknown>): P
 
   if (isPurchaseNote(note) && isStockDurableUuid(productId) && delta !== 0) {
     return { route: "purchase_note", productId, delta, note };
+  }
+
+  // Legacy note:"purchase_void:…" without referenceType — fail closed (no generic RPC).
+  if (isLegacyPurchaseVoidNote(note) && referenceType !== R3_REF_PURCHASE_VOID) {
+    return { route: "quarantine", reason: "purchase_void_missing_reference", productId };
   }
 
   const hasR3Type = referenceType === R3_REF_ADJUSTMENT || referenceType === R3_REF_INVENTORY_COUNT;
@@ -166,6 +207,19 @@ export function classifyPendingStockPayload(payload: Record<string, unknown>): P
     delta !== 0
   ) {
     return { route: "sale_void", productId, delta, referenceId, note };
+  }
+
+  if (referenceType === R3_REF_PURCHASE_VOID && !isStockDurableUuid(referenceId)) {
+    return { route: "quarantine", reason: "purchase_void_missing_reference", productId };
+  }
+
+  if (
+    referenceType === R3_REF_PURCHASE_VOID &&
+    isStockDurableUuid(referenceId) &&
+    isStockDurableUuid(productId) &&
+    delta !== 0
+  ) {
+    return { route: "purchase_void_line", productId, delta, referenceId, note };
   }
 
   if (payload.catalogOnly === true && isStockDurableUuid(productId)) {

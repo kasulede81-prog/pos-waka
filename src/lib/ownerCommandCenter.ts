@@ -31,6 +31,7 @@ import {
 import { activeDayDrawerOpenForDate } from "./dayDrawerOpen";
 import { readClosedDayTotals } from "./closedDayAuthority";
 import { sumDebtPaymentsInBounds } from "./customerDebtActivity";
+import { attributeSalePaymentBuckets } from "./cashPosition";
 import { sumCashExpensesInBounds } from "./cashReconciliation";
 import { isLowStock } from "./sellingEngine";
 import { buildInventoryCountVarianceReport } from "./inventoryCount";
@@ -193,7 +194,8 @@ export type OwnerCommandCenterInput = {
   supplierPayments: SupplierPayment[];
   preferences: ShopPreferences;
   acknowledgements: OwnerAlertAcknowledgement[];
-  expectedCashUgx: number;
+  /** Single-day Drawer V2 expected cash; null for multi-day Command Center ranges. */
+  expectedCashUgx: number | null;
   pharmacyMode: boolean;
   syncPendingCount: number;
   syncErrorCount: number;
@@ -866,14 +868,12 @@ export function buildFinancialSnapshot(input: {
   };
 
   for (const s of scopedSales) {
-    const amt = s.totalUgx;
-    const method = s.paymentMethod ?? (s.debtUgx > 0 ? "credit" : "cash");
-    if (method === "cash") mix.cashUgx += amt;
-    else if (method === "mobile_money") mix.mobileMoneyUgx += amt;
-    else if (method === "atm") mix.atmUgx += amt;
-    else if (method === "credit") mix.creditUgx += amt;
-    else if (method === "mixed") mix.mixedUgx += amt;
-    else mix.otherUgx += amt;
+    const buckets = attributeSalePaymentBuckets(s);
+    mix.cashUgx += buckets.cash;
+    mix.mobileMoneyUgx += buckets.mobile_money;
+    mix.atmUgx += buckets.card;
+    mix.creditUgx += buckets.credit;
+    mix.otherUgx += buckets.bank_transfer;
   }
 
   const expensesPeriodUgx = sumCashExpensesInBounds(input.cashExpenses, input.bounds);

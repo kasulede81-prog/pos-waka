@@ -72,17 +72,23 @@ function appendCashPositionSections(
   }
   lines.push(`  ${t(lang, "cashPositionSupplierPayments")}: UGX ${report.cashPosition.supplierPaymentsUgx.toLocaleString()}`);
   lines.push(`  ${t(lang, "cashPositionExpenses")}: UGX ${report.cashPosition.expensesUgx.toLocaleString()}`);
-  lines.push(`  ${t(lang, "cashPositionRefunds")}: UGX ${report.cashPosition.refundsUgx.toLocaleString()}`);
-  lines.push(
-    `  ${t(lang, "cashPositionExpectedCash")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
-  );
+  lines.push(`  ${t(lang, "cashPositionRefunds")}: UGX ${report.cashPosition.cashRefundsUgx.toLocaleString()}`);
+  if (report.cashPosition.expectedCashUgx == null) {
+    lines.push(`  ${t(lang, "cashPositionExpectedCash")}: —`);
+  } else {
+    lines.push(
+      `  ${t(lang, "cashPositionExpectedCash")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
+    );
+  }
   if (reconciliation) {
     lines.push("");
     lines.push(t(lang, "cashPositionSectionReconcile"));
     lines.push(`  ${t(lang, "cashPositionPhysicalCount")}: UGX ${reconciliation.physicalCountUgx.toLocaleString()}`);
-    lines.push(
-      `  ${t(lang, "cashPositionExpectedLabel")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
-    );
+    if (report.cashPosition.expectedCashUgx != null) {
+      lines.push(
+        `  ${t(lang, "cashPositionExpectedLabel")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
+      );
+    }
     lines.push(`  ${t(lang, "cashPositionActualLabel")}: UGX ${reconciliation.physicalCountUgx.toLocaleString()}`);
     lines.push(
       `  ${t(lang, "cashPositionVariance")}: ${reconciliation.varianceUgx >= 0 ? "+" : ""}UGX ${reconciliation.varianceUgx.toLocaleString()} · ${varianceLabel(lang, reconciliation.varianceKind)}`,
@@ -132,9 +138,16 @@ export function cashPositionToCsv(
   rows.push(["cash", "adjustment_inflows_ugx", report.cashPosition.adjustmentInflowsUgx].map(esc).join(","));
   rows.push(["cash", "adjustment_outflows_ugx", report.cashPosition.adjustmentOutflowsUgx].map(esc).join(","));
   rows.push(["cash", "refunds_ugx", report.cashPosition.refundsUgx].map(esc).join(","));
+  rows.push(["cash", "cash_refunds_ugx", report.cashPosition.cashRefundsUgx].map(esc).join(","));
   rows.push(["cash", "expenses_ugx", report.cashPosition.expensesUgx].map(esc).join(","));
   rows.push(["cash", "supplier_payments_ugx", report.cashPosition.supplierPaymentsUgx].map(esc).join(","));
-  rows.push(["cash", "expected_cash_ugx", report.cashPosition.expectedCashUgx].map(esc).join(","));
+  rows.push([
+    "cash",
+    "expected_cash_ugx",
+    report.cashPosition.expectedCashUgx == null ? "" : report.cashPosition.expectedCashUgx,
+  ]
+    .map(esc)
+    .join(","));
   if (report.paymentAdjustmentUgx !== 0) {
     rows.push(["payment", "adjustment", report.paymentAdjustmentUgx].map(esc).join(","));
   }
@@ -178,10 +191,17 @@ export function buildCashPositionDocument(
           { label: t(lang, "cashPositionTransactions"), value: String(report.summary.transactionCount) },
           { label: t(lang, "cashPositionCashSales"), value: ugxLabel(report.cashPosition.cashSalesUgx) },
           { label: t(lang, "cashPositionDebtCollected"), value: ugxLabel(report.cashPosition.debtCollectedUgx) },
-          { label: t(lang, "cashPositionRefunds"), value: ugxLabel(report.cashPosition.refundsUgx) },
+          { label: t(lang, "cashPositionRefunds"), value: ugxLabel(report.cashPosition.cashRefundsUgx) },
           { label: t(lang, "cashPositionExpenses"), value: ugxLabel(report.cashPosition.expensesUgx) },
           { label: t(lang, "cashPositionSupplierPayments"), value: ugxLabel(report.cashPosition.supplierPaymentsUgx) },
-          { label: t(lang, "cashPositionExpectedCash"), value: ugxLabel(report.cashPosition.expectedCashUgx), bold: true },
+          {
+            label: t(lang, "cashPositionExpectedCash"),
+            value:
+              report.cashPosition.expectedCashUgx == null
+                ? "—"
+                : ugxLabel(report.cashPosition.expectedCashUgx),
+            bold: true,
+          },
           ...(reconciliation
             ? [
                 { label: t(lang, "cashPositionPhysicalCount"), value: ugxLabel(reconciliation.physicalCountUgx) },

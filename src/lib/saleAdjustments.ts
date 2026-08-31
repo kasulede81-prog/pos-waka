@@ -120,7 +120,8 @@ function shiftBaselineUgx(sh: ShiftRecord, formulaVersion: CashDrawerFormulaVers
 
 /** Shift running cash already reflects void/return payouts in estimatedCashUgx (Option A). */
 export function shiftExpectedCash(sh: ShiftRecord, ctx?: ShiftCashContext): number {
-  const formulaVersion = ctx?.formulaVersion ?? "v1";
+  // Unset → v2 (same default as resolveCashDrawerFormulaVersion). Callers should pass explicit preference when known.
+  const formulaVersion = ctx?.formulaVersion ?? "v2";
   const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
   const opening = shiftBaselineUgx(sh, formulaVersion);
   return Math.max(0, opening + sh.estimatedCashUgx + debtPayments);
@@ -135,7 +136,7 @@ export function shiftExpectedCashLabelParts(sh: ShiftRecord, ctx?: ShiftCashCont
   debtPayments: number;
   expected: number;
 } {
-  const formulaVersion = ctx?.formulaVersion ?? "v1";
+  const formulaVersion = ctx?.formulaVersion ?? "v2";
   const openingFloat = shiftBaselineUgx(sh, formulaVersion);
   const discounts = sh.discountsTotalUgx ?? 0;
   const voids = sh.voidsTotalUgx ?? 0;

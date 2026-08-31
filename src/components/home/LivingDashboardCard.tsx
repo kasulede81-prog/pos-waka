@@ -12,6 +12,7 @@ import { enterpriseIconClass, ENTERPRISE_ICON_STROKE } from "../../lib/enterpris
 import { enterpriseMotion } from "../../lib/enterpriseMotion";
 import { resolveHomeTileAccent } from "../../lib/homeTileAccent";
 import { HomeTileAccentWell } from "./HomeTileAccentWell";
+import { HomeTileArt } from "./tiles/HomeTileArt";
 
 type Props = {
   tile: ResolvedHomeTile;
@@ -25,22 +26,26 @@ type Props = {
   appearance?: "enterprise" | "living";
   /** Slightly denser for admin band. */
   density?: "comfortable" | "compact";
+  /** Supporting modules get quieter chrome than primary. */
+  weight?: "primary" | "supporting";
 };
 
 /**
  * Home module card — Phase 34.1 defaults to calm enterprise surfaces
  * so operational KPIs/health own visual priority.
+ * HOME CINEMATIC DENSITY V1 — depth, hover lift, spotlight SVG art (no Lottie load).
  */
 export function LivingDashboardCard({
   tile,
   lang,
-  spotlight: _spotlight,
+  spotlight,
   liveStat,
   buttonRef,
   onClick,
   onPointerDown,
   appearance = "enterprise",
   density = "comfortable",
+  weight = "primary",
 }: Props) {
   const theme = homeDashboardTheme(tile.id);
   const hapticsOn = usePosStore((s) => s.preferences.hapticsOn !== false);
@@ -59,14 +64,18 @@ export function LivingDashboardCard({
         type="button"
         data-launcher-key={tile.id}
         data-tile-intensity={liveStat?.intensity ?? "calm"}
+        data-home-spotlight={spotlight ? "true" : undefined}
         onClick={handleClick}
         onPointerDown={onPointerDown}
         className={clsx(
-          "group relative flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm",
+          "home-module-card group relative flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl border bg-card text-left",
           enterpriseMotion.standard,
           enterpriseMotion.cardInteractive,
+          enterpriseMotion.hoverLift,
           enterpriseMotion.focus,
-          density === "compact" ? "min-h-[96px] p-3" : "min-h-[112px] p-3.5 sm:p-4",
+          density === "compact" ? "min-h-[88px] p-2.5 sm:p-3" : "min-h-[104px] p-3 sm:min-h-[108px] sm:p-3.5",
+          weight === "supporting" ? "border-border/70 shadow-sm" : "border-border shadow-sm",
+          spotlight && "home-module-card--spotlight border-primary/25 shadow-md",
         )}
       >
         <span
@@ -74,13 +83,18 @@ export function LivingDashboardCard({
           style={accent.railStyle}
           aria-hidden
         />
+        {spotlight ? (
+          <div className="home-module-card__art pointer-events-none absolute inset-y-0 right-0 w-[42%] opacity-[0.14]" aria-hidden>
+            <HomeTileArt tileId={tile.id} className="h-full w-full" />
+          </div>
+        ) : null}
         {tile.badge !== undefined && tile.badge > 0 ? (
           <span className="absolute right-2.5 top-2.5 z-10 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-danger px-1.5 text-[10px] font-black text-white">
             {tile.badge > 99 ? "99+" : tile.badge}
           </span>
         ) : null}
 
-        <div className="flex items-start gap-2.5 pl-1">
+        <div className="relative z-[1] flex items-start gap-2.5 pl-1">
           <HomeTileAccentWell accent={accent}>
             <Icon className={clsx(enterpriseIconClass("md"), "text-current")} strokeWidth={ENTERPRISE_ICON_STROKE} aria-hidden />
           </HomeTileAccentWell>
@@ -90,14 +104,21 @@ export function LivingDashboardCard({
               {t(lang, theme.subtitleKey)}
             </span>
           </div>
-          <ChevronRight className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground opacity-70" aria-hidden />
+          <ChevronRight
+            className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100"
+            aria-hidden
+          />
         </div>
 
         {liveStat ? (
-          <div className="mt-auto border-t border-border/70 pt-2">
-            <p className="living-dashboard-card__stat-label text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{liveStat.label}</p>
+          <div className="relative z-[1] mt-auto border-t border-border/70 pt-2">
+            <p className="living-dashboard-card__stat-label text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              {liveStat.label}
+            </p>
             <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
-              <span className="living-dashboard-card__stat-value text-sm font-black tabular-nums text-foreground">{liveStat.value}</span>
+              <span className="living-dashboard-card__stat-value home-stat-value text-sm font-black tabular-nums text-foreground">
+                {liveStat.value}
+              </span>
               {liveStat.trend ? <span className="text-xs font-bold text-success">{liveStat.trend}</span> : null}
             </div>
           </div>
@@ -107,7 +128,7 @@ export function LivingDashboardCard({
   }
 
   // Legacy living appearance (kept for arrange previews / optional use).
-  const glowStyle: CSSProperties | undefined = _spotlight
+  const glowStyle: CSSProperties | undefined = spotlight
     ? ({ "--home-tile-glow": theme.glow } as CSSProperties)
     : undefined;
 
@@ -122,7 +143,7 @@ export function LivingDashboardCard({
         "home-living-card group relative flex min-h-[140px] touch-manipulation flex-col overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br text-left text-white shadow-md",
         theme.gradient,
         theme.shadow,
-        _spotlight && "home-living-card--spotlight",
+        spotlight && "home-living-card--spotlight",
       )}
       style={glowStyle}
     >

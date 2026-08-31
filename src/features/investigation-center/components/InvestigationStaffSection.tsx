@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import type { AuditLogEntry, Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { groupAuditByStaff } from "../../../lib/auditSearch";
@@ -22,6 +23,15 @@ type Props = {
   onSelect: (entry: AuditLogEntry) => void;
   onMenu: (entry: AuditLogEntry) => void;
 };
+
+/** Presentation helper — shift counter is not certified revenue (tests assert this). */
+export function shiftSalesCounterLabelKey(): string {
+  return "icShiftSalesTotal";
+}
+
+export function shiftSalesCounterIsCanonicalRevenue(): boolean {
+  return false;
+}
 
 export function InvestigationStaffSection({
   lang,
@@ -60,8 +70,18 @@ export function InvestigationStaffSection({
                   {s.endAt ? new Date(s.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
                 </p>
                 <p className="mt-2 text-sm font-semibold text-foreground">
-                  UGX {s.salesTotalUgx.toLocaleString()} · {t(lang, "cardDebtToday")} UGX {s.debtTotalUgx.toLocaleString()}
+                  {t(lang, "icShiftSalesTotal")}: UGX {s.salesTotalUgx.toLocaleString()}
                 </p>
+                <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">{t(lang, "icShiftSalesTotalHint")}</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">
+                  {t(lang, "icShiftDebtIssued")}: UGX {s.debtTotalUgx.toLocaleString()}
+                </p>
+                <Link
+                  to="/receipts"
+                  className="mt-2 inline-flex text-[11px] font-black text-waka-700 underline-offset-2 hover:underline"
+                >
+                  {t(lang, "icOpenSalesHistory")} →
+                </Link>
               </li>
             ))}
           </ul>

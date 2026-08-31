@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from "react";
 import { dateKeyKampala } from "../lib/datesUg";
+import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import {
   getDrawerCashForDayInput,
-  sumExpectedDrawerCashForBounds,
   type DrawerCashSnapshot,
 } from "../lib/cashReconciliation";
 import type { DateFilterBounds } from "../lib/dateFilters";
@@ -24,7 +24,7 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
-  const formulaVersion = usePosStore((s) => s.preferences.cashDrawerFormulaVersion ?? "v1");
+  const formulaVersion = usePosStore((s) => resolveCashDrawerFormulaVersion(s.preferences));
 
   useEffect(() => {
     void ensureAllActiveSalesLoaded();
@@ -49,8 +49,8 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
   );
 }
 
-/** Expected drawer cash for a date filter (single day snapshot or summed range). */
-export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number {
+/** Expected drawer cash for a date filter — single-day Drawer V2 snapshot, or null for ranges. */
+export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number | null {
   const sales = useReportingSales(false);
   const returns = useReportingReturnRecords(false);
   const products = usePosStore((s) => s.products);
@@ -60,13 +60,14 @@ export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
-  const formulaVersion = usePosStore((s) => s.preferences.cashDrawerFormulaVersion ?? "v1");
+  const formulaVersion = usePosStore((s) => resolveCashDrawerFormulaVersion(s.preferences));
 
   useEffect(() => {
     void ensureAllActiveSalesLoaded();
   }, []);
 
   return useMemo(() => {
+    if (!bounds.isSingleDay) return null;
     const input = {
       sales,
       returns,
@@ -79,10 +80,7 @@ export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number
       dayDrawerOpens,
       formulaVersion,
     };
-    if (bounds.isSingleDay) {
-      return getDrawerCashForDayInput({ ...input, day: bounds.fromKey }).expectedDrawerCashUgx;
-    }
-    return sumExpectedDrawerCashForBounds(input, bounds);
+    return getDrawerCashForDayInput({ ...input, day: bounds.fromKey }).expectedDrawerCashUgx;
   }, [
     bounds.fromKey,
     bounds.toKey,

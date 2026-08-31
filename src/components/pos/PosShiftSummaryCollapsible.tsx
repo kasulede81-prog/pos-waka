@@ -6,7 +6,7 @@ import type { Language, ShiftRecord } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatShiftDuration } from "../../lib/shiftEnforcement";
 import { shiftExpectedCash, shiftExpectedCashLabelParts } from "../../lib/saleAdjustments";
-import { activeDayDrawerOpenForDate } from "../../lib/dayDrawerOpen";
+import { activeDayDrawerOpenForDate, resolveCashDrawerFormulaVersion } from "../../lib/dayDrawerOpen";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { usePosStore } from "../../store/usePosStore";
 
@@ -43,7 +43,7 @@ export function PosShiftSummaryCollapsible({
   const [now, setNow] = useState(() => Date.now());
   const preferences = usePosStore((s) => s.preferences);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
-  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
+  const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
   const cashCtx = useMemo(() => ({ formulaVersion }), [formulaVersion]);
   const parts = useMemo(() => shiftExpectedCashLabelParts(shift, cashCtx), [shift, cashCtx]);
   const expected = shiftExpectedCash(shift, cashCtx);

@@ -1,7 +1,9 @@
 import type {
   CashExpense,
   CashDrawerAdjustment,
+  CashDrawerFormulaVersion,
   DayCloseSummary,
+  DayDrawerOpen,
   DebtPayment,
   Language,
   Product,
@@ -39,6 +41,9 @@ export type DailyReportPdfInput = {
   supplierPayments?: SupplierPayment[];
   cashDrawerAdjustments?: CashDrawerAdjustment[];
   shifts?: ShiftRecord[];
+  dayDrawerOpens?: DayDrawerOpen[];
+  /** Prefer resolveCashDrawerFormulaVersion(preferences); unset → V2 via drawer default. */
+  formulaVersion?: CashDrawerFormulaVersion;
   topProducts: ProductRank[];
   /** When false, profit line is omitted (Free tier). */
   includeProfit?: boolean;
@@ -82,6 +87,8 @@ export function buildDailyReportDocument(input: DailyReportPdfInput): ReportDocu
     supplierPayments = [],
     cashDrawerAdjustments = [],
     shifts = [],
+    dayDrawerOpens = [],
+    formulaVersion,
     topProducts,
     includeProfit = true,
     dayCloses,
@@ -99,13 +106,16 @@ export function buildDailyReportDocument(input: DailyReportPdfInput): ReportDocu
     supplierPayments,
     cashDrawerAdjustments,
     shifts,
+    dayDrawerOpens,
+    formulaVersion,
     day: dateKey,
   });
   const payments = paymentMethodBreakdown(sales, dateKey);
   const voids = voidLineCount(sales, dateKey);
   const salesUgx = frozen?.totalSalesUgx ?? fin.revenueUgx;
   const profitUgx = frozen?.profitEstimateUgx ?? fin.profitUgx;
-  const cashInHandUgx = frozen?.cashFromSalesUgx ?? fin.cashCollectedUgx;
+  /** cashInHand = physical drawer cash from sales (MoMo/ATM excluded). */
+  const cashInHandUgx = frozen?.cashFromSalesUgx ?? drawer.cashFromSalesUgx;
   const expectedCashUgx = frozen?.expectedCashUgx ?? drawer.expectedDrawerCashUgx;
   const openingFloatUgx = frozen?.openingFloatUgx ?? drawer.openingFloatUgx;
   const adjustmentInUgx = frozen?.adjustmentInflowsUgx ?? drawer.adjustmentInflowsUgx;

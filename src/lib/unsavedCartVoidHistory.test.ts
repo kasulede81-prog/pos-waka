@@ -98,6 +98,8 @@ describe("unsaved-cart VOIDED Sales History + sync wiring", () => {
     const table = src("src/components/receipts/SalesHistoryDesktopTable.tsx");
     expect(table).toContain("salesHistoryStatusVoided");
     expect(table).toContain("isPreCompletionVoidedSale");
+    expect(table).toContain("isVoidedSale");
+    expect(row).toContain("isVoidedSale");
   });
 
   it("cart void snapshots before clearing and never completes EFRIS or reverses stock", () => {

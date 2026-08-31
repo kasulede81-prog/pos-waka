@@ -5,7 +5,7 @@ import type { Language, Product, ReturnRecord, Sale, SaleLine } from "../../type
 import { t, tTemplate } from "../../lib/i18n";
 import { buildReceiptNumberForSale } from "../../lib/receiptPrint";
 import { receiptPrintActionLabel } from "../../lib/printActionLabels";
-import { isCompletedSale, isPendingSale, isPreCompletionVoidedSale, saleStatusOf, voidedSaleHistoryNumber } from "../../lib/saleStatus";
+import { isCompletedSale, isPendingSale, isPreCompletionVoidedSale, isVoidedSale, saleStatusOf, voidedSaleHistoryNumber } from "../../lib/saleStatus";
 import { customerPaidUgxForSaleLine } from "../../lib/refundBreakdown";
 import { computeSaleDiscountBreakdown } from "../../lib/discountBreakdown";
 import { formatSaleLineQuantity } from "../../lib/saleQuantityLabel";
@@ -40,7 +40,8 @@ function statusBadge(
   if (status === "pending") {
     return { label: t(lang, "salesHistoryStatusPending"), className: "bg-amber-100 text-amber-900" };
   }
-  if (isPreCompletionVoidedSale(sale)) {
+  // Whole-bill void (completed + saleVoidedAt) and pre-completion void share VOIDED label.
+  if (isVoidedSale(sale) || isPreCompletionVoidedSale(sale)) {
     return { label: t(lang, "salesHistoryStatusVoided"), className: "bg-rose-100 text-rose-800" };
   }
   if (status === "cancelled") {
@@ -133,6 +134,13 @@ function SaleActionSheet({
         {isPreCompletionVoidedSale(sale) ? (
           <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-900">
             {t(lang, "salesHistoryVoidedBeforeCompletion")}
+            {sale.saleVoidedByLabel?.trim()
+              ? ` · ${t(lang, "salesHistoryVoidedBy")}: ${sale.saleVoidedByLabel.trim()}`
+              : null}
+          </p>
+        ) : isVoidedSale(sale) ? (
+          <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-900">
+            {t(lang, "salesHistoryStatusVoided")}
             {sale.saleVoidedByLabel?.trim()
               ? ` · ${t(lang, "salesHistoryVoidedBy")}: ${sale.saleVoidedByLabel.trim()}`
               : null}
@@ -262,7 +270,7 @@ export function SalesHistoryRow({
   const saleReturns = returnRecords.filter((r) => r.saleId === sale.id);
   const badge = statusBadge(lang, sale, saleReturns.length > 0);
   const completed = isCompletedSale(sale);
-  const allowAdjust = completed && canVoid;
+  const allowAdjust = completed && canVoid && !isVoidedSale(sale);
   const discountBreakdown = completed ? computeSaleDiscountBreakdown(sale) : null;
   const voidableLines = sale.lines.map((line, lineIndex) => ({ line, lineIndex })).filter(({ line }) => !line.voided);
   const { day, time } = formatSaleDateTime(sale.createdAt, lang);

@@ -38,6 +38,11 @@ export const swOverrides: Record<string, string> = {
   homeProfitCostLabel: "Gharama ya bidhaa",
   homeProfitMissingCost:
     "Bidhaa zingine bado hazina bei ya ununuzi kwenye Stock (mauzo {{count}}). Faida inaweza kuonekana kubwa hadi uongeze bei.",
+  profitGrossProfitEstimated: "Faida ya jumla (makadirio)",
+  profitCostIncompleteBanner:
+    "Faida ya jumla ni makadirio — mistari {{count}} haina gharama ya ununuzi. Gharama isiyokuwepo inachukuliwa kama sifuri na inaweza kuongeza faida hadi uongeze bei kwenye Stock.",
+  profitExportCostIncomplete: "Gharama haijakamilika",
+  profitExportAvgGrossProfit: "Wastani wa faida ya jumla kwa mauzo",
   homeProfitAddCostCta: "Weka bei za ununuzi kwenye Stock",
   dashboardProfitShortNote: "Ulichobaki leo baada ya bidhaa ulizouza",
   dashboardDebtShortNote: "Mkopo uliotolewa leo",

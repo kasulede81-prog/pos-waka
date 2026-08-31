@@ -141,9 +141,9 @@ export function HomeBusinessHealthSection({ lang }: Props) {
   ]);
 
   return (
-    <section className="mb-4 sm:mb-5" aria-label={t(lang, "homeHealthTitle")}>
+    <section className="mb-2.5 sm:mb-3" aria-label={t(lang, "homeHealthTitle")}>
       <EnterpriseCard
-        className="!p-3 sm:!p-4"
+        className="!p-2.5 sm:!p-3"
         title={t(lang, "homeHealthTitle")}
         subtitle={t(lang, "homeHealthSub")}
         actions={
@@ -157,7 +157,7 @@ export function HomeBusinessHealthSection({ lang }: Props) {
           ) : null
         }
       >
-        <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+        <ul className="grid grid-cols-2 gap-1 sm:grid-cols-3 sm:gap-1.5 lg:grid-cols-6">
           {items.map((item) => (
             <li key={item.id}>
               <Link

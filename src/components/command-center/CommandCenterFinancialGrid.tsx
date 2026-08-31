@@ -38,7 +38,7 @@ export function CommandCenterFinancialGrid({ lang, financial, periodLabel, reven
       icon: TrendingUp,
     },
     {
-      labelKey: "ownerFinancialProfit",
+      labelKey: financial.costIncomplete ? "profitGrossProfitEstimated" : "ownerFinancialProfit",
       value: formatShortUgx(financial.profitUgx),
       pct: pctChangeLabel(financial.trendVsPriorDay?.pctProfit ?? null),
       icon: PiggyBank,

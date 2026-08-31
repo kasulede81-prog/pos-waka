@@ -46,6 +46,7 @@ import { pharmacyTimelinePresentation } from "./registry/pharmacyWidgets";
 import { resolveInvestigationMode } from "./registry/investigationMode";
 import { createInvestigationSlotRenderer } from "./registry/enterpriseInvestigationRegistry";
 import type { InvestigationCenterContext } from "./registry/investigationWidgetTypes";
+import { buildStaffNameById } from "../../lib/investigationActorAttribution";
 
 const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
 
@@ -142,6 +143,10 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, { name: p.name }])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, { name: c.name }])), [customers]);
+  const staffNameById = useMemo(
+    () => buildStaffNameById(preferences.staffAccounts),
+    [preferences.staffAccounts],
+  );
 
   const filters: AuditSearchFilters = useMemo(
     () => ({
@@ -459,6 +464,7 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     shopName,
     productById,
     customerById,
+    staffNameById,
     saleById,
     integrityReport,
     returnsInRange,
@@ -529,6 +535,7 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     shopName,
     productById,
     customerById,
+    staffNameById,
     saleById,
     integrityReport,
     returnsInRange,

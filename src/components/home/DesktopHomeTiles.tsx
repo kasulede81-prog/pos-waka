@@ -33,7 +33,9 @@ import { HomeBusinessHealthSection } from "./HomeBusinessHealthSection";
 import { HomeReportsPreview } from "./HomeReportsPreview";
 import { HomeOrderedRegions } from "./HomeOrderedRegions";
 import { useHomeDashboardMetrics } from "../../hooks/useHomeDashboardMetrics";
+import { useHomeDashboardAnimationPause } from "../../hooks/useHomeDashboardAnimationPause";
 import { useHomeRegionLayout } from "../../hooks/useHomeRegionLayout";
+import { useHomeTileSpotlight } from "../../hooks/useHomeTileSpotlight";
 import { useSessionHydration } from "../../context/SessionHydrationContext";
 import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
 
@@ -47,6 +49,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   const actor = useSessionActor();
   const tileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const { largeScreen, packExecutiveScan } = useHomeRegionLayout();
+  const animPaused = useHomeDashboardAnimationPause();
   const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
   const preferences = usePosStore((s) => s.preferences);
   const pharmacyPrescriptions = usePosStore((s) => s.pharmacyPrescriptions);
@@ -166,6 +169,9 @@ export function DesktopHomeTiles({ lang }: Props) {
   const { reports: reportsTile, primary: primaryTiles, secondary: secondaryTiles, admin: adminTiles } =
     useMemo(() => presentHomeMenuTiles({ hero, secondary }), [hero, secondary]);
 
+  const primarySpotlightIds = useMemo(() => primaryTiles.map((tile) => tile.id), [primaryTiles]);
+  const spotlightId = useHomeTileSpotlight(primarySpotlightIds, animPaused);
+
   const openTile = useCallback(
     (to: string) => {
       if (to === POS_SHOP_ROUTE) prefetchOfficeHub();
@@ -174,14 +180,19 @@ export function DesktopHomeTiles({ lang }: Props) {
     [navigate],
   );
 
-  const renderCard = (tile: ResolvedHomeTile, density: "comfortable" | "compact" = "comfortable") => (
+  const renderCard = (
+    tile: ResolvedHomeTile,
+    density: "comfortable" | "compact" = "comfortable",
+    weight: "primary" | "supporting" = "primary",
+  ) => (
     <LivingDashboardCard
       key={tile.id}
       tile={tile}
       lang={lang}
-      spotlight={false}
+      spotlight={weight === "primary" && spotlightId === tile.id}
       appearance="enterprise"
       density={density}
+      weight={weight}
       liveStat={liveStats[tile.id]}
       buttonRef={(el) => {
         tileRefs.current[tile.id] = el;
@@ -236,34 +247,34 @@ export function DesktopHomeTiles({ lang }: Props) {
       case "primary":
         return primaryTiles.length > 0 ? (
           <section className={HOME_MODULE_SECTION_SPACING.standard}>
-            <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+            <SectionTitle as="h2" className="mb-1.5 !text-sm sm:mb-2 sm:!text-base">
               {t(lang, "homeModulesPrimary")}
             </SectionTitle>
             <div className={HOME_MODULE_GRID_CLASS.comfortable}>
-              {primaryTiles.map((tile) => renderCard(tile))}
+              {primaryTiles.map((tile) => renderCard(tile, "comfortable", "primary"))}
             </div>
           </section>
         ) : null;
       case "operations":
         return secondaryTiles.length > 0 ? (
           <section className={HOME_MODULE_SECTION_SPACING.standard}>
-            <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+            <SectionTitle as="h2" className="mb-1 !text-sm sm:!text-base">
               {t(lang, "homeModulesSecondary")}
             </SectionTitle>
-            <Caption className="mb-2 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
+            <Caption className="mb-1.5 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
             <div className={HOME_MODULE_GRID_CLASS.comfortable}>
-              {secondaryTiles.map((tile) => renderCard(tile))}
+              {secondaryTiles.map((tile) => renderCard(tile, "comfortable", "supporting"))}
             </div>
           </section>
         ) : null;
       case "admin":
         return adminTiles.length > 0 ? (
           <section className={HOME_MODULE_SECTION_SPACING.admin}>
-            <SectionTitle as="h2" className="mb-2 !text-sm sm:!text-base">
+            <SectionTitle as="h2" className="mb-1.5 !text-sm sm:!text-base">
               {t(lang, "homeModulesAdmin")}
             </SectionTitle>
             <div className={HOME_MODULE_GRID_CLASS.compact}>
-              {adminTiles.map((tile) => renderCard(tile, "compact"))}
+              {adminTiles.map((tile) => renderCard(tile, "compact", "supporting"))}
             </div>
           </section>
         ) : null;

@@ -32,7 +32,11 @@ import { VoidLineModal } from "../components/pos/VoidLineModal";
 import { ReturnProductModal } from "../components/pos/ReturnProductModal";
 import type { VoidReason } from "../types";
 import { getCompletedFinancialsFromScoped, getCompletedRevenue } from "../lib/financialMetrics";
-import { partitionReceiptsSales } from "../lib/receiptsGrouping";
+import { partitionReceiptsSales, revenueEligibleSales } from "../lib/receiptsGrouping";
+import {
+  formatSalesHistoryPaymentMethodsSummary,
+  sumSalesHistoryPhysicalCashUgx,
+} from "../lib/salesHistoryTender";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { expenseCountsInDrawer } from "../lib/cashExpenses";
 import { inventoryValueAtCostUgx } from "../lib/purchaseRecovery";
@@ -81,18 +85,6 @@ function bestSellingProductName(sales: Sale[]): string | null {
   return bestName;
 }
 
-function paymentMethodsSummary(lang: Language, sales: Sale[]): string {
-  let cash = 0;
-  let debt = 0;
-  for (const s of sales) {
-    cash += s.cashPaidUgx;
-    debt += s.debtUgx;
-  }
-  const parts: string[] = [];
-  if (cash > 0) parts.push(`${t(lang, "paymentMethod_cash")}: UGX ${cash.toLocaleString()}`);
-  if (debt > 0) parts.push(`${t(lang, "paymentMethod_credit")}: UGX ${debt.toLocaleString()}`);
-  return parts.length > 0 ? parts.join(" · ") : "—";
-}
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
@@ -213,6 +205,12 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const partitioned = useMemo(() => partitionReceiptsSales(filteredInRange), [filteredInRange]);
 
+  /** KPI / financial rolls — excludes whole-bill voids; list still uses partitioned.completed. */
+  const revenueSalesInRange = useMemo(
+    () => revenueEligibleSales(partitioned.completed),
+    [partitioned.completed],
+  );
+
   const filteredReturns = useMemo(
     () => allReturns.filter((r) => returnMatchesFilter(r, bounds)),
     [allReturns, bounds],
@@ -220,18 +218,24 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const rangeFinancials = useMemo(
     () =>
-      getCompletedFinancialsFromScoped(partitioned.completed, filteredReturns, products, {
+      getCompletedFinancialsFromScoped(revenueSalesInRange, filteredReturns, products, {
         skipProfit: !showProfit,
       }),
-    [partitioned.completed, filteredReturns, products, showProfit],
+    [revenueSalesInRange, filteredReturns, products, showProfit],
   );
 
   const rangeRevenueUgx = useMemo(
-    () => getCompletedRevenue(partitioned.completed, filteredReturns, products),
-    [partitioned.completed, filteredReturns, products],
+    () => getCompletedRevenue(revenueSalesInRange, filteredReturns, products),
+    [revenueSalesInRange, filteredReturns, products],
   );
 
-  const itemsSoldCount = useMemo(() => countItemsSold(partitioned.completed), [partitioned.completed]);
+  const itemsSoldCount = useMemo(() => countItemsSold(revenueSalesInRange), [revenueSalesInRange]);
+
+  /** Physical drawer cash — not cashPaidUgx (MoMo/ATM stay 0). */
+  const physicalCashInHandUgx = useMemo(
+    () => sumSalesHistoryPhysicalCashUgx(revenueSalesInRange),
+    [revenueSalesInRange],
+  );
 
   const listSales = useMemo(() => {
     const primary = [...partitioned.completed, ...partitioned.pending, ...partitioned.voided];
@@ -282,24 +286,24 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const secondaryChips = useMemo(
     () =>
       buildSecondaryChips(lang, {
-        cashSalesUgx: rangeFinancials.cashCollectedUgx,
+        cashSalesUgx: physicalCashInHandUgx,
         debtCollectedUgx,
         expensesUgx,
         expensesLabel: isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange"),
         stockValueUgx,
         showShopSummaries,
       }),
-    [lang, rangeFinancials.cashCollectedUgx, debtCollectedUgx, expensesUgx, isSingleDay, stockValueUgx, showShopSummaries],
+    [lang, physicalCashInHandUgx, debtCollectedUgx, expensesUgx, isSingleDay, stockValueUgx, showShopSummaries],
   );
 
   const analyticsMetrics = useMemo(() => {
-    const bestProduct = bestSellingProductName(partitioned.completed);
+    const bestProduct = bestSellingProductName(revenueSalesInRange);
     const metrics = [
       { label: isSingleDay ? t(lang, "salesHistoryTodaySales") : t(lang, "salesHistorySalesInRange"), value: `UGX ${rangeRevenueUgx.toLocaleString()}` },
       ...(showProfit
         ? [{ label: t(lang, "salesHistoryProfits"), value: `UGX ${rangeFinancials.profitUgx.toLocaleString()}` }]
         : []),
-      { label: t(lang, "salesHistoryCashInHand"), value: `UGX ${rangeFinancials.cashCollectedUgx.toLocaleString()}` },
+      { label: t(lang, "salesHistoryCashInHand"), value: `UGX ${physicalCashInHandUgx.toLocaleString()}` },
       ...(showShopSummaries
         ? [
             { label: t(lang, "salesHistoryDebtCollected"), value: `UGX ${debtCollectedUgx.toLocaleString()}` },
@@ -309,7 +313,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       { label: t(lang, "salesHistoryItemsSold"), value: String(itemsSoldCount) },
       { label: t(lang, "salesHistoryAverageSale"), value: `UGX ${rangeFinancials.averageTransactionUgx.toLocaleString()}` },
       { label: t(lang, "salesHistoryBestProduct"), value: bestProduct ?? "—" },
-      { label: t(lang, "salesHistoryPaymentMethods"), value: paymentMethodsSummary(lang, partitioned.completed) },
+      { label: t(lang, "salesHistoryPaymentMethods"), value: formatSalesHistoryPaymentMethodsSummary(lang, revenueSalesInRange) },
       ...(showShopSummaries
         ? [{ label: t(lang, "salesHistoryStockValue"), value: `UGX ${stockValueUgx.toLocaleString()}` }]
         : []),
@@ -325,7 +329,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     debtCollectedUgx,
     expensesUgx,
     itemsSoldCount,
-    partitioned.completed,
+    revenueSalesInRange,
+    physicalCashInHandUgx,
     stockValueUgx,
   ]);
 

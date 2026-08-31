@@ -136,7 +136,7 @@ function LiveOpsWidget({ ctx }: DashboardWidgetProps) {
     <CommandCenterLiveOpsTiles
       lang={ctx.lang}
       live={ctx.commandCenter.liveOps}
-      expectedCashUgx={ctx.heroExpectedCash ?? 0}
+      expectedCashUgx={ctx.heroExpectedCash ?? null}
     />
   );
 }

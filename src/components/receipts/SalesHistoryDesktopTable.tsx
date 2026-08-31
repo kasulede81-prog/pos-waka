@@ -5,7 +5,8 @@ import type { Language, Sale } from "../../types";
 import { t } from "../../lib/i18n";
 import { buildReceiptNumberForSale } from "../../lib/receiptPrint";
 import { receiptPrintActionLabel } from "../../lib/printActionLabels";
-import { isCompletedSale, isPreCompletionVoidedSale, saleStatusOf, voidedSaleHistoryNumber } from "../../lib/saleStatus";
+import { isCompletedSale, isPreCompletionVoidedSale, isVoidedSale, saleStatusOf, voidedSaleHistoryNumber } from "../../lib/saleStatus";
+import { salesHistoryPaymentMethodLabel } from "../../lib/salesHistoryTender";
 import { statusTokens } from "../../lib/statusTokens";
 import {
   EnterpriseDataTable,
@@ -27,9 +28,7 @@ type Props = {
 };
 
 function paymentLabel(lang: Language, sale: Sale): string {
-  if (sale.debtUgx > 0 && sale.cashPaidUgx > 0) return `${t(lang, "paymentMethod_cash")}+${t(lang, "paymentMethod_credit")}`;
-  if (sale.debtUgx > 0) return t(lang, "paymentMethod_credit");
-  return t(lang, "paymentMethod_cash");
+  return salesHistoryPaymentMethodLabel(lang, sale);
 }
 
 function formatWhen(iso: string, lang: Language): string {
@@ -110,7 +109,7 @@ export function SalesHistoryDesktopTable({
         cell: (sale) => {
           const status = saleStatusOf(sale);
           if (status === "pending") return <span className={statusTokens.warning.badge}>{t(lang, "salesHistoryStatusPending")}</span>;
-          if (isPreCompletionVoidedSale(sale)) {
+          if (isVoidedSale(sale) || isPreCompletionVoidedSale(sale)) {
             return <span className={statusTokens.danger.badge}>{t(lang, "salesHistoryStatusVoided")}</span>;
           }
           if (status === "cancelled") return <span className={statusTokens.draft.badge}>{t(lang, "salesHistoryStatusCancelled")}</span>;

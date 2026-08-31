@@ -3,6 +3,7 @@ import type { Product, Sale } from "../types";
 import { saveExportedFile } from "./fileDownload";
 import { sanitizePdfStem } from "./pdfLayout";
 import { formatSaleLineQuantity } from "./saleQuantityLabel";
+import { formatSalesHistoryPdfMoneyLine } from "./salesHistoryTender";
 
 const UG_LOCALE = "en-UG";
 
@@ -63,9 +64,7 @@ export function buildSalesListPdfBlob(opts: {
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    const money = `Total UGX ${sale.totalUgx.toLocaleString(UG_LOCALE)} · Cash UGX ${sale.cashPaidUgx.toLocaleString(UG_LOCALE)}${
-      sale.debtUgx > 0 ? ` · Credit UGX ${sale.debtUgx.toLocaleString(UG_LOCALE)}` : ""
-    }`;
+    const money = formatSalesHistoryPdfMoneyLine(sale);
     for (const line of doc.splitTextToSize(money, maxW)) {
       ensureSpace(13);
       doc.text(line, margin, y);

@@ -7,12 +7,12 @@ import { usePosStore } from "../store/usePosStore";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
-import { isCompletedSale } from "../lib/saleStatus";
+import { isRevenueSale } from "../lib/saleStatus";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { authOperatorPermissions, authOperatorRole } from "../lib/sessionActor";
-import { computeProfitGroupedByCategory } from "../lib/homeProfit";
+import { computeProfitGroupedByCategory, mergeLinkedReturnsForScopedSales } from "../lib/homeProfit";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
@@ -30,12 +30,14 @@ import { ProfitProductDetailSheet } from "../components/profit/ProfitProductDeta
 import { ProfitInsightsPanel } from "../components/profit/ProfitInsightsPanel";
 import { ProfitSkeletonList, ProfitStatGridSkeleton } from "../components/profit/ProfitSkeleton";
 import {
+  averageGrossProfitPerSale,
   computeDailyProfitTrend,
   flattenProfitProducts,
   lastSoldAtForProduct,
   marginPercent,
   matchesProfitSearch,
   matchesShelfSearch,
+  resolveProfitHeadlineCostUgx,
   type ProfitProductView,
   type ProfitQuickFilter,
 } from "../lib/profitPageView";
@@ -46,6 +48,7 @@ import { buildProfitExportRows } from "../lib/analyticsReportExport";
 import { exportCsvFile } from "../lib/reportExportEngine";
 import { overlayPeriodFinancials, resolvePeriodReportAuthority } from "../lib/closedDayAuthority";
 import { printProfitReportPdf } from "../lib/profitReportDocument";
+import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 
 type Props = { lang: Language; embedded?: boolean };
 
@@ -69,6 +72,8 @@ export function ProfitPage({ lang, embedded }: Props) {
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const products = usePosStore((s) => s.products);
   const dayCloses = usePosStore((s) => s.dayCloses);
+  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
+  const preferences = usePosStore((s) => s.preferences);
   const shopName = usePosStore((s) => s.preferences.shopDisplayName?.trim() || "Waka POS");
   const [searchQuery, setSearchQuery] = useState("");
   const [quickFilter, setQuickFilter] = useState<ProfitQuickFilter>("all");
@@ -86,18 +91,29 @@ export function ProfitPage({ lang, embedded }: Props) {
   const locale = lang === "sw" ? "sw-UG" : "en-UG";
 
   const filteredSales = useMemo(
-    () => sales.filter((s) => isCompletedSale(s) && saleMatchesFilter(s, bounds)),
+    () => sales.filter((s) => isRevenueSale(s) && saleMatchesFilter(s, bounds)),
     [sales, bounds],
   );
 
-  const filteredReturns = useMemo(() => {
-    const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
-    return allReturnRecords.filter((r) => returnMatchesFilter(r, bounds));
-  }, [includeArchived, returnRecords, archivedReturnRecords, bounds]);
+  const allReturns = useMemo(
+    () => (includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords),
+    [includeArchived, returnRecords, archivedReturnRecords],
+  );
+
+  const filteredReturns = useMemo(
+    () => allReturns.filter((r) => returnMatchesFilter(r, bounds)),
+    [allReturns, bounds],
+  );
+
+  /** Include linked returns for scoped sales even when return date is outside the filter. */
+  const profitReturns = useMemo(
+    () => mergeLinkedReturnsForScopedSales(filteredSales, filteredReturns, allReturns),
+    [filteredSales, filteredReturns, allReturns],
+  );
 
   const report = useMemo(
-    () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel, filteredReturns),
-    [filteredSales, productById, generalLabel, filteredReturns],
+    () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel, profitReturns),
+    [filteredSales, productById, generalLabel, profitReturns],
   );
 
   const { groups, total } = report;
@@ -112,19 +128,28 @@ export function ProfitPage({ lang, embedded }: Props) {
     dayCloses,
     bounds,
     sales: filteredSales,
-    returns: filteredReturns,
+    returns: profitReturns,
     products,
   });
   const headlineProfitUgx = overlaid.profitUgx;
   const headlineRevenueUgx = overlaid.revenueUgx;
+  const headlineCostUgx = resolveProfitHeadlineCostUgx({
+    closedPeriod,
+    revenueUgx: headlineRevenueUgx,
+    profitUgx: headlineProfitUgx,
+    liveCostUgx: total.costUgx,
+  });
   const marginPct = marginPercent(headlineRevenueUgx, headlineProfitUgx);
+  const costIncomplete = total.costIncomplete;
+  const revenueEligibleTxnCount = overlaid.transactionCount;
+  const avgGrossProfitPerSale = averageGrossProfitPerSale(headlineProfitUgx, revenueEligibleTxnCount);
   const allProducts = useMemo(() => flattenProfitProducts(groups), [groups]);
-  const bestShelf = groups[0]?.categoryLabel ?? null;
-  const bestProduct = allProducts[0]?.name ?? null;
+  const bestShelf = closedPeriod ? null : groups[0]?.categoryLabel ?? null;
+  const bestProduct = closedPeriod ? null : allProducts[0]?.name ?? null;
 
   const dailyTrend = useMemo(
-    () => computeDailyProfitTrend(filteredSales, filteredReturns, productById, locale),
-    [filteredSales, filteredReturns, productById, locale],
+    () => computeDailyProfitTrend(filteredSales, profitReturns, productById, locale),
+    [filteredSales, profitReturns, productById, locale],
   );
 
   const searchedProducts = useMemo(() => {
@@ -149,10 +174,18 @@ export function ProfitPage({ lang, embedded }: Props) {
   const showLowMargin = quickFilter === "all" || quickFilter === "loss_making";
 
   const totalUnitsSold = useMemo(() => allProducts.reduce((sum, p) => sum + p.qty, 0), [allProducts]);
-  const avgProfitPerSale = filteredSales.length > 0 ? Math.round(total.profitUgx / filteredSales.length) : 0;
 
   const insights = useMemo(() => {
     const items: { text: string }[] = [];
+    if (closedPeriod) {
+      items.push({ text: `${t(lang, "reportDocLiveBreakdown")} — ${t(lang, "reportDocLiveBreakdownHint")}` });
+      return items;
+    }
+    if (costIncomplete) {
+      items.push({
+        text: t(lang, "profitCostIncompleteBanner").replace("{{count}}", String(total.linesMissingCost)),
+      });
+    }
     if (bestShelf) {
       items.push({ text: tTemplate(lang, "profitInsightBestShelf", { name: bestShelf }) });
     }
@@ -181,14 +214,24 @@ export function ProfitPage({ lang, embedded }: Props) {
     if (belowCost.length > 0) {
       items.push({ text: tTemplate(lang, "profitInsightBelowCost", { count: String(belowCost.length) }) });
     }
-    if (avgProfitPerSale !== 0) {
-      items.push({ text: tTemplate(lang, "profitInsightAvgProfit", { amount: avgProfitPerSale.toLocaleString() }) });
+    if (avgGrossProfitPerSale !== 0) {
+      items.push({ text: tTemplate(lang, "profitInsightAvgProfit", { amount: avgGrossProfitPerSale.toLocaleString() }) });
     }
     if (totalUnitsSold > 0) {
       items.push({ text: tTemplate(lang, "profitInsightUnitsSold", { count: totalUnitsSold.toLocaleString() }) });
     }
     return items;
-  }, [lang, bestShelf, bestProduct, allProducts, avgProfitPerSale, totalUnitsSold]);
+  }, [
+    lang,
+    closedPeriod,
+    costIncomplete,
+    total.linesMissingCost,
+    bestShelf,
+    bestProduct,
+    allProducts,
+    avgGrossProfitPerSale,
+    totalUnitsSold,
+  ]);
 
   const detailLastSold = detailProduct ? lastSoldAtForProduct(filteredSales, detailProduct.productId) : null;
   const detailRecord = detailProduct ? productById.get(detailProduct.productId) : undefined;
@@ -200,13 +243,29 @@ export function ProfitPage({ lang, embedded }: Props) {
       buildProfitExportRows({
         lang,
         periodLabel,
-        profitUgx: headlineProfitUgx,
+        grossProfitUgx: headlineProfitUgx,
         revenueUgx: headlineRevenueUgx,
-        costUgx: total.costUgx,
+        costUgx: headlineCostUgx,
         marginPct,
+        transactionCount: revenueEligibleTxnCount,
+        averageGrossProfitUgx: avgGrossProfitPerSale,
+        costIncomplete,
+        closedPeriod,
         groups,
       }),
-    [lang, periodLabel, headlineProfitUgx, headlineRevenueUgx, total.costUgx, marginPct, groups],
+    [
+      lang,
+      periodLabel,
+      headlineProfitUgx,
+      headlineRevenueUgx,
+      headlineCostUgx,
+      marginPct,
+      revenueEligibleTxnCount,
+      avgGrossProfitPerSale,
+      costIncomplete,
+      closedPeriod,
+      groups,
+    ],
   );
 
   if (!canViewProfit) {
@@ -226,6 +285,8 @@ export function ProfitPage({ lang, embedded }: Props) {
         sales: filteredSales,
         products,
         returnRecords: filteredReturns,
+        dayDrawerOpens,
+        formulaVersion: resolveCashDrawerFormulaVersion(preferences),
         includeProfit: true,
         dayCloses,
       });
@@ -243,13 +304,14 @@ export function ProfitPage({ lang, embedded }: Props) {
       periodLabel,
       bounds,
       sales: filteredSales,
-      returnRecords: filteredReturns,
+      returnRecords: profitReturns,
       products,
       dayCloses,
       profitUgx: headlineProfitUgx,
       revenueUgx: headlineRevenueUgx,
-      costUgx: total.costUgx,
+      costUgx: headlineCostUgx,
       marginPct,
+      costIncomplete,
       groups,
     });
   };
@@ -321,12 +383,13 @@ export function ProfitPage({ lang, embedded }: Props) {
           ) : null}
           <ProfitStatGrid
             lang={lang}
-            netProfitUgx={headlineProfitUgx}
+            grossProfitUgx={headlineProfitUgx}
             revenueUgx={headlineRevenueUgx}
-            costUgx={total.costUgx}
+            costUgx={headlineCostUgx}
             marginPct={marginPct}
             bestShelf={bestShelf}
             bestProduct={bestProduct}
+            costIncomplete={costIncomplete}
           />
         </div>
       ) : null}
@@ -359,7 +422,7 @@ export function ProfitPage({ lang, embedded }: Props) {
 
       {total.linesMissingCost > 0 ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
-          {t(lang, "homeProfitMissingCost").replace("{{count}}", String(total.linesMissingCost))}{" "}
+          {t(lang, "profitCostIncompleteBanner").replace("{{count}}", String(total.linesMissingCost))}{" "}
           <Link to="/stock" className="font-black text-waka-800 underline">
             {t(lang, "homeProfitAddCostCta")}
           </Link>

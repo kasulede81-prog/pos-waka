@@ -12,7 +12,7 @@ import {
 import type { AdjustmentBreakdownByType } from "./cashDrawerLedger";
 import { dateKeyKampala } from "./datesUg";
 import { t } from "./i18n";
-import { isCompletedSale } from "./saleStatus";
+import { isRevenueSale } from "./saleStatus";
 import { normalizeLinkedAuthUserId } from "./sessionActor";
 
 export type CashPositionPaymentKey = "cash" | "mobile_money" | "card" | "bank_transfer" | "credit";
@@ -63,7 +63,7 @@ export type CashPositionReport = {
     cashRefundsUgx: number;
     expensesUgx: number;
     supplierPaymentsUgx: number;
-    expectedCashUgx: number;
+    expectedCashUgx: number | null;
   };
   adjustmentBreakdown: AdjustmentBreakdownByType;
   categories: CashPositionCategoryRow[];
@@ -260,7 +260,7 @@ export function buildCashPositionReport(params: {
     cashDrawerAdjustments = [],
     shifts = [],
     dayDrawerOpens = [],
-    formulaVersion = "v1",
+    formulaVersion = "v2",
     staffAccounts,
     generalCategoryLabel,
   } = params;
@@ -278,7 +278,7 @@ export function buildCashPositionReport(params: {
 
   const daySales: Sale[] = [];
   for (const sale of sales) {
-    if (isCompletedSale(sale) && saleDayKey(sale.createdAt) === dayKey) daySales.push(sale);
+    if (isRevenueSale(sale) && saleDayKey(sale.createdAt) === dayKey) daySales.push(sale);
   }
   const dayReturns: ReturnRecord[] = [];
   for (const rec of returnRecords) {

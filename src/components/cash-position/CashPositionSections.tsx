@@ -212,7 +212,7 @@ export function CashPositionBreakdown({
   const outflowLines = [
     { label: t(lang, "cashPositionSupplierPayments"), value: cp.supplierPaymentsUgx },
     { label: t(lang, "cashPositionExpenses"), value: cp.expensesUgx },
-    { label: t(lang, "cashPositionRefunds"), value: cp.refundsUgx },
+    { label: t(lang, "cashPositionRefunds"), value: cp.cashRefundsUgx },
     { label: cashDrawerAdjustmentTypeLabel(lang, "cash_removed"), value: bd.cash_removed ?? 0 },
     { label: cashDrawerAdjustmentTypeLabel(lang, "owner_withdrawal"), value: bd.owner_withdrawal ?? 0 },
     { label: cashDrawerAdjustmentTypeLabel(lang, "bank_deposit"), value: bd.bank_deposit ?? 0 },
@@ -238,7 +238,7 @@ export function CashPositionBreakdown({
       <div className="rounded-2xl bg-gradient-to-br from-waka-500 to-waka-700 px-4 py-5 text-white shadow-md">
         <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "cashPositionExpectedCash")}</p>
         <p className="mt-1 text-3xl font-black tabular-nums sm:text-4xl">
-          UGX {cp.expectedCashUgx.toLocaleString()}
+          {cp.expectedCashUgx == null ? "—" : `UGX ${cp.expectedCashUgx.toLocaleString()}`}
         </p>
       </div>
     </div>

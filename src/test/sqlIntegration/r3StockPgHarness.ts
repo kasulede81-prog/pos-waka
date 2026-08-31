@@ -10,6 +10,7 @@ const R3_BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "r3Sto
 const MIGRATION_166 = join(ROOT, "166_purchase_stock_durable_idempotency.sql");
 const MIGRATION_168 = join(ROOT, "168_adjustment_count_stock_durable_idempotency.sql");
 const MIGRATION_172 = join(ROOT, "172_sale_void_stock_durable_idempotency.sql");
+const MIGRATION_173 = join(ROOT, "173_purchase_void_stock_durable_idempotency.sql");
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -38,6 +39,7 @@ export async function createR3StockSqlHarness(): Promise<SqlExec> {
     await exec.exec(readSql(MIGRATION_166));
     await exec.exec(readSql(MIGRATION_168));
     await exec.exec(readSql(MIGRATION_172));
+    await exec.exec(readSql(MIGRATION_173));
     return exec;
   }
 
@@ -59,6 +61,7 @@ export async function createR3StockSqlHarness(): Promise<SqlExec> {
   await exec.exec(readSql(MIGRATION_166));
   await exec.exec(readSql(MIGRATION_168));
   await exec.exec(readSql(MIGRATION_172));
+  await exec.exec(readSql(MIGRATION_173));
   return exec;
 }
 

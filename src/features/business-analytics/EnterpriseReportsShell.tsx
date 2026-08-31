@@ -17,6 +17,7 @@ import { resolveProfitVisibility } from "../../lib/profitVisibility";
 import { authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
 import { buildDailyReportText, shareText } from "../../lib/reportExport";
 import { downloadDailyReportPdf, printDailyReportPdf, shareDailyReportPdf } from "../../lib/dailyReportPdf";
+import { resolveCashDrawerFormulaVersion } from "../../lib/dayDrawerOpen";
 import { statusFromAuthority, ugxLabel, type ReportDocumentModel } from "../../lib/reportDocumentModel";
 import { printReportDocumentModel } from "../../lib/reportDocumentPrint";
 import { buildAnalyticsReportRows } from "../../lib/analyticsReportExport";
@@ -55,6 +56,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const debtPayments = usePosStore((s) => s.debtPayments);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
@@ -264,6 +266,8 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       supplierPayments,
       cashDrawerAdjustments,
       shifts,
+      dayDrawerOpens,
+      formulaVersion: resolveCashDrawerFormulaVersion(preferences),
       includeProfit: canProfit,
       dayCloses,
     });
@@ -283,6 +287,8 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     supplierPayments,
     cashDrawerAdjustments,
     shifts,
+    dayDrawerOpens,
+    preferences,
     dayCloses,
   ]);
 
@@ -315,6 +321,8 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       supplierPayments,
       cashDrawerAdjustments,
       shifts,
+      dayDrawerOpens,
+      formulaVersion: resolveCashDrawerFormulaVersion(preferences),
       topProducts: report.topProducts,
       includeProfit: canProfit,
       dayCloses,
@@ -322,7 +330,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     [
       lang,
       reportDayKey,
-      preferences.shopDisplayName,
+      preferences,
       sales,
       products,
       returnRecords,
@@ -331,6 +339,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       supplierPayments,
       cashDrawerAdjustments,
       shifts,
+      dayDrawerOpens,
       report.topProducts,
       canProfit,
       dayCloses,

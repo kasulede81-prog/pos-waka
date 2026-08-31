@@ -24,6 +24,7 @@ import {
 } from "../../../lib/commandCenterPageView";
 import { sumCashExpensesInBounds, sumCashExpensesOnDay } from "../../../lib/cashReconciliation";
 import { overlayClosedDayExpenses } from "../../../lib/closedDayAuthority";
+import { attributeSalePaymentBuckets } from "../../../lib/cashPosition";
 import type {
   AiInsightCard,
   AnalyticsKpiCard,
@@ -70,13 +71,17 @@ function pctChange(current: number, previous: number): number | null {
 export function computePaymentMethodMix(sales: Sale[], bounds: DateFilterBounds): PaymentMixSlice[] {
   const buckets = { cash: 0, mobile_money: 0, atm: 0, credit: 0, mixed: 0 };
   for (const s of revenueSalesInBounds(sales, bounds)) {
-    const amt = Math.max(0, s.totalUgx);
+    // Same collected/debt split as Cash Position — sums to sale.totalUgx; debt payments are not sales.
+    const attributed = attributeSalePaymentBuckets(s);
     const method = s.paymentMethod ?? (s.debtUgx > 0 ? "credit" : "cash");
-    if (method === "cash") buckets.cash += amt;
-    else if (method === "mobile_money") buckets.mobile_money += amt;
-    else if (method === "atm") buckets.atm += amt;
-    else if (method === "credit") buckets.credit += amt;
-    else buckets.mixed += amt;
+    buckets.credit += attributed.credit;
+    buckets.mobile_money += attributed.mobile_money;
+    buckets.atm += attributed.card;
+    if (method === "mixed") {
+      buckets.mixed += attributed.cash;
+    } else {
+      buckets.cash += attributed.cash;
+    }
   }
   const total = Object.values(buckets).reduce((a, b) => a + b, 0) || 1;
   const defs: Array<{ id: keyof typeof buckets; labelKey: string; colorClass: string }> = [

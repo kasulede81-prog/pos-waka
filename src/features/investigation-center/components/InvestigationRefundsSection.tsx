@@ -20,6 +20,9 @@ export function InvestigationRefundsSection({ lang, integrityReport, returns, on
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-black text-foreground">{t(lang, "refundIntegrityTitle")}</h2>
             <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "refundIntegritySub")}</p>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-emerald-900/80">
+              {t(lang, "refundIntegrityScopeGlobal")}
+            </p>
             <p className={`mt-2 text-sm font-bold ${integrityReport.ok ? "text-emerald-800" : "text-rose-800"}`}>
               {integrityReport.ok
                 ? t(lang, "refundIntegrityOk")
@@ -44,6 +47,7 @@ export function InvestigationRefundsSection({ lang, integrityReport, returns, on
 
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "refundHistoryTitle")}</h2>
+        <p className="mt-1 text-[10px] font-medium text-muted-foreground">{t(lang, "refundHistoryRangeScoped")}</p>
         {returns.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">{t(lang, "refundHistoryEmpty")}</p>
         ) : (

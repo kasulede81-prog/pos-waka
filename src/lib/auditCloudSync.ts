@@ -1,6 +1,7 @@
 import type { AuditLogEntry } from "../types";
 import { hasSupabaseConfig, supabase } from "./supabase";
 import { reportSyncIssue } from "./monitoring";
+import { restoreActorFromAuditPayload } from "./investigationActorAttribution";
 
 const AUDIT_SELECT =
   "id, shop_id, actor_user_id, role, action, payload_summary, payload, device_id, client_entry_id, created_at";
@@ -19,7 +20,7 @@ function rowToAuditEntry(row: Record<string, unknown>): AuditLogEntry | null {
   if (!id) return null;
   const action = String(row.action ?? "");
   if (!action) return null;
-  return {
+  const raw: AuditLogEntry = {
     id,
     at: String(row.created_at ?? new Date().toISOString()),
     deviceId: typeof row.device_id === "string" ? row.device_id : undefined,
@@ -30,6 +31,7 @@ function rowToAuditEntry(row: Record<string, unknown>): AuditLogEntry | null {
     payloadSummary: String(row.payload_summary ?? ""),
     payload: (row.payload && typeof row.payload === "object" ? row.payload : {}) as Record<string, unknown>,
   };
+  return restoreActorFromAuditPayload(raw);
 }
 
 /**

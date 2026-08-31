@@ -232,6 +232,37 @@ describe("MB-1 branch-safe partition", () => {
     expect(state.processCalls).toEqual([{ shopId: SHOP_A, kind: "pending_stock_updates" }]);
     expect(state.queue.find((o) => o.id === "sale-void-a")).toBeUndefined();
   });
+
+  it("T22 — purchase_void shopId is immutable across active-shop switch", async () => {
+    const { enqueueSync } = await import("../offline/syncEngine");
+    const { setActiveShopId } = await import("../offline/shopScope");
+    await enqueueSync({
+      id: "purchase-void-a",
+      kind: "pending_stock_updates",
+      payload: {
+        productId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        delta: -10,
+        referenceType: "purchase_void",
+        referenceId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      },
+      createdAt: new Date().toISOString(),
+      shopId: SHOP_A,
+    });
+    expect(state.queue[0]?.shopId).toBe(SHOP_A);
+
+    state.activeShopId = SHOP_B;
+    setActiveShopId(SHOP_B);
+    const { flushSyncQueueInner } = await import("../offline/syncEngine");
+    await flushSyncQueueInner();
+    expect(state.processCalls).toHaveLength(0);
+    expect(state.queue[0]?.shopId).toBe(SHOP_A);
+
+    state.activeShopId = SHOP_A;
+    setActiveShopId(SHOP_A);
+    await flushSyncQueueInner();
+    expect(state.processCalls).toEqual([{ shopId: SHOP_A, kind: "pending_stock_updates" }]);
+    expect(state.queue.find((o) => o.id === "purchase-void-a")).toBeUndefined();
+  });
 });
 
 describe("MB-1 shop scope utilities", () => {

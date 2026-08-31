@@ -68,7 +68,7 @@ import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
 import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { getActiveShopId } from "../offline/shopScope";
-import { r3AdjustmentStockPayload, r3SaleVoidStockPayload } from "../lib/stockDurableSync";
+import { r3AdjustmentStockPayload, r3PurchaseVoidStockPayload, r3SaleVoidStockPayload } from "../lib/stockDurableSync";
 import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
@@ -268,7 +268,7 @@ import { dateKeyKampala } from "../lib/datesUg";
 import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { normalizeCashDrawerAdjustment } from "../lib/cashDrawerLedger";
-import { cashReduceFromRefund } from "../lib/cashDrawerSales";
+import { cashReduceFromRefund, physicalCashCollectedFromSale } from "../lib/cashDrawerSales";
 import { resolveDebtorForSale } from "../lib/customerDebtActivity";
 import { draftQuantityExceedsStock, totalDraftQuantityForProduct } from "../lib/draftStockCheck";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
@@ -5067,7 +5067,7 @@ export const usePosStore = create<PosState>((set, get) => {
                 ...sh,
                 salesTotalUgx: sh.salesTotalUgx + total,
                 debtTotalUgx: sh.debtTotalUgx + debt,
-                estimatedCashUgx: sh.estimatedCashUgx + cashPaidUgx,
+                estimatedCashUgx: sh.estimatedCashUgx + physicalCashCollectedFromSale(sale),
                 discountsTotalUgx: (sh.discountsTotalUgx ?? 0) + discountTotal,
               }
             : sh,
@@ -5311,7 +5311,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!line || line.voided) return { ok: false, errorKey: "invalid" };
 
     const amount = line.lineTotalUgx;
-    const cashReduce = Math.min(amount, sale.cashPaidUgx);
+    const physicalCashReduce = cashReduceFromRefund(sale, amount);
     const debtReduce = creditDebtReductionFromSaleAdjustment(sale, amount);
     const openShift = (state.preferences.shifts ?? []).find(
       (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(actor),
@@ -5428,7 +5428,7 @@ export const usePosStore = create<PosState>((set, get) => {
             sh.id === openShift.id
               ? {
                   ...sh,
-                  estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - cashReduce),
+                  estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - physicalCashReduce),
                   voidsTotalUgx: (sh.voidsTotalUgx ?? 0) + amount,
                   refundsUgx: sh.refundsUgx + amount,
                 }
@@ -5699,7 +5699,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const closeGuard = target.isRecovery ? assertCanRecoverShift(state) : assertCanCloseShift(state);
     if (!closeGuard.ok) return { ok: false, errorKey: closeGuard.errorKey };
 
-    const formulaVersion = "v1";
+    const formulaVersion = resolveCashDrawerFormulaVersion(state.preferences);
     const ctx = { formulaVersion } as const;
     const { counted, expected, differenceUgx } = computeShiftCloseAmounts(
       target.shift,
@@ -7135,7 +7135,28 @@ export const usePosStore = create<PosState>((set, get) => {
     });
 
     void queueRemote("pending_purchases", { purchaseId, void: true });
-    void queueRemote("pending_stock_updates", { kind: "purchase_void", purchaseId });
+    // PURCHASE-VOID-STOCK-1.0 — durable stock identity = purchase.id (one void per purchase).
+    for (const [productId, remove] of stockCheck.deltas) {
+      const p = products.find((x) => x.id === productId);
+      if (!p || remove <= 0) continue;
+      void queueRemote(
+        "pending_stock_updates",
+        r3PurchaseVoidStockPayload({
+          productId,
+          delta: -remove,
+          purchaseId,
+          baseUpdatedAt: p.updatedAt,
+          baseStockOnHand: p.stockOnHand,
+        }),
+      );
+    }
+    // Bundle route retained for in-flight / recovery (purchaseId is the durable void id).
+    void queueRemote("pending_stock_updates", {
+      kind: "purchase_void",
+      purchaseId,
+      referenceType: "purchase_void",
+      referenceId: purchaseId,
+    });
     if (!walkIn) void queueRemote("supplier", { id: purchase.supplierId });
     pushAudit("purchase_void", `Voided purchase UGX ${purchase.totalCostUgx.toLocaleString()} · ${purchase.supplierName}`, {
       purchaseId,
@@ -7521,7 +7542,8 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     void queueRemote("pending_cash_expenses", { expenseId: row.id });
     if (hasSupabaseConfig) {
-      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(row.id));
+      const stampedShopId = getActiveShopId();
+      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(row.id, stampedShopId));
     }
     return { ok: true, expenseId: row.id };
   },
@@ -7567,7 +7589,10 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     void queueRemote("pending_cash_drawer_adjustments", { adjustmentId: row.id });
     if (hasSupabaseConfig) {
-      void import("../offline/cloudSync").then((m) => m.syncCashDrawerAdjustmentImmediately(row.id));
+      const stampedShopId = getActiveShopId();
+      void import("../offline/cloudSync").then((m) =>
+        m.syncCashDrawerAdjustmentImmediately(row.id, stampedShopId),
+      );
     }
     return { ok: true, adjustmentId: row.id };
   },

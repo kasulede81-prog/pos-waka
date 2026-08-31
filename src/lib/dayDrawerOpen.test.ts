@@ -4,6 +4,7 @@ import {
   activeDayDrawerOpenForDate,
   completedSalesCountOnDay,
   isDayDrawerOpenMutable,
+  resolveCashDrawerFormulaVersion,
   resolveOpeningFloatUgx,
   shiftVerificationBaselineUgx,
 } from "./dayDrawerOpen";
@@ -144,8 +145,21 @@ describe("DayDrawerOpen", () => {
   });
 });
 
+describe("resolveCashDrawerFormulaVersion", () => {
+  it("defaults unset to v2 and respects explicit preference", () => {
+    expect(resolveCashDrawerFormulaVersion({})).toBe("v2");
+    expect(resolveCashDrawerFormulaVersion({ cashDrawerFormulaVersion: undefined })).toBe("v2");
+    expect(resolveCashDrawerFormulaVersion({ cashDrawerFormulaVersion: "v1" })).toBe("v1");
+    expect(resolveCashDrawerFormulaVersion({ cashDrawerFormulaVersion: "v2" })).toBe("v2");
+  });
+});
+
 describe("migration v1 to v2", () => {
-  it("undefined formula version behaves as v1", () => {
-    expect(resolveOpeningFloatUgx(DAY, [], [shift(25_000)])).toBe(25_000);
+  it("undefined formula version behaves as v2 (day open only; no shift float sum)", () => {
+    expect(resolveOpeningFloatUgx(DAY, [], [shift(25_000)])).toBe(0);
+  });
+
+  it("explicit v1 still sums shift floats", () => {
+    expect(resolveOpeningFloatUgx(DAY, [], [shift(25_000)], { formulaVersion: "v1" })).toBe(25_000);
   });
 });

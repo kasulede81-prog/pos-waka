@@ -65,7 +65,7 @@ export type DashboardCenterContext = {
   };
   devicesTotal?: number;
   devicesOnline?: number;
-  heroExpectedCash?: number;
+  heroExpectedCash?: number | null;
   revenueSparkline?: { value: number }[];
   onAcknowledge?: (alertId: string) => void;
   exportDashboard?: () => void;

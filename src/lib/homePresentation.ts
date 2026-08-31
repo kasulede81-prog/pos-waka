@@ -26,30 +26,31 @@ export type HomePresentationStructure = {
 };
 
 /**
- * HOME-DENSITY-1.1 — centered Home content measure (HD-01).
- * Tailwind `max-w-7xl` = 80rem = 1280px at default 16px root.
+ * HOME CINEMATIC DENSITY V1 — centered Home content measure.
+ * Tailwind `max-w-[100rem]` = 1600px at default 16px root.
  *
  * Applied on the same box as Home gutters so:
  * - below 1024px: never binds (phone / tablet portrait unchanged)
- * - 1280x720: inner width matches the previous full-bleed layout
- * - 1440x900 / 1920x1080: 4-col cards stop stretching with the window
+ * - 1280×720: nearly full-bleed with tighter gutters
+ * - 1440×900: uses the canvas (no 1280 hard ceiling)
+ * - 1920×1080+: caps at 1600 with 5-col primary so tiles stay POS-dense, not stretched
  *
  * AppShell keeps `max-w-none` on `/`; this token is Home-only and wins inside Outlet.
  */
-export const HOME_CONTENT_MAX_WIDTH_PX = 1280;
-export const HOME_CONTENT_MEASURE_CLASS = "mx-auto w-full max-w-7xl";
-export const HOME_PAGE_GUTTER_CLASS = "px-4 py-4 sm:px-8 sm:py-6 lg:px-10 xl:px-14";
-export const HOME_FOOTER_GUTTER_CLASS = "px-4 py-3 sm:px-8 lg:px-10 xl:px-14";
+export const HOME_CONTENT_MAX_WIDTH_PX = 1600;
+export const HOME_CONTENT_MEASURE_CLASS = "mx-auto w-full max-w-[100rem]";
+export const HOME_PAGE_GUTTER_CLASS = "px-4 py-3 sm:px-6 sm:py-4 lg:px-8 xl:px-10";
+export const HOME_FOOTER_GUTTER_CLASS = "px-4 py-2.5 sm:px-6 lg:px-8 xl:px-10";
 
 /** Horizontal padding (both sides) matching HOME_PAGE_GUTTER_CLASS. */
 export function homePageGutterXPx(viewportWidth: number): number {
-  if (viewportWidth >= 1280) return 56 * 2;
-  if (viewportWidth >= 1024) return 40 * 2;
-  if (viewportWidth >= 640) return 32 * 2;
+  if (viewportWidth >= 1280) return 40 * 2;
+  if (viewportWidth >= 1024) return 32 * 2;
+  if (viewportWidth >= 640) return 24 * 2;
   return 16 * 2;
 }
 
-/** Inner content width after gutters and the 1280px measure. */
+/** Inner content width after gutters and the content measure. */
 export function homeContentInnerWidthPx(viewportWidth: number): number {
   const gutter = homePageGutterXPx(viewportWidth);
   return Math.min(Math.max(0, viewportWidth - gutter), HOME_CONTENT_MAX_WIDTH_PX - gutter);
@@ -58,13 +59,14 @@ export function homeContentInnerWidthPx(viewportWidth: number): number {
 /** Grid classes shared by live Home and Settings preview — do not diverge. */
 export const HOME_MODULE_GRID_CLASS = {
   comfortable:
-    "grid auto-rows-min grid-cols-2 items-start gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4",
-  compact: "grid auto-rows-min grid-cols-2 items-start gap-2 sm:gap-2.5 lg:grid-cols-4 xl:grid-cols-5",
+    "grid auto-rows-min grid-cols-2 items-start gap-2 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+  compact:
+    "grid auto-rows-min grid-cols-2 items-start gap-1.5 sm:gap-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
 } as const;
 
 export const HOME_MODULE_SECTION_SPACING = {
-  standard: "mb-4 sm:mb-5",
-  admin: "mb-2",
+  standard: "mb-3",
+  admin: "mb-1.5",
 } as const;
 
 /**

@@ -29,7 +29,11 @@ export function CommandCenterCashCard({ lang, cash }: Props) {
       }
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <EnterpriseKpiCard icon={Wallet} label={t(lang, "ownerCashExpected")} value={formatShortUgx(cash.periodExpectedCashUgx)} />
+        <EnterpriseKpiCard
+          icon={Wallet}
+          label={t(lang, "ownerCashExpected")}
+          value={cash.periodExpectedCashUgx != null ? formatShortUgx(cash.periodExpectedCashUgx) : "—"}
+        />
         <EnterpriseKpiCard
           icon={Scale}
           label={t(lang, "ownerCashCounted")}

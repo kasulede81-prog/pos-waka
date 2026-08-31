@@ -3,6 +3,7 @@ import {
   classifyPendingStockPayload,
   r3AdjustmentStockPayload,
   r3InventoryCountStockPayload,
+  r3PurchaseVoidStockPayload,
   r3SaleVoidStockPayload,
   shouldAckR3StockResult,
 } from "./stockDurableSync";
@@ -55,6 +56,17 @@ describe("stockDurableSync — payload identity", () => {
     expect(p.delta).toBe(2);
   });
 
+  it("stamps explicit purchase_void purchase identity (negative delta)", () => {
+    const p = r3PurchaseVoidStockPayload({
+      productId: PRODUCT,
+      delta: -12,
+      purchaseId: PURCHASE,
+    });
+    expect(p.referenceType).toBe("purchase_void");
+    expect(p.referenceId).toBe(PURCHASE);
+    expect(p.delta).toBe(-12);
+  });
+
   it("does not treat note text as the durable identity", () => {
     const classified = classifyPendingStockPayload({
       productId: PRODUCT,
@@ -69,6 +81,35 @@ describe("stockDurableSync — classifyPendingStockPayload", () => {
   it("routes purchase kind to 166 path", () => {
     expect(classifyPendingStockPayload({ kind: "purchase", purchaseId: PURCHASE }).route).toBe("purchase");
     expect(classifyPendingStockPayload({ kind: "purchase_void", purchaseId: PURCHASE }).route).toBe("purchase_void");
+  });
+
+  it("T14 — quarantines legacy purchase_void note without referenceType", () => {
+    const r = classifyPendingStockPayload({
+      productId: PRODUCT,
+      delta: -10,
+      note: `purchase_void:${PURCHASE}`,
+    });
+    expect(r.route).toBe("quarantine");
+    if (r.route === "quarantine") expect(r.reason).toBe("purchase_void_missing_reference");
+  });
+
+  it("routes durable purchase_void_line to dedicated path", () => {
+    const r = classifyPendingStockPayload(
+      r3PurchaseVoidStockPayload({ productId: PRODUCT, delta: -5, purchaseId: PURCHASE }),
+    );
+    expect(r).toEqual({
+      route: "purchase_void_line",
+      productId: PRODUCT,
+      delta: -5,
+      referenceId: PURCHASE,
+      note: "purchase_void",
+    });
+  });
+
+  it("quarantines kind purchase_void without trustworthy purchaseId", () => {
+    const r = classifyPendingStockPayload({ kind: "purchase_void", purchaseId: "not-a-uuid" });
+    expect(r.route).toBe("quarantine");
+    if (r.route === "quarantine") expect(r.reason).toBe("purchase_void_missing_reference");
   });
 
   it("routes purchase: note to 166 stock RPC", () => {

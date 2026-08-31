@@ -1,10 +1,15 @@
 import { useDeferredValue, useMemo } from "react";
 import type { Language } from "../types";
 import { DEFAULT_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
-import { buildCashPositionDashboard } from "../lib/cashPositionDashboard";
-import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
+import {
+  buildCashPositionDashboard,
+  buildCashPositionDashboardFingerprint,
+} from "../lib/cashPositionDashboard";
+import { getCachedComputation } from "../lib/computationResultCache";
 import { dateKeyKampala } from "../lib/datesUg";
+import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { timedComputation } from "../lib/performanceMetrics";
+import { getActiveShopId } from "../offline/shopScope";
 import { usePosStore } from "../store/usePosStore";
 import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
@@ -21,29 +26,35 @@ export function useCashPositionDashboard(lang: Language, filter: DateFilterValue
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
-  const formulaVersion = usePosStore((s) => s.preferences.cashDrawerFormulaVersion ?? "v1");
+  const formulaVersion = usePosStore((s) => resolveCashDrawerFormulaVersion(s.preferences));
   const preferences = usePosStore((s) => s.preferences);
   const todayKey = dateKeyKampala(new Date());
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
   const generalLabel = t(lang, "uncategorized");
+  const shopId = getActiveShopId();
 
   const dashboard = useMemo(() => {
-    const fp = [
-      filter.kind,
-      filter.kind === "preset" ? filter.preset : "",
-      filter.kind === "day" ? filter.dateKey : "",
-      filter.kind === "range" ? `${filter.fromKey}:${filter.toKey}` : "",
-      buildSalesFingerprint(sales),
-      returnRecords.length,
-      debtPayments.length,
-      cashExpenses.length,
-      supplierPayments.length,
-      cashDrawerAdjustments.length,
-      dayDrawerOpens.length,
-      dayCloses.length,
+    const fp = buildCashPositionDashboardFingerprint({
+      shopId,
+      filter,
+      sales,
+      products,
+      staffAccounts: preferences.staffAccounts ?? [],
+      returnRecords,
+      debtPayments,
+      cashExpenses,
+      supplierPayments,
+      cashDrawerAdjustments,
+      dayDrawerOpens,
+      dayCloses,
+      shifts,
       formulaVersion,
-      preferences.cashSafeLimitUgx ?? "",
-    ].join("|");
+      cashSafeLimitUgx: preferences.cashSafeLimitUgx,
+      lang,
+      shopName,
+      generalCategoryLabel: generalLabel,
+      todayKey,
+    });
     return getCachedComputation("buildCashPositionDashboard", fp, () =>
       timedComputation("buildCashPositionDashboard", () =>
         buildCashPositionDashboard({
@@ -72,6 +83,7 @@ export function useCashPositionDashboard(lang: Language, filter: DateFilterValue
     filter,
     lang,
     shopName,
+    shopId,
     sales,
     products,
     returnRecords,

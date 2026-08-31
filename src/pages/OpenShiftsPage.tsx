@@ -6,6 +6,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { shiftStatusLabel, formatShiftDuration } from "../lib/shiftEnforcement";
 import { dateKeyKampala } from "../lib/datesUg";
+import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { WakaButton } from "../components/ui/wakaPrimitives";
 import { ResponsiveDataTable } from "../components/shared/ResponsiveDataTable";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
@@ -36,8 +37,9 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
   const managerForceCloseOpenShift = usePosStore((s) => s.managerForceCloseOpenShift);
   const todayKey = dateKeyKampala(new Date());
   const [recoveringShift, setRecoveringShift] = useState<ShiftRecord | null>(null);
+  const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
 
-  const rows = useMemo(() => buildShiftSummaryRows(shifts), [shifts]);
+  const rows = useMemo(() => buildShiftSummaryRows(shifts, Date.now(), formulaVersion), [shifts, formulaVersion]);
   const openShifts = useMemo(() => listOpenShifts(shifts), [shifts]);
   const recoverableForActor = useMemo(
     () => listRecoverableOpenShifts(shifts, actor.userId),
@@ -57,8 +59,6 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
   if (!canViewShiftDashboard(actor.role)) {
     return <Navigate to="/office" replace />;
   }
-
-  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
 
   return (
     <EnterprisePageContainer>

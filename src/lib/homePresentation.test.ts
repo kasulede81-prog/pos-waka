@@ -237,14 +237,14 @@ describe("applyHomeBandOrder", () => {
   });
 });
 
-describe("HOME-DENSITY-1.1 layout tokens", () => {
-  it("keeps phone and 1280 inner width unchanged while capping 1440/1920", () => {
+describe("HOME cinematic density V1 layout tokens", () => {
+  it("keeps phone full-bleed while widening 1440/1920 under a 1600px measure", () => {
     expect(homeContentInnerWidthPx(390)).toBe(390 - 32);
-    expect(homeContentInnerWidthPx(768)).toBe(768 - 64);
-    expect(homeContentInnerWidthPx(1024)).toBe(1024 - 80);
-    expect(homeContentInnerWidthPx(1280)).toBe(1280 - 112);
-    expect(homeContentInnerWidthPx(1440)).toBe(1280 - 112);
-    expect(homeContentInnerWidthPx(1920)).toBe(1280 - 112);
+    expect(homeContentInnerWidthPx(768)).toBe(768 - 48);
+    expect(homeContentInnerWidthPx(1024)).toBe(1024 - 64);
+    expect(homeContentInnerWidthPx(1280)).toBe(1280 - 80);
+    expect(homeContentInnerWidthPx(1440)).toBe(1440 - 80);
+    expect(homeContentInnerWidthPx(1920)).toBe(1600 - 80);
   });
 
   it("does not stretch module-grid rows to the tallest sibling", () => {
@@ -254,12 +254,14 @@ describe("HOME-DENSITY-1.1 layout tokens", () => {
     expect(HOME_MODULE_GRID_CLASS.compact).toContain("auto-rows-min");
   });
 
-  it("preserves phone and desktop column counts", () => {
+  it("preserves phone columns and adds 2xl density columns", () => {
     expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("grid-cols-2");
     expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("lg:grid-cols-3");
     expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("xl:grid-cols-4");
+    expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("2xl:grid-cols-5");
     expect(HOME_MODULE_GRID_CLASS.compact).toContain("lg:grid-cols-4");
     expect(HOME_MODULE_GRID_CLASS.compact).toContain("xl:grid-cols-5");
+    expect(HOME_MODULE_GRID_CLASS.compact).toContain("2xl:grid-cols-6");
   });
 });
 

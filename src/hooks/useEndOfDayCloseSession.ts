@@ -4,6 +4,7 @@ import type { Language } from "../types";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { activeDayCloseForDate } from "../lib/dayCloseIdempotency";
 import { dateKeyKampala } from "../lib/datesUg";
+import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import {
   evaluateDayClosePreflightSync,
   runDayClosePreflight,
@@ -152,7 +153,7 @@ export function useEndOfDayCloseSession(lang: Language) {
         cashDrawerAdjustments,
         shifts,
         dayDrawerOpens,
-        formulaVersion: preferences.cashDrawerFormulaVersion ?? "v1",
+        formulaVersion: resolveCashDrawerFormulaVersion(preferences),
         staffAccounts,
         generalCategoryLabel: t(lang, "uncategorized") || "General",
       }),

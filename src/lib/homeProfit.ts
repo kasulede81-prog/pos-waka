@@ -1,5 +1,6 @@
 import type { Product, ReturnRecord, Sale, UserRole } from "../types";
 import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
+import { normalizeUnitCostUgx } from "./costPrecision";
 import {
   findSaleLineForReturn,
   resolveReturnFinancials,
@@ -46,7 +47,50 @@ export type TodayProfitBreakdown = {
   salesUgx: number;
   costUgx: number;
   linesMissingCost: number;
+  /** True when any active line lacks trustworthy historical unit cost (zero COGS is not assumed known). */
+  costIncomplete: boolean;
 };
+
+/**
+ * Sale-line historical cost is trustworthy for Profit only when unit cost &gt; 0.
+ * Zero/missing unit cost is treated as cost-incomplete (may silently inflate gross profit).
+ * Does not consult live WAC / product catalog.
+ */
+export function saleLineHasTrustworthyHistoricalCost(line: {
+  voided?: boolean | null;
+  unitCostUgx?: number | null;
+  financialDataStatus?: string | null;
+}): boolean {
+  if (line.voided) return true;
+  if (line.financialDataStatus === "legacy" || line.financialDataStatus === "needs_repair") {
+    return false;
+  }
+  return normalizeUnitCostUgx(line.unitCostUgx) > 0;
+}
+
+/**
+ * Linked returns already reduce sale.totalUgx (canonical revenue).
+ * When the sale is in profit scope but the return falls outside the date filter,
+ * still include that return for COGS/profit so Revenue − COGS ≈ Gross Profit.
+ * Idempotent by return id — does not double-count same-day returns.
+ */
+export function mergeLinkedReturnsForScopedSales(
+  scopedSales: Sale[],
+  dateScopedReturns: ReturnRecord[],
+  allReturns: ReturnRecord[],
+): ReturnRecord[] {
+  const saleIds = new Set(scopedSales.map((s) => s.id));
+  const byId = new Map<string, ReturnRecord>();
+  for (const rec of dateScopedReturns) {
+    byId.set(rec.id, rec);
+  }
+  for (const rec of allReturns) {
+    const sid = rec.saleId?.trim();
+    if (!sid || !saleIds.has(sid)) continue;
+    byId.set(rec.id, rec);
+  }
+  return [...byId.values()];
+}
 
 /** Profit per line = sale amount − (buying cost per unit × quantity sold). */
 export function computeTodayProfitBreakdown(
@@ -69,8 +113,7 @@ export function computeTodayProfitBreakdown(
     costUgx += part.cogsUgx;
     profitUgx += part.grossProfitUgx;
     for (const line of active) {
-      const fin = resolveSaleLineFinancialsWithSale(line, sale);
-      if (fin.unitCostUgx <= 0) linesMissingCost += 1;
+      if (!saleLineHasTrustworthyHistoricalCost(line)) linesMissingCost += 1;
     }
   }
 
@@ -81,7 +124,9 @@ export function computeTodayProfitBreakdown(
     const linkedSale = todaySales.find((s) => s.id === rec.saleId);
     const saleLine = findSaleLineForReturn(linkedSale, rec.productId);
     const retFin = resolveReturnFinancials(rec, saleLine);
-    if (retFin.unitCostUgx <= 0) linesMissingCost += 1;
+    if (!saleLineHasTrustworthyHistoricalCost({ unitCostUgx: retFin.unitCostUgx })) {
+      linesMissingCost += 1;
+    }
     salesUgx -= refundUgx;
     costUgx -= retFin.cogsUgx;
     profitUgx -= retFin.grossProfitUgx;
@@ -94,6 +139,7 @@ export function computeTodayProfitBreakdown(
     salesUgx: Math.round(salesUgx),
     costUgx: Math.round(costUgx),
     linesMissingCost,
+    costIncomplete: linesMissingCost > 0,
   };
 }
 

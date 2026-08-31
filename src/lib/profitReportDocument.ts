@@ -20,6 +20,7 @@ export type ProfitReportDocumentInput = {
   revenueUgx: number;
   costUgx: number;
   marginPct: number;
+  costIncomplete?: boolean;
   groups: Array<{ categoryLabel: string; profitUgx: number; products: Array<{ name: string; profitUgx: number }> }>;
 };
 
@@ -41,6 +42,9 @@ export function buildProfitReportDocument(input: ProfitReportDocumentInput): Rep
   const closed = authority !== "live";
   const marginPct =
     overlaid.revenueUgx > 0 ? (overlaid.profitUgx / overlaid.revenueUgx) * 100 : 0;
+  const grossLabel = input.costIncomplete
+    ? t(input.lang, "profitGrossProfitEstimated")
+    : t(input.lang, "profitStatGrossProfit");
   return {
     kind: "profit",
     lang: input.lang,
@@ -54,21 +58,24 @@ export function buildProfitReportDocument(input: ProfitReportDocumentInput): Rep
       {
         title: closed ? t(input.lang, "reportDocClosedHeadlines") : undefined,
         rows: [
-          { label: t(input.lang, "profitStatGrossProfit"), value: ugxLabel(overlaid.profitUgx), bold: true },
+          { label: grossLabel, value: ugxLabel(overlaid.profitUgx), bold: true },
           { label: t(input.lang, "profitStatRevenue"), value: ugxLabel(overlaid.revenueUgx) },
-          ...(closed
-            ? [{ label: t(input.lang, "profitStatMargin"), value: `${marginPct.toFixed(1)}%` }]
-            : [
-                { label: t(input.lang, "profitStatCost"), value: ugxLabel(input.costUgx) },
-                { label: t(input.lang, "profitStatMargin"), value: `${marginPct.toFixed(1)}%` },
-              ]),
+          { label: t(input.lang, "profitStatCost"), value: ugxLabel(input.costUgx) },
+          { label: t(input.lang, "profitStatMargin"), value: `${marginPct.toFixed(1)}%` },
+          ...(input.costIncomplete
+            ? [{ label: t(input.lang, "profitExportCostIncomplete"), value: t(input.lang, "profitGrossProfitEstimated") }]
+            : []),
         ],
       },
       {
-        title: t(input.lang, "profitStatBestShelf"),
+        title: closed
+          ? `${t(input.lang, "profitStatBestShelf")} — ${t(input.lang, "reportDocLiveBreakdown")}`
+          : t(input.lang, "profitStatBestShelf"),
         live: closed,
         rows: [
-          ...(closed ? [{ label: t(input.lang, "profitStatCost"), value: ugxLabel(input.costUgx) }] : []),
+          ...(closed
+            ? [{ label: t(input.lang, "reportDocLiveBreakdownHint"), value: "" }]
+            : []),
           ...input.groups.flatMap((g) => [
             { label: g.categoryLabel, value: ugxLabel(g.profitUgx), bold: true },
             ...g.products.slice(0, 40).map((p) => ({ label: `  ${p.name}`, value: ugxLabel(p.profitUgx) })),

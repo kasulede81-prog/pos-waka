@@ -25,7 +25,7 @@ import { Body, Caption, MonoNumber, SectionTitle } from "../components/enterpris
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
 import { buildCashManagementSnapshot, canAccessCashManagement } from "../lib/cashManagementSnapshot";
-import { isFormulaV2 } from "../lib/dayDrawerOpen";
+import { isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import {
   classifyCashVariance,
   computeCashVarianceThresholdUgx,
@@ -121,7 +121,7 @@ function CashManagementHub({ lang }: Props) {
         .slice(0, 5),
     [shifts, todayKey],
   );
-  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
+  const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
 
   if (!canAccessCashManagement(authOperatorRole(actor))) {
     return <Navigate to="/office" replace />;

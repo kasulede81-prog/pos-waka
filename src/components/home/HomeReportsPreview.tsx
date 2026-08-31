@@ -21,11 +21,11 @@ type Props = {
 export function HomeReportsPreview({ lang, tile, liveStat, onOpen }: Props) {
   const accent = resolveHomeTileAccent(tile);
   return (
-    <EnterpriseCard className="!p-0 overflow-hidden">
+    <EnterpriseCard className="home-reports-preview !p-0 overflow-hidden shadow-sm">
       <button
         type="button"
         onClick={onOpen}
-        className="relative flex w-full min-h-[88px] items-stretch gap-3 p-3 pl-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-waka-500 sm:p-4 sm:pl-5"
+        className="relative flex w-full min-h-[76px] items-stretch gap-3 p-2.5 pl-3.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-waka-500 sm:min-h-[84px] sm:p-3.5 sm:pl-4"
       >
         <span
           className="pointer-events-none absolute inset-y-0 left-0 w-1"

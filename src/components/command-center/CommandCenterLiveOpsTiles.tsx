@@ -11,7 +11,7 @@ import { WakaButton } from "../ui/wakaPrimitives";
 type Props = {
   lang: Language;
   live: OwnerLiveOperationsSnapshot;
-  expectedCashUgx: number;
+  expectedCashUgx: number | null;
 };
 
 export function CommandCenterLiveOpsTiles({ lang, live, expectedCashUgx }: Props) {
@@ -37,7 +37,11 @@ export function CommandCenterLiveOpsTiles({ lang, live, expectedCashUgx }: Props
           label={t(lang, "ownerLiveOpsDrawer")}
           value={live.dayDrawerOpen ? t(lang, "ownerCashDrawerOpenYes") : t(lang, "ownerCashDrawerOpenNo")}
         />
-        <EnterpriseKpiCard icon={Banknote} label={t(lang, "cmdCenterKpiExpectedCash")} value={formatShortUgx(expectedCashUgx)} />
+        <EnterpriseKpiCard
+          icon={Banknote}
+          label={t(lang, "cmdCenterKpiExpectedCash")}
+          value={expectedCashUgx == null ? "—" : formatShortUgx(expectedCashUgx)}
+        />
         <EnterpriseKpiCard
           icon={Activity}
           label={t(lang, "ownerLiveOpsUnsynced")}

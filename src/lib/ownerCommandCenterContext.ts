@@ -17,6 +17,7 @@ import { isCatalogTamperAction, isSensitiveCatalogEvent } from "./catalogAudit";
 import { computeExtendedOwnerAlerts } from "./ownerIntelligence";
 import type { OwnerAlert } from "./ownerAlerts";
 import { getCompletedFinancialsFromScoped, type RevenueSalesIndex } from "./financialMetrics";
+import { mergeLinkedReturnsForScopedSales } from "./homeProfit";
 import { buildOwnerRiskCards, type OwnerRiskCard } from "./ownerRiskDashboard";
 import {
   revenueSalesInBoundsFromIndex,
@@ -31,6 +32,7 @@ export type OwnerCommandCenterOverview = {
   revenueUgx: number;
   profitUgx: number;
   transactionCount: number;
+  costIncomplete: boolean;
   countedCashUgx: number | null;
 };
 
@@ -74,7 +76,8 @@ export function buildOwnerCommandCenterContext(params: {
   const periodSales = bounds.isSingleDay
     ? (revenueIndex.salesByDay.get(bounds.fromKey) ?? [])
     : revenueSalesInBoundsFromIndex(revenueIndex, bounds);
-  const periodReturns = returnsInBounds(returnRecords, bounds);
+  const datePeriodReturns = returnsInBounds(returnRecords, bounds);
+  const periodReturns = mergeLinkedReturnsForScopedSales(periodSales, datePeriodReturns, returnRecords);
   const periodVoids = filterVoidsInBounds(voidRecords, bounds);
   const periodAuditLogs = filterAuditLogsInBounds(auditLogs, bounds);
 
@@ -89,7 +92,7 @@ export function buildOwnerCommandCenterContext(params: {
     dayCloses,
     bounds,
     sales,
-    returns: returnRecords,
+    returns: periodReturns,
     products,
   });
   const closePrimary = dayCloses.find((d) => d.dateKey === periodKey && !d.supersededAt);
@@ -163,6 +166,7 @@ export function buildOwnerCommandCenterContext(params: {
       revenueUgx: overlaid.revenueUgx,
       profitUgx: overlaid.profitUgx,
       transactionCount: overlaid.transactionCount,
+      costIncomplete: finPeriod.costIncomplete,
       countedCashUgx,
     },
     ownerAlertsResolved,

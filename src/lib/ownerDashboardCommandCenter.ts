@@ -73,7 +73,7 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
     input.acknowledgements.length,
     input.syncPendingCount,
     input.syncErrorCount,
-    input.expectedCashUgx,
+    input.expectedCashUgx ?? "na",
     input.pharmacyMode ? "rx" : "std",
     input.dayCloses.length,
     input.devicesOnline ?? 0,
@@ -224,6 +224,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
         revenueUgx: overview.revenueUgx,
         profitUgx: overview.profitUgx,
         transactionCount: overview.transactionCount,
+        costIncomplete: overview.costIncomplete,
       },
     }),
   };

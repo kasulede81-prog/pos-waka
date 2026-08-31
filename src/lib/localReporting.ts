@@ -17,6 +17,7 @@ import { inventoryValueAtCostUgx } from "./costPrecision";
 import { isLowStock } from "./sellingEngine";
 import { resolveReturnFinancials, resolveSaleLineFinancialsWithSale, findSaleLineForReturn } from "./saleFinancialEngine";
 import { createReportFinancialCache, cachedCompletedFinancials, type ReportFinancialCache } from "./reportFinancialCache";
+import { physicalCashCollectedFromSale } from "./cashDrawerSales";
 import {
   overlayClosedDayExpenses,
   overlayClosedDayTrendPoint,
@@ -25,6 +26,10 @@ import {
   resolveReportAuthority,
   type PeriodReportAuthority,
 } from "./closedDayAuthority";
+
+function physicalCashCollectedFromSales(sales: Sale[]): number {
+  return sales.reduce((sum, s) => sum + physicalCashCollectedFromSale(s), 0);
+}
 
 export type ProductRank = {
   productId: string;
@@ -214,7 +219,10 @@ export function localGetDailySalesSummary(
       day,
       transactionCount: fin.transactionCount,
       totalRevenueUgx: fin.revenueUgx,
-      cashCollectedUgx: fin.cashCollectedUgx,
+      /** Physical drawer cash from sales (MoMo/ATM = 0); matches closed-day cashFromSalesUgx. */
+      cashCollectedUgx: physicalCashCollectedFromSales(
+        sales.filter((s) => isRevenueSale(s) && saleReportingDayKey(s) === day),
+      ),
       debtIssuedUgx: fin.debtIssuedUgx,
       discountsUgx: fin.discountsUgx,
       taxesUgx: 0,
@@ -304,7 +312,7 @@ function buildWeeklySummaryFromFiltered(
     endDay,
     transactionCount: filtered.length,
     totalRevenueUgx: breakdown.salesUgx,
-    cashCollectedUgx: filtered.reduce((a, s) => a + s.cashPaidUgx, 0),
+    cashCollectedUgx: physicalCashCollectedFromSales(filtered),
     dailyTrend,
     topProducts: rankProducts(filtered, filteredReturns, products, "top", 10),
     activeCustomers: customerIds.size,
@@ -326,11 +334,12 @@ export function localGetMonthlySalesSummary(
   const revenue = fin.revenueUgx;
   const expensesUgx = sumCashExpensesInMonth(cashExpenses, month);
   const grossProfitUgx = fin.profitUgx;
+  const monthSales = sales.filter((s) => isRevenueSale(s) && saleReportingDayKey(s).startsWith(month));
   return {
     month,
     transactionCount: fin.transactionCount,
     totalRevenueUgx: revenue,
-    cashCollectedUgx: fin.cashCollectedUgx,
+    cashCollectedUgx: physicalCashCollectedFromSales(monthSales),
     debtIssuedUgx: fin.debtIssuedUgx,
     estimatedProfitUgx: grossProfitUgx,
     expensesUgx,
@@ -499,7 +508,7 @@ export function localGetRangeSummary(
       day: dayKey,
       transactionCount: dayFin.transactionCount,
       totalRevenueUgx: dayFin.revenueUgx,
-      cashCollectedUgx: dayFin.cashCollectedUgx,
+      cashCollectedUgx: physicalCashCollectedFromSales(filteredSales),
       debtIssuedUgx: dayFin.debtIssuedUgx,
       discountsUgx: dayFin.discountsUgx,
       taxesUgx: 0,

@@ -14,7 +14,8 @@ export type CashDrawerSalesInput = {
   bankTransferSalesUgx: number;
 };
 
-function physicalCashCollectedFromSale(sale: Sale): number {
+/** Physical drawer contribution from a sale (MoMo/ATM → 0). Shared by day + shift expected cash. */
+export function physicalCashCollectedFromSale(sale: Sale): number {
   const total = Math.max(0, sale.totalUgx);
   const debt = Math.max(0, sale.debtUgx);
   const collected = Math.max(0, total - debt);
@@ -69,9 +70,9 @@ export function getCashDrawerSalesInput(sales: Sale[], day: string): CashDrawerS
   return { cashSalesUgx, mobileMoneySalesUgx, cardSalesUgx, bankTransferSalesUgx };
 }
 
-/** Cash portion of a refund that left the drawer (for shift tracking). */
+/** Physical-cash portion of a refund/void that left the drawer (for shift tracking). */
 export function cashReduceFromRefund(sale: Sale | undefined, refundUgx: number): number {
   const refund = Math.max(0, Math.floor(refundUgx));
   if (!sale) return refund;
-  return Math.min(refund, Math.max(0, sale.cashPaidUgx));
+  return Math.min(refund, physicalCashCollectedFromSale(sale));
 }

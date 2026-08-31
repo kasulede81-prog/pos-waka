@@ -33,7 +33,9 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
           ) : null}
         </div>
         <div className="rounded-xl bg-muted px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialProfit")}</dt>
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">
+            {t(lang, financial.costIncomplete ? "profitGrossProfitEstimated" : "ownerFinancialProfit")}
+          </dt>
           <dd className="text-sm font-black tabular-nums">UGX {financial.profitUgx.toLocaleString()}</dd>
         </div>
         <div className="rounded-xl bg-muted px-2.5 py-2">

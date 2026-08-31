@@ -2,7 +2,13 @@ import type { Sale } from "../types";
 import { saleReportingDayKey } from "./datesUg";
 import { getCompletedRevenue } from "./financialMetrics";
 import type { Product, ReturnRecord } from "../types";
-import { isCompletedSale, isPendingSale, isPreCompletionVoidedSale, saleStatusOf } from "./saleStatus";
+import {
+  isCompletedSale,
+  isPendingSale,
+  isPreCompletionVoidedSale,
+  isRevenueSale,
+  saleStatusOf,
+} from "./saleStatus";
 
 export type ReceiptsPartition = {
   completed: Sale[];
@@ -27,6 +33,14 @@ export function partitionReceiptsSales(sales: Sale[]): ReceiptsPartition {
     else cancelled.push(s);
   }
   return { completed, pending, cancelled, voided };
+}
+
+/**
+ * Revenue-producing sales for Sales History KPIs (txn count, average, cash/profit rolls).
+ * Whole-bill voids stay in partition.completed for history list but are excluded here.
+ */
+export function revenueEligibleSales(sales: Sale[]): Sale[] {
+  return sales.filter(isRevenueSale);
 }
 
 export type ReceiptDayGroup = {

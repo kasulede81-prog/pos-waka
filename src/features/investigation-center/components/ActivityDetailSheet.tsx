@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Check, Copy, FileText, Printer, Share2 } from "lucide-react";
+import { Copy, FileText, Printer, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AuditLogEntry, Language } from "../../../types";
 import { t } from "../../../lib/i18n";
@@ -9,15 +9,17 @@ import {
   formatAuditBeforeAfter,
   formatAuditRowSummary,
 } from "../../../lib/auditCenterDetails";
-import { actorDisplayLabel } from "../../../lib/activityNarrative";
 import { formatAuditDeviceLabel } from "../../../lib/auditDeviceLabel";
 import { ModalSheet } from "../../../components/layout/ModalSheet";
 import {
   buildEventTimelineSteps,
   getActivitySeverity,
+  purchaseVoidInvestigationLabelKey,
   severityBadgeClass,
   severityLabelKey,
+  syntheticTimelineSectionLabelKey,
 } from "../lib/activityPresentation";
+import { resolveInvestigationActorLabel } from "../../../lib/investigationActorAttribution";
 
 type Props = {
   lang: Language;
@@ -25,6 +27,7 @@ type Props = {
   shopName: string;
   productById: Map<string, { name: string }>;
   customerById: Map<string, { name: string }>;
+  staffNameById?: Map<string, string>;
   open: boolean;
   onClose: () => void;
   onCopy: () => void;
@@ -49,6 +52,7 @@ export function ActivityDetailSheet({
   shopName,
   productById,
   customerById,
+  staffNameById,
   open,
   onClose,
   onCopy,
@@ -65,13 +69,14 @@ export function ActivityDetailSheet({
   if (!entry) return null;
 
   const detail = extractAuditDetails(entry, lang);
-  const staff = entry.actorName?.trim() || actorDisplayLabel(entry.actorUserId, lang);
+  const staff = resolveInvestigationActorLabel(lang, entry, staffNameById ?? new Map());
   const when = new Date(entry.at);
   const summary = formatAuditRowSummary(lang, entry, { productById, customerById });
   const { before, after } = formatAuditBeforeAfter(detail.before, detail.after);
   const deviceLabel = formatAuditDeviceLabel(detail.deviceId ?? entry.deviceId, entry.payload);
   const severity = getActivitySeverity(entry);
   const steps = buildEventTimelineSteps(lang, entry.action);
+  const purchaseVoidKey = purchaseVoidInvestigationLabelKey(entry);
   const pl = entry.payload;
   const amount =
     typeof pl.amountUgx === "number"
@@ -158,20 +163,24 @@ export function ActivityDetailSheet({
           <DetailRow label={t(lang, "icReferenceId")} value={entry.id} />
           <DetailRow label={t(lang, "auditExportColReason")} value={detail.reason} />
           <DetailRow label={t(lang, "icSyncStatus")} value={t(lang, "icSyncSynced")} />
+          {purchaseVoidKey ? <DetailRow label={t(lang, "icPurchaseVoidEvidence")} value={t(lang, purchaseVoidKey)} /> : null}
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "icEventTimeline")}</p>
+          <p className="mb-1 text-xs font-black uppercase tracking-widest text-muted-foreground">
+            {t(lang, syntheticTimelineSectionLabelKey())}
+          </p>
+          <p className="mb-2 text-[10px] font-medium text-muted-foreground">{t(lang, "icIllustrativeSequenceHint")}</p>
           <ol className="space-y-2">
             {steps.map((step, index) => (
               <li key={step} className="flex items-center gap-3">
                 <span
                   className={clsx(
                     "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black",
-                    index === steps.length - 1 ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground",
+                    index === steps.length - 1 ? "bg-muted text-muted-foreground" : "bg-muted text-muted-foreground",
                   )}
                 >
-                  {index === steps.length - 1 ? <Check className="h-4 w-4" aria-hidden /> : index + 1}
+                  {index + 1}
                 </span>
                 <span className="text-sm font-semibold text-foreground">{step}</span>
               </li>

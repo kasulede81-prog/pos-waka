@@ -6,7 +6,7 @@ import type { Language, ShiftRecord } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatShiftDuration } from "../../lib/shiftEnforcement";
 import { shiftExpectedCash, shiftExpectedCashLabelParts } from "../../lib/saleAdjustments";
-import { activeDayDrawerOpenForDate } from "../../lib/dayDrawerOpen";
+import { activeDayDrawerOpenForDate, resolveCashDrawerFormulaVersion } from "../../lib/dayDrawerOpen";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { usePosStore } from "../../store/usePosStore";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
@@ -68,7 +68,7 @@ export function PosDesktopCompactHeader({
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const [now, setNow] = useState(() => Date.now());
 
-  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
+  const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
   const cashCtx = useMemo(() => ({ formulaVersion }), [formulaVersion]);
   const parts = useMemo(() => (shift ? shiftExpectedCashLabelParts(shift, cashCtx) : null), [shift, cashCtx]);
   const expected = shift ? shiftExpectedCash(shift, cashCtx) : 0;

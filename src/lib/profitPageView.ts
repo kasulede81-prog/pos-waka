@@ -1,7 +1,8 @@
 import type { Product, ReturnRecord, Sale } from "../types";
 import type { ProfitCategoryGroup, ProfitProductRow } from "./homeProfit";
-import { computeTodayProfitBreakdown } from "./homeProfit";
+import { computeTodayProfitBreakdown, mergeLinkedReturnsForScopedSales } from "./homeProfit";
 import { dateKeyKampala } from "./datesUg";
+import { formatUgx } from "./formatUgx";
 
 export type ProfitProductView = ProfitProductRow & {
   shelfLabel: string;
@@ -30,7 +31,31 @@ export function marginPercent(salesUgx: number, profitUgx: number): number {
   return Math.round((profitUgx / salesUgx) * 1000) / 10;
 }
 
-import { formatUgx } from "./formatUgx";
+/**
+ * When closed-day authority overlays Revenue/Profit, derive Cost from the same
+ * pair so Gross Profit = Revenue − Cost. Snapshot has no separate COGS field.
+ * Live periods keep the sale-time COGS breakdown.
+ */
+export function resolveProfitHeadlineCostUgx(input: {
+  closedPeriod: boolean;
+  revenueUgx: number;
+  profitUgx: number;
+  liveCostUgx: number;
+}): number {
+  if (!input.closedPeriod) return input.liveCostUgx;
+  return Math.round(input.revenueUgx - input.profitUgx);
+}
+
+/** Gross profit ÷ revenue-eligible transaction count (voids excluded from both). */
+export function averageGrossProfitPerSale(grossProfitUgx: number, revenueEligibleTxnCount: number): number {
+  if (revenueEligibleTxnCount <= 0) return 0;
+  return Math.round(grossProfitUgx / revenueEligibleTxnCount);
+}
+
+export function averageSaleUgx(revenueUgx: number, revenueEligibleTxnCount: number): number {
+  if (revenueEligibleTxnCount <= 0) return 0;
+  return Math.round(revenueUgx / revenueEligibleTxnCount);
+}
 
 export function formatShortUgx(n: number): string {
   return formatUgx(n);
@@ -69,7 +94,8 @@ export function computeDailyProfitTrend(
   const fmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "Africa/Kampala" });
   return keys.map((dayKey) => {
     const daySales = dayMap.get(dayKey) ?? [];
-    const dayReturns = returns.filter((r) => dateKeyKampala(r.createdAt) === dayKey);
+    const dayDatedReturns = returns.filter((r) => dateKeyKampala(r.createdAt) === dayKey);
+    const dayReturns = mergeLinkedReturnsForScopedSales(daySales, dayDatedReturns, returns);
     const profitUgx = computeTodayProfitBreakdown(daySales, productById, dayReturns).profitUgx;
     const label = fmt.format(new Date(`${dayKey}T12:00:00`));
     return { dayKey, profitUgx, label };

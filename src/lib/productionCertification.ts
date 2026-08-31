@@ -21,6 +21,7 @@ import { readSyncHealthMeta } from "./syncMeta";
 import { getOrCreateDeviceId } from "./deviceId";
 import { dateKeyKampala } from "./datesUg";
 import { getExpectedCashForDay } from "./cashReconciliation";
+import { resolveCashDrawerFormulaVersion } from "./dayDrawerOpen";
 import { analyzeSnapshotTrim, MAX_CLOUD_SNAPSHOT_BYTES } from "./snapshotTrimDiagnostics";
 import { getLastCloudSnapshotUploadIso } from "./cloudSnapshotSync";
 
@@ -169,7 +170,7 @@ export function readExtendedFinancialParity(): ExtendedFinancialParity {
     cashDrawerAdjustments: s.cashDrawerAdjustments,
     shifts,
     dayDrawerOpens: s.dayDrawerOpens,
-    formulaVersion: s.preferences.cashDrawerFormulaVersion ?? "v1",
+    formulaVersion: resolveCashDrawerFormulaVersion(s.preferences),
     day: today,
   });
   return {

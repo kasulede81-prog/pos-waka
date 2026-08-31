@@ -38,7 +38,7 @@ export function ProfitProductCard({ lang, product, onOpen }: Props) {
           <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-bold">
             <span className="text-muted-foreground">{t(lang, "profitPageSoldFor")}</span>
             <span className="text-right tabular-nums text-foreground">{formatShortUgx(product.salesUgx)}</span>
-            <span className="text-muted-foreground">{t(lang, "profitStatNetProfit")}</span>
+            <span className="text-muted-foreground">{t(lang, "profitStatGrossProfit")}</span>
             <span className={clsx("text-right tabular-nums", loss ? "text-rose-700" : "text-teal-800")}>
               {formatShortUgx(product.profitUgx)}
             </span>

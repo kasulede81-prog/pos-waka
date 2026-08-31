@@ -164,6 +164,7 @@ function FooterSheetsWidget({ ctx }: InvestigationWidgetProps) {
         shopName={ctx.shopName}
         productById={ctx.productById}
         customerById={ctx.customerById}
+        staffNameById={ctx.staffNameById}
         open={ctx.selected !== null}
         onClose={() => ctx.setSelected(null)}
         onCopy={() => ctx.selected && void ctx.copyEntry(ctx.selected)}

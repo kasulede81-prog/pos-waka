@@ -48,6 +48,7 @@ function minimalCtx(mode: InvestigationCenterContext["mode"]): InvestigationCent
     shopName: "Shop",
     productById: new Map(),
     customerById: new Map(),
+    staffNameById: new Map(),
     saleById: new Map(),
     integrityReport: { ok: true, violations: [], salesScanned: 0, returnsScanned: 0 },
     returnsInRange: [],

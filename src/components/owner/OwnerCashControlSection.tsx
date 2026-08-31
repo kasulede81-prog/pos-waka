@@ -39,7 +39,9 @@ export function OwnerCashControlSection({ lang, cash }: Props) {
       <dl className="mt-3 grid gap-2 sm:grid-cols-3">
         <div className="rounded-xl bg-muted px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerCashExpected")}</dt>
-          <dd className="mt-0.5 text-sm font-black tabular-nums">UGX {cash.periodExpectedCashUgx.toLocaleString()}</dd>
+          <dd className="mt-0.5 text-sm font-black tabular-nums">
+            {cash.periodExpectedCashUgx != null ? `UGX ${cash.periodExpectedCashUgx.toLocaleString()}` : "—"}
+          </dd>
         </div>
         <div className="rounded-xl bg-muted px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerCashCounted")}</dt>

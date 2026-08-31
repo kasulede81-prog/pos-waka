@@ -3,6 +3,7 @@ import type { Language, ShiftRecord } from "../../types";
 import { t } from "../../lib/i18n";
 import { ModalSheet } from "../layout/ModalSheet";
 import { shiftExpectedCashLabelParts } from "../../lib/saleAdjustments";
+import { resolveCashDrawerFormulaVersion } from "../../lib/dayDrawerOpen";
 import { computeCashVarianceThresholdUgx } from "../../lib/cashVarianceExperience";
 import { formatShiftDuration } from "../../lib/shiftEnforcement";
 import { usePosStore } from "../../store/usePosStore";
@@ -53,7 +54,7 @@ export function ShiftRecoveryWizard({ lang, open, shift, recoveryMode = false, o
     );
   }
 
-  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
+  const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
   const parts = shiftExpectedCashLabelParts(shift, { formulaVersion });
   const duration = formatShiftDuration(shift.startAt);
 

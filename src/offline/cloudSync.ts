@@ -129,8 +129,14 @@ import { applySuccessfulDayClosePush, pullDayClosesFromRpc, pushDayCloseToCloud 
 import { normalizeUnitCostUgx, normalizePackCostUgx } from "../lib/costPrecision";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 import { pullCursorUntilExhausted, pullOffsetRangeUntilExhausted } from "../lib/cloudPullPagination";
-import { getActiveShopId } from "./shopScope";
+import { getActiveShopId, isValidShopId } from "./shopScope";
 import { inferShopIdFromQueueRow } from "./shopScopeMigration";
+
+/** MB-1 — immediate cash push requires an immutable stamped shopId (never active-shop fallback). */
+export function stampedShopIdForImmediateCashSync(shopId?: string | null): string | null {
+  if (!isValidShopId(shopId)) return null;
+  return shopId.trim();
+}
 import { classifyPendingStockPayload, shouldAckR3StockResult } from "../lib/stockDurableSync";
 
 type ShopCtx = { shopId: string; userId: string };
@@ -650,7 +656,8 @@ async function pushR3DurableStockRpc(
   rpcName:
     | "shop_apply_stock_adjustment"
     | "shop_apply_inventory_count_stock"
-    | "shop_apply_sale_void_stock",
+    | "shop_apply_sale_void_stock"
+    | "shop_apply_purchase_void_stock",
   productId: string,
   ctx: ShopCtx,
   payload: Record<string, unknown>,
@@ -734,20 +741,37 @@ export async function pushSaleVoidStockToCloud(
   });
 }
 
+/** PURCHASE-VOID-STOCK-1.0 — durable purchase-void stock reversal; never stale_version rebase. */
+export async function pushPurchaseVoidStockToCloud(
+  productId: string,
+  ctx: ShopCtx,
+  opts: { delta: number; referenceId: string; note?: string },
+): Promise<boolean> {
+  return pushR3DurableStockRpc("shop_apply_purchase_void_stock", productId, ctx, {
+    product_id: productId,
+    purchase_id: opts.referenceId,
+    reference_id: opts.referenceId,
+    delta: opts.delta,
+    note: opts.note ?? "purchase_void",
+  });
+}
+
 export async function pushAuditLogToCloud(entry: AuditLogEntry, ctx: ShopCtx): Promise<boolean> {
   if (!supabase) return false;
 
-  const actorId = isUuid(entry.actorUserId) ? entry.actorUserId : ctx.userId;
   const clientEntryId = isUuid(entry.id) ? entry.id : null;
   if (!clientEntryId) return false;
 
+  const { prepareAuditCloudPush } = await import("../lib/investigationActorAttribution");
+  const prepared = prepareAuditCloudPush(entry, ctx.userId);
+
   const row: Record<string, unknown> = {
     shop_id: ctx.shopId,
-    actor_user_id: actorId,
+    actor_user_id: prepared.actorUserIdForRow,
     role: entry.role,
     action: entry.action,
     payload_summary: entry.payloadSummary.slice(0, 500),
-    payload: entry.payload,
+    payload: prepared.payload,
     device_id: entry.deviceId ?? null,
     client_entry_id: clientEntryId,
     created_at: entry.at,
@@ -764,11 +788,7 @@ export async function pushAuditLogToCloud(entry: AuditLogEntry, ctx: ShopCtx): P
   return true;
 }
 
-export async function pushDebtPaymentToCloud(
-  paymentId: string,
-  ctx: ShopCtx,
-  attempt = 0,
-): Promise<boolean> {
+export async function pushDebtPaymentToCloud(paymentId: string, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(paymentId)) return false;
 
   const state = usePosStore.getState();
@@ -778,17 +798,11 @@ export async function pushDebtPaymentToCloud(
   const customer = state.customers.find((c) => c.id === payment.customerId);
   if (!customer || !isUuid(customer.id)) return true;
 
-  const expectedBalance = customer.debtBalanceUgx + payment.amountUgx;
+  const { buildDebtPaymentRpcPayload, interpretDebtPaymentRpcResult } = await import("../lib/debtPaymentPush");
 
   const { data, error } = await supabase.rpc("shop_push_debt_payment", {
     p_shop_id: ctx.shopId,
-    p_payload: {
-      payment_id: payment.id,
-      customer_id: payment.customerId,
-      amount_ugx: payment.amountUgx,
-      created_at: payment.createdAt,
-      expected_balance_ugx: expectedBalance,
-    },
+    p_payload: buildDebtPaymentRpcPayload(payment),
   });
 
   if (error) {
@@ -796,33 +810,30 @@ export async function pushDebtPaymentToCloud(
     return false;
   }
 
-  const result = data as {
-    ok?: boolean;
-    error?: string;
-    server_balance_ugx?: number;
-    new_balance_ugx?: number;
-  } | null;
+  const decision = interpretDebtPaymentRpcResult(
+    data as {
+      ok?: boolean;
+      idempotent?: boolean;
+      error?: string;
+      new_balance_ugx?: number;
+      server_balance_ugx?: number;
+      payment_id?: string;
+    } | null,
+  );
 
-  if (!result?.ok) {
-    if (result?.error === "stale_balance" && attempt < 2) {
-      const serverBalance = Number(result.server_balance_ugx ?? customer.debtBalanceUgx);
-      usePosStore.setState((s) => ({
-        customers: s.customers.map((c) =>
-          c.id === payment.customerId ? { ...c, debtBalanceUgx: serverBalance, version: c.version + 1 } : c,
-        ),
-      }));
-      return pushDebtPaymentToCloud(paymentId, ctx, attempt + 1);
-    }
-    reportSyncIssue("debt_payment_push_failed", { paymentId, error: result?.error ?? "unknown" });
+  if (!decision.ack) {
+    reportSyncIssue("debt_payment_push_failed", { paymentId, error: decision.error ?? "unknown" });
     return false;
   }
 
-  const newBalance = Number(result.new_balance_ugx ?? customer.debtBalanceUgx);
-  usePosStore.setState((s) => ({
-    customers: s.customers.map((c) =>
-      c.id === payment.customerId ? { ...c, debtBalanceUgx: newBalance, version: c.version + 1 } : c,
-    ),
-  }));
+  if (decision.applyBalanceUgx != null) {
+    const nextBal = decision.applyBalanceUgx;
+    usePosStore.setState((s) => ({
+      customers: s.customers.map((c) =>
+        c.id === payment.customerId ? { ...c, debtBalanceUgx: nextBal, version: c.version + 1 } : c,
+      ),
+    }));
+  }
   return true;
 }
 
@@ -1379,13 +1390,22 @@ async function pushCashExpenseToCloud(expense: CashExpense, ctx: ShopCtx, voided
   return result?.ok === true;
 }
 
-export async function syncCashExpenseImmediately(expenseId: string): Promise<boolean> {
+export async function syncCashExpenseImmediately(
+  expenseId: string,
+  shopId?: string | null,
+): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
   if (!getDeviceOnline()) return false;
+  // MB-1: never fall back to active shop — require immutable stamped shop identity.
+  const stamped = stampedShopIdForImmediateCashSync(shopId);
+  if (!stamped) return false;
   const row = usePosStore.getState().cashExpenses.find((e) => e.id === expenseId);
   if (!row) return false;
-  const ctx = await resolveShopCtx();
-  if (!ctx) return false;
+  if (!supabase) return false;
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (!userId) return false;
+  const ctx: ShopCtx = { shopId: stamped, userId };
   const ok = await pushCashExpenseToCloud(row, ctx, Boolean(row.deletedAt));
   if (!ok) {
     reportSyncIssue("cash_expense_push_failed", { expenseId });
@@ -1426,13 +1446,22 @@ async function pushCashDrawerAdjustmentToCloud(adj: CashDrawerAdjustment, ctx: S
   return result?.ok === true;
 }
 
-export async function syncCashDrawerAdjustmentImmediately(adjustmentId: string): Promise<boolean> {
+export async function syncCashDrawerAdjustmentImmediately(
+  adjustmentId: string,
+  shopId?: string | null,
+): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
   if (!getDeviceOnline()) return false;
+  // MB-1: never fall back to active shop — require immutable stamped shop identity.
+  const stamped = stampedShopIdForImmediateCashSync(shopId);
+  if (!stamped) return false;
   const row = usePosStore.getState().cashDrawerAdjustments.find((a) => a.id === adjustmentId);
   if (!row) return false;
-  const ctx = await resolveShopCtx();
-  if (!ctx) return false;
+  if (!supabase) return false;
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (!userId) return false;
+  const ctx: ShopCtx = { shopId: stamped, userId };
   const ok = await pushCashDrawerAdjustmentToCloud(row, ctx);
   if (ok) {
     usePosStore.setState((s) => ({
@@ -1478,11 +1507,11 @@ async function syncPurchaseVoidStockReversal(purchase: Purchase, ctx: ShopCtx): 
     if (baseOut <= 0) continue;
     const catalogOk = await pushProductCatalogToCloud(product, ctx);
     if (!catalogOk) return false;
-    const stockOk = await pushProductStockToCloud(product.id, ctx, {
+    // PURCHASE-VOID-STOCK-1.0 — durable RPC only; never shop_push_product_stock rebase.
+    const stockOk = await pushPurchaseVoidStockToCloud(product.id, ctx, {
       delta: -baseOut,
-      note: `purchase_void:${purchase.id}`,
-      baseUpdatedAt: product.updatedAt,
-      baseStockOnHand: product.stockOnHand + baseOut,
+      referenceId: purchase.id,
+      note: "purchase_void",
     });
     if (!stockOk) return false;
   }
@@ -1762,6 +1791,13 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
         if (!classified.purchaseId) return true;
         return syncPurchaseVoidBundle(classified.purchaseId, ctx);
       }
+      if (classified.route === "purchase_void_line") {
+        return pushPurchaseVoidStockToCloud(classified.productId, ctx, {
+          delta: classified.delta,
+          referenceId: classified.referenceId,
+          note: classified.note,
+        });
+      }
       if (classified.route === "purchase") {
         if (!classified.purchaseId) return true;
         return syncPurchaseBundle(classified.purchaseId, ctx);
@@ -1925,7 +1961,7 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     case "pending_cash_drawer_adjustments": {
       const adjustmentId = String(payload.adjustmentId ?? "");
       if (!adjustmentId) return true;
-      return syncCashDrawerAdjustmentImmediately(adjustmentId);
+      return syncCashDrawerAdjustmentImmediately(adjustmentId, ctx.shopId);
     }
     case "customer": {
       if (payload.kind === "debt_payment") {

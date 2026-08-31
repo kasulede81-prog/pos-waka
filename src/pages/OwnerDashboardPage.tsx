@@ -254,6 +254,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       score: healthScore,
       revenueUgx: overview.revenueUgx,
       profitUgx: overview.profitUgx,
+      costIncomplete: overview.costIncomplete,
       transactions: overview.transactionCount,
       expectedCashUgx: heroExpectedCash,
     });
@@ -269,6 +270,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       score: healthScore,
       revenueUgx: overview.revenueUgx,
       profitUgx: overview.profitUgx,
+      costIncomplete: overview.costIncomplete,
       transactions: overview.transactionCount,
       expectedCashUgx: heroExpectedCash,
     });
@@ -282,6 +284,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       score: healthScore,
       revenueUgx: overview.revenueUgx,
       profitUgx: overview.profitUgx,
+      costIncomplete: overview.costIncomplete,
       transactions: overview.transactionCount,
       expectedCashUgx: heroExpectedCash,
     });

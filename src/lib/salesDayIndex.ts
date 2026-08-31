@@ -1,5 +1,6 @@
 import type { ReturnRecord, Sale } from "../types";
 import { dateKeyKampala, dateKeyDaysAgoKampala, saleReportingDayKey } from "./datesUg";
+import { isRevenueSale } from "./saleStatus";
 
 /** Pre-index recent sales by Kampala day — avoids O(n × days) rescans on owner dashboard. */
 export type SalesDayIndex = {
@@ -47,6 +48,7 @@ export function buildSalesDayIndex(sales: Sale[], lookbackDays = DEFAULT_LOOKBAC
 /**
  * One pass over sales for revenue-day index + 14-day dashboard index.
  * Used by owner dashboard to avoid repeated full-store scans.
+ * Revenue index / aggregates use isRevenueSale (excludes whole-bill voids).
  */
 export function buildCombinedReportingIndex(
   sales: Sale[],
@@ -77,8 +79,11 @@ export function buildCombinedReportingIndex(
   let refundSaleCount = 0;
 
   for (const s of sales) {
-    if (s.status !== "pending" && s.status !== "cancelled") {
-      const dk = saleReportingDayKey(s);
+    if (s.status === "pending" || s.status === "cancelled") continue;
+    const dk = saleReportingDayKey(s);
+    const revenueEligible = isRevenueSale(s);
+
+    if (revenueEligible) {
       const revBucket = revenueSalesByDay.get(dk);
       if (revBucket) revBucket.push(s);
       else revenueSalesByDay.set(dk, [s]);
@@ -91,31 +96,33 @@ export function buildCombinedReportingIndex(
         const cashier = cashierMap.get(uid) ?? { count: 0, revenue: 0 };
         cashierMap.set(uid, { count: cashier.count + 1, revenue: cashier.revenue + s.totalUgx });
       }
+    }
 
-      if (dk >= minKey) {
-        let daySales = salesByDay.get(dk);
-        if (!daySales) {
-          daySales = [];
-          salesByDay.set(dk, daySales);
-        }
-        daySales.push(s);
+    if (dk >= minKey) {
+      let daySales = salesByDay.get(dk);
+      if (!daySales) {
+        daySales = [];
+        salesByDay.set(dk, daySales);
+      }
+      daySales.push(s);
+      if (revenueEligible) {
         revenueByDay.set(dk, (revenueByDay.get(dk) ?? 0) + s.totalUgx);
-        let dayUnits = unitsByDayProduct.get(dk);
-        if (!dayUnits) {
-          dayUnits = new Map();
-          unitsByDayProduct.set(dk, dayUnits);
-        }
-        for (const line of s.lines) {
-          if (line.voided) continue;
-          dayUnits.set(line.productId, (dayUnits.get(line.productId) ?? 0) + line.quantity);
-          if (dk === todayKey) {
-            const cur = productMap.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
-            productMap.set(line.productId, {
-              name: line.name,
-              qty: cur.qty + line.quantity,
-              revenue: cur.revenue + line.lineTotalUgx,
-            });
-          }
+      }
+      let dayUnits = unitsByDayProduct.get(dk);
+      if (!dayUnits) {
+        dayUnits = new Map();
+        unitsByDayProduct.set(dk, dayUnits);
+      }
+      for (const line of s.lines) {
+        if (line.voided) continue;
+        dayUnits.set(line.productId, (dayUnits.get(line.productId) ?? 0) + line.quantity);
+        if (revenueEligible && dk === todayKey) {
+          const cur = productMap.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
+          productMap.set(line.productId, {
+            name: line.name,
+            qty: cur.qty + line.quantity,
+            revenue: cur.revenue + line.lineTotalUgx,
+          });
         }
       }
     }
