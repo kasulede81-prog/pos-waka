@@ -1,4 +1,5 @@
-import { actorHasPermission, actorHasEffectivePermission } from "../lib/actorAuthorization";
+import { actorHasPermission } from "../lib/actorAuthorization";
+import { canAccessSettingsCapability, type SettingsCapabilityId } from "../lib/settingsCapabilityMatrix";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Camera, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
@@ -46,18 +47,29 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
     return <Navigate to="/" replace />;
   }
 
-  const canShop = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
-  const canDrawerSettings = actorHasEffectivePermission(actor, "day.open_drawer", snapshot, authMode);
+  const canCap = (id: SettingsCapabilityId) => canAccessSettingsCapability(actor, id, snapshot, authMode);
+  const canShopProfile = canCap("shop_profile");
+  const canStaff = canCap("staff");
+  const canDrawerSettings = canCap("cash_drawer");
   const canOwnerFinanceDiagnostics =
-    canSeeFinanceDiagnostics(authOperatorRole(actor)) &&
-    actorHasEffectivePermission(actor, "owner.dashboard", snapshot, authMode);
+    canSeeFinanceDiagnostics(authOperatorRole(actor)) && canCap("finance_diagnostics");
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
-  const canReceipt = actorHasPermission(actor, "settings.receipt");
-  const canDevices = actorHasPermission(actor, "settings.devices");
+  const canReceipt = canCap("receipt");
+  const canDevices = canCap("devices");
+  const canSelling = canCap("selling");
+  const canPin = canCap("pin");
+  const canPassword = canCap("password");
+  const canBiometric = canCap("biometric");
+  const canHomeMenu = canCap("home_menu");
+  const canOfficeMenu = canCap("office_menu");
+  const canShelves = canCap("shelves") && canArrangeShelves;
+  const canHealth = canCap("health");
+  const canDiagnostics = canCap("diagnostics");
+  const canRetention = canCap("retention");
   const pilotActive = isPilotModeActive(authOperatorRole(actor), preferences);
-  const showFloorSetup = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
-  const showPharmacySettings = canShop && isPharmacyMode(businessType, pharmacyModeEnabled);
-  const showHospitalitySettings = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
+  const showFloorSetup = canCap("floor") && isHospitalityMode(businessType, hospitalityModeEnabled);
+  const showPharmacySettings = canCap("pharmacy") && isPharmacyMode(businessType, pharmacyModeEnabled);
+  const showHospitalitySettings = canCap("hospitality") && isHospitalityMode(businessType, hospitalityModeEnabled);
 
   return (
     <BackOfficePageLayout
@@ -80,11 +92,11 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
       }
       className="pb-8"
     >
-      {canShop ? <ShopSupportNumberCard lang={lang} /> : null}
+      {canShopProfile ? <ShopSupportNumberCard lang={lang} /> : null}
       <RemoteSupportStatusCard lang={lang} />
 
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
-        {canShop ? (
+        {canStaff ? (
           <OfficeNavCard
             to="/staff-center"
             title={t(lang, "officeCardStaffAccess")}
@@ -100,7 +112,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Banknote}
           />
         ) : null}
-        {canShop ? (
+        {canShopProfile ? (
           <OfficeNavCard
             to="/settings/shop"
             title={t(lang, "settingsHubShop")}
@@ -108,7 +120,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Store}
           />
         ) : null}
-        {canShop || canReceipt ? (
+        {canReceipt ? (
           <OfficeNavCard
             to="/settings/receipt"
             title={t(lang, "settingsHubReceipt")}
@@ -116,7 +128,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={ReceiptText}
           />
         ) : null}
-        {canShop ? (
+        {canSelling ? (
           <OfficeNavCard
             to="/settings/selling"
             title={t(lang, "settingsHubSelling")}
@@ -156,7 +168,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={MonitorSmartphone}
           />
         ) : null}
-        {canShop && authOperatorRole(actor) === "owner" ? (
+        {canBiometric ? (
           <OfficeNavCard
             to="/settings/biometric"
             title={t(lang, "settingsHubBiometric")}
@@ -164,7 +176,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Fingerprint}
           />
         ) : null}
-        {canShop ? (
+        {canPin ? (
           <OfficeNavCard
             to="/settings/pin"
             title={t(lang, "settingsHubPin")}
@@ -172,7 +184,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={KeyRound}
           />
         ) : null}
-        {canShop ? (
+        {canPassword ? (
           <OfficeNavCard
             to="/settings/password"
             title={t(lang, "settingsHubPassword")}
@@ -213,7 +225,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
       </OfficeNavSection>
 
       <OfficeNavSection title={t(lang, "settingsHubGroupApp")}>
-        {canShop ? (
+        {canHomeMenu ? (
           <OfficeNavCard
             to="/settings/home-menu"
             title={t(lang, "settingsHubHomeMenu")}
@@ -221,7 +233,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Home}
           />
         ) : null}
-        {canShop ? (
+        {canOfficeMenu ? (
           <OfficeNavCard
             to="/settings/office-menu"
             title={t(lang, "settingsHubOfficeMenu")}
@@ -229,7 +241,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Briefcase}
           />
         ) : null}
-        {canShop && canArrangeShelves ? (
+        {canShelves ? (
           <OfficeNavCard
             to="/settings/shelves"
             title={t(lang, "settingsHubShelves")}
@@ -249,7 +261,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
           subtitle={t(lang, "settingsHubNotificationsSub")}
           Icon={Bell}
         />
-        {canShop ? (
+        {canHealth ? (
           <OfficeNavCard
             to="/settings/health"
             title={t(lang, "settingsHubSystemHealth")}
@@ -265,7 +277,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Calculator}
           />
         ) : null}
-        {canShop && Capacitor.isNativePlatform() ? (
+        {canDiagnostics && Capacitor.isNativePlatform() ? (
           <OfficeNavCard
             to="/settings/diagnostics"
             title={t(lang, "settingsHubDiagnostics")}
@@ -273,7 +285,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Stethoscope}
           />
         ) : null}
-        {canShop ? (
+        {canRetention ? (
           <OfficeNavCard
             to="/settings/retention"
             title={t(lang, "settingsHubRetention")}
