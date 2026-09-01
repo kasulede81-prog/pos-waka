@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
+import { canAccessSettingsCapability } from "../../lib/settingsCapabilityMatrix";
 import {
   Package,
   Users,
@@ -289,7 +290,7 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
   if (section === "shop-control" && access.hasShopControl) {
     return (
       <ul className={listClass}>
-        {access.canShopSettings ? (
+        {canAccessSettingsCapability(actor, "staff", snapshot, authMode) ? (
           <OfficeNavCard
             to="/staff-center"
             title={t(lang, "officeCardStaffAccess")}
