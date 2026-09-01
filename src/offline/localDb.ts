@@ -453,6 +453,9 @@ export type AccountIdbWipeSummary = {
   recordsRemoved: number;
   syncQueueRemoved: number;
   backupsRemoved: number;
+  /** False when this namespace wipe hit an IndexedDB error. */
+  ok?: boolean;
+  error?: string;
 };
 
 const ACCOUNT_KV_SUFFIXES = [
@@ -535,6 +538,7 @@ export async function wipeIndexedDbNamespace(accountKey: string): Promise<Accoun
     recordsRemoved: 0,
     syncQueueRemoved: 0,
     backupsRemoved: 0,
+    ok: true,
   };
   if (!accountKey) return summary;
 
@@ -598,8 +602,9 @@ export async function wipeIndexedDbNamespace(accountKey: string): Promise<Accoun
       }
       await txC.done;
     }
-  } catch {
-    /* idempotent — partial wipe is acceptable on error */
+  } catch (err) {
+    summary.ok = false;
+    summary.error = err instanceof Error ? err.message : "indexeddb_wipe_failed";
   }
 
   return summary;
