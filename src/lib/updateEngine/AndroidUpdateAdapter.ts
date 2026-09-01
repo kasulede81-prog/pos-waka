@@ -1,7 +1,8 @@
 import { Capacitor } from "@capacitor/core";
 import type { AppReleaseClientPolicy } from "../appReleaseClient";
 import { WakaAppUpdate } from "../nativeAppUpdate";
-import { evaluateAndroidEligibility, type PlayCheckSnapshot } from "./UpdateEligibility";
+import { evaluateAndroidEligibility } from "./UpdateEligibility";
+import type { PlayCheckSnapshot } from "./UpdateDecision";
 import { logUpdateEvent as logEvent } from "./UpdateEvents";
 import { readInstalledVersion, resolveVersions } from "./UpdateVersionResolver";
 import type {
@@ -34,15 +35,17 @@ export class AndroidUpdateAdapter implements UpdatePlatformAdapter {
       return { phase: "idle", playAvailableVersionCode: 0, error: null };
     }
 
-    const policy = context.policy;
-    if (!policy) {
-      return { phase: "idle", playAvailableVersionCode: 0, error: null };
-    }
-
+    /**
+     * ANDROID-UPDATE-P1: the Play check now runs even when `context.policy` is null.
+     * Previously a missing/unpublished `app_releases` policy returned `idle` here, so a
+     * genuinely newer Play build was never detected at all.
+     */
     let playCheck: PlayCheckSnapshot = {
       updateAvailable: false,
       availableVersionCode: 0,
       installStatus: 0,
+      flexibleAllowed: undefined,
+      immediateAllowed: undefined,
     };
 
     try {
@@ -51,39 +54,50 @@ export class AndroidUpdateAdapter implements UpdatePlatformAdapter {
         updateAvailable: check.updateAvailable,
         availableVersionCode: check.availableVersionCode,
         installStatus: check.installStatus,
+        flexibleAllowed: check.flexibleAllowed,
+        immediateAllowed: check.immediateAllowed,
       };
     } catch (err) {
       const message = (err as Error).message ?? "play_check_failed";
+      // Not swallowed: telemetry keeps flowing and the decision layer decides whether the
+      // published policy still proves an update exists (fallback) or this is a real failure.
       await logEvent("update_failed", {
-        policy,
+        policy: context.policy,
         versions: context.versions,
         metadata: { step: "checkForUpdate", message },
-      });
-      return { phase: "update_failed", playAvailableVersionCode: 0, error: message };
+      }).catch(() => undefined);
+      playCheck = {
+        ...playCheck,
+        checkFailed: true,
+        checkError: message,
+      };
     }
 
     return evaluateAndroidEligibility(context, playCheck);
   }
 
-  async startFlexibleUpdate(policy: AppReleaseClientPolicy): Promise<void> {
+  async startFlexibleUpdate(policy: AppReleaseClientPolicy | null): Promise<{ started: boolean }> {
     const installed = await readInstalledVersion();
     const versions = resolveVersions(installed, policy);
-    await logEvent("update_download_started", { policy, versions });
-    await WakaAppUpdate.startFlexibleUpdate();
+    await logEvent("update_download_started", { policy, versions }).catch(() => undefined);
+    const result = await WakaAppUpdate.startFlexibleUpdate();
+    return { started: result.started !== false };
   }
 
-  async startImmediateUpdate(policy: AppReleaseClientPolicy): Promise<void> {
+  async startImmediateUpdate(policy: AppReleaseClientPolicy | null): Promise<{ started: boolean }> {
     const installed = await readInstalledVersion();
     const versions = resolveVersions(installed, policy);
-    await logEvent("update_install_started", { policy, versions });
-    await WakaAppUpdate.startImmediateUpdate();
+    await logEvent("update_install_started", { policy, versions }).catch(() => undefined);
+    const result = await WakaAppUpdate.startImmediateUpdate();
+    return { started: result.started !== false };
   }
 
-  async completeFlexibleUpdate(policy: AppReleaseClientPolicy): Promise<void> {
+  async completeFlexibleUpdate(policy: AppReleaseClientPolicy | null): Promise<{ completed: boolean }> {
     const installed = await readInstalledVersion();
     const versions = resolveVersions(installed, policy);
-    await logEvent("restart_required", { policy, versions });
-    await WakaAppUpdate.completeFlexibleUpdate();
+    await logEvent("restart_required", { policy, versions }).catch(() => undefined);
+    const result = await WakaAppUpdate.completeFlexibleUpdate();
+    return { completed: result.completed !== false };
   }
 }
 

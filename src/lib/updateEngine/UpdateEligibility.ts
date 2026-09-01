@@ -1,7 +1,11 @@
 import { Preferences } from "@capacitor/preferences";
 import type { AppReleaseClientPolicy } from "../appReleaseClient";
-import { isBelowMinimumVersionCode, isPlayUpdateAvailable } from "../appReleaseVersion";
-import { PLAY_INSTALL_STATUS_DOWNLOADED } from "../nativeAppUpdate";
+import {
+  resolveAndroidUpdateDecision,
+  type AndroidUpdateDecision,
+  type PlayCheckSnapshot,
+} from "./UpdateDecision";
+import { readUpdateDismissed, updateDismissalKey } from "./UpdateDismissal";
 import type { PlatformEvaluationResult, PlatformUpdateContext, UpdatePhase } from "./UpdatePlatformAdapter";
 import type { VersionResolution } from "./UpdateVersionResolver";
 
@@ -27,69 +31,59 @@ export async function writeLastPolicyGeneration(generation: number): Promise<voi
   await Preferences.set({ key: POLICY_GENERATION_KEY, value: String(generation) });
 }
 
-export type PlayCheckSnapshot = {
-  updateAvailable: boolean;
-  availableVersionCode: number;
-  installStatus: number;
-};
+export type { PlayCheckSnapshot } from "./UpdateDecision";
+
+/** Storage must never decide whether an update is shown — fail open. */
+async function safeReadWhatsNewSeen(versionCode: number): Promise<boolean> {
+  try {
+    return await readWhatsNewSeen(versionCode);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * ANDROID-UPDATE-P1: reads the persisted state the decision needs, then delegates to the
+ * pure `resolveAndroidUpdateDecision`. A null policy no longer short-circuits to `idle`
+ * and `prompt_users` no longer suppresses a real Play update.
+ */
+export async function resolveAndroidDecisionForContext(
+  context: PlatformUpdateContext,
+  playCheck: PlayCheckSnapshot,
+): Promise<AndroidUpdateDecision> {
+  const installedCode = context.versions.installedVersionCode;
+  const dismissKey = updateDismissalKey({
+    availableVersionCode: playCheck.availableVersionCode,
+    releaseId: context.policy?.releaseId ?? null,
+  });
+  const [dismissed, whatsNewSeen] = await Promise.all([
+    readUpdateDismissed(dismissKey),
+    safeReadWhatsNewSeen(installedCode),
+  ]);
+
+  return resolveAndroidUpdateDecision({
+    policy: context.policy,
+    installedVersionCode: installedCode,
+    play: playCheck,
+    offline: context.offline,
+    preserveDownloadingPhase: context.preserveDownloadingPhase,
+    dismissed,
+    ignoreDismissal: context.reason === "manual",
+    whatsNewSeen,
+  });
+}
 
 export async function evaluateAndroidEligibility(
   context: PlatformUpdateContext,
   playCheck: PlayCheckSnapshot,
 ): Promise<PlatformEvaluationResult> {
-  const base: PlatformEvaluationResult = {
-    phase: "idle",
-    playAvailableVersionCode: playCheck.availableVersionCode,
-    error: null,
+  const decision = await resolveAndroidDecisionForContext(context, playCheck);
+  return {
+    phase: decision.phase,
+    playAvailableVersionCode: decision.availableVersionCode,
+    error: decision.error,
+    decision,
   };
-
-  if (context.offline) {
-    return { ...base, phase: "offline" };
-  }
-
-  const policy = context.policy;
-  if (!policy) return base;
-
-  if (context.preserveDownloadingPhase) {
-    return { ...base, phase: "flexible_downloading" };
-  }
-
-  const installedCode = context.versions.installedVersionCode;
-
-  if (
-    isBelowMinimumVersionCode(
-      installedCode,
-      policy.minimumSupportedVersionCode,
-      policy.forceBelowMinimum,
-    )
-  ) {
-    return { ...base, phase: "force_block" };
-  }
-
-  if (playCheck.installStatus === PLAY_INSTALL_STATUS_DOWNLOADED) {
-    return { ...base, phase: "flexible_ready" };
-  }
-
-  const updateOnPlay = isPlayUpdateAvailable(installedCode, playCheck.availableVersionCode);
-  if (!updateOnPlay) {
-    if (policy.showWhatsNew) {
-      const seen = await readWhatsNewSeen(installedCode);
-      if (!seen && installedCode >= policy.googlePlayVersionCode) {
-        return { ...base, phase: "whats_new" };
-      }
-    }
-    return { ...base, phase: "no_update" };
-  }
-
-  if (!policy.promptUsers) {
-    return { ...base, phase: "no_update" };
-  }
-
-  if (policy.updateType === "immediate") {
-    return { ...base, phase: "force_block" };
-  }
-
-  return { ...base, phase: "flexible_prompt" };
 }
 
 export function evaluateWebEligibility(context: PlatformUpdateContext): PlatformEvaluationResult {
@@ -109,14 +103,28 @@ export function evaluatePlaceholderEligibility(context: PlatformUpdateContext): 
   return { phase: "idle", playAvailableVersionCode: 0, error: null };
 }
 
+/**
+ * ANDROID-UPDATE-P1: telemetry keys off the release id when a policy exists, and off the
+ * Play version code when it does not, so a Play-only update is still logged exactly once.
+ */
 export function shouldLogUpdateAvailable(
   phase: UpdatePhase,
   policy: AppReleaseClientPolicy | null,
   lastLoggedReleaseId: string | null,
+  playAvailableVersionCode = 0,
 ): boolean {
-  if (!policy) return false;
   if (phase !== "flexible_prompt" && phase !== "force_block") return false;
-  return policy.releaseId !== lastLoggedReleaseId;
+  const key = policy ? policy.releaseId : playAvailableVersionCode > 0 ? `play-${playAvailableVersionCode}` : null;
+  if (!key) return false;
+  return key !== lastLoggedReleaseId;
+}
+
+export function updateAvailableLogKey(
+  policy: AppReleaseClientPolicy | null,
+  playAvailableVersionCode: number,
+): string | null {
+  if (policy) return policy.releaseId;
+  return playAvailableVersionCode > 0 ? `play-${playAvailableVersionCode}` : null;
 }
 
 export function isVerifiedUpdate(
