@@ -11,11 +11,13 @@ import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
 import { AppUpdateCheckButton } from "../components/app-update/AppUpdateControls";
+import { useUpdateEngine } from "../lib/updateEngine/useUpdateEngine";
 import { useToast } from "../context/ToastProvider";
 import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
 import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
 
 export function BackupSyncPage({ lang }: { lang: Language }) {
+  const updateState = useUpdateEngine();
   const actor = useSessionActor();
   const { authMode, snapshot } = useSubscription();
   const canView = actorHasPermission(actor, "settings.view");
@@ -70,7 +72,13 @@ export function BackupSyncPage({ lang }: { lang: Language }) {
 
       <section className="space-y-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
         <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">{t(lang, "updateCheckForUpdates")}</h2>
-        <p className="text-xs font-semibold text-muted-foreground">{t(lang, "appVersionLabel")}: {import.meta.env.VITE_APP_VERSION}</p>
+        <p className="text-xs font-semibold text-muted-foreground">
+          {t(lang, "appVersionLabel")}:{" "}
+          {updateState.versions.installedVersion || import.meta.env.VITE_APP_VERSION}
+          {updateState.versions.installedVersionCode > 0
+            ? ` (${updateState.versions.installedVersionCode})`
+            : ""}
+        </p>
         <AppUpdateCheckButton
           lang={lang}
           onResult={(message) => toast.success(message)}

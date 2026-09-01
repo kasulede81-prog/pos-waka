@@ -1,8 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { evaluateAndroidEligibility, evaluateWebEligibility, shouldLogUpdateAvailable } from "./UpdateEligibility";
 import { resolveUpdateNotification, shouldShowOverlay } from "./UpdateNotifications";
 import { resolveVersions } from "./UpdateVersionResolver";
 import type { PlatformUpdateContext } from "./UpdatePlatformAdapter";
+
+const prefsStore = new Map<string, string>();
+
+vi.mock("@capacitor/preferences", () => ({
+  Preferences: {
+    get: async ({ key }: { key: string }) => ({ value: prefsStore.get(key) ?? null }),
+    set: async ({ key, value }: { key: string; value: string }) => {
+      prefsStore.set(key, value);
+    },
+    remove: async ({ key }: { key: string }) => {
+      prefsStore.delete(key);
+    },
+  },
+}));
 
 const basePolicy = {
   releaseId: "release-1",
@@ -33,6 +47,10 @@ function androidContext(overrides: Partial<PlatformUpdateContext> = {}): Platfor
   };
 }
 
+afterEach(() => {
+  prefsStore.clear();
+});
+
 describe("evaluateAndroidEligibility", () => {
   it("prompts for flexible update when Play has newer build", async () => {
     const result = await evaluateAndroidEligibility(androidContext(), {
@@ -54,6 +72,18 @@ describe("evaluateAndroidEligibility", () => {
       },
     );
     expect(result.phase).toBe("force_block");
+  });
+
+  it("still prompts when prompt_users is false but Play has a newer build", async () => {
+    const result = await evaluateAndroidEligibility(
+      androidContext({ policy: { ...basePolicy, promptUsers: false } }),
+      {
+        updateAvailable: true,
+        availableVersionCode: 17,
+        installStatus: 0,
+      },
+    );
+    expect(result.phase).toBe("flexible_prompt");
   });
 
   it("returns offline when device is offline", async () => {

@@ -1,4 +1,5 @@
 import type { AppReleaseClientPolicy } from "../appReleaseClient";
+import type { AndroidUpdateDecision } from "./UpdateDecision";
 import type { VersionResolution } from "./UpdateVersionResolver";
 
 export type UpdatePlatform = "android" | "web" | "windows" | "ios";
@@ -28,6 +29,8 @@ export type PlatformEvaluationResult = {
   phase: UpdatePhase;
   playAvailableVersionCode: number;
   error: string | null;
+  /** ANDROID-UPDATE-P1 — full audit trail of the Android decision (severity, source, fallback). */
+  decision?: AndroidUpdateDecision;
 };
 
 export type PlatformUpdateContext = {
@@ -39,6 +42,15 @@ export type PlatformUpdateContext = {
   preserveDownloadingPhase: boolean;
 };
 
+/** ANDROID-UPDATE-P1 — outcome of a user-triggered update action (never swallowed). */
+export type UpdateActionOutcome = {
+  ok: boolean;
+  /** The Play Store listing was opened because Play Core could not start. */
+  fallbackOpened: boolean;
+  fallbackVia: "market" | "web" | "none";
+  error: string | null;
+};
+
 export type PlatformAdapterCallbacks = {
   onPlatformSignal: (reason: UpdateEvaluateReason) => void;
 };
@@ -47,9 +59,9 @@ export interface UpdatePlatformAdapter {
   readonly platform: UpdatePlatform;
   evaluate(context: PlatformUpdateContext): Promise<PlatformEvaluationResult>;
   initialize?(callbacks: PlatformAdapterCallbacks): () => void;
-  startFlexibleUpdate?(policy: AppReleaseClientPolicy): Promise<void>;
-  startImmediateUpdate?(policy: AppReleaseClientPolicy): Promise<void>;
-  completeFlexibleUpdate?(policy: AppReleaseClientPolicy): Promise<void>;
+  startFlexibleUpdate?(policy: AppReleaseClientPolicy | null): Promise<{ started: boolean } | void>;
+  startImmediateUpdate?(policy: AppReleaseClientPolicy | null): Promise<{ started: boolean } | void>;
+  completeFlexibleUpdate?(policy: AppReleaseClientPolicy | null): Promise<{ completed: boolean } | void>;
   reloadWebApp?(): void;
   markPwaUpdateSeen?(): void;
 }
