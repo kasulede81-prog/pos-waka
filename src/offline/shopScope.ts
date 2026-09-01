@@ -7,7 +7,10 @@
  *   local:<email>          (offline-only auth — no shop dimension)
  */
 
-import { getActiveAccountKey } from "./accountScope";
+import { getActiveAccountKey, scopedStorageKey } from "./accountScope";
+
+/** Account-scoped last active shop. Never a global unscoped preference. */
+const LAST_ACTIVE_SHOP_BASE_KEY = "waka.lastActiveShopId.v1";
 
 const SHOP_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -44,7 +47,45 @@ export function getActiveShopId(): string | null {
   return activeShopId;
 }
 
-/** Returns true when the active shop changed. */
+export function lastActiveShopStorageKey(accountKey: string | null = getActiveAccountKey()): string | null {
+  return scopedStorageKey(LAST_ACTIVE_SHOP_BASE_KEY, accountKey);
+}
+
+export function readPersistedLastActiveShopId(accountKey: string | null = getActiveAccountKey()): string | null {
+  const key = lastActiveShopStorageKey(accountKey);
+  if (!key) return null;
+  try {
+    const raw = globalThis.localStorage?.getItem(key);
+    return isValidShopId(raw) ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistLastActiveShopId(
+  shopId: string,
+  accountKey: string | null = getActiveAccountKey(),
+): void {
+  const key = lastActiveShopStorageKey(accountKey);
+  if (!key || !isValidShopId(shopId)) return;
+  try {
+    globalThis.localStorage?.setItem(key, shopId.trim());
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+export function clearPersistedLastActiveShopId(accountKey: string | null = getActiveAccountKey()): void {
+  const key = lastActiveShopStorageKey(accountKey);
+  if (!key) return;
+  try {
+    globalThis.localStorage?.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Returns true when the active shop changed. In-memory only — last-shop persist is explicit. */
 export function setActiveShopId(next: string | null): boolean {
   const normalized = next && isValidShopId(next) ? next.trim() : null;
   if (activeShopId === normalized) return false;

@@ -41,9 +41,18 @@ export function StartupLoadingScreen({
   }, [step]);
 
   const labelKey = startupStepLabelKey(currentStep);
+  const startupState =
+    currentStep === "auth_session" || currentStep === "language_load"
+      ? "AUTH INITIALIZING"
+      : currentStep === "cloud_recovery" || currentStep === "cloud_probe"
+        ? "RECOVERY"
+        : currentStep === "ready" || currentStep === "finalizing"
+          ? "READY"
+          : "LOCAL HYDRATING";
 
   return (
     <div
+      data-startup-state={startupState}
       className={`flex min-h-dvh flex-col items-center justify-center ${STARTUP_SCREEN_BG} px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))]`}
     >
       <div className="flex w-full max-w-sm flex-col items-center gap-8">

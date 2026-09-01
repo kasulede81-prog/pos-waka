@@ -5,6 +5,10 @@
 
 export type StartupPerfPhase =
   | "auth_ready"
+  | "device_activation_start"
+  | "device_activation_end"
+  | "initialize_active_shop_start"
+  | "initialize_active_shop_end"
   | "critical_hydrate_start"
   | "critical_hydrate_end"
   | "shell_render"

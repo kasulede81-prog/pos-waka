@@ -22,6 +22,9 @@ import { fetchShopDevicesForManagement } from "../lib/shopDevices";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { logActivationFailure, type ActivationFailureKind } from "../lib/deviceActivationDiagnostics";
 import { scheduleOwnerDeviceEnrollment, schedulePostLoginBackgroundTasks } from "../lib/postLoginBackgroundTasks";
+import { bootTrace } from "../lib/bootTrace";
+import { markStartupPerf } from "../lib/startupPerformance";
+import { initialDeviceActivationFlags } from "../lib/deviceActivationGatePolicy";
 
 export type DeviceActivationBlock = {
   shopId: string;
@@ -41,20 +44,12 @@ type DeviceActivationState = {
 
 const DeviceActivationCtx = createContext<DeviceActivationState | null>(null);
 
-export function pathAllowedWhenDeviceBlocked(path: string): boolean {
-  const p = path.split("?")[0] || "/";
-  return (
-    p === "/device-limit" ||
-    p === "/device-activating" ||
-    p === "/device-pending" ||
-    p === "/upgrade" ||
-    p === "/login" ||
-    p === "/onboarding" ||
-    p.startsWith("/auth/") ||
-    p === "/account" ||
-    p === "/settings/devices"
-  );
-}
+export {
+  pathAllowedWhenDeviceBlocked,
+  initialDeviceActivationFlags,
+  deviceGateMountsProtectedOutlet,
+  isDeviceActivationBlockingUse,
+} from "../lib/deviceActivationGatePolicy";
 
 const DEVICE_CHECK_TIMEOUT_MS = 30_000;
 
@@ -102,8 +97,9 @@ type ProviderProps = {
 };
 
 export function DeviceActivationProvider({ authMode, user, children }: ProviderProps) {
-  const [loading, setLoading] = useState(false);
-  const [activated, setActivated] = useState(authMode !== "supabase");
+  const initialFlags = initialDeviceActivationFlags(authMode, user?.id);
+  const [loading, setLoading] = useState(initialFlags.loading);
+  const [activated, setActivated] = useState(initialFlags.activated);
   const [block, setBlock] = useState<DeviceActivationBlock | null>(null);
   const [shopId, setShopId] = useState<string | null>(null);
   const inFlightRef = useRef<string | null>(null);
@@ -112,6 +108,9 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
     if (!force && inFlightRef.current === uid) return;
     inFlightRef.current = uid;
     setLoading(true);
+    bootTrace("BOOT-015", "device_activation", "START");
+    markStartupPerf("device_activation_start");
+    let outcome: "SUCCESS" | "FAILED" | "TIMEOUT" = "FAILED";
     try {
       const org = await withTimeout(resolvePrimaryOrganizationForUser(uid), DEVICE_CHECK_TIMEOUT_MS, null);
       const sid = org?.shopId ?? null;
@@ -119,6 +118,7 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
       if (!sid) {
         setActivated(true);
         setBlock(null);
+        outcome = "SUCCESS";
         return;
       }
 
@@ -131,11 +131,14 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null),
       ]);
 
+      if (loginActivation.failureReason === "timeout") outcome = "TIMEOUT";
+
       const isOwner = resolveIsShopOwner(context, loginActivation);
 
       if (loginActivation.activated) {
         setActivated(true);
         setBlock(null);
+        outcome = "SUCCESS";
         schedulePostLoginBackgroundTasks(sid);
         return;
       }
@@ -158,6 +161,7 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
 
         setActivated(true);
         setBlock(null);
+        outcome = "SUCCESS";
         schedulePostLoginBackgroundTasks(sid);
         scheduleOwnerDeviceEnrollment(sid);
         return;
@@ -255,6 +259,7 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
           if (resolveIsShopOwner(recoveryContext)) {
             setActivated(true);
             setBlock(null);
+            outcome = "SUCCESS";
             schedulePostLoginBackgroundTasks(recoverySid);
             scheduleOwnerDeviceEnrollment(recoverySid);
             return;
@@ -277,6 +282,8 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
     } finally {
       inFlightRef.current = null;
       setLoading(false);
+      markStartupPerf("device_activation_end");
+      bootTrace("BOOT-015", "device_activation", outcome);
     }
   }, []);
 
