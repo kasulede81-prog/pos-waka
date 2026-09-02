@@ -68,6 +68,8 @@ type Props = {
   onSignOut?: () => void | Promise<void>;
 };
 
+export { POS_BOOT_GATES } from "../lib/posBootGates";
+
 function isStoreReadyForAccount(accountKey: string | null): boolean {
   return Boolean(accountKey && usePosStore.getState()._hydrated && getActiveAccountKey() === accountKey);
 }
@@ -255,8 +257,11 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       recordStartupStep("local_disk");
 
       try {
+        bootTrace("BOOT-017", "critical_hydrate", "START");
         await bootstrapPosCriticalFromDisk();
+        bootTrace("BOOT-017", "critical_hydrate", "SUCCESS");
       } catch {
+        bootTrace("BOOT-017", "critical_hydrate", "FAILED");
         if (bootGenRef.current === gen) {
           setError("load");
           finishReady("critical_load_error", userId);
@@ -267,6 +272,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       if (bootGenRef.current !== gen) return;
 
       recordStartupStep("recovery_check");
+      // POS-ready after critical disk. Cloud recovery / queue / reports stay in background (POS_BOOT_GATES).
       finishReady("critical_hydrate", userId);
       bootTrace("BOOT-012", "PosDataProvider.runBoot", "SUCCESS", { via: "critical_hydrate" });
 

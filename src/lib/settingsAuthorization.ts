@@ -7,7 +7,6 @@ import type { Permission, ShopPreferences } from "../types";
 import type { SessionActor } from "./sessionActor";
 import { authOperatorRole } from "./sessionActor";
 import {
-  checkStorePermission,
   checkStorePermissionEffective,
   type StoreAuthResult,
 } from "./storeAuthorization";
@@ -16,6 +15,10 @@ import { resolveStorePlanTier } from "./productPlanEnforcement";
 import { validateStaffAccountsPatch } from "./staffPlanEnforcement";
 import type { SubscriptionSnapshot } from "./subscriptionEntitlements";
 import { getStoreSubscriptionContext } from "./storeSubscriptionContext";
+import {
+  canAccessSettingsCapability,
+  settingsCapabilityForPreferenceKey,
+} from "./settingsCapabilityMatrix";
 
 /** Per-device / sell-screen UX — no settings permission required. */
 const OPERATIONAL_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
@@ -121,23 +124,6 @@ const OWNER_ACTIVITY_KEYS = new Set<keyof ShopPreferences>(["ownerRisksReviewedA
 
 const NOTIFICATIONS_KEYS = new Set<keyof ShopPreferences>(["hapticsOn", "saleSoundOn"]);
 
-/** Shop profile fields allowed on Free tier (role-only gate). */
-const FREE_TIER_SHOP_PROFILE_KEYS = new Set<keyof ShopPreferences>([
-  "shopDisplayName",
-  "shopPhoneE164",
-  "shopAddressLine",
-  "shopCurrency",
-  "businessType",
-  "onboardingDone",
-  "onboardingWizardDone",
-  "shopSellingStyle",
-  "mixedPackSelling",
-  "pharmacyModeEnabled",
-  "hospitalityModeEnabled",
-  "wakaShopId",
-  "schemaVersion",
-]);
-
 function permissionForPreferenceKey(key: keyof ShopPreferences): Permission | null {
   if (OPERATIONAL_PREFERENCE_KEYS.has(key)) return null;
   if (SHIFT_PREFERENCE_KEYS.has(key)) return null;
@@ -179,10 +165,15 @@ export function authorizePreferencesPatch(
     if (OWNER_ONLY_PREFERENCE_KEYS.has(key) && (!actor || authOperatorRole(actor) !== "owner")) {
       return { ok: false, errorKey: "forbidden" };
     }
-    const effectiveCheck =
-      perm === "settings.shop" && FREE_TIER_SHOP_PROFILE_KEYS.has(key)
-        ? checkStorePermission(actor, perm)
-        : checkStorePermissionEffective(actor, perm, ctx.snapshot, ctx.authMode);
+    const mappedCapability = settingsCapabilityForPreferenceKey(key);
+    const capabilityId = mappedCapability ?? (perm === "settings.shop" ? "shop_business" : null);
+    if (capabilityId) {
+      if (!canAccessSettingsCapability(actor, capabilityId, ctx.snapshot, ctx.authMode)) {
+        return { ok: false, errorKey: actor ? "forbidden" : "noSelection" };
+      }
+      continue;
+    }
+    const effectiveCheck = checkStorePermissionEffective(actor, perm, ctx.snapshot, ctx.authMode);
     if (!effectiveCheck.ok) return effectiveCheck;
   }
 

@@ -1,7 +1,7 @@
 import { flushPendingPersist, usePosStore, bootstrapPosFromDisk } from "../store/usePosStore";
 import { listUserShops, setUserPrimaryShop } from "./primaryShop";
 import { setCachedShopId, clearShopCtxTick, clearCachedShopId } from "./shopSyncContext";
-import { getActiveShopId, isValidShopId, setActiveShopId } from "../offline/shopScope";
+import { getActiveShopId, isValidShopId, persistLastActiveShopId, setActiveShopId } from "../offline/shopScope";
 import { migrateLegacyPersistenceToShop } from "../offline/shopScopeMigration";
 
 export type ActiveShopSwitchResult = {
@@ -36,6 +36,7 @@ export async function switchActiveShop(
 
   setActiveShopId(nextShopId);
   setCachedShopId(nextShopId);
+  persistLastActiveShopId(nextShopId);
   await migrateLegacyPersistenceToShop(nextShopId);
 
   if (opts?.updatePrimary) {

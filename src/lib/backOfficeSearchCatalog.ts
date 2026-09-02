@@ -2,6 +2,7 @@ import type { Permission, ShopPreferences, UserRole } from "../types";
 import type { SubscriptionSnapshot } from "./subscriptionEntitlements";
 import { canUseBackupRestore } from "./subscriptionEntitlements";
 import { permissionsHasEffective } from "./actorAuthorization";
+import { canAccessSettingsCapabilityForRole, type SettingsCapabilityId } from "./settingsCapabilityMatrix";
 import { isHospitalityMode } from "./hospitality";
 import { isPharmacyMode } from "./pharmacy";
 import { isWholesaleMode } from "./wholesale";
@@ -14,6 +15,7 @@ export type BackOfficeSearchEntryDef = {
   subtitleKey?: string;
   sectionKey: string;
   perm?: Permission;
+  settingsCapability?: SettingsCapabilityId;
   /** Extra words users might type (English + common shortcuts). */
   keywords?: string[];
   /** Only show in these business modes (omit = all). */
@@ -34,7 +36,7 @@ export type ResolvedBackOfficeSearchEntry = {
 const CATALOG: BackOfficeSearchEntryDef[] = [
   { id: "shop-hub", path: "/office", titleKey: "officeHubNav", subtitleKey: "officeHubSub", sectionKey: "officeSectionDaily", keywords: ["shop", "office", "hub", "home"] },
   { id: "inventory-purchasing", path: "/stock", titleKey: "ipPageTitle", subtitleKey: "ipPageSub", sectionKey: "officeSectionDaily", keywords: ["inventory", "products", "items", "medicine", "warehouse", "purchase", "buy", "stock in", "vendor", "supplier", "orders", "restock"] },
-  { id: "shelf-arrange", path: "/settings/shelves", titleKey: "officeCardShelfArrange", subtitleKey: "officeCardShelfArrangeSub", sectionKey: "settingsHubGroupApp", perm: "shelves.customize", keywords: ["shelf", "arrange", "order", "sell", "category", "drag", "customize", "rename", "name"] },
+  { id: "shelf-arrange", path: "/settings/shelves", titleKey: "officeCardShelfArrange", subtitleKey: "officeCardShelfArrangeSub", sectionKey: "settingsHubGroupApp", perm: "shelves.customize", settingsCapability: "shelves", keywords: ["shelf", "arrange", "order", "sell", "category", "drag", "customize", "rename", "name"] },
   { id: "customers", path: "/customers", titleKey: "customers", subtitleKey: "officeCardCustomersSub", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["customer", "patient", "account", "debtor"] },
   { id: "debts", path: "/debts", titleKey: "debts", subtitleKey: "debtsHelp", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["debt", "credit", "owe", "loan", "people", "customer", "debtor"] },
   { id: "cash-expenses", path: "/cash-expenses", titleKey: "officeCardCashExpenses", subtitleKey: "officeCardCashExpensesSub", sectionKey: "officeSectionDaily", keywords: ["expense", "petty cash", "drawer"] },
@@ -44,8 +46,8 @@ const CATALOG: BackOfficeSearchEntryDef[] = [
   { id: "close-day", path: "/close-day", titleKey: "officeCardCloseDay", subtitleKey: "officeCardCloseDaySub", sectionKey: "officeSectionDaily", perm: "day.close", keywords: ["close", "end day", "z-report"] },
   { id: "kitchen", path: "/kitchen", titleKey: "navKitchen", subtitleKey: "officeCardKitchenSub", sectionKey: "officeSectionDaily", perm: "hospitality.kitchen", modes: ["hospitality"], keywords: ["kitchen", "kds", "orders"] },
   { id: "pending-sales", path: "/pending-sales", titleKey: "pendingSalesTitle", subtitleKey: "pendingSalesSub", sectionKey: "officeSectionDaily", perm: "pending_sales.manage", modes: ["hospitality"], keywords: ["pending", "hold", "table"] },
-  { id: "floor", path: "/settings/floor", titleKey: "floorSetupTitle", subtitleKey: "floorSetupSub", sectionKey: "settingsHubGroupShop", perm: "hospitality.floor", modes: ["hospitality"], keywords: ["floor", "tables", "layout"] },
-  { id: "pharmacy-settings", path: "/settings/pharmacy", titleKey: "settingsHubPharmacy", subtitleKey: "settingsHubPharmacySub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", modes: ["pharmacy"], keywords: ["pharmacy", "medicine", "drug"] },
+  { id: "floor", path: "/settings/floor", titleKey: "floorSetupTitle", subtitleKey: "floorSetupSub", sectionKey: "settingsHubGroupShop", perm: "hospitality.floor", settingsCapability: "floor", modes: ["hospitality"], keywords: ["floor", "tables", "layout"] },
+  { id: "pharmacy-settings", path: "/settings/pharmacy", titleKey: "settingsHubPharmacy", subtitleKey: "settingsHubPharmacySub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "pharmacy", modes: ["pharmacy"], keywords: ["pharmacy", "medicine", "drug"] },
   { id: "ask-waka", path: "/office/ask-waka", titleKey: "officeCardAskWaka", subtitleKey: "officeCardAskWakaSub", sectionKey: "officeSectionInsights", perm: "reports.view", keywords: ["ask", "waka", "ai", "assistant", "chat", "question"] },
   { id: "reports", path: "/reports", titleKey: "officeCardReports", subtitleKey: "officeCardReportsSub", sectionKey: "officeSectionInsights", perm: "reports.view", keywords: ["report", "sales", "analytics"] },
   { id: "monthly-reports", path: "/office/monthly-reports", titleKey: "officeCardReportsMonthlyNested", subtitleKey: "officeCardReportsSub", sectionKey: "officeSectionInsights", perm: "reports.view", keywords: ["monthly", "month"] },
@@ -55,7 +57,7 @@ const CATALOG: BackOfficeSearchEntryDef[] = [
   { id: "audit", path: "/office/audit-center", titleKey: "officeCardAuditCenter", subtitleKey: "officeCardAuditCenterSub", sectionKey: "officeSectionInsights", perm: "owner.activity", keywords: ["audit", "investigation", "trace"] },
   { id: "activity", path: "/owner/activity", titleKey: "officeCardActivity", subtitleKey: "officeCardActivitySub", sectionKey: "officeSectionInsights", perm: "owner.activity", keywords: ["activity", "log", "history"] },
   { id: "receipts", path: "/receipts", titleKey: "receipts", subtitleKey: "officeCardReportsSub", sectionKey: "officeSectionInsights", perm: "receipts.view", keywords: ["receipt", "invoice", "sales history"] },
-  { id: "staff", path: "/staff-center", titleKey: "officeCardStaffAccess", subtitleKey: "officeCardStaffAccessSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["staff", "user", "pin", "role", "cashier", "team", "workers"] },
+  { id: "staff", path: "/staff-center", titleKey: "officeCardStaffAccess", subtitleKey: "officeCardStaffAccessSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "staff", keywords: ["staff", "user", "pin", "role", "cashier", "team", "workers"] },
   { id: "settings", path: "/settings", titleKey: "settingsHubTitle", subtitleKey: "settingsHubSub", sectionKey: "settingsHubTitle", perm: "settings.view", keywords: ["settings", "config", "preferences"] },
   { id: "backup", path: "/office/backup", titleKey: "officeCardBackup", subtitleKey: "officeCardBackupSub", sectionKey: "officeSectionData", perm: "settings.view", requiresBackup: true, keywords: ["backup", "upload", "sync", "cloud", "save"] },
   { id: "hardware", path: "/office/hardware", titleKey: "officeCardHardware", subtitleKey: "officeCardHardwareSub", sectionKey: "settingsHubGroupShop", keywords: ["printer", "barcode", "scanner", "hardware"] },
@@ -83,19 +85,19 @@ const CATALOG: BackOfficeSearchEntryDef[] = [
     sectionKey: "settingsHubGroupShop",
     keywords: ["vision", "monitor", "floor plan", "layout", "favorites", "dashboard", "cctv"],
   },
-  { id: "settings-shop", path: "/settings/shop", titleKey: "settingsHubShop", subtitleKey: "settingsHubShopSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["shop name", "business", "profile"] },
-  { id: "settings-receipt", path: "/settings/receipt", titleKey: "settingsHubReceipt", subtitleKey: "settingsHubReceiptSub", sectionKey: "settingsHubGroupShop", perm: "settings.receipt", keywords: ["receipt", "print", "header", "footer"] },
-  { id: "settings-selling", path: "/settings/selling", titleKey: "settingsHubSelling", subtitleKey: "settingsHubSellingSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["sell", "pos", "quick sell"] },
-  { id: "settings-devices", path: "/settings/devices", titleKey: "settingsHubDevices", subtitleKey: "settingsHubDevicesSub", sectionKey: "settingsHubGroupShop", perm: "settings.devices", keywords: ["device", "tablet", "phone"] },
-  { id: "settings-pin", path: "/settings/pin", titleKey: "settingsHubPin", subtitleKey: "settingsHubPinSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["pin", "lock", "password"] },
-  { id: "settings-staff-roles", path: "/staff-center/roles", titleKey: "enterpriseRolesPageTitle", subtitleKey: "enterpriseRolesPageSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["roles", "permissions", "custom role", "staff roles"] },
-  { id: "settings-staff-security", path: "/staff-center/security", titleKey: "settingsStaffSecurityTitle", subtitleKey: "settingsStaffSecuritySub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["auto-lock", "switch user", "session", "staff security"] },
-  { id: "settings-password", path: "/settings/password", titleKey: "settingsHubPassword", subtitleKey: "settingsHubPasswordSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["password", "login"] },
-  { id: "settings-notifications", path: "/settings/notifications", titleKey: "settingsHubNotifications", subtitleKey: "settingsHubNotificationsSub", sectionKey: "settingsHubGroupApp", perm: "settings.view", keywords: ["notification", "alert"] },
-  { id: "settings-health", path: "/settings/health", titleKey: "settingsHubSystemHealth", subtitleKey: "settingsHubSystemHealthSub", sectionKey: "settingsHubGroupApp", perm: "settings.shop", keywords: ["health", "diagnostic", "status"] },
-  { id: "settings-diagnostics", path: "/settings/diagnostics", titleKey: "settingsHubDiagnostics", subtitleKey: "settingsHubDiagnosticsSub", sectionKey: "settingsHubGroupApp", perm: "settings.shop", requiresCapacitor: true, keywords: ["diagnostics", "debug"] },
-  { id: "settings-retention", path: "/settings/retention", titleKey: "settingsHubRetention", subtitleKey: "settingsHubRetentionSub", sectionKey: "settingsHubGroupApp", perm: "settings.shop", keywords: ["archive", "retention", "delete old"] },
-  { id: "settings-hospitality", path: "/settings/hospitality", titleKey: "hospitalitySettingsTitle", subtitleKey: "hospitalitySettingsSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", modes: ["hospitality"], keywords: ["restaurant", "hotel", "hospitality"] },
+  { id: "settings-shop", path: "/settings/shop", titleKey: "settingsHubShop", subtitleKey: "settingsHubShopSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "shop_profile", keywords: ["shop name", "business", "profile"] },
+  { id: "settings-receipt", path: "/settings/receipt", titleKey: "settingsHubReceipt", subtitleKey: "settingsHubReceiptSub", sectionKey: "settingsHubGroupShop", perm: "settings.receipt", settingsCapability: "receipt", keywords: ["receipt", "print", "header", "footer"] },
+  { id: "settings-selling", path: "/settings/selling", titleKey: "settingsHubSelling", subtitleKey: "settingsHubSellingSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "selling", keywords: ["sell", "pos", "quick sell"] },
+  { id: "settings-devices", path: "/settings/devices", titleKey: "settingsHubDevices", subtitleKey: "settingsHubDevicesSub", sectionKey: "settingsHubGroupShop", perm: "settings.devices", settingsCapability: "devices", keywords: ["device", "tablet", "phone"] },
+  { id: "settings-pin", path: "/settings/pin", titleKey: "settingsHubPin", subtitleKey: "settingsHubPinSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "pin", keywords: ["pin", "lock", "password"] },
+  { id: "settings-staff-roles", path: "/staff-center/roles", titleKey: "enterpriseRolesPageTitle", subtitleKey: "enterpriseRolesPageSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "staff", keywords: ["roles", "permissions", "custom role", "staff roles"] },
+  { id: "settings-staff-security", path: "/staff-center/security", titleKey: "settingsStaffSecurityTitle", subtitleKey: "settingsStaffSecuritySub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "staff", keywords: ["auto-lock", "switch user", "session", "staff security"] },
+  { id: "settings-password", path: "/settings/password", titleKey: "settingsHubPassword", subtitleKey: "settingsHubPasswordSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "password", keywords: ["password", "login"] },
+  { id: "settings-notifications", path: "/settings/notifications", titleKey: "settingsHubNotifications", subtitleKey: "settingsHubNotificationsSub", sectionKey: "settingsHubGroupApp", perm: "settings.view", settingsCapability: "notifications", keywords: ["notification", "alert"] },
+  { id: "settings-health", path: "/settings/health", titleKey: "settingsHubSystemHealth", subtitleKey: "settingsHubSystemHealthSub", sectionKey: "settingsHubGroupApp", perm: "settings.shop", settingsCapability: "health", keywords: ["health", "diagnostic", "status"] },
+  { id: "settings-diagnostics", path: "/settings/diagnostics", titleKey: "settingsHubDiagnostics", subtitleKey: "settingsHubDiagnosticsSub", sectionKey: "settingsHubGroupApp", perm: "settings.shop", settingsCapability: "diagnostics", requiresCapacitor: true, keywords: ["diagnostics", "debug"] },
+  { id: "settings-retention", path: "/settings/retention", titleKey: "settingsHubRetention", subtitleKey: "settingsHubRetentionSub", sectionKey: "settingsHubGroupApp", perm: "settings.shop", settingsCapability: "retention", keywords: ["archive", "retention", "delete old"] },
+  { id: "settings-hospitality", path: "/settings/hospitality", titleKey: "hospitalitySettingsTitle", subtitleKey: "hospitalitySettingsSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", settingsCapability: "hospitality", modes: ["hospitality"], keywords: ["restaurant", "hotel", "hospitality"] },
   { id: "upgrade", path: "/upgrade", titleKey: "officeCardPlans", subtitleKey: "officeCardPlansSub", sectionKey: "officeSectionHelp", keywords: ["plan", "subscription", "upgrade", "premium"] },
   { id: "support", path: "/support", titleKey: "officeCardSupport", subtitleKey: "officeCardSupportSubDiagnostics", sectionKey: "officeSectionHelp", keywords: ["help", "support", "contact"] },
   { id: "account", path: "/office/account", titleKey: "officeCardAccount", subtitleKey: "officeCardAccountSub", sectionKey: "officeSectionHelp", keywords: ["account", "profile", "user"] },
@@ -129,7 +131,17 @@ function entryVisible(def: BackOfficeSearchEntryDef, ctx: BuildCtx): boolean {
   if (def.modes?.length && !def.modes.some((m) => modes.has(m))) return false;
   if (def.id === "customers" && retailOnly) return false;
   if (def.id === "debts" && (modes.has("pharmacy") || modes.has("hospitality") || modes.has("wholesale"))) return false;
-  if (def.perm && !permissionsHasEffective(ctx.role, def.perm, ctx.snapshot ?? EMPTY_SNAPSHOT, ctx.authMode, ctx.actorPermissions)) return false;
+  if (def.settingsCapability) {
+    if (!canAccessSettingsCapabilityForRole(
+      ctx.role,
+      def.settingsCapability,
+      ctx.snapshot ?? EMPTY_SNAPSHOT,
+      ctx.authMode,
+      ctx.actorPermissions,
+    )) return false;
+  } else if (def.perm && !permissionsHasEffective(ctx.role, def.perm, ctx.snapshot ?? EMPTY_SNAPSHOT, ctx.authMode, ctx.actorPermissions)) {
+    return false;
+  }
   if (def.requiresBackup && !canUseBackupRestore(ctx.snapshot ?? EMPTY_SNAPSHOT, ctx.authMode)) return false;
   if (def.requiresCapacitor && !Capacitor.isNativePlatform()) return false;
   if (def.id === "cash-expenses" && !ctx.canRecordExpense) return false;

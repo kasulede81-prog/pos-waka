@@ -15,8 +15,13 @@ vi.mock("../offline/localDb", () => ({
 }));
 
 function mockBrowserStorage(): void {
-  const store = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
+  const local = new Map<string, string>();
+  const session = new Map<string, string>();
+  const make = (store: Map<string, string>) => ({
+    get length() {
+      return store.size;
+    },
+    key: (index: number) => [...store.keys()][index] ?? null,
     getItem: (k: string) => store.get(k) ?? null,
     setItem: (k: string, v: string) => {
       store.set(k, v);
@@ -28,20 +33,8 @@ function mockBrowserStorage(): void {
       store.clear();
     },
   });
-  vi.stubGlobal("sessionStorage", {
-    getItem: (k: string) => store.get(`s:${k}`) ?? null,
-    setItem: (k: string, v: string) => {
-      store.set(`s:${k}`, v);
-    },
-    removeItem: (k: string) => {
-      store.delete(`s:${k}`);
-    },
-    clear: () => {
-      for (const key of [...store.keys()]) {
-        if (key.startsWith("s:")) store.delete(key);
-      }
-    },
-  });
+  vi.stubGlobal("localStorage", make(local));
+  vi.stubGlobal("sessionStorage", make(session));
 }
 
 describe("accountDataWipe", () => {
@@ -68,6 +61,7 @@ describe("accountDataWipe", () => {
     expect(first.backupsRemoved).toBe(1);
     expect(first.localStorageKeysRemoved).toBeGreaterThan(0);
     expect(first.wipeMarkerWritten).toBe(true);
+    expect(first.complete).toBe(true);
 
     const second = await wipeAccountNamespace(accountKey);
     expect(second.kvKeysRemoved).toBe(2);

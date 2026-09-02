@@ -4,17 +4,23 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { hasSupabaseConfig, supabase } from "../supabase";
 import { androidUpdateAdapter } from "./AndroidUpdateAdapter";
 import { iosUpdateAdapter } from "./IOSUpdateAdapter";
+import type { AndroidUpdateDecision } from "./UpdateDecision";
+import { markUpdateDismissed, updateDismissalKey } from "./UpdateDismissal";
 import {
   isVerifiedUpdate,
   markWhatsNewSeen,
   readLastPolicyGeneration,
   shouldLogUpdateAvailable,
+  updateAvailableLogKey,
   writeLastPolicyGeneration,
 } from "./UpdateEligibility";
 import { logUpdateEvent } from "./UpdateEvents";
+import { isUpdatePathOffline } from "./UpdateNetwork";
 import { fetchReleasePolicy, type ResolvedUpdatePolicy } from "./UpdatePolicyResolver";
 import { resolveUpdateNotification, type UpdateNotificationState } from "./UpdateNotifications";
+import { openPlayStoreListing, type PlayStoreFallbackResult } from "./PlayStoreFallback";
 import type {
+  UpdateActionOutcome,
   UpdateEvaluateReason,
   UpdatePhase,
   UpdatePlatform,
@@ -36,6 +42,11 @@ export type UpdateEngineState = {
   notification: UpdateNotificationState;
   lastReason: UpdateEvaluateReason | null;
   evaluating: boolean;
+  /** ANDROID-UPDATE-P1 — last Android decision (severity / source / fallback). */
+  lastDecision: AndroidUpdateDecision | null;
+  /** ANDROID-UPDATE-P1 — last user-triggered action error, never swallowed. */
+  lastActionError: string | null;
+  fallbackOffered: boolean;
 };
 
 type StateListener = (state: UpdateEngineState) => void;
@@ -69,6 +80,9 @@ function baseState(platform: UpdatePlatform): UpdateEngineState {
     notification: resolveUpdateNotification("idle"),
     lastReason: null,
     evaluating: false,
+    lastDecision: null,
+    lastActionError: null,
+    fallbackOffered: false,
   };
 }
 
@@ -155,6 +169,8 @@ class EnterpriseUpdateEngineImpl {
     const onOnline = () => void this.evaluate("reconnect");
     window.addEventListener("online", onOnline);
     this.disposeFns.push(() => window.removeEventListener("online", onOnline));
+    window.addEventListener("waka:network-online", onOnline);
+    this.disposeFns.push(() => window.removeEventListener("waka:network-online", onOnline));
 
     this.startPolling();
     void this.setupRealtime();
@@ -230,7 +246,7 @@ class EnterpriseUpdateEngineImpl {
 
     try {
       const installed = await readInstalledVersion();
-      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      const offline = await isUpdatePathOffline();
       let policy: ResolvedUpdatePolicy | null = null;
 
       if (this.state.platform === "android") {
@@ -266,7 +282,8 @@ class EnterpriseUpdateEngineImpl {
 
       const previousPhase = this.state.phase;
       let phase = evaluation.phase;
-      let error = evaluation.error;
+      const error = evaluation.error;
+      const lastDecision = evaluation.decision ?? this.state.lastDecision;
 
       if (phase === "flexible_ready" && previousPhase !== "flexible_ready" && policy) {
         await logUpdateEvent("update_download_completed", { policy, versions });
@@ -285,9 +302,9 @@ class EnterpriseUpdateEngineImpl {
         await logUpdateEvent("update_verified", { policy, versions });
       }
 
-      if (shouldLogUpdateAvailable(phase, policy, this.lastLoggedReleaseId) && policy) {
+      if (shouldLogUpdateAvailable(phase, policy, this.lastLoggedReleaseId, evaluation.playAvailableVersionCode)) {
         await logUpdateEvent("update_available", { policy, versions, metadata: { reason } });
-        this.lastLoggedReleaseId = policy.releaseId;
+        this.lastLoggedReleaseId = updateAvailableLogKey(policy, evaluation.playAvailableVersionCode);
       }
 
       this.patch({
@@ -297,6 +314,9 @@ class EnterpriseUpdateEngineImpl {
         playAvailableVersionCode: evaluation.playAvailableVersionCode,
         error,
         evaluating: false,
+        lastDecision,
+        lastActionError: null,
+        fallbackOffered: lastDecision?.fallbackOnly === true,
         notification: resolveUpdateNotification(phase),
       });
     } catch (err) {
@@ -305,36 +325,140 @@ class EnterpriseUpdateEngineImpl {
         phase: "update_failed",
         error: message,
         evaluating: false,
+        lastActionError: message,
         notification: resolveUpdateNotification("update_failed"),
       });
     }
   }
 
-  async startFlexibleUpdate(): Promise<void> {
-    const policy = this.state.policy;
-    if (!policy || !this.adapter.startFlexibleUpdate) return;
-    await this.adapter.startFlexibleUpdate(policy);
-    this.patch({ phase: "flexible_downloading", notification: resolveUpdateNotification("flexible_downloading") });
+  /** ANDROID-UPDATE-P1: Play Store listing — only when Play Core cannot start. */
+  async openPlayStoreFallback(): Promise<PlayStoreFallbackResult> {
+    const result = await openPlayStoreListing({ isAndroid: this.state.platform === "android" });
+    this.patch({
+      lastActionError: result.opened ? this.state.lastActionError : result.error,
+      fallbackOffered: true,
+    });
+    return result;
   }
 
-  async startImmediateUpdate(): Promise<void> {
+  private async runPlayCoreAction(
+    kind: "flexible" | "immediate" | "complete",
+  ): Promise<UpdateActionOutcome> {
     const policy = this.state.policy;
-    if (!policy || !this.adapter.startImmediateUpdate) return;
-    await this.adapter.startImmediateUpdate(policy);
+    const decision = this.state.lastDecision;
+
+    const hasFn =
+      kind === "flexible"
+        ? Boolean(this.adapter.startFlexibleUpdate)
+        : kind === "immediate"
+          ? Boolean(this.adapter.startImmediateUpdate)
+          : Boolean(this.adapter.completeFlexibleUpdate);
+
+    if (!hasFn) {
+      return { ok: false, fallbackOpened: false, fallbackVia: "none", error: "adapter_missing" };
+    }
+
+    const shouldFallbackDirectly = decision?.fallbackOnly === true || decision?.playCoreUsable === false;
+    if (shouldFallbackDirectly && kind !== "complete") {
+      const fallback = await this.openPlayStoreFallback();
+      this.patch({
+        lastActionError: fallback.opened ? null : fallback.error,
+        fallbackOffered: true,
+        error: fallback.opened ? this.state.error : fallback.error,
+      });
+      return {
+        ok: fallback.opened,
+        fallbackOpened: fallback.opened,
+        fallbackVia: fallback.via,
+        error: fallback.opened ? null : fallback.error,
+      };
+    }
+
+    try {
+      const raw =
+        kind === "flexible"
+          ? await this.adapter.startFlexibleUpdate?.(policy)
+          : kind === "immediate"
+            ? await this.adapter.startImmediateUpdate?.(policy)
+            : await this.adapter.completeFlexibleUpdate?.(policy);
+      const started =
+        raw == null
+          ? true
+          : "started" in raw
+            ? Boolean(raw.started)
+            : "completed" in raw
+              ? Boolean(raw.completed)
+              : true;
+      if (!started) {
+        // User cancelled the Play UI — not a failure, and not a fallback case.
+        return { ok: false, fallbackOpened: false, fallbackVia: "none", error: "user_cancelled" };
+      }
+      if (kind === "flexible") {
+        this.patch({
+          phase: "flexible_downloading",
+          lastActionError: null,
+          notification: resolveUpdateNotification("flexible_downloading"),
+        });
+      }
+      return { ok: true, fallbackOpened: false, fallbackVia: "none", error: null };
+    } catch (err) {
+      const message = (err as Error).message ?? `${kind}_start_failed`;
+      await logUpdateEvent("update_failed", {
+        policy,
+        versions: this.state.versions,
+        metadata: { step: `start_${kind}`, message },
+      }).catch(() => undefined);
+
+      // ANDROID-UPDATE-P1: never swallow — offer the Play Store listing as recovery.
+      const fallback = kind === "complete" ? { opened: false, via: "none" as const, error: message } : await this.openPlayStoreFallback();
+      this.patch({
+        phase: kind === "complete" ? this.state.phase : "update_failed",
+        lastActionError: message,
+        error: message,
+        fallbackOffered: fallback.opened || kind !== "complete",
+        notification: resolveUpdateNotification(kind === "complete" ? this.state.phase : "update_failed"),
+      });
+      return {
+        ok: false,
+        fallbackOpened: fallback.opened,
+        fallbackVia: fallback.via,
+        error: message,
+      };
+    }
   }
 
-  async completeFlexibleUpdate(): Promise<void> {
-    const policy = this.state.policy;
-    if (!policy || !this.adapter.completeFlexibleUpdate) return;
-    await this.adapter.completeFlexibleUpdate(policy);
+  async startFlexibleUpdate(): Promise<UpdateActionOutcome> {
+    return this.runPlayCoreAction("flexible");
+  }
+
+  async startImmediateUpdate(): Promise<UpdateActionOutcome> {
+    return this.runPlayCoreAction("immediate");
+  }
+
+  async completeFlexibleUpdate(): Promise<UpdateActionOutcome> {
+    return this.runPlayCoreAction("complete");
   }
 
   async skipUpdate(): Promise<void> {
     const policy = this.state.policy;
-    if (policy) {
-      await logUpdateEvent("update_cancelled", { policy, versions: this.state.versions });
+    const decision = this.state.lastDecision;
+    if (decision?.severity === "mandatory") {
+      // Mandatory updates cannot be dismissed — leave the overlay in place.
+      return;
     }
-    this.patch({ phase: "idle", notification: resolveUpdateNotification("idle") });
+    if (policy) {
+      await logUpdateEvent("update_cancelled", { policy, versions: this.state.versions }).catch(() => undefined);
+    }
+    const key = updateDismissalKey({
+      availableVersionCode: this.state.playAvailableVersionCode,
+      releaseId: policy?.releaseId ?? null,
+    });
+    await markUpdateDismissed(key);
+    this.patch({
+      phase: "idle",
+      lastDecision: decision ? { ...decision, dismissed: true } : decision,
+      notification: resolveUpdateNotification("idle"),
+    });
   }
 
   async dismissWhatsNew(): Promise<void> {

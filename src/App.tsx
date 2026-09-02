@@ -594,7 +594,7 @@ function AppRoutes() {
             <Route
               path="office/hardware"
               element={
-                <RoleProtectedRoute permission="settings.view">
+                <RoleProtectedRoute permission="settings.view" capability="hardware">
                   <Suspense fallback={<LazyWait />}>
                     <HardwareSettingsPage lang={lang} />
                   </Suspense>
@@ -984,7 +984,7 @@ function AppRoutes() {
             <Route
               path="staff-center"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="staff">
                   <SensitiveActionGate lang={lang} kind="manage_users" deniedTo="/settings">
                     <StaffCenterLayout lang={lang} />
                   </SensitiveActionGate>
@@ -1147,7 +1147,7 @@ function AppRoutes() {
             <Route
               path="settings/cash-drawer"
               element={
-                <RoleProtectedRoute permission="day.open_drawer">
+                <RoleProtectedRoute permission="day.open_drawer" capability="cash_drawer">
                   <SettingsChangeGate lang={lang}>
                     <SettingsCashDrawerPage lang={lang} />
                   </SettingsChangeGate>
@@ -1157,7 +1157,7 @@ function AppRoutes() {
             <Route
               path="settings/shop"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="shop_profile">
                   <SettingsChangeGate lang={lang}>
                     <SettingsShopPage
                       lang={lang}
@@ -1173,7 +1173,7 @@ function AppRoutes() {
             <Route
               path="settings/receipt"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.receipt" capability="receipt">
                   <SettingsChangeGate lang={lang}>
                     <SettingsReceiptPage lang={lang} />
                   </SettingsChangeGate>
@@ -1183,7 +1183,7 @@ function AppRoutes() {
             <Route
               path="settings/selling"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="selling">
                   <SettingsChangeGate lang={lang}>
                     <SettingsSellingPage lang={lang} />
                   </SettingsChangeGate>
@@ -1193,7 +1193,7 @@ function AppRoutes() {
             <Route
               path="settings/home-menu"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="home_menu">
                   <SettingsChangeGate lang={lang}>
                     <SettingsHomeMenuPage lang={lang} />
                   </SettingsChangeGate>
@@ -1203,7 +1203,7 @@ function AppRoutes() {
             <Route
               path="settings/office-menu"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="office_menu">
                   <SettingsChangeGate lang={lang}>
                     <SettingsOfficeMenuPage lang={lang} />
                   </SettingsChangeGate>
@@ -1213,7 +1213,7 @@ function AppRoutes() {
             <Route
               path="settings/shelves"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="shelves">
                   <SettingsChangeGate lang={lang}>
                     <SettingsShelvesPage lang={lang} />
                   </SettingsChangeGate>
@@ -1223,7 +1223,7 @@ function AppRoutes() {
             <Route
               path="settings/floor"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="floor">
                   <SettingsChangeGate lang={lang}>
                     <Suspense fallback={<LazyWait />}>
                       <SettingsFloorPage lang={lang} />
@@ -1235,7 +1235,7 @@ function AppRoutes() {
             <Route
               path="settings/pharmacy"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="pharmacy">
                   <SettingsChangeGate lang={lang}>
                     <SettingsPharmacyPage lang={lang} />
                   </SettingsChangeGate>
@@ -1245,7 +1245,7 @@ function AppRoutes() {
             <Route
               path="settings/menu"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="menu_builder">
                   <SettingsChangeGate lang={lang}>
                     <MenuBuilderPage lang={lang} />
                   </SettingsChangeGate>
@@ -1255,7 +1255,7 @@ function AppRoutes() {
             <Route
               path="settings/hospitality"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="hospitality">
                   <SettingsChangeGate lang={lang}>
                     <Suspense fallback={<LazyWait />}>
                       <SettingsHospitalityPage lang={lang} />
@@ -1269,7 +1269,7 @@ function AppRoutes() {
             <Route
               path="settings/pin"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="pin">
                   <SettingsPinPage lang={lang} />
                 </RoleProtectedRoute>
               }
@@ -1277,7 +1277,7 @@ function AppRoutes() {
             <Route
               path="settings/biometric"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="biometric">
                   <SettingsBiometricPage lang={lang} />
                 </RoleProtectedRoute>
               }
@@ -1285,7 +1285,7 @@ function AppRoutes() {
             <Route
               path="settings/password"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="password">
                   <SettingsChangeGate lang={lang}>
                     <SettingsPasswordPage
                       lang={lang}
@@ -1299,7 +1299,7 @@ function AppRoutes() {
             <Route
               path="settings/appearance"
               element={
-                <RoleProtectedRoute permission="settings.view">
+                <RoleProtectedRoute permission="settings.view" capability="appearance">
                   <SettingsAppearancePage lang={lang} />
                 </RoleProtectedRoute>
               }
@@ -1307,7 +1307,7 @@ function AppRoutes() {
             <Route
               path="settings/notifications"
               element={
-                <RoleProtectedRoute permission="settings.view">
+                <RoleProtectedRoute permission="settings.view" capability="notifications">
                   <SettingsChangeGate lang={lang}>
                     <SettingsNotificationsPage lang={lang} />
                   </SettingsChangeGate>
@@ -1317,7 +1317,7 @@ function AppRoutes() {
             <Route
               path="settings/devices"
               element={
-                <RoleProtectedRoute permission="settings.devices">
+                <RoleProtectedRoute permission="settings.devices" capability="devices">
                   <SettingsChangeGate lang={lang}>
                     <DeviceManagementPage lang={lang} />
                   </SettingsChangeGate>
@@ -1327,7 +1327,7 @@ function AppRoutes() {
             <Route
               path="settings/sync-conflicts"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="sync_conflicts">
                   <SettingsChangeGate lang={lang}>
                     <SyncConflictCenterPage lang={lang} />
                   </SettingsChangeGate>
@@ -1337,7 +1337,7 @@ function AppRoutes() {
             <Route
               path="settings/health"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="health">
                   <SettingsChangeGate lang={lang}>
                     <SettingsSystemHealthPage lang={lang} />
                   </SettingsChangeGate>
@@ -1347,7 +1347,7 @@ function AppRoutes() {
             <Route
               path="settings/diagnostics"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="diagnostics">
                   <SettingsChangeGate lang={lang}>
                     <SettingsDiagnosticsPage lang={lang} user={auth.user} />
                   </SettingsChangeGate>
@@ -1357,7 +1357,7 @@ function AppRoutes() {
             <Route
               path="settings/finance-diagnostics"
               element={
-                <RoleProtectedRoute permission="owner.dashboard">
+                <RoleProtectedRoute permission="owner.dashboard" capability="finance_diagnostics">
                   <SettingsChangeGate lang={lang}>
                     <SettingsFinanceDiagnosticsPage lang={lang} />
                   </SettingsChangeGate>
@@ -1377,7 +1377,7 @@ function AppRoutes() {
             <Route
               path="settings/retention"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="retention">
                   <SettingsChangeGate lang={lang}>
                     <SettingsDataRetentionPage lang={lang} />
                   </SettingsChangeGate>
@@ -1387,7 +1387,7 @@ function AppRoutes() {
             <Route
               path="settings/archive"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.shop" capability="archive">
                   <SettingsChangeGate lang={lang}>
                     <ArchiveDataPage lang={lang} />
                   </SettingsChangeGate>

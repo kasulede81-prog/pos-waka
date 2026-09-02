@@ -1,10 +1,10 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import type { Language } from "../types";
+import { resolveIsShopOwner, useDeviceActivation } from "../context/DeviceActivationContext";
 import {
+  deviceGateMountsProtectedOutlet,
   pathAllowedWhenDeviceBlocked,
-  resolveIsShopOwner,
-  useDeviceActivation,
-} from "../context/DeviceActivationContext";
+} from "../lib/deviceActivationGatePolicy";
 import { t } from "../lib/i18n";
 import { EnterpriseSpinner } from "./enterprise/EnterpriseSpinner";
 
@@ -14,31 +14,44 @@ type Props = { lang: Language };
 export function DeviceActivationGateOutlet({ lang }: Props) {
   const location = useLocation();
   const { loading, activated, block, retry } = useDeviceActivation();
+  const path = location.pathname.split("?")[0] || "/";
+  const isShopOwner = resolveIsShopOwner(block?.context ?? null);
+  const mountOutlet = deviceGateMountsProtectedOutlet({
+    loading,
+    activated,
+    path,
+    isShopOwner,
+    blockKind: block?.kind ?? null,
+  });
 
   if (loading) {
     return (
-      <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-waka-50 to-muted px-4 dark:from-foreground dark:to-foreground">
-        <EnterpriseSpinner size="lg" label="Checking device access" />
-        <p className="mt-3 text-sm font-semibold text-muted-foreground dark:text-muted-foreground">Checking device access…</p>
-      </div>
+      <>
+        {mountOutlet ? <Outlet /> : null}
+        <div
+          data-startup-state="DEVICE CHECKING"
+          className="auth-scroll-root fixed inset-0 z-[210] flex h-dvh max-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-waka-50 to-muted px-4 dark:from-foreground dark:to-foreground"
+        >
+          <EnterpriseSpinner size="lg" label="Checking device access" />
+          <p className="mt-3 text-sm font-semibold text-muted-foreground dark:text-muted-foreground">Checking device access…</p>
+        </div>
+      </>
     );
   }
 
   if (activated) {
-    const path = location.pathname.split("?")[0] || "/";
     if (path === "/device-limit" || path === "/device-pending" || path === "/device-activating") {
       return <Navigate to="/" replace />;
     }
     return <Outlet />;
   }
 
-  const path = location.pathname.split("?")[0] || "/";
   if (pathAllowedWhenDeviceBlocked(path)) {
     return <Outlet />;
   }
 
   // Safety net: owners must never be held on staff approval / activating routes.
-  if (resolveIsShopOwner(block?.context ?? null)) {
+  if (isShopOwner) {
     if (block?.kind === "limit") {
       return <Navigate to="/device-limit" replace state={{ from: location.pathname }} />;
     }
@@ -59,7 +72,10 @@ export function DeviceActivationGateOutlet({ lang }: Props) {
 
   if (block?.kind === "connection" || !block) {
     return (
-      <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-waka-50 to-muted px-6 dark:from-foreground dark:to-foreground">
+      <div
+        data-startup-state="DEVICE BLOCKED"
+        className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-waka-50 to-muted px-6 dark:from-foreground dark:to-foreground"
+      >
         <h1 className="text-center text-xl font-black text-foreground dark:text-background">
           {t(lang, "deviceActivatingFailedNetwork")}
         </h1>
