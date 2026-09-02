@@ -51,8 +51,10 @@ describe("settingsAuthorization — permission map", () => {
 
   it("device settings require settings.devices", () => {
     expect(requiredPermissionsForPreferencesPatch({ receiptPaperSize: "80mm" })).toEqual(["settings.devices"]);
+    expect(requiredPermissionsForPreferencesPatch({ hospitalityHardware: undefined })).toEqual(["settings.devices"]);
     expect(authorizePreferencesPatch(actor("owner"), { receiptPaperSize: "80mm" }).ok).toBe(true);
     expect(authorizePreferencesPatch(actor("manager"), { receiptPaperSize: "80mm" }).ok).toBe(false);
+    expect(authorizePreferencesPatch(actor("supervisor"), { hospitalityHardware: undefined }).ok).toBe(false);
   });
 
   it("shelf customization requires settings.shop", () => {
@@ -77,10 +79,14 @@ describe("settingsAuthorization — permission map", () => {
     expect(requiredPermissionsForPreferencesPatch({ cashDrawerFormulaVersion: "v2" })).toEqual([
       "day.open_drawer",
     ]);
+    expect(requiredPermissionsForPreferencesPatch({ cashVarianceThresholdPct: 5 })).toEqual(["day.open_drawer"]);
     expect(
       authorizePreferencesPatch(actor("owner"), { ownerDayOpenCorrectionAfterSales: true }).ok,
     ).toBe(true);
+    expect(authorizePreferencesPatch(actor("manager"), { cashDrawerFormulaVersion: "v2" }).ok).toBe(true);
+    expect(authorizePreferencesPatch(actor("supervisor"), { cashVarianceThresholdPct: 8 }).ok).toBe(true);
     expect(authorizePreferencesPatch(actor("cashier"), { cashDrawerFormulaVersion: "v2" }).ok).toBe(false);
+    expect(authorizePreferencesPatch(actor("manager"), { ownerDayOpenCorrectionAfterSales: true }).ok).toBe(false);
   });
 
   it("owner on free plan can save cash drawer settings", () => {
@@ -177,5 +183,33 @@ describe("shop PIN setup route", () => {
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     expect(src.slice(start, end)).not.toContain("SettingsChangeGate");
+  });
+});
+
+describe("receipt settings route", () => {
+  it("gates /settings/receipt on settings.receipt (not owner-only settings.shop)", () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../App.tsx"), "utf8");
+    const start = src.indexOf('path="settings/receipt"');
+    const end = src.indexOf('path="settings/selling"');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const slice = src.slice(start, end);
+    expect(slice).toContain('permission="settings.receipt"');
+    expect(slice).not.toContain('permission="settings.shop"');
+    expect(slice).toContain("SettingsChangeGate");
+  });
+});
+
+describe("hardware settings route", () => {
+  it("keeps /office/hardware on settings.view (view, not mutate)", () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../App.tsx"), "utf8");
+    const start = src.indexOf('path="office/hardware"');
+    const end = src.indexOf('path="office/vision"');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const slice = src.slice(start, end);
+    expect(slice).toContain('permission="settings.view"');
+    expect(slice).not.toContain('permission="settings.devices"');
+    expect(slice).not.toContain('permission="settings.shop"');
   });
 });

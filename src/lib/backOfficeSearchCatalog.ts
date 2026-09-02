@@ -85,6 +85,7 @@ const CATALOG: BackOfficeSearchEntryDef[] = [
   },
   { id: "settings-shop", path: "/settings/shop", titleKey: "settingsHubShop", subtitleKey: "settingsHubShopSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["shop name", "business", "profile"] },
   { id: "settings-receipt", path: "/settings/receipt", titleKey: "settingsHubReceipt", subtitleKey: "settingsHubReceiptSub", sectionKey: "settingsHubGroupShop", perm: "settings.receipt", keywords: ["receipt", "print", "header", "footer"] },
+  { id: "settings-cash-drawer", path: "/settings/cash-drawer", titleKey: "cashManageDrawerSettings", subtitleKey: "cashManageDrawerSettingsSub", sectionKey: "settingsHubGroupShop", perm: "day.open_drawer", keywords: ["drawer", "till", "variance", "tolerance", "float", "formula", "cash"] },
   { id: "settings-selling", path: "/settings/selling", titleKey: "settingsHubSelling", subtitleKey: "settingsHubSellingSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["sell", "pos", "quick sell"] },
   { id: "settings-devices", path: "/settings/devices", titleKey: "settingsHubDevices", subtitleKey: "settingsHubDevicesSub", sectionKey: "settingsHubGroupShop", perm: "settings.devices", keywords: ["device", "tablet", "phone"] },
   { id: "settings-pin", path: "/settings/pin", titleKey: "settingsHubPin", subtitleKey: "settingsHubPinSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["pin", "lock", "password"] },

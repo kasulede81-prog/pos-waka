@@ -75,6 +75,18 @@ export function shouldPromptForSensitiveAction(
   return !isSensitiveActionSessionActive();
 }
 
+/**
+ * True when a sensitive Settings/route gate may render or run its action.
+ * Biometric-off is a no-op (existing policy). Session must match the active account.
+ */
+export function isSensitiveActionGateSatisfied(
+  kind: SensitiveActionKind,
+  preferences: Pick<ShopPreferences, "biometricAuthEnabled">,
+): boolean {
+  if (!isBiometricAuthFeatureEnabled(preferences)) return true;
+  return isSecuritySessionActive(kind) || isSecuritySessionActive();
+}
+
 /** Enterprise session covers sensitive routes after back-office unlock — avoids double prompts. */
 export function sensitiveAuthSatisfiedByBackOfficeUnlock(
   preferences: {

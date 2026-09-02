@@ -46,6 +46,12 @@ import { testPrintProfile } from "../services/hardware/printerAdapter";
 import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
 import { computeRestaurantBillTotals, billDraftFromSale } from "../lib/restaurantBilling";
 import { readUiLanguageCacheSync } from "../lib/uiLanguage";
+import {
+  authorizePreferencesPatch,
+  requiredPermissionsForPreferencesPatch,
+} from "../lib/settingsAuthorization";
+import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
+import type { StoreAuthResult } from "../lib/storeAuthorization";
 import type { PosState } from "./usePosStore";
 
 type StoreGet = () => PosState;
@@ -72,6 +78,29 @@ function printLang(): Language {
 
 export function createHardwarePrintStoreActions(deps: Deps) {
   const { get, set, pushAudit, flushPendingPersist } = deps;
+
+  const authorizePersistentHardwareConfig = (
+    state: PosState,
+    patch: Partial<ShopPreferences>,
+    action: string,
+  ): StoreAuthResult => {
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const result = authorizePreferencesPatch(state.sessionActor, patch, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: state.preferences.staffAccounts ?? [],
+    });
+    if (!result.ok) {
+      pushAudit("auth_forbidden", `Denied ${action}`, {
+        permission: requiredPermissionsForPreferencesPatch(patch).join(","),
+        action,
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: result.errorKey,
+        keys: Object.keys(patch),
+      });
+    }
+    return result;
+  };
 
   const scheduleQueue = () => {
     const state = get();
@@ -214,6 +243,12 @@ export function createHardwarePrintStoreActions(deps: Deps) {
         isEnabled: true,
       };
       const next = upsertPrinterProfile(state.preferences, profile);
+      const auth = authorizePersistentHardwareConfig(
+        state,
+        { hospitalityHardware: next.hospitalityHardware },
+        "upsertPrinter",
+      );
+      if (!auth.ok) return { ok: false as const, errorKey: auth.errorKey };
       set({ preferences: next });
       flushPendingPersist();
       return { ok: true as const, printerId: profile.id };
@@ -221,7 +256,14 @@ export function createHardwarePrintStoreActions(deps: Deps) {
 
     removePrinter: (printerId: string) => {
       const state = get();
-      set({ preferences: removePrinterProfile(state.preferences, printerId) });
+      const next = removePrinterProfile(state.preferences, printerId);
+      const auth = authorizePersistentHardwareConfig(
+        state,
+        { hospitalityHardware: next.hospitalityHardware },
+        "removePrinter",
+      );
+      if (!auth.ok) return { ok: false as const, errorKey: auth.errorKey };
+      set({ preferences: next });
       flushPendingPersist();
       return { ok: true as const };
     },
@@ -230,6 +272,12 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       const state = get();
       const floor = state.preferences.hospitalityFloor;
       if (!floor) return { ok: false as const, errorKey: "invalid" };
+      const auth = authorizePersistentHardwareConfig(
+        state,
+        { hospitalityHardware: resolveHospitalityHardware(state.preferences) },
+        "assignStationPrinter",
+      );
+      if (!auth.ok) return { ok: false as const, errorKey: auth.errorKey };
       const nextFloor = assignPrinterToStation(floor, stationId, printerId);
       set({
         preferences: {
@@ -275,6 +323,12 @@ export function createHardwarePrintStoreActions(deps: Deps) {
     setHospitalityHardwarePrefs: (patch: Partial<HospitalityHardwarePrefs>) => {
       const state = get();
       const hw = patchHospitalityHardware(state.preferences, patch);
+      const auth = authorizePersistentHardwareConfig(
+        state,
+        { hospitalityHardware: hw },
+        "setHospitalityHardwarePrefs",
+      );
+      if (!auth.ok) return { ok: false as const, errorKey: auth.errorKey };
       set({
         preferences: {
           ...state.preferences,

@@ -28,8 +28,8 @@ const OPERATIONAL_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "activeTableSessionId",
 ]);
 
-/** Device / hardware receipt width — owner devices settings. */
-const DEVICES_PREFERENCE_KEYS = new Set<keyof ShopPreferences>(["receiptPaperSize"]);
+/** Device / hardware receipt width and printer profiles — owner devices settings. */
+const DEVICES_PREFERENCE_KEYS = new Set<keyof ShopPreferences>(["receiptPaperSize", "hospitalityHardware"]);
 
 /** POS UI mode toggle — separate from shop settings. */
 const UI_MODE_KEYS = new Set<keyof ShopPreferences>(["posUiMode"]);

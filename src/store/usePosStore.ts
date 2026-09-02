@@ -980,11 +980,14 @@ export type PosState = {
     isDefaultReceipt?: boolean;
     networkHost?: string | null;
     networkPort?: number | null;
-  }) => { ok: boolean; printerId?: string };
-  removePrinter: (printerId: string) => { ok: boolean };
+  }) => { ok: boolean; printerId?: string; errorKey?: string };
+  removePrinter: (printerId: string) => { ok: boolean; errorKey?: string };
   assignStationPrinter: (stationId: string, printerId: string | null) => { ok: boolean; errorKey?: string };
   testConfiguredPrinter: (printerId: string) => Promise<{ ok: boolean; error?: string }>;
-  setHospitalityHardwarePrefs: (patch: Partial<import("../types").HospitalityHardwarePrefs>) => { ok: boolean };
+  setHospitalityHardwarePrefs: (patch: Partial<import("../types").HospitalityHardwarePrefs>) => {
+    ok: boolean;
+    errorKey?: string;
+  };
   openCashDrawerManual: (reason?: string) => Promise<{ ok: boolean; error?: string }>;
   printRestaurantReceiptForSale: (
     saleId: string,

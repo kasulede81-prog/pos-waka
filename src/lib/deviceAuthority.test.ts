@@ -1,4 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
+import { setActiveAccountKey } from "../offline/accountScope";
+import { resetActiveShopForTests } from "../offline/shopScope";
 import {
   canPerformDeviceAuthorizedActionSync,
   clearDeviceAuthorityCache,
@@ -10,6 +12,8 @@ import {
 } from "./deviceAuthority";
 
 beforeEach(() => {
+  resetActiveShopForTests();
+  setActiveAccountKey(null);
   clearDeviceAuthorityCache();
 });
 

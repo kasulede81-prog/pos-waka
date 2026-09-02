@@ -22,6 +22,10 @@ const ROLE_OPTIONS: PrinterStationRole[] = [
 
 const CONNECTION_OPTIONS: PrinterConnectionType[] = ["usb", "bluetooth", "network", "builtin"];
 
+function hardwareMutationDeniedStatus(lang: Language, errorKey?: string): string {
+  return t(lang, errorKey === "forbidden" || errorKey === "noSelection" ? "forbidden" : "invalid");
+}
+
 export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const hw = useMemo(() => resolveHospitalityHardware(preferences), [preferences]);
@@ -51,7 +55,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
 
   const addPrinter = () => {
     if (!name.trim()) return;
-    upsertPrinter({
+    const result = upsertPrinter({
       name,
       connectionType,
       paperWidth,
@@ -60,6 +64,10 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       networkHost: connectionType === "network" ? networkHost.trim() || null : null,
       networkPort: connectionType === "network" ? Number(networkPort) || 9100 : null,
     });
+    if (!result.ok) {
+      setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
+      return;
+    }
     setStatus(t(lang, "hardwarePrinterAdded"));
   };
 
@@ -203,7 +211,12 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                   <button
                     type="button"
                     className="rounded-xl border-2 border-red-200 px-2 py-1 text-red-800"
-                    onClick={() => removePrinter(p.id)}
+                    onClick={() => {
+                      const result = removePrinter(p.id);
+                      if (!result.ok) {
+                        setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
+                      }
+                    }}
                     aria-label={t(lang, "hardwarePrinterRemove")}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -228,7 +241,12 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                 <select
                   className="rounded-xl border-2 border-amber-200 px-2 py-1 text-sm font-semibold"
                   value={station.futureHooks?.printerIds?.[0] ?? ""}
-                  onChange={(e) => assignStationPrinter(station.id, e.target.value || null)}
+                  onChange={(e) => {
+                    const result = assignStationPrinter(station.id, e.target.value || null);
+                    if (!result.ok) {
+                      setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
+                    }
+                  }}
                 >
                   <option value="">{t(lang, "hardwareStationAuto")}</option>
                   {hw.printers.map((p) => (
@@ -248,22 +266,34 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
         <div className="mt-3 space-y-2 text-sm font-bold text-foreground">
           <WakaSwitch
             checked={hw.autoPrintKitchen}
-            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ autoPrintKitchen: checked })}
+            onCheckedChange={(checked) => {
+              const result = setHospitalityHardwarePrefs({ autoPrintKitchen: checked });
+              if (!result.ok) setStatus(t(lang, "forbidden"));
+            }}
             label={t(lang, "hardwareAutoKitchen")}
           />
           <WakaSwitch
             checked={hw.autoPrintReceipt}
-            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ autoPrintReceipt: checked })}
+            onCheckedChange={(checked) => {
+              const result = setHospitalityHardwarePrefs({ autoPrintReceipt: checked });
+              if (!result.ok) setStatus(t(lang, "forbidden"));
+            }}
             label={t(lang, "hardwareAutoReceipt")}
           />
           <WakaSwitch
             checked={hw.openDrawerOnPayment}
-            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ openDrawerOnPayment: checked })}
+            onCheckedChange={(checked) => {
+              const result = setHospitalityHardwarePrefs({ openDrawerOnPayment: checked });
+              if (!result.ok) setStatus(t(lang, "forbidden"));
+            }}
             label={t(lang, "hardwareDrawerOnPayment")}
           />
           <WakaSwitch
             checked={hw.customerDisplayEnabled}
-            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ customerDisplayEnabled: checked })}
+            onCheckedChange={(checked) => {
+              const result = setHospitalityHardwarePrefs({ customerDisplayEnabled: checked });
+              if (!result.ok) setStatus(t(lang, "forbidden"));
+            }}
             label={t(lang, "hardwareCustomerDisplay")}
           />
         </div>

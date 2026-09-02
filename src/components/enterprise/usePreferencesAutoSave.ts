@@ -2,6 +2,8 @@ import { useCallback, useRef, useState } from "react";
 import type { Language } from "../../types";
 import type { ShopPreferences } from "../../types";
 import { usePosStore } from "../../store/usePosStore";
+import { authorizePreferencesPatch } from "../../lib/settingsAuthorization";
+import { getStoreSubscriptionContext } from "../../lib/storeSubscriptionContext";
 import type { EnterpriseSaveIndicatorProps } from "./EnterpriseSaveIndicator";
 
 type PreferencesPatch = Partial<ShopPreferences>;
@@ -13,6 +15,17 @@ export function usePreferencesAutoSave(_lang: Language) {
 
   const savePreferences = useCallback(
     (patch: PreferencesPatch) => {
+      const state = usePosStore.getState();
+      const ctx = getStoreSubscriptionContext();
+      const auth = authorizePreferencesPatch(state.sessionActor, patch, {
+        snapshot: ctx.snapshot,
+        authMode: ctx.authMode,
+        currentStaffAccounts: state.preferences.staffAccounts ?? [],
+      });
+      if (!auth.ok) {
+        setStatus("idle");
+        return;
+      }
       setStatus("saving");
       setPreferences(patch);
       if (timerRef.current != null) window.clearTimeout(timerRef.current);

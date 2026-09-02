@@ -4,7 +4,7 @@
 
 import type { SessionActor } from "./sessionActor";
 import { canUseBackupRestore, type SubscriptionSnapshot } from "./subscriptionEntitlements";
-import { checkStorePermission, type StoreAuthResult } from "./storeAuthorization";
+import { checkStorePermission, type StoreAuthErrorKey, type StoreAuthResult } from "./storeAuthorization";
 import { isDeviceAuthorizedForManagementSync } from "./deviceAuthority";
 
 /** User JSON import vs system cloud recovery bootstrap on a new device. */
@@ -29,6 +29,17 @@ export function authorizeBackupRestore(input: {
     return { ok: false, errorKey: "deviceNotAuthorized" };
   }
   return { ok: true };
+}
+
+/** Map store auth failures to existing i18n keys (never pretend the file was unreadable). */
+export function backupSurfaceDeniedMessageKey(
+  errorKey: StoreAuthErrorKey | undefined,
+  fallback: "backupExportFail" | "backupRestoreFail",
+): "backupUpgradeRequired" | "deviceNotAuthorized" | "forbidden" | "backupExportFail" | "backupRestoreFail" {
+  if (errorKey === "backupRestoreNotEntitled") return "backupUpgradeRequired";
+  if (errorKey === "deviceNotAuthorized") return "deviceNotAuthorized";
+  if (errorKey === "forbidden" || errorKey === "noSelection") return "forbidden";
+  return fallback;
 }
 
 export async function authorizeBackupRestoreAsync(input: {

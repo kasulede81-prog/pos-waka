@@ -1173,7 +1173,7 @@ function AppRoutes() {
             <Route
               path="settings/receipt"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="settings.receipt">
                   <SettingsChangeGate lang={lang}>
                     <SettingsReceiptPage lang={lang} />
                   </SettingsChangeGate>

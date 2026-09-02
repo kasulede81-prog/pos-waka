@@ -16,6 +16,8 @@ import { resetSessionConnectionState } from "../sessionConnectionState";
 import { flushPendingPersist, usePosStore } from "../../store/usePosStore";
 import { setActiveAccountKey } from "../../offline/accountScope";
 import { clearActiveShopOnSignOut } from "../activeShopSwitch";
+import { clearSecuritySession } from "../enterpriseSecurity/securitySession";
+import { clearDeviceAuthorityCache } from "../deviceAuthority";
 import { hasSupabaseConfig, supabase } from "../supabase";
 import { getDeviceOnline } from "../deviceOnline";
 import { withTimeout } from "../promiseTimeout";
@@ -136,6 +138,8 @@ export function performEnterpriseLogout(opts: EnterpriseLogoutOptions = {}): Pro
 
       usePosStore.getState().resetForSignOut();
       clearActiveShopOnSignOut();
+      clearSecuritySession();
+      clearDeviceAuthorityCache();
       setActiveAccountKey(null);
 
       // 5. Clear staff + local auth markers.

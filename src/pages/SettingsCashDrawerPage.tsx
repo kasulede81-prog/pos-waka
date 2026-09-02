@@ -122,6 +122,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
         </label>
         <fieldset className="mt-4">
           <legend className="text-sm font-bold text-foreground">{t(lang, "cashSettingsFormula")}</legend>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "cashSettingsFormulaHint")}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {(["v1", "v2"] as const).map((v) => (
               <button
@@ -132,7 +133,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
                   formula === v ? "bg-foreground text-background" : "border border-border bg-card text-foreground"
                 }`}
               >
-                {v.toUpperCase()}
+                {t(lang, v === "v2" ? "cashSettingsFormulaV2" : "cashSettingsFormulaV1")}
               </button>
             ))}
           </div>

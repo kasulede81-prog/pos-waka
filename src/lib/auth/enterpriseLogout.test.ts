@@ -103,6 +103,47 @@ describe("enterpriseLogout", () => {
     expect(localStorage.getItem("sb-abc-auth-token")).toBeNull();
   });
 
+  it("clears the settings security session so it cannot survive into another login", async () => {
+    const { setActiveAccountKey } = await import("../../offline/accountScope");
+    const { grantSensitiveActionSession, isSensitiveActionSessionActive } = await import("../sensitiveActionAuth");
+    setActiveAccountKey("sb:logout-user");
+    grantSensitiveActionSession();
+    expect(isSensitiveActionSessionActive()).toBe(true);
+    await performEnterpriseLogout({ hardNavigate: false });
+    expect(isSensitiveActionSessionActive()).toBe(false);
+  });
+
+  it("clears account-scoped device authority so the next login cannot reuse it", async () => {
+    const { setActiveAccountKey } = await import("../../offline/accountScope");
+    const { seedDeviceAuthorityCacheForTests, isDeviceAuthorizedForManagementSync } = await import("../deviceAuthority");
+    setActiveAccountKey("sb:logout-user");
+    seedDeviceAuthorityCacheForTests({
+      shopId: "shop-logout",
+      deviceFingerprint: "fp",
+      deviceId: "d",
+      formFactor: "tablet",
+      approvalStatus: "approved",
+      isDeviceAuthorized: true,
+      isApproved: true,
+      isOperational: true,
+      status: "active",
+      lastSyncAt: null,
+      lastLoginAt: null,
+      lastSeenAt: null,
+      currentStaffClientId: null,
+      appVersion: null,
+      label: null,
+      platform: null,
+      pendingUploads: 0,
+      pendingDownloads: 0,
+      cloudStatus: null,
+      recoveryStatus: null,
+    });
+    expect(isDeviceAuthorizedForManagementSync()).toBe(true);
+    await performEnterpriseLogout({ hardNavigate: false });
+    expect(isDeviceAuthorizedForManagementSync()).toBe(false);
+  });
+
   it("coalesces concurrent logout calls", async () => {
     const slow = new Promise<void>((resolve) => {
       globalThis.setTimeout(resolve, 30);

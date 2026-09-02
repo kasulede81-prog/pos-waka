@@ -73,10 +73,12 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
   const [statusKind, setStatusKind] = useState<"success" | "error" | null>(null);
   const pendingRef = useRef<PendingRequest | null>(null);
   const biometricFailuresRef = useRef(0);
+  const inflightRef = useRef(false);
 
   const finish = useCallback((granted: boolean) => {
     const req = pendingRef.current;
     pendingRef.current = null;
+    inflightRef.current = false;
     setPending(null);
     setForcePin(false);
     setPinSetupRequired(false);
@@ -150,7 +152,8 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
   );
 
   const runBiometric = useCallback(async () => {
-    if (!pending) return;
+    if (!pending || inflightRef.current) return;
+    inflightRef.current = true;
     setBusy(true);
     setStatusMessage(null);
     setStatusKind(null);
@@ -183,6 +186,8 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
       }
     }
 
+    inflightRef.current = false;
+
     if (!result.ok && result.userFallback) {
       setForcePin(true);
       return;
@@ -200,7 +205,9 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
 
   const submitPin = useCallback(
     async (pin: string) => {
-      if (!pending) return;
+      if (!pending || inflightRef.current) return;
+      inflightRef.current = true;
+      setBusy(true);
       const preferences = usePosStore.getState().preferences;
       const deviceId = getOrCreateDeviceId();
       const actor = usePosStore.getState().sessionActor;
@@ -233,6 +240,8 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
       }
 
       if (!verified.ok) {
+        inflightRef.current = false;
+        setBusy(false);
         setStatusKind("error");
         setStatusMessage(t(lang, "enterpriseSecurityWrongPin"));
         defaultSecurityAuditLogger(false, "Sensitive action PIN denied", {

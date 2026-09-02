@@ -1,3 +1,4 @@
+import { getActiveAccountKey, onActiveAccountKeyChange } from "../../offline/accountScope";
 import type { SecurityActionScope, SecurityCredentialType, SecuritySession, VerifiedSecurityUser } from "./types";
 
 export const ENTERPRISE_SECURITY_SESSION_MS = 5 * 60 * 1000;
@@ -18,9 +19,15 @@ export function subscribeSecuritySession(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+function sessionMatchesActiveAccount(cur: SecuritySession): boolean {
+  const current = getActiveAccountKey();
+  if (cur.accountKey == null) return current == null;
+  return cur.accountKey === current;
+}
+
 export function getSecuritySession(): SecuritySession | null {
   if (!session) return null;
-  if (session.expiresAt <= Date.now()) {
+  if (session.expiresAt <= Date.now() || !sessionMatchesActiveAccount(session)) {
     session = null;
     notify();
     return null;
@@ -63,6 +70,7 @@ export function createSecuritySession(input: {
     deviceId: input.deviceId,
     lastActivity: now,
     auditId: input.auditId,
+    accountKey: getActiveAccountKey(),
   };
   notify();
   return session;
@@ -122,4 +130,10 @@ export function isLegacySensitiveSessionActive(): boolean {
 /** @deprecated */
 export function clearLegacySensitiveSession(): void {
   clearSecuritySession();
+}
+
+if (typeof onActiveAccountKeyChange === "function") {
+  onActiveAccountKeyChange(() => {
+    clearSecuritySession();
+  });
 }
