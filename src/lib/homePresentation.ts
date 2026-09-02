@@ -26,27 +26,21 @@ export type HomePresentationStructure = {
 };
 
 /**
- * HOME CINEMATIC DENSITY V1 — centered Home content measure.
- * Tailwind `max-w-[100rem]` = 1600px at default 16px root.
- *
- * Applied on the same box as Home gutters so:
- * - below 1024px: never binds (phone / tablet portrait unchanged)
- * - 1280×720: nearly full-bleed with tighter gutters
- * - 1440×900: uses the canvas (no 1280 hard ceiling)
- * - 1920×1080+: caps at 1600 with 5-col primary so tiles stay POS-dense, not stretched
+ * HOME CINEMATIC V3.1 — desktop Home measure.
+ * Tailwind `max-w-[160rem]` = 2560px (4K cap only). 1280–1920 are full-bleed minus gutters.
  *
  * AppShell keeps `max-w-none` on `/`; this token is Home-only and wins inside Outlet.
  */
-export const HOME_CONTENT_MAX_WIDTH_PX = 1600;
-export const HOME_CONTENT_MEASURE_CLASS = "mx-auto w-full max-w-[100rem]";
-export const HOME_PAGE_GUTTER_CLASS = "px-4 py-3 sm:px-6 sm:py-4 lg:px-8 xl:px-10";
-export const HOME_FOOTER_GUTTER_CLASS = "px-4 py-2.5 sm:px-6 lg:px-8 xl:px-10";
+export const HOME_CONTENT_MAX_WIDTH_PX = 2560;
+export const HOME_CONTENT_MEASURE_CLASS = "mx-auto w-full max-w-[160rem]";
+export const HOME_PAGE_GUTTER_CLASS = "px-4 py-2 sm:px-5 sm:py-2.5 lg:px-5 lg:py-2.5 xl:px-6";
+export const HOME_FOOTER_GUTTER_CLASS = "px-4 py-2 sm:px-5 lg:px-5 xl:px-6";
 
 /** Horizontal padding (both sides) matching HOME_PAGE_GUTTER_CLASS. */
 export function homePageGutterXPx(viewportWidth: number): number {
-  if (viewportWidth >= 1280) return 40 * 2;
-  if (viewportWidth >= 1024) return 32 * 2;
-  if (viewportWidth >= 640) return 24 * 2;
+  if (viewportWidth >= 1280) return 24 * 2;
+  if (viewportWidth >= 1024) return 20 * 2;
+  if (viewportWidth >= 640) return 20 * 2;
   return 16 * 2;
 }
 
@@ -59,10 +53,25 @@ export function homeContentInnerWidthPx(viewportWidth: number): number {
 /** Grid classes shared by live Home and Settings preview — do not diverge. */
 export const HOME_MODULE_GRID_CLASS = {
   comfortable:
-    "grid auto-rows-min grid-cols-2 items-start gap-2 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+    "grid auto-rows-fr grid-cols-2 items-stretch gap-2 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
   compact:
-    "grid auto-rows-min grid-cols-2 items-start gap-1.5 sm:gap-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
+    "grid auto-rows-fr grid-cols-2 items-stretch gap-1.5 sm:gap-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
+  /** Primary work beside Live Engine — equal 2-col tracks, last odd tile spans. */
+  command:
+    "grid auto-rows-fr grid-cols-2 items-stretch gap-2 sm:gap-2.5",
 } as const;
+
+/** Conventional 2-col primary grid. No row-span bento — 3 modules stay readable. */
+export function homeCommandPrimaryGridClass(): string {
+  return HOME_MODULE_GRID_CLASS.command;
+}
+
+export function homeCommandPrimaryItemClass(index?: number, count?: number): string {
+  if (index != null && count != null && count % 2 === 1 && index === count - 1) {
+    return "min-w-0 sm:col-span-2";
+  }
+  return "min-w-0";
+}
 
 export const HOME_MODULE_SECTION_SPACING = {
   standard: "mb-3",
@@ -70,7 +79,8 @@ export const HOME_MODULE_SECTION_SPACING = {
 } as const;
 
 /**
- * HOME-DENSITY-1.2 — first-screen body regions (greeting lives on DesktopHomePage).
+ * HOME CINEMATIC V2 — first-screen body regions (greeting lives on DesktopHomePage).
+ * Large screens fold KPI + Health into the Living Business Pulse (hero).
  * DOM order must match this list so keyboard focus follows the visual scan.
  */
 export type HomeBodyRegionId =
@@ -94,8 +104,6 @@ export const HOME_REGION_ORDER_SMALL: readonly HomeBodyRegionId[] = [
 
 export const HOME_REGION_ORDER_LARGE: readonly HomeBodyRegionId[] = [
   "hero",
-  "kpi",
-  "health",
   "primary",
   "reports",
   "operations",

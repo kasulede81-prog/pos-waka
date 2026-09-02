@@ -11,7 +11,12 @@ import {
   resolveVisibleHomeMetrics,
   type HomeMetricScope,
 } from "../lib/homeVisibility";
-import { localGetDailySalesSummary, localGetMonthlySalesSummary } from "../lib/localReporting";
+import {
+  localGetDailySalesSummary,
+  localGetMonthlySalesSummary,
+  localGetRollingSevenDaySalesSummary,
+} from "../lib/localReporting";
+import type { HomePulseSparkMode, HomePulseTrendPoint } from "../lib/homePulseSpark";
 import { mergeHomeKpisWithShopOverlay } from "../lib/homeShopKpiOverlay";
 import { authoritativeCloseForDate, readClosedDayTotals } from "../lib/closedDayAuthority";
 import { formatShortUgx } from "../lib/commandCenterPageView";
@@ -36,6 +41,9 @@ export type { HomeTileIntensity, HomeTileLiveStat, HomeExecutiveKpi };
 export type HomeDashboardMetrics = {
   byTile: Record<string, HomeTileLiveStat | undefined>;
   executive: HomeExecutiveKpi[];
+  /** Existing rolling 7-day Home summary — no invented points. */
+  weekTrend: HomePulseTrendPoint[];
+  sparkMode: HomePulseSparkMode | null;
 };
 
 function pctChange(current: number, prior: number): string | undefined {
@@ -120,6 +128,7 @@ export function useHomeDashboardMetrics(
     const frozenDrawer = todayClose ? readClosedDayTotals(todayClose) : null;
     const localDrawerCashUgx = frozenDrawer?.expectedCashUgx ?? drawer.expectedDrawerCashUgx;
     const month = localGetMonthlySalesSummary(scopedSales, products, scopedReturns, monthKey, cashExpenses);
+    const rollingWeek = localGetRollingSevenDaySalesSummary(scopedSales, products, scopedReturns);
     const merged = mergeHomeKpisWithShopOverlay(
       {
         todayTransactionCount: today.transactionCount,
@@ -226,6 +235,17 @@ export function useHomeDashboardMetrics(
       };
     }
 
+    let sparkMode: HomePulseSparkMode | null = null;
+    if (showTodayRevenue) sparkMode = "revenue";
+    else if (homeMetrics.showRecentSalesList || Boolean(byTile.sell)) sparkMode = "transactions";
+    const weekTrend: HomePulseTrendPoint[] = sparkMode
+      ? rollingWeek.dailyTrend.map((point) => ({
+          day: point.day,
+          revenueUgx: point.revenueUgx,
+          transactionCount: point.transactionCount,
+        }))
+      : [];
+
     const executive = buildHomeExecutiveKpis({
       todayRevenueLabel: t(lang, "desktopHomeLiveTodaySales"),
       todayRevenueValue: formatShortUgx(today.totalRevenueUgx),
@@ -244,7 +264,7 @@ export function useHomeDashboardMetrics(
       debtsPath: "/debts",
     });
 
-    return { byTile, executive };
+    return { byTile, executive, weekTrend, sparkMode };
   }, [
     lang,
     scopedSales,

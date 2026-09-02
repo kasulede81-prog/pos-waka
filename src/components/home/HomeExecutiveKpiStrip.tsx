@@ -14,6 +14,7 @@ import { t } from "../../lib/i18n";
 import type { HomeExecutiveKpi, HomeExecutiveKpiId } from "../../lib/homeExecutiveKpis";
 import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
 import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
+import { HomeLiveValue } from "./HomeLiveValue";
 
 const ICONS: Record<HomeExecutiveKpiId, LucideIcon> = {
   sales: TrendingUp,
@@ -51,7 +52,7 @@ export function HomeExecutiveKpiStrip({ lang, kpis }: Props) {
             key={kpi.id}
             icon={kpi.id === "lowStock" && kpi.tone === "danger" ? AlertTriangle : ICONS[kpi.id]}
             label={kpi.label}
-            value={kpi.value}
+            value={<HomeLiveValue value={kpi.value} className="enterprise-kpi-value text-base font-black tabular-nums sm:text-lg" />}
             hint={kpi.hint}
             tone={kpi.tone}
             onClick={() => navigate(kpi.to)}

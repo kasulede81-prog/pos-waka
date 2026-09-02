@@ -22,20 +22,28 @@ import { resolveHomeMenuTiles, type ResolvedHomeTile } from "../../lib/launcherT
 import {
   HOME_MODULE_GRID_CLASS,
   HOME_MODULE_SECTION_SPACING,
+  homeCommandPrimaryGridClass,
+  homeCommandPrimaryItemClass,
   presentHomeMenuTiles,
   visibleHomeRegionOrder,
   type HomeBodyRegionId,
 } from "../../lib/homePresentation";
+import { HOME_TYPE_SCALE } from "../../lib/homeComposition";
+import { composeMobileWorkspace } from "../../lib/homeMobileComposition";
+import { MobileHomeCockpit } from "./MobileHomeCockpit";
 import { LivingDashboardCard } from "./LivingDashboardCard";
 import { HomeBusinessHero } from "./HomeBusinessHero";
 import { HomeExecutiveKpiStrip } from "./HomeExecutiveKpiStrip";
 import { HomeBusinessHealthSection } from "./HomeBusinessHealthSection";
 import { HomeReportsPreview } from "./HomeReportsPreview";
 import { HomeOrderedRegions } from "./HomeOrderedRegions";
+import { HomeLiveBusinessFloor } from "./HomeLiveBusinessFloor";
 import { useHomeDashboardMetrics } from "../../hooks/useHomeDashboardMetrics";
+import { useHomeBusinessHealthItems } from "../../hooks/useHomeBusinessHealthItems";
 import { useHomeDashboardAnimationPause } from "../../hooks/useHomeDashboardAnimationPause";
 import { useHomeRegionLayout } from "../../hooks/useHomeRegionLayout";
 import { useHomeTileSpotlight } from "../../hooks/useHomeTileSpotlight";
+import { useHomeCashDrawerKick } from "../../hooks/useHomeCashDrawerKick";
 import { useSessionHydration } from "../../context/SessionHydrationContext";
 import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
 
@@ -48,7 +56,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   const navigate = useNavigate();
   const actor = useSessionActor();
   const tileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const { largeScreen, packExecutiveScan } = useHomeRegionLayout();
+  const { largeScreen, packExecutiveScan, mobileCockpit } = useHomeRegionLayout();
   const animPaused = useHomeDashboardAnimationPause();
   const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
   const preferences = usePosStore((s) => s.preferences);
@@ -76,13 +84,14 @@ export function DesktopHomeTiles({ lang }: Props) {
     [unlockedProducts],
   );
 
-  const { byTile: liveStats, executive } = useHomeDashboardMetrics(
+  const { byTile: liveStats, executive, weekTrend, sparkMode } = useHomeDashboardMetrics(
     lang,
     authOperatorRole(actor),
     actor,
     lowStockCount,
     authOperatorPermissions(actor),
   );
+  const { items: healthItems, commandCenterTo } = useHomeBusinessHealthItems(lang);
 
   const can = useCallback(
     (perm?: Permission) => {
@@ -171,6 +180,7 @@ export function DesktopHomeTiles({ lang }: Props) {
 
   const primarySpotlightIds = useMemo(() => primaryTiles.map((tile) => tile.id), [primaryTiles]);
   const spotlightId = useHomeTileSpotlight(primarySpotlightIds, animPaused);
+  const { kick: drawerKick, settleKick } = useHomeCashDrawerKick();
 
   const openTile = useCallback(
     (to: string) => {
@@ -184,6 +194,7 @@ export function DesktopHomeTiles({ lang }: Props) {
     tile: ResolvedHomeTile,
     density: "comfortable" | "compact" = "comfortable",
     weight: "primary" | "supporting" = "primary",
+    fill = false,
   ) => (
     <LivingDashboardCard
       key={tile.id}
@@ -193,7 +204,11 @@ export function DesktopHomeTiles({ lang }: Props) {
       appearance="enterprise"
       density={density}
       weight={weight}
+      fill={fill}
+      pointerMotion={!animPaused}
       liveStat={liveStats[tile.id]}
+      drawerKick={tile.id === "cash" ? drawerKick : null}
+      onDrawerKickSettled={tile.id === "cash" ? settleKick : undefined}
       buttonRef={(el) => {
         tileRefs.current[tile.id] = el;
       }}
@@ -207,11 +222,33 @@ export function DesktopHomeTiles({ lang }: Props) {
     );
   }
 
+  if (mobileCockpit) {
+    return (
+      <MobileHomeCockpit
+        lang={lang}
+        pharmacyMode={pharmacyMode}
+        onSell={hero ? () => openTile(hero.to) : undefined}
+        sellStat={liveStats.sell}
+        kpis={executive}
+        weekTrend={weekTrend}
+        sparkMode={sparkMode}
+        healthItems={healthItems}
+        workspaceTiles={composeMobileWorkspace(primaryTiles, reportsTile)}
+        operationsTiles={secondaryTiles}
+        adminTiles={adminTiles}
+        liveStats={liveStats}
+        renderCard={renderCard}
+        onOpenAdmin={openTile}
+      />
+    );
+  }
+
+  const packCommandDeck = largeScreen && primaryTiles.length > 0;
   const regionOrder = visibleHomeRegionOrder({
     largeScreen,
     hasHero: Boolean(hero),
-    hasKpis: executive.length > 0,
-    hasHealth: true,
+    hasKpis: !largeScreen && executive.length > 0,
+    hasHealth: !largeScreen,
     hasPrimary: primaryTiles.length > 0,
     hasReports: Boolean(reportsTile),
     hasOperations: secondaryTiles.length > 0,
@@ -224,9 +261,15 @@ export function DesktopHomeTiles({ lang }: Props) {
         return (
           <HomeBusinessHero
             lang={lang}
+            surface={largeScreen ? "command" : "hero"}
             sellStat={liveStats.sell}
             onSell={hero ? () => openTile(hero.to) : undefined}
             heroActionLabelKey={pharmacyMode ? "builderHomeTapDispense" : "builderHomeTapSell"}
+            kpis={largeScreen ? executive : undefined}
+            weekTrend={weekTrend}
+            sparkMode={sparkMode}
+            healthItems={largeScreen ? healthItems : undefined}
+            commandCenterTo={largeScreen ? commandCenterTo : undefined}
           />
         );
       case "kpi":
@@ -235,46 +278,67 @@ export function DesktopHomeTiles({ lang }: Props) {
         return <HomeBusinessHealthSection lang={lang} />;
       case "reports":
         return reportsTile ? (
-          <div className={HOME_MODULE_SECTION_SPACING.standard}>
+          <div className={packCommandDeck ? "flex h-full min-h-0 flex-col" : HOME_MODULE_SECTION_SPACING.standard}>
             <HomeReportsPreview
               lang={lang}
               tile={reportsTile}
               liveStat={liveStats.reports}
+              weekTrend={weekTrend}
+              sparkMode={sparkMode}
+              commandPanel={packCommandDeck}
+              intensity={liveStats.reports?.intensity ?? liveStats.sell?.intensity}
+              sellStat={liveStats.sell}
+              healthItems={packCommandDeck ? healthItems : undefined}
+              commandCenterTo={packCommandDeck ? commandCenterTo : undefined}
               onOpen={() => openTile(reportsTile.to)}
             />
           </div>
         ) : null;
       case "primary":
         return primaryTiles.length > 0 ? (
-          <section className={HOME_MODULE_SECTION_SPACING.standard}>
-            <SectionTitle as="h2" className="mb-1.5 !text-sm sm:mb-2 sm:!text-base">
+          <section className={packCommandDeck ? "flex h-full min-h-0 flex-col" : HOME_MODULE_SECTION_SPACING.standard}>
+            <SectionTitle as="h2" className={`${HOME_TYPE_SCALE.section} mb-2 shrink-0`}>
               {t(lang, "homeModulesPrimary")}
             </SectionTitle>
-            <div className={HOME_MODULE_GRID_CLASS.comfortable}>
-              {primaryTiles.map((tile) => renderCard(tile, "comfortable", "primary"))}
+            <div
+              className={
+                packCommandDeck
+                  ? `${homeCommandPrimaryGridClass()} flex-1`
+                  : HOME_MODULE_GRID_CLASS.comfortable
+              }
+            >
+              {primaryTiles.map((tile, index) =>
+                packCommandDeck ? (
+                  <div key={tile.id} className={`${homeCommandPrimaryItemClass(index, primaryTiles.length)} h-full`}>
+                    {renderCard(tile, "comfortable", "primary", true)}
+                  </div>
+                ) : (
+                  renderCard(tile, "comfortable", "primary")
+                ),
+              )}
             </div>
           </section>
         ) : null;
       case "operations":
         return secondaryTiles.length > 0 ? (
-          <section className={HOME_MODULE_SECTION_SPACING.standard}>
-            <SectionTitle as="h2" className="mb-1 !text-sm sm:!text-base">
+          <section className={packCommandDeck ? undefined : HOME_MODULE_SECTION_SPACING.standard}>
+            <SectionTitle as="h2" className={`${HOME_TYPE_SCALE.section} mb-1.5`}>
               {t(lang, "homeModulesSecondary")}
             </SectionTitle>
-            <Caption className="mb-1.5 normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
+            <Caption className="mb-1.5 block normal-case">{t(lang, "homeModulesSecondarySub")}</Caption>
             <div className={HOME_MODULE_GRID_CLASS.comfortable}>
-              {secondaryTiles.map((tile) => renderCard(tile, "comfortable", "supporting"))}
+              {secondaryTiles.map((tile) => renderCard(tile, packCommandDeck ? "compact" : "comfortable", "supporting", true))}
             </div>
           </section>
         ) : null;
       case "admin":
         return adminTiles.length > 0 ? (
-          <section className={HOME_MODULE_SECTION_SPACING.admin}>
-            <SectionTitle as="h2" className="mb-1.5 !text-sm sm:!text-base">
+          <section className={packCommandDeck ? undefined : HOME_MODULE_SECTION_SPACING.admin}>
+            <SectionTitle as="h2" className={`${HOME_TYPE_SCALE.section} mb-1.5`}>
               {t(lang, "homeModulesAdmin")}
             </SectionTitle>
             <div className={HOME_MODULE_GRID_CLASS.compact}>
-              {adminTiles.map((tile) => renderCard(tile, "compact", "supporting"))}
+              {adminTiles.map((tile) => renderCard(tile, "compact", "supporting", true))}
             </div>
           </section>
         ) : null;
@@ -284,11 +348,31 @@ export function DesktopHomeTiles({ lang }: Props) {
   };
 
   return (
-    <div className="w-full" role="navigation" aria-label={t(lang, "desktopHomeNavLabel")}>
+    <div
+      className={packCommandDeck ? "home-stage" : "w-full"}
+      role="navigation"
+      aria-label={t(lang, "desktopHomeNavLabel")}
+    >
       <HomeOrderedRegions
         order={regionOrder}
         packExecutiveScan={packExecutiveScan}
+        packCommandDeck={packCommandDeck}
         renderRegion={renderRegion}
+        renderLiveFloor={
+          packCommandDeck
+            ? undefined
+            : () => (
+                <HomeLiveBusinessFloor
+                  lang={lang}
+                  weekTrend={weekTrend}
+                  sparkMode={sparkMode}
+                  sellStat={liveStats.sell}
+                  healthItems={healthItems}
+                  commandCenterTo={commandCenterTo}
+                  intensity={liveStats.sell?.intensity ?? liveStats.cashPosition?.intensity ?? "calm"}
+                />
+              )
+        }
       />
     </div>
   );

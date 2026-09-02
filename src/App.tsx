@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -234,14 +234,21 @@ function LazyWait() {
   );
 }
 
+function StabilityDiagnosticsHost() {
+  const { pathname } = useLocation();
+  const enabled = isDiagnosticsEnabled();
+
+  useEffect(() => {
+    if (enabled) installNetworkDiagnosticsProbe();
+  }, [enabled]);
+
+  if (!enabled || pathname === "/") return null;
+  return <StabilityDiagnosticsOverlay />;
+}
+
 function AppRoutes() {
   const auth = useAuth();
   const { lang, setLang, ready: langReady } = useUiLanguage();
-  const showDiagnostics = isDiagnosticsEnabled();
-
-  useEffect(() => {
-    if (showDiagnostics) installNetworkDiagnosticsProbe();
-  }, [showDiagnostics]);
 
   return (
     <ToastProvider lang={lang}>
@@ -252,7 +259,7 @@ function AppRoutes() {
       isAuthenticated={auth.isAuthenticated}
       onSignOut={auth.signOut}
     >
-      {showDiagnostics ? <StabilityDiagnosticsOverlay /> : null}
+      <StabilityDiagnosticsHost />
       <RouteSeoController />
       <NativeSplashGate authReady={!auth.initializing} waitForPos={auth.isAuthenticated} />
       <Routes>

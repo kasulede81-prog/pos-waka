@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyHomeBandOrder,
+  homeCommandPrimaryGridClass,
+  homeCommandPrimaryItemClass,
   homeContentInnerWidthPx,
   homePresentationStructure,
   HOME_MODULE_GRID_CLASS,
@@ -237,21 +239,22 @@ describe("applyHomeBandOrder", () => {
   });
 });
 
-describe("HOME cinematic density V1 layout tokens", () => {
-  it("keeps phone full-bleed while widening 1440/1920 under a 1600px measure", () => {
+describe("HOME cinematic V3 layout tokens", () => {
+  it("keeps phone full-bleed and uses 1280–1920 minus gutters (2560 cap)", () => {
     expect(homeContentInnerWidthPx(390)).toBe(390 - 32);
-    expect(homeContentInnerWidthPx(768)).toBe(768 - 48);
-    expect(homeContentInnerWidthPx(1024)).toBe(1024 - 64);
-    expect(homeContentInnerWidthPx(1280)).toBe(1280 - 80);
-    expect(homeContentInnerWidthPx(1440)).toBe(1440 - 80);
-    expect(homeContentInnerWidthPx(1920)).toBe(1600 - 80);
+    expect(homeContentInnerWidthPx(768)).toBe(768 - 40);
+    expect(homeContentInnerWidthPx(1024)).toBe(1024 - 40);
+    expect(homeContentInnerWidthPx(1280)).toBe(1280 - 48);
+    expect(homeContentInnerWidthPx(1440)).toBe(1440 - 48);
+    expect(homeContentInnerWidthPx(1920)).toBe(1920 - 48);
+    expect(homeContentInnerWidthPx(2560)).toBe(2560 - 48);
   });
 
-  it("does not stretch module-grid rows to the tallest sibling", () => {
-    expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("items-start");
-    expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("auto-rows-min");
-    expect(HOME_MODULE_GRID_CLASS.compact).toContain("items-start");
-    expect(HOME_MODULE_GRID_CLASS.compact).toContain("auto-rows-min");
+  it("stretches module-grid tracks so sibling tiles share a row without leftover holes", () => {
+    expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("items-stretch");
+    expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("auto-rows-fr");
+    expect(HOME_MODULE_GRID_CLASS.compact).toContain("items-stretch");
+    expect(HOME_MODULE_GRID_CLASS.compact).toContain("auto-rows-fr");
   });
 
   it("preserves phone columns and adds 2xl density columns", () => {
@@ -259,6 +262,8 @@ describe("HOME cinematic density V1 layout tokens", () => {
     expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("lg:grid-cols-3");
     expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("xl:grid-cols-4");
     expect(HOME_MODULE_GRID_CLASS.comfortable).toContain("2xl:grid-cols-5");
+    expect(HOME_MODULE_GRID_CLASS.command).toContain("auto-rows-fr");
+    expect(HOME_MODULE_GRID_CLASS.command).not.toContain("h-full");
     expect(HOME_MODULE_GRID_CLASS.compact).toContain("lg:grid-cols-4");
     expect(HOME_MODULE_GRID_CLASS.compact).toContain("xl:grid-cols-5");
     expect(HOME_MODULE_GRID_CLASS.compact).toContain("2xl:grid-cols-6");
@@ -289,12 +294,10 @@ describe("HOME-DENSITY-1.2 region order", () => {
     ]);
   });
 
-  it("B — large-screen owner order: greeting, sell, kpi, health, primary, reports, operations, admin", () => {
+  it("B — large-screen owner order: greeting, living pulse, primary, reports, operations, admin", () => {
     expect(resolveHomeFirstScreenOrder(true)).toEqual([
       "greeting",
       "hero",
-      "kpi",
-      "health",
       "primary",
       "reports",
       "operations",
@@ -359,10 +362,11 @@ describe("HOME-DENSITY-1.2 region order", () => {
     );
   });
 
-  it("G — absent KPI collapses with no placeholder", () => {
-    const order = visibleHomeRegionOrder({ ...ownerFlags, largeScreen: true, hasKpis: false });
-    expect(order).toEqual(["hero", "health", "primary", "reports", "operations", "admin"]);
+  it("G — large Home folds KPI and Health into the pulse with no leftover slots", () => {
+    const order = visibleHomeRegionOrder({ ...ownerFlags, largeScreen: true, hasKpis: false, hasHealth: false });
+    expect(order).toEqual(["hero", "primary", "reports", "operations", "admin"]);
     expect(order).not.toContain("kpi");
+    expect(order).not.toContain("health");
   });
 
   it("H — cashier-style thin Home: sell + inventory, no empty reports/admin slots", () => {
@@ -397,5 +401,15 @@ describe("HOME-DENSITY-1.2 region order", () => {
     expect(resolveHomeRegionLayout(1279).packExecutiveScan).toBe(true);
     expect(resolveHomeRegionLayout(1280).packExecutiveScan).toBe(false);
     expect(resolveHomeRegionLayout(1440).packExecutiveScan).toBe(false);
+  });
+
+  it("uses a conventional 2-col primary grid so three modules do not overlap", () => {
+    expect(homeCommandPrimaryGridClass()).toContain("grid-cols-2");
+    expect(homeCommandPrimaryGridClass()).toContain("auto-rows-fr");
+    expect(homeCommandPrimaryGridClass()).not.toContain("grid-rows-2");
+    expect(homeCommandPrimaryItemClass()).not.toContain("row-span-2");
+    expect(homeCommandPrimaryItemClass()).toBe("min-w-0");
+    expect(homeCommandPrimaryItemClass(2, 3)).toContain("col-span-2");
+    expect(homeCommandPrimaryItemClass(2, 3)).not.toContain("row-span-2");
   });
 });

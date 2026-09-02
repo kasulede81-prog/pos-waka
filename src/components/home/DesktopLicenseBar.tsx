@@ -44,24 +44,24 @@ export function DesktopLicenseBar({ lang }: Props) {
   return (
     <Link
       to={upgradeTo}
-      className="group flex min-h-[72px] w-full flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-waka-200 bg-card px-5 py-4 shadow-waka-sm transition-colors hover:border-waka-400 hover:bg-waka-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2"
+      className="group flex min-h-0 w-full flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/80 py-2.5 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2"
       aria-label={t(lang, "desktopHomeOpenLicense")}
     >
-      <div className="flex min-w-0 items-center gap-4">
-        <WakaPosLogo size="sm" variant="symbol" className="h-10 w-10 shrink-0" />
+      <div className="flex min-w-0 items-center gap-3">
+        <WakaPosLogo size="sm" variant="symbol" className="h-7 w-7 shrink-0" />
         <div className="min-w-0 text-left">
-          <p className="truncate text-base font-bold text-waka-950">{productLine}</p>
-          <p className="mt-0.5 text-sm font-semibold text-waka-800/80">{detailLine}</p>
+          <p className="truncate text-sm font-bold text-waka-950">{productLine}</p>
+          <p className="mt-0.5 text-xs font-semibold text-waka-800/80">{detailLine}</p>
         </div>
       </div>
-      <div className="min-w-0 text-right text-sm font-semibold text-waka-800/70">
+      <div className="min-w-0 text-right text-xs font-semibold text-waka-800/70">
         <p>{synced ? t(lang, "desktopHomeStoreSynced") : t(lang, "desktopHomeStatusSyncPending")}</p>
         {license.deviceLimit !== null ? (
           <p className="mt-0.5 text-xs text-waka-700/60">
             {tTemplate(lang, "desktopHomeDeviceLimit", { count: String(license.deviceLimit) })}
           </p>
         ) : null}
-        <p className="mt-1 text-xs font-bold text-waka-600/70">
+        <p className="mt-0.5 text-xs font-bold text-waka-600/70">
           {tTemplate(lang, "desktopHomeVersion", { version: APP_VERSION })}
         </p>
       </div>
