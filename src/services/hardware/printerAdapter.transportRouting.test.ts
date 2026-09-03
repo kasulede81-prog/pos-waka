@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrinterProfile } from "../../types";
 
 const isNativeBluetoothPrinterAvailable = vi.fn();
@@ -9,10 +9,13 @@ const printEscPosNativeNetwork = vi.fn();
 vi.mock("../../lib/nativeBluetoothPrinter", () => ({
   isNativeBluetoothPrinterAvailable: (...args: unknown[]) => isNativeBluetoothPrinterAvailable(...args),
   printEscPosNative: (...args: unknown[]) => printEscPosNative(...args),
+  printClassicSppDiagnostic: (deviceId: string) =>
+    printEscPosNative(deviceId, new Uint8Array([0x1b, 0x40]), "classic"),
 }));
 
 vi.mock("../../lib/webBluetoothPrinter", () => ({
   printEscPosWebBluetooth: (...args: unknown[]) => printEscPosWebBluetooth(...args),
+  hasActiveWebBleSession: () => false,
 }));
 
 vi.mock("../../lib/nativeNetworkPrinter", () => ({
@@ -44,6 +47,10 @@ describe("printerAdapter transport routing", () => {
     isNativeBluetoothPrinterAvailable.mockResolvedValue(false);
     printEscPosNative.mockResolvedValue({ ok: true });
     printEscPosWebBluetooth.mockResolvedValue({ ok: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("sends Classic jobs to the native plugin on Android", async () => {
@@ -81,5 +88,33 @@ describe("printerAdapter transport routing", () => {
     expect(printEscPosNative).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
     expect(result.error).toBe(NETWORK_NEEDS_BRIDGE_ERROR);
+  });
+
+  it("sends BLE jobs to Web Bluetooth in the browser", async () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0",
+      bluetooth: {},
+    });
+    vi.stubGlobal("window", {
+      navigator: { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0" },
+    });
+    printEscPosWebBluetooth.mockResolvedValue({ ok: true });
+    const bytes = new Uint8Array([0x1b, 0x40]);
+    const result = await sendEscPosBytes(
+      {
+        id: "p-ble",
+        name: "BLE Printer",
+        connectionType: "bluetooth",
+        paperWidth: "58mm",
+        stationRoles: ["receipt"],
+        isEnabled: true,
+        pairedDeviceKey: "ble:web-id",
+        bluetoothTransport: "ble",
+      },
+      bytes,
+    );
+    expect(result.ok).toBe(true);
+    expect(printEscPosWebBluetooth).toHaveBeenCalledWith(bytes, "ble:web-id");
+    expect(printEscPosNative).not.toHaveBeenCalled();
   });
 });

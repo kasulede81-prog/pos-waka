@@ -11,6 +11,8 @@ import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } fr
 import { detectPrinterCapabilities } from "../services/hardware/printerAdapter";
 import { PrinterManagementPanel } from "../components/hardware/PrinterManagementPanel";
 import { PrinterConnectionMatrix } from "../components/hardware/PrinterConnectionMatrix";
+import { ClassicSppDiagnosticPanel } from "../components/hardware/ClassicSppDiagnosticPanel";
+import type { NativeClassicDiagnostic } from "../lib/nativeBluetoothPrinter";
 import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
 import { resolveDefaultReceiptPrinter } from "../lib/printerRegistry";
 
@@ -31,6 +33,7 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
   const [scanStatus, setScanStatus] = useState<string>("Scanner idle.");
   const [scanResult, setScanResult] = useState<string>("");
   const [printingStatus, setPrintingStatus] = useState<string>("");
+  const [classicDiagnostic, setClassicDiagnostic] = useState<NativeClassicDiagnostic | null>(null);
   const cameraRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -59,13 +62,15 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
       hw.printers.find((p) => p.isEnabled && (p.connectionType === "network" || p.connectionType === "usb"));
     if (configured && (configured.connectionType === "bluetooth" || configured.connectionType === "network" || configured.connectionType === "usb")) {
       setPrintingStatus("Testing printer...");
+      setClassicDiagnostic(null);
       void usePosStore
         .getState()
         .testConfiguredPrinter(configured.id)
         .then((result) => {
+          if (result.diagnostic) setClassicDiagnostic(result.diagnostic);
           setPrintingStatus(
             result.ok
-              ? "Printer connected and test data sent."
+              ? "Data sent to printer"
               : (result.error ?? t(lang, "receiptPrintBlocked")),
           );
         });
@@ -230,10 +235,11 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
           </button>
         ) : null}
         {printingStatus ? (
-          <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
+          <p className="mt-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground">
             {printingStatus}
           </p>
         ) : null}
+        {classicDiagnostic ? <ClassicSppDiagnosticPanel diagnostic={classicDiagnostic} /> : null}
       </article>
 
       <PrinterManagementPanel lang={lang} />

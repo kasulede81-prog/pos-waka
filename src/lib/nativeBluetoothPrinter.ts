@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { withTimeout } from "./promiseTimeout";
-import { mapNativeBluetoothPrinterError } from "./bluetoothPrinterHeuristics";
+import { mapNativeBluetoothPrinterError, parseBluetoothDeviceId } from "./bluetoothPrinterHeuristics";
 
 export type NativeBluetoothTransport = "classic" | "ble";
 
@@ -27,12 +27,31 @@ export type NativeBluetoothState = {
   nativeTransport: boolean;
 };
 
-type NativePrintResult = {
-  ok?: boolean;
-  status?: string;
+export const CLASSIC_SPP_DIAGNOSTIC_BYTES = new Uint8Array([
+  0x1b, 0x40, 0x57, 0x41, 0x4b, 0x41, 0x20, 0x54, 0x45, 0x53, 0x54, 0x0a, 0x0a,
+]);
+
+export type NativeClassicDiagnostic = {
+  ok: boolean;
+  stage?: string;
   transport?: string;
+  deviceId?: string;
+  deviceName?: string;
+  address?: string;
+  bytesRequested?: number;
   bytesWritten?: number;
+  connectionSucceeded?: boolean;
+  writeSucceeded?: boolean;
+  flushSucceeded?: boolean;
+  socketClosed?: boolean;
+  errorType?: string;
+  errorMessage?: string;
+  error?: string;
+  code?: string;
+  status?: string;
 };
+
+type NativePrintResult = NativeClassicDiagnostic;
 
 interface WakaBluetoothPrinterPlugin {
   getBluetoothState(): Promise<NativeBluetoothState>;
@@ -81,12 +100,73 @@ export async function getNativeBluetoothState(): Promise<NativeBluetoothState | 
   }
 }
 
-function asError(err: unknown): { code?: string; message?: string } {
+function asError(err: unknown): { code?: string; message?: string; diagnostic?: NativeClassicDiagnostic } {
   if (err && typeof err === "object") {
-    const o = err as { code?: string; message?: string; errorMessage?: string };
-    return { code: o.code, message: o.message ?? o.errorMessage };
+    const o = err as {
+      code?: string;
+      message?: string;
+      errorMessage?: string;
+      data?: Record<string, unknown>;
+    };
+    const data = o.data && typeof o.data === "object" ? o.data : undefined;
+    const diagnostic = data ? diagnosticFromPlugin(data, o.code, o.message ?? o.errorMessage) : undefined;
+    return {
+      code: o.code ?? (typeof data?.code === "string" ? data.code : undefined),
+      message: o.message ?? o.errorMessage ?? diagnostic?.errorMessage,
+      diagnostic,
+    };
   }
   return { message: err instanceof Error ? err.message : String(err) };
+}
+
+function diagnosticFromPlugin(
+  data: Record<string, unknown>,
+  code?: string,
+  message?: string,
+): NativeClassicDiagnostic {
+  return {
+    ok: data.ok === true,
+    stage: typeof data.stage === "string" ? data.stage : undefined,
+    transport: typeof data.transport === "string" ? data.transport : "classic",
+    deviceId: typeof data.deviceId === "string" ? data.deviceId : undefined,
+    deviceName: typeof data.deviceName === "string" ? data.deviceName : undefined,
+    address: typeof data.address === "string" ? data.address : undefined,
+    bytesRequested: typeof data.bytesRequested === "number" ? data.bytesRequested : undefined,
+    bytesWritten: typeof data.bytesWritten === "number" ? data.bytesWritten : 0,
+    connectionSucceeded: data.connectionSucceeded === true,
+    writeSucceeded: data.writeSucceeded === true,
+    flushSucceeded: data.flushSucceeded === true,
+    socketClosed: data.socketClosed === true,
+    errorType: typeof data.errorType === "string" ? data.errorType : undefined,
+    errorMessage: typeof data.errorMessage === "string" ? data.errorMessage : message,
+    error: message,
+    code: typeof data.code === "string" ? data.code : code,
+    status: typeof data.status === "string" ? data.status : undefined,
+  };
+}
+
+export function formatClassicSppDiagnostic(d: NativeClassicDiagnostic): string {
+  const lines = [
+    "Bluetooth Classic SPP",
+    "",
+    `Device: ${d.deviceName || "Bluetooth device"}`,
+    `Address: ${d.address || parseBluetoothDeviceId(d.deviceId)?.address || "—"}`,
+    "Transport: Android Native RFCOMM/SPP",
+    `Connection: ${d.connectionSucceeded ? "SUCCESS" : "FAILED"}`,
+    `RFCOMM: ${d.connectionSucceeded ? "CONNECTED" : "FAILED"}`,
+    `Bytes: ${d.bytesWritten ?? 0}`,
+    `Write: ${d.writeSucceeded ? "SUCCESS" : "FAILED"}`,
+    `Flush: ${d.flushSucceeded ? "SUCCESS" : "FAILED"}`,
+    `Socket close: ${d.socketClosed ? "SUCCESS" : "FAILED"}`,
+    "Physical paper: TEST REQUIRED",
+  ];
+  if (!d.ok && (d.errorType || d.errorMessage || d.error)) {
+    lines.push("");
+    if (d.stage) lines.push(`Stage: ${d.stage}`);
+    if (d.errorType) lines.push(d.errorType);
+    if (d.errorMessage || d.error) lines.push(d.errorMessage || d.error || "");
+  }
+  return lines.join("\n");
 }
 
 export async function requestNativeBluetoothPermissions(): Promise<NativeBluetoothState | null> {
@@ -119,13 +199,18 @@ export async function stopBluetoothPrinterScan(): Promise<void> {
 export async function connectNativeBluetoothPrinter(
   deviceId: string,
   mode?: NativeBluetoothTransport,
-): Promise<{ ok: true } | { ok: false; error: string; code?: string }> {
+): Promise<{ ok: true; diagnostic?: NativeClassicDiagnostic } | { ok: false; error: string; code?: string; diagnostic?: NativeClassicDiagnostic }> {
   try {
-    await WakaBluetoothPrinter.connect({ deviceId, mode });
-    return { ok: true };
+    const result = await WakaBluetoothPrinter.connect({ deviceId, mode });
+    return { ok: true, diagnostic: result };
   } catch (err) {
     const e = asError(err);
-    return { ok: false, error: mapNativeBluetoothPrinterError(e.code, e.message), code: e.code };
+    return {
+      ok: false,
+      error: mapNativeBluetoothPrinterError(e.code, e.message),
+      code: e.code,
+      diagnostic: e.diagnostic,
+    };
   }
 }
 
@@ -153,7 +238,7 @@ export async function printEscPosNative(
   deviceId: string,
   bytes: Uint8Array,
   mode?: NativeBluetoothTransport,
-): Promise<{ ok: true } | { ok: false; error: string; code?: string }> {
+): Promise<NativeClassicDiagnostic> {
   try {
     const result = await withTimeout(
       WakaBluetoothPrinter.printEscPos({
@@ -165,14 +250,47 @@ export async function printEscPosNative(
       null,
     );
     if (!result) {
-      return { ok: false, error: "Printer did not respond. Check that it is on and in range." };
+      return {
+        ok: false,
+        error: "Printer did not respond. Check that it is on and in range.",
+        code: "timeout",
+        stage: "RFCOMM_CONNECT",
+        transport: mode ?? parseBluetoothDeviceId(deviceId)?.transport ?? "classic",
+        deviceId,
+      };
     }
     if (result.ok === false) {
-      return { ok: false, error: "Could not connect to Mobile Printer." };
+      return {
+        ...result,
+        ok: false,
+        error: result.errorMessage || result.error || "RFCOMM connection failed",
+      };
     }
-    return { ok: true };
+    return { ...result, ok: true };
   } catch (err) {
     const e = asError(err);
-    return { ok: false, error: mapNativeBluetoothPrinterError(e.code, e.message), code: e.code };
+    return {
+      ok: false,
+      error: mapNativeBluetoothPrinterError(e.code, e.message),
+      code: e.code,
+      stage: e.diagnostic?.stage,
+      transport: e.diagnostic?.transport ?? mode,
+      deviceId: e.diagnostic?.deviceId ?? deviceId,
+      deviceName: e.diagnostic?.deviceName,
+      address: e.diagnostic?.address,
+      bytesWritten: e.diagnostic?.bytesWritten,
+      connectionSucceeded: e.diagnostic?.connectionSucceeded,
+      writeSucceeded: e.diagnostic?.writeSucceeded,
+      flushSucceeded: e.diagnostic?.flushSucceeded,
+      socketClosed: e.diagnostic?.socketClosed,
+      errorType: e.diagnostic?.errorType,
+      errorMessage: e.diagnostic?.errorMessage ?? e.message,
+    };
   }
+}
+
+export async function printClassicSppDiagnostic(
+  deviceId: string,
+): Promise<NativeClassicDiagnostic> {
+  return printEscPosNative(deviceId, CLASSIC_SPP_DIAGNOSTIC_BYTES, "classic");
 }

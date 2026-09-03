@@ -123,6 +123,7 @@ export function createHardwarePrintStoreActions(deps: Deps) {
     const state = get();
     const hw = resolveHospitalityHardware(state.preferences);
     if (!hw.autoPrintKitchen || !tickets.length) return;
+    const caps = await detectPrinterCapabilities();
     let prefs = state.preferences;
     for (const ticket of tickets) {
       const printer = resolvePrinterForStation(
@@ -132,6 +133,7 @@ export function createHardwarePrintStoreActions(deps: Deps) {
         ticket.stationType,
       );
       if (!printer) continue;
+      if (!canDeliverEscPosWithoutChooser(printer, caps.transports)) continue;
       const chitOpts = {
         shopName: state.preferences.shopDisplayName?.trim() || "Waka POS",
         businessDate: dateKeyKampala(ticket.firedAt),

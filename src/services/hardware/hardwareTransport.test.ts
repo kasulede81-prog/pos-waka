@@ -5,6 +5,8 @@ import {
   IOS_BLUETOOTH_ERROR,
   NETWORK_NEEDS_BRIDGE_ERROR,
   canDeliverEscPosWithoutChooser,
+  defaultPrinterConnectionType,
+  addPrinterConnectionTypes,
   detectHardwareEnvironment,
   getHardwareTransportCapabilities,
   selectPrinterTransport,
@@ -86,6 +88,22 @@ describe("selectPrinterTransport", () => {
           ble: slot(true, true),
           native: true,
           webBluetooth: false,
+        },
+      }),
+    );
+    expect(result).toEqual({ ok: true, transport: "native-classic" });
+  });
+
+  it("never routes a Classic profile through Web Bluetooth", () => {
+    const result = selectPrinterTransport(
+      profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+      caps({
+        environment: "android-native",
+        bluetooth: {
+          classic: slot(true, true, "ready", true),
+          ble: slot(true, true, "ready", true),
+          native: true,
+          webBluetooth: true,
         },
       }),
     );
@@ -228,6 +246,7 @@ describe("API present vs printer transport ready", () => {
     expect(caps.bluetooth.classic.transportReady).toBe(false);
     expect(caps.usb.webUsb.available).toBe(true);
     expect(caps.usb.webUsb.transportReady).toBe(false);
+    expect(caps.usb.webUsb.supported).toBe(false);
     expect(caps.network.electron.transportReady).toBe(false);
     expect(caps.network.androidNative.transportReady).toBe(false);
     expect(caps.network.browserDirect.available).toBe(false);
@@ -304,5 +323,179 @@ describe("API present vs printer transport ready", () => {
       }),
     );
     expect(result).toEqual({ ok: true, transport: "native-classic" });
+  });
+});
+
+describe("connection defaults and USB honesty", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  it("defaults Android to Bluetooth and never to USB", () => {
+    const android = caps({
+      environment: "android-native",
+      bluetooth: {
+        classic: slot(true, true, "ready", true),
+        ble: slot(true, true, "ready", true),
+        native: true,
+        webBluetooth: false,
+      },
+    });
+    expect(defaultPrinterConnectionType(android)).toBe("bluetooth");
+    expect(addPrinterConnectionTypes(android)).toEqual(["bluetooth", "network"]);
+  });
+
+  it("defaults Electron to network", () => {
+    const electron = caps({
+      environment: "electron",
+      network: {
+        electron: slot(true, true, "ready", true),
+        androidNative: slot(false, false),
+        browserDirect: slot(false, false, NETWORK_NEEDS_BRIDGE_ERROR),
+      },
+    });
+    expect(defaultPrinterConnectionType(electron)).toBe("network");
+    expect(addPrinterConnectionTypes(electron)).toEqual(["network", "bluetooth"]);
+  });
+
+  it("does not treat USB API presence as a ready printer transport", () => {
+    const usbCaps = caps({
+      usb: {
+        native: slot(false, false),
+        webUsb: slot(false, true, "USB thermal printing is not supported in this browser yet.", false),
+      },
+    });
+    expect(usbCaps.usb.webUsb.available).toBe(true);
+    expect(usbCaps.usb.webUsb.transportReady).toBe(false);
+    expect(
+      selectPrinterTransport(profile({ connectionType: "usb" }), usbCaps).ok,
+    ).toBe(false);
+  });
+
+  it("does not enable Web Bluetooth on Electron", async () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 Electron/28.0.0 Chrome/120.0.0.0",
+      bluetooth: {},
+      usb: {},
+    });
+    vi.stubGlobal("window", {
+      wakaDesktop: { hardware: { printer: { printEscPos: async () => ({ ok: true }) } } },
+      navigator: { userAgent: "Mozilla/5.0 Electron/28.0.0 Chrome/120.0.0.0" },
+    });
+    const resolved = await getHardwareTransportCapabilities();
+    expect(resolved.environment).toBe("electron");
+    expect(resolved.bluetooth.webBluetooth).toBe(false);
+  });
+
+  it("defaults Chrome to Bluetooth LE when Web Bluetooth exists", () => {
+    const chrome = caps({
+      environment: "desktop-browser",
+      bluetooth: {
+        classic: slot(false, false, CLASSIC_IN_BROWSER_ERROR),
+        ble: slot(true, true, "api", false),
+        native: false,
+        webBluetooth: true,
+      },
+    });
+    expect(defaultPrinterConnectionType(chrome)).toBe("bluetooth");
+    expect(addPrinterConnectionTypes(chrome)).toEqual(["bluetooth", "network"]);
+  });
+});
+
+describe("kitchen and sale delivery rules", () => {
+  it("blocks USB, browser Classic, browser TCP, and Web BLE without a session", () => {
+    const browser = caps({
+      environment: "desktop-browser",
+      bluetooth: {
+        classic: slot(false, false, CLASSIC_IN_BROWSER_ERROR),
+        ble: slot(true, true, "api", false),
+        native: false,
+        webBluetooth: true,
+      },
+      usb: {
+        native: slot(false, false),
+        webUsb: slot(false, true, "USB thermal printing is not supported in this browser yet.", false),
+      },
+    });
+    expect(
+      canDeliverEscPosWithoutChooser(profile({ connectionType: "usb" }), browser),
+    ).toBe(false);
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+        browser,
+      ),
+    ).toBe(false);
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({
+          connectionType: "network",
+          networkHost: "192.168.1.50",
+          networkPort: 9100,
+        }),
+        browser,
+      ),
+    ).toBe(false);
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({ pairedDeviceKey: "ble:web-id", bluetoothTransport: "ble" }),
+        browser,
+      ),
+    ).toBe(false);
+  });
+
+  it("allows Android Classic and BLE, and Electron LAN", () => {
+    const android = caps({
+      environment: "android-native",
+      bluetooth: {
+        classic: slot(true, true, "ready", true),
+        ble: slot(true, true, "ready", true),
+        native: true,
+        webBluetooth: false,
+      },
+    });
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+        android,
+      ),
+    ).toBe(true);
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({ pairedDeviceKey: "ble:11:22:33:44:55:66", bluetoothTransport: "ble" }),
+        android,
+      ),
+    ).toBe(true);
+
+    const electron = caps({
+      environment: "electron",
+      network: {
+        electron: slot(true, true, "ready", true),
+        androidNative: slot(false, false),
+        browserDirect: slot(false, false, NETWORK_NEEDS_BRIDGE_ERROR),
+      },
+    });
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({
+          connectionType: "network",
+          networkHost: "192.168.1.50",
+          networkPort: 9100,
+        }),
+        electron,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("sale and kitchen share the same delivery guard", () => {
+  it("both enqueue paths consult canDeliverEscPosWithoutChooser", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { dirname, join } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const kitchen = readFileSync(join(here, "../../store/hardwarePrintMutations.ts"), "utf8");
+    const sale = readFileSync(join(here, "../../lib/retailReceiptPrint.ts"), "utf8");
+    expect(kitchen).toContain("canDeliverEscPosWithoutChooser(printer, caps.transports)");
+    expect(sale).toContain("canDeliverEscPosWithoutChooser(profile, caps.transports)");
   });
 });

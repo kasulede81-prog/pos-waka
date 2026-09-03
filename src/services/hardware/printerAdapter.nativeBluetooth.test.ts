@@ -9,6 +9,8 @@ vi.mock("../../lib/nativeBluetoothPrinter", () => ({
   isNativeBluetoothPrinterAvailable: (...args: unknown[]) => isNativeBluetoothPrinterAvailable(...args),
   isNativeBluetoothPrinterPlatform: (...args: unknown[]) => isNativeBluetoothPrinterPlatform(...args),
   printEscPosNative: (...args: unknown[]) => printEscPosNative(...args),
+  printClassicSppDiagnostic: (deviceId: string) =>
+    printEscPosNative(deviceId, new Uint8Array([0x1b, 0x40, 0x57, 0x41, 0x4b, 0x41, 0x20, 0x54, 0x45, 0x53, 0x54, 0x0a, 0x0a]), "classic"),
 }));
 
 import { detectPrinterCapabilities, sendEscPosBytes, testPrint, testPrintProfile } from "./printerAdapter";
@@ -71,6 +73,22 @@ describe("printerAdapter native Bluetooth", () => {
     expect(printEscPosNative).toHaveBeenCalledWith("classic:AA:BB:CC:DD:EE:FF", bytes, "classic");
   });
 
+  it("prints native BLE jobs with ble mode", async () => {
+    isNativeBluetoothPrinterAvailable.mockResolvedValue(true);
+    printEscPosNative.mockResolvedValue({ ok: true });
+    const bytes = new Uint8Array([0x1b, 0x40]);
+    const result = await sendEscPosBytes(
+      btProfile({
+        pairedDeviceKey: "ble:11:22:33:44:55:66",
+        bluetoothTransport: "ble",
+        pairedDeviceName: "BLE Printer",
+      }),
+      bytes,
+    );
+    expect(result.ok).toBe(true);
+    expect(printEscPosNative).toHaveBeenCalledWith("ble:11:22:33:44:55:66", bytes, "ble");
+  });
+
   it("fails clearly when Bluetooth profile has no saved device", async () => {
     isNativeBluetoothPrinterAvailable.mockResolvedValue(true);
     const result = await sendEscPosBytes(btProfile({ pairedDeviceKey: null }), new Uint8Array([1]));
@@ -89,6 +107,27 @@ describe("printerAdapter native Bluetooth", () => {
     const result = await sendEscPosBytes(btProfile(), new Uint8Array([1, 2]));
     expect(result.ok).toBe(false);
     expect(result.error).toBe("Could not connect to Mobile Printer.");
+  });
+
+  it("routes Hardware Test for a Classic profile through native-classic diagnostic bytes", async () => {
+    isNativeBluetoothPrinterAvailable.mockResolvedValue(true);
+    printEscPosNative.mockResolvedValue({
+      ok: true,
+      connectionSucceeded: true,
+      writeSucceeded: true,
+      flushSucceeded: true,
+      socketClosed: true,
+      bytesWritten: 13,
+    });
+    const result = await testPrintProfile(btProfile(), ["ignored full receipt"]);
+    expect(result.ok).toBe(true);
+    expect(printEscPosNative).toHaveBeenCalledWith(
+      "classic:AA:BB:CC:DD:EE:FF",
+      expect.any(Uint8Array),
+      "classic",
+    );
+    const sent = printEscPosNative.mock.calls[0][1] as Uint8Array;
+    expect(Array.from(sent)).toEqual([0x1b, 0x40, 0x57, 0x41, 0x4b, 0x41, 0x20, 0x54, 0x45, 0x53, 0x54, 0x0a, 0x0a]);
   });
 
   it("maps permission and disabled errors through testPrintProfile", async () => {
@@ -133,7 +172,7 @@ describe("printerAdapter native Bluetooth", () => {
     const result = await sendEscPosBytes(netProfile(), new Uint8Array([9]));
     expect(printEscPosNative).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/LAN ESC\/POS|Network printer/);
+    expect(result.error).toMatch(/Network printing is not available|Network printer/);
   });
 
   it("keeps USB path off native Bluetooth", async () => {
@@ -149,5 +188,6 @@ describe("printerAdapter native Bluetooth", () => {
     const result = await sendEscPosBytes(usb, new Uint8Array([1]));
     expect(printEscPosNative).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
+    expect(result.error).toBe("USB thermal printing is not supported in this browser yet.");
   });
 });

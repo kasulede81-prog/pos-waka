@@ -986,7 +986,11 @@ export type PosState = {
     }) => { ok: boolean; printerId?: string; errorKey?: string };
   removePrinter: (printerId: string) => { ok: boolean; errorKey?: string };
   assignStationPrinter: (stationId: string, printerId: string | null) => { ok: boolean; errorKey?: string };
-  testConfiguredPrinter: (printerId: string) => Promise<{ ok: boolean; error?: string }>;
+  testConfiguredPrinter: (printerId: string) => Promise<{
+    ok: boolean;
+    error?: string;
+    diagnostic?: import("../lib/nativeBluetoothPrinter").NativeClassicDiagnostic;
+  }>;
   setHospitalityHardwarePrefs: (patch: Partial<import("../types").HospitalityHardwarePrefs>) => {
     ok: boolean;
     errorKey?: string;

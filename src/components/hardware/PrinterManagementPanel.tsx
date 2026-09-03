@@ -1,15 +1,20 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Printer, Trash2, Wifi } from "lucide-react";
 import type { Language, PrinterConnectionType, PrinterStationRole } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { resolveHospitalityHardware } from "../../lib/hospitalityHardware";
 import { stationLabel } from "../../lib/printerRegistry";
-import { testNetworkPrinterConnection } from "../../services/hardware/printerAdapter";
+import { detectPrinterCapabilities, testNetworkPrinterConnection } from "../../services/hardware/printerAdapter";
+import {
+  addPrinterConnectionTypes,
+  defaultPrinterConnectionType,
+} from "../../services/hardware/hardwareTransport";
 import { disconnectNativeBluetoothPrinter } from "../../lib/nativeBluetoothPrinter";
-import type { NativeBluetoothDeviceRow } from "../../lib/nativeBluetoothPrinter";
+import type { NativeBluetoothDeviceRow, NativeClassicDiagnostic } from "../../lib/nativeBluetoothPrinter";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
 import { BluetoothPrinterFinder } from "./BluetoothPrinterFinder";
+import { ClassicSppDiagnosticPanel } from "./ClassicSppDiagnosticPanel";
 
 const ROLE_OPTIONS: PrinterStationRole[] = [
   "kitchen",
@@ -22,8 +27,6 @@ const ROLE_OPTIONS: PrinterStationRole[] = [
   "receipt",
   "other",
 ];
-
-const CONNECTION_OPTIONS: PrinterConnectionType[] = ["usb", "bluetooth", "network", "builtin"];
 
 function hardwareMutationDeniedStatus(lang: Language, errorKey?: string): string {
   return t(lang, errorKey === "forbidden" || errorKey === "noSelection" ? "forbidden" : "invalid");
@@ -44,7 +47,8 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const openCashDrawerManual = usePosStore((s) => s.openCashDrawerManual);
 
   const [name, setName] = useState("Kitchen printer");
-  const [connectionType, setConnectionType] = useState<PrinterConnectionType>("usb");
+  const [connectionType, setConnectionType] = useState<PrinterConnectionType>("bluetooth");
+  const [connectionOptions, setConnectionOptions] = useState<PrinterConnectionType[]>(["bluetooth", "network"]);
   const [paperWidth, setPaperWidth] = useState<"58mm" | "80mm">("80mm");
   const [roles, setRoles] = useState<PrinterStationRole[]>(["kitchen"]);
   const [networkHost, setNetworkHost] = useState("");
@@ -53,6 +57,14 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const [isDefaultReceipt, setIsDefaultReceipt] = useState(false);
   const [pendingBt, setPendingBt] = useState<NativeBluetoothDeviceRow | null>(null);
   const [bindForId, setBindForId] = useState<string | null>(null);
+  const [classicDiagnostic, setClassicDiagnostic] = useState<NativeClassicDiagnostic | null>(null);
+
+  useEffect(() => {
+    void detectPrinterCapabilities().then((caps) => {
+      setConnectionOptions(addPrinterConnectionTypes(caps.transports));
+      setConnectionType(defaultPrinterConnectionType(caps.transports));
+    });
+  }, []);
 
   const toggleRole = (role: PrinterStationRole) => {
     setRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
@@ -60,6 +72,18 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
 
   const addPrinter = () => {
     if (!name.trim()) return;
+    if (connectionType === "usb" || connectionType === "builtin") {
+      setStatus("USB thermal printing is not supported in this browser yet.");
+      return;
+    }
+    if (connectionType === "bluetooth" && !pendingBt) {
+      setStatus("Select a Bluetooth printer first.");
+      return;
+    }
+    if (connectionType === "network" && !networkHost.trim()) {
+      setStatus("Enter a private LAN address (for example 192.168.x.x).");
+      return;
+    }
     const result = upsertPrinter({
       name,
       connectionType,
@@ -104,9 +128,9 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
               value={connectionType}
               onChange={(e) => setConnectionType(e.target.value as PrinterConnectionType)}
             >
-              {CONNECTION_OPTIONS.map((c) => (
+              {connectionOptions.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {c === "bluetooth" ? "Bluetooth" : "Network"}
                 </option>
               ))}
             </select>
@@ -224,10 +248,12 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                           }
                         }
                         setStatus(t(lang, "hardwarePrinterTesting"));
+                        setClassicDiagnostic(null);
                         const r = await testConfiguredPrinter(p.id);
+                        if (r.diagnostic) setClassicDiagnostic(r.diagnostic);
                         setStatus(
                           r.ok
-                            ? "Printer connected and test data sent."
+                            ? "Data sent to printer"
                             : (r.error ?? t(lang, "hardwarePrinterTestFail") ?? "Could not connect to printer"),
                         );
                       })();
@@ -466,6 +492,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       ) : null}
 
       {status ? <p className="text-sm font-bold text-muted-foreground">{status}</p> : null}
+      {classicDiagnostic ? <ClassicSppDiagnosticPanel diagnostic={classicDiagnostic} /> : null}
     </div>
   );
 }

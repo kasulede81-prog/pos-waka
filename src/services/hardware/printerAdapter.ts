@@ -4,12 +4,17 @@
  */
 import type { PrinterProfile } from "../../types";
 import { buildTestEscPos, EscPosBuilder } from "../../lib/escPosBuilder";
-import { printEscPosNative } from "../../lib/nativeBluetoothPrinter";
+import {
+  printClassicSppDiagnostic,
+  printEscPosNative,
+  type NativeClassicDiagnostic,
+} from "../../lib/nativeBluetoothPrinter";
 import { printEscPosNativeNetwork, testNativeNetworkPrinter } from "../../lib/nativeNetworkPrinter";
 import { printEscPosWebBluetooth } from "../../lib/webBluetoothPrinter";
 import { withTimeout } from "../../lib/promiseTimeout";
 import {
   getHardwareTransportCapabilities,
+  resolveBluetoothMode,
   selectPrinterTransport,
   summarizeCapabilityState,
   type HardwareEnvironment,
@@ -54,7 +59,7 @@ function environmentToPlatform(environment: HardwareEnvironment): PrinterPlatfor
 async function transferUsb(_bytes: Uint8Array): Promise<{ ok: boolean; error?: string }> {
   return {
     ok: false,
-    error: "USB thermal printing is not available in this browser.",
+    error: "USB thermal printing is not supported in this browser yet.",
   };
 }
 
@@ -165,11 +170,15 @@ async function sendEscPosBytesInner(
     case "electron-network":
     case "android-network":
       return transferNetwork(profile, bytes);
-    case "native-classic":
+    case "native-classic": {
+      const deviceId = profile.pairedDeviceKey?.trim();
+      if (!deviceId) return { ok: false, error: "Select a Bluetooth printer in Hardware settings." };
+      return printEscPosNative(deviceId, bytes, "classic");
+    }
     case "native-ble": {
       const deviceId = profile.pairedDeviceKey?.trim();
       if (!deviceId) return { ok: false, error: "Select a Bluetooth printer in Hardware settings." };
-      return printEscPosNative(deviceId, bytes, selected.transport === "native-ble" ? "ble" : "classic");
+      return printEscPosNative(deviceId, bytes, "ble");
     }
     case "web-bluetooth":
       return printEscPosWebBluetooth(bytes, profile.pairedDeviceKey);
@@ -201,7 +210,26 @@ export async function testPrint(_payload: { width: PrinterPaperWidth; lines: str
   return { ok: false, error: caps.stateReason };
 }
 
-export async function testPrintProfile(profile: PrinterProfile, lines: string[]): Promise<{ ok: boolean; error?: string }> {
+export async function testPrintProfile(
+  profile: PrinterProfile,
+  lines: string[],
+): Promise<{ ok: boolean; error?: string; diagnostic?: NativeClassicDiagnostic }> {
+  if (profile.connectionType === "bluetooth" && resolveBluetoothMode(profile) === "classic") {
+    const deviceId = profile.pairedDeviceKey?.trim();
+    if (!deviceId) return { ok: false, error: "Select a Bluetooth printer in Hardware settings." };
+    const caps = await detectPrinterCapabilities();
+    const selected = selectPrinterTransport(profile, caps.transports);
+    if (!selected.ok) return { ok: false, error: selected.error };
+    if (selected.transport !== "native-classic") {
+      return { ok: false, error: "Classic printer must use Android RFCOMM/SPP. It was not routed to native-classic." };
+    }
+    const diagnostic = await printClassicSppDiagnostic(deviceId);
+    return {
+      ok: diagnostic.ok,
+      error: diagnostic.ok ? undefined : diagnostic.error,
+      diagnostic,
+    };
+  }
   const bytes = buildTestEscPos(profile.paperWidth, lines);
   const result = await sendEscPosBytes(profile, bytes);
   if (result.ok) {

@@ -51,6 +51,7 @@ export function PrinterConnectionMatrix({ caps }: { caps: HardwareTransportCapab
                 : "This device";
 
   const browserClassic = caps.environment !== "android-native";
+  const ios = caps.environment === "ios-safari" || caps.environment === "ios-native";
 
   return (
     <article className="rounded-3xl border-2 border-border bg-card p-5 shadow-waka-sm">
@@ -58,18 +59,28 @@ export function PrinterConnectionMatrix({ caps }: { caps: HardwareTransportCapab
       <p className="mt-1 text-lg font-black text-foreground">{envLabel}</p>
       <ul className="mt-3 space-y-2">
         {caps.environment === "android-native" ? (
-          <Row label="Bluetooth" slot={caps.bluetooth.classic} extra="Classic SPP + BLE printer transport" />
+          <Row label="Bluetooth" slot={caps.bluetooth.classic} extra="Bluetooth Classic + BLE" />
+        ) : ios ? (
+          <Row
+            label="Bluetooth"
+            slot={caps.bluetooth.classic}
+            extra="Direct Bluetooth thermal printing is not available in this browser. For Bluetooth Classic printers, use WAKA Android."
+          />
         ) : (
           <>
             <Row
               label="Bluetooth LE"
               slot={caps.bluetooth.ble}
-              extra="Available in this browser for compatible BLE printers only"
+              extra={
+                caps.bluetooth.webBluetooth
+                  ? "Web Bluetooth available — compatible BLE printers only"
+                  : caps.bluetooth.ble.reason
+              }
             />
             <Row
               label="Bluetooth Classic"
               slot={caps.bluetooth.classic}
-              extra="Not available in browsers"
+              extra="Not available from browser"
             />
           </>
         )}
@@ -87,11 +98,18 @@ export function PrinterConnectionMatrix({ caps }: { caps: HardwareTransportCapab
                     : caps.network.browserDirect
           }
         />
-        <Row label="USB" slot={caps.usb.webUsb.available ? caps.usb.webUsb : caps.usb.native} />
+        <Row
+          label="USB"
+          slot={caps.usb.webUsb.available ? caps.usb.webUsb : caps.usb.native}
+          extra={
+            caps.usb.webUsb.available
+              ? "Browser API detected. Thermal printer transport not yet supported"
+              : "Thermal printer transport not yet supported"
+          }
+        />
       </ul>
       {browserClassic ? (
         <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
-          For Classic Bluetooth thermal printers: use the WAKA Android app or the WAKA desktop/native LAN bridge.{" "}
           {CLASSIC_CHOOSER_HINT}
         </p>
       ) : null}

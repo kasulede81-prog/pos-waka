@@ -2,7 +2,7 @@
  * Authoritative printer transport resolver.
  * Does not format receipts or own the print queue.
  */
-import type { PrinterProfile } from "../../types";
+import type { PrinterConnectionType, PrinterProfile } from "../../types";
 import { Capacitor } from "@capacitor/core";
 import { canEscPosNetwork } from "../../platform/capabilities";
 import { getPlatform } from "../../platform/detect";
@@ -11,6 +11,7 @@ import {
   isNativeBluetoothPrinterAvailable,
 } from "../../lib/nativeBluetoothPrinter";
 import { isNativeNetworkPrinterAvailable } from "../../lib/nativeNetworkPrinter";
+import { hasActiveWebBleSession } from "../../lib/webBluetoothPrinter";
 
 export type HardwareEnvironment =
   | "android-native"
@@ -59,17 +60,16 @@ export type HardwareTransportCapabilities = {
 };
 
 export const CLASSIC_IN_BROWSER_ERROR =
-  "This printer appears to use Bluetooth Classic. Mac Chrome cannot access Bluetooth Classic printers directly. Use the WAKA Android app or a supported local/network printer connection.";
+  "Bluetooth Classic printers cannot be accessed directly from this browser. Use the WAKA Android app.";
 
 export const IOS_BLUETOOTH_ERROR =
-  "Bluetooth Classic printers require the WAKA app or another supported local bridge on iPhone/iPad.";
+  "Direct Bluetooth thermal printing is not available in this browser. For Bluetooth Classic printers, use WAKA Android.";
 
 export const WEB_BLUETOOTH_UNAVAILABLE_ERROR = "Bluetooth printing is not available in this browser.";
 
-export const NETWORK_NEEDS_BRIDGE_ERROR =
-  "LAN ESC/POS needs the WAKA desktop app or the WAKA Android app. Browsers cannot open port 9100 directly.";
+export const NETWORK_NEEDS_BRIDGE_ERROR = "Network printing is not available in this environment.";
 
-export const BLE_NO_WRITABLE_ERROR = "BLE device has no writable printer characteristic.";
+export const USB_NOT_SUPPORTED_ERROR = "USB thermal printing is not supported in this browser yet.";
 
 export function detectHardwareEnvironment(): HardwareEnvironment {
   if (typeof window === "undefined") return "unknown";
@@ -116,7 +116,12 @@ export async function getHardwareTransportCapabilities(): Promise<HardwareTransp
   const electronNet = canEscPosNetwork();
   const androidNet = await isNativeNetworkPrinterAvailable();
 
-  const bleWeb = webBluetooth && !nativeBt && environment !== "ios-safari" && environment !== "ios-native";
+  const bleWeb =
+    webBluetooth &&
+    !nativeBt &&
+    environment !== "ios-safari" &&
+    environment !== "ios-native" &&
+    environment !== "electron";
 
   return {
     environment,
@@ -144,8 +149,8 @@ export async function getHardwareTransportCapabilities(): Promise<HardwareTransp
     usb: {
       native: slot(false, false, "Native USB thermal transport is not implemented."),
       webUsb: webUsb
-        ? slot(true, true, "WebUSB API is present. This is not a certified thermal printer path.", false)
-        : slot(false, false, "USB printing is not available in this browser."),
+        ? slot(false, true, USB_NOT_SUPPORTED_ERROR, false)
+        : slot(false, false, USB_NOT_SUPPORTED_ERROR),
     },
     network: {
       electron: electronNet
@@ -230,12 +235,33 @@ export function canDeliverEscPosWithoutChooser(
 ): boolean {
   const selected = selectPrinterTransport(profile, caps);
   if (!selected.ok) return false;
-  return (
+  if (
     selected.transport === "native-classic" ||
     selected.transport === "native-ble" ||
     selected.transport === "electron-network" ||
     selected.transport === "android-network"
-  );
+  ) {
+    return true;
+  }
+  if (selected.transport === "web-bluetooth") {
+    return hasActiveWebBleSession(profile.pairedDeviceKey);
+  }
+  return false;
+}
+
+/** Connection types the operator may add. USB/builtin are not offered until a real transport exists. */
+export function addPrinterConnectionTypes(caps: HardwareTransportCapabilities): PrinterConnectionType[] {
+  if (caps.environment === "electron") return ["network", "bluetooth"];
+  return ["bluetooth", "network"];
+}
+
+/** First connection type shown on Add printer — never USB. */
+export function defaultPrinterConnectionType(caps: HardwareTransportCapabilities): PrinterConnectionType {
+  if (caps.bluetooth.native) return "bluetooth";
+  if (caps.environment === "electron") return "network";
+  if (caps.bluetooth.webBluetooth) return "bluetooth";
+  if (caps.network.electron.transportReady || caps.network.androidNative.transportReady) return "network";
+  return "bluetooth";
 }
 
 export function summarizeCapabilityState(caps: HardwareTransportCapabilities): {
@@ -292,20 +318,6 @@ export function summarizeCapabilityState(caps: HardwareTransportCapabilities): {
       nativeBluetoothPrinter: false,
       classicSppSupported: false,
       bleSupported: false,
-    };
-  }
-
-  if (usbAvailable) {
-    return {
-      state: "SUPPORTED",
-      stateReason: "WebUSB thermal printing available (pair printer, allow access).",
-      escPosAvailable: true,
-      bluetoothAvailable,
-      usbAvailable,
-      networkAvailable,
-      nativeBluetoothPrinter: false,
-      classicSppSupported: false,
-      bleSupported: caps.bluetooth.ble.available,
     };
   }
 

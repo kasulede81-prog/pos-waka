@@ -17,9 +17,12 @@ export const WEB_BLE_CHARS = [0xffe1, 0x2af1] as const;
 export const UNSUPPORTED_PRINTER_CONNECTION =
   "This Bluetooth device does not expose a supported printer connection.";
 export const CLASSIC_CHROME_CHOOSER_ERROR =
-  "This printer appears to use Bluetooth Classic. Mac Chrome cannot access Bluetooth Classic printers directly. Use the WAKA Android app or a supported local/network printer connection.";
+  "Bluetooth Classic printers cannot be accessed directly from this browser. Use the WAKA Android app.";
 export const CLASSIC_CHOOSER_HINT =
-  "If your printer is a Bluetooth Classic/SPP model, it will not appear in Chrome's Bluetooth chooser.";
+  "Show all BLE devices still only finds Bluetooth LE. Classic/SPP printers will not appear.";
+export const WEB_BLE_SESSION_LOST = "Select your BLE printer again.";
+export const WEB_BLE_NOT_SELECTED = "No compatible BLE device was selected.";
+export const WEB_BLE_PERMISSION = "Bluetooth permission is required to find printers.";
 
 const WEB_BLE_CHUNK = 20;
 const WEB_BLE_CONNECT_TIMEOUT_MS = 8000;
@@ -92,17 +95,23 @@ export function resetWebBluetoothSessionForTests(): void {
   lastWebBleDevice = null;
 }
 
+export function hasActiveWebBleSession(savedDeviceId?: string | null): boolean {
+  if (!lastWebBleDevice) return false;
+  if (!savedDeviceId?.trim()) return true;
+  return `ble:${lastWebBleDevice.id}` === savedDeviceId || lastWebBleDevice.id === savedDeviceId;
+}
+
 function normalizeUuid(uuid: string): string {
   return uuid.toLowerCase().replace(/-/g, "");
 }
 
 function isPreferredChar(uuid: string): boolean {
   const n = normalizeUuid(uuid);
-  return n.includes("ffe1") || n.includes("2af1") || n.includes("ff01");
+  return n.includes("ffe1") || n.includes("2af1");
 }
 
 function isWritable(char: GattCharacteristic): boolean {
-  if (!char.properties) return false;
+  if (!char.properties) return isPreferredChar(char.uuid);
   return Boolean(char.properties.write || char.properties.writeWithoutResponse);
 }
 
@@ -219,12 +228,15 @@ function mapChooserError(error: unknown): { ok: false; error: string; code: stri
   const name = err?.name ?? "";
   const message = err?.message ?? (error instanceof Error ? error.message : "");
   if (name === "SecurityError" || name === "NotAllowedError" || /permission|not allowed/i.test(message)) {
-    return { ok: false, error: "Bluetooth permission is required.", code: "permission_denied" };
+    return { ok: false, error: WEB_BLE_PERMISSION, code: "permission_denied" };
   }
-  if (name === "NotFoundError" || /not found|no chooser|cancelled|canceled|no device/i.test(message)) {
+  if (/cancelled|canceled/i.test(message)) {
+    return { ok: false, error: WEB_BLE_NOT_SELECTED, code: "chooser_cancelled" };
+  }
+  if (name === "NotFoundError" || /not found|no chooser|no device/i.test(message)) {
     return {
       ok: false,
-      error: `${CLASSIC_CHROME_CHOOSER_ERROR} ${CLASSIC_CHOOSER_HINT}`,
+      error: CLASSIC_CHROME_CHOOSER_ERROR,
       code: "classic_browser_unsupported",
     };
   }
@@ -311,15 +323,21 @@ export async function requestWebBluetoothPrinter(opts?: {
   }
   try {
     const device = await api.requestDevice(chooserOptions(opts?.acceptAllBle));
-    lastWebBleDevice = device;
     const inspected = await inspectAndValidate(device);
+    if (!inspected.ok) {
+      try {
+        device.gatt?.disconnect();
+      } catch {
+        /* ignore */
+      }
+      lastWebBleDevice = null;
+      return { ok: false, error: inspected.error, code: inspected.code };
+    }
+    lastWebBleDevice = device;
     try {
       device.gatt?.disconnect();
     } catch {
       /* keep the device object for later writes */
-    }
-    if (!inspected.ok) {
-      return { ok: false, error: inspected.error, code: inspected.code };
     }
     return { ok: true, device: toRow(device, inspected.diagnostics) };
   } catch (error) {
@@ -355,7 +373,7 @@ export async function printEscPosWebBluetooth(
   try {
     const saved = await withTimeout(resolveSavedDevice(savedDeviceId), WEB_BLE_LOOKUP_TIMEOUT_MS, null);
     if (!saved) {
-      return { ok: false, error: "Select a Bluetooth printer in Hardware settings.", code: "no_device" };
+      return { ok: false, error: WEB_BLE_SESSION_LOST, code: "session_lost" };
     }
     return withTimeout(writeToDevice(saved, bytes), WEB_BLE_CONNECT_TIMEOUT_MS + 4000, {
       ok: false as const,
