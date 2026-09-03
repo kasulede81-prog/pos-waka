@@ -10,6 +10,9 @@ import { canNativePrint } from "../platform";
 import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
 import { detectPrinterCapabilities } from "../services/hardware/printerAdapter";
 import { PrinterManagementPanel } from "../components/hardware/PrinterManagementPanel";
+import { PrinterConnectionMatrix } from "../components/hardware/PrinterConnectionMatrix";
+import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
+import { resolveDefaultReceiptPrinter } from "../lib/printerRegistry";
 
 const PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
 
@@ -22,7 +25,6 @@ function paperLabelKey(size: ReceiptPaperSize): string {
 export function HardwareSettingsPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
-  const [snap, setSnap] = useState<string>("");
   const [barcodeCaps] = useState(() => detectBarcodeCapabilities());
   const [printerCaps, setPrinterCaps] = useState<Awaited<ReturnType<typeof detectPrinterCapabilities>> | null>(null);
   const [scanMode, setScanMode] = useState<"hid" | "camera">("hid");
@@ -30,18 +32,6 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
   const [scanResult, setScanResult] = useState<string>("");
   const [printingStatus, setPrintingStatus] = useState<string>("");
   const cameraRef = useRef<HTMLVideoElement | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const { getHardwareCapabilitySnapshot } = await import("../services/hardware/hardwareCapabilities");
-      const c = await getHardwareCapabilitySnapshot();
-      if (!cancelled) setSnap(JSON.stringify(c, null, 2));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     void detectPrinterCapabilities().then(setPrinterCaps);
@@ -62,6 +52,25 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
       "—",
       "Waka POS",
     ].join("\n");
+    const hw = resolveHospitalityHardware(preferences);
+    const configured =
+      resolveDefaultReceiptPrinter(preferences) ??
+      hw.printers.find((p) => p.connectionType === "bluetooth" && p.pairedDeviceKey && p.isEnabled) ??
+      hw.printers.find((p) => p.isEnabled && (p.connectionType === "network" || p.connectionType === "usb"));
+    if (configured && (configured.connectionType === "bluetooth" || configured.connectionType === "network" || configured.connectionType === "usb")) {
+      setPrintingStatus("Testing printer...");
+      void usePosStore
+        .getState()
+        .testConfiguredPrinter(configured.id)
+        .then((result) => {
+          setPrintingStatus(
+            result.ok
+              ? "Printer connected and test data sent."
+              : (result.error ?? t(lang, "receiptPrintBlocked")),
+          );
+        });
+      return;
+    }
     setPrintingStatus("Testing printer...");
     void printReceiptWithFallback(sample, preferences.receiptPaperSize ?? "80mm").then((result) => {
       if (result.ok) {
@@ -204,19 +213,12 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
           {t(lang, "receiptPaperTestPrint")}
         </button>
         {printerCaps ? (
-          <p className="mt-3 rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
-            {printerCaps.state === "SUPPORTED"
-              ? t(lang, "printerStateSupported")
-              : printerCaps.state === "PARTIAL"
-                ? t(lang, "printerStatePartial")
-                : t(lang, "printerStateUnavailable")}
-            <br />
-            {printerCaps.stateReason}
-            <br />
-            {t(lang, "printerDiagnostics")}: USB {printerCaps.usbAvailable ? "yes" : "no"} · BT{" "}
-            {printerCaps.bluetoothAvailable ? "yes" : "no"} · LAN{" "}
-            {printerCaps.networkAvailable ? "yes" : "no"} · {printerCaps.platform}
-          </p>
+          <div className="mt-4">
+            <PrinterConnectionMatrix caps={printerCaps.transports} />
+            <p className="mt-3 rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
+              {printerCaps.stateReason}
+            </p>
+          </div>
         ) : null}
         {canNativePrint() ? (
           <button
@@ -236,7 +238,6 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
 
       <PrinterManagementPanel lang={lang} />
 
-      <div className="rounded-2xl border border-border bg-muted p-4 font-mono text-xs text-foreground">{snap || "—"}</div>
       <p className="text-xs text-muted-foreground">{t(lang, "hardwareSettingsStubHint")}</p>
     </div>
   );

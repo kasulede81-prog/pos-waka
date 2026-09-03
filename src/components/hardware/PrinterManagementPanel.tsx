@@ -6,7 +6,10 @@ import { usePosStore } from "../../store/usePosStore";
 import { resolveHospitalityHardware } from "../../lib/hospitalityHardware";
 import { stationLabel } from "../../lib/printerRegistry";
 import { testNetworkPrinterConnection } from "../../services/hardware/printerAdapter";
+import { disconnectNativeBluetoothPrinter } from "../../lib/nativeBluetoothPrinter";
+import type { NativeBluetoothDeviceRow } from "../../lib/nativeBluetoothPrinter";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
+import { BluetoothPrinterFinder } from "./BluetoothPrinterFinder";
 
 const ROLE_OPTIONS: PrinterStationRole[] = [
   "kitchen",
@@ -48,6 +51,8 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const [networkPort, setNetworkPort] = useState("9100");
   const [status, setStatus] = useState("");
   const [isDefaultReceipt, setIsDefaultReceipt] = useState(false);
+  const [pendingBt, setPendingBt] = useState<NativeBluetoothDeviceRow | null>(null);
+  const [bindForId, setBindForId] = useState<string | null>(null);
 
   const toggleRole = (role: PrinterStationRole) => {
     setRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
@@ -63,6 +68,9 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       isDefaultReceipt,
       networkHost: connectionType === "network" ? networkHost.trim() || null : null,
       networkPort: connectionType === "network" ? Number(networkPort) || 9100 : null,
+      pairedDeviceKey: connectionType === "bluetooth" ? pendingBt?.id ?? null : null,
+      bluetoothTransport: connectionType === "bluetooth" ? pendingBt?.transport ?? null : null,
+      pairedDeviceName: connectionType === "bluetooth" ? pendingBt?.name ?? null : null,
     });
     if (!result.ok) {
       setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
@@ -133,9 +141,21 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                   onChange={(e) => setNetworkPort(e.target.value)}
                 />
               </label>
+              <p className="sm:col-span-2 text-xs font-semibold text-muted-foreground">
+                Use a private LAN address (for example 192.168.x.x) and port 9100. Browsers cannot open that port
+                directly — printing uses the WAKA desktop app or the WAKA Android app.
+              </p>
             </>
           ) : null}
         </div>
+
+        {connectionType === "bluetooth" ? (
+          <BluetoothPrinterFinder
+            selectedId={pendingBt?.id ?? null}
+            onSelect={setPendingBt}
+            onStatus={setStatus}
+          />
+        ) : null}
 
         <p className="mt-3 text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "hardwarePrinterRoles")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -179,6 +199,13 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                   <p className="font-black text-foreground">{p.name}</p>
                   <p className="text-xs font-semibold text-muted-foreground">
                     {p.connectionType} · {p.paperWidth} · {p.stationRoles.join(", ")}
+                    {p.connectionType === "bluetooth" && p.pairedDeviceName
+                      ? ` · ${p.pairedDeviceName}`
+                      : p.connectionType === "bluetooth" && p.pairedDeviceKey
+                        ? " · Bluetooth saved"
+                        : p.connectionType === "bluetooth"
+                          ? " · no device selected"
+                          : ""}
                   </p>
                   {p.lastError ? <p className="mt-1 text-xs font-bold text-red-700">{p.lastError}</p> : null}
                 </div>
@@ -200,7 +227,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                         const r = await testConfiguredPrinter(p.id);
                         setStatus(
                           r.ok
-                            ? "Printer connected"
+                            ? "Printer connected and test data sent."
                             : (r.error ?? t(lang, "hardwarePrinterTestFail") ?? "Could not connect to printer"),
                         );
                       })();
@@ -223,6 +250,72 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                   </button>
                 </div>
               </div>
+              {p.connectionType === "bluetooth" ? (
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-xl border-2 border-border px-3 py-1 text-xs font-black"
+                      onClick={() => setBindForId(bindForId === p.id ? null : p.id)}
+                    >
+                      Find device
+                    </button>
+                    {p.pairedDeviceKey ? (
+                      <button
+                        type="button"
+                        className="rounded-xl border-2 border-border px-3 py-1 text-xs font-black"
+                        onClick={() => {
+                          void disconnectNativeBluetoothPrinter(p.pairedDeviceKey ?? undefined);
+                          const result = upsertPrinter({
+                            id: p.id,
+                            name: p.name,
+                            connectionType: p.connectionType,
+                            paperWidth: p.paperWidth,
+                            stationRoles: p.stationRoles,
+                            isDefaultReceipt: p.isDefaultReceipt,
+                            pairedDeviceKey: null,
+                            bluetoothTransport: null,
+                            pairedDeviceName: null,
+                          });
+                          if (!result.ok) {
+                            setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
+                            return;
+                          }
+                          setStatus("Bluetooth device forgotten on this printer profile.");
+                        }}
+                      >
+                        Forget device
+                      </button>
+                    ) : null}
+                  </div>
+                  {bindForId === p.id ? (
+                    <BluetoothPrinterFinder
+                      selectedId={p.pairedDeviceKey ?? null}
+                      onSelect={(device) => {
+                        if (!device) return;
+                        const result = upsertPrinter({
+                          id: p.id,
+                          name: p.name,
+                          connectionType: "bluetooth",
+                          paperWidth: p.paperWidth,
+                          stationRoles: p.stationRoles,
+                          isDefaultReceipt: p.isDefaultReceipt,
+                          pairedDeviceKey: device.id,
+                          bluetoothTransport: device.transport,
+                          pairedDeviceName: device.name,
+                        });
+                        if (!result.ok) {
+                          setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
+                          return;
+                        }
+                        setBindForId(null);
+                        setStatus(`Saved ${device.name}`);
+                      }}
+                      onStatus={setStatus}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>

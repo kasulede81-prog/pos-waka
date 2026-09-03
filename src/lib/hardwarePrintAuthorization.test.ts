@@ -113,6 +113,34 @@ describe("hardware printer authorization", () => {
     expect(usePosStore.getState().auditLogs.some((a) => a.action === "auth_forbidden")).toBe(false);
   });
 
+  it("persists Bluetooth pairedDeviceKey on multiple printer profiles", () => {
+    const a = usePosStore.getState().upsertPrinter({
+      name: "Receipt BT",
+      connectionType: "bluetooth",
+      paperWidth: "58mm",
+      stationRoles: ["receipt"],
+      isDefaultReceipt: true,
+      pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF",
+      bluetoothTransport: "classic",
+      pairedDeviceName: "Mobile Printer",
+    });
+    const b = usePosStore.getState().upsertPrinter({
+      name: "Kitchen BT",
+      connectionType: "bluetooth",
+      paperWidth: "80mm",
+      stationRoles: ["kitchen"],
+      pairedDeviceKey: "ble:11:22:33:44:55:66",
+      bluetoothTransport: "ble",
+      pairedDeviceName: "Kitchen Printer",
+    });
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    const printers = resolveHospitalityHardware(usePosStore.getState().preferences).printers;
+    expect(printers).toHaveLength(2);
+    expect(printers.find((p) => p.id === a.printerId)?.pairedDeviceKey).toBe("classic:AA:BB:CC:DD:EE:FF");
+    expect(printers.find((p) => p.id === b.printerId)?.bluetoothTransport).toBe("ble");
+  });
+
   it("T5 — paper size and printer config share settings.devices", () => {
     expect(requiredPermissionsForPreferencesPatch({ receiptPaperSize: "80mm" })).toEqual(["settings.devices"]);
     expect(requiredPermissionsForPreferencesPatch({ hospitalityHardware: defaultHospitalityHardwarePrefs() })).toEqual([

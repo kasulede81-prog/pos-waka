@@ -1,9 +1,19 @@
 /**
- * Thermal / receipt printer adapter (Bluetooth, USB, network framework).
- * Web APIs + optional Electron bridge for LAN printers.
+ * Thermal / receipt printer adapter.
+ * Transport only — ESC/POS generation and print queue stay outside this file.
  */
 import type { PrinterProfile } from "../../types";
 import { buildTestEscPos, EscPosBuilder } from "../../lib/escPosBuilder";
+import { printEscPosNative } from "../../lib/nativeBluetoothPrinter";
+import { printEscPosNativeNetwork, testNativeNetworkPrinter } from "../../lib/nativeNetworkPrinter";
+import { printEscPosWebBluetooth } from "../../lib/webBluetoothPrinter";
+import {
+  getHardwareTransportCapabilities,
+  selectPrinterTransport,
+  summarizeCapabilityState,
+  type HardwareEnvironment,
+  type HardwareTransportCapabilities,
+} from "./hardwareTransport";
 
 export type PrinterPaperWidth = "58mm" | "80mm";
 
@@ -21,70 +31,24 @@ export type PrinterCapabilities = {
   platform: PrinterPlatform;
   state: PrinterCapabilityState;
   stateReason: string;
+  nativeBluetoothPrinter: boolean;
+  classicSppSupported: boolean;
+  bleSupported: boolean;
+  environment: HardwareEnvironment;
+  transports: HardwareTransportCapabilities;
 };
 
-const BT_PRINTER_SERVICES = [0xffe0, 0x18f0];
-const BT_PRINTER_CHARS = [0xffe1, 0x2af1];
-
-function resolvePlatform(): PrinterPlatform {
-  if (typeof navigator === "undefined") return "unknown";
-  const ua = navigator.userAgent.toLowerCase();
-  if (ua.includes("electron")) return "electron";
-  if (ua.includes("android")) return "android";
-  if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) return "ios";
+function environmentToPlatform(environment: HardwareEnvironment): PrinterPlatform {
+  if (environment === "android-native" || environment === "android-browser") return "android";
+  if (environment === "ios-native" || environment === "ios-safari") return "ios";
+  if (environment === "electron") return "electron";
+  if (environment === "unknown") return "unknown";
   return "web";
-}
-
-function resolveCapabilityState(
-  platform: PrinterPlatform,
-  bluetoothAvailable: boolean,
-  usbAvailable: boolean,
-): { state: PrinterCapabilityState; stateReason: string; escPosAvailable: boolean } {
-  if (typeof navigator === "undefined") {
-    return { state: "UNAVAILABLE", stateReason: "No browser runtime.", escPosAvailable: false };
-  }
-  if (usbAvailable) {
-    return {
-      state: "SUPPORTED",
-      stateReason: "WebUSB thermal printing available (pair printer, allow access).",
-      escPosAvailable: true,
-    };
-  }
-  if (bluetoothAvailable) {
-    return {
-      state: "PARTIAL",
-      stateReason: "Web Bluetooth may work with compatible printers; use browser print as fallback.",
-      escPosAvailable: true,
-    };
-  }
-  if (platform === "electron") {
-    return {
-      state: "PARTIAL",
-      stateReason: "Use system print or LAN ESC/POS when configured. USB/BT needs WebUSB/Web Bluetooth.",
-      escPosAvailable: true,
-    };
-  }
-  if (platform === "android" || platform === "ios") {
-    return {
-      state: "PARTIAL",
-      stateReason: "Native thermal SDK not installed. Use Receipt Print or save/share PDF.",
-      escPosAvailable: false,
-    };
-  }
-  return {
-    state: "PARTIAL",
-    stateReason: "Browser print to any printer or Save as PDF from the print dialog.",
-    escPosAvailable: false,
-  };
-}
-
-function toEscPos(payload: { width: PrinterPaperWidth; lines: string[] }): Uint8Array {
-  return buildTestEscPos(payload.width, payload.lines);
 }
 
 async function transferUsb(bytes: Uint8Array): Promise<{ ok: boolean; error?: string }> {
   if (typeof navigator === "undefined" || !("usb" in navigator)) {
-    return { ok: false, error: "WebUSB not available." };
+    return { ok: false, error: "USB printing is not available in this browser." };
   }
   try {
     const usb = navigator.usb as {
@@ -106,42 +70,6 @@ async function transferUsb(bytes: Uint8Array): Promise<{ ok: boolean; error?: st
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "USB thermal print failed." };
-  }
-}
-
-async function transferBluetooth(bytes: Uint8Array): Promise<{ ok: boolean; error?: string }> {
-  if (typeof navigator === "undefined" || !("bluetooth" in navigator)) {
-    return { ok: false, error: "Web Bluetooth not available." };
-  }
-  try {
-    const bluetooth = navigator.bluetooth as {
-      requestDevice: (opts: {
-        acceptAllDevices: boolean;
-        optionalServices: number[];
-      }) => Promise<{
-        gatt?: {
-          connect: () => Promise<{
-            getPrimaryService: (service: number) => Promise<{
-              getCharacteristic: (char: number) => Promise<{ writeValue: (data: Uint8Array) => Promise<void> }>;
-            }>;
-          }>;
-          disconnect: () => void;
-        };
-      }>;
-    };
-    const device = await bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: BT_PRINTER_SERVICES,
-    });
-    const server = await device.gatt?.connect();
-    if (!server) return { ok: false, error: "Bluetooth printer connection failed." };
-    const service = await server.getPrimaryService(BT_PRINTER_SERVICES[0]);
-    const characteristic = await service.getCharacteristic(BT_PRINTER_CHARS[0]);
-    await characteristic.writeValue(bytes);
-    device.gatt?.disconnect();
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Bluetooth thermal print failed." };
   }
 }
 
@@ -182,13 +110,10 @@ async function transferNetwork(
     }
   }
 
-  return {
-    ok: false,
-    error: "LAN ESC/POS needs the Waka desktop app or a print server bridge.",
-  };
+  return printEscPosNativeNetwork(host, port, bytes);
 }
 
-/** Probe TCP reachability via the desktop bridge (no sale/checkout side effects). */
+/** Probe TCP reachability via the desktop or Android bridge (no sale/checkout side effects). */
 export async function testNetworkPrinterConnection(
   profile: Pick<PrinterProfile, "networkHost" | "networkPort">,
 ): Promise<{ ok: boolean; error?: string; message?: string }> {
@@ -209,33 +134,26 @@ export async function testNetworkPrinterConnection(
     }
   }
 
-  return {
-    ok: false,
-    error: "LAN ESC/POS needs the Waka desktop app.",
-  };
+  return testNativeNetworkPrinter(host, port);
 }
 
 export async function detectPrinterCapabilities(): Promise<PrinterCapabilities> {
-  const hasNavigator = typeof navigator !== "undefined";
-  const bluetoothAvailable = hasNavigator && "bluetooth" in navigator;
-  const usbAvailable = hasNavigator && "usb" in navigator;
-  const platform = resolvePlatform();
-  const networkAvailable = Boolean(
-    typeof window !== "undefined" &&
-      (typeof window.wakaDesktop?.hardware?.printer?.printEscPos === "function" ||
-        typeof window.wakaDesktop?.escPosNetwork === "function"),
-  );
-  const sunmiBuiltIn = false;
-  const { state, stateReason, escPosAvailable } = resolveCapabilityState(platform, bluetoothAvailable, usbAvailable);
+  const transports = await getHardwareTransportCapabilities();
+  const summary = summarizeCapabilityState(transports);
   return {
-    bluetoothAvailable,
-    usbAvailable,
-    networkAvailable,
-    sunmiBuiltIn,
-    escPosAvailable: escPosAvailable || networkAvailable,
-    platform,
-    state,
-    stateReason,
+    bluetoothAvailable: summary.bluetoothAvailable,
+    usbAvailable: summary.usbAvailable,
+    networkAvailable: summary.networkAvailable,
+    sunmiBuiltIn: false,
+    escPosAvailable: summary.escPosAvailable,
+    platform: environmentToPlatform(transports.environment),
+    state: summary.state,
+    stateReason: summary.stateReason,
+    nativeBluetoothPrinter: summary.nativeBluetoothPrinter,
+    classicSppSupported: summary.classicSppSupported,
+    bleSupported: summary.bleSupported,
+    environment: transports.environment,
+    transports,
   };
 }
 
@@ -243,19 +161,28 @@ export async function sendEscPosBytes(
   profile: PrinterProfile,
   bytes: Uint8Array,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (profile.connectionType === "network") {
-    return transferNetwork(profile, bytes);
-  }
-  if (profile.connectionType === "bluetooth") {
-    return transferBluetooth(bytes);
-  }
-  if (profile.connectionType === "usb" || profile.connectionType === "builtin") {
-    return transferUsb(bytes);
-  }
   const caps = await detectPrinterCapabilities();
-  if (caps.usbAvailable) return transferUsb(bytes);
-  if (caps.bluetoothAvailable) return transferBluetooth(bytes);
-  return { ok: false, error: caps.stateReason };
+  const selected = selectPrinterTransport(profile, caps.transports);
+  if (!selected.ok) {
+    return { ok: false, error: selected.error };
+  }
+  switch (selected.transport) {
+    case "electron-network":
+    case "android-network":
+      return transferNetwork(profile, bytes);
+    case "native-classic":
+    case "native-ble": {
+      const deviceId = profile.pairedDeviceKey?.trim();
+      if (!deviceId) return { ok: false, error: "Select a Bluetooth printer in Hardware settings." };
+      return printEscPosNative(deviceId, bytes, selected.transport === "native-ble" ? "ble" : "classic");
+    }
+    case "web-bluetooth":
+      return printEscPosWebBluetooth(bytes, profile.pairedDeviceKey);
+    case "web-usb":
+      return transferUsb(bytes);
+    default:
+      return { ok: false, error: caps.stateReason };
+  }
 }
 
 export async function kickCashDrawer(profile: PrinterProfile): Promise<{ ok: boolean; error?: string }> {
@@ -264,27 +191,26 @@ export async function kickCashDrawer(profile: PrinterProfile): Promise<{ ok: boo
 }
 
 export async function testPrint(_payload: { width: PrinterPaperWidth; lines: string[] }): Promise<{ ok: boolean; error?: string }> {
-  const payload = _payload;
   const caps = await detectPrinterCapabilities();
+  if (caps.nativeBluetoothPrinter || caps.transports.bluetooth.webBluetooth) {
+    return { ok: false, error: "Select a Bluetooth printer in Hardware settings." };
+  }
   if (!caps.escPosAvailable) {
     return { ok: false, error: caps.stateReason };
   }
-  const bytes = toEscPos(payload);
-
+  const bytes = buildTestEscPos(_payload.width, _payload.lines);
   if (caps.usbAvailable) {
     const usb = await transferUsb(bytes);
     if (usb.ok) return usb;
   }
-
-  if (caps.bluetoothAvailable) {
-    const bt = await transferBluetooth(bytes);
-    if (bt.ok) return bt;
-  }
-
   return { ok: false, error: caps.stateReason };
 }
 
 export async function testPrintProfile(profile: PrinterProfile, lines: string[]): Promise<{ ok: boolean; error?: string }> {
   const bytes = buildTestEscPos(profile.paperWidth, lines);
-  return sendEscPosBytes(profile, bytes);
+  const result = await sendEscPosBytes(profile, bytes);
+  if (result.ok) {
+    return { ok: true };
+  }
+  return result;
 }

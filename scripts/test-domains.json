@@ -81,7 +81,15 @@
     "src/lib/nativePrintFallback.test.ts",
     "src/lib/restaurantReceiptPrint.test.ts",
     "src/services/hardware/printerAdapter.test.ts",
-    "src/services/hardware/hardwareCapabilities.test.ts"
+    "src/services/hardware/printerAdapter.nativeBluetooth.test.ts",
+    "src/services/hardware/printerCapability.test.ts",
+    "src/services/hardware/hardwareCapabilities.test.ts",
+    "src/lib/bluetoothPrinterHeuristics.test.ts",
+    "src/lib/nativeBluetoothPrinter.test.ts",
+    "src/lib/nativeNetworkPrinter.test.ts",
+    "src/lib/webBluetoothPrinter.test.ts",
+    "src/services/hardware/hardwareTransport.test.ts",
+    "src/services/hardware/printerAdapter.transportRouting.test.ts"
   ],
   "inventory": [
     "src/lib/inventoryIntegrity.test.ts",

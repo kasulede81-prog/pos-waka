@@ -228,19 +228,33 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       isDefaultReceipt?: boolean;
       networkHost?: string | null;
       networkPort?: number | null;
+      pairedDeviceKey?: string | null;
+      bluetoothTransport?: "classic" | "ble" | null;
+      pairedDeviceName?: string | null;
     }) => {
       const state = get();
+      const existing = input.id
+        ? resolveHospitalityHardware(state.preferences).printers.find((p) => p.id === input.id)
+        : undefined;
       const profile: PrinterProfile = {
-        id: input.id ?? crypto.randomUUID(),
-        name: input.name.trim() || "Printer",
+        id: input.id ?? existing?.id ?? crypto.randomUUID(),
+        name: input.name.trim() || existing?.name || "Printer",
         connectionType: input.connectionType,
         paperWidth: input.paperWidth,
         stationRoles: input.stationRoles,
-        isDefaultReceipt: input.isDefaultReceipt ?? false,
-        vendorHint: "generic",
-        networkHost: input.networkHost ?? null,
-        networkPort: input.networkPort ?? 9100,
-        isEnabled: true,
+        isDefaultReceipt: input.isDefaultReceipt ?? existing?.isDefaultReceipt ?? false,
+        vendorHint: existing?.vendorHint ?? "generic",
+        networkHost: input.networkHost !== undefined ? input.networkHost : existing?.networkHost ?? null,
+        networkPort: input.networkPort !== undefined ? input.networkPort : existing?.networkPort ?? 9100,
+        pairedDeviceKey:
+          input.pairedDeviceKey !== undefined ? input.pairedDeviceKey : existing?.pairedDeviceKey ?? null,
+        bluetoothTransport:
+          input.bluetoothTransport !== undefined ? input.bluetoothTransport : existing?.bluetoothTransport ?? null,
+        pairedDeviceName:
+          input.pairedDeviceName !== undefined ? input.pairedDeviceName : existing?.pairedDeviceName ?? null,
+        isEnabled: existing?.isEnabled ?? true,
+        lastSeenAt: existing?.lastSeenAt,
+        lastError: existing?.lastError ?? null,
       };
       const next = upsertPrinterProfile(state.preferences, profile);
       const auth = authorizePersistentHardwareConfig(

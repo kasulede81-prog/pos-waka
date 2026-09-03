@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createDefaultPreferences } from "../data/defaultSeed";
 import { enqueuePrintJob, processPrintQueue } from "./printQueue";
+import { sendEscPosBytes } from "../services/hardware/printerAdapter";
 
 const persistMock = vi.fn();
 const loadMock = vi.fn();
@@ -120,5 +121,62 @@ describe("printQueue durability", () => {
     expect(loadMock).toHaveBeenCalledWith(jobId);
     expect(after.hospitalityHardware?.printQueue).toHaveLength(0);
     expect(after.hospitalityHardware?.printHistory[0]?.status).toBe("done");
+  });
+
+  it("propagates Bluetooth transport failure into a failed print job", async () => {
+    vi.mocked(sendEscPosBytes).mockResolvedValueOnce({
+      ok: false,
+      error: "Could not connect to Mobile Printer.",
+    });
+    const prefs = createDefaultPreferences();
+    const jobId = "job-bt-fail";
+    prefs.hospitalityHardware = {
+      printers: [
+        {
+          id: "p-bt",
+          name: "Mobile Printer",
+          connectionType: "bluetooth",
+          paperWidth: "58mm",
+          stationRoles: ["receipt"],
+          isEnabled: true,
+          pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF",
+          bluetoothTransport: "classic",
+        },
+      ],
+      printQueue: [
+        {
+          id: jobId,
+          kind: "receipt",
+          printerId: "p-bt",
+          status: "queued",
+          attempts: 4,
+          maxAttempts: 5,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          payloadSummary: "Receipt",
+          payloadPersisted: true,
+        },
+      ],
+      printHistory: [],
+      receiptTemplate: {
+        kind: "restaurant",
+        showTableNumber: true,
+        showWaiter: true,
+        showGuests: true,
+        showModifiers: true,
+        showDiscounts: true,
+        showSplitSummary: true,
+        showQrPlaceholder: false,
+      },
+      autoPrintKitchen: true,
+      autoPrintReceipt: true,
+      openDrawerOnPayment: true,
+      customerDisplayEnabled: false,
+      drawerAudit: [],
+    };
+    const after = await processPrintQueue(prefs, 1);
+    expect(after.hospitalityHardware?.printQueue).toHaveLength(0);
+    expect(after.hospitalityHardware?.printHistory[0]?.status).toBe("failed");
+    expect(after.hospitalityHardware?.printHistory[0]?.error).toBe("Could not connect to Mobile Printer.");
   });
 });

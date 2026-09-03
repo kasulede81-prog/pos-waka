@@ -971,16 +971,19 @@ export type PosState = {
   };
   enqueueKitchenTicketPrints: (ticketIds: string[], kind?: import("../lib/kitchenChitPrint").KitchenChitPrintKind) => void;
   reprintKitchenTicket: (ticketId: string) => { ok: boolean; errorKey?: string };
-  upsertPrinter: (input: {
-    id?: string;
-    name: string;
-    connectionType: import("../types").PrinterConnectionType;
-    paperWidth: "58mm" | "80mm";
-    stationRoles: import("../types").PrinterStationRole[];
-    isDefaultReceipt?: boolean;
-    networkHost?: string | null;
-    networkPort?: number | null;
-  }) => { ok: boolean; printerId?: string; errorKey?: string };
+    upsertPrinter: (input: {
+      id?: string;
+      name: string;
+      connectionType: import("../types").PrinterConnectionType;
+      paperWidth: "58mm" | "80mm";
+      stationRoles: import("../types").PrinterStationRole[];
+      isDefaultReceipt?: boolean;
+      networkHost?: string | null;
+      networkPort?: number | null;
+      pairedDeviceKey?: string | null;
+      bluetoothTransport?: "classic" | "ble" | null;
+      pairedDeviceName?: string | null;
+    }) => { ok: boolean; printerId?: string; errorKey?: string };
   removePrinter: (printerId: string) => { ok: boolean; errorKey?: string };
   assignStationPrinter: (stationId: string, printerId: string | null) => { ok: boolean; errorKey?: string };
   testConfiguredPrinter: (printerId: string) => Promise<{ ok: boolean; error?: string }>;

@@ -1,0 +1,249 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PrinterProfile } from "../../types";
+import {
+  CLASSIC_IN_BROWSER_ERROR,
+  IOS_BLUETOOTH_ERROR,
+  NETWORK_NEEDS_BRIDGE_ERROR,
+  detectHardwareEnvironment,
+  getHardwareTransportCapabilities,
+  selectPrinterTransport,
+  type HardwareTransportCapabilities,
+  type TransportSlot,
+} from "./hardwareTransport";
+
+function slot(supported: boolean, available: boolean, reason = "", transportReady = false): TransportSlot {
+  return { supported, available, transportReady, reason };
+}
+
+function caps(patch: Partial<HardwareTransportCapabilities> = {}): HardwareTransportCapabilities {
+  const unavailable = slot(false, false, "no");
+  return {
+    environment: "desktop-browser",
+    bluetooth: {
+      classic: unavailable,
+      ble: unavailable,
+      native: false,
+      webBluetooth: false,
+    },
+    usb: { native: unavailable, webUsb: unavailable },
+    network: {
+      electron: unavailable,
+      androidNative: unavailable,
+      browserDirect: slot(false, false, NETWORK_NEEDS_BRIDGE_ERROR),
+    },
+    ...patch,
+  };
+}
+
+const profile = (patch: Partial<PrinterProfile> = {}): PrinterProfile => ({
+  id: "p1",
+  name: "Printer",
+  connectionType: "bluetooth",
+  paperWidth: "58mm",
+  stationRoles: ["receipt"],
+  isEnabled: true,
+  ...patch,
+});
+
+describe("detectHardwareEnvironment", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("detects iOS Safari from the user agent", () => {
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" });
+    vi.stubGlobal("window", { navigator: { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" } });
+    expect(detectHardwareEnvironment()).toBe("ios-safari");
+  });
+
+  it("detects Android Chrome from the user agent", () => {
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Linux; Android 14) Chrome/120.0.0.0 Mobile" });
+    vi.stubGlobal("window", {
+      navigator: { userAgent: "Mozilla/5.0 (Linux; Android 14) Chrome/120.0.0.0 Mobile" },
+    });
+    expect(detectHardwareEnvironment()).toBe("android-browser");
+  });
+
+  it("detects desktop browser on Windows/macOS Chrome", () => {
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0" });
+    vi.stubGlobal("window", {
+      navigator: { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0" },
+    });
+    expect(detectHardwareEnvironment()).toBe("desktop-browser");
+  });
+});
+
+describe("selectPrinterTransport", () => {
+  it("routes Android + Classic profile to native Classic", () => {
+    const result = selectPrinterTransport(
+      profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+      caps({
+        environment: "android-native",
+        bluetooth: {
+          classic: slot(true, true),
+          ble: slot(true, true),
+          native: true,
+          webBluetooth: false,
+        },
+      }),
+    );
+    expect(result).toEqual({ ok: true, transport: "native-classic" });
+  });
+
+  it("routes Android + BLE profile to native BLE", () => {
+    const result = selectPrinterTransport(
+      profile({ pairedDeviceKey: "ble:11:22:33:44:55:66", bluetoothTransport: "ble" }),
+      caps({
+        environment: "android-native",
+        bluetooth: {
+          classic: slot(true, true),
+          ble: slot(true, true),
+          native: true,
+          webBluetooth: false,
+        },
+      }),
+    );
+    expect(result).toEqual({ ok: true, transport: "native-ble" });
+  });
+
+  it("routes Chrome + BLE profile to Web Bluetooth", () => {
+    const result = selectPrinterTransport(
+      profile({ pairedDeviceKey: "ble:web-id", bluetoothTransport: "ble" }),
+      caps({
+        environment: "desktop-browser",
+        bluetooth: {
+          classic: slot(false, false, CLASSIC_IN_BROWSER_ERROR),
+          ble: slot(true, true),
+          native: false,
+          webBluetooth: true,
+        },
+      }),
+    );
+    expect(result).toEqual({ ok: true, transport: "web-bluetooth" });
+  });
+
+  it("rejects Chrome + Classic profile with the browser limitation", () => {
+    const result = selectPrinterTransport(
+      profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+      caps({ environment: "desktop-browser" }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("classic_browser_unsupported");
+      expect(result.error).toBe(CLASSIC_IN_BROWSER_ERROR);
+    }
+  });
+
+  it("rejects iOS Safari + Classic profile clearly", () => {
+    const result = selectPrinterTransport(
+      profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+      caps({ environment: "ios-safari" }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("ios_bluetooth_unsupported");
+      expect(result.error).toBe(IOS_BLUETOOTH_ERROR);
+    }
+  });
+
+  it("routes Electron + network to the existing LAN bridge", () => {
+    const result = selectPrinterTransport(
+      profile({
+        connectionType: "network",
+        networkHost: "192.168.1.50",
+        networkPort: 9100,
+      }),
+      caps({
+        environment: "electron",
+        network: {
+          electron: slot(true, true),
+          androidNative: slot(false, false),
+          browserDirect: slot(false, false, NETWORK_NEEDS_BRIDGE_ERROR),
+        },
+      }),
+    );
+    expect(result).toEqual({ ok: true, transport: "electron-network" });
+  });
+
+  it("routes Android native + network to Android TCP", () => {
+    const result = selectPrinterTransport(
+      profile({
+        connectionType: "network",
+        networkHost: "192.168.1.50",
+        networkPort: 9100,
+      }),
+      caps({
+        environment: "android-native",
+        network: {
+          electron: slot(false, false),
+          androidNative: slot(true, true),
+          browserDirect: slot(false, false, NETWORK_NEEDS_BRIDGE_ERROR),
+        },
+      }),
+    );
+    expect(result).toEqual({ ok: true, transport: "android-network" });
+  });
+
+  it("does not claim browser TCP to port 9100", () => {
+    const result = selectPrinterTransport(
+      profile({
+        connectionType: "network",
+        networkHost: "192.168.1.50",
+        networkPort: 9100,
+      }),
+      caps({ environment: "desktop-browser" }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe(NETWORK_NEEDS_BRIDGE_ERROR);
+  });
+
+  it("fails clearly when a Bluetooth profile has no saved device", () => {
+    const result = selectPrinterTransport(profile({ pairedDeviceKey: null }), caps());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("no_device");
+  });
+});
+
+describe("API present vs printer transport ready", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("does not treat Web Bluetooth API presence as a ready printer transport", async () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0",
+      bluetooth: {},
+      usb: {},
+    });
+    vi.stubGlobal("window", {
+      navigator: { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0" },
+    });
+    const caps = await getHardwareTransportCapabilities();
+    expect(caps.environment).toBe("desktop-browser");
+    expect(caps.bluetooth.ble.available).toBe(true);
+    expect(caps.bluetooth.ble.transportReady).toBe(false);
+    expect(caps.bluetooth.classic.available).toBe(false);
+    expect(caps.bluetooth.classic.transportReady).toBe(false);
+    expect(caps.usb.webUsb.available).toBe(true);
+    expect(caps.usb.webUsb.transportReady).toBe(false);
+    expect(caps.network.electron.transportReady).toBe(false);
+    expect(caps.network.androidNative.transportReady).toBe(false);
+    expect(caps.network.browserDirect.available).toBe(false);
+  });
+
+  it("keeps Android native Classic as a ready printer transport", () => {
+    const result = selectPrinterTransport(
+      profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+      caps({
+        environment: "android-native",
+        bluetooth: {
+          classic: slot(true, true, "ready", true),
+          ble: slot(true, true, "ready", true),
+          native: true,
+          webBluetooth: false,
+        },
+      }),
+    );
+    expect(result).toEqual({ ok: true, transport: "native-classic" });
+  });
+});

@@ -827,8 +827,12 @@ export type PrinterProfile = {
   vendorHint?: PrinterVendorHint;
   networkHost?: string | null;
   networkPort?: number | null;
-  /** Opaque id from WebUSB / Web Bluetooth pairing session. */
+  /** Opaque native/Web Bluetooth device id (e.g. classic:AA:BB:… or ble:…). */
   pairedDeviceKey?: string | null;
+  /** Android native radio used with pairedDeviceKey. */
+  bluetoothTransport?: "classic" | "ble" | null;
+  /** Last known Bluetooth display name (local only). */
+  pairedDeviceName?: string | null;
   isEnabled: boolean;
   lastSeenAt?: string | null;
   lastError?: string | null;

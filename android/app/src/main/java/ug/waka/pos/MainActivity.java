@@ -11,6 +11,8 @@ public class MainActivity extends BridgeActivity {
     SplashScreen.installSplashScreen(this);
     registerPlugin(WakaMlkitOcrPlugin.class);
     registerPlugin(WakaAppUpdatePlugin.class);
+    registerPlugin(WakaBluetoothPrinterPlugin.class);
+    registerPlugin(WakaNetworkPrinterPlugin.class);
     // Android 15: enableEdgeToEdge() replaces WindowCompat.setDecorFitsSystemWindows.
     // Capacitor SystemBars + CSS env(safe-area-inset-*) still own inset handling.
     EdgeToEdge.enable(this);
