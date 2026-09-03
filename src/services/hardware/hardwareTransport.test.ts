@@ -4,9 +4,11 @@ import {
   CLASSIC_IN_BROWSER_ERROR,
   IOS_BLUETOOTH_ERROR,
   NETWORK_NEEDS_BRIDGE_ERROR,
+  canDeliverEscPosWithoutChooser,
   detectHardwareEnvironment,
   getHardwareTransportCapabilities,
   selectPrinterTransport,
+  summarizeCapabilityState,
   type HardwareTransportCapabilities,
   type TransportSlot,
 } from "./hardwareTransport";
@@ -229,6 +231,63 @@ describe("API present vs printer transport ready", () => {
     expect(caps.network.electron.transportReady).toBe(false);
     expect(caps.network.androidNative.transportReady).toBe(false);
     expect(caps.network.browserDirect.available).toBe(false);
+  });
+
+  it("does not treat Web Bluetooth API presence as a ready ESC/POS path", () => {
+    const summary = summarizeCapabilityState(
+      caps({
+        bluetooth: {
+          classic: slot(false, false, CLASSIC_IN_BROWSER_ERROR),
+          ble: slot(true, true, "Web Bluetooth API is present", false),
+          native: false,
+          webBluetooth: true,
+        },
+      }),
+    );
+    expect(summary.state).toBe("PARTIAL");
+    expect(summary.bluetoothAvailable).toBe(false);
+    expect(summary.escPosAvailable).toBe(false);
+  });
+
+  it("does not enqueue-ready Classic or Web BLE in a desktop browser", () => {
+    const browser = caps({
+      environment: "desktop-browser",
+      bluetooth: {
+        classic: slot(false, false, CLASSIC_IN_BROWSER_ERROR),
+        ble: slot(true, true, "api", false),
+        native: false,
+        webBluetooth: true,
+      },
+    });
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+        browser,
+      ),
+    ).toBe(false);
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({ pairedDeviceKey: "ble:web-id", bluetoothTransport: "ble" }),
+        browser,
+      ),
+    ).toBe(false);
+  });
+
+  it("allows Android native Classic without a browser chooser", () => {
+    expect(
+      canDeliverEscPosWithoutChooser(
+        profile({ pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF", bluetoothTransport: "classic" }),
+        caps({
+          environment: "android-native",
+          bluetooth: {
+            classic: slot(true, true, "ready", true),
+            ble: slot(true, true, "ready", true),
+            native: true,
+            webBluetooth: false,
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("keeps Android native Classic as a ready printer transport", () => {

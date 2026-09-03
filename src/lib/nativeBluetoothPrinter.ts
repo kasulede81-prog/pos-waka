@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { withTimeout } from "./promiseTimeout";
 import { mapNativeBluetoothPrinterError } from "./bluetoothPrinterHeuristics";
 
 export type NativeBluetoothTransport = "classic" | "ble";
@@ -154,11 +155,18 @@ export async function printEscPosNative(
   mode?: NativeBluetoothTransport,
 ): Promise<{ ok: true } | { ok: false; error: string; code?: string }> {
   try {
-    const result = await WakaBluetoothPrinter.printEscPos({
-      deviceId,
-      data: Array.from(bytes),
-      mode,
-    });
+    const result = await withTimeout(
+      WakaBluetoothPrinter.printEscPos({
+        deviceId,
+        data: Array.from(bytes),
+        mode,
+      }),
+      12_000,
+      null,
+    );
+    if (!result) {
+      return { ok: false, error: "Printer did not respond. Check that it is on and in range." };
+    }
     if (result.ok === false) {
       return { ok: false, error: "Could not connect to Mobile Printer." };
     }

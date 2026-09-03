@@ -9,7 +9,8 @@
  * After connect, only GATT services declared in optionalServices are visible
  * (Web Bluetooth security). Unknown services cannot be enumerated.
  */
-import { bluetoothDeviceLooksLikePrinter } from "./bluetoothPrinterHeuristics";
+import { bluetoothDeviceLooksLikePrinter, parseBluetoothDeviceId } from "./bluetoothPrinterHeuristics";
+import { withTimeout } from "./promiseTimeout";
 
 export const WEB_BLE_SERVICES = [0xffe0, 0x18f0] as const;
 export const WEB_BLE_CHARS = [0xffe1, 0x2af1] as const;
@@ -21,6 +22,8 @@ export const CLASSIC_CHOOSER_HINT =
   "If your printer is a Bluetooth Classic/SPP model, it will not appear in Chrome's Bluetooth chooser.";
 
 const WEB_BLE_CHUNK = 20;
+const WEB_BLE_CONNECT_TIMEOUT_MS = 8000;
+const WEB_BLE_LOOKUP_TIMEOUT_MS = 4000;
 
 type GattCharacteristic = {
   uuid: string;
@@ -75,7 +78,6 @@ export type WebBluetoothPrinterDevice = {
 };
 
 let lastWebBleDevice: BluetoothRemoteDevice | null = null;
-let lastChooserUsedAcceptAll = false;
 
 function bluetoothApi(): BluetoothApi | null {
   if (typeof navigator === "undefined" || !("bluetooth" in navigator)) return null;
@@ -88,7 +90,6 @@ export function isWebBluetoothAvailable(): boolean {
 
 export function resetWebBluetoothSessionForTests(): void {
   lastWebBleDevice = null;
-  lastChooserUsedAcceptAll = false;
 }
 
 function normalizeUuid(uuid: string): string {
@@ -241,8 +242,14 @@ async function inspectAndValidate(
     writableCharacteristic: null,
     writeType: null,
   };
-  const server = await device.gatt?.connect();
+  const connect = device.gatt?.connect();
+  const server = connect ? await withTimeout(connect, WEB_BLE_CONNECT_TIMEOUT_MS, null) : null;
   if (!server) {
+    try {
+      device.gatt?.disconnect();
+    } catch {
+      /* ignore */
+    }
     return { ok: false, error: "Could not connect to Mobile Printer.", code: "connect_failed", diagnostics: empty };
   }
   const pick = await enumerateGatt(server);
@@ -303,7 +310,6 @@ export async function requestWebBluetoothPrinter(opts?: {
     return { ok: false, error: "Bluetooth printing is not available in this browser.", code: "web_bluetooth_unavailable" };
   }
   try {
-    lastChooserUsedAcceptAll = Boolean(opts?.acceptAllBle);
     const device = await api.requestDevice(chooserOptions(opts?.acceptAllBle));
     lastWebBleDevice = device;
     const inspected = await inspectAndValidate(device);
@@ -340,18 +346,22 @@ export async function printEscPosWebBluetooth(
   if (!api) {
     return { ok: false, error: "Bluetooth printing is not available in this browser.", code: "web_bluetooth_unavailable" };
   }
-  if (savedDeviceId?.trim()) {
-    try {
-      const saved = await resolveSavedDevice(savedDeviceId);
-      if (saved) return writeToDevice(saved, bytes);
-    } catch {
-      /* chooser fallback */
-    }
+  if (parseBluetoothDeviceId(savedDeviceId)?.transport === "classic") {
+    return { ok: false, error: CLASSIC_CHROME_CHOOSER_ERROR, code: "classic_browser_unsupported" };
+  }
+  if (!savedDeviceId?.trim()) {
+    return { ok: false, error: "Select a Bluetooth printer in Hardware settings.", code: "no_device" };
   }
   try {
-    const device = await api.requestDevice(chooserOptions(lastChooserUsedAcceptAll));
-    lastWebBleDevice = device;
-    return writeToDevice(device, bytes);
+    const saved = await withTimeout(resolveSavedDevice(savedDeviceId), WEB_BLE_LOOKUP_TIMEOUT_MS, null);
+    if (!saved) {
+      return { ok: false, error: "Select a Bluetooth printer in Hardware settings.", code: "no_device" };
+    }
+    return withTimeout(writeToDevice(saved, bytes), WEB_BLE_CONNECT_TIMEOUT_MS + 4000, {
+      ok: false as const,
+      error: "Could not connect to Mobile Printer.",
+      code: "connect_failed",
+    });
   } catch (error) {
     return mapChooserError(error);
   }

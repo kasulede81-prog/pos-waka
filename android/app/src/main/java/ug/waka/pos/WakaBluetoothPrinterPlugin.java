@@ -399,7 +399,7 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
 
   @SuppressLint("MissingPermission")
   private BluetoothSocket openClassicSocket(BluetoothDevice device) throws Exception {
-    Exception last = null;
+    long deadline = System.currentTimeMillis() + CONNECT_TIMEOUT_MS;
     List<UUID> candidates = new ArrayList<>();
     candidates.add(SPP_UUID);
     ParcelUuid[] extras = device.getUuids();
@@ -409,49 +409,66 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
       }
     }
     for (UUID uuid : candidates) {
+      long remaining = deadline - System.currentTimeMillis();
+      if (remaining < 400) break;
       try {
         BluetoothSocket secure = device.createRfcommSocketToServiceRecord(uuid);
-        if (connectSocket(secure)) return secure;
-      } catch (Exception e) {
-        last = e;
-      }
+        if (connectSocket(secure, remaining)) return secure;
+      } catch (Exception ignored) {}
+      remaining = deadline - System.currentTimeMillis();
+      if (remaining < 400) break;
       try {
         BluetoothSocket insecure = device.createInsecureRfcommSocketToServiceRecord(uuid);
-        if (connectSocket(insecure)) return insecure;
-      } catch (Exception e) {
-        last = e;
-      }
+        if (connectSocket(insecure, remaining)) return insecure;
+      } catch (Exception ignored) {}
     }
-    try {
-      Method m = device.getClass().getMethod("createRfcommSocket", int.class);
-      BluetoothSocket reflected = (BluetoothSocket) m.invoke(device, 1);
-      if (reflected != null && connectSocket(reflected)) return reflected;
-    } catch (Exception e) {
-      last = e;
+    long remaining = deadline - System.currentTimeMillis();
+    if (remaining >= 400) {
+      try {
+        Method m = device.getClass().getMethod("createRfcommSocket", int.class);
+        BluetoothSocket reflected = (BluetoothSocket) m.invoke(device, 1);
+        if (reflected != null && connectSocket(reflected, remaining)) return reflected;
+      } catch (Exception ignored) {}
     }
     throw new PrinterTransportException(
-      "unsupported_device",
-      "This Bluetooth device does not expose a supported printer connection."
+      "connect_failed",
+      couldNotConnectMessage(device.getAddress())
     );
   }
 
   @SuppressLint("MissingPermission")
-  private boolean connectSocket(BluetoothSocket socket) {
+  private boolean connectSocket(BluetoothSocket socket, long timeoutMs) {
     BluetoothAdapter adapter = adapter();
     if (adapter != null) {
       try {
         adapter.cancelDiscovery();
       } catch (SecurityException ignored) {}
     }
+    Thread connector = new Thread(() -> {
+      try {
+        socket.connect();
+      } catch (IOException ignored) {}
+    }, "waka-bt-connect");
+    connector.start();
     try {
-      socket.connect();
-      return socket.isConnected();
-    } catch (IOException e) {
+      connector.join(Math.max(400L, timeoutMs));
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+    if (connector.isAlive() || !socket.isConnected()) {
       try {
         socket.close();
       } catch (IOException ignored) {}
+      if (connector.isAlive()) {
+        try {
+          connector.join(400);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
       return false;
     }
+    return true;
   }
 
   @SuppressLint("MissingPermission")

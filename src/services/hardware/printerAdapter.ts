@@ -7,6 +7,7 @@ import { buildTestEscPos, EscPosBuilder } from "../../lib/escPosBuilder";
 import { printEscPosNative } from "../../lib/nativeBluetoothPrinter";
 import { printEscPosNativeNetwork, testNativeNetworkPrinter } from "../../lib/nativeNetworkPrinter";
 import { printEscPosWebBluetooth } from "../../lib/webBluetoothPrinter";
+import { withTimeout } from "../../lib/promiseTimeout";
 import {
   getHardwareTransportCapabilities,
   selectPrinterTransport,
@@ -38,6 +39,10 @@ export type PrinterCapabilities = {
   transports: HardwareTransportCapabilities;
 };
 
+/** Hard cap so a dead printer cannot freeze the POS or Hardware Test button. */
+export const PRINT_IO_TIMEOUT_MS = 12_000;
+export const PRINTER_NO_RESPONSE_ERROR = "Printer did not respond. Check that it is on and in range.";
+
 function environmentToPlatform(environment: HardwareEnvironment): PrinterPlatform {
   if (environment === "android-native" || environment === "android-browser") return "android";
   if (environment === "ios-native" || environment === "ios-safari") return "ios";
@@ -46,31 +51,11 @@ function environmentToPlatform(environment: HardwareEnvironment): PrinterPlatfor
   return "web";
 }
 
-async function transferUsb(bytes: Uint8Array): Promise<{ ok: boolean; error?: string }> {
-  if (typeof navigator === "undefined" || !("usb" in navigator)) {
-    return { ok: false, error: "USB printing is not available in this browser." };
-  }
-  try {
-    const usb = navigator.usb as {
-      requestDevice: (opts: { filters: Array<Record<string, unknown>> }) => Promise<{
-        configuration: unknown;
-        open: () => Promise<void>;
-        selectConfiguration: (cfg: number) => Promise<void>;
-        claimInterface: (idx: number) => Promise<void>;
-        transferOut: (endpoint: number, data: Uint8Array) => Promise<void>;
-        close: () => Promise<void>;
-      }>;
-    };
-    const device = await usb.requestDevice({ filters: [] });
-    await device.open();
-    if (device.configuration == null) await device.selectConfiguration(1);
-    await device.claimInterface(0);
-    await device.transferOut(1, bytes);
-    await device.close();
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "USB thermal print failed." };
-  }
+async function transferUsb(_bytes: Uint8Array): Promise<{ ok: boolean; error?: string }> {
+  return {
+    ok: false,
+    error: "USB thermal printing is not available in this browser.",
+  };
 }
 
 async function transferNetwork(
@@ -158,6 +143,16 @@ export async function detectPrinterCapabilities(): Promise<PrinterCapabilities> 
 }
 
 export async function sendEscPosBytes(
+  profile: PrinterProfile,
+  bytes: Uint8Array,
+): Promise<{ ok: boolean; error?: string }> {
+  return withTimeout(sendEscPosBytesInner(profile, bytes), PRINT_IO_TIMEOUT_MS, {
+    ok: false,
+    error: PRINTER_NO_RESPONSE_ERROR,
+  });
+}
+
+async function sendEscPosBytesInner(
   profile: PrinterProfile,
   bytes: Uint8Array,
 ): Promise<{ ok: boolean; error?: string }> {

@@ -14,6 +14,7 @@ import { resolveDefaultReceiptPrinter } from "./printerRegistry";
 import { enqueuePrintJob } from "./printQueue";
 import { saleReportingDayKey } from "./datesUg";
 import { detectPrinterCapabilities } from "../services/hardware/printerAdapter";
+import { canDeliverEscPosWithoutChooser } from "../services/hardware/hardwareTransport";
 import type { PrinterProfile } from "../types";
 
 export type RetailEscPosEnqueueResult = {
@@ -22,11 +23,14 @@ export type RetailEscPosEnqueueResult = {
 };
 
 function transportSupportsPrinter(profile: PrinterProfile, caps: Awaited<ReturnType<typeof detectPrinterCapabilities>>): boolean {
+  if (caps.transports) {
+    return canDeliverEscPosWithoutChooser(profile, caps.transports);
+  }
   if (!caps.escPosAvailable) return false;
   if (profile.connectionType === "network") return caps.networkAvailable;
-  if (profile.connectionType === "bluetooth") return caps.bluetoothAvailable;
+  if (profile.connectionType === "bluetooth") return Boolean(caps.nativeBluetoothPrinter);
   if (profile.connectionType === "usb" || profile.connectionType === "builtin") return caps.usbAvailable;
-  return caps.escPosAvailable;
+  return false;
 }
 
 function buildDisplayFromSaleContext(ctx: SaleReceiptContext) {

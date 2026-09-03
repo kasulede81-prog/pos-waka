@@ -183,7 +183,7 @@ export function selectPrinterTransport(
   }
 
   if (profile.connectionType === "usb" || profile.connectionType === "builtin") {
-    if (caps.usb.webUsb.available) return { ok: true, transport: "web-usb" };
+    if (caps.usb.webUsb.transportReady) return { ok: true, transport: "web-usb" };
     return { ok: false, error: caps.usb.webUsb.reason, code: "usb_unavailable" };
   }
 
@@ -217,10 +217,25 @@ export function selectPrinterTransport(
 
   if (caps.network.electron.available) return { ok: true, transport: "electron-network" };
   if (caps.network.androidNative.available) return { ok: true, transport: "android-network" };
-  if (caps.usb.webUsb.available) return { ok: true, transport: "web-usb" };
+  if (caps.usb.webUsb.transportReady) return { ok: true, transport: "web-usb" };
   if (caps.bluetooth.native) return { ok: true, transport: "native-classic" };
   if (caps.bluetooth.webBluetooth) return { ok: true, transport: "web-bluetooth" };
   return { ok: false, error: "No printer transport is available on this device.", code: "no_transport" };
+}
+
+/** True when ESC/POS can be sent without a browser chooser that freezes the POS. */
+export function canDeliverEscPosWithoutChooser(
+  profile: PrinterProfile,
+  caps: HardwareTransportCapabilities,
+): boolean {
+  const selected = selectPrinterTransport(profile, caps);
+  if (!selected.ok) return false;
+  return (
+    selected.transport === "native-classic" ||
+    selected.transport === "native-ble" ||
+    selected.transport === "electron-network" ||
+    selected.transport === "android-network"
+  );
 }
 
 export function summarizeCapabilityState(caps: HardwareTransportCapabilities): {
@@ -299,8 +314,8 @@ export function summarizeCapabilityState(caps: HardwareTransportCapabilities): {
       state: "PARTIAL",
       stateReason:
         "Web Bluetooth is BLE/GATT only and cannot talk to Classic SPP printers. Use a BLE printer, the Android app, or a LAN printer in the desktop app.",
-      escPosAvailable: true,
-      bluetoothAvailable: true,
+      escPosAvailable: false,
+      bluetoothAvailable,
       usbAvailable,
       networkAvailable,
       nativeBluetoothPrinter: false,

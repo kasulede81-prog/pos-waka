@@ -42,7 +42,8 @@ import {
 } from "../lib/restaurantReceiptPrint";
 import { dateKeyKampala, saleReportingDayKey } from "../lib/datesUg";
 import { pulseDrawer, pulseDrawerOnPrinter } from "../services/hardware/cashDrawerAdapter";
-import { testPrintProfile } from "../services/hardware/printerAdapter";
+import { detectPrinterCapabilities, testPrintProfile } from "../services/hardware/printerAdapter";
+import { canDeliverEscPosWithoutChooser } from "../services/hardware/hardwareTransport";
 import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
 import { computeRestaurantBillTotals, billDraftFromSale } from "../lib/restaurantBilling";
 import { readUiLanguageCacheSync } from "../lib/uiLanguage";
@@ -426,32 +427,35 @@ export function createHardwarePrintStoreActions(deps: Deps) {
         splitIndex: context?.splitIndex ?? null,
       };
       if (printer) {
-        const bytes =
-          receiptKind === "void" || context?.voidReceipt
-            ? buildVoidRestaurantReceiptEscPos(ctx, printer.paperWidth)
-            : buildRestaurantReceiptEscPos(ctx, printer.paperWidth);
-        const prefs = await enqueuePrintJob(state.preferences, {
-          kind: "receipt",
-          printerId: printer.id,
-          saleId,
-          tableSessionId: sale.tableSessionId ?? null,
-          tableLabel: ctx.tableLabel,
-          businessDate: ctx.businessDate,
-          payloadSummary:
-            receiptKind === "void"
-              ? `VOID ${restaurantReceiptSummary(ctx)}`
-              : receiptKind === "guest"
-                ? `Guest ${restaurantReceiptSummary(ctx)}`
-                : restaurantReceiptSummary(ctx),
-          bytes,
-        });
-        set({ preferences: prefs });
-        flushPendingPersist();
-        scheduleQueue();
-        if (context?.reprint || receiptKind === "reprint") {
-          pushAudit("receipt_reprint", `Reprint ${restaurantReceiptSummary(ctx)}`, { saleId });
+        const caps = await detectPrinterCapabilities();
+        if (canDeliverEscPosWithoutChooser(printer, caps.transports)) {
+          const bytes =
+            receiptKind === "void" || context?.voidReceipt
+              ? buildVoidRestaurantReceiptEscPos(ctx, printer.paperWidth)
+              : buildRestaurantReceiptEscPos(ctx, printer.paperWidth);
+          const prefs = await enqueuePrintJob(state.preferences, {
+            kind: "receipt",
+            printerId: printer.id,
+            saleId,
+            tableSessionId: sale.tableSessionId ?? null,
+            tableLabel: ctx.tableLabel,
+            businessDate: ctx.businessDate,
+            payloadSummary:
+              receiptKind === "void"
+                ? `VOID ${restaurantReceiptSummary(ctx)}`
+                : receiptKind === "guest"
+                  ? `Guest ${restaurantReceiptSummary(ctx)}`
+                  : restaurantReceiptSummary(ctx),
+            bytes,
+          });
+          set({ preferences: prefs });
+          flushPendingPersist();
+          scheduleQueue();
+          if (context?.reprint || receiptKind === "reprint") {
+            pushAudit("receipt_reprint", `Reprint ${restaurantReceiptSummary(ctx)}`, { saleId });
+          }
+          return { ok: true as const, mode: "escpos" as const };
         }
-        return { ok: true as const, mode: "escpos" as const };
       }
       const { printReceiptWithFallback } = await import("../lib/receiptPrint");
       const text = buildRestaurantReceiptLines(ctx).join("\n");

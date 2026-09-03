@@ -133,6 +133,26 @@ describe("webBluetoothPrinter", () => {
     expect(requestDevice).toHaveBeenCalledTimes(1);
   });
 
+  it("does not open a Bluetooth chooser when printing without a saved session", async () => {
+    const requestDevice = vi.fn();
+    mockBluetooth(requestDevice, vi.fn(async () => []));
+    const result = await printEscPosWebBluetooth(new Uint8Array([1]), "ble:missing");
+    expect(result.ok).toBe(false);
+    expect(requestDevice).not.toHaveBeenCalled();
+  });
+
+  it("rejects Classic device ids without opening Web Bluetooth", async () => {
+    const requestDevice = vi.fn();
+    mockBluetooth(requestDevice);
+    const result = await printEscPosWebBluetooth(new Uint8Array([1]), "classic:AA:BB:CC:DD:EE:FF");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("classic_browser_unsupported");
+      expect(result.error).toContain(CLASSIC_CHROME_CHOOSER_ERROR);
+    }
+    expect(requestDevice).not.toHaveBeenCalled();
+  });
+
   it("reports no writable characteristic instead of fake success", async () => {
     mockBluetooth(
       vi.fn(async () => ({

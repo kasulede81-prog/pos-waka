@@ -139,6 +139,23 @@ function withReceiptPrinter(paperWidth: "58mm" | "80mm" = "80mm"): ShopPreferenc
   return prefs;
 }
 
+function withBluetoothPrinter(): ShopPreferences {
+  const prefs = withReceiptPrinter();
+  prefs.hospitalityHardware!.printers[0] = {
+    id: "printer-bt-1",
+    name: "Mobile Printer",
+    connectionType: "bluetooth",
+    paperWidth: "58mm",
+    stationRoles: ["receipt"],
+    isDefaultReceipt: true,
+    isEnabled: true,
+    pairedDeviceKey: "classic:AA:BB:CC:DD:EE:FF",
+    bluetoothTransport: "classic",
+    pairedDeviceName: "Mobile Printer",
+  };
+  return prefs;
+}
+
 describe("Phase 1B retail ESC/POS wiring", () => {
   beforeEach(() => {
     persistMock.mockReset();
@@ -210,6 +227,43 @@ describe("Phase 1B retail ESC/POS wiring", () => {
 
   it("printSaleReceipt keeps HTML path when thermal cannot enqueue", async () => {
     prefsRef = createDefaultPreferences();
+    const result = await printSaleReceipt(saleCtx());
+    expect(result.ok).toBe(true);
+    expect(persistMock).not.toHaveBeenCalled();
+    expect(printHtmlDocument).toHaveBeenCalled();
+  });
+
+  it("does not enqueue Classic Bluetooth from a browser so HTML print can run", async () => {
+    prefsRef = withBluetoothPrinter();
+    detectCapsMock.mockResolvedValue({
+      bluetoothAvailable: true,
+      usbAvailable: false,
+      networkAvailable: false,
+      sunmiBuiltIn: false,
+      escPosAvailable: true,
+      nativeBluetoothPrinter: false,
+      platform: "web",
+      state: "PARTIAL",
+      stateReason: "Web Bluetooth only",
+      transports: {
+        environment: "desktop-browser",
+        bluetooth: {
+          classic: { supported: false, available: false, transportReady: false, reason: "classic" },
+          ble: { supported: true, available: true, transportReady: false, reason: "api" },
+          native: false,
+          webBluetooth: true,
+        },
+        usb: {
+          native: { supported: false, available: false, transportReady: false, reason: "no" },
+          webUsb: { supported: true, available: true, transportReady: false, reason: "api" },
+        },
+        network: {
+          electron: { supported: false, available: false, transportReady: false, reason: "no" },
+          androidNative: { supported: false, available: false, transportReady: false, reason: "no" },
+          browserDirect: { supported: false, available: false, transportReady: false, reason: "no" },
+        },
+      },
+    });
     const result = await printSaleReceipt(saleCtx());
     expect(result.ok).toBe(true);
     expect(persistMock).not.toHaveBeenCalled();
