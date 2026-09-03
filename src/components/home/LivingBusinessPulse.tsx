@@ -16,6 +16,7 @@ import type { HomeHealthItem } from "../../hooks/useHomeBusinessHealthItems";
 import { HomeLiveValue } from "./HomeLiveValue";
 import { HomeLiveStatusRail } from "./HomeLiveStatusRail";
 import { HomePulseSparkline } from "./HomePulseSparkline";
+import { HomeAskWakaShortcut } from "./HomeAskWakaShortcut";
 
 type Props = {
   lang: Language;
@@ -137,6 +138,7 @@ export function LivingBusinessPulse({
                   <HomeLiveValue value={sellStat.value} className="tabular-nums text-foreground" />
                 </p>
               ) : null}
+              <HomeAskWakaShortcut lang={lang} />
             </div>
             {supportingKpis.length > 0 ? (
               <ul className="home-living-pulse__kpis">
@@ -217,6 +219,7 @@ export function LivingBusinessPulse({
               {showSpark && sparkMode ? (
                 <HomePulseSparkline className="mt-2 max-w-xs" lang={lang} points={weekTrend} mode={sparkMode} />
               ) : null}
+              <HomeAskWakaShortcut lang={lang} density="compact" />
             </div>
             {onSell ? (
               <button

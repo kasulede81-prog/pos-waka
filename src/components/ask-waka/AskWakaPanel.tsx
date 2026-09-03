@@ -4,6 +4,7 @@ import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { formatAiErrorMessage } from "../../lib/ai/aiErrors";
 import { formatAskWakaToolLabels } from "../../lib/ai/askWakaGuardrails";
+import { formatAskWakaSourceCitation } from "../../lib/ai/askWakaKnowledge";
 import { useAskWaka } from "../../hooks/useAskWaka";
 import { WakaButton } from "../ui/wakaPrimitives";
 import { enterpriseTypeClass } from "../../lib/enterpriseTypography";
@@ -11,7 +12,7 @@ import { Caption } from "../enterprise/EnterpriseTypography";
 
 const SUGGESTION_KEYS = [
   "askWakaSuggestTodaySales",
-  "askWakaSuggestTopProducts",
+  "askWakaSuggestWhatIsWaka",
   "askWakaSuggestLowStock",
   "askWakaSuggestExpenses",
 ] as const;
@@ -129,6 +130,16 @@ export function AskWakaPanel({ lang, embedded = false }: Props) {
             }
           >
             <p className="whitespace-pre-wrap break-words">{m.content}</p>
+            {m.role === "assistant" && !m.error && m.sources && m.sources.length > 0 ? (
+              <Caption className="mt-2 normal-case opacity-80">
+                {t(lang, "askWakaSourcesHeading")}
+                {m.sources.slice(0, 6).map((s, i) => (
+                  <span key={s.chunk_id ?? `${s.type}-${i}`} className="block font-semibold">
+                    {formatAskWakaSourceCitation(s)}
+                  </span>
+                ))}
+              </Caption>
+            ) : null}
             {m.role === "assistant" && !m.error && (m.data_as_of || (m.tools_used && m.tools_used.length > 0)) ? (
               <Caption className="mt-2 normal-case opacity-80">
                 {m.data_as_of

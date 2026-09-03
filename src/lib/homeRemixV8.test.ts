@@ -21,6 +21,7 @@ describe("HOME V8 console remix", () => {
     expect(pulse).toContain("home-living-pulse--console");
     expect(pulse).toContain("home-living-pulse__atmosphere");
     expect(pulse).toContain("home-new-sale-cta");
+    expect(pulse).toContain("HomeAskWakaShortcut");
     expect(pulse).toContain("onClick={onSell}");
     expect(pulse).toContain("enterpriseMotion.press");
     expect(pulse).not.toContain("setTimeout");

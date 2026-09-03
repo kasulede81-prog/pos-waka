@@ -15,17 +15,37 @@ import {
   type AskWakaToolName,
 } from "../_shared/askWakaTools.ts";
 import {
-  ASK_WAKA_OUT_OF_SCOPE,
   ASK_WAKA_READ_ONLY_REFUSAL,
   ASK_WAKA_SAFE_TOOL_FAILURE,
   ASK_WAKA_SQL_REFUSAL,
   askWakaObservabilityTags,
-  classifyAskWakaQuestion,
   defaultArgsForAskWakaTool,
   ensureAskWakaDataAsOfInAnswer,
   guardAskWakaFinalAnswer,
   quantitativeToolsSatisfied,
 } from "../_shared/askWakaGuardrails.ts";
+import { routeAskWakaSources } from "../_shared/askWakaSourceRouter.ts";
+import {
+  ASK_WAKA_KNOWLEDGE_NOT_FOUND,
+  buildPosToolSourceRecords,
+  mergeAskWakaSources,
+  retrieveWakaKnowledge,
+  shouldShortCircuitKnowledgeNotFound,
+  type AskWakaSourceRecord,
+} from "../_shared/askWakaKnowledge.ts";
+import {
+  ASK_WAKA_PATH_REFUSAL,
+  ASK_WAKA_SECRET_REFUSAL,
+  ASK_WAKA_SOURCE_DUMP_REFUSAL,
+  ensureDisclosureLead,
+  isAskWakaPathProbe,
+  isAskWakaSecretProbe,
+  isAskWakaSourceDumpRequest,
+  looksLikeRawSourceDump,
+  scrubInternalPathsFromAnswer,
+  toClientSafeSources,
+} from "../_shared/askWakaCodeIntel.ts";
+import { WAKA_KNOWLEDGE_ARTIFACT } from "../_shared/wakaKnowledgeArtifactLoad.ts";
 import {
   createLlmChatProvider,
   type LlmChatMessage,
@@ -72,7 +92,8 @@ Deno.serve(async (req) => {
     return aiFailure(messageCheck.reason, messageCheck.code, 400);
   }
 
-  const classification = classifyAskWakaQuestion(messageCheck.message);
+  const route = routeAskWakaSources(messageCheck.message);
+  const classification = route.posClassification;
 
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
@@ -141,19 +162,22 @@ Deno.serve(async (req) => {
   let tokensIn = 0;
   let tokensOut = 0;
   let toolsFailed = false;
+  let sources: AskWakaSourceRecord[] = [];
 
-  // Short-circuit write / SQL / out-of-scope without tool calls or LLM spend.
-  if (
-    classification.kind === "write_request" ||
-    classification.kind === "sql_request" ||
-    classification.kind === "out_of_scope"
-  ) {
+  const knowledge = route.needsKnowledge
+    ? retrieveWakaKnowledge(messageCheck.message, route.lanes, WAKA_KNOWLEDGE_ARTIFACT, {
+        nowIso: dataAsOf,
+      })
+    : null;
+  if (knowledge) sources = knowledge.sources;
+
+  // Short-circuit write / SQL without tool calls or LLM spend.
+  // Out-of-scope jokes are no longer auto-refused — they route as GENERAL.
+  if (route.refuse) {
     const canned =
-      classification.kind === "write_request"
+      route.actionKind === "write"
         ? ASK_WAKA_READ_ONLY_REFUSAL
-        : classification.kind === "sql_request"
-          ? ASK_WAKA_SQL_REFUSAL
-          : ASK_WAKA_OUT_OF_SCOPE;
+        : ASK_WAKA_SQL_REFUSAL;
 
     await logAiRequest(admin, {
       shopId,
@@ -177,6 +201,69 @@ Deno.serve(async (req) => {
     return aiSuccess({
       answer: canned,
       tools_used: [],
+      sources: [],
+      data_as_of: dataAsOf,
+      conversation_id: body.conversation_id ?? null,
+      usage: { tokens_in: 0, tokens_out: 0, latency_ms: Date.now() - started },
+    });
+  }
+
+  if (isAskWakaSecretProbe(messageCheck.message)) {
+    await logAiRequest(admin, {
+      shopId,
+      userId,
+      feature: FEATURE,
+      kind: KIND,
+      tokensIn: 0,
+      tokensOut: 0,
+      cacheHit: true,
+      success: true,
+      latencyMs: Date.now() - started,
+      provider: guard.settings.provider,
+      errorReason: askWakaObservabilityTags({
+        classification,
+        toolsUsed: [],
+        toolsFailed: false,
+        blockedReason: "secret_probe",
+      }),
+    });
+    return aiSuccess({
+      answer: ASK_WAKA_SECRET_REFUSAL,
+      tools_used: [],
+      sources: [],
+      data_as_of: dataAsOf,
+      conversation_id: body.conversation_id ?? null,
+      usage: { tokens_in: 0, tokens_out: 0, latency_ms: Date.now() - started },
+    });
+  }
+
+  if (
+    knowledge &&
+    shouldShortCircuitKnowledgeNotFound(route.lanes, knowledge.found)
+  ) {
+    await logAiRequest(admin, {
+      shopId,
+      userId,
+      feature: FEATURE,
+      kind: KIND,
+      tokensIn: 0,
+      tokensOut: 0,
+      cacheHit: true,
+      success: true,
+      latencyMs: Date.now() - started,
+      provider: guard.settings.provider,
+      errorReason: askWakaObservabilityTags({
+        classification,
+        toolsUsed: [],
+        toolsFailed: false,
+        blockedReason: "knowledge_not_found",
+      }),
+    });
+
+    return aiSuccess({
+      answer: ASK_WAKA_KNOWLEDGE_NOT_FOUND,
+      tools_used: [],
+      sources: [],
       data_as_of: dataAsOf,
       conversation_id: body.conversation_id ?? null,
       usage: { tokens_in: 0, tokens_out: 0, latency_ms: Date.now() - started },
@@ -211,7 +298,7 @@ Deno.serve(async (req) => {
   }
 
   const chatModel = llmModelFromSettings(guard.settings);
-  const offerTools = classification.kind === "quantitative" || classification.kind === "general_business";
+  const offerTools = route.offerPosTools;
   const messages: LlmChatMessage[] = [
     { role: "system", content: ASK_WAKA_SYSTEM_PROMPT },
     {
@@ -223,6 +310,9 @@ Deno.serve(async (req) => {
         dataAsOf,
         questionKind: classification.kind,
         requiredTools: classification.requiredTools,
+        lanes: route.lanes,
+        retrievedKnowledge: knowledge?.context ?? "",
+        knowledgeFound: knowledge?.found === true,
       }),
     },
   ];
@@ -289,6 +379,7 @@ Deno.serve(async (req) => {
 
     // Force-execute required tools when the model skipped them for a quantitative ask.
     if (
+      route.offerPosTools &&
       classification.kind === "quantitative" &&
       !quantitativeToolsSatisfied(classification, toolsUsed)
     ) {
@@ -325,6 +416,7 @@ Deno.serve(async (req) => {
             tokensOut += outT;
           } },
           preferOllama: isOllamaProvider(provider.name),
+          hasKnowledge: Boolean(knowledge?.found),
         });
       } else {
         finalAnswer = ASK_WAKA_SAFE_TOOL_FAILURE;
@@ -337,6 +429,7 @@ Deno.serve(async (req) => {
         } },
         preferOllama: isOllamaProvider(provider.name),
         toolsFailed,
+        hasKnowledge: Boolean(knowledge?.found),
       });
     }
 
@@ -386,6 +479,22 @@ Deno.serve(async (req) => {
     };
   }
 
+  sources = toClientSafeSources(
+    mergeAskWakaSources(knowledge?.sources ?? [], buildPosToolSourceRecords({
+      toolsUsed: [...new Set(toolsUsed)],
+      dataAsOf,
+    })),
+  ) as unknown as AskWakaSourceRecord[];
+
+  let answer = guarded.answer;
+  if (isAskWakaSourceDumpRequest(messageCheck.message) || looksLikeRawSourceDump(answer)) {
+    answer = ensureDisclosureLead(scrubInternalPathsFromAnswer(answer), ASK_WAKA_SOURCE_DUMP_REFUSAL);
+  } else if (isAskWakaPathProbe(messageCheck.message)) {
+    answer = ensureDisclosureLead(scrubInternalPathsFromAnswer(answer), ASK_WAKA_PATH_REFUSAL);
+  } else {
+    answer = scrubInternalPathsFromAnswer(answer);
+  }
+
   await logAiRequest(admin, {
     shopId,
     userId,
@@ -406,8 +515,9 @@ Deno.serve(async (req) => {
   });
 
   return aiSuccess({
-    answer: guarded.answer,
+    answer,
     tools_used: [...new Set(toolsUsed)],
+    sources,
     data_as_of: dataAsOf,
     conversation_id: body.conversation_id ?? null,
     usage: {
@@ -439,11 +549,14 @@ async function requestFinalAnswer(
     tokens: { add: (inT: number, outT: number) => void };
     preferOllama: boolean;
     toolsFailed?: boolean;
+    hasKnowledge?: boolean;
   },
 ): Promise<string | null> {
   const baseInstruction = opts.toolsFailed
-    ? "Using only the tool results above, write the final concise business answer. If tools failed, say the information could not be retrieved. Do not invent numbers. Do not mention internal tool names."
-    : "Using only the tool results above, write the final concise business answer. State the period. Use UGX without unnecessary decimals. If a figure is zero, say zero clearly. Separate FACT from RECOMMENDATION if you give advice. Do not invent numbers. Do not mention internal tool names.";
+    ? "Using only the tool results and retrieved WAKA knowledge above, write the final concise answer. If POS tools failed, say the shop figures could not be retrieved. Do not invent numbers, files, or commits. Do not mention internal tool names."
+    : opts.hasKnowledge
+      ? "Write the final concise answer using retrieved WAKA knowledge and any POS tool results. Prefer current code over old docs for how WAKA works now. Do not invent numbers, files, commits, or milestones. Separate FACT from RECOMMENDATION. Do not mention internal tool names."
+      : "Using only the tool results above, write the final concise business answer. State the period. Use UGX without unnecessary decimals. If a figure is zero, say zero clearly. Separate FACT from RECOMMENDATION if you give advice. Do not invent numbers. Do not mention internal tool names.";
 
   const instruction = opts.preferOllama
     ? `${baseInstruction}\n\n${OLLAMA_FINAL_ANSWER_INSTRUCTION}`

@@ -50,6 +50,7 @@
     "verify:transactional-sync": "node scripts/verify-transactional-sync.mjs",
     "verify:multi-device": "node scripts/multi-device-consistency.mjs",
     "verify:hospitality-concurrency": "vitest run src/lib/pendingSaleMerge.test.ts",
+    "knowledge:waka": "node scripts/generate-waka-knowledge.mjs",
     "test": "vitest run",
     "design-system:check": "node scripts/design-system-enforcement.mjs",
     "check:app-versions": "node scripts/check-app-version-alignment.mjs",

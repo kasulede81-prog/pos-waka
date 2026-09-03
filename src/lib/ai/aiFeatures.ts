@@ -93,7 +93,7 @@ export const AI_FEATURES: Record<AiFeatureName, AiFeatureMeta> = {
     section: "business_qa",
     edgeFunction: "ai-ask-waka",
     deployed: true,
-    description: "Read-only AI business assistant for sales, inventory, expenses, and customers.",
+    description: "WAKA AI: project knowledge plus read-only shop reports.",
   },
 };
 

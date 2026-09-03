@@ -1,8 +1,11 @@
 import { invokeSupabaseEdgeFunction } from "../supabaseEdgeInvoke";
 import { normalizeAiErrorCode } from "./aiErrors";
+import type { AskWakaSourceRecord } from "./askWakaKnowledge";
 import { parseAiEdgeFailure } from "./parseAiEdgeResponse";
 
 export type AskWakaLocale = "en" | "lg";
+
+export type { AskWakaSourceRecord };
 
 export type AskWakaUsage = {
   tokens_in: number;
@@ -14,6 +17,7 @@ export type AskWakaSuccess = {
   ok: true;
   answer: string;
   tools_used: string[];
+  sources: AskWakaSourceRecord[];
   data_as_of: string | null;
   conversation_id: string | null;
   usage: AskWakaUsage | null;
@@ -36,6 +40,7 @@ type EdgeResponse = {
   message?: string;
   answer?: unknown;
   tools_used?: unknown;
+  sources?: unknown;
   data_as_of?: unknown;
   conversation_id?: unknown;
   usage?: unknown;
@@ -63,6 +68,29 @@ function parseToolsUsed(raw: unknown): string[] {
     .map((t) => String(t ?? "").trim())
     .filter(Boolean)
     .slice(0, 32);
+}
+
+const SOURCE_TYPES = new Set(["doc", "code", "git", "test", "milestone", "pos_tool"]);
+
+function parseSources(raw: unknown): AskWakaSourceRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AskWakaSourceRecord[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const s = item as Record<string, unknown>;
+    const type = String(s.type ?? "");
+    if (!SOURCE_TYPES.has(type)) continue;
+    const label = typeof s.label === "string" && s.label.trim() ? s.label.trim() : "";
+    const title = (label || String(s.title ?? "").trim()).slice(0, 160);
+    if (!title) continue;
+    const rec: AskWakaSourceRecord = { type: type as AskWakaSourceRecord["type"], title };
+    if (typeof s.date === "string" && s.date) rec.date = s.date.slice(0, 40);
+    if (typeof s.status === "string" && s.status) rec.status = s.status as AskWakaSourceRecord["status"];
+    if (typeof s.chunk_id === "string" && s.chunk_id) rec.chunk_id = s.chunk_id.slice(0, 120);
+    out.push(rec);
+    if (out.length >= 8) break;
+  }
+  return out;
 }
 
 /**
@@ -115,6 +143,7 @@ export async function askWaka(params: {
     ok: true,
     answer,
     tools_used: parseToolsUsed(data.tools_used),
+    sources: parseSources(data.sources),
     data_as_of: typeof data.data_as_of === "string" && data.data_as_of ? data.data_as_of : null,
     conversation_id:
       typeof data.conversation_id === "string" && data.conversation_id

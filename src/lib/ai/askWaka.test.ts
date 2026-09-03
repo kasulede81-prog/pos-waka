@@ -55,6 +55,7 @@ describe("askWaka", () => {
       ok: true,
       answer: "Today sales: UGX 1000",
       tools_used: ["get_today_sales"],
+      sources: [],
       data_as_of: "2026-08-12T09:00:00.000Z",
       conversation_id: "c1",
       usage: { tokens_in: 10, tokens_out: 5, latency_ms: 100 },

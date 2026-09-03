@@ -17,6 +17,7 @@ import {
   homeGreetingKey,
 } from "../../lib/homeMobileComposition";
 import { HomeLiveValue } from "./HomeLiveValue";
+import { HomeAskWakaShortcut } from "./HomeAskWakaShortcut";
 import { MobileHomeStatusStrip } from "./MobileHomeStatusStrip";
 import { MobileHomeLiveEngine } from "./MobileHomeLiveEngine";
 import { MobileHomeAdminList } from "./MobileHomeAdminList";
@@ -93,6 +94,7 @@ export function MobileHomeCockpit({
           <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "builderHomeHeroSub")}</p>
         )}
         {txKpi ? <p className="mt-1 text-sm font-semibold text-muted-foreground">{txKpi.value}</p> : null}
+        <HomeAskWakaShortcut lang={lang} density="compact" />
       </section>
 
       {onSell ? (

@@ -54,6 +54,7 @@ describe("HOME V8.1 mobile cockpit", () => {
   it("uses a dedicated mobile presentation with no new animation libraries", () => {
     const cockpit = readSrc("../components/home/MobileHomeCockpit.tsx");
     expect(cockpit).toContain("home-mobile-new-sale");
+    expect(cockpit).toContain("HomeAskWakaShortcut");
     expect(cockpit).toContain("onClick={onSell}");
     expect(cockpit).toContain("enterpriseMotion.press");
     expect(cockpit).not.toContain("from \"three\"");
