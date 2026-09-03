@@ -211,5 +211,117 @@ describe("nativeBluetoothPrinter platform gate", () => {
     expect(payload.data[0]).toBe(0x1b);
     expect(payload.data[1]).toBe(0x40);
     expect(payload.data.every((n) => n >= 0 && n <= 255)).toBe(true);
+    const { formatClassicSppDiagnostic } = await import("./nativeBluetoothPrinter");
+    const panel = formatClassicSppDiagnostic({
+      ok: true,
+      deviceName: "Mobile Printer",
+      address: "AA:BB:CC:DD:EE:FF",
+      connectionSucceeded: true,
+      writeSucceeded: true,
+      flushSucceeded: true,
+      socketClosed: true,
+      bytesWritten: 13,
+    });
+    expect(panel).toContain("RFCOMM: SUCCESS");
+    expect(panel).toContain("Physical paper: TEST REQUIRED");
+    expect(panel).not.toContain("Receipt printed");
+  });
+
+  it("serializes two Classic jobs to the same printer", async () => {
+    isNativePlatform.mockReturnValue(true);
+    getPlatform.mockReturnValue("android");
+    const order: string[] = [];
+    printEscPos.mockImplementation(async (opts: { deviceId: string }) => {
+      order.push(`start:${opts.deviceId}`);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      order.push(`end:${opts.deviceId}`);
+      return { ok: true, bytesRequested: 1, bytesWritten: 1 };
+    });
+    const { printEscPosNative } = await import("./nativeBluetoothPrinter");
+    const bytes = new Uint8Array([0x1b]);
+    await Promise.all([
+      printEscPosNative("classic:AA:BB:CC:DD:EE:FF", bytes, "classic"),
+      printEscPosNative("classic:AA:BB:CC:DD:EE:FF", bytes, "classic"),
+    ]);
+    expect(order).toEqual([
+      "start:classic:AA:BB:CC:DD:EE:FF",
+      "end:classic:AA:BB:CC:DD:EE:FF",
+      "start:classic:AA:BB:CC:DD:EE:FF",
+      "end:classic:AA:BB:CC:DD:EE:FF",
+    ]);
+    expect(printEscPos).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows Classic jobs to different printers to overlap", async () => {
+    isNativePlatform.mockReturnValue(true);
+    getPlatform.mockReturnValue("android");
+    const order: string[] = [];
+    printEscPos.mockImplementation(async (opts: { deviceId: string }) => {
+      order.push(`start:${opts.deviceId}`);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      order.push(`end:${opts.deviceId}`);
+      return { ok: true, bytesRequested: 1, bytesWritten: 1 };
+    });
+    const { printEscPosNative } = await import("./nativeBluetoothPrinter");
+    const bytes = new Uint8Array([0x1b]);
+    await Promise.all([
+      printEscPosNative("classic:AA:BB:CC:DD:EE:FF", bytes, "classic"),
+      printEscPosNative("classic:11:22:33:44:55:66", bytes, "classic"),
+    ]);
+    expect(order[0]?.startsWith("start:")).toBe(true);
+    expect(order[1]?.startsWith("start:")).toBe(true);
+    expect(new Set(order)).toEqual(
+      new Set([
+        "start:classic:AA:BB:CC:DD:EE:FF",
+        "start:classic:11:22:33:44:55:66",
+        "end:classic:AA:BB:CC:DD:EE:FF",
+        "end:classic:11:22:33:44:55:66",
+      ]),
+    );
+  });
+
+  it("fails a partial write and does not retry from JavaScript", async () => {
+    isNativePlatform.mockReturnValue(true);
+    getPlatform.mockReturnValue("android");
+    printEscPos.mockResolvedValue({
+      ok: true,
+      stage: "WRITE",
+      bytesRequested: 13,
+      bytesWritten: 4,
+      connectionSucceeded: true,
+      writeSucceeded: false,
+    });
+    const { printEscPosNative } = await import("./nativeBluetoothPrinter");
+    const result = await printEscPosNative(
+      "classic:AA:BB:CC:DD:EE:FF",
+      new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]),
+      "classic",
+    );
+    expect(result.ok).toBe(false);
+    expect(result.stage).toBe("WRITE");
+    expect(result.error).toContain("wrote 4 of 13");
+    expect(printEscPos).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves pairing_required diagnostics from DEVICE_LOOKUP", async () => {
+    isNativePlatform.mockReturnValue(true);
+    getPlatform.mockReturnValue("android");
+    printEscPos.mockRejectedValue({
+      code: "pairing_required",
+      message: "Pair this printer in Android Bluetooth settings, then select it from Paired.",
+      data: {
+        ok: false,
+        stage: "DEVICE_LOOKUP",
+        errorType: "NotBonded",
+        errorMessage: "bondState=none",
+      },
+    });
+    const { printEscPosNative } = await import("./nativeBluetoothPrinter");
+    const unpaired = await printEscPosNative("classic:AA:BB:CC:DD:EE:FF", new Uint8Array([1]), "classic");
+    expect(unpaired.ok).toBe(false);
+    expect(unpaired.stage).toBe("DEVICE_LOOKUP");
+    expect(unpaired.errorType).toBe("NotBonded");
+    expect(unpaired.error).toContain("Android Bluetooth settings");
+    expect(printEscPos).toHaveBeenCalledTimes(1);
   });
 });

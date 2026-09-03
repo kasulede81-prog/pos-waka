@@ -229,6 +229,9 @@ export function BluetoothPrinterFinder({ selectedId, onSelect, onStatus }: Props
           <p className="text-sm font-black text-sky-950">Bluetooth</p>
         </div>
         <p className="text-xs font-semibold text-sky-900">Bluetooth Classic + BLE</p>
+        <p className="text-xs font-semibold text-sky-900">
+          Pair the printer in Android Bluetooth settings first, then select it from Paired. Nearby scan is optional.
+        </p>
         <button
           type="button"
           disabled={scanning}
@@ -274,7 +277,8 @@ export function BluetoothPrinterFinder({ selectedId, onSelect, onStatus }: Props
         ) : null}
         {paired.length === 0 && nearby.length === 0 ? (
           <p className="text-xs font-semibold text-sky-900">
-            Tap Find Bluetooth device. Paired printers appear even when they are not advertising.
+            No paired printers yet. Pair the thermal printer in Android Bluetooth settings, then return here. Find
+            nearby is optional.
           </p>
         ) : null}
       </div>

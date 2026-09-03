@@ -14,7 +14,7 @@ export function ClassicSppDiagnosticPanel({ diagnostic }: { diagnostic: NativeCl
       <p>Address: {address}</p>
       <p>Transport: Android Native RFCOMM/SPP</p>
       <p>Connection: {flag(diagnostic.connectionSucceeded)}</p>
-      <p>RFCOMM: {diagnostic.connectionSucceeded ? "CONNECTED" : "FAILED"}</p>
+      <p>RFCOMM: {flag(diagnostic.connectionSucceeded)}</p>
       <p>
         Bytes: {diagnostic.bytesWritten ?? 0}
         {diagnostic.bytesRequested != null ? ` / ${diagnostic.bytesRequested}` : ""}

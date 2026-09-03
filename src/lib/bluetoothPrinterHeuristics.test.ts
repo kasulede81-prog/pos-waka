@@ -3,6 +3,7 @@ import {
   bluetoothDeviceLooksLikePrinter,
   extractBluetoothAddress,
   formatBluetoothDeviceId,
+  isBluetoothAddress,
   mapNativeBluetoothPrinterError,
   parseBluetoothDeviceId,
   partitionBluetoothDiscovery,
@@ -23,6 +24,10 @@ describe("bluetoothPrinterHeuristics", () => {
     expect(extractBluetoothAddress("aa:bb:cc:dd:ee:ff")).toBe("AA:BB:CC:DD:EE:FF");
     expect(extractBluetoothAddress("classic:aa:bb:cc:dd:ee:ff")).toBe("AA:BB:CC:DD:EE:FF");
     expect(extractBluetoothAddress("classic:not-a-mac")).toBe("NOT-A-MAC");
+    expect(isBluetoothAddress(extractBluetoothAddress("classic:AA:BB:CC:DD:EE:FF"))).toBe(true);
+    expect(isBluetoothAddress(extractBluetoothAddress("classic:not-a-mac"))).toBe(false);
+    expect(isBluetoothAddress("AA:BB:CC:DD:EE:FF")).toBe(true);
+    expect(isBluetoothAddress("AA-BB-CC-DD-EE-FF")).toBe(false);
   });
 
   it("parses classic and ble device ids", () => {
@@ -54,6 +59,9 @@ describe("bluetoothPrinterHeuristics", () => {
     expect(mapNativeBluetoothPrinterError("session_lost", "x")).toBe("Select your BLE printer again.");
     expect(mapNativeBluetoothPrinterError("chooser_cancelled", "x")).toBe(
       "No compatible BLE device was selected.",
+    );
+    expect(mapNativeBluetoothPrinterError("pairing_required", "x")).toBe(
+      "Pair this printer in Android Bluetooth settings, then select it from Paired.",
     );
   });
 

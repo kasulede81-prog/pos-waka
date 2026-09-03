@@ -77,11 +77,13 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
   private static final long CLASSIC_CHUNK_PAUSE_MS = 8L;
   private static final long CLASSIC_SETTLE_AFTER_CONNECT_MS = 150L;
   private static final long CLASSIC_SETTLE_AFTER_FLUSH_MS = 250L;
+  private static final long CLASSIC_WRITE_RETRY_SETTLE_MS = 300L;
 
   private final ExecutorService io = Executors.newCachedThreadPool();
   private final Handler main = new Handler(Looper.getMainLooper());
   private final Map<String, ClassicSession> classicSessions = new ConcurrentHashMap<>();
   private final Map<String, BleSession> bleSessions = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Object> classicLocks = new ConcurrentHashMap<>();
   private final Map<String, JSObject> scanHits = new LinkedHashMap<>();
 
   private final AtomicBoolean scanning = new AtomicBoolean(false);
@@ -322,7 +324,21 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
           call.resolve(r);
           return;
         }
-        ClassicPrintResult printed = printClassicJob(deviceId, data, false);
+        String address;
+        try {
+          address = extractAddress(deviceId);
+        } catch (PrinterTransportException lookup) {
+          ClassicPrintResult fail = ClassicPrintResult.fail(deviceId, "DEVICE_LOOKUP", lookup);
+          fail.code = lookup.code;
+          fail.errorType = lookup.errorType != null ? lookup.errorType : "IllegalArgumentException";
+          fail.errorMessage = lookup.causeMessage != null ? lookup.causeMessage : lookup.userMessage;
+          call.reject(fail.displayMessage(), fail.code, null, fail.toJs());
+          return;
+        }
+        ClassicPrintResult printed;
+        synchronized (classicLock(address)) {
+          printed = printClassicJobWithWriteRetry(deviceId, data);
+        }
         if (printed.ok) {
           call.resolve(printed.toJs());
         } else {
@@ -408,10 +424,39 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
       session.write(data);
       return;
     }
-    ClassicPrintResult printed = printClassicJob(deviceId, data, false);
+    String address = extractAddress(deviceId);
+    ClassicPrintResult printed;
+    synchronized (classicLock(address)) {
+      printed = printClassicJobWithWriteRetry(deviceId, data);
+    }
     if (!printed.ok) {
       throw new PrinterTransportException(printed.code, printed.displayMessage(), printed.stage, printed.errorType, printed.errorMessage);
     }
+  }
+
+  private Object classicLock(String address) {
+    return classicLocks.computeIfAbsent(address, key -> new Object());
+  }
+
+  /**
+   * Fresh RFCOMM job. If the socket connected but WRITE/FLUSH failed, retry
+   * exactly once on a new socket. Connection failures stay on the
+   * insecure → secure → channel 1 path — no extra connect loops.
+   */
+  private ClassicPrintResult printClassicJobWithWriteRetry(String deviceId, byte[] data) {
+    ClassicPrintResult first = printClassicJob(deviceId, data, false);
+    if (first.ok) return first;
+    boolean writeAfterConnect = first.connectionSucceeded
+      && ("WRITE".equals(first.stage) || "FLUSH".equals(first.stage) || "OUTPUT_STREAM".equals(first.stage));
+    if (!writeAfterConnect) return first;
+    log("write failed — one reconnect retry");
+    try {
+      Thread.sleep(CLASSIC_WRITE_RETRY_SETTLE_MS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return first;
+    }
+    return printClassicJob(deviceId, data, false);
   }
 
   @SuppressLint("MissingPermission")
@@ -428,11 +473,21 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
       result.address = safeAddress(device);
       log("device=" + result.deviceName);
       log("address=" + result.address);
+      requireBondedClassic(device);
+      log("bonded=true");
       result.ok = true;
       result.status = "ready";
       result.writeSucceeded = false;
       result.flushSucceeded = false;
       result.socketClosed = true;
+      return result;
+    } catch (PrinterTransportException e) {
+      result.ok = false;
+      result.code = e.code;
+      result.stage = e.stage != null ? e.stage : "DEVICE_LOOKUP";
+      result.errorType = e.errorType != null ? e.errorType : "PrinterTransportException";
+      result.errorMessage = e.causeMessage != null ? e.causeMessage : e.userMessage;
+      logFail(result.stage, e);
       return result;
     } catch (Exception e) {
       result.ok = false;
@@ -465,9 +520,12 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
       result.address = safeAddress(device);
       log("device=" + result.deviceName);
       log("address=" + result.address);
+      requireBondedClassic(device);
+      log("bonded=true");
 
       result.stage = "SOCKET_CREATE";
       log("creating RFCOMM socket");
+      log("socket strategy=insecure-spp then secure-spp then channel1");
       socket = openClassicSocket(device, result);
       result.stage = "RFCOMM_CONNECT";
       result.connectionSucceeded = socket != null && socket.isConnected();
@@ -497,11 +555,19 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
         if (data.length >= 2) {
           log("head=" + String.format(Locale.US, "%02X %02X", data[0] & 0xff, data[1] & 0xff));
         }
+        boolean pace = data.length > CLASSIC_CHUNK;
+        if (pace) {
+          log("pacing large job chunk=" + CLASSIC_CHUNK + " pauseMs=" + CLASSIC_CHUNK_PAUSE_MS);
+        }
         int offset = 0;
         while (offset < data.length) {
           int n = Math.min(CLASSIC_CHUNK, data.length - offset);
           out.write(data, offset, n);
           offset += n;
+          if (pace && offset < data.length) {
+            out.flush();
+            Thread.sleep(CLASSIC_CHUNK_PAUSE_MS);
+          }
         }
         result.bytesWritten = offset;
         if (result.bytesWritten != result.bytesRequested) {
@@ -520,6 +586,7 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
         out.flush();
         result.flushSucceeded = true;
         log("flush complete");
+        log("settle=" + CLASSIC_SETTLE_AFTER_FLUSH_MS);
         Thread.sleep(CLASSIC_SETTLE_AFTER_FLUSH_MS);
       } else {
         result.bytesWritten = 0;
@@ -1162,6 +1229,28 @@ public class WakaBluetoothPrinterPlugin extends Plugin {
     } catch (Exception e) {
       return deviceId == null ? "" : deviceId;
     }
+  }
+
+  @SuppressLint("MissingPermission")
+  private void requireBondedClassic(BluetoothDevice device) throws PrinterTransportException {
+    try {
+      if (device.getBondState() == BluetoothDevice.BOND_BONDED) return;
+    } catch (SecurityException e) {
+      throw new PrinterTransportException(
+        "permission_denied",
+        "Bluetooth permission is required to find printers.",
+        "DEVICE_LOOKUP",
+        "SecurityException",
+        e.getMessage()
+      );
+    }
+    throw new PrinterTransportException(
+      "pairing_required",
+      "Pair this printer in Android Bluetooth settings, then select it from Paired.",
+      "DEVICE_LOOKUP",
+      "NotBonded",
+      "bondState=" + bondState(device)
+    );
   }
 
   private String couldNotConnectMessage(String deviceId) {

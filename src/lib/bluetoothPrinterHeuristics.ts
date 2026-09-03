@@ -24,6 +24,11 @@ export function bluetoothDeviceLooksLikePrinter(name: string | null | undefined,
   return majorClass === "imaging";
 }
 
+/** Matches Java BluetoothAdapter.checkBluetoothAddress. */
+export function isBluetoothAddress(address: string | null | undefined): boolean {
+  return /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test((address ?? "").trim().toUpperCase());
+}
+
 /** Matches Java WakaBluetoothPrinterPlugin.extractBluetoothAddress. */
 export function extractBluetoothAddress(deviceId: string | null | undefined): string {
   let raw = (deviceId ?? "").trim();
@@ -114,6 +119,12 @@ export function mapNativeBluetoothPrinterError(code: string | undefined, message
   if (code === "unsupported") return "Bluetooth is not supported on this device.";
   if (code === "no_device" || code === "session_lost") return "Select your BLE printer again.";
   if (code === "chooser_cancelled") return "No compatible BLE device was selected.";
+  if (code === "pairing_required") {
+    return "Pair this printer in Android Bluetooth settings, then select it from Paired.";
+  }
+  if (code === "write_failed") {
+    return message?.trim() || "RFCOMM write failed";
+  }
   if (code === "classic_spp_failed" || code === "connect_failed") {
     return message?.trim() || "RFCOMM connection failed";
   }

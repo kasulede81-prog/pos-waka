@@ -1,6 +1,35 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { withTimeout } from "./promiseTimeout";
-import { mapNativeBluetoothPrinterError, parseBluetoothDeviceId } from "./bluetoothPrinterHeuristics";
+import {
+  extractBluetoothAddress,
+  mapNativeBluetoothPrinterError,
+  parseBluetoothDeviceId,
+} from "./bluetoothPrinterHeuristics";
+
+const classicPrintTails = new Map<string, Promise<unknown>>();
+
+function classicLockKey(deviceId: string): string {
+  return extractBluetoothAddress(deviceId) || deviceId;
+}
+
+/** Per-MAC Classic serialization. Different printers may overlap. */
+export async function withClassicPrintLock<T>(deviceId: string, fn: () => Promise<T>): Promise<T> {
+  const key = classicLockKey(deviceId);
+  const previous = classicPrintTails.get(key) ?? Promise.resolve();
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = previous.catch(() => undefined).then(() => gate);
+  classicPrintTails.set(key, tail);
+  await previous.catch(() => undefined);
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (classicPrintTails.get(key) === tail) classicPrintTails.delete(key);
+  }
+}
 
 export type NativeBluetoothTransport = "classic" | "ble";
 
@@ -153,7 +182,7 @@ export function formatClassicSppDiagnostic(d: NativeClassicDiagnostic): string {
     `Address: ${d.address || parseBluetoothDeviceId(d.deviceId)?.address || "—"}`,
     "Transport: Android Native RFCOMM/SPP",
     `Connection: ${d.connectionSucceeded ? "SUCCESS" : "FAILED"}`,
-    `RFCOMM: ${d.connectionSucceeded ? "CONNECTED" : "FAILED"}`,
+    `RFCOMM: ${d.connectionSucceeded ? "SUCCESS" : "FAILED"}`,
     `Bytes: ${d.bytesWritten ?? 0}`,
     `Write: ${d.writeSucceeded ? "SUCCESS" : "FAILED"}`,
     `Flush: ${d.flushSucceeded ? "SUCCESS" : "FAILED"}`,
@@ -239,6 +268,26 @@ export async function printEscPosNative(
   bytes: Uint8Array,
   mode?: NativeBluetoothTransport,
 ): Promise<NativeClassicDiagnostic> {
+  const transport = mode ?? parseBluetoothDeviceId(deviceId)?.transport ?? "classic";
+  if (transport === "classic") {
+    return withClassicPrintLock(deviceId, () => printEscPosNativeUnlocked(deviceId, bytes, "classic"));
+  }
+  return printEscPosNativeUnlocked(deviceId, bytes, mode);
+}
+
+function incompleteWrite(result: NativePrintResult): boolean {
+  return (
+    typeof result.bytesRequested === "number" &&
+    typeof result.bytesWritten === "number" &&
+    result.bytesWritten !== result.bytesRequested
+  );
+}
+
+async function printEscPosNativeUnlocked(
+  deviceId: string,
+  bytes: Uint8Array,
+  mode?: NativeBluetoothTransport,
+): Promise<NativeClassicDiagnostic> {
   try {
     const result = await withTimeout(
       WakaBluetoothPrinter.printEscPos({
@@ -259,11 +308,17 @@ export async function printEscPosNative(
         deviceId,
       };
     }
-    if (result.ok === false) {
+    if (result.ok === false || incompleteWrite(result)) {
       return {
         ...result,
         ok: false,
-        error: result.errorMessage || result.error || "RFCOMM connection failed",
+        stage: result.stage ?? (incompleteWrite(result) ? "WRITE" : undefined),
+        error:
+          result.errorMessage ||
+          result.error ||
+          (incompleteWrite(result)
+            ? `WRITE failed: wrote ${result.bytesWritten} of ${result.bytesRequested}`
+            : "RFCOMM connection failed"),
       };
     }
     return { ...result, ok: true };
@@ -278,6 +333,7 @@ export async function printEscPosNative(
       deviceId: e.diagnostic?.deviceId ?? deviceId,
       deviceName: e.diagnostic?.deviceName,
       address: e.diagnostic?.address,
+      bytesRequested: e.diagnostic?.bytesRequested,
       bytesWritten: e.diagnostic?.bytesWritten,
       connectionSucceeded: e.diagnostic?.connectionSucceeded,
       writeSucceeded: e.diagnostic?.writeSucceeded,

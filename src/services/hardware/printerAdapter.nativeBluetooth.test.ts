@@ -156,6 +156,17 @@ describe("printerAdapter native Bluetooth", () => {
     });
     const bad = await testPrintProfile(btProfile(), ["Test"]);
     expect(bad.error).toContain("does not expose a supported printer connection");
+
+    printEscPosNative.mockResolvedValue({
+      ok: false,
+      error: "Pair this printer in Android Bluetooth settings, then select it from Paired.",
+      code: "pairing_required",
+      stage: "DEVICE_LOOKUP",
+    });
+    const unpaired = await testPrintProfile(btProfile(), ["Test"]);
+    expect(unpaired.ok).toBe(false);
+    expect(unpaired.error).toContain("Android Bluetooth settings");
+    expect(printEscPosNative).toHaveBeenCalled();
   });
 
   it("does not open Web Bluetooth chooser from testPrint on native Android", async () => {
