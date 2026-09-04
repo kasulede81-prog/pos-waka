@@ -2821,6 +2821,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     if (r.ok) {
                       logReceiptReprintAudit(receiptSale, ctx.receiptNumber);
                       if (r.mode === "thermal") setToast(t(lang, "receiptPrintThermalSent"));
+                      else if (r.mode === "handoff") setToast(t(lang, "receiptPrintHandoffOpening"));
                       else if (r.mode === "share" || isNativePrintPlatform()) setToast(t(lang, "receiptPrintNativeOpened"));
                     } else {
                       window.alert(r.mode === "thermal" ? (r.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));

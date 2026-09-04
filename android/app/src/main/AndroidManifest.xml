@@ -47,6 +47,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="wakapos" android:host="callback" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="wakapos" android:host="print" android:pathPrefix="/v1" />
+            </intent-filter>
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

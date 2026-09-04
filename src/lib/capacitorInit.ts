@@ -2,6 +2,7 @@ import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { initDeviceOnlineTracking } from "./deviceOnline";
 import { prepareNativeSplash, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "./nativeSplash";
 import { registerNativeAuthDeepLinkHandler } from "./nativeAuthDeepLink";
+import { registerNativePrintDeepLinkHandler } from "./webPrintHandoff";
 
 /**
  * Native shell polish: edge-to-edge system bars (Capacitor 8 SystemBars — no deprecated Window color APIs).
@@ -11,6 +12,7 @@ export async function initCapacitorShell(): Promise<void> {
   document.documentElement.classList.add("waka-native");
   document.documentElement.classList.add(`waka-${Capacitor.getPlatform()}`);
   registerNativeAuthDeepLinkHandler();
+  registerNativePrintDeepLinkHandler();
   await prepareNativeSplash();
   scheduleSplashMaxDuration();
   scheduleSplashSafetyTimeout();

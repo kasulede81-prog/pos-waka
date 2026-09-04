@@ -695,6 +695,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
                     if (r.ok) {
                       logReceiptReprintAudit(receiptSale, receiptCtx.receiptNumber);
                       if (r.mode === "thermal") flash(t(lang, "receiptPrintThermalSent"));
+                      else if (r.mode === "handoff") flash(t(lang, "receiptPrintHandoffOpening"));
                       else if (r.mode === "share" || isNativePrintPlatform()) flash(t(lang, "receiptPrintNativeOpened"));
                     } else {
                       flash(r.mode === "thermal" ? (r.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));

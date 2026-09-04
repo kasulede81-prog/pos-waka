@@ -139,7 +139,7 @@ export function receiptPdfFilename(kind: "sale" | "return" | "debt", id: string)
 
 export type SalePrintResult = {
   ok: boolean;
-  mode: "thermal" | "html" | "share" | "none";
+  mode: "thermal" | "html" | "share" | "handoff" | "none";
   error?: string;
 };
 
@@ -161,6 +161,13 @@ export async function printSaleReceipt(ctx: SaleReceiptContext): Promise<SalePri
   const html = saleReceiptHtml(ctx);
 
   if (!isNativePrintPlatform()) {
+    const saleId = ctx.sale.id?.trim() ?? "";
+    if (saleId) {
+      const { tryLaunchAndroidPrintHandoff } = await import("./webPrintHandoff");
+      if (tryLaunchAndroidPrintHandoff(saleId)) {
+        return { ok: true, mode: "handoff" };
+      }
+    }
     if (printHtmlDocument(html, paper, "Waka receipt")) return { ok: true, mode: "html" };
     const plain = saleReceiptPlain(ctx);
     if (printReceiptText(plain, paper)) return { ok: true, mode: "html" };
