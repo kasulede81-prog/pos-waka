@@ -79,6 +79,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const sales = usePosStore((s) => s.sales);
+  const auditLogs = usePosStore((s) => s.auditLogs);
   const prescriptions = usePosStore((s) => s.pharmacyPrescriptions);
   const draftLines = usePosStore((s) => s.draftLines);
   const activePharmacyPrescriptionId = usePosStore((s) => s.activePharmacyPrescriptionId);
@@ -178,8 +179,9 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
       actor,
       customerName: cust?.name ?? null,
       customerBalanceUgx: cust?.debtBalanceUgx ?? null,
+      auditLogs,
     });
-  }, [receiptSale, customers, lang, sales, preferences, products, actor]);
+  }, [receiptSale, customers, lang, sales, preferences, products, actor, auditLogs]);
 
   const receiptHtmlPreview = useMemo(
     () => (receiptCtx ? saleReceiptHtml(receiptCtx) : ""),
@@ -692,9 +694,10 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
                   void printSaleReceipt(receiptCtx).then((r) => {
                     if (r.ok) {
                       logReceiptReprintAudit(receiptSale, receiptCtx.receiptNumber);
-                      if (isNativePrintPlatform()) flash(t(lang, "receiptPrintNativeOpened"));
+                      if (r.mode === "thermal") flash(t(lang, "receiptPrintThermalSent"));
+                      else if (r.mode === "share" || isNativePrintPlatform()) flash(t(lang, "receiptPrintNativeOpened"));
                     } else {
-                      flash(t(lang, "receiptPrintBlocked"));
+                      flash(r.mode === "thermal" ? (r.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));
                     }
                   });
                 }}

@@ -1,5 +1,5 @@
 import type { KitchenTicket, KitchenTicketItem, Language } from "../types";
-import { EscPosBuilder, padColumns, wrapText } from "./escPosBuilder";
+import { EscPosBuilder, columnsForWidth, padColumns, wrapText, type EscPosPaperWidth } from "./escPosBuilder";
 import { t } from "./i18n";
 
 export type KitchenChitPrintKind = "new" | "modified" | "void" | "course" | "reprint";
@@ -14,8 +14,9 @@ function kindBanner(lang: Language, kind: KitchenChitPrintKind): string {
 
 function formatItemLine(item: KitchenTicketItem, cols: number): string[] {
   const qty = item.itemStatus === "cancelled" ? `VOID ${item.quantity}` : `${item.quantity}x`;
-  const head = padColumns(qty, item.productName, cols);
-  const lines = [head];
+  const name = item.productName ?? "";
+  const lines =
+    qty.length + 1 + name.length <= cols ? [padColumns(qty, name, cols)] : [qty, ...wrapText(name, cols)];
   if (item.variantLabel?.trim()) lines.push(`  ${item.variantLabel.trim()}`);
   for (const mod of item.modifierLabels ?? []) {
     if (mod.trim()) lines.push(`  + ${mod.trim()}`);
@@ -30,8 +31,9 @@ export function buildKitchenChitLines(
   ticket: KitchenTicket,
   lang: Language,
   kind: KitchenChitPrintKind = "new",
-  options?: { shopName?: string | null; businessDate?: string | null },
+  options?: { shopName?: string | null; businessDate?: string | null; paperWidth?: EscPosPaperWidth },
 ): string[] {
+  const cols = columnsForWidth(options?.paperWidth ?? "80mm");
   const lines: string[] = [];
   if (options?.shopName?.trim()) {
     lines.push(options.shopName.trim().toUpperCase());
@@ -52,7 +54,7 @@ export function buildKitchenChitLines(
   if (ticket.ticketNotes?.trim()) lines.push(ticket.ticketNotes.trim());
   lines.push("—");
   for (const item of ticket.items) {
-    lines.push(...formatItemLine(item, 42));
+    lines.push(...formatItemLine(item, cols));
   }
   lines.push("—");
   const fired = new Date(ticket.firedAt);
@@ -76,15 +78,15 @@ export function buildKitchenChitEscPos(
   options?: { shopName?: string | null; businessDate?: string | null },
 ): Uint8Array {
   const b = new EscPosBuilder(paperWidth);
-  const textLines = buildKitchenChitLines(ticket, lang, kind, options);
-  b.align("center").bold(true).doubleSize(true).textLine(kindBanner(lang, kind)).doubleSize(false).bold(false);
+  const textLines = buildKitchenChitLines(ticket, lang, kind, { ...options, paperWidth });
+  b.align("center").bold(true).doubleSize(true).wrapped(kindBanner(lang, kind)).doubleSize(false).bold(false);
   b.align("left").rule();
   for (const line of textLines.slice(1)) {
     if (line === "—") b.rule();
-    else if (line.startsWith("VOID") || kind === "void") b.bold(true).textLine(line).bold(false);
-    else b.textLine(line);
+    else if (line.startsWith("VOID") || kind === "void") b.bold(true).wrapped(line).bold(false);
+    else b.wrapped(line);
   }
-  b.feed(4).partialCut();
+  b.finalize();
   return b.build();
 }
 

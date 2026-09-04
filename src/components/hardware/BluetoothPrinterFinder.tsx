@@ -134,7 +134,7 @@ export function BluetoothPrinterFinder({ selectedId, onSelect, onStatus }: Props
       const listed = await listPairedBluetoothPrinterDevices();
       merge(listed);
       if (listed.length) {
-        onStatus("Select a paired printer, or find nearby devices.");
+        onStatus("Select a paired printer. Use this printer to save it.");
       }
     } catch (err) {
       onStatus(mapNativeBluetoothPrinterError(undefined, err instanceof Error ? err.message : String(err)));
@@ -162,7 +162,7 @@ export function BluetoothPrinterFinder({ selectedId, onSelect, onStatus }: Props
       merge(scanned);
       onStatus(
         bonded.length + scanned.length
-          ? "Select a device from Paired or Nearby."
+          ? "Select a device from Paired or Nearby. Use this printer to save it."
           : "No Bluetooth devices found. Pair the printer in Android Bluetooth settings, then scan again.",
       );
     } catch (err) {
@@ -216,8 +216,8 @@ export function BluetoothPrinterFinder({ selectedId, onSelect, onStatus }: Props
     }
     onStatus(
       classic.transport === "classic"
-        ? `${classic.name} ready as Bluetooth Classic / SPP. Test to send data.`
-        : `Connected: ${classic.name}`,
+        ? `${classic.name} selected. Ready to print.`
+        : `${classic.name} selected. Ready to print.`,
     );
   };
 

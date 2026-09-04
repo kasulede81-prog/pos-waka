@@ -178,7 +178,7 @@ describe("Phase 1B retail ESC/POS wiring", () => {
 
   it("does not enqueue when no default receipt printer is configured", async () => {
     const result = await tryEnqueueRetailSaleReceiptEscPos(saleCtx());
-    expect(result.enqueued).toBe(false);
+    expect(result).toEqual({ enqueued: false, nativePrinterConfigured: false });
     expect(persistMock).not.toHaveBeenCalled();
     expect(processQueueMock).not.toHaveBeenCalled();
   });
@@ -196,14 +196,14 @@ describe("Phase 1B retail ESC/POS wiring", () => {
       stateReason: "Native thermal SDK not installed.",
     });
     const result = await tryEnqueueRetailSaleReceiptEscPos(saleCtx());
-    expect(result.enqueued).toBe(false);
+    expect(result).toEqual({ enqueued: false, nativePrinterConfigured: false });
     expect(persistMock).not.toHaveBeenCalled();
   });
 
   it("enqueues kind:receipt via existing queue when printer + transport ok", async () => {
     prefsRef = withReceiptPrinter("58mm");
     const result = await tryEnqueueRetailSaleReceiptEscPos(saleCtx());
-    expect(result.enqueued).toBe(true);
+    expect(result).toEqual({ enqueued: true, nativePrinterConfigured: true });
     expect(persistMock).toHaveBeenCalledTimes(1);
     const [, bytes] = persistMock.mock.calls[0] as [string, Uint8Array];
     expect(bytes).toBeInstanceOf(Uint8Array);
@@ -220,7 +220,7 @@ describe("Phase 1B retail ESC/POS wiring", () => {
   it("printSaleReceipt prefers thermal enqueue and skips HTML when enqueued", async () => {
     prefsRef = withReceiptPrinter();
     const result = await printSaleReceipt(saleCtx());
-    expect(result.ok).toBe(true);
+    expect(result).toEqual({ ok: true, mode: "thermal" });
     expect(persistMock).toHaveBeenCalled();
     expect(printHtmlDocument).not.toHaveBeenCalled();
   });
@@ -229,8 +229,18 @@ describe("Phase 1B retail ESC/POS wiring", () => {
     prefsRef = createDefaultPreferences();
     const result = await printSaleReceipt(saleCtx());
     expect(result.ok).toBe(true);
+    expect(result.mode).toBe("html");
     expect(persistMock).not.toHaveBeenCalled();
     expect(printHtmlDocument).toHaveBeenCalled();
+  });
+
+  it("does not open PDF/share when a native printer is configured but enqueue fails", async () => {
+    prefsRef = withReceiptPrinter("58mm");
+    persistMock.mockRejectedValueOnce(new Error("payload store unavailable"));
+    const result = await printSaleReceipt(saleCtx());
+    expect(result.ok).toBe(false);
+    expect(result.mode).toBe("thermal");
+    expect(printHtmlDocument).not.toHaveBeenCalled();
   });
 
   it("does not enqueue Classic Bluetooth from a browser so HTML print can run", async () => {
@@ -268,5 +278,21 @@ describe("Phase 1B retail ESC/POS wiring", () => {
     expect(result.ok).toBe(true);
     expect(persistMock).not.toHaveBeenCalled();
     expect(printHtmlDocument).toHaveBeenCalled();
+  });
+
+  it("print enqueue failure does not mutate the completed sale", async () => {
+    prefsRef = withReceiptPrinter("58mm");
+    persistMock.mockRejectedValue(new Error("payload store unavailable"));
+    const saleBefore = structuredClone(sale);
+    const enqueue = await tryEnqueueRetailSaleReceiptEscPos(saleCtx());
+    expect(enqueue).toEqual({ enqueued: false, nativePrinterConfigured: true });
+    expect(sale).toEqual(saleBefore);
+    expect(sale.status).toBe("completed");
+    expect(sale.totalUgx).toBe(2000);
+    const printed = await printSaleReceipt(saleCtx());
+    expect(printed.ok).toBe(false);
+    expect(printed.mode).toBe("thermal");
+    expect(printHtmlDocument).not.toHaveBeenCalled();
+    expect(sale).toEqual(saleBefore);
   });
 });

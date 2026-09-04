@@ -4,7 +4,6 @@ import { Camera, Keyboard, Printer, ScanLine } from "lucide-react";
 import type { Language, ReceiptPaperSize } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { printReceiptWithFallback } from "../lib/receiptPrint";
 import { printElectronWindow } from "../lib/documentPrint";
 import { canNativePrint } from "../platform";
 import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
@@ -13,8 +12,8 @@ import { PrinterManagementPanel } from "../components/hardware/PrinterManagement
 import { PrinterConnectionMatrix } from "../components/hardware/PrinterConnectionMatrix";
 import { ClassicSppDiagnosticPanel } from "../components/hardware/ClassicSppDiagnosticPanel";
 import type { NativeClassicDiagnostic } from "../lib/nativeBluetoothPrinter";
-import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
-import { resolveDefaultReceiptPrinter } from "../lib/printerRegistry";
+import { hospitalityUiActive } from "../lib/hospitalityUx";
+import { resolveConfiguredHardwareTestPrinter } from "../lib/printerRegistry";
 
 const PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
 
@@ -46,22 +45,12 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
     };
   }, []);
 
+  const hospitality = hospitalityUiActive(preferences.businessType, preferences.hospitalityModeEnabled);
+
   const testPrint = () => {
-    const sample = [
-      preferences.shopDisplayName?.trim() || "Waka POS",
-      "",
-      t(lang, "receiptPaperTestLine"),
-      "",
-      "—",
-      "Waka POS",
-    ].join("\n");
-    const hw = resolveHospitalityHardware(preferences);
-    const configured =
-      resolveDefaultReceiptPrinter(preferences) ??
-      hw.printers.find((p) => p.connectionType === "bluetooth" && p.pairedDeviceKey && p.isEnabled) ??
-      hw.printers.find((p) => p.isEnabled && (p.connectionType === "network" || p.connectionType === "usb"));
+    const configured = resolveConfiguredHardwareTestPrinter(preferences);
     if (configured && (configured.connectionType === "bluetooth" || configured.connectionType === "network" || configured.connectionType === "usb")) {
-      setPrintingStatus("Testing printer...");
+      setPrintingStatus(t(lang, "hardwareTestConnecting"));
       setClassicDiagnostic(null);
       void usePosStore
         .getState()
@@ -70,24 +59,13 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
           if (result.diagnostic) setClassicDiagnostic(result.diagnostic);
           setPrintingStatus(
             result.ok
-              ? "Data sent to printer"
-              : (result.error ?? t(lang, "receiptPrintBlocked")),
+              ? `✓ ${t(lang, "hardwareTestSentTo")} ${configured.pairedDeviceName || configured.name}`
+              : `✕ ${t(lang, "hardwareTestCouldNotPrint")}\n${result.error ?? t(lang, "receiptPrintBlocked")}`,
           );
         });
       return;
     }
-    setPrintingStatus("Testing printer...");
-    void printReceiptWithFallback(sample, preferences.receiptPaperSize ?? "80mm").then((result) => {
-      if (result.ok) {
-        const msg =
-          result.mode === "native"
-            ? "Printed via native thermal path."
-            : "Printed via browser fallback.";
-        setPrintingStatus(msg);
-      } else {
-        setPrintingStatus(result.error ?? t(lang, "receiptPrintBlocked"));
-      }
-    });
+    setPrintingStatus(t(lang, "hardwarePrinterNotConfigured"));
   };
 
   const startScan = () => {
@@ -116,6 +94,8 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
       <PageBackBar lang={lang} fallbackTo="/settings" />
       <h1 className="text-2xl font-black text-foreground sm:text-3xl">{t(lang, "hardwareSettingsTitle")}</h1>
       <p className="text-sm font-medium text-muted-foreground">{t(lang, "hardwareSettingsSub")}</p>
+
+      <PrinterManagementPanel lang={lang} />
 
       <article className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/80 p-5 shadow-waka-sm">
         <div className="flex items-center gap-2">
@@ -210,13 +190,15 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={testPrint}
-          className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
-        >
-          {t(lang, "receiptPaperTestPrint")}
-        </button>
+        {hospitality ? (
+          <button
+            type="button"
+            onClick={testPrint}
+            className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
+          >
+            {t(lang, "hardwareTestPrinter")}
+          </button>
+        ) : null}
         {printerCaps ? (
           <div className="mt-4">
             <PrinterConnectionMatrix caps={printerCaps.transports} />
@@ -235,14 +217,12 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
           </button>
         ) : null}
         {printingStatus ? (
-          <p className="mt-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground">
+          <p className="mt-2 whitespace-pre-line rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground">
             {printingStatus}
           </p>
         ) : null}
         {classicDiagnostic ? <ClassicSppDiagnosticPanel diagnostic={classicDiagnostic} /> : null}
       </article>
-
-      <PrinterManagementPanel lang={lang} />
 
       <p className="text-xs text-muted-foreground">{t(lang, "hardwareSettingsStubHint")}</p>
     </div>

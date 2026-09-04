@@ -4,7 +4,9 @@ import type { Language, PrinterConnectionType, PrinterStationRole } from "../../
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { resolveHospitalityHardware } from "../../lib/hospitalityHardware";
+import { hospitalityUiActive } from "../../lib/hospitalityUx";
 import { stationLabel } from "../../lib/printerRegistry";
+import { RetailReceiptPrinterPanel } from "./RetailReceiptPrinterPanel";
 import { detectPrinterCapabilities, testNetworkPrinterConnection } from "../../services/hardware/printerAdapter";
 import {
   addPrinterConnectionTypes,
@@ -56,8 +58,10 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const [status, setStatus] = useState("");
   const [isDefaultReceipt, setIsDefaultReceipt] = useState(false);
   const [pendingBt, setPendingBt] = useState<NativeBluetoothDeviceRow | null>(null);
+  const [draftPrinterId, setDraftPrinterId] = useState<string | null>(null);
   const [bindForId, setBindForId] = useState<string | null>(null);
   const [classicDiagnostic, setClassicDiagnostic] = useState<NativeClassicDiagnostic | null>(null);
+  const hospitality = hospitalityUiActive(preferences.businessType, preferences.hospitalityModeEnabled);
 
   useEffect(() => {
     void detectPrinterCapabilities().then((caps) => {
@@ -85,6 +89,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       return;
     }
     const result = upsertPrinter({
+      id: draftPrinterId ?? undefined,
       name,
       connectionType,
       paperWidth,
@@ -96,12 +101,64 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       bluetoothTransport: connectionType === "bluetooth" ? pendingBt?.transport ?? null : null,
       pairedDeviceName: connectionType === "bluetooth" ? pendingBt?.name ?? null : null,
     });
+    if (result.ok && result.printerId) setDraftPrinterId(result.printerId);
     if (!result.ok) {
       setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
       return;
     }
     setStatus(t(lang, "hardwarePrinterAdded"));
   };
+
+  const persistHospitalityBluetooth = (device: NativeBluetoothDeviceRow) => {
+    setPendingBt(device);
+    const result = upsertPrinter({
+      id: draftPrinterId ?? undefined,
+      name: (name.trim() && name.trim() !== "Kitchen printer" ? name.trim() : device.name) || "Printer",
+      connectionType: "bluetooth",
+      paperWidth,
+      stationRoles: roles.length ? roles : ["kitchen"],
+      isDefaultReceipt,
+      pairedDeviceKey: device.id,
+      bluetoothTransport: device.transport,
+      pairedDeviceName: device.name,
+    });
+    if (!result.ok) {
+      setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
+      return;
+    }
+    if (result.printerId) setDraftPrinterId(result.printerId);
+    setStatus(`${device.name} — ${t(lang, "hardwarePrinterConfiguredReady")}`);
+  };
+
+  if (!hospitality) {
+    return (
+      <div className="space-y-5">
+        <RetailReceiptPrinterPanel lang={lang} />
+        {hw.printQueue.length > 0 ? (
+          <article className="rounded-3xl border-2 border-amber-200 bg-amber-50/80 p-5">
+            <p className="text-sm font-black text-amber-950">{t(lang, "hardwarePrintQueuePending")}</p>
+            <ul className="mt-2 space-y-1 text-xs font-semibold">
+              {hw.printQueue.map((job) => (
+                <li key={job.id} className="flex items-center justify-between gap-2">
+                  <span>
+                    {job.status} · {job.payloadSummary}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-amber-300 px-2 py-0.5 text-[10px] font-black"
+                    onClick={() => cancelQueuedPrintJob(job.id)}
+                  >
+                    {t(lang, "cancel")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </article>
+        ) : null}
+        {status ? <p className="text-sm font-bold text-muted-foreground">{status}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -175,8 +232,15 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
 
         {connectionType === "bluetooth" ? (
           <BluetoothPrinterFinder
-            selectedId={pendingBt?.id ?? null}
-            onSelect={setPendingBt}
+            selectedId={
+              pendingBt?.id ??
+              hw.printers.find((p) => p.id === draftPrinterId)?.pairedDeviceKey ??
+              null
+            }
+            onSelect={(device) => {
+              if (device) persistHospitalityBluetooth(device);
+              else setPendingBt(null);
+            }}
             onStatus={setStatus}
           />
         ) : null}
@@ -247,14 +311,14 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                             return;
                           }
                         }
-                        setStatus(t(lang, "hardwarePrinterTesting"));
+                        setStatus(t(lang, "hardwareTestConnecting"));
                         setClassicDiagnostic(null);
                         const r = await testConfiguredPrinter(p.id);
                         if (r.diagnostic) setClassicDiagnostic(r.diagnostic);
                         setStatus(
                           r.ok
-                            ? "Data sent to printer"
-                            : (r.error ?? t(lang, "hardwarePrinterTestFail") ?? "Could not connect to printer"),
+                            ? `✓ ${t(lang, "hardwareTestSentTo")} ${p.pairedDeviceName || p.name}`
+                            : `✕ ${t(lang, "hardwareTestCouldNotPrint")}\n${r.error ?? t(lang, "hardwarePrinterTestFail")}`,
                         );
                       })();
                     }}

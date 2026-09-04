@@ -22,7 +22,7 @@ export function ClassicSppDiagnosticPanel({ diagnostic }: { diagnostic: NativeCl
       <p>Write: {flag(diagnostic.writeSucceeded)}</p>
       <p>Flush: {flag(diagnostic.flushSucceeded)}</p>
       <p>Socket close: {flag(diagnostic.socketClosed)}</p>
-      <p>Physical paper: TEST REQUIRED</p>
+      <p>PHYSICAL PAPER: NOT VERIFIED</p>
       {!diagnostic.ok && (diagnostic.errorType || diagnostic.errorMessage || diagnostic.error) ? (
         <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-2 py-2 text-red-900">
           <p className="font-black">RFCOMM {diagnostic.stage ? `${diagnostic.stage} ` : ""}failed</p>
@@ -30,7 +30,7 @@ export function ClassicSppDiagnosticPanel({ diagnostic }: { diagnostic: NativeCl
           <p>{diagnostic.errorMessage || diagnostic.error}</p>
         </div>
       ) : (
-        <p className="mt-2 font-black">Data sent to printer</p>
+        <p className="mt-2 font-black">PRINT JOB SENT</p>
       )}
     </article>
   );

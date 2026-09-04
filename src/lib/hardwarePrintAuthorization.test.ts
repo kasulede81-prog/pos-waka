@@ -168,3 +168,20 @@ describe("hardware printer authorization", () => {
     expect(authorizePreferencesPatch(actor("cashier"), { receiptPaperSize: "80mm" }).ok).toBe(false);
   });
 });
+
+describe("retail vs hospitality printer UI", () => {
+  it("gates kitchen printer chrome on hospitality mode and persists via upsertPrinter", () => {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const { dirname, join } = require("node:path") as typeof import("node:path");
+    const { fileURLToPath } = require("node:url") as typeof import("node:url");
+    const dir = dirname(fileURLToPath(import.meta.url));
+    const panel = readFileSync(join(dir, "../components/hardware/PrinterManagementPanel.tsx"), "utf8");
+    const retail = readFileSync(join(dir, "../components/hardware/RetailReceiptPrinterPanel.tsx"), "utf8");
+    expect(panel).toContain("hospitalityUiActive");
+    expect(panel).toContain("RetailReceiptPrinterPanel");
+    expect(retail).toContain("bindBluetoothDeviceToReceiptPrinterInput");
+    expect(retail).toContain("upsertPrinter");
+    expect(retail).toContain("settings.devices");
+    expect(retail).toContain("hardwareTestPrinter");
+  });
+});

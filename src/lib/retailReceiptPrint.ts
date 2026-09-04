@@ -20,6 +20,8 @@ import type { PrinterProfile } from "../types";
 export type RetailEscPosEnqueueResult = {
   /** True when a job was accepted into the existing print queue. */
   enqueued: boolean;
+  /** True when a receipt printer is configured and this runtime can send ESC/POS. */
+  nativePrinterConfigured: boolean;
 };
 
 function transportSupportsPrinter(profile: PrinterProfile, caps: Awaited<ReturnType<typeof detectPrinterCapabilities>>): boolean {
@@ -60,14 +62,18 @@ function buildDisplayFromSaleContext(ctx: SaleReceiptContext) {
  * Returns enqueued:false on any miss/failure so callers keep HTML/PDF/share.
  */
 export async function tryEnqueueRetailSaleReceiptEscPos(ctx: SaleReceiptContext): Promise<RetailEscPosEnqueueResult> {
+  let nativePrinterConfigured = false;
   try {
     const { usePosStore, flushPendingPersist } = await import("../store/usePosStore");
     const state = usePosStore.getState();
     const printer = resolveDefaultReceiptPrinter(state.preferences);
-    if (!printer) return { enqueued: false };
+    if (!printer) return { enqueued: false, nativePrinterConfigured: false };
 
     const caps = await detectPrinterCapabilities();
-    if (!transportSupportsPrinter(printer, caps)) return { enqueued: false };
+    if (!transportSupportsPrinter(printer, caps)) {
+      return { enqueued: false, nativePrinterConfigured: false };
+    }
+    nativePrinterConfigured = true;
 
     const display = buildDisplayFromSaleContext(ctx);
     const bytes = buildRetailReceiptEscPos(display, printer.paperWidth);
@@ -84,8 +90,8 @@ export async function tryEnqueueRetailSaleReceiptEscPos(ctx: SaleReceiptContext)
     flushPendingPersist();
     usePosStore.getState().processPendingPrintQueue();
 
-    return { enqueued: true };
+    return { enqueued: true, nativePrinterConfigured: true };
   } catch {
-    return { enqueued: false };
+    return { enqueued: false, nativePrinterConfigured };
   }
 }

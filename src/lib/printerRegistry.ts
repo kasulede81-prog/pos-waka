@@ -32,6 +32,57 @@ export function resolveDefaultReceiptPrinter(prefs: ShopPreferences): PrinterPro
   return printers.find((p) => p.isDefaultReceipt) ?? printers.find((p) => p.stationRoles.includes("receipt")) ?? printers[0] ?? null;
 }
 
+/** Profile Test / Hardware Test should use — persisted printers only. */
+export function resolveConfiguredHardwareTestPrinter(prefs: ShopPreferences): PrinterProfile | null {
+  const hw = resolveHospitalityHardware(prefs);
+  return (
+    resolveDefaultReceiptPrinter(prefs) ??
+    hw.printers.find((p) => p.connectionType === "bluetooth" && Boolean(p.pairedDeviceKey) && p.isEnabled) ??
+    hw.printers.find((p) => p.isEnabled && (p.connectionType === "network" || p.connectionType === "usb")) ??
+    null
+  );
+}
+
+export type BluetoothBindDevice = {
+  id: string;
+  name: string;
+  transport: "classic" | "ble";
+};
+
+/**
+ * Build the upsert payload so "Use this printer" creates/updates the receipt
+ * PrinterProfile checkout and Test actually read. Does not persist by itself.
+ */
+export function bindBluetoothDeviceToReceiptPrinterInput(
+  existing: PrinterProfile | undefined,
+  device: BluetoothBindDevice,
+  paperWidth: "58mm" | "80mm" = "58mm",
+): {
+  id?: string;
+  name: string;
+  connectionType: "bluetooth";
+  paperWidth: "58mm" | "80mm";
+  stationRoles: PrinterStationRole[];
+  isDefaultReceipt: true;
+  pairedDeviceKey: string;
+  bluetoothTransport: "classic" | "ble";
+  pairedDeviceName: string;
+} {
+  const roles: PrinterStationRole[] =
+    existing?.stationRoles.includes("receipt") ? existing.stationRoles : ["receipt"];
+  return {
+    id: existing?.id,
+    name: device.name.trim() || existing?.name || "Receipt printer",
+    connectionType: "bluetooth",
+    paperWidth: existing?.paperWidth ?? paperWidth,
+    stationRoles: roles,
+    isDefaultReceipt: true,
+    pairedDeviceKey: device.id,
+    bluetoothTransport: device.transport,
+    pairedDeviceName: device.name,
+  };
+}
+
 export function resolvePrinterForStation(
   prefs: ShopPreferences,
   floor: HospitalityFloorState | null | undefined,

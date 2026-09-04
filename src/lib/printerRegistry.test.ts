@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { resolvePrinterForStation, stationTypeToPrinterRole } from "./printerRegistry";
+import {
+  bindBluetoothDeviceToReceiptPrinterInput,
+  resolveConfiguredHardwareTestPrinter,
+  resolveDefaultReceiptPrinter,
+  resolvePrinterForStation,
+  stationTypeToPrinterRole,
+} from "./printerRegistry";
 import type { HospitalityFloorState, PrinterProfile, ShopPreferences } from "../types";
 import { defaultHospitalityHardwarePrefs } from "./hospitalityHardware";
 
@@ -73,5 +79,42 @@ describe("printerRegistry", () => {
     };
     const p = resolvePrinterForStation(prefsWithPrinters(printers), assignedFloor, "st-bar", "bar");
     expect(p?.id).toBe("p-special");
+  });
+
+  it("Use this printer builds a persisted receipt profile payload", () => {
+    const input = bindBluetoothDeviceToReceiptPrinterInput(
+      undefined,
+      { id: "classic:AA:BB:CC:DD:EE:FF", name: "RPP02N", transport: "classic" },
+      "58mm",
+    );
+    expect(input.connectionType).toBe("bluetooth");
+    expect(input.stationRoles).toEqual(["receipt"]);
+    expect(input.isDefaultReceipt).toBe(true);
+    expect(input.pairedDeviceKey).toBe("classic:AA:BB:CC:DD:EE:FF");
+    expect(input.bluetoothTransport).toBe("classic");
+    expect(input.pairedDeviceName).toBe("RPP02N");
+    expect(input.paperWidth).toBe("58mm");
+  });
+
+  it("updates the existing receipt printer instead of inventing a second one", () => {
+    const existing: PrinterProfile = {
+      id: "printer-receipt-1",
+      name: "Front counter",
+      connectionType: "bluetooth",
+      paperWidth: "58mm",
+      stationRoles: ["receipt"],
+      isDefaultReceipt: true,
+      isEnabled: true,
+    };
+    const input = bindBluetoothDeviceToReceiptPrinterInput(existing, {
+      id: "classic:11:22:33:44:55:66",
+      name: "MP-58N-8012",
+      transport: "classic",
+    });
+    expect(input.id).toBe("printer-receipt-1");
+    expect(input.pairedDeviceKey).toBe("classic:11:22:33:44:55:66");
+    const prefs = prefsWithPrinters([{ ...existing, pairedDeviceKey: input.pairedDeviceKey }]);
+    expect(resolveDefaultReceiptPrinter(prefs)?.pairedDeviceKey).toBe("classic:11:22:33:44:55:66");
+    expect(resolveConfiguredHardwareTestPrinter(prefs)?.id).toBe("printer-receipt-1");
   });
 });

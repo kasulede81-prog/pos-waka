@@ -187,8 +187,9 @@ export function formatClassicSppDiagnostic(d: NativeClassicDiagnostic): string {
     `Write: ${d.writeSucceeded ? "SUCCESS" : "FAILED"}`,
     `Flush: ${d.flushSucceeded ? "SUCCESS" : "FAILED"}`,
     `Socket close: ${d.socketClosed ? "SUCCESS" : "FAILED"}`,
-    "Physical paper: TEST REQUIRED",
+    "PHYSICAL PAPER: NOT VERIFIED",
   ];
+  if (d.ok) lines.push("PRINT JOB SENT");
   if (!d.ok && (d.errorType || d.errorMessage || d.error)) {
     lines.push("");
     if (d.stage) lines.push(`Stage: ${d.stage}`);

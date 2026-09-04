@@ -223,7 +223,8 @@ describe("nativeBluetoothPrinter platform gate", () => {
       bytesWritten: 13,
     });
     expect(panel).toContain("RFCOMM: SUCCESS");
-    expect(panel).toContain("Physical paper: TEST REQUIRED");
+    expect(panel).toContain("PHYSICAL PAPER: NOT VERIFIED");
+    expect(panel).toContain("PRINT JOB SENT");
     expect(panel).not.toContain("Receipt printed");
   });
 

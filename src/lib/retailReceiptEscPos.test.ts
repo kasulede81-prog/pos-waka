@@ -245,4 +245,138 @@ describe("buildRetailReceiptEscPos (Phase 1A)", () => {
     enqueueSpy.mockRestore();
     sendSpy.mockRestore();
   });
+
+  it("keeps 58mm lines within 32 columns and wraps long names", () => {
+    const longName =
+      "Very Long Pharmacy Compound Name With Extra Words That Must Wrap Across Thermal Columns Without Throwing";
+    const bytes = buildRetailReceiptEscPos(
+      sampleDisplay({
+        returnPolicy: null,
+        footerLines: [
+          "Thank you for shopping with us",
+          "Returns accepted with receipt within 24 hours.",
+        ],
+        lines: [
+          {
+            name: longName,
+            quantityLabel: "1",
+            unitPriceUgx: 99_999,
+            lineTotalUgx: 99_999,
+            listPriceUgx: 99_999,
+            customerPaidUgx: 99_999,
+            showCustomerPaid: false,
+            showCalculation: true,
+          },
+        ],
+      }),
+      "58mm",
+    );
+    const text = decodeEscPosText(bytes);
+    const contentLines = text.split("\n").filter((line) => line.length > 0);
+    expect(contentLines.every((line) => line.length <= 32)).toBe(true);
+    expect(text).toContain("Very Long Pharmacy");
+    expect(text).toContain("Compound Name");
+  });
+
+  it("keeps 58mm totals aligned and readable", () => {
+    const text = decodeEscPosText(buildRetailReceiptEscPos(sampleDisplay(), "58mm"));
+    for (const label of ["Subtotal", "Grand Total", "Paid", "Change", "Method"]) {
+      const line = text.split("\n").find((row) => row.includes(label));
+      expect(line, label).toBeTruthy();
+      expect(line!.length).toBeLessThanOrEqual(32);
+      if (label !== "Method") expect(line).toContain("UGX");
+      else expect(line).toContain("CASH");
+    }
+  });
+
+  it("uses content-dependent feed and no 327mm page on 58mm", () => {
+    const shortBytes = buildRetailReceiptEscPos(sampleDisplay({ lines: sampleDisplay().lines.slice(0, 1) }), "58mm");
+    const longBytes = buildRetailReceiptEscPos(
+      sampleDisplay({
+        lines: Array.from({ length: 8 }, (_, i) => ({
+          name: `Item number ${i + 1} with a longer product title`,
+          quantityLabel: "1",
+          unitPriceUgx: 1000,
+          lineTotalUgx: 1000,
+          listPriceUgx: 1000,
+          customerPaidUgx: 1000,
+          showCustomerPaid: false,
+          showCalculation: true,
+        })),
+      }),
+      "58mm",
+    );
+    expect(longBytes.byteLength).toBeGreaterThan(shortBytes.byteLength);
+    expect(shortBytes.includes(0x0c)).toBe(false);
+    expect(longBytes.includes(0x0c)).toBe(false);
+    expect(hasPartialCut(shortBytes)).toBe(false);
+    expect(hasFeed(shortBytes, 4)).toBe(true);
+  });
+
+  it("word-wraps the default 24h snapshot footer on 58mm", () => {
+    const policy = "Returns accepted with receipt within 24 hours.";
+    const text = decodeEscPosText(
+      buildRetailReceiptEscPos(
+        sampleDisplay({
+          returnPolicy: null,
+          footerLines: ["Thank you for shopping with us", policy],
+        }),
+        "58mm",
+      ),
+    );
+    const lines = text.split("\n");
+    expect(policy.length).toBe(46);
+    expect(lines).not.toContain(policy);
+    expect(lines).not.toContain("Returns accepted with receipt wi");
+    expect(lines).toContain("Returns accepted with receipt");
+    expect(lines).toContain("within 24 hours.");
+    const first = lines.indexOf("Returns accepted with receipt");
+    expect(lines[first + 1]).toBe("within 24 hours.");
+    expect(lines[first]!.length).toBeLessThanOrEqual(32);
+    expect(lines[first + 1]!.length).toBeLessThanOrEqual(32);
+  });
+
+  it("preserves footer slot order, blank rows, and does not duplicate the policy", () => {
+    const policy = "Returns accepted with receipt within 24 hours.";
+    const longSlot = "Please bring this receipt when you return goods to the shop.";
+    const text = decodeEscPosText(
+      buildRetailReceiptEscPos(
+        sampleDisplay({
+          returnPolicy: policy,
+          footerLines: ["Thank you for shopping with us", "", longSlot, policy],
+        }),
+        "58mm",
+      ),
+    );
+    const policyCount = text.split("Returns accepted with receipt").length - 1;
+    expect(policyCount).toBe(1);
+    expect(text).toContain("Thank you for shopping with us\n\nPlease bring this receipt when\nyou return goods to the shop.\nReturns accepted with receipt\nwithin 24 hours.");
+  });
+
+  it("encodes UGX as ASCII on the thermal payload", () => {
+    const bytes = buildRetailReceiptEscPos(sampleDisplay(), "58mm");
+    const ugx = [0x55, 0x47, 0x58];
+    let found = false;
+    for (let i = 0; i < bytes.length - 2; i++) {
+      if (bytes[i] === ugx[0] && bytes[i + 1] === ugx[1] && bytes[i + 2] === ugx[2]) {
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+  });
 });
+
+function hasPartialCut(bytes: Uint8Array): boolean {
+  for (let i = 0; i < bytes.length - 3; i++) {
+    if (bytes[i] === 0x1d && bytes[i + 1] === 0x56 && bytes[i + 2] === 0x42 && bytes[i + 3] === 0x03) return true;
+  }
+  return false;
+}
+
+function hasFeed(bytes: Uint8Array, lines = 4): boolean {
+  for (let i = 0; i < bytes.length - 2; i++) {
+    if (bytes[i] === 0x1b && bytes[i + 1] === 0x64 && bytes[i + 2] === lines) return true;
+  }
+  return false;
+}

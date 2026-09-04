@@ -2815,13 +2815,15 @@ export function PosPage({ lang }: { lang: Language }) {
                     actor,
                     customerName: cust?.name ?? null,
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
+                    auditLogs,
                   });
                   void printSaleReceipt(ctx).then((r) => {
                     if (r.ok) {
                       logReceiptReprintAudit(receiptSale, ctx.receiptNumber);
-                      if (isNativePrintPlatform()) setToast(t(lang, "receiptPrintNativeOpened"));
+                      if (r.mode === "thermal") setToast(t(lang, "receiptPrintThermalSent"));
+                      else if (r.mode === "share" || isNativePrintPlatform()) setToast(t(lang, "receiptPrintNativeOpened"));
                     } else {
-                      window.alert(t(lang, "receiptPrintBlocked"));
+                      window.alert(r.mode === "thermal" ? (r.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));
                     }
                   });
                 }}
@@ -2836,6 +2838,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     actor,
                     customerName: cust?.name ?? null,
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
+                    auditLogs,
                   });
                   void downloadSaleReceiptPdf(ctx).then((ok) => {
                     if (ok) logReceiptPdfExportAudit(receiptSale, ctx.receiptNumber);
@@ -2853,6 +2856,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     actor,
                     customerName: cust?.name ?? null,
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
+                    auditLogs,
                   });
                   void shareSaleReceiptPdf(ctx).then((ok) => {
                     if (!ok) window.alert(t(lang, "receiptPdfFailed"));

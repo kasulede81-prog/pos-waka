@@ -178,6 +178,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       customerPhone: sale.receiptCustomerPhone ?? cust?.phone ?? null,
       customerBalanceUgx: cust?.debtBalanceUgx ?? null,
       planTier: receiptPlanTier,
+      auditLogs,
     });
   };
 
@@ -185,7 +186,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     const ctx = receiptCtxFor(sale);
     void printSaleReceipt(ctx).then((result) => {
       if (result.ok) logReceiptReprintAudit(sale, ctx.receiptNumber);
-      else window.alert(t(lang, "receiptPrintBlocked"));
+      else window.alert(result.mode === "thermal" ? (result.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));
     });
   };
 

@@ -7,7 +7,7 @@
 
 import type { ReceiptDisplayData, ReceiptDisplayLine } from "./receiptPrint";
 import { receiptLineDetailLabel } from "./receiptPrint";
-import { EscPosBuilder, padColumns, type EscPosPaperWidth } from "./escPosBuilder";
+import { EscPosBuilder, type EscPosPaperWidth } from "./escPosBuilder";
 
 export type { EscPosPaperWidth };
 
@@ -24,19 +24,19 @@ function pushItem(b: EscPosBuilder, line: ReceiptDisplayLine): void {
     b.wrapped(name);
   }
   if (line.showCalculation) {
-    b.textLine(padColumns(line.quantityLabel, total, b.cols));
+    b.aligned(line.quantityLabel, total);
   } else if (line.showCustomerPaid) {
     b.textLine(line.quantityLabel);
     b.wrapped(`List ${fmtUgx(line.listPriceUgx)} · Paid ${fmtUgx(line.customerPaidUgx)}`);
-    b.textLine(padColumns("", total, b.cols));
+    b.aligned("", total);
   } else {
     const detail = receiptLineDetailLabel(line);
     // Prefer qty on left / total on right when detail is the qty—total form.
     if (detail.includes(" — ")) {
-      b.textLine(padColumns(line.quantityLabel, total, b.cols));
+      b.aligned(line.quantityLabel, total);
     } else {
       b.wrapped(detail);
-      b.textLine(padColumns("", total, b.cols));
+      b.aligned("", total);
     }
   }
 }
@@ -78,12 +78,12 @@ export function buildRetailReceiptEscPos(
 
   // Meta
   if (opts.showReceiptNumber && display.receiptNumber.trim()) {
-    b.textLine(padColumns("Receipt No:", display.receiptNumber.trim(), b.cols));
+    b.aligned("Receipt No:", display.receiptNumber.trim());
   }
-  if (display.dateText.trim()) b.textLine(padColumns("Date:", display.dateText.trim(), b.cols));
-  if (display.timeText.trim()) b.textLine(padColumns("Time:", display.timeText.trim(), b.cols));
+  if (display.dateText.trim()) b.aligned("Date:", display.dateText.trim());
+  if (display.timeText.trim()) b.aligned("Time:", display.timeText.trim());
   if (opts.showCashier && display.cashier.trim()) {
-    b.textLine(padColumns("Cashier:", display.cashier.trim(), b.cols));
+    b.aligned("Cashier:", display.cashier.trim());
   }
   b.rule();
 
@@ -94,32 +94,32 @@ export function buildRetailReceiptEscPos(
   b.rule();
 
   // Totals
-  b.textLine(padColumns("Subtotal", fmtUgx(display.subtotalUgx), b.cols));
+  b.aligned("Subtotal", fmtUgx(display.subtotalUgx));
   if (display.lineDiscountsUgx > 0) {
-    b.textLine(padColumns("Line discounts", `-${fmtUgx(display.lineDiscountsUgx)}`, b.cols));
+    b.aligned("Line discounts", `-${fmtUgx(display.lineDiscountsUgx)}`);
   }
   if (display.cartDiscountUgx > 0) {
-    b.textLine(padColumns("Cart discount", `-${fmtUgx(display.cartDiscountUgx)}`, b.cols));
+    b.aligned("Cart discount", `-${fmtUgx(display.cartDiscountUgx)}`);
   }
   if (display.discountUgx > 0 && display.lineDiscountsUgx <= 0 && display.cartDiscountUgx <= 0) {
-    b.textLine(padColumns("Discount", `-${fmtUgx(display.discountUgx)}`, b.cols));
+    b.aligned("Discount", `-${fmtUgx(display.discountUgx)}`);
   }
   b.bold(true);
-  b.textLine(padColumns("Grand Total", fmtUgx(display.totalUgx), b.cols));
+  b.aligned("Grand Total", fmtUgx(display.totalUgx));
   b.bold(false);
   b.rule();
 
   // Payment
-  b.textLine(padColumns("Paid", fmtUgx(display.paidUgx), b.cols));
-  b.textLine(padColumns("Change", fmtUgx(display.changeUgx), b.cols));
+  b.aligned("Paid", fmtUgx(display.paidUgx));
+  b.aligned("Change", fmtUgx(display.changeUgx));
   if (opts.showPaymentMethod && display.paymentMethodLabel.trim()) {
-    b.textLine(padColumns("Method", display.paymentMethodLabel.trim(), b.cols));
+    b.aligned("Method", display.paymentMethodLabel.trim());
   }
   if (opts.showDebtInfo && display.outstandingDebtUgx > 0) {
-    b.textLine(padColumns("Outstanding Debt", fmtUgx(display.outstandingDebtUgx), b.cols));
+    b.aligned("Outstanding Debt", fmtUgx(display.outstandingDebtUgx));
     if (opts.showCustomerName) {
       const name = display.customerName?.trim() || "Not Recorded";
-      b.textLine(padColumns("Customer", name, b.cols));
+      b.aligned("Customer", name);
     }
     if (opts.showCustomerPhone && display.customerPhone?.trim()) {
       b.wrapped(display.customerPhone.trim());
@@ -133,13 +133,14 @@ export function buildRetailReceiptEscPos(
     b.wrapped(display.returnPolicy.trim());
   }
   for (const foot of display.footerLines) {
-    if (foot.trim() || foot === "") b.textLine(foot);
+    if (foot.trim()) b.wrapped(foot);
+    else if (foot === "") b.textLine(foot);
   }
   if (display.footerPowered?.trim()) {
     b.wrapped(display.footerPowered.trim());
   }
   b.align("left");
 
-  b.feed(4).partialCut();
+  b.finalize();
   return b.build();
 }

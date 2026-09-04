@@ -7,7 +7,7 @@ import type {
   SaleLine,
   ShopPreferences,
 } from "../types";
-import { EscPosBuilder, padColumns } from "./escPosBuilder";
+import { EscPosBuilder, columnsForWidth, padColumns, wrapText, type EscPosPaperWidth } from "./escPosBuilder";
 import { computeRestaurantBillTotals, billDraftFromSale } from "./restaurantBilling";
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { t } from "./i18n";
@@ -51,7 +51,10 @@ function lineNoteSuffix(line: SaleLine): string {
   return line.notes?.trim() ? ` [${line.notes.trim()}]` : "";
 }
 
-export function buildRestaurantReceiptLines(ctx: RestaurantReceiptContext): string[] {
+export function buildRestaurantReceiptLines(
+  ctx: RestaurantReceiptContext,
+  paperWidth: EscPosPaperWidth = "80mm",
+): string[] {
   const template = ctx.template ?? ctx.prefs.hospitalityHardware?.receiptTemplate;
   const tmpl = template ?? {
     kind: "restaurant" as const,
@@ -142,10 +145,15 @@ export function buildRestaurantReceiptLines(ctx: RestaurantReceiptContext): stri
     lines.push(`${t(ctx.lang, "restaurantReceiptPrintedBy")}: ${ctx.printedBy.trim()}`);
   }
   lines.push("—");
-  const cols = 42;
+  const cols = columnsForWidth(paperWidth);
   for (const line of receiptLines) {
     const name = line.name + (tmpl.showModifiers ? modifierSuffix(line) + lineNoteSuffix(line) : "");
-    lines.push(padColumns(`${line.quantity}x`, name.slice(0, cols - 8), cols));
+    const qty = `${line.quantity}x`;
+    if (qty.length + 1 + name.length <= cols) {
+      lines.push(padColumns(qty, name, cols));
+    } else {
+      lines.push(...wrapText(name, cols));
+    }
     lines.push(padColumns("", `UGX ${(line.lineTotalUgx ?? 0).toLocaleString()}`, cols));
   }
   lines.push("—");
@@ -211,17 +219,17 @@ export function splitRemainingUgx(split: BillSplitLine): number {
 }
 
 export function buildRestaurantReceiptEscPos(ctx: RestaurantReceiptContext, paperWidth: "58mm" | "80mm" = "80mm"): Uint8Array {
-  const textLines = buildRestaurantReceiptLines(ctx);
+  const textLines = buildRestaurantReceiptLines(ctx, paperWidth);
   const b = new EscPosBuilder(paperWidth);
-  b.align("center").doubleSize(true).textLine(textLines[0] ?? "WAKA POS").doubleSize(false);
+  b.align("center").doubleSize(true).wrapped(textLines[0] ?? "WAKA POS").doubleSize(false);
   b.align("left");
   for (const line of textLines.slice(1)) {
     if (line === "—") b.rule();
-    else if (line.includes("TOTAL") || line === t(ctx.lang, "restaurantReceiptTitle")) b.bold(true).textLine(line).bold(false);
+    else if (line.includes("TOTAL") || line === t(ctx.lang, "restaurantReceiptTitle")) b.bold(true).wrapped(line).bold(false);
     else if (line === "[ QR ]") b.qrPlaceholder(t(ctx.lang, "restaurantReceiptQrHint"));
-    else b.textLine(line);
+    else b.wrapped(line);
   }
-  b.feed(4).partialCut();
+  b.finalize();
   return b.build();
 }
 
