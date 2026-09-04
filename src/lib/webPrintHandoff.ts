@@ -1,5 +1,7 @@
 /**
- * Print-only handoff: Android Chrome → installed WAKA app (ug.waka.pos).
+ * Print-only handoff:
+ *   Android Chrome → Intent → ug.waka.pos
+ *   Windows Chrome/Edge → wakapos://print/v1 → ug.waka.pos.desktop
  * Does not format receipts, touch Bluetooth, or alter auth deep links.
  */
 
@@ -106,6 +108,70 @@ export function tryLaunchAndroidPrintHandoff(saleId: string, userAgent?: string)
   return true;
 }
 
+function runtimeUserAgent(userAgent?: string): string {
+  return userAgent ?? (typeof navigator !== "undefined" ? navigator.userAgent : "") ?? "";
+}
+
+function runtimePlatform(platform?: string): string {
+  return platform ?? (typeof navigator !== "undefined" ? navigator.platform : "") ?? "";
+}
+
+/** Windows Chrome or Edge in a normal desktop tab — not Android, Electron, Firefox, or Safari. */
+export function isWindowsDesktopChromeOrEdge(userAgent?: string, platform?: string): boolean {
+  const ua = runtimeUserAgent(userAgent);
+  const plat = runtimePlatform(platform);
+  if (!ua && !plat) return false;
+  if (/Android|iPhone|iPad|iPod/i.test(ua)) return false;
+  if (!/Win/i.test(plat) && !/Windows/i.test(ua)) return false;
+  if (/Firefox|FxiOS|OPR|Opera|SamsungBrowser/i.test(ua)) return false;
+  if (/Edg\//i.test(ua)) return true;
+  return /Chrome/i.test(ua) && !/EdgA/i.test(ua);
+}
+
+export function canAttemptDesktopPrintHandoff(userAgent?: string, platform?: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (Capacitor.isNativePlatform()) return false;
+  } catch {
+    return false;
+  }
+  if (isElectronDesktop()) return false;
+  return isWindowsDesktopChromeOrEdge(userAgent, platform);
+}
+
+export function buildDesktopPrintProtocolUrl(saleId: string): string | null {
+  if (!isValidSaleId(saleId)) return null;
+  return `${WAKA_PRINT_SCHEME}://${WAKA_PRINT_HOST}/${WAKA_PRINT_PROTOCOL}?saleId=${encodeURIComponent(saleId.trim())}`;
+}
+
+/**
+ * Fire wakapos://print/v1 without navigating the SPA away.
+ * Does not detect whether WAKA Desktop is installed — caller keeps HTML fallback when this returns false.
+ */
+export function tryLaunchDesktopPrintHandoff(
+  saleId: string,
+  userAgent?: string,
+  platform?: string,
+): boolean {
+  if (!canAttemptDesktopPrintHandoff(userAgent, platform)) return false;
+  if (typeof document === "undefined") return false;
+  const url = buildDesktopPrintProtocolUrl(saleId);
+  if (!url) return false;
+  try {
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.display = "none";
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    window.setTimeout(() => {
+      iframe.remove();
+    }, 1500);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isSignedInActor(actor: { userId?: string } | null | undefined): boolean {
   const id = actor?.userId?.trim() ?? "";
   return Boolean(id) && id !== "unknown";
@@ -180,6 +246,29 @@ export async function executeAppPrintHandoff(saleId: string): Promise<{ ok: bool
 }
 
 let printHandlerRegistered = false;
+let desktopPrintHandlerRegistered = false;
+
+function runPrintHandoff(saleId: string): void {
+  void executeAppPrintHandoff(saleId).then((result) => {
+    if (result.ok) return;
+    if (typeof window !== "undefined" && result.error) {
+      window.alert(result.error);
+    }
+  });
+}
+
+/** Electron Windows only — Capacitor Android uses registerNativePrintDeepLinkHandler. */
+export function registerDesktopPrintHandoffHandler(): void {
+  if (typeof window === "undefined" || desktopPrintHandlerRegistered) return;
+  if (!isElectronDesktop()) return;
+  const subscribe = window.wakaDesktop?.onPrintHandoff;
+  if (typeof subscribe !== "function") return;
+  desktopPrintHandlerRegistered = true;
+  subscribe((request) => {
+    if (request?.type !== "print" || !isValidSaleId(request.saleId)) return;
+    runPrintHandoff(request.saleId);
+  });
+}
 
 export function registerNativePrintDeepLinkHandler(): void {
   if (!Capacitor.isNativePlatform() || printHandlerRegistered) return;
@@ -188,12 +277,7 @@ export function registerNativePrintDeepLinkHandler(): void {
   const onUrl = (url: string) => {
     const parsed = parsePrintDeepLink(url);
     if (!parsed) return;
-    void executeAppPrintHandoff(parsed.saleId).then((result) => {
-      if (result.ok) return;
-      if (typeof window !== "undefined" && result.error) {
-        window.alert(result.error);
-      }
-    });
+    runPrintHandoff(parsed.saleId);
   };
 
   void App.addListener("appUrlOpen", ({ url }) => onUrl(url));

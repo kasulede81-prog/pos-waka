@@ -1,4 +1,26 @@
 const { contextBridge, ipcRenderer } = require("electron");
+const { PRINT_HANDOFF_CHANNELS } = require("./printHandoff/channels.cjs");
+
+function subscribePrintHandoff(callback) {
+  if (typeof callback !== "function") return () => {};
+  let lastSeq = -1;
+  const deliver = (payload) => {
+    if (!payload || typeof payload !== "object") return;
+    const saleId = typeof payload.saleId === "string" ? payload.saleId.trim() : "";
+    if (!saleId) return;
+    const seq = typeof payload.seq === "number" ? payload.seq : 0;
+    if (seq === lastSeq && lastSeq >= 0) return;
+    lastSeq = seq;
+    callback({ type: "print", version: 1, saleId });
+  };
+  const listen = ipcRenderer["on"].bind(ipcRenderer);
+  const wrapped = (_event, payload) => deliver(payload);
+  listen(PRINT_HANDOFF_CHANNELS.EVENT, wrapped);
+  void ipcRenderer.invoke(PRINT_HANDOFF_CHANNELS.TAKE).then(deliver).catch(() => {});
+  return () => {
+    ipcRenderer.removeListener(PRINT_HANDOFF_CHANNELS.EVENT, wrapped);
+  };
+}
 
 contextBridge.exposeInMainWorld("wakaDesktop", {
   platform: process.platform,
@@ -6,6 +28,8 @@ contextBridge.exposeInMainWorld("wakaDesktop", {
   getPrinterDiagnostics: () => ipcRenderer.invoke("waka-printer-diagnostics"),
   /** Desktop recovery only — reloads packaged index without clearing storage. */
   reloadApp: () => ipcRenderer.invoke("waka:shell:reload-app"),
+  /** Print Protocol V1 — saleId only. Main already validated the URI. */
+  onPrintHandoff: subscribePrintHandoff,
   /**
    * Typed hardware surface. LAN ESC/POS only — no generic sockets.
    * cashDrawer intentionally omitted (Phase 4B).

@@ -163,8 +163,11 @@ export async function printSaleReceipt(ctx: SaleReceiptContext): Promise<SalePri
   if (!isNativePrintPlatform()) {
     const saleId = ctx.sale.id?.trim() ?? "";
     if (saleId) {
-      const { tryLaunchAndroidPrintHandoff } = await import("./webPrintHandoff");
+      const { tryLaunchAndroidPrintHandoff, tryLaunchDesktopPrintHandoff } = await import("./webPrintHandoff");
       if (tryLaunchAndroidPrintHandoff(saleId)) {
+        return { ok: true, mode: "handoff" };
+      }
+      if (tryLaunchDesktopPrintHandoff(saleId)) {
         return { ok: true, mode: "handoff" };
       }
     }

@@ -199,6 +199,14 @@
     },
     "portable": {
       "artifactName": "WAKA-POS-Portable-${version}.${ext}"
-    }
+    },
+    "protocols": [
+      {
+        "name": "WAKA POS",
+        "schemes": [
+          "wakapos"
+        ]
+      }
+    ]
   }
 }

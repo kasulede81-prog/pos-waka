@@ -6,13 +6,17 @@ import {
   WAKA_PRINT_PROTOCOL,
   WAKA_PRINT_SCHEME,
   buildAndroidPrintIntentUrl,
+  buildDesktopPrintProtocolUrl,
+  canAttemptDesktopPrintHandoff,
   canAttemptWebPrintHandoff,
   executeAppPrintHandoff,
   isAndroidChromeBrowser,
   isValidSaleId,
   isValidWakaReturnUrl,
+  isWindowsDesktopChromeOrEdge,
   parsePrintDeepLink,
   tryLaunchAndroidPrintHandoff,
+  tryLaunchDesktopPrintHandoff,
 } from "./webPrintHandoff";
 import { normalizeAuthDeepLinkToAppPath } from "./nativeAuthDeepLink";
 
@@ -21,6 +25,14 @@ const ANDROID_CHROME =
   "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36";
 const DESKTOP_CHROME =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+const WINDOWS_CHROME =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+const WINDOWS_EDGE =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0";
+const WINDOWS_FIREFOX =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0";
+const LINUX_CHROME =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 const SAMSUNG =
   "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 Mobile Safari/537.36";
 
@@ -137,7 +149,9 @@ describe("webPrintHandoff protocol", () => {
     expect(isAndroidChromeBrowser(DESKTOP_CHROME)).toBe(false);
     expect(isAndroidChromeBrowser(SAMSUNG)).toBe(false);
     expect(canAttemptWebPrintHandoff(DESKTOP_CHROME)).toBe(false);
+    expect(canAttemptWebPrintHandoff(WINDOWS_CHROME)).toBe(false);
     expect(tryLaunchAndroidPrintHandoff(SALE_ID, DESKTOP_CHROME)).toBe(false);
+    expect(tryLaunchAndroidPrintHandoff(SALE_ID, WINDOWS_CHROME)).toBe(false);
   });
 
   it("launches the Intent URL from Android Chrome", () => {
@@ -192,6 +206,73 @@ describe("webPrintHandoff app execution", () => {
     const result = await executeAppPrintHandoff(SALE_ID);
     expect(result.ok).toBe(false);
     expect(printSaleReceipt).not.toHaveBeenCalled();
+  });
+});
+
+describe("desktop Windows print handoff", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (typeof window !== "undefined" && "wakaDesktop" in window) {
+      delete (window as Window & { wakaDesktop?: unknown }).wakaDesktop;
+    }
+  });
+
+  it("builds wakapos://print/v1 with saleId only", () => {
+    const url = buildDesktopPrintProtocolUrl(SALE_ID);
+    expect(url).toBe(`${WAKA_PRINT_SCHEME}://print/${WAKA_PRINT_PROTOCOL}?saleId=${encodeURIComponent(SALE_ID)}`);
+    expect(url).not.toMatch(/host=|port=|mac=|9100|ESC|1b40/i);
+    expect(buildDesktopPrintProtocolUrl("")).toBeNull();
+    expect(buildDesktopPrintProtocolUrl("bad id")).toBeNull();
+    expect(buildDesktopPrintProtocolUrl("x".repeat(81))).toBeNull();
+  });
+
+  it("is eligible on Windows Chrome and Edge only", () => {
+    expect(isWindowsDesktopChromeOrEdge(WINDOWS_CHROME, "Win32")).toBe(true);
+    expect(isWindowsDesktopChromeOrEdge(WINDOWS_EDGE, "Win32")).toBe(true);
+    expect(isWindowsDesktopChromeOrEdge(WINDOWS_FIREFOX, "Win32")).toBe(false);
+    expect(isWindowsDesktopChromeOrEdge(DESKTOP_CHROME, "MacIntel")).toBe(false);
+    expect(isWindowsDesktopChromeOrEdge(LINUX_CHROME, "Linux x86_64")).toBe(false);
+    expect(isWindowsDesktopChromeOrEdge(ANDROID_CHROME, "Linux armv8l")).toBe(false);
+  });
+
+  it("does not use the desktop branch on Android, Electron, or non-Windows", () => {
+    vi.stubGlobal("window", { location: { href: "https://pos.waka.ug/pos" } });
+    vi.stubGlobal("navigator", { userAgent: WINDOWS_CHROME, platform: "Win32" });
+    expect(canAttemptDesktopPrintHandoff(ANDROID_CHROME, "Linux armv8l")).toBe(false);
+    expect(canAttemptDesktopPrintHandoff(WINDOWS_FIREFOX, "Win32")).toBe(false);
+    expect(canAttemptDesktopPrintHandoff(DESKTOP_CHROME, "MacIntel")).toBe(false);
+    expect(canAttemptDesktopPrintHandoff(LINUX_CHROME, "Linux x86_64")).toBe(false);
+    expect(canAttemptWebPrintHandoff(WINDOWS_CHROME)).toBe(false);
+  });
+
+  it("does not launch desktop handoff from Electron", () => {
+    vi.stubGlobal("window", {
+      wakaDesktop: { platform: "win32" },
+      location: { href: "file:///app/index.html" },
+    });
+    vi.stubGlobal("navigator", { userAgent: WINDOWS_CHROME, platform: "Win32" });
+    expect(canAttemptDesktopPrintHandoff(WINDOWS_CHROME, "Win32")).toBe(false);
+    expect(tryLaunchDesktopPrintHandoff(SALE_ID, WINDOWS_CHROME, "Win32")).toBe(false);
+  });
+
+  it("launches the custom scheme from Windows Chrome without navigating the tab", () => {
+    const iframe = { setAttribute: vi.fn(), style: { display: "" }, src: "", remove: vi.fn() };
+    const loc = { href: "https://pos.waka.ug/pos" };
+    vi.stubGlobal("window", { location: loc, wakaDesktop: undefined, setTimeout: () => 1 });
+    vi.stubGlobal("navigator", { userAgent: WINDOWS_CHROME, platform: "Win32" });
+    vi.stubGlobal("document", {
+      createElement: () => iframe,
+      body: { appendChild: vi.fn() },
+    });
+    expect(tryLaunchDesktopPrintHandoff(SALE_ID, WINDOWS_CHROME, "Win32")).toBe(true);
+    expect(tryLaunchDesktopPrintHandoff(SALE_ID, WINDOWS_EDGE, "Win32")).toBe(true);
+    expect(iframe.src).toBe(`wakapos://print/v1?saleId=${encodeURIComponent(SALE_ID)}`);
+    expect(loc.href).toBe("https://pos.waka.ug/pos");
+  });
+
+  it("does not launch Android Intent from Windows Chrome", () => {
+    expect(tryLaunchAndroidPrintHandoff(SALE_ID, WINDOWS_CHROME)).toBe(false);
+    expect(tryLaunchAndroidPrintHandoff(SALE_ID, WINDOWS_EDGE)).toBe(false);
   });
 });
 

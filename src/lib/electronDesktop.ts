@@ -33,6 +33,10 @@ declare global {
       getPrinterDiagnostics?: () => Promise<unknown>;
       /** Desktop shell recovery — reloads packaged UI; does not clear storage. */
       reloadApp?: () => Promise<{ ok: boolean; error?: string }>;
+      /** Print Protocol V1 from Windows custom scheme — saleId only. */
+      onPrintHandoff?: (
+        callback: (request: { type: "print"; version: 1; saleId: string }) => void,
+      ) => () => void;
       /** Typed hardware bridge (Phase 4A+). */
       hardware?: {
         printer?: WakaDesktopHardwarePrinterApi;
@@ -54,7 +58,7 @@ declare global {
 export function isElectronDesktop(): boolean {
   if (typeof window === "undefined") return false;
   if (window.wakaDesktop) return true;
-  return /Electron/i.test(navigator.userAgent);
+  return typeof navigator !== "undefined" && /Electron/i.test(navigator.userAgent);
 }
 
 /** True when the native LAN ESC/POS bridge is present. */

@@ -16,6 +16,7 @@ import { AppProviders } from "./providers/AppProviders";
 import { Capacitor } from "@capacitor/core";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { initCapacitorShell } from "./lib/capacitorInit";
+import { registerDesktopPrintHandoffHandler } from "./lib/webPrintHandoff";
 import { initCrashReporting, installGlobalErrorHandlers } from "./lib/crashReporting";
 import { bootTrace } from "./lib/bootTrace";
 import { recoverStuckStartupState, recordStartupStep } from "./lib/startupDiagnostics";
@@ -53,6 +54,9 @@ if (!isElectronDesktop() && !Capacitor.isNativePlatform()) {
   });
 }
 void initCapacitorShell().then(() => recordStartupStep("capacitor_init"));
+if (isElectronDesktop()) {
+  registerDesktopPrintHandoffHandler();
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

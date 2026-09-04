@@ -7,8 +7,11 @@ const { registerRemoteSupportIpc, stopAllRemoteSupportTransports } = require("./
 const { registerPrinterIpc } = require("./hardware/printerIpc.cjs");
 const { classifyNavigation, isHttpOrHttps } = require("./shell/navigationSecurity.cjs");
 const { sanitizeShellError } = require("./shell/errors.cjs");
+const { extractPrintProtocolFromArgv } = require("./printHandoff/parsePrintProtocol.cjs");
+const { PRINT_HANDOFF_CHANNELS } = require("./printHandoff/channels.cjs");
 
 const APP_NAME = "WAKA POS";
+const PRINT_PROTOCOL_SCHEME = "wakapos";
 const isDev = !app.isPackaged;
 
 /** @type {BrowserWindow | null} */
@@ -16,13 +19,28 @@ let mainWindow = null;
 let isQuitting = false;
 let rendererRecoveryInFlight = false;
 let remoteSupportQuitCleanupStarted = false;
+/** @type {{ type: "print", version: 1, saleId: string, seq: number } | null} */
+let pendingPrintHandoff = null;
+let printHandoffSeq = 0;
+
+if (process.platform === "win32") {
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(PRINT_PROTOCOL_SCHEME, process.execPath, [
+      path.resolve(process.argv[1]),
+    ]);
+  } else {
+    app.setAsDefaultProtocolClient(PRINT_PROTOCOL_SCHEME);
+  }
+}
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, commandLine) => {
     focusMainWindow();
+    const request = extractPrintProtocolFromArgv(commandLine);
+    if (request) queuePrintHandoff(request);
   });
 }
 
@@ -40,6 +58,33 @@ function focusMainWindow() {
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+}
+
+function queuePrintHandoff(request) {
+  if (!request || request.type !== "print" || typeof request.saleId !== "string") return;
+  printHandoffSeq += 1;
+  pendingPrintHandoff = {
+    type: "print",
+    version: 1,
+    saleId: request.saleId,
+    seq: printHandoffSeq,
+  };
+  notifyPrintHandoffRenderer();
+}
+
+function notifyPrintHandoffRenderer() {
+  const win = mainWindow;
+  if (!win || win.isDestroyed() || !pendingPrintHandoff) return;
+  try {
+    win.webContents.send(PRINT_HANDOFF_CHANNELS.EVENT, {
+      type: pendingPrintHandoff.type,
+      version: pendingPrintHandoff.version,
+      saleId: pendingPrintHandoff.saleId,
+      seq: pendingPrintHandoff.seq,
+    });
+  } catch {
+    /* renderer not ready yet — take() + did-finish-load retry */
+  }
 }
 
 function logShell(level, message, detail) {
@@ -139,6 +184,7 @@ async function loadApp(win) {
 
   try {
     await win.loadFile(indexPath);
+    notifyPrintHandoffRenderer();
     return { ok: true };
   } catch (err) {
     logShell("error", "loadFile failed", err?.message || err);
@@ -205,6 +251,9 @@ function createMainWindow() {
   mainWindow = win;
   attachLifecycleGuards(win);
   attachNavigationGuards(win);
+  win.webContents.on("did-finish-load", () => {
+    notifyPrintHandoffRenderer();
+  });
 
   win.webContents.on("did-fail-load", (_event, code, description, validatedURL, isMainFrame) => {
     if (!isMainFrame) return;
@@ -271,11 +320,19 @@ ipcMain.handle("waka:shell:reload-app", async (event) => {
 registerPrinterIpc(ipcMain);
 registerRemoteSupportIpc(ipcMain);
 
+ipcMain.handle(PRINT_HANDOFF_CHANNELS.TAKE, () => {
+  const request = pendingPrintHandoff;
+  pendingPrintHandoff = null;
+  return request;
+});
+
 app.setName(APP_NAME);
 
 if (gotSingleInstanceLock) {
   app.whenReady().then(() => {
     createMainWindow();
+    const launchRequest = extractPrintProtocolFromArgv(process.argv);
+    if (launchRequest) queuePrintHandoff(launchRequest);
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
