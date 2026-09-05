@@ -91,7 +91,8 @@ export function buildDailyReportText(
   const frozen = resolveReportAuthority(input.dayCloses, dateKey).frozenTotals;
   const total = frozen?.totalSalesUgx ?? fin.revenueUgx;
   /** cashInHand = physical drawer cash from sales (MoMo/ATM excluded), same as Close Day / Cash Position. */
-  const cash = frozen?.cashFromSalesUgx ?? drawer.cashFromSalesUgx;
+  const cashUnavailable = Boolean(frozen) && frozen?.cashFromSalesUgx == null;
+  const cash = cashUnavailable ? null : (frozen?.cashFromSalesUgx ?? drawer.cashFromSalesUgx);
   const debt = frozen?.totalDebtUgx ?? fin.debtIssuedUgx;
   const profit = frozen?.profitEstimateUgx ?? fin.profitUgx;
   const txnCount = frozen?.transactionCount ?? fin.transactionCount;
@@ -104,7 +105,11 @@ export function buildDailyReportText(
   }
   lines.push(`${t(lang, "salesCount")}: ${txnCount}`);
   lines.push(`${t(lang, "totalSales")}: UGX ${total.toLocaleString()}`);
-  lines.push(`${t(lang, "cashInHand")}: UGX ${cash.toLocaleString()}`);
+  lines.push(
+    cashUnavailable || cash == null
+      ? `${t(lang, "cashInHand")}: ${t(lang, "reportsClosedBreakdownUnavailable")}`
+      : `${t(lang, "cashInHand")}: UGX ${cash.toLocaleString()}`,
+  );
   lines.push(`${t(lang, "ownerCardExpectedCash")}: UGX ${expectedCash.toLocaleString()}`);
   lines.push(`${t(lang, "creditLabel")}: UGX ${debt.toLocaleString()}`);
   if (includeProfit) {

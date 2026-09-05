@@ -13,6 +13,7 @@ function PharmacyOperationsWidget({ ctx }: ReportWidgetProps) {
       stockMovements={movements}
       pharmacyExpiryReport={ctx.pharmacyExpiryReport}
       periodLabel={ctx.periodLabel}
+      canProfit={ctx.canProfit}
     />
   );
 }

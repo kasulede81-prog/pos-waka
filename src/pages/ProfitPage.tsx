@@ -16,8 +16,9 @@ import { computeProfitGroupedByCategory, mergeLinkedReturnsForScopedSales } from
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
-import { MONTH_TO_DATE_FILTER } from "../lib/dateFilters";
+import { MONTH_TO_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
+import { resolveProfitPageDateAuthority } from "../lib/profitPageDateAuthority";
 import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
 import { ProfitStatGrid } from "../components/profit/ProfitStatGrid";
 import { ProfitTrendChart } from "../components/profit/ProfitTrendChart";
@@ -50,21 +51,33 @@ import { overlayPeriodFinancials, resolvePeriodReportAuthority } from "../lib/cl
 import { printProfitReportPdf } from "../lib/profitReportDocument";
 import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 
-type Props = { lang: Language; embedded?: boolean };
+type Props = {
+  lang: Language;
+  embedded?: boolean;
+  /** When set (Reports shell), this filter is the only date authority. */
+  dateFilter?: DateFilterValue;
+  includeArchived?: boolean;
+};
 
-export function ProfitPage({ lang, embedded }: Props) {
+export function ProfitPage({
+  lang,
+  embedded,
+  dateFilter: controlledFilter,
+  includeArchived: controlledArchived,
+}: Props) {
   const actor = useSessionActor();
   const { authMode, snapshot } = useSubscription();
-  const {
-    filter,
-    setFilter,
-    bounds,
-    includeArchived,
-    setIncludeArchived,
-    archiveNotice,
-    archivedSalesCount,
-    needsArchive,
-  } = useReportingDateFilter(MONTH_TO_DATE_FILTER);
+  const localDate = useReportingDateFilter(MONTH_TO_DATE_FILTER);
+  const { filter, bounds, controlled: dateControlled } = resolveProfitPageDateAuthority({
+    controlledFilter,
+    localFilter: localDate.filter,
+  });
+  const setFilter = localDate.setFilter;
+  const includeArchived = dateControlled ? Boolean(controlledArchived) : localDate.includeArchived;
+  const setIncludeArchived = localDate.setIncludeArchived;
+  const archiveNotice = dateControlled ? false : localDate.archiveNotice;
+  const archivedSalesCount = localDate.archivedSalesCount;
+  const needsArchive = dateControlled ? false : localDate.needsArchive;
   const rawSales = useReportingSales(includeArchived);
   const sales = useDeferredValue(rawSales);
   const salesRefreshing = rawSales !== sales;
@@ -396,11 +409,13 @@ export function ProfitPage({ lang, embedded }: Props) {
 
       {hasData ? (
         <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-muted/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
-          <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
+          {dateControlled ? null : (
+            <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
+          )}
           <ProfitQuickFilterChips lang={lang} active={quickFilter} onChange={setQuickFilter} />
           <ProfitSearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} />
         </div>
-      ) : (
+      ) : dateControlled ? null : (
         <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
       )}
 
@@ -418,7 +433,9 @@ export function ProfitPage({ lang, embedded }: Props) {
         <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
       ) : null}
 
-      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+      {dateControlled ? null : (
+        <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+      )}
 
       {total.linesMissingCost > 0 ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">

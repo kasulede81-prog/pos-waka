@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "./useDeferredReportingSales";
+import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
-import { DEFAULT_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
+import { DEFAULT_DATE_FILTER, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 import type { HomeMetricScope } from "../lib/homeVisibility";
 import { filterReturnsForHomeScope, filterSalesForHomeScope } from "../lib/homeVisibility";
 import {
@@ -16,11 +17,20 @@ import {
 import { timedComputation } from "../lib/performanceMetrics";
 import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
 import type { PeriodReportAuthority } from "../lib/closedDayAuthority";
+import {
+  applyReportsCompletenessToBundle,
+  resolveReportsFinancialReadiness,
+  sumFrozenPeriodHeadlines,
+} from "../lib/reportsDataCompleteness";
 
 export type ShopReportBundle = {
   /** Financial totals from local helpers, with closed-day overlay when a date is closed. */
   source: "local";
   authority: PeriodReportAuthority;
+  /** Unpersisted sales breakdowns must not be rebuilt from live rows when any selected day is closed. */
+  closedDayBreakdownUnavailable: boolean;
+  /** Closed snapshot lacks cashFromSalesUgx — physical cash must not be shown as a number. */
+  physicalCashUnavailable?: boolean;
   revenue: number;
   cash: number;
   profit: number;
@@ -35,7 +45,12 @@ export type ShopReportBundle = {
   dailyTrend: { day: string; label: string; total: number; barPx: number }[];
   stockValueAtCost: number;
   supplierDebtTotal: number;
-  loading: false;
+  /** True while live financials must not be shown as final (incomplete required data). */
+  loading: boolean;
+  /** Remainder + active sales tail have finished. Required for exports and live totals. */
+  dataComplete: boolean;
+  /** Returns, archives, expenses, and other remainder buckets are in RAM. */
+  remainderReady: boolean;
 };
 
 function trendBars(days: { day: string; revenueUgx: number }[]) {
@@ -53,13 +68,15 @@ function reportFilterFingerprint(filter: DateFilterValue): string {
 }
 
 export function useShopReportBundle(filter: DateFilterValue, includeArchived: boolean): ShopReportBundle {
-  const sales = useDeferredReportingSales(includeArchived);
+  const sales = useReportingSales(includeArchived);
   const returns = useReportingReturnRecords(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const suppliers = usePosStore((s) => s.suppliers);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const dayCloses = usePosStore((s) => s.dayCloses);
+  const hydrationStage = usePosStore((s) => s.hydrationStage);
+  const salesHistoryHydration = usePosStore((s) => s.salesHistoryHydration);
 
   const local = useMemo(() => {
     const closesFp = dayCloses
@@ -82,24 +99,42 @@ export function useShopReportBundle(filter: DateFilterValue, includeArchived: bo
   const discountsUgx = "discountsUgx" in summary ? summary.discountsUgx : 0;
   const taxesUgx = "taxesUgx" in summary ? summary.taxesUgx : 0;
 
+  const readiness = resolveReportsFinancialReadiness({
+    hydrationStage,
+    salesHistoryHydration,
+    authority: local.authority,
+  });
+  const frozenHeadlines = readiness.canShowFrozenHeadlines
+    ? sumFrozenPeriodHeadlines(dayCloses, resolveDateFilterBounds(filter))
+    : null;
+
+  const presented = applyReportsCompletenessToBundle(
+    {
+      authority: local.authority,
+      closedDayBreakdownUnavailable: local.closedDayBreakdownUnavailable,
+      physicalCashUnavailable: local.closedDayPhysicalCashUnavailable,
+      revenue: summary.totalRevenueUgx,
+      cash: local.closedDayPhysicalCashUnavailable ? 0 : cash,
+      profit: local.profitUgx,
+      debt,
+      count: summary.transactionCount,
+      discountsUgx,
+      taxesUgx,
+      topProducts: local.topProducts,
+      slowProducts: local.slowProducts,
+      marginLeaders: local.topProducts.filter((p) => p.profitUgx > 0).slice(0, 8),
+      dailyTrend: trendBars(local.dailyTrend.map((d) => ({ day: d.day, revenueUgx: d.revenueUgx }))),
+    },
+    readiness,
+    frozenHeadlines,
+  );
+
   return {
     source: "local",
-    authority: local.authority,
-    revenue: summary.totalRevenueUgx,
-    cash,
-    profit: local.profitUgx,
-    debt,
-    count: summary.transactionCount,
-    discountsUgx,
-    taxesUgx,
+    ...presented,
     debtOutstanding: local.customers.totalDebtOutstandingUgx,
-    topProducts: local.topProducts,
-    slowProducts: local.slowProducts,
-    marginLeaders: local.topProducts.filter((p) => p.profitUgx > 0).slice(0, 8),
-    dailyTrend: trendBars(local.dailyTrend.map((d) => ({ day: d.day, revenueUgx: d.revenueUgx }))),
     stockValueAtCost: local.inventory.stockValueAtCostUgx,
     supplierDebtTotal: local.supplierDebtTotal,
-    loading: false,
   };
 }
 

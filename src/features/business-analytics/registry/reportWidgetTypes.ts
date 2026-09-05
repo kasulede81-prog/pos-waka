@@ -21,6 +21,7 @@ import type {
 } from "../../../types";
 import type { DateFilterValue } from "../../../lib/dateFilters";
 import type { ShopReportBundle } from "../../../hooks/useShopReporting";
+import type { ReportsPeriodCashFlow } from "../../../lib/reportsCashFlow";
 import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
 import type { HospitalityReportSummary } from "../../../lib/hospitalityReports";
 import type { ReportWidgetSlot } from "./reportWidgetSlots";
@@ -75,6 +76,7 @@ export type ReportsCenterContext = {
   marginLeaders: Array<{ name: string; revenue: number; profit: number; pct: number }>;
   purchasesTodayUgx: number;
   purchasesInPeriodUgx: number;
+  cashFlow: ReportsPeriodCashFlow;
   showDailyExport: boolean;
   reportDayKey: string;
   exportSummaryText: string;

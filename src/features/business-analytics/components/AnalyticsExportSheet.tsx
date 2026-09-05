@@ -7,6 +7,7 @@ type Props = {
   lang: Language;
   open: boolean;
   onClose: () => void;
+  exportDisabled?: boolean;
   onExportPdf: () => void;
   onExportCsv: () => void;
   onExportExcel: () => void;
@@ -19,6 +20,7 @@ export function AnalyticsExportSheet({
   lang,
   open,
   onClose,
+  exportDisabled = false,
   onExportPdf,
   onExportCsv,
   onExportExcel,
@@ -37,16 +39,21 @@ export function AnalyticsExportSheet({
 
   return (
     <ModalSheet open={open} onClose={onClose} title={t(lang, "baExportTitle")}>
+      {exportDisabled ? (
+        <p className="mb-3 text-sm font-medium text-muted-foreground">{t(lang, "baReportExportNotReady")}</p>
+      ) : null}
       <ul className="space-y-1">
         {items.map((item) => (
           <li key={item.label}>
             <button
               type="button"
+              disabled={exportDisabled}
               onClick={() => {
+                if (exportDisabled) return;
                 item.action();
                 onClose();
               }}
-              className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl px-2 text-left text-sm font-bold text-foreground active:bg-muted"
+              className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl px-2 text-left text-sm font-bold text-foreground active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-waka-50 text-waka-700">
                 <item.icon className="h-5 w-5" aria-hidden />
@@ -60,12 +67,21 @@ export function AnalyticsExportSheet({
   );
 }
 
-export function AnalyticsExportFab({ lang, onClick }: { lang: Language; onClick: () => void }) {
+export function AnalyticsExportFab({
+  lang,
+  onClick,
+  disabled = false,
+}: {
+  lang: Language;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="fixed bottom-[calc(var(--waka-bottom-nav-h,0px)+var(--waka-safe-bottom,0px)+5.5rem)] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-waka-600 text-white shadow-lg ring-4 ring-white/80 active:scale-95 sm:bottom-8"
+      disabled={disabled}
+      className="fixed bottom-[calc(var(--waka-bottom-nav-h,0px)+var(--waka-safe-bottom,0px)+5.5rem)] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-waka-600 text-white shadow-lg ring-4 ring-white/80 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:bottom-8"
       aria-label={t(lang, "baExport")}
     >
       <Download className="h-6 w-6" aria-hidden />

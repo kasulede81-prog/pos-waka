@@ -7,6 +7,7 @@ type Props = {
   periodLabel: string;
   compareEnabled: boolean;
   searchQuery: string;
+  exportDisabled?: boolean;
   onSearchChange: (value: string) => void;
   onOpenDateFilter: () => void;
   onToggleCompare: () => void;
@@ -19,6 +20,7 @@ export function AnalyticsPageToolbar({
   periodLabel,
   compareEnabled,
   searchQuery,
+  exportDisabled = false,
   onSearchChange,
   onOpenDateFilter,
   onToggleCompare,
@@ -67,7 +69,8 @@ export function AnalyticsPageToolbar({
         <button
           type="button"
           onClick={onOpenExport}
-          className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-waka-600 px-4 text-xs font-black text-white shadow-sm"
+          disabled={exportDisabled}
+          className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-waka-600 px-4 text-xs font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Download className="h-4 w-4" aria-hidden />
           {t(lang, "baExport")}

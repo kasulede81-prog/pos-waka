@@ -1,7 +1,7 @@
 /** Client-side report aggregation (offline / local-mode fallback). */
 
 import type { Customer, DayCloseSummary, Product, ReturnRecord, Sale, Supplier } from "../types";
-import { dateKeyDaysAgoKampala, dateKeyKampala, monthKeyKampala, previousMonthKey, saleReportingDayKey } from "./datesUg";
+import { dateKeyDaysAgoKampala, dateKeyKampala, monthKeyKampala, previousMonthKey, saleReportingDayKey, weekStartKeyKampala } from "./datesUg";
 import {
   enumerateDaysInBounds,
   resolveDateFilterBounds,
@@ -12,7 +12,7 @@ import {
 import { sumCashExpensesInMonth, sumCashExpensesOnDay } from "./cashReconciliation";
 import type { CashExpense } from "../types";
 import { getCompletedFinancials, getCompletedFinancialsFromScoped, isRevenueSale } from "./financialMetrics";
-import { computeTodayProfitBreakdown } from "./homeProfit";
+import { computeTodayProfitBreakdown, mergeLinkedReturnsForScopedSales } from "./homeProfit";
 import { inventoryValueAtCostUgx } from "./costPrecision";
 import { isLowStock } from "./sellingEngine";
 import { resolveReturnFinancials, resolveSaleLineFinancialsWithSale, findSaleLineForReturn } from "./saleFinancialEngine";
@@ -22,6 +22,8 @@ import {
   overlayClosedDayExpenses,
   overlayClosedDayTrendPoint,
   overlayPeriodFinancials,
+  periodClosedPhysicalCashUnavailable,
+  periodSalesBreakdownsUnavailable,
   resolvePeriodReportAuthority,
   resolveReportAuthority,
   type PeriodReportAuthority,
@@ -235,7 +237,9 @@ export function localGetDailySalesSummary(
     day,
     transactionCount: tot.transactionCount ?? fin.transactionCount,
     totalRevenueUgx: tot.totalSalesUgx,
-    cashCollectedUgx: tot.cashFromSalesUgx ?? fin.cashCollectedUgx,
+    cashCollectedUgx: tot.cashFromSalesUgx != null ? tot.cashFromSalesUgx : physicalCashCollectedFromSales(
+      sales.filter((s) => isRevenueSale(s) && saleReportingDayKey(s) === day),
+    ),
     debtIssuedUgx: tot.totalDebtUgx,
     discountsUgx: fin.discountsUgx,
     taxesUgx: 0,
@@ -441,6 +445,33 @@ export function localGetCustomerInsights(
   };
 }
 
+export type ReportsTrendPoint = { day: string; revenueUgx: number; transactionCount: number };
+
+/** Daily bars while the range is short enough to read; then week / month from those day points. */
+export const REPORTS_TREND_DAILY_MAX_DAYS = 45;
+export const REPORTS_TREND_WEEKLY_MAX_DAYS = 180;
+
+/** Fold an already-built daily series. Does not rescan sales. */
+export function aggregateReportsTrendPoints(daily: ReportsTrendPoint[]): ReportsTrendPoint[] {
+  const n = daily.length;
+  if (n <= REPORTS_TREND_DAILY_MAX_DAYS) return daily;
+  const weekly = n <= REPORTS_TREND_WEEKLY_MAX_DAYS;
+  const buckets = new Map<string, ReportsTrendPoint>();
+  const order: string[] = [];
+  for (const row of daily) {
+    const key = weekly ? weekStartKeyKampala(row.day) : `${row.day.slice(0, 7)}-01`;
+    const cur = buckets.get(key);
+    if (!cur) {
+      buckets.set(key, { day: key, revenueUgx: row.revenueUgx, transactionCount: row.transactionCount });
+      order.push(key);
+    } else {
+      cur.revenueUgx += row.revenueUgx;
+      cur.transactionCount += row.transactionCount;
+    }
+  }
+  return order.map((day) => buckets.get(day)!);
+}
+
 export type ShopRangeSummaryResult = {
   summary: DailySalesSummary | WeeklySalesSummary | MonthlySalesSummary;
   profitUgx: number;
@@ -452,6 +483,9 @@ export type ShopRangeSummaryResult = {
   supplierDebtTotal: number;
   dailyTrend: { day: string; revenueUgx: number; transactionCount: number }[];
   authority: PeriodReportAuthority;
+  closedDayBreakdownUnavailable: boolean;
+  /** Closed day(s) in range lack snapshot cashFromSalesUgx — do not present cash as final. */
+  closedDayPhysicalCashUnavailable: boolean;
 };
 
 export function localGetRangeSummary(
@@ -472,6 +506,7 @@ export function localGetRangeSummary(
   const finCache = needsMultiDayFin ? createReportFinancialCache(sales, returns, products) : null;
   const filteredSales = salesForFilter(sales, filter);
   const filteredReturns = returnsForFilter(returns, filter);
+  const profitReturns = mergeLinkedReturnsForScopedSales(filteredSales, filteredReturns, returns);
   const productById = finCache?.productById ?? new Map(products.map((p) => [p.id, p]));
 
   let summary: DailySalesSummary | WeeklySalesSummary | MonthlySalesSummary;
@@ -503,7 +538,7 @@ export function localGetRangeSummary(
     const dayFin =
       finCache != null
         ? cachedCompletedFinancials(finCache, { day: dayKey })
-        : getCompletedFinancialsFromScoped(filteredSales, filteredReturns, products);
+        : getCompletedFinancialsFromScoped(filteredSales, profitReturns, products);
     summary = {
       day: dayKey,
       transactionCount: dayFin.transactionCount,
@@ -515,7 +550,15 @@ export function localGetRangeSummary(
       estimatedProfitUgx: dayFin.profitUgx,
       averageTransactionUgx: dayFin.averageTransactionUgx,
     };
-    dailyTrend = [{ day: dayKey, revenueUgx: dayFin.revenueUgx, transactionCount: dayFin.transactionCount }];
+    if (bounds.isSingleDay) {
+      dailyTrend = [{ day: dayKey, revenueUgx: dayFin.revenueUgx, transactionCount: dayFin.transactionCount }];
+    } else {
+      const trendCache = createReportFinancialCache(sales, returns, products);
+      dailyTrend = enumerateDaysInBounds(bounds).map((day) => {
+        const fin = cachedCompletedFinancials(trendCache, { day });
+        return { day, revenueUgx: fin.revenueUgx, transactionCount: fin.transactionCount };
+      });
+    }
   }
 
   const { top: topProducts, slow: slowProducts } = rankProductsBoth(
@@ -529,7 +572,7 @@ export function localGetRangeSummary(
   let profitUgx =
     !needsMultiDayFin && !isWeek
       ? (summary as DailySalesSummary).estimatedProfitUgx
-      : computeTodayProfitBreakdown(filteredSales, productById, filteredReturns).profitUgx;
+      : computeTodayProfitBreakdown(filteredSales, productById, profitReturns).profitUgx;
 
   if (dayCloses?.length) {
     const liveDebt = "debtIssuedUgx" in summary ? summary.debtIssuedUgx : 0;
@@ -549,20 +592,10 @@ export function localGetRangeSummary(
       products,
     });
     profitUgx = overlaid.profitUgx;
-    if (bounds.isSingleDay || isWeek || isMonth) {
-      dailyTrend = dailyTrend.map((row) => ({
-        day: row.day,
-        ...overlayClosedDayTrendPoint(row.day, row, dayCloses),
-      }));
-    } else {
-      dailyTrend = [
-        {
-          day: bounds.fromKey,
-          revenueUgx: overlaid.revenueUgx,
-          transactionCount: overlaid.transactionCount,
-        },
-      ];
-    }
+    dailyTrend = dailyTrend.map((row) => ({
+      day: row.day,
+      ...overlayClosedDayTrendPoint(row.day, row, dayCloses),
+    }));
     if ("month" in summary) {
       const expensesUgx = overlayClosedDayExpenses(
         summary.expensesUgx,
@@ -603,18 +636,33 @@ export function localGetRangeSummary(
     }
   }
 
+  if (!isWeek && !isMonth && !bounds.isSingleDay) {
+    dailyTrend = aggregateReportsTrendPoints(dailyTrend);
+  }
+
   const authority: PeriodReportAuthority = resolvePeriodReportAuthority(dayCloses, bounds);
+  const closedDayBreakdownUnavailable = periodSalesBreakdownsUnavailable(authority);
+  const closedDayPhysicalCashUnavailable = periodClosedPhysicalCashUnavailable(dayCloses, bounds);
+  if (closedDayBreakdownUnavailable && "discountsUgx" in summary) {
+    summary = { ...summary, discountsUgx: 0 };
+  }
+  if (closedDayBreakdownUnavailable && weekly) {
+    weekly = { ...weekly, topProducts: [] };
+    if ("startDay" in summary) summary = weekly;
+  }
 
   return {
     summary,
     profitUgx,
     weekly,
-    topProducts,
-    slowProducts,
+    topProducts: closedDayBreakdownUnavailable ? [] : topProducts,
+    slowProducts: closedDayBreakdownUnavailable ? [] : slowProducts,
     inventory: localGetInventoryInsights(products),
     customers: localGetCustomerInsights(sales, customers, filter),
     supplierDebtTotal: suppliers.reduce((a, s) => a + Math.max(0, s.balanceOwedUgx), 0),
     dailyTrend,
     authority,
+    closedDayBreakdownUnavailable,
+    closedDayPhysicalCashUnavailable,
   };
 }

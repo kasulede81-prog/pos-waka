@@ -1,13 +1,25 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
+import { Link } from "react-router-dom";
 import type { Language, Product, Purchase, Supplier } from "../../../types";
 import type { ShopReportBundle } from "../../../hooks/useShopReporting";
+import type { ReportsPeriodCashFlow } from "../../../lib/reportsCashFlow";
 import type { InventoryInsights } from "../../../lib/localReporting";
 import type { PaymentMixSlice, LeaderboardRow } from "../types";
 import type { AnalyticsCategory } from "../types";
+import type { DateFilterValue } from "../../../lib/dateFilters";
 import { t } from "../../../lib/i18n";
+import {
+  REPORTS_STOCK_NOW_HREF,
+  reportsStockNowHeading,
+  reportsStockNowPreview,
+  reportsStockNowRowFields,
+} from "../lib/reportsStockNowPreview";
 import { KPI_VALUE_CLASS } from "../../../lib/desktopLayout";
 import { formatShortUgx } from "../../../lib/commandCenterPageView";
+import { reportsInventoryCostPresentation } from "../lib/analyticsPageView";
+import { formatDateFilterViewingLabel } from "../../../lib/dateFilterLabels";
+import { reportsCategoryBlocksOnIncompleteSales } from "../../../lib/reportsDataCompleteness";
 import { AnalyticsBarChart, AnalyticsDonutChart, AnalyticsTrendChart } from "./AnalyticsCharts";
 import { AnalyticsLeaderboard, AnalyticsEmptyState } from "./AnalyticsLeaderboard";
 import { MonthlyReportsPanel } from "../../../components/reports/MonthlyReportsPanel";
@@ -31,6 +43,7 @@ export type AnalyticsSectionProps = {
   stockValueAtCost: number;
   purchasesTodayUgx: number;
   purchasesInPeriodUgx: number;
+  cashFlow: ReportsPeriodCashFlow;
   marginLeaders: Array<{ name: string; revenue: number; profit: number; pct: number }>;
   weakProducts: Array<{ name: string; revenueUgx: number }>;
   products: Product[];
@@ -40,6 +53,8 @@ export type AnalyticsSectionProps = {
   count: number;
   revenue: number;
   profit: number;
+  dateFilter?: DateFilterValue;
+  includeArchived?: boolean;
 };
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -52,11 +67,46 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
+function closedBreakdownEmpty(unavailable: boolean) {
+  return unavailable
+    ? {
+        emptyKey: "reportsClosedBreakdownUnavailable",
+        emptyHintKey: "reportsClosedBreakdownUnavailableHint",
+      }
+    : {};
+}
+
+function ReportsDataLoadingState({ lang }: { lang: Language }) {
+  return <AnalyticsEmptyState lang={lang} titleKey="salesHistoryHydrationLoading" bodyKey="baReportDataPreparing" />;
+}
+
 export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
   const { lang, category } = props;
+  const breakdownsUnavailable = props.report.closedDayBreakdownUnavailable;
+  const closedEmpty = closedBreakdownEmpty(breakdownsUnavailable);
+  const remainderPending = !props.report.remainderReady;
+  const liveFinancialsPending = props.report.loading;
+  const hideEmbeddedProfitPage = !props.report.dataComplete;
+
+  if (liveFinancialsPending && reportsCategoryBlocksOnIncompleteSales(category)) {
+    if (category === "expenses" || category === "purchases") {
+      if (remainderPending) return <ReportsDataLoadingState lang={lang} />;
+    } else {
+      return <ReportsDataLoadingState lang={lang} />;
+    }
+  }
+  if ((category === "expenses" || category === "purchases") && remainderPending) {
+    return <ReportsDataLoadingState lang={lang} />;
+  }
+  if (category === "taxes" && !props.report.dataComplete) {
+    return <ReportsDataLoadingState lang={lang} />;
+  }
 
   if (category === "overview") {
-    if (props.count === 0 && props.revenue === 0) {
+    if (liveFinancialsPending) {
+      return <ReportsDataLoadingState lang={lang} />;
+    }
+    if (props.count === 0 && props.revenue === 0 && !breakdownsUnavailable && props.report.dataComplete) {
       return <AnalyticsEmptyState lang={lang} titleKey="baEmptyTitle" bodyKey="baEmptyBody" />;
     }
     return (
@@ -64,25 +114,45 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
         {props.modePanels}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <StatTile label={t(lang, "baTodaySummary")} value={formatShortUgx(props.revenue)} hint={`${props.count} ${t(lang, "salesCount").toLowerCase()}`} />
-          <StatTile label={t(lang, "baTopProduct")} value={props.topProducts[0]?.label ?? "—"} hint={props.topProducts[0]?.value} />
-          <StatTile label={t(lang, "baBestCustomer")} value={props.topCustomers[0]?.label ?? "—"} hint={props.topCustomers[0]?.value} />
-          <StatTile label={t(lang, "baActiveCashier")} value={props.topCashiers[0]?.label ?? "—"} hint={props.topCashiers[0]?.sub} />
+          <StatTile
+            label={t(lang, "baTopProduct")}
+            value={breakdownsUnavailable ? t(lang, "reportsClosedBreakdownUnavailable") : (props.topProducts[0]?.label ?? "—")}
+            hint={breakdownsUnavailable ? t(lang, "reportsClosedBreakdownUnavailableHint") : props.topProducts[0]?.value}
+          />
+          <StatTile
+            label={t(lang, "baBestCustomer")}
+            value={breakdownsUnavailable ? t(lang, "reportsClosedBreakdownUnavailable") : (props.topCustomers[0]?.label ?? "—")}
+            hint={breakdownsUnavailable ? t(lang, "reportsClosedBreakdownUnavailableHint") : props.topCustomers[0]?.value}
+          />
+          <StatTile
+            label={t(lang, "baActiveCashier")}
+            value={breakdownsUnavailable ? t(lang, "reportsClosedBreakdownUnavailable") : (props.topCashiers[0]?.label ?? "—")}
+            hint={breakdownsUnavailable ? t(lang, "reportsClosedBreakdownUnavailableHint") : props.topCashiers[0]?.sub}
+          />
           <StatTile label={t(lang, "reportsDebtOutstanding")} value={formatShortUgx(props.debtOutstanding)} />
           {props.canProfit ? (
             <StatTile label={t(lang, "estimatedProfit")} value={formatShortUgx(props.profit)} />
           ) : null}
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          <AnalyticsTrendChart points={props.sparkline} title={t(lang, "baSalesOverview")} />
-          <AnalyticsDonutChart
-            title={t(lang, "baPaymentMethods")}
-            slices={props.paymentMix.map((s) => ({ label: t(lang, s.labelKey), pct: s.pct, colorClass: s.colorClass }))}
-          />
+          {breakdownsUnavailable ? (
+            <AnalyticsEmptyState lang={lang} titleKey="reportsClosedBreakdownUnavailable" bodyKey="reportsClosedBreakdownUnavailableHint" />
+          ) : (
+            <AnalyticsTrendChart points={props.sparkline} title={t(lang, "baSalesOverview")} />
+          )}
+          {breakdownsUnavailable ? (
+            <AnalyticsEmptyState lang={lang} titleKey="reportsClosedBreakdownUnavailable" bodyKey="reportsClosedBreakdownUnavailableHint" />
+          ) : (
+            <AnalyticsDonutChart
+              title={t(lang, "baPaymentMethods")}
+              slices={props.paymentMix.map((s) => ({ label: t(lang, s.labelKey), pct: s.pct, colorClass: s.colorClass }))}
+            />
+          )}
         </div>
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-          <AnalyticsLeaderboard lang={lang} title={t(lang, "topProducts")} rows={props.topProducts} />
-          <AnalyticsLeaderboard lang={lang} title={t(lang, "baTopCustomers")} rows={props.topCustomers} />
-          <AnalyticsLeaderboard lang={lang} title={t(lang, "baTopEmployees")} rows={props.topCashiers} />
+          <AnalyticsLeaderboard lang={lang} title={t(lang, "topProducts")} rows={props.topProducts} {...closedEmpty} />
+          <AnalyticsLeaderboard lang={lang} title={t(lang, "baTopCustomers")} rows={props.topCustomers} {...closedEmpty} />
+          <AnalyticsLeaderboard lang={lang} title={t(lang, "baTopEmployees")} rows={props.topCashiers} {...closedEmpty} />
           {props.canProfit ? (
             <AnalyticsLeaderboard
               lang={lang}
@@ -93,6 +163,7 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
                 value: formatShortUgx(r.profit),
                 sub: `${Math.round(r.pct * 100)}%`,
               }))}
+              {...closedEmpty}
             />
           ) : null}
         </div>
@@ -106,13 +177,30 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
         <div className="grid gap-3 sm:grid-cols-3">
           <StatTile label={t(lang, "receiptsRangeRevenue")} value={formatShortUgx(props.revenue)} />
           <StatTile label={t(lang, "salesCount")} value={String(props.count)} />
-          <StatTile label={t(lang, "cashInHand")} value={formatShortUgx(props.report.cash)} />
+          <StatTile
+            label={t(lang, "cashInHand")}
+            value={
+              props.report.physicalCashUnavailable
+                ? t(lang, "reportsClosedBreakdownUnavailable")
+                : formatShortUgx(props.report.cash)
+            }
+            hint={props.report.physicalCashUnavailable ? t(lang, "reportsClosedPhysicalCashUnavailableHint") : undefined}
+          />
         </div>
-        <AnalyticsBarChart title={t(lang, "reportsWeekTrend")} bars={props.trendBars} />
-        <AnalyticsDonutChart
-          title={t(lang, "baPaymentMethods")}
-          slices={props.paymentMix.map((s) => ({ label: t(lang, s.labelKey), pct: s.pct, colorClass: s.colorClass }))}
+        <AnalyticsBarChart
+          title={
+            props.dateFilter ? formatDateFilterViewingLabel(lang, props.dateFilter) : t(lang, "reportsSalesTrend")
+          }
+          bars={props.trendBars}
         />
+        {breakdownsUnavailable ? (
+          <AnalyticsEmptyState lang={lang} titleKey="reportsClosedBreakdownUnavailable" bodyKey="reportsClosedBreakdownUnavailableHint" />
+        ) : (
+          <AnalyticsDonutChart
+            title={t(lang, "baPaymentMethods")}
+            slices={props.paymentMix.map((s) => ({ label: t(lang, s.labelKey), pct: s.pct, colorClass: s.colorClass }))}
+          />
+        )}
       </div>
     );
   }
@@ -126,43 +214,69 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
           <StatTile label={t(lang, "reportsStockValue")} value={formatShortUgx(props.stockValueAtCost)} />
           <StatTile label={t(lang, "reportsSupplierDebt")} value={formatShortUgx(props.supplierDebtTotal)} />
         </div>
-        <ProfitPage lang={lang} embedded />
+        {hideEmbeddedProfitPage ? (
+          <ReportsDataLoadingState lang={lang} />
+        ) : (
+          <ProfitPage
+            lang={lang}
+            embedded
+            dateFilter={props.dateFilter}
+            includeArchived={props.includeArchived}
+          />
+        )}
       </div>
     );
   }
 
   if (category === "products") {
+    const stockNow = reportsStockNowPreview(props.products);
     return (
       <div className="space-y-4">
-        <AnalyticsLeaderboard lang={lang} title={t(lang, "topProducts")} rows={props.topProducts} />
+        <AnalyticsLeaderboard lang={lang} title={t(lang, "topProducts")} rows={props.topProducts} {...closedEmpty} />
         {props.canProfit && props.weakProducts.length > 0 ? (
           <AnalyticsLeaderboard
             lang={lang}
             title={t(lang, "reportsWeakSellers")}
             rows={props.weakProducts.map((p, i) => ({ id: `w-${i}`, label: p.name, value: formatShortUgx(p.revenueUgx) }))}
+            {...closedEmpty}
           />
         ) : null}
         <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <h3 className="text-sm font-black text-foreground">{t(lang, "stockRemainingHint")}</h3>
+          <h3 className="text-sm font-black text-foreground">
+            {reportsStockNowHeading(lang, stockNow.shown, stockNow.total)}
+          </h3>
           <ul className="mt-3 space-y-2">
-            {props.products.slice(0, 12).map((p) => (
-              <li key={p.id} className="flex justify-between text-sm font-medium text-muted-foreground">
-                <span className="truncate">{p.name}</span>
-                <span className="shrink-0 tabular-nums">
-                  {p.stockOnHand} {p.baseUnit}
-                </span>
-              </li>
-            ))}
+            {stockNow.rows.map((p) => {
+              const row = reportsStockNowRowFields(p);
+              return (
+                <li key={p.id} className="flex justify-between text-sm font-medium text-muted-foreground">
+                  <span className="truncate">{row.name}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {row.stockOnHand} {row.baseUnit}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
+          {stockNow.showViewStock ? (
+            <Link to={REPORTS_STOCK_NOW_HREF} className="mt-3 inline-block text-sm font-black text-waka-800">
+              {t(lang, "reportsViewStock")}
+            </Link>
+          ) : null}
         </section>
       </div>
     );
   }
 
   if (category === "inventory") {
+    const inventoryCost = reportsInventoryCostPresentation(props.canProfit, props.inventory.stockValueAtCostUgx);
     return (
       <div className="space-y-4">
-        <StatTile label={t(lang, "reportsStockValue")} value={formatShortUgx(props.inventory.stockValueAtCostUgx)} />
+        <StatTile
+          label={t(lang, "reportsStockValue")}
+          value={inventoryCost.visible ? formatShortUgx(inventoryCost.valueUgx) : t(lang, "baProfitLockedTitle")}
+          hint={inventoryCost.visible ? undefined : t(lang, "baProfitLockedBody")}
+        />
         <AnalyticsLeaderboard
           lang={lang}
           title={t(lang, "baLowStock")}
@@ -187,8 +301,15 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
   if (category === "customers") {
     return (
       <div className="space-y-4">
-        <AnalyticsLeaderboard lang={lang} title={t(lang, "baTopCustomers")} rows={props.topCustomers} />
-        <StatTile label={t(lang, "baReturningCustomers")} value={String(props.topCustomers.filter((c) => c.sub?.includes("purchases")).length)} />
+        <AnalyticsLeaderboard lang={lang} title={t(lang, "baTopCustomers")} rows={props.topCustomers} {...closedEmpty} />
+        <StatTile
+          label={t(lang, "baReturningCustomers")}
+          value={
+            breakdownsUnavailable
+              ? t(lang, "reportsClosedBreakdownUnavailable")
+              : String(props.topCustomers.filter((c) => c.sub?.includes("purchases")).length)
+          }
+        />
       </div>
     );
   }
@@ -201,7 +322,8 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
           lang={lang}
           title={t(lang, "baCustomersWithDebt")}
           rows={props.topCustomers.filter((c) => c.sub?.includes("Debt"))}
-          emptyKey="baNoDebtCustomers"
+          emptyKey={breakdownsUnavailable ? "reportsClosedBreakdownUnavailable" : "baNoDebtCustomers"}
+          emptyHintKey={breakdownsUnavailable ? "reportsClosedBreakdownUnavailableHint" : undefined}
         />
       </div>
     );
@@ -227,18 +349,42 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
   if (category === "cash_flow") {
     return (
       <div className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <StatTile label={t(lang, "baMoneyIn")} value={formatShortUgx(props.revenue)} />
-          <StatTile label={t(lang, "baMoneyOut")} value={formatShortUgx(props.expensesUgx + props.purchasesInPeriodUgx)} />
-          <StatTile label={t(lang, "baNetCashFlow")} value={formatShortUgx(props.report.cash - props.expensesUgx)} />
-          <StatTile label={t(lang, "cashInHand")} value={formatShortUgx(props.report.cash)} />
-        </div>
+        {props.cashFlow.unavailable ? (
+          <AnalyticsEmptyState
+            lang={lang}
+            titleKey="reportsClosedBreakdownUnavailable"
+            bodyKey="reportsClosedBreakdownUnavailableHint"
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <StatTile
+              label={t(lang, "eodSummaryCashIn")}
+              value={formatShortUgx(props.cashFlow.cashInUgx)}
+              hint={t(lang, "baCashFlowPhysicalHint")}
+            />
+            <StatTile
+              label={t(lang, "eodSummaryCashOut")}
+              value={formatShortUgx(props.cashFlow.cashOutUgx)}
+              hint={t(lang, "baCashFlowPhysicalHint")}
+            />
+            <StatTile label={t(lang, "baNetCashFlow")} value={formatShortUgx(props.cashFlow.netUgx)} />
+          </div>
+        )}
+        <StatTile
+          label={t(lang, "cashInHand")}
+          value={
+            props.report.physicalCashUnavailable
+              ? t(lang, "reportsClosedBreakdownUnavailable")
+              : formatShortUgx(props.report.cash)
+          }
+          hint={props.report.physicalCashUnavailable ? t(lang, "reportsClosedPhysicalCashUnavailableHint") : undefined}
+        />
       </div>
     );
   }
 
   if (category === "employees") {
-    return <AnalyticsLeaderboard lang={lang} title={t(lang, "baTopEmployees")} rows={props.topCashiers} />;
+    return <AnalyticsLeaderboard lang={lang} title={t(lang, "baTopEmployees")} rows={props.topCashiers} {...closedEmpty} />;
   }
 
   if (category === "taxes") {

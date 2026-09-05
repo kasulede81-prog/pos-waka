@@ -10,6 +10,7 @@ import { t } from "./i18n";
 import { buildDailyReportText } from "./reportExport";
 import { resolveReportAuthority } from "./closedDayAuthority";
 import type { ShopReportBundle } from "../hooks/useShopReporting";
+import { REPORTS_DATA_COMPLETE_FLAGS } from "./reportsDataCompleteness";
 
 const DAY_A = "2026-08-12";
 const DAY_B = "2026-08-13";
@@ -69,8 +70,10 @@ function closeFor(params: {
   profitUgx: number;
   txn: number;
   createdAt: string;
+  cashFromSalesUgx?: number;
 }): DayCloseSummary {
   const differenceUgx = params.countedCashUgx - params.expectedCashUgx;
+  const cashFromSalesUgx = params.cashFromSalesUgx ?? params.salesUgx;
   const row = {
     id: params.id,
     dateKey: params.dateKey,
@@ -90,12 +93,12 @@ function closeFor(params: {
     closedByLabel: "Owner",
     row,
     drawer: {
-      cashFromSalesUgx: params.salesUgx,
+      cashFromSalesUgx,
       debtCollectedUgx: 0,
       refundsUgx: 0,
       expenseUgx: 0,
       openingFloatUgx: 0,
-      cashSalesUgx: params.salesUgx,
+      cashSalesUgx: cashFromSalesUgx,
       supplierPaymentsUgx: 0,
       adjustmentInflowsUgx: 0,
       adjustmentOutflowsUgx: 0,
@@ -117,6 +120,7 @@ function bundleFromRange(range: ReturnType<typeof localGetRangeSummary>): ShopRe
   return {
     source: "local",
     authority: range.authority,
+    closedDayBreakdownUnavailable: range.closedDayBreakdownUnavailable,
     revenue: summary.totalRevenueUgx,
     cash: summary.cashCollectedUgx,
     profit: range.profitUgx,
@@ -131,7 +135,7 @@ function bundleFromRange(range: ReturnType<typeof localGetRangeSummary>): ShopRe
     dailyTrend: [],
     stockValueAtCost: range.inventory.stockValueAtCostUgx,
     supplierDebtTotal: range.supplierDebtTotal,
-    loading: false,
+    ...REPORTS_DATA_COMPLETE_FLAGS,
   };
 }
 
@@ -193,7 +197,8 @@ describe("REPORTS-1.1 closed-day authority", () => {
     expect(csv.some((row) => row[0] === t("en", "receiptsRangeRevenue") && row[1] === 500_000)).toBe(true);
     expect(csv.some((row) => row[0] === t("en", "salesCount") && row[1] === 1)).toBe(true);
     expect(csv.flat().join(" ")).toContain(t("en", "dailyReportClosedAuthorityNote"));
-    expect(csv.flat().join(" ")).toContain(t("en", "dailyReportOperationalDetails"));
+    expect(csv.flat().join(" ")).toContain(t("en", "reportsClosedBreakdownUnavailable"));
+    expect(csv.flat().join(" ")).not.toContain(t("en", "dailyReportOperationalDetails"));
   });
 
   it("CASE B: open days stay live", () => {
@@ -283,7 +288,7 @@ describe("REPORTS-1.1 closed-day authority", () => {
     expect(rangeB.summary.totalRevenueUgx).toBe(40_000);
   });
 
-  it("CASE E: live payment mix is labeled, not presented as the closed ledger", async () => {
+  it("CASE E: closed-day payment mix is unavailable, not live 530,000", async () => {
     const sales = [closedSale, lateSale];
     const blob = buildDailyReportPdfBlob({
       lang: "en",
@@ -300,8 +305,44 @@ describe("REPORTS-1.1 closed-day authority", () => {
     expect(blob.size).toBeGreaterThan(500);
     const pdf = await blob.text();
     expect(pdf).toContain("Closed-day ledger");
-    expect(pdf).toContain("Operational details");
+    expect(pdf).toContain("Unavailable for closed day");
     expect(pdf).toContain("UGX 500,000");
-    expect(pdf).toContain("UGX 530,000");
+    expect(pdf).not.toContain("UGX 530,000");
+    expect(pdf).not.toContain("Operational details");
+  });
+});
+
+describe("RPT-P1-01 Reports bundle cash uses physical overlay", () => {
+  it("closed mixed tender Reports cash is 30,000 not 10,000", () => {
+    const mixed: Sale = {
+      ...sale("mix", 100_000, `${DAY_A}T10:00:00.000Z`),
+      cashPaidUgx: 50_000,
+      debtUgx: 50_000,
+      paymentMethod: "mixed",
+      tenderCashUgx: 30_000,
+    };
+    const close = closeFor({
+      id: "close-mix",
+      dateKey: DAY_A,
+      salesUgx: 100_000,
+      cashFromSalesUgx: 30_000,
+      expectedCashUgx: 30_000,
+      countedCashUgx: 30_000,
+      profitUgx: 0,
+      txn: 1,
+      createdAt: `${DAY_A}T18:00:00.000Z`,
+    });
+    const range = localGetRangeSummary(
+      [mixed],
+      [product],
+      [],
+      [],
+      [],
+      { kind: "day", dateKey: DAY_A },
+      [],
+      [close],
+    );
+    expect(range.summary.cashCollectedUgx).toBe(30_000);
+    expect(bundleFromRange(range).cash).toBe(30_000);
   });
 });

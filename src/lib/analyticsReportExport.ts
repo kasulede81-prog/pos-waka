@@ -5,6 +5,7 @@
 import type { Language } from "../types";
 import type { ShopReportBundle } from "../hooks/useShopReporting";
 import { t } from "./i18n";
+import type { ReportsPeriodCashFlow } from "./reportsCashFlow";
 
 export type AnalyticsExportInput = {
   lang: Language;
@@ -13,11 +14,12 @@ export type AnalyticsExportInput = {
   report: ShopReportBundle;
   expensesUgx: number;
   purchasesInPeriodUgx: number;
+  cashFlow?: ReportsPeriodCashFlow;
   canProfit: boolean;
 };
 
 export function buildAnalyticsReportRows(input: AnalyticsExportInput): Array<Array<string | number>> {
-  const { lang, title, periodLabel, report, expensesUgx, purchasesInPeriodUgx, canProfit } = input;
+  const { lang, title, periodLabel, report, expensesUgx, purchasesInPeriodUgx, cashFlow, canProfit } = input;
   const rows: Array<Array<string | number>> = [
     [t(lang, "exportReportHeading"), title],
     [t(lang, "reportsPeriod"), periodLabel],
@@ -25,17 +27,33 @@ export function buildAnalyticsReportRows(input: AnalyticsExportInput): Array<Arr
     [t(lang, "baExportMetric"), t(lang, "baExportValue")],
     [t(lang, "receiptsRangeRevenue"), report.revenue],
     [t(lang, "salesCount"), report.count],
-    [t(lang, "cashInHand"), report.cash],
+    [
+      t(lang, "cashInHand"),
+      report.physicalCashUnavailable ? t(lang, "reportsClosedBreakdownUnavailable") : report.cash,
+    ],
     [t(lang, "reportsDebtOutstanding"), report.debtOutstanding],
     [t(lang, "baExpensesInPeriod"), expensesUgx],
     [t(lang, "baPurchasesInPeriod"), purchasesInPeriodUgx],
   ];
+  if (cashFlow?.unavailable) {
+    rows.push([t(lang, "baNetCashFlow"), t(lang, "reportsClosedBreakdownUnavailable")]);
+  } else if (cashFlow) {
+    rows.push(
+      [t(lang, "eodSummaryCashIn"), cashFlow.cashInUgx],
+      [t(lang, "eodSummaryCashOut"), cashFlow.cashOutUgx],
+      [t(lang, "baNetCashFlow"), cashFlow.netUgx],
+    );
+  }
   if (canProfit) {
     rows.push([t(lang, "profitStatGrossProfit"), report.profit]);
   }
   if (report.authority !== "live") {
     rows.push([], [t(lang, "dailyReportClosedAuthorityNote")]);
-    rows.push([t(lang, "dailyReportOperationalDetails")]);
+  }
+  if (report.closedDayBreakdownUnavailable) {
+    rows.push([t(lang, "reportsClosedBreakdownUnavailable")]);
+    rows.push([t(lang, "reportsClosedBreakdownUnavailableHint")]);
+    return rows;
   }
   rows.push([], [t(lang, "topProducts"), t(lang, "receiptsRangeRevenue")]);
   for (const p of report.topProducts.slice(0, 50)) {

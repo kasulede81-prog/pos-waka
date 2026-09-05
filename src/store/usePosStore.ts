@@ -8868,6 +8868,9 @@ export async function applyRestoredSnapshotFromBackup(
 }
 
 function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): void {
+  const allSalesPreview = (snap.sales ?? []) as Sale[];
+  const tailPreview = allSalesPreview.slice(INITIAL_SALES_LOAD_COUNT);
+  markSalesHistoryHydrationStarted(Math.max(tailPreview.length, 1));
   const run = () => {
     void (async () => {
       if (!usePosStore.getState()._hydrated) return;
@@ -8901,6 +8904,8 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
       });
       if (tail.length > 0) {
         scheduleBackgroundSalesHydrate(tail);
+      } else {
+        finishSalesHistoryHydrationIfCaughtUp([]);
       }
     })();
   };
@@ -8911,62 +8916,106 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
   }
 }
 
+function markSalesHistoryHydrationStarted(total: number, loaded = 0): void {
+  if (total <= 0) return;
+  const existing = usePosStore.getState().salesHistoryHydration;
+  if (existing?.active && (existing.total ?? 0) >= total) return;
+  usePosStore.setState({
+    salesHistoryHydration: {
+      active: true,
+      loaded: existing?.loaded ?? loaded,
+      total: Math.max(total, existing?.total ?? 0),
+    },
+  });
+}
+
+function finishSalesHistoryHydrationIfCaughtUp(expectedIds: string[]): void {
+  if (expectedIds.length === 0) {
+    usePosStore.setState({ salesHistoryHydration: null });
+    return;
+  }
+  const have = new Set(usePosStore.getState().sales.map((s) => s.id));
+  const missing = expectedIds.filter((id) => !have.has(id));
+  if (missing.length === 0) {
+    usePosStore.setState({ salesHistoryHydration: null });
+    return;
+  }
+  usePosStore.setState({
+    salesHistoryHydration: {
+      active: true,
+      loaded: expectedIds.length - missing.length,
+      total: expectedIds.length,
+    },
+  });
+}
+
 /** Load remaining sales from entity store in background pages. */
 function scheduleBackgroundSalesHydrateByIds(ids: string[]): void {
+  if (ids.length === 0) return;
+  markSalesHistoryHydrationStarted(ids.length);
   void (async () => {
-    const { getEntitiesByIds } = await import("../offline/entityStore");
-    usePosStore.setState({ salesHistoryHydration: { active: true, loaded: 0, total: ids.length } });
-    let loaded = 0;
-    for (let i = 0; i < ids.length; i += SALES_PAGE_LOAD_SIZE) {
-      await yieldUiTick();
-      const batch = (await getEntitiesByIds<Sale>("sale", ids.slice(i, i + SALES_PAGE_LOAD_SIZE))).map(normalizeSale);
-      loaded += batch.length;
-      usePosStore.setState((s) => {
-        const have = new Set(s.sales.map((x) => x.id));
-        const merged = [...s.sales];
-        for (const row of batch) {
-          if (!have.has(row.id)) merged.push(row);
-        }
-        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-        return {
-          sales: merged,
-          salesHistoryHydration: { active: true, loaded, total: ids.length },
-        };
-      });
+    try {
+      const { getEntitiesByIds } = await import("../offline/entityStore");
+      let loaded = 0;
+      for (let i = 0; i < ids.length; i += SALES_PAGE_LOAD_SIZE) {
+        await yieldUiTick();
+        const batch = (await getEntitiesByIds<Sale>("sale", ids.slice(i, i + SALES_PAGE_LOAD_SIZE))).map(normalizeSale);
+        loaded += batch.length;
+        usePosStore.setState((s) => {
+          const have = new Set(s.sales.map((x) => x.id));
+          const merged = [...s.sales];
+          for (const row of batch) {
+            if (!have.has(row.id)) merged.push(row);
+          }
+          merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+          return {
+            sales: merged,
+            salesHistoryHydration: { active: true, loaded, total: ids.length },
+          };
+        });
+      }
+      finishSalesHistoryHydrationIfCaughtUp(ids);
+      const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
+      usePosStore.setState({ todayKpiSnapshot: snapshot });
+      void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
+    } catch {
+      finishSalesHistoryHydrationIfCaughtUp(ids);
     }
-    usePosStore.setState({ salesHistoryHydration: null });
-    const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
-    usePosStore.setState({ todayKpiSnapshot: snapshot });
-    void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
   })();
 }
 
 /** Load remaining sales in background without blocking checkout. */
 function scheduleBackgroundSalesHydrate(sales: Sale[]): void {
+  if (sales.length === 0) return;
+  markSalesHistoryHydrationStarted(sales.length);
+  const expectedIds = sales.map((row) => row.id);
   void (async () => {
-    usePosStore.setState({ salesHistoryHydration: { active: true, loaded: 0, total: sales.length } });
-    let loaded = 0;
-    for (let i = 0; i < sales.length; i += SALES_PAGE_LOAD_SIZE) {
-      await yieldUiTick();
-      const chunk = sales.slice(i, i + SALES_PAGE_LOAD_SIZE);
-      loaded += chunk.length;
-      usePosStore.setState((s) => {
-        const have = new Set(s.sales.map((x) => x.id));
-        const merged = [...s.sales];
-        for (const row of chunk) {
-          if (!have.has(row.id)) merged.push(normalizeSale(row));
-        }
-        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-        return {
-          sales: merged,
-          salesHistoryHydration: { active: true, loaded, total: sales.length },
-        };
-      });
+    try {
+      let loaded = 0;
+      for (let i = 0; i < sales.length; i += SALES_PAGE_LOAD_SIZE) {
+        await yieldUiTick();
+        const chunk = sales.slice(i, i + SALES_PAGE_LOAD_SIZE);
+        loaded += chunk.length;
+        usePosStore.setState((s) => {
+          const have = new Set(s.sales.map((x) => x.id));
+          const merged = [...s.sales];
+          for (const row of chunk) {
+            if (!have.has(row.id)) merged.push(normalizeSale(row));
+          }
+          merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+          return {
+            sales: merged,
+            salesHistoryHydration: { active: true, loaded, total: sales.length },
+          };
+        });
+      }
+      finishSalesHistoryHydrationIfCaughtUp(expectedIds);
+      const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
+      usePosStore.setState({ todayKpiSnapshot: snapshot });
+      void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
+    } catch {
+      finishSalesHistoryHydrationIfCaughtUp(expectedIds);
     }
-    usePosStore.setState({ salesHistoryHydration: null });
-    const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
-    usePosStore.setState({ todayKpiSnapshot: snapshot });
-    void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
   })();
 }
 
@@ -8988,18 +9037,31 @@ export async function ensureAllActiveSalesLoaded(): Promise<void> {
   const have = new Set(state.sales.map((s) => s.id));
   const missingIds = manifest.salesOrder.filter((id) => !have.has(id));
   if (missingIds.length === 0) return;
-  for (let i = 0; i < missingIds.length; i += SALES_PAGE_LOAD_SIZE) {
-    await yieldUiTick();
-    const batch = await getEntitiesByIds<Sale>("sale", missingIds.slice(i, i + SALES_PAGE_LOAD_SIZE));
-    usePosStore.setState((s) => {
-      const ids = new Set(s.sales.map((x) => x.id));
-      const merged = [...s.sales];
-      for (const row of batch) {
-        if (!ids.has(row.id)) merged.push(normalizeSale(row));
-      }
-      merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-      return { sales: merged };
-    });
+  markSalesHistoryHydrationStarted(manifest.salesOrder.length, have.size);
+  try {
+    for (let i = 0; i < missingIds.length; i += SALES_PAGE_LOAD_SIZE) {
+      await yieldUiTick();
+      const batch = await getEntitiesByIds<Sale>("sale", missingIds.slice(i, i + SALES_PAGE_LOAD_SIZE));
+      usePosStore.setState((s) => {
+        const ids = new Set(s.sales.map((x) => x.id));
+        const merged = [...s.sales];
+        for (const row of batch) {
+          if (!ids.has(row.id)) merged.push(normalizeSale(row));
+        }
+        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+        return {
+          sales: merged,
+          salesHistoryHydration: {
+            active: true,
+            loaded: s.salesHistoryHydration?.loaded ?? have.size + i,
+            total: manifest.salesOrder.length,
+          },
+        };
+      });
+    }
+    finishSalesHistoryHydrationIfCaughtUp(manifest.salesOrder);
+  } catch {
+    finishSalesHistoryHydrationIfCaughtUp(manifest.salesOrder);
   }
 }
 
@@ -9366,7 +9428,14 @@ export async function bootstrapPosInteractiveFromDisk(): Promise<void> {
     const headSales = (await getEntitiesByIds<Sale>("sale", headIds)).map(normalizeSale);
     await hydrateSalesBatched(headSales);
     const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
-    usePosStore.setState({ todayKpiSnapshot: snapshot, hydrationStage: "interactive" });
+    const tailIds = manifest.salesOrder.slice(INITIAL_SALES_LOAD_COUNT).filter((id) => !voidedSales[id]);
+    usePosStore.setState({
+      todayKpiSnapshot: snapshot,
+      hydrationStage: "interactive",
+      ...(tailIds.length > 0
+        ? { salesHistoryHydration: { active: true, loaded: 0, total: tailIds.length } }
+        : {}),
+    });
     void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
     markStartupPerf("interactive_hydrate_end");
     return;

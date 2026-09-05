@@ -77,8 +77,10 @@ function closeFor(params: {
   txn: number;
   createdAt: string;
   supersededAt?: string | null;
+  cashFromSalesUgx?: number;
 }): DayCloseSummary {
   const differenceUgx = params.countedCashUgx - params.expectedCashUgx;
+  const cashFromSalesUgx = params.cashFromSalesUgx ?? params.salesUgx;
   const row = {
     id: params.id,
     dateKey: params.dateKey,
@@ -98,12 +100,12 @@ function closeFor(params: {
     closedByLabel: "Owner",
     row,
     drawer: {
-      cashFromSalesUgx: params.salesUgx,
+      cashFromSalesUgx,
       debtCollectedUgx: 0,
       refundsUgx: 0,
       expenseUgx: 0,
       openingFloatUgx: 0,
-      cashSalesUgx: params.salesUgx,
+      cashSalesUgx: cashFromSalesUgx,
       supplierPaymentsUgx: 0,
       adjustmentInflowsUgx: 0,
       adjustmentOutflowsUgx: 0,
@@ -505,5 +507,178 @@ describe("CLOSE-DAY-1.1 period overlay", () => {
     });
     expect(overlaid.revenueUgx).toBe(580_000);
     expect(overlaid.transactionCount).toBe(2);
+  });
+});
+
+describe("RPT-P1-01 overlay cash uses physical cash not cashPaidUgx", () => {
+  const at = `${DAY_A}T10:00:00.000Z`;
+  const openAt = `${DAY_B}T10:00:00.000Z`;
+
+  function overlayCash(sales: Sale[], close: DayCloseSummary, livePhysical: number, bounds = { fromKey: DAY_A, toKey: DAY_A, isSingleDay: true }) {
+    return overlayPeriodFinancials({
+      live: {
+        revenueUgx: 0,
+        profitUgx: 0,
+        transactionCount: 0,
+        debtIssuedUgx: 0,
+        cashCollectedUgx: livePhysical,
+      },
+      dayCloses: [close],
+      bounds,
+      sales,
+      returns: [],
+      products: [product],
+    }).cashCollectedUgx;
+  }
+
+  it("closed mixed 30 cash / 20 MoMo / 50 debt stays 30,000", () => {
+    const mixed: Sale = {
+      ...sale("mixed", 100_000, at),
+      cashPaidUgx: 50_000,
+      debtUgx: 50_000,
+      paymentMethod: "mixed",
+      tenderCashUgx: 30_000,
+    };
+    const close = closeFor({
+      id: "c-mix",
+      dateKey: DAY_A,
+      salesUgx: 100_000,
+      cashFromSalesUgx: 30_000,
+      expectedCashUgx: 30_000,
+      countedCashUgx: 30_000,
+      profitUgx: 0,
+      txn: 1,
+      createdAt: `${DAY_A}T18:00:00.000Z`,
+    });
+    expect(overlayCash([mixed], close, 30_000)).toBe(30_000);
+  });
+
+  it("closed pure cash stays 100,000", () => {
+    const cash = sale("cash", 100_000, at);
+    const close = closeFor({
+      id: "c-cash",
+      dateKey: DAY_A,
+      salesUgx: 100_000,
+      expectedCashUgx: 100_000,
+      countedCashUgx: 100_000,
+      profitUgx: 0,
+      txn: 1,
+      createdAt: `${DAY_A}T18:00:00.000Z`,
+    });
+    expect(overlayCash([cash], close, 100_000)).toBe(100_000);
+  });
+
+  it("closed pure MoMo stays 0", () => {
+    const momo: Sale = {
+      ...sale("momo", 100_000, at),
+      paymentMethod: "mobile_money",
+      cashPaidUgx: 100_000,
+      tenderCashUgx: 0,
+    };
+    const close = closeFor({
+      id: "c-momo",
+      dateKey: DAY_A,
+      salesUgx: 100_000,
+      cashFromSalesUgx: 0,
+      expectedCashUgx: 0,
+      countedCashUgx: 0,
+      profitUgx: 0,
+      txn: 1,
+      createdAt: `${DAY_A}T18:00:00.000Z`,
+    });
+    expect(overlayCash([momo], close, 0)).toBe(0);
+  });
+
+  it("closed cash + debt stays cash portion only", () => {
+    const credit: Sale = {
+      ...sale("cd", 100_000, at),
+      cashPaidUgx: 30_000,
+      debtUgx: 70_000,
+      paymentMethod: "credit",
+      tenderCashUgx: 30_000,
+    };
+    const close = closeFor({
+      id: "c-cd",
+      dateKey: DAY_A,
+      salesUgx: 100_000,
+      cashFromSalesUgx: 30_000,
+      expectedCashUgx: 30_000,
+      countedCashUgx: 30_000,
+      profitUgx: 0,
+      txn: 1,
+      createdAt: `${DAY_A}T18:00:00.000Z`,
+    });
+    expect(overlayCash([credit], close, 30_000)).toBe(30_000);
+  });
+
+  it("range keeps frozen physical cash on the closed day and live physical on the open day", () => {
+    const mixed: Sale = {
+      ...sale("mixed", 100_000, at),
+      cashPaidUgx: 50_000,
+      debtUgx: 50_000,
+      paymentMethod: "mixed",
+      tenderCashUgx: 30_000,
+    };
+    const openCash = sale("open", 20_000, openAt);
+    const close = closeFor({
+      id: "c-range",
+      dateKey: DAY_A,
+      salesUgx: 100_000,
+      cashFromSalesUgx: 30_000,
+      expectedCashUgx: 30_000,
+      countedCashUgx: 30_000,
+      profitUgx: 0,
+      txn: 1,
+      createdAt: `${DAY_A}T18:00:00.000Z`,
+    });
+    expect(
+      overlayCash([mixed, openCash], close, 50_000, { fromKey: DAY_A, toKey: DAY_B, isSingleDay: false }),
+    ).toBe(50_000);
+  });
+
+  it("open day is unchanged when no close exists", () => {
+    const mixed: Sale = {
+      ...sale("open-mix", 100_000, at),
+      cashPaidUgx: 50_000,
+      debtUgx: 50_000,
+      paymentMethod: "mixed",
+      tenderCashUgx: 30_000,
+    };
+    const overlaid = overlayPeriodFinancials({
+      live: {
+        revenueUgx: 100_000,
+        profitUgx: 0,
+        transactionCount: 1,
+        debtIssuedUgx: 50_000,
+        cashCollectedUgx: 30_000,
+      },
+      dayCloses: [],
+      bounds: { fromKey: DAY_A, toKey: DAY_A, isSingleDay: true },
+      sales: [mixed],
+      returns: [],
+      products: [product],
+    });
+    expect(overlaid.cashCollectedUgx).toBe(30_000);
+  });
+
+  it("legacy mixed without tenderCashUgx keeps collected fallback", () => {
+    const legacy: Sale = {
+      ...sale("legacy", 100_000, at),
+      cashPaidUgx: 50_000,
+      debtUgx: 50_000,
+      paymentMethod: "mixed",
+    };
+    const close = closeFor({
+      id: "c-leg",
+      dateKey: DAY_A,
+      salesUgx: 100_000,
+      cashFromSalesUgx: 50_000,
+      expectedCashUgx: 50_000,
+      countedCashUgx: 50_000,
+      profitUgx: 0,
+      txn: 1,
+      createdAt: `${DAY_A}T18:00:00.000Z`,
+    });
+    expect(overlayCash([legacy], close, 50_000)).toBe(50_000);
   });
 });

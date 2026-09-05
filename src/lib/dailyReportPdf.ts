@@ -110,12 +110,13 @@ export function buildDailyReportDocument(input: DailyReportPdfInput): ReportDocu
     formulaVersion,
     day: dateKey,
   });
-  const payments = paymentMethodBreakdown(sales, dateKey);
-  const voids = voidLineCount(sales, dateKey);
+  const payments = auth.closed ? [] : paymentMethodBreakdown(sales, dateKey);
+  const voids = auth.closed ? 0 : voidLineCount(sales, dateKey);
   const salesUgx = frozen?.totalSalesUgx ?? fin.revenueUgx;
   const profitUgx = frozen?.profitEstimateUgx ?? fin.profitUgx;
   /** cashInHand = physical drawer cash from sales (MoMo/ATM excluded). */
-  const cashInHandUgx = frozen?.cashFromSalesUgx ?? drawer.cashFromSalesUgx;
+  const cashUnavailable = Boolean(auth.closed && frozen?.cashFromSalesUgx == null);
+  const cashInHandUgx = cashUnavailable ? null : (frozen?.cashFromSalesUgx ?? drawer.cashFromSalesUgx);
   const expectedCashUgx = frozen?.expectedCashUgx ?? drawer.expectedDrawerCashUgx;
   const openingFloatUgx = frozen?.openingFloatUgx ?? drawer.openingFloatUgx;
   const adjustmentInUgx = frozen?.adjustmentInflowsUgx ?? drawer.adjustmentInflowsUgx;
@@ -129,7 +130,10 @@ export function buildDailyReportDocument(input: DailyReportPdfInput): ReportDocu
   const ledgerRows = [
     { label: t(lang, "totalSales"), value: ugxLabel(salesUgx), bold: true },
     ...(includeProfit ? [{ label: t(lang, "estimatedProfit"), value: ugxLabel(profitUgx) }] : []),
-    { label: t(lang, "cashInHand"), value: ugxLabel(cashInHandUgx) },
+    {
+      label: t(lang, "cashInHand"),
+      value: cashUnavailable || cashInHandUgx == null ? t(lang, "reportsClosedBreakdownUnavailable") : ugxLabel(cashInHandUgx),
+    },
     { label: t(lang, "ownerCardExpectedCash"), value: ugxLabel(expectedCashUgx) },
     ...(openingFloatUgx > 0 ? [{ label: t(lang, "cashDrawerOpeningFloat"), value: ugxLabel(openingFloatUgx) }] : []),
     ...(adjustmentInUgx > 0 ? [{ label: t(lang, "cashDrawerAdjustmentIn"), value: ugxLabel(adjustmentInUgx) }] : []),
@@ -141,18 +145,27 @@ export function buildDailyReportDocument(input: DailyReportPdfInput): ReportDocu
     { label: t(lang, "salesCount"), value: String(txnCount) },
   ];
 
-  const liveSection: ReportDocumentSection = {
-    title: t(lang, "dailyReportPaymentMethods"),
-    live: auth.closed,
-    rows: [
-      { label: t(lang, "dailyReportVoids"), value: String(voids) },
-      ...payments.map((p) => ({ label: p.label, value: `${p.count} · ${ugxLabel(p.ugx)}` })),
-      ...topProducts.slice(0, 12).map((p) => ({
-        label: p.name,
-        value: `${p.quantity} — ${ugxLabel(p.revenueUgx)}`,
-      })),
-    ],
-  };
+  const breakdownSection: ReportDocumentSection = auth.closed
+    ? {
+        title: t(lang, "dailyReportPaymentMethods"),
+        rows: [
+          {
+            label: t(lang, "reportsClosedBreakdownUnavailable"),
+            value: t(lang, "reportsClosedBreakdownUnavailableHint"),
+          },
+        ],
+      }
+    : {
+        title: t(lang, "dailyReportPaymentMethods"),
+        rows: [
+          { label: t(lang, "dailyReportVoids"), value: String(voids) },
+          ...payments.map((p) => ({ label: p.label, value: `${p.count} · ${ugxLabel(p.ugx)}` })),
+          ...topProducts.slice(0, 12).map((p) => ({
+            label: p.name,
+            value: `${p.quantity} — ${ugxLabel(p.revenueUgx)}`,
+          })),
+        ],
+      };
 
   return {
     kind: "daily",
@@ -169,7 +182,7 @@ export function buildDailyReportDocument(input: DailyReportPdfInput): ReportDocu
         title: auth.closed ? t(lang, "reportDocClosedHeadlines") : undefined,
         rows: ledgerRows,
       },
-      liveSection,
+      breakdownSection,
     ],
   };
 }

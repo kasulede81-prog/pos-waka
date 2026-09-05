@@ -7,34 +7,64 @@ import { createPdfLayout, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
 import { downloadCsvText, downloadPdfBlob } from "./documentPrint";
 import { t } from "./i18n";
 
-export function pharmacyExpiryCsv(products: Product[]): string {
+/** Reports.profit only. Missing/undefined is fail-closed (no cost/value). */
+export type PharmacyExpiryExportOptions = {
+  includeCost?: boolean;
+};
+
+function allowPharmacyExpiryCost(options?: PharmacyExpiryExportOptions): boolean {
+  return options?.includeCost === true;
+}
+
+export function pharmacyExpiryCsv(products: Product[], options?: PharmacyExpiryExportOptions): string {
+  const includeCost = allowPharmacyExpiryCost(options);
   const report = computePharmacyExpiryReport(products);
-  const lines = ["product,expiry_date,status,qty,value_ugx"];
+  const lines = [includeCost ? "product,expiry_date,status,qty,value_ugx" : "product,expiry_date,status,qty"];
   for (const row of [...report.expiring, ...report.expired]) {
     const status = report.expired.some((e) => e.productId === row.productId) ? "expired" : "expiring";
-    lines.push(
-      `"${row.name.replace(/"/g, '""')}",${row.expiryDate},${status},${row.stockOnHand},${row.stockValueUgx}`,
-    );
+    const base = `"${row.name.replace(/"/g, '""')}",${row.expiryDate},${status},${row.stockOnHand}`;
+    lines.push(includeCost ? `${base},${row.stockValueUgx}` : base);
   }
   return lines.join("\n");
 }
 
-export function buildPharmacyExpiryPdfBlob(lang: Language, products: Product[]): Blob {
+export function buildPharmacyExpiryPdfBlob(
+  lang: Language,
+  products: Product[],
+  options?: PharmacyExpiryExportOptions,
+): Blob {
+  const includeCost = allowPharmacyExpiryCost(options);
   const report = computePharmacyExpiryReport(products);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const layout = createPdfLayout(doc);
   pdfLine(layout, doc, t(lang, "pharmacyExpiryExportTitle"), { size: 14, bold: true });
-  pdfLine(layout, doc, `${t(lang, "pharmacyReportsExpiringValue")}: UGX ${report.expiringValueUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `${t(lang, "pharmacyReportsExpiredValue")}: UGX ${report.expiredValueUgx.toLocaleString()}`);
+  if (includeCost) {
+    pdfLine(layout, doc, `${t(lang, "pharmacyReportsExpiringValue")}: UGX ${report.expiringValueUgx.toLocaleString()}`);
+    pdfLine(layout, doc, `${t(lang, "pharmacyReportsExpiredValue")}: UGX ${report.expiredValueUgx.toLocaleString()}`);
+  }
   pdfGap(layout, 6);
   pdfLine(layout, doc, t(lang, "pharmacyReportsExpiring"), { bold: true });
   for (const row of report.expiring.slice(0, 40)) {
-    pdfLine(layout, doc, `${row.name} · ${row.expiryDate} · UGX ${row.stockValueUgx.toLocaleString()}`, { size: 9 });
+    pdfLine(
+      layout,
+      doc,
+      includeCost
+        ? `${row.name} · ${row.expiryDate} · UGX ${row.stockValueUgx.toLocaleString()}`
+        : `${row.name} · ${row.expiryDate} · ${row.stockOnHand}`,
+      { size: 9 },
+    );
   }
   pdfGap(layout, 4);
   pdfLine(layout, doc, t(lang, "pharmacyReportsExpired"), { bold: true });
   for (const row of report.expired.slice(0, 40)) {
-    pdfLine(layout, doc, `${row.name} · ${row.expiryDate} · UGX ${row.stockValueUgx.toLocaleString()}`, { size: 9 });
+    pdfLine(
+      layout,
+      doc,
+      includeCost
+        ? `${row.name} · ${row.expiryDate} · UGX ${row.stockValueUgx.toLocaleString()}`
+        : `${row.name} · ${row.expiryDate} · ${row.stockOnHand}`,
+      { size: 9 },
+    );
   }
   return doc.output("blob");
 }
@@ -70,12 +100,22 @@ export function buildPharmacyMarginPdfBlob(lang: Language, products: Product[]):
   return doc.output("blob");
 }
 
-export async function downloadPharmacyExpiryPdf(lang: Language, products: Product[]): Promise<boolean> {
-  return downloadPdfBlob(sanitizePdfStem("waka-pharmacy-expiry") + ".pdf", buildPharmacyExpiryPdfBlob(lang, products));
+export async function downloadPharmacyExpiryPdf(
+  lang: Language,
+  products: Product[],
+  options?: PharmacyExpiryExportOptions,
+): Promise<boolean> {
+  return downloadPdfBlob(
+    sanitizePdfStem("waka-pharmacy-expiry") + ".pdf",
+    buildPharmacyExpiryPdfBlob(lang, products, options),
+  );
 }
 
-export async function downloadPharmacyExpiryCsv(products: Product[]): Promise<boolean> {
-  return downloadCsvText("waka-pharmacy-expiry.csv", pharmacyExpiryCsv(products));
+export async function downloadPharmacyExpiryCsv(
+  products: Product[],
+  options?: PharmacyExpiryExportOptions,
+): Promise<boolean> {
+  return downloadCsvText("waka-pharmacy-expiry.csv", pharmacyExpiryCsv(products, options));
 }
 
 export async function downloadPharmacyMarginPdf(lang: Language, products: Product[]): Promise<boolean> {

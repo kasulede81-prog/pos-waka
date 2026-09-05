@@ -3,6 +3,7 @@ import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { KPI_VALUE_CLASS } from "../../../lib/desktopLayout";
 import { MiniSparkline } from "../../../components/command-center/MiniSparkline";
+import { REPORTS_KPI_SPARKLINE_LABEL_KEY } from "../lib/reportsKpiSparklineContext";
 import type { AnalyticsKpiCard, AnalyticsKpiId } from "../types";
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect }: Props) {
+  const showSparklineContext = cards.some((card) => card.sparkline.length >= 2);
   return (
     <section className="min-w-0 max-w-full">
       <div className="mb-2 flex items-end justify-between gap-2 px-0.5">
@@ -21,6 +23,11 @@ export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect
           <h2 className="text-sm font-black text-foreground">{t(lang, "baSnapshotTitle")}</h2>
           {compareLabel ? <p className="text-[11px] font-semibold text-muted-foreground">{compareLabel}</p> : null}
         </div>
+        {showSparklineContext ? (
+          <p className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+            {t(lang, REPORTS_KPI_SPARKLINE_LABEL_KEY)}
+          </p>
+        ) : null}
       </div>
       <div className="w-full min-w-0 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible">
       <div className="-mx-0.5 grid w-max min-w-full grid-flow-col auto-cols-[minmax(140px,1fr)] gap-2 sm:w-full sm:grid-flow-row sm:grid-cols-2 lg:grid-cols-3">
