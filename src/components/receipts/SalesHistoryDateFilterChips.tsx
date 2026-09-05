@@ -5,6 +5,8 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DateFilterPreset, DateFilterValue } from "../../lib/dateFilters";
 import { dateKeyKampala } from "../../lib/datesUg";
+import { themeUi } from "../../lib/themeTokens";
+import { enterpriseMotion } from "../../lib/enterpriseMotion";
 
 type ChipId = DateFilterPreset | "custom" | "all_time";
 
@@ -66,32 +68,40 @@ export function SalesHistoryDateFilterChips({ lang, filter, onFilterChange }: Pr
 
   return (
     <div className="space-y-2">
-      <div className="-mx-0.5 flex gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
-        {PRESET_CHIPS.map(({ id }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onChipClick(id)}
-            className={clsx(
-              "min-h-[34px] shrink-0 rounded-full px-3 py-1 text-xs font-black transition-all",
-              chipActive(filter, id)
-                ? "bg-waka-600 text-white shadow-sm"
-                : "border border-border bg-card text-muted-foreground active:bg-muted",
-            )}
-          >
-            {labelFor(id)}
-          </button>
-        ))}
+      <div
+        className="-mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]"
+      >
+        {PRESET_CHIPS.map(({ id }) => {
+          const active = chipActive(filter, id);
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChipClick(id)}
+              className={clsx(
+                themeUi.chip,
+                enterpriseMotion.standard,
+                enterpriseMotion.press,
+                themeUi.focusRing,
+                "min-h-11 shrink-0 px-4 py-2 text-sm",
+                active ? themeUi.chipActive : "text-muted-foreground",
+              )}
+            >
+              {labelFor(id)}
+            </button>
+          );
+        })}
       </div>
       {customOpen ? (
-        <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
-          <label htmlFor={dateInputId} className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
-            <CalendarDays className="h-4 w-4 text-waka-600" aria-hidden />
+        <div className={clsx(themeUi.surface, "p-3")}>
+          <label htmlFor={dateInputId} className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
+            <CalendarDays className="h-5 w-5 text-waka-600" aria-hidden />
             {t(lang, "dateFilterPickDate")}
             <input
               id={dateInputId}
               type="date"
-              className="ml-auto rounded-lg border border-border px-2 py-1 text-xs font-semibold"
+              className={clsx(themeUi.input, "ml-auto max-w-[11rem]")}
               value={customDayKey}
               onChange={(e) => {
                 const v = e.target.value;

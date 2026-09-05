@@ -111,11 +111,12 @@ export type ExpectedDrawerCashV2Input = {
 };
 
 /**
- * Canonical V2 expected physical cash in drawer.
+ * Canonical V2 expected physical cash in drawer (signed).
+ * Outflows may exceed inflows — do not clamp to zero.
  * Revenue / inventory / debt issuance are unchanged — drawer cash only.
  */
 export function computeExpectedDrawerCashV2(input: ExpectedDrawerCashV2Input): number {
-  const raw =
+  return (
     Math.max(0, Math.floor(input.openingFloatUgx)) +
     Math.max(0, Math.floor(input.cashSalesUgx)) +
     Math.max(0, Math.floor(input.cashDebtCollectionsUgx)) +
@@ -123,8 +124,8 @@ export function computeExpectedDrawerCashV2(input: ExpectedDrawerCashV2Input): n
     Math.max(0, Math.floor(input.cashExpensesUgx)) -
     Math.max(0, Math.floor(input.cashSupplierPaymentsUgx)) -
     Math.max(0, Math.floor(input.cashRefundsUgx)) -
-    Math.max(0, Math.floor(input.adjustmentOutflowsUgx));
-  return Math.max(0, raw);
+    Math.max(0, Math.floor(input.adjustmentOutflowsUgx))
+  );
 }
 
 export function normalizeCashDrawerAdjustment(row: CashDrawerAdjustment): CashDrawerAdjustment {

@@ -5,6 +5,7 @@ import {
   reportDocumentStatusLabel,
   type ReportDocumentModel,
   type ReportDocumentSection,
+  type ReportDocumentTable,
 } from "./reportDocumentModel";
 
 const MARGIN = 48;
@@ -53,6 +54,18 @@ function drawHeader(doc: jsPDF, model: ReportDocumentModel, pageW: number): numb
     doc.setFontSize(10);
     doc.text(org, MARGIN, y);
     y += 14;
+  }
+  const address = model.shopAddress?.trim();
+  if (address) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    y = writeWrapped(doc, address, MARGIN, y, pageW - MARGIN * 2, 13, 10_000);
+  }
+  const phone = model.shopPhone?.trim();
+  if (phone) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    y = writeWrapped(doc, phone, MARGIN, y, pageW - MARGIN * 2, 13, 10_000);
   }
   doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.6);
@@ -129,6 +142,59 @@ function writeWrapped(doc: jsPDF, text: string, x: number, y: number, maxW: numb
   return cursor;
 }
 
+function writeTable(
+  doc: jsPDF,
+  table: ReportDocumentTable,
+  y: number,
+  pageW: number,
+  pageH: number,
+): number {
+  const maxW = pageW - MARGIN * 2;
+  const colWidths = table.columns.map((c) => Math.max(24, c.width * maxW));
+  const lineH = 12;
+  const rowPad = 5;
+
+  const drawRow = (cells: string[], bold: boolean): number => {
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setFontSize(bold ? 8 : 9);
+    const wrapped = cells.map((cell, i) => doc.splitTextToSize(cell || " ", colWidths[i]! - 6) as string[]);
+    const lineCount = Math.max(1, ...wrapped.map((lines) => lines.length));
+    const height = lineCount * lineH + rowPad;
+    let cursor = ensureSpace(doc, y, height + 2, pageH);
+    let x = MARGIN;
+    for (let i = 0; i < table.columns.length; i++) {
+      const lines = wrapped[i] ?? [""];
+      const align = table.columns[i]?.align ?? "left";
+      const colW = colWidths[i] ?? 40;
+      for (let li = 0; li < lines.length; li++) {
+        const text = lines[li] ?? "";
+        const textY = cursor + li * lineH;
+        if (align === "right") {
+          const tw = doc.getTextWidth(text);
+          doc.text(text, x + colW - 2 - tw, textY);
+        } else {
+          doc.text(text, x + 2, textY);
+        }
+      }
+      x += colW;
+    }
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.4);
+    doc.line(MARGIN, cursor + height - 2, pageW - MARGIN, cursor + height - 2);
+    y = cursor + height;
+    return y;
+  };
+
+  y = drawRow(
+    table.columns.map((c) => c.header),
+    true,
+  );
+  for (const record of table.records) {
+    y = drawRow(record, false);
+  }
+  return y + 6;
+}
+
 function writeSection(
   doc: jsPDF,
   lang: ReportDocumentModel["lang"],
@@ -137,7 +203,7 @@ function writeSection(
   pageW: number,
   pageH: number,
 ): number {
-  if (section.rows.length === 0 && !section.title) return y;
+  if (section.rows.length === 0 && !section.title && !section.table) return y;
   const maxW = pageW - MARGIN * 2;
   let cursor = y;
   const blockStart = 28 + (section.title ? 18 : 0) + 13;
@@ -158,6 +224,9 @@ function writeSection(
     cursor = writeWrapped(doc, section.title, MARGIN, cursor, maxW, 14, pageH);
     cursor += 2;
   }
+  if (section.table) {
+    cursor = writeTable(doc, section.table, cursor, pageW, pageH);
+  }
   for (const row of section.rows) {
     const label = row.value ? `${row.label}: ${row.value}` : row.label;
     doc.setFont("helvetica", row.bold ? "bold" : "normal");
@@ -176,7 +245,15 @@ export function renderReportDocumentPdf(model: ReportDocumentModel): Blob {
   if (model.empty) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    y = writeWrapped(doc, t(model.lang, "reportDocEmpty"), MARGIN, y, pageW - MARGIN * 2, 16, pageH);
+    y = writeWrapped(
+      doc,
+      model.emptyMessage?.trim() || t(model.lang, "reportDocEmpty"),
+      MARGIN,
+      y,
+      pageW - MARGIN * 2,
+      16,
+      pageH,
+    );
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     y = writeWrapped(doc, model.shopName, MARGIN, y + 6, pageW - MARGIN * 2, 14, pageH);

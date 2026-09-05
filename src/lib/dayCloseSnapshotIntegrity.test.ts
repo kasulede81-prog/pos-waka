@@ -102,6 +102,7 @@ describe("day close snapshot integrity", () => {
         productName: "Item",
         quantity: 1,
         refundAmountUgx: 20_000,
+        refundCashUgx: 20_000,
         reason: "other",
         actorUserId: "owner",
         createdAt: `${DAY}T14:00:00.000Z`,
@@ -117,6 +118,7 @@ describe("day close snapshot integrity", () => {
       cashDrawerAdjustments: adjustments,
       shifts: [],
       day: DAY,
+      formulaVersion: "v1",
     });
     const snap = buildDayCloseSnapshot({
       closedByUserId: "owner",

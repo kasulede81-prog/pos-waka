@@ -9,6 +9,7 @@ import { Caption, MonoNumber, SectionTitle } from "../enterprise/EnterpriseTypog
 import { WakaButton } from "../ui/wakaPrimitives";
 import { Wallet } from "lucide-react";
 import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
+import { DocumentActionsBar } from "../documents/DocumentActionsBar";
 
 type Props = {
   lang: Language;
@@ -18,6 +19,9 @@ type Props = {
   onClose: () => void;
   onReceive: () => void;
   canDebt: boolean;
+  onPrintStatement?: () => void;
+  onDownloadStatementPdf?: () => void;
+  onShareStatementPdf?: () => void;
 };
 
 export function DebtCustomerDetailSheet({
@@ -28,6 +32,9 @@ export function DebtCustomerDetailSheet({
   onClose,
   onReceive,
   canDebt,
+  onPrintStatement,
+  onDownloadStatementPdf,
+  onShareStatementPdf,
 }: Props) {
   if (!customer) return null;
 
@@ -109,6 +116,18 @@ export function DebtCustomerDetailSheet({
           ))}
         </ul>
       )}
+
+      {onPrintStatement && onDownloadStatementPdf && onShareStatementPdf ? (
+        <div className="mt-4">
+          <DocumentActionsBar
+            lang={lang}
+            compact
+            onPrint={onPrintStatement}
+            onDownloadPdf={onDownloadStatementPdf}
+            onSharePdf={onShareStatementPdf}
+          />
+        </div>
+      ) : null}
     </ModalSheet>
   );
 }

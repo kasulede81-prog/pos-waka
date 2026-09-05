@@ -8,6 +8,8 @@ import { setStoreSubscriptionContext } from "./storeSubscriptionContext";
 import {
   authorizePreferencesPatch,
   canPersistCatalogShelfPreferences,
+  canPersistInventoryArchivePreferences,
+  canPersistInventoryProductTagsPreferences,
   requiredPermissionsForPreferencesPatch,
 } from "./settingsAuthorization";
 
@@ -65,6 +67,30 @@ describe("settingsAuthorization — permission map", () => {
     expect(requiredPermissionsForPreferencesPatch({ posCatalogNodes: [] })).toEqual(["settings.shop"]);
     expect(authorizePreferencesPatch(actor("owner"), { posPinnedShelfKeys: ["cat:General"] }).ok).toBe(true);
     expect(authorizePreferencesPatch(actor("manager"), { posPinnedShelfKeys: ["cat:General"] }).ok).toBe(false);
+  });
+
+  it("INV-NEW-05 — inventory archive persist matches setPreferences (settings.shop)", () => {
+    const ctx = { snapshot: { kind: "local_full" as const }, authMode: "local" as const };
+    expect(requiredPermissionsForPreferencesPatch({ inventoryArchivedProductIds: ["p1"] })).toEqual([
+      "settings.shop",
+    ]);
+    expect(canPersistInventoryArchivePreferences(actor("owner"), ctx)).toBe(true);
+    expect(canPersistInventoryArchivePreferences(actor("manager"), ctx)).toBe(false);
+    expect(canPersistInventoryArchivePreferences(actor("stock_keeper"), ctx)).toBe(false);
+    expect(canPersistInventoryArchivePreferences(actor("cashier"), ctx)).toBe(false);
+    expect(authorizePreferencesPatch(actor("manager"), { inventoryArchivedProductIds: ["p1"] }).ok).toBe(false);
+    expect(authorizePreferencesPatch(actor("owner"), { inventoryArchivedProductIds: ["p1"] }).ok).toBe(true);
+  });
+
+  it("INV-POST-01 — inventory product tags persist matches setPreferences (settings.shop)", () => {
+    const ctx = { snapshot: { kind: "local_full" as const }, authMode: "local" as const };
+    expect(requiredPermissionsForPreferencesPatch({ inventoryProductTags: {} })).toEqual(["settings.shop"]);
+    expect(canPersistInventoryProductTagsPreferences(actor("owner"), ctx)).toBe(true);
+    expect(canPersistInventoryProductTagsPreferences(actor("manager"), ctx)).toBe(false);
+    expect(canPersistInventoryProductTagsPreferences(actor("stock_keeper"), ctx)).toBe(false);
+    expect(canPersistInventoryProductTagsPreferences(actor("cashier"), ctx)).toBe(false);
+    expect(authorizePreferencesPatch(actor("manager"), { inventoryProductTags: {} }).ok).toBe(false);
+    expect(authorizePreferencesPatch(actor("owner"), { inventoryProductTags: {} }).ok).toBe(true);
   });
 
   it("create CatalogNode persist matches createCatalogShelf gates", () => {

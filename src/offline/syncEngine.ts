@@ -2,6 +2,7 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation } from "../types";
 import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "../lib/autoSync";
+import { usePosStore } from "../store/usePosStore";
 import { sortSyncQueueByPriority } from "../lib/syncQueuePriority";
 import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
@@ -71,10 +72,11 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   skippedBackoff: number;
 }> {
   const queue = sortSyncQueueByPriority(await readSyncQueue());
+  const dayCloses = usePosStore.getState().dayCloses;
   const ready: SyncOperation[] = [];
   let skippedBackoff = 0;
   for (const op of queue) {
-    if (!shouldRetrySyncOp(op)) {
+    if (!shouldRetrySyncOp(op, Date.now(), dayCloses)) {
       skippedBackoff += 1;
       continue;
     }
@@ -113,7 +115,11 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
           recordSyncRetry(op.kind, op.attempts + 1);
         });
         if (op.attempts < 100) {
-          await appendSyncOperation(markSyncOpFailed(op));
+          const { syncOpEntityId, takeClosedBusinessDatePark } = await import("../lib/closedBusinessDateSync");
+          await appendSyncOperation({
+            ...markSyncOpFailed(op),
+            ...takeClosedBusinessDatePark(syncOpEntityId(op)),
+          });
         }
       }
     } catch {

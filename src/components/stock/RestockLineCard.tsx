@@ -1,24 +1,35 @@
 import { X } from "lucide-react";
 import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
+import { isControlledProduct } from "../../lib/pharmacyControlledMedicine";
 import { baseUnitsPerBuyingUnit, buyingUnitsToBaseUnits, packLabelFromProduct } from "../../lib/sellingEngine";
+import { BatchReceiveExtension } from "../inventory/receive/BatchReceiveExtension";
 
 export type RestockLineRow = {
   key: string;
   productId: string;
   qtyBuyingStr: string;
   costPerBuyingStr: string;
+  batchNumber?: string;
+  expiryDate?: string;
+  manufactureDate?: string;
+  location?: string;
 };
+
+export type RestockLinePatch = Partial<
+  Pick<RestockLineRow, "qtyBuyingStr" | "costPerBuyingStr" | "batchNumber" | "expiryDate" | "manufactureDate" | "location">
+>;
 
 type Props = {
   lang: Language;
   product: Product;
   row: RestockLineRow;
-  onChange: (patch: Partial<Pick<RestockLineRow, "qtyBuyingStr" | "costPerBuyingStr">>) => void;
+  onChange: (patch: RestockLinePatch) => void;
   onRemove: () => void;
+  batchTracked?: boolean;
 };
 
-export function RestockLineCard({ lang, product: p, row, onChange, onRemove }: Props) {
+export function RestockLineCard({ lang, product: p, row, onChange, onRemove, batchTracked }: Props) {
   const qty = Number(row.qtyBuyingStr) || 0;
   const pack = packLabelFromProduct(p);
   const buyUnit = (pack || p.baseUnit || "").trim() || p.baseUnit || "ea";
@@ -106,6 +117,23 @@ export function RestockLineCard({ lang, product: p, row, onChange, onRemove }: P
             baseUnitPlural,
           })}
         </p>
+      ) : null}
+
+      {batchTracked ? (
+        <div className="mt-3">
+          <BatchReceiveExtension
+            lang={lang}
+            batchNumber={row.batchNumber ?? ""}
+            onBatchNumberChange={(value) => onChange({ batchNumber: value })}
+            expiryDate={row.expiryDate ?? ""}
+            onExpiryDateChange={(value) => onChange({ expiryDate: value })}
+            manufactureDate={row.manufactureDate ?? ""}
+            onManufactureDateChange={(value) => onChange({ manufactureDate: value })}
+            location={row.location ?? ""}
+            onLocationChange={(value) => onChange({ location: value })}
+            controlledWarning={isControlledProduct(p) ? t(lang, "pharmacyControlled") : null}
+          />
+        </div>
       ) : null}
     </li>
   );

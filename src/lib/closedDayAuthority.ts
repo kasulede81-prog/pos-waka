@@ -6,8 +6,10 @@
  * ledger. They must not rewrite frozen close totals. Sale-id membership is not
  * on the snapshot today; flagging those rows for reconciliation is CLOSE-DAY-1.2.
  *
- * Snapshot does not freeze: payment mix (MoMo/card/credit), itemsSold,
- * categories, cashiers, hourly, top products, discounts, voids.
+ * Snapshot does not persist: payment mix, itemsSold, categories, cashiers,
+ * hourly, top products, discounts, voids, or timeline.
+ * Closed-day Cash Position must not present live rebuilds of those fields
+ * as finalized historical values — strip them (unavailable), do not invent.
  */
 
 import type { CashPositionReport } from "./cashPosition";
@@ -190,8 +192,8 @@ export function boundsForMonthKey(monthKey: string): DateFilterBounds {
 }
 
 /**
- * Headline cash-position fields for a closed date.
- * Payment mix, categories, cashiers, itemsSold, and timeline are not on the snapshot — left live.
+ * Closed-date Cash Position: freeze ledger headlines from the close snapshot.
+ * Unpersisted operational breakdowns are stripped — never left as live stand-ins.
  */
 export function applyClosedDayToCashPositionReport(
   report: CashPositionReport,
@@ -201,11 +203,17 @@ export function applyClosedDayToCashPositionReport(
   return {
     ...report,
     ledgerClosed: true,
+    closedDayBreakdownUnavailable: true,
     summary: {
       ...report.summary,
       totalSalesUgx: tot.totalSalesUgx,
       transactionCount: tot.transactionCount ?? report.summary.transactionCount,
+      itemsSold: 0,
     },
+    paymentMethods: [],
+    paymentAdjustmentUgx: 0,
+    categories: [],
+    cashiers: [],
     cashPosition: {
       ...report.cashPosition,
       openingFloatUgx: tot.openingFloatUgx ?? report.cashPosition.openingFloatUgx,

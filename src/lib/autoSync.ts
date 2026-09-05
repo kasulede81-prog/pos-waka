@@ -1,4 +1,5 @@
-import type { SyncOperation } from "../types";
+import type { DayCloseSummary, SyncOperation } from "../types";
+import { shouldRetryClosedBusinessDateOp } from "./businessDateLock";
 
 export const SYNC_BACKOFF_BASE_MS = 2_000;
 export const SYNC_BACKOFF_CAP_MS = 300_000;
@@ -10,7 +11,12 @@ export function computeSyncBackoffMs(attempts: number): number {
 }
 
 /** True when enough time has passed since the last failed attempt. */
-export function shouldRetrySyncOp(op: SyncOperation, nowMs = Date.now()): boolean {
+export function shouldRetrySyncOp(
+  op: SyncOperation,
+  nowMs = Date.now(),
+  dayCloses?: DayCloseSummary[],
+): boolean {
+  if (!shouldRetryClosedBusinessDateOp(op, dayCloses)) return false;
   if (!op.lastAttemptAt) return true;
   const last = new Date(op.lastAttemptAt).getTime();
   if (!Number.isFinite(last)) return true;

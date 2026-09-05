@@ -151,6 +151,7 @@ describe("getDrawerCashForDayInput integration", () => {
         productName: "Item",
         quantity: 1,
         refundAmountUgx: 20_000,
+        refundCashUgx: 20_000,
         reason: "other",
         actorUserId: "owner",
         createdAt: `${DAY}T14:00:00.000Z`,

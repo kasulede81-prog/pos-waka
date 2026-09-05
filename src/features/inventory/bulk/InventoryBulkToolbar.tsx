@@ -26,6 +26,10 @@ type Props = {
   preferences: ShopPreferences;
   suppliers: Supplier[];
   canEdit: boolean;
+  /** Preference-backed archive/unarchive — must match `setPreferences` (`settings.shop`). */
+  canArchive: boolean;
+  /** Preference-backed supplier tags — must match `setPreferences` (`settings.shop`). */
+  canPersistSupplierTags: boolean;
   canAdjust: boolean;
   canSeeCost?: boolean;
   stockCategoryPicklist: string[];
@@ -41,6 +45,8 @@ export function InventoryBulkToolbar({
   preferences,
   suppliers,
   canEdit,
+  canArchive,
+  canPersistSupplierTags,
   canAdjust,
   canSeeCost = false,
   stockCategoryPicklist,
@@ -234,7 +240,7 @@ export function InventoryBulkToolbar({
             <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => exportProductLabelsHtml(lang, selected)}>
               {t(lang, "inventoryExportLabels")}
             </button>
-            {canEdit ? (
+            {canArchive ? (
               <>
                 <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "archive" })}>
                   <Archive className="mr-1 inline h-3.5 w-3.5" />{t(lang, "inventoryBulkArchive")}
@@ -242,19 +248,21 @@ export function InventoryBulkToolbar({
                 <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "unarchive" })}>
                   {t(lang, "inventoryBulkUnarchive")}
                 </button>
-                <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "deactivate" })}>
-                  {t(lang, "inventoryBulkDeactivate")}
-                </button>
-                {suppliers[0] ? (
-                  <button
-                    type="button"
-                    className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold"
-                    onClick={() => void run({ kind: "supplier", supplierId: suppliers[0]!.id, supplierName: suppliers[0]!.name })}
-                  >
-                    {t(lang, "inventoryBulkSupplier")}
-                  </button>
-                ) : null}
               </>
+            ) : null}
+            {canEdit ? (
+              <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "deactivate" })}>
+                {t(lang, "inventoryBulkDeactivate")}
+              </button>
+            ) : null}
+            {canPersistSupplierTags && suppliers[0] ? (
+              <button
+                type="button"
+                className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold"
+                onClick={() => void run({ kind: "supplier", supplierId: suppliers[0]!.id, supplierName: suppliers[0]!.name })}
+              >
+                {t(lang, "inventoryBulkSupplier")}
+              </button>
             ) : null}
           </div>
         ) : null}

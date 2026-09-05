@@ -30,6 +30,8 @@ import { hydrateSaleFinancialsFromCloud } from "../lib/saleLineFinancialHydratio
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { decodeSaleLineFromCloud, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
 import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
+import { parsePersistedTenderCashUgx } from "../lib/saleTenderCash";
+import { buildCashExpensePushPayload, cashExpenseFromCloudRow } from "../lib/cashExpenses";
 import {
   soldByAuthUserIdFromCloudSaleRow,
   soldByUserIdFromCloudSaleRow,
@@ -356,6 +358,7 @@ function hospitalitySaleMetadata(sale: Sale): Record<string, unknown> {
     billPayments: sale.billPayments ?? null,
     splitBreakdown: sale.splitBreakdown ?? null,
     paymentMethod: sale.paymentMethod ?? null,
+    tenderCashUgx: sale.tenderCashUgx ?? null,
   };
 }
 
@@ -425,6 +428,7 @@ function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null
     billPayments: Array.isArray(meta.billPayments) ? (meta.billPayments as Sale["billPayments"]) : null,
     splitBreakdown: Array.isArray(meta.splitBreakdown) ? (meta.splitBreakdown as Sale["splitBreakdown"]) : null,
     paymentMethod: meta.paymentMethod != null ? (meta.paymentMethod as Sale["paymentMethod"]) : undefined,
+    tenderCashUgx: parsePersistedTenderCashUgx(meta.tenderCashUgx),
     receiptHeaderSnapshot: parseReceiptHeaderSnapshot(meta.receiptHeaderSnapshot),
     receiptFooterSnapshot: parseReceiptFooterSnapshot(meta.receiptFooterSnapshot),
     receiptCustomerName: meta.receiptCustomerName != null ? String(meta.receiptCustomerName) : null,
@@ -823,6 +827,11 @@ export async function pushDebtPaymentToCloud(paymentId: string, ctx: ShopCtx): P
 
   if (!decision.ack) {
     reportSyncIssue("debt_payment_push_failed", { paymentId, error: decision.error ?? "unknown" });
+    if (decision.error === "closed_business_date") {
+      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+      const { dateKeyKampala } = await import("../lib/datesUg");
+      noteClosedBusinessDateRejection(dateKeyKampala(payment.createdAt), payment.id);
+    }
     return false;
   }
 
@@ -1111,6 +1120,11 @@ export async function pushPendingSaleToCloud(
     }
     markSaleSyncState(sale.id, false, result?.error ?? "pending_sale_rejected");
     reportSyncIssue("pending_sale_rejected", { saleId: sale.id, error: result?.error ?? "unknown" });
+    if (result?.error === "closed_business_date") {
+      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+      const { dateKeyKampala } = await import("../lib/datesUg");
+      noteClosedBusinessDateRejection(dateKeyKampala(sale.createdAt), sale.id);
+    }
     return false;
   }
 
@@ -1249,6 +1263,11 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
   if (!result?.ok) {
     markSaleSyncState(sale.id, false, result?.error ?? "sale_rpc_rejected");
     reportSyncIssue("sale_rpc_rejected", { saleId: sale.id, error: result?.error ?? "unknown" });
+    if (result?.error === "closed_business_date") {
+      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+      const { dateKeyKampala } = await import("../lib/datesUg");
+      noteClosedBusinessDateRejection(dateKeyKampala(sale.createdAt), sale.id);
+    }
     return false;
   }
 
@@ -1314,6 +1333,7 @@ async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise
       shiftId: returnRow.shiftId ?? null,
       cogsUgx: returnRow.cogsUgx ?? null,
       unitCostUgx: returnRow.unitCostUgx ?? null,
+      refundCashUgx: returnRow.refundCashUgx ?? null,
       wakaClient: true,
     },
   };
@@ -1325,32 +1345,17 @@ async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise
     if (isMissingTableError(error)) return false;
     return false;
   }
-  const result = data as { ok?: boolean } | null;
+  const result = data as { ok?: boolean; error?: string } | null;
+  if (result?.error === "closed_business_date") {
+    const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+    const { dateKeyKampala } = await import("../lib/datesUg");
+    noteClosedBusinessDateRejection(dateKeyKampala(returnRow.createdAt), returnRow.id);
+  }
   return result?.ok === true;
 }
 
 function rowToCashExpense(raw: Record<string, unknown>): CashExpense | null {
-  const id = String(raw.id ?? "").trim();
-  if (!id) return null;
-  const deletedAt = raw.deleted_at != null ? String(raw.deleted_at) : null;
-  return {
-    id,
-    category: String(raw.category ?? "Miscellaneous"),
-    amountUgx: Number(raw.amount_ugx ?? 0),
-    description: raw.description != null ? String(raw.description) : "",
-    paidOn: String(raw.paid_on ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10),
-    createdAt: String(raw.created_at ?? new Date().toISOString()),
-    createdByUserId: String(raw.created_by ?? ""),
-    createdByLabel:
-      raw.recorded_by_label != null
-        ? String(raw.recorded_by_label)
-        : raw.metadata && typeof raw.metadata === "object"
-          ? String((raw.metadata as Record<string, unknown>).actorName ?? "")
-          : undefined,
-    pendingSync: false,
-    lastSyncError: null,
-    deletedAt,
-  };
+  return cashExpenseFromCloudRow(raw);
 }
 
 async function pushCashExpenseToCloud(expense: CashExpense, ctx: ShopCtx, voided = false): Promise<boolean> {
@@ -1364,20 +1369,20 @@ async function pushCashExpenseToCloud(expense: CashExpense, ctx: ShopCtx, voided
       if (isMissingTableError(error)) return true;
       return false;
     }
-    const result = data as { ok?: boolean } | null;
+    const result = data as { ok?: boolean; error?: string } | null;
+    if (result?.error === "closed_business_date") {
+      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+      const { dateKeyKampala } = await import("../lib/datesUg");
+      noteClosedBusinessDateRejection(dateKeyKampala(expense.paidOn), expense.id);
+      usePosStore.setState((s) => ({
+        cashExpenses: s.cashExpenses.map((e) =>
+          e.id === expense.id ? { ...e, pendingSync: true, lastSyncError: "closed_business_date" } : e,
+        ),
+      }));
+    }
     return result?.ok === true;
   }
-  const payload = {
-    id: expense.id,
-    category: expense.category,
-    amount_ugx: expense.amountUgx,
-    description: expense.description || null,
-    paid_on: expense.paidOn,
-    created_at: expense.createdAt,
-    recorded_by_staff_id: expense.createdByUserId.startsWith("staff:") ? expense.createdByUserId : null,
-    recorded_by_label: expense.createdByLabel ?? null,
-    metadata: { wakaClient: true },
-  };
+  const payload = buildCashExpensePushPayload(expense);
   const { data, error } = await supabase.rpc("shop_push_cash_expense", {
     p_shop_id: ctx.shopId,
     p_payload: payload,
@@ -1386,7 +1391,17 @@ async function pushCashExpenseToCloud(expense: CashExpense, ctx: ShopCtx, voided
     if (isMissingTableError(error)) return true;
     return false;
   }
-  const result = data as { ok?: boolean } | null;
+  const result = data as { ok?: boolean; error?: string } | null;
+  if (result?.error === "closed_business_date") {
+    const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+    const { dateKeyKampala } = await import("../lib/datesUg");
+    noteClosedBusinessDateRejection(dateKeyKampala(expense.paidOn), expense.id);
+    usePosStore.setState((s) => ({
+      cashExpenses: s.cashExpenses.map((e) =>
+        e.id === expense.id ? { ...e, pendingSync: true, lastSyncError: "closed_business_date" } : e,
+      ),
+    }));
+  }
   return result?.ok === true;
 }
 
@@ -1442,7 +1457,17 @@ async function pushCashDrawerAdjustmentToCloud(adj: CashDrawerAdjustment, ctx: S
     if (isMissingTableError(error)) return true;
     return false;
   }
-  const result = data as { ok?: boolean } | null;
+  const result = data as { ok?: boolean; error?: string } | null;
+  if (result?.error === "closed_business_date") {
+    const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+    const { dateKeyKampala } = await import("../lib/datesUg");
+    noteClosedBusinessDateRejection(dateKeyKampala(adj.occurredAt), adj.id);
+    usePosStore.setState((s) => ({
+      cashDrawerAdjustments: s.cashDrawerAdjustments.map((a) =>
+        a.id === adj.id ? { ...a, pendingSync: true, lastSyncError: "closed_business_date" } : a,
+      ),
+    }));
+  }
   return result?.ok === true;
 }
 
@@ -1677,7 +1702,7 @@ async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx
     if (isMissingTableError(error)) return false;
     return false;
   }
-  const result = data as { ok?: boolean } | null;
+  const result = data as { ok?: boolean; error?: string } | null;
   const ok = result?.ok === true;
   if (ok) {
     usePosStore.setState((s) => ({
@@ -1685,6 +1710,10 @@ async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx
         p.id === payment.id ? { ...p, pendingSync: false } : p,
       ),
     }));
+  } else if (result?.error === "closed_business_date") {
+    const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+    const { dateKeyKampala } = await import("../lib/datesUg");
+    noteClosedBusinessDateRejection(dateKeyKampala(payment.createdAt), payment.id);
   }
   return ok;
 }
@@ -3690,9 +3719,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
 
   const mergedCashExpenses =
     cloud.cashExpenses.length > 0
-      ? await mergeByIdChunked(state.cashExpenses, cloud.cashExpenses, (a, b) =>
-          newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
-        )
+      ? await mergeByIdChunked(state.cashExpenses, cloud.cashExpenses, newer)
       : state.cashExpenses;
 
   const mergedCashDrawerAdjustments =
@@ -3849,8 +3876,15 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
 
   let ok = 0;
   let fail = 0;
+  const { shouldSkipPendingClosedDateSync } = await import("../lib/closedBusinessDateSync");
+  const { dateKeyKampala } = await import("../lib/datesUg");
+  const dayCloses = usePosStore.getState().dayCloses;
   const { sales } = usePosStore.getState();
-  const pendingSales = sales.filter((s) => s.pendingSync);
+  const pendingSales = sales.filter(
+    (s) =>
+      s.pendingSync &&
+      !shouldSkipPendingClosedDateSync(dateKeyKampala(s.createdAt), s.lastSyncError, dayCloses),
+  );
   const saleResults = await mapPool(pendingSales, SYNC_SALE_PUSH_CONCURRENCY, async (s) => {
     // OBS-1 D3 — pendingSync-scan sale push attempt (not deduped with other paths).
     void import("../lib/syncDiagnostics")
@@ -3869,6 +3903,9 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
 
   for (const adj of usePosStore.getState().cashDrawerAdjustments) {
     if (!adj.pendingSync) continue;
+    if (shouldSkipPendingClosedDateSync(dateKeyKampala(adj.occurredAt), adj.lastSyncError, dayCloses)) {
+      continue;
+    }
     if (await pushCashDrawerAdjustmentToCloud(adj, ctx)) ok += 1;
     else fail += 1;
   }

@@ -204,6 +204,39 @@ export function authorizePreferencesPatch(
  * authorizePreferencesPatch for posCatalogNodes (settings.shop).
  * UI must not offer Create new shelf unless this is true.
  */
+/**
+ * Product archive/unarchive is stored on preferences (`inventoryArchivedProductIds`)
+ * and therefore uses the same `authorizePreferencesPatch` contract as
+ * `setPreferences` — `settings.shop` (effective). UI must not offer Archive
+ * unless this is true.
+ */
+export function canPersistInventoryArchivePreferences(
+  actor: SessionActor | null | undefined,
+  input?: {
+    snapshot: SubscriptionSnapshot;
+    authMode: "supabase" | "local";
+  },
+): boolean {
+  const ctx = input ?? getStoreSubscriptionContext();
+  return authorizePreferencesPatch(actor ?? null, { inventoryArchivedProductIds: [] }, ctx).ok;
+}
+
+/**
+ * Supplier tags live on preferences (`inventoryProductTags`) and use the same
+ * `authorizePreferencesPatch` / `settings.shop` contract as `setPreferences`.
+ * UI must not offer Bulk → Supplier unless this is true.
+ */
+export function canPersistInventoryProductTagsPreferences(
+  actor: SessionActor | null | undefined,
+  input?: {
+    snapshot: SubscriptionSnapshot;
+    authMode: "supabase" | "local";
+  },
+): boolean {
+  const ctx = input ?? getStoreSubscriptionContext();
+  return authorizePreferencesPatch(actor ?? null, { inventoryProductTags: {} }, ctx).ok;
+}
+
 export function canPersistCatalogShelfPreferences(
   actor: SessionActor | null | undefined,
   input?: {

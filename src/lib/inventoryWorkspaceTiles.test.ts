@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   INVENTORY_TRANSFER_ENABLED,
+  inventoryAddProductToShelfHref,
+  inventoryMovementsHref,
   resolveInventoryExtensionTiles,
   resolveInventoryNavTiles,
   resolveInventoryOverviewQuickActions,
   resolveInventoryQuickActions,
+  tabHref,
 } from "./inventoryWorkspaceTiles";
 
 describe("inventoryWorkspaceTiles (MB-4C transfer enabled)", () => {
@@ -56,6 +59,25 @@ describe("inventoryWorkspaceTiles (MB-4C transfer enabled)", () => {
       "suppliers",
       "reports",
     ]);
+  });
+
+  it("INV-NEW-04 — empty-shelf add dest is Products + stockView=shelves, not tab=shelves", () => {
+    expect(inventoryAddProductToShelfHref("DRINKS")).toBe(
+      "/stock?tab=products&stockView=shelves&shelf=DRINKS&add=1",
+    );
+    expect(inventoryAddProductToShelfHref("DRINKS")).not.toContain("tab=shelves");
+    const categories = resolveInventoryNavTiles("retail", "/stock").find((t) => t.id === "categories");
+    expect(categories?.href).toBe(tabHref("/stock", "products", { stockView: "shelves" }));
+  });
+
+  it("INV-NEW-03 — movements dest is Products hub + stockView, not tab=movements", () => {
+    expect(tabHref("/stock", "products", { stockView: "movements" })).toBe(
+      "/stock?tab=products&stockView=movements",
+    );
+    expect(inventoryMovementsHref("/stock")).toBe("/stock?tab=products&stockView=movements");
+    expect(inventoryMovementsHref("/stock")).not.toBe("/stock?tab=movements");
+    const movements = resolveInventoryNavTiles("retail", "/stock").find((t) => t.id === "movements");
+    expect(movements?.href).toBe(inventoryMovementsHref("/stock"));
   });
 
   it("wires implemented extensions and hides unfinished ones", () => {

@@ -8,7 +8,9 @@ import { usePosStore } from "../store/usePosStore";
 import { purchaseLineCostTotalUgx } from "../lib/sellingEngine";
 import { WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { dateKeyKampala } from "../lib/datesUg";
-import { RestockLineCard, type RestockLineRow } from "../components/stock/RestockLineCard";
+import { RestockLineCard, type RestockLinePatch, type RestockLineRow } from "../components/stock/RestockLineCard";
+import { buildRestockPurchaseLines } from "../lib/restockPurchaseLines";
+import { shouldTrackBatchesForProduct } from "../lib/pharmacyStoreBatch";
 import { RestockProductPicker } from "../components/stock/RestockProductPicker";
 import { ReceiveOperationShell } from "../components/inventory/receive/ReceiveOperationShell";
 import { SupplierSelector } from "../components/inventory/receive/SupplierSelector";
@@ -40,6 +42,7 @@ export function RestockPage({
 }) {
   const suppliers = usePosStore((s) => s.suppliers);
   const products = usePosStore((s) => s.products);
+  const preferences = usePosStore((s) => s.preferences);
   const recordPurchase = usePosStore((s) => s.recordPurchase);
 
   const [buySource, setBuySource] = useState<ReceiveBuySource>(() =>
@@ -106,13 +109,25 @@ export function RestockPage({
   }, [lines.length, submitting]);
 
   const addProductLine = (productId: string) => {
-    setLines((prev) => [...prev, { key: crypto.randomUUID(), productId, qtyBuyingStr: "1", costPerBuyingStr: "" }]);
+    setLines((prev) => [
+      ...prev,
+      {
+        key: crypto.randomUUID(),
+        productId,
+        qtyBuyingStr: "1",
+        costPerBuyingStr: "",
+        batchNumber: "",
+        expiryDate: "",
+        manufactureDate: "",
+        location: "",
+      },
+    ]);
     setPickerOpen(false);
     setPickerQuery("");
     setMsg(null);
   };
 
-  const updateLine = (key: string, patch: Partial<Pick<RestockLineRow, "qtyBuyingStr" | "costPerBuyingStr">>) => {
+  const updateLine = (key: string, patch: RestockLinePatch) => {
     setLines((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   };
 
@@ -128,17 +143,16 @@ export function RestockPage({
     e.preventDefault();
     if (submitLockRef.current) return;
     setMsg(null);
-    const built = lines
-      .map((r) => ({
-        productId: r.productId,
-        qtyBuyingUnits: Number(r.qtyBuyingStr) || 0,
-        costPerBuyingUnitUgx: Math.floor(Number(r.costPerBuyingStr.replace(/\D/g, "")) || 0),
-      }))
-      .filter((r) => r.productId && r.qtyBuyingUnits > 0 && r.costPerBuyingUnitUgx >= 0);
+    const invoice = invoiceNumber.trim().slice(0, 40);
+    const built = buildRestockPurchaseLines(lines, products, {
+      businessType: preferences.businessType,
+      pharmacyModeEnabled: preferences.pharmacyModeEnabled,
+      purchaseInvoice: invoice || null,
+    });
 
-    if (!built.length) {
+    if (!built.ok) {
       setMsgTone("err");
-      setMsg(t(lang, "restockAddLineHint"));
+      setMsg(t(lang, built.errorKey));
       return;
     }
 
@@ -149,14 +163,13 @@ export function RestockPage({
     }
 
     const paid = walkIn ? totals.sum : paidAmount;
-    const invoice = invoiceNumber.trim().slice(0, 40);
 
     setSubmitting(true);
     const attempt = submitRestockOnce(submitLockRef, () =>
       recordPurchase({
         supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
         supplierName,
-        lines: built,
+        lines: built.lines,
         amountPaidUgx: paid,
         notes: notes.trim(),
         invoiceNumber: invoice || undefined,
@@ -264,6 +277,11 @@ export function RestockPage({
                     lang={lang}
                     product={p}
                     row={row}
+                    batchTracked={shouldTrackBatchesForProduct(
+                      preferences.businessType,
+                      preferences.pharmacyModeEnabled,
+                      p,
+                    )}
                     onChange={(patch) => updateLine(row.key, patch)}
                     onRemove={() => removeLine(row.key)}
                   />

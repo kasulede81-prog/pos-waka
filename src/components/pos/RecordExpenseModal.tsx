@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { ModalSheet } from "../layout/ModalSheet";
@@ -10,6 +10,7 @@ import {
 import { usePosStore } from "../../store/usePosStore";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { dateKeyKampala } from "../../lib/datesUg";
+import { releaseCashMutationSubmit, submitCashMutationOnce } from "../../lib/cashMutationSubmitGuard";
 import { EnterpriseTextField } from "../enterprise/EnterpriseTextField";
 import { WakaButton } from "../ui/wakaPrimitives";
 import { Body, Caption } from "../enterprise/EnterpriseTypography";
@@ -33,9 +34,17 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
   const [note, setNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
   const todayKey = dateKeyKampala(new Date());
   const canRecord = canRecordCashExpenses(actor.role, preferences, actor.permissions);
+
+  useEffect(() => {
+    if (!open) return;
+    releaseCashMutationSubmit(submitLockRef);
+    setSubmitting(false);
+  }, [open]);
 
   const myTodayExpenses = useMemo(
     () =>
@@ -49,16 +58,36 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     setErr(null);
+    const amt = Math.floor(Number(amount.replace(/\D/g, "")) || 0);
     const category =
       categoryKey === "custom" ? customCategory.trim() : cashExpenseCategoryLabel(lang, categoryKey);
-    const res = addCashExpense({
-      amountUgx: Math.floor(Number(amount.replace(/\D/g, "")) || 0),
-      category,
-      description: note.trim(),
-    });
-    if (!res.ok) {
-      setErr(t(lang, res.errorKey === "forbidden" ? "noPermission" : (res.errorKey ?? "invalid")));
+    if (amt <= 0) {
+      setErr(t(lang, "cashExpenseAmountRequired"));
+      return;
+    }
+    if (!category) {
+      setErr(t(lang, "cashExpenseCategoryRequired"));
+      return;
+    }
+    setSubmitting(true);
+    const attempt = submitCashMutationOnce(submitLockRef, () =>
+      addCashExpense({
+        amountUgx: amt,
+        category,
+        description: note.trim(),
+      }),
+    );
+    if (!attempt.started) return;
+    if (!attempt.result.ok) {
+      setSubmitting(false);
+      setErr(
+        t(
+          lang,
+          attempt.result.errorKey === "forbidden" ? "noPermission" : (attempt.result.errorKey ?? "invalid"),
+        ),
+      );
       return;
     }
     setSaved(true);
@@ -115,7 +144,7 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
           <WakaButton type="button" variant="secondary" className="flex-1" onClick={onClose}>
             {t(lang, "cancel")}
           </WakaButton>
-          <WakaButton type="submit" variant="primary" className="flex-1">
+          <WakaButton type="submit" variant="primary" className="flex-1" disabled={submitting}>
             {t(lang, "cashExpenseRecordBtn")}
           </WakaButton>
         </div>

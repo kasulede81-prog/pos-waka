@@ -7,6 +7,7 @@ import { usePosStore } from "../store/usePosStore";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import { writeDayCloseCashCountDraft } from "../lib/dayCloseCashCountDraft";
+import { releaseCashMutationSubmit, submitCashMutationOnce } from "../lib/cashMutationSubmitGuard";
 import { DEFAULT_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
 import {
   downloadCashPositionCsv,
@@ -19,7 +20,6 @@ import {
 } from "../lib/cashPositionExport";
 import type { CashPositionReconciliation } from "../lib/cashPosition";
 import { useCashPositionDashboard } from "../hooks/useCashPositionDashboard";
-import { useDrawerCashForDay } from "../hooks/useDrawerCashForDay";
 import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
 import { CashPositionCollapsibleCard } from "../components/cash-position/CashPositionCollapsibleCard";
 import {
@@ -59,7 +59,7 @@ export function CashPositionPage({ lang }: { lang: Language }) {
   });
   const { dashboard, isStale, todayKey, preferences } = useCashPositionDashboard(lang, filter);
   const countDayKey = dashboard.isSingleDay ? dashboard.bounds.fromKey : todayKey;
-  const drawerForCount = useDrawerCashForDay(countDayKey);
+  const countExpectedUgx = dashboard.report.cashPosition.expectedCashUgx ?? 0;
   const showCashCountSection = dashboard.isSingleDay && (dashboard.isToday || fromCloseDay);
   const closeDayReturnUrl = `/close-day?date=${encodeURIComponent(countDayKey)}#cash-count`;
 
@@ -83,6 +83,8 @@ export function CashPositionPage({ lang }: { lang: Language }) {
   const [movementReason, setMovementReason] = useState("");
   const [movementNote, setMovementNote] = useState("");
   const [movementMsg, setMovementMsg] = useState<string | null>(null);
+  const [movementSubmitting, setMovementSubmitting] = useState(false);
+  const movementLockRef = useRef(false);
   const [safeLimitInput, setSafeLimitInput] = useState(
     () => String(preferences.cashSafeLimitUgx ?? ""),
   );
@@ -141,24 +143,39 @@ export function CashPositionPage({ lang }: { lang: Language }) {
     [dashboard.report, exportReconciliation, lang],
   );
 
+  useEffect(() => {
+    const empty = !movementAmount.replace(/\D/g, "") && !movementReason.trim();
+    if (!empty) return;
+    if (!movementLockRef.current && !movementSubmitting) return;
+    releaseCashMutationSubmit(movementLockRef);
+    setMovementSubmitting(false);
+  }, [movementAmount, movementReason, movementSubmitting]);
+
   const submitMovement = () => {
+    if (movementLockRef.current) return;
     const amountUgx = Math.floor(Number(movementAmount.replace(/\D/g, "")) || 0);
     if (amountUgx <= 0 || !movementReason.trim()) return;
     const combinedNote = movementNote.trim()
       ? `${movementReason.trim()} — ${movementNote.trim()}`
       : movementReason.trim();
-    const result = addCashDrawerAdjustment({
-      type: movementType,
-      amountUgx,
-      note: combinedNote,
-    });
-    if (result.ok) {
-      setMovementAmount("");
-      setMovementReason("");
-      setMovementNote("");
-      setMovementMsg(t(lang, "cashPositionMovementSaved"));
-      window.setTimeout(() => setMovementMsg(null), 3000);
+    setMovementSubmitting(true);
+    const attempt = submitCashMutationOnce(movementLockRef, () =>
+      addCashDrawerAdjustment({
+        type: movementType,
+        amountUgx,
+        note: combinedNote,
+      }),
+    );
+    if (!attempt.started) return;
+    if (!attempt.result.ok) {
+      setMovementSubmitting(false);
+      return;
     }
+    setMovementAmount("");
+    setMovementReason("");
+    setMovementNote("");
+    setMovementMsg(t(lang, "cashPositionMovementSaved"));
+    window.setTimeout(() => setMovementMsg(null), 3000);
   };
 
   const actorLabel = actor.displayName?.trim() || actor.role;
@@ -180,6 +197,12 @@ export function CashPositionPage({ lang }: { lang: Language }) {
       {fromCloseDay && dashboard.isSingleDay ? (
         <p className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 text-sm font-semibold text-waka-950">
           {tTemplate(lang, "cashPositionCountForDate", { date: countDayKey })}
+        </p>
+      ) : null}
+
+      {dashboard.report.ledgerClosed ? (
+        <p className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-800">
+          {t(lang, "dailyReportClosedAuthorityNote")}
         </p>
       ) : null}
 
@@ -210,7 +233,12 @@ export function CashPositionPage({ lang }: { lang: Language }) {
         onExport={() => scrollTo("export")}
       />
 
-      <CashPositionHeroSummary lang={lang} extendedSummary={dashboard.extendedSummary} rangeLabel={dashboard.rangeLabel} />
+      <CashPositionHeroSummary
+        lang={lang}
+        extendedSummary={dashboard.extendedSummary}
+        rangeLabel={dashboard.rangeLabel}
+        ledgerClosed={Boolean(dashboard.report.ledgerClosed)}
+      />
 
       <CashPositionCollapsibleCard id="payments" title={t(lang, "cashPositionSectionPayments")} icon="💳" defaultOpen>
         <CashPositionPaymentMethods lang={lang} report={dashboard.report} />
@@ -222,7 +250,11 @@ export function CashPositionPage({ lang }: { lang: Language }) {
 
       {dashboard.isSingleDay ? (
         <CashPositionCollapsibleCard id="timeline" title={t(lang, "cashPositionSectionTimeline")} icon="🧾" defaultOpen>
-          <CashPositionActivityTimeline lang={lang} events={dashboard.timeline} />
+          <CashPositionActivityTimeline
+            lang={lang}
+            events={dashboard.timeline}
+            unavailable={Boolean(dashboard.report.closedDayBreakdownUnavailable)}
+          />
         </CashPositionCollapsibleCard>
       ) : null}
 
@@ -242,6 +274,7 @@ export function CashPositionPage({ lang }: { lang: Language }) {
             movementReason={movementReason}
             movementNote={movementNote}
             movementMsg={movementMsg}
+            submitting={movementSubmitting}
             onTypeChange={setMovementType}
             onAmountChange={setMovementAmount}
             onReasonChange={setMovementReason}
@@ -252,11 +285,19 @@ export function CashPositionPage({ lang }: { lang: Language }) {
       </div>
 
       <CashPositionCollapsibleCard id="categories" title={t(lang, "cashPositionSectionCategories")} icon="📦">
-        <CashPositionCategories lang={lang} categories={dashboard.categories} />
+        <CashPositionCategories
+          lang={lang}
+          categories={dashboard.categories}
+          unavailable={Boolean(dashboard.report.closedDayBreakdownUnavailable)}
+        />
       </CashPositionCollapsibleCard>
 
       <CashPositionCollapsibleCard id="cashiers" title={t(lang, "cashPositionSectionCashiers")} icon="👤">
-        <CashPositionCashiers lang={lang} cashiers={dashboard.cashiers} />
+        <CashPositionCashiers
+          lang={lang}
+          cashiers={dashboard.cashiers}
+          unavailable={Boolean(dashboard.report.closedDayBreakdownUnavailable)}
+        />
       </CashPositionCollapsibleCard>
 
       {showCashCountSection ? (
@@ -271,7 +312,7 @@ export function CashPositionPage({ lang }: { lang: Language }) {
             <CashPositionCashCount
               lang={lang}
               closeDateKey={countDayKey}
-              expectedUgx={drawerForCount.expectedDrawerCashUgx}
+              expectedUgx={countExpectedUgx}
               onUseTotal={(total) => {
                 writeDayCloseCashCountDraft(countDayKey, String(total));
                 try {

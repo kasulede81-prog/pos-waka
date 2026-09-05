@@ -1,11 +1,15 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
-import { BarChart3, FileDown, Receipt } from "lucide-react";
+import { BarChart3, FileDown, Receipt, SearchX } from "lucide-react";
+import { themeUi } from "../lib/themeTokens";
+import { statusTokens } from "../lib/statusTokens";
+import { enterpriseMotion } from "../lib/enterpriseMotion";
+import clsx from "clsx";
 import type { Language, Sale, SaleLine } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -45,8 +49,7 @@ import { SalesHistoryRow } from "../components/receipts/SalesHistoryRow";
 import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { sumDebtPaymentsInBounds } from "../lib/customerDebtActivity";
 import { useProtectedAction } from "../hooks/useProtectedAction";
-import { SalesHistoryStatGrid } from "../components/receipts/SalesHistoryStatGrid";
-import { SalesHistorySecondaryChips, buildSecondaryChips } from "../components/receipts/SalesHistorySecondaryChips";
+import { SalesHistoryPeriodSummary } from "../components/receipts/SalesHistoryPeriodSummary";
 import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
 import { SalesHistorySearchBar } from "../components/receipts/SalesHistorySearchBar";
 import { SalesHistoryAnalyticsPanel } from "../components/receipts/SalesHistoryAnalyticsPanel";
@@ -55,6 +58,14 @@ import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptySt
 import { buildReceiptNumberForSale } from "../lib/receiptPrint";
 import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabels";
 import { saleSoldByMatchesActor } from "../lib/sellerIdentity";
+import { salesHistoryShowsInitialSkeleton } from "../lib/salesHistoryLoading";
+import { findProductByBarcode } from "../lib/pharmacyMedicine";
+import {
+  detectBarcodeCapabilities,
+  startBarcodeSession,
+  stopBarcodeSession,
+} from "../services/hardware/barcodeAdapter";
+import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 
 function countItemsSold(sales: Sale[]): number {
   let count = 0;
@@ -92,6 +103,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const desktopTable = useWakaLayoutBand() === "desktop";
   const { runProtected } = useProtectedAction();
   const [desktopActionSale, setDesktopActionSale] = useState<Sale | null>(null);
+  const [cameraScanOpen, setCameraScanOpen] = useState(false);
+  const [cameraScanStatus, setCameraScanStatus] = useState("");
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const {
     filter,
     setFilter,
@@ -105,6 +119,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const rawSales = useReportingSales(includeArchived);
   const sales = useDeferredValue(rawSales);
   const salesRefreshing = rawSales !== sales;
+  const showInitialSkeleton = salesHistoryShowsInitialSkeleton(salesRefreshing, sales.length);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
@@ -136,6 +151,37 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
   const [returnReceiptCtx, setReturnReceiptCtx] = useState<import("../lib/receiptDocuments").ReturnReceiptContext | null>(null);
+
+  useEffect(() => {
+    if (!cameraScanOpen) return;
+    setCameraScanStatus(t(lang, "posBarcodeStarting"));
+    void startBarcodeSession("camera", {
+      videoElement: cameraVideoRef.current,
+      onScan: (code) => {
+        const hit = findProductByBarcode(products, code);
+        const name = hit?.name?.trim();
+        setSearchQuery(name || code);
+        void stopBarcodeSession();
+        setCameraScanOpen(false);
+      },
+      onError: (message) => setCameraScanStatus(message),
+    }).then((result) => {
+      if (!result.ok) setCameraScanStatus(result.error ?? t(lang, "posBarcodeSoon"));
+    });
+    return () => {
+      void stopBarcodeSession();
+    };
+  }, [cameraScanOpen, lang, products]);
+
+  const openCameraScan = () => {
+    if (!detectBarcodeCapabilities().cameraScan) return;
+    setCameraScanOpen(true);
+  };
+
+  const closeCameraScan = () => {
+    void stopBarcodeSession();
+    setCameraScanOpen(false);
+  };
 
   const shopLabel = preferences.shopDisplayName?.trim() || undefined;
   const customers = usePosStore((s) => s.customers);
@@ -276,34 +322,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     [debtPayments, bounds],
   );
 
-  const totalDebtUgx = useMemo(
-    () => customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0),
-    [customers],
-  );
-
-  const canViewDebts = actorHasPermission(actor, "customers.view");
   const syncErrorCount = countSalesWithSyncErrors();
-
-  const secondaryChips = useMemo(
-    () =>
-      buildSecondaryChips(lang, {
-        cashSalesUgx: physicalCashInHandUgx,
-        debtCollectedUgx,
-        expensesUgx,
-        expensesLabel: isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange"),
-        stockValueUgx,
-        showShopSummaries,
-      }),
-    [lang, physicalCashInHandUgx, debtCollectedUgx, expensesUgx, isSingleDay, stockValueUgx, showShopSummaries],
-  );
 
   const analyticsMetrics = useMemo(() => {
     const bestProduct = bestSellingProductName(revenueSalesInRange);
     const metrics = [
-      { label: isSingleDay ? t(lang, "salesHistoryTodaySales") : t(lang, "salesHistorySalesInRange"), value: `UGX ${rangeRevenueUgx.toLocaleString()}` },
-      ...(showProfit
-        ? [{ label: t(lang, "salesHistoryProfits"), value: `UGX ${rangeFinancials.profitUgx.toLocaleString()}` }]
-        : []),
       { label: t(lang, "salesHistoryCashInHand"), value: `UGX ${physicalCashInHandUgx.toLocaleString()}` },
       ...(showShopSummaries
         ? [
@@ -311,7 +334,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             { label: isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange"), value: `UGX ${expensesUgx.toLocaleString()}` },
           ]
         : []),
-      { label: t(lang, "salesHistoryItemsSold"), value: String(itemsSoldCount) },
       { label: t(lang, "salesHistoryAverageSale"), value: `UGX ${rangeFinancials.averageTransactionUgx.toLocaleString()}` },
       { label: t(lang, "salesHistoryBestProduct"), value: bestProduct ?? "—" },
       { label: t(lang, "salesHistoryPaymentMethods"), value: formatSalesHistoryPaymentMethodsSummary(lang, revenueSalesInRange) },
@@ -323,13 +345,10 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   }, [
     lang,
     isSingleDay,
-    rangeRevenueUgx,
-    showProfit,
     rangeFinancials,
     showShopSummaries,
     debtCollectedUgx,
     expensesUgx,
-    itemsSoldCount,
     revenueSalesInRange,
     physicalCashInHandUgx,
     stockValueUgx,
@@ -375,8 +394,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   );
 
   return (
-    <EnterprisePageContainer className="space-y-3">
-      <div className="flex items-start justify-between gap-2">
+    <EnterprisePageContainer variant="workspace" className="sales-history-workspace">
+      <div className="sales-history-header sales-history-enter flex items-start justify-between gap-3">
         <div className="min-w-0">
           <PageHeader
             lang={lang}
@@ -384,15 +403,14 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             subtitle={term ? term("receiptsHint") : t(lang, "receiptsHint")}
             backFallback="/office"
             backLabel={t(lang, "officeBackToHub")}
-            compact
           />
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-2 pt-1">
           {partitioned.completed.length > 0 ? (
             <button
               type="button"
               onClick={() => void runProtected("export_data", onDownloadAll)}
-              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-muted"
+              className={clsx(themeUi.btnSecondary, "min-h-11 gap-1.5 px-3 text-sm")}
               title={t(lang, "receiptsDownloadPdf")}
             >
               <FileDown className="h-4 w-4 shrink-0" aria-hidden />
@@ -402,7 +420,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           {showShopSummaries ? (
             <Link
               to="/reports"
-              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm active:bg-muted"
+              className={clsx(themeUi.btnGhost, "min-h-11 gap-1.5 px-3 text-sm")}
             >
               <BarChart3 className="h-4 w-4 shrink-0" aria-hidden />
               <span className="hidden sm:inline">{t(lang, "salesHistoryReports")}</span>
@@ -412,32 +430,23 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       </div>
 
       {syncErrorCount > 0 ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
+        <p className={clsx(statusTokens.warning.banner, enterpriseMotion.toastEnter)}>
           {tTemplate(lang, "syncErrorCount", { count: String(syncErrorCount) })} — {t(lang, "syncErrorBanner")}
         </p>
       ) : null}
 
-      {sales.length > 0 ? (
-        <>
-          <SalesHistoryStatGrid
-            lang={lang}
-            salesLabel={salesHeroLabel}
-            salesUgx={rangeRevenueUgx}
-            profitUgx={showProfit ? rangeFinancials.profitUgx : null}
-            showProfit={showProfit}
-            itemsSold={itemsSoldCount}
-            totalDebtUgx={totalDebtUgx}
-            showShopDebt={showShopSummaries && canViewDebts}
-          />
-
-          {hasAnyInRange && secondaryChips.length > 0 ? (
-            <SalesHistorySecondaryChips chips={secondaryChips} />
-          ) : null}
-
-          <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-muted/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
-            <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
-            <SalesHistorySearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} />
-
+      <div className="sales-history-zone--controls sticky top-0 z-10 -mx-3 space-y-3 px-3 pb-3 pt-1 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
+        {sales.length > 0 ? (
+          <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
+        ) : null}
+        <IncludeArchivedFilter
+          lang={lang}
+          checked={includeArchived}
+          onChange={setIncludeArchived}
+          className="border-waka-200/70 bg-card/90 py-2 shadow-elev"
+        />
+        {sales.length > 0 ? (
+          <>
             {archiveNotice ? (
               <DateFilterArchiveNotice
                 lang={lang}
@@ -446,30 +455,49 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
               />
             ) : null}
             {needsArchive && includeArchived && archivedSalesCount > 0 ? (
-              <p className="text-xs font-semibold text-muted-foreground">{t(lang, "dateFilterArchiveIncluded")}</p>
+              <p className="text-sm font-semibold text-muted-foreground">{t(lang, "dateFilterArchiveIncluded")}</p>
             ) : null}
             {needsArchive && archivedSalesCount === 0 ? (
-              <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
+              <p className={statusTokens.warning.banner}>{t(lang, "dateFilterArchiveEmpty")}</p>
             ) : null}
-          </div>
+            <SalesHistorySearchBar
+              lang={lang}
+              value={searchQuery}
+              onChange={setSearchQuery}
+              onScan={openCameraScan}
+            />
+          </>
+        ) : null}
+      </div>
 
-          {hasAnyInRange ? <SalesHistoryAnalyticsPanel lang={lang} metrics={analyticsMetrics} /> : null}
-        </>
+      {sales.length > 0 ? (
+        <div className="sales-history-enter">
+          <SalesHistoryPeriodSummary
+            lang={lang}
+            salesLabel={salesHeroLabel}
+            salesUgx={rangeRevenueUgx}
+            itemsSold={itemsSoldCount}
+            profitUgx={showProfit ? rangeFinancials.profitUgx : null}
+            showProfit={showProfit}
+            compact={!desktopTable}
+          />
+        </div>
       ) : null}
-
-      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {sales.length > 0 && !hasAnyInRange ? (
-        <p className="rounded-xl border border-border bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
-          {t(lang, "receiptsNoSalesInRange")}
-        </p>
+        <EnterpriseEmptyState
+          icon={Receipt}
+          title={t(lang, "receiptsNoSalesInRange")}
+          className="border-waka-200/70 bg-waka-50/50"
+        />
       ) : null}
 
-      {sales.length === 0 && !salesRefreshing ? (
+      {sales.length === 0 && !showInitialSkeleton ? (
         <EnterpriseEmptyState
           icon={Receipt}
           title={t(lang, "salesHistoryEmptyTitle")}
           description={t(lang, "salesHistoryEmptyHint")}
+          className="border-waka-200/70 bg-waka-50/50"
           primaryAction={
             hasSellAccess
               ? { label: t(lang, "salesHistoryStartSelling"), onClick: () => navigate("/pos") }
@@ -478,10 +506,10 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         />
       ) : null}
 
-      {salesRefreshing ? (
+      {showInitialSkeleton ? (
         <SalesHistorySkeletonList />
       ) : listSales.length > 0 ? (
-        <section className="transition-opacity duration-300 ease-out">
+        <section className="sales-history-zone--workspace sales-history-enter">
           {desktopTable ? (
             <>
               <SalesHistoryDesktopTable
@@ -512,6 +540,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                   }
                   hideCard
                   forceOpenActions
+                  onActionsClose={() => setDesktopActionSale(null)}
                 />
               ) : null}
             </>
@@ -524,17 +553,26 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           )}
         </section>
       ) : hasAnyInRange && searchQuery.trim() ? (
-        <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">
-          {t(lang, "posSellNoMatch")}
-        </p>
+        <EnterpriseEmptyState
+          icon={SearchX}
+          title={t(lang, "salesHistoryNoMatchTitle")}
+          description={t(lang, "salesHistoryNoMatchHint")}
+          className="border-waka-200/70 bg-waka-50/50"
+        />
       ) : null}
 
+      {hasAnyInRange ? <SalesHistoryAnalyticsPanel lang={lang} metrics={analyticsMetrics} /> : null}
+
       {partitioned.cancelled.length > 0 ? (
-        <section className="space-y-2">
+        <section className={clsx(themeUi.surfaceMuted, "space-y-3 p-4")}>
           <button
             type="button"
             onClick={() => setShowCancelled((v) => !v)}
-            className="px-1 text-sm font-bold text-muted-foreground underline-offset-2 hover:underline"
+            className={clsx(
+              "text-base font-bold text-muted-foreground underline-offset-2 hover:underline",
+              themeUi.focusRing,
+              "rounded-lg px-1",
+            )}
           >
             {showCancelled ? t(lang, "receiptsHideCancelled") : t(lang, "receiptsShowCancelled")} (
             {partitioned.cancelled.length})
@@ -597,6 +635,25 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         ctx={returnReceiptCtx}
         onClose={() => setReturnReceiptCtx(null)}
       />
+
+      {cameraScanOpen ? (
+        <AppModalOverlay className="z-[90] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal>
+          <div className="w-full max-w-md rounded-3xl bg-card p-4 shadow-2xl">
+            <p className="text-lg font-black text-foreground">{t(lang, "posBarcodeSoon")}</p>
+            <video ref={cameraVideoRef} className="mt-3 h-56 w-full rounded-2xl bg-black object-cover" />
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">
+              {cameraScanStatus || t(lang, "posBarcodeStarting")}
+            </p>
+            <button
+              type="button"
+              className="mt-3 min-h-[48px] w-full rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground"
+              onClick={closeCameraScan}
+            >
+              {t(lang, "cancel")}
+            </button>
+          </div>
+        </AppModalOverlay>
+      ) : null}
     </EnterprisePageContainer>
   );
 }

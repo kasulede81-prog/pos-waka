@@ -19,6 +19,7 @@ import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { Pill } from "lucide-react";
 import { printHtmlDocument } from "../lib/documentPrint";
+import { pharmacyReceiveReplacementHref } from "../lib/pharmacyReceiveDeepLink";
 
 const BUCKETS = ["expired", "today", "d7", "d30", "d60", "d90"] as const;
 
@@ -301,7 +302,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
                     <button
                       type="button"
                       onClick={() => {
-                        window.location.assign(`/pharmacy/inventory?productId=${row.productId}&receive=1`);
+                        window.location.assign(pharmacyReceiveReplacementHref(row.productId));
                       }}
                       className="min-h-[48px] rounded-2xl border border-teal-200 bg-teal-50 px-4 text-sm font-black text-teal-900 touch-manipulation"
                     >

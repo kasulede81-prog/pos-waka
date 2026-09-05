@@ -5,10 +5,12 @@
 
 import type { CashExpense, CashDrawerAdjustment, DebtPayment, Language, Product, ReturnRecord, Sale, ShiftRecord, StaffAccount, SupplierPayment } from "../types";
 import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
+import { physicalCashCollectedFromSale } from "./cashDrawerSales";
 import {
   getDrawerCashForDayInput,
   sumRefundsOnDay,
 } from "./cashReconciliation";
+import { hasAuthoritativeTenderCash } from "./saleTenderCash";
 import type { AdjustmentBreakdownByType } from "./cashDrawerLedger";
 import { dateKeyKampala } from "./datesUg";
 import { t } from "./i18n";
@@ -70,6 +72,11 @@ export type CashPositionReport = {
   cashiers: CashPositionCashierRow[];
   /** True when this report's headlines come from an active day close. */
   ledgerClosed?: boolean;
+  /**
+   * Close snapshot does not persist payment mix / categories / cashiers / items.
+   * When true those fields are empty — do not treat them as historical close data.
+   */
+  closedDayBreakdownUnavailable?: boolean;
 };
 
 export type CashPositionReconciliation = {
@@ -138,6 +145,22 @@ function fillSalePaymentBuckets(sale: Sale, buckets: Record<CashPositionPaymentK
   if (collected <= 0) return;
 
   const pm = sale.paymentMethod ?? (debt > 0 ? "credit" : "cash");
+  if (hasAuthoritativeTenderCash(sale)) {
+    const cash = physicalCashCollectedFromSale(sale);
+    const remainder = Math.max(0, collected - cash);
+    if (pm === "mobile_money") {
+      buckets.mobile_money = collected;
+      return;
+    }
+    if (pm === "atm") {
+      buckets.card = collected;
+      return;
+    }
+    buckets.cash = cash;
+    if (remainder > 0) buckets.mobile_money = remainder;
+    return;
+  }
+
   switch (pm) {
     case "mobile_money":
       buckets.mobile_money = collected;
@@ -386,15 +409,24 @@ export function buildCashPositionReport(params: {
       saleCounted = true;
     }
     if (collected > 0) {
-      const pm = sale.paymentMethod ?? (debt > 0 ? "credit" : "cash");
-      const key: CashPositionPaymentKey =
-        pm === "mobile_money" ? "mobile_money" : pm === "atm" ? "card" : "cash";
-      const cur = paymentAgg.get(key)!;
-      paymentAgg.set(key, {
-        amountUgx: cur.amountUgx + collected,
-        transactionCount: cur.transactionCount + (saleCounted ? 0 : 1),
-      });
-      saleCounted = true;
+      const buckets = attributeSalePaymentBuckets(sale);
+      const parts: Array<[CashPositionPaymentKey, number]> = [
+        ["cash", buckets.cash],
+        ["mobile_money", buckets.mobile_money],
+        ["card", buckets.card],
+        ["bank_transfer", buckets.bank_transfer],
+      ];
+      let incrementCount = !saleCounted;
+      for (const [key, amt] of parts) {
+        if (amt <= 0) continue;
+        const cur = paymentAgg.get(key)!;
+        paymentAgg.set(key, {
+          amountUgx: cur.amountUgx + amt,
+          transactionCount: cur.transactionCount + (incrementCount ? 1 : 0),
+        });
+        incrementCount = false;
+        saleCounted = true;
+      }
     }
     if (!saleCounted) {
       const cur = paymentAgg.get("cash")!;

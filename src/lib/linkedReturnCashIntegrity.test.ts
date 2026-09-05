@@ -142,7 +142,9 @@ describe("linked return cash integrity — Option A", () => {
     });
     const adjustedPrior = adjustedAfterReturn(prior, 10_000);
     const todaySale = sale({ status: "completed", totalUgx: 60_000, cashPaidUgx: 60_000 });
-    const returns = [returnRec(prior.id, 10_000, `${DAY}T12:00:00.000Z`)];
+    const rec = returnRec(prior.id, 10_000, `${DAY}T12:00:00.000Z`);
+    rec.refundCashUgx = 10_000;
+    const returns = [rec];
 
     const drawer = getDrawerCashForDayInput({
       sales: [adjustedPrior, todaySale],
@@ -164,10 +166,10 @@ describe("linked return cash integrity — Option A", () => {
     expect(expectedCash([adjusted], returns)).toBe(55_000);
   });
 
-  it("7: unlinked return subtracts full refund (sale header not adjusted)", () => {
+  it("7: unlinked return without refundCashUgx does not assume cash", () => {
     const base = sale({ status: "completed", totalUgx: 60_000, cashPaidUgx: 60_000 });
     const returns = [returnRec(null, 5_000)];
-    expect(expectedCash([base], returns)).toBe(55_000);
+    expect(expectedCash([base], returns)).toBe(60_000);
   });
 });
 

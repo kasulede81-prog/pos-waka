@@ -60,6 +60,7 @@ import {
 } from "../lib/posCheckoutKeypad";
 import { PosDesktopCompactHeader } from "../components/pos/PosDesktopCompactHeader";
 import { EmptyShelfPanel } from "../components/stock/EmptyShelfPanel";
+import { inventoryAddProductToShelfHref } from "../lib/inventoryWorkspaceTiles";
 import { PosDesktopProductCard } from "../components/pos/PosDesktopProductCard";
 import { PosDesktopStatusBar } from "../components/pos/PosDesktopStatusBar";
 import {
@@ -120,6 +121,7 @@ import {
 } from "../lib/pharmacyPackaging";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
 import { addDenominationToCashInput } from "../lib/cashDenominations";
+import { physicalCashTenderFromCheckoutInputs } from "../lib/saleTenderCash";
 import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import { brandingFromSale } from "../lib/receiptBranding";
@@ -1229,6 +1231,11 @@ export function PosPage({ lang }: { lang: Language }) {
       customerPhone: saleCustomerPhone.trim() || null,
       paymentMethod,
       amountPaidUgx: totalPaidInput,
+      tenderCashUgx: physicalCashTenderFromCheckoutInputs({
+        paymentMethod,
+        cashInput,
+        draftPayable,
+      }),
       changeGivenUgx: changeDue,
     };
     const r = pharmacyMode
@@ -1735,11 +1742,7 @@ export function PosPage({ lang }: { lang: Language }) {
             lang={lang}
             shelfLabel={selectedShelfLabel}
             canAdd={actorHasPermission(actor, "products.add")}
-            onAddProduct={() =>
-              navigate(
-                `/stock?tab=shelves&shelf=${encodeURIComponent(sellCategoryKey)}&add=1`,
-              )
-            }
+            onAddProduct={() => navigate(inventoryAddProductToShelfHref(sellCategoryKey))}
           />
         );
       }

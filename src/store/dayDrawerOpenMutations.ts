@@ -50,6 +50,10 @@ type Deps = {
     permission: import("../types").Permission,
     label: string,
   ) => { ok: false; errorKey: string } | null;
+  denyIfBusinessDateLocked: (
+    dateKey: string,
+    action: string,
+  ) => { ok: false; errorKey: string } | null;
 };
 
 export type BeginShiftV2Input = {
@@ -102,7 +106,7 @@ function assertDayDrawerOpenEditable(
 }
 
 export function createDayDrawerOpenStoreActions(deps: Deps) {
-  const { get, set, pushAudit, queueRemote, denyUnlessEffectivePermission } = deps;
+  const { get, set, pushAudit, queueRemote, denyUnlessEffectivePermission, denyIfBusinessDateLocked } = deps;
 
   const recordDayDrawerOpen = (input: {
     openingFloatUgx: number;
@@ -189,6 +193,8 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
 
     const prev = state.dayDrawerOpens.find((r) => r.id === input.previousId && r.status === "open");
     if (!prev) return { ok: false as const, errorKey: "invalid" };
+    const dateLock = denyIfBusinessDateLocked(prev.dateKey, "supersedeDayDrawerOpen");
+    if (dateLock) return dateLock;
     const editGate = assertDayDrawerOpenEditable(state, {
       dateKey: prev.dateKey,
       reason: (input.reason ?? input.note ?? "").trim(),
@@ -265,6 +271,8 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
 
     const row = state.dayDrawerOpens.find((r) => r.id === input.dayOpenId && r.status === "open");
     if (!row) return { ok: false as const, errorKey: "invalid" };
+    const dateLock = denyIfBusinessDateLocked(row.dateKey, "voidDayDrawerOpen");
+    if (dateLock) return dateLock;
     const editGate = assertDayDrawerOpenEditable(state, {
       dateKey: row.dateKey,
       reason: input.reason,
@@ -309,6 +317,8 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     if (open) return { ok: false as const, errorKey: "invalid" };
 
     const todayKey = dateKeyKampala(new Date());
+    const dateLock = denyIfBusinessDateLocked(todayKey, "beginShiftV2");
+    if (dateLock) return dateLock;
     const dayOpen = activeDayDrawerOpenForDate(state.dayDrawerOpens, todayKey);
     if (!dayOpen) return { ok: false as const, errorKey: "dayDrawerNotOpen" };
 

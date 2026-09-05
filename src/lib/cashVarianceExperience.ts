@@ -42,7 +42,7 @@ export function classifyCashVariance(
   preferences: Pick<ShopPreferences, "cashVarianceThresholdPct" | "cashVarianceThresholdUgxFixed">,
   context: CashVarianceContext = "shift_close",
 ): CashVarianceAssessment {
-  const expected = Math.max(0, Math.floor(expectedCashUgx));
+  const expected = Math.floor(expectedCashUgx);
   const counted = Math.max(0, Math.floor(countedCashUgx));
   const varianceUgx = counted - expected;
   const thresholdUgx = computeCashVarianceThresholdUgx(expected, preferences);

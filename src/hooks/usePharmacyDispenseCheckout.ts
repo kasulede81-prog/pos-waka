@@ -4,6 +4,7 @@ import { usePosStore } from "../store/usePosStore";
 import { usePharmacyControlledCheckout } from "./usePharmacyControlledCheckout";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep } from "../lib/draftCart";
 import { parseDisplayMoney } from "../lib/posCheckoutMoney";
+import { physicalCashTenderFromCheckoutInputs } from "../lib/saleTenderCash";
 import { addDenominationToCashInput } from "../lib/cashDenominations";
 import {
   applyCheckoutAlphaKey,
@@ -272,6 +273,11 @@ export function usePharmacyDispenseCheckout({
         customerPhone,
         paymentMethod,
         amountPaidUgx: totalPaidInput,
+        tenderCashUgx: physicalCashTenderFromCheckoutInputs({
+          paymentMethod,
+          cashInput,
+          draftPayable,
+        }),
         changeGivenUgx: changeDue,
       };
       const r = controlledCheckout.attemptFinalize(finalizeOpts);

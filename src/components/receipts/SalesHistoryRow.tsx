@@ -12,6 +12,10 @@ import { formatSaleLineQuantity } from "../../lib/saleQuantityLabel";
 import { SaleDiscountSummary } from "../returns/SaleDiscountSummary";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { dateKeyKampala } from "../../lib/datesUg";
+import { salesHistoryPaymentMethodLabel } from "../../lib/salesHistoryTender";
+import { statusTokens } from "../../lib/statusTokens";
+import { themeUi } from "../../lib/themeTokens";
+import { enterpriseMotion } from "../../lib/enterpriseMotion";
 
 function formatSaleDateTime(iso: string, lang: Language): { day: string; time: string } {
   const locale = lang === "sw" ? "sw-UG" : "en-UG";
@@ -38,19 +42,19 @@ function statusBadge(
 ): { label: string; className: string } {
   const status = saleStatusOf(sale);
   if (status === "pending") {
-    return { label: t(lang, "salesHistoryStatusPending"), className: "bg-amber-100 text-amber-900" };
+    return { label: t(lang, "salesHistoryStatusPending"), className: statusTokens.warning.badge };
   }
   // Whole-bill void (completed + saleVoidedAt) and pre-completion void share VOIDED label.
   if (isVoidedSale(sale) || isPreCompletionVoidedSale(sale)) {
-    return { label: t(lang, "salesHistoryStatusVoided"), className: "bg-rose-100 text-rose-800" };
+    return { label: t(lang, "salesHistoryStatusVoided"), className: statusTokens.danger.badge };
   }
   if (status === "cancelled") {
-    return { label: t(lang, "salesHistoryStatusCancelled"), className: "bg-muted text-muted-foreground" };
+    return { label: t(lang, "salesHistoryStatusCancelled"), className: statusTokens.draft.badge };
   }
   if (hasReturns) {
-    return { label: t(lang, "salesHistoryStatusReturned"), className: "bg-sky-100 text-sky-800" };
+    return { label: t(lang, "salesHistoryStatusReturned"), className: statusTokens.info.badge };
   }
-  return { label: t(lang, "salesHistoryStatusCompleted"), className: "bg-emerald-100 text-emerald-800" };
+  return { label: t(lang, "salesHistoryStatusCompleted"), className: statusTokens.success.badge };
 }
 
 type SaleActionSheetProps = {
@@ -245,6 +249,8 @@ type Props = {
   /** Phase 30.1 — host action sheet from desktop table without showing the card. */
   hideCard?: boolean;
   forceOpenActions?: boolean;
+  /** Desktop host only — clear parent selection when the sheet closes so the same sale can reopen. */
+  onActionsClose?: () => void;
 };
 
 export function SalesHistoryRow({
@@ -262,6 +268,7 @@ export function SalesHistoryRow({
   onVoidLine,
   hideCard = false,
   forceOpenActions = false,
+  onActionsClose,
 }: Props) {
   const [sheetOpen, setSheetOpen] = useState(forceOpenActions);
   const invoice = isPreCompletionVoidedSale(sale)
@@ -274,6 +281,12 @@ export function SalesHistoryRow({
   const discountBreakdown = completed ? computeSaleDiscountBreakdown(sale) : null;
   const voidableLines = sale.lines.map((line, lineIndex) => ({ line, lineIndex })).filter(({ line }) => !line.voided);
   const { day, time } = formatSaleDateTime(sale.createdAt, lang);
+  const paymentLabel = salesHistoryPaymentMethodLabel(lang, sale);
+
+  const closeActions = () => {
+    setSheetOpen(false);
+    onActionsClose?.();
+  };
 
   useEffect(() => {
     if (forceOpenActions) setSheetOpen(true);
@@ -282,42 +295,53 @@ export function SalesHistoryRow({
   useEffect(() => {
     if (!sheetOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSheetOpen(false);
+      if (e.key === "Escape") closeActions();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [sheetOpen]);
+  }, [sheetOpen, onActionsClose]);
 
   return (
     <>
       {hideCard ? null : (
-      <article className="rounded-xl border border-border/90 bg-card p-2.5 shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100">
-        <div className="flex items-start gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-            <FileText className="h-4 w-4" aria-hidden />
+      <article
+        className={clsx(
+          themeUi.surface,
+          enterpriseMotion.cardInteractive,
+          "p-3.5",
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-waka-50 text-waka-800 ring-1 ring-waka-200/60">
+            <FileText className="h-5 w-5" aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <p className="truncate text-sm font-black text-foreground">{invoice}</p>
-              <p className="shrink-0 text-sm font-black tabular-nums text-foreground">
+              <p className="truncate text-base font-bold text-foreground">{invoice}</p>
+              <p className="shrink-0 text-base font-bold tabular-nums text-foreground">
                 UGX {sale.totalUgx.toLocaleString()}
               </p>
             </div>
-            <p className="truncate text-xs font-semibold text-muted-foreground">{customerName}</p>
-            <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">
-              {day} · {time} · {cashierLabel}
+            <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
+              {customerName} · {time}
             </p>
-            <span className={clsx("mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase", badge.className)}>
-              {badge.label}
-            </span>
+            <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm font-medium text-muted-foreground">
+              <span className={statusTokens.business.badge}>{paymentLabel}</span>
+              <span>{day}</span>
+              {cashierLabel ? <span>· {cashierLabel}</span> : null}
+            </p>
+            <span className={clsx("mt-2", badge.className)}>{badge.label}</span>
           </div>
           <button
             type="button"
             aria-expanded={sheetOpen}
             onClick={() => setSheetOpen(true)}
-            className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground active:bg-muted"
+            className={clsx(
+              "flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground active:bg-muted",
+              themeUi.focusRing,
+            )}
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal className="h-5 w-5" />
             <span className="sr-only">{t(lang, "salesHistoryMoreActions")}</span>
           </button>
         </div>
@@ -335,7 +359,7 @@ export function SalesHistoryRow({
         allowAdjust={allowAdjust}
         voidableLines={voidableLines}
         open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
+        onClose={closeActions}
         onPrint={onPrint}
         onReceiptPdf={onReceiptPdf}
         onReturn={onReturn}

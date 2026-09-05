@@ -16,6 +16,7 @@ export type SaleFinancialFields = Pick<
   | "voidedTotalUgx"
   | "estimatedProfitUgx"
   | "createdAt"
+  | "tenderCashUgx"
 >;
 
 export function saleCompletedAt(sale: Sale): string {
@@ -32,6 +33,7 @@ function financialFields(sale: Sale): SaleFinancialFields {
     voidedTotalUgx: sale.voidedTotalUgx,
     estimatedProfitUgx: sale.estimatedProfitUgx,
     createdAt: sale.createdAt,
+    tenderCashUgx: sale.tenderCashUgx,
   };
 }
 
@@ -107,6 +109,7 @@ function mergeCompletedSaleMetadata(financialBase: Sale, other: Sale): Sale {
     customerId: meta.customerId ?? financialBase.customerId,
     paymentMethod: meta.paymentMethod ?? financialBase.paymentMethod,
     amountPaidUgx: meta.amountPaidUgx ?? financialBase.amountPaidUgx,
+    tenderCashUgx: financialBase.tenderCashUgx ?? meta.tenderCashUgx,
     changeGivenUgx: meta.changeGivenUgx ?? financialBase.changeGivenUgx,
     splitBreakdown: meta.splitBreakdown ?? financialBase.splitBreakdown,
     lines: mergeLinesPreservingFinancial(financialBase, other),

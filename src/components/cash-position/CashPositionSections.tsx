@@ -75,17 +75,23 @@ export function CashPositionHeroSummary({
   lang,
   extendedSummary,
   rangeLabel,
+  ledgerClosed = false,
 }: {
   lang: Language;
   extendedSummary: import("../../lib/cashPositionDashboard").CashPositionExtendedSummary;
   rangeLabel: string;
+  ledgerClosed?: boolean;
 }) {
   const kpis = [
     { label: t(lang, "cashPositionTransactions"), value: extendedSummary.transactionCount.toLocaleString() },
-    { label: t(lang, "cashPositionItemsSold"), value: extendedSummary.itemsSold.toLocaleString() },
+    ...(ledgerClosed
+      ? []
+      : [{ label: t(lang, "cashPositionItemsSold"), value: extendedSummary.itemsSold.toLocaleString() }]),
     { label: t(lang, "cashPositionGrossProfit"), value: `UGX ${extendedSummary.grossProfitUgx.toLocaleString()}` },
     { label: t(lang, "cashPositionAverageSale"), value: `UGX ${extendedSummary.averageSaleUgx.toLocaleString()}` },
-    { label: t(lang, "cashPositionLargestSale"), value: `UGX ${extendedSummary.largestSaleUgx.toLocaleString()}` },
+    ...(ledgerClosed
+      ? []
+      : [{ label: t(lang, "cashPositionLargestSale"), value: `UGX ${extendedSummary.largestSaleUgx.toLocaleString()}` }]),
   ];
 
   return (
@@ -149,7 +155,11 @@ export function CashPositionPaymentMethods({
   report: import("../../lib/cashPosition").CashPositionReport;
 }) {
   if (report.paymentMethods.length === 0 && report.paymentAdjustmentUgx === 0) {
-    return <p className="text-base font-medium text-muted-foreground">{t(lang, "cashPositionNoSalesToday")}</p>;
+    return (
+      <p className="text-base font-medium text-muted-foreground">
+        {t(lang, report.closedDayBreakdownUnavailable ? "cashPositionClosedBreakdownUnavailable" : "cashPositionNoSalesToday")}
+      </p>
+    );
   }
 
   return (
@@ -248,12 +258,18 @@ export function CashPositionBreakdown({
 export function CashPositionActivityTimeline({
   lang,
   events,
+  unavailable = false,
 }: {
   lang: Language;
   events: import("../../lib/cashPositionDashboard").CashActivityEvent[];
+  unavailable?: boolean;
 }) {
   if (events.length === 0) {
-    return <p className="text-sm font-medium text-muted-foreground">{t(lang, "cashPositionTimelineEmpty")}</p>;
+    return (
+      <p className="text-sm font-medium text-muted-foreground">
+        {t(lang, unavailable ? "cashPositionClosedBreakdownUnavailable" : "cashPositionTimelineEmpty")}
+      </p>
+    );
   }
 
   return (

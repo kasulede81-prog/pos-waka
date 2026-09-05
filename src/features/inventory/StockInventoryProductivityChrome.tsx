@@ -17,6 +17,8 @@ type Props = {
   preferences: ShopPreferences;
   suppliers: Supplier[];
   canEdit: boolean;
+  canArchive: boolean;
+  canPersistSupplierTags: boolean;
   canAdjust: boolean;
   canSeeCost?: boolean;
   stockCategoryPicklist: string[];
@@ -32,6 +34,8 @@ export function StockInventoryProductivityChrome({
   preferences,
   suppliers,
   canEdit,
+  canArchive,
+  canPersistSupplierTags,
   canAdjust,
   canSeeCost = false,
   stockCategoryPicklist,
@@ -70,7 +74,7 @@ export function StockInventoryProductivityChrome({
     enabled,
     onSelectAll,
     onClearSelection,
-    onArchive: canEdit ? onArchive : undefined,
+    onArchive: canArchive ? onArchive : undefined,
     onFocusSearch: () => searchInputRef.current?.focus(),
     onExport: () => {
       const csv = buildProductCatalogCsv(lang, filteredProducts, { includeCost: canSeeCost });
@@ -90,6 +94,8 @@ export function StockInventoryProductivityChrome({
       preferences={preferences}
       suppliers={suppliers}
       canEdit={canEdit}
+      canArchive={canArchive}
+      canPersistSupplierTags={canPersistSupplierTags}
       canAdjust={canAdjust}
       canSeeCost={canSeeCost}
       stockCategoryPicklist={stockCategoryPicklist}

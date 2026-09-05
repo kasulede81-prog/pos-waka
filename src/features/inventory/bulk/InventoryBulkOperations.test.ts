@@ -111,7 +111,8 @@ describe("INV-B2 runInventoryBulkOperation", () => {
 
   it("A — cashier without settings.shop cannot bulk archive", async () => {
     const before = usePosStore.getState().preferences.inventoryArchivedProductIds;
-    await runInventoryBulkOperation({ kind: "archive" }, ctx({ role: "cashier" }));
+    const r = await runInventoryBulkOperation({ kind: "archive" }, ctx({ role: "cashier" }));
+    expect(r.ok).toBe(false);
     expect(usePosStore.getState().preferences.inventoryArchivedProductIds).toEqual(before);
     expect(requiredPermissionsForPreferencesPatch({ inventoryArchivedProductIds: ["prod-a"] })).toEqual([
       "settings.shop",
@@ -120,7 +121,8 @@ describe("INV-B2 runInventoryBulkOperation", () => {
 
   it("A — manager (canEdit UI) still cannot persist archive without settings.shop", async () => {
     const before = usePosStore.getState().preferences.inventoryArchivedProductIds;
-    await runInventoryBulkOperation({ kind: "archive" }, ctx({ role: "manager" }));
+    const r = await runInventoryBulkOperation({ kind: "archive" }, ctx({ role: "manager" }));
+    expect(r.ok).toBe(false);
     expect(usePosStore.getState().preferences.inventoryArchivedProductIds).toEqual(before);
   });
 

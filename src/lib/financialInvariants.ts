@@ -107,10 +107,8 @@ export function verifyFinancialInvariants(input: {
     .filter((p) => dateKeyKampala(p.createdAt) === day)
     .reduce((a, p) => a + Math.max(0, p.amountUgx), 0);
 
-  const expectedCash = Math.max(
-    0,
-    fin.cashCollectedUgx + debtPayDay - externalRefunds - expensesDay - supplierPayDay,
-  );
+  const expectedCash =
+    fin.cashCollectedUgx + debtPayDay - externalRefunds - expensesDay - supplierPayDay;
 
   if (drawer.expectedDrawerCashUgx !== expectedCash) {
     violations.push({

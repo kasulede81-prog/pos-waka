@@ -109,7 +109,7 @@ describe("debt cash reconciliation", () => {
     expect(drawer.expectedDrawerCashUgx).toBe(70_000);
   });
 
-  it("external unlinked return reduces expected drawer cash", () => {
+  it("external unlinked return without refundCashUgx does not reduce expected drawer cash", () => {
     const completed = sale({ status: "completed", totalUgx: 60_000, cashPaidUgx: 60_000, debtUgx: 0 });
     const returns: ReturnRecord[] = [
       {
@@ -127,7 +127,7 @@ describe("debt cash reconciliation", () => {
       },
     ];
     const drawer = getDrawerCashForDay([completed], returns, products, [], DAY);
-    expect(drawer.expectedDrawerCashUgx).toBe(55_000);
+    expect(drawer.expectedDrawerCashUgx).toBe(60_000);
   });
 
   it("shift expected cash after void/return already in estimatedCashUgx", () => {

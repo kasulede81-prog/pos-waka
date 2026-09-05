@@ -1,5 +1,7 @@
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { statusTokens } from "../../lib/statusTokens";
+import { themeUi } from "../../lib/themeTokens";
 
 type Props = {
   lang: Language;
@@ -10,18 +12,16 @@ type Props = {
 export function DateFilterArchiveNotice({ lang, onEnableArchived, archivedCount }: Props) {
   if (archivedCount === 0) {
     return (
-      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
-        {t(lang, "dateFilterArchiveEmpty")}
-      </p>
+      <p className={statusTokens.warning.banner}>{t(lang, "dateFilterArchiveEmpty")}</p>
     );
   }
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-      <p className="text-sm font-semibold text-amber-950">{t(lang, "dateFilterArchivePrompt")}</p>
+    <div className={`flex flex-wrap items-center justify-between gap-2 ${statusTokens.warning.banner}`}>
+      <p>{t(lang, "dateFilterArchivePrompt")}</p>
       <button
         type="button"
         onClick={onEnableArchived}
-        className="shrink-0 rounded-xl bg-amber-800 px-3 py-1.5 text-xs font-black text-white"
+        className={`${themeUi.btnPrimary} min-h-10 shrink-0 px-3 py-1.5 text-sm`}
       >
         {t(lang, "dateFilterArchiveLoad")}
       </button>

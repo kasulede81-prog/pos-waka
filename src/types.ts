@@ -364,6 +364,12 @@ export type ReturnRecord = {
   productName: string;
   quantity: number;
   refundAmountUgx: number;
+  /**
+   * Physical cash that left the drawer for this return (integer UGX).
+   * Set at return time from the linked sale's physical-cash classifier.
+   * 0 = known non-cash / unknown original tender. Absent = legacy unknown (not cash).
+   */
+  refundCashUgx?: number | null;
   /** COGS reversed from original sale line snapshot */
   cogsUgx?: number;
   /** Unit cost per base unit from original sale line */
@@ -1907,6 +1913,12 @@ export type Sale = {
   paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher";
   /** What customer actually handed over (when captured at checkout). */
   amountPaidUgx?: number | null;
+  /**
+   * Physical cash tender only (integer UGX).
+   * Not collected (`cashPaidUgx`), not total tender (`amountPaidUgx`), not debt.
+   * Absent on legacy sales — cannot be reconstructed from total − debt.
+   */
+  tenderCashUgx?: number | null;
   /** Change returned to customer at checkout (when captured). */
   changeGivenUgx?: number | null;
   /** Branding frozen at checkout — historical receipts must not change. */
@@ -2057,6 +2069,8 @@ export type CashExpense = {
   /** Kampala calendar date YYYY-MM-DD */
   paidOn: string;
   createdAt: string;
+  /** Last local/cloud write — used for expense pull LWW (approval/void). */
+  updatedAt?: string;
   createdByUserId: string;
   createdByLabel?: string;
   deviceId?: string;
@@ -2535,6 +2549,10 @@ export type SyncOperation = {
   lastAttemptAt?: string | null;
   /** MB-1 — immutable shop identity stamped at enqueue; never rewritten at flush. */
   shopId?: string;
+  /** Permanent-ish RPC error (e.g. closed_business_date). Does not ACK the entity. */
+  lastError?: string | null;
+  /** Kampala date_key for a parked closed-business-date rejection. */
+  closedDateKey?: string | null;
 };
 
 /** High-level connectivity for the tiny header strip */

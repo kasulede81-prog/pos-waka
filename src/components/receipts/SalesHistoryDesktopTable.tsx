@@ -7,6 +7,7 @@ import { buildReceiptNumberForSale } from "../../lib/receiptPrint";
 import { receiptPrintActionLabel } from "../../lib/printActionLabels";
 import { isCompletedSale, isPreCompletionVoidedSale, isVoidedSale, saleStatusOf, voidedSaleHistoryNumber } from "../../lib/saleStatus";
 import { salesHistoryPaymentMethodLabel } from "../../lib/salesHistoryTender";
+import { resolveSaleLineQuantity } from "../../lib/saleQuantityLabel";
 import { statusTokens } from "../../lib/statusTokens";
 import {
   EnterpriseDataTable,
@@ -29,6 +30,17 @@ type Props = {
 
 function paymentLabel(lang: Language, sale: Sale): string {
   return salesHistoryPaymentMethodLabel(lang, sale);
+}
+
+/** Compact WHAT summary from already-loaded sale.lines — no extra fetch. */
+function saleItemsSummary(sale: Sale): string {
+  const parts: string[] = [];
+  for (const line of sale.lines) {
+    if (line.voided) continue;
+    const qty = resolveSaleLineQuantity(line);
+    parts.push(`${line.name} ×${qty}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
 function formatWhen(iso: string, lang: Language): string {
@@ -61,45 +73,58 @@ export function SalesHistoryDesktopTable({
       {
         id: "receipt",
         header: t(lang, "receipts"),
-        width: "minmax(100px,1fr)",
+        width: "minmax(112px,1fr)",
         cell: (sale) =>
           isPreCompletionVoidedSale(sale) ? voidedSaleHistoryNumber(sale) : buildReceiptNumberForSale(sale, allSales),
-        className: "text-foreground",
+        className: "text-base font-bold text-foreground",
       },
       {
-        id: "cashier",
-        header: "Cashier",
-        width: "minmax(100px,1fr)",
-        hideBelow: "lg",
-        cell: (sale) => cashierLabelFor(sale),
+        id: "items",
+        header: t(lang, "salesHistoryItemsSold"),
+        width: "minmax(168px,1.6fr)",
+        hideBelow: "xl",
+        cell: (sale) => {
+          const summary = saleItemsSummary(sale);
+          return (
+            <span className="block truncate font-semibold text-foreground" title={summary}>
+              {summary}
+            </span>
+          );
+        },
       },
       {
         id: "customer",
         header: t(lang, "customers"),
-        width: "minmax(120px,1.2fr)",
-        hideBelow: "lg",
-        cell: (sale) => customerNameFor(sale),
+        width: "minmax(128px,1.2fr)",
+        cell: (sale) => <span className="font-semibold text-foreground">{customerNameFor(sale)}</span>,
+      },
+      {
+        id: "cashier",
+        header: "Cashier",
+        width: "minmax(108px,1fr)",
+        cell: (sale) => <span className="font-medium text-muted-foreground">{cashierLabelFor(sale)}</span>,
       },
       {
         id: "date",
         header: "Date",
-        width: "minmax(120px,1.1fr)",
-        cell: (sale) => formatWhen(sale.createdAt, lang),
+        width: "minmax(128px,1.1fr)",
+        cell: (sale) => <span className="font-medium text-muted-foreground">{formatWhen(sale.createdAt, lang)}</span>,
       },
       {
         id: "payment",
         header: t(lang, "salesHistoryPaymentMethods"),
-        width: "minmax(96px,0.9fr)",
-        hideBelow: "xl",
-        cell: (sale) => paymentLabel(lang, sale),
+        width: "minmax(108px,0.9fr)",
+        cell: (sale) => (
+          <span className={clsx(statusTokens.business.badge, "max-w-full truncate")}>{paymentLabel(lang, sale)}</span>
+        ),
       },
       {
         id: "total",
         header: t(lang, "purchasesColTotal"),
-        width: "minmax(96px,1fr)",
+        width: "minmax(108px,1fr)",
         align: "right",
         cell: (sale) => (
-          <span className="font-bold tabular-nums text-foreground">UGX {sale.totalUgx.toLocaleString()}</span>
+          <span className="text-base font-bold tabular-nums text-foreground">UGX {sale.totalUgx.toLocaleString()}</span>
         ),
       },
       {
@@ -156,27 +181,35 @@ export function SalesHistoryDesktopTable({
         rowKey={(s) => s.id}
         selection={selection}
         onRowActivate={onOpenActions}
-        minWidthPx={980}
+        minWidthPx={1100}
+        estimateRowHeight={56}
+        className="sales-history-table"
         ariaLabel={t(lang, "receipts")}
         rowActions={(sale) => (
-          <div className="relative flex items-center gap-0.5">
+          <div className="relative flex items-center gap-1">
             {isCompletedSale(sale) ? (
               <button
                 type="button"
                 title={receiptPrintActionLabel(lang)}
                 onClick={() => onPrint(sale)}
-                className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted"
+                className={clsx(
+                  "inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-waka-800 hover:bg-waka-50",
+                  themeUi.focusRing,
+                )}
               >
-                <Printer className="h-3.5 w-3.5" />
+                <Printer className="h-4 w-4" />
               </button>
             ) : null}
             <button
               type="button"
               title={t(lang, "salesHistoryMoreActions")}
               onClick={() => onOpenActions(sale)}
-              className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted"
+              className={clsx(
+                "inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted",
+                themeUi.focusRing,
+              )}
             >
-              <MoreHorizontal className="h-3.5 w-3.5" />
+              <MoreHorizontal className="h-4 w-4" />
             </button>
           </div>
         )}

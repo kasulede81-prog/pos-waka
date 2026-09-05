@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Receipt } from "lucide-react";
+import { Plus, Printer, Receipt } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -24,10 +24,13 @@ import {
   canApproveCashExpenses,
   canDeleteCashExpenses,
   canRecordCashExpenses,
-  canViewExpenseRow,
   cashExpenseCategoryLabel,
-  expenseCountsInDrawer,
+  selectVisibleExpensesForDay,
+  sumDrawerExpenseAmounts,
 } from "../lib/cashExpenses";
+import { printCashExpenseList } from "../lib/cashExpenseDocuments";
+import { releaseCashMutationSubmit, submitCashMutationOnce } from "../lib/cashMutationSubmitGuard";
+import { hasActorPermission } from "../lib/permissions";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { enterpriseTypeClass } from "../lib/enterpriseTypography";
 import { Banknote, TrendingDown, Wallet } from "lucide-react";
@@ -54,17 +57,23 @@ export function CashExpensesPage({ lang }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
+
+  useEffect(() => {
+    if (showForm) return;
+    if (!submitLockRef.current && !submitting) return;
+    releaseCashMutationSubmit(submitLockRef);
+    setSubmitting(false);
+  }, [showForm, submitting]);
 
   const canRecord = canRecordCashExpenses(actor.role, preferences, actor.permissions);
   const canDelete = canDeleteCashExpenses(actor.role);
   const canApprove = canApproveCashExpenses(actor.role);
 
   const todayExpenses = useMemo(
-    () =>
-      cashExpenses
-        .filter((e) => !e.deletedAt && e.paidOn === todayKey && canViewExpenseRow(actor.role, e, actor.userId))
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    [cashExpenses, todayKey, actor.role, actor.userId],
+    () => selectVisibleExpensesForDay(cashExpenses, todayKey, actor.role, actor.userId, actor.permissions),
+    [cashExpenses, todayKey, actor.role, actor.userId, actor.permissions],
   );
 
   const pendingExpenses = useMemo(
@@ -72,13 +81,11 @@ export function CashExpensesPage({ lang }: Props) {
     [todayExpenses],
   );
 
-  const todayExpenseTotal = useMemo(
-    () => todayExpenses.filter(expenseCountsInDrawer).reduce((a, e) => a + e.amountUgx, 0),
-    [todayExpenses],
-  );
+  const todayExpenseTotal = useMemo(() => sumDrawerExpenseAmounts(todayExpenses), [todayExpenses]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     setErr(null);
     const amt = Math.floor(Number(amount.replace(/\D/g, "")) || 0);
     if (amt <= 0) {
@@ -93,13 +100,18 @@ export function CashExpensesPage({ lang }: Props) {
       setErr(t(lang, "cashExpenseCategoryRequired"));
       return;
     }
-    const res = addCashExpense({
-      amountUgx: amt,
-      category: cat,
-      description: description.trim(),
-    });
-    if (!res.ok) {
-      setErr(res.errorKey ? t(lang, res.errorKey) : t(lang, "invalid"));
+    setSubmitting(true);
+    const attempt = submitCashMutationOnce(submitLockRef, () =>
+      addCashExpense({
+        amountUgx: amt,
+        category: cat,
+        description: description.trim(),
+      }),
+    );
+    if (!attempt.started) return;
+    if (!attempt.result.ok) {
+      setSubmitting(false);
+      setErr(attempt.result.errorKey ? t(lang, attempt.result.errorKey) : t(lang, "invalid"));
       return;
     }
     setAmount("");
@@ -122,13 +134,37 @@ export function CashExpensesPage({ lang }: Props) {
 
   return (
     <EnterprisePageContainer>
-      <EnterprisePageHeader
-        lang={lang}
-        title={t(lang, "cashExpensesTitle")}
-        subtitle={t(lang, "cashExpensesSub")}
-        backLabel={t(lang, "backToSell")}
-        backFallback="/pos"
-      />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <EnterprisePageHeader
+            lang={lang}
+            title={t(lang, "cashExpensesTitle")}
+            subtitle={t(lang, "cashExpensesSub")}
+            backLabel={t(lang, "backToSell")}
+            backFallback="/pos"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            void printCashExpenseList({
+              lang,
+              shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+              shopAddress: preferences.shopAddressLine,
+              shopPhone: preferences.shopPhoneE164,
+              dayKey: todayKey,
+              expenses: todayExpenses,
+              scope: hasActorPermission(actor.role, "back_office.access", actor.permissions)
+                ? "all_shop"
+                : "own",
+            })
+          }
+          className="mt-8 inline-flex min-h-[36px] shrink-0 items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-foreground shadow-sm active:bg-muted"
+        >
+          <Printer className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="hidden sm:inline">{t(lang, "monthlyReportPrint")}</span>
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <EnterpriseKpiCard
@@ -239,7 +275,7 @@ export function CashExpensesPage({ lang }: Props) {
             {err ? <Body className="!text-sm text-danger-foreground">{err}</Body> : null}
             {saved ? <Body className="!text-sm text-emerald-700">{t(lang, "cashExpenseSaved")}</Body> : null}
             <div className="flex gap-2">
-              <WakaButton type="submit" variant="primary" className="flex-1">
+              <WakaButton type="submit" variant="primary" className="flex-1" disabled={submitting}>
                 {t(lang, "save")}
               </WakaButton>
               <WakaButton

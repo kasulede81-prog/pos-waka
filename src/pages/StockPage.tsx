@@ -1,4 +1,8 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
+import {
+  canPersistInventoryArchivePreferences,
+  canPersistInventoryProductTagsPreferences,
+} from "../lib/settingsAuthorization";
 import { actorCanSeeInventoryCostValue } from "../lib/inventoryFinancialVisibility";
 import { countInventoryStockStatus } from "../lib/inventoryWorkspaceStats";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -122,7 +126,10 @@ import {
   PharmacyBatchAdjustmentSheet,
   type PharmacyBatchAdjustmentKind,
 } from "../components/pharmacy/PharmacyBatchAdjustmentSheet";
-import { findProductByBarcode, formatMedicineFullLabel } from "../lib/pharmacyMedicine";
+import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
+import { resolveStockPageHidScan } from "../lib/stockPageHidScan";
+import { resolvePharmacyReceiveDeepLink, stripPharmacyReceiveQuery } from "../lib/pharmacyReceiveDeepLink";
+import { resolveInventoryWorkspaceView } from "../lib/inventoryWorkspaceTiles";
 import { getProductBatches } from "../lib/pharmacyBatches";
 import { printHtmlDocument } from "../lib/documentPrint";
 import { usePosViewportWidth } from "../hooks/usePosViewportWidth";
@@ -140,18 +147,21 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const canAdd = actorHasPermission(actor, "products.add");
   /** Store `updateProduct` requires `stock.adjust`; create/duplicate stay `products.add`. */
   const canEdit = canAdd && canAdjust;
+  const canArchive = canPersistInventoryArchivePreferences(actor, { snapshot, authMode });
+  const canPersistSupplierTags = canPersistInventoryProductTagsPreferences(actor, { snapshot, authMode });
   const canSeeCost = actorCanSeeInventoryCostValue(actor, snapshot, authMode);
   const canPresets = actorHasPermission(actor, "products.edit_presets");
   const canSell = actorHasPermission(actor, "pos.sell");
   const canRestock = actorHasPermission(actor, "purchases.record");
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
 
-  const { products, suppliers, stockMovements, preferences } = usePosStore(
+  const { products, suppliers, stockMovements, preferences, hydrated } = usePosStore(
     useShallow((s) => ({
       products: s.products,
       suppliers: s.suppliers,
       stockMovements: s.stockMovements,
       preferences: s.preferences,
+      hydrated: s._hydrated,
     })),
   );
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
@@ -261,35 +271,47 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     if (!caps.hidWedge) return;
     void startBarcodeSession("hid", {
       onScan: (code) => {
+        const resolved = resolveStockPageHidScan(code, pharmacyMode);
         setStockTab("products");
-        setListQuery(code);
-        if (pharmacyMode) {
-          const hit = findProductByBarcode(products, code);
-          if (hit) setDetailProduct(hit);
-        }
+        setListQuery(resolved.listQuery);
+        if (resolved.detailProduct) setDetailProduct(resolved.detailProduct);
       },
     });
     return () => {
       void stopBarcodeSession();
     };
-  }, [pharmacyMode, products]);
+  }, [pharmacyMode]);
 
   useEffect(() => {
     if (workspaceEmbed) {
       const view = searchParams.get("stockView");
+      const shelf = searchParams.get("shelf");
+      const workspace = resolveInventoryWorkspaceView({ stockView: view, shelf });
       // Phase 31.1 — hub owns overview; never show nested overview inside products embed
-      if (view === "shelves" || view === "low" || view === "movements") {
-        setStockTab(view);
-      } else {
-        setStockTab("products");
-      }
+      setStockTab(workspace.stockTab);
+      if (workspace.selectedShelf) setSelectedShelf(workspace.selectedShelf);
       const q = searchParams.get("q");
       if (q) setListQuery(q);
       const openAdd = searchParams.get("add") === "1" && canAdd && !freeProductLimitReached;
       const importRequested = searchParams.get("import") === "csv";
       if (openAdd) {
-        setWizardPrefill(undefined);
-        setWizardInitialStep(undefined);
+        if (workspace.selectedShelf) {
+          const shelfName = workspace.selectedShelf === UNCATEGORIZED_SENTINEL ? "" : workspace.selectedShelf;
+          setWizardPrefill({
+            name: "",
+            shelf: shelfName,
+            sellUnit: "piece",
+            sellUnitCustom: "",
+            hasPack: false,
+            packKind: "crate",
+            packCustom: "",
+            piecesPerPack: "",
+          });
+          setWizardInitialStep("name");
+        } else {
+          setWizardPrefill(undefined);
+          setWizardInitialStep(undefined);
+        }
         setBulkOpen(true);
       }
       if (importRequested && canAdd && !freeProductLimitReached) {
@@ -336,13 +358,39 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   useEffect(() => {
     const productId = searchParams.get("productId");
+    const receive = searchParams.get("receive");
+    const resolved = resolvePharmacyReceiveDeepLink({
+      productId,
+      receive,
+      pharmacyMode,
+      products,
+      hydrated,
+    });
+
+    if (resolved.action === "wait") return;
+
+    if (resolved.action === "open") {
+      const hit = products.find((p) => p.id === resolved.productId);
+      if (hit) {
+        setReceiveProduct((current) => (current?.id === hit.id ? current : hit));
+        setStockTab("products");
+      }
+      setSearchParams((prev) => stripPharmacyReceiveQuery(prev, true), { replace: true });
+      return;
+    }
+
+    if (resolved.action === "miss") {
+      setSearchParams((prev) => stripPharmacyReceiveQuery(prev), { replace: true });
+      return;
+    }
+
     if (!productId || !pharmacyMode) return;
     const hit = products.find((p) => p.id === productId);
     if (hit) {
       setDetailProduct(hit);
       setStockTab("products");
     }
-  }, [searchParams, products, pharmacyMode]);
+  }, [searchParams, products, pharmacyMode, hydrated, setSearchParams]);
 
   const guessPreview = useMemo(() => {
     const n = qaName.trim();
@@ -1714,6 +1762,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         preferences={preferences}
         suppliers={suppliers}
         canEdit={canEdit}
+        canArchive={canArchive}
+        canPersistSupplierTags={canPersistSupplierTags}
         canAdjust={canAdjust}
         canSeeCost={canSeeCost}
         stockCategoryPicklist={stockCategoryPicklist}

@@ -8,6 +8,7 @@ import {
   downloadInventoryCountCsv,
   downloadInventoryCountPdf,
 } from "../../../lib/inventoryCountExport";
+import { inventoryMovementsHref } from "../../../lib/inventoryWorkspaceTiles";
 import { WIZARD_BTN_FOOTER_BASE } from "./countTokens";
 
 type Props = {
@@ -65,7 +66,7 @@ export function CountCompletionScreen({ lang, session, report, shopName, onStart
           </button>
         ) : null}
         <Link
-          to="/stock?tab=movements"
+          to={inventoryMovementsHref("/stock")}
           className={clsx(
             WIZARD_BTN_FOOTER_BASE,
             "gap-2 border border-border bg-card px-4 text-foreground hover:bg-muted",

@@ -7,6 +7,8 @@ import { dateKeyKampala } from "./datesUg";
 
 export type DebtsQuickFilter = "all" | "outstanding" | "overdue" | "paid_today" | "this_week";
 
+export type DebtListSort = "balance_desc" | "balance_asc" | "name_az";
+
 export type CustomerDebtMeta = {
   lastPayment: CreditActivityEntry | null;
   lastSale: CreditActivityEntry | null;
@@ -87,6 +89,33 @@ export function customerMatchesSearch(customer: Customer, query: string): boolea
   if (customer.name.toLowerCase().includes(q)) return true;
   if (customer.phone?.toLowerCase().includes(q)) return true;
   return false;
+}
+
+/** Same outstanding formula the debts page hero already uses. */
+export function sumAuthoritativeCustomerDebt(customers: Customer[]): number {
+  return customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0);
+}
+
+/** Same search / quick-filter / sort the debts page list already applies. */
+export function selectCustomersForDebtView(input: {
+  customers: Customer[];
+  searchQuery: string;
+  quickFilter: DebtsQuickFilter;
+  index: CreditActivityIndex;
+  bounds: DateFilterBounds;
+  todayKey: string;
+  sortBy: DebtListSort;
+}): Customer[] {
+  const list = input.customers.filter(
+    (c) =>
+      customerMatchesSearch(c, input.searchQuery) &&
+      customerMatchesQuickFilter(c, input.quickFilter, input.index, input.bounds, input.todayKey),
+  );
+  return [...list].sort((a, b) => {
+    if (input.sortBy === "name_az") return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    if (input.sortBy === "balance_asc") return a.debtBalanceUgx - b.debtBalanceUgx;
+    return b.debtBalanceUgx - a.debtBalanceUgx;
+  });
 }
 
 export function customerMatchesQuickFilter(

@@ -70,6 +70,7 @@ export function CashPositionMovementForm({
   movementReason,
   movementNote,
   movementMsg,
+  submitting,
   onTypeChange,
   onAmountChange,
   onReasonChange,
@@ -83,6 +84,7 @@ export function CashPositionMovementForm({
   movementReason: string;
   movementNote: string;
   movementMsg: string | null;
+  submitting?: boolean;
   onTypeChange: (t: CashDrawerAdjustmentType) => void;
   onAmountChange: (v: string) => void;
   onReasonChange: (v: string) => void;
@@ -137,7 +139,7 @@ export function CashPositionMovementForm({
       <button
         type="button"
         onClick={onSubmit}
-        disabled={!movementAmount.replace(/\D/g, "") || !movementReason.trim()}
+        disabled={Boolean(submitting) || !movementAmount.replace(/\D/g, "") || !movementReason.trim()}
         className="min-h-[48px] w-full rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
       >
         {t(lang, "save")}
@@ -150,14 +152,20 @@ export function CashPositionMovementForm({
 export function CashPositionCategories({
   lang,
   categories,
+  unavailable = false,
 }: {
   lang: Language;
   categories: CashPositionCategoryDetail[];
+  unavailable?: boolean;
 }) {
   const [selected, setSelected] = useState<CashPositionCategoryDetail | null>(null);
 
   if (categories.length === 0) {
-    return <p className="text-base font-medium text-muted-foreground">{t(lang, "cashPositionNoSalesToday")}</p>;
+    return (
+      <p className="text-base font-medium text-muted-foreground">
+        {t(lang, unavailable ? "cashPositionClosedBreakdownUnavailable" : "cashPositionNoSalesToday")}
+      </p>
+    );
   }
 
   return (
@@ -202,9 +210,21 @@ export function CashPositionCategories({
   );
 }
 
-export function CashPositionCashiers({ lang, cashiers }: { lang: Language; cashiers: CashPositionCashierDetail[] }) {
+export function CashPositionCashiers({
+  lang,
+  cashiers,
+  unavailable = false,
+}: {
+  lang: Language;
+  cashiers: CashPositionCashierDetail[];
+  unavailable?: boolean;
+}) {
   if (cashiers.length === 0) {
-    return <p className="text-base font-medium text-muted-foreground">{t(lang, "cashPositionNoSalesToday")}</p>;
+    return (
+      <p className="text-base font-medium text-muted-foreground">
+        {t(lang, unavailable ? "cashPositionClosedBreakdownUnavailable" : "cashPositionNoSalesToday")}
+      </p>
+    );
   }
 
   return (

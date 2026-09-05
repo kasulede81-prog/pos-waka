@@ -16,7 +16,6 @@ import type {
 } from "../types";
 import type { DateFilterBounds } from "./dateFilters";
 import { enumerateDaysInBounds } from "./dateFilters";
-import { externalReturnRefundsUgx } from "./canonicalRevenue";
 import {
   adjustmentBreakdownByType,
   computeExpectedDrawerCashV2,
@@ -26,7 +25,7 @@ import {
   type AdjustmentBreakdownByType,
   type ExpectedDrawerCashV2Input,
 } from "./cashDrawerLedger";
-import { getCashDrawerSalesInput } from "./cashDrawerSales";
+import { externalPhysicalCashRefundsUgx, getCashDrawerSalesInput } from "./cashDrawerSales";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesOnDay } from "./financialMetrics";
 
@@ -211,7 +210,7 @@ export function getDrawerCashForDay(
   const dayReturns = returns.filter((r) => dateKeyKampala(r.createdAt) === day);
   const debtCollectedUgx = sumDebtPaymentsOnDay(debtPayments, day);
   const refundsUgx = sumRefundsOnDay(returns, day);
-  const cashRefundsUgx = externalReturnRefundsUgx(daySales, dayReturns);
+  const cashRefundsUgx = externalPhysicalCashRefundsUgx(daySales, dayReturns);
   const drawerSales = getCashDrawerSalesInput(sales, day);
   const openingFloatUgx = resolveOpeningFloatUgx(day, cashDrawerAdjustments, shifts, {
     dayDrawerOpens,

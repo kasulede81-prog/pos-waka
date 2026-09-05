@@ -127,6 +127,22 @@ describe("attributeSalePaymentBuckets", () => {
     expect(buckets.credit).toBe(6_000);
     expect(buckets.cash).toBe(4_000);
   });
+
+  it("CASH-POST-01A credit+MoMo uses tenderCashUgx for cash, not collected", () => {
+    const buckets = attributeSalePaymentBuckets(
+      completedSale({
+        id: "s-tender",
+        totalUgx: 100_000,
+        cashPaidUgx: 50_000,
+        debtUgx: 50_000,
+        paymentMethod: "credit",
+        tenderCashUgx: 30_000,
+      }),
+    );
+    expect(buckets.cash).toBe(30_000);
+    expect(buckets.mobile_money).toBe(20_000);
+    expect(buckets.credit).toBe(50_000);
+  });
 });
 
 describe("allocateSaleLineRevenueUgx", () => {

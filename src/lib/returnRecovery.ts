@@ -3,6 +3,7 @@
  */
 
 import type { ReturnReason, ReturnRecord } from "../types";
+import { parsePersistedRefundCashUgx } from "./cashDrawerSales";
 
 const RETURN_REASONS: ReturnReason[] = ["damaged", "warm_bad", "broken", "wrong_item", "other"];
 
@@ -33,6 +34,7 @@ export function rowToReturnRecord(row: Record<string, unknown>): CloudReturnRow 
     productName: String(meta.productName ?? ""),
     quantity: Math.max(0, Number(row.quantity ?? 0)),
     refundAmountUgx: Math.max(0, Math.floor(Number(row.refund_amount_ugx ?? 0))),
+    refundCashUgx: parsePersistedRefundCashUgx(meta.refundCashUgx),
     cogsUgx: meta.cogsUgx != null ? Math.max(0, Math.floor(Number(meta.cogsUgx))) : undefined,
     unitCostUgx: meta.unitCostUgx != null ? Math.max(0, Number(meta.unitCostUgx)) : undefined,
     reason: normalizeReturnReason(String(row.reason ?? "other")),

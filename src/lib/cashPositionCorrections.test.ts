@@ -124,10 +124,10 @@ describe("CASH-POSITION-CORRECTIONS-1.0 P1-01 refund breakdown", () => {
       cashExpenses: [],
       day: DAY,
     });
-    expect(report.cashPosition.cashRefundsUgx).toBe(20_000);
+    expect(report.cashPosition.cashRefundsUgx).toBe(0);
     expect(report.cashPosition.cashRefundsUgx).toBe(drawer.cashRefundsUgx);
     expect(report.cashPosition.expectedCashUgx).toBe(drawer.expectedDrawerCashUgx);
-    expect(report.cashPosition.expectedCashUgx).toBe(80_000);
+    expect(report.cashPosition.expectedCashUgx).toBe(100_000);
   });
 
   it("linked same-day return does not appear as physical drawer cashRefundsUgx", () => {

@@ -1,11 +1,17 @@
 import type { Language, Product, ShopPreferences } from "../../../types";
 import { executeShopAction, type ShopActionResult } from "../../../lib/shopActionRunner";
 import {
+  canPersistInventoryArchivePreferences,
+  canPersistInventoryProductTagsPreferences,
+} from "../../../lib/settingsAuthorization";
+import { usePosStore } from "../../../store/usePosStore";
+import {
   isProductArchived,
   productSupplierTag,
   readArchivedProductIds,
   readProductTags,
   writeArchivedProductIds,
+  writeProductTags,
 } from "../filters/inventoryAdvancedFilters";
 
 export type BulkPriceMode = "set" | "adjust_pct" | "adjust_fixed";
@@ -76,6 +82,56 @@ export function nextInventoryArchivedProductIds(
   return [...ids];
 }
 
+/**
+ * Sequential single-product supplier-tag contract: each selected id replaces
+ * its `supplier:*` tag (other tags on that product stay). Bulk must produce
+ * the same end map as applying this once per selected id against the previous
+ * result — including when the current map is undefined.
+ */
+export function nextInventoryProductTagsForSupplier(
+  current: Record<string, string[]> | undefined,
+  productIds: readonly string[],
+  supplierId: string,
+): Record<string, string[]> {
+  const next: Record<string, string[]> = { ...(current ?? {}) };
+  const supplierTag = productSupplierTag(supplierId);
+  const seen = new Set<string>();
+  for (const id of productIds) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const cur = (next[id] ?? []).filter((t) => !t.startsWith("supplier:"));
+    next[id] = [...cur, supplierTag];
+  }
+  return next;
+}
+
+function applyBulkSupplierPreference(
+  op: Extract<InventoryBulkOperation, { kind: "supplier" }>,
+  ctx: BulkOperationContext,
+  targets: Product[],
+): ShopActionResult {
+  // setPreferences is void and no-ops on deny. Check the same contract first
+  // so unauthorized callers never get "Updated N products".
+  if (!canPersistInventoryProductTagsPreferences(usePosStore.getState().sessionActor)) {
+    return {
+      ok: false,
+      errorKey: "forbidden",
+      message: "You do not have permission for this action.",
+    };
+  }
+  const current = readProductTags(ctx.preferences);
+  const next = nextInventoryProductTagsForSupplier(
+    current,
+    targets.map((p) => p.id),
+    op.supplierId,
+  );
+  ctx.store.setPreferences(writeProductTags(ctx.preferences, next));
+  return {
+    ok: true,
+    message: `Updated ${targets.length} products`,
+  };
+}
+
 function applyBulkArchivePreference(
   op: Extract<InventoryBulkOperation, { kind: "archive" | "unarchive" | "activate" }>,
   ctx: BulkOperationContext,
@@ -101,6 +157,19 @@ function applyBulkArchivePreference(
   ctx.store.setPreferences(
     writeArchivedProductIds(ctx.preferences, nextInventoryArchivedProductIds(current, eligibleIds, mode)),
   );
+
+  // setPreferences denies silently (void). Archive/unarchive must not report
+  // success when the store-authoritative settings.shop gate rejected the write.
+  if (
+    (op.kind === "archive" || op.kind === "unarchive") &&
+    !canPersistInventoryArchivePreferences(usePosStore.getState().sessionActor)
+  ) {
+    return {
+      ok: false,
+      errorKey: "forbidden",
+      message: "You do not have permission for this action.",
+    };
+  }
 
   if (op.kind === "activate") {
     for (const p of targets) {
@@ -182,14 +251,6 @@ function applyBulkOperation(
       store.setPreferences({ inventoryProductTags: all });
       return { ok: true };
     }
-    case "supplier": {
-      const all = readProductTags(preferences);
-      const cur = (all[product.id] ?? []).filter((t) => !t.startsWith("supplier:"));
-      cur.push(productSupplierTag(op.supplierId));
-      all[product.id] = cur;
-      store.setPreferences({ inventoryProductTags: all });
-      return { ok: true };
-    }
     default:
       return { ok: false, message: "Unknown bulk operation" };
   }
@@ -214,6 +275,9 @@ export async function runInventoryBulkOperation(
     async () => {
       if (op.kind === "archive" || op.kind === "unarchive" || op.kind === "activate") {
         return applyBulkArchivePreference(op, ctx, targets);
+      }
+      if (op.kind === "supplier") {
+        return applyBulkSupplierPreference(op, ctx, targets);
       }
       let applied = 0;
       let failed = 0;

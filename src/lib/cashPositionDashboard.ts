@@ -26,6 +26,7 @@ import {
   type CashPositionVariance,
 } from "./cashPosition";
 import { cashDrawerAdjustmentTypeLabel, isCashDrawerInflow } from "./cashDrawerLedger";
+import { physicalCashRefundedFromReturn } from "./cashDrawerSales";
 import { expenseCountsInDrawer } from "./cashExpenses";
 import { dateKeyKampala } from "./datesUg";
 import {
@@ -378,6 +379,7 @@ function aggregateReports(reports: CashPositionReport[], bounds: DateFilterBound
     categories: mergeCategories(reports),
     cashiers: mergeCashiers(reports),
     ledgerClosed: reports.some((r) => r.ledgerClosed),
+    closedDayBreakdownUnavailable: reports.every((r) => r.closedDayBreakdownUnavailable),
   };
 }
 
@@ -476,12 +478,20 @@ export function buildCashActivityTimeline(input: {
   for (const ret of input.returnRecords) {
     const dk = dateKeyKampala(ret.createdAt);
     if (!dateMatchesFilter(dk, input.bounds)) continue;
+    const sameDaySaleIds = new Set(
+      input.sales
+        .filter((s) => isCompletedSale(s) && dateKeyKampala(s.createdAt) === dk)
+        .map((s) => s.id),
+    );
+    if (ret.saleId && sameDaySaleIds.has(ret.saleId)) continue;
+    const cashOut = physicalCashRefundedFromReturn(ret);
+    if (cashOut <= 0) continue;
     events.push({
       id: `ret-${ret.id}`,
       at: ret.createdAt,
       timeLabel: formatTimeKampala(ret.createdAt),
       label: t(input.lang, "cashPositionRefunds"),
-      amountUgx: -Math.max(0, ret.refundAmountUgx),
+      amountUgx: -cashOut,
       kind: "refund",
     });
   }
@@ -730,7 +740,10 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
     returns: input.returnRecords,
     products: input.products,
   });
-  const largestSaleUgx = scopedSales.reduce((max, s) => Math.max(max, s.totalUgx), 0);
+  const closedSingleDay = Boolean(singleClose);
+  const largestSaleUgx = closedSingleDay
+    ? 0
+    : scopedSales.reduce((max, s) => Math.max(max, s.totalUgx), 0);
   const averageSaleUgx =
     report.summary.transactionCount > 0
       ? Math.round(report.summary.totalSalesUgx / report.summary.transactionCount)
@@ -747,20 +760,22 @@ export function buildCashPositionDashboard(input: CashPositionDashboardInput): C
         : null,
   };
 
-  const categories = buildCategoryDetails(report, input.sales, input.products, bounds);
-  const cashiers = buildCashierDetails(report, input.returnRecords, bounds);
+  const categories = closedSingleDay ? [] : buildCategoryDetails(report, input.sales, input.products, bounds);
+  const cashiers = closedSingleDay ? [] : buildCashierDetails(report, input.returnRecords, bounds);
 
-  const timeline = buildCashActivityTimeline({
-    lang: input.lang,
-    bounds,
-    sales: input.sales,
-    returnRecords: input.returnRecords,
-    debtPayments: input.debtPayments,
-    cashExpenses: input.cashExpenses,
-    supplierPayments: input.supplierPayments,
-    cashDrawerAdjustments: input.cashDrawerAdjustments,
-    dayDrawerOpens: input.dayDrawerOpens,
-  });
+  const timeline = closedSingleDay
+    ? []
+    : buildCashActivityTimeline({
+        lang: input.lang,
+        bounds,
+        sales: input.sales,
+        returnRecords: input.returnRecords,
+        debtPayments: input.debtPayments,
+        cashExpenses: input.cashExpenses,
+        supplierPayments: input.supplierPayments,
+        cashDrawerAdjustments: input.cashDrawerAdjustments,
+        dayDrawerOpens: input.dayDrawerOpens,
+      });
 
   const pendingDebtCount = input.sales.filter(
     (s) => isCompletedSale(s) && (s.debtUgx ?? 0) > 0,

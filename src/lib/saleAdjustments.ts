@@ -1,4 +1,6 @@
 import type { CashDrawerFormulaVersion, Customer, Sale, SaleLine, ShiftRecord } from "../types";
+import { cashReduceFromRefund } from "./cashDrawerSales";
+import { hasAuthoritativeTenderCash } from "./saleTenderCash";
 
 export type DiscountMode = "percent" | "amount" | "final";
 
@@ -90,19 +92,26 @@ export function applyCustomerDebtDelta(
 export function reduceSaleTotalsByAmount(
   sale: Sale,
   amountUgx: number,
-): Pick<Sale, "totalUgx" | "cashPaidUgx" | "debtUgx" | "estimatedProfitUgx" | "voidedTotalUgx"> {
+): Pick<Sale, "totalUgx" | "cashPaidUgx" | "debtUgx" | "estimatedProfitUgx" | "voidedTotalUgx"> &
+  Partial<Pick<Sale, "tenderCashUgx">> {
   const amt = Math.max(0, Math.floor(amountUgx));
   const cashReduce = Math.min(amt, sale.cashPaidUgx);
   const debtReduce = amt - cashReduce;
   const nextTotal = Math.max(0, sale.totalUgx - amt);
   const profitScale = sale.totalUgx > 0 ? nextTotal / sale.totalUgx : 0;
-  return {
+  const next: Pick<Sale, "totalUgx" | "cashPaidUgx" | "debtUgx" | "estimatedProfitUgx" | "voidedTotalUgx"> &
+    Partial<Pick<Sale, "tenderCashUgx">> = {
     totalUgx: nextTotal,
     cashPaidUgx: Math.max(0, sale.cashPaidUgx - cashReduce),
     debtUgx: Math.max(0, sale.debtUgx - debtReduce),
     estimatedProfitUgx: Math.max(0, Math.round(sale.estimatedProfitUgx * profitScale)),
     voidedTotalUgx: (sale.voidedTotalUgx ?? 0) + amt,
   };
+  if (hasAuthoritativeTenderCash(sale)) {
+    const physicalReduce = cashReduceFromRefund(sale, amt);
+    next.tenderCashUgx = Math.max(0, Math.floor(sale.tenderCashUgx!) - physicalReduce);
+  }
+  return next;
 }
 
 export type ShiftCashContext = {

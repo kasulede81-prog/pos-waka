@@ -270,6 +270,7 @@ import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { normalizeCashDrawerAdjustment } from "../lib/cashDrawerLedger";
 import { cashReduceFromRefund, physicalCashCollectedFromSale } from "../lib/cashDrawerSales";
+import { normalizeTenderCashUgx } from "../lib/saleTenderCash";
 import { resolveDebtorForSale } from "../lib/customerDebtActivity";
 import { draftQuantityExceedsStock, totalDraftQuantityForProduct } from "../lib/draftStockCheck";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
@@ -335,7 +336,11 @@ import { isDeviceAuthorizedForManagementSync } from "../lib/deviceAuthority";
 import { isCompletedSale, isPendingSale } from "../lib/saleStatus";
 import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
 import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
-import { canRecordCashExpenses, resolveNewExpenseApprovalStatus } from "../lib/cashExpenses";
+import {
+  canRecordCashExpenses,
+  cashExpenseTransitionWouldAffectDrawer,
+  resolveNewExpenseApprovalStatus,
+} from "../lib/cashExpenses";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
 import { saleStockMovementsFromSale, openingStockMovementFromProduct } from "../lib/inventoryIntegrity";
 import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
@@ -1087,6 +1092,8 @@ export type PosState = {
     customerPhone?: string | null;
     paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher";
     amountPaidUgx?: number;
+    /** Physical cash tender only. Do not pass collected / total − debt. */
+    tenderCashUgx?: number;
     changeGivenUgx?: number;
     splitBreakdown?: import("../types").BillSplitLine[] | null;
     serviceChargeUgx?: number;
@@ -1899,6 +1906,7 @@ function normalizeCashExpense(e: CashExpense): CashExpense {
     lastSyncError: e.lastSyncError ?? null,
     deletedAt: e.deletedAt ?? null,
     approvalStatus: e.approvalStatus ?? "approved",
+    updatedAt: e.updatedAt ?? e.createdAt,
     deviceId: e.deviceId ?? undefined,
   };
 }
@@ -3254,6 +3262,8 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!writerId) return { ok: false, errorKey: "noSelection" };
     const open = s.preferences.shifts?.find((sh) => !sh.endAt && sh.actorUserId === writerId);
     if (open) return { ok: false, errorKey: "invalid" };
+    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "beginShift");
+    if (dateLock) return dateLock;
     const floatAmt = openingFloatUgx != null ? Math.max(0, Math.floor(openingFloatUgx)) : 0;
     const row: ShiftRecord = {
       id: crypto.randomUUID(),
@@ -4719,6 +4729,7 @@ export const usePosStore = create<PosState>((set, get) => {
     customerPhone,
     paymentMethod,
     amountPaidUgx,
+    tenderCashUgx,
     changeGivenUgx,
     splitBreakdown,
     serviceChargeUgx: inputServiceChargeUgx,
@@ -4978,6 +4989,14 @@ export const usePosStore = create<PosState>((set, get) => {
       billPayments: billPayments?.length ? billPayments : null,
       paymentMethod: paymentMethod ?? (debt > 0 ? (cashPaidUgx > 0 ? "mixed" : "credit") : "cash"),
       amountPaidUgx: Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
+      ...(tenderCashUgx !== undefined
+        ? {
+            tenderCashUgx: normalizeTenderCashUgx(
+              tenderCashUgx,
+              Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
+            ),
+          }
+        : {}),
       changeGivenUgx: Number.isFinite(changeGivenUgx) ? Math.max(0, Math.floor(changeGivenUgx ?? 0)) : 0,
       prescriptionId: state.activePharmacyPrescriptionId ?? null,
       dispenseType: state.activePharmacyPrescriptionId
@@ -5528,6 +5547,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const at = new Date().toISOString();
 
     const linkedSale = saleId ? state.sales.find((s) => s.id === saleId) : undefined;
+    const cashReduce = cashReduceFromRefund(linkedSale, refund);
     const saleLine = findSaleLineForReturn(linkedSale, productId);
     const returnCogsUgx = saleLine
       ? resolveReturnCogsFromSaleLine(saleLine, qty)
@@ -5543,6 +5563,7 @@ export const usePosStore = create<PosState>((set, get) => {
       productName: product.name,
       quantity: qty,
       refundAmountUgx: refund,
+      refundCashUgx: cashReduce,
       cogsUgx: returnCogsUgx,
       unitCostUgx: returnUnitCostUgx,
       reason,
@@ -5587,12 +5608,10 @@ export const usePosStore = create<PosState>((set, get) => {
     let customers = state.customers;
     let debtReduce = 0;
     let linkedCustomerId: string | null = null;
-    let cashReduce = refund;
     if (saleId) {
       const saleIdx = sales.findIndex((s) => s.id === saleId);
       if (saleIdx >= 0) {
         const sale = sales[saleIdx]!;
-        cashReduce = cashReduceFromRefund(sale, refund);
         const limit = validateReturnAgainstSale({
           sale,
           productId,
@@ -5676,6 +5695,7 @@ export const usePosStore = create<PosState>((set, get) => {
         pushAudit,
         queueRemote,
         denyUnlessEffectivePermission,
+        denyIfBusinessDateLocked,
       });
       return closeShiftWithHandoff({
         countedCashUgx,
@@ -6877,6 +6897,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const pay = Math.min(amount, c.debtBalanceUgx);
     if (pay <= 0) return { ok: false, errorKey: "invalid" };
 
+    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addDebtPayment");
+    if (dateLock) return dateLock;
+
     const receiptSnap = buildReceiptBrandingSnapshot(state.preferences, receiptSnapshotPlanTier(state.preferences));
     const payment: DebtPayment = {
       id: crypto.randomUUID(),
@@ -7041,6 +7064,10 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!sup) return { ok: false, errorKey: "missingSupplier" };
     const pay = Math.min(Math.floor(Math.max(0, amountUgx)), Math.max(0, sup.balanceOwedUgx));
     if (pay <= 0) return { ok: false, errorKey: "invalidMoney" };
+
+    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addSupplierPayment");
+    if (dateLock) return dateLock;
+
     const actor = state.sessionActor;
     const payment: SupplierPayment = {
       id: crypto.randomUUID(),
@@ -7530,6 +7557,7 @@ export const usePosStore = create<PosState>((set, get) => {
       description: (input.description ?? "").trim(),
       paidOn,
       createdAt: now,
+      updatedAt: now,
       createdByUserId: actor.userId,
       createdByLabel: actor.displayName,
       deviceId: getOrCreateDeviceId(),
@@ -7619,6 +7647,10 @@ export const usePosStore = create<PosState>((set, get) => {
     const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
     if (!row) return { ok: false, errorKey: "invalid" };
     if ((row.approvalStatus ?? "approved") !== "pending") return { ok: false, errorKey: "invalid" };
+    if (cashExpenseTransitionWouldAffectDrawer(row, "approved")) {
+      const dateLock = denyIfBusinessDateLocked(row.paidOn, "approveCashExpense");
+      if (dateLock) return dateLock;
+    }
     const now = new Date().toISOString();
     set((s) => ({
       cashExpenses: s.cashExpenses.map((e) =>
@@ -7629,6 +7661,7 @@ export const usePosStore = create<PosState>((set, get) => {
               approvedByUserId: actor.userId,
               approvedByLabel: actor.displayName ?? null,
               approvedAt: now,
+              updatedAt: now,
               pendingSync: true,
             }
           : e,
@@ -7642,6 +7675,10 @@ export const usePosStore = create<PosState>((set, get) => {
       approvedByLabel: actor.displayName,
     });
     void queueRemote("pending_cash_expenses", { expenseId: id });
+    if (hasSupabaseConfig) {
+      const stampedShopId = getActiveShopId();
+      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(id, stampedShopId));
+    }
     return { ok: true };
   },
 
@@ -7655,6 +7692,10 @@ export const usePosStore = create<PosState>((set, get) => {
     const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
     if (!row) return { ok: false, errorKey: "invalid" };
     if ((row.approvalStatus ?? "approved") !== "pending") return { ok: false, errorKey: "invalid" };
+    if (cashExpenseTransitionWouldAffectDrawer(row, "rejected")) {
+      const dateLock = denyIfBusinessDateLocked(row.paidOn, "rejectCashExpense");
+      if (dateLock) return dateLock;
+    }
     const now = new Date().toISOString();
     set((s) => ({
       cashExpenses: s.cashExpenses.map((e) =>
@@ -7665,6 +7706,7 @@ export const usePosStore = create<PosState>((set, get) => {
               rejectedByUserId: actor.userId,
               rejectedByLabel: actor.displayName ?? null,
               rejectedAt: now,
+              updatedAt: now,
               pendingSync: true,
             }
           : e,
@@ -7678,6 +7720,10 @@ export const usePosStore = create<PosState>((set, get) => {
       rejectedByLabel: actor.displayName,
     });
     void queueRemote("pending_cash_expenses", { expenseId: id });
+    if (hasSupabaseConfig) {
+      const stampedShopId = getActiveShopId();
+      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(id, stampedShopId));
+    }
     return { ok: true };
   },
 
@@ -7692,10 +7738,14 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!actor) return { ok: false, errorKey: "noSelection" };
     const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
     if (!row) return { ok: false, errorKey: "invalid" };
+    if (cashExpenseTransitionWouldAffectDrawer(row, "voided")) {
+      const dateLock = denyIfBusinessDateLocked(row.paidOn, "voidCashExpense");
+      if (dateLock) return dateLock;
+    }
     const now = new Date().toISOString();
     set((s) => ({
       cashExpenses: s.cashExpenses.map((e) =>
-        e.id === id ? { ...e, deletedAt: now, pendingSync: true } : e,
+        e.id === id ? { ...e, deletedAt: now, updatedAt: now, pendingSync: true } : e,
       ),
     }));
     pushAudit("cash_expense_voided", `Removed ${row.category} UGX ${row.amountUgx.toLocaleString()}`, {
@@ -7706,6 +7756,10 @@ export const usePosStore = create<PosState>((set, get) => {
       reason: auditReason,
     });
     void queueRemote("pending_cash_expenses", { expenseId: id, void: true });
+    if (hasSupabaseConfig) {
+      const stampedShopId = getActiveShopId();
+      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(id, stampedShopId));
+    }
     return { ok: true };
   },
 
@@ -8196,6 +8250,7 @@ export const usePosStore = create<PosState>((set, get) => {
       pushAudit,
       queueRemote,
       denyUnlessEffectivePermission,
+      denyIfBusinessDateLocked,
     });
     void _omit;
     return dayDrawerActions;

@@ -65,9 +65,41 @@ export function inventoryWorkspaceBasePath(mode: InventoryWorkspaceMode): string
  */
 export const INVENTORY_TRANSFER_ENABLED = true;
 
-function tabHref(base: string, tab: string, extra?: Record<string, string>): string {
+export function tabHref(base: string, tab: string, extra?: Record<string, string>): string {
   const p = new URLSearchParams({ tab, ...extra });
   return `${base}?${p.toString()}`;
+}
+
+/** Products workspace Movements view — not a hub tab. */
+export function inventoryMovementsHref(basePath = "/stock"): string {
+  return tabHref(basePath, "products", { stockView: "movements" });
+}
+
+/** Products workspace Shelves view + one-shot Add Product for a specific shelf. */
+export function inventoryAddProductToShelfHref(shelfId: string, basePath = "/stock"): string {
+  return tabHref(basePath, "products", {
+    stockView: "shelves",
+    shelf: shelfId,
+    add: "1",
+  });
+}
+
+export type InventoryWorkspaceStockTab = "products" | "shelves" | "low" | "movements";
+
+/** How embedded StockPage maps hub query params onto the products workspace view. */
+export function resolveInventoryWorkspaceView(search: {
+  stockView?: string | null;
+  shelf?: string | null;
+}): { stockTab: InventoryWorkspaceStockTab; selectedShelf: string | null } {
+  const view = search.stockView ?? null;
+  const shelf = (search.shelf ?? "").trim() || null;
+  if (view === "low" || view === "movements") {
+    return { stockTab: view, selectedShelf: shelf };
+  }
+  if (view === "shelves" || shelf) {
+    return { stockTab: "shelves", selectedShelf: shelf };
+  }
+  return { stockTab: "products", selectedShelf: null };
 }
 
 /** Hub directory — completed destinations only (Phase 27.1). */

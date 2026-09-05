@@ -60,6 +60,7 @@ describe("cash drawer backup/restore recovery", () => {
           productName: "Item",
           quantity: 1,
           refundAmountUgx: 20_000,
+          refundCashUgx: 20_000,
           reason: "other",
           actorUserId: "owner",
           createdAt: `${DAY}T14:00:00.000Z`,
@@ -88,6 +89,6 @@ describe("cash drawer backup/restore recovery", () => {
     });
 
     expect(normalized).toHaveLength(3);
-    expect(drawer.expectedDrawerCashUgx).toBe(280_000);
+    expect(drawer.expectedDrawerCashUgx).toBe(230_000);
   });
 });
