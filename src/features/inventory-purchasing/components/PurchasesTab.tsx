@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import clsx from "clsx";
+import { Package, Receipt, ShoppingCart, Wallet } from "lucide-react";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
@@ -14,13 +14,14 @@ import { downloadPurchasesCsv, downloadPurchasesPdf, printPurchasesReport } from
 import { receiptPrintActionLabel } from "../../../lib/printActionLabels";
 import { dateKeyKampala } from "../../../lib/datesUg";
 import type { DateFilterValue } from "../../../lib/dateFilters";
-import { SalesHistoryDateFilterChips } from "../../../components/receipts/SalesHistoryDateFilterChips";
+import { InventoryDateFilterChips } from "./InventoryDateFilterChips";
 import { purchaseStatusKind, formatShortUgx } from "../lib/overviewStats";
 import type { PurchaseStatusFilter } from "../types";
 import { PurchasesDesktopTable } from "./PurchasesDesktopTable";
+import { InventoryPurchaseStatus, InventoryRoomEmpty, InventoryRoomHeader, InventoryRoomMetric } from "./InventoryRoomChrome";
 import { useWakaLayoutBand } from "../../../hooks/useWakaLayoutBand";
 import { WakaButton } from "../../../components/ui/wakaPrimitives";
-import { statusTokens } from "../../../lib/statusTokens";
+import clsx from "clsx";
 
 type Props = {
   lang: Language;
@@ -57,6 +58,22 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
   const rows = useMemo(() => buildPurchaseListRows(filtered, stockMovements), [filtered, stockMovements]);
   const exportStem = `${bounds.fromKey}_${bounds.toKey}`;
 
+  const summary = useMemo(() => {
+    let total = 0;
+    let paid = 0;
+    let balance = 0;
+    let open = 0;
+    for (const row of rows) {
+      const kind = purchaseStatusKind(row.purchase);
+      if (kind === "voided") continue;
+      total += row.purchase.totalCostUgx;
+      paid += row.purchase.amountPaidUgx;
+      balance += Math.max(0, row.purchase.balanceDeltaUgx);
+      if (kind === "unpaid" || kind === "partial") open += 1;
+    }
+    return { count: rows.length, total, paid, balance, open };
+  }, [rows]);
+
   const runExport = async (kind: "csv" | "pdf") => {
     setExportBusy(true);
     try {
@@ -71,13 +88,6 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
     }
   };
 
-  const statusClass = (kind: ReturnType<typeof purchaseStatusKind>) => {
-    if (kind === "paid") return statusTokens.success.badge;
-    if (kind === "partial") return statusTokens.warning.badge;
-    if (kind === "unpaid") return statusTokens.danger.badge;
-    return statusTokens.draft.badge;
-  };
-
   const statusLabel = (kind: ReturnType<typeof purchaseStatusKind>) => {
     if (kind === "paid") return t(lang, "ipStatusPaid");
     if (kind === "partial") return t(lang, "ipStatusPartial");
@@ -86,56 +96,77 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
-        <WakaButton type="button" variant="primary" className="shrink-0 !min-h-[40px] !px-4 !text-xs" onClick={onNewPurchase}>
-          + {t(lang, "ipActionNewPurchase")}
-        </WakaButton>
-      </div>
-
-      <input
-        value={searchQ}
-        onChange={(e) => setSearchQ(e.target.value)}
-        placeholder={t(lang, "ipPurchasesSearchPh")}
-        className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold shadow-sm outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200/50"
+    <div className="inventory-room inventory-room--purchases space-y-3">
+      <InventoryRoomHeader
+        icon={Receipt}
+        title={t(lang, "ipTabPurchases")}
+        subtitle={t(lang, "ipPurchasesSub")}
+        action={
+          <WakaButton
+            type="button"
+            variant="primary"
+            className="inventory-hub-cta shrink-0"
+            iconLeft={<ShoppingCart className="h-4 w-4" aria-hidden />}
+            onClick={onNewPurchase}
+          >
+            {t(lang, "ipActionNewPurchase")}
+          </WakaButton>
+        }
       />
 
-      <div className="flex flex-wrap gap-1.5">
-        {(["all", "paid", "partial", "unpaid", "voided"] as PurchaseStatusFilter[]).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStatusFilter(s)}
-            className={clsx(
-              "rounded-full px-3 py-1.5 text-[11px] font-bold",
-              statusFilter === s
-                ? "bg-primary text-primary-foreground"
-                : "border border-border bg-card text-muted-foreground",
-            )}
-          >
-            {s === "all" ? t(lang, "ipFilterAll") : statusLabel(s as ReturnType<typeof purchaseStatusKind>)}
-          </button>
-        ))}
+      <div className="inventory-room-summary inventory-enter inventory-enter--1">
+        <InventoryRoomMetric icon={Receipt} label={t(lang, "ipTabPurchases")} value={String(summary.count)} />
+        <InventoryRoomMetric icon={Package} label={t(lang, "purchasesColTotal")} value={formatShortUgx(summary.total)} />
+        <InventoryRoomMetric icon={Wallet} label={t(lang, "purchasesColPaid")} value={formatShortUgx(summary.paid)} tone="ok" />
+        <InventoryRoomMetric
+          icon={Wallet}
+          label={t(lang, "ipBalance")}
+          value={formatShortUgx(summary.balance)}
+          tone={summary.open > 0 ? "warning" : "default"}
+        />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <WakaButton type="button" variant="secondary" className="!min-h-[40px] !text-xs" disabled={exportBusy || rows.length === 0} onClick={() => void printPurchasesReport(lang, shopName, rows, exportStem)}>
-          {receiptPrintActionLabel(lang)}
-        </WakaButton>
-        <WakaButton type="button" variant="secondary" className="!min-h-[40px] !text-xs" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("csv")}>
-          CSV
-        </WakaButton>
-        <WakaButton type="button" variant="primary" className="!min-h-[40px] !text-xs" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("pdf")}>
-          PDF
-        </WakaButton>
-        {exportHint ? <p className="self-center text-xs font-bold text-primary">{exportHint}</p> : null}
+      <div className="inventory-enter inventory-enter--2 space-y-2.5">
+        <InventoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
+        <input
+          value={searchQ}
+          onChange={(e) => setSearchQ(e.target.value)}
+          placeholder={t(lang, "ipPurchasesSearchPh")}
+          className="inventory-room-search"
+        />
+        <div className="flex flex-wrap gap-1.5">
+          {(["all", "paid", "partial", "unpaid", "voided"] as PurchaseStatusFilter[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStatusFilter(s)}
+              className={clsx("inventory-room-chip", statusFilter === s ? "inventory-room-chip--on" : "inventory-room-chip--off")}
+            >
+              {s === "all" ? t(lang, "ipFilterAll") : statusLabel(s as ReturnType<typeof purchaseStatusKind>)}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <WakaButton type="button" variant="secondary" className="!min-h-[40px]" disabled={exportBusy || rows.length === 0} onClick={() => void printPurchasesReport(lang, shopName, rows, exportStem)}>
+            {receiptPrintActionLabel(lang)}
+          </WakaButton>
+          <WakaButton type="button" variant="secondary" className="!min-h-[40px]" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("csv")}>
+            CSV
+          </WakaButton>
+          <WakaButton type="button" variant="secondary" className="!min-h-[40px]" disabled={exportBusy || rows.length === 0} onClick={() => void runExport("pdf")}>
+            PDF
+          </WakaButton>
+          {exportHint ? <p className="self-center text-sm font-bold text-primary">{exportHint}</p> : null}
+        </div>
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border bg-muted px-4 py-10 text-center text-sm font-semibold text-muted-foreground">
-          {t(lang, "purchasesEmpty")}
-        </p>
+        <InventoryRoomEmpty
+          icon={ShoppingCart}
+          title={t(lang, "purchasesEmpty")}
+          actionLabel={t(lang, "ipActionNewPurchase")}
+          onAction={onNewPurchase}
+        />
       ) : desktopTable ? (
         <PurchasesDesktopTable
           lang={lang}
@@ -146,47 +177,32 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
           }}
         />
       ) : (
-        <ul className="space-y-2">
+        <ul>
           {rows.map((row) => {
             const kind = purchaseStatusKind(row.purchase);
             const balance = Math.max(0, row.purchase.balanceDeltaUgx);
             return (
               <li key={row.purchase.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpenPurchase(row.purchase.id)}
-                  className="w-full rounded-2xl border border-border/90 bg-card p-3 text-left shadow-sm transition active:scale-[0.99]"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-foreground">{row.purchase.supplierName}</p>
-                      <p className="text-[11px] font-semibold text-muted-foreground">
-                        {dateKeyKampala(row.purchase.createdAt)}
-                        {row.purchase.invoiceNumber?.trim() ? ` · ${row.purchase.invoiceNumber.trim()}` : ""}
-                        {" · "}
-                        {row.productCount} {t(lang, "purchasesColProducts").toLowerCase()}
-                      </p>
-                    </div>
-                    <span className={clsx("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase", statusClass(kind))}>
-                      {statusLabel(kind)}
+                <button type="button" onClick={() => onOpenPurchase(row.purchase.id)} className="inventory-room-row">
+                  <span className="inventory-ops-icon">
+                    <Receipt className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="inventory-room-row__name truncate">{row.purchase.supplierName}</p>
+                    <p className="inventory-room-row__meta truncate">
+                      {dateKeyKampala(row.purchase.createdAt)}
+                      {row.purchase.invoiceNumber?.trim() ? ` · ${row.purchase.invoiceNumber.trim()}` : ""}
+                      {" · "}
+                      {row.productCount} {t(lang, "purchasesColProducts").toLowerCase()}
+                    </p>
+                    <InventoryPurchaseStatus kind={kind} label={statusLabel(kind)} />
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-0.5">
+                    <span className="inventory-room-row__amount tabular-nums">{formatShortUgx(row.purchase.totalCostUgx)}</span>
+                    <span className={clsx("text-sm font-bold tabular-nums", balance > 0 ? "text-rose-700" : "text-muted-foreground")}>
+                      {formatShortUgx(balance)}
                     </span>
                   </div>
-                  <dl className="mt-2 grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-3">
-                    <div>
-                      <dt className="font-semibold text-muted-foreground">{t(lang, "purchasesColTotal")}</dt>
-                      <dd className="font-black tabular-nums">{formatShortUgx(row.purchase.totalCostUgx)}</dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-muted-foreground">{t(lang, "purchasesColPaid")}</dt>
-                      <dd className="font-black tabular-nums text-teal-800">{formatShortUgx(row.purchase.amountPaidUgx)}</dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-muted-foreground">{t(lang, "ipBalance")}</dt>
-                      <dd className={clsx("font-black tabular-nums", balance > 0 ? "text-rose-700" : "text-foreground")}>
-                        {formatShortUgx(balance)}
-                      </dd>
-                    </div>
-                  </dl>
                 </button>
               </li>
             );

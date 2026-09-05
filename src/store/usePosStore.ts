@@ -69,6 +69,7 @@ import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } 
 import { getActiveAccountKey } from "../offline/accountScope";
 import { getActiveShopId } from "../offline/shopScope";
 import { r3AdjustmentStockPayload, r3PurchaseVoidStockPayload, r3SaleVoidStockPayload } from "../lib/stockDurableSync";
+import { catalogDuplicatePrefill } from "../lib/duplicateProductCatalog";
 import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
@@ -5862,17 +5863,18 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const p = state.products.find((x) => x.id === productId);
     if (!p) return { ok: false, errorKey: "missingProduct" };
+    const catalog = catalogDuplicatePrefill(p, nameSuffix);
     get().addProduct({
-      name: `${p.name}${nameSuffix}`,
+      name: catalog.name,
       sellingMode: p.sellingMode,
       baseUnit: p.baseUnit,
       buyingUnit: p.buyingUnit,
       conversionRate: p.conversionRate,
-      sellingPricePerUnitUgx: p.sellingPricePerUnitUgx,
-      costPricePerUnitUgx: p.costPricePerUnitUgx,
-      stockOnHand: p.stockOnHand,
+      sellingPricePerUnitUgx: catalog.sellingPricePerUnitUgx,
+      costPricePerUnitUgx: catalog.costPricePerUnitUgx ?? 0,
+      stockOnHand: catalog.stockOnHand,
       minimumStockAlert: p.minimumStockAlert,
-      category: p.category,
+      category: catalog.category || p.category,
       sku: `SKU-${Date.now()}`,
       quickPresetsMoneyUgx: p.quickPresetsMoneyUgx,
       quickPresetsQty: p.quickPresetsQty,

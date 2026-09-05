@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import type { InventoryWorkspaceTile } from "../../../lib/inventoryWorkspaceTiles";
@@ -18,33 +17,22 @@ export function InventoryNavigationTiles({ lang, tiles, titleKey = "iwSectionNav
   if (visible.length === 0) return null;
 
   return (
-    <section className="space-y-2">
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-        {t(lang, titleKey)}
-      </h3>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <section className="space-y-1.5">
+      <h3 className="inventory-zone-label">{t(lang, titleKey)}</h3>
+      <div className="inventory-nav-dir">
         {visible.map((tile) => {
           const Icon = tile.Icon;
           return (
-            <Link
-              key={tile.id}
-              to={tile.href}
-              className={clsx(
-                "group relative flex min-h-[88px] flex-col justify-between rounded-2xl border border-border/90 bg-card p-3 shadow-sm",
-                "transition-all hover:-translate-y-0.5 hover:border-waka-200 hover:shadow-md active:scale-[0.98] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
-              )}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:bg-waka-100 group-hover:text-waka-800">
-                  <Icon className="h-5 w-5" aria-hidden />
+            <Link key={tile.id} to={tile.href} className="inventory-nav-link">
+              <span className="inventory-ops-icon">
+                <Icon className="h-4 w-4" aria-hidden />
+              </span>
+              <span className="inventory-nav-link__label">{t(lang, tile.labelKey)}</span>
+              {tile.badge != null && tile.badge > 0 ? (
+                <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-bold text-white">
+                  {tile.badge > 99 ? "99+" : tile.badge}
                 </span>
-                {tile.badge != null && tile.badge > 0 ? (
-                  <span className="rounded-full bg-danger px-2 py-0.5 text-[10px] font-black text-white">
-                    {tile.badge > 99 ? "99+" : tile.badge}
-                  </span>
-                ) : null}
-              </div>
-              <span className="text-sm font-black leading-tight text-foreground">{t(lang, tile.labelKey)}</span>
+              ) : null}
             </Link>
           );
         })}

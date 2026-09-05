@@ -12,60 +12,72 @@ type Props = {
   onAction: (actionId: string) => void;
 };
 
+function actionVisual(action: InventoryQuickActionDef): "lead" | "quiet" {
+  return action.id === "receive" || action.id === "newProduct" ? "lead" : "quiet";
+}
+
 export function InventoryQuickActions({ lang, actions, onAction }: Props) {
   const actor = useSessionActor();
   const visible = actions.filter((a) => !a.perm || hasActorPermission(actor.role, a.perm, actor.permissions));
   if (visible.length === 0) return null;
 
+  const featured = visible.filter((a) => actionVisual(a) === "lead");
+  const rest = visible.filter((a) => actionVisual(a) === "quiet");
+
+  const renderAction = (action: InventoryQuickActionDef) => {
+    const Icon = action.Icon;
+    const visual = actionVisual(action);
+    const className = clsx(
+      "inventory-action-tile",
+      visual === "lead" ? "inventory-action-tile--lead" : "inventory-action-tile--quiet",
+      "active:scale-[0.98] motion-reduce:active:scale-100",
+    );
+    const inner = (
+      <>
+        <span
+          className={clsx(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+            visual === "lead" ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
+          )}
+        >
+          <Icon className="h-5 w-5" aria-hidden />
+        </span>
+        <span className="inventory-action-tile__copy">
+          <span className="inventory-action-tile__title">{t(lang, action.labelKey)}</span>
+          {action.hintKey ? (
+            <span className="inventory-action-tile__hint">{t(lang, action.hintKey)}</span>
+          ) : null}
+        </span>
+      </>
+    );
+
+    if (action.href) {
+      return (
+        <Link key={action.id} to={action.href} className={className}>
+          {inner}
+        </Link>
+      );
+    }
+
+    return (
+      <button
+        key={action.id}
+        type="button"
+        className={className}
+        onClick={() => action.actionId && onAction(action.actionId)}
+      >
+        {inner}
+      </button>
+    );
+  };
+
   return (
-    <section className="space-y-2">
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-        {t(lang, "ipQuickActions")}
-      </h3>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-        {visible.map((action) => {
-          const Icon = action.Icon;
-          const className = clsx(
-            "flex min-h-[72px] flex-col items-start justify-between rounded-2xl border p-3 text-left shadow-sm transition-all",
-            "active:scale-[0.98] motion-reduce:active:scale-100",
-            action.primary
-              ? "border-waka-200 bg-gradient-to-br from-waka-50 to-card active:border-waka-300"
-              : "border-border/90 bg-card active:border-waka-300 active:shadow-md",
-          );
-          const inner = (
-            <>
-              <span
-                className={clsx(
-                  "flex h-9 w-9 items-center justify-center rounded-xl",
-                  action.primary ? "bg-waka-600 text-white" : "bg-muted text-muted-foreground",
-                )}
-              >
-                <Icon className="h-[18px] w-[18px]" aria-hidden />
-              </span>
-              <span className="text-xs font-black leading-tight text-foreground">{t(lang, action.labelKey)}</span>
-            </>
-          );
-
-          if (action.href) {
-            return (
-              <Link key={action.id} to={action.href} className={className}>
-                {inner}
-              </Link>
-            );
-          }
-
-          return (
-            <button
-              key={action.id}
-              type="button"
-              className={className}
-              onClick={() => action.actionId && onAction(action.actionId)}
-            >
-              {inner}
-            </button>
-          );
-        })}
-      </div>
+    <section className="inventory-action-zone space-y-2.5">
+      <h3 className="inventory-zone-label">{t(lang, "ipWhatToDo")}</h3>
+      {featured.length > 0 ? (
+        <div className="inventory-action-zone__featured">{featured.map(renderAction)}</div>
+      ) : null}
+      {rest.length > 0 ? <div className="inventory-action-zone__rest">{rest.map(renderAction)}</div> : null}
     </section>
   );
 }

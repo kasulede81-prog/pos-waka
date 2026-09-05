@@ -11,6 +11,7 @@ type Props = {
   showBack?: boolean;
   compact?: boolean;
   children?: ReactNode;
+  className?: string;
 };
 
 export function PageHeader(props: Props) {

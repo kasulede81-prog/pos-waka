@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Pill } from "lucide-react";
 import type { Language, Product } from "../../types";
 import { t } from "../../lib/i18n";
@@ -15,6 +15,7 @@ import { ReceiveMovementPreview } from "../inventory/receive/ReceiveMovementPrev
 import { ReceiveSummaryPanel } from "../inventory/receive/ReceiveSummaryPanel";
 import { ReceiveFooter } from "../inventory/receive/ReceiveFooter";
 import { ReceiveStatusStrip } from "../inventory/receive/ReceiveStatusStrip";
+import { submitRestockOnce } from "../../lib/restockSubmitGuard";
 
 type Props = {
   lang: Language;
@@ -37,6 +38,7 @@ export function PharmacyReceiveBatchSheet({ lang, product, open, onClose, onDone
   const [location, setLocation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const submitLockRef = useRef(false);
 
   const qtyN = Math.floor(Number(quantity)) || 0;
   const costN = Math.round(Number(unitCost)) || 0;
@@ -48,6 +50,7 @@ export function PharmacyReceiveBatchSheet({ lang, product, open, onClose, onDone
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     setError(null);
     const qty = Math.floor(Number(quantity));
     const cost = Math.round(Number(unitCost));
@@ -64,30 +67,33 @@ export function PharmacyReceiveBatchSheet({ lang, product, open, onClose, onDone
       return;
     }
     setBusy(true);
-    const r = recordPurchase({
-      supplierId,
-      lines: [
-        {
-          productId: product.id,
-          baseUnitsIn: qty,
-          costPerBaseUnitUgx: cost,
-          batchReceive: {
-            batchNumber: batchNumber.trim(),
-            expiryDate,
-            quantityBase: qty,
-            unitCostUgx: cost,
-            manufactureDate: manufactureDate || null,
-            purchaseInvoice: invoice.trim() || null,
-            location: location.trim() || null,
+    const attempt = submitRestockOnce(submitLockRef, () =>
+      recordPurchase({
+        supplierId,
+        lines: [
+          {
+            productId: product.id,
+            baseUnitsIn: qty,
+            costPerBaseUnitUgx: cost,
+            batchReceive: {
+              batchNumber: batchNumber.trim(),
+              expiryDate,
+              quantityBase: qty,
+              unitCostUgx: cost,
+              manufactureDate: manufactureDate || null,
+              purchaseInvoice: invoice.trim() || null,
+              location: location.trim() || null,
+            },
           },
-        },
-      ],
-      amountPaidUgx: qty * cost,
-      notes: invoice.trim() ? `Invoice ${invoice.trim()}` : "",
-    });
-    setBusy(false);
-    if (!r.ok) {
-      setError(t(lang, r.errorKey ?? "invalid"));
+        ],
+        amountPaidUgx: qty * cost,
+        notes: invoice.trim() ? `Invoice ${invoice.trim()}` : "",
+      }),
+    );
+    if (!attempt.started) return;
+    if (!attempt.result.ok) {
+      setBusy(false);
+      setError(t(lang, attempt.result.errorKey ?? "invalid"));
       return;
     }
     onDone?.();

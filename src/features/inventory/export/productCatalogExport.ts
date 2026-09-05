@@ -1,5 +1,8 @@
 import type { Language, Product } from "../../../types";
 import { t } from "../../../lib/i18n";
+import { actorCanSeeInventoryCostValue } from "../../../lib/inventoryFinancialVisibility";
+import type { SessionActor } from "../../../lib/sessionActor";
+import type { SubscriptionSnapshot } from "../../../lib/subscriptionEntitlements";
 import { formatProductPriceLabel } from "../../../store/usePosStore";
 import { normalizedCategoryKey } from "../../../lib/productCategories";
 import { productBrandLabel } from "../filters/inventoryAdvancedFilters";
@@ -12,13 +15,38 @@ function escCsv(v: string | number): string {
 
 export type ProductCatalogExportScope = "selected" | "filtered" | "all";
 
-export function buildProductCatalogCsv(lang: Language, products: Product[]): string {
+export type ProductCatalogCsvOptions = {
+  /**
+   * Same gate as the products table cost column (`actorCanSeeInventoryCostValue`).
+   * When omitted, cost is included only if actor + subscription context allow it.
+   * Direct calls with no context are fail-closed (no cost column).
+   */
+  includeCost?: boolean;
+  actor?: SessionActor | null;
+  snapshot?: SubscriptionSnapshot;
+  authMode?: "supabase" | "local";
+};
+
+function resolveCatalogCsvIncludeCost(opts?: ProductCatalogCsvOptions): boolean {
+  if (typeof opts?.includeCost === "boolean") return opts.includeCost;
+  if (opts?.snapshot && opts.authMode) {
+    return actorCanSeeInventoryCostValue(opts.actor, opts.snapshot, opts.authMode);
+  }
+  return false;
+}
+
+export function buildProductCatalogCsv(
+  lang: Language,
+  products: Product[],
+  opts?: ProductCatalogCsvOptions,
+): string {
+  const includeCost = resolveCatalogCsvIncludeCost(opts);
   const header = [
     t(lang, "inventoryTableProduct"),
     t(lang, "inventoryTableSku"),
     t(lang, "inventoryTableShelf"),
     t(lang, "inventoryTableStock"),
-    t(lang, "inventoryTableCost"),
+    ...(includeCost ? [t(lang, "inventoryTableCost")] : []),
     t(lang, "inventoryTablePrice"),
     "Brand",
     t(lang, "inventoryTableUpdated"),
@@ -32,7 +60,7 @@ export function buildProductCatalogCsv(lang: Language, products: Product[]): str
         p.sku?.trim() ?? "",
         shelf,
         p.stockOnHand,
-        Math.round(p.costPricePerUnitUgx),
+        ...(includeCost ? [Math.round(p.costPricePerUnitUgx)] : []),
         formatProductPriceLabel(p),
         productBrandLabel(p),
         p.updatedAt,

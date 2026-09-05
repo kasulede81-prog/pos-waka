@@ -6,11 +6,13 @@ import {
   buildSupplierSummary,
   filterPurchases,
   filterSupplierPayments,
+  purchaseFilterFromDateFilter,
   resolvePurchaseFilterBounds,
   searchPurchases,
   sumSupplierPaymentsUgx,
 } from "./purchaseReporting";
 import { WALK_IN_SUPPLIER_ID } from "./walkInSupplier";
+import type { DateFilterValue } from "./dateFilters";
 
 const SUPPLIER_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const SUPPLIER_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -90,6 +92,104 @@ describe("purchase filtering", () => {
     const byProduct = searchPurchases(purchases, [product], { product: "bread" });
     expect(byProduct).toHaveLength(1);
     expect(byProduct[0]?.id).toBe("p2");
+  });
+});
+
+describe("INV-D1 purchaseFilterFromDateFilter", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-15T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const allTime: DateFilterValue = { kind: "range", fromKey: "2020-01-01", toKey: "2026-06-15" };
+
+  function payment(id: string, createdAt: string, amountUgx: number): SupplierPayment {
+    return { id, supplierId: SUPPLIER_A, amountUgx, createdAt, pendingSync: false };
+  }
+
+  it("maps All time as a range, not a single day on 2020-01-01", () => {
+    const mapped = purchaseFilterFromDateFilter(allTime);
+    expect(mapped).toEqual({ kind: "range", fromKey: "2020-01-01", toKey: "2026-06-15" });
+    expect(mapped).not.toEqual({ kind: "day", dateKey: "2020-01-01" });
+
+    const bounds = resolvePurchaseFilterBounds(mapped);
+    expect(bounds.fromKey).toBe("2020-01-01");
+    expect(bounds.toKey).toBe("2026-06-15");
+    expect(bounds.isSingleDay).toBe(false);
+  });
+
+  it("keeps a genuine range as a range", () => {
+    const mapped = purchaseFilterFromDateFilter({ kind: "range", fromKey: "2026-06-01", toKey: "2026-06-10" });
+    expect(mapped).toEqual({ kind: "range", fromKey: "2026-06-01", toKey: "2026-06-10" });
+    const bounds = resolvePurchaseFilterBounds(mapped);
+    expect(bounds.isSingleDay).toBe(false);
+    expect(bounds.fromKey).toBe("2026-06-01");
+    expect(bounds.toKey).toBe("2026-06-10");
+  });
+
+  it("All time includes 2020-01-01, a later date, and today for purchases and payments", () => {
+    const purchases = [
+      purchase({ id: "p-start", createdAt: "2020-01-01T10:00:00.000Z", totalCostUgx: 1_000 }),
+      purchase({ id: "p-mid", createdAt: "2024-08-15T10:00:00.000Z", totalCostUgx: 2_000 }),
+      purchase({ id: "p-today", createdAt: "2026-06-15T10:00:00.000Z", totalCostUgx: 3_000 }),
+    ];
+    const payments = [
+      payment("pay-start", "2020-01-01T10:00:00.000Z", 100),
+      payment("pay-mid", "2024-08-15T10:00:00.000Z", 200),
+      payment("pay-today", "2026-06-15T10:00:00.000Z", 300),
+    ];
+    const bounds = resolvePurchaseFilterBounds(purchaseFilterFromDateFilter(allTime));
+    expect(filterPurchases(purchases, bounds).map((p) => p.id)).toEqual(["p-start", "p-mid", "p-today"]);
+    expect(filterSupplierPayments(payments, bounds).map((p) => p.id)).toEqual(["pay-start", "pay-mid", "pay-today"]);
+    expect(sumSupplierPaymentsUgx(filterSupplierPayments(payments, bounds))).toBe(600);
+  });
+
+  it("preserves week and month presets as presets", () => {
+    expect(purchaseFilterFromDateFilter({ kind: "preset", preset: "this_week" })).toEqual({
+      kind: "preset",
+      preset: "this_week",
+    });
+    expect(purchaseFilterFromDateFilter({ kind: "preset", preset: "this_month" })).toEqual({
+      kind: "preset",
+      preset: "this_month",
+    });
+  });
+
+  it("Today still returns only today's records", () => {
+    const mapped = purchaseFilterFromDateFilter({ kind: "preset", preset: "today" });
+    expect(mapped).toEqual({ kind: "preset", preset: "today" });
+    const bounds = resolvePurchaseFilterBounds(mapped);
+    const purchases = [
+      purchase({ id: "p-today", createdAt: "2026-06-15T10:00:00.000Z", totalCostUgx: 3_000 }),
+      purchase({ id: "p-yest", createdAt: "2026-06-14T10:00:00.000Z", totalCostUgx: 1_000 }),
+    ];
+    const payments = [
+      payment("pay-today", "2026-06-15T10:00:00.000Z", 300),
+      payment("pay-yest", "2026-06-14T10:00:00.000Z", 100),
+    ];
+    expect(filterPurchases(purchases, bounds).map((p) => p.id)).toEqual(["p-today"]);
+    expect(filterSupplierPayments(payments, bounds).map((p) => p.id)).toEqual(["pay-today"]);
+  });
+
+  it("custom day still returns only that day", () => {
+    const mapped = purchaseFilterFromDateFilter({ kind: "day", dateKey: "2024-08-15" });
+    expect(mapped).toEqual({ kind: "day", dateKey: "2024-08-15" });
+    const bounds = resolvePurchaseFilterBounds(mapped);
+    expect(bounds.isSingleDay).toBe(true);
+    const purchases = [
+      purchase({ id: "p-custom", createdAt: "2024-08-15T10:00:00.000Z", totalCostUgx: 2_000 }),
+      purchase({ id: "p-other", createdAt: "2024-08-16T10:00:00.000Z", totalCostUgx: 9_000 }),
+    ];
+    const payments = [
+      payment("pay-custom", "2024-08-15T10:00:00.000Z", 200),
+      payment("pay-other", "2024-08-16T10:00:00.000Z", 900),
+    ];
+    expect(filterPurchases(purchases, bounds).map((p) => p.id)).toEqual(["p-custom"]);
+    expect(filterSupplierPayments(payments, bounds).map((p) => p.id)).toEqual(["pay-custom"]);
   });
 });
 

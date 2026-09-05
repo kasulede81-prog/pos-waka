@@ -3,10 +3,11 @@ import {
   ArrowLeftRight,
   AlertTriangle,
   BarChart3,
-  ClipboardList,
+  ClipboardCheck,
   FolderOpen,
   History,
   Package,
+  PackagePlus,
   Receipt,
   Scale,
   Shield,
@@ -41,6 +42,7 @@ export type InventoryQuickActionDef = {
   actionId?: string;
   perm?: Permission;
   primary?: boolean;
+  hintKey?: string;
 };
 
 export function inventoryWorkspaceMode(
@@ -85,7 +87,7 @@ export function resolveInventoryNavTiles(
     {
       id: "count",
       labelKey: "iwNavInventoryCount",
-      Icon: ClipboardList,
+      Icon: ClipboardCheck,
       href: "/stock/count",
       perm: "stock.count",
     },
@@ -145,14 +147,16 @@ export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMo
       actionId: "receiveStock",
       perm: "purchases.record",
       primary: true,
+      hintKey: "ipActionReceiveHint",
     },
     {
       id: "newProduct",
       labelKey: "stockAddProductBtn",
-      Icon: Package,
+      Icon: PackagePlus,
       actionId: "newProduct",
       perm: "products.add",
       primary: true,
+      hintKey: "stockAddProductHint",
     },
     {
       id: "importCsv",
@@ -172,7 +176,7 @@ export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMo
     {
       id: "count",
       labelKey: "iwNavInventoryCount",
-      Icon: ClipboardList,
+      Icon: ClipboardCheck,
       href: "/stock/count",
       perm: "stock.count",
     },
@@ -202,7 +206,7 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
     {
       id: "newProduct",
       labelKey: "stockAddProductBtn",
-      Icon: Package,
+      Icon: PackagePlus,
       actionId: "newProduct",
       perm: "products.add",
       primary: true,
@@ -210,7 +214,7 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
     {
       id: "count",
       labelKey: "iwNavInventoryCount",
-      Icon: ClipboardList,
+      Icon: ClipboardCheck,
       href: "/stock/count",
       perm: "stock.count",
     },

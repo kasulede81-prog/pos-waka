@@ -347,6 +347,6 @@ export function buildRestockProductSuggestions(
 /** Map DateFilterValue to PurchaseListFilter for shared preset UI. */
 export function purchaseFilterFromDateFilter(value: DateFilterValue): PurchaseListFilter {
   if (value.kind === "day") return { kind: "day", dateKey: value.dateKey };
-  if (value.kind === "range") return { kind: "day", dateKey: value.fromKey };
+  if (value.kind === "range") return { kind: "range", fromKey: value.fromKey, toKey: value.toKey };
   return { kind: "preset", preset: value.preset };
 }

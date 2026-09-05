@@ -21,6 +21,8 @@ type Props = {
   preferences: ShopPreferences;
   locked: boolean;
   canAdd: boolean;
+  canEdit?: boolean;
+  canSeeCost?: boolean;
   canSell: boolean;
   onClose: () => void;
   onSell: () => void;
@@ -47,6 +49,8 @@ export function StockProductDetailSheet({
   preferences,
   locked,
   canAdd,
+  canEdit,
+  canSeeCost = true,
   canSell,
   onClose,
   onSell,
@@ -76,24 +80,32 @@ export function StockProductDetailSheet({
       value: formatStockLabel(product),
       warn: low,
     },
-    {
-      label: t(lang, "stockDetailCost"),
-      value: product.costPricePerUnitUgx > 0 ? `UGX ${Math.round(product.costPricePerUnitUgx).toLocaleString()}` : "—",
-    },
+    ...(canSeeCost
+      ? [
+          {
+            label: t(lang, "stockDetailCost"),
+            value: product.costPricePerUnitUgx > 0 ? `UGX ${Math.round(product.costPricePerUnitUgx).toLocaleString()}` : "—",
+          },
+        ]
+      : []),
     { label: t(lang, "stockDetailSellPrice"), value: formatProductPriceLabel(product) },
-    {
-      label: t(lang, "stockDetailProfit"),
-      value: profit != null ? `UGX ${profit.toLocaleString()}` : "—",
-      positive: profit != null && profit >= 0,
-      negative: profit != null && profit < 0,
-    },
-    ...(marginPct != null
-      ? [{
-          label: t(lang, "profitStatMargin"),
-          value: `${marginPct.toFixed(1)}%`,
-          positive: marginPct >= 0,
-          negative: marginPct < 0,
-        }]
+    ...(canSeeCost
+      ? [
+          {
+            label: t(lang, "stockDetailProfit"),
+            value: profit != null ? `UGX ${profit.toLocaleString()}` : "—",
+            positive: profit != null && profit >= 0,
+            negative: profit != null && profit < 0,
+          },
+          ...(marginPct != null
+            ? [{
+                label: t(lang, "profitStatMargin"),
+                value: `${marginPct.toFixed(1)}%`,
+                positive: marginPct >= 0,
+                negative: marginPct < 0,
+              }]
+            : []),
+        ]
       : []),
     { label: t(lang, "stockDetailLastUpdated"), value: formatUpdated(product.updatedAt, lang) },
   ];
@@ -147,7 +159,7 @@ export function StockProductDetailSheet({
               ) : (
                 <span />
               )}
-              {canAdd ? (
+              {canEdit ?? canAdd ? (
                 <WakaButton type="button" variant="secondary" onClick={() => closeAnd(onEdit)}>
                   {t(lang, "stockCardEdit")}
                 </WakaButton>

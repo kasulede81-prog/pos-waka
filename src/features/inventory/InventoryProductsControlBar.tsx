@@ -44,6 +44,8 @@ type Props = {
   canImportCsv?: boolean;
   onImportCsv?: () => void;
   csvImportDisabled?: boolean;
+  /** Products-table cost visibility — CSV must use the same contract. */
+  canSeeCost?: boolean;
 };
 
 /**
@@ -83,6 +85,7 @@ export function InventoryProductsControlBar(props: Props) {
     canImportCsv,
     onImportCsv,
     csvImportDisabled,
+    canSeeCost = false,
   } = props;
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -90,7 +93,7 @@ export function InventoryProductsControlBar(props: Props) {
   const activeFilterCount = countActiveAdvancedFilters(filters) + (listFilter === "low" ? 1 : 0);
 
   const exportFiltered = async () => {
-    const csv = buildProductCatalogCsv(lang, filteredProducts);
+    const csv = buildProductCatalogCsv(lang, filteredProducts, { includeCost: canSeeCost });
     await saveExportedFile(productCatalogExportFilename("filtered"), csv, "text/csv");
   };
 

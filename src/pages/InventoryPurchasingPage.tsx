@@ -1,6 +1,5 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo } from "react";
-import clsx from "clsx";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -8,6 +7,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
+import { Package, ShoppingCart } from "lucide-react";
 import { WakaButton } from "../components/ui/wakaPrimitives";
 import { StockPage } from "./StockPage";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
@@ -59,28 +59,41 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <EnterprisePageContainer className="space-y-3">
-      <EnterprisePageHeader
-        lang={lang}
-        title={t(lang, "ipPageTitle")}
-        subtitle={t(lang, "ipPageSub")}
-        backFallback="/office"
-        backLabel={t(lang, "officeBackToHub")}
-        compact
-      >
+    <EnterprisePageContainer variant="workspace" className="inventory-workspace">
+      <div className="inventory-hub-header inventory-enter inventory-enter--0 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span className="inventory-hub-mark mt-6 hidden sm:flex">
+            <Package className="h-5 w-5" aria-hidden />
+          </span>
+          <EnterprisePageHeader
+            lang={lang}
+            title={t(lang, "ipPageTitle")}
+            subtitle={t(lang, "ipPageSub")}
+            backFallback="/office"
+            backLabel={t(lang, "officeBackToHub")}
+            compact
+            className="inventory-hub-header__identity min-w-0 flex-1"
+          />
+        </div>
         {canPurchasesRecord ? (
-          <WakaButton type="button" variant="primary" onClick={openNewPurchaseFlow}>
-            + {t(lang, "ipActionNewPurchase")}
+          <WakaButton
+            type="button"
+            variant="primary"
+            className="inventory-hub-cta shrink-0 sm:mt-6"
+            iconLeft={<ShoppingCart className="h-5 w-5" aria-hidden />}
+            onClick={openNewPurchaseFlow}
+          >
+            <span className="flex flex-col items-start leading-tight">
+              <span>{t(lang, "ipActionNewPurchase")}</span>
+              <span className="hidden text-xs font-semibold opacity-90 sm:inline">
+                {t(lang, "ipActionNewPurchaseHint")}
+              </span>
+            </span>
           </WakaButton>
         ) : null}
-      </EnterprisePageHeader>
+      </div>
 
-      <div
-        className={clsx(
-          "sticky top-0 z-20 -mx-3 border-b border-border/80 bg-muted/95 px-3 py-2 backdrop-blur-md",
-          "supports-[backdrop-filter]:bg-muted/88 md:-mx-6 md:px-6",
-        )}
-      >
+      <div className="inventory-hub-nav sticky top-0 z-20 -mx-3 px-3 py-2 md:-mx-6 md:px-6">
         <InventoryPurchasingTabs lang={lang} active={tab} onChange={setTab} visibleTabs={visibleTabs} />
       </div>
 

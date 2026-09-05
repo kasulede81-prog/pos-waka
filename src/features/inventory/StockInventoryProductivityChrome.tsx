@@ -18,6 +18,7 @@ type Props = {
   suppliers: Supplier[];
   canEdit: boolean;
   canAdjust: boolean;
+  canSeeCost?: boolean;
   stockCategoryPicklist: string[];
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   filteredIds: readonly string[];
@@ -32,6 +33,7 @@ export function StockInventoryProductivityChrome({
   suppliers,
   canEdit,
   canAdjust,
+  canSeeCost = false,
   stockCategoryPicklist,
   searchInputRef,
   filteredIds,
@@ -71,7 +73,7 @@ export function StockInventoryProductivityChrome({
     onArchive: canEdit ? onArchive : undefined,
     onFocusSearch: () => searchInputRef.current?.focus(),
     onExport: () => {
-      const csv = buildProductCatalogCsv(lang, filteredProducts);
+      const csv = buildProductCatalogCsv(lang, filteredProducts, { includeCost: canSeeCost });
       void saveExportedFile(productCatalogExportFilename("filtered"), csv, "text/csv");
     },
     onPrintLabels: () => {
@@ -89,6 +91,7 @@ export function StockInventoryProductivityChrome({
       suppliers={suppliers}
       canEdit={canEdit}
       canAdjust={canAdjust}
+      canSeeCost={canSeeCost}
       stockCategoryPicklist={stockCategoryPicklist}
       onClearSelection={onClearSelection}
     />

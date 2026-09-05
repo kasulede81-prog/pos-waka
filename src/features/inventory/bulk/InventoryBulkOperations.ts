@@ -5,6 +5,7 @@ import {
   productSupplierTag,
   readArchivedProductIds,
   readProductTags,
+  writeArchivedProductIds,
 } from "../filters/inventoryAdvancedFilters";
 
 export type BulkPriceMode = "set" | "adjust_pct" | "adjust_fixed";
@@ -16,7 +17,7 @@ export type BulkTagMode = "add" | "remove" | "set";
 export type InventoryBulkOperation =
   | { kind: "category"; category: string }
   | { kind: "shelf"; shelf: string }
-  | { kind: "sellingPrice"; mode: BulkPriceMode; valueUgx: number }
+  | { kind: "sellingPrice"; mode: BulkPriceMode; valueUgx: number; reason?: string }
   | { kind: "cost"; mode: BulkPriceMode; valueUgx: number }
   | { kind: "stock"; mode: BulkStockMode; value: number; reason: string }
   | { kind: "archive" }
@@ -53,6 +54,77 @@ function resolvePrice(base: number, mode: BulkPriceMode, valueUgx: number): numb
   return Math.max(0, Math.round(base + valueUgx));
 }
 
+/** Same class of canned reason bulk stock already passes to `adjustStock`. */
+export const BULK_PRICE_AUDIT_REASON = "Bulk price update";
+
+/**
+ * Sequential single-archive contract: each product is unioned into (or removed
+ * from) the live archived-id set. Bulk must produce the same end state as
+ * applying this once per selected id against the previous result.
+ */
+export function nextInventoryArchivedProductIds(
+  currentIds: readonly string[] | undefined,
+  productIds: readonly string[],
+  mode: "archive" | "unarchive",
+): string[] {
+  const ids = new Set(currentIds ?? []);
+  if (mode === "archive") {
+    for (const id of productIds) ids.add(id);
+  } else {
+    for (const id of productIds) ids.delete(id);
+  }
+  return [...ids];
+}
+
+function applyBulkArchivePreference(
+  op: Extract<InventoryBulkOperation, { kind: "archive" | "unarchive" | "activate" }>,
+  ctx: BulkOperationContext,
+  targets: Product[],
+): ShopActionResult {
+  const mode = op.kind === "archive" ? "archive" : "unarchive";
+  const current = [...readArchivedProductIds(ctx.preferences)];
+  let applied = 0;
+  let failed = 0;
+  const eligibleIds: string[] = [];
+
+  if (op.kind === "archive") {
+    for (const p of targets) {
+      if (isProductArchived(ctx.preferences, p.id)) continue;
+      eligibleIds.push(p.id);
+      applied += 1;
+    }
+    if (applied === 0) return { ok: false, message: "No products updated" };
+  } else {
+    for (const p of targets) eligibleIds.push(p.id);
+  }
+
+  ctx.store.setPreferences(
+    writeArchivedProductIds(ctx.preferences, nextInventoryArchivedProductIds(current, eligibleIds, mode)),
+  );
+
+  if (op.kind === "activate") {
+    for (const p of targets) {
+      if (!p.menu?.hideFromMenu) {
+        applied += 1;
+        continue;
+      }
+      const r = ctx.store.updateProduct(p.id, {
+        menu: { ...p.menu, hideFromMenu: false },
+      });
+      if (r.ok) applied += 1;
+      else failed += 1;
+    }
+  } else if (op.kind === "unarchive") {
+    applied = targets.length;
+  }
+
+  if (applied === 0) return { ok: false, message: "No products updated" };
+  return {
+    ok: true,
+    message: failed > 0 ? `Updated ${applied}; ${failed} skipped` : `Updated ${applied} products`,
+  };
+}
+
 function applyBulkOperation(
   op: InventoryBulkOperation,
   product: Product,
@@ -68,7 +140,11 @@ function applyBulkOperation(
     }
     case "sellingPrice": {
       const next = resolvePrice(product.sellingPricePerUnitUgx, op.mode, op.valueUgx);
-      const r = store.updateProduct(product.id, { sellingPricePerUnitUgx: next });
+      const r = store.updateProduct(
+        product.id,
+        { sellingPricePerUnitUgx: next },
+        { auditReason: op.reason ?? BULK_PRICE_AUDIT_REASON },
+      );
       return { ok: r.ok, message: r.errorKey };
     }
     case "cost": {
@@ -84,24 +160,6 @@ function applyBulkOperation(
       if (delta === 0) return { ok: true };
       const r = store.adjustStock(product.id, delta, op.reason);
       return { ok: r.ok, message: r.errorKey };
-    }
-    case "archive": {
-      const ids = new Set(readArchivedProductIds(preferences));
-      ids.add(product.id);
-      store.setPreferences({ inventoryArchivedProductIds: [...ids] });
-      return { ok: true };
-    }
-    case "unarchive":
-    case "activate": {
-      const ids = [...readArchivedProductIds(preferences)].filter((id) => id !== product.id);
-      store.setPreferences({ inventoryArchivedProductIds: ids });
-      if (op.kind === "activate" && product.menu?.hideFromMenu) {
-        const r = store.updateProduct(product.id, {
-          menu: { ...product.menu, hideFromMenu: false },
-        });
-        if (!r.ok) return { ok: false, message: r.errorKey };
-      }
-      return { ok: true };
     }
     case "deactivate": {
       const r = store.updateProduct(product.id, {
@@ -154,12 +212,12 @@ export async function runInventoryBulkOperation(
       audit: { action: `inventory_bulk_${op.kind}`, metadata: { count: targets.length } },
     },
     async () => {
+      if (op.kind === "archive" || op.kind === "unarchive" || op.kind === "activate") {
+        return applyBulkArchivePreference(op, ctx, targets);
+      }
       let applied = 0;
       let failed = 0;
       for (const p of targets) {
-        if (isProductArchived(ctx.preferences, p.id) && op.kind !== "unarchive" && op.kind !== "activate") {
-          if (op.kind === "archive") continue;
-        }
         const r = applyBulkOperation(op, p, ctx);
         if (r.ok) applied += 1;
         else failed += 1;

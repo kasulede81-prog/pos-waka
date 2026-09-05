@@ -6,6 +6,7 @@ import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
 import { useInventorySelection } from "../selection/useInventorySelection";
 import {
+  BULK_PRICE_AUDIT_REASON,
   runInventoryBulkOperation,
   selectedProducts,
   type InventoryBulkOperation,
@@ -26,6 +27,7 @@ type Props = {
   suppliers: Supplier[];
   canEdit: boolean;
   canAdjust: boolean;
+  canSeeCost?: boolean;
   stockCategoryPicklist: string[];
   onClearSelection?: () => void;
 };
@@ -40,6 +42,7 @@ export function InventoryBulkToolbar({
   suppliers,
   canEdit,
   canAdjust,
+  canSeeCost = false,
   stockCategoryPicklist,
   onClearSelection,
 }: Props) {
@@ -72,12 +75,12 @@ export function InventoryBulkToolbar({
   };
 
   const exportSelected = async () => {
-    const csv = buildProductCatalogCsv(lang, selected);
+    const csv = buildProductCatalogCsv(lang, selected, { includeCost: canSeeCost });
     await saveExportedFile(productCatalogExportFilename("selected"), csv, "text/csv");
   };
 
   const exportFiltered = async () => {
-    const csv = buildProductCatalogCsv(lang, filteredProducts);
+    const csv = buildProductCatalogCsv(lang, filteredProducts, { includeCost: canSeeCost });
     await saveExportedFile(productCatalogExportFilename("filtered"), csv, "text/csv");
   };
 
@@ -161,7 +164,7 @@ export function InventoryBulkToolbar({
               onConfirm={() => {
                 const v = Number(inputValue);
                 if (!Number.isFinite(v)) return;
-                void run({ kind: "sellingPrice", mode: "set", valueUgx: v });
+                void run({ kind: "sellingPrice", mode: "set", valueUgx: v, reason: BULK_PRICE_AUDIT_REASON });
               }}
             />
           ) : sheet === "more" ? (

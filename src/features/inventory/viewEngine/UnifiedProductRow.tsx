@@ -4,8 +4,7 @@ import clsx from "clsx";
 import type { Language, Product, ShopPreferences } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { formatProductPriceLabel } from "../../../store/usePosStore";
-import { formatStockLabel, isLowStock } from "../../../lib/sellingEngine";
-import { formatPharmacyStockPrimary, isPharmacyPackagingActive } from "../../../lib/pharmacyPackaging";
+import { InventoryStockStatus, inventoryStockKind } from "../../../components/inventory/workspace/InventoryStockStatus";
 import { normalizedCategoryKey, shelfIconFor } from "../../../lib/productCategories";
 import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../../lib/pharmacy";
@@ -26,6 +25,7 @@ export type UnifiedProductRowProps = {
   viewMode: InventoryViewMode;
   locked: boolean;
   canAdd: boolean;
+  canEdit?: boolean;
   canRemove: boolean;
   canSell: boolean;
   canRestock: boolean;
@@ -41,6 +41,7 @@ function CompactProductRow({
   preferences,
   locked,
   canAdd,
+  canEdit,
   canRemove,
   canSell,
   canRestock,
@@ -53,10 +54,9 @@ function CompactProductRow({
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
-  const low = isLowStock(p);
   const shelf = normalizedCategoryKey(p) ? p.category!.trim() : t(lang, "uncategorized");
   const shelfIcon = shelfIconFor(shelf);
-  const stockText = isPharmacyPackagingActive(p) ? formatPharmacyStockPrimary(p) : formatStockLabel(p);
+  const kind = inventoryStockKind(p);
   const lowStockFocus = variant === "lowStock";
   const selected = selection?.isSelected(p.id) ?? false;
 
@@ -79,10 +79,11 @@ function CompactProductRow({
     <>
       <div
         className={clsx(
-          "flex min-h-[68px] items-center gap-2 rounded-lg border bg-card px-2 py-1.5 shadow-sm",
-          locked ? "border-border/80 opacity-55" : "border-border/90",
-          low && !locked && lowStockFocus && "border-danger/30 bg-danger-muted/30",
-          selected && "border-indigo-300 bg-indigo-50/40",
+          "inventory-product-row",
+          locked && "opacity-55",
+          kind === "low" && !locked && lowStockFocus && "inventory-row--low",
+          kind === "out" && !locked && "inventory-row--out",
+          selected && "bg-indigo-50/40",
         )}
         onPointerDown={onPointerDown}
         onPointerUp={clearPress}
@@ -101,33 +102,31 @@ function CompactProductRow({
           type="button"
           disabled={!onOpenDetail}
           onClick={() => onOpenDetail?.()}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left active:opacity-90"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left active:opacity-90"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-base leading-none">
+          <span className="inventory-ops-icon text-base leading-none">
             {shelfIcon ?? "📦"}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <p className="line-clamp-1 text-sm font-black text-foreground">
+              <p className="inventory-product-row__name line-clamp-1">
                 {pharmacyMode ? formatMedicineListPrimary(p) : p.name}
               </p>
               {pharmacyMode ? <ExpiryStatusBadge lang={lang} product={p} compact /> : null}
             </div>
-            <p className="truncate text-[10px] font-semibold text-muted-foreground">{shelf}</p>
-            <div className="flex items-baseline gap-2">
-              <span className={clsx("text-[10px] font-bold", low && !locked ? "text-danger" : "text-muted-foreground")}>
-                {stockText}
-              </span>
-              <span className="text-xs font-black text-teal-700">{formatProductPriceLabel(p)}</span>
-            </div>
+            <p className="inventory-product-row__meta truncate">{shelf}</p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-0.5">
+            <InventoryStockStatus product={p} />
+            <span className="text-sm font-bold text-teal-700">{formatProductPriceLabel(p)}</span>
           </div>
         </button>
-        {!locked && (canAdd || canRestock || canRemove || canSell) ? (
+        {!locked && (canAdd || canEdit || canRestock || canRemove || canSell) ? (
           <button
             type="button"
             aria-expanded={sheetOpen}
             onClick={() => setSheetOpen(true)}
-            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground active:bg-muted"
+            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg text-muted-foreground active:bg-muted"
           >
             <MoreHorizontal className="h-4 w-4" />
             <span className="sr-only">{t(lang, "stockMoreActions")}</span>
@@ -139,6 +138,7 @@ function CompactProductRow({
         open={sheetOpen}
         productName={p.name}
         canAdd={canAdd}
+        canEdit={canEdit}
         canRestock={canRestock}
         canRemove={canRemove}
         canSell={canSell}
@@ -165,6 +165,7 @@ export function UnifiedProductRow(props: UnifiedProductRowProps) {
         preferences={rest.preferences}
         locked={rest.locked}
         canAdd={rest.canAdd}
+        canEdit={rest.canEdit}
         canRemove={rest.canRemove}
         canSell={rest.canSell}
         canRestock={rest.canRestock}

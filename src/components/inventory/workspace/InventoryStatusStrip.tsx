@@ -58,14 +58,11 @@ export function InventoryStatusStrip({ lang, className }: Props) {
   const failedPrints = (hw.printQueue ?? []).filter((j) => j.status === "failed").length;
   const pendingPrints = (hw.printQueue ?? []).filter((j) => j.status === "queued" || j.status === "sending").length;
 
-  const chipClass =
-    "inline-flex items-center gap-1.5 rounded-full border border-border/90 bg-card px-2.5 py-1 text-[10px] font-bold text-muted-foreground shadow-sm";
+  const chipClass = "inventory-status-chip";
 
   return (
-    <section className={clsx("space-y-2", className)} aria-label={t(lang, "iwStatusStripLabel")}>
-      <h3 className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-        {t(lang, "iwStatusStripLabel")}
-      </h3>
+    <section className={clsx("space-y-1.5", className)} aria-label={t(lang, "iwStatusStripLabel")}>
+      <h3 className="inventory-zone-label">{t(lang, "iwStatusStripLabel")}</h3>
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={clsx(
@@ -75,7 +72,7 @@ export function InventoryStatusStrip({ lang, className }: Props) {
               : "border-warning/30 bg-warning-muted text-warning-foreground",
           )}
         >
-          {isOnline ? <Wifi className="h-3 w-3" aria-hidden /> : <WifiOff className="h-3 w-3" aria-hidden />}
+          {isOnline ? <Wifi className="h-3.5 w-3.5" aria-hidden /> : <WifiOff className="h-3.5 w-3.5" aria-hidden />}
           {isOnline
             ? pendingCount > 0 || syncErrors > 0
               ? t(lang, "desktopHomeStatusSyncPending")

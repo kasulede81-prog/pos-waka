@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Banknote, Wallet } from "lucide-react";
+import { CreditCard, Wallet } from "lucide-react";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
@@ -7,18 +7,13 @@ import { filterSupplierPayments, purchaseFilterFromDateFilter, resolvePurchaseFi
 import { supplierPaymentCreatedByLabel } from "../../../lib/purchaseCorrections";
 import { dateKeyKampala } from "../../../lib/datesUg";
 import type { DateFilterValue } from "../../../lib/dateFilters";
-import { SalesHistoryDateFilterChips } from "../../../components/receipts/SalesHistoryDateFilterChips";
+import { InventoryDateFilterChips } from "./InventoryDateFilterChips";
 import { buildSupplierSummary } from "../../../lib/purchaseReporting";
 import { formatShortUgx } from "../lib/overviewStats";
 import { isWalkInSupplierId } from "../../../lib/walkInSupplier";
-import { EnterpriseKpiCard } from "../../../components/enterprise/EnterpriseKpiCard";
-import { EnterpriseResponsiveTable } from "../../../components/shared/ResponsiveDataTable";
 import { WakaButton } from "../../../components/ui/wakaPrimitives";
-import { enterpriseTypeClass } from "../../../lib/enterpriseTypography";
-import { Caption, MonoNumber, SectionTitle } from "../../../components/enterprise/EnterpriseTypography";
-import { Body } from "../../../components/enterprise/EnterpriseTypography";
-import clsx from "clsx";
-import { statusTokens } from "../../../lib/statusTokens";
+import { InventoryRoomEmpty, InventoryRoomHeader, InventoryRoomMetric } from "./InventoryRoomChrome";
+import { InventoryRoomTable } from "./InventoryRoomTable";
 
 type Props = {
   lang: Language;
@@ -47,55 +42,63 @@ export function PaymentsTab({ lang, onRecordPayment, onOpenSupplier }: Props) {
     () => suppliers.filter((s) => !isWalkInSupplierId(s.id) && s.balanceOwedUgx > 0).sort((a, b) => b.balanceOwedUgx - a.balanceOwedUgx),
     [suppliers],
   );
+  const periodPaid = useMemo(() => sumSupplierPaymentsUgx(payments), [payments]);
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2">
-        <EnterpriseKpiCard
-          icon={Wallet}
-          label={t(lang, "ipPaymentsPeriod")}
-          value={<MonoNumber className="text-lg text-teal-800">{formatShortUgx(sumSupplierPaymentsUgx(payments))}</MonoNumber>}
-          tone="success"
-        />
-        <EnterpriseKpiCard
-          icon={Banknote}
+    <div className="inventory-room inventory-room--payments space-y-3">
+      <InventoryRoomHeader
+        icon={Wallet}
+        title={t(lang, "ipTabPayments")}
+        subtitle={t(lang, "ipPaymentsSub")}
+        action={
+          <WakaButton
+            type="button"
+            variant="primary"
+            className="inventory-hub-cta shrink-0"
+            iconLeft={<CreditCard className="h-4 w-4" aria-hidden />}
+            onClick={onRecordPayment}
+          >
+            {t(lang, "supplierPayButton")}
+          </WakaButton>
+        }
+      />
+
+      <div className="inventory-room-summary inventory-enter inventory-enter--1">
+        <InventoryRoomMetric icon={Wallet} label={t(lang, "ipPaymentsPeriod")} value={formatShortUgx(periodPaid)} tone="ok" />
+        <InventoryRoomMetric
+          icon={CreditCard}
           label={t(lang, "ipStatOutstanding")}
-          value={<MonoNumber className="text-lg text-rose-800">{formatShortUgx(summary.totalDebtUgx)}</MonoNumber>}
-          tone="danger"
+          value={formatShortUgx(summary.totalDebtUgx)}
+          tone={summary.totalDebtUgx > 0 ? "danger" : "default"}
         />
       </div>
 
-      <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
-
-      <div className="flex flex-wrap gap-2">
-        <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold">
+      <div className="inventory-enter inventory-enter--2 space-y-2.5">
+        <InventoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
+        <select
+          value={supplierFilter}
+          onChange={(e) => setSupplierFilter(e.target.value)}
+          className="inventory-room-search max-w-full sm:max-w-xs"
+        >
           <option value="all">{t(lang, "ipAllSuppliers")}</option>
           {suppliers.filter((s) => !isWalkInSupplierId(s.id)).map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
-        <WakaButton type="button" variant="primary" onClick={onRecordPayment}>
-          {t(lang, "supplierPayButton")}
-        </WakaButton>
       </div>
 
       {owingSuppliers.length > 0 ? (
-        <section>
-          <Caption as="h3" className="mb-2 block">{t(lang, "ipUpcomingPayments")}</Caption>
-          <ul className="space-y-2">
+        <section className="inventory-enter inventory-enter--3">
+          <h3 className="inventory-zone-label mb-1.5">{t(lang, "ipUpcomingPayments")}</h3>
+          <ul>
             {owingSuppliers.slice(0, 5).map((s) => (
               <li key={s.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpenSupplier(s.id)}
-                  className={clsx(
-                    "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left",
-                    statusTokens.warning.banner,
-                    statusTokens.warning.badgeRing,
-                  )}
-                >
-                  <span className={enterpriseTypeClass("body", "!text-sm !font-bold")}>{s.name}</span>
-                  <MonoNumber className="text-sm text-rose-800">{formatShortUgx(s.balanceOwedUgx)}</MonoNumber>
+                <button type="button" onClick={() => onOpenSupplier(s.id)} className="inventory-room-row">
+                  <span className="inventory-ops-icon">
+                    <CreditCard className="h-4 w-4" aria-hidden />
+                  </span>
+                  <span className="inventory-room-row__name min-w-0 flex-1 truncate">{s.name}</span>
+                  <span className="inventory-room-row__amount tabular-nums text-rose-700">{formatShortUgx(s.balanceOwedUgx)}</span>
                 </button>
               </li>
             ))}
@@ -103,47 +106,73 @@ export function PaymentsTab({ lang, onRecordPayment, onOpenSupplier }: Props) {
         </section>
       ) : null}
 
-      <section>
-        <SectionTitle as="h3" className="mb-2 !text-xs uppercase tracking-wide text-muted-foreground">
-          {t(lang, "supplierPaymentHistory")}
-        </SectionTitle>
-        <EnterpriseResponsiveTable
-          rows={payments}
-          rowKey={(pay) => pay.id}
-          minWidthPx={640}
-          emptyState={<Body className="text-muted-foreground">{t(lang, "supplierPaymentEmpty")}</Body>}
-          columns={[
-            {
-              id: "supplier",
-              header: t(lang, "officeCardSuppliers"),
-              cell: (pay) => supplierNameById.get(pay.supplierId) ?? "—",
-            },
-            {
-              id: "date",
-              header: t(lang, "purchasesColDate"),
-              cell: (pay) => dateKeyKampala(pay.createdAt),
-              hideOnMobile: true,
-            },
-            {
-              id: "by",
-              header: t(lang, "supplierPaymentCreatedBy"),
-              cell: (pay) =>
-                supplierPaymentCreatedByLabel(
-                  pay,
-                  auditLogs.find((e) => e.action === "supplier_payment" && e.payload.paymentId === pay.id) ?? null,
-                ),
-              hideOnMobile: true,
-            },
-            {
-              id: "amount",
-              header: t(lang, "supplierPayAmount"),
-              className: "text-right",
-              cell: (pay) => (
-                <MonoNumber className="text-teal-800">{formatShortUgx(pay.amountUgx)}</MonoNumber>
-              ),
-            },
-          ]}
-        />
+      <section className="inventory-enter inventory-enter--4">
+        <h3 className="inventory-zone-label mb-1.5">{t(lang, "supplierPaymentHistory")}</h3>
+        {payments.length === 0 ? (
+          <InventoryRoomEmpty
+            icon={Wallet}
+            title={t(lang, "supplierPaymentEmpty")}
+            actionLabel={t(lang, "supplierPayButton")}
+            onAction={onRecordPayment}
+          />
+        ) : (
+          <>
+            <InventoryRoomTable
+              rows={payments}
+              rowKey={(pay) => pay.id}
+              ariaLabel={t(lang, "supplierPaymentHistory")}
+              minWidthPx={640}
+              onRowActivate={(pay) => onOpenSupplier(pay.supplierId)}
+              columns={[
+                {
+                  id: "supplier",
+                  header: t(lang, "officeCardSuppliers"),
+                  cell: (pay) => (
+                    <span className="inventory-table-product">{supplierNameById.get(pay.supplierId) ?? "—"}</span>
+                  ),
+                },
+                {
+                  id: "date",
+                  header: t(lang, "purchasesColDate"),
+                  hideBelow: "lg",
+                  cell: (pay) => dateKeyKampala(pay.createdAt),
+                },
+                {
+                  id: "by",
+                  header: t(lang, "supplierPaymentCreatedBy"),
+                  hideBelow: "xl",
+                  cell: (pay) =>
+                    supplierPaymentCreatedByLabel(
+                      pay,
+                      auditLogs.find((e) => e.action === "supplier_payment" && e.payload.paymentId === pay.id) ?? null,
+                    ),
+                },
+                {
+                  id: "amount",
+                  header: t(lang, "supplierPayAmount"),
+                  align: "right",
+                  cell: (pay) => <span className="font-bold tabular-nums text-teal-800">{formatShortUgx(pay.amountUgx)}</span>,
+                },
+              ]}
+            />
+            <ul className="sm:hidden">
+              {payments.map((pay) => (
+                <li key={pay.id}>
+                  <button type="button" onClick={() => onOpenSupplier(pay.supplierId)} className="inventory-room-row">
+                    <span className="inventory-ops-icon">
+                      <Wallet className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="inventory-room-row__name truncate">{supplierNameById.get(pay.supplierId) ?? "—"}</p>
+                      <p className="inventory-room-row__meta">{dateKeyKampala(pay.createdAt)}</p>
+                    </div>
+                    <span className="inventory-room-row__amount tabular-nums text-teal-800">{formatShortUgx(pay.amountUgx)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
     </div>
   );

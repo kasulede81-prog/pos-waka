@@ -1,4 +1,6 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
+import { actorCanSeeInventoryCostValue } from "../lib/inventoryFinancialVisibility";
+import { countInventoryStockStatus } from "../lib/inventoryWorkspaceStats";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
@@ -72,13 +74,14 @@ import { EnterprisePageContainer } from "../components/layout/EnterprisePageCont
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { WakaButton } from "../components/ui/wakaPrimitives";
-import { Package } from "lucide-react";
+import { FolderOpen, Package, PackagePlus } from "lucide-react";
 import {
   costPerUnitFromPackAndStock,
   resolveQuickAddSellUnit,
   sellUnitPresetFromBaseUnit,
   sellingModeFromSellUnit,
 } from "../lib/quickAddProductForm";
+import { catalogDuplicatePrefill } from "../lib/duplicateProductCatalog";
 import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
@@ -131,10 +134,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   usePageLoadMark("stock");
   const actor = useSessionActor();
   const toast = useToast();
-  const { snapshot } = useSubscription();
+  const { snapshot, authMode } = useSubscription();
   const canRemove = actorHasPermission(actor, "products.remove");
   const canAdjust = actorHasPermission(actor, "stock.adjust");
   const canAdd = actorHasPermission(actor, "products.add");
+  /** Store `updateProduct` requires `stock.adjust`; create/duplicate stay `products.add`. */
+  const canEdit = canAdd && canAdjust;
+  const canSeeCost = actorCanSeeInventoryCostValue(actor, snapshot, authMode);
   const canPresets = actorHasPermission(actor, "products.edit_presets");
   const canSell = actorHasPermission(actor, "pos.sell");
   const canRestock = actorHasPermission(actor, "purchases.record");
@@ -199,6 +205,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [qaStock, setQaStock] = useState("");
   const [qaCategory, setQaCategory] = useState("");
   const [qaBuyPackTotal, setQaBuyPackTotal] = useState("");
+  const [qaDuplicateCost, setQaDuplicateCost] = useState<number | null>(null);
 
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
   const [stockTab, setStockTab] = useState<StockHubTab>(() => (workspaceEmbed ? "products" : "overview"));
@@ -434,7 +441,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     ],
   );
 
-  const lowStockCount = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)).length, [unlockedProducts]);
+  const stockStatus = useMemo(() => countInventoryStockStatus(unlockedProducts), [unlockedProducts]);
+  const lowStockCount = stockStatus.lowStockCount;
   const inventoryValueUgx = useMemo(() => inventoryValueAtCostUgx(unlockedProducts), [unlockedProducts]);
   const lowStockProducts = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)), [unlockedProducts]);
 
@@ -556,7 +564,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     const sellingMode = sellingModeFromSellUnit(sellUnit);
     const stockQty = Number(qaStock.replace(/[^\d.]/g, "")) || 0;
     const packTotal = Math.floor(Number(qaBuyPackTotal.replace(/\D/g, "")) || 0);
-    const costPerSell = costPerUnitFromPackAndStock(packTotal, stockQty);
+    const costPerSell = costPerUnitFromPackAndStock(packTotal, stockQty) ?? qaDuplicateCost;
     const r = quickAddProduct({
       name: qaName,
       priceUgx: price,
@@ -574,6 +582,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     setQaStock("");
     setQaCategory("");
     setQaBuyPackTotal("");
+    setQaDuplicateCost(null);
     setQuickOpen(false);
   };
 
@@ -830,18 +839,16 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   const openDuplicateToQuick = (p: Product) => {
     if (freeProductLimitReached) return;
-    setQaName(`${p.name} (2)`);
-    setQaCategory((p.category ?? "").trim());
+    const prefill = catalogDuplicatePrefill(p, " (2)");
+    setQaName(prefill.name);
+    setQaCategory(prefill.category);
     const preset = sellUnitPresetFromBaseUnit(p.baseUnit);
     setQaUnitPreset(preset);
     setQaUnitCustom(preset === "other" ? p.baseUnit : "");
-    setQaPrice(String(Math.floor(p.sellingPricePerUnitUgx)));
-    setQaStock(String(p.stockOnHand));
-    setQaBuyPackTotal(
-      p.stockOnHand > 0 && p.costPricePerUnitUgx > 0
-        ? String(Math.floor(p.costPricePerUnitUgx * p.stockOnHand))
-        : "",
-    );
+    setQaPrice(String(prefill.sellingPricePerUnitUgx));
+    setQaStock(String(prefill.stockOnHand));
+    setQaBuyPackTotal("");
+    setQaDuplicateCost(prefill.costPricePerUnitUgx);
     setQuickOpen(true);
   };
 
@@ -871,7 +878,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     }
     switch (action) {
       case "edit":
-        if (canAdd) openEditProduct(p);
+        if (canEdit) openEditProduct(p);
         break;
       case "add10":
         if (canAdjust) adjustStock(p.id, 10, "added");
@@ -966,9 +973,11 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         preferences={preferences}
         lockedIds={lockedIds}
         canAdd={canAdd}
+        canEdit={canEdit}
         canRemove={canRemove}
         canSell={canSell}
         canRestock={canRestock}
+        canSeeCost={canSeeCost}
         isOnlyProduct={onlyProductInStock}
         variant={variant}
         listSort={listSort}
@@ -1120,23 +1129,12 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         </EnterpriseEmptyState>
       ) : (
         <>
-          {stockTab !== "movements" ? (
-            <InventoryStatGrid
-              lang={lang}
-              totalProducts={unlockedProducts.length}
-              lowStockCount={lowStockCount}
-              shelfCount={shelfFolders.length}
-              inventoryValueUgx={inventoryValueUgx}
-              onLowStockTap={() => setStockTab("low")}
-            />
-          ) : null}
-
           <div
             className={clsx(
-              "-mx-3 space-y-2 border-b border-border/80 bg-muted/95 px-3 py-2",
-              "supports-[backdrop-filter]:bg-muted/88 md:-mx-6 md:px-6",
+              "inventory-sub-nav -mx-3 space-y-2 px-3 py-2",
+              "md:-mx-6 md:px-6",
               // Phone: avoid nested sticky chrome that buries the product list (Phase 27.1 / 4A).
-              "md:sticky md:top-0 md:z-20 md:backdrop-blur-md",
+              "md:sticky md:top-0 md:z-20",
             )}
           >
             <StockSectionTabs
@@ -1166,7 +1164,26 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           ) : null}
 
           {stockTab === "products" ? (
-            <section className="space-y-3">
+            <section className="inventory-products-stage space-y-2.5">
+              <div className="inventory-products-stage__header flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="inventory-products-stage__title">{t(lang, "stockTabProducts")}</h2>
+                  <p className="inventory-products-stage__count">
+                    {tTemplate(lang, "inventoryGroupItemCount", { count: String(unlockedProducts.length) })}
+                  </p>
+                </div>
+                {canAdd && !isPhone && !freeProductLimitReached ? (
+                  <WakaButton
+                    type="button"
+                    variant="primary"
+                    className="inventory-products-cta shrink-0"
+                    iconLeft={<PackagePlus className="h-4 w-4" aria-hidden />}
+                    onClick={openAddProductSheet}
+                  >
+                    {t(lang, "stockAddProductBtn")}
+                  </WakaButton>
+                ) : null}
+              </div>
               <InventoryProductsControlBar
                 lang={lang}
                 isPhone={isPhone}
@@ -1202,6 +1219,16 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 canImportCsv={canAdd}
                 onImportCsv={openCsvImport}
                 csvImportDisabled={freeProductLimitReached}
+                canSeeCost={canSeeCost}
+              />
+              <InventoryStatGrid
+                lang={lang}
+                totalProducts={unlockedProducts.length}
+                lowStockCount={lowStockCount}
+                shelfCount={shelfFolders.length}
+                inventoryValueUgx={inventoryValueUgx}
+                showInventoryValue={canSeeCost}
+                onLowStockTap={() => setStockTab("low")}
               />
               <InventorySelectionToolbar
                 lang={lang}
@@ -1209,15 +1236,24 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 filteredIds={listableProducts.map((p) => p.id)}
               />
               {groupByCategory && categoryGroups && listableProducts.length > 0 ? (
-                <div className="space-y-4">
-                  {categoryGroups.keys.map((gk) => (
-                    <div key={gk}>
-                      <h3 className="mb-2 px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-                        {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
-                      </h3>
-                      {renderProductList(categoryGroups.map.get(gk) ?? [])}
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  {categoryGroups.keys.map((gk) => {
+                    const groupProducts = categoryGroups.map.get(gk) ?? [];
+                    return (
+                      <div key={gk}>
+                        <h3 className="inventory-group-heading">
+                          <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                          <span className="inventory-group-heading__name">
+                            {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
+                          </span>
+                          <span className="inventory-group-heading__count">
+                            {tTemplate(lang, "inventoryGroupItemCount", { count: String(groupProducts.length) })}
+                          </span>
+                        </h3>
+                        {renderProductList(groupProducts)}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 renderProductList(listableProducts)
@@ -1289,7 +1325,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           ) : null}
 
           {stockTab === "low" ? (
-            <section className="space-y-3">
+            <section className="inventory-products-stage space-y-3">
               <div className="flex justify-end">
                 <InventoryViewSwitcher lang={lang} variant="inline" />
               </div>
@@ -1307,7 +1343,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             <StockMovementsPanel lang={lang} movements={recentMovements} pharmacyMode={pharmacyMode} wholesaleMode={wholesaleMode} />
           ) : null}
 
-          {canAdd && !freeProductLimitReached ? (
+          {isPhone && canAdd && !freeProductLimitReached ? (
             <StockFab lang={lang} onClick={openAddProductSheet} />
           ) : null}
         </>
@@ -1315,7 +1351,10 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
       <ModalSheet
         open={quickOpen}
-        onClose={() => setQuickOpen(false)}
+        onClose={() => {
+          setQaDuplicateCost(null);
+          setQuickOpen(false);
+        }}
         align="center"
         zIndexClass="z-[70]"
         title={
@@ -1331,7 +1370,14 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         }
         footer={
           <div className="grid grid-cols-2 gap-3">
-            <WakaButton type="button" variant="secondary" onClick={() => setQuickOpen(false)}>
+            <WakaButton
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setQaDuplicateCost(null);
+                setQuickOpen(false);
+              }}
+            >
               {t(lang, "cancel")}
             </WakaButton>
             <WakaButton type="submit" form="stock-quick-add-form">
@@ -1590,6 +1636,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         preferences={preferences}
         locked={detailProduct ? lockedIds.has(detailProduct.id) : false}
         canAdd={canAdd}
+        canEdit={canEdit}
+        canSeeCost={canSeeCost}
         canSell={canSell}
         onClose={() => setDetailProduct(null)}
         onSell={() => detailProduct && handleRowAction(detailProduct, "sell")}
@@ -1609,7 +1657,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           open
           onClose={() => setDetailProduct(null)}
           canReceive={canRestock}
-          canAdjust={canAdd}
+          canAdjust={canEdit}
           canWriteOff={canAdjust}
           canReturn={canRestock}
           onAction={(action) => handleBatchDetailAction(detailProduct, action)}
@@ -1648,8 +1696,10 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         open={actionSheetProduct !== null}
         productName={actionSheetProduct?.name ?? ""}
         canAdd={canAdd}
+        canEdit={canEdit}
         canRestock={canRestock}
         canRemove={canRemove}
+        canSell={canSell}
         onClose={() => setActionSheetProduct(null)}
         onAction={(action) => {
           if (actionSheetProduct) handleRowAction(actionSheetProduct, action);
@@ -1663,8 +1713,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         filteredProducts={listableProducts}
         preferences={preferences}
         suppliers={suppliers}
-        canEdit={canAdd}
+        canEdit={canEdit}
         canAdjust={canAdjust}
+        canSeeCost={canSeeCost}
         stockCategoryPicklist={stockCategoryPicklist}
         searchInputRef={searchInputRef}
         filteredIds={listableProducts.map((p) => p.id)}

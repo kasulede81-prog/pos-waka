@@ -5,7 +5,6 @@ import { t } from "../../../lib/i18n";
 import { dateKeyKampala } from "../../../lib/datesUg";
 import type { PurchaseListRow } from "../../../lib/purchaseReporting";
 import { purchaseStatusKind, formatShortUgx } from "../lib/overviewStats";
-import { statusTokens } from "../../../lib/statusTokens";
 import {
   EnterpriseDataTable,
   EnterpriseDesktopBulkBar,
@@ -13,6 +12,7 @@ import {
   type EnterpriseDataColumn,
 } from "../../../components/enterprise/data-table";
 import { themeUi } from "../../../lib/themeTokens";
+import { InventoryPurchaseStatus } from "./InventoryRoomChrome";
 
 type Props = {
   lang: Language;
@@ -31,18 +31,11 @@ export function PurchasesDesktopTable({ lang, rows, onOpenPurchase, onExportSele
     return t(lang, "purchaseStatusVoided");
   };
 
-  const statusBadge = (kind: ReturnType<typeof purchaseStatusKind>) => {
-    if (kind === "paid") return statusTokens.success.badge;
-    if (kind === "partial") return statusTokens.warning.badge;
-    if (kind === "unpaid") return statusTokens.danger.badge;
-    return statusTokens.draft.badge;
-  };
-
   const columns: EnterpriseDataColumn<PurchaseListRow>[] = useMemo(
     () => [
       {
         id: "date",
-        header: "Date",
+        header: t(lang, "purchasesColDate"),
         width: "minmax(96px,0.9fr)",
         cell: (row) => dateKeyKampala(row.purchase.createdAt),
       },
@@ -50,12 +43,12 @@ export function PurchasesDesktopTable({ lang, rows, onOpenPurchase, onExportSele
         id: "supplier",
         header: t(lang, "purchasesColSupplier") !== "purchasesColSupplier" ? t(lang, "purchasesColSupplier") : "Supplier",
         width: "minmax(140px,2fr)",
-        cell: (row) => row.purchase.supplierName,
+        cell: (row) => <span className="inventory-table-product">{row.purchase.supplierName}</span>,
         className: "text-foreground",
       },
       {
         id: "invoice",
-        header: "Invoice",
+        header: t(lang, "purchasesSearchInvoice"),
         width: "minmax(88px,1fr)",
         hideBelow: "lg",
         cell: (row) => row.purchase.invoiceNumber?.trim() || "—",
@@ -75,12 +68,35 @@ export function PurchasesDesktopTable({ lang, rows, onOpenPurchase, onExportSele
         cell: (row) => <span className="font-bold tabular-nums text-foreground">{formatShortUgx(row.purchase.totalCostUgx)}</span>,
       },
       {
+        id: "paid",
+        header: t(lang, "purchasesColPaid"),
+        width: "minmax(88px,0.9fr)",
+        align: "right",
+        hideBelow: "xl",
+        cell: (row) => <span className="font-bold tabular-nums text-teal-800">{formatShortUgx(row.purchase.amountPaidUgx)}</span>,
+      },
+      {
+        id: "balance",
+        header: t(lang, "ipBalance"),
+        width: "minmax(88px,0.9fr)",
+        align: "right",
+        hideBelow: "lg",
+        cell: (row) => {
+          const balance = Math.max(0, row.purchase.balanceDeltaUgx);
+          return (
+            <span className={clsx("font-bold tabular-nums", balance > 0 ? "text-rose-700" : "text-foreground")}>
+              {formatShortUgx(balance)}
+            </span>
+          );
+        },
+      },
+      {
         id: "status",
         header: t(lang, "inventoryTableStatus"),
-        width: "minmax(88px,0.8fr)",
+        width: "minmax(104px,0.9fr)",
         cell: (row) => {
           const kind = purchaseStatusKind(row.purchase);
-          return <span className={statusBadge(kind)}>{statusLabel(kind)}</span>;
+          return <InventoryPurchaseStatus kind={kind} label={statusLabel(kind)} />;
         },
       },
     ],
@@ -90,7 +106,7 @@ export function PurchasesDesktopTable({ lang, rows, onOpenPurchase, onExportSele
   const selected = useMemo(() => rows.filter((r) => selection.isSelected(r.purchase.id)), [rows, selection]);
 
   return (
-    <div className="space-y-2">
+    <div className="inventory-room-table space-y-2">
       <EnterpriseDesktopBulkBar
         lang={lang}
         count={selection.count}
@@ -102,7 +118,7 @@ export function PurchasesDesktopTable({ lang, rows, onOpenPurchase, onExportSele
             type="button"
             disabled={selected.length === 0}
             onClick={() => onExportSelectedCsv(selected)}
-            className={clsx(themeUi.btnSecondary, "min-h-[36px] px-3 py-1.5 text-xs")}
+            className={clsx(themeUi.btnSecondary, "min-h-[36px] px-3 py-1.5 text-sm")}
           >
             CSV
           </button>
@@ -117,6 +133,12 @@ export function PurchasesDesktopTable({ lang, rows, onOpenPurchase, onExportSele
         onRowActivate={(row) => onOpenPurchase(row.purchase.id)}
         minWidthPx={920}
         ariaLabel={t(lang, "ipTabPurchases")}
+        getRowClassName={(row) => {
+          const kind = purchaseStatusKind(row.purchase);
+          if (kind === "unpaid") return "inventory-row--out";
+          if (kind === "partial") return "inventory-row--low";
+          return "";
+        }}
       />
     </div>
   );

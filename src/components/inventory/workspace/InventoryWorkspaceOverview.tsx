@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import type { Language } from "../../../types";
 import { usePosStore } from "../../../store/usePosStore";
+import { useSessionActor } from "../../../context/SessionActorContext";
+import { useSubscription } from "../../../context/SubscriptionContext";
+import { maxProductsForTier, resolveEffectivePlanTier } from "../../../lib/subscriptionEntitlements";
+import { actorCanSeeInventoryCostValue } from "../../../lib/inventoryFinancialVisibility";
 import {
   inventoryWorkspaceBasePath,
   inventoryWorkspaceMode,
@@ -13,7 +17,7 @@ import {
 import { computeInventoryWorkspaceDashboardStats } from "../../../lib/inventoryWorkspaceStats";
 import { InventoryWorkspaceShell } from "./InventoryWorkspaceShell";
 import { InventorySearchBar } from "./InventorySearchBar";
-import { InventoryDashboardCards } from "./InventoryDashboardCards";
+import { InventoryDashboardCards, InventoryOpsBoard } from "./InventoryDashboardCards";
 import { InventoryQuickActions } from "./InventoryQuickActions";
 import { InventoryNavigationTiles } from "./InventoryNavigationTiles";
 import { InventoryBusinessExtension } from "./InventoryBusinessExtension";
@@ -33,6 +37,9 @@ type Props = {
 
 export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onAddProduct, onImportCsv }: Props) {
   const navigate = useNavigate();
+  const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
+  const canSeeCost = actorCanSeeInventoryCostValue(actor, snapshot, authMode);
   const { products, purchases, supplierPayments, suppliers, preferences, pharmacyComplianceAlerts } = usePosStore(
     useShallow((s) => ({
       products: s.products,
@@ -46,11 +53,17 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onA
 
   const mode = inventoryWorkspaceMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const basePath = inventoryWorkspaceBasePath(mode);
+  const productLimit = maxProductsForTier(resolveEffectivePlanTier(snapshot));
+  const catalogProducts = useMemo(
+    () => (productLimit === null ? products : products.slice(0, productLimit)),
+    [products, productLimit],
+  );
 
   const stats = useMemo(
     () =>
       computeInventoryWorkspaceDashboardStats({
         products,
+        catalogProducts,
         purchases,
         supplierPayments,
         suppliers,
@@ -58,7 +71,7 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onA
         pharmacyModeEnabled: preferences.pharmacyModeEnabled,
         complianceAlertCount: pharmacyComplianceAlerts.length,
       }),
-    [products, purchases, supplierPayments, suppliers, preferences.businessType, preferences.pharmacyModeEnabled, pharmacyComplianceAlerts.length],
+    [products, catalogProducts, purchases, supplierPayments, suppliers, preferences.businessType, preferences.pharmacyModeEnabled, pharmacyComplianceAlerts.length],
   );
 
   const quickActions = useMemo(() => resolveInventoryOverviewQuickActions(mode), [mode]);
@@ -100,27 +113,40 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onA
   };
 
   return (
-    <InventoryWorkspaceShell>
-      <InventorySearchBar lang={lang} onSearch={(q) => onSetTab("products", { q })} />
-      <InventoryDashboardCards
-        lang={lang}
-        mode={mode}
-        stats={stats}
-        onLowStock={() => onSetTab("products", { stockView: "low" })}
-        onOutOfStock={() => onSetTab("products")}
-        onPendingPurchases={() => onSetTab("purchases")}
-        onTodayPurchases={() => onSetTab("purchases")}
-        onSuppliers={() => onSetTab("suppliers")}
-        onInventoryAlerts={() => onSetTab("products", { stockView: "low" })}
-        onNearExpiry={() => navigate("/pharmacy/expiry")}
-        onExpired={() => navigate("/pharmacy/expiry")}
-        onBatchIntegrity={() => onSetTab("products")}
-        onControlledAlerts={() => navigate("/pharmacy/compliance/register")}
-      />
-      <InventoryQuickActions lang={lang} actions={quickActions} onAction={handleAction} />
-      <InventoryNavigationTiles lang={lang} tiles={navTiles} />
-      <InventoryBusinessExtension lang={lang} mode={mode} tiles={extensionTiles} />
-      <InventoryStatusStrip lang={lang} />
+    <InventoryWorkspaceShell className="inventory-overview">
+      <div className="inventory-enter inventory-enter--1">
+        <InventorySearchBar lang={lang} onSearch={(q) => onSetTab("products", { q })} />
+      </div>
+      <div className="inventory-enter inventory-enter--2">
+        <InventoryDashboardCards
+          lang={lang}
+          stats={stats}
+          showInventoryValue={canSeeCost}
+          onLowStock={() => onSetTab("products", { stockView: "low" })}
+          onOutOfStock={() => onSetTab("products")}
+        />
+      </div>
+      <div className="inventory-enter inventory-enter--3">
+        <InventoryQuickActions lang={lang} actions={quickActions} onAction={handleAction} />
+      </div>
+      <div className="inventory-supporting inventory-enter inventory-enter--4 space-y-3">
+        <InventoryOpsBoard
+          lang={lang}
+          mode={mode}
+          stats={stats}
+          onPendingPurchases={() => onSetTab("purchases")}
+          onTodayPurchases={() => onSetTab("purchases")}
+          onSuppliers={() => onSetTab("suppliers")}
+          onInventoryAlerts={() => onSetTab("products", { stockView: "low" })}
+          onNearExpiry={() => navigate("/pharmacy/expiry")}
+          onExpired={() => navigate("/pharmacy/expiry")}
+          onBatchIntegrity={() => onSetTab("products")}
+          onControlledAlerts={() => navigate("/pharmacy/compliance/register")}
+        />
+        <InventoryNavigationTiles lang={lang} tiles={navTiles} />
+        <InventoryBusinessExtension lang={lang} mode={mode} tiles={extensionTiles} />
+        <InventoryStatusStrip lang={lang} />
+      </div>
       <StockAdjustmentSheet lang={lang} open={adjustOpen} onClose={() => setAdjustOpen(false)} />
     </InventoryWorkspaceShell>
   );

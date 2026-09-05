@@ -7,5 +7,5 @@ type Props = {
 };
 
 export function InventoryWorkspaceShell({ children, className }: Props) {
-  return <div className={clsx("space-y-4", className)}>{children}</div>;
+  return <div className={clsx("inventory-overview-shell space-y-3", className)}>{children}</div>;
 }

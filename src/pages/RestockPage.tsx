@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -27,6 +27,7 @@ import {
   defaultReceiveBuySource,
   type ReceiveBuySource,
 } from "../components/inventory/receive/receiveBuySourceDefault";
+import { releaseRestockSubmit, submitRestockOnce } from "../lib/restockSubmitGuard";
 
 export function RestockPage({
   lang,
@@ -57,6 +58,8 @@ export function RestockPage({
   const [notes, setNotes] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [msgTone, setMsgTone] = useState<"ok" | "err">("ok");
+  const [submitting, setSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
   const walkIn = buySource === "town";
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -95,6 +98,13 @@ export function RestockPage({
     if (!supplierId && suppliers.length > 0) setSupplierId(suppliers[0]!.id);
   }, [walkIn, supplierId, suppliers]);
 
+  useEffect(() => {
+    if (lines.length > 0) return;
+    if (!submitLockRef.current && !submitting) return;
+    releaseRestockSubmit(submitLockRef);
+    setSubmitting(false);
+  }, [lines.length, submitting]);
+
   const addProductLine = (productId: string) => {
     setLines((prev) => [...prev, { key: crypto.randomUUID(), productId, qtyBuyingStr: "1", costPerBuyingStr: "" }]);
     setPickerOpen(false);
@@ -116,6 +126,7 @@ export function RestockPage({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     setMsg(null);
     const built = lines
       .map((r) => ({
@@ -140,16 +151,22 @@ export function RestockPage({
     const paid = walkIn ? totals.sum : paidAmount;
     const invoice = invoiceNumber.trim().slice(0, 40);
 
-    const r = recordPurchase({
-      supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
-      supplierName,
-      lines: built,
-      amountPaidUgx: paid,
-      notes: notes.trim(),
-      invoiceNumber: invoice || undefined,
-    });
+    setSubmitting(true);
+    const attempt = submitRestockOnce(submitLockRef, () =>
+      recordPurchase({
+        supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
+        supplierName,
+        lines: built,
+        amountPaidUgx: paid,
+        notes: notes.trim(),
+        invoiceNumber: invoice || undefined,
+      }),
+    );
 
-    if (!r.ok) {
+    if (!attempt.started) return;
+
+    if (!attempt.result.ok) {
+      setSubmitting(false);
       setMsgTone("err");
       setMsg(t(lang, "restockSaveError"));
       return;
@@ -190,7 +207,8 @@ export function RestockPage({
             lang={lang}
             layout="single"
             primaryLabelKey="restockFinish"
-            primaryDisabled={!lines.length}
+            primaryDisabled={!lines.length || submitting}
+            primaryBusy={submitting}
             fixed={!embedded}
           />
         }

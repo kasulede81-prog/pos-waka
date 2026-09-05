@@ -1,22 +1,20 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { actorHasPermission } from "../../../lib/actorAuthorization";
 import clsx from "clsx";
-import { Building2, Phone, MessageCircle, Trash2, Users, Wallet } from "lucide-react";
+import { Building2, Phone, MessageCircle, Trash2, Truck, Users, Wallet } from "lucide-react";
 import type { Language, Supplier } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { useShopAction } from "../../../hooks/useShopAction";
 import { usePosStore } from "../../../store/usePosStore";
 import { useSessionActor } from "../../../context/SessionActorContext";
 import { ModalSheet } from "../../../components/layout/ModalSheet";
-import { EnterpriseEmptyState } from "../../../components/enterprise/EnterpriseEmptyState";
-import { EnterpriseKpiCard } from "../../../components/enterprise/EnterpriseKpiCard";
-import { EnterpriseResponsiveTable } from "../../../components/shared/ResponsiveDataTable";
 import { EnterpriseTextField } from "../../../components/enterprise/EnterpriseTextField";
 import { WakaButton } from "../../../components/ui/wakaPrimitives";
-import { Body, Caption, MonoNumber, SectionTitle } from "../../../components/enterprise/EnterpriseTypography";
-import { statusTokens } from "../../../lib/statusTokens";
+import { SectionTitle } from "../../../components/enterprise/EnterpriseTypography";
 import { isWalkInSupplierId } from "../../../lib/walkInSupplier";
 import { formatShortUgx } from "../lib/overviewStats";
+import { InventoryRoomEmpty, InventoryRoomHeader, InventoryRoomMetric } from "./InventoryRoomChrome";
+import { InventoryRoomTable } from "./InventoryRoomTable";
 
 type Props = {
   lang: Language;
@@ -115,177 +113,210 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
     if (r.ok) setDeleteSupplier(null);
   };
 
+  const supplierActions = (s: Supplier) => (
+    <div className="flex flex-wrap gap-1.5">
+      {s.phone ? (
+        <>
+          <a
+            href={`tel:${s.phone}`}
+            className="inline-flex min-h-[40px] items-center gap-1 rounded-xl px-2.5 text-sm font-bold text-foreground"
+          >
+            <Phone className="h-4 w-4" aria-hidden />
+            {t(lang, "debtsCall")}
+          </a>
+          <a
+            href={`https://wa.me/${s.phone.replace(/\D/g, "")}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-[40px] items-center gap-1 rounded-xl px-2.5 text-sm font-bold text-teal-800"
+          >
+            <MessageCircle className="h-4 w-4" aria-hidden />
+            WhatsApp
+          </a>
+        </>
+      ) : null}
+      <WakaButton type="button" variant="primary" className="hidden !min-h-[40px] !px-2.5 sm:inline-flex" onClick={() => onOpenSupplier(s.id)}>
+        {t(lang, "supplierViewDetail")}
+      </WakaButton>
+      {canManage && s.balanceOwedUgx > 0 ? (
+        <WakaButton
+          type="button"
+          variant="secondary"
+          className="!min-h-[40px] !px-2.5"
+          onClick={() => {
+            setPaySupplier(s);
+            setPayAmount(String(Math.min(s.balanceOwedUgx, 50000)));
+          }}
+        >
+          {t(lang, "supplierPayButton")}
+        </WakaButton>
+      ) : null}
+      {canDelete ? (
+        <WakaButton type="button" variant="danger" className="!min-h-[40px] !px-2.5" onClick={() => setDeleteSupplier(s)}>
+          <Trash2 className="h-4 w-4" aria-hidden />
+          {t(lang, "supplierDeleteButton")}
+        </WakaButton>
+      ) : null}
+    </div>
+  );
+
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        <EnterpriseKpiCard icon={Users} label={t(lang, "officeCardSuppliers")} value={String(realSuppliers.length)} />
-        <EnterpriseKpiCard
+    <div className="inventory-room inventory-room--suppliers space-y-3">
+      <InventoryRoomHeader
+        icon={Truck}
+        title={t(lang, "ipTabSuppliers")}
+        subtitle={t(lang, "ipSuppliersSub")}
+        action={
+          canManage ? (
+            <WakaButton
+              type="button"
+              variant="primary"
+              className="inventory-hub-cta shrink-0"
+              iconLeft={<Building2 className="h-4 w-4" aria-hidden />}
+              onClick={() => setAddOpen(true)}
+            >
+              {t(lang, "ipActionAddSupplier")}
+            </WakaButton>
+          ) : null
+        }
+      />
+
+      <div className="inventory-room-summary inventory-enter inventory-enter--1">
+        <InventoryRoomMetric icon={Users} label={t(lang, "officeCardSuppliers")} value={String(realSuppliers.length)} />
+        <InventoryRoomMetric
           icon={Wallet}
           label={t(lang, "ipStatOutstanding")}
-          value={<MonoNumber className="text-lg text-amber-900">{formatShortUgx(totalOutstanding)}</MonoNumber>}
+          value={formatShortUgx(totalOutstanding)}
           tone={totalOutstanding > 0 ? "warning" : "default"}
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {canManage ? (
-          <WakaButton type="button" variant="primary" onClick={() => setAddOpen(true)}>
-            + {t(lang, "ipActionAddSupplier")}
-          </WakaButton>
-        ) : null}
-        <WakaButton
-          type="button"
-          variant={outstandingOnly ? "primary" : "secondary"}
-          onClick={() => setOutstandingOnly((v) => !v)}
-          className={outstandingOnly ? clsx(statusTokens.danger.badge, statusTokens.danger.badgeRing) : undefined}
-        >
-          {t(lang, "ipFilterOutstanding")}
-        </WakaButton>
-      </div>
-
-      <EnterpriseTextField
-        value={searchQ}
-        onChange={(e) => setSearchQ(e.target.value)}
-        placeholder={t(lang, "ipSuppliersSearchPh")}
-      />
-
-      <div className="flex gap-1 overflow-x-auto pb-1">
-        <WakaButton
-          type="button"
-          size="standard"
-          variant={alpha === "all" ? "primary" : "ghost"}
-          className="shrink-0 !min-h-[32px] !rounded-full !px-2.5 !py-1 !text-xs"
-          onClick={() => setAlpha("all")}
-        >
-          {t(lang, "ipFilterAll")}
-        </WakaButton>
-        {letters.map((l) => (
+      <div className="inventory-enter inventory-enter--2 space-y-2.5">
+        <div className="flex flex-wrap gap-2">
           <WakaButton
-            key={l}
             type="button"
-            size="standard"
-            variant={alpha === l ? "primary" : "ghost"}
-            className="shrink-0 !min-h-[32px] !rounded-full !px-2.5 !py-1 !text-xs"
-            onClick={() => setAlpha(l)}
+            variant={outstandingOnly ? "primary" : "secondary"}
+            onClick={() => setOutstandingOnly((v) => !v)}
           >
-            {l}
+            {t(lang, "ipFilterOutstanding")}
           </WakaButton>
-        ))}
+        </div>
+        <input
+          value={searchQ}
+          onChange={(e) => setSearchQ(e.target.value)}
+          placeholder={t(lang, "ipSuppliersSearchPh")}
+          className="inventory-room-search"
+        />
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          <button
+            type="button"
+            className={clsx("inventory-room-chip shrink-0", alpha === "all" ? "inventory-room-chip--on" : "inventory-room-chip--off")}
+            onClick={() => setAlpha("all")}
+          >
+            {t(lang, "ipFilterAll")}
+          </button>
+          {letters.map((l) => (
+            <button
+              key={l}
+              type="button"
+              className={clsx("inventory-room-chip shrink-0", alpha === l ? "inventory-room-chip--on" : "inventory-room-chip--off")}
+              onClick={() => setAlpha(l)}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
-        <EnterpriseEmptyState
+        <InventoryRoomEmpty
           icon={Building2}
           title={t(lang, "suppliersEmpty")}
-          primaryAction={
-            canManage
-              ? { label: `+ ${t(lang, "ipActionAddSupplier")}`, onClick: () => setAddOpen(true) }
-              : undefined
-          }
+          actionLabel={canManage ? t(lang, "ipActionAddSupplier") : undefined}
+          onAction={canManage ? () => setAddOpen(true) : undefined}
         />
       ) : (
-        <EnterpriseResponsiveTable
-          rows={filtered}
-          rowKey={(s) => s.id}
-          minWidthPx={720}
-          columns={[
-            {
-              id: "name",
-              header: t(lang, "officeCardSuppliers"),
-              cell: (s) => (
-                <button type="button" onClick={() => onOpenSupplier(s.id)} className="min-w-0 text-left">
-                  <Body as="span" className="!text-sm !font-black">{s.name}</Body>
-                  {s.phone ? <Caption className="mt-0.5 block normal-case">{s.phone}</Caption> : null}
-                  {s.location ? <Caption className="normal-case">{s.location}</Caption> : null}
+        <>
+          <InventoryRoomTable
+            rows={filtered}
+            rowKey={(s) => s.id}
+            ariaLabel={t(lang, "ipTabSuppliers")}
+            minWidthPx={720}
+            onRowActivate={(s) => onOpenSupplier(s.id)}
+            columns={[
+              {
+                id: "name",
+                header: t(lang, "officeCardSuppliers"),
+                cell: (s) => (
+                  <span className="flex items-center gap-2">
+                    <span className="inventory-ops-icon">
+                      <Building2 className="h-4 w-4" aria-hidden />
+                    </span>
+                    <span>
+                      <span className="inventory-table-product block">{s.name}</span>
+                      {s.phone || s.location ? (
+                        <span className="inventory-room-row__meta block">
+                          {[s.phone, s.location].filter(Boolean).join(" · ")}
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                id: "balance",
+                header: t(lang, "supplierBalanceLabel"),
+                align: "right",
+                cell: (s) => (
+                  <span className={clsx("font-bold tabular-nums", s.balanceOwedUgx > 0 ? "text-amber-900" : undefined)}>
+                    {formatShortUgx(s.balanceOwedUgx)}
+                  </span>
+                ),
+              },
+              {
+                id: "purchases",
+                header: t(lang, "supplierTotalBuy"),
+                align: "right",
+                hideBelow: "lg",
+                cell: (s) => <span className="font-bold tabular-nums">{formatShortUgx(s.totalPurchasesUgx)}</span>,
+              },
+              {
+                id: "last",
+                header: t(lang, "ipLastPurchase"),
+                hideBelow: "xl",
+                cell: (s) => lastPurchaseBySupplier.get(s.id)?.slice(0, 10) ?? "—",
+              },
+              {
+                id: "actions",
+                header: t(lang, "ipQuickActions"),
+                cell: (s) => (
+                  <div onClick={(e) => e.stopPropagation()}>{supplierActions(s)}</div>
+                ),
+              },
+            ]}
+          />
+          <ul className="sm:hidden">
+            {filtered.map((s) => (
+              <li key={s.id}>
+                <button type="button" onClick={() => onOpenSupplier(s.id)} className="inventory-room-row">
+                  <span className="inventory-ops-icon">
+                    <Building2 className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="inventory-room-row__name truncate">{s.name}</p>
+                    <p className="inventory-room-row__meta truncate">
+                      {[s.phone, s.location, lastPurchaseBySupplier.get(s.id)?.slice(0, 10)].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <span className={clsx("inventory-room-row__amount tabular-nums", s.balanceOwedUgx > 0 ? "text-amber-900" : undefined)}>
+                    {formatShortUgx(s.balanceOwedUgx)}
+                  </span>
                 </button>
-              ),
-            },
-            {
-              id: "balance",
-              header: t(lang, "supplierBalanceLabel"),
-              className: "text-right",
-              cell: (s) => (
-                <MonoNumber className={s.balanceOwedUgx > 0 ? "text-amber-900" : undefined}>
-                  {formatShortUgx(s.balanceOwedUgx)}
-                </MonoNumber>
-              ),
-            },
-            {
-              id: "purchases",
-              header: t(lang, "supplierTotalBuy"),
-              hideOnMobile: true,
-              className: "text-right",
-              cell: (s) => <MonoNumber>{formatShortUgx(s.totalPurchasesUgx)}</MonoNumber>,
-            },
-            {
-              id: "last",
-              header: t(lang, "ipLastPurchase"),
-              hideOnMobile: true,
-              cell: (s) => lastPurchaseBySupplier.get(s.id)?.slice(0, 10) ?? "—",
-            },
-            {
-              id: "actions",
-              header: t(lang, "ipQuickActions"),
-              cell: (s) => (
-                <div className="flex flex-wrap gap-1.5">
-                  {s.phone ? (
-                    <>
-                      <a
-                        href={`tel:${s.phone}`}
-                        className="inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground"
-                      >
-                        <Phone className="h-3.5 w-3.5" aria-hidden />
-                        {t(lang, "debtsCall")}
-                      </a>
-                      <a
-                        href={`https://wa.me/${s.phone.replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={clsx(
-                          "inline-flex min-h-[36px] items-center gap-1 rounded-xl border px-3 text-xs font-black",
-                          statusTokens.success.badgeRing,
-                          statusTokens.success.banner,
-                        )}
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" aria-hidden />
-                        WhatsApp
-                      </a>
-                    </>
-                  ) : null}
-                  <WakaButton type="button" variant="primary" size="standard" className="!min-h-[36px] !px-2 !text-xs" onClick={() => onOpenSupplier(s.id)}>
-                    {t(lang, "supplierViewDetail")}
-                  </WakaButton>
-                  {canManage && s.balanceOwedUgx > 0 ? (
-                    <WakaButton
-                      type="button"
-                      variant="secondary"
-                      size="standard"
-                      className={clsx("!min-h-[36px] !px-2 !text-xs", statusTokens.warning.badgeRing)}
-                      onClick={() => {
-                        setPaySupplier(s);
-                        setPayAmount(String(Math.min(s.balanceOwedUgx, 50000)));
-                      }}
-                    >
-                      {t(lang, "supplierPayButton")}
-                    </WakaButton>
-                  ) : null}
-                  {canDelete ? (
-                    <WakaButton
-                      type="button"
-                      variant="danger"
-                      size="standard"
-                      className="!min-h-[36px] !px-2 !text-xs"
-                      onClick={() => setDeleteSupplier(s)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                      {t(lang, "supplierDeleteButton")}
-                    </WakaButton>
-                  ) : null}
-                </div>
-              ),
-            },
-          ]}
-        />
+                <div className="pb-2">{supplierActions(s)}</div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <ModalSheet open={addOpen} onClose={() => setAddOpen(false)} title={t(lang, "supplierAddTitle")}>
