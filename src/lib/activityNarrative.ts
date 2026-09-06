@@ -275,6 +275,34 @@ export function describeAuditLine(
       return t(lang, "narrativeInventoryCountApplied");
     case "inventory_count_cancelled":
       return t(lang, "narrativeInventoryCountCancelled");
+    case "inventory_transfer": {
+      const source =
+        typeof pl.sourceName === "string" && pl.sourceName.trim()
+          ? pl.sourceName.trim()
+          : typeof pl.sourceShopId === "string" && pl.sourceShopId.trim()
+            ? pl.sourceShopId.trim()
+            : "—";
+      const destination =
+        typeof pl.destinationName === "string" && pl.destinationName.trim()
+          ? pl.destinationName.trim()
+          : typeof pl.destinationShopId === "string" && pl.destinationShopId.trim()
+            ? pl.destinationShopId.trim()
+            : "—";
+      const quantity = typeof pl.totalUnits === "number" ? String(pl.totalUnits) : "0";
+      const lineCount = typeof pl.lineCount === "number" ? pl.lineCount : 0;
+      const named =
+        typeof pl.productName === "string" && pl.productName.trim() ? pl.productName.trim() : "";
+      const product =
+        lineCount > 1
+          ? tTemplate(lang, "narrativeInventoryTransferProducts", { count: String(lineCount) })
+          : named || productNameFromPayload(lang, pl, productById);
+      return tTemplate(lang, "narrativeInventoryTransfer", {
+        product,
+        quantity,
+        source,
+        destination,
+      });
+    }
     default:
       return humanizePayloadSummary(lang, e);
   }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../../types";
 import { t } from "../../lib/i18n";
@@ -8,12 +8,7 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { usePosStore } from "../../store/usePosStore";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
-import {
-  AUDIT_FILTER_RESULT_LIMIT,
-  buildAuditLogSearchIndex,
-  filterAuditLogsIndexed,
-  type AuditSearchFilters,
-} from "../../lib/auditSearch";
+import { buildAuditLogSearchIndex, type AuditSearchFilters } from "../../lib/auditSearch";
 import { buildAuditCsv, buildAuditPdfBlob } from "../../lib/auditExport";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { auditRefundIntegrity } from "../../lib/auditRefundIntegrity";
@@ -24,18 +19,23 @@ import { exportCsvFile, exportJsonFile, exportPdfFile, exportXlsxFile, printRepo
 import { useInvestigationCenter, splitActiveKpis } from "./hooks/useInvestigationCenter";
 import { computePharmacyInvestigationKpis } from "./extensions/pharmacy/computePharmacyInvestigationKpis";
 import {
-  applyKpiFilter,
   buildActivityDetailText,
   buildAuditJsonExport,
   buildAuditPrintHtml,
   buildExcelCompatibleCsv,
   computeInvestigationKpis,
-  matchesCategory,
-  shouldHideFromInvestigationCenter,
 } from "./lib/activityPresentation";
+import {
+  collectInvestigationMatches,
+  INVESTIGATION_PAGE_SIZE,
+  investigationResultScopeKey,
+  investigationShareSlice,
+  nextInvestigationVisibleCount,
+  paginateInvestigationResults,
+  resetInvestigationVisibleCount,
+} from "./lib/investigationResultScope";
 import type { InvestigationKpiId, PharmacyInvestigationKpiId } from "./types";
 import { EnterprisePageContainer } from "../../components/layout/EnterprisePageContainer";
-import { EnterpriseListFooter } from "../../components/enterprise/EnterpriseListFooter";
 import {
   resolveInvestigationAccentCategories,
   resolveInvestigationCategories,
@@ -47,8 +47,12 @@ import { resolveInvestigationMode } from "./registry/investigationMode";
 import { createInvestigationSlotRenderer } from "./registry/enterpriseInvestigationRegistry";
 import type { InvestigationCenterContext } from "./registry/investigationWidgetTypes";
 import { buildStaffNameById } from "../../lib/investigationActorAttribution";
-
-const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
+import {
+  canExportInvestigationData,
+  canShareInvestigationData,
+  resolveInvestigationDataCompleteness,
+} from "./lib/investigationDataCompleteness";
+import { resolveInvestigationSalesDependentReadiness } from "./lib/investigationSalesDependentReadiness";
 
 function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue {
   const from = searchParams.get("from");
@@ -62,6 +66,12 @@ function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue 
 
 export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const hydrationStage = usePosStore((s) => s.hydrationStage);
+  const dataComplete = resolveInvestigationDataCompleteness({ hydrationStage }).dataComplete;
+  const salesHistoryHydrationActive = usePosStore((s) => s.salesHistoryHydration?.active === true);
+  const salesDependentReady = resolveInvestigationSalesDependentReadiness({
+    salesHistoryHydrationActive,
+  }).salesDependentReady;
   const preferences = usePosStore((s) => s.preferences);
   const mode = resolveInvestigationMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -103,6 +113,7 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [traceReturn, setTraceReturn] = useState<ReturnRecord | null>(null);
+  const [visibleCount, setVisibleCount] = useState(INVESTIGATION_PAGE_SIZE);
 
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
@@ -162,32 +173,61 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     [dateFrom, dateTo, actorUserId, action, productId, customerId, supplierId, debouncedSearchText],
   );
 
-  const baseFiltered = useMemo(
-    () => filterAuditLogsIndexed(auditIndex, filters, { products, customers, suppliers, lang }, PAGE_SIZE),
-    [auditIndex, filters, products, customers, suppliers, lang],
+  const resultScopeKey = useMemo(
+    () =>
+      investigationResultScopeKey({
+        dateFrom,
+        dateTo,
+        actorUserId,
+        action,
+        productId,
+        customerId,
+        supplierId,
+        searchText: debouncedSearchText,
+        category,
+        activeKpi,
+        includeArchived,
+      }),
+    [
+      dateFrom,
+      dateTo,
+      actorUserId,
+      action,
+      productId,
+      customerId,
+      supplierId,
+      debouncedSearchText,
+      category,
+      activeKpi,
+      includeArchived,
+    ],
   );
 
-  const filtered = useMemo(() => {
-    const todayKey = dateKeyKampala(new Date());
-    let rows = baseFiltered.filter((entry) => !shouldHideFromInvestigationCenter(entry));
-    rows = rows.filter((entry) => matchesCategory(entry, category));
-    rows = applyKpiFilter(rows, activeKpi, todayKey);
-    return rows;
-  }, [baseFiltered, category, activeKpi]);
+  useEffect(() => {
+    setVisibleCount(resetInvestigationVisibleCount());
+  }, [resultScopeKey]);
 
-  const exportEntries = useMemo(() => {
-    const allBase = filterAuditLogsIndexed(
+  const matchingEntries = useMemo(() => {
+    const todayKey = dateKeyKampala(new Date());
+    return collectInvestigationMatches(
       auditIndex,
       filters,
+      { category, activeKpi, todayKey },
       { products, customers, suppliers, lang },
-      Number.MAX_SAFE_INTEGER,
     );
-    const todayKey = dateKeyKampala(new Date());
-    let rows = allBase.filter((entry) => !shouldHideFromInvestigationCenter(entry));
-    rows = rows.filter((entry) => matchesCategory(entry, category));
-    rows = applyKpiFilter(rows, activeKpi, todayKey);
-    return rows;
-  }, [auditIndex, filters, products, customers, suppliers, lang, category, activeKpi]);
+  }, [auditIndex, filters, category, activeKpi, products, customers, suppliers, lang]);
+
+  const resultPage = useMemo(
+    () => paginateInvestigationResults(matchingEntries, visibleCount),
+    [matchingEntries, visibleCount],
+  );
+
+  const filtered = resultPage.displayed;
+  const exportEntries = matchingEntries;
+
+  const loadMoreResults = useCallback(() => {
+    setVisibleCount((current) => nextInvestigationVisibleCount(current, matchingEntries.length));
+  }, [matchingEntries.length]);
 
   const kpiCards = useMemo(
     () => computeInvestigationKpis(auditIndex, dateFrom, dateTo, returnsCountInRange),
@@ -304,17 +344,19 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
 
   const downloadCsv = useCallback(
     async (entries: AuditLogEntry[] = exportEntries) => {
+      if (!canExportInvestigationData(dataComplete)) return;
       const csv = buildAuditCsv(lang, entries);
       const rows = csv.split("\n").map((line) => line.split(","));
       await exportCsvFile("investigation", `audit-${dateKeyKampala(new Date())}.csv`, rows, {
         shareDialogTitle: t(lang, "auditCenterTitle"),
       });
     },
-    [exportEntries, lang],
+    [dataComplete, exportEntries, lang],
   );
 
   const downloadExcel = useCallback(
     async (entries: AuditLogEntry[] = exportEntries) => {
+      if (!canExportInvestigationData(dataComplete)) return;
       const csv = buildExcelCompatibleCsv(lang, entries);
       const rows = csv.replace(/^\uFEFF/, "").split("\n").map((line) => line.split(","));
       await exportXlsxFile("investigation", `audit-${dateKeyKampala(new Date())}.xlsx`, rows, {
@@ -322,21 +364,23 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
         sheetName: "Audit",
       });
     },
-    [exportEntries, lang],
+    [dataComplete, exportEntries, lang],
   );
 
   const downloadPdf = useCallback(
     async (entries: AuditLogEntry[] = exportEntries) => {
+      if (!canExportInvestigationData(dataComplete)) return;
       const blob = await buildAuditPdfBlob(lang, entries, shopName);
       await exportPdfFile("investigation", `audit-${dateKeyKampala(new Date())}.pdf`, blob, {
         shareDialogTitle: t(lang, "auditCenterTitle"),
       });
     },
-    [exportEntries, lang, shopName],
+    [dataComplete, exportEntries, lang, shopName],
   );
 
   const downloadJson = useCallback(
     async (entries: AuditLogEntry[] = exportEntries) => {
+      if (!canExportInvestigationData(dataComplete)) return;
       await exportJsonFile(
         "investigation",
         `audit-${dateKeyKampala(new Date())}.json`,
@@ -344,11 +388,12 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
         { shareDialogTitle: t(lang, "auditCenterTitle") },
       );
     },
-    [exportEntries, lang],
+    [dataComplete, exportEntries, lang],
   );
 
   const printEntries = useCallback(
     async (entries: AuditLogEntry[] = exportEntries) => {
+      if (!canExportInvestigationData(dataComplete)) return;
       const filename = `audit-${dateKeyKampala(new Date())}.pdf`;
       const blob = await buildAuditPdfBlob(lang, entries, shopName);
       await printReportDocument("investigation", {
@@ -360,18 +405,18 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
         shareDialogTitle: t(lang, "auditCenterTitle"),
       });
     },
-    [exportEntries, lang, shopName],
+    [dataComplete, exportEntries, lang, shopName],
   );
 
   const shareEntries = useCallback(
     async (entries: AuditLogEntry[] = exportEntries) => {
-      const body = entries
-        .slice(0, 40)
+      if (!canShareInvestigationData(dataComplete)) return;
+      const body = investigationShareSlice(entries)
         .map((e) => buildActivityDetailText(lang, e, { productById, customerById }))
         .join("\n\n---\n\n");
       await shareText(body, t(lang, "auditCenterTitle"), "investigation");
     },
-    [customerById, exportEntries, lang, productById],
+    [customerById, dataComplete, exportEntries, lang, productById],
   );
 
   const copyEntry = useCallback(
@@ -452,7 +497,12 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     onSearchTextChange,
     debouncedSearchText,
     filters,
+    dataComplete,
+    salesDependentReady,
     filtered,
+    matchingTotal: resultPage.total,
+    hasMoreResults: resultPage.hasMore,
+    loadMoreResults,
     kpiCards,
     pharmacyKpiCards,
     periodLabel,
@@ -523,7 +573,12 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     onSearchTextChange,
     debouncedSearchText,
     filters,
+    dataComplete,
+    salesDependentReady,
     filtered,
+    resultPage.total,
+    resultPage.hasMore,
+    loadMoreResults,
     kpiCards,
     pharmacyKpiCards,
     periodLabel,
@@ -574,9 +629,6 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
       {renderSlot("search")}
       {renderSlot("timeline-categories")}
       {renderSlot("timeline")}
-      {baseFiltered.length >= PAGE_SIZE ? (
-        <EnterpriseListFooter lang={lang} truncated truncatedCount={PAGE_SIZE} />
-      ) : null}
       {renderSlot("reports")}
       {renderSlot("compliance")}
       {renderSlot("quick-actions")}

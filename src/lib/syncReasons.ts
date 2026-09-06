@@ -35,7 +35,8 @@ export type IncrementalPullEntity =
   | "shifts"
   | "day_closes"
   | "stock_movements"
-  | "catalog";
+  | "catalog"
+  | "audit_logs";
 
 export const ALL_INCREMENTAL_PULL_ENTITIES: readonly IncrementalPullEntity[] = [
   "products",
@@ -54,6 +55,7 @@ export const ALL_INCREMENTAL_PULL_ENTITIES: readonly IncrementalPullEntity[] = [
   "day_closes",
   "stock_movements",
   "catalog",
+  "audit_logs",
 ] as const;
 
 /** Sale ACK: sales only. Stock is already applied locally on checkout. */
@@ -131,6 +133,7 @@ export type IncrementalCheckpointTimes = {
   dayClosesAt?: string;
   stockMovementsAt?: string;
   catalogAt?: string;
+  auditLogsAt?: string;
 };
 
 /** Only advance cursors for entities that were actually pulled. */
@@ -154,6 +157,7 @@ export function incrementalCheckpointPatch(
   dayCloses?: boolean;
   stockMovements?: boolean;
   catalog?: boolean;
+  auditLogs?: boolean;
   salesAt?: string;
   productsAt?: string;
   customersAt?: string;
@@ -170,6 +174,7 @@ export function incrementalCheckpointPatch(
   dayClosesAt?: string;
   stockMovementsAt?: string;
   catalogAt?: string;
+  auditLogsAt?: string;
 } {
   const pulled = new Set(pulledEntities);
   return {
@@ -189,6 +194,7 @@ export function incrementalCheckpointPatch(
     dayCloses: pulled.has("day_closes"),
     stockMovements: pulled.has("stock_movements"),
     catalog: pulled.has("catalog"),
+    auditLogs: pulled.has("audit_logs"),
     salesAt: checkpoints?.salesAt,
     productsAt: checkpoints?.productsAt,
     customersAt: checkpoints?.customersAt,
@@ -205,5 +211,6 @@ export function incrementalCheckpointPatch(
     dayClosesAt: checkpoints?.dayClosesAt,
     stockMovementsAt: checkpoints?.stockMovementsAt,
     catalogAt: checkpoints?.catalogAt,
+    auditLogsAt: checkpoints?.auditLogsAt,
   };
 }

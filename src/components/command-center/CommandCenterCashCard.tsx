@@ -3,7 +3,7 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { OwnerCashExtended } from "../../lib/ownerCommandCenterBuilders";
-import { formatShortUgx } from "../../lib/commandCenterPageView";
+import { formatOfficialHeadlineUgx, formatShortUgx } from "../../lib/commandCenterPageView";
 import { EnterpriseCard } from "../enterprise/EnterpriseCard";
 import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
 import { WakaButton } from "../ui/wakaPrimitives";
@@ -47,7 +47,7 @@ export function CommandCenterCashCard({ lang, cash }: Props) {
         />
         <EnterpriseKpiCard icon={PiggyBank} label={t(lang, "ownerCashOwnerWithdrawal")} value={formatShortUgx(cash.ownerWithdrawalsUgx)} />
         <EnterpriseKpiCard icon={Landmark} label={t(lang, "ownerCashBankDeposit")} value={formatShortUgx(cash.bankDepositsUgx)} />
-        <EnterpriseKpiCard icon={Receipt} label={t(lang, "ownerCashExpenses")} value={formatShortUgx(cash.cashExpensesUgx)} />
+        <EnterpriseKpiCard icon={Receipt} label={t(lang, "ownerCashExpenses")} value={formatOfficialHeadlineUgx(cash.cashExpensesUgx)} />
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">

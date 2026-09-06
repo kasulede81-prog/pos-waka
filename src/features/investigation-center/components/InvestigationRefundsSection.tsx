@@ -3,15 +3,25 @@ import type { Language, ReturnRecord } from "../../../types";
 import { t, tTemplate } from "../../../lib/i18n";
 import { actorDisplayLabel } from "../../../lib/activityNarrative";
 import type { RefundIntegrityReport } from "../../../lib/auditRefundIntegrity";
+import { investigationRefundsTabHintKey } from "../lib/investigationRefundAuthority";
+import { investigationRefundIntegrityPresentation } from "../lib/investigationSalesDependentReadiness";
 
 type Props = {
   lang: Language;
   integrityReport: RefundIntegrityReport;
+  salesDependentReady?: boolean;
   returns: ReturnRecord[];
   onTraceReturn: (record: ReturnRecord) => void;
 };
 
-export function InvestigationRefundsSection({ lang, integrityReport, returns, onTraceReturn }: Props) {
+export function InvestigationRefundsSection({
+  lang,
+  integrityReport,
+  salesDependentReady = true,
+  returns,
+  onTraceReturn,
+}: Props) {
+  const integrityPresentation = investigationRefundIntegrityPresentation(salesDependentReady);
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/80 to-card p-4 shadow-sm">
@@ -23,6 +33,11 @@ export function InvestigationRefundsSection({ lang, integrityReport, returns, on
             <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-emerald-900/80">
               {t(lang, "refundIntegrityScopeGlobal")}
             </p>
+            {integrityPresentation === "loading" ? (
+              <p className="mt-2 text-sm font-bold text-muted-foreground" role="status" aria-live="polite" aria-busy="true">
+                {t(lang, "icRefundIntegrityLoading")}
+              </p>
+            ) : (
             <p className={`mt-2 text-sm font-bold ${integrityReport.ok ? "text-emerald-800" : "text-rose-800"}`}>
               {integrityReport.ok
                 ? t(lang, "refundIntegrityOk")
@@ -30,7 +45,8 @@ export function InvestigationRefundsSection({ lang, integrityReport, returns, on
                     count: String(integrityReport.violations.length),
                   })}
             </p>
-            {!integrityReport.ok ? (
+            )}
+            {integrityPresentation === "ready" && !integrityReport.ok ? (
               <ul className="mt-2 space-y-1 text-xs font-semibold text-rose-900">
                 {integrityReport.violations.slice(0, 8).map((v, i) => (
                   <li key={`${v.code}-${i}`} className="rounded-lg bg-rose-50 px-2 py-1">
@@ -48,6 +64,7 @@ export function InvestigationRefundsSection({ lang, integrityReport, returns, on
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "refundHistoryTitle")}</h2>
         <p className="mt-1 text-[10px] font-medium text-muted-foreground">{t(lang, "refundHistoryRangeScoped")}</p>
+        <p className="mt-1 text-[10px] font-medium text-muted-foreground">{t(lang, investigationRefundsTabHintKey())}</p>
         {returns.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">{t(lang, "refundHistoryEmpty")}</p>
         ) : (

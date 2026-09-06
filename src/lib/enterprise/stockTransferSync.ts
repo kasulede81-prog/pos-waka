@@ -1,7 +1,24 @@
 import { supabase } from "../supabase";
 import { enqueueSync } from "../../offline/syncEngine";
 import { getActiveShopId } from "../../offline/shopScope";
+import { usePosStore } from "../../store/usePosStore";
 import type { TransferLineReceiveInput } from "./stockTransferEngine";
+import {
+  parseInventoryTransferAuditSnapshot,
+  recordInventoryTransferAuditIfSucceeded,
+  type InventoryTransferAuditSnapshot,
+} from "./inventoryTransferAudit";
+
+function writeTransferAuditIfSucceeded(
+  result: { ok: boolean; idempotent?: boolean },
+  snapshot?: InventoryTransferAuditSnapshot,
+): void {
+  const state = usePosStore.getState();
+  recordInventoryTransferAuditIfSucceeded(result, snapshot, {
+    writeAudit: (action, summary, payload) => state.logAuditAction(action, summary, payload),
+    existingLogs: state.auditLogs,
+  });
+}
 
 export type CloudTransferLine = {
   id: string;
@@ -55,19 +72,28 @@ export async function upsertTransferDraftCloud(payload: {
   return { ok: true, transferId: j.transfer_id };
 }
 
-export async function dispatchTransferCloud(transferId: string): Promise<{ ok: boolean; error?: string; idempotent?: boolean }> {
+export async function dispatchTransferCloud(
+  transferId: string,
+  snapshot?: InventoryTransferAuditSnapshot,
+): Promise<{ ok: boolean; error?: string; idempotent?: boolean }> {
   if (!supabase) return { ok: false, error: "offline" };
   const { data, error } = await supabase.rpc("enterprise_transfer_dispatch", { p_transfer_id: transferId });
   if (error) return { ok: false, error: error.message };
   const j = (data ?? {}) as { ok?: boolean; error?: string; idempotent?: boolean };
   if (!j.ok) return { ok: false, error: j.error ?? "dispatch_failed" };
-  return { ok: true, idempotent: j.idempotent === true };
+  const result = { ok: true, idempotent: j.idempotent === true };
+  writeTransferAuditIfSucceeded(
+    result,
+    snapshot ?? parseInventoryTransferAuditSnapshot({ transferId, phase: "dispatch" }),
+  );
+  return result;
 }
 
 export async function receiveTransferCloud(
   transferId: string,
   receiveEventId: string,
   lines: TransferLineReceiveInput[],
+  snapshot?: InventoryTransferAuditSnapshot,
 ): Promise<{ ok: boolean; error?: string; idempotent?: boolean; status?: string }> {
   if (!supabase) return { ok: false, error: "offline" };
   const { data, error } = await supabase.rpc("enterprise_transfer_receive", {
@@ -78,7 +104,17 @@ export async function receiveTransferCloud(
   if (error) return { ok: false, error: error.message };
   const j = (data ?? {}) as { ok?: boolean; error?: string; idempotent?: boolean; status?: string };
   if (!j.ok) return { ok: false, error: j.error ?? "receive_failed" };
-  return { ok: true, idempotent: j.idempotent === true, status: j.status };
+  const result = { ok: true, idempotent: j.idempotent === true, status: j.status };
+  writeTransferAuditIfSucceeded(
+    result,
+    snapshot ??
+      parseInventoryTransferAuditSnapshot({
+        transferId,
+        phase: "receive",
+        receiveEventId,
+      }),
+  );
+  return result;
 }
 
 export async function cancelTransferDraftCloud(transferId: string): Promise<{ ok: boolean; error?: string }> {
@@ -150,13 +186,17 @@ export function filterDestinationShopProductRows(
 }
 
 /** Queue dispatch for offline-first retry (MB-1 shop stamp at enqueue). */
-export async function queueTransferDispatch(transferId: string, fromShopId?: string | null): Promise<void> {
+export async function queueTransferDispatch(
+  transferId: string,
+  fromShopId?: string | null,
+  snapshot?: InventoryTransferAuditSnapshot,
+): Promise<void> {
   const shopId = fromShopId ?? getActiveShopId();
   await enqueueSync({
     id: crypto.randomUUID(),
     kind: "pending_transfer_dispatch",
     shopId: shopId ?? undefined,
-    payload: { transferId },
+    payload: { transferId, auditSnapshot: snapshot ?? null },
     createdAt: new Date().toISOString(),
   });
 }
@@ -166,19 +206,23 @@ export async function queueTransferReceive(
   receiveEventId: string,
   lines: TransferLineReceiveInput[],
   toShopId?: string | null,
+  snapshot?: InventoryTransferAuditSnapshot,
 ): Promise<void> {
   const shopId = toShopId ?? getActiveShopId();
   await enqueueSync({
     id: crypto.randomUUID(),
     kind: "pending_transfer_receive",
     shopId: shopId ?? undefined,
-    payload: { transferId, receiveEventId, lines },
+    payload: { transferId, receiveEventId, lines, auditSnapshot: snapshot ?? null },
     createdAt: new Date().toISOString(),
   });
 }
 
-export async function syncTransferDispatchFromQueue(transferId: string): Promise<boolean> {
-  const result = await dispatchTransferCloud(transferId);
+export async function syncTransferDispatchFromQueue(
+  transferId: string,
+  snapshot?: InventoryTransferAuditSnapshot,
+): Promise<boolean> {
+  const result = await dispatchTransferCloud(transferId, snapshot);
   return result.ok;
 }
 
@@ -186,7 +230,13 @@ export async function syncTransferReceiveFromQueue(payload: {
   transferId: string;
   receiveEventId: string;
   lines: TransferLineReceiveInput[];
+  auditSnapshot?: InventoryTransferAuditSnapshot;
 }): Promise<boolean> {
-  const result = await receiveTransferCloud(payload.transferId, payload.receiveEventId, payload.lines);
+  const result = await receiveTransferCloud(
+    payload.transferId,
+    payload.receiveEventId,
+    payload.lines,
+    payload.auditSnapshot,
+  );
   return result.ok;
 }

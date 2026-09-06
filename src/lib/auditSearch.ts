@@ -66,6 +66,7 @@ export const INVESTIGATION_ACTIONS: ReadonlySet<AuditAction> = new Set([
   "staff_logout",
   "discount_given",
   "expired_stock_writeoff",
+  "inventory_transfer",
   "customer_add",
   "customer_merge",
   "product_restore",
@@ -122,6 +123,10 @@ function haystack(
     typeof pl.reason === "string" ? pl.reason : "",
     typeof pl.note === "string" ? pl.note : "",
     typeof pl.category === "string" ? pl.category : "",
+    typeof pl.sourceName === "string" ? pl.sourceName : "",
+    typeof pl.destinationName === "string" ? pl.destinationName : "",
+    typeof pl.transferId === "string" ? pl.transferId : "",
+    Array.isArray(pl.productIds) ? pl.productIds.filter((id) => typeof id === "string").join(" ") : "",
     narrative,
   ];
   return parts.join(" ").toLowerCase();
@@ -180,6 +185,8 @@ function matchesEntityIndexed(
   if (filters.productId) {
     const pid = typeof pl.productId === "string" ? pl.productId : "";
     if (pid === filters.productId) return true;
+    const ids = Array.isArray(pl.productIds) ? pl.productIds : [];
+    if (ids.some((id) => id === filters.productId)) return true;
     const name = productById.get(filters.productId)?.name?.toLowerCase() ?? "";
     if (name && hay.includes(name)) return true;
     return false;

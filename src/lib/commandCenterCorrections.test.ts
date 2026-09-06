@@ -198,7 +198,7 @@ describe("COMMAND-CENTER-P1-CORRECTIONS-1.0", () => {
       ],
       shifts: [],
       cashDrawerAdjustments: [],
-      cashExpenses: [],
+      expensesPeriodUgx: 0,
       expectedCashUgx: null,
       lang: "en",
     });

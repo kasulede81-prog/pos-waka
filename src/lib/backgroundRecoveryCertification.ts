@@ -61,7 +61,10 @@ export function runBackgroundRecoveryCertification(opts: BackgroundCertification
         const recovered = await pullAuditLogsFromCloud(ctx.shopId).catch(() => []);
         if (recovered.length > 0) {
           const s = usePosStore.getState();
-          const merged = mergeAuditLogsFromCloudPull(s.auditLogs, s.archivedAuditLogs, recovered);
+          const { normalizeDataRetentionPolicy } = await import("./dataRetention");
+          const merged = mergeAuditLogsFromCloudPull(s.auditLogs, s.archivedAuditLogs, recovered, {
+            policy: normalizeDataRetentionPolicy(s.preferences.dataRetentionPolicy),
+          });
           usePosStore.setState({
             auditLogs: merged.auditLogs,
             archivedAuditLogs: merged.archivedAuditLogs,

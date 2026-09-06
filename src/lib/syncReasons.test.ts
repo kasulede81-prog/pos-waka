@@ -60,4 +60,14 @@ describe("syncReasons", () => {
     expect(patch.catalogAt).toBe("2026-08-29T12:00:00.000Z");
     expect(patch.sales).toBe(false);
   });
+
+  it("includes audit_logs in the normal incremental bundle but not sale ACK", () => {
+    expect(ALL_INCREMENTAL_PULL_ENTITIES).toContain("audit_logs");
+    expect(incrementalEntitiesForReason("resume")).toContain("audit_logs");
+    expect(incrementalEntitiesForReason("sale_ack")).not.toContain("audit_logs");
+    const patch = incrementalCheckpointPatch(["audit_logs"], { auditLogsAt: "2026-09-06T08:00:00.000Z" });
+    expect(patch.auditLogs).toBe(true);
+    expect(patch.auditLogsAt).toBe("2026-09-06T08:00:00.000Z");
+    expect(patch.sales).toBe(false);
+  });
 });

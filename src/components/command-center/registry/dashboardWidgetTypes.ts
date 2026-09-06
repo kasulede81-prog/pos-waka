@@ -99,7 +99,6 @@ export type DashboardCenterContext = {
   canPatients?: boolean;
   canReceipts?: boolean;
   canWriteOff?: boolean;
-  canProfit?: boolean;
   showRevenue?: boolean;
   showActivityFeed?: boolean;
   hospitalityStats?: HospitalityDashboardStats | null;

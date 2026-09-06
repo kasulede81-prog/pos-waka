@@ -133,6 +133,7 @@ import {
 } from "../lib/pharmacyComplianceOps";
 import { normalizeControlledRegisterEntry } from "../lib/pharmacyControlledRegister";
 import { detectComplianceAlerts } from "../lib/pharmacyComplianceAlerts";
+import { applyPharmacyRemainderHydration } from "../lib/pharmacyRemainderHydration";
 import { applyIndustryReceiptDefaults, buildReceiptBrandingSnapshot } from "../lib/receiptBranding";
 import type { SubscriptionPlanCode } from "../lib/subscriptionEntitlements";
 import { normalizeMedicineForm, normalizeMedicineStrength } from "../lib/pharmacyMedicine";
@@ -187,6 +188,7 @@ import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
 import { canEnableBiometricAuth } from "../lib/sensitiveActionAuth";
 import { archiveSalesBeyondActiveWindow, INITIAL_SALES_LOAD_COUNT, SALES_PAGE_LOAD_SIZE } from "../lib/activeSalesWindow";
 import { partitionForArchive } from "../lib/recordArchive";
+import { applyAuditActiveCap, mergeAuditLogEntriesById } from "../lib/auditActiveCap";
 import { normalizePosShelfLayout, clampShelfScale, fillDefaultShelfLayout } from "../lib/posShelfLayout";
 import { distinctTrimmedCategories } from "../lib/productCategories";
 import { POS_SHELF_PRESET_IDS } from "../lib/posShelfPresets";
@@ -394,11 +396,12 @@ function queueHospitalityChange(input: { sessionIds?: string[]; ticketIds?: stri
   );
 }
 
-function mergeAuditLogs(existing: AuditLogEntry[], incoming: AuditLogEntry[]): AuditLogEntry[] {
-  const byId = new Map<string, AuditLogEntry>();
-  for (const e of existing) byId.set(e.id, e);
-  for (const e of incoming) byId.set(e.id, e);
-  return [...byId.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, MAX_AUDIT_LOGS);
+function mergeAuditLogs(
+  existing: AuditLogEntry[],
+  incoming: AuditLogEntry[],
+  archived: AuditLogEntry[] = [],
+): { auditLogs: AuditLogEntry[]; archivedAuditLogs: AuditLogEntry[] } {
+  return applyAuditActiveCap(mergeAuditLogEntriesById(existing, incoming), archived, MAX_AUDIT_LOGS);
 }
 
 function broadcastInventoryStock(products: Product[], type: InventorySyncEventType): void {
@@ -726,6 +729,8 @@ export type PosState = {
     archivedDayCloses?: DayCloseSummary[];
     archivedVoidRecords?: VoidRecord[];
     archivedReturnRecords?: ReturnRecord[];
+    pharmacyPrescriptions?: import("../types").PharmacyPrescription[];
+    pharmacyControlledRegister?: import("../types").PharmacyControlledRegisterEntry[];
   }) => void;
 
   /** Replace local state + disk from a full backup (owner only in UI). Prefer await applyRestoredSnapshotFromBackup. */
@@ -1925,7 +1930,10 @@ export const usePosStore = create<PosState>((set, get) => {
       payloadSummary,
       payload,
     };
-    set((s) => ({ auditLogs: mergeAuditLogs(s.auditLogs, [entry]) }));
+    set((s) => {
+      const merged = mergeAuditLogs(s.auditLogs, [entry], s.archivedAuditLogs);
+      return { auditLogs: merged.auditLogs, archivedAuditLogs: merged.archivedAuditLogs };
+    });
     logPilotEventFromAudit(action, payloadSummary, payload);
     void queueRemote("audit_log", { entry });
   };
@@ -1998,7 +2006,15 @@ export const usePosStore = create<PosState>((set, get) => {
   hydrationStage: "none",
   todayKpiSnapshot: null,
 
-  hydrate: (data, opts) =>
+  hydrate: (data, opts) => {
+    const current = get();
+    const archivedSeed = data.archivedAuditLogs ?? [];
+    const auditCap = opts?.replaceAudit
+      ? applyAuditActiveCap(data.auditLogs ?? [], archivedSeed, MAX_AUDIT_LOGS)
+      : mergeAuditLogs(data.auditLogs ?? [], current.auditLogs, [
+          ...archivedSeed,
+          ...(current.archivedAuditLogs ?? []),
+        ]);
     set({
       products: data.products.map(normalizeProduct),
       customers: data.customers.map(normalizeCustomer),
@@ -2006,7 +2022,7 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: data.preferences,
       debtPayments: data.debtPayments ?? [],
       dayCloses: data.dayCloses ?? [],
-      auditLogs: opts?.replaceAudit ? (data.auditLogs ?? []) : mergeAuditLogs(data.auditLogs ?? [], get().auditLogs),
+      auditLogs: auditCap.auditLogs,
       suppliers: (data.suppliers ?? []).map(normalizeSupplier),
       purchases: (data.purchases ?? []).map(normalizePurchase),
       supplierPayments: (data.supplierPayments ?? []).map(normalizeSupplierPayment),
@@ -2028,7 +2044,7 @@ export const usePosStore = create<PosState>((set, get) => {
       dayDrawerOpens: (data.dayDrawerOpens ?? []).map(normalizeDayDrawerOpen),
       inventoryCountSessions: (data.inventoryCountSessions ?? []).map(normalizeInventoryCountSession),
       archivedSales: (data.archivedSales ?? []).map(normalizeSale),
-      archivedAuditLogs: data.archivedAuditLogs ?? [],
+      archivedAuditLogs: auditCap.archivedAuditLogs,
       archivedDayCloses: data.archivedDayCloses ?? [],
       archivedVoidRecords: data.archivedVoidRecords ?? [],
       archivedReturnRecords: data.archivedReturnRecords ?? [],
@@ -2042,14 +2058,11 @@ export const usePosStore = create<PosState>((set, get) => {
         const register = (data.pharmacyControlledRegister ?? [])
           .map(normalizeControlledRegisterEntry)
           .filter((e): e is NonNullable<ReturnType<typeof normalizeControlledRegisterEntry>> => Boolean(e));
-        const auditLogs = opts?.replaceAudit
-          ? (data.auditLogs ?? [])
-          : mergeAuditLogs(data.auditLogs ?? [], get().auditLogs);
         return {
           pharmacyControlledRegister: register,
           pharmacyComplianceAlerts: detectComplianceAlerts({
             register,
-            auditLogs,
+            auditLogs: auditCap.auditLogs,
             preferences: data.preferences,
           }),
         };
@@ -2060,7 +2073,8 @@ export const usePosStore = create<PosState>((set, get) => {
       draftLines: [],
       draftInput: null,
       draftCartDiscountUgx: 0,
-    }),
+    });
+  },
 
   hydrateEssentials: (data) => {
     const products = data.products.map(normalizeProduct);
@@ -2089,6 +2103,10 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedDayCloses: [],
       archivedVoidRecords: [],
       archivedReturnRecords: [],
+      pharmacyPrescriptions: [],
+      pharmacyDoctors: [],
+      pharmacyControlledRegister: [],
+      pharmacyComplianceAlerts: [],
       _hydrated: true,
       hydrationStage: "critical",
       draftLines: [],
@@ -2100,12 +2118,27 @@ export const usePosStore = create<PosState>((set, get) => {
   hydrateRemainder: (data) =>
     set((s) => {
       const sales = data.sales ? data.sales.map(normalizeSale) : s.sales;
+      const mergedAudit = mergeAuditLogs(
+        data.auditLogs ?? [],
+        s.auditLogs,
+        data.archivedAuditLogs ?? s.archivedAuditLogs,
+      );
+      const pharmacyPrescriptions = applyPharmacyRemainderHydration(
+        data.pharmacyPrescriptions,
+        s.pharmacyPrescriptions,
+        normalizePrescription,
+      );
+      const pharmacyControlledRegister = applyPharmacyRemainderHydration(
+        data.pharmacyControlledRegister,
+        s.pharmacyControlledRegister,
+        normalizeControlledRegisterEntry,
+      );
       return {
       sales,
       activePendingSaleId: resolvePersistedDraftSaleBinding(sales, s.activePendingSaleId, true),
       debtPayments: data.debtPayments ?? s.debtPayments,
       dayCloses: data.dayCloses ?? s.dayCloses,
-      auditLogs: mergeAuditLogs(data.auditLogs ?? [], s.auditLogs),
+      ...mergedAudit,
       suppliers: (data.suppliers ?? []).map(normalizeSupplier),
       purchases: (data.purchases ?? []).map(normalizePurchase),
       supplierPayments: (data.supplierPayments ?? []).map(normalizeSupplierPayment),
@@ -2133,10 +2166,19 @@ export const usePosStore = create<PosState>((set, get) => {
         ? data.inventoryCountSessions.map(normalizeInventoryCountSession)
         : s.inventoryCountSessions,
       archivedSales: data.archivedSales ? data.archivedSales.map(normalizeSale) : s.archivedSales,
-      archivedAuditLogs: data.archivedAuditLogs ?? s.archivedAuditLogs,
       archivedDayCloses: data.archivedDayCloses ?? s.archivedDayCloses,
       archivedVoidRecords: data.archivedVoidRecords ?? s.archivedVoidRecords,
       archivedReturnRecords: data.archivedReturnRecords ?? s.archivedReturnRecords,
+      pharmacyPrescriptions,
+      pharmacyControlledRegister,
+      pharmacyComplianceAlerts:
+        data.pharmacyControlledRegister !== undefined
+          ? detectComplianceAlerts({
+              register: pharmacyControlledRegister,
+              auditLogs: mergedAudit.auditLogs,
+              preferences: s.preferences,
+            })
+          : s.pharmacyComplianceAlerts,
       hydrationStage: s.hydrationStage === "none" ? "background" : s.hydrationStage,
     };
     }),
@@ -2177,6 +2219,10 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedDayCloses: [],
       archivedVoidRecords: [],
       archivedReturnRecords: [],
+      pharmacyPrescriptions: [],
+      pharmacyDoctors: [],
+      pharmacyControlledRegister: [],
+      pharmacyComplianceAlerts: [],
       sessionActor: null,
       ...emptyDraftPatch(),
       salesHistoryHydration: null,
@@ -5248,11 +5294,12 @@ export const usePosStore = create<PosState>((set, get) => {
       }
       nextComplianceAlerts = detectComplianceAlerts({
         register: nextControlledRegister,
-        auditLogs: mergeAuditLogs(state.auditLogs, auditEntries),
+        auditLogs: mergeAuditLogs(state.auditLogs, auditEntries, state.archivedAuditLogs).auditLogs,
         preferences: state.preferences,
       });
     }
 
+    const mergedAudits = mergeAuditLogs(state.auditLogs, auditEntries, state.archivedAuditLogs);
     set({
       products,
       sales: [sale, ...state.sales.filter((s) => s.id !== sale.id)],
@@ -5266,7 +5313,8 @@ export const usePosStore = create<PosState>((set, get) => {
       customers,
       ...movementMergePatch(state, saleMovements),
       preferences: nextPreferences,
-      auditLogs: mergeAuditLogs(state.auditLogs, auditEntries),
+      auditLogs: mergedAudits.auditLogs,
+      archivedAuditLogs: mergedAudits.archivedAuditLogs,
       todayKpiSnapshot: bumpTodayKpiSnapshot(state.todayKpiSnapshot, sale),
     });
 
@@ -8820,6 +8868,8 @@ export async function applyRestoredSnapshotFromBackup(
       archivedDayCloses: restoredSnap.archivedDayCloses ?? [],
       archivedVoidRecords: restoredSnap.archivedVoidRecords ?? [],
       archivedReturnRecords: restoredSnap.archivedReturnRecords ?? [],
+      pharmacyPrescriptions: restoredSnap.pharmacyPrescriptions ?? [],
+      pharmacyControlledRegister: restoredSnap.pharmacyControlledRegister ?? [],
     });
     reportRestoreProgress(opts?.onProgress, 8, 12, 100);
     await yieldUiTick();
@@ -8901,6 +8951,8 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         archivedDayCloses: snap.archivedDayCloses ?? [],
         archivedVoidRecords: snap.archivedVoidRecords ?? [],
         archivedReturnRecords: snap.archivedReturnRecords ?? [],
+        pharmacyPrescriptions: snap.pharmacyPrescriptions ?? [],
+        pharmacyControlledRegister: snap.pharmacyControlledRegister ?? [],
       });
       if (tail.length > 0) {
         scheduleBackgroundSalesHydrate(tail);
@@ -9267,6 +9319,8 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     archivedDayClosesRaw,
     archivedVoidRecordsRaw,
     archivedReturnRecordsRaw,
+    pharmacyPrescriptionsRaw,
+    pharmacyControlledRegisterRaw,
   ] = await Promise.all([
     getEntitiesByBucket<DebtPayment>("debtPayment"),
     getEntitiesByBucket<DayCloseSummary>("dayClose"),
@@ -9285,6 +9339,8 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     getEntitiesByBucket<DayCloseSummary>("archivedDayClose"),
     getEntitiesByBucket<VoidRecord>("archivedVoidRecord"),
     getEntitiesByBucket<ReturnRecord>("archivedReturnRecord"),
+    getEntitiesByBucket<import("../types").PharmacyPrescription>("pharmacyPrescription"),
+    getEntitiesByBucket<import("../types").PharmacyControlledRegisterEntry>("pharmacyControlledRegister"),
   ]);
   const archivedSalesRaw = (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale);
   usePosStore.getState().hydrateRemainder({
@@ -9306,6 +9362,8 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     archivedDayCloses: archivedDayClosesRaw,
     archivedVoidRecords: archivedVoidRecordsRaw,
     archivedReturnRecords: archivedReturnRecordsRaw,
+    pharmacyPrescriptions: pharmacyPrescriptionsRaw,
+    pharmacyControlledRegister: pharmacyControlledRegisterRaw,
   });
   if (manifest.salesOrder.length > INITIAL_SALES_LOAD_COUNT) {
     scheduleBackgroundSalesHydrateByIds(

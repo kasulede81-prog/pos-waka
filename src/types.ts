@@ -202,6 +202,7 @@ export type AuditAction =
   | "inventory_count_approved"
   | "inventory_count_applied"
   | "inventory_count_cancelled"
+  | "inventory_transfer"
   | "day_drawer_open"
   | "day_drawer_open_supersede"
   | "day_drawer_open_void"

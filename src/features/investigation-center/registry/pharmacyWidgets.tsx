@@ -8,9 +8,11 @@ import {
 import { PHARMACY_INVESTIGATION_CATEGORIES } from "../extensions/pharmacy/pharmacyCategoryActions";
 import type { InvestigationCategory, InvestigationTab } from "../types";
 import { INVESTIGATION_TABS_WITH_COMPLIANCE } from "../types";
+import { InvestigationIncompleteState } from "../components/InvestigationIncompleteState";
 import type { InvestigationWidgetDef, InvestigationWidgetProps, TimelinePresentation } from "./investigationWidgetTypes";
 
 function PharmacyKpiGridWidget({ ctx }: InvestigationWidgetProps) {
+  if (!ctx.dataComplete) return null;
   if (ctx.pharmacyKpiCards.length === 0) return null;
   return (
     <InvestigationPharmacyKpiGrid
@@ -24,6 +26,9 @@ function PharmacyKpiGridWidget({ ctx }: InvestigationWidgetProps) {
 }
 
 function PharmacyComplianceWidget({ ctx }: InvestigationWidgetProps) {
+  if (!ctx.dataComplete) {
+    return <InvestigationIncompleteState lang={ctx.lang} />;
+  }
   return <InvestigationComplianceSection lang={ctx.lang} register={ctx.pharmacyRegister} />;
 }
 

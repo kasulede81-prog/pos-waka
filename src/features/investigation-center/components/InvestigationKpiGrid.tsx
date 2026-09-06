@@ -71,7 +71,9 @@ export function InvestigationKpiGrid({ lang, cards, activeKpi, periodLabel, onSe
               </div>
               <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{t(lang, card.labelKey)}</p>
               <p className="mt-0.5 text-xl font-black tabular-nums text-foreground">{card.value.toLocaleString()}</p>
-              <p className="mt-1 truncate text-[10px] font-semibold text-muted-foreground">{periodLabel}</p>
+              <p className="mt-1 text-[10px] font-semibold leading-tight text-muted-foreground">
+                {card.hintKey ? t(lang, card.hintKey) : periodLabel}
+              </p>
             </button>
           );
         })}

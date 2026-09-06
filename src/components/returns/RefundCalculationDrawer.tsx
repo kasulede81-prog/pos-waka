@@ -8,6 +8,8 @@ type Props = {
   lang: Language;
   open: boolean;
   sale: Sale | null;
+  /** Sale is expected but still loading from local sales-history tail. */
+  salePending?: boolean;
   returnRecord: ReturnRecord | null;
   returnRecords: ReturnRecord[];
   actorLabel: string;
@@ -94,6 +96,7 @@ export function RefundCalculationDrawer({
   lang,
   open,
   sale,
+  salePending = false,
   returnRecord,
   returnRecords,
   actorLabel,
@@ -119,7 +122,11 @@ export function RefundCalculationDrawer({
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {!sale ? (
+          {salePending && !sale ? (
+            <p className="text-sm text-muted-foreground" role="status" aria-live="polite" aria-busy="true">
+              {t(lang, "icRefundTraceSaleLoading")}
+            </p>
+          ) : !sale ? (
             <p className="text-sm text-muted-foreground">{t(lang, "refundTraceUnlinked")}</p>
           ) : trace ? (
             <TraceBody lang={lang} trace={trace} />

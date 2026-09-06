@@ -2,8 +2,8 @@ import type { AuditAction, AuditLogEntry } from "../types";
 import { getOrCreateDeviceId } from "./deviceId";
 import { usePosStore } from "../store/usePosStore";
 import { enqueueSync } from "../offline/syncEngine";
-
-const MAX_AUDIT = 5000;
+import { applyAuditActiveCap, mergeAuditLogEntriesById } from "./auditActiveCap";
+import { AUDIT_RETENTION_MAX_COUNT } from "./auditHealth";
 
 /** Append a local audit row and queue cloud mirror (used outside store mutations). */
 export function appendDeviceAuditEntry(
@@ -24,12 +24,12 @@ export function appendDeviceAuditEntry(
     payload,
   };
   usePosStore.setState((s) => {
-    const byId = new Map(s.auditLogs.map((e) => [e.id, e]));
-    byId.set(entry.id, entry);
-    const auditLogs = [...byId.values()]
-      .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
-      .slice(0, MAX_AUDIT);
-    return { auditLogs };
+    const merged = applyAuditActiveCap(
+      mergeAuditLogEntriesById(s.auditLogs, [entry]),
+      s.archivedAuditLogs,
+      AUDIT_RETENTION_MAX_COUNT,
+    );
+    return { auditLogs: merged.auditLogs, archivedAuditLogs: merged.archivedAuditLogs };
   });
   void enqueueSync({
     id: crypto.randomUUID(),

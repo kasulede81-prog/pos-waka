@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { commandCenterComparisonLabelKey, pctChangeLabel, presentCommandCenterExpectedCash } from "./commandCenterPageView";
 import { addDaysToDateKey, resolveDateFilterBounds } from "./dateFilters";
-import { dateKeyKampala } from "./datesUg";
 import { t } from "./i18n";
 import { buildDayCloseSnapshot } from "./dayCloseDocument";
 import type { DayCloseSummary } from "../types";

@@ -30,6 +30,8 @@ export type SyncCheckpoints = {
   lastDayClosesSyncAt: string | null;
   lastStockMovementsSyncAt: string | null;
   lastCatalogSyncAt: string | null;
+  /** audit_logs pull cursor (created_at). */
+  lastAuditLogsSyncAt: string | null;
 };
 
 const empty: SyncCheckpoints = {
@@ -51,6 +53,7 @@ const empty: SyncCheckpoints = {
   lastDayClosesSyncAt: null,
   lastStockMovementsSyncAt: null,
   lastCatalogSyncAt: null,
+  lastAuditLogsSyncAt: null,
 };
 
 function scopedKey(): string | null {
@@ -95,6 +98,7 @@ export function readSyncCheckpoints(): SyncCheckpoints {
       lastStockMovementsSyncAt:
         typeof o.lastStockMovementsSyncAt === "string" ? o.lastStockMovementsSyncAt : null,
       lastCatalogSyncAt: typeof o.lastCatalogSyncAt === "string" ? o.lastCatalogSyncAt : null,
+      lastAuditLogsSyncAt: typeof o.lastAuditLogsSyncAt === "string" ? o.lastAuditLogsSyncAt : null,
     };
   } catch {
     return { ...empty };
@@ -146,6 +150,7 @@ export function seedEntitySyncCursorsAt(at: string): SyncCheckpoints {
     lastDayClosesSyncAt: at,
     lastStockMovementsSyncAt: at,
     lastCatalogSyncAt: at,
+    lastAuditLogsSyncAt: at,
   });
 }
 
@@ -170,6 +175,7 @@ export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCh
     lastDayClosesSyncAt: at,
     lastStockMovementsSyncAt: at,
     lastCatalogSyncAt: at,
+    lastAuditLogsSyncAt: at,
   });
 }
 
@@ -190,6 +196,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   dayCloses?: boolean;
   stockMovements?: boolean;
   catalog?: boolean;
+  auditLogs?: boolean;
   /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
   salesAt?: string;
@@ -209,6 +216,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   dayClosesAt?: string;
   stockMovementsAt?: string;
   catalogAt?: string;
+  auditLogsAt?: string;
 }): SyncCheckpoints {
   const fallback = partial.at ?? new Date().toISOString();
   const patch: Partial<SyncCheckpoints> = {};
@@ -247,6 +255,9 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   }
   if (partial.catalog) {
     patch.lastCatalogSyncAt = partial.catalogAt ?? fallback;
+  }
+  if (partial.auditLogs) {
+    patch.lastAuditLogsSyncAt = partial.auditLogsAt ?? fallback;
   }
   return writeSyncCheckpoints(patch);
 }

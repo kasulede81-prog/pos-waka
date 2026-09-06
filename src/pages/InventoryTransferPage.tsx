@@ -22,6 +22,7 @@ import {
   type CloudTransfer,
   type DestinationShopProductOption,
 } from "../lib/enterprise/stockTransferSync";
+import type { InventoryTransferAuditSnapshot } from "../lib/enterprise/inventoryTransferAudit";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { hasSupabaseConfig } from "../lib/supabase";
 
@@ -180,11 +181,25 @@ export function InventoryTransferPage({ lang }: Props) {
 
   const dispatchDraft = async () => {
     if (!draftTransferId || !activeShopId) return;
+    const snapshot: InventoryTransferAuditSnapshot = {
+      transferId: draftTransferId,
+      phase: "dispatch",
+      sourceShopId: activeShopId,
+      destinationShopId: destShopId,
+      sourceName: sourceShopLabel,
+      destinationName: destShopLabel,
+      lines: draftLines.map((line) => ({
+        productId: line.sourceProductId,
+        productName: line.sourceName,
+        quantity: line.quantity,
+        destinationProductId: line.destinationProductId,
+      })),
+    };
     setBusy(true);
     setErr(null);
     setMsg(null);
     if (getDeviceOnline() && hasSupabaseConfig) {
-      const result = await dispatchTransferCloud(draftTransferId);
+      const result = await dispatchTransferCloud(draftTransferId, snapshot);
       setBusy(false);
       if (!result.ok) {
         setErr(result.error ?? "Dispatch failed");
@@ -196,7 +211,7 @@ export function InventoryTransferPage({ lang }: Props) {
       void loadInTransit();
       return;
     }
-    await queueTransferDispatch(draftTransferId, activeShopId);
+    await queueTransferDispatch(draftTransferId, activeShopId, snapshot);
     setBusy(false);
     setMsg(lang === "lg" ? "Dispatch erindiridde mu queue." : "Dispatch queued for sync.");
   };
@@ -214,11 +229,27 @@ export function InventoryTransferPage({ lang }: Props) {
       setErr(lang === "lg" ? "Yingiza obungi obw'okufuna." : "Enter receive quantity.");
       return;
     }
+    const snapshot: InventoryTransferAuditSnapshot = {
+      transferId: selectedTransfer.id,
+      phase: "receive",
+      sourceShopId: selectedTransfer.fromShopId,
+      destinationShopId: selectedTransfer.toShopId ?? activeShopId,
+      receiveEventId,
+      lines: lines.map((line) => {
+        const src = selectedTransfer.lines.find((row) => row.id === line.lineId);
+        return {
+          productId: src?.productId ?? src?.destinationProductId ?? line.lineId,
+          productName: src?.productName,
+          quantity: line.quantity,
+          destinationProductId: src?.destinationProductId ?? undefined,
+        };
+      }),
+    };
     setBusy(true);
     setErr(null);
     setMsg(null);
     if (getDeviceOnline() && hasSupabaseConfig) {
-      const result = await receiveTransferCloud(selectedTransfer.id, receiveEventId, lines);
+      const result = await receiveTransferCloud(selectedTransfer.id, receiveEventId, lines, snapshot);
       setBusy(false);
       if (!result.ok) {
         setErr(result.error ?? "Receive failed");
@@ -229,7 +260,7 @@ export function InventoryTransferPage({ lang }: Props) {
       void loadInTransit();
       return;
     }
-    await queueTransferReceive(selectedTransfer.id, receiveEventId, lines, activeShopId);
+    await queueTransferReceive(selectedTransfer.id, receiveEventId, lines, activeShopId, snapshot);
     setBusy(false);
     setMsg(lang === "lg" ? "Receive erindiridde mu queue." : "Receive queued for sync.");
   };

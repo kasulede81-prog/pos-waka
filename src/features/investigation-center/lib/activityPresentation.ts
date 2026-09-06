@@ -28,6 +28,7 @@ import {
   isPharmacyInvestigationKpiId,
 } from "../extensions/pharmacy/computePharmacyInvestigationKpis";
 import { severityStatusBadge, severityStatusIcon } from "../../../lib/statusTokens";
+import { investigationRefundsKpiHintKey } from "./investigationRefundAuthority";
 
 const SALES: ReadonlySet<AuditAction> = new Set(["sale_completed", "sale_void", "receipt_reprint", "receipt_pdf_export"]);
 const INVENTORY: ReadonlySet<AuditAction> = new Set([
@@ -38,8 +39,8 @@ const INVENTORY: ReadonlySet<AuditAction> = new Set([
   "inventory_count_approved",
   "inventory_count_applied",
   "inventory_count_cancelled",
+  "inventory_transfer",
 ]);
-/** Enterprise transfer dispatch/receive have no shop AuditAction — see tests. */
 const PRODUCTS: ReadonlySet<AuditAction> = new Set([
   "product_add",
   "product_remove",
@@ -241,6 +242,7 @@ export function getActivitySeverity(entry: AuditLogEntry): ActivitySeverity {
     entry.action === "debt_payment" ||
     entry.action === "purchase_saved" ||
     entry.action === "inventory_count_applied" ||
+    entry.action === "inventory_transfer" ||
     entry.action === "back_office_unlock_success" ||
     entry.action === "staff_login"
   ) {
@@ -358,7 +360,13 @@ export function computeInvestigationKpis(
     { id: "warnings", labelKey: "icKpiWarnings", value: warnings, iconTone: "yellow" },
     { id: "errors", labelKey: "icKpiErrors", value: errors, iconTone: "red" },
     { id: "failed_syncs", labelKey: "icKpiFailedSyncs", value: failedSyncs, iconTone: "red" },
-    { id: "refunds", labelKey: "icKpiRefunds", value: refundsCount, iconTone: "orange" },
+    {
+      id: "refunds",
+      labelKey: "icKpiRefunds",
+      value: refundsCount,
+      iconTone: "orange",
+      hintKey: investigationRefundsKpiHintKey(),
+    },
   ];
 }
 

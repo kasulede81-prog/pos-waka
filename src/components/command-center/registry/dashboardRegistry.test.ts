@@ -3,6 +3,7 @@ import type { Permission } from "../../../types";
 import { resolveDashboardWidgets, renderDashboardSlot } from "./enterpriseDashboardRegistry";
 import type { DashboardCenterContext } from "./dashboardWidgetTypes";
 import { resolveDashboardMode } from "./dashboardMode";
+import { COMMAND_CENTER_SLOT_ORDER } from "./dashboardCatalog";
 
 function minimalCtx(
   mode: DashboardCenterContext["mode"],
@@ -161,5 +162,33 @@ describe("enterprise dashboard registry", () => {
 
   it("renderSlot returns null for empty slots", () => {
     expect(renderDashboardSlot("insights", minimalCtx("retail"))).toBeNull();
+  });
+
+  it("Command Center slot order is the certified IA sequence", () => {
+    expect([...COMMAND_CENTER_SLOT_ORDER]).toEqual([
+      "header",
+      "status",
+      "health-hero",
+      "kpi-grid",
+      "financial",
+      "cash",
+      "staff",
+      "inventory",
+      "live-operations",
+      "integrity",
+      "attention",
+      "recommendations",
+      "quick-actions",
+      "footer",
+    ]);
+  });
+
+  it("places the cloud card in live-operations once, not attention", () => {
+    const ctx = minimalCtx("retail");
+    const liveOps = resolveDashboardWidgets("live-operations", ctx).map((w) => w.id);
+    const attention = resolveDashboardWidgets("attention", ctx).map((w) => w.id);
+    expect(liveOps.filter((id) => id === "retail-cloud-card")).toEqual(["retail-cloud-card"]);
+    expect(attention).not.toContain("retail-cloud-card");
+    expect(liveOps.indexOf("retail-live-ops")).toBeLessThan(liveOps.indexOf("retail-cloud-card"));
   });
 });

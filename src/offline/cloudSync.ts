@@ -59,6 +59,7 @@ import {
 import { createIncrementalPullCoalescer } from "../lib/incrementalPullCoalesce";
 import { mapPool } from "../lib/asyncPool";
 import { pullEntitySafe } from "../lib/pullEntitySafe";
+import { applyNormalSyncAuditPull, pullAuditLogsFromCloudIncremental } from "../lib/auditCloudSync";
 import { recordEntityPullErrors } from "../lib/pullDiagnostics";
 import {
   markBootstrapSyncComplete,
@@ -1778,7 +1779,8 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       const transferId = String(payload.transferId ?? "");
       if (!transferId) return true;
       const { syncTransferDispatchFromQueue } = await import("../lib/enterprise/stockTransferSync");
-      return syncTransferDispatchFromQueue(transferId);
+      const { parseInventoryTransferAuditSnapshot } = await import("../lib/enterprise/inventoryTransferAudit");
+      return syncTransferDispatchFromQueue(transferId, parseInventoryTransferAuditSnapshot(payload.auditSnapshot));
     }
     case "pending_transfer_receive": {
       const transferId = String(payload.transferId ?? "");
@@ -1786,6 +1788,7 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       const lines = Array.isArray(payload.lines) ? payload.lines : [];
       if (!transferId || !receiveEventId) return false;
       const { syncTransferReceiveFromQueue } = await import("../lib/enterprise/stockTransferSync");
+      const { parseInventoryTransferAuditSnapshot } = await import("../lib/enterprise/inventoryTransferAudit");
       return syncTransferReceiveFromQueue({
         transferId,
         receiveEventId,
@@ -1795,6 +1798,7 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
             return { lineId: String(r.lineId ?? ""), quantity: Number(r.quantity ?? 0) };
           })
           .filter((r) => r.lineId && r.quantity > 0),
+        auditSnapshot: parseInventoryTransferAuditSnapshot(payload.auditSnapshot),
       });
     }
     case "purchase": {
@@ -2075,6 +2079,7 @@ export type CloudPullCheckpoints = {
   dayClosesAt: string;
   stockMovementsAt: string;
   catalogAt: string;
+  auditLogsAt: string;
 };
 
 export type CloudPullResult = {
@@ -2102,6 +2107,8 @@ export type CloudPullResult = {
   stats: CloudPullStats;
   checkpoints?: CloudPullCheckpoints;
   recoveredAuditLogs?: AuditLogEntry[];
+  /** Unseen shop audit events from normal incremental sync — merge into ACTIVE auditLogs. */
+  pulledAuditLogs?: AuditLogEntry[];
   /** Entities that completed successfully — only these cursors may advance. */
   pulledEntities: IncrementalPullEntity[];
 };
@@ -2976,6 +2983,7 @@ export async function pullShopDataFromCloud(opts?: {
 
   const entityErrors: Record<string, string> = {};
   let recoveredAuditLogs: AuditLogEntry[] = [];
+  let pulledAuditLogs: AuditLogEntry[] = [];
   const pulledEntities: IncrementalPullEntity[] = [];
 
   if (mode === "full") {
@@ -3104,6 +3112,7 @@ export async function pullShopDataFromCloud(opts?: {
     }
 
     for (const entity of ALL_INCREMENTAL_PULL_ENTITIES) {
+      if (entity === "audit_logs") continue;
       if (!entityErrors[entity]) pulledEntities.push(entity);
     }
   } else {
@@ -3124,6 +3133,7 @@ export async function pullShopDataFromCloud(opts?: {
     const sinceDayCloses = cp.lastDayClosesSyncAt ?? new Date(0).toISOString();
     const sinceStockMovements = cp.lastStockMovementsSyncAt ?? new Date(0).toISOString();
     const sinceCatalog = cp.lastCatalogSyncAt ?? new Date(0).toISOString();
+    const sinceAuditLogs = cp.lastAuditLogsSyncAt ?? new Date(0).toISOString();
 
     let p: Awaited<ReturnType<typeof pullProductsIncremental>> | undefined;
     let c: Awaited<ReturnType<typeof pullCustomersIncremental>> | undefined;
@@ -3141,6 +3151,7 @@ export async function pullShopDataFromCloud(opts?: {
     let dc: Awaited<ReturnType<typeof pullDayClosesFromRpc>> | undefined;
     let sm: Awaited<ReturnType<typeof pullStockMovementsIncremental>> | undefined;
     let cat: Awaited<ReturnType<typeof pullCatalogFromRpc>> | undefined;
+    let al: Awaited<ReturnType<typeof pullAuditLogsFromCloudIncremental>> | undefined;
 
     const jobs: Array<{ entity: IncrementalPullEntity; run: () => Promise<void> }> = [];
 
@@ -3345,6 +3356,19 @@ export async function pullShopDataFromCloud(opts?: {
         },
       });
     }
+    if (wanted.has("audit_logs")) {
+      jobs.push({
+        entity: "audit_logs",
+        run: async () => {
+          al = await pullEntitySafe("audit_logs", entityErrors, () =>
+            pullAuditLogsFromCloudIncremental(ctx.shopId, sinceAuditLogs),
+          );
+          if (!al) return;
+          pulledAuditLogs = al.entries;
+          pulledEntities.push("audit_logs");
+        },
+      });
+    }
 
     await mapPool(jobs, SYNC_INCREMENTAL_PULL_CONCURRENCY, async (job) => {
       await job.run();
@@ -3367,7 +3391,8 @@ export async function pullShopDataFromCloud(opts?: {
       (sh?.bytes ?? 0) +
       (dc?.bytes ?? 0) +
       (sm?.bytes ?? 0) +
-      (cat?.bytes ?? 0);
+      (cat?.bytes ?? 0) +
+      (al ? al.entries.reduce((n, e) => n + (e.payloadSummary?.length ?? 0) + 64, 0) : 0);
 
     pullCheckpoints = {
       salesAt: s?.checkpointAt ?? sinceSales,
@@ -3386,10 +3411,12 @@ export async function pullShopDataFromCloud(opts?: {
       dayClosesAt: dc?.checkpointAt ?? sinceDayCloses,
       stockMovementsAt: sm?.checkpointAt ?? sinceStockMovements,
       catalogAt: cat?.checkpointAt ?? sinceCatalog,
+      auditLogsAt: al?.checkpointAt ?? sinceAuditLogs,
     };
   }
 
-  // Audit logs are deferred to background certification (non-blocking for POS unlock).
+  // Full unlock pull still skips audit history (recovery/certification). Incremental sync
+  // pulls shop-scoped audit_logs into pulledAuditLogs → active auditLogs.
 
   recordEntityPullErrors(entityErrors);
 
@@ -3462,6 +3489,7 @@ export async function pullShopDataFromCloud(opts?: {
     stats,
     checkpoints: pullCheckpoints,
     recoveredAuditLogs: recoveredAuditLogs.length > 0 ? recoveredAuditLogs : undefined,
+    pulledAuditLogs: pulledAuditLogs.length > 0 ? pulledAuditLogs : undefined,
     pulledEntities,
   };
 }
@@ -3573,6 +3601,21 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       logRecoveryDiagnosticEvent("merge_produced_empty_store");
       return failMerge("merge_produced_empty_store");
     }
+    if (cloud.pulledAuditLogs?.length) {
+      const mergedAudits = applyNormalSyncAuditPull(
+        state.auditLogs,
+        state.archivedAuditLogs,
+        cloud.pulledAuditLogs,
+      );
+      if (mergedAudits.added > 0) {
+        usePosStore.setState({
+          auditLogs: mergedAudits.auditLogs,
+          archivedAuditLogs: mergedAudits.archivedAuditLogs,
+        });
+        const { flushFullSnapshotPersist } = await import("./incrementalPersist");
+        await flushFullSnapshotPersist(usePosStore.getState(), { skipLastGood: true });
+      }
+    }
     if (cloud.stats.mode === "full" && shouldMarkBootstrap) markBootstrapSyncComplete();
     else {
       updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
@@ -3618,15 +3661,25 @@ export async function pullCloudAndMergeIntoStore(opts?: {
         ? mergeStockMovementsFromCloudPull([], cloud.stockMovements)
         : state.stockMovements;
 
+    let recoveredActive = state.auditLogs;
     let archivedAuditLogs = state.archivedAuditLogs;
     if (cloud.recoveredAuditLogs?.length) {
       const { mergeAuditLogsFromCloudPull } = await import("../lib/auditCloudSync");
-      archivedAuditLogs = mergeAuditLogsFromCloudPull(
+      const { normalizeDataRetentionPolicy } = await import("../lib/dataRetention");
+      const recovered = mergeAuditLogsFromCloudPull(
         state.auditLogs,
         state.archivedAuditLogs,
         cloud.recoveredAuditLogs,
-      ).archivedAuditLogs;
+        { policy: normalizeDataRetentionPolicy(state.preferences.dataRetentionPolicy) },
+      );
+      recoveredActive = recovered.auditLogs;
+      archivedAuditLogs = recovered.archivedAuditLogs;
     }
+    const pulledActiveAudits = applyNormalSyncAuditPull(
+      recoveredActive,
+      archivedAuditLogs,
+      cloud.pulledAuditLogs ?? [],
+    );
 
     await applyRestoredSnapshotFromBackup(
       {
@@ -3636,7 +3689,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       preferences: mergeCatalogPreferences({ ...state.preferences, shifts: mergedShifts }, cloud.catalog),
       debtPayments,
       dayCloses: mergedDayCloses,
-      auditLogs: state.auditLogs,
+      auditLogs: pulledActiveAudits.auditLogs,
       suppliers: purchaseRecovery.suppliers,
       purchases: purchaseRecovery.purchases,
       supplierPayments: purchaseRecovery.supplierPayments,
@@ -3649,7 +3702,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       dayDrawerOpens: mergedDayDrawerOpens,
       inventoryCountSessions: mergedInventoryCounts,
       archivedSales: state.archivedSales,
-      archivedAuditLogs,
+      archivedAuditLogs: pulledActiveAudits.archivedAuditLogs,
       archivedDayCloses: state.archivedDayCloses,
       archivedVoidRecords: state.archivedVoidRecords,
       archivedReturnRecords: state.archivedReturnRecords,
@@ -3754,15 +3807,25 @@ export async function pullCloudAndMergeIntoStore(opts?: {
 
   const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
 
+  let recoveredActive = state.auditLogs;
   let mergedArchivedAuditLogs = state.archivedAuditLogs;
   if (cloud.recoveredAuditLogs?.length) {
     const { mergeAuditLogsFromCloudPull } = await import("../lib/auditCloudSync");
-    mergedArchivedAuditLogs = mergeAuditLogsFromCloudPull(
+    const { normalizeDataRetentionPolicy } = await import("../lib/dataRetention");
+    const recovered = mergeAuditLogsFromCloudPull(
       state.auditLogs,
       state.archivedAuditLogs,
       cloud.recoveredAuditLogs,
-    ).archivedAuditLogs;
+      { policy: normalizeDataRetentionPolicy(state.preferences.dataRetentionPolicy) },
+    );
+    recoveredActive = recovered.auditLogs;
+    mergedArchivedAuditLogs = recovered.archivedAuditLogs;
   }
+  const pulledActiveAudits = applyNormalSyncAuditPull(
+    recoveredActive,
+    mergedArchivedAuditLogs,
+    cloud.pulledAuditLogs ?? [],
+  );
 
   const { suspendStorePersist } = await import("../store/usePosStore");
   const release = suspendStorePersist();
@@ -3787,7 +3850,8 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       purchases: purchaseRecovery.purchases,
       suppliers: purchaseRecovery.suppliers,
       supplierPayments: purchaseRecovery.supplierPayments,
-      archivedAuditLogs: mergedArchivedAuditLogs,
+      auditLogs: pulledActiveAudits.auditLogs,
+      archivedAuditLogs: pulledActiveAudits.archivedAuditLogs,
     });
 
     const next = usePosStore.getState();

@@ -82,7 +82,9 @@ export function OwnerCashControlSection({ lang, cash }: Props) {
         </div>
         <div className="rounded-lg bg-muted px-2 py-1.5 text-[11px]">
           <dt className="font-semibold text-muted-foreground">{t(lang, "ownerCashExpenses")}</dt>
-          <dd className="font-black tabular-nums">UGX {cash.cashExpensesUgx.toLocaleString()}</dd>
+          <dd className="font-black tabular-nums">
+            {cash.cashExpensesUgx == null ? "—" : `UGX ${cash.cashExpensesUgx.toLocaleString()}`}
+          </dd>
         </div>
       </dl>
 

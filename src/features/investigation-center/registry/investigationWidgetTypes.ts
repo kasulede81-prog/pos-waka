@@ -63,7 +63,12 @@ export type InvestigationCenterContext = {
   onSearchTextChange: (value: string) => void;
   debouncedSearchText: string;
   filters: AuditSearchFilters;
+  dataComplete: boolean;
+  salesDependentReady: boolean;
   filtered: AuditLogEntry[];
+  matchingTotal: number;
+  hasMoreResults: boolean;
+  loadMoreResults: () => void;
   kpiCards: InvestigationKpiCard[];
   pharmacyKpiCards: PharmacyInvestigationKpiCard[];
   periodLabel: string;

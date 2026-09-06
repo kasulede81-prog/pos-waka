@@ -256,7 +256,8 @@ export type OwnerCashExtended = {
   bankDepositsUgx: number;
   safeTransfersInUgx: number;
   safeTransfersOutUgx: number;
-  cashExpensesUgx: number;
+  /** Selected-period expenses. Same authority as Financial Intelligence `expensesPeriodUgx`. */
+  cashExpensesUgx: number | null;
   topCashierShortages: CashAccountabilityRow[];
   accountabilityRanking: CashAccountabilityRow[];
 };
@@ -706,7 +707,8 @@ export function buildCashControlExtended(input: {
   dayCloses: DayCloseSummary[];
   shifts: ShiftRecord[];
   cashDrawerAdjustments: CashDrawerAdjustment[];
-  cashExpenses: CashExpense[];
+  /** Already-presented period expenses from Financial Intelligence. Null = unavailable. */
+  expensesPeriodUgx: number | null;
   /** Single-day Drawer V2 expected cash; null for multi-day ranges (not a summable balance). */
   expectedCashUgx: number | null;
   lang: Language;
@@ -799,7 +801,7 @@ export function buildCashControlExtended(input: {
   }
   adjustmentFeed.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
-  const cashExpensesUgx = sumCashExpensesInBounds(input.cashExpenses, input.bounds);
+  const cashExpensesUgx = input.expensesPeriodUgx;
   const latestDayVarianceUgx = isSingleDay ? (close?.differenceUgx ?? null) : null;
   const latestCountedCashUgx = isSingleDay ? (close?.countedCashUgx ?? null) : null;
   const hasUnresolvedVariance =

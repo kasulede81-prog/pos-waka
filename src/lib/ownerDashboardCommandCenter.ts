@@ -52,14 +52,72 @@ export type OwnerCommandCenterBundle = {
   financial: OwnerFinancialExtended;
 };
 
+/** Linear mutation token — count + deterministic 32-bit roll. Not a crypto hash. */
+function mutationFingerprint(parts: string[]): string {
+  let h = 0;
+  for (const part of parts) {
+    for (let i = 0; i < part.length; i++) {
+      h = (Math.imul(31, h) + part.charCodeAt(i)) | 0;
+    }
+  }
+  return `${parts.length}:${h}`;
+}
+
+function salesMutationFingerprint(sales: OwnerCommandCenterInput["sales"]): string {
+  return mutationFingerprint(
+    sales.map(
+      (s) =>
+        `${s.id}:${s.updatedAt ?? ""}:${s.status ?? ""}:${s.saleVoidedAt ?? ""}:${s.totalUgx}:${s.estimatedProfitUgx}`,
+    ),
+  );
+}
+
+function returnsMutationFingerprint(returns: OwnerCommandCenterInput["returnRecords"]): string {
+  return mutationFingerprint(
+    returns.map(
+      (r) => `${r.id}:${r.saleId ?? ""}:${r.refundAmountUgx}:${r.quantity}:${r.createdAt}:${r.cogsUgx ?? ""}`,
+    ),
+  );
+}
+
+function voidsMutationFingerprint(voids: OwnerCommandCenterInput["voidRecords"]): string {
+  return mutationFingerprint(voids.map((v) => `${v.id}:${v.saleId}:${v.amountUgx}:${v.createdAt}`));
+}
+
+function dayCloseMutationFingerprint(closes: OwnerCommandCenterInput["dayCloses"]): string {
+  return mutationFingerprint(
+    closes.map((c) => {
+      const snap = c.documentSnapshot;
+      return [
+        c.id,
+        c.dateKey,
+        c.supersededAt ?? "",
+        c.updatedAt ?? c.createdAt,
+        c.expectedCashUgx,
+        c.countedCashUgx,
+        c.differenceUgx,
+        c.totalSalesUgx,
+        c.profitEstimateUgx,
+        c.totalDebtUgx,
+        snap?.expectedCashUgx ?? "",
+        snap?.totalSalesUgx ?? "",
+        snap?.profitEstimateUgx ?? "",
+        snap?.expenseUgx ?? "",
+        snap?.totalDebtUgx ?? "",
+        snap?.transactionCount ?? "",
+        snap?.cashFromSalesUgx ?? "",
+      ].join(":");
+    }),
+  );
+}
+
 export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInput): string {
   const { bounds, sales, products, shifts, customers, suppliers, debtPayments, stockMovements, purchases } = input;
-  const salesFp = `${sales.length}:${sales[0]?.id ?? ""}:${sales[sales.length - 1]?.id ?? ""}`;
   return [
     bounds.fromKey,
     bounds.toKey,
     bounds.isSingleDay ? "1d" : "rng",
-    salesFp,
+    salesMutationFingerprint(sales),
     products.length,
     shifts.length,
     customers.length,
@@ -76,7 +134,9 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
     input.syncErrorCount,
     input.expectedCashUgx ?? "na",
     input.pharmacyMode ? "rx" : "std",
-    input.dayCloses.length,
+    dayCloseMutationFingerprint(input.dayCloses),
+    returnsMutationFingerprint(input.returnRecords),
+    voidsMutationFingerprint(input.voidRecords),
     input.devicesOnline ?? 0,
     input.devicesStale ?? 0,
   ].join(":");
@@ -169,6 +229,26 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
   });
   const snapshotTrimStatus = partial ? buildSnapshotTrimStatus(partial) : "ok";
 
+  const financial = buildFinancialExtended({
+    sales: input.sales,
+    returnRecords: input.returnRecords,
+    products: input.products,
+    customers: input.customers,
+    suppliers: input.suppliers,
+    purchases: input.purchases,
+    debtPayments: input.debtPayments,
+    cashExpenses: input.cashExpenses,
+    bounds: input.bounds,
+    salesIndex: revenueIndex,
+    dayCloses: input.dayCloses,
+    currentPeriod: {
+      revenueUgx: overview.revenueUgx,
+      profitUgx: overview.profitUgx,
+      transactionCount: overview.transactionCount,
+      costIncomplete: overview.costIncomplete,
+    },
+  });
+
   return {
     overview,
     integrity,
@@ -197,7 +277,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
       dayCloses: input.dayCloses,
       shifts: input.shifts,
       cashDrawerAdjustments: input.cashDrawerAdjustments,
-      cashExpenses: input.cashExpenses,
+      expensesPeriodUgx: financial.expensesPeriodUgx,
       expectedCashUgx: input.expectedCashUgx,
       lang: input.lang,
     }),
@@ -209,25 +289,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
       input.bounds,
       input.auditLogs,
     ),
-    financial: buildFinancialExtended({
-      sales: input.sales,
-      returnRecords: input.returnRecords,
-      products: input.products,
-      customers: input.customers,
-      suppliers: input.suppliers,
-      purchases: input.purchases,
-      debtPayments: input.debtPayments,
-      cashExpenses: input.cashExpenses,
-      bounds: input.bounds,
-      salesIndex: revenueIndex,
-      dayCloses: input.dayCloses,
-      currentPeriod: {
-        revenueUgx: overview.revenueUgx,
-        profitUgx: overview.profitUgx,
-        transactionCount: overview.transactionCount,
-        costIncomplete: overview.costIncomplete,
-      },
-    }),
+    financial,
   };
 }
 

@@ -143,14 +143,12 @@ describe("INVESTIGATION-CENTER-CORRECTIONS-1.0", () => {
     expect(INVESTIGATION_CATEGORY_ACTION_SETS.failed_syncs.has("sync_override")).toBe(false);
   });
 
-  it("P2-04 — inventory category covers count/adjust/writeoff; no shop transfer AuditAction exists", () => {
+  it("P2-04 — inventory category covers count/adjust/writeoff/transfer", () => {
     const inv = INVESTIGATION_CATEGORY_ACTION_SETS.inventory;
     expect(inv.has("stock_adjust")).toBe(true);
     expect(inv.has("inventory_count_applied")).toBe(true);
     expect(inv.has("expired_stock_writeoff")).toBe(true);
-    // Enterprise transfers use stock movement refs, not shop AuditAction — do not invent.
-    expect((inv as Set<string>).has("transfer_dispatch")).toBe(false);
-    expect((inv as Set<string>).has("transfer_receive")).toBe(false);
+    expect(inv.has("inventory_transfer")).toBe(true);
   });
 
   it("P2-05 — CSV export includes durable entry id", () => {

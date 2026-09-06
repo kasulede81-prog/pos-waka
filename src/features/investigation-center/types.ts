@@ -74,6 +74,8 @@ export type InvestigationKpiCard = {
   labelKey: string;
   value: number;
   iconTone: "orange" | "green" | "yellow" | "purple" | "red" | "slate";
+  /** Optional authority/honesty hint. Used by Refunds KPI (IC-P2-02). */
+  hintKey?: string;
 };
 
 export type PharmacyInvestigationKpiCard = InvestigationKpiCard & {
