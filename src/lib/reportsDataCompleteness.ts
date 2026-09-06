@@ -241,5 +241,5 @@ export function reportsCategoryBlocksOnIncompleteSales(
     | "performance"
     | "forecast",
 ): boolean {
-  return category !== "inventory" && category !== "forecast" && category !== "performance";
+  return category !== "inventory" && category !== "forecast";
 }

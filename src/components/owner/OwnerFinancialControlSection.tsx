@@ -16,8 +16,9 @@ function trendLabel(pct: number | null): string | null {
 
 export function OwnerFinancialControlSection({ lang, financial, periodLabel }: Props) {
   const mix = financial.paymentMix;
-  const mixTotal =
-    mix.cashUgx + mix.mobileMoneyUgx + mix.atmUgx + mix.creditUgx + mix.mixedUgx + mix.otherUgx;
+  const mixTotal = mix
+    ? mix.cashUgx + mix.mobileMoneyUgx + mix.atmUgx + mix.creditUgx + mix.mixedUgx + mix.otherUgx
+    : 0;
 
   return (
     <section className="rounded-2xl border border-border/90 bg-card p-3 shadow-sm sm:p-4">
@@ -44,7 +45,9 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
         </div>
         <div className="rounded-xl bg-muted px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialPurchases")}</dt>
-          <dd className="text-sm font-black tabular-nums">UGX {financial.purchasesUgx.toLocaleString()}</dd>
+          <dd className="text-sm font-black tabular-nums">
+            {financial.purchasesUgx == null ? "—" : `UGX ${financial.purchasesUgx.toLocaleString()}`}
+          </dd>
         </div>
         <div className="rounded-xl bg-muted px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialDebtCollected")}</dt>
@@ -52,7 +55,9 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
         </div>
         <div className="rounded-xl bg-muted px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialDebtIssued")}</dt>
-          <dd className="text-sm font-black tabular-nums">UGX {financial.debtIssuedUgx.toLocaleString()}</dd>
+          <dd className="text-sm font-black tabular-nums">
+            {financial.debtIssuedUgx == null ? "—" : `UGX ${financial.debtIssuedUgx.toLocaleString()}`}
+          </dd>
         </div>
         <div className="rounded-xl bg-muted px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialReceivables")}</dt>
@@ -64,7 +69,9 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
         </div>
         <div className="rounded-xl bg-muted px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "ownerFinancialExpensesPeriod")}</dt>
-          <dd className="text-sm font-black tabular-nums">UGX {financial.expensesPeriodUgx.toLocaleString()}</dd>
+          <dd className="text-sm font-black tabular-nums">
+            {financial.expensesPeriodUgx == null ? "—" : `UGX ${financial.expensesPeriodUgx.toLocaleString()}`}
+          </dd>
         </div>
       </dl>
 
@@ -79,7 +86,7 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
         </p>
       ) : null}
 
-      {mixTotal > 0 ? (
+      {mix && mixTotal > 0 ? (
         <div className="mt-3">
           <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "ownerFinancialPaymentMix")}</p>
           <ul className="mt-1 space-y-0.5 text-[11px] font-semibold text-muted-foreground">

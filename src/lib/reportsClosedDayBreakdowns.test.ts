@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DayCloseSummary, Product, Sale } from "../types";
 import { computePaymentMethodMix, computeRangeAnalytics, computeTopCashiers } from "../features/business-analytics/lib/analyticsPageView";
 import { buildAnalyticsReportRows } from "./analyticsReportExport";
-import { periodSalesBreakdownsUnavailable } from "./closedDayAuthority";
+import { dayClosesForAuthority, periodSalesBreakdownsUnavailable } from "./closedDayAuthority";
 import { buildDayCloseSnapshot } from "./dayCloseDocument";
 import { buildDailyReportDocument, buildDailyReportPdfBlob } from "./dailyReportPdf";
 import { resolveDateFilterBounds } from "./dateFilters";
@@ -207,6 +207,8 @@ describe("RPT-P2-01 closed-day report breakdowns must not mix live data", () => 
     expect(analytics.closedDayBreakdownUnavailable).toBe(true);
     expect(analytics.paymentMix).toEqual([]);
     expect(analytics.paymentMix.reduce((a, s) => a + s.amountUgx, 0)).not.toBe(530_000);
+    expect(analytics.current.dailyTrend.length).toBeGreaterThan(0);
+    expect(analytics.trendBars).toEqual([]);
   });
 
   it("TEST 3 — post-close sale does not change closed-day top products", () => {
@@ -274,6 +276,8 @@ describe("RPT-P2-01 closed-day report breakdowns must not mix live data", () => 
     );
     expect(analytics.closedDayBreakdownUnavailable).toBe(false);
     expect(analytics.paymentMix.reduce((a, s) => a + s.amountUgx, 0)).toBe(80_000);
+    expect(analytics.trendBars.length).toBeGreaterThan(0);
+    expect(analytics.trendBars.some((b) => b.total === 80_000)).toBe(true);
     expect(
       computeTopCashiers([openSale], analytics.bounds, { lang: "en", nameByUserId: new Map(), shopDisplayName: "Shop" }),
     ).toHaveLength(1);
@@ -311,6 +315,8 @@ describe("RPT-P2-01 closed-day report breakdowns must not mix live data", () => 
     expect(analytics.closedDayBreakdownUnavailable).toBe(true);
     expect(analytics.paymentMix).toEqual([]);
     expect(analytics.paymentMix.reduce((a, s) => a + s.amountUgx, 0)).not.toBe(610_000);
+    expect(analytics.current.dailyTrend.length).toBeGreaterThan(0);
+    expect(analytics.trendBars).toEqual([]);
   });
 
   it("TEST 8 — closed day without post-close activity keeps frozen headlines", () => {
@@ -322,6 +328,9 @@ describe("RPT-P2-01 closed-day report breakdowns must not mix live data", () => 
     expect(range.closedDayBreakdownUnavailable).toBe(true);
     expect(range.topProducts).toEqual([]);
     expect(range.dailyTrend[0]?.revenueUgx).toBe(500_000);
+    const analytics = dayAAnalytics([frozenSale]);
+    expect(analytics.current.dailyTrend[0]?.revenueUgx).toBe(500_000);
+    expect(analytics.trendBars).toEqual([]);
   });
 
   it("TEST 9 — closed-day CSV and PDF do not export live post-close breakdown values", async () => {
@@ -375,5 +384,14 @@ describe("RPT-P2-01 closed-day report breakdowns must not mix live data", () => 
     expect(pdf).toContain("UGX 500,000");
     expect(pdf).not.toContain("UGX 530,000");
     expect(pdf).toContain("Unavailable for closed day");
+  });
+
+  it("TEST 10 — archived closed authority keeps Sales trend unavailable", () => {
+    const archivedClose = { ...closeA, id: "archived-close-a" };
+    const merged = dayClosesForAuthority([], [archivedClose]);
+    const analytics = dayAAnalytics([frozenSale, lateSale], merged);
+    expect(analytics.closedDayBreakdownUnavailable).toBe(true);
+    expect(analytics.current.dailyTrend.length).toBeGreaterThan(0);
+    expect(analytics.trendBars).toEqual([]);
   });
 });

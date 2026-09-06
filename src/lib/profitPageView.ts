@@ -1,8 +1,15 @@
 import type { Product, ReturnRecord, Sale } from "../types";
+import type { PeriodReportAuthority } from "./closedDayAuthority";
+import { periodSalesBreakdownsUnavailable } from "./closedDayAuthority";
 import type { ProfitCategoryGroup, ProfitProductRow } from "./homeProfit";
 import { computeTodayProfitBreakdown, mergeLinkedReturnsForScopedSales } from "./homeProfit";
 import { dateKeyKampala } from "./datesUg";
 import { formatUgx } from "./formatUgx";
+import {
+  canExportReportsData,
+  type FrozenPeriodHeadlines,
+  type ReportsFinancialReadiness,
+} from "./reportsDataCompleteness";
 
 export type ProfitProductView = ProfitProductRow & {
   shelfLabel: string;
@@ -123,6 +130,97 @@ export function productInitials(name: string): string {
 export function shelfContributionPct(shelfProfit: number, totalProfit: number): number {
   if (totalProfit <= 0) return 0;
   return Math.round((shelfProfit / totalProfit) * 1000) / 10;
+}
+
+/**
+ * P2-NEW-03 — standalone Profit headlines/breakdowns follow the shared Reports
+ * financial-readiness contract. Does not invent a second hydration system.
+ */
+export type ProfitPageHeadlineSource = "overlay" | "frozen" | "hidden";
+
+export type ProfitPageFinancialPresentation = {
+  showHeadlineSkeleton: boolean;
+  showLiveBreakdowns: boolean;
+  presentHeadlinesAsComplete: boolean;
+  canExport: boolean;
+  headlineSource: ProfitPageHeadlineSource;
+  headlineRevenueUgx: number;
+  headlineProfitUgx: number;
+  headlineCostUgx: number;
+  revenueEligibleTxnCount: number;
+};
+
+export function presentProfitPageFinancials(input: {
+  readiness: ReportsFinancialReadiness;
+  overlaid: { revenueUgx: number; profitUgx: number; transactionCount: number };
+  liveCostUgx: number;
+  closedPeriod: boolean;
+  frozenHeadlines: FrozenPeriodHeadlines | null;
+}): ProfitPageFinancialPresentation {
+  if (input.readiness.dataComplete) {
+    const headlineRevenueUgx = input.overlaid.revenueUgx;
+    const headlineProfitUgx = input.overlaid.profitUgx;
+    return {
+      showHeadlineSkeleton: false,
+      showLiveBreakdowns: true,
+      presentHeadlinesAsComplete: true,
+      canExport: canExportReportsData(input.readiness),
+      headlineSource: "overlay",
+      headlineRevenueUgx,
+      headlineProfitUgx,
+      headlineCostUgx: resolveProfitHeadlineCostUgx({
+        closedPeriod: input.closedPeriod,
+        revenueUgx: headlineRevenueUgx,
+        profitUgx: headlineProfitUgx,
+        liveCostUgx: input.liveCostUgx,
+      }),
+      revenueEligibleTxnCount: input.overlaid.transactionCount,
+    };
+  }
+  if (input.readiness.canShowFrozenHeadlines && input.frozenHeadlines) {
+    const headlineRevenueUgx = input.frozenHeadlines.revenue;
+    const headlineProfitUgx = input.frozenHeadlines.profit;
+    return {
+      showHeadlineSkeleton: false,
+      showLiveBreakdowns: false,
+      presentHeadlinesAsComplete: true,
+      canExport: canExportReportsData(input.readiness),
+      headlineSource: "frozen",
+      headlineRevenueUgx,
+      headlineProfitUgx,
+      headlineCostUgx: resolveProfitHeadlineCostUgx({
+        closedPeriod: true,
+        revenueUgx: headlineRevenueUgx,
+        profitUgx: headlineProfitUgx,
+        liveCostUgx: 0,
+      }),
+      revenueEligibleTxnCount: input.frozenHeadlines.count,
+    };
+  }
+  return {
+    showHeadlineSkeleton: true,
+    showLiveBreakdowns: false,
+    presentHeadlinesAsComplete: false,
+    canExport: canExportReportsData(input.readiness),
+    headlineSource: "hidden",
+    headlineRevenueUgx: 0,
+    headlineProfitUgx: 0,
+    headlineCostUgx: 0,
+    revenueEligibleTxnCount: 0,
+  };
+}
+
+/**
+ * P2-NEW-07 — snapshot has no product/shelf profit. Closed/mixed periods cannot
+ * reconstruct an authoritative shelf; do not use live rows as a frozen breakdown.
+ */
+export function presentProfitShelfRanking(input: {
+  authority: PeriodReportAuthority;
+  groups: ProfitCategoryGroup[];
+  liveTotalProfitUgx: number;
+}): { kind: "open"; groups: ProfitCategoryGroup[]; totalProfitUgx: number } | { kind: "unavailable" } {
+  if (periodSalesBreakdownsUnavailable(input.authority)) return { kind: "unavailable" };
+  return { kind: "open", groups: input.groups, totalProfitUgx: input.liveTotalProfitUgx };
 }
 
 export function matchesProfitSearch(

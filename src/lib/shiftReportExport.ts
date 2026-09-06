@@ -12,6 +12,28 @@ export type ShiftSummaryRow = {
   refundsUgx: number;
 };
 
+/** Scope-first names: this file is the retained-shift list, not a single business day. */
+export const SHIFT_SUMMARY_RETAINED_CSV_FILENAME = "waka-shift-summary-retained-shifts.csv";
+export const SHIFT_SUMMARY_RETAINED_PDF_FILENAME = "waka-shift-summary-retained-shifts.pdf";
+
+export function shiftSummaryExportFilenames(): { csv: string; pdf: string } {
+  return {
+    csv: SHIFT_SUMMARY_RETAINED_CSV_FILENAME,
+    pdf: SHIFT_SUMMARY_RETAINED_PDF_FILENAME,
+  };
+}
+
+export function shiftSummaryDocumentLabels(lang: Language): { title: string; scopeHint: string } {
+  return {
+    title: t(lang, "shiftReportTitle"),
+    scopeHint: t(lang, "shiftReportScopeHint"),
+  };
+}
+
+export function shiftIdsFromSummaryRows(rows: ShiftSummaryRow[]): string[] {
+  return rows.map((row) => row.shift.id);
+}
+
 export function buildShiftSummaryRows(
   shifts: ShiftRecord[],
   nowMs = Date.now(),
@@ -72,7 +94,7 @@ function csvCell(value: string): string {
 
 export async function downloadShiftSummaryCsv(lang: Language, rows: ShiftSummaryRow[]): Promise<boolean> {
   const csv = buildShiftSummaryCsv(lang, rows);
-  const filename = `waka-shift-summary-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = shiftSummaryExportFilenames().csv;
   const result = await exportCsvFile("shift", filename, csvToRows(csv));
   return result.ok;
 }
@@ -82,7 +104,7 @@ function csvToRows(csv: string): Array<Array<string | number>> {
 }
 
 export async function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummaryRow[]): Promise<boolean> {
-  const title = t(lang, "shiftReportTitle");
+  const { title, scopeHint } = shiftSummaryDocumentLabels(lang);
   const tableRows = rows
     .map((row) => {
       const sh = row.shift;
@@ -104,12 +126,14 @@ export async function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummary
   const html = `<!DOCTYPE html><html><head><title>${escapeHtml(title)}</title>
     <style>
       body { font-family: system-ui, sans-serif; padding: 24px; color: #111; }
-      h1 { font-size: 20px; margin-bottom: 16px; }
+      h1 { font-size: 20px; margin-bottom: 8px; }
+      .scope { font-size: 12px; color: #57534e; margin: 0 0 16px; }
       table { width: 100%; border-collapse: collapse; font-size: 12px; }
       th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
       th { background: #f5f5f4; }
     </style></head><body>
     <h1>${escapeHtml(title)}</h1>
+    <p class="scope">${escapeHtml(scopeHint)}</p>
     <table>
       <thead><tr>
         <th>${escapeHtml(t(lang, "shiftReportCashier"))}</th>
@@ -127,7 +151,7 @@ export async function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummary
     </table>
     </body></html>`;
 
-  const filename = `waka-shift-summary-${new Date().toISOString().slice(0, 10)}.pdf`;
+  const filename = shiftSummaryExportFilenames().pdf;
   return printReportDocument("shift", {
     pdfFilename: filename,
     buildPdfBlob: () => {
@@ -135,9 +159,10 @@ export async function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummary
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
       doc.text(title, 40, 40);
-      let y = 64;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
+      doc.text(scopeHint, 40, 56);
+      let y = 76;
       for (const row of rows) {
         const sh = row.shift;
         const line = `${sh.actorName ?? sh.actorUserId} | ${formatTs(sh.startAt)} | UGX ${sh.salesTotalUgx.toLocaleString()}`;

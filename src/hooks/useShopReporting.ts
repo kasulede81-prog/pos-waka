@@ -3,6 +3,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "./useDeferredReportingSales";
 import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
+import { useDayClosesForAuthority } from "./useDayClosesForAuthority";
 import { DEFAULT_DATE_FILTER, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 import type { HomeMetricScope } from "../lib/homeVisibility";
 import { filterReturnsForHomeScope, filterSalesForHomeScope } from "../lib/homeVisibility";
@@ -74,7 +75,7 @@ export function useShopReportBundle(filter: DateFilterValue, includeArchived: bo
   const customers = usePosStore((s) => s.customers);
   const suppliers = usePosStore((s) => s.suppliers);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
-  const dayCloses = usePosStore((s) => s.dayCloses);
+  const dayCloses = useDayClosesForAuthority();
   const hydrationStage = usePosStore((s) => s.hydrationStage);
   const salesHistoryHydration = usePosStore((s) => s.salesHistoryHydration);
 

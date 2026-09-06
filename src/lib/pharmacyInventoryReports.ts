@@ -1,4 +1,5 @@
 import type { Product } from "../types";
+import { reportsInventoryCostPresentation } from "../features/business-analytics/lib/analyticsPageView";
 import { buildExpiryCenterRows, getProductBatches } from "./pharmacyBatches";
 import { pharmacyInventoryValueAtCostUgx } from "./pharmacyCostIntegrity";
 import { computePharmacyExpiryReport } from "./pharmacyReports";
@@ -14,6 +15,53 @@ export type PharmacyInventoryReportSnapshot = {
   topMedicines: { productId: string; name: string; stockOnHand: number; valueUgx: number }[];
   slowMovers: { productId: string; name: string; stockOnHand: number; daysSinceLastSale?: number }[];
 };
+
+export type PharmacyInventoryCostField = ReturnType<typeof reportsInventoryCostPresentation>;
+
+export type PharmacyInventoryReportsView = {
+  inventoryValue: PharmacyInventoryCostField;
+  expiryLoss: PharmacyInventoryCostField;
+  nearExpiryValue: PharmacyInventoryCostField;
+  expiredValue: PharmacyInventoryCostField;
+  batchCount: number;
+  medicineCount: number;
+  controlledCount: number;
+  topMedicines: { productId: string; name: string; stockOnHand: number; valueUgx?: number }[];
+  slowMovers: { productId: string; name: string; stockOnHand: number; daysSinceLastSale?: number }[];
+};
+
+/** Presentation consumer — `reports.profit` via `reportsInventoryCostPresentation`. Does not change formulas. */
+export function presentPharmacyInventoryReports(
+  snapshot: PharmacyInventoryReportSnapshot,
+  canProfit: boolean | null | undefined,
+): PharmacyInventoryReportsView {
+  const allowed = canProfit === true;
+  const inventoryValue = reportsInventoryCostPresentation(allowed, snapshot.inventoryValueUgx);
+  const expiryLoss = reportsInventoryCostPresentation(allowed, snapshot.expiryLossUgx);
+  const nearExpiryValue = reportsInventoryCostPresentation(allowed, snapshot.nearExpiryValueUgx);
+  const expiredValue = reportsInventoryCostPresentation(allowed, snapshot.expiredValueUgx);
+  return {
+    inventoryValue,
+    expiryLoss,
+    nearExpiryValue,
+    expiredValue,
+    batchCount: snapshot.batchCount,
+    medicineCount: snapshot.medicineCount,
+    controlledCount: snapshot.controlledCount,
+    topMedicines: snapshot.topMedicines.map((row) => {
+      const cost = reportsInventoryCostPresentation(allowed, row.valueUgx);
+      return cost.visible
+        ? { productId: row.productId, name: row.name, stockOnHand: row.stockOnHand, valueUgx: cost.valueUgx }
+        : { productId: row.productId, name: row.name, stockOnHand: row.stockOnHand };
+    }),
+    slowMovers: snapshot.slowMovers.map((row) => ({
+      productId: row.productId,
+      name: row.name,
+      stockOnHand: row.stockOnHand,
+      ...(row.daysSinceLastSale != null ? { daysSinceLastSale: row.daysSinceLastSale } : {}),
+    })),
+  };
+}
 
 export function computePharmacyInventoryReports(products: Product[]): PharmacyInventoryReportSnapshot {
   const inStock = products.filter((p) => p.stockOnHand > 0);

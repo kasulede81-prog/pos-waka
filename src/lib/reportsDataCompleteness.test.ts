@@ -10,6 +10,7 @@ import {
   applyReportsCompletenessToBundle,
   canExportReportsData,
   REPORTS_DATA_COMPLETE_FLAGS,
+  reportsCategoryBlocksOnIncompleteSales,
   resolveReportsDataCompleteness,
   resolveReportsFinancialReadiness,
   runReportsExportIfComplete,
@@ -491,5 +492,32 @@ describe("RPT-P2-04 reports data completeness", () => {
         salesHistoryHydration: null,
       }).dataComplete,
     ).toBe(false);
+  });
+
+  it("RPT-P3-12-1 — Performance is a financial category and blocks on incomplete sales", () => {
+    expect(reportsCategoryBlocksOnIncompleteSales("performance")).toBe(true);
+    expect(reportsCategoryBlocksOnIncompleteSales("sales")).toBe(true);
+    expect(reportsCategoryBlocksOnIncompleteSales("taxes")).toBe(true);
+    expect(reportsCategoryBlocksOnIncompleteSales("forecast")).toBe(false);
+    expect(reportsCategoryBlocksOnIncompleteSales("inventory")).toBe(false);
+
+    const incompleteLive = resolveReportsFinancialReadiness({
+      hydrationStage: "interactive",
+      salesHistoryHydration: { active: true, loaded: 100, total: 500 },
+      authority: "live",
+    });
+    expect(incompleteLive.dataComplete).toBe(false);
+    expect(incompleteLive.loading).toBe(true);
+    expect(reportsCategoryBlocksOnIncompleteSales("performance") && (incompleteLive.loading || !incompleteLive.dataComplete)).toBe(
+      true,
+    );
+
+    const frozenIncomplete = resolveReportsFinancialReadiness({
+      hydrationStage: "complete",
+      salesHistoryHydration: { active: true, loaded: 1, total: 50 },
+      authority: "closed_snapshot",
+    });
+    expect(frozenIncomplete.loading).toBe(false);
+    expect(frozenIncomplete.dataComplete).toBe(false);
   });
 });

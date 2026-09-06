@@ -98,7 +98,7 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
   if ((category === "expenses" || category === "purchases") && remainderPending) {
     return <ReportsDataLoadingState lang={lang} />;
   }
-  if (category === "taxes" && !props.report.dataComplete) {
+  if ((category === "taxes" || category === "performance") && !props.report.dataComplete) {
     return <ReportsDataLoadingState lang={lang} />;
   }
 

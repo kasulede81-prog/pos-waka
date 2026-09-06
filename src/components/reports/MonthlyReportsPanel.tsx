@@ -8,6 +8,7 @@ import { authOperatorPermissions, authOperatorRole } from "../../lib/sessionActo
 import { usePosStore } from "../../store/usePosStore";
 import { useDeferredReportingSales } from "../../hooks/useDeferredReportingSales";
 import { useReportingReturnRecords } from "../../hooks/useReportingReturnRecords";
+import { useDayClosesForAuthority } from "../../hooks/useDayClosesForAuthority";
 import { IncludeArchivedFilter } from "../office/IncludeArchivedFilter";
 import {
   buildMonthlyBusinessReport,
@@ -50,7 +51,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
   const returnRecords = useReportingReturnRecords(includeArchived);
   const products = usePosStore((s) => s.products);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
-  const dayCloses = usePosStore((s) => s.dayCloses);
+  const dayCloses = useDayClosesForAuthority();
   const preferences = usePosStore((s) => s.preferences);
 
   const months = useMemo(() => monthOptions(), []);

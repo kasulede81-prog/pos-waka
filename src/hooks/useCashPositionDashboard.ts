@@ -13,6 +13,7 @@ import { getActiveShopId } from "../offline/shopScope";
 import { usePosStore } from "../store/usePosStore";
 import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
+import { useDayClosesForAuthority } from "./useDayClosesForAuthority";
 import { t } from "../lib/i18n";
 
 export function useCashPositionDashboard(lang: Language, filter: DateFilterValue = DEFAULT_DATE_FILTER) {
@@ -24,7 +25,7 @@ export function useCashPositionDashboard(lang: Language, filter: DateFilterValue
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
-  const dayCloses = usePosStore((s) => s.dayCloses);
+  const dayCloses = useDayClosesForAuthority();
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const formulaVersion = usePosStore((s) => resolveCashDrawerFormulaVersion(s.preferences));
   const preferences = usePosStore((s) => s.preferences);

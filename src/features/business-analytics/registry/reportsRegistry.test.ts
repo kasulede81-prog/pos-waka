@@ -188,4 +188,12 @@ describe("enterprise reports registry", () => {
   it("renderSlot returns null for empty slots", () => {
     expect(renderReportSlot("financial", minimalCtx("retail"))).toBeNull();
   });
+
+  it("RPT-P3-12-1 — Performance keeps toolbar, category chips, and content; drops shell archive widgets", () => {
+    const ctx = minimalCtx("retail", { category: "performance" });
+    expect(resolveReportWidgets("search", ctx).some((w) => w.id === "retail-toolbar")).toBe(true);
+    expect(resolveReportWidgets("filters", ctx).some((w) => w.id === "retail-category-filters")).toBe(true);
+    expect(resolveReportWidgets("reports", ctx).some((w) => w.id === "retail-category-content")).toBe(true);
+    expect(resolveReportWidgets("header", ctx).some((w) => w.id === "retail-header")).toBe(true);
+  });
 });

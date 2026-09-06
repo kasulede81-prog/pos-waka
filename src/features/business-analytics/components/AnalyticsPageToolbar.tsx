@@ -8,6 +8,8 @@ type Props = {
   compareEnabled: boolean;
   searchQuery: string;
   exportDisabled?: boolean;
+  /** Performance uses its own month selector — hide the shell date-range chrome. */
+  hideDateRange?: boolean;
   onSearchChange: (value: string) => void;
   onOpenDateFilter: () => void;
   onToggleCompare: () => void;
@@ -21,6 +23,7 @@ export function AnalyticsPageToolbar({
   compareEnabled,
   searchQuery,
   exportDisabled = false,
+  hideDateRange = false,
   onSearchChange,
   onOpenDateFilter,
   onToggleCompare,
@@ -41,31 +44,35 @@ export function AnalyticsPageToolbar({
       </div>
       <div className="w-full min-w-0 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible">
         <div className="flex w-max min-w-full items-center gap-2 sm:w-full sm:flex-wrap">
-        <button
-          type="button"
-          onClick={onOpenDateFilter}
-          className="inline-flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground sm:flex-none"
-        >
-          <Calendar className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="truncate">{periodLabel}</span>
-        </button>
-        <button
-          type="button"
-          onClick={onToggleCompare}
-          className={`inline-flex min-h-[40px] items-center rounded-xl border px-3 text-xs font-black ${
-            compareEnabled ? "border-waka-300 bg-waka-50 text-waka-800" : "border-border bg-card text-muted-foreground"
-          }`}
-        >
-          {t(lang, "baComparePrior")}
-        </button>
-        <button
-          type="button"
-          onClick={onOpenFilters}
-          className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-border bg-card text-muted-foreground"
-          aria-label={t(lang, "baFilters")}
-        >
-          <SlidersHorizontal className="h-4 w-4" aria-hidden />
-        </button>
+        {hideDateRange ? null : (
+          <>
+            <button
+              type="button"
+              onClick={onOpenDateFilter}
+              className="inline-flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground sm:flex-none"
+            >
+              <Calendar className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="truncate">{periodLabel}</span>
+            </button>
+            <button
+              type="button"
+              onClick={onToggleCompare}
+              className={`inline-flex min-h-[40px] items-center rounded-xl border px-3 text-xs font-black ${
+                compareEnabled ? "border-waka-300 bg-waka-50 text-waka-800" : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              {t(lang, "baComparePrior")}
+            </button>
+            <button
+              type="button"
+              onClick={onOpenFilters}
+              className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-border bg-card text-muted-foreground"
+              aria-label={t(lang, "baFilters")}
+            >
+              <SlidersHorizontal className="h-4 w-4" aria-hidden />
+            </button>
+          </>
+        )}
         <button
           type="button"
           onClick={onOpenExport}

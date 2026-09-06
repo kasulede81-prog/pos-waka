@@ -31,6 +31,7 @@ function ToolbarWidget({ ctx }: ReportWidgetProps) {
       periodLabel={ctx.periodLabel}
       compareEnabled={ctx.compareEnabled}
       searchQuery={ctx.searchQuery}
+      hideDateRange={ctx.category === "performance"}
       onSearchChange={ctx.setSearchQuery}
       onOpenDateFilter={() => ctx.setDateOpen(true)}
       onToggleCompare={() => ctx.setCompareEnabled((v) => !v)}
@@ -67,6 +68,7 @@ function AiInsightsWidget({ ctx }: ReportWidgetProps) {
 }
 
 function ArchiveStatusWidget({ ctx }: ReportWidgetProps) {
+  if (ctx.category === "performance") return null;
   return (
     <>
       {ctx.archiveNotice ? (
@@ -84,6 +86,7 @@ function ArchiveStatusWidget({ ctx }: ReportWidgetProps) {
 }
 
 function IncludeArchivedWidget({ ctx }: ReportWidgetProps) {
+  if (ctx.category === "performance") return null;
   return (
     <IncludeArchivedFilter lang={ctx.lang} checked={ctx.includeArchived} onChange={ctx.setIncludeArchived} />
   );

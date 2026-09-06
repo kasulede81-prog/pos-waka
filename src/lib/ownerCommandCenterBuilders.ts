@@ -24,7 +24,7 @@ import type {
 } from "../types";
 import { actorDisplayLabel } from "./activityNarrative";
 import { attributeSalePaymentBuckets } from "./cashPosition";
-import { sumCashExpensesInBounds } from "./cashReconciliation";
+import { sumCashExpensesInBounds, sumCashExpensesOnDay } from "./cashReconciliation";
 import { inventoryValueAtCostUgx } from "./costPrecision";
 import { sumDebtPaymentsInBounds, sumCreditIssuedInBounds } from "./customerDebtActivity";
 import { activeDayDrawerOpenForDate } from "./dayDrawerOpen";
@@ -40,7 +40,14 @@ import {
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancialsFromScoped, type RevenueSalesIndex } from "./financialMetrics";
 import { mergeLinkedReturnsForScopedSales } from "./homeProfit";
-import { overlayPeriodFinancials } from "./closedDayAuthority";
+import {
+  overlayPeriodFinancials,
+  periodSalesBreakdownsUnavailable,
+  resolvePeriodReportAuthority,
+  resolveReportAuthority,
+} from "./closedDayAuthority";
+import { sumPurchasesForReporting } from "./purchaseReporting";
+import { isRevenueSale } from "./saleStatus";
 import { buildInventoryCountVarianceReport } from "./inventoryCount";
 import { isLowStock } from "./sellingEngine";
 import { listSyncConflicts } from "./syncConflictLog";
@@ -159,12 +166,16 @@ export type OwnerFinancialExtended = {
   receivablesUgx: number;
   payablesUgx: number;
   expensesTodayUgx: number;
-  expensesPeriodUgx: number;
+  /** Selected-period expenses. Null when a closed/mixed period lacks frozen expense authority. */
+  expensesPeriodUgx: number | null;
   expensesPriorPeriodUgx: number;
-  purchasesUgx: number;
-  debtIssuedUgx: number;
+  /** Selected-period purchase invoice total. Null when historical purchase authority is unavailable. */
+  purchasesUgx: number | null;
+  /** Selected-period debt issued. Null when a closed/mixed period lacks frozen debt authority. */
+  debtIssuedUgx: number | null;
   topSuppliers: Array<{ id: string; name: string; balanceOwedUgx: number }>;
-  paymentMix: OwnerPaymentMix;
+  /** Null when DayClose has no frozen payment-mix breakdown (closed/mixed). */
+  paymentMix: OwnerPaymentMix | null;
   trendVsPriorDay: FinancialTrendComparison | null;
   trendVsPriorWeek: FinancialTrendComparison | null;
   trendVsPriorMonth: FinancialTrendComparison | null;
@@ -317,6 +328,66 @@ export function paymentMixFromRevenueSales(scopedSales: Sale[]): OwnerPaymentMix
     mix.otherUgx += buckets.bank_transfer;
   }
   return mix;
+}
+
+/**
+ * CC-P2-02 — selected-period Financial Intelligence authority.
+ * Open periods keep live classifiers. Closed/mixed periods use frozen close
+ * fields when they exist, otherwise unavailable — never live stand-ins.
+ */
+export function presentCommandCenterPeriodFinancialIntelligence(input: {
+  bounds: DateFilterBounds;
+  dayCloses: DayCloseSummary[] | undefined;
+  livePaymentMix: OwnerPaymentMix;
+  liveExpensesUgx: number;
+  liveDebtIssuedUgx: number;
+  livePurchasesUgx: number;
+  liveExpenseForDay: (dateKey: string) => number;
+  liveDebtIssuedForDay: (dateKey: string) => number;
+}): {
+  paymentMix: OwnerPaymentMix | null;
+  expensesPeriodUgx: number | null;
+  debtIssuedUgx: number | null;
+  purchasesUgx: number | null;
+} {
+  const authority = resolvePeriodReportAuthority(input.dayCloses, input.bounds);
+  if (authority === "live") {
+    return {
+      paymentMix: input.livePaymentMix,
+      expensesPeriodUgx: input.liveExpensesUgx,
+      debtIssuedUgx: input.liveDebtIssuedUgx,
+      purchasesUgx: input.livePurchasesUgx,
+    };
+  }
+
+  let expensesPeriodUgx: number | null = 0;
+  let debtIssuedUgx: number | null = 0;
+  for (const day of enumerateDaysInBounds(input.bounds)) {
+    const auth = resolveReportAuthority(input.dayCloses, day);
+    if (auth.closed) {
+      const frozenExpense = auth.frozenTotals?.expenseUgx;
+      if (typeof frozenExpense !== "number" || !Number.isFinite(frozenExpense)) {
+        expensesPeriodUgx = null;
+      } else if (expensesPeriodUgx != null) {
+        expensesPeriodUgx += frozenExpense;
+      }
+      if (!auth.frozenTotals) {
+        debtIssuedUgx = null;
+      } else if (debtIssuedUgx != null) {
+        debtIssuedUgx += auth.frozenTotals.totalDebtUgx;
+      }
+    } else {
+      if (expensesPeriodUgx != null) expensesPeriodUgx += input.liveExpenseForDay(day);
+      if (debtIssuedUgx != null) debtIssuedUgx += input.liveDebtIssuedForDay(day);
+    }
+  }
+
+  return {
+    paymentMix: periodSalesBreakdownsUnavailable(authority) ? null : input.livePaymentMix,
+    expensesPeriodUgx,
+    debtIssuedUgx,
+    purchasesUgx: periodSalesBreakdownsUnavailable(authority) ? null : input.livePurchasesUgx,
+  };
 }
 
 export function buildLiveOperationsSnapshot(input: {
@@ -871,9 +942,22 @@ export function buildFinancialExtended(input: {
   const scopedSales = input.salesIndex
     ? revenueSalesInBoundsFromIndex(input.salesIndex, input.bounds)
     : revenueSalesInBounds(input.sales, input.bounds);
-  const mix = paymentMixFromRevenueSales(scopedSales);
-
-  const expensesPeriodUgx = sumCashExpensesInBounds(input.cashExpenses, input.bounds);
+  const liveMix = paymentMixFromRevenueSales(scopedSales);
+  const liveExpensesPeriodUgx = sumCashExpensesInBounds(input.cashExpenses, input.bounds);
+  const livePurchasesUgx = sumPurchasesForReporting(input.purchases, input.bounds).totalUgx;
+  const revenueSales = input.sales.filter(isRevenueSale);
+  const liveDebtIssuedUgx = sumCreditIssuedInBounds(revenueSales, input.bounds);
+  const presented = presentCommandCenterPeriodFinancialIntelligence({
+    bounds: input.bounds,
+    dayCloses: input.dayCloses,
+    livePaymentMix: liveMix,
+    liveExpensesUgx: liveExpensesPeriodUgx,
+    liveDebtIssuedUgx,
+    livePurchasesUgx,
+    liveExpenseForDay: (day) => sumCashExpensesOnDay(input.cashExpenses, day),
+    liveDebtIssuedForDay: (day) =>
+      sumCreditIssuedInBounds(revenueSales, { fromKey: day, toKey: day, isSingleDay: true }),
+  });
   const todayKey = dateKeyKampala(new Date());
   const expensesTodayUgx = sumCashExpensesInBounds(input.cashExpenses, {
     fromKey: todayKey,
@@ -907,13 +991,6 @@ export function buildFinancialExtended(input: {
   const priorWeek = financialForBounds(input.sales, input.returnRecords, input.products, priorWeekBounds, input.salesIndex, input.dayCloses);
   const priorMonth = financialForBounds(input.sales, input.returnRecords, input.products, priorMonthBounds, input.salesIndex, input.dayCloses);
 
-  let purchasesUgx = 0;
-  for (const p of input.purchases) {
-    if (p.voidedAt) continue;
-    if (!dateMatchesFilter(dateKeyKampala(p.createdAt), input.bounds)) continue;
-    purchasesUgx += p.totalCostUgx;
-  }
-
   const topSuppliers = [...input.suppliers]
     .filter((s) => (s.balanceOwedUgx ?? 0) > 0)
     .sort((a, b) => (b.balanceOwedUgx ?? 0) - (a.balanceOwedUgx ?? 0))
@@ -929,12 +1006,12 @@ export function buildFinancialExtended(input: {
     receivablesUgx: input.customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0),
     payablesUgx: input.suppliers.reduce((sum, s) => sum + Math.max(0, s.balanceOwedUgx ?? 0), 0),
     expensesTodayUgx,
-    expensesPeriodUgx,
+    expensesPeriodUgx: presented.expensesPeriodUgx,
     expensesPriorPeriodUgx,
-    purchasesUgx,
-    debtIssuedUgx: sumCreditIssuedInBounds(input.sales, input.bounds),
+    purchasesUgx: presented.purchasesUgx,
+    debtIssuedUgx: presented.debtIssuedUgx,
     topSuppliers,
-    paymentMix: mix,
+    paymentMix: presented.paymentMix,
     trendVsPriorDay: trendComparison(current, priorDay),
     trendVsPriorWeek: trendComparison(current, priorWeek),
     trendVsPriorMonth: trendComparison(current, priorMonth),

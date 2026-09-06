@@ -386,7 +386,7 @@ export function computeRangeAnalytics(
     expensesUgx: overlayClosedDayExpenses(liveExpenses, dayCloses, bounds, (day) =>
       sumCashExpensesOnDay(cashExpenses, day),
     ),
-    trendBars: trendBars(current.dailyTrend),
+    trendBars: closedDayBreakdownUnavailable ? [] : trendBars(current.dailyTrend),
   };
 }
 

@@ -68,10 +68,11 @@ export function buildCommandCenterExportRows(input: {
   periodLabel: string;
   score: number;
   revenueUgx: number;
-  profitUgx: number;
+  profitUgx?: number;
   costIncomplete?: boolean;
   transactions: number;
   expectedCashUgx: number | null;
+  includeProfit?: boolean;
 }): Array<Array<string | number>> {
   const {
     lang,
@@ -83,17 +84,23 @@ export function buildCommandCenterExportRows(input: {
     costIncomplete,
     transactions,
     expectedCashUgx,
+    includeProfit = true,
   } = input;
-  return [
+  const rows: Array<Array<string | number>> = [
     [t(lang, "ownerDashboardTitle"), shopName],
     [t(lang, "dateFilterViewing"), periodLabel],
     [],
     [t(lang, "cmdCenterExecutiveTitle"), score],
     [t(lang, "receiptsRangeRevenue"), revenueUgx],
-    [t(lang, costIncomplete ? "profitGrossProfitEstimated" : "profitStatGrossProfit"), profitUgx],
+  ];
+  if (includeProfit && profitUgx != null) {
+    rows.push([t(lang, costIncomplete ? "profitGrossProfitEstimated" : "profitStatGrossProfit"), profitUgx]);
+  }
+  rows.push(
     [t(lang, "salesCount"), transactions],
     [t(lang, "ownerCardExpectedCash"), expectedCashUgx == null ? "—" : expectedCashUgx],
-  ];
+  );
+  return rows;
 }
 
 export function buildProfitExportRows(input: {

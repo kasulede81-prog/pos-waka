@@ -6,6 +6,7 @@ import { actorHasPermission } from "../../lib/actorAuthorization";
 import { usePosStore } from "../../store/usePosStore";
 import { useReportingSales } from "../../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../../hooks/useReportingReturnRecords";
+import { useDayClosesForAuthority } from "../../hooks/useDayClosesForAuthority";
 import { useShopReportBundle } from "../../hooks/useShopReporting";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { MONTH_TO_DATE_FILTER } from "../../lib/dateFilters";
@@ -61,7 +62,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
-  const dayCloses = usePosStore((s) => s.dayCloses);
+  const dayCloses = useDayClosesForAuthority();
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const stockMovements = usePosStore((s) => s.stockMovements);

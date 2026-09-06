@@ -14,6 +14,7 @@ import type { PharmacyPatientDashboardStats } from "../../../lib/pharmacyPatient
 import type { PharmacyPrescriptionDashboardStats } from "../../../lib/pharmacyPrescriptionStats";
 import type { PharmacyDashboardStats } from "../../../lib/pharmacyStats";
 import type {
+  CommandCenterOfficialFinancials,
   CommandCenterRecommendation,
   DomainStatusRow,
   KpiCardModel,
@@ -35,6 +36,7 @@ export type DashboardCenterContext = {
   mode: DashboardBusinessMode;
   businessType: BusinessType;
   can: (perm: Permission) => boolean;
+  canProfit?: boolean;
   className?: string;
   // Command center
   filter?: DateFilterValue;
@@ -55,6 +57,8 @@ export type DashboardCenterContext = {
   healthScore?: number;
   domainStatuses?: DomainStatusRow[];
   kpiCards?: KpiCardModel[];
+  officialFinancials?: CommandCenterOfficialFinancials;
+  canExportOfficialFinancials?: boolean;
   recommendations?: CommandCenterRecommendation[];
   summaryKey?: string;
   summaryVars?: Record<string, string | number>;
@@ -67,6 +71,7 @@ export type DashboardCenterContext = {
   devicesOnline?: number;
   heroExpectedCash?: number | null;
   revenueSparkline?: { value: number }[];
+  comparisonLabelKey?: string;
   onAcknowledge?: (alertId: string) => void;
   exportDashboard?: () => void;
   shareDashboard?: () => void;

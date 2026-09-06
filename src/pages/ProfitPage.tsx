@@ -38,7 +38,8 @@ import {
   marginPercent,
   matchesProfitSearch,
   matchesShelfSearch,
-  resolveProfitHeadlineCostUgx,
+  presentProfitPageFinancials,
+  presentProfitShelfRanking,
   type ProfitProductView,
   type ProfitQuickFilter,
 } from "../lib/profitPageView";
@@ -48,8 +49,15 @@ import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { buildProfitExportRows } from "../lib/analyticsReportExport";
 import { exportCsvFile } from "../lib/reportExportEngine";
 import { overlayPeriodFinancials, resolvePeriodReportAuthority } from "../lib/closedDayAuthority";
+import { useDayClosesForAuthority } from "../hooks/useDayClosesForAuthority";
 import { printProfitReportPdf } from "../lib/profitReportDocument";
 import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
+import {
+  canExportReportsData,
+  resolveReportsFinancialReadiness,
+  runReportsExportIfComplete,
+  sumFrozenPeriodHeadlines,
+} from "../lib/reportsDataCompleteness";
 
 type Props = {
   lang: Language;
@@ -84,7 +92,9 @@ export function ProfitPage({
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const products = usePosStore((s) => s.products);
-  const dayCloses = usePosStore((s) => s.dayCloses);
+  const dayCloses = useDayClosesForAuthority();
+  const hydrationStage = usePosStore((s) => s.hydrationStage);
+  const salesHistoryHydration = usePosStore((s) => s.salesHistoryHydration);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const preferences = usePosStore((s) => s.preferences);
   const shopName = usePosStore((s) => s.preferences.shopDisplayName?.trim() || "Waka POS");
@@ -130,7 +140,8 @@ export function ProfitPage({
   );
 
   const { groups, total } = report;
-  const closedPeriod = resolvePeriodReportAuthority(dayCloses, bounds) !== "live";
+  const periodAuthority = resolvePeriodReportAuthority(dayCloses, bounds);
+  const closedPeriod = periodAuthority !== "live";
   const overlaid = overlayPeriodFinancials({
     live: {
       revenueUgx: total.salesUgx,
@@ -144,17 +155,27 @@ export function ProfitPage({
     returns: profitReturns,
     products,
   });
-  const headlineProfitUgx = overlaid.profitUgx;
-  const headlineRevenueUgx = overlaid.revenueUgx;
-  const headlineCostUgx = resolveProfitHeadlineCostUgx({
-    closedPeriod,
-    revenueUgx: headlineRevenueUgx,
-    profitUgx: headlineProfitUgx,
-    liveCostUgx: total.costUgx,
+  const readiness = resolveReportsFinancialReadiness({
+    hydrationStage,
+    salesHistoryHydration,
+    authority: periodAuthority,
   });
+  const frozenHeadlines = readiness.canShowFrozenHeadlines
+    ? sumFrozenPeriodHeadlines(dayCloses, bounds)
+    : null;
+  const presentation = presentProfitPageFinancials({
+    readiness,
+    overlaid,
+    liveCostUgx: total.costUgx,
+    closedPeriod,
+    frozenHeadlines,
+  });
+  const headlineProfitUgx = presentation.headlineProfitUgx;
+  const headlineRevenueUgx = presentation.headlineRevenueUgx;
+  const headlineCostUgx = presentation.headlineCostUgx;
   const marginPct = marginPercent(headlineRevenueUgx, headlineProfitUgx);
-  const costIncomplete = total.costIncomplete;
-  const revenueEligibleTxnCount = overlaid.transactionCount;
+  const costIncomplete = presentation.showLiveBreakdowns && total.costIncomplete;
+  const revenueEligibleTxnCount = presentation.revenueEligibleTxnCount;
   const avgGrossProfitPerSale = averageGrossProfitPerSale(headlineProfitUgx, revenueEligibleTxnCount);
   const allProducts = useMemo(() => flattenProfitProducts(groups), [groups]);
   const bestShelf = closedPeriod ? null : groups[0]?.categoryLabel ?? null;
@@ -173,6 +194,12 @@ export function ProfitPage({
     if (!searchQuery.trim()) return groups;
     return groups.filter((g) => matchesShelfSearch(searchQuery, g.categoryLabel));
   }, [groups, searchQuery]);
+
+  const shelfPresentation = presentProfitShelfRanking({
+    authority: periodAuthority,
+    groups: searchedGroups,
+    liveTotalProfitUgx: total.profitUgx,
+  });
 
   const displayProducts = useMemo(() => {
     let list = [...searchedProducts];
@@ -286,32 +313,38 @@ export function ProfitPage({
   }
 
   const exportProfitCsv = async () => {
-    await exportCsvFile("profit", `waka-profit-${dateKeyKampala(new Date())}.csv`, exportProfitRows, {
+    if (!canExportReportsData(readiness)) return;
+    const rows = runReportsExportIfComplete(readiness.dataComplete, () => exportProfitRows);
+    if (!rows) return;
+    await exportCsvFile("profit", `waka-profit-${dateKeyKampala(new Date())}.csv`, rows, {
       shareDialogTitle: t(lang, "profitPageTitle"),
     });
   };
 
   const shareProfitReport = async () => {
-    const dayKey = selectedDayKeyForFilter(filter);
-    if (dayKey) {
-      const body = buildDailyReportText(lang, dayKey, {
-        sales: filteredSales,
-        products,
-        returnRecords: filteredReturns,
-        dayDrawerOpens,
-        formulaVersion: resolveCashDrawerFormulaVersion(preferences),
-        includeProfit: true,
-        dayCloses,
-      });
-      await shareText(body, t(lang, "profitPageTitle"), "profit");
-      return;
-    }
-    const lines = exportProfitRows.map((row) => row.join(": ")).join("\n");
-    await shareText(lines, t(lang, "profitPageTitle"), "profit");
+    if (!canExportReportsData(readiness)) return;
+    const payload = runReportsExportIfComplete(readiness.dataComplete, () => {
+      const dayKey = selectedDayKeyForFilter(filter);
+      if (dayKey) {
+        return buildDailyReportText(lang, dayKey, {
+          sales: filteredSales,
+          products,
+          returnRecords: filteredReturns,
+          dayDrawerOpens,
+          formulaVersion: resolveCashDrawerFormulaVersion(preferences),
+          includeProfit: true,
+          dayCloses,
+        });
+      }
+      return exportProfitRows.map((row) => row.join(": ")).join("\n");
+    });
+    if (!payload) return;
+    await shareText(payload, t(lang, "profitPageTitle"), "profit");
   };
 
   const printProfitReport = async () => {
-    await printProfitReportPdf({
+    if (!canExportReportsData(readiness)) return;
+    const payload = runReportsExportIfComplete(readiness.dataComplete, () => ({
       lang,
       shopName,
       periodLabel,
@@ -320,16 +353,24 @@ export function ProfitPage({
       returnRecords: profitReturns,
       products,
       dayCloses,
-      profitUgx: headlineProfitUgx,
-      revenueUgx: headlineRevenueUgx,
-      costUgx: headlineCostUgx,
+      profitUgx: total.profitUgx,
+      revenueUgx: total.salesUgx,
+      costUgx: total.costUgx,
       marginPct,
       costIncomplete,
       groups,
-    });
+    }));
+    if (!payload) return;
+    await printProfitReportPdf(payload);
   };
 
   const hasData = filteredSales.length > 0 || groups.length > 0;
+  const showHeadlineSkeleton = presentation.showHeadlineSkeleton || (salesRefreshing && presentation.showLiveBreakdowns);
+  const showHeadlines =
+    !showHeadlineSkeleton &&
+    (presentation.headlineSource === "frozen" || (presentation.headlineSource === "overlay" && hasData));
+  const showLiveBreakdowns = presentation.showLiveBreakdowns && hasData && !salesRefreshing;
+  const showExportActions = presentation.canExport && hasData;
 
   return (
     <EnterprisePageContainer className={embedded ? "space-y-3" : undefined} variant={embedded ? "flush" : "default"}>
@@ -346,7 +387,7 @@ export function ProfitPage({
             />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 pt-8">
-            {hasData ? (
+            {showExportActions ? (
               <>
                 <button
                   type="button"
@@ -385,9 +426,9 @@ export function ProfitPage({
         </div>
       ) : null}
 
-      {salesRefreshing ? (
+      {showHeadlineSkeleton ? (
         <ProfitStatGridSkeleton />
-      ) : hasData ? (
+      ) : showHeadlines ? (
         <div className="space-y-2">
           {closedPeriod ? (
             <p className="rounded-xl border border-border bg-muted/70 px-3 py-2 text-xs font-semibold text-muted-foreground">
@@ -437,7 +478,7 @@ export function ProfitPage({
         <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
       )}
 
-      {total.linesMissingCost > 0 ? (
+      {presentation.showLiveBreakdowns && total.linesMissingCost > 0 ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
           {t(lang, "profitCostIncompleteBanner").replace("{{count}}", String(total.linesMissingCost))}{" "}
           <Link to="/stock" className="font-black text-waka-800 underline">
@@ -446,7 +487,7 @@ export function ProfitPage({
         </p>
       ) : null}
 
-      {!hasData && !salesRefreshing ? (
+      {!showHeadlines && !showHeadlineSkeleton ? (
         <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center">
           <TrendingUp className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
           <p className="mt-3 text-base font-black text-foreground">{t(lang, "profitEmptyTitle")}</p>
@@ -454,9 +495,9 @@ export function ProfitPage({
         </div>
       ) : null}
 
-      {salesRefreshing ? (
+      {showHeadlineSkeleton ? (
         <ProfitSkeletonList />
-      ) : hasData ? (
+      ) : showLiveBreakdowns ? (
         <div className="space-y-3 transition-opacity duration-300">
           {closedPeriod ? (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
@@ -467,33 +508,51 @@ export function ProfitPage({
 
           {insights.length > 0 ? <ProfitInsightsPanel lang={lang} insights={insights} /> : null}
 
-          {showShelves && searchedGroups.length > 0 ? (
-            <ProfitShelfRanking
-              lang={lang}
-              groups={searchedGroups}
-              totalProfitUgx={total.profitUgx}
-              onShelfClick={(label) => setSearchQuery(label)}
-            />
-          ) : null}
+          {shelfPresentation.kind === "unavailable" ? (
+            <div className="rounded-2xl border border-dashed border-border bg-muted/60 px-6 py-12 text-center">
+              <p className="text-base font-black text-foreground">{t(lang, "reportsClosedBreakdownUnavailable")}</p>
+              <p className="mx-auto mt-2 max-w-sm text-sm font-medium text-muted-foreground">
+                {t(lang, "reportsClosedBreakdownUnavailableHint")}
+              </p>
+            </div>
+          ) : (
+            <>
+              {showShelves && shelfPresentation.groups.length > 0 ? (
+                <ProfitShelfRanking
+                  lang={lang}
+                  groups={shelfPresentation.groups}
+                  totalProfitUgx={shelfPresentation.totalProfitUgx}
+                  onShelfClick={(label) => setSearchQuery(label)}
+                />
+              ) : null}
 
-          {showProducts && displayProducts.length > 0 ? (
-            <section className="space-y-2">
-              <h3 className="px-0.5 text-xs font-black text-foreground">{t(lang, "profitTopProducts")}</h3>
-              {displayProducts.map((p) => (
-                <ProfitProductCard key={`${p.productId}-${p.name}`} lang={lang} product={p} onOpen={setDetailProduct} />
-              ))}
-            </section>
-          ) : null}
+              {showProducts && displayProducts.length > 0 ? (
+                <section className="space-y-2">
+                  <h3 className="px-0.5 text-xs font-black text-foreground">{t(lang, "profitTopProducts")}</h3>
+                  {displayProducts.map((p) => (
+                    <ProfitProductCard key={`${p.productId}-${p.name}`} lang={lang} product={p} onOpen={setDetailProduct} />
+                  ))}
+                </section>
+              ) : null}
 
-          {showLowMargin ? (
-            <ProfitLowMarginList lang={lang} products={searchedProducts} onProductClick={setDetailProduct} />
-          ) : null}
+              {showLowMargin ? (
+                <ProfitLowMarginList lang={lang} products={searchedProducts} onProductClick={setDetailProduct} />
+              ) : null}
+            </>
+          )}
 
           {hasData && displayProducts.length === 0 && searchedGroups.length === 0 && searchQuery.trim() ? (
             <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">
               {t(lang, "posSellNoMatch")}
             </p>
           ) : null}
+        </div>
+      ) : presentation.headlineSource === "frozen" ? (
+        <div className="rounded-2xl border border-dashed border-border bg-muted/60 px-6 py-12 text-center">
+          <p className="text-base font-black text-foreground">{t(lang, "reportsClosedBreakdownUnavailable")}</p>
+          <p className="mx-auto mt-2 max-w-sm text-sm font-medium text-muted-foreground">
+            {t(lang, "reportsClosedBreakdownUnavailableHint")}
+          </p>
         </div>
       ) : null}
 

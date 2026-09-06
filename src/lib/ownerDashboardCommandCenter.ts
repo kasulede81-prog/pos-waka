@@ -35,6 +35,7 @@ import {
   type StaffControlRow,
 } from "./ownerCommandCenterBuilders";
 import { snapshotFromPartial } from "../offline/backupEngine";
+import { dateKeyKampala } from "./datesUg";
 import { listSyncConflicts } from "./syncConflictLog";
 import { readSyncHealthMeta } from "./syncMeta";
 
@@ -182,7 +183,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
     liveOps: buildLiveOperationsSnapshot({
       shifts: input.shifts,
       dayDrawerOpens: input.dayDrawerOpens,
-      primaryDayKey: input.bounds.toKey,
+      primaryDayKey: dateKeyKampala(new Date()),
       syncPendingCount: input.syncPendingCount,
       syncHealth,
       devicesOnline: input.devicesOnline,

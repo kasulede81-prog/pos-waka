@@ -113,6 +113,22 @@ export function authoritativeCloseForDate(
   return activeDayCloseForDate(dayCloses ?? [], dateKey);
 }
 
+/**
+ * P2-NEW-01/02 — financial authority may live in archivedDayCloses after retention.
+ * Active non-superseded rows stay first so existing find/seen-by-dateKey wins.
+ * Does not copy archive into active state.
+ */
+export function dayClosesForAuthority(
+  dayCloses: DayCloseSummary[] | undefined,
+  archivedDayCloses?: DayCloseSummary[] | undefined,
+): DayCloseSummary[] {
+  const active = dayCloses ?? [];
+  const archived = archivedDayCloses ?? [];
+  if (archived.length === 0) return active;
+  if (active.length === 0) return archived;
+  return [...active, ...archived];
+}
+
 export type ReportAuthoritySource = "closed_snapshot" | "live";
 
 export type ReportAuthority = {

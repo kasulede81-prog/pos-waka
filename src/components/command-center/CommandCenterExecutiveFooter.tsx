@@ -12,6 +12,7 @@ type Props = {
   onExport: () => void;
   onShare: () => void;
   onPrint: () => void;
+  exportEnabled?: boolean;
 };
 
 export function CommandCenterExecutiveFooter({
@@ -22,6 +23,7 @@ export function CommandCenterExecutiveFooter({
   onExport,
   onShare,
   onPrint,
+  exportEnabled = true,
 }: Props) {
   const stars = starCountFromScore(score);
 
@@ -52,21 +54,24 @@ export function CommandCenterExecutiveFooter({
         <button
           type="button"
           onClick={onExport}
-          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-waka-600 px-4 text-sm font-black text-white"
+          disabled={!exportEnabled}
+          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-waka-600 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t(lang, "cmdCenterExportDashboard")}
         </button>
         <button
           type="button"
           onClick={onPrint}
-          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-card/80 px-4 text-sm font-black text-foreground"
+          disabled={!exportEnabled}
+          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-border bg-card/80 px-4 text-sm font-black text-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t(lang, "monthlyReportPrint")}
         </button>
         <button
           type="button"
           onClick={onShare}
-          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border-2 border-border bg-card/80 px-4 text-sm font-black text-foreground"
+          disabled={!exportEnabled}
+          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-2xl border-2 border-border bg-card/80 px-4 text-sm font-black text-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Share2 className="h-4 w-4" aria-hidden />
           {t(lang, "cmdCenterShareReport")}

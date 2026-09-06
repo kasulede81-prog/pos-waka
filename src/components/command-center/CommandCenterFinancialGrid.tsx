@@ -4,7 +4,13 @@ import type { LucideIcon } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { OwnerFinancialExtended } from "../../lib/ownerCommandCenterBuilders";
-import { formatShortUgx, pctChangeLabel, type SparkPoint } from "../../lib/commandCenterPageView";
+import {
+  formatOfficialHeadlineUgx,
+  formatShortUgx,
+  pctChangeLabel,
+  type CommandCenterOfficialFinancials,
+  type SparkPoint,
+} from "../../lib/commandCenterPageView";
 import { MiniSparkline } from "./MiniSparkline";
 import { EnterpriseCard } from "../enterprise/EnterpriseCard";
 import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
@@ -16,6 +22,9 @@ type Props = {
   financial: OwnerFinancialExtended;
   periodLabel: string;
   revenueSparkline?: SparkPoint[];
+  officialFinancials?: CommandCenterOfficialFinancials;
+  canProfit?: boolean;
+  comparisonLabelKey?: string;
 };
 
 type FinMetric = {
@@ -25,30 +34,53 @@ type FinMetric = {
   icon: LucideIcon;
 };
 
-export function CommandCenterFinancialGrid({ lang, financial, periodLabel, revenueSparkline = [] }: Props) {
-  const mix = financial.paymentMix;
-  const mixTotal = mix.cashUgx + mix.mobileMoneyUgx + mix.atmUgx + mix.creditUgx + mix.mixedUgx + mix.otherUgx;
-  const cashPct = mixTotal > 0 ? Math.round((mix.cashUgx / mixTotal) * 100) : 0;
+export function CommandCenterFinancialGrid({
+  lang,
+  financial,
+  periodLabel,
+  revenueSparkline = [],
+  officialFinancials,
+  canProfit = true,
+  comparisonLabelKey = "cmdCenterVsYesterday",
+}: Props) {
+  const officialReady = officialFinancials ? officialFinancials.presentHeadlinesAsFinal : true;
+  const officialRevenue = officialReady ? (officialFinancials?.revenueUgx ?? financial.revenueUgx) : null;
+  const officialProfit = officialReady ? (officialFinancials?.profitUgx ?? financial.profitUgx) : null;
+  const officialCostIncomplete = officialReady
+    ? (officialFinancials?.costIncomplete ?? financial.costIncomplete)
+    : false;
+  const mix = officialReady ? financial.paymentMix : null;
+  const mixTotal = mix
+    ? mix.cashUgx + mix.mobileMoneyUgx + mix.atmUgx + mix.creditUgx + mix.mixedUgx + mix.otherUgx
+    : 0;
+  const cashPct = mix && mixTotal > 0 ? Math.round((mix.cashUgx / mixTotal) * 100) : 0;
+  const purchasesUgx = officialReady ? financial.purchasesUgx : null;
+  const expensesPeriodUgx = officialReady ? financial.expensesPeriodUgx : null;
+  const debtIssuedUgx = officialReady ? financial.debtIssuedUgx : null;
 
   const metrics: FinMetric[] = [
     {
       labelKey: "ownerFinancialRevenue",
-      value: formatShortUgx(financial.revenueUgx),
-      pct: pctChangeLabel(financial.trendVsPriorDay?.pctRevenue ?? null),
+      value: formatOfficialHeadlineUgx(officialRevenue),
+      pct: officialReady ? pctChangeLabel(financial.trendVsPriorDay?.pctRevenue ?? null) : null,
       icon: TrendingUp,
     },
-    {
-      labelKey: financial.costIncomplete ? "profitGrossProfitEstimated" : "ownerFinancialProfit",
-      value: formatShortUgx(financial.profitUgx),
-      pct: pctChangeLabel(financial.trendVsPriorDay?.pctProfit ?? null),
-      icon: PiggyBank,
-    },
-    { labelKey: "ownerFinancialPurchases", value: formatShortUgx(financial.purchasesUgx), pct: null, icon: ArrowUpRight },
-    { labelKey: "ownerFinancialExpensesPeriod", value: formatShortUgx(financial.expensesPeriodUgx), pct: null, icon: Receipt },
+    ...(canProfit
+      ? [
+          {
+            labelKey: officialCostIncomplete ? "profitGrossProfitEstimated" : "ownerFinancialProfit",
+            value: formatOfficialHeadlineUgx(officialProfit),
+            pct: officialReady ? pctChangeLabel(financial.trendVsPriorDay?.pctProfit ?? null) : null,
+            icon: PiggyBank,
+          } satisfies FinMetric,
+        ]
+      : []),
+    { labelKey: "ownerFinancialPurchases", value: formatOfficialHeadlineUgx(purchasesUgx), pct: null, icon: ArrowUpRight },
+    { labelKey: "ownerFinancialExpensesPeriod", value: formatOfficialHeadlineUgx(expensesPeriodUgx), pct: null, icon: Receipt },
     { labelKey: "ownerFinancialReceivables", value: formatShortUgx(financial.receivablesUgx), pct: null, icon: Wallet },
     { labelKey: "ownerFinancialPayables", value: formatShortUgx(financial.payablesUgx), pct: null, icon: Scale },
     { labelKey: "ownerFinancialDebtCollected", value: formatShortUgx(financial.debtCollectedUgx), pct: null, icon: ArrowDownLeft },
-    { labelKey: "ownerFinancialDebtIssued", value: formatShortUgx(financial.debtIssuedUgx), pct: null, icon: ArrowUpRight },
+    { labelKey: "ownerFinancialDebtIssued", value: formatOfficialHeadlineUgx(debtIssuedUgx), pct: null, icon: ArrowUpRight },
   ];
 
   return (
@@ -65,12 +97,17 @@ export function CommandCenterFinancialGrid({ lang, financial, periodLabel, reven
                 <MiniSparkline points={revenueSparkline} strokeClass="stroke-stone-400" />
               </div>
             }
-            hint={m.pct ? `${m.pct} ${t(lang, "cmdCenterVsYesterday")}` : undefined}
+            hint={m.pct ? `${m.pct} ${t(lang, comparisonLabelKey)}` : undefined}
           />
         ))}
       </div>
 
-      {mixTotal > 0 ? (
+      {mix == null ? (
+        <div className="mt-4 rounded-2xl bg-muted p-3">
+          <Caption className="uppercase tracking-wide">{t(lang, "ownerFinancialPaymentMix")}</Caption>
+          <MonoNumber className="mt-1 text-sm">—</MonoNumber>
+        </div>
+      ) : mixTotal > 0 ? (
         <div className="mt-4 rounded-2xl bg-muted p-3">
           <Caption className="uppercase tracking-wide">{t(lang, "ownerFinancialPaymentMix")}</Caption>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">

@@ -35,7 +35,8 @@ function HeaderWidget({ ctx }: DashboardWidgetProps) {
         <button
           type="button"
           onClick={ctx.exportDashboard}
-          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground shadow-sm"
+          disabled={ctx.canExportOfficialFinancials === false}
+          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           <FileDown className="h-3.5 w-3.5" aria-hidden />
           {t(ctx.lang, "cmdCenterExport")}
@@ -98,7 +99,12 @@ function HealthHeroWidget({ ctx }: DashboardWidgetProps) {
 function KpiGridWidget({ ctx }: DashboardWidgetProps) {
   if (!COMMAND_CENTER_SURFACE(ctx) || !ctx.kpiCards) return null;
   return (
-    <CommandCenterKpiGrid lang={ctx.lang} cards={ctx.kpiCards} periodLabel={ctx.periodLabel ?? ""} />
+    <CommandCenterKpiGrid
+      lang={ctx.lang}
+      cards={ctx.kpiCards}
+      periodLabel={ctx.periodLabel ?? ""}
+      comparisonLabelKey={ctx.comparisonLabelKey}
+    />
   );
 }
 
@@ -159,7 +165,13 @@ function StaffCardWidget({ ctx }: DashboardWidgetProps) {
 
 function InventoryCardWidget({ ctx }: DashboardWidgetProps) {
   if (!COMMAND_CENTER_SURFACE(ctx) || !ctx.commandCenter) return null;
-  return <CommandCenterInventoryCard lang={ctx.lang} inventory={ctx.commandCenter.inventory} />;
+  return (
+    <CommandCenterInventoryCard
+      lang={ctx.lang}
+      inventory={ctx.commandCenter.inventory}
+      canProfit={ctx.canProfit !== false}
+    />
+  );
 }
 
 function FinancialGridWidget({ ctx }: DashboardWidgetProps) {
@@ -170,6 +182,9 @@ function FinancialGridWidget({ ctx }: DashboardWidgetProps) {
       financial={ctx.commandCenter.financial}
       periodLabel={ctx.periodLabel ?? ""}
       revenueSparkline={ctx.revenueSparkline ?? []}
+      officialFinancials={ctx.officialFinancials}
+      canProfit={ctx.canProfit !== false}
+      comparisonLabelKey={ctx.comparisonLabelKey}
     />
   );
 }
@@ -206,6 +221,7 @@ function ExecutiveFooterWidget({ ctx }: DashboardWidgetProps) {
       onExport={ctx.exportDashboard ?? (() => {})}
       onShare={ctx.shareDashboard ?? (() => {})}
       onPrint={ctx.printDashboard ?? (() => {})}
+      exportEnabled={ctx.canExportOfficialFinancials !== false}
     />
   );
 }

@@ -3,6 +3,7 @@ import type { DateFilterBounds } from "./dateFilters";
 import { overlayPeriodFinancials, resolvePeriodReportAuthority } from "./closedDayAuthority";
 import { t } from "./i18n";
 import { sanitizePdfStem } from "./pdfLayout";
+import { resolveProfitHeadlineCostUgx } from "./profitPageView";
 import { statusFromAuthority, ugxLabel, type ReportDocumentModel } from "./reportDocumentModel";
 import { renderReportDocumentPdf } from "./reportDocumentPdf";
 import { downloadReportPdfBlob, printReportPdfBlob } from "./reportDocumentPrint";
@@ -16,6 +17,10 @@ export type ProfitReportDocumentInput = {
   returnRecords: ReturnRecord[];
   products: Product[];
   dayCloses?: DayCloseSummary[];
+  /**
+   * LIVE period totals (pre-overlay). This builder applies
+   * `overlayPeriodFinancials` once. Never pass already-overlaid headlines.
+   */
   profitUgx: number;
   revenueUgx: number;
   costUgx: number;
@@ -40,6 +45,12 @@ export function buildProfitReportDocument(input: ProfitReportDocumentInput): Rep
   });
   const authority = resolvePeriodReportAuthority(input.dayCloses, input.bounds);
   const closed = authority !== "live";
+  const costUgx = resolveProfitHeadlineCostUgx({
+    closedPeriod: closed,
+    revenueUgx: overlaid.revenueUgx,
+    profitUgx: overlaid.profitUgx,
+    liveCostUgx: input.costUgx,
+  });
   const marginPct =
     overlaid.revenueUgx > 0 ? (overlaid.profitUgx / overlaid.revenueUgx) * 100 : 0;
   const grossLabel = input.costIncomplete
@@ -60,7 +71,7 @@ export function buildProfitReportDocument(input: ProfitReportDocumentInput): Rep
         rows: [
           { label: grossLabel, value: ugxLabel(overlaid.profitUgx), bold: true },
           { label: t(input.lang, "profitStatRevenue"), value: ugxLabel(overlaid.revenueUgx) },
-          { label: t(input.lang, "profitStatCost"), value: ugxLabel(input.costUgx) },
+          { label: t(input.lang, "profitStatCost"), value: ugxLabel(costUgx) },
           { label: t(input.lang, "profitStatMargin"), value: `${marginPct.toFixed(1)}%` },
           ...(input.costIncomplete
             ? [{ label: t(input.lang, "profitExportCostIncomplete"), value: t(input.lang, "profitGrossProfitEstimated") }]

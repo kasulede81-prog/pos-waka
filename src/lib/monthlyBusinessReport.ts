@@ -3,7 +3,12 @@ import { sumCashExpensesInMonth } from "./cashReconciliation";
 import { dateKeyKampala, formatDateTimeKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesInMonth } from "./financialMetrics";
 import { physicalCashCollectedFromSale } from "./cashDrawerSales";
-import { boundsForMonthKey, overlayPeriodFinancials, resolvePeriodReportAuthority } from "./closedDayAuthority";
+import {
+  boundsForMonthKey,
+  overlayPeriodFinancials,
+  periodSalesBreakdownsUnavailable,
+  resolvePeriodReportAuthority,
+} from "./closedDayAuthority";
 import { inventoryValueAtCostUgx } from "./costPrecision";
 import { saveExportedFile } from "./fileDownload";
 import { t } from "./i18n";
@@ -19,6 +24,8 @@ export type MonthlyBusinessReport = {
   totalSalesUgx: number;
   transactionCount: number;
   cashUgx: number;
+  /** Closed-day physical cash was not saved — never present `cashUgx` as a number. */
+  physicalCashUnavailable: boolean;
   debtUgx: number;
   discountsUgx: number;
   refundsUgx: number;
@@ -35,6 +42,8 @@ export type MonthlyBusinessReport = {
     lowStockCount: number;
   };
   hasClosedDays: boolean;
+  /** Snapshot does not persist products, cashiers, or discounts — never present live rows as historical. */
+  closedDayBreakdownUnavailable: boolean;
 };
 
 function isValidMonthKey(monthKey: string): boolean {
@@ -81,33 +90,37 @@ export function buildMonthlyBusinessReport(params: {
     returns: returnRecords,
     products,
   });
-  const hasClosedDays = resolvePeriodReportAuthority(dayCloses, monthBounds) !== "live";
+  const periodAuthority = resolvePeriodReportAuthority(dayCloses, monthBounds);
+  const hasClosedDays = periodAuthority !== "live";
+  const closedDayBreakdownUnavailable = periodSalesBreakdownsUnavailable(periodAuthority);
 
   const productMap = new Map<string, { name: string; qty: number; revenueUgx: number }>();
-  for (const sale of monthSales) {
-    for (const line of sale.lines) {
-      if (line.voided) continue;
-      const cur = productMap.get(line.productId) ?? { name: line.name, qty: 0, revenueUgx: 0 };
-      productMap.set(line.productId, {
-        name: line.name,
-        qty: cur.qty + line.quantity,
-        revenueUgx: cur.revenueUgx + line.lineTotalUgx,
-      });
-    }
-  }
-
-  const staffName = new Map(staffAccounts.map((s) => [s.id, s.name]));
   const cashierMap = new Map<string, { label: string; count: number; revenueUgx: number }>();
-  for (const sale of monthSales) {
-    const uid = sale.soldByUserId ?? "unknown";
-    let label = uid;
-    if (uid.startsWith("staff:")) {
-      label = staffName.get(uid.slice("staff:".length)) ?? t("en", "role_cashier");
-    } else if (uid.startsWith("local:") || uid.startsWith("sb:")) {
-      label = t("en", "role_owner");
+  if (!closedDayBreakdownUnavailable) {
+    for (const sale of monthSales) {
+      for (const line of sale.lines) {
+        if (line.voided) continue;
+        const cur = productMap.get(line.productId) ?? { name: line.name, qty: 0, revenueUgx: 0 };
+        productMap.set(line.productId, {
+          name: line.name,
+          qty: cur.qty + line.quantity,
+          revenueUgx: cur.revenueUgx + line.lineTotalUgx,
+        });
+      }
     }
-    const cur = cashierMap.get(uid) ?? { label, count: 0, revenueUgx: 0 };
-    cashierMap.set(uid, { label: cur.label, count: cur.count + 1, revenueUgx: cur.revenueUgx + sale.totalUgx });
+
+    const staffName = new Map(staffAccounts.map((s) => [s.id, s.name]));
+    for (const sale of monthSales) {
+      const uid = sale.soldByUserId ?? "unknown";
+      let label = uid;
+      if (uid.startsWith("staff:")) {
+        label = staffName.get(uid.slice("staff:".length)) ?? t("en", "role_cashier");
+      } else if (uid.startsWith("local:") || uid.startsWith("sb:")) {
+        label = t("en", "role_owner");
+      }
+      const cur = cashierMap.get(uid) ?? { label, count: 0, revenueUgx: 0 };
+      cashierMap.set(uid, { label: cur.label, count: cur.count + 1, revenueUgx: cur.revenueUgx + sale.totalUgx });
+    }
   }
 
   const lowStockCount = products.filter((p) => p.stockOnHand <= (p.minimumStockAlert ?? 5)).length;
@@ -120,6 +133,7 @@ export function buildMonthlyBusinessReport(params: {
     totalSalesUgx: overlaid.revenueUgx,
     transactionCount: overlaid.transactionCount,
     cashUgx: overlaid.cashCollectedUgx,
+    physicalCashUnavailable: overlaid.physicalCashUnavailable,
     debtUgx: overlaid.debtIssuedUgx,
     discountsUgx: fin.discountsUgx,
     refundsUgx: monthReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0),
@@ -134,7 +148,40 @@ export function buildMonthlyBusinessReport(params: {
       lowStockCount,
     },
     hasClosedDays,
+    closedDayBreakdownUnavailable,
   };
+}
+
+export function monthlyReportCashInHandDisplay(
+  lang: Language,
+  report: Pick<MonthlyBusinessReport, "cashUgx" | "physicalCashUnavailable">,
+): string {
+  if (report.physicalCashUnavailable) return t(lang, "reportsClosedBreakdownUnavailable");
+  return `UGX ${report.cashUgx.toLocaleString()}`;
+}
+
+function monthlyReportCashCsvValue(
+  lang: Language,
+  report: Pick<MonthlyBusinessReport, "cashUgx" | "physicalCashUnavailable">,
+): string | number {
+  if (report.physicalCashUnavailable) return t(lang, "reportsClosedBreakdownUnavailable");
+  return report.cashUgx;
+}
+
+export function monthlyReportDiscountDisplay(
+  lang: Language,
+  report: Pick<MonthlyBusinessReport, "discountsUgx" | "closedDayBreakdownUnavailable">,
+): string {
+  if (report.closedDayBreakdownUnavailable) return t(lang, "reportsClosedBreakdownUnavailable");
+  return `UGX ${report.discountsUgx.toLocaleString()}`;
+}
+
+function monthlyReportDiscountCsvValue(
+  lang: Language,
+  report: Pick<MonthlyBusinessReport, "discountsUgx" | "closedDayBreakdownUnavailable">,
+): string | number {
+  if (report.closedDayBreakdownUnavailable) return t(lang, "reportsClosedBreakdownUnavailable");
+  return report.discountsUgx;
 }
 
 export function formatMonthlyReportPlain(
@@ -148,9 +195,9 @@ export function formatMonthlyReportPlain(
   lines.push("");
   lines.push(`${t(lang, "totalSales")}: UGX ${report.totalSalesUgx.toLocaleString()}`);
   lines.push(`${t(lang, "monthlyReportTransactions")}: ${report.transactionCount}`);
-  lines.push(`${t(lang, "cashInHand")}: UGX ${report.cashUgx.toLocaleString()}`);
+  lines.push(`${t(lang, "cashInHand")}: ${monthlyReportCashInHandDisplay(lang, report)}`);
   lines.push(`${t(lang, "creditLabel")}: UGX ${report.debtUgx.toLocaleString()}`);
-  lines.push(`${t(lang, "monthlyReportDiscounts")}: UGX ${report.discountsUgx.toLocaleString()}`);
+  lines.push(`${t(lang, "monthlyReportDiscounts")}: ${monthlyReportDiscountDisplay(lang, report)}`);
   lines.push(`${t(lang, "monthlyReportRefunds")}: UGX ${report.refundsUgx.toLocaleString()}`);
   if (opts.includeProfit) {
     lines.push(`${t(lang, "estimatedProfit")}: UGX ${report.profitUgx.toLocaleString()}`);
@@ -162,13 +209,23 @@ export function formatMonthlyReportPlain(
   }
   lines.push("");
   lines.push(t(lang, "monthlyReportTopProducts"));
-  for (const p of report.topProducts.slice(0, 10)) {
-    lines.push(`  · ${p.name} — ${p.qty} · UGX ${p.revenueUgx.toLocaleString()}`);
+  if (report.closedDayBreakdownUnavailable) {
+    lines.push(`  ${t(lang, "reportsClosedBreakdownUnavailable")}`);
+    lines.push(`  ${t(lang, "reportsClosedBreakdownUnavailableHint")}`);
+  } else {
+    for (const p of report.topProducts.slice(0, 10)) {
+      lines.push(`  · ${p.name} — ${p.qty} · UGX ${p.revenueUgx.toLocaleString()}`);
+    }
   }
   lines.push("");
   lines.push(t(lang, "monthlyReportByCashier"));
-  for (const c of report.byCashier) {
-    lines.push(`  · ${c.label} — ${c.count} · UGX ${c.revenueUgx.toLocaleString()}`);
+  if (report.closedDayBreakdownUnavailable) {
+    lines.push(`  ${t(lang, "reportsClosedBreakdownUnavailable")}`);
+    lines.push(`  ${t(lang, "reportsClosedBreakdownUnavailableHint")}`);
+  } else {
+    for (const c of report.byCashier) {
+      lines.push(`  · ${c.label} — ${c.count} · UGX ${c.revenueUgx.toLocaleString()}`);
+    }
   }
   lines.push("");
   lines.push(t(lang, "monthlyReportInventory"));
@@ -185,20 +242,25 @@ export function monthlyReportToCsv(report: MonthlyBusinessReport, opts: { includ
   rows.push(["summary", "month", report.monthKey].map(esc).join(","));
   rows.push(["summary", "total_sales_ugx", report.totalSalesUgx].map(esc).join(","));
   rows.push(["summary", "transactions", report.transactionCount].map(esc).join(","));
-  rows.push(["summary", "cash_ugx", report.cashUgx].map(esc).join(","));
+  rows.push(["summary", "cash_ugx", monthlyReportCashCsvValue("en", report)].map(esc).join(","));
   rows.push(["summary", "debt_ugx", report.debtUgx].map(esc).join(","));
-  rows.push(["summary", "discounts_ugx", report.discountsUgx].map(esc).join(","));
+  rows.push(["summary", "discounts_ugx", monthlyReportDiscountCsvValue("en", report)].map(esc).join(","));
   rows.push(["summary", "refunds_ugx", report.refundsUgx].map(esc).join(","));
   if (opts.includeProfit) {
     rows.push(["summary", "profit_ugx", report.profitUgx].map(esc).join(","));
   }
   rows.push(["summary", "products_count", report.inventorySummary.productCount].map(esc).join(","));
   rows.push(["summary", "stock_value_cost_ugx", report.inventorySummary.stockValueAtCostUgx].map(esc).join(","));
-  for (const p of report.topProducts) {
-    rows.push(["product", p.name, `${p.qty}|${p.revenueUgx}`].map(esc).join(","));
-  }
-  for (const c of report.byCashier) {
-    rows.push(["cashier", c.label, `${c.count}|${c.revenueUgx}`].map(esc).join(","));
+  if (report.closedDayBreakdownUnavailable) {
+    rows.push(["breakdown", "top_products", t("en", "reportsClosedBreakdownUnavailable")].map(esc).join(","));
+    rows.push(["breakdown", "cashiers", t("en", "reportsClosedBreakdownUnavailable")].map(esc).join(","));
+  } else {
+    for (const p of report.topProducts) {
+      rows.push(["product", p.name, `${p.qty}|${p.revenueUgx}`].map(esc).join(","));
+    }
+    for (const c of report.byCashier) {
+      rows.push(["cashier", c.label, `${c.count}|${c.revenueUgx}`].map(esc).join(","));
+    }
   }
   return "\uFEFF" + rows.join("\n");
 }
@@ -223,9 +285,9 @@ export function buildMonthlyReportHtml(
   const rows = [
     [t(lang, "totalSales"), `UGX ${report.totalSalesUgx.toLocaleString()}`],
     [t(lang, "monthlyReportTransactions"), String(report.transactionCount)],
-    [t(lang, "cashInHand"), `UGX ${report.cashUgx.toLocaleString()}`],
+    [t(lang, "cashInHand"), monthlyReportCashInHandDisplay(lang, report)],
     [t(lang, "creditLabel"), `UGX ${report.debtUgx.toLocaleString()}`],
-    [t(lang, "monthlyReportDiscounts"), `UGX ${report.discountsUgx.toLocaleString()}`],
+    [t(lang, "monthlyReportDiscounts"), monthlyReportDiscountDisplay(lang, report)],
     [t(lang, "monthlyReportRefunds"), `UGX ${report.refundsUgx.toLocaleString()}`],
     ...(opts.includeProfit
       ? [[t(lang, "estimatedProfit"), `UGX ${report.profitUgx.toLocaleString()}`] as [string, string]]
@@ -234,13 +296,18 @@ export function buildMonthlyReportHtml(
       ? [[t(lang, "dailyReportClosedAuthorityNote"), t(lang, "dailyReportOperationalDetails")] as [string, string]]
       : []),
   ];
-  const productRows = report.topProducts
-    .slice(0, 15)
-    .map((p) => `<tr><td>${escapeHtml(p.name)}</td><td>${p.qty}</td><td>UGX ${p.revenueUgx.toLocaleString()}</td></tr>`)
-    .join("");
-  const cashierRows = report.byCashier
-    .map((c) => `<tr><td>${escapeHtml(c.label)}</td><td>${c.count}</td><td>UGX ${c.revenueUgx.toLocaleString()}</td></tr>`)
-    .join("");
+  const unavailable = t(lang, "reportsClosedBreakdownUnavailable");
+  const productRows = report.closedDayBreakdownUnavailable
+    ? `<tr><td colspan="3">${escapeHtml(unavailable)}</td></tr>`
+    : report.topProducts
+        .slice(0, 15)
+        .map((p) => `<tr><td>${escapeHtml(p.name)}</td><td>${p.qty}</td><td>UGX ${p.revenueUgx.toLocaleString()}</td></tr>`)
+        .join("");
+  const cashierRows = report.closedDayBreakdownUnavailable
+    ? `<tr><td colspan="3">${escapeHtml(unavailable)}</td></tr>`
+    : report.byCashier
+        .map((c) => `<tr><td>${escapeHtml(c.label)}</td><td>${c.count}</td><td>UGX ${c.revenueUgx.toLocaleString()}</td></tr>`)
+        .join("");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(report.shopName)} ${report.monthKey}</title>
 <style>
 body{font-family:system-ui,sans-serif;padding:24px;color:#111}
@@ -287,28 +354,40 @@ export function buildMonthlyReportDocument(
         rows: [
           { label: t(lang, "totalSales"), value: ugxLabel(report.totalSalesUgx), bold: true },
           { label: t(lang, "monthlyReportTransactions"), value: String(report.transactionCount) },
-          { label: t(lang, "cashInHand"), value: ugxLabel(report.cashUgx) },
+          { label: t(lang, "cashInHand"), value: monthlyReportCashInHandDisplay(lang, report) },
           { label: t(lang, "creditLabel"), value: ugxLabel(report.debtUgx) },
-          { label: t(lang, "monthlyReportDiscounts"), value: ugxLabel(report.discountsUgx) },
+          { label: t(lang, "monthlyReportDiscounts"), value: monthlyReportDiscountDisplay(lang, report) },
           { label: t(lang, "monthlyReportRefunds"), value: ugxLabel(report.refundsUgx) },
           ...(opts.includeProfit ? [{ label: t(lang, "estimatedProfit"), value: ugxLabel(report.profitUgx) }] : []),
         ],
       },
       {
         title: t(lang, "monthlyReportTopProducts"),
-        live: report.hasClosedDays,
-        rows: report.topProducts.slice(0, 12).map((p) => ({
-          label: p.name,
-          value: `${p.qty} · ${ugxLabel(p.revenueUgx)}`,
-        })),
+        rows: report.closedDayBreakdownUnavailable
+          ? [
+              {
+                label: t(lang, "reportsClosedBreakdownUnavailable"),
+                value: t(lang, "reportsClosedBreakdownUnavailableHint"),
+              },
+            ]
+          : report.topProducts.slice(0, 12).map((p) => ({
+              label: p.name,
+              value: `${p.qty} · ${ugxLabel(p.revenueUgx)}`,
+            })),
       },
       {
         title: t(lang, "monthlyReportByCashier"),
-        live: report.hasClosedDays,
-        rows: report.byCashier.map((c) => ({
-          label: c.label,
-          value: `${c.count} · ${ugxLabel(c.revenueUgx)}`,
-        })),
+        rows: report.closedDayBreakdownUnavailable
+          ? [
+              {
+                label: t(lang, "reportsClosedBreakdownUnavailable"),
+                value: t(lang, "reportsClosedBreakdownUnavailableHint"),
+              },
+            ]
+          : report.byCashier.map((c) => ({
+              label: c.label,
+              value: `${c.count} · ${ugxLabel(c.revenueUgx)}`,
+            })),
       },
     ],
   };

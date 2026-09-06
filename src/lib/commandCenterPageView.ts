@@ -1,10 +1,11 @@
-import type { Language, Sale } from "../types";
+import type { DayCloseSummary, Language, Sale } from "../types";
 import { t, tTemplate } from "./i18n";
 import type { AttentionItem } from "./ownerCommandCenter";
 import type { IntegritySignal } from "./ownerCommandCenterBuilders";
 import type { OwnerFinancialExtended, OwnerInventoryExtended } from "./ownerCommandCenterBuilders";
-import type { DateFilterBounds } from "./dateFilters";
+import { addDaysToDateKey, type DateFilterBounds } from "./dateFilters";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "./datesUg";
+import { periodSalesBreakdownsUnavailable, resolveReportAuthority, type PeriodReportAuthority } from "./closedDayAuthority";
 import { isCompletedSale } from "./saleStatus";
 
 export type DomainHealth = "healthy" | "warning" | "critical";
@@ -27,9 +28,115 @@ export type CommandCenterRecommendation = {
 };
 
 import { formatUgx } from "./formatUgx";
+import {
+  canExportReportsData,
+  type FrozenPeriodHeadlines,
+  type ReportsFinancialReadiness,
+} from "./reportsDataCompleteness";
 
 export function formatShortUgx(n: number): string {
   return formatUgx(n);
+}
+
+export type CommandCenterOfficialHeadlineSource = "overlay" | "frozen" | "hidden";
+
+export type CommandCenterOfficialFinancials = {
+  headlineSource: CommandCenterOfficialHeadlineSource;
+  presentHeadlinesAsFinal: boolean;
+  canExport: boolean;
+  revenueUgx: number | null;
+  profitUgx: number | null;
+  transactionCount: number | null;
+  costIncomplete: boolean;
+};
+
+/**
+ * CC-P2-03 — official Command Center Revenue / Profit / Transactions follow the
+ * shared Reports readiness contract. Does not invent a second hydration system.
+ */
+export function presentCommandCenterOfficialFinancials(input: {
+  readiness: ReportsFinancialReadiness;
+  overlaid: {
+    revenueUgx: number;
+    profitUgx: number;
+    transactionCount: number;
+    costIncomplete: boolean;
+  };
+  frozenHeadlines: FrozenPeriodHeadlines | null;
+}): CommandCenterOfficialFinancials {
+  if (input.readiness.dataComplete) {
+    return {
+      headlineSource: "overlay",
+      presentHeadlinesAsFinal: true,
+      canExport: canExportReportsData(input.readiness),
+      revenueUgx: input.overlaid.revenueUgx,
+      profitUgx: input.overlaid.profitUgx,
+      transactionCount: input.overlaid.transactionCount,
+      costIncomplete: input.overlaid.costIncomplete,
+    };
+  }
+  if (input.readiness.canShowFrozenHeadlines && input.frozenHeadlines) {
+    return {
+      headlineSource: "frozen",
+      presentHeadlinesAsFinal: true,
+      canExport: canExportReportsData(input.readiness),
+      revenueUgx: input.frozenHeadlines.revenue,
+      profitUgx: input.frozenHeadlines.profit,
+      transactionCount: input.frozenHeadlines.count,
+      costIncomplete: false,
+    };
+  }
+  return {
+    headlineSource: "hidden",
+    presentHeadlinesAsFinal: false,
+    canExport: false,
+    revenueUgx: null,
+    profitUgx: null,
+    transactionCount: null,
+    costIncomplete: false,
+  };
+}
+
+export function formatOfficialHeadlineUgx(value: number | null): string {
+  return value == null ? "—" : formatShortUgx(value);
+}
+
+export function commandCenterOfficialExportValues(
+  official: CommandCenterOfficialFinancials,
+): {
+  revenueUgx: number;
+  profitUgx: number;
+  transactionCount: number;
+  costIncomplete: boolean;
+} | null {
+  if (
+    !official.canExport ||
+    official.revenueUgx == null ||
+    official.profitUgx == null ||
+    official.transactionCount == null
+  ) {
+    return null;
+  }
+  return {
+    revenueUgx: official.revenueUgx,
+    profitUgx: official.profitUgx,
+    transactionCount: official.transactionCount,
+    costIncomplete: official.costIncomplete,
+  };
+}
+
+/** Command Center selected-day Expected Cash: frozen close when authoritative, else live Drawer V2. Ranges stay null. */
+export function presentCommandCenterExpectedCash(
+  bounds: DateFilterBounds,
+  dayCloses: DayCloseSummary[] | undefined,
+  liveExpectedCashUgx: number | null,
+): number | null {
+  if (!bounds.isSingleDay) return null;
+  const auth = resolveReportAuthority(dayCloses, bounds.fromKey);
+  if (!auth.closed) return liveExpectedCashUgx;
+  const frozen = auth.frozenTotals?.expectedCashUgx;
+  if (typeof frozen !== "number" || !Number.isFinite(frozen)) return null;
+  return frozen;
 }
 
 export function computeBusinessHealthScore(
@@ -136,6 +243,29 @@ export function computeDailyRevenueSparkline(sales: Sale[], days = 7): SparkPoin
   return points;
 }
 
+/**
+ * CC-P2-04 — Command Center KPI sparklines stay on the selected period.
+ * The rolling last-7-day series is only valid for today's open live day.
+ * Historical / closed / mixed / incomplete periods hide the chart rather than
+ * pairing an official KPI with an unrelated live window.
+ */
+export function presentCommandCenterSparkline(
+  existingSeries: SparkPoint[],
+  opts: {
+    bounds: DateFilterBounds;
+    authority: PeriodReportAuthority;
+    dataComplete: boolean;
+  },
+): SparkPoint[] {
+  if (!opts.dataComplete) return [];
+  if (periodSalesBreakdownsUnavailable(opts.authority)) return [];
+  const today = dateKeyKampala(new Date());
+  if (!opts.bounds.isSingleDay || opts.bounds.fromKey !== today || opts.bounds.toKey !== today) {
+    return [];
+  }
+  return existingSeries;
+}
+
 export function buildCoachInsights(params: {
   pctRevenue: number | null;
   inventoryIssues: number;
@@ -232,34 +362,47 @@ export function buildCommandCenterExportText(params: {
   periodLabel: string;
   score: number;
   revenueUgx: number;
-  profitUgx: number;
+  profitUgx?: number;
   costIncomplete?: boolean;
   transactions: number;
   expectedCashUgx: number | null;
+  includeProfit?: boolean;
 }): string {
+  const includeProfit = params.includeProfit !== false && params.profitUgx != null;
   const profitLabel = params.costIncomplete ? "Gross profit (estimated)" : "Gross profit";
   const expectedCashLine =
     params.expectedCashUgx == null
       ? "Expected cash: —"
       : `Expected cash: UGX ${params.expectedCashUgx.toLocaleString()}`;
-  return [
+  const lines = [
     `${params.shopName} — Command Center`,
     params.periodLabel,
     "",
     `Business health: ${params.score}/100`,
     `Revenue: UGX ${params.revenueUgx.toLocaleString()}`,
-    `${profitLabel}: UGX ${params.profitUgx.toLocaleString()}`,
-    `Transactions: ${params.transactions}`,
-    expectedCashLine,
-    "",
-    "Generated by Waka POS",
-  ].join("\n");
+  ];
+  if (includeProfit) {
+    lines.push(`${profitLabel}: UGX ${params.profitUgx!.toLocaleString()}`);
+  }
+  lines.push(`Transactions: ${params.transactions}`, expectedCashLine, "", "Generated by Waka POS");
+  return lines.join("\n");
 }
 
 export function pctChangeLabel(pct: number | null): string | null {
   if (pct == null) return null;
   const arrow = pct >= 0 ? "↑" : "↓";
   return `${arrow} ${Math.abs(pct).toFixed(0)}%`;
+}
+
+/**
+ * CC-P2-05 — KPI comparison copy names the window already used by
+ * `trendVsPriorDay`: the single Kampala day immediately before `bounds.fromKey`.
+ * Does not recalculate percentages or prior-period financials.
+ */
+export function commandCenterComparisonLabelKey(bounds: DateFilterBounds): string {
+  const yesterday = addDaysToDateKey(dateKeyKampala(new Date()), -1);
+  const priorDayKey = addDaysToDateKey(bounds.fromKey, -1);
+  return priorDayKey === yesterday ? "cmdCenterVsYesterday" : "cmdCenterVsPreviousDay";
 }
 
 export function averageSaleUgx(revenueUgx: number, transactionCount: number): number {
@@ -281,29 +424,40 @@ export function buildKpiCards(
   expectedCashUgx: number | null,
   customerCount: number,
   revenueSparkline: SparkPoint[],
+  official?: CommandCenterOfficialFinancials,
+  canProfit = true,
 ): KpiCardModel[] {
-  const avg = averageSaleUgx(financial.revenueUgx, financial.transactionCount);
-  const pct = financial.trendVsPriorDay?.pctRevenue ?? null;
+  const ready = official ? official.presentHeadlinesAsFinal : true;
+  const revenueUgx = ready ? (official?.revenueUgx ?? financial.revenueUgx) : null;
+  const profitUgx = ready ? (official?.profitUgx ?? financial.profitUgx) : null;
+  const transactionCount = ready ? (official?.transactionCount ?? financial.transactionCount) : null;
+  const costIncomplete = ready ? (official?.costIncomplete ?? financial.costIncomplete) : false;
+  const avg = revenueUgx != null && transactionCount != null ? averageSaleUgx(revenueUgx, transactionCount) : null;
+  const pct = ready ? financial.trendVsPriorDay?.pctRevenue ?? null : null;
   return [
     {
       id: "revenue",
       labelKey: "cmdCenterKpiRevenue",
-      value: formatShortUgx(financial.revenueUgx),
+      value: formatOfficialHeadlineUgx(revenueUgx),
       pctChange: pctChangeLabel(pct),
       sparkline: revenueSparkline,
     },
-    {
-      id: "profit",
-      labelKey: financial.costIncomplete ? "profitGrossProfitEstimated" : "cmdCenterKpiProfit",
-      value: formatShortUgx(financial.profitUgx),
-      pctChange: pctChangeLabel(financial.trendVsPriorDay?.pctProfit ?? null),
-      sparkline: revenueSparkline,
-      valueClass: financial.profitUgx >= 0 ? "text-teal-800" : "text-rose-700",
-    },
+    ...(canProfit
+      ? [
+          {
+            id: "profit",
+            labelKey: costIncomplete ? "profitGrossProfitEstimated" : "cmdCenterKpiProfit",
+            value: formatOfficialHeadlineUgx(profitUgx),
+            pctChange: ready ? pctChangeLabel(financial.trendVsPriorDay?.pctProfit ?? null) : null,
+            sparkline: revenueSparkline,
+            valueClass: profitUgx == null || profitUgx >= 0 ? "text-teal-800" : "text-rose-700",
+          } satisfies KpiCardModel,
+        ]
+      : []),
     {
       id: "transactions",
       labelKey: "cmdCenterKpiTransactions",
-      value: String(financial.transactionCount),
+      value: transactionCount == null ? "—" : String(transactionCount),
       pctChange: null,
       sparkline: revenueSparkline,
     },
@@ -324,7 +478,7 @@ export function buildKpiCards(
     {
       id: "avg-sale",
       labelKey: "cmdCenterKpiAvgSale",
-      value: formatShortUgx(avg),
+      value: formatOfficialHeadlineUgx(avg),
       pctChange: null,
       sparkline: revenueSparkline,
     },

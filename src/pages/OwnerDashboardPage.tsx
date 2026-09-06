@@ -1,9 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
-import type { Language } from "../types";
+import type { Language, Permission } from "../types";
+import { useSessionActor } from "../context/SessionActorContext";
+import { useSubscription } from "../context/SubscriptionContext";
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
+import { authOperatorPermissions, authOperatorRole } from "../lib/sessionActor";
+import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { usePosStore } from "../store/usePosStore";
 import { useExpectedDrawerCashForBounds } from "../hooks/useDrawerCashForDay";
+import { useDayClosesForAuthority } from "../hooks/useDayClosesForAuthority";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { formatDateFilterViewingLabel } from "../lib/dateFilterLabels";
 import { getCachedOwnerCommandCenterBundle } from "../lib/ownerDashboardCommandCenter";
@@ -21,7 +27,19 @@ import {
   countUniqueCustomers,
   deriveDomainStatuses,
   filterAttentionByQuery,
+  presentCommandCenterExpectedCash,
+  presentCommandCenterOfficialFinancials,
+  presentCommandCenterSparkline,
+  commandCenterComparisonLabelKey,
+  commandCenterOfficialExportValues,
 } from "../lib/commandCenterPageView";
+import { resolvePeriodReportAuthority } from "../lib/closedDayAuthority";
+import {
+  canExportReportsData,
+  runReportsExportIfComplete,
+  resolveReportsFinancialReadiness,
+  sumFrozenPeriodHeadlines,
+} from "../lib/reportsDataCompleteness";
 import { shareText } from "../lib/reportExport";
 import { buildCommandCenterExportRows } from "../lib/analyticsReportExport";
 import { exportCsvFile, printReportDocument } from "../lib/reportExportEngine";
@@ -36,6 +54,18 @@ import { resolveDashboardMode } from "../components/command-center/registry/dash
 const RECOMMENDATIONS_SECTION_ID = "cmd-center-recommendations";
 
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
+  const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
+  const can = useCallback(
+    (perm: Permission) => actorHasEffectivePermission(actor, perm, snapshot, authMode),
+    [actor, snapshot, authMode],
+  );
+  const { canProfit } = resolveProfitVisibility({
+    role: authOperatorRole(actor),
+    snapshot,
+    authMode,
+    actorPermissions: authOperatorPermissions(actor),
+  });
   const sync = useSyncStatus();
   const deviceHealth = useOwnerDeviceHealth();
   const acknowledgeOwnerAlert = usePosStore((s) => s.acknowledgeOwnerAlert);
@@ -59,7 +89,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const stockMovements = usePosStore((s) => s.stockMovements);
-  const dayCloses = usePosStore((s) => s.dayCloses);
+  const dayCloses = useDayClosesForAuthority();
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
@@ -73,7 +103,10 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const reportingVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
   const reportingReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
-  const heroExpectedCash = useExpectedDrawerCashForBounds(bounds);
+  const liveExpectedCash = useExpectedDrawerCashForBounds(bounds);
+  const heroExpectedCash = presentCommandCenterExpectedCash(bounds, dayCloses, liveExpectedCash);
+  const hydrationStage = usePosStore((s) => s.hydrationStage);
+  const salesHistoryHydration = usePosStore((s) => s.salesHistoryHydration);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -165,7 +198,46 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   ]);
 
   const { overview } = commandCenter;
-  const revenueSparkline = useMemo(() => computeDailyRevenueSparkline(sales), [sales]);
+  const periodAuthority = useMemo(
+    () => resolvePeriodReportAuthority(dayCloses, bounds),
+    [dayCloses, bounds],
+  );
+  const financialReadiness = useMemo(
+    () =>
+      resolveReportsFinancialReadiness({
+        hydrationStage,
+        salesHistoryHydration,
+        authority: periodAuthority,
+      }),
+    [hydrationStage, salesHistoryHydration, periodAuthority],
+  );
+  const frozenHeadlines = useMemo(
+    () => (financialReadiness.canShowFrozenHeadlines ? sumFrozenPeriodHeadlines(dayCloses, bounds) : null),
+    [financialReadiness.canShowFrozenHeadlines, dayCloses, bounds],
+  );
+  const officialFinancials = useMemo(
+    () =>
+      presentCommandCenterOfficialFinancials({
+        readiness: financialReadiness,
+        overlaid: {
+          revenueUgx: overview.revenueUgx,
+          profitUgx: overview.profitUgx,
+          transactionCount: overview.transactionCount,
+          costIncomplete: overview.costIncomplete,
+        },
+        frozenHeadlines,
+      }),
+    [financialReadiness, overview, frozenHeadlines],
+  );
+  const revenueSparkline = useMemo(
+    () =>
+      presentCommandCenterSparkline(computeDailyRevenueSparkline(sales), {
+        bounds,
+        authority: periodAuthority,
+        dataComplete: financialReadiness.dataComplete,
+      }),
+    [sales, bounds, periodAuthority, financialReadiness.dataComplete],
+  );
   const customerCount = useMemo(() => countUniqueCustomers(sales, bounds), [sales, bounds]);
 
   const healthScore = useMemo(
@@ -190,9 +262,19 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     [commandCenter, deviceHealth.devicesStale],
   );
 
+  const comparisonLabelKey = useMemo(() => commandCenterComparisonLabelKey(bounds), [bounds]);
+
   const kpiCards = useMemo(
-    () => buildKpiCards(commandCenter.financial, heroExpectedCash, customerCount, revenueSparkline),
-    [commandCenter.financial, heroExpectedCash, customerCount, revenueSparkline],
+    () =>
+      buildKpiCards(
+        commandCenter.financial,
+        heroExpectedCash,
+        customerCount,
+        revenueSparkline,
+        officialFinancials,
+        canProfit,
+      ),
+    [commandCenter.financial, heroExpectedCash, customerCount, revenueSparkline, officialFinancials, canProfit],
   );
 
   const recommendations = useMemo(
@@ -247,47 +329,68 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   );
 
   const exportDashboard = useCallback(async () => {
-    const rows = buildCommandCenterExportRows({
-      lang,
-      shopName,
-      periodLabel,
-      score: healthScore,
-      revenueUgx: overview.revenueUgx,
-      profitUgx: overview.profitUgx,
-      costIncomplete: overview.costIncomplete,
-      transactions: overview.transactionCount,
-      expectedCashUgx: heroExpectedCash,
-    });
+    if (!canExportReportsData(financialReadiness)) return;
+    const official = commandCenterOfficialExportValues(officialFinancials);
+    if (!official) return;
+    const rows = runReportsExportIfComplete(financialReadiness.dataComplete, () =>
+      buildCommandCenterExportRows({
+        lang,
+        shopName,
+        periodLabel,
+        score: healthScore,
+        revenueUgx: official.revenueUgx,
+        profitUgx: canProfit ? official.profitUgx : undefined,
+        costIncomplete: official.costIncomplete,
+        transactions: official.transactionCount,
+        expectedCashUgx: heroExpectedCash,
+        includeProfit: canProfit,
+      }),
+    );
+    if (!rows) return;
     await exportCsvFile("command_center", `waka-command-center-${dateKeyKampala(new Date())}.csv`, rows, {
       shareDialogTitle: `${shopName} Command Center`,
     });
-  }, [lang, shopName, periodLabel, healthScore, overview, heroExpectedCash]);
+  }, [lang, shopName, periodLabel, healthScore, officialFinancials, heroExpectedCash, financialReadiness, canProfit]);
 
   const shareDashboard = useCallback(() => {
-    const text = buildCommandCenterExportText({
-      shopName,
-      periodLabel,
-      score: healthScore,
-      revenueUgx: overview.revenueUgx,
-      profitUgx: overview.profitUgx,
-      costIncomplete: overview.costIncomplete,
-      transactions: overview.transactionCount,
-      expectedCashUgx: heroExpectedCash,
-    });
+    if (!canExportReportsData(financialReadiness)) return;
+    const official = commandCenterOfficialExportValues(officialFinancials);
+    if (!official) return;
+    const text = runReportsExportIfComplete(financialReadiness.dataComplete, () =>
+      buildCommandCenterExportText({
+        shopName,
+        periodLabel,
+        score: healthScore,
+        revenueUgx: official.revenueUgx,
+        profitUgx: canProfit ? official.profitUgx : undefined,
+        costIncomplete: official.costIncomplete,
+        transactions: official.transactionCount,
+        expectedCashUgx: heroExpectedCash,
+        includeProfit: canProfit,
+      }),
+    );
+    if (!text) return;
     void shareText(text, `${shopName} Command Center`, "command_center");
-  }, [shopName, periodLabel, healthScore, overview, heroExpectedCash]);
+  }, [shopName, periodLabel, healthScore, officialFinancials, heroExpectedCash, financialReadiness, canProfit]);
 
   const printDashboard = useCallback(async () => {
-    const text = buildCommandCenterExportText({
-      shopName,
-      periodLabel,
-      score: healthScore,
-      revenueUgx: overview.revenueUgx,
-      profitUgx: overview.profitUgx,
-      costIncomplete: overview.costIncomplete,
-      transactions: overview.transactionCount,
-      expectedCashUgx: heroExpectedCash,
-    });
+    if (!canExportReportsData(financialReadiness)) return;
+    const official = commandCenterOfficialExportValues(officialFinancials);
+    if (!official) return;
+    const text = runReportsExportIfComplete(financialReadiness.dataComplete, () =>
+      buildCommandCenterExportText({
+        shopName,
+        periodLabel,
+        score: healthScore,
+        revenueUgx: official.revenueUgx,
+        profitUgx: canProfit ? official.profitUgx : undefined,
+        costIncomplete: official.costIncomplete,
+        transactions: official.transactionCount,
+        expectedCashUgx: heroExpectedCash,
+        includeProfit: canProfit,
+      }),
+    );
+    if (!text) return;
     const filename = `waka-command-center-${dateKeyKampala(new Date())}.pdf`;
     await printReportDocument("command_center", {
       pdfFilename: filename,
@@ -310,14 +413,15 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       title: `${shopName} Command Center`,
       shareDialogTitle: `${shopName} Command Center`,
     });
-  }, [shopName, periodLabel, healthScore, overview, heroExpectedCash]);
+  }, [shopName, periodLabel, healthScore, officialFinancials, heroExpectedCash, financialReadiness, canProfit]);
 
   const ctx = useMemo((): DashboardCenterContext => ({
     lang,
     surface: "command-center",
     mode,
     businessType: preferences.businessType,
-    can: () => true,
+    can,
+    canProfit,
     filter,
     setFilter,
     includeArchived,
@@ -336,6 +440,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     healthScore,
     domainStatuses,
     kpiCards,
+    officialFinancials,
+    canExportOfficialFinancials: officialFinancials.canExport,
     recommendations,
     summaryKey,
     summaryVars,
@@ -344,6 +450,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     devicesOnline: deviceHealth.devicesOnline,
     heroExpectedCash,
     revenueSparkline,
+    comparisonLabelKey,
     onAcknowledge,
     exportDashboard,
     shareDashboard,
@@ -355,6 +462,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     lang,
     mode,
     preferences.businessType,
+    can,
+    canProfit,
     filter,
     setFilter,
     includeArchived,
@@ -371,6 +480,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     healthScore,
     domainStatuses,
     kpiCards,
+    officialFinancials,
     recommendations,
     summaryKey,
     summaryVars,
@@ -379,6 +489,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     deviceHealth.devicesOnline,
     heroExpectedCash,
     revenueSparkline,
+    comparisonLabelKey,
     onAcknowledge,
     exportDashboard,
     shareDashboard,
