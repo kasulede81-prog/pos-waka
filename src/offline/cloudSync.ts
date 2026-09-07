@@ -3612,8 +3612,8 @@ export async function pullCloudAndMergeIntoStore(opts?: {
           auditLogs: mergedAudits.auditLogs,
           archivedAuditLogs: mergedAudits.archivedAuditLogs,
         });
-        const { flushFullSnapshotPersist } = await import("./incrementalPersist");
-        await flushFullSnapshotPersist(usePosStore.getState(), { skipLastGood: true });
+        const { flushIncrementalPersist } = await import("./incrementalPersist");
+        await flushIncrementalPersist(state, usePosStore.getState());
       }
     }
     if (cloud.stats.mode === "full" && shouldMarkBootstrap) markBootstrapSyncComplete();
@@ -3855,8 +3855,8 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     });
 
     const next = usePosStore.getState();
-    const { flushFullSnapshotPersist } = await import("./incrementalPersist");
-    await flushFullSnapshotPersist(next, { skipLastGood: true });
+    const { flushIncrementalPersist } = await import("./incrementalPersist");
+    await flushIncrementalPersist(state, next);
     runPostSyncDebtValidation({
       customers: next.customers,
       sales: next.sales,

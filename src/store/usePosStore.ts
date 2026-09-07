@@ -1444,6 +1444,16 @@ export function suspendStorePersist(): () => void {
   };
 }
 
+/** Disk→memory hydrate must not rewrite IndexedDB (SYNC-INV mobile starvation). */
+function runWithPersistSuspendedSync<T>(fn: () => T): T {
+  const release = suspendStorePersist();
+  try {
+    return fn();
+  } finally {
+    release();
+  }
+}
+
 function fireSnapshotWrite(forceFull = false): void {
   if (snapshotWriteInFlight) {
     snapshotWriteQueued = true;
@@ -8922,7 +8932,9 @@ async function hydrateSalesBatched(
   opts?: { batchSize?: number; sessionId?: number; onProgress?: (percent: number) => void },
 ): Promise<void> {
   if (raw.length === 0) {
-    usePosStore.setState({ sales: [] });
+    runWithPersistSuspendedSync(() => {
+      usePosStore.setState({ sales: [] });
+    });
     opts?.onProgress?.(100);
     return;
   }
@@ -8937,7 +8949,9 @@ async function hydrateSalesBatched(
       await yieldUiTick();
     }
   }
-  usePosStore.setState({ sales: normalized });
+  runWithPersistSuspendedSync(() => {
+    usePosStore.setState({ sales: normalized });
+  });
 }
 
 async function hydrateArchivedSalesBatched(
@@ -9171,7 +9185,8 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
       const head = allSales.slice(0, INITIAL_SALES_LOAD_COUNT);
       const tail = allSales.slice(INITIAL_SALES_LOAD_COUNT);
       await hydrateSalesBatched(head);
-      usePosStore.getState().hydrateRemainder({
+      runWithPersistSuspendedSync(() => {
+        usePosStore.getState().hydrateRemainder({
         debtPayments: snap.debtPayments ?? [],
         dayCloses: snap.dayCloses ?? [],
         auditLogs: (snap as { auditLogs?: AuditLogEntry[] }).auditLogs ?? [],
@@ -9198,6 +9213,7 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         pharmacyPrescriptions: snap.pharmacyPrescriptions ?? [],
         pharmacyDoctors: snap.pharmacyDoctors ?? [],
         pharmacyControlledRegister: snap.pharmacyControlledRegister ?? [],
+        });
       });
       if (tail.length > 0) {
         scheduleBackgroundSalesHydrate(tail);
@@ -9258,17 +9274,19 @@ function scheduleBackgroundSalesHydrateByIds(ids: string[]): void {
         await yieldUiTick();
         const batch = (await getEntitiesByIds<Sale>("sale", ids.slice(i, i + SALES_PAGE_LOAD_SIZE))).map(normalizeSale);
         loaded += batch.length;
-        usePosStore.setState((s) => {
-          const have = new Set(s.sales.map((x) => x.id));
-          const merged = [...s.sales];
-          for (const row of batch) {
-            if (!have.has(row.id)) merged.push(row);
-          }
-          merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-          return {
-            sales: merged,
-            salesHistoryHydration: { active: true, loaded, total: ids.length },
-          };
+        runWithPersistSuspendedSync(() => {
+          usePosStore.setState((s) => {
+            const have = new Set(s.sales.map((x) => x.id));
+            const merged = [...s.sales];
+            for (const row of batch) {
+              if (!have.has(row.id)) merged.push(row);
+            }
+            merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+            return {
+              sales: merged,
+              salesHistoryHydration: { active: true, loaded, total: ids.length },
+            };
+          });
         });
       }
       finishSalesHistoryHydrationIfCaughtUp(ids);
@@ -9293,17 +9311,19 @@ function scheduleBackgroundSalesHydrate(sales: Sale[]): void {
         await yieldUiTick();
         const chunk = sales.slice(i, i + SALES_PAGE_LOAD_SIZE);
         loaded += chunk.length;
-        usePosStore.setState((s) => {
-          const have = new Set(s.sales.map((x) => x.id));
-          const merged = [...s.sales];
-          for (const row of chunk) {
-            if (!have.has(row.id)) merged.push(normalizeSale(row));
-          }
-          merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-          return {
-            sales: merged,
-            salesHistoryHydration: { active: true, loaded, total: sales.length },
-          };
+        runWithPersistSuspendedSync(() => {
+          usePosStore.setState((s) => {
+            const have = new Set(s.sales.map((x) => x.id));
+            const merged = [...s.sales];
+            for (const row of chunk) {
+              if (!have.has(row.id)) merged.push(normalizeSale(row));
+            }
+            merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+            return {
+              sales: merged,
+              salesHistoryHydration: { active: true, loaded, total: sales.length },
+            };
+          });
         });
       }
       finishSalesHistoryHydrationIfCaughtUp(expectedIds);
@@ -9339,21 +9359,23 @@ export async function ensureAllActiveSalesLoaded(): Promise<void> {
     for (let i = 0; i < missingIds.length; i += SALES_PAGE_LOAD_SIZE) {
       await yieldUiTick();
       const batch = await getEntitiesByIds<Sale>("sale", missingIds.slice(i, i + SALES_PAGE_LOAD_SIZE));
-      usePosStore.setState((s) => {
-        const ids = new Set(s.sales.map((x) => x.id));
-        const merged = [...s.sales];
-        for (const row of batch) {
-          if (!ids.has(row.id)) merged.push(normalizeSale(row));
-        }
-        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-        return {
-          sales: merged,
-          salesHistoryHydration: {
-            active: true,
-            loaded: s.salesHistoryHydration?.loaded ?? have.size + i,
-            total: manifest.salesOrder.length,
-          },
-        };
+      runWithPersistSuspendedSync(() => {
+        usePosStore.setState((s) => {
+          const ids = new Set(s.sales.map((x) => x.id));
+          const merged = [...s.sales];
+          for (const row of batch) {
+            if (!ids.has(row.id)) merged.push(normalizeSale(row));
+          }
+          merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+          return {
+            sales: merged,
+            salesHistoryHydration: {
+              active: true,
+              loaded: s.salesHistoryHydration?.loaded ?? have.size + i,
+              total: manifest.salesOrder.length,
+            },
+          };
+        });
       });
     }
     finishSalesHistoryHydrationIfCaughtUp(manifest.salesOrder);
@@ -9467,10 +9489,12 @@ async function runPostBootstrapTasks(): Promise<void> {
 
 function hydrateEssentialsFromSnap(snap: Partial<PersistedSnapshot>): void {
   const preferences = applyBootstrapPreferences(snap);
-  usePosStore.getState().hydrateEssentials({
-    products: (snap.products ?? []) as Product[],
-    customers: (snap.customers ?? []) as Customer[],
-    preferences,
+  runWithPersistSuspendedSync(() => {
+    usePosStore.getState().hydrateEssentials({
+      products: (snap.products ?? []) as Product[],
+      customers: (snap.customers ?? []) as Customer[],
+      preferences,
+    });
   });
 }
 
@@ -9592,7 +9616,8 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     getEntitiesByBucket<import("../types").PharmacyControlledRegisterEntry>("pharmacyControlledRegister"),
   ]);
   const archivedSalesRaw = (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale);
-  usePosStore.getState().hydrateRemainder({
+  runWithPersistSuspendedSync(() => {
+    usePosStore.getState().hydrateRemainder({
     debtPayments: debtPaymentsRaw,
     dayCloses: dayClosesRaw,
     auditLogs: auditLogsRaw,
@@ -9615,6 +9640,7 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     pharmacyPrescriptions: pharmacyPrescriptionsRaw,
     pharmacyDoctors: pharmacyDoctorsRaw,
     pharmacyControlledRegister: pharmacyControlledRegisterRaw,
+    });
   });
   if (manifest.salesOrder.length > INITIAL_SALES_LOAD_COUNT) {
     scheduleBackgroundSalesHydrateByIds(
@@ -9664,10 +9690,12 @@ export async function bootstrapPosCriticalFromDisk(): Promise<void> {
       const products = (await getEntitiesByBucket<Product>("product")).map(normalizeProduct);
       const customers = (await getEntitiesByBucket<Customer>("customer")).map(normalizeCustomer);
       const tombstones = manifest.tombstones ?? {};
-      usePosStore.getState().hydrateEssentials({
-        products: products.filter((p) => !tombstones[p.id]),
-        customers,
-        preferences: manifest.preferences,
+      runWithPersistSuspendedSync(() => {
+        usePosStore.getState().hydrateEssentials({
+          products: products.filter((p) => !tombstones[p.id]),
+          customers,
+          preferences: manifest.preferences,
+        });
       });
       await applyTodayKpiSnapshotFromDisk();
       return;
@@ -9684,7 +9712,9 @@ export async function bootstrapPosCriticalFromDisk(): Promise<void> {
       hydrateEssentialsFromSnap(snap);
     } else {
       const preferences = preferencesForAccountBootstrap(key);
-      usePosStore.getState().hydrateEssentials({ products: [], customers: [], preferences });
+      runWithPersistSuspendedSync(() => {
+        usePosStore.getState().hydrateEssentials({ products: [], customers: [], preferences });
+      });
       if (!key.startsWith("sb:")) {
         void writeSnapshot({
           products: [],
@@ -9710,10 +9740,12 @@ export async function bootstrapPosCriticalFromDisk(): Promise<void> {
     await raceBootstrap(load(), BOOTSTRAP_CRITICAL_TIMEOUT_MS);
   } catch (e) {
     if (!usePosStore.getState()._hydrated) {
-      usePosStore.getState().hydrateEssentials({
-        products: [],
-        customers: [],
-        preferences: preferencesForAccountBootstrap(key),
+      runWithPersistSuspendedSync(() => {
+        usePosStore.getState().hydrateEssentials({
+          products: [],
+          customers: [],
+          preferences: preferencesForAccountBootstrap(key),
+        });
       });
     }
     if (import.meta.env.DEV) console.warn("[waka-pos] bootstrap critical", e);

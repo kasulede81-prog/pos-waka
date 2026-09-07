@@ -11,6 +11,28 @@ import {
 } from "./globalSyncMutex";
 
 describe("globalSyncMutex", () => {
+  it("does not reenter pull while another pull is already running", async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = withPullSyncMutex("syncShopWithCloud", async () => {
+      order.push("1-start");
+      await gate;
+      order.push("1-end");
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    const second = withPullSyncMutex("pullCloud", async () => {
+      order.push("2");
+    });
+    release();
+    await Promise.all([first, second]);
+    expect(order).toEqual(["1-start", "1-end", "2"]);
+    expect(isPullSyncInFlight()).toBe(false);
+  });
+
   it("runs pull tasks sequentially when not nested", async () => {
     const order: string[] = [];
     const first = withPullSyncMutex("syncShopWithCloud", async () => {
