@@ -155,6 +155,11 @@ export function stampedShopIdForImmediateCashSync(shopId?: string | null): strin
   return shopId.trim();
 }
 import { classifyPendingStockPayload, shouldAckR3StockResult } from "../lib/stockDurableSync";
+import {
+  isSaleCloudAcked,
+  linkedSaleAdjustmentDecision,
+  type SyncProcessResult,
+} from "../lib/saleAdjustmentSync";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -1357,8 +1362,8 @@ export async function refreshProductStockFromCloud(
   }));
 }
 
-async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<boolean> {
-  if (!supabase || !isUuid(returnRow.id)) return false;
+async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<SyncProcessResult> {
+  if (!supabase || !isUuid(returnRow.id)) return "retry";
   const payload = {
     id: returnRow.id,
     sale_id: returnRow.saleId && isUuid(returnRow.saleId) ? returnRow.saleId : null,
@@ -1384,16 +1389,80 @@ async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise
     p_payload: payload,
   });
   if (error) {
-    if (isMissingTableError(error)) return false;
-    return false;
+    if (isMissingTableError(error)) return "retry";
+    return "retry";
   }
   const result = data as { ok?: boolean; error?: string } | null;
   if (result?.error === "closed_business_date") {
     const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
     const { dateKeyKampala } = await import("../lib/datesUg");
     noteClosedBusinessDateRejection(dateKeyKampala(returnRow.createdAt), returnRow.id);
+    return "park";
   }
-  return result?.ok === true;
+  if (result?.ok === true) return "ack";
+  return "retry";
+}
+
+async function processPendingReturnAdjustment(
+  payload: Record<string, unknown>,
+  ctx: ShopCtx,
+): Promise<SyncProcessResult> {
+  const returnId = String(payload.returnId ?? "");
+  const row = await resolveReturnForSync(returnId);
+  if (!row) return "retry";
+  const linkedSaleId = row.saleId ?? (typeof payload.saleId === "string" ? payload.saleId : null);
+  if (linkedSaleAdjustmentDecision(undefined, linkedSaleId) === "wait") {
+    const sale = await resolveSaleForSync(String(linkedSaleId));
+    if (!isSaleCloudAcked(sale)) return "wait";
+  }
+  return pushReturnToCloud(row, ctx);
+}
+
+async function processSaleVoidAdjustment(
+  classified: { productId: string; delta: number; referenceId: string; note?: string },
+  payload: Record<string, unknown>,
+  ctx: ShopCtx,
+): Promise<SyncProcessResult> {
+  const state = usePosStore.getState();
+  const ledger = resolveSaleVoidQueueLedger({
+    payload,
+    voidRecords: [...state.voidRecords, ...(state.archivedVoidRecords ?? [])],
+  });
+  const referencedSaleId = ledger.saleId ?? (typeof payload.saleId === "string" ? payload.saleId : "");
+  if (referencedSaleId) {
+    const referencedSale = await resolveSaleForSync(referencedSaleId);
+    if (!isSaleCloudAcked(referencedSale)) return "wait";
+  }
+  let saleId = ledger.saleId;
+  let amountUgx = ledger.amountUgx;
+  let lineIndex = ledger.lineIndex;
+  let saleVoidedAt = ledger.saleVoidedAt;
+  let productName = ledger.productName;
+  // Enriched historical ops: do not attach financials when the sale day is closed
+  // (179 would reject the whole RPC). Stock-only replay still ACKs.
+  if (ledger.source === "void_record" && saleId && amountUgx) {
+    const sale =
+      state.sales.find((s) => s.id === saleId) ??
+      (state.archivedSales ?? []).find((s) => s.id === saleId);
+    if (!sale || isBusinessDateLocked(state.dayCloses ?? [], dateKeyKampala(sale.createdAt))) {
+      saleId = undefined;
+      amountUgx = undefined;
+      lineIndex = undefined;
+      saleVoidedAt = undefined;
+      productName = undefined;
+    }
+  }
+  const ok = await pushSaleVoidStockToCloud(classified.productId, ctx, {
+    delta: classified.delta,
+    referenceId: classified.referenceId,
+    note: classified.note,
+    saleId,
+    amountUgx,
+    lineIndex,
+    saleVoidedAt,
+    productName,
+  });
+  return ok ? "ack" : "retry";
 }
 
 function rowToCashExpense(raw: Record<string, unknown>): CashExpense | null {
@@ -1772,18 +1841,40 @@ export async function syncSaleImmediately(saleId: string): Promise<boolean> {
 }
 
 export async function processCloudSyncOperation(op: SyncOperation): Promise<boolean> {
+  return (await processCloudSyncOperationResult(op)) === "ack";
+}
+
+export async function processCloudSyncOperationResult(op: SyncOperation): Promise<SyncProcessResult> {
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
   } catch {
-    return false;
+    return "retry";
   }
 
   const ctx = await resolveShopCtxForOperation(op);
-  if (!ctx) return false;
+  if (!ctx) return "retry";
 
   const payload = op.payload as Record<string, unknown>;
 
+  if (op.kind === "pending_returns") {
+    return processPendingReturnAdjustment(payload, ctx);
+  }
+  if (op.kind === "pending_stock_updates" || op.kind === "stock_move") {
+    const classified = classifyPendingStockPayload(payload);
+    if (classified.route === "sale_void") {
+      return processSaleVoidAdjustment(classified, payload, ctx);
+    }
+  }
+
+  return (await processCloudSyncOperationLegacy(op, ctx, payload)) ? "ack" : "retry";
+}
+
+async function processCloudSyncOperationLegacy(
+  op: SyncOperation,
+  ctx: ShopCtx,
+  payload: Record<string, unknown>,
+): Promise<boolean> {
   switch (op.kind) {
     case "product": {
       const productId = String(payload.id ?? "");
@@ -1899,40 +1990,7 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
         });
       }
       if (classified.route === "sale_void") {
-        const state = usePosStore.getState();
-        const ledger = resolveSaleVoidQueueLedger({
-          payload,
-          voidRecords: [...state.voidRecords, ...(state.archivedVoidRecords ?? [])],
-        });
-        let saleId = ledger.saleId;
-        let amountUgx = ledger.amountUgx;
-        let lineIndex = ledger.lineIndex;
-        let saleVoidedAt = ledger.saleVoidedAt;
-        let productName = ledger.productName;
-        // Enriched historical ops: do not attach financials when the sale day is closed
-        // (179 would reject the whole RPC). Stock-only replay still ACKs.
-        if (ledger.source === "void_record" && saleId && amountUgx) {
-          const sale =
-            state.sales.find((s) => s.id === saleId) ??
-            (state.archivedSales ?? []).find((s) => s.id === saleId);
-          if (!sale || isBusinessDateLocked(state.dayCloses ?? [], dateKeyKampala(sale.createdAt))) {
-            saleId = undefined;
-            amountUgx = undefined;
-            lineIndex = undefined;
-            saleVoidedAt = undefined;
-            productName = undefined;
-          }
-        }
-        return pushSaleVoidStockToCloud(classified.productId, ctx, {
-          delta: classified.delta,
-          referenceId: classified.referenceId,
-          note: classified.note,
-          saleId,
-          amountUgx,
-          lineIndex,
-          saleVoidedAt,
-          productName,
-        });
+        return (await processSaleVoidAdjustment(classified, payload, ctx)) === "ack";
       }
       if (classified.route === "catalog_only") {
         const product = usePosStore.getState().products.find((p) => p.id === classified.productId);
@@ -1972,17 +2030,7 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       });
     }
     case "pending_returns": {
-      const returnId = String(payload.returnId ?? "");
-      const row = await resolveReturnForSync(returnId);
-      if (!row) return false;
-      if (row.saleId) {
-        const sale = await resolveSaleForSync(row.saleId);
-        if (sale) {
-          const synced = await pushSaleRowToCloud(sale, ctx);
-          if (!synced) return false;
-        }
-      }
-      return pushReturnToCloud(row, ctx);
+      return (await processPendingReturnAdjustment(payload, ctx)) === "ack";
     }
     case "pending_expenses":
       if (payload.kind === "supplier_payment") {
@@ -3879,7 +3927,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       customers,
       sales: absorbCloudSaleAdjustmentLedgers(
         cloud.sales,
-        mergeReturnRecordsForRecovery([], cloud.returnCloudRows),
+        mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows),
         mergeVoidRecordsForRecovery(state.voidRecords, cloud.voidCloudRows ?? []),
       ),
       preferences: mergeShopPolicyPreferences(
@@ -3895,7 +3943,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       supplierPayments: purchaseRecovery.supplierPayments,
       stockMovements: mergedStockMovements,
       voidRecords: mergeVoidRecordsForRecovery(state.voidRecords, cloud.voidCloudRows ?? []),
-      returnRecords: mergeReturnRecordsForRecovery([], cloud.returnCloudRows),
+      returnRecords: mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows),
       cashExpenses: cloud.cashExpenses.length > 0 ? cloud.cashExpenses : state.cashExpenses,
       cashDrawerAdjustments:
         cloud.cashDrawerAdjustments.length > 0 ? cloud.cashDrawerAdjustments : state.cashDrawerAdjustments,

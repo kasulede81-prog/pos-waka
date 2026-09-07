@@ -304,6 +304,8 @@ import {
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { remainingVoidableLine, validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
+import { resolveLocalSaleForReturn } from "../lib/resolveLocalSaleForReturn";
+import { saleAdjustmentOutboxMeta, saleAdjustmentQueueId } from "../lib/saleAdjustmentSync";
 import { emitInventoryStockChanges, type InventoryStockSyncMessage, type InventorySyncEventType } from "../lib/inventorySyncChannel";
 import { mergeRemoteInventoryStock, validateDraftSaleStockBeforeFinalize } from "../lib/inventoryVersionProtection";
 import { assertCanFinalizeStockSale } from "../lib/primaryRegisterMode";
@@ -1609,11 +1611,11 @@ configureDailyAutoBackupScheduler({
   },
 });
 
-async function queueRemote(kind: SyncOperationKind, payload: unknown) {
+async function queueRemote(kind: SyncOperationKind, payload: unknown, opts?: { id?: string }) {
   if (getActiveAccountKey()?.startsWith("demo:")) return;
   const shopId = getActiveShopId() ?? undefined;
   await enqueueSync({
-    id: crypto.randomUUID(),
+    id: opts?.id?.trim() || crypto.randomUUID(),
     kind,
     payload,
     createdAt: new Date().toISOString(),
@@ -5580,7 +5582,7 @@ export const usePosStore = create<PosState>((set, get) => {
       ...totals,
       lines: updatedLines,
       estimatedProfitUgx: Math.max(0, sale.estimatedProfitUgx - profitReduce),
-      pendingSync: true,
+      pendingSync: sale.pendingSync === true,
     };
 
     const products = [...state.products];
@@ -5692,19 +5694,26 @@ export const usePosStore = create<PosState>((set, get) => {
     }
     void queueRemote(
       "pending_stock_updates",
-      r3SaleVoidStockPayload({
-        productId: line.productId,
-        delta: voidQty,
-        voidRecordId: voidRec.id,
-        baseUpdatedAt: preVoidProduct?.updatedAt ?? at,
-        baseStockOnHand: preVoidProduct?.stockOnHand,
-        saleId,
-        amountUgx: amount,
-        lineIndex,
-        productName: line.name,
-      }),
+      {
+        ...r3SaleVoidStockPayload({
+          productId: line.productId,
+          delta: voidQty,
+          voidRecordId: voidRec.id,
+          baseUpdatedAt: preVoidProduct?.updatedAt ?? at,
+          baseStockOnHand: preVoidProduct?.stockOnHand,
+          saleId,
+          amountUgx: amount,
+          lineIndex,
+          productName: line.name,
+        }),
+        ...saleAdjustmentOutboxMeta({
+          operationType: "void",
+          saleId,
+          dateKey: saleDayKey,
+        }),
+      },
+      { id: saleAdjustmentQueueId(voidRec.id) },
     );
-    void queueRemote("sale", { saleId });
     if (sale.customerId && debtReduce > 0) {
       void queueRemote("customer", { id: sale.customerId });
     }
@@ -5730,11 +5739,15 @@ export const usePosStore = create<PosState>((set, get) => {
     const refund = Math.max(0, Math.floor(refundAmountUgx));
     if (qty <= 0 || refund <= 0) return { ok: false, errorKey: "invalid" };
 
-    const saleIdxPrecheck = saleId ? state.sales.findIndex((s) => s.id === saleId) : -1;
+    const resolvedPrecheck = resolveLocalSaleForReturn(
+      saleId,
+      state.sales,
+      state.archivedSales ?? [],
+    );
     const auth = validateReturnAuthorization({
       role: actor.role,
       saleId: saleId ?? null,
-      saleFound: saleIdxPrecheck >= 0,
+      saleFound: resolvedPrecheck != null,
       note: note ?? "",
     });
     if (!auth.ok) return { ok: false, errorKey: auth.errorKey };
@@ -5742,18 +5755,16 @@ export const usePosStore = create<PosState>((set, get) => {
     const product = state.products.find((p) => p.id === productId);
     if (!product) return { ok: false, errorKey: "missingProduct" };
 
-    if (saleId) {
-      const saleForLimit = state.sales.find((s) => s.id === saleId);
-      if (saleForLimit) {
-        const limit = validateReturnAgainstSale({
-          sale: saleForLimit,
-          productId,
-          quantity: qty,
-          refundAmountUgx: refund,
-          returnRecords: state.returnRecords,
-        });
-        if (!limit.ok) return { ok: false, errorKey: limit.errorKey };
-      }
+    const returnScopedPrecheck = [...state.returnRecords, ...(state.archivedReturnRecords ?? [])];
+    if (resolvedPrecheck) {
+      const limit = validateReturnAgainstSale({
+        sale: resolvedPrecheck.sale,
+        productId,
+        quantity: qty,
+        refundAmountUgx: refund,
+        returnRecords: returnScopedPrecheck,
+      });
+      if (!limit.ok) return { ok: false, errorKey: limit.errorKey };
     }
 
     const lockKey = returnSubmitLockKey({
@@ -5780,20 +5791,23 @@ export const usePosStore = create<PosState>((set, get) => {
       releaseReturnSubmit(lockKey);
       return { ok: false, errorKey: "missingProduct" };
     }
-    if (saleId) {
-      const saleForLimit = live.sales.find((s) => s.id === saleId);
-      if (saleForLimit) {
-        const limit = validateReturnAgainstSale({
-          sale: saleForLimit,
-          productId,
-          quantity: qty,
-          refundAmountUgx: refund,
-          returnRecords: live.returnRecords,
-        });
-        if (!limit.ok) {
-          releaseReturnSubmit(lockKey);
-          return { ok: false, errorKey: limit.errorKey };
-        }
+    const resolved = resolveLocalSaleForReturn(saleId, live.sales, live.archivedSales ?? []);
+    if (saleId && String(saleId).trim() && !resolved) {
+      releaseReturnSubmit(lockKey);
+      return { ok: false, errorKey: "returnSaleUnavailable" };
+    }
+    const returnScoped = [...live.returnRecords, ...(live.archivedReturnRecords ?? [])];
+    if (resolved) {
+      const limit = validateReturnAgainstSale({
+        sale: resolved.sale,
+        productId,
+        quantity: qty,
+        refundAmountUgx: refund,
+        returnRecords: returnScoped,
+      });
+      if (!limit.ok) {
+        releaseReturnSubmit(lockKey);
+        return { ok: false, errorKey: limit.errorKey };
       }
     }
 
@@ -5802,7 +5816,7 @@ export const usePosStore = create<PosState>((set, get) => {
     );
     const at = new Date().toISOString();
 
-    const linkedSale = saleId ? live.sales.find((s) => s.id === saleId) : undefined;
+    const linkedSale = resolved?.sale;
     const cashReduce = cashReduceFromRefund(linkedSale, refund);
     const saleLine = findSaleLineForReturn(linkedSale, productId);
     const returnCogsUgx = saleLine
@@ -5861,26 +5875,36 @@ export const usePosStore = create<PosState>((set, get) => {
       : null;
 
     let sales = live.sales;
+    let archivedSales = live.archivedSales ?? [];
     let customers = live.customers;
     let debtReduce = 0;
     let linkedCustomerId: string | null = null;
-    if (saleId) {
-      const saleIdx = sales.findIndex((s) => s.id === saleId);
-      if (saleIdx >= 0) {
-        const sale = sales[saleIdx]!;
-        linkedCustomerId = sale.customerId ?? null;
-        debtReduce = creditDebtReductionFromSaleAdjustment(sale, refund);
-        const totals = reduceSaleTotalsByAmount(sale, refund);
-        const updated: Sale = { ...sale, ...totals, pendingSync: true };
-        customers = applyCustomerDebtDelta(customers, sale.customerId, -debtReduce);
-        sales = [...sales];
-        sales[saleIdx] = updated;
+    if (resolved) {
+      const sale = resolved.sale;
+      linkedCustomerId = sale.customerId ?? null;
+      debtReduce = creditDebtReductionFromSaleAdjustment(sale, refund);
+      const totals = reduceSaleTotalsByAmount(sale, refund);
+      const updated: Sale = { ...sale, ...totals, pendingSync: sale.pendingSync === true };
+      customers = applyCustomerDebtDelta(customers, sale.customerId, -debtReduce);
+      if (resolved.bucket === "sales") {
+        const saleIdx = sales.findIndex((s) => s.id === sale.id);
+        if (saleIdx >= 0) {
+          sales = [...sales];
+          sales[saleIdx] = updated;
+        }
+      } else {
+        const saleIdx = archivedSales.findIndex((s) => s.id === sale.id);
+        if (saleIdx >= 0) {
+          archivedSales = [...archivedSales];
+          archivedSales[saleIdx] = updated;
+        }
       }
     }
 
     set({
       products,
       sales,
+      archivedSales,
       customers,
       returnRecords: [returnRec, ...live.returnRecords],
       ...(movement ? movementMergePatch(live, [movement]) : {}),
@@ -5914,13 +5938,21 @@ export const usePosStore = create<PosState>((set, get) => {
       note: note ?? null,
       actorUserId: liveActor.userId,
     });
-    void queueRemote("pending_returns", {
-      returnId: returnRec.id,
-      saleId: saleId ?? null,
-      productId,
-      quantity: qty,
-      refundAmountUgx: refund,
-    });
+    void queueRemote(
+      "pending_returns",
+      {
+        returnId: returnRec.id,
+        productId,
+        quantity: qty,
+        refundAmountUgx: refund,
+        ...saleAdjustmentOutboxMeta({
+          operationType: "return",
+          saleId: saleId ?? null,
+          dateKey: dateKeyKampala(at),
+        }),
+      },
+      { id: saleAdjustmentQueueId(returnRec.id) },
+    );
     if (linkedCustomerId && debtReduce > 0) {
       void queueRemote("customer", { id: linkedCustomerId });
     }

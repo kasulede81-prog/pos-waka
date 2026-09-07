@@ -2,6 +2,7 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation } from "../types";
 import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "../lib/autoSync";
+import type { SyncProcessResult } from "../lib/saleAdjustmentSync";
 import { usePosStore } from "../store/usePosStore";
 import { sortSyncQueueByPriority } from "../lib/syncQueuePriority";
 import { processCloudSyncOperation } from "./cloudSync";
@@ -33,27 +34,34 @@ export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attemp
  * (local-only mode) so they can sync once cloud is configured.
  * When configured but signed out, ops are retried later.
  */
-async function processOne(op: SyncOperation): Promise<boolean> {
-  if (!hasSupabaseConfig || !supabase) return false;
+async function processOne(op: SyncOperation): Promise<SyncProcessResult> {
+  if (!hasSupabaseConfig || !supabase) return "retry";
 
   const { data: session } = await supabase.auth.getSession();
-  if (!session.session) return false;
+  if (!session.session) return "retry";
 
   const opShopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
   if (!opShopId) {
     reportSyncIssue("sync_quarantined_no_shop", { kind: op.kind, opId: op.id });
-    return false;
+    return "retry";
   }
 
   const activeShop = getActiveShopId();
   if (activeShop && opShopId !== activeShop) {
-    return false;
+    return "retry";
   }
 
   try {
-    return await processCloudSyncOperation({ ...op, shopId: opShopId });
+    const cloud = await import("./cloudSync");
+    if (
+      "processCloudSyncOperationResult" in cloud &&
+      typeof cloud.processCloudSyncOperationResult === "function"
+    ) {
+      return await cloud.processCloudSyncOperationResult({ ...op, shopId: opShopId });
+    }
+    return (await processCloudSyncOperation({ ...op, shopId: opShopId })) ? "ack" : "retry";
   } catch {
-    return false;
+    return "retry";
   }
 }
 
@@ -91,8 +99,10 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   let done = skippedBackoff;
   const { mapPool } = await import("../lib/asyncPool");
   const { SYNC_QUEUE_FLUSH_CONCURRENCY } = await import("../lib/syncTiming");
+  const { markSyncOpWaitingForSale, partitionSaleBeforeAdjustment } = await import("../lib/saleAdjustmentSync");
+  const { saleUploads, other } = partitionSaleBeforeAdjustment(ready);
 
-  await mapPool(ready, SYNC_QUEUE_FLUSH_CONCURRENCY, async (op) => {
+  const processReady = async (op: SyncOperation): Promise<boolean> => {
     try {
       // OBS-1 D2 — sale queue-drain attempt (fire-and-forget; never awaited).
       if (op.kind === "pending_sales" || op.kind === "sale") {
@@ -106,9 +116,13 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
           })
           .catch(() => {});
       }
-      const ok = await processOne(op);
-      if (ok) {
+      const result = await processOne(op);
+      if (result === "ack") {
         await removeSyncOperation(op.id);
+      } else if (result === "wait") {
+        if (op.attempts < 100) {
+          await appendSyncOperation(markSyncOpWaitingForSale(op));
+        }
       } else {
         failed += 1;
         void import("../lib/syncDiagnostics").then(({ recordSyncRetry }) => {
@@ -137,7 +151,10 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
     done += 1;
     onProgress?.(done, total);
     return true;
-  });
+  };
+
+  await mapPool(saleUploads, SYNC_QUEUE_FLUSH_CONCURRENCY, processReady);
+  await mapPool(other, SYNC_QUEUE_FLUSH_CONCURRENCY, processReady);
 
   const remaining = (await readSyncQueue()).length;
   return { failed, remaining, skippedBackoff };

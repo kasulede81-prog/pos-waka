@@ -103,6 +103,21 @@ describe("buildSyncForensicSnapshot", () => {
     expect(snap.blocker?.classification).toBe("BACKOFF");
   });
 
+  it("waiting_for_sale is not ordinary BACKOFF", () => {
+    const row = op({
+      id: "wait-sale-1",
+      kind: "pending_returns",
+      lastError: "waiting_for_sale",
+      attempts: 0,
+      lastAttemptAt: null,
+    });
+    const snap = snapshot([row]);
+    expect(snap.rows[0]?.classification).toBe("WAITING_FOR_SALE");
+    expect(snap.rows[0]?.retryEligible).toBe(true);
+    expect(snap.queue.queueHasBackoff).toBe(false);
+    expect(snap.queue.queueHealth).toBe("healthy");
+  });
+
   it("4. closed-date parked operation", () => {
     const row = op({
       id: "park-1",

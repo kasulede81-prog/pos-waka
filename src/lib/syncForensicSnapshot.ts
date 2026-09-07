@@ -6,6 +6,11 @@
 import type { DayCloseSummary, SyncOperation, SyncOperationKind, UserRole } from "../types";
 import { computeSyncBackoffMs, deriveQueueHealth, shouldRetrySyncOp } from "./autoSync";
 import { isClosedBusinessDateSyncError, shouldRetryClosedBusinessDateOp } from "./businessDateLock";
+import {
+  forensicAdjustmentOperationType,
+  forensicAdjustmentSaleId,
+  isWaitingForSaleSyncError,
+} from "./saleAdjustmentSync";
 import { getDeviceOnline } from "./deviceOnline";
 import { isNativeApp } from "./nativeApp";
 import { inferShopIdFromQueueRow } from "../offline/shopScopeMigration";
@@ -45,6 +50,7 @@ const KNOWN_KIND_SET = new Set<string>(KNOWN_SYNC_OPERATION_KINDS);
 export type SyncForensicClassification =
   | "READY"
   | "BACKOFF"
+  | "WAITING_FOR_SALE"
   | "CLOSED_DATE_PARK"
   | "MISSING_SHOP"
   | "SHOP_MISMATCH"
@@ -91,6 +97,8 @@ export type SyncForensicRow = {
   retryAt: string | null;
   accountKeyPresent: boolean;
   payloadClass: SyncForensicPayloadClass;
+  operationType: string | null;
+  saleIdRedacted: string | null;
   classification: SyncForensicClassification;
 };
 
@@ -244,6 +252,7 @@ export function classifySyncForensicRow(input: {
   if (!shopId) return "MISSING_SHOP";
   if (activeShopId && shopId !== activeShopId) return "SHOP_MISMATCH";
   if (!authenticated) return "MISSING_SESSION";
+  if (isWaitingForSaleSyncError(op.lastError)) return "WAITING_FOR_SALE";
   if (!shouldRetrySyncOp(op, nowMs, [...dayCloses])) return "BACKOFF";
   if (shouldRetrySyncOp(op, nowMs, [...dayCloses])) return "READY";
   return "OTHER";
@@ -293,6 +302,8 @@ function toRow(
     retryAt: retryAtIso(op),
     accountKeyPresent: input.accountKeyPresent,
     payloadClass: classifySyncForensicPayload(String(op.kind ?? ""), op.payload),
+    operationType: forensicAdjustmentOperationType(String(op.kind ?? ""), op.payload),
+    saleIdRedacted: redactId(forensicAdjustmentSaleId(op.payload)),
     classification: classifySyncForensicRow({
       op,
       nowMs: input.nowMs,
@@ -419,6 +430,8 @@ export function formatSyncForensicExport(snapshot: SyncForensicSnapshot): string
         closedDateKey: row.closedDateKey,
         createdAt: row.createdAt,
         payloadClass: row.payloadClass,
+        operationType: row.operationType,
+        saleIdRedacted: row.saleIdRedacted,
         retryEligible: row.retryEligible,
         accountKeyPresent: row.accountKeyPresent,
       })),
@@ -436,6 +449,8 @@ export function formatSyncForensicExport(snapshot: SyncForensicSnapshot): string
         closedDateKey: row.closedDateKey,
         createdAt: row.createdAt,
         payloadClass: row.payloadClass,
+        operationType: row.operationType,
+        saleIdRedacted: row.saleIdRedacted,
         retryEligible: row.retryEligible,
         accountKeyPresent: row.accountKeyPresent,
       })),

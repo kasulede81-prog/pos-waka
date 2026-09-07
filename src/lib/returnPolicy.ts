@@ -19,8 +19,11 @@ export type ReturnAuthInput = {
 };
 
 export function validateReturnAuthorization(input: ReturnAuthInput): { ok: true } | { ok: false; errorKey: string } {
-  const linked = Boolean(input.saleId && input.saleFound);
-  if (linked) return { ok: true };
+  const hasSaleId = Boolean(String(input.saleId ?? "").trim());
+  if (hasSaleId && !input.saleFound) {
+    return { ok: false, errorKey: "returnSaleUnavailable" };
+  }
+  if (hasSaleId && input.saleFound) return { ok: true };
 
   if (!canPerformUnlinkedReturn(input.role)) {
     return { ok: false, errorKey: "returnUnlinkedForbidden" };

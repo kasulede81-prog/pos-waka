@@ -17,6 +17,7 @@ export function shouldRetrySyncOp(
   dayCloses?: DayCloseSummary[],
 ): boolean {
   if (!shouldRetryClosedBusinessDateOp(op, dayCloses)) return false;
+  if (op.lastError === "waiting_for_sale") return true;
   if (!op.lastAttemptAt) return true;
   const last = new Date(op.lastAttemptAt).getTime();
   if (!Number.isFinite(last)) return true;

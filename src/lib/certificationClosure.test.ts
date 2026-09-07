@@ -73,6 +73,17 @@ describe("return policy", () => {
     });
     expect(ok.ok).toBe(true);
   });
+
+  it("linked saleId with missing sale is not treated as unlinked", () => {
+    const owner = validateReturnAuthorization({
+      role: "owner",
+      saleId: "sale-missing",
+      saleFound: false,
+      note: "Would have passed unlinked",
+    });
+    expect(owner.ok).toBe(false);
+    if (!owner.ok) expect(owner.errorKey).toBe("returnSaleUnavailable");
+  });
 });
 
 describe("completed sale financial merge", () => {

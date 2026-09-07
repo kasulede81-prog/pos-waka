@@ -47,6 +47,21 @@ describe("autoSync backoff", () => {
     expect(deriveQueueHealth(queue)).toBe("backing_off");
     expect(shouldRetrySyncOp(queue[0], now + 1_000)).toBe(false);
   });
+
+  it("waiting_for_sale is not exponential backoff health", () => {
+    const now = Date.now();
+    const queue = [
+      op({
+        id: "wait-1",
+        kind: "pending_returns",
+        lastError: "waiting_for_sale",
+        attempts: 0,
+        lastAttemptAt: new Date(now).toISOString(),
+      }),
+    ];
+    expect(shouldRetrySyncOp(queue[0], now)).toBe(true);
+    expect(deriveQueueHealth(queue)).toBe("healthy");
+  });
 });
 
 describe("offline duration label", () => {
