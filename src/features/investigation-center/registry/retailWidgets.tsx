@@ -139,7 +139,7 @@ function StaffReportsWidget({ ctx }: InvestigationWidgetProps) {
   return (
     <InvestigationStaffSection
       lang={ctx.lang}
-      entries={ctx.filtered}
+      entries={ctx.matchingEntries}
       shifts={ctx.shiftsInRange}
       productById={ctx.productById}
       customerById={ctx.customerById}

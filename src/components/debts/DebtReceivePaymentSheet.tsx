@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Customer, Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { releaseDebtPaymentSubmitsForAccount } from "../../lib/debtPaymentSubmitGuard";
+import { inventoryMovementNamespace } from "../../lib/shopSyncContext";
 import { ModalSheet } from "../layout/ModalSheet";
 import { EnterpriseTextField } from "../enterprise/EnterpriseTextField";
 import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
@@ -18,10 +20,16 @@ const QUICK_PCTS = [25, 50, 75] as const;
 
 export function DebtReceivePaymentSheet({ lang, open, customer, onClose, onSubmit }: Props) {
   const [amount, setAmount] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
 
   useEffect(() => {
-    if (!open) setAmount("");
-  }, [open]);
+    if (!open) return;
+    submitInFlightRef.current = false;
+    setSubmitting(false);
+    setAmount("");
+    releaseDebtPaymentSubmitsForAccount(inventoryMovementNamespace());
+  }, [open, customer?.id]);
 
   const balance = customer?.debtBalanceUgx ?? 0;
 
@@ -36,10 +44,23 @@ export function DebtReceivePaymentSheet({ lang, open, customer, onClose, onSubmi
   if (!customer) return null;
 
   const submit = async () => {
+    if (submitInFlightRef.current) return;
     const n = Math.floor(Number(amount.replace(/\D/g, "")) || 0);
     if (n <= 0) return;
-    const ok = await onSubmit(n);
-    if (ok) onClose();
+    submitInFlightRef.current = true;
+    setSubmitting(true);
+    try {
+      const ok = await onSubmit(n);
+      if (ok) {
+        onClose();
+        return;
+      }
+      submitInFlightRef.current = false;
+      setSubmitting(false);
+    } catch {
+      submitInFlightRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -58,7 +79,7 @@ export function DebtReceivePaymentSheet({ lang, open, customer, onClose, onSubmi
       }
       footer={
         <div className="space-y-2">
-          <WakaButton type="button" className="w-full" onClick={submit}>
+          <WakaButton type="button" className="w-full" loading={submitting} onClick={submit}>
             {t(lang, "repayDebt")}
           </WakaButton>
           <WakaButton type="button" variant="secondary" className="w-full" onClick={onClose}>

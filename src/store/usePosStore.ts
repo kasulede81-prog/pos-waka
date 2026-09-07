@@ -197,7 +197,7 @@ import { normalizeLauncherTileLayout } from "../lib/launcherTiles";
 import { normalizeOfficeHubTileLayout } from "../lib/officeHubSections";
 import type { PosShelfPresetId } from "../types";
 import { assertBackupRestoreNotAborted, cancelBackupRestoreSession } from "../lib/backupRestoreSession";
-import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
+import { maybeAppendDailyAutoBackup, registerBackupPersistFlush } from "../offline/backupEngine";
 import { clearPersistedDraft, readPersistedDraft, resolveDraftFromPersisted, writePersistedDraft } from "../offline/draftStorage";
 import {
   buildUnsavedCartVoidedSale,
@@ -348,6 +348,24 @@ import { saleStockMovementsFromSale, openingStockMovementFromProduct } from "../
 import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
 import { repairLegacySaleFinancials } from "../lib/legacyFinancialRepair";
 import { inventoryMovementNamespace } from "../lib/shopSyncContext";
+import {
+  releaseReturnSubmit,
+  resetReturnSubmitLocksForTests,
+  returnSubmitLockKey,
+  tryBeginReturnSubmit,
+} from "../lib/returnSubmitGuard";
+import {
+  debtPaymentSubmitLockKey,
+  releaseDebtPaymentSubmit,
+  resetDebtPaymentSubmitLocksForTests,
+  tryBeginDebtPaymentSubmit,
+} from "../lib/debtPaymentSubmitGuard";
+import {
+  releaseSupplierPaymentSubmit,
+  resetSupplierPaymentSubmitLocksForTests,
+  supplierPaymentSubmitLockKey,
+  tryBeginSupplierPaymentSubmit,
+} from "../lib/supplierPaymentSubmitGuard";
 import { detectSaleStockConflict, logInventoryConflict } from "../lib/inventoryConflictLog";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
 import { resolveStaffPermissions, findRoleTemplate, permissionsFromTemplate } from "../lib/enterpriseRoles";
@@ -520,14 +538,43 @@ function normalizeCustomStaffRoles(raw: unknown): CustomStaffRole[] {
   return out;
 }
 
-function refreshStaffPermissionsForRoles(
+/** BACKOFFICE-01 — assigned staff only; one updatedAt per logical role change. */
+function applyCustomRoleToAssignedStaff(
   staffAccounts: StaffAccount[] | undefined,
   customRoles: CustomStaffRole[] | undefined,
-): StaffAccount[] {
-  return (staffAccounts ?? []).map((staff) => ({
-    ...staff,
-    permissions: resolveStaffPermissions(staff, customRoles),
-  }));
+  roleId: string,
+  now: string,
+  unassign: boolean,
+): { staffAccounts: StaffAccount[]; affected: StaffAccount[] } {
+  const affected: StaffAccount[] = [];
+  const staffAccountsNext = (staffAccounts ?? []).map((staff) => {
+    if (staff.customRoleId !== roleId) return staff;
+    const nextBase = unassign ? { ...staff, customRoleId: null } : staff;
+    const row: StaffAccount = {
+      ...nextBase,
+      permissions: resolveStaffPermissions(nextBase, customRoles),
+      updatedAt: now,
+    };
+    affected.push(row);
+    return row;
+  });
+  return { staffAccounts: staffAccountsNext, affected };
+}
+
+function queueStaffPermissionSnapshots(affected: StaffAccount[]): void {
+  if (affected.length === 0) return;
+  for (const staff of affected) {
+    void import("../lib/shopStaffCloud").then(async ({ pushStaffToCloud }) => {
+      const ok = await pushStaffToCloud(staff);
+      if (ok) {
+        const { afterStaffCloudAck } = await import("../lib/staffSyncQueue");
+        await afterStaffCloudAck("update");
+      } else {
+        const { enqueuePendingStaffSync } = await import("../lib/staffSyncQueue");
+        await enqueuePendingStaffSync({ action: "update", staff });
+      }
+    });
+  }
 }
 
 function normalizeShifts(raw: unknown): ShiftRecord[] {
@@ -718,6 +765,7 @@ export type PosState = {
     purchases?: Purchase[];
     supplierPayments?: SupplierPayment[];
     stockMovements?: StockMovement[];
+    archivedStockMovements?: StockMovement[];
     voidRecords?: VoidRecord[];
     returnRecords?: ReturnRecord[];
     cashExpenses?: CashExpense[];
@@ -730,6 +778,7 @@ export type PosState = {
     archivedVoidRecords?: VoidRecord[];
     archivedReturnRecords?: ReturnRecord[];
     pharmacyPrescriptions?: import("../types").PharmacyPrescription[];
+    pharmacyDoctors?: import("../types").PharmacyDoctor[];
     pharmacyControlledRegister?: import("../types").PharmacyControlledRegisterEntry[];
   }) => void;
 
@@ -1488,6 +1537,25 @@ function scheduleDraftPersist(get: () => PosState) {
   }, 400);
 }
 
+function consumePendingPersistTimer(): { prev: PosState; next: PosState } | null {
+  if (!persistTimer) return null;
+  clearTimeout(persistTimer);
+  persistTimer = null;
+  const next = pendingPersistNext ?? usePosStore.getState();
+  const prev = pendingPersistPrev ?? next;
+  pendingPersistPrev = null;
+  pendingPersistNext = null;
+  return { prev, next };
+}
+
+function flushDraftPersistTimer(): void {
+  if (!draftPersistTimer) return;
+  clearTimeout(draftPersistTimer);
+  draftPersistTimer = null;
+  const s = usePosStore.getState();
+  if (s._hydrated) fireDraftWrite(s);
+}
+
 /**
  * Synchronously fire any pending persist timers so the in-flight snapshot is
  * captured under the CURRENT account key before an account switch swaps the
@@ -1496,24 +1564,28 @@ function scheduleDraftPersist(get: () => PosState) {
  * even after the active key flips to null / the next account.
  */
 export function flushPendingPersist(): void {
-  if (persistTimer) {
-    clearTimeout(persistTimer);
-    persistTimer = null;
-    const next = pendingPersistNext ?? usePosStore.getState();
-    const prev = pendingPersistPrev ?? next;
-    pendingPersistPrev = null;
-    pendingPersistNext = null;
-    if (next._hydrated && persistSuspended === 0) {
-      void import("../offline/incrementalPersist").then((m) => m.flushIncrementalPersist(prev, next));
-    }
+  const pair = consumePendingPersistTimer();
+  if (pair && pair.next._hydrated && persistSuspended === 0) {
+    void import("../offline/incrementalPersist").then((m) => m.flushIncrementalPersist(pair.prev, pair.next));
   }
-  if (draftPersistTimer) {
-    clearTimeout(draftPersistTimer);
-    draftPersistTimer = null;
-    const s = usePosStore.getState();
-    if (s._hydrated) fireDraftWrite(s);
-  }
+  flushDraftPersistTimer();
 }
+
+/**
+ * Same pending-timer drain as `flushPendingPersist`, but awaits incremental
+ * entity writes. Local backup/export uses this so the assembled snapshot cannot
+ * be older than mutations already queued on the existing persist scheduler.
+ */
+export async function flushPendingPersistAsync(): Promise<void> {
+  const pair = consumePendingPersistTimer();
+  if (pair && pair.next._hydrated && persistSuspended === 0) {
+    const { flushIncrementalPersist } = await import("../offline/incrementalPersist");
+    await flushIncrementalPersist(pair.prev, pair.next);
+  }
+  flushDraftPersistTimer();
+}
+
+registerBackupPersistFlush(flushPendingPersistAsync);
 
 async function queueRemote(kind: SyncOperationKind, payload: unknown) {
   if (getActiveAccountKey()?.startsWith("demo:")) return;
@@ -2093,10 +2165,12 @@ export const usePosStore = create<PosState>((set, get) => {
       purchases: [],
       supplierPayments: [],
       stockMovements: [],
+      archivedStockMovements: [],
       voidRecords: [],
       returnRecords: [],
       cashExpenses: [],
       cashDrawerAdjustments: [],
+      dayDrawerOpens: [],
       inventoryCountSessions: [],
       archivedSales: [],
       archivedAuditLogs: [],
@@ -2128,6 +2202,11 @@ export const usePosStore = create<PosState>((set, get) => {
         s.pharmacyPrescriptions,
         normalizePrescription,
       );
+      const pharmacyDoctors = applyPharmacyRemainderHydration(
+        data.pharmacyDoctors,
+        s.pharmacyDoctors,
+        normalizePharmacyDoctor,
+      );
       const pharmacyControlledRegister = applyPharmacyRemainderHydration(
         data.pharmacyControlledRegister,
         s.pharmacyControlledRegister,
@@ -2143,10 +2222,27 @@ export const usePosStore = create<PosState>((set, get) => {
       purchases: (data.purchases ?? []).map(normalizePurchase),
       supplierPayments: (data.supplierPayments ?? []).map(normalizeSupplierPayment),
       ...(() => {
+        const persistedArchive = data.archivedStockMovements;
+        const archivedSeed =
+          persistedArchive === undefined
+            ? (s.archivedStockMovements ?? [])
+            : (() => {
+                const byId = new Map<string, StockMovement>();
+                for (const raw of persistedArchive) {
+                  if (!raw || typeof raw !== "object") continue;
+                  const id = String((raw as StockMovement).id ?? "").trim();
+                  if (!id) continue;
+                  byId.set(id, normalizeStockMovement(raw as StockMovement));
+                }
+                for (const row of s.archivedStockMovements ?? []) {
+                  if (row?.id) byId.set(row.id, row);
+                }
+                return [...byId.values()];
+              })();
         const merged = mergeStockMovements(
           data.stockMovements ?? [],
           s.stockMovements,
-          s.archivedStockMovements ?? [],
+          archivedSeed,
         );
         return {
           stockMovements: merged.stockMovements,
@@ -2170,6 +2266,7 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedVoidRecords: data.archivedVoidRecords ?? s.archivedVoidRecords,
       archivedReturnRecords: data.archivedReturnRecords ?? s.archivedReturnRecords,
       pharmacyPrescriptions,
+      pharmacyDoctors,
       pharmacyControlledRegister,
       pharmacyComplianceAlerts:
         data.pharmacyControlledRegister !== undefined
@@ -2196,6 +2293,9 @@ export const usePosStore = create<PosState>((set, get) => {
       clearTimeout(draftPersistTimer);
       draftPersistTimer = null;
     }
+    resetReturnSubmitLocksForTests();
+    resetDebtPaymentSubmitLocksForTests();
+    resetSupplierPaymentSubmitLocksForTests();
     set({
       _hydrated: false,
       products: [],
@@ -2209,10 +2309,12 @@ export const usePosStore = create<PosState>((set, get) => {
       purchases: [],
       supplierPayments: [],
       stockMovements: [],
+      archivedStockMovements: [],
       voidRecords: [],
       returnRecords: [],
       cashExpenses: [],
       cashDrawerAdjustments: [],
+      dayDrawerOpens: [],
       inventoryCountSessions: [],
       archivedSales: [],
       archivedAuditLogs: [],
@@ -2895,25 +2997,32 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!inheritsFrom || inheritsFrom === "owner") return { ok: false, errorKey: "enterpriseRolesInvalidBase" };
     const nextPermissions = patch.permissions ? [...patch.permissions] : current.permissions;
     const nextStatus = patch.status ?? current.status ?? "active";
+    const now = new Date().toISOString();
     const updatedRole: CustomStaffRole = {
       ...current,
       name: nextName,
       inheritsFrom,
       permissions: nextPermissions,
       status: nextStatus,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     };
-    set((s) => {
-      const customStaffRoles = (s.preferences.customStaffRoles ?? []).map((r) =>
-        r.id === id ? updatedRole : r,
-      );
-      return {
-        preferences: {
-          ...s.preferences,
-          customStaffRoles,
-          staffAccounts: refreshStaffPermissionsForRoles(s.preferences.staffAccounts, customStaffRoles),
-        },
-      };
+    const state = get();
+    const customStaffRoles = (state.preferences.customStaffRoles ?? []).map((r) =>
+      r.id === id ? updatedRole : r,
+    );
+    const refreshed = applyCustomRoleToAssignedStaff(
+      state.preferences.staffAccounts,
+      customStaffRoles,
+      id,
+      now,
+      false,
+    );
+    set({
+      preferences: {
+        ...state.preferences,
+        customStaffRoles,
+        staffAccounts: refreshed.staffAccounts,
+      },
     });
     pushAudit("custom_role_updated", `Custom role updated: ${updatedRole.name}`, {
       roleId: updatedRole.id,
@@ -2921,6 +3030,7 @@ export const usePosStore = create<PosState>((set, get) => {
       status: updatedRole.status,
       permissionCount: updatedRole.permissions.length,
     });
+    queueStaffPermissionSnapshots(refreshed.affected);
     return { ok: true };
   },
 
@@ -2937,21 +3047,18 @@ export const usePosStore = create<PosState>((set, get) => {
     const current = roles.find((r) => r.id === id);
     if (!current) return { ok: false, errorKey: "enterpriseRolesNotFound" };
     const assigned = (get().preferences.staffAccounts ?? []).filter((s) => s.customRoleId === id);
-    set((s) => {
-      const customStaffRoles = (s.preferences.customStaffRoles ?? []).filter((r) => r.id !== id);
-      const staffAccounts = refreshStaffPermissionsForRoles(
-        (s.preferences.staffAccounts ?? []).map((staff) =>
-          staff.customRoleId === id
-            ? {
-                ...staff,
-                customRoleId: null,
-                updatedAt: new Date().toISOString(),
-              }
-            : staff,
-        ),
-        customStaffRoles,
-      );
-      return { preferences: { ...s.preferences, customStaffRoles, staffAccounts } };
+    const now = new Date().toISOString();
+    const state = get();
+    const customStaffRoles = (state.preferences.customStaffRoles ?? []).filter((r) => r.id !== id);
+    const refreshed = applyCustomRoleToAssignedStaff(
+      state.preferences.staffAccounts,
+      customStaffRoles,
+      id,
+      now,
+      true,
+    );
+    set({
+      preferences: { ...state.preferences, customStaffRoles, staffAccounts: refreshed.staffAccounts },
     });
     pushAudit("custom_role_deleted", `Custom role deleted: ${current.name}`, {
       roleId: current.id,
@@ -2966,6 +3073,7 @@ export const usePosStore = create<PosState>((set, get) => {
         roleName: current.name,
       });
     }
+    queueStaffPermissionSnapshots(refreshed.affected);
     return { ok: true };
   },
 
@@ -5589,26 +5697,81 @@ export const usePosStore = create<PosState>((set, get) => {
     const product = state.products.find((p) => p.id === productId);
     if (!product) return { ok: false, errorKey: "missingProduct" };
 
-    const openShift = (state.preferences.shifts ?? []).find(
-      (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(actor),
+    if (saleId) {
+      const saleForLimit = state.sales.find((s) => s.id === saleId);
+      if (saleForLimit) {
+        const limit = validateReturnAgainstSale({
+          sale: saleForLimit,
+          productId,
+          quantity: qty,
+          refundAmountUgx: refund,
+          returnRecords: state.returnRecords,
+        });
+        if (!limit.ok) return { ok: false, errorKey: limit.errorKey };
+      }
+    }
+
+    const lockKey = returnSubmitLockKey({
+      accountKey: inventoryMovementNamespace(),
+      saleId: saleId ?? null,
+      productId,
+      quantity: qty,
+      refundAmountUgx: refund,
+      reason,
+    });
+    if (!tryBeginReturnSubmit(lockKey)) {
+      return { ok: false, errorKey: "invalid" };
+    }
+
+    try {
+    const live = get();
+    const liveActor = live.sessionActor;
+    if (!liveActor) {
+      releaseReturnSubmit(lockKey);
+      return { ok: false, errorKey: "noSelection" };
+    }
+    const liveProduct = live.products.find((p) => p.id === productId);
+    if (!liveProduct) {
+      releaseReturnSubmit(lockKey);
+      return { ok: false, errorKey: "missingProduct" };
+    }
+    if (saleId) {
+      const saleForLimit = live.sales.find((s) => s.id === saleId);
+      if (saleForLimit) {
+        const limit = validateReturnAgainstSale({
+          sale: saleForLimit,
+          productId,
+          quantity: qty,
+          refundAmountUgx: refund,
+          returnRecords: live.returnRecords,
+        });
+        if (!limit.ok) {
+          releaseReturnSubmit(lockKey);
+          return { ok: false, errorKey: limit.errorKey };
+        }
+      }
+    }
+
+    const openShift = (live.preferences.shifts ?? []).find(
+      (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(liveActor),
     );
     const at = new Date().toISOString();
 
-    const linkedSale = saleId ? state.sales.find((s) => s.id === saleId) : undefined;
+    const linkedSale = saleId ? live.sales.find((s) => s.id === saleId) : undefined;
     const cashReduce = cashReduceFromRefund(linkedSale, refund);
     const saleLine = findSaleLineForReturn(linkedSale, productId);
     const returnCogsUgx = saleLine
       ? resolveReturnCogsFromSaleLine(saleLine, qty)
-      : Math.round(qty * normalizeUnitCostUgx(product.costPricePerUnitUgx));
+      : Math.round(qty * normalizeUnitCostUgx(liveProduct.costPricePerUnitUgx));
     const returnUnitCostUgx = saleLine
       ? normalizeUnitCostUgx(saleLine.unitCostUgx)
-      : normalizeUnitCostUgx(product.costPricePerUnitUgx);
+      : normalizeUnitCostUgx(liveProduct.costPricePerUnitUgx);
 
     const returnRec: ReturnRecord = {
       id: crypto.randomUUID(),
       saleId: saleId ?? null,
       productId,
-      productName: product.name,
+      productName: liveProduct.name,
       quantity: qty,
       refundAmountUgx: refund,
       refundCashUgx: cashReduce,
@@ -5616,15 +5779,15 @@ export const usePosStore = create<PosState>((set, get) => {
       unitCostUgx: returnUnitCostUgx,
       reason,
       note: note?.trim() || undefined,
-      actorUserId: actor.userId,
-      actorName: actor.displayName,
+      actorUserId: liveActor.userId,
+      actorName: liveActor.displayName,
       shiftId: openShift?.id ?? null,
       createdAt: at,
     };
 
     const restock = returnRestocksInventory(reason);
 
-    const products = state.products.map((p) =>
+    const products = live.products.map((p) =>
       p.id === productId && restock
         ? {
             ...p,
@@ -5643,7 +5806,7 @@ export const usePosStore = create<PosState>((set, get) => {
           id: crypto.randomUUID(),
           at,
           productId,
-          productName: product.name,
+          productName: liveProduct.name,
           deltaBaseUnits: qty,
           kind: "adjust_other",
           summary: `Return +${qty}`,
@@ -5652,22 +5815,14 @@ export const usePosStore = create<PosState>((set, get) => {
         }
       : null;
 
-    let sales = state.sales;
-    let customers = state.customers;
+    let sales = live.sales;
+    let customers = live.customers;
     let debtReduce = 0;
     let linkedCustomerId: string | null = null;
     if (saleId) {
       const saleIdx = sales.findIndex((s) => s.id === saleId);
       if (saleIdx >= 0) {
         const sale = sales[saleIdx]!;
-        const limit = validateReturnAgainstSale({
-          sale,
-          productId,
-          quantity: qty,
-          refundAmountUgx: refund,
-          returnRecords: state.returnRecords,
-        });
-        if (!limit.ok) return { ok: false, errorKey: limit.errorKey };
         linkedCustomerId = sale.customerId ?? null;
         debtReduce = creditDebtReductionFromSaleAdjustment(sale, refund);
         const totals = reduceSaleTotalsByAmount(sale, refund);
@@ -5682,8 +5837,8 @@ export const usePosStore = create<PosState>((set, get) => {
       products,
       sales,
       customers,
-      returnRecords: [returnRec, ...state.returnRecords],
-      ...(movement ? movementMergePatch(state, [movement]) : {}),
+      returnRecords: [returnRec, ...live.returnRecords],
+      ...(movement ? movementMergePatch(live, [movement]) : {}),
     });
 
     if (openShift) {
@@ -5704,15 +5859,15 @@ export const usePosStore = create<PosState>((set, get) => {
       }));
     }
 
-    pushAudit("sale_return", `Return ${product.name} UGX ${refund.toLocaleString()}`, {
+    pushAudit("sale_return", `Return ${liveProduct.name} UGX ${refund.toLocaleString()}`, {
       returnId: returnRec.id,
       saleId: saleId ?? null,
-      productName: product.name,
+      productName: liveProduct.name,
       quantity: qty,
       refundUgx: refund,
       reason,
       note: note ?? null,
-      actorUserId: actor.userId,
+      actorUserId: liveActor.userId,
     });
     void queueRemote("pending_returns", {
       returnId: returnRec.id,
@@ -5729,6 +5884,10 @@ export const usePosStore = create<PosState>((set, get) => {
       if (updated) broadcastInventoryStock([updated], "sale_return");
     }
     return { ok: true, returnRecord: returnRec };
+    } catch (err) {
+      releaseReturnSubmit(lockKey);
+      throw err;
+    }
   },
 
   closeShiftWithCashCount: (countedCashUgx, handoffFloatUgx, opts) => {
@@ -6948,49 +7107,85 @@ export const usePosStore = create<PosState>((set, get) => {
     const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addDebtPayment");
     if (dateLock) return dateLock;
 
-    const receiptSnap = buildReceiptBrandingSnapshot(state.preferences, receiptSnapshotPlanTier(state.preferences));
-    const payment: DebtPayment = {
-      id: crypto.randomUUID(),
+    const lockKey = debtPaymentSubmitLockKey({
+      accountKey: inventoryMovementNamespace(),
       customerId,
       amountUgx: pay,
-      createdAt: new Date().toISOString(),
-      receiptHeaderSnapshot: receiptSnap.header,
-      receiptFooterSnapshot: receiptSnap.footer,
-    };
-
-    set({
-      customers: state.customers.map((x) =>
-        x.id === customerId
-          ? { ...x, debtBalanceUgx: x.debtBalanceUgx - pay, version: x.version + 1 }
-          : x,
-      ),
-      debtPayments: [payment, ...state.debtPayments],
     });
-
-    const actor = state.sessionActor;
-    if (actor) {
-      const writerId = shiftOwnerUserId(actor);
-      set((st) => ({
-        preferences: {
-          ...st.preferences,
-          shifts: (st.preferences.shifts ?? []).map((sh) =>
-            !sh.endAt && writerId && sh.actorUserId === writerId
-              ? {
-                  ...sh,
-                  debtPaymentsTotalUgx: (sh.debtPaymentsTotalUgx ?? 0) + pay,
-                }
-              : sh,
-          ),
-        },
-      }));
+    if (!tryBeginDebtPaymentSubmit(lockKey)) {
+      return { ok: false, errorKey: "invalid" };
     }
-    void queueRemote("customer", { kind: "debt_payment", paymentId: payment.id });
-    pushAudit("debt_payment", `Payment UGX ${pay.toLocaleString()}`, {
-      customerId,
-      paymentId: payment.id,
-      amountUgx: pay,
-    });
-    return { ok: true, payment };
+
+    try {
+      const live = get();
+      const liveShift = requireActiveShift(live);
+      if (!liveShift.ok) {
+        releaseDebtPaymentSubmit(lockKey);
+        return { ok: false, errorKey: liveShift.errorKey };
+      }
+      const liveCustomer = live.customers.find((x) => x.id === customerId);
+      if (!liveCustomer) {
+        releaseDebtPaymentSubmit(lockKey);
+        return { ok: false, errorKey: "missingProduct" };
+      }
+      const livePay = Math.min(amount, liveCustomer.debtBalanceUgx);
+      if (livePay <= 0 || livePay !== pay) {
+        releaseDebtPaymentSubmit(lockKey);
+        return { ok: false, errorKey: "invalid" };
+      }
+      const liveDateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addDebtPayment");
+      if (liveDateLock) {
+        releaseDebtPaymentSubmit(lockKey);
+        return liveDateLock;
+      }
+
+      const receiptSnap = buildReceiptBrandingSnapshot(live.preferences, receiptSnapshotPlanTier(live.preferences));
+      const payment: DebtPayment = {
+        id: crypto.randomUUID(),
+        customerId,
+        amountUgx: livePay,
+        createdAt: new Date().toISOString(),
+        receiptHeaderSnapshot: receiptSnap.header,
+        receiptFooterSnapshot: receiptSnap.footer,
+      };
+
+      set({
+        customers: live.customers.map((x) =>
+          x.id === customerId
+            ? { ...x, debtBalanceUgx: x.debtBalanceUgx - livePay, version: x.version + 1 }
+            : x,
+        ),
+        debtPayments: [payment, ...live.debtPayments],
+      });
+
+      const actor = live.sessionActor;
+      if (actor) {
+        const writerId = shiftOwnerUserId(actor);
+        set((st) => ({
+          preferences: {
+            ...st.preferences,
+            shifts: (st.preferences.shifts ?? []).map((sh) =>
+              !sh.endAt && writerId && sh.actorUserId === writerId
+                ? {
+                    ...sh,
+                    debtPaymentsTotalUgx: (sh.debtPaymentsTotalUgx ?? 0) + livePay,
+                  }
+                : sh,
+            ),
+          },
+        }));
+      }
+      void queueRemote("customer", { kind: "debt_payment", paymentId: payment.id });
+      pushAudit("debt_payment", `Payment UGX ${livePay.toLocaleString()}`, {
+        customerId,
+        paymentId: payment.id,
+        amountUgx: livePay,
+      });
+      return { ok: true, payment };
+    } catch (err) {
+      releaseDebtPaymentSubmit(lockKey);
+      throw err;
+    }
   },
 
   addSupplier: (input) => {
@@ -7116,32 +7311,68 @@ export const usePosStore = create<PosState>((set, get) => {
     const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addSupplierPayment");
     if (dateLock) return dateLock;
 
-    const actor = state.sessionActor;
-    const payment: SupplierPayment = {
-      id: crypto.randomUUID(),
+    const lockKey = supplierPaymentSubmitLockKey({
+      accountKey: inventoryMovementNamespace(),
       supplierId,
       amountUgx: pay,
-      createdByUserId: actor?.userId,
-      createdByName: actor?.displayName,
-      createdAt: new Date().toISOString(),
-      pendingSync: true,
-    };
-    set({
-      suppliers: state.suppliers.map((s) =>
-        s.id === supplierId
-          ? { ...s, balanceOwedUgx: Math.max(0, s.balanceOwedUgx - pay), version: s.version + 1 }
-          : s,
-      ),
-      supplierPayments: [payment, ...state.supplierPayments],
     });
-    void queueRemote("pending_expenses", { kind: "supplier_payment", paymentId: payment.id, supplierId, amountUgx: pay });
-    pushAudit("supplier_payment", `Paid supplier UGX ${pay.toLocaleString()}`, {
-      supplierId,
-      supplierName: sup.name,
-      paymentId: payment.id,
-      amountUgx: pay,
-    });
-    return { ok: true };
+    if (!tryBeginSupplierPaymentSubmit(lockKey)) {
+      return { ok: false, errorKey: "invalid" };
+    }
+
+    try {
+      const live = get();
+      const liveSup = live.suppliers.find((x) => x.id === supplierId);
+      if (!liveSup) {
+        releaseSupplierPaymentSubmit(lockKey);
+        return { ok: false, errorKey: "missingSupplier" };
+      }
+      const livePay = Math.min(Math.floor(Math.max(0, amountUgx)), Math.max(0, liveSup.balanceOwedUgx));
+      if (livePay <= 0 || livePay !== pay) {
+        releaseSupplierPaymentSubmit(lockKey);
+        return { ok: false, errorKey: "invalidMoney" };
+      }
+      const liveDateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addSupplierPayment");
+      if (liveDateLock) {
+        releaseSupplierPaymentSubmit(lockKey);
+        return liveDateLock;
+      }
+
+      const actor = live.sessionActor;
+      const payment: SupplierPayment = {
+        id: crypto.randomUUID(),
+        supplierId,
+        amountUgx: livePay,
+        createdByUserId: actor?.userId,
+        createdByName: actor?.displayName,
+        createdAt: new Date().toISOString(),
+        pendingSync: true,
+      };
+      set({
+        suppliers: live.suppliers.map((s) =>
+          s.id === supplierId
+            ? { ...s, balanceOwedUgx: Math.max(0, s.balanceOwedUgx - livePay), version: s.version + 1 }
+            : s,
+        ),
+        supplierPayments: [payment, ...live.supplierPayments],
+      });
+      void queueRemote("pending_expenses", {
+        kind: "supplier_payment",
+        paymentId: payment.id,
+        supplierId,
+        amountUgx: livePay,
+      });
+      pushAudit("supplier_payment", `Paid supplier UGX ${livePay.toLocaleString()}`, {
+        supplierId,
+        supplierName: liveSup.name,
+        paymentId: payment.id,
+        amountUgx: livePay,
+      });
+      return { ok: true };
+    } catch (err) {
+      releaseSupplierPaymentSubmit(lockKey);
+      throw err;
+    }
   },
 
   voidPurchase: (purchaseId, reason) => {
@@ -8306,7 +8537,7 @@ export const usePosStore = create<PosState>((set, get) => {
 };
 });
 
-function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
+export function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
   return (
     a.products === b.products &&
     a.customers === b.customers &&
@@ -8330,7 +8561,10 @@ function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
     a.archivedAuditLogs === b.archivedAuditLogs &&
     a.archivedDayCloses === b.archivedDayCloses &&
     a.archivedVoidRecords === b.archivedVoidRecords &&
-    a.archivedReturnRecords === b.archivedReturnRecords
+    a.archivedReturnRecords === b.archivedReturnRecords &&
+    a.pharmacyDoctors === b.pharmacyDoctors &&
+    a.pharmacyPrescriptions === b.pharmacyPrescriptions &&
+    a.pharmacyControlledRegister === b.pharmacyControlledRegister
   );
 }
 
@@ -8857,6 +9091,7 @@ export async function applyRestoredSnapshotFromBackup(
       purchases: (restoredSnap.purchases ?? []).map(normalizePurchase),
       supplierPayments: (restoredSnap.supplierPayments ?? []).map(normalizeSupplierPayment),
       stockMovements: (restoredSnap.stockMovements ?? []).map(normalizeStockMovement),
+      archivedStockMovements: restoredSnap.archivedStockMovements ?? [],
       voidRecords: restoredSnap.voidRecords ?? [],
       returnRecords: restoredSnap.returnRecords ?? [],
       cashExpenses: (restoredSnap.cashExpenses ?? []).map(normalizeCashExpense),
@@ -8869,6 +9104,7 @@ export async function applyRestoredSnapshotFromBackup(
       archivedVoidRecords: restoredSnap.archivedVoidRecords ?? [],
       archivedReturnRecords: restoredSnap.archivedReturnRecords ?? [],
       pharmacyPrescriptions: restoredSnap.pharmacyPrescriptions ?? [],
+      pharmacyDoctors: restoredSnap.pharmacyDoctors ?? [],
       pharmacyControlledRegister: restoredSnap.pharmacyControlledRegister ?? [],
     });
     reportRestoreProgress(opts?.onProgress, 8, 12, 100);
@@ -8936,6 +9172,7 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         purchases: (snap as { purchases?: Purchase[] }).purchases ?? [],
         supplierPayments: (snap as { supplierPayments?: SupplierPayment[] }).supplierPayments ?? [],
         stockMovements: (snap as { stockMovements?: StockMovement[] }).stockMovements ?? [],
+        archivedStockMovements: (snap as { archivedStockMovements?: StockMovement[] }).archivedStockMovements ?? [],
         voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
         returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
         cashExpenses: ((snap as { cashExpenses?: CashExpense[] }).cashExpenses ?? []).map(normalizeCashExpense),
@@ -8952,6 +9189,7 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         archivedVoidRecords: snap.archivedVoidRecords ?? [],
         archivedReturnRecords: snap.archivedReturnRecords ?? [],
         pharmacyPrescriptions: snap.pharmacyPrescriptions ?? [],
+        pharmacyDoctors: snap.pharmacyDoctors ?? [],
         pharmacyControlledRegister: snap.pharmacyControlledRegister ?? [],
       });
       if (tail.length > 0) {
@@ -9309,6 +9547,7 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     purchasesRaw,
     supplierPaymentsRaw,
     stockMovementsRaw,
+    archivedStockMovementsRaw,
     voidRecordsRaw,
     returnRecordsRaw,
     cashExpensesRaw,
@@ -9320,6 +9559,7 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     archivedVoidRecordsRaw,
     archivedReturnRecordsRaw,
     pharmacyPrescriptionsRaw,
+    pharmacyDoctorsRaw,
     pharmacyControlledRegisterRaw,
   ] = await Promise.all([
     getEntitiesByBucket<DebtPayment>("debtPayment"),
@@ -9329,6 +9569,7 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     getEntitiesByBucket<Purchase>("purchase"),
     getEntitiesByBucket<SupplierPayment>("supplierPayment"),
     getEntitiesByBucket<StockMovement>("stockMovement"),
+    getEntitiesByBucket<StockMovement>("archivedStockMovement"),
     getEntitiesByBucket<VoidRecord>("voidRecord"),
     getEntitiesByBucket<ReturnRecord>("returnRecord"),
     getEntitiesByBucket<CashExpense>("cashExpense"),
@@ -9340,6 +9581,7 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     getEntitiesByBucket<VoidRecord>("archivedVoidRecord"),
     getEntitiesByBucket<ReturnRecord>("archivedReturnRecord"),
     getEntitiesByBucket<import("../types").PharmacyPrescription>("pharmacyPrescription"),
+    getEntitiesByBucket<import("../types").PharmacyDoctor>("pharmacyDoctor"),
     getEntitiesByBucket<import("../types").PharmacyControlledRegisterEntry>("pharmacyControlledRegister"),
   ]);
   const archivedSalesRaw = (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale);
@@ -9351,6 +9593,7 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     purchases: purchasesRaw.map(normalizePurchase),
     supplierPayments: supplierPaymentsRaw.map(normalizeSupplierPayment),
     stockMovements: stockMovementsRaw.map(normalizeStockMovement),
+    archivedStockMovements: archivedStockMovementsRaw,
     voidRecords: voidRecordsRaw,
     returnRecords: returnRecordsRaw,
     cashExpenses: cashExpensesRaw.map(normalizeCashExpense),
@@ -9363,6 +9606,7 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     archivedVoidRecords: archivedVoidRecordsRaw,
     archivedReturnRecords: archivedReturnRecordsRaw,
     pharmacyPrescriptions: pharmacyPrescriptionsRaw,
+    pharmacyDoctors: pharmacyDoctorsRaw,
     pharmacyControlledRegister: pharmacyControlledRegisterRaw,
   });
   if (manifest.salesOrder.length > INITIAL_SALES_LOAD_COUNT) {

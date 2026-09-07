@@ -1,8 +1,17 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { EnterpriseListFooter } from "../../../components/enterprise/EnterpriseListFooter";
 import type { AuditLogEntry, Language } from "../../../types";
 import { t } from "../../../lib/i18n";
-import { groupAuditByStaff } from "../../../lib/auditSearch";
 import type { TimelinePresentation } from "../registry/investigationWidgetTypes";
+import {
+  INVESTIGATION_PAGE_SIZE,
+  INVESTIGATION_SHIFTS_PAGE_SIZE,
+  collectInvestigationStaffGroups,
+  nextInvestigationVisibleCount,
+  paginateInvestigationResults,
+  resetInvestigationVisibleCount,
+} from "../lib/investigationResultScope";
 import { VirtualizedActivityTimeline } from "./VirtualizedActivityTimeline";
 
 type Props = {
@@ -43,7 +52,23 @@ export function InvestigationStaffSection({
   onSelect,
   onMenu,
 }: Props) {
-  const staffGroups = groupAuditByStaff(entries);
+  const staffGroups = useMemo(() => collectInvestigationStaffGroups(entries), [entries]);
+  const [visibleCount, setVisibleCount] = useState(INVESTIGATION_PAGE_SIZE);
+  const [shiftVisibleCount, setShiftVisibleCount] = useState(INVESTIGATION_SHIFTS_PAGE_SIZE);
+  useEffect(() => {
+    setVisibleCount(resetInvestigationVisibleCount(INVESTIGATION_PAGE_SIZE));
+  }, [entries]);
+  useEffect(() => {
+    setShiftVisibleCount(resetInvestigationVisibleCount(INVESTIGATION_SHIFTS_PAGE_SIZE));
+  }, [shifts]);
+  const page = useMemo(
+    () => paginateInvestigationResults(staffGroups, visibleCount),
+    [staffGroups, visibleCount],
+  );
+  const shiftPage = useMemo(
+    () => paginateInvestigationResults(shifts, shiftVisibleCount),
+    [shifts, shiftVisibleCount],
+  );
 
   if (staffGroups.length === 0) {
     return (
@@ -59,7 +84,7 @@ export function InvestigationStaffSection({
         <section>
           <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t(lang, "shiftsTodayTitle")}</h2>
           <ul className="mt-3 space-y-2">
-            {shifts.map((s) => (
+            {shiftPage.displayed.map((s) => (
               <li key={s.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-black text-foreground">{s.actorName ?? s.actorUserId}</p>
@@ -85,10 +110,25 @@ export function InvestigationStaffSection({
               </li>
             ))}
           </ul>
+          {shiftPage.hasMore || shiftPage.total > INVESTIGATION_SHIFTS_PAGE_SIZE ? (
+            <EnterpriseListFooter
+              lang={lang}
+              truncated={shiftPage.hasMore}
+              truncatedCount={shiftPage.shown}
+              totalCount={shiftPage.total}
+              hasMore={shiftPage.hasMore}
+              onLoadMore={() =>
+                setShiftVisibleCount((current) =>
+                  nextInvestigationVisibleCount(current, shiftPage.total, INVESTIGATION_SHIFTS_PAGE_SIZE),
+                )
+              }
+              endOfList={!shiftPage.hasMore && shiftPage.total > INVESTIGATION_SHIFTS_PAGE_SIZE}
+            />
+          ) : null}
         </section>
       ) : null}
 
-      {staffGroups.map((group) => (
+      {page.displayed.map((group) => (
         <section key={group.actorId}>
           <h2 className="mb-2 text-xs font-black uppercase tracking-widest text-muted-foreground">{group.actorLabel}</h2>
           <VirtualizedActivityTimeline
@@ -102,6 +142,21 @@ export function InvestigationStaffSection({
           />
         </section>
       ))}
+      {page.hasMore || page.total > INVESTIGATION_PAGE_SIZE ? (
+        <EnterpriseListFooter
+          lang={lang}
+          truncated={page.hasMore}
+          truncatedCount={page.shown}
+          totalCount={page.total}
+          hasMore={page.hasMore}
+          onLoadMore={() =>
+            setVisibleCount((current) =>
+              nextInvestigationVisibleCount(current, page.total, INVESTIGATION_PAGE_SIZE),
+            )
+          }
+          endOfList={!page.hasMore && page.total > INVESTIGATION_PAGE_SIZE}
+        />
+      ) : null}
     </div>
   );
 }

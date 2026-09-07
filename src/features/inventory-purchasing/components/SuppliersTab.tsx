@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { actorHasPermission } from "../../../lib/actorAuthorization";
 import clsx from "clsx";
 import { Building2, Phone, MessageCircle, Trash2, Truck, Users, Wallet } from "lucide-react";
@@ -7,6 +7,8 @@ import { t } from "../../../lib/i18n";
 import { useShopAction } from "../../../hooks/useShopAction";
 import { usePosStore } from "../../../store/usePosStore";
 import { useSessionActor } from "../../../context/SessionActorContext";
+import { releaseSupplierPaymentSubmitsForAccount } from "../../../lib/supplierPaymentSubmitGuard";
+import { inventoryMovementNamespace } from "../../../lib/shopSyncContext";
 import { ModalSheet } from "../../../components/layout/ModalSheet";
 import { EnterpriseTextField } from "../../../components/enterprise/EnterpriseTextField";
 import { WakaButton } from "../../../components/ui/wakaPrimitives";
@@ -42,7 +44,16 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
   const [notes, setNotes] = useState("");
   const [paySupplier, setPaySupplier] = useState<Supplier | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [paySubmitting, setPaySubmitting] = useState(false);
+  const paySubmitInFlightRef = useRef(false);
   const [deleteSupplier, setDeleteSupplier] = useState<Supplier | null>(null);
+
+  useEffect(() => {
+    if (!paySupplier) return;
+    paySubmitInFlightRef.current = false;
+    setPaySubmitting(false);
+    releaseSupplierPaymentSubmitsForAccount(inventoryMovementNamespace());
+  }, [paySupplier?.id]);
 
   const realSuppliers = useMemo(() => suppliers.filter((s) => !isWalkInSupplierId(s.id)), [suppliers]);
 
@@ -92,15 +103,26 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
 
   const submitPay = async (e: FormEvent) => {
     e.preventDefault();
-    if (!paySupplier) return;
+    if (!paySupplier || paySubmitInFlightRef.current) return;
     const n = Math.floor(Number(payAmount) || 0);
-    const r = await runShopAction(
-      { lang, action: "supplier.payment", permitted: canManage },
-      () => addSupplierPayment(paySupplier.id, n),
-    );
-    if (r.ok) {
-      setPaySupplier(null);
-      setPayAmount("");
+    if (n <= 0) return;
+    paySubmitInFlightRef.current = true;
+    setPaySubmitting(true);
+    try {
+      const r = await runShopAction(
+        { lang, action: "supplier.payment", permitted: canManage },
+        () => addSupplierPayment(paySupplier.id, n),
+      );
+      if (r.ok) {
+        setPaySupplier(null);
+        setPayAmount("");
+        return;
+      }
+      paySubmitInFlightRef.current = false;
+      setPaySubmitting(false);
+    } catch {
+      paySubmitInFlightRef.current = false;
+      setPaySubmitting(false);
     }
   };
 
@@ -336,7 +358,7 @@ export function SuppliersTab({ lang, onOpenSupplier }: Props) {
           <form onSubmit={submitPay} className="space-y-3">
             <SectionTitle as="p" className="!text-sm">{paySupplier.name}</SectionTitle>
             <EnterpriseTextField value={payAmount} onChange={(e) => setPayAmount(e.target.value)} inputMode="numeric" pos />
-            <WakaButton type="submit" variant="primary" className="w-full">
+            <WakaButton type="submit" variant="primary" className="w-full" loading={paySubmitting}>
               {t(lang, "supplierPaySave")}
             </WakaButton>
           </form>

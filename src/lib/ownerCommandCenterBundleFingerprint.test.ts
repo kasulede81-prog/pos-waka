@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createDefaultPreferences } from "../data/defaultSeed";
-import type { DayCloseSummary, Product, ReturnRecord, Sale } from "../types";
+import type { CashDrawerAdjustment, CashExpense, DayCloseSummary, Product, ReturnRecord, Sale } from "../types";
 import { dayClosesForAuthority } from "./closedDayAuthority";
 import { resolveDateFilterBounds } from "./dateFilters";
 import { buildDayCloseSnapshot } from "./dayCloseDocument";
@@ -122,6 +122,36 @@ function closeFor(params: {
     supersededAt: null,
     pendingSync: false,
     updatedAt: `${params.dateKey}T18:00:00.000Z`,
+  };
+}
+
+function expense(partial: Partial<CashExpense> & Pick<CashExpense, "id">): CashExpense {
+  return {
+    category: "transport",
+    amountUgx: 5_000,
+    description: "boda",
+    paidOn: DAY,
+    createdAt: `${DAY}T10:00:00.000Z`,
+    createdByUserId: "owner",
+    pendingSync: false,
+    approvalStatus: "pending",
+    deletedAt: null,
+    ...partial,
+  };
+}
+
+function adjustment(partial: Partial<CashDrawerAdjustment> & Pick<CashDrawerAdjustment, "id">): CashDrawerAdjustment {
+  return {
+    type: "owner_withdrawal",
+    amountUgx: 20_000,
+    note: "float",
+    actorUserId: "owner",
+    occurredAt: `${DAY}T11:00:00.000Z`,
+    createdAt: `${DAY}T11:00:00.000Z`,
+    updatedAt: `${DAY}T11:00:00.000Z`,
+    pendingSync: false,
+    deletedAt: null,
+    ...partial,
   };
 }
 
@@ -336,11 +366,162 @@ describe("CC-P2-08 source wiring", () => {
     expect(helper).toContain("salesMutationFingerprint");
     expect(helper).toContain("returnsMutationFingerprint");
     expect(helper).toContain("dayCloseMutationFingerprint");
+    expect(helper).toContain("expensesMutationFingerprint");
+    expect(helper).toContain("adjustmentsMutationFingerprint");
+    expect(helper).toContain("productsMutationFingerprint");
     expect(helper).toContain('getCachedComputation("ownerCommandCenterBundle"');
     expect(helper).not.toContain("resolveProfitVisibility");
     expect(helper).not.toContain("overlayPeriodFinancials");
 
     const fingerprint = src("src/lib/computationResultCache.ts");
     expect(fingerprint).toContain("export function buildSalesFingerprint");
+  });
+});
+
+describe("POST-AUDIT-06 Command Center expense / adjustment / product fingerprints", () => {
+  it("TEST 1 — unchanged expense content keeps the same fingerprint", () => {
+    const row = expense({ id: "e1", approvalStatus: "approved", amountUgx: 8_000 });
+    expect(buildOwnerCommandCenterFingerprint(input({ cashExpenses: [row] }))).toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashExpenses: [{ ...row }] })),
+    );
+  });
+
+  it("TEST 2 — expense approval status change invalidates with the same length", () => {
+    const pending = expense({ id: "e1", approvalStatus: "pending", amountUgx: 8_000 });
+    const approved = { ...pending, approvalStatus: "approved" as const };
+    expect([approved].length).toBe(1);
+    expect(buildOwnerCommandCenterFingerprint(input({ cashExpenses: [approved] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashExpenses: [pending] })),
+    );
+  });
+
+  it("TEST 3 — expense void (deletedAt) invalidates with the same length", () => {
+    const live = expense({ id: "e1", approvalStatus: "approved", deletedAt: null });
+    const voided = { ...live, deletedAt: `${DAY}T15:00:00.000Z` };
+    expect([voided].length).toBe(1);
+    expect(buildOwnerCommandCenterFingerprint(input({ cashExpenses: [voided] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashExpenses: [live] })),
+    );
+  });
+
+  it("TEST 4 — expense amount change invalidates", () => {
+    const a = expense({ id: "e1", approvalStatus: "approved", amountUgx: 8_000 });
+    const b = { ...a, amountUgx: 12_000 };
+    expect(buildOwnerCommandCenterFingerprint(input({ cashExpenses: [b] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashExpenses: [a] })),
+    );
+  });
+
+  it("TEST 5 — cash adjustment amount / void change invalidates", () => {
+    const a = adjustment({ id: "adj-1", amountUgx: 20_000 });
+    const amountChanged = { ...a, amountUgx: 30_000 };
+    const voided = { ...a, deletedAt: `${DAY}T16:00:00.000Z` };
+    expect([amountChanged].length).toBe(1);
+    expect(buildOwnerCommandCenterFingerprint(input({ cashDrawerAdjustments: [amountChanged] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashDrawerAdjustments: [a] })),
+    );
+    expect(buildOwnerCommandCenterFingerprint(input({ cashDrawerAdjustments: [voided] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashDrawerAdjustments: [a] })),
+    );
+  });
+
+  it("TEST 6 — product cost change invalidates", () => {
+    const costly = { ...product, costPricePerUnitUgx: 12_000 };
+    expect([costly].length).toBe(1);
+    expect(buildOwnerCommandCenterFingerprint(input({ products: [costly] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ products: [product] })),
+    );
+  });
+
+  it("TEST 7 — product stock change invalidates", () => {
+    const lower = { ...product, stockOnHand: 5 };
+    expect(buildOwnerCommandCenterFingerprint(input({ products: [lower] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ products: [product] })),
+    );
+  });
+
+  it("TEST 8 — product identity replacement (archive/remove + same length) invalidates", () => {
+    const replacement = { ...product, id: "p-archived-out" };
+    expect([replacement].length).toBe(1);
+    expect(buildOwnerCommandCenterFingerprint(input({ products: [replacement] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ products: [product] })),
+    );
+  });
+
+  it("TEST 9 — irrelevant fields do not invalidate", () => {
+    const expA = expense({ id: "e1", approvalStatus: "approved", description: "boda", pendingSync: false });
+    const expB = { ...expA, description: "lunch", pendingSync: true };
+    const adjA = adjustment({ id: "adj-1", note: "old", pendingSync: false });
+    const adjB = { ...adjA, note: "new", pendingSync: true, actorName: "Other" };
+    const prodB = { ...product, name: "Renamed", sku: "SKU-9", category: "Other", version: 9, updatedAt: `${DAY}T18:00:00.000Z` };
+    expect(buildOwnerCommandCenterFingerprint(input({ cashExpenses: [expB] }))).toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashExpenses: [expA] })),
+    );
+    expect(buildOwnerCommandCenterFingerprint(input({ cashDrawerAdjustments: [adjB] }))).toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashDrawerAdjustments: [adjA] })),
+    );
+    expect(buildOwnerCommandCenterFingerprint(input({ products: [prodB] }))).toBe(
+      buildOwnerCommandCenterFingerprint(input({ products: [product] })),
+    );
+  });
+
+  it("TEST 10 — same-length collections with different relevant content differ", () => {
+    const e1 = expense({ id: "e1", approvalStatus: "approved", amountUgx: 1_000 });
+    const e2 = expense({ id: "e2", approvalStatus: "approved", amountUgx: 9_000 });
+    expect([e1].length).toBe([e2].length);
+    expect(buildOwnerCommandCenterFingerprint(input({ cashExpenses: [e2] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ cashExpenses: [e1] })),
+    );
+  });
+
+  it("TEST 11 — repeated fingerprint of the same content is deterministic", () => {
+    const payload = input({
+      cashExpenses: [expense({ id: "e1", approvalStatus: "approved" })],
+      cashDrawerAdjustments: [adjustment({ id: "adj-1" })],
+      products: [product],
+    });
+    expect(buildOwnerCommandCenterFingerprint(payload)).toBe(buildOwnerCommandCenterFingerprint(payload));
+    expect(buildOwnerCommandCenterFingerprint(payload)).toBe(buildOwnerCommandCenterFingerprint({ ...payload }));
+  });
+
+  it("TEST 12 — sales / returns / day-close fingerprints still invalidate independently", () => {
+    const sales = [
+      sale({ id: "s-a", createdAt: `${DAY}T09:00:00.000Z`, totalUgx: 10_000 }),
+      sale({ id: "s-b", createdAt: `${DAY}T10:00:00.000Z`, totalUgx: 20_000 }),
+    ];
+    const mutatedSales = [sales[0]!, { ...sales[1]!, totalUgx: 50_000, estimatedProfitUgx: 10_000 }];
+    expect(buildOwnerCommandCenterFingerprint(input({ sales: mutatedSales }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ sales })),
+    );
+    const r1 = ret({ id: "r-keep", saleId: "s-a", refundAmountUgx: 1_000 });
+    const r2 = { ...r1, refundAmountUgx: 4_000 };
+    expect(buildOwnerCommandCenterFingerprint(input({ sales, returnRecords: [r2] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ sales, returnRecords: [r1] })),
+    );
+    const closeA = closeFor({ id: "c-keep", dateKey: DAY, salesUgx: 10_000 });
+    const closeB = { ...closeFor({ id: "c-keep", dateKey: DAY, salesUgx: 11_000 }), updatedAt: `${DAY}T19:00:00.000Z` };
+    expect(buildOwnerCommandCenterFingerprint(input({ sales, dayCloses: [closeB] }))).not.toBe(
+      buildOwnerCommandCenterFingerprint(input({ sales, dayCloses: [closeA] })),
+    );
+  });
+
+  it("same length + approved expense recomputes the cached financial bundle", () => {
+    const pending = expense({ id: "e-cache", approvalStatus: "pending", amountUgx: 8_000 });
+    const before = getCachedOwnerCommandCenterBundle(input({ cashExpenses: [pending] }));
+    expect(before.financial.expensesPeriodUgx).toBe(0);
+    const approved = { ...pending, approvalStatus: "approved" as const };
+    expect([approved].length).toBe([pending].length);
+    const after = getCachedOwnerCommandCenterBundle(input({ cashExpenses: [approved] }));
+    expect(after).not.toBe(before);
+    expect(after.financial.expensesPeriodUgx).toBe(8_000);
+  });
+
+  it("same length + product cost edit recomputes inventory value", () => {
+    const before = getCachedOwnerCommandCenterBundle(input({ products: [product] }));
+    const costly = { ...product, costPricePerUnitUgx: 80_000 };
+    expect([costly].length).toBe(1);
+    const after = getCachedOwnerCommandCenterBundle(input({ products: [costly] }));
+    expect(after).not.toBe(before);
+    expect(after.inventory.inventoryValueUgx).not.toBe(before.inventory.inventoryValueUgx);
   });
 });

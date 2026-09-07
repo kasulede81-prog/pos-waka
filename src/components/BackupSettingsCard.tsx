@@ -8,14 +8,14 @@ import {
   cancelBackupRestoreInProgress,
   persistRestoredSnapshotToDisk,
 } from "../store/usePosStore";
-import { readSnapshotWithFallback, getBackupRecord } from "../offline/localDb";
+import { getBackupRecord } from "../offline/localDb";
 import {
   appendManualBackup,
   buildExportEnvelope,
   listBackupMeta,
   MAX_BACKUP_IMPORT_BYTES,
   parseImportEnvelopeFromFile,
-  snapshotFromPartial,
+  readCurrentBackupSnapshot,
 } from "../offline/backupEngine";
 import {
   beginBackupRestoreSession,
@@ -209,8 +209,7 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
         setMsg(t(lang, backupSurfaceDeniedMessageKey(auth.errorKey, "backupExportFail")));
         return;
       }
-      const raw = await readSnapshotWithFallback();
-      const snap = snapshotFromPartial(raw ?? {});
+      const snap = await readCurrentBackupSnapshot();
       if (!snap) {
         setMsg(t(lang, "backupExportFail"));
         return;

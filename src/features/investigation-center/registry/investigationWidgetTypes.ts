@@ -66,6 +66,7 @@ export type InvestigationCenterContext = {
   dataComplete: boolean;
   salesDependentReady: boolean;
   filtered: AuditLogEntry[];
+  matchingEntries: AuditLogEntry[];
   matchingTotal: number;
   hasMoreResults: boolean;
   loadMoreResults: () => void;

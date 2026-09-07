@@ -16,7 +16,12 @@ import {
   type MonthlySalesSummary,
 } from "../lib/localReporting";
 import { timedComputation } from "../lib/performanceMetrics";
-import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
+import {
+  buildReportingExpensesFingerprint,
+  buildReportingProductsFingerprint,
+  buildSalesFingerprint,
+  getCachedComputation,
+} from "../lib/computationResultCache";
 import type { PeriodReportAuthority } from "../lib/closedDayAuthority";
 import {
   applyReportsCompletenessToBundle,
@@ -84,7 +89,7 @@ export function useShopReportBundle(filter: DateFilterValue, includeArchived: bo
       .filter((d) => !d.supersededAt)
       .map((d) => `${d.dateKey}:${d.id}:${d.totalSalesUgx}`)
       .join(",");
-    const fp = `${buildSalesFingerprint(sales)}:${products.length}:${customers.length}:${returns.length}:${suppliers.length}:${cashExpenses.length}:${reportFilterFingerprint(filter)}:${closesFp}`;
+    const fp = `${buildSalesFingerprint(sales)}:${buildReportingProductsFingerprint(products)}:${customers.length}:${returns.length}:${suppliers.length}:${buildReportingExpensesFingerprint(cashExpenses)}:${reportFilterFingerprint(filter)}:${closesFp}`;
     return getCachedComputation("localGetRangeSummary", fp, () =>
       timedComputation("localGetRangeSummary", () =>
         localGetRangeSummary(sales, products, customers, returns, suppliers, filter, cashExpenses, dayCloses),

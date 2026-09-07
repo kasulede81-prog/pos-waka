@@ -2,10 +2,12 @@
  * IC-P2-01 — honest investigation result totals vs bounded display.
  * Filter all → count all → slice for presentation. Export uses the full match set.
  */
-import type { AuditLogEntry, Language, Product, Customer, Supplier } from "../../../types";
+import type { AuditLogEntry, Language, Product, Customer, ReturnRecord, Supplier } from "../../../types";
+import { dateKeyKampala } from "../../../lib/datesUg";
 import {
   AUDIT_FILTER_RESULT_LIMIT,
   filterAuditLogsIndexed,
+  groupAuditByStaff,
   type AuditLogSearchIndex,
   type AuditSearchFilters,
 } from "../../../lib/auditSearch";
@@ -13,10 +15,13 @@ import type { InvestigationCategory, InvestigationKpiId } from "../types";
 import { applyKpiFilter, matchesCategory, shouldHideFromInvestigationCenter } from "./activityPresentation";
 
 export const INVESTIGATION_PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
+export const INVESTIGATION_RETURNS_PAGE_SIZE = 25;
+export const INVESTIGATION_INTEGRITY_PAGE_SIZE = 8;
+export const INVESTIGATION_SHIFTS_PAGE_SIZE = 10;
 export const INVESTIGATION_SHARE_ENTRY_LIMIT = 40;
 
-export type InvestigationResultPage = {
-  displayed: AuditLogEntry[];
+export type InvestigationResultPage<T = AuditLogEntry> = {
+  displayed: T[];
   total: number;
   shown: number;
   hasMore: boolean;
@@ -53,10 +58,10 @@ export function collectInvestigationMatches(
   return applyInvestigationResultFilters(base, presentation);
 }
 
-export function paginateInvestigationResults(
-  matching: AuditLogEntry[],
+export function paginateInvestigationResults<T>(
+  matching: readonly T[],
   visibleCount: number,
-): InvestigationResultPage {
+): InvestigationResultPage<T> {
   const total = matching.length;
   const shown = total === 0 ? 0 : Math.min(Math.max(visibleCount, 0), total);
   return {
@@ -65,6 +70,37 @@ export function paginateInvestigationResults(
     shown,
     hasMore: shown < total,
   };
+}
+
+/** Staff groups from the complete matching set — never from a timeline presentation page. */
+export function collectInvestigationStaffGroups(matchingEntries: readonly AuditLogEntry[]) {
+  return groupAuditByStaff(matchingEntries as AuditLogEntry[]);
+}
+
+/** Date-scoped shifts. Presentation slice happens after this. */
+export function collectInvestigationShiftsInRange<T extends { startAt: string }>(
+  shifts: readonly T[],
+  dateFrom: string,
+  dateTo: string,
+): T[] {
+  return shifts.filter((s) => {
+    const key = dateKeyKampala(s.startAt);
+    return key >= dateFrom && key <= dateTo;
+  });
+}
+
+/** Date-scoped Return Records, newest first. Presentation slice happens after this. */
+export function collectInvestigationReturnsInRange(
+  records: readonly ReturnRecord[],
+  dateFrom: string,
+  dateTo: string,
+): ReturnRecord[] {
+  return records
+    .filter((r) => {
+      const key = dateKeyKampala(r.createdAt);
+      return key >= dateFrom && key <= dateTo;
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function nextInvestigationVisibleCount(

@@ -39,6 +39,7 @@ function minimalCtx(mode: InvestigationCenterContext["mode"]): InvestigationCent
     dataComplete: true,
     salesDependentReady: true,
     filtered: [],
+    matchingEntries: [],
     matchingTotal: 0,
     hasMoreResults: false,
     loadMoreResults: () => {},

@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../../types";
 import { t } from "../../lib/i18n";
-import { useDeferredReportingAuditLogs } from "../../hooks/useDeferredReportingAuditLogs";
-import { useDeferredReportingSales } from "../../hooks/useDeferredReportingSales";
+import { useReportingAuditLogs, useReportingSales } from "../../hooks/useReportingSales";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { usePosStore } from "../../store/usePosStore";
 import { useSessionActor } from "../../context/SessionActorContext";
@@ -27,6 +26,8 @@ import {
 } from "./lib/activityPresentation";
 import {
   collectInvestigationMatches,
+  collectInvestigationReturnsInRange,
+  collectInvestigationShiftsInRange,
   INVESTIGATION_PAGE_SIZE,
   investigationResultScopeKey,
   investigationShareSlice,
@@ -52,7 +53,11 @@ import {
   canShareInvestigationData,
   resolveInvestigationDataCompleteness,
 } from "./lib/investigationDataCompleteness";
-import { resolveInvestigationSalesDependentReadiness } from "./lib/investigationSalesDependentReadiness";
+import {
+  investigationDeferredValueCaughtUp,
+  resolveInvestigationPresentationDataComplete,
+  resolveInvestigationPresentationSalesDependentReady,
+} from "./lib/investigationDeferredPresentation";
 
 function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue {
   const from = searchParams.get("from");
@@ -67,24 +72,31 @@ function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue 
 export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const hydrationStage = usePosStore((s) => s.hydrationStage);
-  const dataComplete = resolveInvestigationDataCompleteness({ hydrationStage }).dataComplete;
+  const hydrationComplete = resolveInvestigationDataCompleteness({ hydrationStage }).dataComplete;
   const salesHistoryHydrationActive = usePosStore((s) => s.salesHistoryHydration?.active === true);
-  const salesDependentReady = resolveInvestigationSalesDependentReadiness({
-    salesHistoryHydrationActive,
-  }).salesDependentReady;
   const preferences = usePosStore((s) => s.preferences);
   const mode = resolveInvestigationMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const [searchParams, setSearchParams] = useSearchParams();
   const { tab, setTab, category, setCategory, activeKpi, setActiveKpi } = useInvestigationCenter(mode);
   const { sharedKpi, pharmacyKpi } = splitActiveKpis(activeKpi);
   const [includeArchived, setIncludeArchived] = useState(false);
-  const auditLogs = useDeferredReportingAuditLogs(includeArchived);
+  const authoritativeAuditLogs = useReportingAuditLogs(includeArchived);
+  const auditLogs = useDeferredValue(authoritativeAuditLogs);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const suppliers = usePosStore((s) => s.suppliers);
   const shopName = usePosStore((s) => s.preferences.shopDisplayName ?? "Shop");
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
-  const sales = useDeferredReportingSales(includeArchived);
+  const authoritativeSales = useReportingSales(includeArchived);
+  const sales = useDeferredValue(authoritativeSales);
+  const dataComplete = resolveInvestigationPresentationDataComplete({
+    hydrationComplete,
+    auditLogsCaughtUp: investigationDeferredValueCaughtUp(authoritativeAuditLogs, auditLogs),
+  });
+  const salesDependentReady = resolveInvestigationPresentationSalesDependentReady({
+    salesHistoryHydrationActive,
+    salesCaughtUp: investigationDeferredValueCaughtUp(authoritativeSales, sales),
+  });
   const prescriptions = usePosStore((s) => s.pharmacyPrescriptions);
   const pharmacyRegister = usePosStore((s) => s.pharmacyControlledRegister);
 
@@ -117,7 +129,10 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
 
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
-  const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
+  const allReturns = useMemo(
+    () => (includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords),
+    [includeArchived, returnRecords, archivedReturnRecords],
+  );
 
   const can = useCallback((perm: Parameters<typeof hasPermission>[1]) => hasPermission(actor.role, perm), [actor.role]);
 
@@ -128,24 +143,11 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
 
   const saleById = useMemo(() => new Map(sales.map((s) => [s.id, s])), [sales]);
 
-  const returnsCountInRange = useMemo(
-    () =>
-      allReturns.filter((r) => {
-        const key = dateKeyKampala(r.createdAt);
-        return key >= dateFrom && key <= dateTo;
-      }).length,
+  const returnsInRange = useMemo(
+    () => collectInvestigationReturnsInRange(allReturns, dateFrom, dateTo),
     [allReturns, dateFrom, dateTo],
   );
-
-  const returnsInRange = useMemo(() => {
-    return allReturns
-      .filter((r) => {
-        const key = dateKeyKampala(r.createdAt);
-        return key >= dateFrom && key <= dateTo;
-      })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 25);
-  }, [allReturns, dateFrom, dateTo]);
+  const returnsCountInRange = returnsInRange.length;
 
   const auditIndex = useMemo(
     () => buildAuditLogSearchIndex(auditLogs, { products, customers, suppliers, lang }),
@@ -265,13 +267,7 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
   const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, quickFilter), [lang, quickFilter]);
 
   const shiftsInRange = useMemo(
-    () =>
-      (shifts ?? [])
-        .filter((s) => {
-          const key = dateKeyKampala(s.startAt);
-          return key >= dateFrom && key <= dateTo;
-        })
-        .slice(0, 10),
+    () => collectInvestigationShiftsInRange(shifts ?? [], dateFrom, dateTo),
     [shifts, dateFrom, dateTo],
   );
 
@@ -500,6 +496,7 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     dataComplete,
     salesDependentReady,
     filtered,
+    matchingEntries,
     matchingTotal: resultPage.total,
     hasMoreResults: resultPage.hasMore,
     loadMoreResults,
@@ -576,6 +573,7 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
     dataComplete,
     salesDependentReady,
     filtered,
+    matchingEntries,
     resultPage.total,
     resultPage.hasMore,
     loadMoreResults,

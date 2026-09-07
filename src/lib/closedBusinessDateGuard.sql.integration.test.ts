@@ -24,6 +24,10 @@ const SQL_175 = readFileSync(
   join(process.cwd(), "supabase/migrations/175_closed_business_date_guard.sql"),
   "utf8",
 );
+const SQL_176 = readFileSync(
+  join(process.cwd(), "supabase/migrations/176_closed_business_date_update_guard.sql"),
+  "utf8",
+);
 
 async function insertOrError(exec: SqlExec, sql: string, params: unknown[] = []): Promise<string | null> {
   try {
@@ -261,5 +265,274 @@ describe("CASH-CONTROL-01 server closed business-date guard", () => {
       [fx.shopAId, day],
     );
     expect(Number(rows[0]?.c)).toBe(1);
+  });
+});
+
+describe("NEW-04 server closed-date UPDATE guard", () => {
+  let exec: SqlExec & { isRealPostgres: boolean };
+  let fx: ClosedDateFixture;
+
+  const UPD_DAY = "2026-09-07";
+  const UPD_TS = "2026-09-07T12:00:00+03:00";
+  const OTHER_OPEN = "2026-09-09";
+  const OTHER_OPEN_TS = "2026-09-09T12:00:00+03:00";
+  const REOPEN_DAY = "2026-09-08";
+  const REOPEN_TS = "2026-09-08T12:00:00+03:00";
+
+  beforeAll(async () => {
+    exec = await createClosedBusinessDateSqlHarness();
+    fx = await seedClosedDateFixture(exec);
+  }, 120_000);
+
+  afterAll(async () => {
+    await exec?.close();
+  });
+
+  it("176 replaces the unconditional UPDATE bypass without a second trigger", () => {
+    expect(SQL_175).toContain("return NEW;");
+    expect(SQL_175).toContain("'sale_returns'");
+    expect(SQL_176).toContain("create or replace function public.enforce_closed_business_date");
+    expect(SQL_176).not.toContain("create trigger trg_sale_returns_closed_business_date");
+    expect(SQL_176).toContain("NEW.refund_amount_ugx is not distinct from OLD.refund_amount_ugx");
+    expect(SQL_176).toContain("v_old_date_key is distinct from v_date_key");
+  });
+
+  it("1 / 2 — sale_return UPDATE succeeds on open date and fails after close", async () => {
+    const id = crypto.randomUUID();
+    expect(
+      await insertOrError(
+        exec,
+        `INSERT INTO public.sale_returns (id, shop_id, quantity, refund_amount_ugx, created_at)
+         VALUES ($1::uuid, $2::uuid, 1, 3000, $3::timestamptz)`,
+        [id, fx.shopAId, UPD_TS],
+      ),
+    ).toBeNull();
+    expect(
+      await insertOrError(
+        exec,
+        `UPDATE public.sale_returns SET refund_amount_ugx = 3500 WHERE id = $1::uuid`,
+        [id],
+      ),
+    ).toBeNull();
+
+    await insertActiveClose(exec, fx.shopAId, UPD_DAY);
+    const err = await insertOrError(
+      exec,
+      `UPDATE public.sale_returns SET refund_amount_ugx = 4000 WHERE id = $1::uuid`,
+      [id],
+    );
+    expect(err).toMatch(/closed_business_date/);
+  });
+
+  it("3 / 4 — debt payment UPDATE succeeds on open date and fails after close", async () => {
+    const id = crypto.randomUUID();
+    expect(
+      await insertOrError(
+        exec,
+        `INSERT INTO public.customer_debt_payments (id, shop_id, customer_id, amount_ugx, created_at)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, 4000, $4::timestamptz)`,
+        [id, fx.shopAId, fx.customerAId, OTHER_OPEN_TS],
+      ),
+    ).toBeNull();
+    expect(
+      await insertOrError(
+        exec,
+        `UPDATE public.customer_debt_payments SET amount_ugx = 4500 WHERE id = $1::uuid`,
+        [id],
+      ),
+    ).toBeNull();
+
+    await insertActiveClose(exec, fx.shopAId, OTHER_OPEN);
+    const err = await insertOrError(
+      exec,
+      `UPDATE public.customer_debt_payments SET amount_ugx = 5000 WHERE id = $1::uuid`,
+      [id],
+    );
+    expect(err).toMatch(/closed_business_date/);
+  });
+
+  it("5 / 6 — supplier payment UPDATE succeeds on open date and fails after close", async () => {
+    const id = crypto.randomUUID();
+    const day = "2026-09-10";
+    const ts = "2026-09-10T12:00:00+03:00";
+    expect(
+      await insertOrError(
+        exec,
+        `INSERT INTO public.shop_supplier_payments (id, shop_id, supplier_id, amount_ugx, created_at)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, 8000, $4::timestamptz)`,
+        [id, fx.shopAId, crypto.randomUUID(), ts],
+      ),
+    ).toBeNull();
+    expect(
+      await insertOrError(
+        exec,
+        `UPDATE public.shop_supplier_payments SET amount_ugx = 8500 WHERE id = $1::uuid`,
+        [id],
+      ),
+    ).toBeNull();
+
+    await insertActiveClose(exec, fx.shopAId, day);
+    const err = await insertOrError(
+      exec,
+      `UPDATE public.shop_supplier_payments SET amount_ugx = 9000 WHERE id = $1::uuid`,
+      [id],
+    );
+    expect(err).toMatch(/closed_business_date/);
+  });
+
+  it("7 / 8 — cash drawer adjustment UPDATE succeeds on open date and fails after close", async () => {
+    const id = crypto.randomUUID();
+    const day = "2026-09-11";
+    const ts = "2026-09-11T12:00:00+03:00";
+    expect(
+      await insertOrError(
+        exec,
+        `INSERT INTO public.shop_cash_drawer_adjustments
+           (id, shop_id, adjustment_type, amount_ugx, occurred_at)
+         VALUES ($1::uuid, $2::uuid, 'cash_added', 2000, $3::timestamptz)`,
+        [id, fx.shopAId, ts],
+      ),
+    ).toBeNull();
+    expect(
+      await insertOrError(
+        exec,
+        `UPDATE public.shop_cash_drawer_adjustments SET amount_ugx = 2500 WHERE id = $1::uuid`,
+        [id],
+      ),
+    ).toBeNull();
+
+    await insertActiveClose(exec, fx.shopAId, day);
+    const err = await insertOrError(
+      exec,
+      `UPDATE public.shop_cash_drawer_adjustments SET amount_ugx = 3000 WHERE id = $1::uuid`,
+      [id],
+    );
+    expect(err).toMatch(/closed_business_date/);
+  });
+
+  it("9 — moving a closed-date row onto an open date cannot bypass the guard", async () => {
+    const { rows } = await exec.query<{ id: string }>(
+      `SELECT id::text AS id FROM public.sale_returns
+       WHERE shop_id = $1 AND created_at = $2::timestamptz
+       LIMIT 1`,
+      [fx.shopAId, UPD_TS],
+    );
+    const id = rows[0]?.id;
+    expect(id).toBeTruthy();
+    const err = await insertOrError(
+      exec,
+      `UPDATE public.sale_returns SET created_at = $2::timestamptz, refund_amount_ugx = 9999
+       WHERE id = $1::uuid`,
+      [id, "2026-09-13T12:00:00+03:00"],
+    );
+    expect(err).toMatch(/closed_business_date/);
+    const after = await exec.query<{ refund: string }>(
+      `SELECT refund_amount_ugx::text AS refund FROM public.sale_returns WHERE id = $1`,
+      [id],
+    );
+    expect(Number(after.rows[0]?.refund)).toBe(3500);
+  });
+
+  it("10 — moving an open-date row into a closed date is rejected", async () => {
+    const id = crypto.randomUUID();
+    const openTs = "2026-09-12T12:00:00+03:00";
+    expect(
+      await insertOrError(
+        exec,
+        `INSERT INTO public.shop_cash_drawer_adjustments
+           (id, shop_id, adjustment_type, amount_ugx, occurred_at)
+         VALUES ($1::uuid, $2::uuid, 'cash_removed', 1000, $3::timestamptz)`,
+        [id, fx.shopAId, openTs],
+      ),
+    ).toBeNull();
+    const err = await insertOrError(
+      exec,
+      `UPDATE public.shop_cash_drawer_adjustments SET occurred_at = $2::timestamptz WHERE id = $1::uuid`,
+      [id, UPD_TS],
+    );
+    expect(err).toMatch(/closed_business_date/);
+  });
+
+  it("11 — existing INSERT closed-date rejection still holds", async () => {
+    const err = await insertOrError(
+      exec,
+      `INSERT INTO public.sale_returns (id, shop_id, quantity, refund_amount_ugx, created_at)
+       VALUES ($1::uuid, $2::uuid, 1, 3000, $3::timestamptz)`,
+      [crypto.randomUUID(), fx.shopAId, UPD_TS],
+    );
+    expect(err).toMatch(/closed_business_date/);
+  });
+
+  it("12 — reopen still allows a legitimate financial UPDATE", async () => {
+    const id = crypto.randomUUID();
+    expect(
+      await insertOrError(
+        exec,
+        `INSERT INTO public.customer_debt_payments (id, shop_id, customer_id, amount_ugx, created_at)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, 2000, $4::timestamptz)`,
+        [id, fx.shopAId, fx.customerAId, REOPEN_TS],
+      ),
+    ).toBeNull();
+    const closeId = await insertActiveClose(exec, fx.shopAId, REOPEN_DAY);
+    expect(
+      await insertOrError(
+        exec,
+        `UPDATE public.customer_debt_payments SET amount_ugx = 2200 WHERE id = $1::uuid`,
+        [id],
+      ),
+    ).toMatch(/closed_business_date/);
+
+    await exec.exec(`
+      UPDATE public.shop_day_closes
+      SET superseded_at = now()
+      WHERE id = '${closeId}';
+    `);
+
+    expect(
+      await insertOrError(
+        exec,
+        `UPDATE public.customer_debt_payments SET amount_ugx = 2200 WHERE id = $1::uuid`,
+        [id],
+      ),
+    ).toBeNull();
+  });
+
+  it("13 — same-id metadata ACK remains allowed after close", async () => {
+    const { rows } = await exec.query<{ id: string }>(
+      `SELECT id::text AS id FROM public.sale_returns
+       WHERE shop_id = $1 AND created_at = $2::timestamptz
+       LIMIT 1`,
+      [fx.shopAId, UPD_TS],
+    );
+    const id = rows[0]?.id;
+    expect(id).toBeTruthy();
+    expect(
+      await insertOrError(
+        exec,
+        `UPDATE public.sale_returns SET reason = 'other', updated_at = now() WHERE id = $1::uuid`,
+        [id],
+      ),
+    ).toBeNull();
+  });
+
+  it("14 — expense RPC closed-date protection remains intact", async () => {
+    const result = await asUser(exec, fx.userAId, async () => {
+      const { rows } = await exec.query(
+        `SELECT public.shop_push_cash_expense($1::uuid, $2::jsonb) AS result`,
+        [
+          fx.shopAId,
+          JSON.stringify({
+            id: crypto.randomUUID(),
+            category: "transport",
+            amount_ugx: 5000,
+            paid_on: UPD_DAY,
+            created_at: UPD_TS,
+          }),
+        ],
+      );
+      return rpcJson(rows[0]);
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("closed_business_date");
   });
 });

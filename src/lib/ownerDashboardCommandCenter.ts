@@ -111,6 +111,44 @@ function dayCloseMutationFingerprint(closes: OwnerCommandCenterInput["dayCloses"
   );
 }
 
+/** Fields consumed by sumCashExpensesInBounds / OnDay (approval + void + amount + paidOn). */
+function expensesMutationFingerprint(expenses: OwnerCommandCenterInput["cashExpenses"]): string {
+  return mutationFingerprint(
+    expenses
+      .map(
+        (e) =>
+          `${e.id}:${e.amountUgx}:${e.approvalStatus ?? "approved"}:${e.deletedAt ?? ""}:${e.paidOn}`,
+      )
+      .sort(),
+  );
+}
+
+/** Fields consumed by adjustmentInBounds + cash-control inflow/outflow totals. */
+function adjustmentsMutationFingerprint(
+  adjustments: OwnerCommandCenterInput["cashDrawerAdjustments"],
+): string {
+  return mutationFingerprint(
+    adjustments
+      .map((a) => `${a.id}:${a.amountUgx}:${a.type}:${a.occurredAt}:${a.deletedAt ?? ""}`)
+      .sort(),
+  );
+}
+
+/**
+ * Fields consumed by inventory value, stock KPIs, low-stock, and pharmacy expiry.
+ * Archive/removal is identity (id); catalog products have no in-place archived flag.
+ */
+function productsMutationFingerprint(products: OwnerCommandCenterInput["products"]): string {
+  return mutationFingerprint(
+    products
+      .map(
+        (p) =>
+          `${p.id}:${p.costPricePerUnitUgx}:${p.stockOnHand}:${p.minimumStockAlert}:${p.expiryDate ?? ""}:${p.buyingPackCostUgx ?? ""}:${p.conversionRate ?? ""}:${p.packCostUnitsDepleted ?? ""}`,
+      )
+      .sort(),
+  );
+}
+
 export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInput): string {
   const { bounds, sales, products, shifts, customers, suppliers, debtPayments, stockMovements, purchases } = input;
   return [
@@ -118,7 +156,7 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
     bounds.toKey,
     bounds.isSingleDay ? "1d" : "rng",
     salesMutationFingerprint(sales),
-    products.length,
+    productsMutationFingerprint(products),
     shifts.length,
     customers.length,
     suppliers.length,
@@ -126,8 +164,8 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
     stockMovements.length,
     purchases.length,
     input.inventoryCountSessions.length,
-    input.cashDrawerAdjustments.length,
-    input.cashExpenses.length,
+    adjustmentsMutationFingerprint(input.cashDrawerAdjustments),
+    expensesMutationFingerprint(input.cashExpenses),
     input.auditLogs.length,
     input.acknowledgements.length,
     input.syncPendingCount,

@@ -9,6 +9,7 @@ const TRANSFER_BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", 
 const R3_BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "r3StockBootstrap.sql");
 const CLOSED_BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "closedBusinessDateBootstrap.sql");
 const MIGRATION_175 = join(ROOT, "175_closed_business_date_guard.sql");
+const MIGRATION_176 = join(ROOT, "176_closed_business_date_update_guard.sql");
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -37,6 +38,7 @@ export async function createClosedBusinessDateSqlHarness(): Promise<SqlExec & { 
     await exec.exec(readSql(R3_BOOTSTRAP));
     await exec.exec(readSql(CLOSED_BOOTSTRAP));
     await exec.exec(readSql(MIGRATION_175));
+    await exec.exec(readSql(MIGRATION_176));
     return exec;
   }
 
@@ -58,6 +60,7 @@ export async function createClosedBusinessDateSqlHarness(): Promise<SqlExec & { 
   await exec.exec(readSql(R3_BOOTSTRAP));
   await exec.exec(readSql(CLOSED_BOOTSTRAP));
   await exec.exec(readSql(MIGRATION_175));
+  await exec.exec(readSql(MIGRATION_176));
   return exec;
 }
 

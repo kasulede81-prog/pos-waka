@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import type { PharmacyControlledRegisterEntry, PharmacyPrescription } from "../types";
+import type { PharmacyControlledRegisterEntry, PharmacyDoctor, PharmacyPrescription } from "../types";
 import { createDefaultPreferences } from "../data/defaultSeed";
 import { dateKeyKampala } from "./datesUg";
 import { entityKey } from "../offline/entityStore";
@@ -18,6 +18,7 @@ import {
   resolveInvestigationSalesDependentReadiness,
 } from "../features/investigation-center/lib/investigationSalesDependentReadiness";
 import { normalizePrescription } from "./pharmacyPrescriptions";
+import { normalizePharmacyDoctor } from "./pharmacyDoctors";
 import { normalizeControlledRegisterEntry } from "./pharmacyControlledRegister";
 import { applyPharmacyRemainderHydration } from "./pharmacyRemainderHydration";
 import { usePosStore } from "../store/usePosStore";
@@ -73,6 +74,22 @@ function persistedRx(id: string, extra: Partial<PharmacyPrescription> = {}): Pha
   };
 }
 
+function persistedDoctor(id: string, extra: Partial<PharmacyDoctor> = {}): PharmacyDoctor {
+  return {
+    id,
+    name: extra.name ?? `Dr. ${id}`,
+    clinic: extra.clinic ?? "Kampala Clinic",
+    phone: extra.phone ?? null,
+    registrationNumber: extra.registrationNumber ?? null,
+    notes: extra.notes ?? null,
+    createdAt: extra.createdAt ?? "2026-09-06T08:00:00.000Z",
+    updatedAt: extra.updatedAt ?? "2026-09-06T08:00:00.000Z",
+    version: extra.version ?? 1,
+    pendingSync: extra.pendingSync ?? false,
+    ...extra,
+  };
+}
+
 function persistedRegister(id: string): PharmacyControlledRegisterEntry {
   const today = dateKeyKampala(new Date());
   return {
@@ -123,6 +140,7 @@ describe("IC-NEW-01 pharmacy remainder hydration helper", () => {
   it("empty incoming stays empty when runtime is empty", () => {
     expect(applyPharmacyRemainderHydration([], [], normalizePrescription)).toEqual([]);
     expect(applyPharmacyRemainderHydration([], [], normalizeControlledRegisterEntry)).toEqual([]);
+    expect(applyPharmacyRemainderHydration([], [], normalizePharmacyDoctor)).toEqual([]);
   });
 
   it("repeated hydration does not duplicate ids", () => {
@@ -222,6 +240,10 @@ describe("IC-NEW-01 restart-style production remainder hydration", () => {
     expect(entityKey("sb:shop-a", "pharmacyControlledRegister", "reg-1")).not.toBe(
       entityKey("sb:shop-b", "pharmacyControlledRegister", "reg-1"),
     );
+    expect(entityKey("sb:shop-a", "pharmacyDoctor", "doc-1")).not.toBe(
+      entityKey("sb:shop-b", "pharmacyDoctor", "doc-1"),
+    );
+    expect(entityKey("sb:shop-a", "pharmacyDoctor", "doc-1")).toBe("sb:shop-a::pharmacyDoctor::doc-1");
   });
 });
 
@@ -279,6 +301,7 @@ describe("IC-NEW-01 Investigation Center reads hydrated pharmacy runtime state",
     });
     expect(usePosStore.getState().pharmacyPrescriptions).toEqual([]);
     expect(usePosStore.getState().pharmacyControlledRegister).toEqual([]);
+    expect(usePosStore.getState().pharmacyDoctors).toEqual([]);
     expect(resolveInvestigationDataCompleteness({ hydrationStage: "complete" }).dataComplete).toBe(true);
     expect(resolveInvestigationDataCompleteness({ hydrationStage: "background" }).dataComplete).toBe(false);
     expect(
@@ -300,12 +323,16 @@ describe("IC-NEW-01 production hydration boundary contracts", () => {
       'getEntitiesByBucket<import("../types").PharmacyControlledRegisterEntry>("pharmacyControlledRegister")',
     );
     const remainderCall = storeSrc.indexOf("pharmacyPrescriptions: pharmacyPrescriptionsRaw");
+    const doctorBucket = storeSrc.indexOf('getEntitiesByBucket<import("../types").PharmacyDoctor>("pharmacyDoctor")');
+    const doctorRemainderCall = storeSrc.indexOf("pharmacyDoctors: pharmacyDoctorsRaw");
     const completeAfterRemainder = storeSrc.indexOf('hydrationStage: "complete"', backgroundFn);
     expect(remainderFn).toBeGreaterThan(0);
     expect(backgroundFn).toBeGreaterThan(remainderFn);
     expect(rxBucket).toBeGreaterThan(remainderFn);
     expect(registerBucket).toBeGreaterThan(remainderFn);
+    expect(doctorBucket).toBeGreaterThan(remainderFn);
     expect(remainderCall).toBeGreaterThan(rxBucket);
+    expect(doctorRemainderCall).toBeGreaterThan(doctorBucket);
     expect(completeAfterRemainder).toBeGreaterThan(backgroundFn);
   });
 
@@ -340,5 +367,185 @@ describe("IC-NEW-01 production hydration boundary contracts", () => {
     const readinessSrc = src("src/features/investigation-center/lib/investigationSalesDependentReadiness.ts");
     expect(readinessSrc).toContain("salesDependentReady: !input.salesHistoryHydrationActive");
     expect(readinessSrc).not.toContain("pharmacyPrescriptions");
+  });
+});
+
+describe("IC-NEW-12 pharmacy doctor remainder hydration helper", () => {
+  it("loads persisted pharmacyDoctor rows and drops malformed rows", () => {
+    const persisted = [persistedDoctor("doc-1"), { not: "a doctor" }, { id: "doc-bad" }, "bad"];
+    const loaded = applyPharmacyRemainderHydration(persisted, [], normalizePharmacyDoctor);
+    expect(loaded.map((d) => d.id)).toEqual(["doc-1"]);
+    expect(loaded[0]?.name).toBe("Dr. doc-1");
+  });
+
+  it("missing incoming keeps existing in-memory doctors", () => {
+    const existing = [persistedDoctor("doc-live")];
+    const loaded = applyPharmacyRemainderHydration(undefined, existing, normalizePharmacyDoctor);
+    expect(loaded).toEqual(existing);
+  });
+
+  it("empty incoming stays empty when runtime is empty", () => {
+    expect(applyPharmacyRemainderHydration([], [], normalizePharmacyDoctor)).toEqual([]);
+  });
+
+  it("newer in-memory doctor wins over a stale persisted copy of the same id", () => {
+    const disk = persistedDoctor("doc-1", { name: "Stale Name", clinic: "Old Clinic", version: 1 });
+    const live = persistedDoctor("doc-1", { name: "Live Name", clinic: "New Clinic", version: 2 });
+    const merged = applyPharmacyRemainderHydration([disk], [live], normalizePharmacyDoctor);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.name).toBe("Live Name");
+    expect(merged[0]?.clinic).toBe("New Clinic");
+    expect(merged[0]?.version).toBe(2);
+  });
+});
+
+describe("IC-NEW-12 restart-style doctor remainder hydration", () => {
+  it("hydrates persisted pharmacyDoctor rows into state.pharmacyDoctors", () => {
+    const doctors = [persistedDoctor("doc-restart")];
+
+    restartStore();
+    expect(usePosStore.getState().pharmacyDoctors).toEqual([]);
+    expect(usePosStore.getState().hydrationStage).toBe("critical");
+
+    usePosStore.getState().hydrateRemainder({
+      pharmacyDoctors: doctors,
+    });
+
+    const state = usePosStore.getState();
+    expect(state.pharmacyDoctors.map((d) => d.id)).toEqual(["doc-restart"]);
+    expect(state.pharmacyDoctors[0]?.name).toBe("Dr. doc-restart");
+    expect(state.hydrationStage).not.toBe("complete");
+
+    usePosStore.setState({ hydrationStage: "complete" });
+    expect(resolveInvestigationDataCompleteness({ hydrationStage: usePosStore.getState().hydrationStage }).dataComplete).toBe(
+      true,
+    );
+    expect(usePosStore.getState().pharmacyDoctors).toHaveLength(1);
+  });
+
+  it("empty or missing pharmacyDoctor bucket leaves pharmacyDoctors empty without throwing", () => {
+    restartStore();
+    expect(() => {
+      usePosStore.getState().hydrateRemainder({
+        pharmacyDoctors: [],
+      });
+    }).not.toThrow();
+    expect(usePosStore.getState().pharmacyDoctors).toEqual([]);
+
+    restartStore();
+    expect(() => {
+      usePosStore.getState().hydrateRemainder({
+        returnRecords: [],
+      });
+    }).not.toThrow();
+    expect(usePosStore.getState().pharmacyDoctors).toEqual([]);
+  });
+
+  it("hydration of account A loads only account A doctors after essentials reset", () => {
+    restartStore();
+    usePosStore.setState({
+      pharmacyDoctors: [persistedDoctor("doc-shop-a"), persistedDoctor("doc-shop-b-leak")],
+    });
+    usePosStore.getState().hydrateEssentials({
+      products: [],
+      customers: [],
+      preferences: createDefaultPreferences(),
+    });
+    expect(usePosStore.getState().pharmacyDoctors).toEqual([]);
+    usePosStore.getState().hydrateRemainder({
+      pharmacyDoctors: [persistedDoctor("doc-shop-a")],
+    });
+    expect(usePosStore.getState().pharmacyDoctors.map((d) => d.id)).toEqual(["doc-shop-a"]);
+  });
+
+  it("skips malformed doctor rows using normalizePharmacyDoctor conventions", () => {
+    restartStore();
+    usePosStore.getState().hydrateRemainder({
+      pharmacyDoctors: [
+        persistedDoctor("doc-ok"),
+        { id: "doc-no-name" },
+        { name: "No id" },
+        null,
+        "bad",
+      ] as PharmacyDoctor[],
+    });
+    expect(usePosStore.getState().pharmacyDoctors.map((d) => d.id)).toEqual(["doc-ok"]);
+  });
+
+  it("does not overwrite a newer in-memory doctor with stale persisted data", () => {
+    restartStore();
+    usePosStore.setState({
+      pharmacyDoctors: [persistedDoctor("doc-1", { name: "Live Name", version: 2 })],
+    });
+    usePosStore.getState().hydrateRemainder({
+      pharmacyDoctors: [persistedDoctor("doc-1", { name: "Stale Name", version: 1 })],
+    });
+    expect(usePosStore.getState().pharmacyDoctors).toHaveLength(1);
+    expect(usePosStore.getState().pharmacyDoctors[0]?.name).toBe("Live Name");
+    expect(usePosStore.getState().pharmacyDoctors[0]?.version).toBe(2);
+  });
+
+  it("snapshot and backup remainder sources restore pharmacyDoctors through hydrateRemainder", () => {
+    const snapDoctors = [persistedDoctor("doc-snap")];
+    const backupDoctors = [persistedDoctor("doc-backup")];
+
+    restartStore();
+    usePosStore.getState().hydrateRemainder({
+      pharmacyDoctors: snapDoctors ?? [],
+    });
+    expect(usePosStore.getState().pharmacyDoctors.map((d) => d.id)).toEqual(["doc-snap"]);
+
+    restartStore();
+    usePosStore.getState().hydrateRemainder({
+      pharmacyDoctors: backupDoctors ?? [],
+    });
+    expect(usePosStore.getState().pharmacyDoctors.map((d) => d.id)).toEqual(["doc-backup"]);
+  });
+
+  it("sign-out and essentials still clear pharmacyDoctors for account isolation", () => {
+    usePosStore.setState({ pharmacyDoctors: [persistedDoctor("doc-session")] });
+    usePosStore.getState().resetForSignOut();
+    expect(usePosStore.getState().pharmacyDoctors).toEqual([]);
+
+    usePosStore.setState({ pharmacyDoctors: [persistedDoctor("doc-session")] });
+    usePosStore.getState().hydrateEssentials({
+      products: [],
+      customers: [],
+      preferences: createDefaultPreferences(),
+    });
+    expect(usePosStore.getState().pharmacyDoctors).toEqual([]);
+  });
+});
+
+describe("IC-NEW-12 production hydration boundary contracts", () => {
+  it("entity remainder loads pharmacyDoctor before hydrationStage complete", () => {
+    const storeSrc = src("src/store/usePosStore.ts");
+    const remainderFn = storeSrc.indexOf("async function hydrateEntityRemainderFromManifest");
+    const backgroundFn = storeSrc.indexOf("export async function bootstrapPosBackgroundFromDisk");
+    const doctorBucket = storeSrc.indexOf('getEntitiesByBucket<import("../types").PharmacyDoctor>("pharmacyDoctor")');
+    const doctorCall = storeSrc.indexOf("pharmacyDoctors: pharmacyDoctorsRaw");
+    const completeAfterRemainder = storeSrc.indexOf('hydrationStage: "complete"', backgroundFn);
+    expect(remainderFn).toBeGreaterThan(0);
+    expect(doctorBucket).toBeGreaterThan(remainderFn);
+    expect(doctorBucket).toBeLessThan(backgroundFn);
+    expect(doctorCall).toBeGreaterThan(doctorBucket);
+    expect(completeAfterRemainder).toBeGreaterThan(backgroundFn);
+  });
+
+  it("snapshot and backup remainder call sites pass pharmacyDoctors", () => {
+    const storeSrc = src("src/store/usePosStore.ts");
+    expect(storeSrc).toContain("pharmacyDoctors: restoredSnap.pharmacyDoctors ?? []");
+    expect(storeSrc).toContain("pharmacyDoctors: snap.pharmacyDoctors ?? []");
+  });
+
+  it("Investigation Center completeness stays independent of pharmacyDoctors", () => {
+    const completenessSrc = src("src/features/investigation-center/lib/investigationDataCompleteness.ts");
+    const readinessSrc = src("src/features/investigation-center/lib/investigationSalesDependentReadiness.ts");
+    const widgetSrc = src("src/features/investigation-center/registry/pharmacyWidgets.tsx");
+    expect(completenessSrc).not.toContain("pharmacyDoctors");
+    expect(completenessSrc).not.toContain("pharmacyDoctor");
+    expect(readinessSrc).not.toContain("pharmacyDoctors");
+    expect(widgetSrc).not.toContain("pharmacyDoctors");
+    expect(resolveInvestigationDataCompleteness({ hydrationStage: "complete" }).dataComplete).toBe(true);
   });
 });

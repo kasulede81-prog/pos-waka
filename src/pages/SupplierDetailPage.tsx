@@ -1,5 +1,7 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
+import { releaseSupplierPaymentSubmitsForAccount } from "../lib/supplierPaymentSubmitGuard";
+import { inventoryMovementNamespace } from "../lib/shopSyncContext";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowDownLeft, ArrowUpRight, Scale, Trash2, Wallet } from "lucide-react";
 import type { Language } from "../types";
@@ -75,7 +77,16 @@ export function SupplierDetailPage({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState("");
+  const [paySubmitting, setPaySubmitting] = useState(false);
+  const paySubmitInFlightRef = useRef(false);
   const [statementFilter, setStatementFilter] = useState<DateFilterValue>({ kind: "preset", preset: "this_month" });
+
+  useEffect(() => {
+    if (!payOpen) return;
+    paySubmitInFlightRef.current = false;
+    setPaySubmitting(false);
+    releaseSupplierPaymentSubmitsForAccount(inventoryMovementNamespace());
+  }, [payOpen, supplierId]);
 
   const statementBounds = useMemo(() => resolveDateFilterBounds(statementFilter), [statementFilter]);
 
@@ -195,14 +206,26 @@ export function SupplierDetailPage({
 
   const submitPay = async (e: FormEvent) => {
     e.preventDefault();
+    if (paySubmitInFlightRef.current) return;
     const n = Math.floor(Number(payAmount) || 0);
-    const r = await runShopAction(
-      { lang, action: "supplier.payment", permitted: canManage },
-      () => addSupplierPayment(supplier.id, n),
-    );
-    if (r.ok) {
-      setPayOpen(false);
-      setPayAmount("");
+    if (n <= 0) return;
+    paySubmitInFlightRef.current = true;
+    setPaySubmitting(true);
+    try {
+      const r = await runShopAction(
+        { lang, action: "supplier.payment", permitted: canManage },
+        () => addSupplierPayment(supplier.id, n),
+      );
+      if (r.ok) {
+        setPayOpen(false);
+        setPayAmount("");
+        return;
+      }
+      paySubmitInFlightRef.current = false;
+      setPaySubmitting(false);
+    } catch {
+      paySubmitInFlightRef.current = false;
+      setPaySubmitting(false);
     }
   };
 
@@ -466,7 +489,7 @@ export function SupplierDetailPage({
             inputMode="numeric"
             pos
           />
-          <WakaButton type="submit" variant="primary" className="w-full">
+          <WakaButton type="submit" variant="primary" className="w-full" loading={paySubmitting}>
             {t(lang, "supplierPaySave")}
           </WakaButton>
         </form>

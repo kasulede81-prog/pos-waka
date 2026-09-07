@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { ChevronDown } from "lucide-react";
 import type { Language, Product, ReturnReason, ReturnRecord, Sale, UserRole } from "../../types";
@@ -14,6 +14,8 @@ import {
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { PosScreenPortal } from "../layout/PosScreenPortal";
 import { resolveReturnRefundUgx } from "../../lib/returnRefundInput";
+import { releaseReturnSubmitsForAccount } from "../../lib/returnSubmitGuard";
+import { inventoryMovementNamespace } from "../../lib/shopSyncContext";
 import { pricePerBaseUnitUgx } from "../../lib/sellingEngine";
 import { buildLineRefundBreakdown } from "../../lib/refundBreakdown";
 import { RefundBreakdownPanel } from "../returns/RefundBreakdownPanel";
@@ -47,6 +49,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showCalcDetails, setShowCalcDetails] = useState(false);
+  const submitInFlightRef = useRef(false);
 
   const allowUnlinked = canPerformUnlinkedReturn(actorRole);
   const lineOptions = sale?.lines.filter((l) => !l.voided) ?? [];
@@ -58,6 +61,8 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
 
   useEffect(() => {
     if (!open) return;
+    submitInFlightRef.current = false;
+    releaseReturnSubmitsForAccount(inventoryMovementNamespace());
     setProductId(pickList[0]?.id ?? "");
     setQty("1");
     setRefund("");
@@ -134,7 +139,8 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
     sale != null ? Math.max(0, sale.totalUgx - finalRefundUgx) : 0;
 
   const handleSubmit = () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setSubmitError(null);
     const r = onConfirm({
       saleId: sale?.id ?? null,
@@ -148,6 +154,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
       onClose();
       return;
     }
+    submitInFlightRef.current = false;
     const key = r.errorKey;
     setSubmitError(
       key ? t(lang, key as Parameters<typeof t>[1]) : t(lang, "returnSubmitError"),
