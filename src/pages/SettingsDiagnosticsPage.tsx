@@ -9,6 +9,7 @@ import { useSyncStatus } from "../hooks/useSyncStatus";
 import { readSyncHealthMeta } from "../lib/syncMeta";
 import { SelfDeleteHealthPanel } from "../components/settings/SelfDeleteHealthPanel";
 import { SyncHealthCard } from "../components/SyncHealthCard";
+import { SyncForensicSnapshotCard } from "../components/SyncForensicSnapshotCard";
 import type { User } from "@supabase/supabase-js";
 
 function yesNo(lang: Language, ok: boolean): string {
@@ -64,6 +65,8 @@ export function SettingsDiagnosticsPage({ lang, user }: { lang: Language; user: 
       <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
         <SyncHealthCard lang={lang} variant="simple" />
       </section>
+
+      <SyncForensicSnapshotCard lang={lang} />
 
       <SelfDeleteHealthPanel lang={lang} user={user} />
 

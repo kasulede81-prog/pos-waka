@@ -2,6 +2,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { SystemHealthDiagnosticsProvider, SystemHealthSummaryStrip } from "../components/settings/SystemHealthDiagnosticsProvider";
 import { SyncHealthCard } from "../components/SyncHealthCard";
+import { SyncForensicSnapshotCard } from "../components/SyncForensicSnapshotCard";
 import { MultiDeviceHealthCard } from "../components/settings/MultiDeviceHealthCard";
 import { UserCloudBackupStatusCard } from "../components/settings/UserCloudBackupStatusCard";
 import { PageBackBar } from "../components/layout/PageBackBar";
@@ -30,6 +31,8 @@ export function SettingsSystemHealthPage({ lang }: { lang: Language }) {
         </section>
 
         <SyncHealthCard lang={lang} variant="simple" />
+
+        <SyncForensicSnapshotCard lang={lang} />
 
         <UserCloudBackupStatusCard lang={lang} />
 
