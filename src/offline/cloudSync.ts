@@ -77,6 +77,9 @@ import {
   rowToVoidRecord,
   type CloudVoidRow,
 } from "../lib/saleAdjustmentLedger";
+import { resolveSaleVoidQueueLedger } from "../lib/saleVoidQueueLedger";
+import { dateKeyKampala } from "../lib/datesUg";
+import { isBusinessDateLocked } from "../lib/businessDateLock";
 import {
   buildPurchaseCloudPushPayload,
   mergePurchaseRecoveryBundle,
@@ -1896,15 +1899,39 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
         });
       }
       if (classified.route === "sale_void") {
+        const state = usePosStore.getState();
+        const ledger = resolveSaleVoidQueueLedger({
+          payload,
+          voidRecords: [...state.voidRecords, ...(state.archivedVoidRecords ?? [])],
+        });
+        let saleId = ledger.saleId;
+        let amountUgx = ledger.amountUgx;
+        let lineIndex = ledger.lineIndex;
+        let saleVoidedAt = ledger.saleVoidedAt;
+        let productName = ledger.productName;
+        // Enriched historical ops: do not attach financials when the sale day is closed
+        // (179 would reject the whole RPC). Stock-only replay still ACKs.
+        if (ledger.source === "void_record" && saleId && amountUgx) {
+          const sale =
+            state.sales.find((s) => s.id === saleId) ??
+            (state.archivedSales ?? []).find((s) => s.id === saleId);
+          if (!sale || isBusinessDateLocked(state.dayCloses ?? [], dateKeyKampala(sale.createdAt))) {
+            saleId = undefined;
+            amountUgx = undefined;
+            lineIndex = undefined;
+            saleVoidedAt = undefined;
+            productName = undefined;
+          }
+        }
         return pushSaleVoidStockToCloud(classified.productId, ctx, {
           delta: classified.delta,
           referenceId: classified.referenceId,
           note: classified.note,
-          saleId: typeof payload.saleId === "string" ? payload.saleId : undefined,
-          amountUgx: Number.isFinite(Number(payload.amountUgx)) ? Number(payload.amountUgx) : undefined,
-          lineIndex: typeof payload.lineIndex === "number" ? payload.lineIndex : undefined,
-          saleVoidedAt: typeof payload.saleVoidedAt === "string" ? payload.saleVoidedAt : undefined,
-          productName: typeof payload.productName === "string" ? payload.productName : undefined,
+          saleId,
+          amountUgx,
+          lineIndex,
+          saleVoidedAt,
+          productName,
         });
       }
       if (classified.route === "catalog_only") {

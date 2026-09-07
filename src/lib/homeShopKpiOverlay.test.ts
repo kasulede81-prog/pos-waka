@@ -125,6 +125,20 @@ describe("mergeHomeKpisWithShopOverlay", () => {
     expect(merged.todayExpectedCashUgx).toBe(12_000);
   });
 
+  it("keeps matching void-adjusted shop and local books", () => {
+    const merged = mergeHomeKpisWithShopOverlay(
+      local({ todayTransactionCount: 1, todayRevenueUgx: 0, todayExpectedCashUgx: 0 }),
+      overlay({
+        todayTransactionCount: 1,
+        todayRevenueUgx: 0,
+        todayExpectedCashUgx: 0,
+      }),
+      { todayKey: TODAY, monthKey: MONTH, freezeToday: false },
+    );
+    expect(merged.todayRevenueUgx).toBe(0);
+    expect(merged.todayExpectedCashUgx).toBe(0);
+  });
+
   it("keeps local expected cash when it includes opening float above shop cash", () => {
     const merged = mergeHomeKpisWithShopOverlay(
       local({ todayExpectedCashUgx: 59_000, todayTransactionCount: 3, todayRevenueUgx: 13_000 }),
