@@ -67,7 +67,7 @@ import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
 import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
 import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
-import { getActiveShopId } from "../offline/shopScope";
+import { getActiveShopId, getPersistenceNamespace } from "../offline/shopScope";
 import { r3AdjustmentStockPayload, r3PurchaseVoidStockPayload, r3SaleVoidStockPayload } from "../lib/stockDurableSync";
 import { catalogDuplicatePrefill } from "../lib/duplicateProductCatalog";
 import { isNativeApp } from "../lib/nativeApp";
@@ -197,7 +197,12 @@ import { normalizeLauncherTileLayout } from "../lib/launcherTiles";
 import { normalizeOfficeHubTileLayout } from "../lib/officeHubSections";
 import type { PosShelfPresetId } from "../types";
 import { assertBackupRestoreNotAborted, cancelBackupRestoreSession } from "../lib/backupRestoreSession";
-import { maybeAppendDailyAutoBackup, registerBackupPersistFlush } from "../offline/backupEngine";
+import { registerBackupPersistFlush } from "../offline/backupEngine";
+import {
+  configureDailyAutoBackupScheduler,
+  invalidateDailyAutoBackupSchedule,
+  scheduleDailyAutoBackup,
+} from "../lib/dailyAutoBackupScheduler";
 import { clearPersistedDraft, readPersistedDraft, resolveDraftFromPersisted, writePersistedDraft } from "../offline/draftStorage";
 import {
   buildUnsavedCartVoidedSale,
@@ -1474,23 +1479,11 @@ function fireSnapshotWrite(forceFull = false): void {
       const after = usePosStore.getState();
       if (!after._hydrated || persistSuspended > 0) return;
 
-      const runBackup = () => {
-        void (async () => {
-          const latest = usePosStore.getState();
-          if (!latest._hydrated) return;
-          const nextKey = await maybeAppendDailyAutoBackup(latest.preferences.lastAutoBackupDateKey);
-          if (nextKey && nextKey !== latest.preferences.lastAutoBackupDateKey) {
-            usePosStore.setState((st) => ({
-              preferences: { ...st.preferences, lastAutoBackupDateKey: nextKey },
-            }));
-          }
-        })();
-      };
-      if (isNativeApp()) {
-        runWhenIdle(runBackup, 4000);
-      } else {
-        runBackup();
-      }
+      scheduleDailyAutoBackup({
+        lastSavedDateKey: after.preferences.lastAutoBackupDateKey,
+        namespace: getPersistenceNamespace(),
+        hydrated: after._hydrated,
+      });
     } finally {
       snapshotWriteInFlight = false;
       if (snapshotWriteQueued) {
@@ -1586,6 +1579,19 @@ export async function flushPendingPersistAsync(): Promise<void> {
 }
 
 registerBackupPersistFlush(flushPendingPersistAsync);
+configureDailyAutoBackupScheduler({
+  getNamespace: getPersistenceNamespace,
+  isHydrated: () => usePosStore.getState()._hydrated,
+  getLastSavedDateKey: () => usePosStore.getState().preferences.lastAutoBackupDateKey,
+  onSuccess: (dateKey) => {
+    const latest = usePosStore.getState();
+    if (!latest._hydrated) return;
+    if (latest.preferences.lastAutoBackupDateKey === dateKey) return;
+    usePosStore.setState((st) => ({
+      preferences: { ...st.preferences, lastAutoBackupDateKey: dateKey },
+    }));
+  },
+});
 
 async function queueRemote(kind: SyncOperationKind, payload: unknown) {
   if (getActiveAccountKey()?.startsWith("demo:")) return;
@@ -2296,6 +2302,7 @@ export const usePosStore = create<PosState>((set, get) => {
     resetReturnSubmitLocksForTests();
     resetDebtPaymentSubmitLocksForTests();
     resetSupplierPaymentSubmitLocksForTests();
+    invalidateDailyAutoBackupSchedule();
     set({
       _hydrated: false,
       products: [],

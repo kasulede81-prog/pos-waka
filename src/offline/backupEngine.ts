@@ -14,6 +14,7 @@ import {
   type LocalBackupRecord,
 } from "./localDb";
 import { assembleSnapshotFromEntities } from "./entityStore";
+import { getPersistenceNamespace } from "./shopScope";
 
 const MAX_BACKUPS = 28;
 
@@ -97,13 +98,28 @@ export async function readCurrentBackupSnapshot(): Promise<PersistedSnapshot | n
   return snapshotFromPartial(raw ?? {});
 }
 
-/** After a successful snapshot write, once per Kampala calendar day. */
-export async function maybeAppendDailyAutoBackup(lastSavedDateKey: string | undefined): Promise<string | undefined> {
+/**
+ * Write the daily auto-backup record. Callers on the persist path must go
+ * through `scheduleDailyAutoBackup` so this expensive assemble is not launched
+ * per persist. Manual/export still uses `readCurrentBackupSnapshot` directly.
+ */
+export async function maybeAppendDailyAutoBackup(
+  lastSavedDateKey: string | undefined,
+  opts?: { expectedNamespace?: string | null },
+): Promise<string | undefined> {
   const today = dateKeyKampala(new Date());
   if (lastSavedDateKey === today) return lastSavedDateKey;
 
+  if (opts?.expectedNamespace != null && getPersistenceNamespace() !== opts.expectedNamespace) {
+    return lastSavedDateKey;
+  }
+
   const snap = await readCurrentBackupSnapshot();
   if (!snap) return lastSavedDateKey;
+
+  if (opts?.expectedNamespace != null && getPersistenceNamespace() !== opts.expectedNamespace) {
+    return lastSavedDateKey;
+  }
 
   const id = `auto-${today}`;
   const rec: LocalBackupRecord = {
