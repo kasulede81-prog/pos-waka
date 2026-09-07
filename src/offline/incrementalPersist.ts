@@ -60,6 +60,43 @@ function salesOrderFromArray(sales: Sale[]): string[] {
   return sales.map((s) => s.id);
 }
 
+/**
+ * SYNC-01 — incomplete sales-history hydration must not shrink the manifest.
+ * RAM order is newest-first and is preserved; IDs still on disk but not yet in
+ * this persist's previous RAM are appended in their existing manifest order.
+ * IDs that left previous RAM are dropped (persistArrayDelta deletes those rows).
+ * Voided / archived IDs are also allowed to leave salesOrder.
+ */
+export function resolveSalesOrderForIncrementalPersist(input: {
+  existingSalesOrder: string[];
+  prevSales: Sale[];
+  nextSales: Sale[];
+  nextArchivedSales: Sale[];
+  voidedSaleIds?: Record<string, string>;
+  salesHistoryHydrationActive: boolean;
+}): string[] {
+  const ramOrder = salesOrderFromArray(input.nextSales);
+  if (!input.salesHistoryHydrationActive) {
+    return ramOrder;
+  }
+  const seen = new Set(ramOrder);
+  const removedFromPreviousRam = new Set(
+    input.prevSales.map((s) => s.id).filter((id) => !seen.has(id)),
+  );
+  const archived = new Set(input.nextArchivedSales.map((s) => s.id));
+  const voided = input.voidedSaleIds ?? {};
+  const preserved: string[] = [];
+  for (const id of input.existingSalesOrder) {
+    if (!id || seen.has(id)) continue;
+    if (removedFromPreviousRam.has(id)) continue;
+    if (voided[id]) continue;
+    if (archived.has(id)) continue;
+    preserved.push(id);
+    seen.add(id);
+  }
+  return [...ramOrder, ...preserved];
+}
+
 /** Incremental entity writes — normal POS operations. */
 export async function flushIncrementalPersist(prev: PosState, next: PosState): Promise<IncrementalPersistResult> {
   const started = performance.now();
@@ -164,7 +201,14 @@ export async function flushIncrementalPersist(prev: PosState, next: PosState): P
   );
 
   if (prev.sales !== next.sales) {
-    manifest.salesOrder = salesOrderFromArray(next.sales);
+    manifest.salesOrder = resolveSalesOrderForIncrementalPersist({
+      existingSalesOrder: manifest.salesOrder,
+      prevSales: prev.sales,
+      nextSales: next.sales,
+      nextArchivedSales: next.archivedSales,
+      voidedSaleIds: manifest.voidedSaleIds,
+      salesHistoryHydrationActive: next.salesHistoryHydration?.active === true,
+    });
   }
   if (prev.archivedSales !== next.archivedSales) {
     manifest.archivedSalesOrder = salesOrderFromArray(next.archivedSales);
