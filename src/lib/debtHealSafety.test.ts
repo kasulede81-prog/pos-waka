@@ -25,6 +25,7 @@ const emptyCheckpoints: syncCheckpoints.SyncCheckpoints = {
   lastDayClosesSyncAt: null,
   lastStockMovementsSyncAt: null,
   lastCatalogSyncAt: null,
+  lastShopPolicySyncAt: null,
   lastAuditLogsSyncAt: null,
 };
 
