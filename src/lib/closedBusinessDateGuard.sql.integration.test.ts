@@ -536,3 +536,92 @@ describe("NEW-04 server closed-date UPDATE guard", () => {
     expect(result.error).toBe("closed_business_date");
   });
 });
+
+describe("SALES-MULTI-01 closed business date on sale_voids", () => {
+  let exec: SqlExec & { isRealPostgres: boolean };
+  let fx: ClosedDateFixture;
+  const SQL_179 = readFileSync(
+    join(process.cwd(), "supabase/migrations/179_sale_void_financial_ledger.sql"),
+    "utf8",
+  );
+
+  beforeAll(async () => {
+    exec = await createClosedBusinessDateSqlHarness();
+    fx = await seedClosedDateFixture(exec);
+    await insertActiveClose(exec, fx.shopAId, CLOSED);
+    await exec.exec(SQL_179);
+  }, 120_000);
+
+  afterAll(async () => {
+    await exec?.close();
+  });
+
+  it("13 — new void financial row on a closed sale date is rejected", async () => {
+    const productId = crypto.randomUUID();
+    const saleId = crypto.randomUUID();
+    await exec.exec(`
+      INSERT INTO public.products (id, shop_id, name, stock_on_hand, cost_price_per_unit_ugx, metadata)
+      VALUES ('${productId}', '${fx.shopAId}', 'Close Item', 10, 1000, '{}');
+      INSERT INTO public.sales (id, shop_id, status, total_ugx, cash_amount_ugx, created_at)
+      VALUES ('${saleId}', '${fx.shopAId}', 'completed', 100000, 100000, '${OPEN_TS}');
+      UPDATE public.sales SET created_at = '${CLOSED_TS}' WHERE id = '${saleId}';
+    `);
+    const result = await asUser(exec, fx.userAId, async () => {
+      const { rows } = await exec.query(
+        `SELECT public.shop_apply_sale_void_stock($1::uuid, $2::jsonb) AS result`,
+        [
+          fx.shopAId,
+          JSON.stringify({
+            product_id: productId,
+            void_record_id: crypto.randomUUID(),
+            delta: 1,
+            sale_id: saleId,
+            amount_ugx: 10000,
+          }),
+        ],
+      );
+      return rpcJson(rows[0]);
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("closed_business_date");
+    const { rows } = await exec.query<{ c: string }>(`SELECT count(*)::text AS c FROM public.sale_voids`);
+    expect(Number(rows[0]?.c)).toBe(0);
+  });
+
+  it("14 — replay of an existing sale_void after close is not a second insert", async () => {
+    const productId = crypto.randomUUID();
+    const saleId = crypto.randomUUID();
+    const voidId = crypto.randomUUID();
+    await exec.exec(`
+      INSERT INTO public.products (id, shop_id, name, stock_on_hand, cost_price_per_unit_ugx, metadata)
+      VALUES ('${productId}', '${fx.shopAId}', 'Open Item', 10, 1000, '{}');
+      INSERT INTO public.sales (id, shop_id, status, total_ugx, cash_amount_ugx, created_at)
+      VALUES ('${saleId}', '${fx.shopAId}', 'completed', 40000, 40000, '${OPEN_TS}');
+      INSERT INTO public.sale_voids (id, shop_id, sale_id, product_id, quantity, amount_ugx)
+      VALUES ('${voidId}', '${fx.shopAId}', '${saleId}', '${productId}', 1, 10000);
+    `);
+    const result = await asUser(exec, fx.userAId, async () => {
+      const { rows } = await exec.query(
+        `SELECT public.shop_apply_sale_void_stock($1::uuid, $2::jsonb) AS result`,
+        [
+          fx.shopAId,
+          JSON.stringify({
+            product_id: productId,
+            void_record_id: voidId,
+            delta: 1,
+            sale_id: saleId,
+            amount_ugx: 10000,
+          }),
+        ],
+      );
+      return rpcJson(rows[0]);
+    });
+    // Existing void row: closed-date assert is skipped. Stock apply may fail in this harness.
+    expect(result.error === "closed_business_date").toBe(false);
+    const { rows } = await exec.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM public.sale_voids WHERE id = $1`,
+      [voidId],
+    );
+    expect(Number(rows[0]!.c)).toBe(1);
+  });
+});

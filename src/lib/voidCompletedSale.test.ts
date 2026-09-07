@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Customer, Product, Sale, SaleLine } from "../types";
+import type { Customer, Product, ReturnRecord, Sale, SaleLine } from "../types";
 import { isRevenueSale } from "./saleStatus";
 import { planWholeBillVoid } from "./voidCompletedSale";
 
@@ -103,6 +103,36 @@ describe("planWholeBillVoid", () => {
       actorUserId: "owner:1",
     });
     expect(replay.ok).toBe(false);
+  });
+
+  it("void after a partial return restocks only remaining units", () => {
+    const returned: ReturnRecord = {
+      id: "ret-1",
+      saleId: SALE_ID,
+      productId: PRODUCT_ID,
+      productName: "Meal",
+      quantity: 1,
+      refundAmountUgx: 10_000,
+      reason: "wrong_item",
+      actorUserId: "owner:1",
+      createdAt: "2026-06-02T11:00:00.000Z",
+    };
+    const r = planWholeBillVoid({
+      sale: completedSale({ totalUgx: 10_000, cashPaidUgx: 7_500, debtUgx: 2_500 }),
+      products: [product(9)],
+      customers: [customer(2_500)],
+      shopKey: "shop:test",
+      at: "2026-06-02T12:00:00.000Z",
+      reason: "other",
+      note: "wrong table",
+      actorUserId: "owner:1",
+      returnRecords: [returned],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.plan.products[0]!.stockOnHand).toBe(10);
+    expect(r.plan.movements[0]!.deltaBaseUnits).toBe(1);
+    expect(r.plan.voidRecords[0]!.quantity).toBe(1);
   });
 
   it("rejects pending sales", () => {

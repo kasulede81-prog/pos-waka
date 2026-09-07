@@ -302,7 +302,7 @@ import {
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
-import { validateReturnAgainstSale } from "../lib/returnLimits";
+import { remainingVoidableLine, validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
 import { emitInventoryStockChanges, type InventoryStockSyncMessage, type InventorySyncEventType } from "../lib/inventorySyncChannel";
 import { mergeRemoteInventoryStock, validateDraftSaleStockBeforeFinalize } from "../lib/inventoryVersionProtection";
@@ -5531,7 +5531,13 @@ export const usePosStore = create<PosState>((set, get) => {
     const line = sale.lines[lineIndex];
     if (!line || line.voided) return { ok: false, errorKey: "invalid" };
 
-    const amount = line.lineTotalUgx;
+    const returnScoped = [...state.returnRecords, ...(state.archivedReturnRecords ?? [])];
+    const remaining = remainingVoidableLine(sale, line.productId, returnScoped);
+    if (remaining.quantity <= 0) return { ok: false, errorKey: "invalid" };
+    const amount = remaining.amountUgx;
+    const voidQty = remaining.quantity;
+    const profitReduce =
+      line.quantity > 0 ? Math.round((line.estimatedProfitUgx * voidQty) / line.quantity) : 0;
     const physicalCashReduce = cashReduceFromRefund(sale, amount);
     const debtReduce = creditDebtReductionFromSaleAdjustment(sale, amount);
     const openShift = (state.preferences.shifts ?? []).find(
@@ -5557,7 +5563,7 @@ export const usePosStore = create<PosState>((set, get) => {
       lineIndex,
       productId: line.productId,
       productName: line.name,
-      quantity: line.quantity,
+      quantity: voidQty,
       amountUgx: amount,
       reason,
       note: note?.trim() || undefined,
@@ -5573,7 +5579,7 @@ export const usePosStore = create<PosState>((set, get) => {
       ...sale,
       ...totals,
       lines: updatedLines,
-      estimatedProfitUgx: Math.max(0, sale.estimatedProfitUgx - line.estimatedProfitUgx),
+      estimatedProfitUgx: Math.max(0, sale.estimatedProfitUgx - profitReduce),
       pendingSync: true,
     };
 
@@ -5584,9 +5590,9 @@ export const usePosStore = create<PosState>((set, get) => {
       const p = products[pIdx]!;
       products[pIdx] = {
         ...p,
-        stockOnHand: p.stockOnHand + line.quantity,
+        stockOnHand: p.stockOnHand + voidQty,
         packCostUnitsDepleted: hasPackCostAllocation(p)
-          ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, line.quantity)
+          ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, voidQty)
           : p.packCostUnitsDepleted,
         updatedAt: at,
         version: p.version + 1,
@@ -5598,9 +5604,9 @@ export const usePosStore = create<PosState>((set, get) => {
       at,
       productId: line.productId,
       productName: line.name,
-      deltaBaseUnits: line.quantity,
+      deltaBaseUnits: voidQty,
       kind: "adjust_other",
-      summary: `Void +${line.quantity}`,
+      summary: `Void +${voidQty}`,
       refId: voidRec.id,
       supplierId: null,
     };
@@ -5620,7 +5626,7 @@ export const usePosStore = create<PosState>((set, get) => {
         saleId,
         productId: line.productId,
         productName: line.name,
-        quantity: line.quantity,
+        quantity: voidQty,
         reason: `${reason}${note ? `: ${note}` : ""}`,
         deviceId,
         batchNumber: line.pharmacyBatchNumber ?? null,
@@ -5677,7 +5683,7 @@ export const usePosStore = create<PosState>((set, get) => {
         saleId,
         voidId: voidRec.id,
         productId: line.productId,
-        quantity: line.quantity,
+        quantity: voidQty,
         deviceId: getOrCreateDeviceId(),
         actorUserId: actor.userId,
         actorName: actor.displayName ?? null,
@@ -5688,10 +5694,14 @@ export const usePosStore = create<PosState>((set, get) => {
       "pending_stock_updates",
       r3SaleVoidStockPayload({
         productId: line.productId,
-        delta: line.quantity,
+        delta: voidQty,
         voidRecordId: voidRec.id,
         baseUpdatedAt: preVoidProduct?.updatedAt ?? at,
         baseStockOnHand: preVoidProduct?.stockOnHand,
+        saleId,
+        amountUgx: amount,
+        lineIndex,
+        productName: line.name,
       }),
     );
     void queueRemote("sale", { saleId });
@@ -8610,7 +8620,7 @@ usePosStore.subscribe((state, prev) => {
 });
 
 /** Backup/legacy-snapshot hydrate whitelist. Extra preference keys are dropped. */
-function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreferences }>): ShopPreferences {
+export function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreferences }>): ShopPreferences {
   const base = createDefaultPreferences();
   const p = raw.preferences;
   if (!p) {
@@ -8871,6 +8881,13 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
       typeof p.discountMaxPercentThreshold === "number" && p.discountMaxPercentThreshold >= 0 && p.discountMaxPercentThreshold <= 100
         ? p.discountMaxPercentThreshold
         : (base.discountMaxPercentThreshold ?? 10),
+    registerMode: p.registerMode === "single" || p.registerMode === "multi" ? p.registerMode : base.registerMode,
+    primaryDeviceFingerprint:
+      p.primaryDeviceFingerprint === undefined
+        ? (base.primaryDeviceFingerprint ?? null)
+        : p.primaryDeviceFingerprint === null || String(p.primaryDeviceFingerprint).trim() === ""
+          ? null
+          : String(p.primaryDeviceFingerprint).trim(),
     cashDrawerFormulaVersion:
       p.cashDrawerFormulaVersion === "v2" ? "v2" : p.cashDrawerFormulaVersion === "v1" ? "v1" : (base.cashDrawerFormulaVersion ?? undefined),
     ownerDayOpenCorrectionAfterSales:
@@ -9390,22 +9407,22 @@ export async function ensureAllActiveSalesLoaded(): Promise<void> {
       await yieldUiTick();
       const batch = await getEntitiesByIds<Sale>("sale", missingIds.slice(i, i + SALES_PAGE_LOAD_SIZE));
       runWithPersistSuspendedSync(() => {
-        usePosStore.setState((s) => {
-          const ids = new Set(s.sales.map((x) => x.id));
-          const merged = [...s.sales];
-          for (const row of batch) {
-            if (!ids.has(row.id)) merged.push(normalizeSale(row));
-          }
-          merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-          return {
-            sales: merged,
-            salesHistoryHydration: {
-              active: true,
-              loaded: s.salesHistoryHydration?.loaded ?? have.size + i,
-              total: manifest.salesOrder.length,
-            },
-          };
-        });
+      usePosStore.setState((s) => {
+        const ids = new Set(s.sales.map((x) => x.id));
+        const merged = [...s.sales];
+        for (const row of batch) {
+          if (!ids.has(row.id)) merged.push(normalizeSale(row));
+        }
+        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+        return {
+          sales: merged,
+          salesHistoryHydration: {
+            active: true,
+            loaded: s.salesHistoryHydration?.loaded ?? have.size + i,
+            total: manifest.salesOrder.length,
+          },
+        };
+      });
       });
     }
     finishSalesHistoryHydrationIfCaughtUp(manifest.salesOrder);

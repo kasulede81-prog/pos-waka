@@ -355,6 +355,8 @@ export type VoidRecord = {
   actorName?: string;
   shiftId?: string | null;
   createdAt: string;
+  /** Whole-bill void timestamp when the cloud void ledger carries it. */
+  saleVoidedAt?: string | null;
 };
 
 /** Customer brought product back — stock restored, sale totals adjusted. */
@@ -2502,7 +2504,9 @@ export type ShopPreferences = {
       | "discountMaxPercentThreshold"
       | "kioskQuickSell"
       | "staffCanRecordCashExpenses"
-      | "requireCashierExpenseApproval",
+      | "requireCashierExpenseApproval"
+      | "registerMode"
+      | "primaryDeviceFingerprint",
       string
     >
   >;

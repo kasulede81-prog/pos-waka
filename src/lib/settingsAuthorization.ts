@@ -70,6 +70,8 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "kioskQuickSell",
   "discountControlMode",
   "discountMaxPercentThreshold",
+  "registerMode",
+  "primaryDeviceFingerprint",
   "dataRetentionPolicy",
   "lastAutoBackupDateKey",
   "lastArchiveRunAt",

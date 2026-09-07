@@ -106,6 +106,28 @@ export function suggestReturnRefundUgx(
   return remainingRefundableForLineQty(sale, productId, quantity, returnRecords);
 }
 
+export type RemainingVoidableLine = {
+  quantity: number;
+  amountUgx: number;
+};
+
+/**
+ * SALES-VOID-01 — remaining units/value that a void may still take.
+ * Returns do not mutate line.quantity / line.lineTotalUgx; subtract ReturnRecords.
+ */
+export function remainingVoidableLine(
+  sale: Sale,
+  productId: string,
+  returnRecords: readonly ReturnRecord[],
+): RemainingVoidableLine {
+  const records = [...returnRecords];
+  const quantity = remainingReturnableQuantity(sale, productId, records);
+  if (quantity <= 0) return { quantity: 0, amountUgx: 0 };
+  const lineCap = remainingRefundableForLineQty(sale, productId, quantity, records);
+  const headerCap = remainingRefundableAmount(sale);
+  return { quantity, amountUgx: Math.max(0, Math.min(lineCap, headerCap)) };
+}
+
 export type ReturnLimitCheck = { ok: true } | { ok: false; errorKey: string };
 
 export function validateReturnAgainstSale(input: {

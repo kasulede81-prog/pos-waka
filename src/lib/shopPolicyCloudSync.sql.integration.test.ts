@@ -12,6 +12,7 @@ import {
 const BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "transferEngineBootstrap.sql");
 const CASHIER_FN = join(process.cwd(), "src", "test", "sqlIntegration", "r3StockBootstrap.sql");
 const MIGRATION_177 = join(process.cwd(), "supabase/migrations/177_shop_policy_sync.sql");
+const MIGRATION_178 = join(process.cwd(), "supabase/migrations/178_shop_policy_register_mode.sql");
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -38,6 +39,7 @@ async function createShopPolicySqlHarness(): Promise<SqlExec & { isRealPostgres:
     await exec.exec(readSql(BOOTSTRAP));
     await exec.exec(readSql(CASHIER_FN));
     await exec.exec(readSql(MIGRATION_177));
+    await exec.exec(readSql(MIGRATION_178));
     return exec;
   }
 
@@ -58,6 +60,7 @@ async function createShopPolicySqlHarness(): Promise<SqlExec & { isRealPostgres:
   await exec.exec(readSql(BOOTSTRAP));
   await exec.exec(readSql(CASHIER_FN));
   await exec.exec(readSql(MIGRATION_177));
+  await exec.exec(readSql(MIGRATION_178));
   return exec;
 }
 
@@ -287,4 +290,48 @@ describe("BACKOFFICE-02 shop policy SQL / RLS", () => {
     expect(pulled.kiosk_quick_sell).toBe(false);
   });
 
+  it("BACKOFFICE-04 — owner can push register mode and cashier can pull it", async () => {
+    const pushed = await asUser(exec, ownerAId, () =>
+      pushPolicy(exec, shopAId, {
+        register_mode: "single",
+        register_mode_updated_at: "2026-09-07T12:00:00.000Z",
+        primary_device_fingerprint: "device-A-fingerprint",
+        primary_device_fingerprint_updated_at: "2026-09-07T12:00:00.000Z",
+      }),
+    );
+    expect(pushed.ok).toBe(true);
+    const pulled = await asUser(exec, cashierAId, () => pullPolicy(exec, shopAId, "1970-01-01T00:00:00.000Z"));
+    expect(pulled.ok).toBe(true);
+    expect(pulled.register_mode).toBe("single");
+    expect(pulled.primary_device_fingerprint).toBe("device-A-fingerprint");
+    expect(String(pulled.shop_id)).toBe(shopAId);
+  });
+
+  it("BACKOFFICE-04 — stale fingerprint cannot overwrite a newer primary", async () => {
+    await asUser(exec, ownerAId, () =>
+      pushPolicy(exec, shopAId, {
+        primary_device_fingerprint: "device-A-fingerprint",
+        primary_device_fingerprint_updated_at: "2026-09-08T12:00:00.000Z",
+      }),
+    );
+    await asUser(exec, ownerAId, () =>
+      pushPolicy(exec, shopAId, {
+        primary_device_fingerprint: "device-B-fingerprint",
+        primary_device_fingerprint_updated_at: "2026-09-07T12:00:00.000Z",
+      }),
+    );
+    const pulled = await asUser(exec, ownerAId, () => pullPolicy(exec, shopAId, "1970-01-01T00:00:00.000Z"));
+    expect(pulled.primary_device_fingerprint).toBe("device-A-fingerprint");
+  });
+
+  it("BACKOFFICE-04 — Shop B owner cannot write Shop A register mode", async () => {
+    const pushed = await asUser(exec, ownerBId, () =>
+      pushPolicy(exec, shopAId, {
+        register_mode: "multi",
+        register_mode_updated_at: "2026-09-10T00:00:00.000Z",
+      }),
+    );
+    expect(pushed.ok).toBe(false);
+    expect(pushed.error).toBe("forbidden");
+  });
 });

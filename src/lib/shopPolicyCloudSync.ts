@@ -14,6 +14,7 @@
  */
 
 import type { ShopPreferences } from "../types";
+import type { RegisterMode } from "./primaryRegisterMode";
 import { supabase } from "./supabase";
 
 export const SHOP_POLICY_SYNC_KEYS = [
@@ -22,6 +23,8 @@ export const SHOP_POLICY_SYNC_KEYS = [
   "kioskQuickSell",
   "staffCanRecordCashExpenses",
   "requireCashierExpenseApproval",
+  "registerMode",
+  "primaryDeviceFingerprint",
 ] as const;
 
 export type ShopPolicySyncKey = (typeof SHOP_POLICY_SYNC_KEYS)[number];
@@ -41,6 +44,8 @@ export type ShopPolicyCloudDocument = {
   kioskQuickSell?: ShopPolicyField<boolean>;
   staffCanRecordCashExpenses?: ShopPolicyField<boolean>;
   requireCashierExpenseApproval?: ShopPolicyField<boolean>;
+  registerMode?: ShopPolicyField<RegisterMode>;
+  primaryDeviceFingerprint?: ShopPolicyField<string | null>;
 };
 
 const EPOCH = "1970-01-01T00:00:00.000Z";
@@ -112,6 +117,23 @@ function parseBooleanField(value: unknown): boolean | null {
   return null;
 }
 
+function parseRegisterMode(value: unknown): RegisterMode | null {
+  if (value === "single" || value === "multi") return value;
+  return null;
+}
+
+const MAX_FINGERPRINT_LENGTH = 128;
+
+/** Valid fingerprint, empty/null (no designated primary), or undefined = invalid / skip. */
+function parsePrimaryDeviceFingerprint(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length < 8 || trimmed.length > MAX_FINGERPRINT_LENGTH) return undefined;
+  return trimmed;
+}
+
 function canonicalTieBreak(value: unknown): string {
   if (typeof value === "boolean") return value ? "1" : "0";
   if (typeof value === "number") return String(value);
@@ -155,6 +177,14 @@ export function shopPolicyDocumentFromPreferences(prefs: ShopPreferences): ShopP
       value: prefs.requireCashierExpenseApproval === true,
       updatedAt: rev.requireCashierExpenseApproval ?? EPOCH,
     },
+    registerMode: {
+      value: parseRegisterMode(prefs.registerMode) ?? "multi",
+      updatedAt: rev.registerMode ?? EPOCH,
+    },
+    primaryDeviceFingerprint: {
+      value: parsePrimaryDeviceFingerprint(prefs.primaryDeviceFingerprint ?? null) ?? null,
+      updatedAt: rev.primaryDeviceFingerprint ?? EPOCH,
+    },
   };
 }
 
@@ -171,6 +201,10 @@ export function buildShopPolicyPushPayload(prefs: ShopPreferences): Record<strin
     staff_can_record_cash_expenses_updated_at: doc.staffCanRecordCashExpenses?.updatedAt,
     require_cashier_expense_approval: doc.requireCashierExpenseApproval?.value,
     require_cashier_expense_approval_updated_at: doc.requireCashierExpenseApproval?.updatedAt,
+    register_mode: doc.registerMode?.value,
+    register_mode_updated_at: doc.registerMode?.updatedAt,
+    primary_device_fingerprint: doc.primaryDeviceFingerprint?.value,
+    primary_device_fingerprint_updated_at: doc.primaryDeviceFingerprint?.updatedAt,
   };
 }
 
@@ -216,7 +250,17 @@ export function parseShopPolicyPullPayload(raw: unknown): ShopPolicyCloudDocumen
       "require_cashier_expense_approval_updated_at",
       parseBooleanField,
     ),
+    registerMode: fieldFromRaw(o, "register_mode", "register_mode_updated_at", parseRegisterMode),
+    primaryDeviceFingerprint: fingerprintFieldFromRaw(o),
   };
+}
+
+function fingerprintFieldFromRaw(raw: Record<string, unknown>): ShopPolicyField<string | null> | undefined {
+  if (!("primary_device_fingerprint" in raw)) return undefined;
+  const parsed = parsePrimaryDeviceFingerprint(raw.primary_device_fingerprint);
+  if (parsed === undefined) return undefined;
+  const updatedAt = String(raw.primary_device_fingerprint_updated_at ?? "").trim() || EPOCH;
+  return { value: parsed, updatedAt };
 }
 
 function applyField<T>(
@@ -296,6 +340,28 @@ export function mergeShopPolicyPreferences(
   if (requireAppr.changed) {
     next.requireCashierExpenseApproval = requireAppr.value;
     if (requireAppr.updatedAt) rev.requireCashierExpenseApproval = requireAppr.updatedAt;
+    touched = true;
+  }
+
+  const register = applyField(
+    parseRegisterMode(local.registerMode) ?? "multi",
+    rev.registerMode,
+    remote.registerMode,
+  );
+  if (register.changed) {
+    next.registerMode = register.value;
+    if (register.updatedAt) rev.registerMode = register.updatedAt;
+    touched = true;
+  }
+
+  const fingerprint = applyField(
+    parsePrimaryDeviceFingerprint(local.primaryDeviceFingerprint ?? null) ?? null,
+    rev.primaryDeviceFingerprint,
+    remote.primaryDeviceFingerprint,
+  );
+  if (fingerprint.changed) {
+    next.primaryDeviceFingerprint = fingerprint.value;
+    if (fingerprint.updatedAt) rev.primaryDeviceFingerprint = fingerprint.updatedAt;
     touched = true;
   }
 

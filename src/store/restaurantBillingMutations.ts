@@ -473,6 +473,7 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
         actorUserId: actor?.userId ?? "unknown",
         actorName: actor?.displayName,
         shiftId: openShift?.id ?? null,
+        returnRecords: [...state.returnRecords, ...(state.archivedReturnRecords ?? [])],
       });
       if (!planned.ok) return { ok: false as const, errorKey: planned.errorKey };
 
@@ -542,6 +543,7 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
         const pre = state.products.find((p) => p.id === movement.productId);
         const voidRecordId = movement.refId;
         if (!voidRecordId) continue;
+        const voidRec = planned.plan.voidRecords.find((v) => v.id === voidRecordId);
         void queueRemote(
           "pending_stock_updates",
           r3SaleVoidStockPayload({
@@ -550,6 +552,11 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
             voidRecordId,
             baseUpdatedAt: pre?.updatedAt ?? at,
             baseStockOnHand: pre?.stockOnHand,
+            saleId: sale.id,
+            amountUgx: voidRec?.amountUgx,
+            lineIndex: voidRec?.lineIndex,
+            saleVoidedAt: voidedSale.saleVoidedAt ?? null,
+            productName: voidRec?.productName,
           }),
         );
       }

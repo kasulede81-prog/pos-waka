@@ -30,6 +30,11 @@ export type R3StockQueuePayload = {
   baseStockOnHand?: number;
   referenceType: DurableStockReferenceType;
   referenceId: string;
+  saleId?: string;
+  amountUgx?: number;
+  lineIndex?: number;
+  saleVoidedAt?: string | null;
+  productName?: string;
 };
 
 export function r3AdjustmentStockPayload(input: {
@@ -77,6 +82,11 @@ export function r3SaleVoidStockPayload(input: {
   note?: string;
   baseUpdatedAt?: string | null;
   baseStockOnHand?: number;
+  saleId?: string;
+  amountUgx?: number;
+  lineIndex?: number;
+  saleVoidedAt?: string | null;
+  productName?: string;
 }): R3StockQueuePayload {
   return {
     productId: input.productId,
@@ -86,6 +96,11 @@ export function r3SaleVoidStockPayload(input: {
     baseStockOnHand: input.baseStockOnHand,
     referenceType: R3_REF_SALE_VOID,
     referenceId: input.voidRecordId,
+    saleId: input.saleId,
+    amountUgx: input.amountUgx,
+    lineIndex: input.lineIndex,
+    saleVoidedAt: input.saleVoidedAt,
+    productName: input.productName,
   };
 }
 
