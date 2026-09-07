@@ -332,6 +332,12 @@ import {
   retiredCatalogNodeIds,
   stampCatalogPreferencePatch,
 } from "../lib/catalogCloudSync";
+import {
+  normalizeShopPolicyRevisions,
+  preferencesPatchNeedsShopPolicySync,
+  preferencesPatchTouchesShopPolicy,
+  stampShopPolicyPreferencePatch,
+} from "../lib/shopPolicyCloudSync";
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
@@ -1621,6 +1627,11 @@ function queueCatalogCloudSync() {
   flushPendingPersist();
 }
 
+function queueShopPolicyCloudSync() {
+  void queueRemote("pending_shop_policy", { type: "shop_policy" });
+  flushPendingPersist();
+}
+
 function catalogPrefPatch(prev: ShopPreferences, patch: Partial<ShopPreferences>, now = new Date().toISOString()): Partial<ShopPreferences> {
   let next = stampCatalogPreferencePatch(prev, patch, now);
   if (patch.posCatalogNodes) {
@@ -2418,6 +2429,10 @@ export const usePosStore = create<PosState>((set, get) => {
     if (preferencesPatchTouchesCatalog(p)) {
       p = catalogPrefPatch(state.preferences, p);
     }
+    if (preferencesPatchTouchesShopPolicy(p)) {
+      p = stampShopPolicyPreferencePatch(state.preferences, p);
+    }
+    const shouldQueueShopPolicy = preferencesPatchNeedsShopPolicySync(state.preferences, p);
     set((s) => {
       let merged = { ...s.preferences, ...p };
       const role = s.sessionActor?.role ?? "cashier";
@@ -2429,6 +2444,9 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     if (preferencesPatchTouchesCatalog(p)) {
       queueCatalogCloudSync();
+    }
+    if (shouldQueueShopPolicy) {
+      queueShopPolicyCloudSync();
     }
   },
 
@@ -8591,6 +8609,7 @@ usePosStore.subscribe((state, prev) => {
   schedulePersist(prev ?? state, state);
 });
 
+/** Backup/legacy-snapshot hydrate whitelist. Extra preference keys are dropped. */
 function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreferences }>): ShopPreferences {
   const base = createDefaultPreferences();
   const p = raw.preferences;
@@ -8686,6 +8705,15 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
           ? null
           : String(p.shopAddressLine),
     shopCurrency: normalizeShopCurrency(p.shopCurrency ?? base.shopCurrency),
+    staffCanRecordCashExpenses:
+      typeof p.staffCanRecordCashExpenses === "boolean"
+        ? p.staffCanRecordCashExpenses
+        : (base.staffCanRecordCashExpenses ?? false),
+    requireCashierExpenseApproval:
+      typeof p.requireCashierExpenseApproval === "boolean"
+        ? p.requireCashierExpenseApproval
+        : (base.requireCashierExpenseApproval ?? false),
+    shopPolicyRevisions: normalizeShopPolicyRevisions(p.shopPolicyRevisions) ?? base.shopPolicyRevisions,
     staffAccounts: normalizeStaffAccounts(p.staffAccounts, normalizeCustomStaffRoles(p.customStaffRoles ?? base.customStaffRoles)),
     customStaffRoles: normalizeCustomStaffRoles(p.customStaffRoles ?? base.customStaffRoles),
     activeStaffId:
@@ -8834,7 +8862,9 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
     lastArchiveRunAt:
       p.lastArchiveRunAt === undefined ? (base.lastArchiveRunAt ?? null) : p.lastArchiveRunAt === null ? null : String(p.lastArchiveRunAt),
     discountControlMode:
-      p.discountControlMode === "manager_approval" || p.discountControlMode === "max_percent"
+      p.discountControlMode === "manager_approval" ||
+      p.discountControlMode === "max_percent" ||
+      p.discountControlMode === "unrestricted"
         ? p.discountControlMode
         : (base.discountControlMode ?? "unrestricted"),
     discountMaxPercentThreshold:

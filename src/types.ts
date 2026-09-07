@@ -2492,6 +2492,20 @@ export type ShopPreferences = {
   discountControlMode?: "unrestricted" | "manager_approval" | "max_percent";
   /** Percent threshold for manager_approval / max_percent modes. */
   discountMaxPercentThreshold?: number;
+  /**
+   * Per-field LWW clocks for shop-wide selling/cash policy sync.
+   * Metadata only — not a business preference value.
+   */
+  shopPolicyRevisions?: Partial<
+    Record<
+      | "discountControlMode"
+      | "discountMaxPercentThreshold"
+      | "kioskQuickSell"
+      | "staffCanRecordCashExpenses"
+      | "requireCashierExpenseApproval",
+      string
+    >
+  >;
   /** Cash drawer reconciliation formula — undefined = v1 (legacy dual float). New shops default v2. */
   cashDrawerFormulaVersion?: CashDrawerFormulaVersion;
   /** Owner may supersede/void day open after first sale with PIN + reason (formula v2). */
@@ -2530,6 +2544,7 @@ export type SyncOperationKind =
   | "pending_transfer_receive"
   | "pending_hospitality"
   | "pending_catalog"
+  | "pending_shop_policy"
   | "pending_staff"
   /** Legacy queue kinds kept for backward compatibility */
   | "sale"

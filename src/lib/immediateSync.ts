@@ -105,7 +105,7 @@ export function scheduleImmediateSyncForKind(kind: SyncOperationKind, payload?: 
   }
 
   const coalesceKey = coalesceKeyForOp(kind, payload);
-  if (coalesceKey && (kind === "product" || kind === "customer" || kind === "supplier" || kind === "pending_staff" || kind === "pending_catalog")) {
+  if (coalesceKey && (kind === "product" || kind === "customer" || kind === "supplier" || kind === "pending_staff" || kind === "pending_catalog" || kind === "pending_shop_policy")) {
     scheduleCoalescedPush(kind, coalesceKey);
     return;
   }

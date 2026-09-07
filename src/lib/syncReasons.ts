@@ -10,6 +10,7 @@ export type SyncReason =
   | "reconnect"
   | "sale_ack"
   | "catalog_change"
+  | "shop_policy_change"
   | "realtime"
   | "staff_ack"
   | "staff_realtime"
@@ -36,6 +37,7 @@ export type IncrementalPullEntity =
   | "day_closes"
   | "stock_movements"
   | "catalog"
+  | "shop_policy"
   | "audit_logs";
 
 export const ALL_INCREMENTAL_PULL_ENTITIES: readonly IncrementalPullEntity[] = [
@@ -55,6 +57,7 @@ export const ALL_INCREMENTAL_PULL_ENTITIES: readonly IncrementalPullEntity[] = [
   "day_closes",
   "stock_movements",
   "catalog",
+  "shop_policy",
   "audit_logs",
 ] as const;
 
@@ -64,15 +67,19 @@ const SALE_ACK_ENTITIES: readonly IncrementalPullEntity[] = ["sales"];
 /** After a catalog push ACK: catalog tree plus product category rows (rename). */
 const CATALOG_CHANGE_ENTITIES: readonly IncrementalPullEntity[] = ["catalog", "products"];
 
+/** After a shop-policy push ACK: shop policy only — not catalog. */
+const SHOP_POLICY_CHANGE_ENTITIES: readonly IncrementalPullEntity[] = ["shop_policy"];
+
 export function incrementalEntitiesForReason(reason: string): IncrementalPullEntity[] {
   if (reason === "sale_ack") return [...SALE_ACK_ENTITIES];
   if (reason === "catalog_change") return [...CATALOG_CHANGE_ENTITIES];
+  if (reason === "shop_policy_change") return [...SHOP_POLICY_CHANGE_ENTITIES];
   return [...ALL_INCREMENTAL_PULL_ENTITIES];
 }
 
 /** Hospitality / staff / device / PIN belong on resume/reconnect/startup, not sale ACK. */
 export function shouldRunAncillaryCloudBundle(reason: string): boolean {
-  return reason !== "sale_ack" && reason !== "catalog_change";
+  return reason !== "sale_ack" && reason !== "catalog_change" && reason !== "shop_policy_change";
 }
 
 export function isEventPullReason(reason: string): boolean {
@@ -80,6 +87,7 @@ export function isEventPullReason(reason: string): boolean {
     reason === "realtime" ||
     reason === "sale_ack" ||
     reason === "catalog_change" ||
+    reason === "shop_policy_change" ||
     reason === "reconnect" ||
     reason === "foreground" ||
     reason === "resume" ||
@@ -95,7 +103,7 @@ export function isEventPullReason(reason: string): boolean {
  * Startup / resume / reconnect / recovery / realtime may still force.
  */
 export function shouldForceCloudPull(reason: string, requestedForce?: boolean): boolean {
-  if (reason === "sale_ack" || reason === "catalog_change") return false;
+  if (reason === "sale_ack" || reason === "catalog_change" || reason === "shop_policy_change") return false;
   return requestedForce === true;
 }
 
@@ -133,6 +141,7 @@ export type IncrementalCheckpointTimes = {
   dayClosesAt?: string;
   stockMovementsAt?: string;
   catalogAt?: string;
+  shopPolicyAt?: string;
   auditLogsAt?: string;
 };
 
@@ -157,6 +166,7 @@ export function incrementalCheckpointPatch(
   dayCloses?: boolean;
   stockMovements?: boolean;
   catalog?: boolean;
+  shopPolicy?: boolean;
   auditLogs?: boolean;
   salesAt?: string;
   productsAt?: string;
@@ -174,6 +184,7 @@ export function incrementalCheckpointPatch(
   dayClosesAt?: string;
   stockMovementsAt?: string;
   catalogAt?: string;
+  shopPolicyAt?: string;
   auditLogsAt?: string;
 } {
   const pulled = new Set(pulledEntities);
@@ -194,6 +205,7 @@ export function incrementalCheckpointPatch(
     dayCloses: pulled.has("day_closes"),
     stockMovements: pulled.has("stock_movements"),
     catalog: pulled.has("catalog"),
+    shopPolicy: pulled.has("shop_policy"),
     auditLogs: pulled.has("audit_logs"),
     salesAt: checkpoints?.salesAt,
     productsAt: checkpoints?.productsAt,
@@ -211,6 +223,7 @@ export function incrementalCheckpointPatch(
     dayClosesAt: checkpoints?.dayClosesAt,
     stockMovementsAt: checkpoints?.stockMovementsAt,
     catalogAt: checkpoints?.catalogAt,
+    shopPolicyAt: checkpoints?.shopPolicyAt,
     auditLogsAt: checkpoints?.auditLogsAt,
   };
 }

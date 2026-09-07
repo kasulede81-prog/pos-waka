@@ -13,6 +13,7 @@ describe("syncQueuePriority", () => {
     expect(syncKindPriority("customer")).toBe(1);
     expect(syncKindPriority("pending_purchases")).toBe(1);
     expect(syncKindPriority("pending_catalog")).toBe(1);
+    expect(syncKindPriority("pending_shop_policy")).toBe(1);
   });
 
   it("assigns P2 to settings-like kinds", () => {
@@ -34,5 +35,6 @@ describe("syncQueuePriority", () => {
     expect(coalesceKeyForOp("sale", { saleId: "s1" })).toBe("sale:s1");
     expect(coalesceKeyForOp("pending_staff", { staff: { id: "staff-1" } })).toBe("pending_staff:staff-1");
     expect(coalesceKeyForOp("pending_catalog", { type: "catalog" })).toBe("pending_catalog:shop");
+    expect(coalesceKeyForOp("pending_shop_policy", { type: "shop_policy" })).toBe("pending_shop_policy:shop");
   });
 });

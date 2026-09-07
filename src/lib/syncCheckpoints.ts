@@ -30,6 +30,7 @@ export type SyncCheckpoints = {
   lastDayClosesSyncAt: string | null;
   lastStockMovementsSyncAt: string | null;
   lastCatalogSyncAt: string | null;
+  lastShopPolicySyncAt: string | null;
   /** audit_logs pull cursor (created_at). */
   lastAuditLogsSyncAt: string | null;
 };
@@ -53,6 +54,7 @@ const empty: SyncCheckpoints = {
   lastDayClosesSyncAt: null,
   lastStockMovementsSyncAt: null,
   lastCatalogSyncAt: null,
+  lastShopPolicySyncAt: null,
   lastAuditLogsSyncAt: null,
 };
 
@@ -98,6 +100,7 @@ export function readSyncCheckpoints(): SyncCheckpoints {
       lastStockMovementsSyncAt:
         typeof o.lastStockMovementsSyncAt === "string" ? o.lastStockMovementsSyncAt : null,
       lastCatalogSyncAt: typeof o.lastCatalogSyncAt === "string" ? o.lastCatalogSyncAt : null,
+      lastShopPolicySyncAt: typeof o.lastShopPolicySyncAt === "string" ? o.lastShopPolicySyncAt : null,
       lastAuditLogsSyncAt: typeof o.lastAuditLogsSyncAt === "string" ? o.lastAuditLogsSyncAt : null,
     };
   } catch {
@@ -150,6 +153,7 @@ export function seedEntitySyncCursorsAt(at: string): SyncCheckpoints {
     lastDayClosesSyncAt: at,
     lastStockMovementsSyncAt: at,
     lastCatalogSyncAt: at,
+    lastShopPolicySyncAt: at,
     lastAuditLogsSyncAt: at,
   });
 }
@@ -175,6 +179,7 @@ export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCh
     lastDayClosesSyncAt: at,
     lastStockMovementsSyncAt: at,
     lastCatalogSyncAt: at,
+    lastShopPolicySyncAt: at,
     lastAuditLogsSyncAt: at,
   });
 }
@@ -196,6 +201,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   dayCloses?: boolean;
   stockMovements?: boolean;
   catalog?: boolean;
+  shopPolicy?: boolean;
   auditLogs?: boolean;
   /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
@@ -216,6 +222,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   dayClosesAt?: string;
   stockMovementsAt?: string;
   catalogAt?: string;
+  shopPolicyAt?: string;
   auditLogsAt?: string;
 }): SyncCheckpoints {
   const fallback = partial.at ?? new Date().toISOString();
@@ -255,6 +262,9 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   }
   if (partial.catalog) {
     patch.lastCatalogSyncAt = partial.catalogAt ?? fallback;
+  }
+  if (partial.shopPolicy) {
+    patch.lastShopPolicySyncAt = partial.shopPolicyAt ?? fallback;
   }
   if (partial.auditLogs) {
     patch.lastAuditLogsSyncAt = partial.auditLogsAt ?? fallback;
