@@ -20,7 +20,7 @@ type Props = {
 
 export function ReturnReceiptActionsModal({ lang, open, ctx, onClose }: Props) {
   if (!open || !ctx) return null;
-  const fail = () => window.alert(t(lang, "receiptPdfFailed"));
+  const failPdf = () => window.alert(t(lang, "receiptPdfFailed"));
 
   return (
     <PosScreenPortal>
@@ -40,9 +40,18 @@ export function ReturnReceiptActionsModal({ lang, open, ctx, onClose }: Props) {
             <DocumentActionsBar
               lang={lang}
               compact
-              onPrint={() => void printReturnReceipt(ctx).then((r) => !r.ok && fail())}
-              onDownloadPdf={() => void downloadReturnReceiptPdf(ctx).then((ok) => !ok && fail())}
-              onSharePdf={() => void shareReturnReceiptPdf(ctx).then((ok) => !ok && fail())}
+              onPrint={() =>
+                void printReturnReceipt(ctx).then((r) => {
+                  if (r.ok) return;
+                  window.alert(
+                    r.mode === "thermal"
+                      ? (r.error ?? t(lang, "receiptPrintThermalFailed"))
+                      : t(lang, "receiptPdfFailed"),
+                  );
+                })
+              }
+              onDownloadPdf={() => void downloadReturnReceiptPdf(ctx).then((ok) => !ok && failPdf())}
+              onSharePdf={() => void shareReturnReceiptPdf(ctx).then((ok) => !ok && failPdf())}
             />
           </div>
           <button

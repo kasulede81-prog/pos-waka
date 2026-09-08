@@ -198,13 +198,27 @@ export async function shareSaleReceiptPdf(ctx: SaleReceiptContext): Promise<bool
   return sharePdf(ctx);
 }
 
-export async function printReturnReceipt(ctx: ReturnReceiptContext): Promise<{ ok: boolean }> {
+export async function printReturnReceipt(ctx: ReturnReceiptContext): Promise<SalePrintResult> {
+  const { tryEnqueueReturnReceiptEscPos } = await import("./returnReceiptPrint");
+  const thermal = await tryEnqueueReturnReceiptEscPos(ctx);
+  if (thermal.enqueued) return { ok: true, mode: "thermal" };
+  if (thermal.nativePrinterConfigured) {
+    return {
+      ok: false,
+      mode: "thermal",
+      error: "Could not print to the receipt printer. Check that it is on and paired.",
+    };
+  }
+
   const paper = ctx.paper ?? "80mm";
   if (!isNativePrintPlatform()) {
-    return { ok: printHtmlDocument(returnReceiptHtml(ctx), paper, "Return receipt") };
+    if (printHtmlDocument(returnReceiptHtml(ctx), paper, "Return receipt")) {
+      return { ok: true, mode: "html" };
+    }
+    return { ok: false, mode: "none" };
   }
   const { shareReturnReceiptPdf } = await import("./receiptPdfDocuments");
-  return { ok: await shareReturnReceiptPdf(ctx) };
+  return { ok: await shareReturnReceiptPdf(ctx), mode: "share" };
 }
 
 export async function downloadReturnReceiptPdf(ctx: ReturnReceiptContext): Promise<boolean> {
