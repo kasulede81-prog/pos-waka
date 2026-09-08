@@ -48,6 +48,30 @@ describe("autoSync backoff", () => {
     expect(shouldRetrySyncOp(queue[0], now + 1_000)).toBe(false);
   });
 
+  it("allowlisted transport lastError does not change backoff windows", () => {
+    const now = Date.now();
+    const failed = markSyncOpFailed(
+      op({ id: "obs", attempts: 2, lastAttemptAt: new Date(now).toISOString() }),
+      "401",
+    );
+    expect(failed.lastError).toBe("401");
+    expect(shouldRetrySyncOp(failed, now + 1_000)).toBe(false);
+    expect(deriveQueueHealth([failed])).toBe("backing_off");
+  });
+
+  it("blocked business lastError is never retryable and is not backing_off", () => {
+    const now = Date.now();
+    const blocked = op({
+      id: "blocked-obs",
+      kind: "pending_returns",
+      lastError: "refund_exceeds_remaining",
+      attempts: 34,
+      lastAttemptAt: new Date(now).toISOString(),
+    });
+    expect(shouldRetrySyncOp(blocked, now + 1_000_000)).toBe(false);
+    expect(deriveQueueHealth([blocked])).toBe("blocked");
+  });
+
   it("waiting_for_sale is not exponential backoff health", () => {
     const now = Date.now();
     const queue = [

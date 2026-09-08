@@ -445,7 +445,9 @@ export function buildQueueHealthAttentionItems(
   pendingCount: number,
 ): AttentionItem[] {
   const degraded =
-    syncHealth.queueHealth === "degraded" || syncHealth.queueHealth === "backing_off";
+    syncHealth.queueHealth === "degraded" ||
+    syncHealth.queueHealth === "backing_off" ||
+    syncHealth.queueHealth === "blocked";
   if (!degraded && pendingCount < 20) return [];
   return [
     {
@@ -1034,7 +1036,9 @@ export function buildExtendedIntegritySignals(
   const syncErr = integrity.syncErrorCount || integrity.syncStats.errorCount;
   const pending = integrity.syncPendingCount || integrity.syncStats.unsyncedCount;
   const queueDegraded =
-    integrity.syncHealth.queueHealth === "degraded" || integrity.syncHealth.queueHealth === "backing_off";
+    integrity.syncHealth.queueHealth === "degraded" ||
+    integrity.syncHealth.queueHealth === "backing_off" ||
+    integrity.syncHealth.queueHealth === "blocked";
   const drawerConflict =
     integrity.periodDrawerDuplicateOpens > 0 ||
     integrity.periodDrawerDeviceConflicts > 0 ||

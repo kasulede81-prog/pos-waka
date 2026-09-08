@@ -27,6 +27,7 @@ vi.mock("../offline/cloudSync", () => ({
   syncSaleImmediately: mocks.syncSaleImmediately,
   scheduleIncrementalCloudPull: mocks.scheduleIncrementalCloudPull,
   processCloudSyncOperation: mocks.processCloudSyncOperation,
+  probeBlockedReturnRecovery: async () => false,
 }));
 
 vi.mock("./posPushScheduler", () => ({

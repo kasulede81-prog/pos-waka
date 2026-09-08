@@ -277,6 +277,7 @@ import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { normalizeCashDrawerAdjustment } from "../lib/cashDrawerLedger";
 import { cashReduceFromRefund, physicalCashCollectedFromSale } from "../lib/cashDrawerSales";
+import { captureCloudCompleteFinancials } from "../lib/saleCloudCompleteFinancials";
 import { normalizeTenderCashUgx } from "../lib/saleTenderCash";
 import { resolveDebtorForSale } from "../lib/customerDebtActivity";
 import { draftQuantityExceedsStock, totalDraftQuantityForProduct } from "../lib/draftStockCheck";
@@ -5166,6 +5167,13 @@ export const usePosStore = create<PosState>((set, get) => {
       estimatedProfitUgx,
       createdAt: existingPending?.createdAt ?? new Date().toISOString(),
       pendingSync: true,
+      cloudCompleteFinancials: captureCloudCompleteFinancials({
+        subtotalUgx: listSubtotal,
+        totalUgx: total,
+        cashPaidUgx,
+        debtUgx: debt,
+        discountTotalUgx: discountTotal,
+      }),
       lastSyncError: null,
       customerId: customerId ?? null,
       soldByUserId: actorId,

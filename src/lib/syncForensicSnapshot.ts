@@ -9,6 +9,7 @@ import { isClosedBusinessDateSyncError, shouldRetryClosedBusinessDateOp } from "
 import {
   forensicAdjustmentOperationType,
   forensicAdjustmentSaleId,
+  isBlockedBusinessSyncError,
   isWaitingForSaleSyncError,
 } from "./saleAdjustmentSync";
 import { getDeviceOnline } from "./deviceOnline";
@@ -52,6 +53,7 @@ export type SyncForensicClassification =
   | "BACKOFF"
   | "WAITING_FOR_SALE"
   | "CLOSED_DATE_PARK"
+  | "BLOCKED_BUSINESS"
   | "MISSING_SHOP"
   | "SHOP_MISMATCH"
   | "MISSING_SESSION"
@@ -136,14 +138,16 @@ export type SyncForensicSnapshot = {
     ready: number;
     backingOff: number;
     parkedClosedDate: number;
+    blockedBusiness: number;
     degraded: boolean;
     oldestCreatedAt: string | null;
     newestCreatedAt: string | null;
     maxAttempts: number;
-    queueHealth: "healthy" | "degraded" | "backing_off";
+    queueHealth: "healthy" | "degraded" | "backing_off" | "blocked";
     queueHasReadyWork: boolean;
     queueHasBackoff: boolean;
     queueHasClosedDatePark: boolean;
+    queueHasBlockedBusiness: boolean;
     queueHasMalformedRows: boolean;
     queueHasShopMismatch: boolean;
     queueHasMissingShop: boolean;
@@ -253,6 +257,7 @@ export function classifySyncForensicRow(input: {
   if (activeShopId && shopId !== activeShopId) return "SHOP_MISMATCH";
   if (!authenticated) return "MISSING_SESSION";
   if (isWaitingForSaleSyncError(op.lastError)) return "WAITING_FOR_SALE";
+  if (isBlockedBusinessSyncError(op.lastError)) return "BLOCKED_BUSINESS";
   if (!shouldRetrySyncOp(op, nowMs, [...dayCloses])) return "BACKOFF";
   if (shouldRetrySyncOp(op, nowMs, [...dayCloses])) return "READY";
   return "OTHER";
@@ -268,6 +273,7 @@ function retryAtIso(op: SyncOperation): string | null {
 function classificationRank(c: SyncForensicClassification): number {
   switch (c) {
     case "CLOSED_DATE_PARK":
+    case "BLOCKED_BUSINESS":
       return 0;
     case "MALFORMED":
     case "UNKNOWN_KIND":
@@ -286,7 +292,8 @@ function toRow(
   input: Omit<SyncForensicBuildInput, "queue">,
 ): SyncForensicRow {
   const shopId = inferredShopId(op);
-  const retryEligible = !isMalformedRow(op) && shouldRetrySyncOp(op, input.nowMs, [...input.dayCloses]);
+  const blocked = isBlockedBusinessSyncError(op.lastError);
+  const retryEligible = !isMalformedRow(op) && !blocked && shouldRetrySyncOp(op, input.nowMs, [...input.dayCloses]);
   return {
     id: String(op.id ?? ""),
     kind: String(op.kind ?? ""),
@@ -299,7 +306,7 @@ function toRow(
     shopIdRedacted: redactId(shopId),
     closedDateKey: op.closedDateKey ?? null,
     retryEligible,
-    retryAt: retryAtIso(op),
+    retryAt: blocked ? null : retryAtIso(op),
     accountKeyPresent: input.accountKeyPresent,
     payloadClass: classifySyncForensicPayload(String(op.kind ?? ""), op.payload),
     operationType: forensicAdjustmentOperationType(String(op.kind ?? ""), op.payload),
@@ -353,6 +360,7 @@ export function buildSyncForensicSnapshot(input: SyncForensicBuildInput): SyncFo
   const ready = rows.filter((r) => r.classification === "READY").length;
   const backingOff = rows.filter((r) => r.classification === "BACKOFF").length;
   const parkedClosedDate = rows.filter((r) => r.classification === "CLOSED_DATE_PARK").length;
+  const blockedBusiness = rows.filter((r) => r.classification === "BLOCKED_BUSINESS").length;
   const created = rows.map((r) => r.createdAt).filter(Boolean).sort();
   const maxAttempts = rows.reduce((max, r) => Math.max(max, r.attempts), 0);
   const queueHealth = deriveQueueHealth([...input.queue]);
@@ -378,6 +386,7 @@ export function buildSyncForensicSnapshot(input: SyncForensicBuildInput): SyncFo
       ready,
       backingOff,
       parkedClosedDate,
+      blockedBusiness,
       degraded: queueHealth === "degraded",
       oldestCreatedAt: created[0] ?? null,
       newestCreatedAt: created[created.length - 1] ?? null,
@@ -386,6 +395,7 @@ export function buildSyncForensicSnapshot(input: SyncForensicBuildInput): SyncFo
       queueHasReadyWork: ready > 0,
       queueHasBackoff: backingOff > 0,
       queueHasClosedDatePark: parkedClosedDate > 0,
+      queueHasBlockedBusiness: blockedBusiness > 0,
       queueHasMalformedRows: rows.some((r) => r.classification === "MALFORMED"),
       queueHasShopMismatch: rows.some((r) => r.classification === "SHOP_MISMATCH"),
       queueHasMissingShop: rows.some((r) => r.classification === "MISSING_SHOP"),

@@ -59,7 +59,11 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
 
       {h.queueHealth !== "healthy" && isOnline ? (
         <p className="mt-2 text-xs font-semibold text-amber-900">
-          {h.queueHealth === "backing_off" ? t(lang, "autoSyncQueueBackoff") : t(lang, "autoSyncQueueDegraded")}
+          {h.queueHealth === "backing_off"
+            ? t(lang, "autoSyncQueueBackoff")
+            : h.queueHealth === "blocked"
+              ? t(lang, "autoSyncQueueBlocked")
+              : t(lang, "autoSyncQueueDegraded")}
         </p>
       ) : null}
 

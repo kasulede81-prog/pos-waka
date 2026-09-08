@@ -5,6 +5,7 @@ import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
 import { usePosStore } from "../store/usePosStore";
 import { clearPendingRegistrationProfile } from "./registrationProfileCache";
+import { getActiveShopId, isValidShopId } from "../offline/shopScope";
 
 export type SaveOwnerBundleArgs = {
   shopName: string;
@@ -206,6 +207,48 @@ export function applyRegistrationProfileToLocalStore(profile: RegistrationProfil
   );
 }
 
+const ACTIVE_SHOP_PROFILE_COLUMNS =
+  "id, organization_id, name, business_type, phone_e164, address_line, district_id, city, area, latitude, longitude";
+
+type CloudShopProfileRow = {
+  id: string;
+  organization_id: string;
+  name: string | null;
+  business_type: string | null;
+  phone_e164: string | null;
+  address_line?: string | null;
+  district_id: string | null;
+  city: string | null;
+  area: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+/**
+ * Runtime profile reads bind to getActiveShopId() — never oldest membership.
+ * shops SELECT RLS (user_can_access_shop) rejects shops the user cannot access.
+ * No active shop → no-op (must not pick an arbitrary membership).
+ */
+export async function loadCloudShopProfileForActiveShop(): Promise<CloudShopProfileRow | null> {
+  if (!supabase) return null;
+  const shopId = getActiveShopId();
+  if (!isValidShopId(shopId)) return null;
+
+  const { data, error } = await supabase
+    .from("shops")
+    .select(ACTIVE_SHOP_PROFILE_COLUMNS)
+    .eq("id", shopId)
+    .maybeSingle();
+  if (error || !data) return null;
+
+  const row = data as CloudShopProfileRow;
+  if (!row.id || row.id !== shopId) return null;
+  // Shop switch during the round-trip: do not write into a different partition.
+  if (getActiveShopId() !== shopId) return null;
+  return row;
+}
+
+/** Oldest-membership lookup kept only for local-auth / bootstrap write fallback — not hydrate. */
 async function getPrimaryShopForUser(userId: string) {
   if (!supabase) return null;
   const { data: member, error: memberErr } = await supabase
@@ -228,23 +271,15 @@ async function getPrimaryShopForUser(userId: string) {
 }
 
 /**
- * New browser/device: local store is empty but cloud may already have the shop.
- * Pull shop name and profile into preferences so Home does not ask for setup again.
+ * Pull the ACTIVE shop's cloud profile into that shop's local preferences.
+ * Does not use oldest membership. No active shop → no-op.
  */
 export async function hydrateLocalShopProfileFromCloud(): Promise<void> {
   if (!supabase) return;
-  const { data: authData, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !authData.user) return;
 
-  const primary = await getPrimaryShopForUser(authData.user.id);
-  if (!primary?.shop) return;
+  const s = await loadCloudShopProfileForActiveShop();
+  if (!s) return;
 
-  const s = primary.shop as {
-    name: string | null;
-    business_type: string | null;
-    phone_e164: string | null;
-    organization_id: string;
-  };
   const shopName = String(s.name ?? "").trim();
   if (!shopName) return;
 
@@ -269,29 +304,16 @@ export async function hydrateLocalShopProfileFromCloud(): Promise<void> {
   }
 }
 
-/** Load primary shop row fields used by the location section in Settings. */
+/** Load active-shop row fields used by the location section in Settings. */
 export async function loadPrimaryShopLocationFromCloud(): Promise<PrimaryShopLocationSnapshot | null> {
   if (!supabase) return null;
-  const { data: authData, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !authData.user) return null;
-  const primary = await getPrimaryShopForUser(authData.user.id);
-  if (!primary?.shop) return null;
-  const s = primary.shop as {
-    id: string;
-    organization_id: string;
-    name: string | null;
-    phone_e164: string | null;
-    district_id: string | null;
-    city: string | null;
-    area: string | null;
-    latitude: number | null;
-    longitude: number | null;
-  };
+  const s = await loadCloudShopProfileForActiveShop();
+  if (!s) return null;
   return {
     shopId: s.id,
     organizationId: s.organization_id,
-    shopName: (s.name as string | null) ?? null,
-    phoneE164: (s.phone_e164 as string | null) ?? null,
+    shopName: s.name ?? null,
+    phoneE164: s.phone_e164 ?? null,
     districtId: s.district_id,
     city: s.city,
     area: s.area,

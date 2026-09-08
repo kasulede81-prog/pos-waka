@@ -156,10 +156,18 @@ export function stampedShopIdForImmediateCashSync(shopId?: string | null): strin
 }
 import { classifyPendingStockPayload, shouldAckR3StockResult } from "../lib/stockDurableSync";
 import {
+  classifyPostgrestSyncError,
+  classifyShopPushSaleReturnOutcome,
+  classifySyncExceptionMessage,
+  isBlockedBusinessSyncError,
   isSaleCloudAcked,
+  isSyncAck,
   linkedSaleAdjustmentDecision,
   type SyncProcessResult,
 } from "../lib/saleAdjustmentSync";
+import { saleHeaderForCloudComplete } from "../lib/saleCloudCompleteFinancials";
+import { evaluateSaleReturnCeilings } from "../lib/saleReturnCeilings";
+import { idSuffix, recordBlockedReturnProbe } from "../lib/blockedReturnRecovery";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -932,18 +940,19 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
     qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + line.quantity);
   }
 
+  const header = saleHeaderForCloudComplete(sale);
   const activeLines = sale.lines.filter((line) => !line.voided).map(ensureSaleLineId);
   return {
     sale: {
       id: sale.id,
       customer_id: sale.customerId && isUuid(sale.customerId) ? sale.customerId : null,
-      payment_status: sale.debtUgx > 0 ? "partial" : "paid",
-      subtotal_ugx: sale.subtotalUgx,
+      payment_status: header.debtUgx > 0 ? "partial" : "paid",
+      subtotal_ugx: header.subtotalUgx,
       tax_ugx: 0,
-      discount_ugx: sale.discountTotalUgx ?? 0,
-      total_ugx: sale.totalUgx,
-      cash_amount_ugx: sale.cashPaidUgx,
-      debt_amount_ugx: sale.debtUgx,
+      discount_ugx: header.discountTotalUgx,
+      total_ugx: header.totalUgx,
+      cash_amount_ugx: header.cashPaidUgx,
+      debt_amount_ugx: header.debtUgx,
       issue_receipt: false,
       created_by: ctx.userId,
       sold_by_user_id: resolveSoldByAuthUserIdForPush(sale),
@@ -980,11 +989,11 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
       },
     })),
     payments:
-      sale.cashPaidUgx > 0
+      header.cashPaidUgx > 0
         ? [
             {
               method: "cash",
-              amount_ugx: sale.cashPaidUgx,
+              amount_ugx: header.cashPaidUgx,
               recorded_by: ctx.userId,
             },
           ]
@@ -1363,7 +1372,8 @@ export async function refreshProductStockFromCloud(
 }
 
 async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<SyncProcessResult> {
-  if (!supabase || !isUuid(returnRow.id)) return "retry";
+  if (!supabase) return { status: "retry", lastError: "rpc_failed" };
+  if (!isUuid(returnRow.id)) return { status: "block", lastError: "invalid_uuid" };
   const payload = {
     id: returnRow.id,
     sale_id: returnRow.saleId && isUuid(returnRow.saleId) ? returnRow.saleId : null,
@@ -1384,23 +1394,246 @@ async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise
       wakaClient: true,
     },
   };
-  const { data, error } = await supabase.rpc("shop_push_sale_return", {
-    p_shop_id: ctx.shopId,
-    p_payload: payload,
-  });
-  if (error) {
-    if (isMissingTableError(error)) return "retry";
-    return "retry";
+  try {
+    const { data, error } = await supabase.rpc("shop_push_sale_return", {
+      p_shop_id: ctx.shopId,
+      p_payload: payload,
+    });
+    const outcome = classifyShopPushSaleReturnOutcome({
+      error: error ? { code: (error as { code?: string }).code, message: null } : null,
+      data: data as { ok?: boolean; error?: string | null } | null,
+    });
+    if (outcome.status === "park") {
+      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+      const { dateKeyKampala } = await import("../lib/datesUg");
+      noteClosedBusinessDateRejection(dateKeyKampala(returnRow.createdAt), returnRow.id);
+      return "park";
+    }
+    if (outcome.status === "ack") return "ack";
+    if (outcome.status === "block") {
+      return { status: "block", lastError: outcome.lastError ?? "invalid_payload" };
+    }
+    return { status: "retry", lastError: outcome.lastError ?? "rpc_failed" };
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "";
+    const token = classifySyncExceptionMessage(message);
+    if (token === "closed_business_date") {
+      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+      const { dateKeyKampala } = await import("../lib/datesUg");
+      noteClosedBusinessDateRejection(dateKeyKampala(returnRow.createdAt), returnRow.id);
+      return "park";
+    }
+    if (isBlockedBusinessSyncError(token)) {
+      return { status: "block", lastError: token };
+    }
+    return { status: "retry", lastError: token };
   }
-  const result = data as { ok?: boolean; error?: string } | null;
-  if (result?.error === "closed_business_date") {
-    const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-    const { dateKeyKampala } = await import("../lib/datesUg");
-    noteClosedBusinessDateRejection(dateKeyKampala(returnRow.createdAt), returnRow.id);
-    return "park";
+}
+
+/** Read-only cloud SELECT + 086 ceiling mirror. Never writes, never calls shop_push_sale_return. */
+export async function probeBlockedReturnRecovery(op: SyncOperation): Promise<boolean> {
+  const payload = (op.payload && typeof op.payload === "object" ? op.payload : {}) as Record<string, unknown>;
+  const base = {
+    ok: false as const,
+    queueIdSuffix: idSuffix(op.id),
+    returnIdSuffix: idSuffix(String(payload.returnId ?? op.id ?? "")),
+    saleIdSuffix: idSuffix(typeof payload.saleId === "string" ? payload.saleId : ""),
+  };
+  if (op.kind !== "pending_returns" || !isBlockedBusinessSyncError(op.lastError)) {
+    return recordBlockedReturnProbe({ ...base, blocker: "not_blocked_kind" });
   }
-  if (result?.ok === true) return "ack";
-  return "retry";
+  if (!supabase) {
+    return recordBlockedReturnProbe({ ...base, blocker: "no_supabase" });
+  }
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) {
+      return recordBlockedReturnProbe({ ...base, blocker: "not_authenticated" });
+    }
+    const ctx = await resolveShopCtxForOperation(op);
+    if (!ctx) {
+      return recordBlockedReturnProbe({ ...base, blocker: "no_shop_ctx" });
+    }
+    const returnId = String(payload.returnId ?? op.id ?? "").trim();
+    const row = await resolveReturnForSync(returnId);
+    if (!row) {
+      return recordBlockedReturnProbe({ ...base, blocker: "no_return" });
+    }
+    const saleId = row.saleId ?? (typeof payload.saleId === "string" ? payload.saleId : "");
+    base.saleIdSuffix = idSuffix(saleId);
+    base.returnIdSuffix = idSuffix(row.id);
+    if (!saleId || !isUuid(saleId)) {
+      return recordBlockedReturnProbe({ ...base, blocker: "no_return" });
+    }
+
+    const saleRes = await supabase
+      .from("sales")
+      .select(
+        "id, shop_id, total_ugx, cash_amount_ugx, debt_amount_ugx, subtotal_ugx, discount_ugx, status, payment_status, created_at, updated_at, completed_at, metadata",
+      )
+      .eq("id", saleId)
+      .eq("shop_id", ctx.shopId)
+      .maybeSingle();
+    if (saleRes.error) {
+      return recordBlockedReturnProbe({
+        ...base,
+        blocker: "select_error",
+        selectErrorCode: classifyPostgrestSyncError((saleRes.error as { code?: string }).code),
+      });
+    }
+
+    const lineRes = await supabase
+      .from("sale_line_items")
+      .select("product_id, quantity, unit_price_ugx, line_total_ugx, line_discount_ugx")
+      .eq("sale_id", saleId);
+    if (lineRes.error) {
+      return recordBlockedReturnProbe({
+        ...base,
+        blocker: "select_error",
+        selectErrorCode: classifyPostgrestSyncError((lineRes.error as { code?: string }).code),
+      });
+    }
+
+    const retRes = await supabase
+      .from("sale_returns")
+      .select("id, shop_id, product_id, quantity, refund_amount_ugx, reason, created_at")
+      .eq("sale_id", saleId);
+    if (retRes.error) {
+      return recordBlockedReturnProbe({
+        ...base,
+        blocker: "select_error",
+        selectErrorCode: classifyPostgrestSyncError((retRes.error as { code?: string }).code),
+      });
+    }
+
+    if (!saleRes.data) {
+      return recordBlockedReturnProbe({
+        ...base,
+        blocker: "select_empty",
+        saleRowPresent: false,
+        cloudSaleTotalUgx: null,
+      });
+    }
+
+    const cloudSaleTotalUgx = Number(saleRes.data.total_ugx ?? 0);
+    const localSale = await resolveSaleForSync(saleId);
+    const ram = usePosStore.getState();
+    const saleOut = [...ram.stockMovements, ...(ram.archivedStockMovements ?? [])].find(
+      (m) => m.refId === saleId && m.productId === row.productId && m.kind === "sale_out",
+    );
+    const metadataKeys =
+      saleRes.data.metadata && typeof saleRes.data.metadata === "object" && !Array.isArray(saleRes.data.metadata)
+        ? Object.keys(saleRes.data.metadata as Record<string, unknown>).filter(
+            (key) => !/name|phone|email|token|secret/i.test(key),
+          )
+        : [];
+    const forensic = {
+      probeVersion: 2,
+      cloud: {
+        totalUgx: cloudSaleTotalUgx,
+        cashAmountUgx: Number(saleRes.data.cash_amount_ugx ?? 0),
+        debtAmountUgx: Number(saleRes.data.debt_amount_ugx ?? 0),
+        subtotalUgx: Number(saleRes.data.subtotal_ugx ?? 0),
+        discountUgx: Number(saleRes.data.discount_ugx ?? 0),
+        status: saleRes.data.status != null ? String(saleRes.data.status) : null,
+        paymentStatus: saleRes.data.payment_status != null ? String(saleRes.data.payment_status) : null,
+        createdAt: saleRes.data.created_at != null ? String(saleRes.data.created_at) : null,
+        updatedAt: saleRes.data.updated_at != null ? String(saleRes.data.updated_at) : null,
+        completedAt: saleRes.data.completed_at != null ? String(saleRes.data.completed_at) : null,
+        shopIdSuffix: idSuffix(String(saleRes.data.shop_id ?? "")),
+        metadataKeys,
+        voidedTotalPresent: false,
+        lines: (lineRes.data ?? []).map((line) => ({
+          productIdSuffix: idSuffix(String(line.product_id)),
+          quantity: Number(line.quantity ?? 0),
+          unitPriceUgx: line.unit_price_ugx == null ? null : Number(line.unit_price_ugx),
+          lineTotalUgx: Number(line.line_total_ugx ?? 0),
+          lineDiscountUgx: line.line_discount_ugx == null ? null : Number(line.line_discount_ugx),
+        })),
+        returns: (retRes.data ?? []).map((ret) => ({
+          idSuffix: idSuffix(String(ret.id)),
+          productIdSuffix: idSuffix(String(ret.product_id)),
+          quantity: Number(ret.quantity ?? 0),
+          refundAmountUgx: Number(ret.refund_amount_ugx ?? 0),
+          reason: ret.reason != null ? String(ret.reason) : null,
+          createdAt: ret.created_at != null ? String(ret.created_at) : null,
+          shopIdSuffix: idSuffix(String(ret.shop_id ?? "")),
+        })),
+      },
+      local: {
+        totalUgx: localSale?.totalUgx,
+        cashPaidUgx: localSale?.cashPaidUgx,
+        debtUgx: localSale?.debtUgx,
+        subtotalUgx: localSale?.subtotalUgx,
+        discountTotalUgx: localSale?.discountTotalUgx ?? null,
+        voidedTotalUgx: localSale?.voidedTotalUgx ?? null,
+        tenderCashUgx: localSale?.tenderCashUgx ?? null,
+        paymentMethod: localSale?.paymentMethod ?? null,
+        status: localSale?.status ?? null,
+        createdAt: localSale?.createdAt ?? null,
+        pendingSync: localSale?.pendingSync,
+        cloudCompleteTotalUgx: localSale?.cloudCompleteFinancials?.totalUgx ?? null,
+        lineCount: localSale?.lines.length,
+        lines: localSale?.lines.map((line) => ({
+          productIdSuffix: idSuffix(line.productId),
+          quantity: line.quantity,
+          unitPriceUgx: line.unitPriceUgx,
+          lineTotalUgx: line.lineTotalUgx,
+          voided: line.voided === true,
+        })),
+        returnQty: row.quantity,
+        returnRefundUgx: row.refundAmountUgx,
+        returnReason: row.reason ?? null,
+        returnCreatedAt: row.createdAt ?? null,
+        saleOutDelta: saleOut?.deltaBaseUnits ?? null,
+        saleOutSummary: saleOut?.summary ?? null,
+      },
+    };
+    const verdict = evaluateSaleReturnCeilings({
+      shopId: ctx.shopId,
+      saleId,
+      sale: {
+        id: String(saleRes.data.id),
+        shopId: String(saleRes.data.shop_id),
+        totalUgx: cloudSaleTotalUgx,
+      },
+      lines: (lineRes.data ?? []).map((line) => ({
+        productId: String(line.product_id),
+        quantity: Number(line.quantity ?? 0),
+        lineTotalUgx: Number(line.line_total_ugx ?? 0),
+      })),
+      priorReturns: (retRes.data ?? []).map((ret) => ({
+        id: String(ret.id),
+        productId: String(ret.product_id),
+        quantity: Number(ret.quantity ?? 0),
+        refundAmountUgx: Number(ret.refund_amount_ugx ?? 0),
+      })),
+      excludeReturnId: row.id,
+      productId: row.productId,
+      quantity: row.quantity,
+      refundUgx: row.refundAmountUgx,
+    });
+    if (!verdict.ok) {
+      return recordBlockedReturnProbe({
+        ...base,
+        blocker: "ceiling",
+        ceilingError: verdict.error,
+        cloudSaleTotalUgx,
+        saleRowPresent: true,
+        ...forensic,
+      });
+    }
+    return recordBlockedReturnProbe({
+      ...base,
+      ok: true,
+      blocker: "none",
+      cloudSaleTotalUgx,
+      saleRowPresent: true,
+      ...forensic,
+    });
+  } catch {
+    return recordBlockedReturnProbe({ ...base, blocker: "select_error", selectErrorCode: "rpc_failed" });
+  }
 }
 
 async function processPendingReturnAdjustment(
@@ -1841,7 +2074,7 @@ export async function syncSaleImmediately(saleId: string): Promise<boolean> {
 }
 
 export async function processCloudSyncOperation(op: SyncOperation): Promise<boolean> {
-  return (await processCloudSyncOperationResult(op)) === "ack";
+  return isSyncAck(await processCloudSyncOperationResult(op));
 }
 
 export async function processCloudSyncOperationResult(op: SyncOperation): Promise<SyncProcessResult> {
@@ -1990,7 +2223,7 @@ async function processCloudSyncOperationLegacy(
         });
       }
       if (classified.route === "sale_void") {
-        return (await processSaleVoidAdjustment(classified, payload, ctx)) === "ack";
+        return isSyncAck(await processSaleVoidAdjustment(classified, payload, ctx));
       }
       if (classified.route === "catalog_only") {
         const product = usePosStore.getState().products.find((p) => p.id === classified.productId);
@@ -2030,7 +2263,7 @@ async function processCloudSyncOperationLegacy(
       });
     }
     case "pending_returns": {
-      return (await processPendingReturnAdjustment(payload, ctx)) === "ack";
+      return isSyncAck(await processPendingReturnAdjustment(payload, ctx));
     }
     case "pending_expenses":
       if (payload.kind === "supplier_payment") {

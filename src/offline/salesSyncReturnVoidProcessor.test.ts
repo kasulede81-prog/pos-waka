@@ -4,14 +4,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Product, ReturnRecord, Sale, SaleLine, SyncOperation, VoidRecord } from "../types";
 import { r3SaleVoidStockPayload } from "../lib/stockDurableSync";
+import { syncProcessLastError, syncProcessStatus } from "../lib/saleAdjustmentSync";
+import { captureCloudCompleteFinancials } from "../lib/saleCloudCompleteFinancials";
+import { buildSalePushPayload } from "./cloudSync";
+import { readLastBlockedReturnProbe, resetBlockedReturnRecoveryForTests } from "../lib/blockedReturnRecovery";
 import { usePosStore } from "../store/usePosStore";
 
 const rpcMock = vi.hoisted(() => vi.fn());
+const fromMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../lib/supabase", () => ({
   hasSupabaseConfig: true,
   supabase: {
     rpc: (...args: unknown[]) => rpcMock(...args),
+    from: (...args: unknown[]) => fromMock(...args),
     auth: {
       getSession: async () => ({
         data: { session: { user: { id: "11111111-1111-4111-8111-111111111111" } } },
@@ -131,10 +137,45 @@ function seed(opts?: { pendingSync?: boolean; saleId?: string | null; omitSale?:
   });
 }
 
+function thenableQuery(data: unknown, error: unknown = null) {
+  const query: {
+    select: () => typeof query;
+    eq: () => typeof query;
+    in: () => typeof query;
+    maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+    then: (resolve: (value: { data: unknown; error: unknown }) => unknown, reject?: (reason: unknown) => unknown) => Promise<unknown>;
+  } = {
+    select: () => query,
+    eq: () => query,
+    in: () => query,
+    maybeSingle: async () => ({ data, error }),
+    then: (resolve, reject) => Promise.resolve({ data, error }).then(resolve, reject),
+  };
+  return query;
+}
+
+function mockCeilingCloud(input: { totalUgx: number; quantity: number; lineTotalUgx: number }) {
+  fromMock.mockImplementation((table: unknown) => {
+    if (table === "sales") {
+      return thenableQuery({ id: SALE_ID, shop_id: SHOP_ID, total_ugx: input.totalUgx });
+    }
+    if (table === "sale_line_items") {
+      return thenableQuery([
+        { product_id: PRODUCT_ID, quantity: input.quantity, line_total_ugx: input.lineTotalUgx },
+      ]);
+    }
+    if (table === "sale_returns") return thenableQuery([]);
+    return thenableQuery(null, { message: "unknown_table" });
+  });
+}
+
 describe("SALES-SYNC-RETURNVOID-FIX-01 processors", () => {
   beforeEach(() => {
     rpcMock.mockReset();
     rpcMock.mockResolvedValue({ data: { ok: true }, error: null });
+    fromMock.mockReset();
+    fromMock.mockImplementation(() => thenableQuery(null, { message: "unmocked" }));
+    resetBlockedReturnRecoveryForTests();
   });
 
   it("pending_returns of a cloud-ACKed sale does not call shop_push_sale_complete", async () => {
@@ -244,14 +285,15 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 processors", () => {
     expect(rpcMock.mock.calls.map((c) => c[0])).toEqual(["shop_push_sale_return"]);
   });
 
-  it("sale_not_found remains retryable and does not re-complete the sale", async () => {
+  it("sale_not_found is BLOCKED_BUSINESS and does not re-complete the sale", async () => {
     seed({ pendingSync: false });
     rpcMock.mockResolvedValue({ data: { ok: false, error: "sale_not_found" }, error: null });
     const { processCloudSyncOperationResult } = await import("./cloudSync");
     const result = await processCloudSyncOperationResult(
       op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID }),
     );
-    expect(result).toBe("retry");
+    expect(syncProcessStatus(result)).toBe("block");
+    expect(syncProcessLastError(result)).toBe("sale_not_found");
     expect(rpcMock.mock.calls.map((c) => c[0])).toEqual(["shop_push_sale_return"]);
     expect(rpcMock.mock.calls.map((c) => c[0])).not.toContain("shop_push_sale_complete");
   });
@@ -304,7 +346,9 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 processors", () => {
     rpcMock.mockResolvedValue({ data: null, error: { message: "network" } });
     const { processCloudSyncOperationResult } = await import("./cloudSync");
     const row = op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID });
-    expect(await processCloudSyncOperationResult(row)).toBe("retry");
+    const failed = await processCloudSyncOperationResult(row);
+    expect(syncProcessStatus(failed)).toBe("retry");
+    expect(syncProcessLastError(failed)).toBe("rpc_failed");
     expect(usePosStore.getState().returnRecords).toHaveLength(1);
     rpcMock.mockReset();
     rpcMock.mockResolvedValue({ data: { ok: true }, error: null });
@@ -342,5 +386,158 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 processors", () => {
       op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID }),
     );
     expect(result).toBe("park");
+    expect(syncProcessLastError(result)).toBeUndefined();
+  });
+
+  it("refund_exceeds_remaining is BLOCK with allowlisted lastError", async () => {
+    seed({ pendingSync: false });
+    rpcMock.mockResolvedValue({ data: { ok: false, error: "refund_exceeds_remaining" }, error: null });
+    const { processCloudSyncOperationResult } = await import("./cloudSync");
+    const result = await processCloudSyncOperationResult(
+      op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID }),
+    );
+    expect(syncProcessStatus(result)).toBe("block");
+    expect(syncProcessLastError(result)).toBe("refund_exceeds_remaining");
+  });
+
+  it("PostgREST 401 is RETRY with 401", async () => {
+    seed({ pendingSync: false });
+    rpcMock.mockResolvedValue({ data: null, error: { code: "401", message: "JWT expired for kasule" } });
+    const { processCloudSyncOperationResult } = await import("./cloudSync");
+    const result = await processCloudSyncOperationResult(
+      op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID }),
+    );
+    expect(syncProcessStatus(result)).toBe("retry");
+    expect(syncProcessLastError(result)).toBe("401");
+  });
+
+  it("boolean ACK wrapper still treats ok as true", async () => {
+    seed({ pendingSync: false });
+    const { processCloudSyncOperation } = await import("./cloudSync");
+    expect(await processCloudSyncOperation(op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID }))).toBe(
+      true,
+    );
+  });
+
+  it("blocked business rejection does not masquerade as success", async () => {
+    seed({ pendingSync: false });
+    rpcMock.mockResolvedValue({ data: { ok: false, error: "refund_exceeds_remaining" }, error: null });
+    const { processCloudSyncOperation } = await import("./cloudSync");
+    expect(await processCloudSyncOperation(op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID }))).toBe(
+      false,
+    );
+  });
+
+  it("sale 2000 → local return shrinks live header → uploads still send 2000 / 2000 and both ACK", async () => {
+    const snapshot = captureCloudCompleteFinancials({
+      subtotalUgx: 2000,
+      totalUgx: 2000,
+      cashPaidUgx: 2000,
+      debtUgx: 0,
+      discountTotalUgx: 0,
+    });
+    const pending: Sale = {
+      ...sale(true),
+      subtotalUgx: 0,
+      totalUgx: 0,
+      cashPaidUgx: 0,
+      estimatedProfitUgx: 0,
+      voidedTotalUgx: 2000,
+      cloudCompleteFinancials: snapshot,
+      lines: [{ ...line(), quantity: 2, unitPriceUgx: 1000, lineTotalUgx: 2000 }],
+    };
+    const ret: ReturnRecord = {
+      ...returnRec(SALE_ID),
+      quantity: 2,
+      refundAmountUgx: 2000,
+      reason: "warm_bad",
+    };
+    usePosStore.setState({
+      sales: [pending],
+      archivedSales: [],
+      products: [product()],
+      returnRecords: [ret],
+      archivedReturnRecords: [],
+      voidRecords: [],
+      archivedVoidRecords: [],
+    });
+    const salePayload = buildSalePushPayload(pending, { shopId: SHOP_ID, userId: SHOP_ID });
+    expect(pending.totalUgx).toBe(0);
+    expect(pending.cloudCompleteFinancials?.totalUgx).toBe(2000);
+    expect(salePayload.sale.total_ugx).toBe(2000);
+    expect(salePayload.payments[0]?.amount_ugx).toBe(2000);
+    const { processCloudSyncOperationResult } = await import("./cloudSync");
+    expect(
+      await processCloudSyncOperationResult(op("pending_sales", { saleId: SALE_ID })),
+    ).toBe("ack");
+    expect(rpcMock.mock.calls[0]?.[0]).toBe("shop_push_sale_complete");
+    expect((rpcMock.mock.calls[0]?.[1] as { p_payload?: { sale?: { total_ugx?: number } } }).p_payload?.sale?.total_ugx).toBe(
+      2000,
+    );
+    rpcMock.mockClear();
+    usePosStore.setState({ sales: [{ ...pending, pendingSync: false }] });
+    expect(
+      await processCloudSyncOperationResult(op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID })),
+    ).toBe("ack");
+    expect(rpcMock.mock.calls.map((c) => c[0])).toEqual(["shop_push_sale_return"]);
+    expect(
+      (rpcMock.mock.calls[0]?.[1] as { p_payload?: { refund_amount_ugx?: number; quantity?: number } }).p_payload
+        ?.refund_amount_ugx,
+    ).toBe(2000);
+    expect(
+      (rpcMock.mock.calls[0]?.[1] as { p_payload?: { quantity?: number } }).p_payload?.quantity,
+    ).toBe(2);
+  });
+
+  it("probe stays false when cloud total is below the refund", async () => {
+    seed({ pendingSync: false });
+    mockCeilingCloud({ totalUgx: 1000, quantity: 1, lineTotalUgx: 1000 });
+    const { probeBlockedReturnRecovery } = await import("./cloudSync");
+    const blocked = op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID });
+    blocked.lastError = "refund_exceeds_remaining";
+    expect(await probeBlockedReturnRecovery(blocked)).toBe(false);
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(readLastBlockedReturnProbe()).toMatchObject({
+      ok: false,
+      blocker: "ceiling",
+      ceilingError: "refund_exceeds_remaining",
+      cloudSaleTotalUgx: 1000,
+      saleRowPresent: true,
+    });
+  });
+
+  it("legitimate return can recover after cloud ceilings would pass, then ACK", async () => {
+    seed({ pendingSync: false });
+    mockCeilingCloud({ totalUgx: 10_000, quantity: 5, lineTotalUgx: 50_000 });
+    const { probeBlockedReturnRecovery, processCloudSyncOperationResult } = await import("./cloudSync");
+    const blocked = op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID });
+    blocked.lastError = "refund_exceeds_remaining";
+    expect(await probeBlockedReturnRecovery(blocked)).toBe(true);
+    expect(rpcMock).not.toHaveBeenCalled();
+    const result = await processCloudSyncOperationResult(blocked);
+    expect(result).toBe("ack");
+    expect(rpcMock.mock.calls.map((c) => c[0])).toEqual(["shop_push_sale_return"]);
+    expect(rpcMock.mock.calls.map((c) => c[0])).not.toContain("shop_push_sale_complete");
+  });
+
+  it("authenticated empty SELECT is not treated as a missing sale and does not call the RPC", async () => {
+    seed({ pendingSync: false });
+    fromMock.mockImplementation((table: unknown) => {
+      if (table === "sales") return thenableQuery(null, null);
+      if (table === "sale_line_items") return thenableQuery([]);
+      if (table === "sale_returns") return thenableQuery([]);
+      return thenableQuery(null, { message: "unknown_table" });
+    });
+    const { probeBlockedReturnRecovery } = await import("./cloudSync");
+    const blocked = op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID });
+    blocked.lastError = "refund_exceeds_remaining";
+    expect(await probeBlockedReturnRecovery(blocked)).toBe(false);
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(readLastBlockedReturnProbe()).toMatchObject({
+      ok: false,
+      blocker: "select_empty",
+      saleRowPresent: false,
+      cloudSaleTotalUgx: null,
+    });
   });
 });

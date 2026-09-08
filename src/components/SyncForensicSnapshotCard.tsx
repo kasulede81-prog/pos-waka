@@ -107,7 +107,7 @@ export function SyncForensicSnapshotCard({ lang }: Props) {
               <dt className="text-xs font-bold uppercase text-muted-foreground">Counts</dt>
               <dd className="font-semibold text-foreground">
                 total {snap.queue.total} · ready {snap.queue.ready} · backoff {snap.queue.backingOff} ·
-                parked {snap.queue.parkedClosedDate}
+                parked {snap.queue.parkedClosedDate} · blocked {snap.queue.blockedBusiness}
               </dd>
             </div>
           </dl>
@@ -116,7 +116,8 @@ export function SyncForensicSnapshotCard({ lang }: Props) {
             <p className="font-black uppercase text-slate-700">Flags</p>
             <p className="mt-1 text-foreground">
               ready={flag(snap.queue.queueHasReadyWork)} backoff={flag(snap.queue.queueHasBackoff)}{" "}
-              closedDatePark={flag(snap.queue.queueHasClosedDatePark)} malformed=
+              closedDatePark={flag(snap.queue.queueHasClosedDatePark)} blockedBusiness=
+              {flag(snap.queue.queueHasBlockedBusiness)} malformed=
               {flag(snap.queue.queueHasMalformedRows)} shopMismatch={flag(snap.queue.queueHasShopMismatch)}{" "}
               missingShop={flag(snap.queue.queueHasMissingShop)} unknownKind=
               {flag(snap.queue.queueHasUnknownKind)}

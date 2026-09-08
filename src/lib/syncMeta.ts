@@ -23,7 +23,7 @@ export type SyncHealthMeta = {
   /** Last time connectivity was confirmed. */
   lastOnlineAt: string | null;
   /** Queue health for owner diagnostics. */
-  queueHealth: "healthy" | "degraded" | "backing_off";
+  queueHealth: "healthy" | "degraded" | "backing_off" | "blocked";
   /** POS push-only upload diagnostics (no cloud pull). */
   posPushAttempts?: number;
   posPushSuccesses?: number;
@@ -70,7 +70,9 @@ export function readSyncHealthMeta(): SyncHealthMeta {
       offlineSinceAt: typeof o.offlineSinceAt === "string" ? o.offlineSinceAt : null,
       lastOnlineAt: typeof o.lastOnlineAt === "string" ? o.lastOnlineAt : null,
       queueHealth:
-        o.queueHealth === "degraded" || o.queueHealth === "backing_off" ? o.queueHealth : "healthy",
+        o.queueHealth === "degraded" || o.queueHealth === "backing_off" || o.queueHealth === "blocked"
+          ? o.queueHealth
+          : "healthy",
       posPushAttempts: typeof o.posPushAttempts === "number" ? o.posPushAttempts : 0,
       posPushSuccesses: typeof o.posPushSuccesses === "number" ? o.posPushSuccesses : 0,
       posPushFailures: typeof o.posPushFailures === "number" ? o.posPushFailures : 0,

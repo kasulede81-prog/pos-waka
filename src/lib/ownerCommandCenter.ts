@@ -543,7 +543,9 @@ export function buildIntegritySignals(
   const syncErr = integrity.syncErrorCount || integrity.syncStats.errorCount;
   const pending = integrity.syncPendingCount || integrity.syncStats.unsyncedCount;
   const queueDegraded =
-    integrity.syncHealth.queueHealth === "degraded" || integrity.syncHealth.queueHealth === "backing_off";
+    integrity.syncHealth.queueHealth === "degraded" ||
+    integrity.syncHealth.queueHealth === "backing_off" ||
+    integrity.syncHealth.queueHealth === "blocked";
 
   const drawerConflict =
     integrity.periodDrawerDuplicateOpens > 0 ||

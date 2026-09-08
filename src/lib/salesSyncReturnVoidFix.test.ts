@@ -123,6 +123,15 @@ function op(partial: Partial<SyncOperation> & Pick<SyncOperation, "id" | "kind">
 }
 
 describe("SALES-SYNC-RETURNVOID-FIX-01 source locks", () => {
+  it("checkout stamps cloudCompleteFinancials before any return can shrink the header", () => {
+    const store = readFileSync(resolve(process.cwd(), "src/store/usePosStore.ts"), "utf8");
+    const engine = readFileSync(resolve(process.cwd(), "src/offline/syncEngine.ts"), "utf8");
+    expect(store).toContain("cloudCompleteFinancials: captureCloudCompleteFinancials({");
+    expect(engine).toContain("probeBlockedReturnRecovery");
+    expect(engine).toContain("hasBlockedReturnRecoveryAttempt");
+    expect(engine).toContain("markBlockedReturnRecoveryAttempted");
+  });
+
   it("return/void processors no longer re-complete the sale", () => {
     const sync = readFileSync(resolve(process.cwd(), "src/offline/cloudSync.ts"), "utf8");
     const helperStart = sync.indexOf("async function processPendingReturnAdjustment");
@@ -273,6 +282,7 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 store enqueue", () => {
     expect(done.ok).toBe(true);
     const created = usePosStore.getState().sales[0]!;
     expect(created.pendingSync).toBe(true);
+    expect(created.cloudCompleteFinancials?.totalUgx).toBe(created.totalUgx);
     expect(queuedKinds(enqueueSpy.mock.calls)).toContain("pending_sales");
     expect(unsyncedSaleCount()).toBe(1);
   });
@@ -304,7 +314,17 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 store enqueue", () => {
   });
 
   it("return of a still-pending sale keeps pendingSync so checkout can finish", () => {
-    seedStore(sale({ totalUgx: 50_000, pendingSync: true }));
+    seedStore(sale({
+      totalUgx: 50_000,
+      pendingSync: true,
+      cloudCompleteFinancials: {
+        subtotalUgx: 50_000,
+        totalUgx: 50_000,
+        cashPaidUgx: 50_000,
+        debtUgx: 0,
+        discountTotalUgx: 0,
+      },
+    }));
     const r = usePosStore.getState().returnProduct({
       saleId: SALE_ID,
       productId: PRODUCT_ID,
@@ -313,7 +333,10 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 store enqueue", () => {
       reason: "wrong_item",
     });
     expect(r.ok).toBe(true);
-    expect(usePosStore.getState().sales[0]!.pendingSync).toBe(true);
+    const next = usePosStore.getState().sales[0]!;
+    expect(next.pendingSync).toBe(true);
+    expect(next.totalUgx).toBe(40_000);
+    expect(next.cloudCompleteFinancials?.totalUgx).toBe(50_000);
     expect(unsyncedSaleCount()).toBe(1);
     expect(queuedKinds(enqueueSpy.mock.calls)).toContain("pending_returns");
   });

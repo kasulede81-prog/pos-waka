@@ -1880,6 +1880,18 @@ export type Sale = {
   dispenseType?: PharmacyDispenseType | null;
   createdAt: string;
   pendingSync: boolean;
+  /**
+   * Immutable checkout header for first `shop_push_sale_complete`.
+   * Local returns/voids shrink live totals; this snapshot keeps the cloud
+   * complete payload aligned with the original paid sale.
+   */
+  cloudCompleteFinancials?: {
+    subtotalUgx: number;
+    totalUgx: number;
+    cashPaidUgx: number;
+    debtUgx: number;
+    discountTotalUgx: number;
+  } | null;
   lastSyncError?: string | null;
   /** When set, sale debt is linked to this person for balance tracking */
   customerId?: string | null;

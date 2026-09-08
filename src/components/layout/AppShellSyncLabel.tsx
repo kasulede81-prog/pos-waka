@@ -28,7 +28,7 @@ function label(
   pendingCount: number,
   online: boolean,
   syncErrors: number,
-  queueHealth: "healthy" | "degraded" | "backing_off",
+  queueHealth: "healthy" | "degraded" | "backing_off" | "blocked",
   pullPaused: boolean,
   uploadPausedReason: string | null,
 ): string {
@@ -40,6 +40,7 @@ function label(
   if (syncErrors > 0) return tTemplate(lang, "syncErrorCount", { count: String(syncErrors) });
   if (queueHealth === "backing_off") return t(lang, "autoSyncQueueBackoff");
   if (queueHealth === "degraded") return t(lang, "autoSyncQueueDegraded");
+  if (queueHealth === "blocked") return t(lang, "autoSyncQueueBlocked");
   if (pendingCount > 0) {
     return tTemplate(lang, "posUploadPendingCount", { count: String(pendingCount) });
   }

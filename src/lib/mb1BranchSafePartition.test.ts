@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("../offline/accountScope", () => ({
   getActiveAccountKey: () => state.accountKey,
+  onActiveAccountKeyChange: () => () => {},
 }));
 
 vi.mock("../lib/supabase", () => ({
@@ -64,6 +65,7 @@ vi.mock("../offline/cloudSync", () => ({
     state.processCalls.push({ shopId: op.shopId, kind: op.kind });
     return true;
   },
+  probeBlockedReturnRecovery: async () => false,
 }));
 
 vi.mock("../lib/organizationDeletionState", () => ({

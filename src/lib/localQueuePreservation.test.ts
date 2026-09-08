@@ -14,6 +14,7 @@ vi.mock("../offline/localDb", () => ({
 
 vi.mock("../offline/cloudSync", () => ({
   processCloudSyncOperation: vi.fn(async () => true),
+  probeBlockedReturnRecovery: async () => false,
 }));
 
 import { flushSyncQueue } from "../offline/syncEngine";

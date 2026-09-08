@@ -118,6 +118,25 @@ describe("buildSyncForensicSnapshot", () => {
     expect(snap.queue.queueHealth).toBe("healthy");
   });
 
+  it("blocked business rejection is not BACKOFF", () => {
+    const row = op({
+      id: "blocked-1",
+      kind: "pending_returns",
+      lastError: "refund_exceeds_remaining",
+      attempts: 34,
+      lastAttemptAt: "2026-09-07T23:42:32.109Z",
+    });
+    const snap = snapshot([row]);
+    expect(snap.rows[0]?.classification).toBe("BLOCKED_BUSINESS");
+    expect(snap.rows[0]?.lastError).toBe("refund_exceeds_remaining");
+    expect(snap.rows[0]?.retryEligible).toBe(false);
+    expect(snap.rows[0]?.retryAt).toBeNull();
+    expect(snap.queue.queueHasBlockedBusiness).toBe(true);
+    expect(snap.queue.queueHasBackoff).toBe(false);
+    expect(snap.queue.queueHealth).toBe("blocked");
+    expect(snap.blocker?.classification).toBe("BLOCKED_BUSINESS");
+  });
+
   it("4. closed-date parked operation", () => {
     const row = op({
       id: "park-1",

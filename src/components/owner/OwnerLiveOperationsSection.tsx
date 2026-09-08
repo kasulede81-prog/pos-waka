@@ -33,7 +33,10 @@ function Metric({ label, value, warn }: { label: string; value: string; warn?: b
 
 export function OwnerLiveOperationsSection({ lang, live }: Props) {
   const queueWarn =
-    live.queueHealth === "degraded" || live.queueHealth === "backing_off" || live.unsyncedOperations > 0;
+    live.queueHealth === "degraded" ||
+    live.queueHealth === "backing_off" ||
+    live.queueHealth === "blocked" ||
+    live.unsyncedOperations > 0;
 
   return (
     <section className="rounded-2xl border border-border/90 bg-card p-3 shadow-sm sm:p-4">

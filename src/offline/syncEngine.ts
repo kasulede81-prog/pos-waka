@@ -2,13 +2,29 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation } from "../types";
 import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "../lib/autoSync";
-import type { SyncProcessResult } from "../lib/saleAdjustmentSync";
+import {
+  isBlockedBusinessSyncError,
+  markSyncOpBlockedBusiness,
+  syncProcessLastError,
+  syncProcessStatus,
+  type SyncProcessResult,
+} from "../lib/saleAdjustmentSync";
 import { usePosStore } from "../store/usePosStore";
 import { sortSyncQueueByPriority } from "../lib/syncQueuePriority";
 import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
 import { getActiveShopId } from "./shopScope";
 import { inferShopIdFromQueueRow } from "./shopScopeMigration";
+import {
+  clearBlockedReturnRecoveryAttempts,
+  hasBlockedReturnRecoveryAttempt,
+  markBlockedReturnRecoveryAttempted,
+  readLastBlockedReturnProbe,
+} from "../lib/blockedReturnRecovery";
+import {
+  maybeRepairHistoricalSaleHeader,
+  verifyHistoricalReturnFollowThrough,
+} from "../lib/historicalSaleHeaderRepair";
 
 export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attempts?: number }): Promise<void> {
   const shopId = op.shopId ?? getActiveShopId() ?? undefined;
@@ -79,11 +95,35 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   remaining: number;
   skippedBackoff: number;
 }> {
+  const repair = await maybeRepairHistoricalSaleHeader();
+  if (repair.allowReturnRecovery) {
+    clearBlockedReturnRecoveryAttempts();
+  }
   const queue = sortSyncQueueByPriority(await readSyncQueue());
   const dayCloses = usePosStore.getState().dayCloses;
+  const cloudMod = await import("./cloudSync");
+  const probeBlockedReturnRecovery =
+    typeof cloudMod.probeBlockedReturnRecovery === "function"
+      ? cloudMod.probeBlockedReturnRecovery
+      : async () => false;
   const ready: SyncOperation[] = [];
   let skippedBackoff = 0;
   for (const op of queue) {
+    if (isBlockedBusinessSyncError(op.lastError)) {
+      if (op.kind === "pending_returns" && !hasBlockedReturnRecoveryAttempt(op.id)) {
+        const recoverable = await probeBlockedReturnRecovery(op);
+        const probe = readLastBlockedReturnProbe();
+        if (recoverable) {
+          markBlockedReturnRecoveryAttempted(op.id);
+          ready.push(op);
+          continue;
+        }
+        if (probe?.blocker === "ceiling" || probe?.blocker === "select_empty") {
+          markBlockedReturnRecoveryAttempted(op.id);
+        }
+      }
+      continue;
+    }
     if (!shouldRetrySyncOp(op, Date.now(), dayCloses)) {
       skippedBackoff += 1;
       continue;
@@ -117,12 +157,15 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
           .catch(() => {});
       }
       const result = await processOne(op);
-      if (result === "ack") {
+      const status = syncProcessStatus(result);
+      if (status === "ack") {
         await removeSyncOperation(op.id);
-      } else if (result === "wait") {
+      } else if (status === "wait") {
         if (op.attempts < 100) {
           await appendSyncOperation(markSyncOpWaitingForSale(op));
         }
+      } else if (status === "block") {
+        await appendSyncOperation(markSyncOpBlockedBusiness(op, syncProcessLastError(result)));
       } else {
         failed += 1;
         void import("../lib/syncDiagnostics").then(({ recordSyncRetry }) => {
@@ -131,7 +174,7 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
         if (op.attempts < 100) {
           const { syncOpEntityId, takeClosedBusinessDatePark } = await import("../lib/closedBusinessDateSync");
           await appendSyncOperation({
-            ...markSyncOpFailed(op),
+            ...markSyncOpFailed(op, status === "retry" ? syncProcessLastError(result) : undefined),
             ...takeClosedBusinessDatePark(syncOpEntityId(op)),
           });
         }
@@ -156,6 +199,10 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   await mapPool(saleUploads, SYNC_QUEUE_FLUSH_CONCURRENCY, processReady);
   await mapPool(other, SYNC_QUEUE_FLUSH_CONCURRENCY, processReady);
 
+  if (repair.allowReturnRecovery) {
+    await verifyHistoricalReturnFollowThrough();
+  }
+
   const remaining = (await readSyncQueue()).length;
   return { failed, remaining, skippedBackoff };
 }
@@ -164,6 +211,7 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
 export function nextQueueRetryMs(queue: SyncOperation[], nowMs = Date.now()): number | null {
   let minWait: number | null = null;
   for (const op of queue) {
+    if (isBlockedBusinessSyncError(op.lastError)) continue;
     if (shouldRetrySyncOp(op, nowMs)) continue;
     const last = op.lastAttemptAt ? new Date(op.lastAttemptAt).getTime() : nowMs;
     const wait = computeSyncBackoffMs(op.attempts) - (nowMs - last);
