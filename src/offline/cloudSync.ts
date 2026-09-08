@@ -167,7 +167,7 @@ import {
 } from "../lib/saleAdjustmentSync";
 import { saleHeaderForCloudComplete } from "../lib/saleCloudCompleteFinancials";
 import { evaluateSaleReturnCeilings } from "../lib/saleReturnCeilings";
-import { cloudReturnAlreadySynced, idSuffix, recordBlockedReturnProbe } from "../lib/blockedReturnRecovery";
+import { cloudReturnAlreadySynced, idSuffix, isUnrecoverableZeroHeaderReturn, recordBlockedReturnProbe } from "../lib/blockedReturnRecovery";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -1505,6 +1505,33 @@ export async function probeBlockedReturnRecovery(op: SyncOperation): Promise<boo
         returnIdSuffix: idSuffix(returnId),
       });
     }
+    const payloadSaleId = typeof payload.saleId === "string" ? payload.saleId.trim() : "";
+    if (isUuid(payloadSaleId) && String(op.lastError ?? "").trim() === "refund_exceeds_remaining") {
+      const zeroHeaderRes = await supabase
+        .from("sales")
+        .select("id, total_ugx")
+        .eq("id", payloadSaleId)
+        .eq("shop_id", ctx.shopId)
+        .maybeSingle();
+      if (
+        !zeroHeaderRes.error &&
+        zeroHeaderRes.data &&
+        isUnrecoverableZeroHeaderReturn({
+          lastError: op.lastError,
+          cloudSaleTotalUgx: Number(zeroHeaderRes.data.total_ugx ?? 0),
+        })
+      ) {
+        return recordBlockedReturnProbe({
+          ...base,
+          ok: true,
+          blocker: "none",
+          cloudSaleTotalUgx: 0,
+          saleRowPresent: true,
+          returnIdSuffix: idSuffix(returnId),
+          saleIdSuffix: idSuffix(payloadSaleId),
+        });
+      }
+    }
     const row = await resolveReturnForSync(returnId);
     if (!row) {
       return recordBlockedReturnProbe({ ...base, blocker: "no_return" });
@@ -1695,6 +1722,22 @@ export async function probeBlockedReturnRecovery(op: SyncOperation): Promise<boo
       refundUgx: row.refundAmountUgx,
     });
     if (!verdict.ok) {
+      if (
+        isUnrecoverableZeroHeaderReturn({
+          lastError: op.lastError,
+          cloudSaleTotalUgx,
+        })
+      ) {
+        return recordBlockedReturnProbe({
+          ...base,
+          ok: true,
+          blocker: "none",
+          ceilingError: verdict.error,
+          cloudSaleTotalUgx,
+          saleRowPresent: true,
+          ...forensic,
+        });
+      }
       return recordBlockedReturnProbe({
         ...base,
         blocker: "ceiling",
@@ -1720,11 +1763,32 @@ export async function probeBlockedReturnRecovery(op: SyncOperation): Promise<boo
 async function processPendingReturnAdjustment(
   payload: Record<string, unknown>,
   ctx: ShopCtx,
+  lastError?: string | null,
 ): Promise<SyncProcessResult> {
   const returnId = String(payload.returnId ?? "");
   const existing = await selectCloudSaleReturnById(returnId);
   if (!existing.error && existing.row && cloudReturnAlreadySynced({ returnId, cloudReturns: [existing.row] })) {
     return "ack";
+  }
+  const saleId = typeof payload.saleId === "string" ? payload.saleId.trim() : "";
+  if (isUuid(saleId) && String(lastError ?? "").trim() === "refund_exceeds_remaining") {
+    const saleRes = await supabase
+      ?.from("sales")
+      .select("id, total_ugx")
+      .eq("id", saleId)
+      .eq("shop_id", ctx.shopId)
+      .maybeSingle();
+    if (
+      saleRes &&
+      !saleRes.error &&
+      saleRes.data &&
+      isUnrecoverableZeroHeaderReturn({
+        lastError,
+        cloudSaleTotalUgx: Number(saleRes.data.total_ugx ?? 0),
+      })
+    ) {
+      return "ack";
+    }
   }
   const row = await resolveReturnForSync(returnId);
   if (!row) return "retry";
@@ -2176,7 +2240,7 @@ export async function processCloudSyncOperationResult(op: SyncOperation): Promis
   const payload = op.payload as Record<string, unknown>;
 
   if (op.kind === "pending_returns") {
-    return processPendingReturnAdjustment(payload, ctx);
+    return processPendingReturnAdjustment(payload, ctx, op.lastError);
   }
   if (op.kind === "pending_stock_updates" || op.kind === "stock_move") {
     const classified = classifyPendingStockPayload(payload);
@@ -2348,7 +2412,7 @@ async function processCloudSyncOperationLegacy(
       });
     }
     case "pending_returns": {
-      return isSyncAck(await processPendingReturnAdjustment(payload, ctx));
+      return isSyncAck(await processPendingReturnAdjustment(payload, ctx, op.lastError));
     }
     case "pending_expenses":
       if (payload.kind === "supplier_payment") {

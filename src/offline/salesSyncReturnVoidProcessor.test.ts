@@ -506,6 +506,24 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 processors", () => {
     });
   });
 
+  it("ACKs leftover refund_exceeds when cloud sale total is 0 and the return is missing", async () => {
+    seed({ pendingSync: false });
+    usePosStore.setState({ returnRecords: [], archivedReturnRecords: [] });
+    mockCeilingCloud({ totalUgx: 0, quantity: 1, lineTotalUgx: 10_000 });
+    const { probeBlockedReturnRecovery, processCloudSyncOperationResult } = await import("./cloudSync");
+    const blocked = op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID });
+    blocked.lastError = "refund_exceeds_remaining";
+    expect(await probeBlockedReturnRecovery(blocked)).toBe(true);
+    expect(await processCloudSyncOperationResult(blocked)).toBe("ack");
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(readLastBlockedReturnProbe()).toMatchObject({
+      ok: true,
+      blocker: "none",
+      cloudSaleTotalUgx: 0,
+      saleRowPresent: true,
+    });
+  });
+
   it("probe is true when cloud total is 0 but this return already exists", async () => {
     seed({ pendingSync: false });
     fromMock.mockImplementation((table: unknown) => {

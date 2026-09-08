@@ -102,7 +102,17 @@ export function idSuffix(id: string | null | undefined): string {
   return value.slice(-4);
 }
 
-/** True when cloud already has this return id. Id is the idempotency key; leftover queue rows ACK without replaying 086. */
+/** Stuck leftover: return-before-ACK uploaded total 0, so 086 can never accept this refund. */
+export function isUnrecoverableZeroHeaderReturn(input: {
+  lastError?: string | null;
+  cloudSaleTotalUgx: number | null | undefined;
+}): boolean {
+  return (
+    String(input.lastError ?? "").trim() === "refund_exceeds_remaining" &&
+    Math.floor(Number(input.cloudSaleTotalUgx) || 0) === 0
+  );
+}
+
 export function cloudReturnAlreadySynced(input: {
   returnId: string;
   saleId?: string | null;

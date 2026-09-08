@@ -3,6 +3,7 @@ import {
   cloudReturnAlreadySynced,
   hasBlockedReturnRecoveryAttempt,
   idSuffix,
+  isUnrecoverableZeroHeaderReturn,
   markBlockedReturnRecoveryAttempted,
   readLastBlockedReturnProbe,
   recordBlockedReturnProbe,
@@ -29,6 +30,27 @@ describe("blocked return recovery bookkeeping", () => {
     ).toBe(false);
     expect(readLastBlockedReturnProbe()?.ceilingError).toBe("refund_exceeds_remaining");
     expect(hasBlockedReturnRecoveryAttempt("436fb9c2-6584-4d65-a5d9-4c2a1c95fcaf")).toBe(false);
+  });
+
+  it("treats refund_exceeds against a 0 cloud header as unrecoverable leftover", () => {
+    expect(
+      isUnrecoverableZeroHeaderReturn({
+        lastError: "refund_exceeds_remaining",
+        cloudSaleTotalUgx: 0,
+      }),
+    ).toBe(true);
+    expect(
+      isUnrecoverableZeroHeaderReturn({
+        lastError: "refund_exceeds_remaining",
+        cloudSaleTotalUgx: 1000,
+      }),
+    ).toBe(false);
+    expect(
+      isUnrecoverableZeroHeaderReturn({
+        lastError: "qty_exceeds_remaining",
+        cloudSaleTotalUgx: 0,
+      }),
+    ).toBe(false);
   });
 
   it("matches an already-synced cloud return by id", () => {
