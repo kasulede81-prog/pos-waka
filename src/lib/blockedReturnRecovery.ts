@@ -102,6 +102,34 @@ export function idSuffix(id: string | null | undefined): string {
   return value.slice(-4);
 }
 
+/** True when cloud already has this exact ReturnRecord. Used to ACK leftover queue rows without replaying 086. */
+export function cloudReturnAlreadySynced(input: {
+  returnId: string;
+  saleId: string | null | undefined;
+  productId: string;
+  quantity: number;
+  refundUgx: number;
+  cloudReturns: Array<{
+    id: string;
+    saleId?: string | null;
+    productId: string;
+    quantity: number;
+    refundAmountUgx: number;
+  }>;
+}): boolean {
+  const returnId = String(input.returnId ?? "").trim();
+  if (!returnId) return false;
+  const match = input.cloudReturns.find((row) => String(row.id) === returnId);
+  if (!match) return false;
+  const cloudSale = match.saleId != null ? String(match.saleId).trim() : "";
+  const localSale = input.saleId != null ? String(input.saleId).trim() : "";
+  if (cloudSale && localSale && cloudSale !== localSale) return false;
+  if (String(match.productId) !== String(input.productId)) return false;
+  if (Number(match.quantity) !== Number(input.quantity)) return false;
+  if (Math.floor(Number(match.refundAmountUgx) || 0) !== Math.floor(Number(input.refundUgx) || 0)) return false;
+  return true;
+}
+
 export function readLastBlockedReturnProbe(): BlockedReturnProbeRecord | null {
   return lastProbe;
 }

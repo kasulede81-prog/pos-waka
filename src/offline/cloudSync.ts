@@ -167,7 +167,7 @@ import {
 } from "../lib/saleAdjustmentSync";
 import { saleHeaderForCloudComplete } from "../lib/saleCloudCompleteFinancials";
 import { evaluateSaleReturnCeilings } from "../lib/saleReturnCeilings";
-import { idSuffix, recordBlockedReturnProbe } from "../lib/blockedReturnRecovery";
+import { cloudReturnAlreadySynced, idSuffix, recordBlockedReturnProbe } from "../lib/blockedReturnRecovery";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -1371,9 +1371,52 @@ export async function refreshProductStockFromCloud(
   }));
 }
 
+function asQueryRows<T>(data: unknown): T[] {
+  if (data == null) return [];
+  return Array.isArray(data) ? (data as T[]) : [data as T];
+}
+
+function firstSaleReturnRow(data: unknown): {
+  id: string;
+  saleId: string | null;
+  productId: string;
+  quantity: number;
+  refundAmountUgx: number;
+} | null {
+  const row = asQueryRows<Record<string, unknown>>(data)[0];
+  if (!row || row.id == null) return null;
+  return {
+    id: String(row.id),
+    saleId: row.sale_id != null ? String(row.sale_id) : null,
+    productId: String(row.product_id ?? ""),
+    quantity: Number(row.quantity ?? 0),
+    refundAmountUgx: Number(row.refund_amount_ugx ?? 0),
+  };
+}
+
 async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<SyncProcessResult> {
   if (!supabase) return { status: "retry", lastError: "rpc_failed" };
   if (!isUuid(returnRow.id)) return { status: "block", lastError: "invalid_uuid" };
+  const existingRes = await supabase
+    .from("sale_returns")
+    .select("id, sale_id, product_id, quantity, refund_amount_ugx")
+    .eq("id", returnRow.id)
+    .eq("shop_id", ctx.shopId)
+    .maybeSingle();
+  const existingRow = !existingRes.error ? firstSaleReturnRow(existingRes.data) : null;
+  if (
+    existingRow &&
+    cloudReturnAlreadySynced({
+      returnId: returnRow.id,
+      saleId: returnRow.saleId,
+      productId: returnRow.productId,
+      quantity: returnRow.quantity,
+      refundUgx: returnRow.refundAmountUgx,
+      cloudReturns: [existingRow],
+    })
+  ) {
+    return "ack";
+  }
   const payload = {
     id: returnRow.id,
     sale_id: returnRow.saleId && isUuid(returnRow.saleId) ? returnRow.saleId : null,
@@ -1496,7 +1539,7 @@ export async function probeBlockedReturnRecovery(op: SyncOperation): Promise<boo
 
     const retRes = await supabase
       .from("sale_returns")
-      .select("id, shop_id, product_id, quantity, refund_amount_ugx, reason, created_at")
+      .select("id, shop_id, sale_id, product_id, quantity, refund_amount_ugx, reason, created_at")
       .eq("sale_id", saleId);
     if (retRes.error) {
       return recordBlockedReturnProbe({
@@ -1589,6 +1632,37 @@ export async function probeBlockedReturnRecovery(op: SyncOperation): Promise<boo
         saleOutSummary: saleOut?.summary ?? null,
       },
     };
+    if (
+      cloudReturnAlreadySynced({
+        returnId: row.id,
+        saleId,
+        productId: row.productId,
+        quantity: row.quantity,
+        refundUgx: row.refundAmountUgx,
+        cloudReturns: asQueryRows<{
+          id: unknown;
+          sale_id?: unknown;
+          product_id: unknown;
+          quantity: unknown;
+          refund_amount_ugx: unknown;
+        }>(retRes.data).map((ret) => ({
+          id: String(ret.id),
+          saleId: ret.sale_id != null ? String(ret.sale_id) : null,
+          productId: String(ret.product_id),
+          quantity: Number(ret.quantity ?? 0),
+          refundAmountUgx: Number(ret.refund_amount_ugx ?? 0),
+        })),
+      })
+    ) {
+      return recordBlockedReturnProbe({
+        ...base,
+        ok: true,
+        blocker: "none",
+        cloudSaleTotalUgx,
+        saleRowPresent: true,
+        ...forensic,
+      });
+    }
     const verdict = evaluateSaleReturnCeilings({
       shopId: ctx.shopId,
       saleId,

@@ -506,6 +506,68 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 processors", () => {
     });
   });
 
+  it("probe is true when cloud total is 0 but this return already exists", async () => {
+    seed({ pendingSync: false });
+    fromMock.mockImplementation((table: unknown) => {
+      if (table === "sales") {
+        return thenableQuery({ id: SALE_ID, shop_id: SHOP_ID, total_ugx: 0, cash_amount_ugx: 0 });
+      }
+      if (table === "sale_line_items") {
+        return thenableQuery([
+          { product_id: PRODUCT_ID, quantity: 1, line_total_ugx: 10_000 },
+        ]);
+      }
+      if (table === "sale_returns") {
+        return thenableQuery([
+          {
+            id: RETURN_ID,
+            shop_id: SHOP_ID,
+            sale_id: SALE_ID,
+            product_id: PRODUCT_ID,
+            quantity: 1,
+            refund_amount_ugx: 10_000,
+            reason: "wrong_item",
+            created_at: "2026-09-07T11:00:00.000Z",
+          },
+        ]);
+      }
+      return thenableQuery(null, { message: "unknown_table" });
+    });
+    const { probeBlockedReturnRecovery } = await import("./cloudSync");
+    const blocked = op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID });
+    blocked.lastError = "refund_exceeds_remaining";
+    expect(await probeBlockedReturnRecovery(blocked)).toBe(true);
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(readLastBlockedReturnProbe()).toMatchObject({
+      ok: true,
+      blocker: "none",
+      cloudSaleTotalUgx: 0,
+      saleRowPresent: true,
+    });
+  });
+
+  it("already-synced return ACKs leftover queue without shop_push_sale_return", async () => {
+    seed({ pendingSync: false });
+    fromMock.mockImplementation((table: unknown) => {
+      if (table === "sale_returns") {
+        return thenableQuery({
+          id: RETURN_ID,
+          sale_id: SALE_ID,
+          product_id: PRODUCT_ID,
+          quantity: 1,
+          refund_amount_ugx: 10_000,
+        });
+      }
+      return thenableQuery(null, { message: "unmocked" });
+    });
+    const { processCloudSyncOperationResult } = await import("./cloudSync");
+    const result = await processCloudSyncOperationResult(
+      op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID }),
+    );
+    expect(result).toBe("ack");
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
   it("legitimate return can recover after cloud ceilings would pass, then ACK", async () => {
     seed({ pendingSync: false });
     mockCeilingCloud({ totalUgx: 10_000, quantity: 5, lineTotalUgx: 50_000 });
