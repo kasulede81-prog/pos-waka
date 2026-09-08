@@ -104,6 +104,7 @@ import {
   mergeProductFromCloudPull,
   patchProductsWithServerStock,
   pendingProductCatalogIds,
+  pendingRestockProductIds,
   type ServerProductStockRow,
 } from "../lib/inventoryIntegrity";
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
@@ -4403,14 +4404,22 @@ export async function pullCloudAndMergeIntoStore(opts?: {
 
   const deletedProductSet = new Set(cloud.deletedProductIds);
   const voidedSaleSet = new Set(cloud.voidedSaleIds);
-  const pendingCatalogIds = pendingProductCatalogIds(await readSyncQueue());
+  const queue = await readSyncQueue();
+  const pendingCatalogIds = pendingProductCatalogIds(queue);
+  const pendingRestockIds = pendingRestockProductIds(queue, [
+    ...state.returnRecords,
+    ...(state.archivedReturnRecords ?? []),
+  ]);
 
   const products = (
     await mergeByIdChunked(
       state.products.filter((p) => !tombstoneIds.has(p.id) && !deletedProductSet.has(p.id)),
       cloud.products,
       (a, b) =>
-        mergeProductFromCloudPull(a, b, { pendingLocalCatalog: pendingCatalogIds.has(a.id) }),
+        mergeProductFromCloudPull(a, b, {
+          pendingLocalCatalog: pendingCatalogIds.has(a.id),
+          pendingLocalRestock: pendingRestockIds.has(a.id),
+        }),
       tombstoneIds,
     )
   ).filter((p) => !deletedProductSet.has(p.id));

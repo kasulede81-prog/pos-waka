@@ -9,12 +9,12 @@ const RETURN_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const REASONS: ReturnReason[] = ["wrong_item", "damaged", "broken", "warm_bad", "other"];
 
 describe("returnInventorySync — returnRestocksInventory", () => {
-  it("only wrong_item restocks inventory", () => {
+  it("sellable returns restock; damaged/broken/warm do not", () => {
     expect(returnRestocksInventory("wrong_item")).toBe(true);
+    expect(returnRestocksInventory("other")).toBe(true);
     expect(returnRestocksInventory("damaged")).toBe(false);
     expect(returnRestocksInventory("broken")).toBe(false);
     expect(returnRestocksInventory("warm_bad")).toBe(false);
-    expect(returnRestocksInventory("other")).toBe(false);
   });
 });
 
@@ -25,7 +25,13 @@ describe("returnInventorySync — returnStockDelta reconciliation", () => {
     expect(applyStockDeltas(10, [delta])).toBe(13);
   });
 
-  for (const reason of ["damaged", "broken", "warm_bad", "other"] as const) {
+  it("other return also restocks sellable inventory", () => {
+    const delta = returnStockDelta(RETURN_ID, PRODUCT_ID, 1, "other", "2026-06-01T10:00:00.000Z");
+    expect(delta.delta).toBe(1);
+    expect(applyStockDeltas(11, [delta])).toBe(12);
+  });
+
+  for (const reason of ["damaged", "broken", "warm_bad"] as const) {
     it(`${reason} return does not increase stock in movement ledger`, () => {
       const delta = returnStockDelta(RETURN_ID, PRODUCT_ID, 3, reason, "2026-06-01T10:00:00.000Z");
       expect(delta.delta).toBe(0);
@@ -33,16 +39,16 @@ describe("returnInventorySync — returnStockDelta reconciliation", () => {
     });
   }
 
-  it("cloud-aligned policy: non-wrong_item reasons never add quantity", () => {
+  it("cloud-aligned policy: unsellable reasons never add quantity", () => {
     for (const reason of REASONS) {
       const delta = returnStockDelta(RETURN_ID, PRODUCT_ID, 5, reason, "2026-06-01T10:00:00.000Z");
-      const expectedDelta = reason === "wrong_item" ? 5 : 0;
+      const expectedDelta = returnRestocksInventory(reason) ? 5 : 0;
       expect(delta.delta).toBe(expectedDelta);
     }
   });
 });
 
-/** Mirrors apply_sale_return_stock guard in migration 103. */
+/** Mirrors apply_sale_return_stock guard in migration 181. */
 function simulateServerApplyReturnStock(
   currentStock: number,
   quantity: number,

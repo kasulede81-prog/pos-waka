@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react";
 import type { Language, Product, ReturnReason, ReturnRecord, Sale, UserRole } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { formatSaleLineQuantity } from "../../lib/saleQuantityLabel";
-import { canPerformUnlinkedReturn } from "../../lib/returnPolicy";
+import { canPerformUnlinkedReturn, returnRestocksInventory } from "../../lib/returnPolicy";
 import {
   remainingRefundableAmount,
   remainingRefundableForLineQty,
@@ -21,7 +21,7 @@ import { buildLineRefundBreakdown } from "../../lib/refundBreakdown";
 import { RefundBreakdownPanel } from "../returns/RefundBreakdownPanel";
 import { RefundReturnSummaryCard } from "../returns/RefundReturnSummaryCard";
 
-const REASONS: ReturnReason[] = ["damaged", "warm_bad", "broken", "wrong_item", "other"];
+const REASONS: ReturnReason[] = ["wrong_item", "other", "damaged", "warm_bad", "broken"];
 
 type Props = {
   lang: Language;
@@ -45,7 +45,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
   const [productId, setProductId] = useState("");
   const [qty, setQty] = useState("1");
   const [refund, setRefund] = useState("");
-  const [reason, setReason] = useState<ReturnReason>("damaged");
+  const [reason, setReason] = useState<ReturnReason>("wrong_item");
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showCalcDetails, setShowCalcDetails] = useState(false);
@@ -66,7 +66,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
     setProductId(pickList[0]?.id ?? "");
     setQty("1");
     setRefund("");
-    setReason("damaged");
+    setReason("wrong_item");
     setNote("");
     setSubmitError(null);
     setShowCalcDetails(false);
@@ -336,6 +336,9 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">
+              {t(lang, returnRestocksInventory(reason) ? "returnRestockShelfHint" : "returnNoRestockShelfHint")}
+            </p>
 
             <label className="mt-3 block text-sm font-bold text-foreground">
               {!sale && allowUnlinked ? t(lang, "returnUnlinkedNoteRequired") : t(lang, "voidNoteOptional")}

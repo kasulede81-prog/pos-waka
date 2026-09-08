@@ -193,6 +193,28 @@ export function pendingProductCatalogIds(
   return ids;
 }
 
+export function pendingRestockProductIds(
+  ops: Array<{ kind: string; payload?: unknown }>,
+  returns: Array<{ id: string; productId: string; reason: ReturnReason }>,
+): Set<string> {
+  const byId = new Map(returns.map((row) => [row.id, row]));
+  const ids = new Set<string>();
+  for (const op of ops) {
+    if (op.kind !== "pending_returns") continue;
+    const payload =
+      op.payload && typeof op.payload === "object" ? (op.payload as { returnId?: unknown; productId?: unknown }) : {};
+    const returnId = String(payload.returnId ?? "").trim();
+    const rec = returnId ? byId.get(returnId) : undefined;
+    if (rec) {
+      if (returnRestocksInventory(rec.reason)) ids.add(rec.productId);
+      continue;
+    }
+    const productId = String(payload.productId ?? "").trim();
+    if (productId) ids.add(productId);
+  }
+  return ids;
+}
+
 /**
  * Cloud pull merge: server stock, cost, and pack fields are the shared catalog.
  * Local version is incremented on every sale, so it must not keep a stale cost.
@@ -201,19 +223,20 @@ export function pendingProductCatalogIds(
 export function mergeProductFromCloudPull(
   local: Product,
   remote: Product,
-  opts?: { pendingLocalCatalog?: boolean },
+  opts?: { pendingLocalCatalog?: boolean; pendingLocalRestock?: boolean },
 ): Product {
   const catalog = mergeProductCatalogFields(local, remote);
+  const stockOnHand = opts?.pendingLocalRestock ? local.stockOnHand : remote.stockOnHand;
   if (opts?.pendingLocalCatalog) {
     return {
       ...catalog,
-      stockOnHand: remote.stockOnHand,
+      stockOnHand,
       updatedAt: remote.updatedAt,
     };
   }
   return {
     ...catalog,
-    stockOnHand: remote.stockOnHand,
+    stockOnHand,
     sellingPricePerUnitUgx: remote.sellingPricePerUnitUgx,
     costPricePerUnitUgx: remote.costPricePerUnitUgx,
     buyingPackCostUgx: remote.buyingPackCostUgx ?? null,

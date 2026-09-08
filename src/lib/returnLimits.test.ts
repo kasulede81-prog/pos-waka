@@ -170,11 +170,11 @@ describe("returnLimits — rounding", () => {
 });
 
 describe("returnPolicy — inventory", () => {
-  it("only wrong_item restocks sellable inventory", () => {
+  it("sellable returns restock; damaged/broken/warm do not", () => {
     expect(returnRestocksInventory("wrong_item")).toBe(true);
+    expect(returnRestocksInventory("other")).toBe(true);
     expect(returnRestocksInventory("damaged")).toBe(false);
     expect(returnRestocksInventory("warm_bad")).toBe(false);
     expect(returnRestocksInventory("broken")).toBe(false);
-    expect(returnRestocksInventory("other")).toBe(false);
   });
 });

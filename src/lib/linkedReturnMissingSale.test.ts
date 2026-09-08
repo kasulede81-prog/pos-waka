@@ -401,6 +401,19 @@ describe("SALES-RETURN-01 linked return missing sale", () => {
     expect(usePosStore.getState().products[0]!.stockOnHand).toBe(12);
   });
 
+  it("14b — other restocks a sold unit back onto the shelf", () => {
+    seedStore({ stock: 11 });
+    const r = usePosStore.getState().returnProduct({
+      ...linkedInput,
+      quantity: 1,
+      refundAmountUgx: 10_000,
+      reason: "other",
+    });
+    expect(r.ok).toBe(true);
+    expect(returnRestocksInventory("other")).toBe(true);
+    expect(usePosStore.getState().products[0]!.stockOnHand).toBe(12);
+  });
+
   it("15 — damaged does not restock", () => {
     seedStore({ stock: 10 });
     const r = usePosStore.getState().returnProduct({

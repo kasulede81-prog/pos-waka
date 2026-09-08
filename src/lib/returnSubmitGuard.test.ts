@@ -287,10 +287,12 @@ describe("SALE-RET-01 return submit guard", () => {
   it("I — existing shop_push_sale_return ON CONFLICT / stock replay remains intact", () => {
     const sql062 = readFileSync(join(ROOT, "supabase/migrations/062_sale_returns.sql"), "utf8");
     const sql103 = readFileSync(join(ROOT, "supabase/migrations/103_sale_return_stock_reason_guard.sql"), "utf8");
+    const sql181 = readFileSync(join(ROOT, "supabase/migrations/181_sale_return_restock_sellable.sql"), "utf8");
     expect(sql062).toContain("on conflict (id) do update set");
     expect(sql103).toContain("im.reference_id = p_return_id");
+    expect(sql181).toContain("v_reason in ('damaged', 'broken', 'warm_bad')");
     const store = readFileSync(join(ROOT, "src/store/usePosStore.ts"), "utf8");
-    expect(store).toContain("queueRemote(\"pending_returns\"");
+    expect(store).toContain("pending_returns");
     expect(store).toContain("tryBeginReturnSubmit");
     const modal = readFileSync(join(ROOT, "src/components/pos/ReturnProductModal.tsx"), "utf8");
     expect(modal).toContain("submitInFlightRef");

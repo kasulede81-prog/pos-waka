@@ -189,4 +189,21 @@ describe("crossTabSaleProtection", () => {
     expect(usePosStore.getState().products[0]!.stockOnHand).toBe(7);
     expect(usePosStore.getState().products[0]!.version).toBe(2);
   });
+
+  it("other return restocks locally like a customer bring-back", () => {
+    seedStore(11, 1);
+
+    const result = usePosStore.getState().returnProduct({
+      saleId: null,
+      productId: PRODUCT_ID,
+      quantity: 1,
+      refundAmountUgx: 2_000,
+      reason: "other",
+      note: "brought back",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(returnRestocksInventory("other")).toBe(true);
+    expect(usePosStore.getState().products[0]!.stockOnHand).toBe(12);
+  });
 });

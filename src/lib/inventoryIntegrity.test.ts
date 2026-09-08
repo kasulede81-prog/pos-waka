@@ -8,6 +8,7 @@ import {
   mergeProductFromCloudPull,
   mergeProductInventory,
   pendingProductCatalogIds,
+  pendingRestockProductIds,
   movementsToDeltas,
   patchProductsWithServerStock,
   returnStockDelta,
@@ -167,6 +168,28 @@ describe("inventoryIntegrity — cloud pull merge", () => {
     const merged = mergeProductFromCloudPull(local, remote, { pendingLocalCatalog: true });
     expect(merged.stockOnHand).toBe(5);
     expect(merged.costPricePerUnitUgx).toBe(80);
+  });
+
+  it("cloud pull keeps local stock when a restocking return is still queued", () => {
+    const local = product(12, "2026-05-31T12:00:00.000Z");
+    const remote = product(11, "2026-05-31T11:00:00.000Z");
+    const merged = mergeProductFromCloudPull(local, remote, { pendingLocalRestock: true });
+    expect(merged.stockOnHand).toBe(12);
+  });
+
+  it("collects pending restock product ids from queued sellable returns", () => {
+    expect(
+      [...pendingRestockProductIds(
+        [{ kind: "pending_returns", payload: { returnId: "ret-1", productId: PRODUCT_ID } }],
+        [{ id: "ret-1", productId: PRODUCT_ID, reason: "wrong_item" }],
+      )],
+    ).toEqual([PRODUCT_ID]);
+    expect(
+      [...pendingRestockProductIds(
+        [{ kind: "pending_returns", payload: { returnId: "ret-2", productId: PRODUCT_ID } }],
+        [{ id: "ret-2", productId: PRODUCT_ID, reason: "damaged" }],
+      )],
+    ).toEqual([]);
   });
 
   it("collects pending product catalog ids from the queue", () => {
