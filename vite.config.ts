@@ -105,6 +105,10 @@ export default defineConfig(({ mode }) => {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
+          // Plugin default is "index.html". That registers NavigationRoute bound to a
+          // file we no longer precache, so the new SW fails install and Android Chrome
+          // keeps the old cached "Loading…" shell after deploy.
+          navigateFallback: undefined,
           // Do not precache index.html — a stale shell after deploy 404s hashed JS and
           // leaves mobile Chrome on the HTML "Loading…" splash forever.
           globPatterns: ["manifest.webmanifest", "favicon.svg", "icons/icon-192.webp"],
@@ -115,8 +119,8 @@ export default defineConfig(({ mode }) => {
               handler: "NetworkFirst",
               options: {
                 cacheName: "waka-html-navigations",
-                networkTimeoutSeconds: 4,
-                expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 },
+                networkTimeoutSeconds: 8,
+                expiration: { maxEntries: 8, maxAgeSeconds: 60 * 10 },
               },
             },
             {

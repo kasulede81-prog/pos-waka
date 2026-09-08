@@ -10,9 +10,11 @@ describe("PWA update precache", () => {
     const src = readFileSync(join(ROOT, "vite.config.ts"), "utf8");
     expect(src).not.toContain('globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"]');
     expect(src).toContain('globPatterns: ["manifest.webmanifest", "favicon.svg", "icons/icon-192.webp"]');
-    expect(src).not.toContain('"index.html"');
+    expect(src).not.toContain('navigateFallback: "index.html"');
+    expect(src).toContain("navigateFallback: undefined");
     expect(src).toContain("waka-html-navigations");
     expect(src).toContain("NetworkFirst");
+    expect(src).toContain("networkTimeoutSeconds: 8");
     expect(src).toContain("waka-hashed-assets");
     expect(src).toContain("waka-sw-reload-stale-clients");
     const swSnippet = readFileSync(join(ROOT, "src/lib/swReloadStaleClients.js"), "utf8");

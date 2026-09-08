@@ -38,10 +38,13 @@ describe("HTML boot splash recovery", () => {
     expect(html).toContain('src="/boot-recovery.js"');
     expect(boot).toContain(HTML_BOOT_RECOVERY_KEY);
     expect(boot).toContain("waka-html-boot");
-    expect(boot).toContain('tagName !== "SCRIPT"');
+    expect(boot).toContain('tagName === "SCRIPT"');
     expect(boot).toContain("serviceWorker");
     expect(boot).toContain("unregister");
     expect(boot).toContain("caches.delete");
+    expect(boot).toContain("setTimeout");
+    expect(boot).toContain("Tap to reload");
+    expect(boot).toContain("unhandledrejection");
   });
 
   it("does not SPA-rewrite boot-recovery.js and keeps it revalidatable", () => {
