@@ -6,7 +6,7 @@
       "destination": "https://ljaedextsenbkxzzgxcg.supabase.co/auth/v1/:match*"
     },
     {
-      "source": "/:path((?!sitemap\\.xml$|robots\\.txt$|assets/|sw\\.js$|workbox-.*|manifest\\.webmanifest$).*)",
+      "source": "/:path((?!sitemap\\.xml$|robots\\.txt$|assets/|sw\\.js$|workbox-.*|manifest\\.webmanifest$|boot-recovery\\.js$).*)",
       "destination": "/index.html"
     }
   ],
@@ -31,6 +31,10 @@
     },
     {
       "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+    },
+    {
+      "source": "/boot-recovery.js",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {

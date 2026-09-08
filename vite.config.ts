@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import { defineConfig, loadEnv } from "vite";
@@ -105,19 +105,20 @@ export default defineConfig(({ mode }) => {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
-          // Shell only — full JS/CSS precache blocked the tab for minutes on every Vercel deploy.
-          globPatterns: ["index.html", "manifest.webmanifest", "favicon.svg", "icons/icon-192.webp"],
+          // Do not precache index.html — a stale shell after deploy 404s hashed JS and
+          // leaves mobile Chrome on the HTML "Loading…" splash forever.
+          globPatterns: ["manifest.webmanifest", "favicon.svg", "icons/icon-192.webp"],
           globIgnores: ["**/internal-admin-*.js"],
-          navigateFallback: "/index.html",
-          navigateFallbackDenylist: [
-            /^\/auth\/callback/,
-            /^\/auth\/recovery/,
-            /^\/reset-password/,
-            /^\/staff\/accept/,
-            /^\/sitemap\.xml$/,
-            /^\/robots\.txt$/,
-          ],
           runtimeCaching: [
+            {
+              urlPattern: ({ request }) => request.mode === "navigate",
+              handler: "NetworkFirst",
+              options: {
+                cacheName: "waka-html-navigations",
+                networkTimeoutSeconds: 4,
+                expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 },
+              },
+            },
             {
               urlPattern: /\/assets\/.+\.(js|css)$/i,
               handler: "CacheFirst",
@@ -142,6 +143,20 @@ export default defineConfig(({ mode }) => {
           ],
         },
       }),
+      {
+        name: "waka-sw-reload-stale-clients",
+        apply: "build",
+        closeBundle: {
+          sequential: true,
+          order: "post",
+          handler() {
+            const distSw = fileURLToPath(new URL("./dist/sw.js", import.meta.url));
+            const snippet = fileURLToPath(new URL("./src/lib/swReloadStaleClients.js", import.meta.url));
+            if (!existsSync(distSw) || !existsSync(snippet)) return;
+            appendFileSync(distSw, `\n${readFileSync(snippet, "utf8")}\n`);
+          },
+        },
+      },
     ],
   };
 });

@@ -1,4 +1,14 @@
 const CHUNK_RELOAD_KEY = "waka.chunk_reload_attempted";
+export const HTML_BOOT_RECOVERY_KEY = "waka.html-boot-recovery";
+
+/** Allow a later deploy mismatch to recover again after a successful boot. */
+export function clearHtmlBootRecoveryFlag(): void {
+  try {
+    sessionStorage.removeItem(HTML_BOOT_RECOVERY_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** One automatic reload per session when a lazy chunk fails after deploy. */
 export function markChunkReloadAttempted(): void {

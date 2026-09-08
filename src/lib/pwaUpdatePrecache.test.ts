@@ -9,8 +9,15 @@ describe("PWA update precache", () => {
   it("does not precache every JS/CSS file on deploy", () => {
     const src = readFileSync(join(ROOT, "vite.config.ts"), "utf8");
     expect(src).not.toContain('globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"]');
-    expect(src).toContain('globPatterns: ["index.html", "manifest.webmanifest", "favicon.svg", "icons/icon-192.webp"]');
+    expect(src).toContain('globPatterns: ["manifest.webmanifest", "favicon.svg", "icons/icon-192.webp"]');
+    expect(src).not.toContain('"index.html"');
+    expect(src).toContain("waka-html-navigations");
+    expect(src).toContain("NetworkFirst");
     expect(src).toContain("waka-hashed-assets");
+    expect(src).toContain("waka-sw-reload-stale-clients");
+    const swSnippet = readFileSync(join(ROOT, "src/lib/swReloadStaleClients.js"), "utf8");
+    expect(swSnippet).toContain("__wakaHadActiveWorker");
+    expect(swSnippet).toContain("client.navigate");
   });
 
   it("does not mark sw.js as an immutable year-long cache", () => {
