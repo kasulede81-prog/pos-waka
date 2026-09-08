@@ -89,6 +89,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const stockMovements = usePosStore((s) => s.stockMovements);
+  const archivedStockMovements = usePosStore((s) => s.archivedStockMovements);
   const dayCloses = useDayClosesForAuthority();
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
@@ -143,6 +144,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         cashExpenses,
         debtPayments,
         stockMovements,
+        archivedStockMovements,
         inventoryCountSessions,
         auditLogs,
         voidRecords: reportingVoidRecords,
@@ -173,6 +175,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       cashExpenses,
       debtPayments,
       stockMovements,
+      archivedStockMovements,
       inventoryCountSessions,
       auditLogs,
       reportingVoidRecords,

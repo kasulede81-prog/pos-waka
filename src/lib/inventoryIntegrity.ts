@@ -4,6 +4,7 @@
 
 import type { Product, ReturnReason, Sale, StockMovement } from "../types";
 import { returnRestocksInventory } from "./returnPolicy";
+import { allStockMovementsForIntegrity } from "./stockMovementLedger";
 
 /** Namespace UUID for deterministic sale movement ids (matches server inventory_movement_uuid). */
 export const INVENTORY_MOVEMENT_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fdcb4fe";
@@ -429,9 +430,7 @@ export function verifyInventoryIntegrity(input: {
   archivedMovements?: StockMovement[];
   openingStockByProduct?: Record<string, number>;
 }): { ok: boolean; mismatches: InventoryIntegrityMismatch[] } {
-  const allMovements = input.archivedMovements?.length
-    ? [...input.archivedMovements, ...input.movements]
-    : input.movements;
+  const allMovements = allStockMovementsForIntegrity(input.movements, input.archivedMovements);
   const opening = input.openingStockByProduct ?? {};
   const deltasByProduct = new Map<string, number>();
 

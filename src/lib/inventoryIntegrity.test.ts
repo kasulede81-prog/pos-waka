@@ -322,6 +322,40 @@ describe("inventoryIntegrity — verification", () => {
     });
     expect(ok).toBe(true);
   });
+
+  it("active window alone is a false mismatch when the opening lives in archive", () => {
+    const products = [product(10, "2026-05-31T12:00:00.000Z")];
+    const saleOut: StockMovement = {
+      id: "m-sale",
+      at: "2026-05-31T11:00:00.000Z",
+      productId: PRODUCT_ID,
+      productName: "Item",
+      deltaBaseUnits: -2,
+      kind: "sale_out",
+      summary: "Sale",
+      refId: SALE_A,
+      supplierId: null,
+    };
+    const opening: StockMovement = {
+      id: "m-open",
+      at: "2026-05-31T09:00:00.000Z",
+      productId: PRODUCT_ID,
+      productName: "Item",
+      deltaBaseUnits: 12,
+      kind: "opening_stock",
+      summary: "Opening",
+      refId: PRODUCT_ID,
+      supplierId: null,
+    };
+    expect(verifyInventoryIntegrity({ products, movements: [saleOut] }).ok).toBe(false);
+    expect(
+      verifyInventoryIntegrity({
+        products,
+        movements: [saleOut],
+        archivedMovements: [opening],
+      }).ok,
+    ).toBe(true);
+  });
 });
 
 describe("inventoryIntegrity — movementsToDeltas", () => {

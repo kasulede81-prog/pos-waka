@@ -1172,6 +1172,7 @@ export function buildDiagnosticsHints(input: {
   sales: Sale[];
   debtPayments: DebtPayment[];
   stockMovements: StockMovement[];
+  archivedStockMovements?: StockMovement[];
   suppliers: Supplier[];
   purchases: Purchase[];
   supplierPayments: SupplierPayment[];
@@ -1179,6 +1180,7 @@ export function buildDiagnosticsHints(input: {
   const postRestore = buildPostRestoreValidationSnapshot({
     products: input.products,
     stockMovements: input.stockMovements,
+    archivedStockMovements: input.archivedStockMovements,
     customers: input.customers,
     sales: input.sales,
     debtPayments: input.debtPayments,

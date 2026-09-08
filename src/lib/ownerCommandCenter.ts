@@ -186,6 +186,8 @@ export type OwnerCommandCenterInput = {
   cashExpenses: CashExpense[];
   debtPayments: DebtPayment[];
   stockMovements: StockMovement[];
+  /** Overflow from the 4000-row active window — required for inventory integrity. */
+  archivedStockMovements?: StockMovement[];
   inventoryCountSessions: InventoryCountSession[];
   auditLogs: AuditLogEntry[];
   voidRecords: VoidRecord[];

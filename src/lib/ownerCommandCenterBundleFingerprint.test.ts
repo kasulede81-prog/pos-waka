@@ -357,6 +357,7 @@ describe("CC-P2-08 source wiring", () => {
   it("TEST 14 / 15 — permission and readiness presenters stay outside the fingerprint", () => {
     const page = src("src/pages/OwnerDashboardPage.tsx");
     expect(page).toContain("getCachedOwnerCommandCenterBundle");
+    expect(page).toContain("archivedStockMovements");
     expect(page).toContain("resolveProfitVisibility");
     expect(page).toContain("resolveReportsFinancialReadiness");
     expect(page).toContain("presentCommandCenterOfficialFinancials");
@@ -523,5 +524,42 @@ describe("POST-AUDIT-06 Command Center expense / adjustment / product fingerprin
     const after = getCachedOwnerCommandCenterBundle(input({ products: [costly] }));
     expect(after).not.toBe(before);
     expect(after.inventory.inventoryValueUgx).not.toBe(before.inventory.inventoryValueUgx);
+  });
+
+  it("archived stock movements clear a false inventory integrity mismatch", () => {
+    const saleOut = {
+      id: "m-sale",
+      at: `${DAY}T11:00:00.000Z`,
+      productId: "p1",
+      productName: "Item",
+      deltaBaseUnits: -2,
+      kind: "sale_out" as const,
+      summary: "Sale",
+      refId: "s-main",
+      supplierId: null,
+    };
+    const opening = {
+      id: "m-open",
+      at: `${DAY}T09:00:00.000Z`,
+      productId: "p1",
+      productName: "Item",
+      deltaBaseUnits: 52,
+      kind: "opening_stock" as const,
+      summary: "Opening",
+      refId: "p1",
+      supplierId: null,
+    };
+    const withoutArchive = getCachedOwnerCommandCenterBundle(input({ stockMovements: [saleOut] }));
+    expect(withoutArchive.integrity.inventoryIntegrity.ok).toBe(false);
+    expect(withoutArchive.attention.critical.some((item) => item.id === "inventory-integrity")).toBe(true);
+    expect(
+      buildOwnerCommandCenterFingerprint(input({ stockMovements: [saleOut], archivedStockMovements: [opening] })),
+    ).not.toBe(buildOwnerCommandCenterFingerprint(input({ stockMovements: [saleOut] })));
+    const withArchive = getCachedOwnerCommandCenterBundle(
+      input({ stockMovements: [saleOut], archivedStockMovements: [opening] }),
+    );
+    expect(withArchive.integrity.inventoryIntegrity.ok).toBe(true);
+    expect(withArchive.attention.critical.some((item) => item.id === "inventory-integrity")).toBe(false);
+    expect(withArchive.inventory.inventoryValueUgx).toBe(2_000_000);
   });
 });

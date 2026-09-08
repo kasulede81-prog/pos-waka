@@ -29,6 +29,7 @@ function statusFromCount(count: number, criticalAt: number): PostRestoreValidati
 export function buildPostRestoreValidationSnapshot(input: {
   products: Product[];
   stockMovements: StockMovement[];
+  archivedStockMovements?: StockMovement[];
   customers: Customer[];
   sales: Sale[];
   debtPayments: DebtPayment[];
@@ -39,6 +40,7 @@ export function buildPostRestoreValidationSnapshot(input: {
   const inventoryResult = verifyInventoryIntegrity({
     products: input.products,
     movements: input.stockMovements,
+    archivedMovements: input.archivedStockMovements,
   });
 
   const debtResult = verifyCustomerDebtIntegrity(input.customers, input.sales, input.debtPayments, {
