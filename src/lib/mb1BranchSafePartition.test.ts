@@ -82,6 +82,8 @@ describe("MB-1 branch-safe partition", () => {
     state.processCalls = [];
     state.snapshots.clear();
     vi.clearAllMocks();
+    const { usePosStore } = await import("../store/usePosStore");
+    usePosStore.setState({ _hydrated: true });
   });
 
   it("T1/T5 — enqueued Shop A operation keeps A identity after switch to B", async () => {

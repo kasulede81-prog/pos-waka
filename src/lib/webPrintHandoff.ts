@@ -104,6 +104,9 @@ export function tryLaunchAndroidPrintHandoff(saleId: string, userAgent?: string)
     fallbackUrl: window.location.href,
   });
   if (!intent) return false;
+  // Navigating this tab to intent:// unloads the web session. Callers that
+  // already have the sale in the browser (reprint / post-sale) must not use
+  // this — stay on HTML print instead.
   window.location.href = intent;
   return true;
 }

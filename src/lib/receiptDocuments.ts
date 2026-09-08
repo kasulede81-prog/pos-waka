@@ -163,10 +163,10 @@ export async function printSaleReceipt(ctx: SaleReceiptContext): Promise<SalePri
   if (!isNativePrintPlatform()) {
     const saleId = ctx.sale.id?.trim() ?? "";
     if (saleId) {
-      const { tryLaunchAndroidPrintHandoff, tryLaunchDesktopPrintHandoff } = await import("./webPrintHandoff");
-      if (tryLaunchAndroidPrintHandoff(saleId)) {
-        return { ok: true, mode: "handoff" };
-      }
+      const { tryLaunchDesktopPrintHandoff } = await import("./webPrintHandoff");
+      // Do not launch Android Intent handoff from the web SPA. Assigning
+      // window.location to intent:// unloads this tab (looks like logout) and
+      // opens the native app, which often does not have the sale locally.
       if (tryLaunchDesktopPrintHandoff(saleId)) {
         return { ok: true, mode: "handoff" };
       }

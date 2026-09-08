@@ -108,7 +108,13 @@ describe("blocked pending_returns recovery flush", () => {
     resetBlockedReturnRecoveryForTests();
     resetHistoricalSaleHeaderRepairForTests();
     const { usePosStore } = await import("../store/usePosStore");
-    usePosStore.setState({ sales: [], archivedSales: [], returnRecords: [], archivedReturnRecords: [] });
+    usePosStore.setState({
+      _hydrated: true,
+      sales: [],
+      archivedSales: [],
+      returnRecords: [],
+      archivedReturnRecords: [],
+    });
     state.queue = [blockedReturn()];
     state.probeOk = false;
     state.processResult = { status: "block", lastError: "refund_exceeds_remaining" };

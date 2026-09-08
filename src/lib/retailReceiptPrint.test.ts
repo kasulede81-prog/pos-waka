@@ -280,6 +280,24 @@ describe("Phase 1B retail ESC/POS wiring", () => {
     expect(printHtmlDocument).toHaveBeenCalled();
   });
 
+  it("printSaleReceipt stays on HTML print for Android Chrome instead of opening the native app", async () => {
+    const loc = { href: "https://pos.waka.ug/receipts" };
+    vi.stubGlobal("window", { location: loc });
+    vi.stubGlobal("navigator", {
+      userAgent:
+        "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36",
+    });
+    try {
+      const result = await printSaleReceipt(saleCtx());
+      expect(result).toEqual({ ok: true, mode: "html" });
+      expect(printHtmlDocument).toHaveBeenCalled();
+      expect(loc.href).toBe("https://pos.waka.ug/receipts");
+      expect(loc.href).not.toContain("intent://");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("print enqueue failure does not mutate the completed sale", async () => {
     prefsRef = withReceiptPrinter("58mm");
     persistMock.mockRejectedValue(new Error("payload store unavailable"));

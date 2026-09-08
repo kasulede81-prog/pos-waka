@@ -159,8 +159,16 @@ export function seedEntitySyncCursorsAt(at: string): SyncCheckpoints {
   });
 }
 
-/** Mark bootstrap done and set all entity cursors to the same timestamp. */
-export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCheckpoints {
+/**
+ * Mark bootstrap done and set all entity cursors to the same timestamp.
+ *
+ * WAKA-05: `at` must be a server timestamp (see `fetchShopServerNow`). There is
+ * no client-clock default — a fast device would seed every cursor into the
+ * server's future and permanently skip rows stamped in the gap.
+ */
+export function markBootstrapSyncComplete(at: string): SyncCheckpoints {
+  const ms = Date.parse(at);
+  if (!Number.isFinite(ms)) return readSyncCheckpoints();
   return writeSyncCheckpoints({
     bootstrapComplete: true,
     lastSalesSyncAt: at,

@@ -9,6 +9,8 @@ const TRANSFER_BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", 
 const R3_BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "r3StockBootstrap.sql");
 const DEBT_BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "debtPaymentBootstrap.sql");
 const MIGRATION_174 = join(ROOT, "174_debt_payment_durable_idempotency.sql");
+/** WAKA-05 — server-stamped created_at + client_created_at, applied after 174. */
+const MIGRATION_182 = join(ROOT, "182_waka05_server_authoritative_sync_timestamps.sql");
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -37,6 +39,7 @@ export async function createDebtPaymentSqlHarness(): Promise<SqlExec & { isRealP
     await exec.exec(readSql(R3_BOOTSTRAP));
     await exec.exec(readSql(DEBT_BOOTSTRAP));
     await exec.exec(readSql(MIGRATION_174));
+    await exec.exec(readSql(MIGRATION_182));
     return exec;
   }
 
@@ -58,6 +61,7 @@ export async function createDebtPaymentSqlHarness(): Promise<SqlExec & { isRealP
   await exec.exec(readSql(R3_BOOTSTRAP));
   await exec.exec(readSql(DEBT_BOOTSTRAP));
   await exec.exec(readSql(MIGRATION_174));
+  await exec.exec(readSql(MIGRATION_182));
   return exec;
 }
 

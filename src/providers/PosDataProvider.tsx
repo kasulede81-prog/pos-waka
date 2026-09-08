@@ -74,7 +74,9 @@ function isStoreReadyForAccount(accountKey: string | null): boolean {
 
 async function markFreshAccountBootstrapReady(): Promise<void> {
   const { markBootstrapSyncComplete } = await import("../lib/syncCheckpoints");
-  markBootstrapSyncComplete();
+  const { fetchShopServerNow } = await import("../lib/serverNow");
+  const at = await fetchShopServerNow();
+  if (at) markBootstrapSyncComplete(at);
   resetCloudRecoverySessionForRetry();
 }
 

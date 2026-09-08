@@ -14,7 +14,12 @@ export function rowToDebtPayment(row: Record<string, unknown>): DebtPayment | nu
     id,
     customerId,
     amountUgx,
-    createdAt: String(row.created_at ?? new Date().toISOString()),
+    // WAKA-05: `created_at` is server-stamped and is the pull cursor;
+    // `client_created_at` is the time the cashier actually took the payment and
+    // is what business-date/trading-day logic must use. Rows written before
+    // migration 182 have no `client_created_at`, so fall back to `created_at`,
+    // which for those rows still holds the client value.
+    createdAt: String(row.client_created_at ?? row.created_at ?? new Date().toISOString()),
   };
 }
 

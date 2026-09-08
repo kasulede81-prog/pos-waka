@@ -98,6 +98,12 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   if (repair.allowReturnRecovery) {
     clearBlockedReturnRecoveryAttempts();
   }
+  // WAKA-06: never process/ACK entity ops while persisted state is still
+  // hydrating. A RAM miss during this window is not proof the row is gone.
+  if (!usePosStore.getState()._hydrated) {
+    const remaining = (await readSyncQueue()).length;
+    return { failed: 0, remaining, skippedBackoff: remaining };
+  }
   const queue = sortSyncQueueByPriority(await readSyncQueue());
   const dayCloses = usePosStore.getState().dayCloses;
   const cloudMod = await import("./cloudSync");

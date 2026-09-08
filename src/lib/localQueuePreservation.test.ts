@@ -21,8 +21,10 @@ import { flushSyncQueue } from "../offline/syncEngine";
 import { readSyncQueue, removeSyncOperation } from "../offline/localDb";
 
 describe("localQueuePreservation", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { usePosStore } = await import("../store/usePosStore");
+    usePosStore.setState({ _hydrated: true });
   });
 
   it("does not remove queue ops when Supabase is not configured", async () => {

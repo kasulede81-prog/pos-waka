@@ -69,6 +69,14 @@ import {
   readSyncCheckpoints,
   updateCheckpointsAfterIncrementalPull,
 } from "../lib/syncCheckpoints";
+import { fetchShopServerNow } from "../lib/serverNow";
+import {
+  applyIncrementalKeyset,
+  asIncrementalKeyset,
+  incrementalKeysetFromSince,
+  keysetFromLastRow,
+  type IncrementalKeyset,
+} from "../lib/incrementalKeyset";
 import { usePosStore } from "../store/usePosStore";
 import type { SyncOperation } from "../types";
 import { reportSyncIssue } from "../lib/monitoring";
@@ -507,6 +515,10 @@ function customerToRow(c: Customer, shopId: string) {
       phone: c.phone ?? "",
       wakaClient: true,
     },
+    // WAKA-05: inert since migration 182 — `trg_customers_updated` now fires on
+    // INSERT as well as UPDATE, so the server stamps `customers.updated_at` (the
+    // customers pull cursor) and this client value never lands. Kept so the
+    // upsert payload shape is unchanged for older deployments.
     updated_at: new Date().toISOString(),
   };
 }
@@ -851,15 +863,54 @@ export async function pushAuditLogToCloud(entry: AuditLogEntry, ctx: ShopCtx): P
   return true;
 }
 
+/**
+ * WAKA-06 — resolve a queued debt payment from the hydrated in-memory store,
+ * then fall back to the persisted entity store on disk. A queue op enqueued
+ * before the store finished hydrating (or after RAM was trimmed) still has its
+ * row safely on disk; the flush must not treat "absent from RAM" as done.
+ */
+async function resolveDebtPaymentForSync(paymentId: string): Promise<DebtPayment | null> {
+  const inRam = usePosStore.getState().debtPayments.find((p) => p.id === paymentId);
+  if (inRam) return inRam;
+  const { getEntitiesByIds } = await import("./entityStore");
+  const [fromDisk] = await getEntitiesByIds<DebtPayment>("debtPayment", [paymentId]);
+  return fromDisk ?? null;
+}
+
+/**
+ * WAKA-06 — RAM first, then the persisted entity bucket. Missing from both
+ * is "not yet known", never "done". Callers must `return false` (retry).
+ */
+async function resolveEntityFromRamOrDisk<T>(
+  id: string,
+  ram: T | undefined,
+  bucket: import("./entityStore").EntityBucket,
+): Promise<T | null> {
+  if (ram) return ram;
+  if (!id) return null;
+  const { getEntitiesByIds } = await import("./entityStore");
+  const [fromDisk] = await getEntitiesByIds<T>(bucket, [id]);
+  return fromDisk ?? null;
+}
+
+async function resolveShiftForSync(shiftId: string): Promise<ShiftRecord | null> {
+  const inRam = (usePosStore.getState().preferences.shifts ?? []).find((r) => r.id === shiftId);
+  if (inRam) return inRam;
+  const { readEntityManifest } = await import("./entityStore");
+  const manifest = await readEntityManifest();
+  return (manifest?.preferences.shifts ?? []).find((r) => r.id === shiftId) ?? null;
+}
+
 export async function pushDebtPaymentToCloud(paymentId: string, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(paymentId)) return false;
 
-  const state = usePosStore.getState();
-  const payment = state.debtPayments.find((p) => p.id === paymentId);
-  if (!payment) return true;
+  // WAKA-06: the persisted queue/entity store is the source of truth. A payment
+  // that is merely missing from the not-yet-hydrated RAM store must retry
+  // (return false), never be acknowledged and deleted from the queue.
+  const payment = await resolveDebtPaymentForSync(paymentId);
+  if (!payment) return false;
 
-  const customer = state.customers.find((c) => c.id === payment.customerId);
-  if (!customer || !isUuid(customer.id)) return true;
+  if (!isUuid(payment.customerId)) return true;
 
   const { buildDebtPaymentRpcPayload, interpretDebtPaymentRpcResult } = await import("../lib/debtPaymentPush");
 
@@ -2278,13 +2329,21 @@ async function processCloudSyncOperationLegacy(
         return !error;
       }
       if (payload.presets === true || payload.catalogOnly === true) {
-        const product = usePosStore.getState().products.find((p) => p.id === productId);
-        if (!product) return true;
+        const product = await resolveEntityFromRamOrDisk(
+          productId,
+          usePosStore.getState().products.find((p) => p.id === productId),
+          "product",
+        );
+        if (!product) return false;
         return pushProductCatalogToCloud(product, ctx);
       }
       const includeStock = payload.isNew === true;
-      const product = usePosStore.getState().products.find((p) => p.id === productId);
-      if (!product) return true;
+      const product = await resolveEntityFromRamOrDisk(
+        productId,
+        usePosStore.getState().products.find((p) => p.id === productId),
+        "product",
+      );
+      if (!product) return false;
       return pushProductCatalogToCloud(product, ctx, { includeStock });
     }
     case "pending_purchases": {
@@ -2331,8 +2390,12 @@ async function processCloudSyncOperationLegacy(
         if (!isUuid(supplierId)) return true;
         return pushSupplierDeletedToCloud(supplierId, payload, ctx);
       }
-      const supplier = usePosStore.getState().suppliers.find((s) => s.id === supplierId);
-      if (!supplier) return true;
+      const supplier = await resolveEntityFromRamOrDisk(
+        supplierId,
+        usePosStore.getState().suppliers.find((s) => s.id === supplierId),
+        "supplier",
+      );
+      if (!supplier) return false;
       return pushSupplierToCloud(supplier, ctx);
     }
     case "pending_stock_updates":
@@ -2379,8 +2442,13 @@ async function processCloudSyncOperationLegacy(
         return isSyncAck(await processSaleVoidAdjustment(classified, payload, ctx));
       }
       if (classified.route === "catalog_only") {
-        const product = usePosStore.getState().products.find((p) => p.id === classified.productId);
-        if (!product) return true;
+        const productId = classified.productId ?? "";
+        const product = await resolveEntityFromRamOrDisk(
+          productId,
+          usePosStore.getState().products.find((p) => p.id === productId),
+          "product",
+        );
+        if (!product) return false;
         return pushProductCatalogToCloud(product, ctx);
       }
       if (classified.route === "quarantine") {
@@ -2421,8 +2489,12 @@ async function processCloudSyncOperationLegacy(
     case "pending_expenses":
       if (payload.kind === "supplier_payment") {
         const paymentId = String(payload.paymentId ?? "");
-        const payment = usePosStore.getState().supplierPayments.find((p) => p.id === paymentId);
-        if (!payment) return true;
+        const payment = await resolveEntityFromRamOrDisk(
+          paymentId,
+          usePosStore.getState().supplierPayments.find((p) => p.id === paymentId),
+          "supplierPayment",
+        );
+        if (!payment) return false;
         return pushSupplierPaymentToCloud(payment, ctx);
       }
       return true;
@@ -2434,8 +2506,12 @@ async function processCloudSyncOperationLegacy(
     case "pending_inventory_counts": {
       const sessionId = String(payload.sessionId ?? "");
       if (!sessionId) return true;
-      const session = usePosStore.getState().inventoryCountSessions.find((r) => r.id === sessionId);
-      if (!session) return true;
+      const session = await resolveEntityFromRamOrDisk(
+        sessionId,
+        usePosStore.getState().inventoryCountSessions.find((r) => r.id === sessionId),
+        "inventoryCountSession",
+      );
+      if (!session) return false;
       const ok = await pushInventoryCountSessionToCloud(session, ctx);
       if (ok) {
         usePosStore.setState((s) => ({
@@ -2449,8 +2525,8 @@ async function processCloudSyncOperationLegacy(
     case "pending_shifts": {
       const shiftId = String(payload.shiftId ?? "");
       if (!shiftId) return true;
-      const shift = (usePosStore.getState().preferences.shifts ?? []).find((r) => r.id === shiftId);
-      if (!shift) return true;
+      const shift = await resolveShiftForSync(shiftId);
+      if (!shift) return false;
       const ok = await pushShiftToCloud(shift, ctx);
       if (ok) {
         usePosStore.setState((s) => ({
@@ -2467,8 +2543,12 @@ async function processCloudSyncOperationLegacy(
     case "pending_day_closes": {
       const closeId = String(payload.closeId ?? "");
       if (!closeId) return true;
-      const close = usePosStore.getState().dayCloses.find((r) => r.id === closeId);
-      if (!close) return true;
+      const close = await resolveEntityFromRamOrDisk(
+        closeId,
+        usePosStore.getState().dayCloses.find((r) => r.id === closeId),
+        "dayClose",
+      );
+      if (!close) return false;
       const result = await pushDayCloseToCloud(close, ctx);
       if (result.ok) {
         usePosStore.setState((s) => ({
@@ -2479,8 +2559,12 @@ async function processCloudSyncOperationLegacy(
     }
     case "pending_cash_expenses": {
       const expenseId = String(payload.expenseId ?? "");
-      const row = usePosStore.getState().cashExpenses.find((e) => e.id === expenseId);
-      if (!row) return true;
+      const row = await resolveEntityFromRamOrDisk(
+        expenseId,
+        usePosStore.getState().cashExpenses.find((e) => e.id === expenseId),
+        "cashExpense",
+      );
+      if (!row) return false;
       const voided = Boolean(payload.void);
       const ok = await pushCashExpenseToCloud(row, ctx, voided);
       if (!ok) {
@@ -2507,8 +2591,12 @@ async function processCloudSyncOperationLegacy(
         return pushDebtPaymentToCloud(paymentId, ctx);
       }
       const customerId = String(payload.id ?? "");
-      const customer = usePosStore.getState().customers.find((c) => c.id === customerId);
-      if (!customer) return true;
+      const customer = await resolveEntityFromRamOrDisk(
+        customerId,
+        usePosStore.getState().customers.find((c) => c.id === customerId),
+        "customer",
+      );
+      if (!customer) return false;
       return pushCustomerToCloud(customer, ctx);
     }
     case "pending_hospitality": {
@@ -2618,6 +2706,11 @@ export type CloudPullResult = {
   voidedSaleIds: string[];
   stats: CloudPullStats;
   checkpoints?: CloudPullCheckpoints;
+  /**
+   * WAKA-05: Postgres `now()` taken once immediately before a full/bootstrap
+   * pull. Seed every entity cursor from this — never from the client clock.
+   */
+  bootstrapServerNow?: string;
   recoveredAuditLogs?: AuditLogEntry[];
   /** Unseen shop audit events from normal incremental sync — merge into ACTIVE auditLogs. */
   pulledAuditLogs?: AuditLogEntry[];
@@ -2643,7 +2736,10 @@ export function wasLastSalesPullTruncated(): boolean {
   return lastSalesPullTruncated;
 }
 
-const CUSTOMER_DEBT_PAYMENTS_SELECT = "id, shop_id, customer_id, amount_ugx, created_at, metadata";
+// WAKA-05: `created_at` is server-stamped (the cursor); `client_created_at`
+// carries the cashier's clock for business-date purposes (migration 182).
+const CUSTOMER_DEBT_PAYMENTS_SELECT =
+  "id, shop_id, customer_id, amount_ugx, created_at, client_created_at, metadata";
 
 const SHOP_PURCHASES_SELECT =
   "id, shop_id, supplier_id, supplier_name, total_cost_ugx, amount_paid_ugx, balance_delta_ugx, notes, lines, created_at, updated_at, voided_at, void_reason, metadata";
@@ -2671,6 +2767,21 @@ function maxRowUpdatedAt(rows: Record<string, unknown>[], since: string): string
     maxAt = maxIsoTimestamp(maxAt, row.updated_at ?? row.created_at);
   }
   return maxAt;
+}
+
+/**
+ * WAKA-05 — the only legal way to settle a pull cursor.
+ *
+ * `observed` must be a timestamp the SERVER stamped on a row (via
+ * `maxRowUpdatedAt` / `maxIsoTimestamp` / an RPC page checkpoint). The cursor
+ * moves forward only when the server proves there was something newer, and
+ * otherwise stays exactly where it was — an empty page is not evidence of
+ * progress. The client clock is never a checkpoint source: a device running
+ * fast would write a cursor into the server's future and permanently skip every
+ * row written in the gap.
+ */
+function serverCheckpoint(since: string, observed: string): string {
+  return observed > since ? observed : since;
 }
 
 function estimatePayloadBytes(rows: unknown[]): number {
@@ -2763,17 +2874,18 @@ async function pullSalesIncremental(
   const sales: Sale[] = [];
   const voidedIds: string[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   let truncated = false;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { data: saleRows, error: sErr } = await supabase!
-      .from("sales")
-      .select("*, sale_line_items(*)")
-      .eq("shop_id", ctx.shopId)
-      .gt("updated_at", cursor)
-      .order("updated_at", { ascending: true })
-      .limit(INCREMENTAL_SALES_LIMIT);
+    const { data: saleRows, error: sErr } = await applyIncrementalKeyset(
+      supabase!
+        .from("sales")
+        .select("*, sale_line_items(*)")
+        .eq("shop_id", ctx.shopId),
+      "updated_at",
+      cursor,
+    ).limit(INCREMENTAL_SALES_LIMIT);
     if (sErr) throw sErr;
     const batch = (saleRows ?? []) as Record<string, unknown>[];
     bytes += estimatePayloadBytes(batch);
@@ -2787,17 +2899,25 @@ async function pullSalesIncremental(
       truncated = true;
       lastSalesPullTruncated = true;
     }
-    cursor = checkpointAt;
+    cursor = keysetFromLastRow(batch, "updated_at", cursor);
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   if (!truncated) {
     lastSalesPullTruncated = false;
   }
-  return { sales, voidedIds, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(), truncated };
+  // WAKA-05: the sales cursor must only ever move to a timestamp the server
+  // actually stamped on a row. `checkpointAt` starts at `since` and is only
+  // advanced by `maxRowUpdatedAt` over real `updated_at` values, so an empty
+  // page leaves it at `since` (no advance) and a non-empty page moves it to a
+  // server time. It must never fall back to the client clock, which can be
+  // ahead of the server and would skip rows written in the gap forever.
+  return { sales, voidedIds, bytes, checkpointAt, truncated };
 }
 
-async function pullProductsFull(ctx: ShopCtx): Promise<{ products: Product[]; deletedIds: string[]; bytes: number }> {
+async function pullProductsFull(
+  ctx: ShopCtx,
+): Promise<{ products: Product[]; deletedIds: string[]; bytes: number; checkpointAt: string }> {
   let bytes = 0;
   const productRows = await pullOffsetRangeUntilExhausted({
     pageSize: INCREMENTAL_PRODUCTS_LIMIT,
@@ -2843,7 +2963,14 @@ async function pullProductsFull(ctx: ShopCtx): Promise<{ products: Product[]; de
     if (isUuid(id)) deletedIds.push(id);
   }
 
-  return { products, deletedIds, bytes };
+  // WAKA-05: settle on the newest `updated_at` this pull actually saw, never on
+  // the local clock. The deactivated-rows query selects `id` only, so a product
+  // deactivated after the newest active row leaves the checkpoint slightly
+  // behind — which costs one re-fetch on the next incremental pull and can
+  // never skip a row. Behind is safe; ahead is the bug.
+  const checkpointAt = maxRowUpdatedAt(productRows, new Date(0).toISOString());
+
+  return { products, deletedIds, bytes, checkpointAt };
 }
 
 async function pullProductsIncremental(
@@ -2853,16 +2980,14 @@ async function pullProductsIncremental(
   const products: Product[] = [];
   const deletedIds: string[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { data: productRows, error: pErr } = await supabase!
-      .from("products")
-      .select("*")
-      .eq("shop_id", ctx.shopId)
-      .gt("updated_at", cursor)
-      .order("updated_at", { ascending: true })
-      .limit(INCREMENTAL_PRODUCTS_LIMIT);
+    const { data: productRows, error: pErr } = await applyIncrementalKeyset(
+      supabase!.from("products").select("*").eq("shop_id", ctx.shopId),
+      "updated_at",
+      cursor,
+    ).limit(INCREMENTAL_PRODUCTS_LIMIT);
     if (pErr) throw pErr;
     const rows = productRows ?? [];
     bytes += estimatePayloadBytes(rows);
@@ -2880,11 +3005,11 @@ async function pullProductsIncremental(
       if (p) products.push(p);
     }
     if (rows.length < INCREMENTAL_PRODUCTS_LIMIT) break;
-    cursor = checkpointAt;
+    cursor = keysetFromLastRow(rows as Record<string, unknown>[], "updated_at", cursor);
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
-  return { products, deletedIds, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString() };
+  return { products, deletedIds, bytes, checkpointAt: serverCheckpoint(since, checkpointAt) };
 }
 
 async function pullCustomersFull(ctx: ShopCtx): Promise<{ customers: Customer[]; bytes: number }> {
@@ -2916,16 +3041,14 @@ async function pullCustomersIncremental(
 ): Promise<{ customers: Customer[]; bytes: number; checkpointAt: string }> {
   const customers: Customer[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { data: customerRows, error: cErr } = await supabase!
-      .from("customers")
-      .select("*")
-      .eq("shop_id", ctx.shopId)
-      .gt("updated_at", cursor)
-      .order("updated_at", { ascending: true })
-      .limit(INCREMENTAL_CUSTOMERS_LIMIT);
+    const { data: customerRows, error: cErr } = await applyIncrementalKeyset(
+      supabase!.from("customers").select("*").eq("shop_id", ctx.shopId),
+      "updated_at",
+      cursor,
+    ).limit(INCREMENTAL_CUSTOMERS_LIMIT);
     if (cErr) throw cErr;
     const rows = customerRows ?? [];
     bytes += estimatePayloadBytes(rows);
@@ -2935,11 +3058,11 @@ async function pullCustomersIncremental(
       ...rows.map((r) => rowToCustomer(r as Record<string, unknown>)).filter((c): c is Customer => c != null),
     );
     if (rows.length < INCREMENTAL_CUSTOMERS_LIMIT) break;
-    cursor = checkpointAt;
+    cursor = keysetFromLastRow(rows as Record<string, unknown>[], "updated_at", cursor);
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
-  return { customers, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString() };
+  return { customers, bytes, checkpointAt: serverCheckpoint(since, checkpointAt) };
 }
 
 const CASH_EXPENSE_SELECT =
@@ -2998,7 +3121,7 @@ async function pullExpensesIncremental(
       cashExpenses,
       count,
       bytes,
-      checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+      checkpointAt: serverCheckpoint(since, checkpointAt),
     };
   } catch {
     return { cashExpenses: [], count: 0, bytes: 0, checkpointAt: since };
@@ -3045,7 +3168,7 @@ async function pullCashDrawerAdjustmentsIncremental(
       cashDrawerAdjustments: page.cashDrawerAdjustments,
       count: page.cashDrawerAdjustments.length,
       bytes: page.bytes,
-      checkpointAt: page.checkpointAt > since ? page.checkpointAt : new Date().toISOString(),
+      checkpointAt: serverCheckpoint(since, page.checkpointAt),
     };
   } catch {
     return { cashDrawerAdjustments: [], count: 0, bytes: 0, checkpointAt: since };
@@ -3069,7 +3192,7 @@ async function pullDayDrawerOpensIncremental(
       dayDrawerOpens: page.dayDrawerOpens,
       count: page.dayDrawerOpens.length,
       bytes: page.bytes,
-      checkpointAt: page.checkpointAt > since ? page.checkpointAt : new Date().toISOString(),
+      checkpointAt: serverCheckpoint(since, page.checkpointAt),
     };
   } catch {
     return { dayDrawerOpens: [], count: 0, bytes: 0, checkpointAt: since };
@@ -3094,26 +3217,30 @@ function parseReturnRows(rows: Record<string, unknown>[]): CloudReturnRow[] {
 
 async function pullReturnsPage(
   ctx: ShopCtx,
-  since: string,
-): Promise<{ rows: CloudReturnRow[]; bytes: number; checkpointAt: string }> {
-  const { data, error } = await supabase!
-    .from("sale_returns")
-    .select(SALE_RETURNS_SELECT)
-    .eq("shop_id", ctx.shopId)
-    .gt("updated_at", since)
-    .order("updated_at", { ascending: true })
-    .limit(INCREMENTAL_RETURNS_LIMIT);
+  since: string | IncrementalKeyset,
+): Promise<{ rows: CloudReturnRow[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
+  const cursor = asIncrementalKeyset(since);
+  const { data, error } = await applyIncrementalKeyset(
+    supabase!.from("sale_returns").select(SALE_RETURNS_SELECT).eq("shop_id", ctx.shopId),
+    "updated_at",
+    cursor,
+  ).limit(INCREMENTAL_RETURNS_LIMIT);
 
   if (error) {
     if (isMissingTableError(error)) {
-      return { rows: [], bytes: 0, checkpointAt: since };
+      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
     }
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseReturnRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
-  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
+  return {
+    rows,
+    bytes: estimatePayloadBytes(raw),
+    checkpointAt,
+    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
+  };
 }
 
 async function pullReturnsFull(ctx: ShopCtx): Promise<{ returnRows: CloudReturnRow[]; bytes: number }> {
@@ -3131,7 +3258,7 @@ async function pullReturnsIncremental(
 ): Promise<{ returnRows: CloudReturnRow[]; bytes: number; checkpointAt: string }> {
   const returnRows: CloudReturnRow[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullReturnsPage(ctx, cursor);
@@ -3140,14 +3267,14 @@ async function pullReturnsIncremental(
     checkpointAt = pageResult.checkpointAt;
     returnRows.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_RETURNS_LIMIT) break;
-    cursor = checkpointAt;
+    cursor = pageResult.nextCursor;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     returnRows,
     bytes,
-    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+    checkpointAt: serverCheckpoint(since, checkpointAt),
   };
 }
 
@@ -3162,26 +3289,30 @@ function parseVoidRows(rows: Record<string, unknown>[]): CloudVoidRow[] {
 
 async function pullVoidsPage(
   ctx: ShopCtx,
-  since: string,
-): Promise<{ rows: CloudVoidRow[]; bytes: number; checkpointAt: string }> {
-  const { data, error } = await supabase!
-    .from("sale_voids")
-    .select(SALE_VOIDS_SELECT)
-    .eq("shop_id", ctx.shopId)
-    .gt("updated_at", since)
-    .order("updated_at", { ascending: true })
-    .limit(INCREMENTAL_RETURNS_LIMIT);
+  since: string | IncrementalKeyset,
+): Promise<{ rows: CloudVoidRow[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
+  const cursor = asIncrementalKeyset(since);
+  const { data, error } = await applyIncrementalKeyset(
+    supabase!.from("sale_voids").select(SALE_VOIDS_SELECT).eq("shop_id", ctx.shopId),
+    "updated_at",
+    cursor,
+  ).limit(INCREMENTAL_RETURNS_LIMIT);
 
   if (error) {
     if (isMissingTableError(error)) {
-      return { rows: [], bytes: 0, checkpointAt: since };
+      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
     }
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseVoidRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
-  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
+  return {
+    rows,
+    bytes: estimatePayloadBytes(raw),
+    checkpointAt,
+    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
+  };
 }
 
 async function pullVoidsFull(ctx: ShopCtx): Promise<{ voidRows: CloudVoidRow[]; bytes: number }> {
@@ -3199,7 +3330,7 @@ async function pullVoidsIncremental(
 ): Promise<{ voidRows: CloudVoidRow[]; bytes: number; checkpointAt: string }> {
   const voidRows: CloudVoidRow[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullVoidsPage(ctx, cursor);
@@ -3208,14 +3339,14 @@ async function pullVoidsIncremental(
     checkpointAt = pageResult.checkpointAt;
     voidRows.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_RETURNS_LIMIT) break;
-    cursor = checkpointAt;
+    cursor = pageResult.nextCursor;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     voidRows,
     bytes,
-    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+    checkpointAt: serverCheckpoint(since, checkpointAt),
   };
 }
 
@@ -3248,24 +3379,30 @@ function parseSupplierPaymentRows(rows: Record<string, unknown>[]): SupplierPaym
 
 async function pullPurchasesPage(
   ctx: ShopCtx,
-  since: string,
-): Promise<{ rows: CloudPurchaseRow[]; bytes: number; checkpointAt: string }> {
-  const { data, error } = await supabase!
-    .from("shop_purchases")
-    .select(SHOP_PURCHASES_SELECT)
-    .eq("shop_id", ctx.shopId)
-    .gt("updated_at", since)
-    .order("updated_at", { ascending: true })
-    .limit(INCREMENTAL_PURCHASES_LIMIT);
+  since: string | IncrementalKeyset,
+): Promise<{ rows: CloudPurchaseRow[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
+  const cursor = asIncrementalKeyset(since);
+  const { data, error } = await applyIncrementalKeyset(
+    supabase!.from("shop_purchases").select(SHOP_PURCHASES_SELECT).eq("shop_id", ctx.shopId),
+    "updated_at",
+    cursor,
+  ).limit(INCREMENTAL_PURCHASES_LIMIT);
 
   if (error) {
-    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
+    if (isMissingTableError(error)) {
+      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
+    }
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parsePurchaseRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
-  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
+  return {
+    rows,
+    bytes: estimatePayloadBytes(raw),
+    checkpointAt,
+    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
+  };
 }
 
 async function pullPurchasesFull(ctx: ShopCtx): Promise<{ purchaseRows: CloudPurchaseRow[]; bytes: number }> {
@@ -3283,7 +3420,7 @@ async function pullPurchasesIncremental(
 ): Promise<{ purchaseRows: CloudPurchaseRow[]; bytes: number; checkpointAt: string }> {
   const purchaseRows: CloudPurchaseRow[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullPurchasesPage(ctx, cursor);
@@ -3292,37 +3429,43 @@ async function pullPurchasesIncremental(
     checkpointAt = pageResult.checkpointAt;
     purchaseRows.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_PURCHASES_LIMIT) break;
-    cursor = checkpointAt;
+    cursor = pageResult.nextCursor;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     purchaseRows,
     bytes,
-    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+    checkpointAt: serverCheckpoint(since, checkpointAt),
   };
 }
 
 async function pullSuppliersPage(
   ctx: ShopCtx,
-  since: string,
-): Promise<{ rows: CloudSupplierRow[]; bytes: number; checkpointAt: string }> {
-  const { data, error } = await supabase!
-    .from("shop_suppliers")
-    .select(SHOP_SUPPLIERS_SELECT)
-    .eq("shop_id", ctx.shopId)
-    .gt("updated_at", since)
-    .order("updated_at", { ascending: true })
-    .limit(INCREMENTAL_SUPPLIERS_LIMIT);
+  since: string | IncrementalKeyset,
+): Promise<{ rows: CloudSupplierRow[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
+  const cursor = asIncrementalKeyset(since);
+  const { data, error } = await applyIncrementalKeyset(
+    supabase!.from("shop_suppliers").select(SHOP_SUPPLIERS_SELECT).eq("shop_id", ctx.shopId),
+    "updated_at",
+    cursor,
+  ).limit(INCREMENTAL_SUPPLIERS_LIMIT);
 
   if (error) {
-    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
+    if (isMissingTableError(error)) {
+      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
+    }
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseSupplierRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
-  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
+  return {
+    rows,
+    bytes: estimatePayloadBytes(raw),
+    checkpointAt,
+    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
+  };
 }
 
 async function pullSuppliersFull(ctx: ShopCtx): Promise<{ supplierRows: CloudSupplierRow[]; bytes: number }> {
@@ -3340,7 +3483,7 @@ async function pullSuppliersIncremental(
 ): Promise<{ supplierRows: CloudSupplierRow[]; bytes: number; checkpointAt: string }> {
   const supplierRows: CloudSupplierRow[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullSuppliersPage(ctx, cursor);
@@ -3349,37 +3492,43 @@ async function pullSuppliersIncremental(
     checkpointAt = pageResult.checkpointAt;
     supplierRows.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_SUPPLIERS_LIMIT) break;
-    cursor = checkpointAt;
+    cursor = pageResult.nextCursor;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     supplierRows,
     bytes,
-    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+    checkpointAt: serverCheckpoint(since, checkpointAt),
   };
 }
 
 async function pullSupplierPaymentsPage(
   ctx: ShopCtx,
-  since: string,
-): Promise<{ rows: SupplierPayment[]; bytes: number; checkpointAt: string }> {
-  const { data, error } = await supabase!
-    .from("shop_supplier_payments")
-    .select(SHOP_SUPPLIER_PAYMENTS_SELECT)
-    .eq("shop_id", ctx.shopId)
-    .gt("updated_at", since)
-    .order("updated_at", { ascending: true })
-    .limit(INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT);
+  since: string | IncrementalKeyset,
+): Promise<{ rows: SupplierPayment[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
+  const cursor = asIncrementalKeyset(since);
+  const { data, error } = await applyIncrementalKeyset(
+    supabase!.from("shop_supplier_payments").select(SHOP_SUPPLIER_PAYMENTS_SELECT).eq("shop_id", ctx.shopId),
+    "updated_at",
+    cursor,
+  ).limit(INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT);
 
   if (error) {
-    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
+    if (isMissingTableError(error)) {
+      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
+    }
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseSupplierPaymentRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
-  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
+  return {
+    rows,
+    bytes: estimatePayloadBytes(raw),
+    checkpointAt,
+    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
+  };
 }
 
 async function pullSupplierPaymentsFull(
@@ -3399,7 +3548,7 @@ async function pullSupplierPaymentsIncremental(
 ): Promise<{ supplierPayments: SupplierPayment[]; bytes: number; checkpointAt: string }> {
   const supplierPayments: SupplierPayment[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullSupplierPaymentsPage(ctx, cursor);
@@ -3408,14 +3557,14 @@ async function pullSupplierPaymentsIncremental(
     checkpointAt = pageResult.checkpointAt;
     supplierPayments.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT) break;
-    cursor = checkpointAt;
+    cursor = pageResult.nextCursor;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     supplierPayments,
     bytes,
-    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+    checkpointAt: serverCheckpoint(since, checkpointAt),
   };
 }
 
@@ -3429,33 +3578,43 @@ function maxDebtPaymentCreatedAt(rows: Record<string, unknown>[], since: string)
 
 async function pullDebtPaymentsPage(
   ctx: ShopCtx,
-  since: string,
-): Promise<{ rows: DebtPayment[]; bytes: number; checkpointAt: string }> {
-  const { data, error } = await supabase!
-    .from("customer_debt_payments")
-    .select(CUSTOMER_DEBT_PAYMENTS_SELECT)
-    .eq("shop_id", ctx.shopId)
-    .gt("created_at", since)
-    .order("created_at", { ascending: true })
-    .limit(INCREMENTAL_DEBT_PAYMENTS_LIMIT);
+  since: string | IncrementalKeyset,
+): Promise<{ rows: DebtPayment[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
+  const cursor = asIncrementalKeyset(since);
+  const { data, error } = await applyIncrementalKeyset(
+    supabase!.from("customer_debt_payments").select(CUSTOMER_DEBT_PAYMENTS_SELECT).eq("shop_id", ctx.shopId),
+    "created_at",
+    cursor,
+  ).limit(INCREMENTAL_DEBT_PAYMENTS_LIMIT);
 
   if (error) {
-    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
+    if (isMissingTableError(error)) {
+      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
+    }
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseDebtPaymentRows(raw);
-  const checkpointAt = raw.length > 0 ? maxDebtPaymentCreatedAt(raw, since) : since;
-  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
+  const checkpointAt = raw.length > 0 ? maxDebtPaymentCreatedAt(raw, cursor.at) : cursor.at;
+  return {
+    rows,
+    bytes: estimatePayloadBytes(raw),
+    checkpointAt,
+    nextCursor: keysetFromLastRow(raw, "created_at", cursor),
+  };
 }
 
-async function pullDebtPaymentsFull(ctx: ShopCtx): Promise<{ debtPayments: DebtPayment[]; bytes: number }> {
+async function pullDebtPaymentsFull(
+  ctx: ShopCtx,
+): Promise<{ debtPayments: DebtPayment[]; bytes: number; checkpointAt: string }> {
   const result = await pullCursorUntilExhausted({
     initialCursor: new Date(0).toISOString(),
     pageSizeHint: INCREMENTAL_DEBT_PAYMENTS_LIMIT,
     pullPage: (cursor) => pullDebtPaymentsPage(ctx, cursor),
   });
-  return { debtPayments: result.rows, bytes: result.bytes };
+  // WAKA-05: a full pull settles its cursor on the newest `created_at` the
+  // server actually returned, not on the local clock.
+  return { debtPayments: result.rows, bytes: result.bytes, checkpointAt: result.checkpointAt };
 }
 
 async function pullDebtPaymentsIncremental(
@@ -3464,7 +3623,7 @@ async function pullDebtPaymentsIncremental(
 ): Promise<{ debtPayments: DebtPayment[]; bytes: number; checkpointAt: string }> {
   const debtPayments: DebtPayment[] = [];
   let bytes = 0;
-  let cursor = since;
+  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullDebtPaymentsPage(ctx, cursor);
@@ -3473,14 +3632,14 @@ async function pullDebtPaymentsIncremental(
     checkpointAt = pageResult.checkpointAt;
     debtPayments.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_DEBT_PAYMENTS_LIMIT) break;
-    cursor = checkpointAt;
+    cursor = pageResult.nextCursor;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     debtPayments,
     bytes,
-    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+    checkpointAt: serverCheckpoint(since, checkpointAt),
   };
 }
 
@@ -3493,7 +3652,7 @@ export async function pullDebtPayments(opts?: {
   const cp = readSyncCheckpoints();
   if (opts?.forceFull === true || !cp.bootstrapComplete) {
     const full = await pullDebtPaymentsFull(ctx);
-    return { debtPayments: full.debtPayments, checkpointAt: new Date().toISOString() };
+    return { debtPayments: full.debtPayments, checkpointAt: full.checkpointAt };
   }
   const since = cp.lastDebtPaymentsSyncAt ?? new Date(0).toISOString();
   const inc = await pullDebtPaymentsIncremental(ctx, since);
@@ -3533,6 +3692,10 @@ export async function pullShopDataFromCloud(opts?: {
     (needsBootstrapPull(localEmpty) && opts?.afterSnapshotRestore !== true)
       ? "full"
       : "incremental";
+
+  // WAKA-05: one server clock, taken before the full download so rows written
+  // during the pull stay ahead of the cursor and are picked up incrementally.
+  const bootstrapServerNow = mode === "full" ? await fetchShopServerNow() : null;
 
   const cp = readSyncCheckpoints();
   let products: Product[] = [];
@@ -3766,7 +3929,8 @@ export async function pullShopDataFromCloud(opts?: {
                 products: full.products,
                 deletedIds: full.deletedIds,
                 bytes: full.bytes,
-                checkpointAt: new Date().toISOString(),
+                // WAKA-05: server-derived, not `Date.now()`.
+                checkpointAt: serverCheckpoint(sinceProducts, full.checkpointAt),
               };
             }
             return pullProductsIncremental(ctx, sinceProducts);
@@ -4127,6 +4291,7 @@ export async function pullShopDataFromCloud(opts?: {
     voidedSaleIds,
     stats,
     checkpoints: pullCheckpoints,
+    bootstrapServerNow: bootstrapServerNow ?? undefined,
     recoveredAuditLogs: recoveredAuditLogs.length > 0 ? recoveredAuditLogs : undefined,
     pulledAuditLogs: pulledAuditLogs.length > 0 ? pulledAuditLogs : undefined,
     pulledEntities,
@@ -4266,8 +4431,9 @@ export async function pullCloudAndMergeIntoStore(opts?: {
         await flushIncrementalPersist(state, usePosStore.getState());
       }
     }
-    if (cloud.stats.mode === "full" && shouldMarkBootstrap) markBootstrapSyncComplete();
-    else {
+    if (cloud.stats.mode === "full") {
+      if (shouldMarkBootstrap && cloud.bootstrapServerNow) markBootstrapSyncComplete(cloud.bootstrapServerNow);
+    } else {
       updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
     }
     const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
@@ -4375,7 +4541,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       cloudRecovery: opts?.cloudRecovery,
       skipEntityMigration: opts?.cloudRecovery === true,
     });
-    if (shouldMarkBootstrap) markBootstrapSyncComplete();
+    if (shouldMarkBootstrap && cloud.bootstrapServerNow) markBootstrapSyncComplete(cloud.bootstrapServerNow);
     runPostSyncDebtValidation({
       customers: usePosStore.getState().customers,
       sales: usePosStore.getState().sales,
@@ -4437,6 +4603,19 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     cpBeforeMerge.lastDebtPaymentsSyncAt != null ||
     debtPayments.length > 0;
 
+  // WAKA-01: `sales` (and the return/void records it absorbs) must be declared
+  // before the customer merge, which reads it to reconcile debt balances. The
+  // declaration previously sat ~40 lines below this call, so every steady-state
+  // pull whose local + cloud customer ids intersected hit the temporal dead
+  // zone and threw, silently discarding the whole payload.
+  const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
+  const voidRecords = mergeVoidRecordsForRecovery(state.voidRecords, cloud.voidCloudRows ?? []);
+  const sales = absorbCloudSaleAdjustmentLedgers(
+    salesUnfiltered,
+    [...returnRecords, ...(state.archivedReturnRecords ?? [])],
+    [...voidRecords, ...(state.archivedVoidRecords ?? [])],
+  );
+
   const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) =>
     mergeCustomerFromCloudPull(a, b, sales, debtPayments, { ledgerAuthoritative }),
   );
@@ -4475,14 +4654,6 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     cloud.stockMovements.length > 0
       ? mergeStockMovementsFromCloudPull(state.stockMovements, cloud.stockMovements)
       : state.stockMovements;
-
-  const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
-  const voidRecords = mergeVoidRecordsForRecovery(state.voidRecords, cloud.voidCloudRows ?? []);
-  const sales = absorbCloudSaleAdjustmentLedgers(
-    salesUnfiltered,
-    [...returnRecords, ...(state.archivedReturnRecords ?? [])],
-    [...voidRecords, ...(state.archivedVoidRecords ?? [])],
-  );
 
   let recoveredActive = state.auditLogs;
   let mergedArchivedAuditLogs = state.archivedAuditLogs;
@@ -4555,7 +4726,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   await addVoidedSaleTombstones(cloud.voidedSaleIds);
 
   if (cloud.stats.mode === "full") {
-    if (shouldMarkBootstrap) markBootstrapSyncComplete();
+    if (shouldMarkBootstrap && cloud.bootstrapServerNow) markBootstrapSyncComplete(cloud.bootstrapServerNow);
   } else {
     updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
   }

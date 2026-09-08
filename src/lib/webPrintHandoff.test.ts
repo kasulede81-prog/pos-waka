@@ -281,4 +281,13 @@ describe("auth isolation", () => {
     expect(normalizeAuthDeepLinkToAppPath(`wakapos://print/v1?saleId=${SALE_ID}`)).toBeNull();
     expect(normalizeAuthDeepLinkToAppPath("wakapos://callback?code=abc")).toBe("/auth/callback?code=abc");
   });
+
+  it("printSaleReceipt does not auto-navigate Android Chrome to the native app", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { dirname, join } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "receiptDocuments.ts"), "utf8");
+    expect(src).not.toContain("tryLaunchAndroidPrintHandoff");
+    expect(src).toContain("tryLaunchDesktopPrintHandoff");
+  });
 });

@@ -42,6 +42,11 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "node",
       include: ["src/**/*.test.ts"],
+      // PHASE 0A — `*.offline.test.ts` runs in its own project
+      // (`vitest.offline.config.ts` / `npm run test:offline`) because this
+      // project's setup file globally mocks `src/offline/localDb`, which makes
+      // real IndexedDB and sync-queue behaviour impossible to observe.
+      exclude: ["**/node_modules/**", "**/dist/**", "src/**/*.offline.test.ts"],
       setupFiles: ["src/test/vitest.setup.ts"],
       testTimeout: 15_000,
       hookTimeout: 15_000,

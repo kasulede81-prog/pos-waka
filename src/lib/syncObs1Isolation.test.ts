@@ -86,6 +86,8 @@ describe("OBS-1 isolation + path counters", () => {
     mocks.removeSyncOperation.mockReset().mockResolvedValue(undefined);
     mocks.appendSyncOperation.mockReset().mockResolvedValue(undefined);
     mocks.reportSyncIssue.mockReset();
+    const { usePosStore } = await import("../store/usePosStore");
+    usePosStore.setState({ _hydrated: true });
   });
 
   it("immediate sale path increments only SALE_PUSH_IMMEDIATE_ATTEMPT", async () => {
