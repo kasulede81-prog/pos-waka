@@ -83,7 +83,7 @@ export function buildPosSupportDiagnostics(input?: { category?: PosSupportCatego
 } {
   return {
     deviceId: getOrCreateDeviceId(),
-    appVersion: import.meta.env.VITE_APP_VERSION?.trim() || "1.0.12",
+    appVersion: import.meta.env.VITE_APP_VERSION?.trim() || "1.0.13",
     source: "pos_need_help",
     category: input?.category ?? null,
     role: input?.role ?? null,

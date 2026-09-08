@@ -531,9 +531,14 @@ export function CustomersPage({ lang }: { lang: Language }) {
               lang={lang}
               compact
               onPrint={() =>
-                void printDebtPaymentReceipt(debtReceiptCtx).then(
-                  (r) => !r.ok && window.alert(t(lang, "receiptPdfFailed")),
-                )
+                void printDebtPaymentReceipt(debtReceiptCtx).then((r) => {
+                  if (r.ok) return;
+                  window.alert(
+                    r.mode === "thermal"
+                      ? (r.error ?? t(lang, "receiptPrintThermalFailed"))
+                      : t(lang, "receiptPdfFailed"),
+                  );
+                })
               }
               onDownloadPdf={() =>
                 void downloadDebtPaymentReceiptPdf(debtReceiptCtx).then(
