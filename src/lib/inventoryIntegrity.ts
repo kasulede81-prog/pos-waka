@@ -180,14 +180,46 @@ export function mergeProductCatalogFields(local: Product, remote: Product): Prod
   };
 }
 
+export function pendingProductCatalogIds(
+  ops: Array<{ kind: string; payload?: unknown }>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const op of ops) {
+    if (op.kind !== "product") continue;
+    const payload = op.payload && typeof op.payload === "object" ? (op.payload as { id?: unknown }) : {};
+    const id = String(payload.id ?? "").trim();
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
 /**
- * Cloud pull merge: server stock_on_hand is authoritative (movement ledger truth).
+ * Cloud pull merge: server stock, cost, and pack fields are the shared catalog.
+ * Local version is incremented on every sale, so it must not keep a stale cost.
+ * Unpushed catalog edits (`pendingLocalCatalog`) still use version-wins price/cost.
  */
-export function mergeProductFromCloudPull(local: Product, remote: Product): Product {
+export function mergeProductFromCloudPull(
+  local: Product,
+  remote: Product,
+  opts?: { pendingLocalCatalog?: boolean },
+): Product {
   const catalog = mergeProductCatalogFields(local, remote);
+  if (opts?.pendingLocalCatalog) {
+    return {
+      ...catalog,
+      stockOnHand: remote.stockOnHand,
+      updatedAt: remote.updatedAt,
+    };
+  }
   return {
     ...catalog,
     stockOnHand: remote.stockOnHand,
+    sellingPricePerUnitUgx: remote.sellingPricePerUnitUgx,
+    costPricePerUnitUgx: remote.costPricePerUnitUgx,
+    buyingPackCostUgx: remote.buyingPackCostUgx ?? null,
+    packCostUnitsDepleted: remote.packCostUnitsDepleted,
+    conversionRate: remote.conversionRate,
+    buyingUnit: remote.buyingUnit,
     updatedAt: remote.updatedAt,
   };
 }

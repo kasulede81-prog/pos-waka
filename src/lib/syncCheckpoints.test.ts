@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearBootstrapSyncComplete,
   markBootstrapSyncComplete,
+  markProductCostAuthorityRefreshDone,
   needsBootstrapPull,
+  needsProductCostAuthorityRefresh,
   readSyncCheckpoints,
   writeSyncCheckpoints,
 } from "./syncCheckpoints";
@@ -45,6 +47,12 @@ describe("syncCheckpoints bootstrap rollback", () => {
     writeSyncCheckpoints({ lastProductsSyncAt: "2026-05-01T00:00:00.000Z", bootstrapComplete: true });
     clearBootstrapSyncComplete();
     expect(readSyncCheckpoints().lastProductsSyncAt).toBe("2026-05-01T00:00:00.000Z");
+  });
+
+  it("product cost authority refresh is one-shot per namespace", () => {
+    expect(needsProductCostAuthorityRefresh()).toBe(true);
+    markProductCostAuthorityRefreshDone();
+    expect(needsProductCostAuthorityRefresh()).toBe(false);
   });
 
   it("empty local state still requires a full bootstrap pull", () => {

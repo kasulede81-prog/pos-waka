@@ -3,6 +3,7 @@
 import { getPersistenceNamespace } from "../offline/shopScope";
 
 const BASE_KEY = "waka.sync.checkpoints.v1";
+const PRODUCT_COST_AUTHORITY_KEY = "waka.sync.productCostAuthority.v1";
 
 export type SyncCheckpoints = {
   /** After first successful bootstrap pull, incremental mode is used. */
@@ -275,4 +276,30 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
 export function needsBootstrapPull(localEmpty: boolean): boolean {
   const cp = readSyncCheckpoints();
   return localEmpty || !cp.bootstrapComplete;
+}
+
+function productCostAuthorityKey(): string | null {
+  const ns = getPersistenceNamespace();
+  if (!ns) return null;
+  return `${PRODUCT_COST_AUTHORITY_KEY}::${ns}`;
+}
+
+/** One-shot full product pull so stale local costs converge after version-wins pull. */
+export function needsProductCostAuthorityRefresh(): boolean {
+  try {
+    const k = productCostAuthorityKey();
+    if (!k) return false;
+    return localStorage.getItem(k) !== "done";
+  } catch {
+    return false;
+  }
+}
+
+export function markProductCostAuthorityRefreshDone(): void {
+  try {
+    const k = productCostAuthorityKey();
+    if (k) localStorage.setItem(k, "done");
+  } catch {
+    /* ignore quota */
+  }
 }

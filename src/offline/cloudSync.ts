@@ -63,7 +63,9 @@ import { applyNormalSyncAuditPull, pullAuditLogsFromCloudIncremental } from "../
 import { recordEntityPullErrors } from "../lib/pullDiagnostics";
 import {
   markBootstrapSyncComplete,
+  markProductCostAuthorityRefreshDone,
   needsBootstrapPull,
+  needsProductCostAuthorityRefresh,
   readSyncCheckpoints,
   updateCheckpointsAfterIncrementalPull,
 } from "../lib/syncCheckpoints";
@@ -101,6 +103,7 @@ import {
 import {
   mergeProductFromCloudPull,
   patchProductsWithServerStock,
+  pendingProductCatalogIds,
   type ServerProductStockRow,
 } from "../lib/inventoryIntegrity";
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
@@ -2564,6 +2567,7 @@ export type CloudPullStats = {
   stockMovements?: number;
   entityErrors?: Record<string, string>;
   partialSuccess?: boolean;
+  productCostAuthorityRefresh?: boolean;
 };
 
 export type CloudPullCheckpoints = {
@@ -3565,6 +3569,7 @@ export async function pullShopDataFromCloud(opts?: {
   let recoveredAuditLogs: AuditLogEntry[] = [];
   let pulledAuditLogs: AuditLogEntry[] = [];
   const pulledEntities: IncrementalPullEntity[] = [];
+  let productCostAuthorityRefresh = false;
 
   if (mode === "full") {
     const p = await pullEntitySafe("products", entityErrors, () => pullProductsFull(ctx));
@@ -3752,8 +3757,21 @@ export async function pullShopDataFromCloud(opts?: {
       jobs.push({
         entity: "products",
         run: async () => {
-          p = await pullEntitySafe("products", entityErrors, () => pullProductsIncremental(ctx, sinceProducts));
+          const refreshCatalog = needsProductCostAuthorityRefresh();
+          p = await pullEntitySafe("products", entityErrors, async () => {
+            if (refreshCatalog) {
+              const full = await pullProductsFull(ctx);
+              return {
+                products: full.products,
+                deletedIds: full.deletedIds,
+                bytes: full.bytes,
+                checkpointAt: new Date().toISOString(),
+              };
+            }
+            return pullProductsIncremental(ctx, sinceProducts);
+          });
           if (!p) return;
+          productCostAuthorityRefresh = refreshCatalog;
           products = p.products;
           deletedProductIds = p.deletedIds;
           pulledEntities.push("products");
@@ -4077,6 +4095,7 @@ export async function pullShopDataFromCloud(opts?: {
     stockMovements: stockMovementCount,
     entityErrors: Object.keys(entityErrors).length > 0 ? entityErrors : undefined,
     partialSuccess: Object.keys(entityErrors).length > 0,
+    productCostAuthorityRefresh: mode === "full" || productCostAuthorityRefresh,
   };
 
   const { isDiagnosticsEnabled, recordCloudPullStats } = await import("../lib/stabilityDiagnostics");
@@ -4184,6 +4203,13 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   });
   if (!cloud) return failMerge("cloud_pull_failed");
 
+  const noteProductCostAuthorityRefresh = () => {
+    if (cloud.stats.entityErrors?.products) return;
+    if (cloud.stats.mode === "full" || cloud.stats.productCostAuthorityRefresh) {
+      markProductCostAuthorityRefreshDone();
+    }
+  };
+
   const state = usePosStore.getState();
   if (!state._hydrated) return failMerge("store_not_hydrated");
 
@@ -4217,6 +4243,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       const { storeHasCoreRecoveryData } = await import("../lib/recoveryHydration");
       if (opts?.afterSnapshotRestore && storeHasCoreRecoveryData()) {
         await assertCloudRecoveryStoreHydrated();
+        noteProductCostAuthorityRefresh();
         return true;
       }
       const { logRecoveryDiagnosticEvent } = await import("../lib/cloudRecoverySession");
@@ -4244,6 +4271,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     }
     const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
     if (isDiagnosticsEnabled()) recordSyncDuration(cloud.stats.durationMs);
+    noteProductCostAuthorityRefresh();
     return true;
   }
 
@@ -4362,23 +4390,27 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       recordSyncDuration(cloud.stats.durationMs);
     }
     await assertCloudRecoveryStoreHydrated();
+    noteProductCostAuthorityRefresh();
     return true;
   }
 
   const { readProductTombstones } = await import("./entityStore");
   const { markProductDeleted } = await import("./incrementalPersist");
+  const { readSyncQueue } = await import("./localDb");
   const tombstones = await readProductTombstones();
   const tombstoneIds = new Set(Object.keys(tombstones));
   for (const id of cloud.deletedProductIds) tombstoneIds.add(id);
 
   const deletedProductSet = new Set(cloud.deletedProductIds);
   const voidedSaleSet = new Set(cloud.voidedSaleIds);
+  const pendingCatalogIds = pendingProductCatalogIds(await readSyncQueue());
 
   const products = (
     await mergeByIdChunked(
       state.products.filter((p) => !tombstoneIds.has(p.id) && !deletedProductSet.has(p.id)),
       cloud.products,
-      (a, b) => mergeProductFromCloudPull(a, b),
+      (a, b) =>
+        mergeProductFromCloudPull(a, b, { pendingLocalCatalog: pendingCatalogIds.has(a.id) }),
       tombstoneIds,
     )
   ).filter((p) => !deletedProductSet.has(p.id));
@@ -4552,6 +4584,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     recordSyncDuration(cloud.stats.durationMs);
   }
   await assertCloudRecoveryStoreHydrated();
+  noteProductCostAuthorityRefresh();
   return true;
 }
 
