@@ -19,7 +19,6 @@ import {
   clearBlockedReturnRecoveryAttempts,
   hasBlockedReturnRecoveryAttempt,
   markBlockedReturnRecoveryAttempted,
-  readLastBlockedReturnProbe,
 } from "../lib/blockedReturnRecovery";
 import {
   maybeRepairHistoricalSaleHeader,
@@ -112,14 +111,10 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
     if (isBlockedBusinessSyncError(op.lastError)) {
       if (op.kind === "pending_returns" && !hasBlockedReturnRecoveryAttempt(op.id)) {
         const recoverable = await probeBlockedReturnRecovery(op);
-        const probe = readLastBlockedReturnProbe();
         if (recoverable) {
           markBlockedReturnRecoveryAttempted(op.id);
           ready.push(op);
           continue;
-        }
-        if (probe?.blocker === "ceiling" || probe?.blocker === "select_empty") {
-          markBlockedReturnRecoveryAttempted(op.id);
         }
       }
       continue;

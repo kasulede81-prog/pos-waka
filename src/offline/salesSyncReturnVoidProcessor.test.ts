@@ -541,8 +541,6 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 processors", () => {
     expect(readLastBlockedReturnProbe()).toMatchObject({
       ok: true,
       blocker: "none",
-      cloudSaleTotalUgx: 0,
-      saleRowPresent: true,
     });
   });
 
@@ -565,6 +563,29 @@ describe("SALES-SYNC-RETURNVOID-FIX-01 processors", () => {
       op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID }),
     );
     expect(result).toBe("ack");
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("ACKs leftover queue from the return id even when the local return row is missing", async () => {
+    seed({ pendingSync: false });
+    usePosStore.setState({ returnRecords: [], archivedReturnRecords: [] });
+    fromMock.mockImplementation((table: unknown) => {
+      if (table === "sale_returns") {
+        return thenableQuery({
+          id: RETURN_ID,
+          sale_id: SALE_ID,
+          product_id: PRODUCT_ID,
+          quantity: 1,
+          refund_amount_ugx: 10_000,
+        });
+      }
+      return thenableQuery(null, { message: "unmocked" });
+    });
+    const { probeBlockedReturnRecovery, processCloudSyncOperationResult } = await import("./cloudSync");
+    const blocked = op("pending_returns", { returnId: RETURN_ID, saleId: SALE_ID });
+    blocked.lastError = "refund_exceeds_remaining";
+    expect(await probeBlockedReturnRecovery(blocked)).toBe(true);
+    expect(await processCloudSyncOperationResult(blocked)).toBe("ack");
     expect(rpcMock).not.toHaveBeenCalled();
   });
 

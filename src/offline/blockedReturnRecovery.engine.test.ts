@@ -125,7 +125,8 @@ describe("blocked pending_returns recovery flush", () => {
     expect(result.remaining).toBe(1);
     state.probeCalls = 0;
     await flushSyncQueueInner();
-    expect(state.probeCalls).toBe(0);
+    expect(state.probeCalls).toBe(1);
+    expect(state.processCalls).toEqual([]);
   });
 
   it("allows one processor pass after ceilings pass, then does not hammer", async () => {

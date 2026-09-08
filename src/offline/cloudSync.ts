@@ -1394,27 +1394,25 @@ function firstSaleReturnRow(data: unknown): {
   };
 }
 
-async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<SyncProcessResult> {
-  if (!supabase) return { status: "retry", lastError: "rpc_failed" };
-  if (!isUuid(returnRow.id)) return { status: "block", lastError: "invalid_uuid" };
+async function selectCloudSaleReturnById(returnId: string): Promise<{
+  error: boolean;
+  row: { id: string; saleId: string | null; productId: string; quantity: number; refundAmountUgx: number } | null;
+}> {
+  if (!supabase || !isUuid(returnId)) return { error: true, row: null };
   const existingRes = await supabase
     .from("sale_returns")
     .select("id, sale_id, product_id, quantity, refund_amount_ugx")
-    .eq("id", returnRow.id)
-    .eq("shop_id", ctx.shopId)
+    .eq("id", returnId)
     .maybeSingle();
-  const existingRow = !existingRes.error ? firstSaleReturnRow(existingRes.data) : null;
-  if (
-    existingRow &&
-    cloudReturnAlreadySynced({
-      returnId: returnRow.id,
-      saleId: returnRow.saleId,
-      productId: returnRow.productId,
-      quantity: returnRow.quantity,
-      refundUgx: returnRow.refundAmountUgx,
-      cloudReturns: [existingRow],
-    })
-  ) {
+  if (existingRes.error) return { error: true, row: null };
+  return { error: false, row: firstSaleReturnRow(existingRes.data) };
+}
+
+async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<SyncProcessResult> {
+  if (!supabase) return { status: "retry", lastError: "rpc_failed" };
+  if (!isUuid(returnRow.id)) return { status: "block", lastError: "invalid_uuid" };
+  const existing = await selectCloudSaleReturnById(returnRow.id);
+  if (!existing.error && existing.row && cloudReturnAlreadySynced({ returnId: returnRow.id, cloudReturns: [existing.row] })) {
     return "ack";
   }
   const payload = {
@@ -1498,6 +1496,15 @@ export async function probeBlockedReturnRecovery(op: SyncOperation): Promise<boo
       return recordBlockedReturnProbe({ ...base, blocker: "no_shop_ctx" });
     }
     const returnId = String(payload.returnId ?? op.id ?? "").trim();
+    const existing = await selectCloudSaleReturnById(returnId);
+    if (!existing.error && existing.row && cloudReturnAlreadySynced({ returnId, cloudReturns: [existing.row] })) {
+      return recordBlockedReturnProbe({
+        ...base,
+        ok: true,
+        blocker: "none",
+        returnIdSuffix: idSuffix(returnId),
+      });
+    }
     const row = await resolveReturnForSync(returnId);
     if (!row) {
       return recordBlockedReturnProbe({ ...base, blocker: "no_return" });
@@ -1715,6 +1722,10 @@ async function processPendingReturnAdjustment(
   ctx: ShopCtx,
 ): Promise<SyncProcessResult> {
   const returnId = String(payload.returnId ?? "");
+  const existing = await selectCloudSaleReturnById(returnId);
+  if (!existing.error && existing.row && cloudReturnAlreadySynced({ returnId, cloudReturns: [existing.row] })) {
+    return "ack";
+  }
   const row = await resolveReturnForSync(returnId);
   if (!row) return "retry";
   const linkedSaleId = row.saleId ?? (typeof payload.saleId === "string" ? payload.saleId : null);
