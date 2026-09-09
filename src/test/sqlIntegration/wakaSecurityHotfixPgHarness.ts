@@ -15,6 +15,7 @@ const MIGRATION_183 = join(ROOT, "183_waka0203_security_hotfix.sql");
 const MIGRATION_184 = join(ROOT, "184_ungated_definer_primitive_revoke.sql");
 const MIGRATION_185 = join(ROOT, "185_account_deletion_wrapper_anon_revoke.sql");
 const MIGRATION_186 = join(ROOT, "186_sales_status_stock_drop_legacy_reverse.sql");
+const MIGRATION_187 = join(ROOT, "187_internal_ops_search_shops.sql");
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -503,6 +504,164 @@ export async function seedWakaSecurityCatalog(exec: SqlExec): Promise<void> {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.shop_pos_staff_revisions TO anon;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.waka_shop_number_counter TO anon;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.waka_shop_number_released TO anon;
+  `);
+}
+
+export async function applyWakaInternalOpsSearchShops(exec: SqlExec): Promise<void> {
+  await exec.exec(readSql(MIGRATION_187));
+}
+
+export const INTERNAL_OPS_SEARCH_FIXTURE = {
+  staffId: "a1870000-0000-4000-8000-000000000010",
+  outsiderId: "a1870000-0000-4000-8000-000000000011",
+  ownerId: "a1870000-0000-4000-8000-000000000012",
+  extraMemberId: "a1870000-0000-4000-8000-000000000013",
+  orgId: "a1870000-0000-4000-8000-000000000020",
+  oldShopId: "a1870000-0000-4000-8000-000000000001",
+  oldShopNumber: "A9001",
+  oldShopName: "Zebra Hidden Mart",
+  ownerEmail: "hidden.owner@example.com",
+  ownerFullName: "Nakato Hidden",
+  shopCount: 110,
+} as const;
+
+/** Minimal catalog so migration 187 can run on the 173-era security harness. */
+export async function seedInternalOpsSearchShopsCatalog(exec: SqlExec): Promise<void> {
+  const f = INTERNAL_OPS_SEARCH_FIXTURE;
+  await exec.exec(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon NOLOGIN;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated NOLOGIN;
+      END IF;
+    END $$;
+
+    GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+    ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS shop_number text;
+    ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS district text;
+    ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS city text;
+    ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS phone_e164 text;
+    ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS business_type text;
+    ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS gps_missing boolean DEFAULT true;
+    ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS last_seen_at timestamptz;
+
+    CREATE TABLE IF NOT EXISTS public.profiles (
+      id uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
+      full_name text,
+      email text,
+      business_name text,
+      phone_e164 text
+    );
+
+    CREATE TABLE IF NOT EXISTS public.internal_admins (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id uuid NOT NULL UNIQUE REFERENCES auth.users (id) ON DELETE CASCADE,
+      auth_user_id uuid REFERENCES auth.users (id),
+      email text NOT NULL,
+      role text NOT NULL DEFAULT 'support_admin',
+      assigned_district_ids uuid[] NOT NULL DEFAULT '{}'::uuid[],
+      max_shops int,
+      active boolean NOT NULL DEFAULT true,
+      is_active boolean,
+      full_name text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS public.shop_activity (
+      shop_id uuid PRIMARY KEY REFERENCES public.shops (id) ON DELETE CASCADE,
+      last_sale_at timestamptz,
+      sale_count_30d int NOT NULL DEFAULT 0,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS public.subscription_plans (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      code text NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS public.subscriptions (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      organization_id uuid REFERENCES public.organizations (id) ON DELETE CASCADE,
+      plan_id uuid REFERENCES public.subscription_plans (id),
+      status text,
+      trial_ends_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE OR REPLACE FUNCTION public.is_waka_internal_staff ()
+    RETURNS boolean
+    LANGUAGE sql
+    STABLE
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$
+      SELECT EXISTS (
+        SELECT 1
+        FROM public.internal_admins ia
+        WHERE coalesce(ia.auth_user_id, ia.user_id) = auth.uid()
+          AND coalesce(ia.is_active, ia.active, true) = true
+      );
+    $$;
+
+    CREATE OR REPLACE FUNCTION public.internal_can_view_owner_contact ()
+    RETURNS boolean
+    LANGUAGE sql
+    STABLE
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$
+      SELECT public.is_waka_internal_staff ();
+    $$;
+
+    INSERT INTO auth.users (id, email) VALUES
+      ('${f.staffId}'::uuid, 'staff@waka.ug'),
+      ('${f.outsiderId}'::uuid, 'outsider@shop.ug'),
+      ('${f.ownerId}'::uuid, '${f.ownerEmail}'),
+      ('${f.extraMemberId}'::uuid, 'manager@shop.ug')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.internal_admins (user_id, auth_user_id, email, role, active, is_active, full_name)
+    VALUES (
+      '${f.staffId}'::uuid,
+      '${f.staffId}'::uuid,
+      'staff@waka.ug',
+      'support_admin',
+      true,
+      true,
+      'Waka Staff'
+    )
+    ON CONFLICT (user_id) DO NOTHING;
+
+    INSERT INTO public.organizations (id, name)
+    VALUES ('${f.orgId}'::uuid, 'ADMIN-1 Search Org')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.shops (id, organization_id, name, shop_number, is_active, created_at, district, city, gps_missing)
+    SELECT
+      CASE WHEN i = 1 THEN '${f.oldShopId}'::uuid ELSE gen_random_uuid() END,
+      '${f.orgId}'::uuid,
+      CASE WHEN i = 1 THEN '${f.oldShopName}' ELSE 'Newest Window Shop ' || i::text END,
+      CASE WHEN i = 1 THEN '${f.oldShopNumber}' ELSE 'A' || lpad((2000 + i)::text, 4, '0') END,
+      true,
+      now() - ((110 - i) * interval '1 hour'),
+      CASE WHEN i = 1 THEN 'Gulu' ELSE 'Kampala' END,
+      'Center',
+      true
+    FROM generate_series(1, ${f.shopCount}) AS i;
+
+    INSERT INTO public.profiles (id, full_name, email)
+    VALUES ('${f.ownerId}'::uuid, '${f.ownerFullName}', '${f.ownerEmail}')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.shop_members (shop_id, user_id, role)
+    VALUES
+      ('${f.oldShopId}'::uuid, '${f.ownerId}'::uuid, 'owner'),
+      ('${f.oldShopId}'::uuid, '${f.extraMemberId}'::uuid, 'manager')
+    ON CONFLICT (shop_id, user_id) DO NOTHING;
   `);
 }
 

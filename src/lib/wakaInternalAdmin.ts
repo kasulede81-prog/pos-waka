@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { normalizeShopLookupInput } from "./shopNumber";
 
 export type WakaInternalAdminRow = {
   id: string;
@@ -991,6 +992,83 @@ function mapRecentShopRpcRow(row: Record<string, unknown>): RecentShopRow {
     product_count: Number(row.product_count ?? 0),
     sale_count_30d: Number(row.sale_count_30d ?? 0),
   };
+}
+
+export type InternalOpsSearchShopsResult = {
+  rows: RecentShopRow[];
+  hasMore: boolean;
+  error: string | null;
+};
+
+export type AdminShopListFilterStatus = "all" | "active" | "inactive";
+
+/** True for UUID or A-number lookup even when the typed string is short. */
+export function isInternalOpsExactShopLookup(query: string): boolean {
+  return normalizeShopLookupInput(query.trim()) != null;
+}
+
+/** Shops page browse allows empty query; global search does not. */
+export function shouldQueryInternalOpsShopSearch(
+  query: string,
+  opts?: { allowEmptyBrowse?: boolean },
+): boolean {
+  const q = query.trim();
+  if (!q) return Boolean(opts?.allowEmptyBrowse);
+  if (isInternalOpsExactShopLookup(q)) return true;
+  return q.length >= 2;
+}
+
+export function filterAdminShopListRows(
+  shops: RecentShopRow[],
+  opts: {
+    query?: string;
+    district: string;
+    plan: string;
+    status: AdminShopListFilterStatus;
+    applyQuery: boolean;
+  },
+): RecentShopRow[] {
+  const q = (opts.query ?? "").trim().toLowerCase();
+  return shops.filter((s) => {
+    if (opts.district && s.district !== opts.district) return false;
+    if (opts.plan && (s.plan_code ?? "") !== opts.plan) return false;
+    if (opts.status === "active" && !s.is_active) return false;
+    if (opts.status === "inactive" && s.is_active) return false;
+    if (!opts.applyQuery || !q) return true;
+    const owner =
+      formatDisplayEmail(s.owner_email) ??
+      formatOwnerDisplayLabel({ ownerFullName: s.owner_full_name, ownerLabel: s.owner_label }) ??
+      "";
+    return (
+      s.name.toLowerCase().includes(q) ||
+      (s.shop_number ?? "").toLowerCase().includes(q) ||
+      owner.toLowerCase().includes(q) ||
+      (s.district ?? "").toLowerCase().includes(q)
+    );
+  });
+}
+
+/**
+ * Paginated internal shop discovery. Requests `limit` rows; the RPC may return
+ * one extra so the client can set hasMore. Not capped to the newest 100 shops.
+ */
+export async function fetchInternalOpsSearchShops(opts?: {
+  query?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<InternalOpsSearchShopsResult> {
+  if (!supabase) return { rows: [], hasMore: false, error: "Not configured" };
+  const pageSize = Math.min(Math.max(opts?.limit ?? 25, 1), 50);
+  const offset = Math.min(Math.max(opts?.offset ?? 0, 0), 500);
+  const { data, error } = await supabase.rpc("internal_ops_search_shops", {
+    p_query: opts?.query ?? "",
+    p_limit: pageSize,
+    p_offset: offset,
+  });
+  if (error) return { rows: [], hasMore: false, error: error.message };
+  const mapped = (Array.isArray(data) ? data : []).map((row) => mapRecentShopRpcRow(row as Record<string, unknown>));
+  const hasMore = mapped.length > pageSize;
+  return { rows: mapped.slice(0, pageSize), hasMore, error: null };
 }
 
 /** Shops sorted by signup date (newest first) — best for spotting new registrations. */

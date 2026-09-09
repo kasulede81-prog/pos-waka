@@ -17,7 +17,12 @@ import type {
   RecentShopRow,
   SupportTicketRow,
 } from "../../../../lib/wakaInternalAdmin";
-import { formatDisplayEmail, formatOwnerDisplayLabel } from "../../../../lib/wakaInternalAdmin";
+import {
+  fetchInternalOpsSearchShops,
+  formatDisplayEmail,
+  formatOwnerDisplayLabel,
+  shouldQueryInternalOpsShopSearch,
+} from "../../../../lib/wakaInternalAdmin";
 import { internalAdminShopHref, internalAdminShopTabHref } from "../../../../lib/internalAdminPreview";
 import {
   CURRENT_APP_VERSION,
@@ -194,6 +199,34 @@ export function GlobalSearchBar({
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [remoteShops, setRemoteShops] = useState<RecentShopRow[]>([]);
+  const [shopSearchError, setShopSearchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (previewMode) {
+      setRemoteShops([]);
+      setShopSearchError(null);
+      return;
+    }
+    const needle = q.trim();
+    if (!shouldQueryInternalOpsShopSearch(needle)) {
+      setRemoteShops([]);
+      setShopSearchError(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void fetchInternalOpsSearchShops({ query: needle, limit: 8, offset: 0 }).then((result) => {
+        if (cancelled) return;
+        setRemoteShops(result.rows);
+        setShopSearchError(result.error);
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [q, previewMode]);
 
   type Hit =
     | { type: "shop"; id: string; label: string; sub: string }
@@ -212,29 +245,29 @@ export function GlobalSearchBar({
     const needle = q.trim().toLowerCase();
     if (needle.length < 2) return [];
 
-    const shopHits = shops
-      .filter((s) => {
-        const owner =
-          formatDisplayEmail(s.owner_email) ??
-          formatOwnerDisplayLabel({ ownerFullName: s.owner_full_name, ownerLabel: s.owner_label }) ??
-          "";
-        return (
-          s.name.toLowerCase().includes(needle) ||
-          (s.shop_number ?? "").toLowerCase().includes(needle) ||
-          owner.toLowerCase().includes(needle) ||
-          (s.district ?? "").toLowerCase().includes(needle) ||
-          (s.phone_e164 ?? "").includes(needle)
-        );
-      })
-      .slice(0, 5)
-      .map(
-        (s): Hit => ({
-          type: "shop",
-          id: s.id,
-          label: s.shop_number ? `${s.shop_number} · ${s.name}` : s.name,
-          sub: s.district ?? "Shop",
-        }),
-      );
+    const shopSource = previewMode
+      ? shops.filter((s) => {
+          const owner =
+            formatDisplayEmail(s.owner_email) ??
+            formatOwnerDisplayLabel({ ownerFullName: s.owner_full_name, ownerLabel: s.owner_label }) ??
+            "";
+          return (
+            s.name.toLowerCase().includes(needle) ||
+            (s.shop_number ?? "").toLowerCase().includes(needle) ||
+            owner.toLowerCase().includes(needle) ||
+            (s.district ?? "").toLowerCase().includes(needle) ||
+            (s.phone_e164 ?? "").includes(needle)
+          );
+        })
+      : remoteShops;
+    const shopHits = shopSource.slice(0, previewMode ? 5 : 8).map(
+      (s): Hit => ({
+        type: "shop",
+        id: s.id,
+        label: s.shop_number ? `${s.shop_number} · ${s.name}` : s.name,
+        sub: s.district ?? "Shop",
+      }),
+    );
 
     const ticketHits = tickets
       .filter(
@@ -399,7 +432,7 @@ export function GlobalSearchBar({
       ...aiHits,
       ...flagHits,
     ];
-  }, [q, shops, tickets, devices, admins, agents, releases, activations, pricingCampaigns, growthCampaigns, aiProviders, featureFlags]);
+  }, [q, shops, remoteShops, previewMode, tickets, devices, admins, agents, releases, activations, pricingCampaigns, growthCampaigns, aiProviders, featureFlags]);
 
   const go = (r: Hit) => {
     setOpen(false);
@@ -472,9 +505,12 @@ export function GlobalSearchBar({
       </div>
       {open && q.length >= 2 ? (
         <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-border bg-card py-1 shadow-xl">
-          {results.length === 0 ? (
+          {shopSearchError ? (
+            <p className="px-4 py-3 text-sm font-semibold text-red-700">Shop search failed. {shopSearchError}</p>
+          ) : null}
+          {results.length === 0 && !shopSearchError ? (
             <p className="px-4 py-3 text-sm text-muted-foreground">No matches.</p>
-          ) : (
+          ) : results.length === 0 ? null : (
             results.map((r) => (
               <button
                 key={`${r.type}-${r.id}`}
