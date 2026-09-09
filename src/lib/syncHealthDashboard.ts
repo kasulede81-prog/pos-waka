@@ -17,7 +17,7 @@ export type SyncHealthDashboardSnapshot = {
   oldestPendingAt: string | null;
   failedOperations: number;
   retryWaitMs: number | null;
-  queueHealth: "healthy" | "degraded" | "backing_off" | "blocked";
+  queueHealth: "healthy" | "degraded" | "backing_off" | "blocked" | "quarantined";
   inventoryIntegrityOk: boolean;
   inventoryIntegrityStatus: "healthy" | "warning" | "critical";
   inventoryMismatchCount: number;

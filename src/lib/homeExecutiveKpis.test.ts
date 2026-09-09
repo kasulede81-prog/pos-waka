@@ -28,6 +28,26 @@ describe("homeExecutiveKpis", () => {
     expect(kpis.find((k) => k.id === "lowStock")?.tone).toBe("danger");
     expect(kpis.find((k) => k.id === "sales")?.value).toBe("UGX 120K");
   });
+
+  it("passes overlay availability through without changing ready values", () => {
+    const kpis = buildHomeExecutiveKpis({
+      todayRevenueLabel: "Today's sales",
+      todayRevenueValue: "—",
+      todayRevenueIntensity: "calm",
+      todayRevenueHint: "Shop totals unavailable",
+      todayRevenueAvailability: "unavailable",
+      showTodayRevenue: true,
+      reportsPath: "/reports",
+      receiptsPath: "/receipts",
+      profitPath: "/office/profit",
+      cashPath: "/office/cash-drawer",
+      inventoryPath: "/stock",
+      debtsPath: "/debts",
+    });
+    expect(kpis[0]?.value).toBe("—");
+    expect(kpis[0]?.hint).toBe("Shop totals unavailable");
+    expect(kpis[0]?.availability).toBe("unavailable");
+  });
 });
 
 describe("homeModulePriority", () => {

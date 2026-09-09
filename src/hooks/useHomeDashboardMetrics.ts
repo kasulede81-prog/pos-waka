@@ -18,6 +18,14 @@ import {
 } from "../lib/localReporting";
 import type { HomePulseSparkMode, HomePulseTrendPoint } from "../lib/homePulseSpark";
 import { mergeHomeKpisWithShopOverlay } from "../lib/homeShopKpiOverlay";
+import {
+  homeKpiAvailabilityHint,
+  presentHomeKpiFormattedValue,
+  presentHomeKpiStat,
+  resolveHomeShopMonthAvailability,
+  resolveHomeShopTodayAvailability,
+  resolveHomeWeekSparkAvailability,
+} from "../lib/homeKpiTrust";
 import { authoritativeCloseForDate, readClosedDayTotals } from "../lib/closedDayAuthority";
 import { formatShortUgx } from "../lib/commandCenterPageView";
 import { resolveStableTodayKpi } from "../lib/todayKpiSnapshot";
@@ -74,6 +82,7 @@ export function useHomeDashboardMetrics(
   const todayKpiSnapshot = usePosStore((s) => s.todayKpiSnapshot);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const salesHydrating = usePosStore((s) => s.salesHistoryHydration?.active ?? false);
+  const hydrationStage = usePosStore((s) => s.hydrationStage);
   const preferences = usePosStore((s) => s.preferences);
   const { snapshot, authMode } = useSubscription();
   const homeMetrics = resolveVisibleHomeMetrics(role);
@@ -81,8 +90,9 @@ export function useHomeDashboardMetrics(
   const { todayKey, monthKey, monthLabel } = useKampalaCalendarTick(lang);
   const drawer = useDrawerCashForDay(todayKey);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
-  const shopOverlay = useShopHomeKpiOverlay({
-    enabled: authMode === "supabase" && homeMetrics.scope === "shop_wide",
+  const overlayEnabled = authMode === "supabase" && homeMetrics.scope === "shop_wide";
+  const shopOverlayState = useShopHomeKpiOverlay({
+    enabled: overlayEnabled,
     todayKey,
     monthKey,
   });
@@ -139,7 +149,7 @@ export function useHomeDashboardMetrics(
         previousMonthRevenueUgx: month.previousMonthRevenueUgx,
         revenueGrowthPct: month.revenueGrowthPct,
       },
-      shopOverlay,
+      shopOverlayState.overlay,
       { todayKey, monthKey, freezeToday: Boolean(todayClose) },
     );
     today.transactionCount = merged.todayTransactionCount;
@@ -149,6 +159,30 @@ export function useHomeDashboardMetrics(
     month.estimatedProfitUgx = merged.monthProfitUgx;
     month.previousMonthRevenueUgx = merged.previousMonthRevenueUgx;
     month.revenueGrowthPct = merged.revenueGrowthPct;
+    const kpiCopy = {
+      loading: t(lang, "homeKpiLoading"),
+      unavailable: t(lang, "homeKpiUnavailable"),
+    };
+    const overlayHasToday =
+      shopOverlayState.overlay?.todayTransactionCount != null && shopOverlayState.overlay?.todayRevenueUgx != null;
+    const overlayHasMonth = shopOverlayState.overlay?.monthRevenueUgx != null;
+    const hydrationComplete = hydrationStage === "complete";
+    const todayAvail = resolveHomeShopTodayAvailability({
+      scope,
+      overlayExpected: shopOverlayState.expected,
+      overlayStatus: shopOverlayState.status,
+      overlayHasToday,
+      freezeToday: Boolean(todayClose),
+    });
+    const monthAvail = resolveHomeShopMonthAvailability({
+      scope,
+      overlayExpected: shopOverlayState.expected,
+      overlayStatus: shopOverlayState.status,
+      overlayHasMonth,
+      salesHydrating,
+      hydrationComplete,
+    });
+    const weekAvail = resolveHomeWeekSparkAvailability({ salesHydrating, hydrationComplete });
     const totalDebtUgx = customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0);
     const canCash = permissionsHasEffective(role, "day.close", snapshot, authMode, actorPermissions);
     const canDebt = homeMetrics.showShopWideDebt;
@@ -159,23 +193,31 @@ export function useHomeDashboardMetrics(
     const byTile: Record<string, HomeTileLiveStat | undefined> = {};
 
     if (showTodayRevenue) {
-      byTile.sell = {
-        label: t(lang, "desktopHomeLiveTodaySales"),
-        value: tTemplate(lang, "desktopHomeLiveTxnCount", { count: today.transactionCount }),
-        intensity: today.transactionCount >= 40 ? "high" : today.transactionCount >= 10 ? "normal" : "calm",
-      };
+      byTile.sell = presentHomeKpiStat(
+        {
+          label: t(lang, "desktopHomeLiveTodaySales"),
+          value: tTemplate(lang, "desktopHomeLiveTxnCount", { count: today.transactionCount }),
+          intensity: today.transactionCount >= 40 ? "high" : today.transactionCount >= 10 ? "normal" : "calm",
+        },
+        todayAvail,
+        kpiCopy,
+      );
     }
 
     if (canProfit) {
-      byTile.profit = {
-        label: tTemplate(lang, "desktopHomeLiveMonthProfit", { month: monthLabel }),
-        value: formatShortUgx(month.estimatedProfitUgx),
-        trend:
-          month.revenueGrowthPct !== null
-            ? `${month.revenueGrowthPct >= 0 ? "↑" : "↓"} ${Math.abs(month.revenueGrowthPct).toFixed(1)}%`
-            : undefined,
-        intensity: revenueIntensity(month.estimatedProfitUgx),
-      };
+      byTile.profit = presentHomeKpiStat(
+        {
+          label: tTemplate(lang, "desktopHomeLiveMonthProfit", { month: monthLabel }),
+          value: formatShortUgx(month.estimatedProfitUgx),
+          trend:
+            month.revenueGrowthPct !== null
+              ? `${month.revenueGrowthPct >= 0 ? "↑" : "↓"} ${Math.abs(month.revenueGrowthPct).toFixed(1)}%`
+              : undefined,
+          intensity: revenueIntensity(month.estimatedProfitUgx),
+        },
+        monthAvail,
+        kpiCopy,
+      );
     }
 
     if (homeMetrics.showInventoryMetrics) {
@@ -200,19 +242,27 @@ export function useHomeDashboardMetrics(
     }
 
     if (permissionsHasEffective(role, "owner.dashboard", snapshot, authMode, actorPermissions)) {
-      byTile.commandCenter = {
-        label: t(lang, "desktopHomeLiveTodaySales"),
-        value: formatShortUgx(today.totalRevenueUgx),
-        intensity: revenueIntensity(today.totalRevenueUgx),
-      };
+      byTile.commandCenter = presentHomeKpiStat(
+        {
+          label: t(lang, "desktopHomeLiveTodaySales"),
+          value: formatShortUgx(today.totalRevenueUgx),
+          intensity: revenueIntensity(today.totalRevenueUgx),
+        },
+        todayAvail,
+        kpiCopy,
+      );
     }
 
     if (homeMetrics.showRecentSalesList) {
-      byTile.salesHistory = {
-        label: t(lang, "desktopHomeLiveTodaySales"),
-        value: tTemplate(lang, "desktopHomeLiveTxnCount", { count: today.transactionCount }),
-        intensity: today.transactionCount >= 20 ? "high" : "normal",
-      };
+      byTile.salesHistory = presentHomeKpiStat(
+        {
+          label: t(lang, "desktopHomeLiveTodaySales"),
+          value: tTemplate(lang, "desktopHomeLiveTxnCount", { count: today.transactionCount }),
+          intensity: today.transactionCount >= 20 ? "high" : "normal",
+        },
+        todayAvail,
+        kpiCopy,
+      );
     }
 
     if (canDebt) {
@@ -224,32 +274,42 @@ export function useHomeDashboardMetrics(
     }
 
     if (canReports) {
-      byTile.reports = {
-        label: tTemplate(lang, "desktopHomeLiveMonthSales", { month: monthLabel }),
-        value: formatShortUgx(month.totalRevenueUgx),
-        trend:
-          month.revenueGrowthPct !== null
-            ? `${month.revenueGrowthPct >= 0 ? "↑" : "↓"} ${Math.abs(month.revenueGrowthPct).toFixed(1)}%`
-            : pctChange(month.totalRevenueUgx, month.previousMonthRevenueUgx),
-        intensity: revenueIntensity(month.totalRevenueUgx),
-      };
+      byTile.reports = presentHomeKpiStat(
+        {
+          label: tTemplate(lang, "desktopHomeLiveMonthSales", { month: monthLabel }),
+          value: formatShortUgx(month.totalRevenueUgx),
+          trend:
+            month.revenueGrowthPct !== null
+              ? `${month.revenueGrowthPct >= 0 ? "↑" : "↓"} ${Math.abs(month.revenueGrowthPct).toFixed(1)}%`
+              : pctChange(month.totalRevenueUgx, month.previousMonthRevenueUgx),
+          intensity: revenueIntensity(month.totalRevenueUgx),
+        },
+        monthAvail,
+        kpiCopy,
+      );
     }
 
     let sparkMode: HomePulseSparkMode | null = null;
-    if (showTodayRevenue) sparkMode = "revenue";
-    else if (homeMetrics.showRecentSalesList || Boolean(byTile.sell)) sparkMode = "transactions";
-    const weekTrend: HomePulseTrendPoint[] = sparkMode
-      ? rollingWeek.dailyTrend.map((point) => ({
-          day: point.day,
-          revenueUgx: point.revenueUgx,
-          transactionCount: point.transactionCount,
-        }))
-      : [];
+    if (weekAvail === "ready") {
+      if (showTodayRevenue) sparkMode = "revenue";
+      else if (homeMetrics.showRecentSalesList || Boolean(byTile.sell)) sparkMode = "transactions";
+    }
+    const weekTrend: HomePulseTrendPoint[] =
+      sparkMode && weekAvail === "ready"
+        ? rollingWeek.dailyTrend.map((point) => ({
+            day: point.day,
+            revenueUgx: point.revenueUgx,
+            transactionCount: point.transactionCount,
+          }))
+        : [];
 
+    const todayRevenueValue = presentHomeKpiFormattedValue(formatShortUgx(today.totalRevenueUgx), todayAvail);
     const executive = buildHomeExecutiveKpis({
       todayRevenueLabel: t(lang, "desktopHomeLiveTodaySales"),
-      todayRevenueValue: formatShortUgx(today.totalRevenueUgx),
-      todayRevenueIntensity: revenueIntensity(today.totalRevenueUgx),
+      todayRevenueValue,
+      todayRevenueIntensity: todayAvail === "ready" ? revenueIntensity(today.totalRevenueUgx) : "calm",
+      todayRevenueHint: homeKpiAvailabilityHint(todayAvail, kpiCopy),
+      todayRevenueAvailability: todayAvail,
       showTodayRevenue,
       transactions: byTile.sell,
       profit: byTile.profit,
@@ -286,7 +346,10 @@ export function useHomeDashboardMetrics(
     actorPermissions,
     todayKpiSnapshot,
     salesHydrating,
+    hydrationStage,
     pharmacyMode,
-    shopOverlay,
+    shopOverlayState.overlay,
+    shopOverlayState.status,
+    shopOverlayState.expected,
   ]);
 }

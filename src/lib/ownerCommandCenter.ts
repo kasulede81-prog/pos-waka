@@ -42,6 +42,7 @@ import {
   ownerRiskCardTitle,
   type OwnerRiskCard,
 } from "./ownerRiskDashboard";
+import { isUnhealthyQueueHealth } from "./autoSync";
 import type { OwnerDashboardIntegritySnapshot } from "./ownerDashboardIntegrityCache";
 import {
   buildDayCloseVarianceAttentionItems,
@@ -544,10 +545,7 @@ export function buildIntegritySignals(
 ): IntegritySignal[] {
   const syncErr = integrity.syncErrorCount || integrity.syncStats.errorCount;
   const pending = integrity.syncPendingCount || integrity.syncStats.unsyncedCount;
-  const queueDegraded =
-    integrity.syncHealth.queueHealth === "degraded" ||
-    integrity.syncHealth.queueHealth === "backing_off" ||
-    integrity.syncHealth.queueHealth === "blocked";
+  const queueDegraded = isUnhealthyQueueHealth(integrity.syncHealth.queueHealth);
 
   const drawerConflict =
     integrity.periodDrawerDuplicateOpens > 0 ||

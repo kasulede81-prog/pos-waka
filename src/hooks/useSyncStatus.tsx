@@ -28,7 +28,8 @@ import {
   syncStartupIdleMs,
 } from "../lib/syncTiming";
 import { useOfflineStatus } from "./useOfflineStatus";
-import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
+import { applySyncHealthAfterCycle, readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
+import { readLastEntityPullErrors } from "../lib/pullDiagnostics";
 import { appendPilotEvent } from "../lib/pilotEventLog";
 import { pilotSyncLog } from "../lib/pilotSyncLog";
 import { captureAppException } from "../lib/crashReporting";
@@ -196,32 +197,41 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
     setHealth(readSyncHealthMeta());
     try {
       const work = (async () => {
+        const retryQuarantined = showSpinner || forcePending;
         if (wantPull) {
-          const { pulled, push, queueFailed } = await syncShopWithCloud({ pull: true, forceFull });
+          const { pulled, push, queueFailed } = await syncShopWithCloud({
+            pull: true,
+            forceFull,
+            retryQuarantined,
+          });
           lastFullSyncAtRef.current = Date.now();
           lastPushAtRef.current = lastFullSyncAtRef.current;
-          void pulled;
-          if (push.fail === 0 && queueFailed === 0) {
-            writeSyncHealthMeta({
-              lastSuccessAt: attemptAt,
-              lastIssueCode: "none",
-              lastIssueAt: null,
-            });
-          } else {
-            writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
-          }
+          const entityPullErrors = readLastEntityPullErrors();
+          const pullPartial = pulled === false || Object.keys(entityPullErrors).length > 0;
+          const durable = await readSyncQueue();
+          applySyncHealthAfterCycle({
+            attemptAt,
+            pullPartial,
+            entityPullErrors,
+            pushFail: push.fail,
+            queueFailed,
+            durableRemaining: durable.length,
+            queueHealth: deriveQueueHealth(durable),
+          });
         } else {
-          const { push, queueFailed } = await pushShopPendingToCloud();
+          const { push, queueFailed } = await pushShopPendingToCloud({ retryQuarantined });
           lastPushAtRef.current = Date.now();
-          if (push.fail === 0 && queueFailed === 0 && (push.ok > 0 || pendingRef.current === 0)) {
-            writeSyncHealthMeta({
-              lastSuccessAt: attemptAt,
-              lastIssueCode: "none",
-              lastIssueAt: null,
-            });
-          } else if (push.fail > 0 || queueFailed > 0) {
-            writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
-          }
+          const durable = await readSyncQueue();
+          const entityPullErrors = readLastEntityPullErrors();
+          applySyncHealthAfterCycle({
+            attemptAt,
+            pullPartial: Object.keys(entityPullErrors).length > 0,
+            entityPullErrors,
+            pushFail: push.fail,
+            queueFailed,
+            durableRemaining: durable.length,
+            queueHealth: deriveQueueHealth(durable),
+          });
         }
       })();
       await Promise.race([

@@ -83,12 +83,12 @@ export function MobileHomeCockpit({
         {salesKpi ? (
           <>
             <p className={`${HOME_MOBILE_TYPE.salesLabel} mt-3`}>{salesKpi.label}</p>
-            <HomeLiveValue value={salesKpi.value} className={clsx("home-stat-value mt-0.5 block text-foreground", HOME_MOBILE_TYPE.salesValue)} />
+            <HomeLiveValue value={salesKpi.value} availability={salesKpi.availability} className={clsx("home-stat-value mt-0.5 block text-foreground", HOME_MOBILE_TYPE.salesValue)} />
           </>
         ) : sellStat ? (
           <>
             <p className={`${HOME_MOBILE_TYPE.salesLabel} mt-3`}>{sellStat.label}</p>
-            <HomeLiveValue value={sellStat.value} className={clsx("home-stat-value mt-0.5 block text-foreground", HOME_MOBILE_TYPE.salesValue)} />
+            <HomeLiveValue value={sellStat.value} availability={sellStat.availability} className={clsx("home-stat-value mt-0.5 block text-foreground", HOME_MOBILE_TYPE.salesValue)} />
           </>
         ) : (
           <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "builderHomeHeroSub")}</p>

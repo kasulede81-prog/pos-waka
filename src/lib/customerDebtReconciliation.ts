@@ -4,7 +4,11 @@
  */
 
 import type { Customer, DebtPayment, Sale } from "../types";
-import { computeExpectedCustomerDebt } from "./customerDebt";
+import {
+  computeExpectedCustomerDebt,
+  sumDebtPaymentsForCustomer,
+  sumRemainingSaleDebtForCustomer,
+} from "./customerDebt";
 
 export type CustomerDebtReconciliation = {
   customerId: string;
@@ -48,8 +52,36 @@ function newerCustomerRow<T extends Versioned>(a: T, b: T): T {
 }
 
 /**
+ * True only when the in-memory sales + payments can stand in for this
+ * customer's full debt history. An incomplete subset must not replace the
+ * cloud `debtBalanceUgx` (R1).
+ */
+export function isLocalCustomerDebtLedgerComplete(
+  customerId: string,
+  remoteBalanceUgx: number,
+  sales: Sale[],
+  debtPayments: DebtPayment[],
+): boolean {
+  const saleDebt = sumRemainingSaleDebtForCustomer(sales, customerId);
+  const paid = sumDebtPaymentsForCustomer(debtPayments, customerId);
+  const expected = Math.max(0, saleDebt - paid);
+  const remote = Math.max(0, remoteBalanceUgx);
+
+  if (expected === remote) return true;
+  if (saleDebt === 0 && paid === 0) return false;
+  // Missing payments: local expected is higher than the cloud balance.
+  if (expected > remote) return false;
+  // Missing sales: local expected is lower and no payments explain the gap.
+  if (expected < remote && paid === 0) return false;
+  // Ledger does not cover the cloud-reported outstanding amount.
+  if (saleDebt + paid < remote) return false;
+  return true;
+}
+
+/**
  * Merge customer rows after cloud pull.
- * When ledger is authoritative, balance comes from sales + payments — not last-write-wins.
+ * Ledger overwrite runs only when the caller asked for it AND the local
+ * sales + payments are complete enough for this customer.
  */
 export function mergeCustomerFromCloudPull(
   local: Customer,
@@ -60,11 +92,18 @@ export function mergeCustomerFromCloudPull(
 ): Customer {
   const base = newerCustomerRow(local, remote);
   if (!opts?.ledgerAuthoritative) return base;
+  if (!isLocalCustomerDebtLedgerComplete(local.id, remote.debtBalanceUgx, sales, debtPayments)) {
+    return base;
+  }
   const rec = reconcileCustomerDebtBalance(base, sales, debtPayments);
   if (rec.healthy) return base;
+  const nextVersion =
+    local.debtBalanceUgx === rec.expected
+      ? Math.max(local.version, remote.version)
+      : Math.max(local.version, remote.version) + 1;
   return {
     ...base,
     debtBalanceUgx: rec.expected,
-    version: Math.max(local.version, remote.version) + 1,
+    version: nextVersion,
   };
 }

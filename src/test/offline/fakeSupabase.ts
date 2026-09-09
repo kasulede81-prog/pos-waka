@@ -61,6 +61,14 @@ export type FakeSupabaseOptions = {
    * actually use are implemented; everything else stays a no-op.
    */
   keyset?: boolean;
+  /**
+   * Opt-in PostgREST `.eq()` / `.in()` filtering, per table.
+   *
+   * OFF by default so existing tests keep "the server returns exactly the rows
+   * I configured". Turn it ON for tables where the test's point is that the
+   * client sent a status/shop filter and the server honoured it (WAKA-09).
+   */
+  columnFilterTables?: string[];
 };
 
 type QueryOutcome = { data: unknown; error: null };
@@ -99,6 +107,9 @@ class FakeQueryBuilder implements PromiseLike<QueryOutcome> {
   private readonly table: string;
   private readonly writes: FakeSupabaseWrite[];
   private readonly keyset: boolean;
+  private readonly columnFilters: boolean;
+  private eqFilters: Array<{ column: string; value: unknown }> = [];
+  private inFilters: Array<{ column: string; values: unknown[] }> = [];
   private gtColumn: string | null = null;
   private gtValue: string | null = null;
   private orFilter: string | null = null;
@@ -107,13 +118,30 @@ class FakeQueryBuilder implements PromiseLike<QueryOutcome> {
   private orders: Array<{ column: string; ascending: boolean }> = [];
   private rowLimit: number | null = null;
 
-  constructor(table: string, rows: unknown[], writes: FakeSupabaseWrite[], keyset = false) {
+  constructor(
+    table: string,
+    rows: unknown[],
+    writes: FakeSupabaseWrite[],
+    keyset = false,
+    columnFilters = false,
+  ) {
     this.table = table;
     this.rows = rows;
     this.writes = writes;
     this.keyset = keyset;
+    this.columnFilters = columnFilters;
     for (const method of CHAIN_METHODS) {
       (this as unknown as Record<string, unknown>)[method] = () => this;
+    }
+    if (columnFilters) {
+      (this as unknown as Record<string, unknown>).eq = (column: string, value: unknown) => {
+        this.eqFilters.push({ column, value });
+        return this;
+      };
+      (this as unknown as Record<string, unknown>).in = (column: string, values: unknown[]) => {
+        this.inFilters.push({ column, values: [...values] });
+        return this;
+      };
     }
     if (!keyset) return;
     (this as unknown as Record<string, unknown>).gt = (column: string, value: unknown) => {
@@ -141,10 +169,19 @@ class FakeQueryBuilder implements PromiseLike<QueryOutcome> {
     };
   }
 
-  /** Apply the recorded `.gt` / `.or` / `.order` / `.limit` the way PostgREST would. */
+  /** Apply recorded `.eq` / `.in` and, when enabled, keyset `.gt` / `.or` / `.order` / `.limit`. */
   private resolveRows(): unknown[] {
-    if (!this.keyset) return this.rows;
+    if (!this.keyset && !this.columnFilters) return this.rows;
     let out = [...this.rows] as Record<string, unknown>[];
+    if (this.columnFilters) {
+      for (const filter of this.eqFilters) {
+        out = out.filter((row) => row[filter.column] === filter.value);
+      }
+      for (const filter of this.inFilters) {
+        out = out.filter((row) => filter.values.includes(row[filter.column]));
+      }
+    }
+    if (!this.keyset) return out;
     const keysetOr = this.orFilter ? parseIncrementalKeysetOr(this.orFilter) : null;
     if (keysetOr) {
       out = out.filter((row) =>
@@ -277,7 +314,13 @@ export function createFakeSupabaseClient(options: FakeSupabaseOptions = {}): Fak
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => undefined } } }),
     },
     from: (table: string) =>
-      new FakeQueryBuilder(table, [...(tables[table] ?? [])], writes, options.keyset === true),
+      new FakeQueryBuilder(
+        table,
+        [...(tables[table] ?? [])],
+        writes,
+        options.keyset === true,
+        options.columnFilterTables?.includes(table) === true,
+      ),
     rpc: async (fn: string, args?: Record<string, unknown>) => {
       rpcCalls.push({ fn, args });
       return { data: fn in rpcResults ? rpcResults[fn] : null, error: null };

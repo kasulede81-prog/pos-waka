@@ -1,16 +1,15 @@
 /**
- * DEBT-PAY-01 — prevent the same Pay Debt confirm from minting two payment IDs.
+ * DEBT-PAY-01 / R7 — prevent the same Pay Debt confirm from minting two payment IDs.
  * `addDebtPayment` is not idempotent (new UUID each call). A React busy flag is
  * too late for double-click; this lock is synchronous.
  *
- * The key is an in-flight / session identity, not a permanent uniqueness rule.
- * The same customer may legitimately pay the same amount later after the lock
- * is released (sheet reopen / account switch).
+ * The key is an in-flight identity, not a permanent uniqueness rule. Overlapping
+ * submits of the same customer+amount are rejected. The lock is released when
+ * the protected submission finishes (success or failure) so a later legitimate
+ * payment is not blocked until the sheet reopens. Account switch still clears
+ * leftover keys.
  *
  * Validation must run before tryBegin (failed validation must not take the lock).
- * Failed mutations release the lock so the cashier can retry.
- * Successful mutations stay locked until the caller releases (sheet reopen /
- * account switch) so a later legitimate payment remains possible.
  */
 
 import { onActiveAccountKeyChange } from "../offline/accountScope";

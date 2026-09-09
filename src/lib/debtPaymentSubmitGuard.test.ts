@@ -17,7 +17,7 @@ import * as receiptBranding from "./receiptBranding";
 import {
   debtPaymentSubmitLockHeld,
   debtPaymentSubmitLockKey,
-  releaseDebtPaymentSubmit,
+  releaseDebtPaymentSubmitsForAccount,
   resetDebtPaymentSubmitLocksForTests,
   tryBeginDebtPaymentSubmit,
 } from "./debtPaymentSubmitGuard";
@@ -87,15 +87,24 @@ describe("DEBT-PAY-01 debt payment submit guard", () => {
     vi.restoreAllMocks();
   });
 
-  it("A — two concurrent identical submits mint one payment, one queue, one shift total", () => {
+  it("A — nested re-entrant submit while first is in-flight mints one payment", () => {
+    let reentered = false;
+    const unsub = usePosStore.subscribe(() => {
+      if (reentered) return;
+      reentered = true;
+      expect(debtPaymentSubmitLockHeld(lockKeyFor(ACCOUNT_A))).toBe(true);
+      const second = usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
+      expect(second.ok).toBe(false);
+      expect(second.errorKey).toBe("invalid");
+      expect(second.payment).toBeUndefined();
+    });
+
     const first = usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
-    const second = usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
+    unsub();
 
     expect(first.ok).toBe(true);
-    expect(second.ok).toBe(false);
-    expect(second.errorKey).toBe("invalid");
     expect(first.payment?.id).toBeTruthy();
-    expect(second.payment).toBeUndefined();
+    expect(reentered).toBe(true);
 
     const state = usePosStore.getState();
     expect(state.debtPayments).toHaveLength(1);
@@ -106,16 +115,19 @@ describe("DEBT-PAY-01 debt payment submit guard", () => {
     const queued = queuedDebtPayments(enqueueSpy);
     expect(queued).toHaveLength(1);
     expect((queued[0]![0] as { payload: { paymentId: string } }).payload.paymentId).toBe(first.payment!.id);
+    expect(debtPaymentSubmitLockHeld(lockKeyFor(ACCOUNT_A))).toBe(false);
   });
 
-  it("B — two rapid 10k submits against 100k leave balance 90k", () => {
-    usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
-    usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
+  it("B — overlapping in-flight lock rejects a concurrent duplicate", () => {
+    const key = lockKeyFor(ACCOUNT_A);
+    expect(tryBeginDebtPaymentSubmit(key)).toBe(true);
+    expect(debtPaymentSubmitLockHeld(key)).toBe(true);
 
-    const state = usePosStore.getState();
-    expect(state.debtPayments).toHaveLength(1);
-    expect(state.debtPayments[0]!.amountUgx).toBe(10_000);
-    expect(state.customers[0]!.debtBalanceUgx).toBe(90_000);
+    const blocked = usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
+    expect(blocked.ok).toBe(false);
+    expect(blocked.errorKey).toBe("invalid");
+    expect(usePosStore.getState().debtPayments).toHaveLength(0);
+    expect(usePosStore.getState().customers[0]!.debtBalanceUgx).toBe(100_000);
   });
 
   it("C — two rapid full 100k submits create one 100k payment", () => {
@@ -159,12 +171,12 @@ describe("DEBT-PAY-01 debt payment submit guard", () => {
     expect(usePosStore.getState().customers[0]!.debtBalanceUgx).toBe(90_000);
   });
 
-  it("F — after a successful payment, a later legitimate same-amount payment still works", () => {
+  it("F — after a successful payment, a later legitimate same-amount payment works without sheet reopen", () => {
     const first = usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
     expect(first.ok).toBe(true);
     expect(usePosStore.getState().debtPayments).toHaveLength(1);
+    expect(debtPaymentSubmitLockHeld(lockKeyFor(ACCOUNT_A))).toBe(false);
 
-    releaseDebtPaymentSubmit(lockKeyFor(ACCOUNT_A));
     const later = usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
     expect(later.ok).toBe(true);
     expect(later.payment!.id).not.toBe(first.payment!.id);
@@ -208,6 +220,15 @@ describe("DEBT-PAY-01 debt payment submit guard", () => {
     expect(b.payment!.id).not.toBe(a.payment!.id);
   });
 
+  it("R7 — sheet reopen helper still clears leftover in-flight keys", () => {
+    const key = lockKeyFor(ACCOUNT_A);
+    expect(tryBeginDebtPaymentSubmit(key)).toBe(true);
+    releaseDebtPaymentSubmitsForAccount(ACCOUNT_A);
+    expect(debtPaymentSubmitLockHeld(key)).toBe(false);
+    const after = usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
+    expect(after.ok).toBe(true);
+  });
+
   it("I — existing shop_push_debt_payment same-ID idempotency remains intact", () => {
     const sql174 = readFileSync(join(ROOT, "supabase/migrations/174_debt_payment_durable_idempotency.sql"), "utf8");
     expect(sql174).toContain("shop_push_debt_payment");
@@ -238,6 +259,8 @@ describe("DEBT-PAY-01 debt payment submit guard", () => {
     const beforeCc = sumDebtPaymentsInBounds(before.debtPayments, bounds);
 
     const first = usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
+    const key = lockKeyFor(ACCOUNT_A);
+    expect(tryBeginDebtPaymentSubmit(key)).toBe(true);
     usePosStore.getState().addDebtPayment(CUSTOMER_A, 10_000);
     expect(first.ok).toBe(true);
 

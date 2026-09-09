@@ -56,6 +56,8 @@ const STORED_SYNC_ERRORS = new Set<string>([
   ...RPC_BUSINESS_ERRORS,
   ...POSTGREST_CODE_ERRORS,
   RPC_FAILED_ERROR,
+  "quarantined_max_attempts",
+  "quarantined_no_shop",
 ]);
 
 export function sanitizeStoredSyncError(error?: string | null): string | null {

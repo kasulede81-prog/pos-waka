@@ -61,7 +61,7 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
         <p className="mt-2 text-xs font-semibold text-amber-900">
           {h.queueHealth === "backing_off"
             ? t(lang, "autoSyncQueueBackoff")
-            : h.queueHealth === "blocked"
+            : h.queueHealth === "blocked" || h.queueHealth === "quarantined"
               ? t(lang, "autoSyncQueueBlocked")
               : t(lang, "autoSyncQueueDegraded")}
         </p>

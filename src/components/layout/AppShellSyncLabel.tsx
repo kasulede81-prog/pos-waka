@@ -28,9 +28,10 @@ function label(
   pendingCount: number,
   online: boolean,
   syncErrors: number,
-  queueHealth: "healthy" | "degraded" | "backing_off" | "blocked",
+  queueHealth: "healthy" | "degraded" | "backing_off" | "blocked" | "quarantined",
   pullPaused: boolean,
   uploadPausedReason: string | null,
+  lastIssueCode: "none" | "partial" | "error",
 ): string {
   if (!online) return t(lang, "posUploadWaitingNetwork");
   if (uploadPausedReason === "recovery_lock" || uploadPausedReason === "org_blocked") {
@@ -38,9 +39,11 @@ function label(
   }
   if (syncing) return t(lang, "posUploadInProgress");
   if (syncErrors > 0) return tTemplate(lang, "syncErrorCount", { count: String(syncErrors) });
+  if (lastIssueCode === "error") return t(lang, "syncIssueError");
+  if (lastIssueCode === "partial") return t(lang, "syncIssuePartial");
+  if (queueHealth === "quarantined" || queueHealth === "blocked") return t(lang, "autoSyncQueueBlocked");
   if (queueHealth === "backing_off") return t(lang, "autoSyncQueueBackoff");
   if (queueHealth === "degraded") return t(lang, "autoSyncQueueDegraded");
-  if (queueHealth === "blocked") return t(lang, "autoSyncQueueBlocked");
   if (pendingCount > 0) {
     return tTemplate(lang, "posUploadPendingCount", { count: String(pendingCount) });
   }
@@ -61,7 +64,9 @@ export const AppShellSyncLabel = memo(function AppShellSyncLabel({
   const { syncing, pendingCount, health, pullPaused } = useSyncStatus();
   const syncErrors = countSalesWithSyncErrors();
   const salesHydration = usePosStore((s) => s.salesHistoryHydration);
-  const needsAction = isOnline && syncErrors > 0;
+  const needsAction =
+    isOnline &&
+    (syncErrors > 0 || health.lastIssueCode !== "none" || health.queueHealth === "quarantined" || health.queueHealth === "blocked");
 
   const syncLine = label(
     lang,
@@ -72,6 +77,7 @@ export const AppShellSyncLabel = memo(function AppShellSyncLabel({
     health.queueHealth,
     pullPaused,
     health.lastPosPushSkipReason ?? null,
+    health.lastIssueCode,
   );
   const offlineDur = !isOnline ? offlineDurationLabel(health.offlineSinceAt) : null;
   const lastSuccess = fmtShort(health.lastPosPushSuccessAt ?? health.lastSuccessAt, lang);
@@ -119,7 +125,7 @@ export const AppShellSyncLabel = memo(function AppShellSyncLabel({
           {tTemplate(lang, "autoSyncOfflineDuration", { duration: offlineDur })}
         </p>
       ) : null}
-      {isOnline && lastSuccess && !syncing && pendingCount === 0 && syncErrors === 0 ? (
+      {isOnline && lastSuccess && !syncing && pendingCount === 0 && syncErrors === 0 && health.lastIssueCode === "none" && health.queueHealth === "healthy" ? (
         <p className={`truncate text-[10px] font-medium ${inverted ? "text-emerald-100" : "text-emerald-800"}`}>
           {tTemplate(lang, "autoSyncLastSuccess", { time: lastSuccess })}
         </p>

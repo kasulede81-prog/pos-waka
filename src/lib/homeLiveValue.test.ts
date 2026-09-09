@@ -13,6 +13,19 @@ describe("HomeLiveValue", () => {
     expect(html).toContain("home-live-value");
   });
 
+  it("marks loading and unavailable values for Home", () => {
+    const loading = renderToStaticMarkup(
+      createElement(HomeLiveValue, { value: "—", availability: "loading" }),
+    );
+    expect(loading).toContain('data-home-kpi-availability="loading"');
+    expect(loading).toContain("aria-busy");
+    const unavailable = renderToStaticMarkup(
+      createElement(HomeLiveValue, { value: "—", availability: "unavailable" }),
+    );
+    expect(unavailable).toContain('data-home-kpi-availability="unavailable"');
+    expect(unavailable).not.toContain("aria-busy");
+  });
+
   it("restarts CSS illumination from the formatted string key", () => {
     const src = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../components/home/HomeLiveValue.tsx"),

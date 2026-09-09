@@ -109,15 +109,24 @@ export function HomeReportsPreview({
             {sellStat ? (
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{sellStat.label}</p>
-                <HomeLiveValue value={sellStat.value} className="text-lg font-black tabular-nums text-foreground xl:text-xl" />
+                <HomeLiveValue value={sellStat.value} availability={sellStat.availability} className="text-lg font-black tabular-nums text-foreground xl:text-xl" />
               </div>
             ) : null}
             {liveStat ? (
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{liveStat.label}</p>
                 <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
-                  <HomeLiveValue value={liveStat.value} className="text-lg font-black tabular-nums text-foreground xl:text-xl" />
-                  {liveStat.trend ? <span className="text-xs font-bold text-success">{liveStat.trend}</span> : null}
+                  <HomeLiveValue value={liveStat.value} availability={liveStat.availability} className="text-lg font-black tabular-nums text-foreground xl:text-xl" />
+                  {liveStat.trend ? (
+                    <span
+                      className={clsx(
+                        "text-xs font-bold",
+                        liveStat.availability === "ready" || !liveStat.availability ? "text-success" : "text-muted-foreground",
+                      )}
+                    >
+                      {liveStat.trend}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -126,8 +135,17 @@ export function HomeReportsPreview({
           <div className={clsx("min-w-0", commandPanel ? "w-full" : "flex-1")}>
             <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{liveStat.label}</p>
             <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
-              <HomeLiveValue value={liveStat.value} className="text-lg font-black tabular-nums text-foreground xl:text-xl" />
-              {liveStat.trend ? <span className="text-xs font-bold text-success">{liveStat.trend}</span> : null}
+              <HomeLiveValue value={liveStat.value} availability={liveStat.availability} className="text-lg font-black tabular-nums text-foreground xl:text-xl" />
+              {liveStat.trend ? (
+                <span
+                  className={clsx(
+                    "text-xs font-bold",
+                    liveStat.availability === "ready" || !liveStat.availability ? "text-success" : "text-muted-foreground",
+                  )}
+                >
+                  {liveStat.trend}
+                </span>
+              ) : null}
             </div>
           </div>
         ) : null}

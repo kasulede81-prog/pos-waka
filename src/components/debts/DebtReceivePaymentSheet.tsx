@@ -49,17 +49,17 @@ export function DebtReceivePaymentSheet({ lang, open, customer, onClose, onSubmi
     if (n <= 0) return;
     submitInFlightRef.current = true;
     setSubmitting(true);
+    let succeeded = false;
     try {
-      const ok = await onSubmit(n);
-      if (ok) {
-        onClose();
-        return;
-      }
-      submitInFlightRef.current = false;
-      setSubmitting(false);
+      succeeded = await onSubmit(n);
+      if (succeeded) onClose();
     } catch {
-      submitInFlightRef.current = false;
-      setSubmitting(false);
+      succeeded = false;
+    } finally {
+      if (!succeeded) {
+        submitInFlightRef.current = false;
+        setSubmitting(false);
+      }
     }
   };
 

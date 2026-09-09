@@ -36,6 +36,7 @@ export function OwnerLiveOperationsSection({ lang, live }: Props) {
     live.queueHealth === "degraded" ||
     live.queueHealth === "backing_off" ||
     live.queueHealth === "blocked" ||
+    live.queueHealth === "quarantined" ||
     live.unsyncedOperations > 0;
 
   return (

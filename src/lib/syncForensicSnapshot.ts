@@ -143,7 +143,7 @@ export type SyncForensicSnapshot = {
     oldestCreatedAt: string | null;
     newestCreatedAt: string | null;
     maxAttempts: number;
-    queueHealth: "healthy" | "degraded" | "backing_off" | "blocked";
+    queueHealth: "healthy" | "degraded" | "backing_off" | "blocked" | "quarantined";
     queueHasReadyWork: boolean;
     queueHasBackoff: boolean;
     queueHasClosedDatePark: boolean;

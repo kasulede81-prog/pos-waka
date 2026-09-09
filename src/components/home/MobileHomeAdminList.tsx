@@ -42,7 +42,7 @@ export function MobileHomeAdminList({ lang, tiles, liveStats, onOpen }: Props) {
                 <span className="min-w-0 flex-1 text-left">
                   <span className="block truncate text-sm font-bold">{t(lang, tile.labelKey)}</span>
                   {stat ? (
-                    <HomeLiveValue value={stat.value} className="block truncate text-xs font-semibold tabular-nums opacity-80" />
+                    <HomeLiveValue value={stat.value} availability={stat.availability} className="block truncate text-xs font-semibold tabular-nums opacity-80" />
                   ) : null}
                 </span>
                 {tile.badge !== undefined && tile.badge > 0 ? (

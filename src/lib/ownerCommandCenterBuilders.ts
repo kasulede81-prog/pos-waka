@@ -54,6 +54,7 @@ import { listSyncConflicts } from "./syncConflictLog";
 import { readSyncCheckpoints } from "./syncCheckpoints";
 import { countUnsyncedSales } from "../offline/cloudSync";
 import type { SyncHealthMeta } from "./syncMeta";
+import { isUnhealthyQueueHealth } from "./autoSync";
 import { LARGE_DISCOUNT_UGX_THRESHOLD } from "./ownerRiskDashboard";
 import type { AttentionItem, ShiftAccountabilityRow } from "./ownerCommandCenter";
 import type { OwnerDashboardIntegritySnapshot } from "./ownerDashboardIntegrityCache";
@@ -444,10 +445,7 @@ export function buildQueueHealthAttentionItems(
   syncHealth: SyncHealthMeta,
   pendingCount: number,
 ): AttentionItem[] {
-  const degraded =
-    syncHealth.queueHealth === "degraded" ||
-    syncHealth.queueHealth === "backing_off" ||
-    syncHealth.queueHealth === "blocked";
+  const degraded = isUnhealthyQueueHealth(syncHealth.queueHealth);
   if (!degraded && pendingCount < 20) return [];
   return [
     {
@@ -1035,10 +1033,7 @@ export function buildExtendedIntegritySignals(
 ): IntegritySignal[] {
   const syncErr = integrity.syncErrorCount || integrity.syncStats.errorCount;
   const pending = integrity.syncPendingCount || integrity.syncStats.unsyncedCount;
-  const queueDegraded =
-    integrity.syncHealth.queueHealth === "degraded" ||
-    integrity.syncHealth.queueHealth === "backing_off" ||
-    integrity.syncHealth.queueHealth === "blocked";
+  const queueDegraded = isUnhealthyQueueHealth(integrity.syncHealth.queueHealth);
   const drawerConflict =
     integrity.periodDrawerDuplicateOpens > 0 ||
     integrity.periodDrawerDeviceConflicts > 0 ||

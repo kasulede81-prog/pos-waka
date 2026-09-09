@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Customer, DebtPayment, Sale } from "../types";
 import { computeExpectedCustomerDebt } from "./customerDebt";
 import {
+  isLocalCustomerDebtLedgerComplete,
   mergeCustomerFromCloudPull,
   reconcileCustomerDebtBalance,
   reconcileAllCustomerDebtBalances,
@@ -63,11 +64,14 @@ describe("customerDebtReconciliation", () => {
     expect(rec.delta).toBe(20_000);
   });
 
-  it("mergeCustomerFromCloudPull uses ledger when authoritative", () => {
-    const sales = [creditSale(50_000)];
-    const local = customer(50_000, 2);
+  it("mergeCustomerFromCloudPull uses a complete ledger when authoritative", () => {
+    const sales = [creditSale(90_000)];
+    const payments: DebtPayment[] = [
+      { id: "p1", customerId: CUSTOMER_ID, amountUgx: 40_000, createdAt: "2026-06-11T12:00:00.000Z" },
+    ];
+    const local = customer(90_000, 2);
     const remote = { ...customer(90_000, 5), updatedAt: "2026-06-12T00:00:00.000Z" };
-    const merged = mergeCustomerFromCloudPull(local, remote, sales, [], { ledgerAuthoritative: true });
+    const merged = mergeCustomerFromCloudPull(local, remote, sales, payments, { ledgerAuthoritative: true });
     expect(merged.debtBalanceUgx).toBe(50_000);
   });
 
@@ -83,5 +87,65 @@ describe("customerDebtReconciliation", () => {
     const rows = reconcileAllCustomerDebtBalances([customer(100_000)], [creditSale(50_000)], []);
     expect(rows[0]!.healthy).toBe(false);
     expect(rows[0]!.expected).toBe(50_000);
+  });
+});
+
+describe("R1 — incomplete local ledger must not overwrite cloud debt", () => {
+  const AUTHORITATIVE_X = 60_000;
+
+  it("1–3 — missing local payments keep cloud balance X", () => {
+    const sales = [creditSale(100_000)];
+    const local = { ...customer(100_000, 2), updatedAt: "2026-06-11T11:00:00.000Z" };
+    const remote = { ...customer(AUTHORITATIVE_X, 8), updatedAt: "2026-06-12T00:00:00.000Z" };
+    expect(isLocalCustomerDebtLedgerComplete(CUSTOMER_ID, AUTHORITATIVE_X, sales, [])).toBe(false);
+    const merged = mergeCustomerFromCloudPull(local, remote, sales, [], { ledgerAuthoritative: true });
+    expect(merged.debtBalanceUgx).toBe(AUTHORITATIVE_X);
+    expect(computeExpectedCustomerDebt(CUSTOMER_ID, sales, [])).toBe(100_000);
+  });
+
+  it("2–3 — incomplete local sales keep cloud balance X", () => {
+    const sales = [creditSale(40_000)];
+    const local = { ...customer(40_000, 2), updatedAt: "2026-06-11T11:00:00.000Z" };
+    const remote = { ...customer(AUTHORITATIVE_X, 8), updatedAt: "2026-06-12T00:00:00.000Z" };
+    expect(isLocalCustomerDebtLedgerComplete(CUSTOMER_ID, AUTHORITATIVE_X, sales, [])).toBe(false);
+    const merged = mergeCustomerFromCloudPull(local, remote, sales, [], { ledgerAuthoritative: true });
+    expect(merged.debtBalanceUgx).toBe(AUTHORITATIVE_X);
+  });
+
+  it("4 — a complete sales+payments ledger still reconciles stale metadata", () => {
+    const sales = [creditSale(100_000)];
+    const payments: DebtPayment[] = [
+      { id: "p1", customerId: CUSTOMER_ID, amountUgx: 40_000, createdAt: "2026-06-11T12:00:00.000Z" },
+    ];
+    const local = { ...customer(100_000, 2), updatedAt: "2026-06-11T11:00:00.000Z" };
+    const remote = { ...customer(100_000, 5), updatedAt: "2026-06-12T00:00:00.000Z" };
+    expect(isLocalCustomerDebtLedgerComplete(CUSTOMER_ID, 100_000, sales, payments)).toBe(true);
+    const merged = mergeCustomerFromCloudPull(local, remote, sales, payments, { ledgerAuthoritative: true });
+    expect(merged.debtBalanceUgx).toBe(60_000);
+  });
+
+  it("5 — a missing debt payment cannot restore the pre-payment balance", () => {
+    const sales = [creditSale(100_000)];
+    const local = { ...customer(100_000, 3), updatedAt: "2026-06-11T11:00:00.000Z" };
+    const remote = { ...customer(AUTHORITATIVE_X, 9), updatedAt: "2026-06-12T08:00:00.000Z" };
+    const merged = mergeCustomerFromCloudPull(local, remote, sales, [], { ledgerAuthoritative: true });
+    expect(merged.debtBalanceUgx).not.toBe(100_000);
+    expect(merged.debtBalanceUgx).toBe(AUTHORITATIVE_X);
+  });
+
+  it("6 — a second merge does not keep bumping version once local already matches the ledger", () => {
+    const sales = [creditSale(100_000)];
+    const payments: DebtPayment[] = [
+      { id: "p1", customerId: CUSTOMER_ID, amountUgx: 40_000, createdAt: "2026-06-11T12:00:00.000Z" },
+    ];
+    const remote = { ...customer(100_000, 5), updatedAt: "2026-06-12T00:00:00.000Z" };
+    const first = mergeCustomerFromCloudPull(customer(100_000, 2), remote, sales, payments, {
+      ledgerAuthoritative: true,
+    });
+    expect(first.debtBalanceUgx).toBe(60_000);
+    const firstVersion = first.version;
+    const second = mergeCustomerFromCloudPull(first, remote, sales, payments, { ledgerAuthoritative: true });
+    expect(second.debtBalanceUgx).toBe(60_000);
+    expect(second.version).toBe(firstVersion);
   });
 });

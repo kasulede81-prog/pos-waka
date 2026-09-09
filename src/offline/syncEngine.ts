@@ -1,7 +1,7 @@
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation } from "../types";
-import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "../lib/autoSync";
+import { computeSyncBackoffMs, markSyncOpFailed, markSyncOpQuarantined, shouldRetrySyncOp, isQuarantinedSyncOp, SYNC_QUARANTINE_AFTER_ATTEMPTS, QUARANTINED_MAX_ATTEMPTS_ERROR, QUARANTINED_NO_SHOP_ERROR, clearSyncOpQuarantine } from "../lib/autoSync";
 import {
   isBlockedBusinessSyncError,
   markSyncOpBlockedBusiness,
@@ -58,7 +58,7 @@ async function processOne(op: SyncOperation): Promise<SyncProcessResult> {
   const opShopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
   if (!opShopId) {
     reportSyncIssue("sync_quarantined_no_shop", { kind: op.kind, opId: op.id });
-    return "retry";
+    return { status: "block", lastError: QUARANTINED_NO_SHOP_ERROR };
   }
 
   const activeShop = getActiveShopId();
@@ -80,16 +80,16 @@ async function processOne(op: SyncOperation): Promise<SyncProcessResult> {
   }
 }
 
-export async function flushSyncQueue(onProgress?: (done: number, total: number) => void): Promise<{
+export async function flushSyncQueue(onProgress?: (done: number, total: number) => void, opts?: { retryQuarantined?: boolean }): Promise<{
   failed: number;
   remaining: number;
   skippedBackoff: number;
 }> {
   const { withGlobalSyncMutex } = await import("../lib/globalSyncMutex");
-  return withGlobalSyncMutex("flushSyncQueue", () => flushSyncQueueInner(onProgress));
+  return withGlobalSyncMutex("flushSyncQueue", () => flushSyncQueueInner(onProgress, opts));
 }
 
-export async function flushSyncQueueInner(onProgress?: (done: number, total: number) => void): Promise<{
+export async function flushSyncQueueInner(onProgress?: (done: number, total: number) => void, opts?: { retryQuarantined?: boolean }): Promise<{
   failed: number;
   remaining: number;
   skippedBackoff: number;
@@ -111,9 +111,25 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
     typeof cloudMod.probeBlockedReturnRecovery === "function"
       ? cloudMod.probeBlockedReturnRecovery
       : async () => false;
+  const retryQuarantined = opts?.retryQuarantined === true;
+  const activeShop = getActiveShopId();
   const ready: SyncOperation[] = [];
   let skippedBackoff = 0;
   for (const op of queue) {
+    const opShopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
+    if (activeShop && opShopId && opShopId !== activeShop) {
+      continue;
+    }
+    if (op.attempts >= SYNC_QUARANTINE_AFTER_ATTEMPTS && !isQuarantinedSyncOp(op)) {
+      await appendSyncOperation(markSyncOpQuarantined(op, QUARANTINED_MAX_ATTEMPTS_ERROR));
+      continue;
+    }
+    if (isQuarantinedSyncOp(op)) {
+      if (retryQuarantined) {
+        ready.push(clearSyncOpQuarantine(op));
+      }
+      continue;
+    }
     if (isBlockedBusinessSyncError(op.lastError)) {
       if (op.kind === "pending_returns" && !hasBlockedReturnRecoveryAttempt(op.id)) {
         const recoverable = await probeBlockedReturnRecovery(op);
@@ -162,17 +178,25 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
       if (status === "ack") {
         await removeSyncOperation(op.id);
       } else if (status === "wait") {
-        if (op.attempts < 100) {
+        if (op.attempts < SYNC_QUARANTINE_AFTER_ATTEMPTS) {
           await appendSyncOperation(markSyncOpWaitingForSale(op));
         }
       } else if (status === "block") {
-        await appendSyncOperation(markSyncOpBlockedBusiness(op, syncProcessLastError(result)));
+        const blockedError = syncProcessLastError(result);
+        await appendSyncOperation(
+          blockedError === QUARANTINED_NO_SHOP_ERROR
+            ? markSyncOpQuarantined(op, QUARANTINED_NO_SHOP_ERROR)
+            : markSyncOpBlockedBusiness(op, blockedError),
+        );
       } else {
         failed += 1;
         void import("../lib/syncDiagnostics").then(({ recordSyncRetry }) => {
           recordSyncRetry(op.kind, op.attempts + 1);
         });
-        if (op.attempts < 100) {
+        const nextAttempts = op.attempts + 1;
+        if (nextAttempts >= SYNC_QUARANTINE_AFTER_ATTEMPTS) {
+          await appendSyncOperation(markSyncOpQuarantined(op, QUARANTINED_MAX_ATTEMPTS_ERROR));
+        } else {
           const { syncOpEntityId, takeClosedBusinessDatePark } = await import("../lib/closedBusinessDateSync");
           await appendSyncOperation({
             ...markSyncOpFailed(op, status === "retry" ? syncProcessLastError(result) : undefined),
@@ -183,12 +207,14 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
     } catch {
       failed += 1;
       reportSyncIssue("sync_flush_error", { kind: op.kind, attempts: op.attempts + 1 });
-      if (op.attempts < 100) {
-        try {
+      try {
+        if (op.attempts + 1 >= SYNC_QUARANTINE_AFTER_ATTEMPTS) {
+          await appendSyncOperation(markSyncOpQuarantined(op, QUARANTINED_MAX_ATTEMPTS_ERROR));
+        } else {
           await appendSyncOperation(markSyncOpFailed(op));
-        } catch {
-          reportSyncIssue("sync_queue_corrupt", { kind: op.kind });
         }
+      } catch {
+        reportSyncIssue("sync_queue_corrupt", { kind: op.kind });
       }
       return false;
     }
@@ -212,7 +238,7 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
 export function nextQueueRetryMs(queue: SyncOperation[], nowMs = Date.now()): number | null {
   let minWait: number | null = null;
   for (const op of queue) {
-    if (isBlockedBusinessSyncError(op.lastError)) continue;
+    if (isBlockedBusinessSyncError(op.lastError) || isQuarantinedSyncOp(op)) continue;
     if (shouldRetrySyncOp(op, nowMs)) continue;
     const last = op.lastAttemptAt ? new Date(op.lastAttemptAt).getTime() : nowMs;
     const wait = computeSyncBackoffMs(op.attempts) - (nowMs - last);

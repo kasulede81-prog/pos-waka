@@ -31,7 +31,7 @@ export function MobileHomeLiveEngine({
       <h2 className={`${HOME_MOBILE_TYPE.section} mb-2`}>{t(lang, "homeLiveFloorTitle")}</h2>
       {sellStat ? (
         <div className="mb-2">
-          <HomeLiveValue value={sellStat.value} className="block text-xl font-black tabular-nums" />
+          <HomeLiveValue value={sellStat.value} availability={sellStat.availability} className="block text-xl font-black tabular-nums" />
           <p className="text-xs font-semibold opacity-80">{sellStat.label}</p>
         </div>
       ) : null}

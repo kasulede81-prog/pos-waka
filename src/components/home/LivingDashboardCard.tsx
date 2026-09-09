@@ -181,6 +181,7 @@ export function LivingDashboardCard({
               <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
                 <HomeLiveValue
                   value={liveStat.value}
+                  availability={liveStat.availability}
                   className="living-dashboard-card__stat-value home-stat-value home-world-title text-sm font-black tabular-nums"
                 />
                 {liveStat.trend ? <span className="home-world-trend text-xs font-bold">{liveStat.trend}</span> : null}
@@ -217,7 +218,7 @@ export function LivingDashboardCard({
         {liveStat ? (
           <div className="mt-1 rounded-xl bg-black/15 px-2.5 py-1.5">
             <p className="living-dashboard-card__stat-label text-[10px] font-bold uppercase text-white/65">{liveStat.label}</p>
-            <HomeLiveValue value={liveStat.value} className="living-dashboard-card__stat-value text-sm font-black tabular-nums" />
+            <HomeLiveValue value={liveStat.value} availability={liveStat.availability} className="living-dashboard-card__stat-value text-sm font-black tabular-nums" />
           </div>
         ) : null}
       </div>

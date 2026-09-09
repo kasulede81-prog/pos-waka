@@ -25,6 +25,11 @@ export type HomeShopKpiOverlay = {
   revenueGrowthPct: number | null;
 };
 
+export type HomeShopKpiOverlayFetchResult =
+  | { status: "ok"; overlay: HomeShopKpiOverlay }
+  | { status: "skipped" }
+  | { status: "error" };
+
 function parseNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = typeof value === "number" ? value : Number(value);
@@ -113,8 +118,8 @@ export function mergeHomeKpisWithShopOverlay(
 export async function fetchShopHomeKpiOverlay(
   todayKey: string,
   monthKey: string,
-): Promise<HomeShopKpiOverlay | null> {
-  if (!supabase || !hasSupabaseConfig || !getDeviceOnline()) return null;
+): Promise<HomeShopKpiOverlayFetchResult> {
+  if (!supabase || !hasSupabaseConfig || !getDeviceOnline()) return { status: "skipped" };
 
   let dailyRes: { data: unknown; error: { message?: string } | null };
   let monthlyRes: { data: unknown; error: { message?: string } | null };
@@ -124,28 +129,31 @@ export async function fetchShopHomeKpiOverlay(
       supabase.rpc("shop_get_monthly_sales_summary", { p_month: monthKey }),
     ]);
   } catch {
-    return null;
+    return { status: "error" };
   }
 
   const daily = !dailyRes.error ? asRecord(dailyRes.data) : null;
   const monthly = !monthlyRes.error ? asRecord(monthlyRes.data) : null;
   const dailyOk = daily?.ok === true;
   const monthlyOk = monthly?.ok === true;
-  if (!dailyOk && !monthlyOk) return null;
+  if (!dailyOk && !monthlyOk) return { status: "error" };
 
   const profitGated = monthly?.profit_gated === true || daily?.profit_gated === true;
 
   return {
-    todayKey,
-    monthKey,
-    todayTransactionCount: dailyOk ? parseNumber(daily?.transaction_count) : null,
-    todayRevenueUgx: dailyOk ? parseNumber(daily?.total_revenue_ugx) : null,
-    todayExpectedCashUgx: dailyOk
-      ? (parseNumber(daily?.expected_cash_in_drawer_ugx) ?? parseNumber(daily?.cash_collected_ugx))
-      : null,
-    monthRevenueUgx: monthlyOk ? parseNumber(monthly?.total_revenue_ugx) : null,
-    monthProfitUgx: monthlyOk && !profitGated ? parseNumber(monthly?.estimated_profit_ugx) : null,
-    previousMonthRevenueUgx: monthlyOk ? parseNumber(monthly?.previous_month_revenue_ugx) : null,
-    revenueGrowthPct: monthlyOk ? parseNumber(monthly?.revenue_growth_pct) : null,
+    status: "ok",
+    overlay: {
+      todayKey,
+      monthKey,
+      todayTransactionCount: dailyOk ? parseNumber(daily?.transaction_count) : null,
+      todayRevenueUgx: dailyOk ? parseNumber(daily?.total_revenue_ugx) : null,
+      todayExpectedCashUgx: dailyOk
+        ? (parseNumber(daily?.expected_cash_in_drawer_ugx) ?? parseNumber(daily?.cash_collected_ugx))
+        : null,
+      monthRevenueUgx: monthlyOk ? parseNumber(monthly?.total_revenue_ugx) : null,
+      monthProfitUgx: monthlyOk && !profitGated ? parseNumber(monthly?.estimated_profit_ugx) : null,
+      previousMonthRevenueUgx: monthlyOk ? parseNumber(monthly?.previous_month_revenue_ugx) : null,
+      revenueGrowthPct: monthlyOk ? parseNumber(monthly?.revenue_growth_pct) : null,
+    },
   };
 }

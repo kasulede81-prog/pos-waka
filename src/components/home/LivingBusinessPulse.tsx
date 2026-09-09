@@ -119,6 +119,7 @@ export function LivingBusinessPulse({
                   <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{salesKpi.label}</p>
                   <HomeLiveValue
                     value={salesKpi.value}
+                    availability={salesKpi.availability}
                     className={clsx("home-stat-value mt-1 block text-foreground", HOME_TYPE_SCALE.metric)}
                   />
                 </>
@@ -127,6 +128,7 @@ export function LivingBusinessPulse({
                   <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{sellStat.label}</p>
                   <HomeLiveValue
                     value={sellStat.value}
+                    availability={sellStat.availability}
                     className={clsx("home-stat-value mt-1 block text-foreground", HOME_TYPE_SCALE.metric)}
                   />
                 </>
@@ -135,7 +137,7 @@ export function LivingBusinessPulse({
               )}
               {sellStat && salesKpi ? (
                 <p className="mt-2 text-sm font-semibold text-muted-foreground">
-                  <HomeLiveValue value={sellStat.value} className="tabular-nums text-foreground" />
+                  <HomeLiveValue value={sellStat.value} availability={sellStat.availability} className="tabular-nums text-foreground" />
                 </p>
               ) : null}
               <HomeAskWakaShortcut lang={lang} />
@@ -145,7 +147,7 @@ export function LivingBusinessPulse({
                 {supportingKpis.map((kpi) => (
                   <li key={kpi.id} className="home-living-pulse__chip rounded-xl px-3 py-2.5">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{kpi.label}</p>
-                    <HomeLiveValue value={kpi.value} className="text-lg font-black tabular-nums text-foreground" />
+                    <HomeLiveValue value={kpi.value} availability={kpi.availability} className="text-lg font-black tabular-nums text-foreground" />
                   </li>
                 ))}
               </ul>
@@ -211,7 +213,7 @@ export function LivingBusinessPulse({
               {sellStat ? (
                 <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
                   {sellStat.label}:{" "}
-                  <HomeLiveValue value={sellStat.value} className="home-stat-value tabular-nums text-foreground" />
+                  <HomeLiveValue value={sellStat.value} availability={sellStat.availability} className="home-stat-value tabular-nums text-foreground" />
                 </p>
               ) : (
                 <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "builderHomeHeroSub")}</p>

@@ -64,9 +64,19 @@ export function HomeLiveBusinessFloor({
               <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{sellStat.label}</p>
               <HomeLiveValue
                 value={sellStat.value}
+                availability={sellStat.availability}
                 className={clsx("text-lg font-black tabular-nums text-foreground", sellStat.trend && "mr-2")}
               />
-              {sellStat.trend ? <span className="text-xs font-bold text-success">{sellStat.trend}</span> : null}
+              {sellStat.trend ? (
+                <span
+                  className={clsx(
+                    "text-xs font-bold",
+                    sellStat.availability === "ready" || !sellStat.availability ? "text-success" : "text-muted-foreground",
+                  )}
+                >
+                  {sellStat.trend}
+                </span>
+              ) : null}
             </div>
           ) : null}
           {floorHealth.length > 0 ? (

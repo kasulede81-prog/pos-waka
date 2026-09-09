@@ -52,7 +52,13 @@ export function HomeExecutiveKpiStrip({ lang, kpis }: Props) {
             key={kpi.id}
             icon={kpi.id === "lowStock" && kpi.tone === "danger" ? AlertTriangle : ICONS[kpi.id]}
             label={kpi.label}
-            value={<HomeLiveValue value={kpi.value} className="enterprise-kpi-value text-base font-black tabular-nums sm:text-lg" />}
+            value={
+              <HomeLiveValue
+                value={kpi.value}
+                availability={kpi.availability}
+                className="enterprise-kpi-value text-base font-black tabular-nums sm:text-lg"
+              />
+            }
             hint={kpi.hint}
             tone={kpi.tone}
             onClick={() => navigate(kpi.to)}
