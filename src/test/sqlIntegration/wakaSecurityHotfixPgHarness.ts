@@ -12,6 +12,8 @@ const MIGRATION_168 = join(ROOT, "168_adjustment_count_stock_durable_idempotency
 const MIGRATION_172 = join(ROOT, "172_sale_void_stock_durable_idempotency.sql");
 const MIGRATION_173 = join(ROOT, "173_purchase_void_stock_durable_idempotency.sql");
 const MIGRATION_183 = join(ROOT, "183_waka0203_security_hotfix.sql");
+const MIGRATION_184 = join(ROOT, "184_ungated_definer_primitive_revoke.sql");
+const MIGRATION_185 = join(ROOT, "185_account_deletion_wrapper_anon_revoke.sql");
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -70,6 +72,215 @@ export async function createWakaSecuritySqlHarness(): Promise<SqlExec> {
 
 export async function applyWakaSecurityHotfix(exec: SqlExec): Promise<void> {
   await exec.exec(readSql(MIGRATION_183));
+}
+
+export async function applyWakaUngatedPrimitiveHotfix(exec: SqlExec): Promise<void> {
+  await exec.exec(readSql(MIGRATION_184));
+}
+
+export async function applyWakaAccountDeletionWrapperHotfix(exec: SqlExec): Promise<void> {
+  await exec.exec(readSql(MIGRATION_185));
+}
+
+/**
+ * Four live deletion-wrapper overloads with production-like ACLs:
+ * PUBLIC revoked (112/148), leftover named EXECUTE for anon + authenticated
+ * (Supabase default privileges at CREATE). Bodies are no-ops.
+ */
+export async function seedAccountDeletionWrapperCatalog(exec: SqlExec): Promise<void> {
+  await exec.exec(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon NOLOGIN;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated NOLOGIN;
+      END IF;
+    END $$;
+
+    CREATE OR REPLACE FUNCTION public.owner_permanently_delete_own_account (p_confirmation text)
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT jsonb_build_object('ok', true); $$;
+
+    CREATE OR REPLACE FUNCTION public.owner_permanently_delete_own_account (
+      p_confirmation text,
+      p_phase text DEFAULT 'execute'
+    )
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT jsonb_build_object('ok', true); $$;
+
+    CREATE OR REPLACE FUNCTION public.admin_permanently_delete_shop_account (
+      p_shop_id uuid,
+      p_confirmation text
+    )
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT jsonb_build_object('ok', true); $$;
+
+    CREATE OR REPLACE FUNCTION public.admin_permanently_delete_shop_account (
+      p_shop_id uuid,
+      p_confirmation text,
+      p_phase text DEFAULT 'execute'
+    )
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT jsonb_build_object('ok', true); $$;
+
+    REVOKE ALL ON FUNCTION public.owner_permanently_delete_own_account(text) FROM public;
+    REVOKE ALL ON FUNCTION public.owner_permanently_delete_own_account(text, text) FROM public;
+    REVOKE ALL ON FUNCTION public.admin_permanently_delete_shop_account(uuid, text) FROM public;
+    REVOKE ALL ON FUNCTION public.admin_permanently_delete_shop_account(uuid, text, text) FROM public;
+
+    GRANT EXECUTE ON FUNCTION public.owner_permanently_delete_own_account(text) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.owner_permanently_delete_own_account(text, text) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.admin_permanently_delete_shop_account(uuid, text) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.admin_permanently_delete_shop_account(uuid, text, text) TO anon, authenticated;
+  `);
+}
+
+/** Stub the 184-targeted DEFINER primitives plus gated wrappers. Bodies are no-ops. */
+export async function seedUngatedDefinerPrimitiveCatalog(exec: SqlExec): Promise<void> {
+  await exec.exec(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon NOLOGIN;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated NOLOGIN;
+      END IF;
+    END $$;
+
+    CREATE OR REPLACE FUNCTION public.certified_hard_delete_organization_execute (
+      p_org_id uuid,
+      p_primary_shop_id uuid,
+      p_owner_user_id uuid,
+      p_actor_user_id uuid,
+      p_actor_role text,
+      p_audit_action text DEFAULT 'certified_hard_delete_executed'
+    )
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT jsonb_build_object('ok', true); $$;
+
+    CREATE OR REPLACE FUNCTION public.hard_delete_collect_org_user_ids (p_org_id uuid)
+    RETURNS uuid[]
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT '{}'::uuid[]; $$;
+
+    CREATE OR REPLACE FUNCTION public.hard_delete_collect_org_shop_ids (p_org_id uuid)
+    RETURNS uuid[]
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT '{}'::uuid[]; $$;
+
+    CREATE OR REPLACE FUNCTION public.hard_delete_verification_report (
+      p_org_id uuid,
+      p_shop_ids uuid[],
+      p_owner_user_id uuid DEFAULT NULL,
+      p_staff_user_ids uuid[] DEFAULT '{}'::uuid[]
+    )
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT jsonb_build_object('ok', true); $$;
+
+    CREATE OR REPLACE FUNCTION public.reverse_sale_stock_movements (p_sale_id uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ BEGIN END; $$;
+
+    CREATE OR REPLACE FUNCTION public.apply_sale_stock_movements (p_sale_id uuid)
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT '[]'::jsonb; $$;
+
+    CREATE OR REPLACE FUNCTION public.apply_sale_return_stock (p_return_id uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ BEGIN END; $$;
+
+    CREATE OR REPLACE FUNCTION public.create_receipt_for_sale (p_sale_id uuid)
+    RETURNS uuid
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT '00000000-0000-4000-8000-000000000001'::uuid; $$;
+
+    CREATE OR REPLACE FUNCTION public.next_shop_counter (p_shop uuid, p_key text)
+    RETURNS bigint
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT 1::bigint; $$;
+
+    CREATE OR REPLACE FUNCTION public.shop_org_id (p_shop_id uuid)
+    RETURNS uuid
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT NULL::uuid; $$;
+
+    CREATE OR REPLACE FUNCTION public.owner_permanently_delete_own_account (
+      p_confirmation text,
+      p_phase text DEFAULT 'execute'
+    )
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT jsonb_build_object('ok', true); $$;
+
+    CREATE OR REPLACE FUNCTION public.admin_permanently_delete_shop_account (
+      p_shop_id uuid,
+      p_confirmation text,
+      p_phase text DEFAULT 'execute'
+    )
+    RETURNS jsonb
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ SELECT jsonb_build_object('ok', true); $$;
+
+    GRANT EXECUTE ON FUNCTION public.certified_hard_delete_organization_execute(uuid, uuid, uuid, uuid, text, text) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.hard_delete_collect_org_user_ids(uuid) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.hard_delete_collect_org_shop_ids(uuid) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.hard_delete_verification_report(uuid, uuid[], uuid, uuid[]) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.reverse_sale_stock_movements(uuid) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.apply_sale_stock_movements(uuid) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.apply_sale_return_stock(uuid) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.create_receipt_for_sale(uuid) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.next_shop_counter(uuid, text) TO anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.shop_org_id(uuid) TO anon, authenticated;
+
+    REVOKE ALL ON FUNCTION public.owner_permanently_delete_own_account(text, text) FROM public, anon;
+    GRANT EXECUTE ON FUNCTION public.owner_permanently_delete_own_account(text, text) TO authenticated;
+    REVOKE ALL ON FUNCTION public.admin_permanently_delete_shop_account(uuid, text, text) FROM public, anon;
+    GRANT EXECUTE ON FUNCTION public.admin_permanently_delete_shop_account(uuid, text, text) TO authenticated;
+  `);
 }
 
 /** Tables + helpers the hotfix migration hardens when they exist. */
