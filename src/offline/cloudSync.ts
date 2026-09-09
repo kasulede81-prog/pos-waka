@@ -31,6 +31,7 @@ import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../li
 import { decodeSaleLineFromCloud, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
 import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
 import { parsePersistedTenderCashUgx } from "../lib/saleTenderCash";
+import { normalizeReceiptTerminal, parseReceiptSeq } from "../lib/receiptIdentity";
 import { buildCashExpensePushPayload, cashExpenseFromCloudRow } from "../lib/cashExpenses";
 import {
   soldByAuthUserIdFromCloudSaleRow,
@@ -45,7 +46,7 @@ import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
 import { isCloudRecoveryLockActive } from "../lib/cloudRecoverySession";
 import { SYNC_EVENT_PULL_MIN_MS, SYNC_INCREMENTAL_PULL_CONCURRENCY, SYNC_PULL_MIN_INTERVAL_MS, SYNC_REALTIME_COALESCE_MS } from "../lib/syncTiming";
 import { isNativeApp } from "../lib/nativeApp";
-import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
+import { writeSyncHealthMeta, readSyncHealthMeta, recordBackgroundSyncFailure } from "../lib/syncMeta";
 import { consumeOrResolveShopCtx, clearShopCtxTick, rememberShopCtxForTick, setCachedShopId } from "../lib/shopSyncContext";
 import {
   ALL_INCREMENTAL_PULL_ENTITIES,
@@ -70,6 +71,7 @@ import {
   updateCheckpointsAfterIncrementalPull,
 } from "../lib/syncCheckpoints";
 import { fetchShopServerNow } from "../lib/serverNow";
+import { maxIsoTimestamp } from "../lib/maxIsoTimestamp";
 import {
   applyIncrementalKeyset,
   asIncrementalKeyset,
@@ -79,7 +81,7 @@ import {
 } from "../lib/incrementalKeyset";
 import { usePosStore } from "../store/usePosStore";
 import type { SyncOperation } from "../types";
-import { reportSyncIssue } from "../lib/monitoring";
+import { reportSyncIssue, ignoreReportedSyncFailure } from "../lib/monitoring";
 import { mergeReturnRecordsForRecovery, rowToReturnRecord, type CloudReturnRow } from "../lib/returnRecovery";
 import {
   absorbCloudSaleAdjustmentLedgers,
@@ -399,6 +401,8 @@ function hospitalitySaleMetadata(sale: Sale): Record<string, unknown> {
     splitBreakdown: sale.splitBreakdown ?? null,
     paymentMethod: sale.paymentMethod ?? null,
     tenderCashUgx: sale.tenderCashUgx ?? null,
+    receiptSeq: sale.receiptSeq ?? null,
+    receiptTerminal: sale.receiptTerminal ?? null,
   };
 }
 
@@ -469,6 +473,8 @@ function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null
     splitBreakdown: Array.isArray(meta.splitBreakdown) ? (meta.splitBreakdown as Sale["splitBreakdown"]) : null,
     paymentMethod: meta.paymentMethod != null ? (meta.paymentMethod as Sale["paymentMethod"]) : undefined,
     tenderCashUgx: parsePersistedTenderCashUgx(meta.tenderCashUgx),
+    receiptSeq: parseReceiptSeq(meta.receiptSeq),
+    receiptTerminal: normalizeReceiptTerminal(meta.receiptTerminal),
     receiptHeaderSnapshot: parseReceiptHeaderSnapshot(meta.receiptHeaderSnapshot),
     receiptFooterSnapshot: parseReceiptFooterSnapshot(meta.receiptFooterSnapshot),
     receiptCustomerName: meta.receiptCustomerName != null ? String(meta.receiptCustomerName) : null,
@@ -2756,11 +2762,6 @@ const SALE_RETURNS_SELECT =
 const SALE_VOIDS_SELECT =
   "id, shop_id, sale_id, product_id, quantity, amount_ugx, line_index, note, sale_voided_at, created_by, created_at, updated_at, metadata";
 
-function maxIsoTimestamp(current: string, candidate: unknown): string {
-  const next = typeof candidate === "string" ? candidate : "";
-  return next && next > current ? next : current;
-}
-
 function maxRowUpdatedAt(rows: Record<string, unknown>[], since: string): string {
   let maxAt = since;
   for (const row of rows) {
@@ -2781,7 +2782,7 @@ function maxRowUpdatedAt(rows: Record<string, unknown>[], since: string): string
  * row written in the gap.
  */
 function serverCheckpoint(since: string, observed: string): string {
-  return observed > since ? observed : since;
+  return maxIsoTimestamp(since, observed);
 }
 
 function estimatePayloadBytes(rows: unknown[]): number {
@@ -2798,7 +2799,7 @@ function parseSaleRows(rawRows: Record<string, unknown>[]): { sales: Sale[]; voi
   for (const raw of rawRows) {
     const status = String(raw.status ?? "completed");
     const id = String(raw.id ?? "");
-    if (status === "void" || status === "refunded") {
+    if (status === "void" || status === "refunded" || status === "cancelled") {
       if (isUuid(id)) voidedIds.push(id);
       continue;
     }
@@ -2847,7 +2848,7 @@ async function pullSalesFull(ctx: ShopCtx): Promise<{
       .from("sales")
       .select("id")
       .eq("shop_id", ctx.shopId)
-      .eq("status", "voided")
+      .in("status", ["void", "refunded", "cancelled"])
       .order("created_at", { ascending: true })
       .range(voidOffset, voidOffset + FULL_SALES_PAGE - 1);
     if (vErr) throw vErr;
@@ -4235,10 +4236,11 @@ export async function pullShopDataFromCloud(opts?: {
   const pulledAt = new Date().toISOString();
   const hasPartialIssue = salesTruncated || Object.keys(entityErrors).length > 0;
   writeSyncHealthMeta({
-    lastSuccessAt: pulledAt,
     lastPullAt: pulledAt,
     lastIssueCode: hasPartialIssue ? "partial" : "none",
     lastIssueAt: hasPartialIssue ? pulledAt : null,
+    entityPullErrors: entityErrors,
+    ...(hasPartialIssue ? {} : { lastSuccessAt: pulledAt }),
   });
 
   const stats: CloudPullStats = {
@@ -4368,6 +4370,12 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     recordCheckpointDuration(performance.now() - checkpointStarted);
   });
   if (!cloud) return failMerge("cloud_pull_failed");
+  // WAKA-09 — a recovery/full pull that failed to download sales must not be
+  // treated as a successful hydration. The void-tombstone query lives on this
+  // path; claiming success here left local copies of voided sales in place.
+  if (opts?.cloudRecovery && cloud.stats.entityErrors?.sales) {
+    return failMerge("cloud_pull_entity_failed");
+  }
 
   const noteProductCostAuthorityRefresh = () => {
     if (cloud.stats.entityErrors?.products) return;
@@ -4432,7 +4440,9 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       }
     }
     if (cloud.stats.mode === "full") {
-      if (shouldMarkBootstrap && cloud.bootstrapServerNow) markBootstrapSyncComplete(cloud.bootstrapServerNow);
+      if (shouldMarkBootstrap && cloud.bootstrapServerNow && !cloud.stats.entityErrors?.sales) {
+        markBootstrapSyncComplete(cloud.bootstrapServerNow);
+      }
     } else {
       updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
     }
@@ -4541,14 +4551,18 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       cloudRecovery: opts?.cloudRecovery,
       skipEntityMigration: opts?.cloudRecovery === true,
     });
-    if (shouldMarkBootstrap && cloud.bootstrapServerNow) markBootstrapSyncComplete(cloud.bootstrapServerNow);
+    if (shouldMarkBootstrap && cloud.bootstrapServerNow && !cloud.stats.entityErrors?.sales) {
+      markBootstrapSyncComplete(cloud.bootstrapServerNow);
+    }
     runPostSyncDebtValidation({
       customers: usePosStore.getState().customers,
       sales: usePosStore.getState().sales,
       debtPayments: usePosStore.getState().debtPayments,
     });
     const { scheduleShopRecovery: scheduleRecoveryAfterMerge } = await import("../lib/shopRecoveryOrchestration");
-    await scheduleRecoveryAfterMerge("background_sync").catch(() => undefined);
+    await scheduleRecoveryAfterMerge("background_sync").catch(
+      ignoreReportedSyncFailure("shop_recovery_schedule_failed"),
+    );
     const { isDiagnosticsEnabled, recordCloudMergeDuration, recordSyncDuration } = await import(
       "../lib/stabilityDiagnostics",
     );
@@ -4596,12 +4610,16 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   const salesUnfiltered = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
 
   const debtPayments = mergeDebtPaymentsFromCloudPull(state.debtPayments, cloud.debtPayments);
-  const cpBeforeMerge = readSyncCheckpoints();
+  // R1: a checkpoint or a non-empty local payment list is not proof that this
+  // device holds the customer's full sales + payment history. Only a complete
+  // full pull (no truncated/failed sales or debt-payment pages) may request
+  // ledger overwrite; mergeCustomerFromCloudPull still refuses an incomplete
+  // per-customer subset.
   const ledgerAuthoritative =
-    cloud.stats.mode === "full" ||
-    cloud.debtPayments.length > 0 ||
-    cpBeforeMerge.lastDebtPaymentsSyncAt != null ||
-    debtPayments.length > 0;
+    cloud.stats.mode === "full" &&
+    cloud.stats.salesTruncated !== true &&
+    !cloud.stats.entityErrors?.sales &&
+    !cloud.stats.entityErrors?.debt_payments;
 
   // WAKA-01: `sales` (and the return/void records it absorbs) must be declared
   // before the customer merge, which reads it to reconcile debt balances. The
@@ -4726,13 +4744,15 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   await addVoidedSaleTombstones(cloud.voidedSaleIds);
 
   if (cloud.stats.mode === "full") {
-    if (shouldMarkBootstrap && cloud.bootstrapServerNow) markBootstrapSyncComplete(cloud.bootstrapServerNow);
+    if (shouldMarkBootstrap && cloud.bootstrapServerNow && !cloud.stats.entityErrors?.sales) {
+      markBootstrapSyncComplete(cloud.bootstrapServerNow);
+    }
   } else {
     updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
   }
 
   const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
-  await scheduleShopRecovery("background_sync").catch(() => undefined);
+  await scheduleShopRecovery("background_sync").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
   if (opts?.cloudRecovery) {
     const { reconcileRecoveryInventoryLedger } = await import("../lib/recoveryInventoryReconciliation");
     const { recordRecoveryIntegrityDiagnostics } = await import("../lib/cloudRecoverySession");
@@ -4958,7 +4978,7 @@ async function runIncrementalCloudPull(reason: string, opts?: { force?: boolean 
 }
 
 /** Push pending sales/queue only (fast, for background sync). */
-async function pushShopPendingToCloudInner(): Promise<{
+async function pushShopPendingToCloudInner(opts?: { retryQuarantined?: boolean }): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
@@ -4974,7 +4994,7 @@ async function pushShopPendingToCloudInner(): Promise<{
   if (getDeviceOnline()) {
     push = await pushAllPendingToCloud();
     const { flushSyncQueueInner } = await import("./syncEngine");
-    const result = await flushSyncQueueInner();
+    const result = await flushSyncQueueInner(undefined, { retryQuarantined: opts?.retryQuarantined === true });
     queueFailed = result.failed;
     writeSyncHealthMeta({ lastPushAt: new Date().toISOString() });
     const ctx = await resolveShopCtx();
@@ -4986,18 +5006,19 @@ async function pushShopPendingToCloudInner(): Promise<{
   return { push, queueFailed };
 }
 
-export async function pushShopPendingToCloud(): Promise<{
+export async function pushShopPendingToCloud(opts?: { retryQuarantined?: boolean }): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
   const { withPushSyncMutex } = await import("../lib/globalSyncMutex");
-  return withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner());
+  return withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner(opts));
 }
 
 /** Pull cloud data, push pending local rows — push and pull run concurrently. */
 async function syncShopWithCloudInner(opts?: {
   pull?: boolean;
   forceFull?: boolean;
+  retryQuarantined?: boolean;
 }): Promise<{
   pulled: boolean;
   push: { ok: number; fail: number };
@@ -5019,7 +5040,7 @@ async function syncShopWithCloudInner(opts?: {
   }
 
   const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
-  await scheduleShopRecovery("background_sync").catch(() => undefined);
+  await scheduleShopRecovery("background_sync").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
 
   const doPull =
     opts?.pull !== false &&
@@ -5045,7 +5066,9 @@ async function syncShopWithCloudInner(opts?: {
       : Promise.resolve(false);
 
   const pushPromise = getDeviceOnline()
-    ? withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner())
+    ? withPushSyncMutex("pushPending", () =>
+        pushShopPendingToCloudInner({ retryQuarantined: opts?.retryQuarantined === true }),
+      )
     : Promise.resolve({ push: { ok: 0, fail: 0 }, queueFailed: 0 });
 
   const [pulled, pushResult] = await Promise.all([pullPromise, pushPromise]);
@@ -5053,7 +5076,10 @@ async function syncShopWithCloudInner(opts?: {
   if (getDeviceOnline() && pushResult.push.fail === 0) {
     const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
     const { runWhenIdle } = await import("../lib/uiYield");
-    runWhenIdle(() => void uploadShopCloudSnapshot().catch(() => false), isNativeApp() ? 15_000 : 4000);
+    runWhenIdle(
+      () => void uploadShopCloudSnapshot().catch(ignoreReportedSyncFailure("cloud_snapshot_upload_failed")),
+      isNativeApp() ? 15_000 : 4000,
+    );
   }
   return { pulled, push: pushResult.push, queueFailed: pushResult.queueFailed };
 }
@@ -5061,6 +5087,7 @@ async function syncShopWithCloudInner(opts?: {
 export async function syncShopWithCloud(opts?: {
   pull?: boolean;
   forceFull?: boolean;
+  retryQuarantined?: boolean;
 }): Promise<{
   pulled: boolean;
   push: { ok: number; fail: number };
@@ -5087,10 +5114,12 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
   backgroundSyncTimer = globalThis.setTimeout(() => {
     backgroundSyncTimer = null;
     if (opts?.pull === false) {
-      void pushShopPendingToCloud().catch(() => undefined);
+      void pushShopPendingToCloud().catch((err) => recordBackgroundSyncFailure("background_push_failed", err));
       return;
     }
-    void syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
+    void syncShopWithCloud({ pull: opts?.pull }).catch((err) =>
+      recordBackgroundSyncFailure("background_sync_failed", err),
+    );
   }, delay);
 }
 

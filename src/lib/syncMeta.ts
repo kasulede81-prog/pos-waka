@@ -1,6 +1,7 @@
 /** Local-only sync health hints for owners (no PII). Account-scoped. */
 
 import { getPersistenceNamespace } from "../offline/shopScope";
+import { reportSwallowedSyncFailure } from "./monitoring";
 
 const BASE_KEY = "waka.sync.health.v1";
 
@@ -23,7 +24,9 @@ export type SyncHealthMeta = {
   /** Last time connectivity was confirmed. */
   lastOnlineAt: string | null;
   /** Queue health for owner diagnostics. */
-  queueHealth: "healthy" | "degraded" | "backing_off" | "blocked";
+  queueHealth: "healthy" | "degraded" | "backing_off" | "blocked" | "quarantined";
+  /** WAKA-12 — last pull entity failures. Empty when the last pull was complete. */
+  entityPullErrors?: Record<string, string>;
   /** POS push-only upload diagnostics (no cloud pull). */
   posPushAttempts?: number;
   posPushSuccesses?: number;
@@ -51,6 +54,7 @@ const empty: SyncHealthMeta = {
   lastPosPushSuccessAt: null,
   lastPosPushSkipReason: null,
   posPushUploadActive: false,
+  entityPullErrors: {},
 };
 
 export function readSyncHealthMeta(): SyncHealthMeta {
@@ -70,9 +74,20 @@ export function readSyncHealthMeta(): SyncHealthMeta {
       offlineSinceAt: typeof o.offlineSinceAt === "string" ? o.offlineSinceAt : null,
       lastOnlineAt: typeof o.lastOnlineAt === "string" ? o.lastOnlineAt : null,
       queueHealth:
-        o.queueHealth === "degraded" || o.queueHealth === "backing_off" || o.queueHealth === "blocked"
+        o.queueHealth === "degraded" ||
+        o.queueHealth === "backing_off" ||
+        o.queueHealth === "blocked" ||
+        o.queueHealth === "quarantined"
           ? o.queueHealth
           : "healthy",
+      entityPullErrors:
+        o.entityPullErrors && typeof o.entityPullErrors === "object" && !Array.isArray(o.entityPullErrors)
+          ? Object.fromEntries(
+              Object.entries(o.entityPullErrors).filter(
+                (entry): entry is [string, string] => typeof entry[1] === "string",
+              ),
+            )
+          : {},
       posPushAttempts: typeof o.posPushAttempts === "number" ? o.posPushAttempts : 0,
       posPushSuccesses: typeof o.posPushSuccesses === "number" ? o.posPushSuccesses : 0,
       posPushFailures: typeof o.posPushFailures === "number" ? o.posPushFailures : 0,
@@ -98,6 +113,50 @@ export function writeSyncHealthMeta(partial: Partial<SyncHealthMeta>): SyncHealt
   return next;
 }
 
+/**
+ * WAKA-12 — one place that decides whether a cycle may claim full health.
+ * A successful push must not clear a failed pull, and an empty in-memory view
+ * must not claim healthy while durable queue rows remain.
+ */
+export function applySyncHealthAfterCycle(input: {
+  attemptAt: string;
+  pullPartial: boolean;
+  entityPullErrors?: Record<string, string>;
+  pushFail: number;
+  queueFailed: number;
+  durableRemaining: number;
+  queueHealth: SyncHealthMeta["queueHealth"];
+}): SyncHealthMeta {
+  const errors = input.entityPullErrors ?? {};
+  const pullOrPushIssue =
+    input.pullPartial ||
+    Object.keys(errors).length > 0 ||
+    input.pushFail > 0 ||
+    input.queueFailed > 0;
+  if (!pullOrPushIssue && input.durableRemaining === 0) {
+    return writeSyncHealthMeta({
+      lastSuccessAt: input.attemptAt,
+      lastIssueCode: "none",
+      lastIssueAt: null,
+      queueHealth: "healthy",
+      entityPullErrors: {},
+    });
+  }
+  const blocked = input.queueHealth === "quarantined" || input.queueHealth === "blocked";
+  if (pullOrPushIssue || blocked) {
+    return writeSyncHealthMeta({
+      lastIssueAt: input.attemptAt,
+      lastIssueCode: "partial",
+      queueHealth: input.queueHealth,
+      entityPullErrors: errors,
+    });
+  }
+  return writeSyncHealthMeta({
+    queueHealth: input.queueHealth,
+    entityPullErrors: errors,
+  });
+}
+
 /** Human-readable offline duration for trust UI. */
 export function offlineDurationLabel(offlineSinceAt: string | null, nowMs = Date.now()): string | null {
   if (!offlineSinceAt) return null;
@@ -109,4 +168,18 @@ export function offlineDurationLabel(offlineSinceAt: string | null, nowMs = Date
   const hrs = Math.floor(mins / 60);
   if (hrs < 48) return `${hrs}h`;
   return `${Math.floor(hrs / 24)}d`;
+}
+
+/**
+ * R6 — fire-and-forget sync/push threw before WAKA-12's cycle health writer ran.
+ * Keep lastIssueCode distinct from a clean success without adding a new UI event.
+ */
+export function recordBackgroundSyncFailure(code: string, err?: unknown): SyncHealthMeta {
+  reportSwallowedSyncFailure(code, err);
+  const at = new Date().toISOString();
+  return writeSyncHealthMeta({
+    lastAttemptAt: at,
+    lastIssueAt: at,
+    lastIssueCode: "error",
+  });
 }

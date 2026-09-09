@@ -25,8 +25,9 @@ function scheduleImmediatePushUpload(opts?: { force?: boolean; source?: string }
     void import("./posPushScheduler").then(async ({ runPosPushOnlyUpload }) => {
       try {
         await runPosPushOnlyUpload({ force: opts?.force ?? true, source: opts?.source ?? "immediate" });
-      } catch {
-        // fire-and-forget push scheduler
+      } catch (err) {
+        const { recordBackgroundSyncFailure } = await import("./syncMeta");
+        recordBackgroundSyncFailure("immediate_push_failed", err);
       }
     });
   }, 0);

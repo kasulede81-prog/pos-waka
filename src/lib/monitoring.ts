@@ -76,6 +76,32 @@ export function reportSyncIssue(code: string, meta?: MonitoringPayload["meta"]):
   }
 }
 
+/**
+ * R6 — record a swallowed sync/data failure without changing control flow.
+ * Does not become user-facing unless `code` is already in USER_FACING_SYNC_CODES
+ * (WAKA-12 health / toasts stay on the existing four codes).
+ */
+export function reportSwallowedSyncFailure(
+  code: string,
+  err?: unknown,
+  extra?: MonitoringPayload["meta"],
+): void {
+  const raw = err instanceof Error ? err.message : err != null ? String(err) : "";
+  const message = raw.trim().slice(0, 180);
+  reportSyncIssue(code, {
+    ...extra,
+    ...(message ? { message } : {}),
+  });
+}
+
+/** `.catch(ignoreReportedSyncFailure("code"))` for fire-and-forget best-effort work. */
+export function ignoreReportedSyncFailure(code: string): (err: unknown) => undefined {
+  return (err) => {
+    reportSwallowedSyncFailure(code, err);
+    return undefined;
+  };
+}
+
 export function reportAuthIssue(code: string, meta?: MonitoringPayload["meta"]): void {
   reportMonitoringEvent({ category: "auth", code, meta });
 }

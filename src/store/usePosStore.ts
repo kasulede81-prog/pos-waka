@@ -72,7 +72,7 @@ import { r3AdjustmentStockPayload, r3PurchaseVoidStockPayload, r3SaleVoidStockPa
 import { catalogDuplicatePrefill } from "../lib/duplicateProductCatalog";
 import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
-import { scanTodaySalesHead } from "../lib/salesDayIndex";
+import { mintLocalReceiptIdentity } from "../lib/receiptIdentity";
 import {
   buildTodayKpiSnapshotFromSales,
   bumpTodayKpiSnapshot,
@@ -5140,7 +5140,11 @@ export const usePosStore = create<PosState>((set, get) => {
     const soldByAuthUserId =
       commercialAuthUserIdFromActor(actor) ?? existingPending?.soldByAuthUserId ?? null;
     const todayKey = dateKeyKampala(new Date());
-    const receiptSeq = scanTodaySalesHead(state.sales, todayKey).nextReceiptSeq;
+    const { receiptSeq, receiptTerminal } = mintLocalReceiptIdentity(
+      state.sales,
+      getOrCreateDeviceId(),
+      todayKey,
+    );
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const sessionWaiter = sessionWaiterAttribution(floor, existingPending?.tableSessionId);
     const receiptSnap = buildReceiptBrandingSnapshot(state.preferences, receiptSnapshotPlanTier(state.preferences));
@@ -5153,6 +5157,7 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: existingPending?.tableSessionId ?? null,
       updatedAt: new Date().toISOString(),
       receiptSeq,
+      receiptTerminal,
       receiptHeaderSnapshot: receiptSnap.header,
       receiptFooterSnapshot: receiptSnap.footer,
       receiptCustomerName: debtorCustomer?.name?.trim() || (customerName?.trim() || null),
@@ -7205,22 +7210,18 @@ export const usePosStore = create<PosState>((set, get) => {
       const live = get();
       const liveShift = requireActiveShift(live);
       if (!liveShift.ok) {
-        releaseDebtPaymentSubmit(lockKey);
         return { ok: false, errorKey: liveShift.errorKey };
       }
       const liveCustomer = live.customers.find((x) => x.id === customerId);
       if (!liveCustomer) {
-        releaseDebtPaymentSubmit(lockKey);
         return { ok: false, errorKey: "missingProduct" };
       }
       const livePay = Math.min(amount, liveCustomer.debtBalanceUgx);
       if (livePay <= 0 || livePay !== pay) {
-        releaseDebtPaymentSubmit(lockKey);
         return { ok: false, errorKey: "invalid" };
       }
       const liveDateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addDebtPayment");
       if (liveDateLock) {
-        releaseDebtPaymentSubmit(lockKey);
         return liveDateLock;
       }
 
@@ -7267,9 +7268,10 @@ export const usePosStore = create<PosState>((set, get) => {
         amountUgx: livePay,
       });
       return { ok: true, payment };
-    } catch (err) {
+    } finally {
+      // R7: release on finish (success or failure). Overlapping in-flight
+      // submits still see the lock; a later legitimate payment does not.
       releaseDebtPaymentSubmit(lockKey);
-      throw err;
     }
   },
 
@@ -9554,8 +9556,9 @@ async function runPostBootstrapTasks(): Promise<void> {
 
   const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
   const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
-  void hydrateLocalShopProfileFromCloud().catch(() => undefined);
-  void scheduleShopRecovery("app_launch").catch(() => undefined);
+  const { ignoreReportedSyncFailure } = await import("../lib/monitoring");
+  void hydrateLocalShopProfileFromCloud().catch(ignoreReportedSyncFailure("shop_profile_hydrate_failed"));
+  void scheduleShopRecovery("app_launch").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
   const { isCloudRecoveryLockActive } = await import("../lib/cloudRecoverySession");
   if (isCloudRecoveryLockActive()) return;
   const { shouldRequireRecoveryLock } = await import("../lib/postAuthCloudHydrate");

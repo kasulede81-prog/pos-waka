@@ -21,6 +21,7 @@ import type {
 } from "../types";
 import { getActiveAccountKey } from "./accountScope";
 import { getPersistenceNamespace } from "./shopScope";
+import { reportSwallowedSyncFailure } from "../lib/monitoring";
 
 /**
  * IndexedDB layout (multi-account safe):
@@ -191,7 +192,8 @@ export async function readKv<T>(key: string): Promise<T | null> {
     const db = await getLocalDb();
     const row = await db.get("kv", k);
     return (row ?? null) as T | null;
-  } catch {
+  } catch (err) {
+    reportSwallowedSyncFailure("idb_kv_read_failed", err, { key: k });
     return null;
   }
 }
@@ -218,7 +220,8 @@ async function readScopedSnapshot(): Promise<Partial<PersistedSnapshot> | null> 
     const row = await db.get("kv", k);
     if (!row) return null;
     return row as Partial<PersistedSnapshot>;
-  } catch {
+  } catch (err) {
+    reportSwallowedSyncFailure("idb_snapshot_read_failed", err, { key: "snapshot" });
     return null;
   }
 }
@@ -231,7 +234,8 @@ async function readScopedLastGood(): Promise<Partial<PersistedSnapshot> | null> 
     const row = await db.get("kv", k);
     if (!row) return null;
     return row as Partial<PersistedSnapshot>;
-  } catch {
+  } catch (err) {
+    reportSwallowedSyncFailure("idb_snapshot_read_failed", err, { key: "last_good_snapshot" });
     return null;
   }
 }
@@ -271,19 +275,27 @@ export async function claimLegacySnapshotForCurrentAccount(): Promise<Partial<Pe
   if (claimed?.accountKey) return null;
   try {
     const db = await getLocalDb();
-    const legacy = (await db.get("kv", LEGACY_SNAPSHOT_KEY)) as Partial<PersistedSnapshot> | undefined;
+    // R3: every IDB read/write for this claim must use the same readwrite
+    // transaction. `db.get()` opens a *new* transaction; awaiting it lets the
+    // outer tx auto-commit, and the later put/delete throw TransactionInactiveError.
+    const tx = db.transaction("kv", "readwrite");
+    const kv = tx.objectStore("kv");
+    const legacy = (await kv.get(LEGACY_SNAPSHOT_KEY)) as Partial<PersistedSnapshot> | undefined;
     if (!legacy || !isSnapshotShape(legacy)) {
-      window.localStorage.setItem(LEGACY_CLAIMED_FLAG, JSON.stringify({ accountKey: acc, at: new Date().toISOString(), empty: true }));
+      await tx.done;
+      window.localStorage.setItem(
+        LEGACY_CLAIMED_FLAG,
+        JSON.stringify({ accountKey: acc, at: new Date().toISOString(), empty: true }),
+      );
       return null;
     }
-    const tx = db.transaction("kv", "readwrite");
-    await tx.objectStore("kv").put(legacy, `${acc}::${LEGACY_SNAPSHOT_KEY}`);
-    const legacyFb = (await db.get("kv", LEGACY_LAST_GOOD_KEY)) as Partial<PersistedSnapshot> | undefined;
+    await kv.put(legacy, `${acc}::${LEGACY_SNAPSHOT_KEY}`);
+    const legacyFb = (await kv.get(LEGACY_LAST_GOOD_KEY)) as Partial<PersistedSnapshot> | undefined;
     if (legacyFb && isSnapshotShape(legacyFb)) {
-      await tx.objectStore("kv").put(legacyFb, `${acc}::${LEGACY_LAST_GOOD_KEY}`);
+      await kv.put(legacyFb, `${acc}::${LEGACY_LAST_GOOD_KEY}`);
     }
-    await tx.objectStore("kv").delete(LEGACY_SNAPSHOT_KEY);
-    await tx.objectStore("kv").delete(LEGACY_LAST_GOOD_KEY);
+    await kv.delete(LEGACY_SNAPSHOT_KEY);
+    await kv.delete(LEGACY_LAST_GOOD_KEY);
     await tx.done;
     window.localStorage.setItem(LEGACY_CLAIMED_FLAG, JSON.stringify({ accountKey: acc, at: new Date().toISOString() }));
     return legacy;
@@ -301,6 +313,12 @@ export async function writeSnapshot(
   data: Omit<PersistedSnapshot, "updatedAt">,
   opts?: WriteSnapshotOptions,
 ): Promise<void> {
+  const next: PersistedSnapshot = {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  };
+  // WAKA-09 — never install an incomplete/corrupt payload as the active snapshot.
+  if (!isSnapshotShape(next)) return;
   const mainKey = scopedKey(LEGACY_SNAPSHOT_KEY);
   const fbKey = scopedKey(LEGACY_LAST_GOOD_KEY);
   if (!mainKey || !fbKey) return;
@@ -318,10 +336,6 @@ export async function writeSnapshot(
       /* ignore */
     }
   }
-  const next: PersistedSnapshot = {
-    ...data,
-    updatedAt: new Date().toISOString(),
-  };
   await kv.put(next, mainKey);
   await tx.done;
 }

@@ -9,6 +9,7 @@ import {
 import { storeHasCoreRecoveryData } from "./recoveryHydration";
 import { hasSupabaseConfig, supabase } from "./supabase";
 import { yieldUiTick } from "./uiYield";
+import { reportSwallowedSyncFailure, ignoreReportedSyncFailure } from "./monitoring";
 
 const MIN_UPLOAD_INTERVAL_MS = 5 * 60_000;
 let lastCloudSnapshotUploadAt = 0;
@@ -201,50 +202,65 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
   if (cloudSnapshotUploadInFlight) return cloudSnapshotUploadInFlight;
 
   const run = async (): Promise<boolean> => {
-  const { assertOrganizationOperationsAllowed } = await import("./organizationDeletionState");
-  try {
-    await assertOrganizationOperationsAllowed();
-  } catch {
-    return false;
-  }
+    try {
+      const { assertOrganizationOperationsAllowed } = await import("./organizationDeletionState");
+      try {
+        await assertOrganizationOperationsAllowed();
+      } catch {
+        return false;
+      }
 
-  const ctx = await resolveShopCtx();
-  if (!ctx || !supabase) return false;
+      const ctx = await resolveShopCtx();
+      if (!ctx || !supabase) return false;
 
-  const snap = await snapshotFromStoreWithTombstones();
-  if (!snap) return false;
-  if (snap.products.length === 0 && snap.sales.length === 0) return false;
+      const snap = await snapshotFromStoreWithTombstones();
+      if (!snap) return false;
+      if (snap.products.length === 0 && snap.sales.length === 0) return false;
 
-  const trimAnalysis = analyzeSnapshotTrim(snap);
-  recordSnapshotUploadTrimAnalysis(trimAnalysis);
+      const trimAnalysis = analyzeSnapshotTrim(snap);
+      recordSnapshotUploadTrimAnalysis(trimAnalysis);
 
-  const payload = await trimSnapshotForUpload(snap);
-  const envelope = buildExportEnvelope(payload);
-  const json = JSON.stringify(envelope);
+      const payload = await trimSnapshotForUpload(snap);
+      const envelope = buildExportEnvelope(payload);
+      const json = JSON.stringify(envelope);
 
-  const { error } = await supabase.from("shop_cloud_snapshots").upsert(
-    {
-      shop_id: ctx.shopId,
-      snapshot: envelope,
-      schema_version: WAKA_BACKUP_FILE_VERSION,
-      byte_size: json.length,
-      updated_at: new Date().toISOString(),
-      updated_by: ctx.userId,
-    },
-    { onConflict: "shop_id" },
-  );
+      const { error } = await supabase.from("shop_cloud_snapshots").upsert(
+        {
+          shop_id: ctx.shopId,
+          snapshot: envelope,
+          schema_version: WAKA_BACKUP_FILE_VERSION,
+          byte_size: json.length,
+          updated_at: new Date().toISOString(),
+          updated_by: ctx.userId,
+        },
+        { onConflict: "shop_id" },
+      );
 
-  if (!error) {
-    lastCloudSnapshotUploadAt = Date.now();
-    lastCloudSnapshotUploadIso = new Date().toISOString();
-  }
-  return !error;
+      if (error) {
+        reportSwallowedSyncFailure("cloud_snapshot_upload_failed", error, {
+          code: (error as { code?: string }).code ?? "unknown",
+        });
+        return false;
+      }
+      lastCloudSnapshotUploadAt = Date.now();
+      lastCloudSnapshotUploadIso = new Date().toISOString();
+      return true;
+    } catch (err) {
+      reportSwallowedSyncFailure("cloud_snapshot_upload_failed", err);
+      return false;
+    }
   };
 
   cloudSnapshotUploadInFlight = run().finally(() => {
     cloudSnapshotUploadInFlight = null;
   });
   return cloudSnapshotUploadInFlight;
+}
+
+/** Missing `shop_cloud_snapshots` is expected on older deploys — not a restore failure. */
+export function isAbsentCloudSnapshotTableError(error: { code?: string } | null | undefined): boolean {
+  const code = error?.code;
+  return code === "42P01" || code === "PGRST205";
 }
 
 /** Download cloud snapshot and replace local store (new phone). */
@@ -265,8 +281,10 @@ export async function restoreShopFromCloudSnapshot(
     .maybeSingle();
 
   if (error) {
-    const code = (error as { code?: string }).code;
-    if (code === "42P01" || code === "PGRST205") return false;
+    if (isAbsentCloudSnapshotTableError(error)) return false;
+    reportSwallowedSyncFailure("cloud_snapshot_restore_failed", error, {
+      code: (error as { code?: string }).code ?? "unknown",
+    });
     return false;
   }
   if (!data?.snapshot) return false;
@@ -274,7 +292,8 @@ export async function restoreShopFromCloudSnapshot(
   let envelope;
   try {
     envelope = validateImportEnvelope(data.snapshot);
-  } catch {
+  } catch (err) {
+    reportSwallowedSyncFailure("cloud_snapshot_restore_invalid", err);
     return false;
   }
 
@@ -287,7 +306,7 @@ export async function restoreShopFromCloudSnapshot(
   await yieldUiTick();
 
   const { pullDayDrawerOpensForRecovery } = await import("./dayDrawerOpenCloudSync");
-  await pullDayDrawerOpensForRecovery(ctx).catch(() => false);
+  await pullDayDrawerOpensForRecovery(ctx).catch(ignoreReportedSyncFailure("cloud_snapshot_restore_drawer_pull_failed"));
 
   if (opts?.cloudRecovery) {
     const { reportRecoveryManualProgress } = await import("./cloudRecoverySession");
