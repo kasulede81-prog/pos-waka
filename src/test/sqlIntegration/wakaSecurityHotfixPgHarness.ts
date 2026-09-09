@@ -14,6 +14,7 @@ const MIGRATION_173 = join(ROOT, "173_purchase_void_stock_durable_idempotency.sq
 const MIGRATION_183 = join(ROOT, "183_waka0203_security_hotfix.sql");
 const MIGRATION_184 = join(ROOT, "184_ungated_definer_primitive_revoke.sql");
 const MIGRATION_185 = join(ROOT, "185_account_deletion_wrapper_anon_revoke.sql");
+const MIGRATION_186 = join(ROOT, "186_sales_status_stock_drop_legacy_reverse.sql");
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -80,6 +81,93 @@ export async function applyWakaUngatedPrimitiveHotfix(exec: SqlExec): Promise<vo
 
 export async function applyWakaAccountDeletionWrapperHotfix(exec: SqlExec): Promise<void> {
   await exec.exec(readSql(MIGRATION_185));
+}
+
+export async function applyWakaSalesStatusStockTriggerFix(exec: SqlExec): Promise<void> {
+  await exec.exec(readSql(MIGRATION_186));
+}
+
+/**
+ * 011-era trg_sales_status_stock plus no-op stock/receipt stubs.
+ * Probe table drives the trigger without touching real sales stock.
+ */
+export async function seedSalesStatusStockTriggerCatalog(exec: SqlExec): Promise<void> {
+  await exec.exec(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon NOLOGIN;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated NOLOGIN;
+      END IF;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS public.waka186_trigger_probe (
+      fn text NOT NULL,
+      sale_id uuid NOT NULL
+    );
+
+    CREATE OR REPLACE FUNCTION public.apply_sale_stock_movements (p_sale_id uuid)
+    RETURNS void
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ INSERT INTO public.waka186_trigger_probe (fn, sale_id) VALUES ('apply', p_sale_id); $$;
+
+    CREATE OR REPLACE FUNCTION public.reverse_sale_stock_movements (p_sale_id uuid)
+    RETURNS void
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$ INSERT INTO public.waka186_trigger_probe (fn, sale_id) VALUES ('reverse', p_sale_id); $$;
+
+    CREATE OR REPLACE FUNCTION public.create_receipt_for_sale (p_sale_id uuid)
+    RETURNS uuid
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$
+      INSERT INTO public.waka186_trigger_probe (fn, sale_id) VALUES ('receipt', p_sale_id);
+      SELECT p_sale_id;
+    $$;
+
+    CREATE OR REPLACE FUNCTION public.trg_sales_status_stock ()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$
+    begin
+      if tg_op = 'UPDATE' then
+        if new.status = 'completed' and old.status is distinct from 'completed' then
+          perform public.apply_sale_stock_movements (new.id);
+          if coalesce (new.issue_receipt, false) then
+            perform public.create_receipt_for_sale (new.id);
+          end if;
+        elsif old.status = 'completed' and new.status in ('void', 'refunded') then
+          perform public.reverse_sale_stock_movements (old.id);
+        end if;
+      end if;
+      return new;
+    end;
+    $$;
+
+    CREATE TABLE IF NOT EXISTS public.waka186_sales_probe (
+      id uuid PRIMARY KEY,
+      status text NOT NULL,
+      issue_receipt boolean NOT NULL DEFAULT false
+    );
+
+    DROP TRIGGER IF EXISTS trg_waka186_sales_status_stock ON public.waka186_sales_probe;
+    CREATE TRIGGER trg_waka186_sales_status_stock
+      AFTER UPDATE ON public.waka186_sales_probe
+      FOR EACH ROW EXECUTE FUNCTION public.trg_sales_status_stock ();
+
+    REVOKE ALL ON FUNCTION public.reverse_sale_stock_movements (uuid) FROM public;
+    REVOKE ALL ON FUNCTION public.reverse_sale_stock_movements (uuid) FROM anon;
+    REVOKE ALL ON FUNCTION public.reverse_sale_stock_movements (uuid) FROM authenticated;
+  `);
 }
 
 /**
