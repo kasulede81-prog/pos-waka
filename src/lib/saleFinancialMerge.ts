@@ -4,6 +4,7 @@
 
 import type { Sale, SaleLine } from "../types";
 import { isCompletedSale } from "./saleStatus";
+import { mergeStampedReceiptIdentity } from "./receiptIdentity";
 import { mergeCommercialSellerFields } from "./sellerIdentity";
 
 export type SaleFinancialFields = Pick<
@@ -103,7 +104,8 @@ function mergeCompletedSaleMetadata(financialBase: Sale, other: Sale): Sale {
     referenceLabel: meta.referenceLabel ?? financialBase.referenceLabel,
     tableSessionId: meta.tableSessionId ?? financialBase.tableSessionId,
     updatedAt: meta.updatedAt ?? financialBase.updatedAt,
-    receiptSeq: meta.receiptSeq ?? financialBase.receiptSeq,
+    receiptSeq: financialBase.receiptSeq ?? other.receiptSeq ?? meta.receiptSeq,
+    receiptTerminal: financialBase.receiptTerminal ?? other.receiptTerminal ?? meta.receiptTerminal,
     soldByUserId: seller.soldByUserId,
     soldByAuthUserId: seller.soldByAuthUserId,
     customerId: meta.customerId ?? financialBase.customerId,
@@ -133,15 +135,24 @@ export function mergeSaleFromCloudPull(local: Sale, remote: Sale): Sale {
 
   if (localDone && remoteDone) {
     const financialBase = pickAuthoritativeCompletedFinancial(local, remote);
-    return mergeCompletedSaleMetadata(financialBase, local === financialBase ? remote : local);
+    return {
+      ...mergeCompletedSaleMetadata(financialBase, local === financialBase ? remote : local),
+      ...mergeStampedReceiptIdentity(local, remote),
+    };
   }
 
   if (localDone && !remoteDone) {
-    return mergeCompletedSaleMetadata(local, remote);
+    return {
+      ...mergeCompletedSaleMetadata(local, remote),
+      ...mergeStampedReceiptIdentity(local, remote),
+    };
   }
 
   if (!localDone && remoteDone) {
-    return mergeCompletedSaleMetadata(remote, local);
+    return {
+      ...mergeCompletedSaleMetadata(remote, local),
+      ...mergeStampedReceiptIdentity(local, remote),
+    };
   }
 
   return recencyMs(remote) >= recencyMs(local) ? remote : local;

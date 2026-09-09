@@ -174,10 +174,14 @@ export function avgDailyUnitsFromIndex(
 /**
  * Sales are stored newest-first. Scan only the head until the day changes — O(today)
  * instead of O(all sales) for receipt numbers and “sold today” badges.
+ *
+ * When `receiptTerminal` is set, `nextReceiptSeq` is the next sequence for that
+ * till only (WAKA-10). `todaySales` / `unitsByProduct` stay shop-wide.
  */
 export function scanTodaySalesHead(
   sales: Sale[],
   todayKey = dateKeyKampala(new Date()),
+  receiptTerminal?: string,
 ): {
   todaySales: Sale[];
   maxReceiptSeq: number;
@@ -187,13 +191,18 @@ export function scanTodaySalesHead(
   const todaySales: Sale[] = [];
   let maxReceiptSeq = 0;
   const unitsByProduct = new Map<string, number>();
+  const terminal = receiptTerminal?.trim().toUpperCase() || null;
 
   for (const sale of sales) {
     if (sale.status === "pending" || sale.status === "cancelled") continue;
     if (dateKeyKampala(sale.createdAt) !== todayKey) break;
     todaySales.push(sale);
     if (Number.isFinite(sale.receiptSeq)) {
-      maxReceiptSeq = Math.max(maxReceiptSeq, Math.floor(sale.receiptSeq ?? 0));
+      const seq = Math.floor(sale.receiptSeq ?? 0);
+      const saleTerminal = sale.receiptTerminal?.trim().toUpperCase() || null;
+      if (!terminal || saleTerminal === terminal) {
+        maxReceiptSeq = Math.max(maxReceiptSeq, seq);
+      }
     }
     for (const line of sale.lines) {
       if (line.voided) continue;

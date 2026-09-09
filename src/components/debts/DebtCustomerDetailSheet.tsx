@@ -2,6 +2,7 @@ import clsx from "clsx";
 import type { Customer, Language } from "../../types";
 import type { CreditActivityEntry } from "../../lib/customerDebtActivity";
 import { t } from "../../lib/i18n";
+import { formatReceiptIdentityForUi } from "../../lib/receiptIdentity";
 import { customerInitials, formatActivityWhen } from "../../lib/debtsPageView";
 import { ModalSheet } from "../layout/ModalSheet";
 import { EnterpriseEmptyState } from "../enterprise/EnterpriseEmptyState";
@@ -100,7 +101,10 @@ export function DebtCustomerDetailSheet({
               <div className="min-w-0">
                 <Caption className="font-bold normal-case text-foreground">
                   {entry.kind === "credit_sale" ? t(lang, "creditSaleActivity") : t(lang, "debtPaymentActivity")}
-                  {entry.receiptSeq != null ? ` #${String(entry.receiptSeq).padStart(3, "0")}` : ""}
+                  {(() => {
+                    const receiptLabel = formatReceiptIdentityForUi(entry);
+                    return receiptLabel ? ` ${receiptLabel}` : "";
+                  })()}
                 </Caption>
                 <Caption>{formatActivityWhen(entry.at, localeLang)}</Caption>
               </div>

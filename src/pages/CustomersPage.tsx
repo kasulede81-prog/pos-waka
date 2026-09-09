@@ -5,6 +5,7 @@ import { ChevronDown, FileDown, Printer, UserPlus, Users } from "lucide-react";
 import clsx from "clsx";
 import type { Customer, Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
+import { formatReceiptIdentityForUi } from "../lib/receiptIdentity";
 import { useShopAction } from "../hooks/useShopAction";
 import {
   buildCreditActivityIndex,
@@ -355,7 +356,10 @@ export function CustomersPage({ lang }: { lang: Language }) {
                 <li key={o.saleId} className="rounded-xl border border-danger/30 bg-card p-3">
                   <p className="text-xs font-semibold text-danger">
                     {new Date(o.createdAt).toLocaleString()}
-                    {o.receiptSeq != null ? ` · #${String(o.receiptSeq).padStart(3, "0")}` : ""}
+                    {(() => {
+                      const receiptLabel = formatReceiptIdentityForUi(o);
+                      return receiptLabel ? ` · ${receiptLabel}` : "";
+                    })()}
                   </p>
                   <p className="mt-1 text-base font-black text-danger">UGX {o.debtUgx.toLocaleString()}</p>
                   {canDebt && customers.length > 0 ? (

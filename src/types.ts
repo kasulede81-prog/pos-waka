@@ -1857,8 +1857,10 @@ export type Sale = {
   tableSessionId?: string | null;
   /** Last cart update — used for sync merge */
   updatedAt?: string | null;
-  /** 1-based receipt sequence for this Kampala day (001, 002...). */
+  /** 1-based receipt sequence for this Kampala day on this till (001, 002...). */
   receiptSeq?: number;
+  /** Stable till code stamped at completion; qualifies receiptSeq across devices. */
+  receiptTerminal?: string;
   lines: SaleLine[];
   subtotalUgx: number;
   totalUgx: number;
@@ -2585,6 +2587,8 @@ export type SyncOperation = {
   lastError?: string | null;
   /** Kampala date_key for a parked closed-business-date rejection. */
   closedDateKey?: string | null;
+  /** WAKA-11 — ISO time the op entered dead-letter. Durable; never ACK'd. */
+  quarantinedAt?: string | null;
 };
 
 /** High-level connectivity for the tiny header strip */

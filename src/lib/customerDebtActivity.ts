@@ -18,6 +18,7 @@ export type CreditActivityEntry = {
   /** Signed ledger delta: + increases balance, − decreases */
   deltaUgx: number;
   receiptSeq?: number;
+  receiptTerminal?: string;
 };
 
 export type OrphanDebtSale = {
@@ -26,6 +27,7 @@ export type OrphanDebtSale = {
   debtUgx: number;
   totalUgx: number;
   receiptSeq?: number;
+  receiptTerminal?: string;
 };
 
 export function resolveDebtorForSale(
@@ -88,6 +90,7 @@ export function buildCreditActivityIndex(sales: Sale[], debtPayments: DebtPaymen
       amountUgx: s.debtUgx,
       deltaUgx: s.debtUgx,
       receiptSeq: s.receiptSeq,
+      receiptTerminal: s.receiptTerminal,
     });
     salesByCustomer.set(s.customerId, list);
   }
@@ -126,6 +129,7 @@ export function findOrphanDebtSales(sales: Sale[]): OrphanDebtSale[] {
       debtUgx: s.debtUgx,
       totalUgx: s.totalUgx,
       receiptSeq: s.receiptSeq,
+      receiptTerminal: s.receiptTerminal,
     }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }

@@ -8,6 +8,7 @@ import type { CreditActivityEntry, CreditActivityIndex } from "./customerDebtAct
 import type { DateFilterValue } from "./dateFilters";
 import { formatDateFilterViewingLabel } from "./dateFilterLabels";
 import { formatDateTimeKampala } from "./datesUg";
+import { formatReceiptIdentityForUi } from "./receiptIdentity";
 import {
   deriveCustomerDebtMeta,
   sumAuthoritativeCustomerDebt,
@@ -72,8 +73,7 @@ export function customerContactLabel(lang: Language, customer: Pick<Customer, "p
 }
 
 export function activityReferenceLabel(entry: CreditActivityEntry): string {
-  if (entry.receiptSeq == null) return "—";
-  return `#${String(entry.receiptSeq).padStart(3, "0")}`;
+  return formatReceiptIdentityForUi(entry) ?? "—";
 }
 
 export function activityKindLabel(lang: Language, entry: CreditActivityEntry): string {

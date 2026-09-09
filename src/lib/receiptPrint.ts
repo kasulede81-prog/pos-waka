@@ -1,6 +1,7 @@
 import type { Product, ReceiptDisplayOptions, ReceiptPaperSize, Sale, SaleLine } from "../types";
 import { defaultReceiptDisplayOptions, receiptFooterLinesForPrint } from "./receiptBranding";
 import { dateKeyKampala } from "./datesUg";
+import { formatPersistedReceiptIdentity } from "./receiptIdentity";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { buildReceiptLineQuantityDisplay, formatReceiptLineCalculation } from "./saleQuantityLabel";
@@ -119,20 +120,17 @@ function formatTimeUg(value: string): string {
 }
 
 export function buildReceiptNumberForSale(sale: Sale, allSales: Sale[]): string {
-  let seq: number;
-  if (Number.isFinite(sale.receiptSeq) && (sale.receiptSeq ?? 0) > 0) {
-    seq = Math.floor(sale.receiptSeq ?? 0);
-  } else {
-    const dayKey = dateKeyKampala(sale.createdAt);
-    const daySales = allSales
-      .filter((s) => dateKeyKampala(s.createdAt) === dayKey)
-      .sort((a, b) => {
-        if (a.createdAt === b.createdAt) return a.id.localeCompare(b.id);
-        return a.createdAt.localeCompare(b.createdAt);
-      });
-    const idx = daySales.findIndex((s) => s.id === sale.id);
-    seq = idx >= 0 ? idx + 1 : daySales.length + 1;
-  }
+  const stamped = formatPersistedReceiptIdentity(sale);
+  if (stamped) return stamped;
+  const dayKey = dateKeyKampala(sale.createdAt);
+  const daySales = allSales
+    .filter((s) => dateKeyKampala(s.createdAt) === dayKey)
+    .sort((a, b) => {
+      if (a.createdAt === b.createdAt) return a.id.localeCompare(b.id);
+      return a.createdAt.localeCompare(b.createdAt);
+    });
+  const idx = daySales.findIndex((s) => s.id === sale.id);
+  const seq = idx >= 0 ? idx + 1 : daySales.length + 1;
   return `INV-${String(seq).padStart(6, "0")}`;
 }
 
