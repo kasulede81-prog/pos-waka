@@ -3,6 +3,9 @@ import type {
   DistrictOpsRow,
   FieldMapPin,
   InternalDashboardStats,
+  InternalOpsShopCashExpenseRow,
+  InternalOpsShopSaleReturnRow,
+  InternalOpsShopSaleVoidRow,
   PlanTierMetrics,
   RecentShopRow,
   FleetDeviceRow,
@@ -374,6 +377,49 @@ export const PREVIEW_SHOP_OPS_DETAIL: ShopOpsDetail = {
   },
   subscriptionPaymentsRecent: [],
 };
+
+export const PREVIEW_SHOP_SALE_RETURNS: InternalOpsShopSaleReturnRow[] = [
+  {
+    id: "preview-return-1",
+    shop_id: PREVIEW_SHOP_ID,
+    sale_id: "preview-sale-1",
+    product_id: "preview-product-1",
+    product_name: "Soda 500ml",
+    quantity: 2,
+    refund_amount_ugx: 4000,
+    reason: "damaged",
+    stock_applied_at: daysAgo(1),
+    created_at: daysAgo(1),
+  },
+];
+
+export const PREVIEW_SHOP_SALE_VOIDS: InternalOpsShopSaleVoidRow[] = [
+  {
+    id: "preview-void-1",
+    shop_id: PREVIEW_SHOP_ID,
+    sale_id: "preview-sale-2",
+    product_id: "preview-product-2",
+    product_name: "Bread",
+    quantity: 1,
+    amount_ugx: 3500,
+    line_index: 0,
+    sale_voided_at: daysAgo(2),
+    created_at: daysAgo(2),
+  },
+];
+
+export const PREVIEW_SHOP_CASH_EXPENSES: InternalOpsShopCashExpenseRow[] = [
+  {
+    id: "preview-expense-1",
+    shop_id: PREVIEW_SHOP_ID,
+    category: "transport",
+    amount_ugx: 8000,
+    description: "Boda to market",
+    paid_on: daysAgo(0).slice(0, 10),
+    recorded_by_label: "Cashier Ann",
+    created_at: daysAgo(0),
+  },
+];
 
 export function previewDayBuckets(): { label: string; count: number }[] {
   return Array.from({ length: 7 }, (_, i) => ({

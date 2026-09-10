@@ -1071,6 +1071,181 @@ export async function fetchInternalOpsSearchShops(opts?: {
   return { rows: mapped.slice(0, pageSize), hasMore, error: null };
 }
 
+export type InternalOpsShopSaleReturnRow = {
+  id: string;
+  shop_id: string;
+  sale_id: string | null;
+  product_id: string | null;
+  product_name: string | null;
+  quantity: number;
+  refund_amount_ugx: number;
+  reason: string;
+  stock_applied_at: string | null;
+  created_at: string;
+};
+
+export type InternalOpsShopSaleVoidRow = {
+  id: string;
+  shop_id: string;
+  sale_id: string | null;
+  product_id: string | null;
+  product_name: string | null;
+  quantity: number;
+  amount_ugx: number;
+  line_index: number;
+  sale_voided_at: string | null;
+  created_at: string;
+};
+
+export type InternalOpsShopCashExpenseRow = {
+  id: string;
+  shop_id: string;
+  category: string;
+  amount_ugx: number;
+  description: string | null;
+  paid_on: string;
+  recorded_by_label: string | null;
+  created_at: string;
+};
+
+export type InternalOpsShopLedgerResult<T> = {
+  rows: T[];
+  hasMore: boolean;
+  error: string | null;
+};
+
+export function clampInternalOpsPage(opts?: { limit?: number; offset?: number }): {
+  pageSize: number;
+  offset: number;
+} {
+  return {
+    pageSize: Math.min(Math.max(opts?.limit ?? 25, 1), 50),
+    offset: Math.min(Math.max(opts?.offset ?? 0, 0), 500),
+  };
+}
+
+export function sliceInternalOpsHasMore<T>(
+  rows: T[],
+  pageSize: number,
+): { rows: T[]; hasMore: boolean } {
+  const hasMore = rows.length > pageSize;
+  return { rows: rows.slice(0, pageSize), hasMore };
+}
+
+function asIsoTimestamp(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+function asDateKey(value: unknown): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const raw = String(value ?? "");
+  return raw.length >= 10 ? raw.slice(0, 10) : raw;
+}
+
+function asFiniteNumber(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function mapShopSaleReturnRpcRow(row: Record<string, unknown>): InternalOpsShopSaleReturnRow {
+  return {
+    id: String(row.id ?? ""),
+    shop_id: String(row.shop_id ?? ""),
+    sale_id: row.sale_id != null ? String(row.sale_id) : null,
+    product_id: row.product_id != null ? String(row.product_id) : null,
+    product_name: row.product_name != null && row.product_name !== "" ? String(row.product_name) : null,
+    quantity: asFiniteNumber(row.quantity),
+    refund_amount_ugx: asFiniteNumber(row.refund_amount_ugx),
+    reason: row.reason != null ? String(row.reason) : "other",
+    stock_applied_at: asIsoTimestamp(row.stock_applied_at),
+    created_at: asIsoTimestamp(row.created_at) ?? "",
+  };
+}
+
+function mapShopSaleVoidRpcRow(row: Record<string, unknown>): InternalOpsShopSaleVoidRow {
+  return {
+    id: String(row.id ?? ""),
+    shop_id: String(row.shop_id ?? ""),
+    sale_id: row.sale_id != null ? String(row.sale_id) : null,
+    product_id: row.product_id != null ? String(row.product_id) : null,
+    product_name: row.product_name != null && row.product_name !== "" ? String(row.product_name) : null,
+    quantity: asFiniteNumber(row.quantity),
+    amount_ugx: asFiniteNumber(row.amount_ugx),
+    line_index: asFiniteNumber(row.line_index),
+    sale_voided_at: asIsoTimestamp(row.sale_voided_at),
+    created_at: asIsoTimestamp(row.created_at) ?? "",
+  };
+}
+
+function mapShopCashExpenseRpcRow(row: Record<string, unknown>): InternalOpsShopCashExpenseRow {
+  return {
+    id: String(row.id ?? ""),
+    shop_id: String(row.shop_id ?? ""),
+    category: row.category != null ? String(row.category) : "",
+    amount_ugx: asFiniteNumber(row.amount_ugx),
+    description: row.description != null && row.description !== "" ? String(row.description) : null,
+    paid_on: asDateKey(row.paid_on),
+    recorded_by_label:
+      row.recorded_by_label != null && row.recorded_by_label !== "" ? String(row.recorded_by_label) : null,
+    created_at: asIsoTimestamp(row.created_at) ?? "",
+  };
+}
+
+async function fetchInternalOpsShopLedgerPage<T>(
+  rpcName: string,
+  shopId: string,
+  mapRow: (row: Record<string, unknown>) => T,
+  opts?: { limit?: number; offset?: number },
+): Promise<InternalOpsShopLedgerResult<T>> {
+  if (!supabase) return { rows: [], hasMore: false, error: "Not configured" };
+  const { pageSize, offset } = clampInternalOpsPage(opts);
+  const { data, error } = await supabase.rpc(rpcName, {
+    p_shop_id: shopId,
+    p_limit: pageSize,
+    p_offset: offset,
+  });
+  if (error) return { rows: [], hasMore: false, error: error.message };
+  const mapped = (Array.isArray(data) ? data : []).map((row) => mapRow(row as Record<string, unknown>));
+  const sliced = sliceInternalOpsHasMore(mapped, pageSize);
+  return { ...sliced, error: null };
+}
+
+export async function fetchInternalOpsShopSaleReturns(opts: {
+  shopId: string;
+  limit?: number;
+  offset?: number;
+}): Promise<InternalOpsShopLedgerResult<InternalOpsShopSaleReturnRow>> {
+  return fetchInternalOpsShopLedgerPage(
+    "internal_ops_shop_sale_returns",
+    opts.shopId,
+    mapShopSaleReturnRpcRow,
+    opts,
+  );
+}
+
+export async function fetchInternalOpsShopSaleVoids(opts: {
+  shopId: string;
+  limit?: number;
+  offset?: number;
+}): Promise<InternalOpsShopLedgerResult<InternalOpsShopSaleVoidRow>> {
+  return fetchInternalOpsShopLedgerPage("internal_ops_shop_sale_voids", opts.shopId, mapShopSaleVoidRpcRow, opts);
+}
+
+export async function fetchInternalOpsShopCashExpenses(opts: {
+  shopId: string;
+  limit?: number;
+  offset?: number;
+}): Promise<InternalOpsShopLedgerResult<InternalOpsShopCashExpenseRow>> {
+  return fetchInternalOpsShopLedgerPage(
+    "internal_ops_shop_cash_expenses",
+    opts.shopId,
+    mapShopCashExpenseRpcRow,
+    opts,
+  );
+}
+
 /** Shops sorted by signup date (newest first) — best for spotting new registrations. */
 export async function fetchShopsBySignupDate(limit = 50): Promise<RecentShopRow[]> {
   if (!supabase) return [];

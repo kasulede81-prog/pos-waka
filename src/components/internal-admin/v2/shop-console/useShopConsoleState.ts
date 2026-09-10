@@ -1,21 +1,30 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Language } from "../../../../types";
 import { t } from "../../../../lib/i18n";
 import { executeInternalAdminAction } from "../../../../lib/internalAdminActionRunner";
 import { adminSetShopPilotCohort } from "../../../../lib/internalOpsHardening";
 import {
   INTERNAL_ADMIN_PREVIEW_ROW,
+  PREVIEW_SHOP_CASH_EXPENSES,
   PREVIEW_SHOP_ID,
   PREVIEW_SHOP_OPS_DETAIL,
+  PREVIEW_SHOP_SALE_RETURNS,
+  PREVIEW_SHOP_SALE_VOIDS,
 } from "../../../../lib/internalAdminPreview";
 import {
   fetchShopCloudSnapshotForRescue,
   fetchShopRecoverySignals,
 } from "../../../../lib/rescueSupportActions";
 import {
+  fetchInternalOpsShopCashExpenses,
+  fetchInternalOpsShopSaleReturns,
+  fetchInternalOpsShopSaleVoids,
   fetchShopAuditTimeline,
   fetchShopOpsDetail,
   fetchWakaInternalAdminMe,
+  type InternalOpsShopCashExpenseRow,
+  type InternalOpsShopSaleReturnRow,
+  type InternalOpsShopSaleVoidRow,
   type OpsAuditRow,
   type ShopOpsDetail,
   type WakaInternalAdminRow,
@@ -27,6 +36,13 @@ import {
 import type { RescueAuditFilters } from "../../../../lib/rescueConsoleIntel";
 import { supabase } from "../../../../lib/supabase";
 import { adminPermissions } from "../adminRoles";
+import {
+  applyOpsLedgerLoadMore,
+  emptyShopOpsLedgerList,
+  isCurrentOpsLedgerRequest,
+  SHOP_OPS_LEDGER_PAGE_SIZE,
+  type ShopOpsLedgerList,
+} from "./shopConsoleOpsLedgers";
 
 export type ShopConsoleRescueState = {
   auditRows: OpsAuditRow[];
@@ -86,6 +102,17 @@ export function useShopConsoleState(
     showAllDevices: false,
     loaded: false,
   });
+  const [saleReturns, setSaleReturns] = useState<ShopOpsLedgerList<InternalOpsShopSaleReturnRow>>(() =>
+    emptyShopOpsLedgerList(),
+  );
+  const [saleVoids, setSaleVoids] = useState<ShopOpsLedgerList<InternalOpsShopSaleVoidRow>>(() =>
+    emptyShopOpsLedgerList(),
+  );
+  const [cashExpenses, setCashExpenses] = useState<ShopOpsLedgerList<InternalOpsShopCashExpenseRow>>(() =>
+    emptyShopOpsLedgerList(),
+  );
+  const opsLedgerSeq = useRef(0);
+  const opsLedgersLoadedForShopRef = useRef<string | null>(null);
 
   const effectivePreviewMode = previewRequested && (loadingAdmin || !adminRow);
 
@@ -175,6 +202,175 @@ export function useShopConsoleState(
       .maybeSingle()
       .then(({ data }) => setPilotCohort(Boolean(data?.pilot_cohort)));
   }, [shopId, effectivePreviewMode]);
+
+  useEffect(() => {
+    opsLedgerSeq.current += 1;
+    opsLedgersLoadedForShopRef.current = null;
+    setSaleReturns(emptyShopOpsLedgerList());
+    setSaleVoids(emptyShopOpsLedgerList());
+    setCashExpenses(emptyShopOpsLedgerList());
+  }, [shopId]);
+
+  const ensureOpsLedgers = useCallback(async () => {
+    if (!shopId) return;
+    if (effectivePreviewMode) {
+      opsLedgersLoadedForShopRef.current = shopId;
+      setSaleReturns({
+        rows: PREVIEW_SHOP_SALE_RETURNS,
+        hasMore: false,
+        loading: false,
+        loadingMore: false,
+        error: null,
+        loaded: true,
+      });
+      setSaleVoids({
+        rows: PREVIEW_SHOP_SALE_VOIDS,
+        hasMore: false,
+        loading: false,
+        loadingMore: false,
+        error: null,
+        loaded: true,
+      });
+      setCashExpenses({
+        rows: PREVIEW_SHOP_CASH_EXPENSES,
+        hasMore: false,
+        loading: false,
+        loadingMore: false,
+        error: null,
+        loaded: true,
+      });
+      return;
+    }
+    if (opsLedgersLoadedForShopRef.current === shopId) return;
+    const seq = ++opsLedgerSeq.current;
+    opsLedgersLoadedForShopRef.current = shopId;
+    setSaleReturns((prev) => ({ ...prev, loading: true, error: null }));
+    setSaleVoids((prev) => ({ ...prev, loading: true, error: null }));
+    setCashExpenses((prev) => ({ ...prev, loading: true, error: null }));
+    const [returnsRes, voidsRes, expensesRes] = await Promise.all([
+      fetchInternalOpsShopSaleReturns({ shopId, limit: SHOP_OPS_LEDGER_PAGE_SIZE, offset: 0 }),
+      fetchInternalOpsShopSaleVoids({ shopId, limit: SHOP_OPS_LEDGER_PAGE_SIZE, offset: 0 }),
+      fetchInternalOpsShopCashExpenses({ shopId, limit: SHOP_OPS_LEDGER_PAGE_SIZE, offset: 0 }),
+    ]);
+    if (!isCurrentOpsLedgerRequest(seq, opsLedgerSeq.current)) return;
+    setSaleReturns({
+      rows: returnsRes.rows,
+      hasMore: returnsRes.hasMore,
+      loading: false,
+      loadingMore: false,
+      error: returnsRes.error,
+      loaded: true,
+    });
+    setSaleVoids({
+      rows: voidsRes.rows,
+      hasMore: voidsRes.hasMore,
+      loading: false,
+      loadingMore: false,
+      error: voidsRes.error,
+      loaded: true,
+    });
+    setCashExpenses({
+      rows: expensesRes.rows,
+      hasMore: expensesRes.hasMore,
+      loading: false,
+      loadingMore: false,
+      error: expensesRes.error,
+      loaded: true,
+    });
+  }, [shopId, effectivePreviewMode]);
+
+  const loadMoreSaleReturns = useCallback(async () => {
+    if (!shopId || effectivePreviewMode || saleReturns.loadingMore || !saleReturns.hasMore || saleReturns.error) {
+      return;
+    }
+    const seq = opsLedgerSeq.current;
+    setSaleReturns((prev) => ({ ...prev, loadingMore: true }));
+    const result = await fetchInternalOpsShopSaleReturns({
+      shopId,
+      limit: SHOP_OPS_LEDGER_PAGE_SIZE,
+      offset: saleReturns.rows.length,
+    });
+    if (!isCurrentOpsLedgerRequest(seq, opsLedgerSeq.current)) return;
+    if (result.error) {
+      setSaleReturns((prev) => ({ ...prev, loadingMore: false, error: result.error }));
+      return;
+    }
+    const merged = applyOpsLedgerLoadMore({
+      startedSeq: seq,
+      latestSeq: opsLedgerSeq.current,
+      previous: saleReturns.rows,
+      incoming: result.rows,
+    });
+    if (!merged.applied) return;
+    setSaleReturns((prev) => ({
+      ...prev,
+      rows: merged.rows,
+      hasMore: result.hasMore,
+      loadingMore: false,
+    }));
+  }, [shopId, effectivePreviewMode, saleReturns]);
+
+  const loadMoreSaleVoids = useCallback(async () => {
+    if (!shopId || effectivePreviewMode || saleVoids.loadingMore || !saleVoids.hasMore || saleVoids.error) {
+      return;
+    }
+    const seq = opsLedgerSeq.current;
+    setSaleVoids((prev) => ({ ...prev, loadingMore: true }));
+    const result = await fetchInternalOpsShopSaleVoids({
+      shopId,
+      limit: SHOP_OPS_LEDGER_PAGE_SIZE,
+      offset: saleVoids.rows.length,
+    });
+    if (!isCurrentOpsLedgerRequest(seq, opsLedgerSeq.current)) return;
+    if (result.error) {
+      setSaleVoids((prev) => ({ ...prev, loadingMore: false, error: result.error }));
+      return;
+    }
+    const merged = applyOpsLedgerLoadMore({
+      startedSeq: seq,
+      latestSeq: opsLedgerSeq.current,
+      previous: saleVoids.rows,
+      incoming: result.rows,
+    });
+    if (!merged.applied) return;
+    setSaleVoids((prev) => ({
+      ...prev,
+      rows: merged.rows,
+      hasMore: result.hasMore,
+      loadingMore: false,
+    }));
+  }, [shopId, effectivePreviewMode, saleVoids]);
+
+  const loadMoreCashExpenses = useCallback(async () => {
+    if (!shopId || effectivePreviewMode || cashExpenses.loadingMore || !cashExpenses.hasMore || cashExpenses.error) {
+      return;
+    }
+    const seq = opsLedgerSeq.current;
+    setCashExpenses((prev) => ({ ...prev, loadingMore: true }));
+    const result = await fetchInternalOpsShopCashExpenses({
+      shopId,
+      limit: SHOP_OPS_LEDGER_PAGE_SIZE,
+      offset: cashExpenses.rows.length,
+    });
+    if (!isCurrentOpsLedgerRequest(seq, opsLedgerSeq.current)) return;
+    if (result.error) {
+      setCashExpenses((prev) => ({ ...prev, loadingMore: false, error: result.error }));
+      return;
+    }
+    const merged = applyOpsLedgerLoadMore({
+      startedSeq: seq,
+      latestSeq: opsLedgerSeq.current,
+      previous: cashExpenses.rows,
+      incoming: result.rows,
+    });
+    if (!merged.applied) return;
+    setCashExpenses((prev) => ({
+      ...prev,
+      rows: merged.rows,
+      hasMore: result.hasMore,
+      loadingMore: false,
+    }));
+  }, [shopId, effectivePreviewMode, cashExpenses]);
 
   const shellAdmin = effectivePreviewMode ? INTERNAL_ADMIN_PREVIEW_ROW : adminRow;
   const perms = adminPermissions(adminRow);
@@ -273,6 +469,13 @@ export function useShopConsoleState(
     rescue,
     setRescueField,
     loadImport,
+    saleReturns,
+    saleVoids,
+    cashExpenses,
+    ensureOpsLedgers,
+    loadMoreSaleReturns,
+    loadMoreSaleVoids,
+    loadMoreCashExpenses,
   };
 }
 

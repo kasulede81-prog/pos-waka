@@ -16,6 +16,7 @@ const MIGRATION_184 = join(ROOT, "184_ungated_definer_primitive_revoke.sql");
 const MIGRATION_185 = join(ROOT, "185_account_deletion_wrapper_anon_revoke.sql");
 const MIGRATION_186 = join(ROOT, "186_sales_status_stock_drop_legacy_reverse.sql");
 const MIGRATION_187 = join(ROOT, "187_internal_ops_search_shops.sql");
+const MIGRATION_188 = join(ROOT, "188_internal_ops_shop_sale_returns_voids_expenses.sql");
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -511,6 +512,10 @@ export async function applyWakaInternalOpsSearchShops(exec: SqlExec): Promise<vo
   await exec.exec(readSql(MIGRATION_187));
 }
 
+export async function applyWakaInternalOpsShopLedgers(exec: SqlExec): Promise<void> {
+  await exec.exec(readSql(MIGRATION_188));
+}
+
 export const INTERNAL_OPS_SEARCH_FIXTURE = {
   staffId: "a1870000-0000-4000-8000-000000000010",
   outsiderId: "a1870000-0000-4000-8000-000000000011",
@@ -665,5 +670,314 @@ export async function seedInternalOpsSearchShopsCatalog(exec: SqlExec): Promise<
   `);
 }
 
+export const INTERNAL_OPS_SHOP_LEDGER_FIXTURE = {
+  staffId: "a1880000-0000-4000-8000-000000000010",
+  outsiderId: "a1880000-0000-4000-8000-000000000011",
+  ownerId: "a1880000-0000-4000-8000-000000000012",
+  orgId: "a1880000-0000-4000-8000-000000000020",
+  shopAId: "a1880000-0000-4000-8000-000000000001",
+  shopBId: "a1880000-0000-4000-8000-000000000002",
+  emptyShopId: "a1880000-0000-4000-8000-000000000003",
+  productAId: "a1880000-0000-4000-8000-000000000031",
+  productBId: "a1880000-0000-4000-8000-000000000032",
+  returnCountA: 60,
+} as const;
+
+/** Catalog for migration 188 shop-ledger RPCs (two shops + empty shop). */
+export async function seedInternalOpsShopLedgersCatalog(exec: SqlExec): Promise<void> {
+  const f = INTERNAL_OPS_SHOP_LEDGER_FIXTURE;
+  await exec.exec(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon NOLOGIN;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated NOLOGIN;
+      END IF;
+    END $$;
+
+    GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+    CREATE TABLE IF NOT EXISTS public.internal_admins (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id uuid NOT NULL UNIQUE REFERENCES auth.users (id) ON DELETE CASCADE,
+      auth_user_id uuid REFERENCES auth.users (id),
+      email text NOT NULL,
+      role text NOT NULL DEFAULT 'support_admin',
+      assigned_district_ids uuid[] NOT NULL DEFAULT '{}'::uuid[],
+      max_shops int,
+      active boolean NOT NULL DEFAULT true,
+      is_active boolean,
+      full_name text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE OR REPLACE FUNCTION public.is_waka_internal_staff ()
+    RETURNS boolean
+    LANGUAGE sql
+    STABLE
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$
+      SELECT EXISTS (
+        SELECT 1
+        FROM public.internal_admins ia
+        WHERE coalesce(ia.auth_user_id, ia.user_id) = auth.uid()
+          AND coalesce(ia.is_active, ia.active, true) = true
+      );
+    $$;
+
+    CREATE TABLE IF NOT EXISTS public.sale_returns (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      shop_id uuid NOT NULL,
+      sale_id uuid,
+      product_id uuid,
+      quantity numeric NOT NULL DEFAULT 0,
+      refund_amount_ugx bigint NOT NULL DEFAULT 0,
+      reason text NOT NULL DEFAULT 'other',
+      note text,
+      created_by uuid,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+      stock_applied_at timestamptz
+    );
+    ALTER TABLE public.sale_returns ADD COLUMN IF NOT EXISTS reason text NOT NULL DEFAULT 'other';
+    ALTER TABLE public.sale_returns ADD COLUMN IF NOT EXISTS note text;
+    ALTER TABLE public.sale_returns ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE public.sale_returns ADD COLUMN IF NOT EXISTS stock_applied_at timestamptz;
+
+    CREATE TABLE IF NOT EXISTS public.sale_voids (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      shop_id uuid NOT NULL,
+      sale_id uuid NOT NULL,
+      product_id uuid NOT NULL,
+      quantity numeric NOT NULL DEFAULT 0,
+      amount_ugx bigint NOT NULL DEFAULT 0,
+      line_index int NOT NULL DEFAULT 0,
+      note text,
+      sale_voided_at timestamptz,
+      created_by uuid,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+    );
+    ALTER TABLE public.sale_voids ADD COLUMN IF NOT EXISTS line_index int NOT NULL DEFAULT 0;
+    ALTER TABLE public.sale_voids ADD COLUMN IF NOT EXISTS note text;
+    ALTER TABLE public.sale_voids ADD COLUMN IF NOT EXISTS sale_voided_at timestamptz;
+    ALTER TABLE public.sale_voids ADD COLUMN IF NOT EXISTS created_by uuid;
+    ALTER TABLE public.sale_voids ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE public.sale_voids ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+    CREATE TABLE IF NOT EXISTS public.expenses (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      shop_id uuid NOT NULL,
+      category text NOT NULL DEFAULT 'other',
+      amount_ugx bigint NOT NULL DEFAULT 0,
+      currency text NOT NULL DEFAULT 'UGX',
+      description text,
+      paid_on date NOT NULL DEFAULT current_date,
+      attachment_path text,
+      created_by uuid,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      expense_type text NOT NULL DEFAULT 'cash_drawer',
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      recorded_by_staff_id text,
+      recorded_by_label text,
+      metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+      deleted_at timestamptz
+    );
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'other';
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS description text;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS attachment_path text;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS expense_type text NOT NULL DEFAULT 'cash_drawer';
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS recorded_by_label text;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+
+    INSERT INTO auth.users (id, email) VALUES
+      ('${f.staffId}'::uuid, 'staff188@waka.ug'),
+      ('${f.outsiderId}'::uuid, 'outsider188@shop.ug'),
+      ('${f.ownerId}'::uuid, 'owner188@shop.ug')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.internal_admins (user_id, auth_user_id, email, role, active, is_active, full_name)
+    VALUES (
+      '${f.staffId}'::uuid,
+      '${f.staffId}'::uuid,
+      'staff188@waka.ug',
+      'support_admin',
+      true,
+      true,
+      'Waka Staff 188'
+    )
+    ON CONFLICT (user_id) DO NOTHING;
+
+    INSERT INTO public.organizations (id, name)
+    VALUES ('${f.orgId}'::uuid, 'ADMIN-2 Ledger Org')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.shops (id, organization_id, name, is_active)
+    VALUES
+      ('${f.shopAId}'::uuid, '${f.orgId}'::uuid, 'Ledger Shop A', true),
+      ('${f.shopBId}'::uuid, '${f.orgId}'::uuid, 'Ledger Shop B', true),
+      ('${f.emptyShopId}'::uuid, '${f.orgId}'::uuid, 'Ledger Shop Empty', true)
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.shop_members (shop_id, user_id, role)
+    VALUES ('${f.shopAId}'::uuid, '${f.ownerId}'::uuid, 'owner')
+    ON CONFLICT (shop_id, user_id) DO NOTHING;
+
+    INSERT INTO public.products (id, shop_id, name)
+    VALUES
+      ('${f.productAId}'::uuid, '${f.shopAId}'::uuid, 'Soda 500ml'),
+      ('${f.productBId}'::uuid, '${f.shopBId}'::uuid, 'Shop B Bread')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.sale_returns (
+      id, shop_id, sale_id, product_id, quantity, refund_amount_ugx, reason,
+      stock_applied_at, created_at, metadata, note
+    )
+    SELECT
+      ('a1881000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+      '${f.shopAId}'::uuid,
+      ('a1881100-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+      '${f.productAId}'::uuid,
+      1,
+      1000 * i,
+      'damaged',
+      timestamptz '2026-01-01 00:00:00+00' + (i * interval '1 hour'),
+      timestamptz '2026-01-01 00:00:00+00' + (i * interval '1 hour'),
+      '{"secret":"return-meta"}'::jsonb,
+      'return note must not leak'
+    FROM generate_series(1, ${f.returnCountA}) AS i
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.sale_returns (
+      id, shop_id, product_id, quantity, refund_amount_ugx, reason, created_at, metadata
+    ) VALUES
+      (
+        'a1881000-0000-4000-8000-000000000101'::uuid,
+        '${f.shopBId}'::uuid,
+        '${f.productBId}'::uuid,
+        9,
+        999999,
+        'wrong_shop',
+        timestamptz '2026-12-01 00:00:00+00',
+        '{"secret":"shop-b"}'::jsonb
+      ),
+      (
+        'a1881000-0000-4000-8000-000000000102'::uuid,
+        '${f.shopBId}'::uuid,
+        '${f.productBId}'::uuid,
+        8,
+        888888,
+        'wrong_shop',
+        timestamptz '2026-12-02 00:00:00+00',
+        '{"secret":"shop-b"}'::jsonb
+      )
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.sale_voids (
+      id, shop_id, sale_id, product_id, quantity, amount_ugx, line_index,
+      note, sale_voided_at, created_at, metadata
+    )
+    SELECT
+      ('a1882000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+      '${f.shopAId}'::uuid,
+      ('a1882100-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+      '${f.productAId}'::uuid,
+      1,
+      2000 * i,
+      0,
+      'void note must not leak',
+      timestamptz '2026-02-01 00:00:00+00' + (i * interval '1 hour'),
+      timestamptz '2026-02-01 00:00:00+00' + (i * interval '1 hour'),
+      '{"secret":"void-meta"}'::jsonb
+    FROM generate_series(1, 8) AS i
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.sale_voids (
+      id, shop_id, sale_id, product_id, quantity, amount_ugx, line_index, created_at, metadata
+    ) VALUES (
+      'a1882000-0000-4000-8000-000000000101'::uuid,
+      '${f.shopBId}'::uuid,
+      'a1882100-0000-4000-8000-000000000101'::uuid,
+      '${f.productBId}'::uuid,
+      3,
+      777777,
+      1,
+      timestamptz '2026-12-01 00:00:00+00',
+      '{"secret":"shop-b-void"}'::jsonb
+    )
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.expenses (
+      id, shop_id, category, amount_ugx, description, paid_on, recorded_by_label,
+      expense_type, deleted_at, attachment_path, metadata, created_at
+    )
+    SELECT
+      ('a1883000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+      '${f.shopAId}'::uuid,
+      'transport',
+      5000 * i,
+      'boda to market',
+      DATE '2026-03-01' + (i - 1),
+      'Cashier Ann',
+      'cash_drawer',
+      NULL,
+      'secret/receipt.jpg',
+      '{"secret":"expense-meta"}'::jsonb,
+      timestamptz '2026-03-01 00:00:00+00' + (i * interval '1 hour')
+    FROM generate_series(1, 8) AS i
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.expenses (
+      id, shop_id, category, amount_ugx, description, paid_on, expense_type,
+      deleted_at, attachment_path, metadata
+    ) VALUES
+      (
+        'a1883000-0000-4000-8000-000000000090'::uuid,
+        '${f.shopAId}'::uuid,
+        'deleted',
+        1,
+        'should be excluded',
+        DATE '2026-06-01',
+        'cash_drawer',
+        timestamptz '2026-06-02 00:00:00+00',
+        'secret/deleted.jpg',
+        '{"secret":"deleted"}'::jsonb
+      ),
+      (
+        'a1883000-0000-4000-8000-000000000091'::uuid,
+        '${f.shopAId}'::uuid,
+        'legacy',
+        2,
+        'legacy type excluded',
+        DATE '2026-06-02',
+        'legacy',
+        NULL,
+        'secret/legacy.jpg',
+        '{"secret":"legacy"}'::jsonb
+      ),
+      (
+        'a1883000-0000-4000-8000-000000000101'::uuid,
+        '${f.shopBId}'::uuid,
+        'rent',
+        888888,
+        'shop B expense',
+        DATE '2026-12-01',
+        'cash_drawer',
+        NULL,
+        'secret/b.jpg',
+        '{"secret":"shop-b-exp"}'::jsonb
+      )
+    ON CONFLICT (id) DO NOTHING;
+  `);
+}
+
 export { seedR3StockFixture, type R3StockFixture } from "./r3StockPgHarness";
 export { asUser, rpcJson } from "./transferEnginePgHarness";
+
