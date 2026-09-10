@@ -2,14 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   online: true,
-  pushResult: { push: { ok: 1, fail: 0 }, queueFailed: 0 },
+  pushResult: { push: { ok: 1, fail: 0 }, queueFailed: 0, hadOutboundWork: true },
   recoveryLock: false,
   orgBlocked: false,
   syncInFlight: false,
   queue: [{ id: "1", kind: "pending_sales" as const, createdAt: "2026-01-01T00:00:00Z", attempts: 0, payload: {} }],
   unsyncedSales: 1,
   pushPaused: false,
+  throwOnPush: false,
   meta: {} as Record<string, unknown>,
+  publish: vi.fn(),
+  publishAfterCycle: vi.fn(),
 }));
 
 vi.mock("./deviceOnline", () => ({
@@ -49,7 +52,10 @@ vi.mock("../offline/localDb", () => ({
 
 vi.mock("../offline/cloudSync", () => ({
   countUnsyncedSales: () => mocks.unsyncedSales,
-  pushShopPendingToCloud: async () => mocks.pushResult,
+  pushShopPendingToCloud: async () => {
+    if (mocks.throwOnPush) throw new Error("upload exploded");
+    return mocks.pushResult;
+  },
 }));
 
 vi.mock("./syncMeta", () => ({
@@ -61,11 +67,22 @@ vi.mock("./syncMeta", () => ({
     lastPosPushSuccessAt: null,
     lastPosPushSkipReason: null,
     posPushUploadActive: false,
+    lastIssueCode: "none",
+    entityPullErrors: {},
     ...mocks.meta,
   }),
   writeSyncHealthMeta: (partial: Record<string, unknown>) => {
     Object.assign(mocks.meta, partial);
   },
+  publishShopSyncHealth: (...args: unknown[]) => mocks.publish(...args),
+  publishShopSyncHealthAfterPushCycle: (...args: unknown[]) => mocks.publishAfterCycle(...args),
+  formatCloudSyncLastError: () =>
+    mocks.meta.lastIssueCode === "error"
+      ? "error"
+      : mocks.meta.lastIssueCode === "partial"
+        ? "partial"
+        : null,
+  countPendingOutboundFromKnown: (queue: number, unsynced: number) => (queue > 0 ? queue : unsynced),
 }));
 
 vi.mock("./nativeApp", () => ({
@@ -81,8 +98,11 @@ describe("posPushScheduler", () => {
     mocks.pushPaused = false;
     mocks.queue = [{ id: "1", kind: "pending_sales", createdAt: "2026-01-01T00:00:00Z", attempts: 0, payload: {} }];
     mocks.unsyncedSales = 1;
-    mocks.pushResult = { push: { ok: 1, fail: 0 }, queueFailed: 0 };
+    mocks.pushResult = { push: { ok: 1, fail: 0 }, queueFailed: 0, hadOutboundWork: true };
+    mocks.throwOnPush = false;
     mocks.meta = {};
+    mocks.publish.mockClear();
+    mocks.publishAfterCycle.mockClear();
     vi.resetModules();
   });
 
@@ -115,5 +135,40 @@ describe("posPushScheduler", () => {
     await runPosPushOnlyUpload({ force: true });
     expect(mocks.meta.posPushSuccesses).toBe(1);
     expect(mocks.meta.lastPosPushAt).toBeTruthy();
+  });
+
+  it("does not publish sync health on no_pending skip", async () => {
+    mocks.queue = [];
+    mocks.unsyncedSales = 0;
+    const { runPosPushOnlyUpload } = await import("./posPushScheduler");
+    const result = await runPosPushOnlyUpload();
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toBe("no_pending");
+    expect(mocks.publish).not.toHaveBeenCalled();
+    expect(mocks.publishAfterCycle).not.toHaveBeenCalled();
+  });
+
+  it("publishes sync health after a completed push cycle", async () => {
+    const { runPosPushOnlyUpload } = await import("./posPushScheduler");
+    await runPosPushOnlyUpload({ force: true });
+    expect(mocks.publishAfterCycle).toHaveBeenCalledTimes(1);
+    expect(mocks.publishAfterCycle.mock.calls[0]![0]).toMatchObject({
+      pushFail: 0,
+      queueFailed: 0,
+      pushOk: 1,
+      hadOutboundWork: true,
+    });
+  });
+
+  it("publishes error without claiming push success when the upload throws", async () => {
+    mocks.throwOnPush = true;
+    const { runPosPushOnlyUpload } = await import("./posPushScheduler");
+    const result = await runPosPushOnlyUpload({ force: true });
+    expect(result.ran).toBe(true);
+    expect(result.pushFail).toBe(1);
+    expect(mocks.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ lastError: "error", includeLastError: true }),
+    );
+    expect(mocks.publishAfterCycle).not.toHaveBeenCalled();
   });
 });

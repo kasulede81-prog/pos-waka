@@ -28,7 +28,16 @@ import {
   syncStartupIdleMs,
 } from "../lib/syncTiming";
 import { useOfflineStatus } from "./useOfflineStatus";
-import { applySyncHealthAfterCycle, readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
+import {
+  applySyncHealthAfterCycle,
+  countPendingOutboundFromKnown,
+  formatCloudSyncLastError,
+  publishShopSyncHealth,
+  publishShopSyncHealthAfterPushCycle,
+  readSyncHealthMeta,
+  writeSyncHealthMeta,
+  type SyncHealthMeta,
+} from "../lib/syncMeta";
 import { readLastEntityPullErrors } from "../lib/pullDiagnostics";
 import { appendPilotEvent } from "../lib/pilotEventLog";
 import { pilotSyncLog } from "../lib/pilotSyncLog";
@@ -199,7 +208,7 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
       const work = (async () => {
         const retryQuarantined = showSpinner || forcePending;
         if (wantPull) {
-          const { pulled, push, queueFailed } = await syncShopWithCloud({
+          const { pulled, push, queueFailed, hadOutboundWork } = await syncShopWithCloud({
             pull: true,
             forceFull,
             retryQuarantined,
@@ -209,29 +218,59 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
           const entityPullErrors = readLastEntityPullErrors();
           const pullPartial = pulled === false || Object.keys(entityPullErrors).length > 0;
           const durable = await readSyncQueue();
-          applySyncHealthAfterCycle({
+          const queueHealth = deriveQueueHealth(durable);
+          const meta = applySyncHealthAfterCycle({
             attemptAt,
             pullPartial,
             entityPullErrors,
             pushFail: push.fail,
             queueFailed,
             durableRemaining: durable.length,
-            queueHealth: deriveQueueHealth(durable),
+            queueHealth,
           });
+          try {
+            publishShopSyncHealthAfterPushCycle({
+              pendingOutbound: countPendingOutboundFromKnown(durable.length, countUnsyncedSales()),
+              pushFail: push.fail,
+              queueFailed,
+              queueHealth,
+              lastPushOkAt: attemptAt,
+              lastError: formatCloudSyncLastError(meta),
+              pushOk: push.ok,
+              hadOutboundWork,
+            });
+          } catch {
+            /* telemetry must not fail flush */
+          }
         } else {
-          const { push, queueFailed } = await pushShopPendingToCloud({ retryQuarantined });
+          const { push, queueFailed, hadOutboundWork } = await pushShopPendingToCloud({ retryQuarantined });
           lastPushAtRef.current = Date.now();
           const durable = await readSyncQueue();
           const entityPullErrors = readLastEntityPullErrors();
-          applySyncHealthAfterCycle({
+          const queueHealth = deriveQueueHealth(durable);
+          const meta = applySyncHealthAfterCycle({
             attemptAt,
             pullPartial: Object.keys(entityPullErrors).length > 0,
             entityPullErrors,
             pushFail: push.fail,
             queueFailed,
             durableRemaining: durable.length,
-            queueHealth: deriveQueueHealth(durable),
+            queueHealth,
           });
+          try {
+            publishShopSyncHealthAfterPushCycle({
+              pendingOutbound: countPendingOutboundFromKnown(durable.length, countUnsyncedSales()),
+              pushFail: push.fail,
+              queueFailed,
+              queueHealth,
+              lastPushOkAt: attemptAt,
+              lastError: formatCloudSyncLastError(meta),
+              pushOk: push.ok,
+              hadOutboundWork,
+            });
+          } catch {
+            /* telemetry must not fail flush */
+          }
         }
       })();
       await Promise.race([
@@ -245,6 +284,14 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
         lastIssueAt: attemptAt,
         lastIssueCode: "error",
       });
+      try {
+        publishShopSyncHealth({
+          lastError: "error",
+          includeLastError: true,
+        });
+      } catch {
+        /* telemetry must not fail flush */
+      }
       captureAppException(err, { scope: "sync_flush" });
       appendPilotEvent("sync_failure", "Sync flush failed", { at: attemptAt });
       pilotSyncLog("flush_error", { at: attemptAt });

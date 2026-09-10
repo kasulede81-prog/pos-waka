@@ -6,6 +6,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ignoreReportedSyncFailure, reportSwallowedSyncFailure, reportSyncIssue } from "./monitoring";
 import { applySyncHealthAfterCycle, recordBackgroundSyncFailure } from "./syncMeta";
 
+vi.mock("./supabase", () => ({
+  hasSupabaseConfig: false,
+  supabase: null,
+}));
+
 describe("R6 — swallowed failures are observable", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

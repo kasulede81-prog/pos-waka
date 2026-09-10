@@ -46,7 +46,12 @@ import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
 import { isCloudRecoveryLockActive } from "../lib/cloudRecoverySession";
 import { SYNC_EVENT_PULL_MIN_MS, SYNC_INCREMENTAL_PULL_CONCURRENCY, SYNC_PULL_MIN_INTERVAL_MS, SYNC_REALTIME_COALESCE_MS } from "../lib/syncTiming";
 import { isNativeApp } from "../lib/nativeApp";
-import { writeSyncHealthMeta, readSyncHealthMeta, recordBackgroundSyncFailure } from "../lib/syncMeta";
+import {
+  writeSyncHealthMeta,
+  readSyncHealthMeta,
+  recordBackgroundSyncFailure,
+  publishShopSyncHealth,
+} from "../lib/syncMeta";
 import { consumeOrResolveShopCtx, clearShopCtxTick, rememberShopCtxForTick, setCachedShopId } from "../lib/shopSyncContext";
 import {
   ALL_INCREMENTAL_PULL_ENTITIES,
@@ -4221,19 +4226,13 @@ export async function pullShopDataFromCloud(opts?: {
 
   recordEntityPullErrors(entityErrors);
 
-  void supabase
-    .from("sync_health")
-    .upsert(
-      {
-        shop_id: ctx.shopId,
-        last_pull_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "shop_id" },
-    )
-    .then(() => undefined);
-
   const pulledAt = new Date().toISOString();
+  publishShopSyncHealth({
+    shopId: ctx.shopId,
+    lastPullAt: pulledAt,
+    includePendingOutbound: false,
+  });
+
   const hasPartialIssue = salesTruncated || Object.keys(entityErrors).length > 0;
   writeSyncHealthMeta({
     lastPullAt: pulledAt,
@@ -4981,21 +4980,26 @@ async function runIncrementalCloudPull(reason: string, opts?: { force?: boolean 
 async function pushShopPendingToCloudInner(opts?: { retryQuarantined?: boolean }): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
+  hadOutboundWork: boolean;
 }> {
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
   } catch {
-    return { push: { ok: 0, fail: 0 }, queueFailed: 0 };
+    return { push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false };
   }
 
   let push = { ok: 0, fail: 0 };
   let queueFailed = 0;
+  let hadOutboundWork = false;
   if (getDeviceOnline()) {
+    const { readSyncQueue } = await import("./localDb");
+    const queueBefore = (await readSyncQueue()).length;
     push = await pushAllPendingToCloud();
     const { flushSyncQueueInner } = await import("./syncEngine");
     const result = await flushSyncQueueInner(undefined, { retryQuarantined: opts?.retryQuarantined === true });
     queueFailed = result.failed;
+    hadOutboundWork = push.ok > 0 || result.remaining < queueBefore;
     writeSyncHealthMeta({ lastPushAt: new Date().toISOString() });
     const ctx = await resolveShopCtx();
     if (ctx) {
@@ -5003,12 +5007,13 @@ async function pushShopPendingToCloudInner(opts?: { retryQuarantined?: boolean }
       void sendShopPresenceHeartbeat(ctx.shopId);
     }
   }
-  return { push, queueFailed };
+  return { push, queueFailed, hadOutboundWork };
 }
 
 export async function pushShopPendingToCloud(opts?: { retryQuarantined?: boolean }): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
+  hadOutboundWork?: boolean;
 }> {
   const { withPushSyncMutex } = await import("../lib/globalSyncMutex");
   return withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner(opts));
@@ -5023,19 +5028,20 @@ async function syncShopWithCloudInner(opts?: {
   pulled: boolean;
   push: { ok: number; fail: number };
   queueFailed: number;
+  hadOutboundWork?: boolean;
 }> {
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
   } catch {
-    return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
+    return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false };
   }
 
   if (hasSupabaseConfig && supabase) {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
     if (user && !isSupabaseEmailVerified(user)) {
-      return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
+      return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false };
     }
   }
 
@@ -5069,7 +5075,7 @@ async function syncShopWithCloudInner(opts?: {
     ? withPushSyncMutex("pushPending", () =>
         pushShopPendingToCloudInner({ retryQuarantined: opts?.retryQuarantined === true }),
       )
-    : Promise.resolve({ push: { ok: 0, fail: 0 }, queueFailed: 0 });
+    : Promise.resolve({ push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false });
 
   const [pulled, pushResult] = await Promise.all([pullPromise, pushPromise]);
 
@@ -5081,7 +5087,12 @@ async function syncShopWithCloudInner(opts?: {
       isNativeApp() ? 15_000 : 4000,
     );
   }
-  return { pulled, push: pushResult.push, queueFailed: pushResult.queueFailed };
+  return {
+    pulled,
+    push: pushResult.push,
+    queueFailed: pushResult.queueFailed,
+    hadOutboundWork: pushResult.hadOutboundWork === true,
+  };
 }
 
 export async function syncShopWithCloud(opts?: {
@@ -5092,6 +5103,7 @@ export async function syncShopWithCloud(opts?: {
   pulled: boolean;
   push: { ok: number; fail: number };
   queueFailed: number;
+  hadOutboundWork?: boolean;
 }> {
   const { recordSyncDuration } = await import("../lib/performanceMetrics");
   const started = performance.now();
