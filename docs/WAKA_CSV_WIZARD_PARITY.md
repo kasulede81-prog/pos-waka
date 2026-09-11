@@ -33,7 +33,7 @@ Product name, Section, Unit, Opening quantity, Cost price, Selling price
 | Section | Section / folder | `categoryInput` → resolve | `category` |
 | Unit | How do you sell it? | `baseUnit` (default `piece`) | `baseUnit` |
 | Opening quantity | How many do you have now? | `stockQty` (sell units) | `stockOnHand` |
-| Cost price | How much do you buy one {unit}? | `costPricePerUnitUgx` | unit cost (or 72% if blank) |
+| Cost price | How much do you buy one {unit}? | `costPricePerUnitUgx` | unit cost (CSV blank → 72%; Excel blank → blocking) |
 | Selling price | How much do you sell one {unit}? | `sellingPriceUgx` | `sellingPricePerUnitUgx` |
 
 `packMode: "none"`. No pack fields on the bulk payload.
@@ -125,12 +125,12 @@ The previous single 7-column template is **not** accepted. Silent reinterpretati
 
 ## UI
 
-Stock → **Import CSV** (`ProductCsvImportSheet`):
+Stock → **Import CSV / Excel** (`ProductCsvImportSheet`):
 
 - Short “Which template should I use?”
 - Download — No Packs
 - Download — With Packs
-- Choose / upload CSV → shared `ProductImportReviewSheet`
+- Choose / upload `.csv` or Excel (`.xlsx` / `.xls` / `.ods`) → shared `ProductImportReviewSheet`
 
 Review for packed rows shows Pack, Pack size, Opening packs, Cost per pack, and derived sell-unit stock/cost hints.
 

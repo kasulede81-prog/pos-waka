@@ -35,11 +35,13 @@ export {
 export type { ParseProductImportCsvOptions } from "./parseProductImportCsv";
 export {
   EXCEL_IMPORT_MAX_BYTES,
+  isExcelImportFile,
   isExcelImportFilename,
   parseProductImportWorkbook,
   workbookBytesToCsvText,
 } from "./parseProductImportExcel";
 export type { ParseProductImportCsvResult, ProductImportCsvIssue } from "./parseProductImportCsv";
+export { formatProductImportCsvIssue } from "./formatProductImportIssue";
 export {
   buildWakaProductImportTemplateCsv,
   buildWakaProductImportExampleCsv,

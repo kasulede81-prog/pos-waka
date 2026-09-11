@@ -1,11 +1,11 @@
 # WAKA POS — CSV Product Import
 
-**Phase:** 2 — Two wizard-parity templates  
-**Date:** 2026-08-29  
+**Phase:** 2 — Two wizard-parity templates (CSV or Excel)  
+**Date:** 2026-09-11  
 **Parity detail:** `docs/WAKA_CSV_WIZARD_PARITY.md`  
-**Save path (mandatory):** `parseProductImportCsv` → `ProductImportReviewSheet` → `commitNormalizedProductImport` → `bulkQuickAddProducts` → `buildQuickAddProductDraft` → `commitNewProducts`
+**Save path (mandatory):** `parseProductImportCsv` / `parseProductImportWorkbook` → `ProductImportReviewSheet` → `commitNormalizedProductImport` → `bulkQuickAddProducts` → `buildQuickAddProductDraft` → `commitNewProducts`
 
-CSV never writes `public.products` itself. Permission remains `products.add`.
+CSV and Excel never write `public.products` themselves. Permission remains `products.add`.
 
 ---
 
@@ -25,7 +25,7 @@ Paper / photo / OCR is **not** in this phase.
 | **No Packs** | Stocked and bought individually (wizard pack OFF) | `WAKA Product Import — No Packs.csv` |
 | **With Packs** | Bought in packs/crates/boxes, sold by unit (wizard pack ON) | `WAKA Product Import — With Packs.csv` |
 
-Stock → **Import CSV** explains this briefly and offers both downloads.
+Stock → **Import CSV / Excel** explains this briefly and offers both downloads. Fill the template in a spreadsheet and upload `.csv` or `.xlsx`.
 
 Templates are identified by **exact header columns**, not by filename.
 
@@ -75,7 +75,8 @@ Coca Cola row → `stockOnHand = 1152`, unit cost `750`, pack cost `18000`.
 | Case | Review | Draft |
 |------|--------|-------|
 | Number present | Cost provided | Stored (unit cost; pack template also stores pack cost) |
-| Blank | Cost missing — ~72% fallback | `defaultWizardUnitCostUgx` |
+| Blank (CSV) | Cost missing — ~72% fallback | `defaultWizardUnitCostUgx` |
+| Blank (Excel) | Blocking `missing_cost_required` | Must enter a buying price or uncheck |
 | Invalid | Blocking | Must fix or uncheck |
 
 Explicit `0` is a real zero cost, not missing.
@@ -131,9 +132,10 @@ Every parse opens **`ProductImportReviewSheet`** (one review UI). Packed rows sh
 | Limit | Value |
 |-------|-------|
 | Max products per file | 500 |
-| Max file size | 256 KB |
+| Max CSV size | 256 KB |
+| Max Excel workbook | 5 MB |
 
-Excel `.xlsx` is rejected — save as CSV.
+Excel `.xlsx` / `.xls` / `.ods` uses the same templates and review. The first sheet is projected to CSV; rows are tagged `source: "excel"` so a missing buying price is blocking (no 72% fallback).
 
 ---
 
@@ -151,6 +153,7 @@ Same as Add product: **`products.add`**.
 | Templates | `src/lib/productImport/csvTemplate.ts` |
 | Pack math | `src/lib/productImport/packImportSemantics.ts` |
 | Adapter | `src/lib/productImport/parseProductImportCsv.ts` |
+| Excel adapter | `src/lib/productImport/parseProductImportExcel.ts` |
 | Stock entry | `ProductCsvImportSheet` → `ProductImportReviewSheet` |
 | Commit | `commitNormalizedProductImport` |
 

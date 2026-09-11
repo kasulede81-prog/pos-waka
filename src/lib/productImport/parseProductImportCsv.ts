@@ -22,7 +22,6 @@ export type ProductImportCsvIssueKind =
   | "too_many_rows"
   | "file_too_large"
   | "invalid_number"
-  | "excel_not_supported"
   | "legacy_template"
   | "unrecognized_template";
 
@@ -383,8 +382,17 @@ export function parseProductImportCsv(
 }
 
 export async function parseProductImportCsvFile(file: File): Promise<ParseProductImportCsvResult> {
-  const { isExcelImportFilename, parseProductImportWorkbook } = await import("./parseProductImportExcel");
-  if (isExcelImportFilename(file.name)) {
+  const { EXCEL_IMPORT_MAX_BYTES, isExcelImportFile, parseProductImportWorkbook } = await import(
+    "./parseProductImportExcel"
+  );
+  if (isExcelImportFile(file)) {
+    if (file.size > EXCEL_IMPORT_MAX_BYTES) {
+      return fail([
+        issue("file_too_large", "excelImportFileTooLarge", {
+          params: { maxMb: String(Math.floor(EXCEL_IMPORT_MAX_BYTES / (1024 * 1024))) },
+        }),
+      ]);
+    }
     const buffer = await file.arrayBuffer();
     return parseProductImportWorkbook(new Uint8Array(buffer));
   }

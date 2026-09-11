@@ -9,17 +9,28 @@
  * SheetJS is imported dynamically so it code-splits out of the main POS bundle.
  */
 
-import { CSV_IMPORT_MAX_BYTES } from "./csvLimits";
+import { CSV_IMPORT_MAX_BYTES, EXCEL_IMPORT_MAX_BYTES } from "./csvLimits";
 import type { ParseProductImportCsvResult, ProductImportCsvIssue } from "./parseProductImportCsv";
 import { parseProductImportCsv } from "./parseProductImportCsv";
 
-/** Workbook bytes are compressed; the CSV projection is capped separately. */
-export const EXCEL_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+export { EXCEL_IMPORT_MAX_BYTES };
 
 const EXCEL_EXTENSIONS = /\.(xlsx|xlsm|xls|ods)$/i;
 
+const EXCEL_MIME_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/vnd.oasis.opendocument.spreadsheet",
+]);
+
 export function isExcelImportFilename(filename: string): boolean {
   return EXCEL_EXTENSIONS.test(filename.trim());
+}
+
+/** Filename first; MIME covers Android/Drive picks that drop the extension. */
+export function isExcelImportFile(file: { name: string; type?: string }): boolean {
+  if (isExcelImportFilename(file.name)) return true;
+  return EXCEL_MIME_TYPES.has((file.type ?? "").trim().toLowerCase());
 }
 
 function fail(issues: ProductImportCsvIssue[]): ParseProductImportCsvResult {
@@ -55,7 +66,7 @@ export async function workbookBytesToCsvText(bytes: Uint8Array): Promise<
     if (!sheetName) return { ok: false, issues: [issue("empty_file", "csvImportEmpty")] };
     const sheet = wb.Sheets[sheetName];
     if (!sheet) return { ok: false, issues: [issue("empty_file", "csvImportEmpty")] };
-    csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false, rawNumbers: true });
+    csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: true, rawNumbers: true });
   } catch {
     return { ok: false, issues: [issue("malformed_csv", "excelImportUnreadable")] };
   }

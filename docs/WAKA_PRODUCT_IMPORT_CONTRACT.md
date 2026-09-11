@@ -1,11 +1,11 @@
 # WAKA POS — Product Import Contract
 
-**Phase:** 2 — Normalized rows + review + two CSV templates (no OCR)  
-**Date:** 2026-08-29  
+**Phase:** 2 — Normalized rows + review + two templates (CSV or Excel; no OCR)  
+**Date:** 2026-09-11  
 **Save path (mandatory):** `bulkQuickAddProducts` → `buildQuickAddProductDraft` → `commitNewProducts`  
-**CSV detail:** `docs/WAKA_CSV_PRODUCT_IMPORT.md` · **Wizard parity:** `docs/WAKA_CSV_WIZARD_PARITY.md`
+**CSV / Excel detail:** `docs/WAKA_CSV_PRODUCT_IMPORT.md` · **Wizard parity:** `docs/WAKA_CSV_WIZARD_PARITY.md`
 
-This contract is the only allowed way for CSV and future paper/OCR adapters to create products.
+This contract is the only allowed way for CSV, Excel, and future paper/OCR adapters to create products.
 
 ---
 
@@ -16,7 +16,7 @@ Type: `NormalizedProductImportRow` (`src/lib/productImport/types.ts`)
 | Field | WAKA destination | Required? | Notes |
 |-------|------------------|-----------|--------|
 | `clientId` | Review only | Yes | Not stored on `Product` |
-| `source` | Review / debug only | Yes | `manual` \| `ai` \| `csv` \| `paper_ocr` |
+| `source` | Review / debug only | Yes | `manual` \| `ai` \| `csv` \| `excel` \| `paper_ocr` |
 | `enabled` | Skipped if false | Yes | Review checkbox |
 | `name` | `Product.name` | Yes | Same as wizard / draft |
 | `categoryInput` | Resolution input | Yes to type | Leaf name, path, or `legacyShelfKey` |
@@ -54,7 +54,8 @@ Not on the row: SKU, id, tax, image, supplier, `openingBatch` (pharmacy wizard-o
 
 **Warnings:**
 
-- Cost missing → ~72% fallback (`cost_fallback`)  
+- Cost missing on CSV / manual / AI → ~72% fallback (`cost_fallback`)
+- Cost missing on Excel → blocking (`missing_cost_required`; no invented cost)   
 - Unresolved section  
 - Duplicate of existing catalog name  
 - Unit cost > selling price  
@@ -86,7 +87,8 @@ Pack sell-unit / cost derivation: `packImportSemantics.ts` (same math as `buildP
 | Review | Draft |
 |--------|--------|
 | Cost provided (unit, or pack-derived unit) | Passed through |
-| Cost / cost-per-pack missing | Warning + 72% fallback via draft |
+| Cost / cost-per-pack missing (CSV / manual / AI) | Warning + 72% fallback via draft |
+| Cost / cost-per-pack missing (Excel) | Blocking — operator must enter a buying price |
 
 Do not pass `0` to mean missing. Do not put pack totals into `costPricePerUnitUgx` without deriving unit cost.
 
@@ -119,7 +121,9 @@ No `public.products` writes. Permission `products.add` inside `bulkQuickAddProdu
 
 ---
 
-## CSV adapter
+## CSV / Excel adapter
+
+Excel is an adapter, not a second importer. The first worksheet is projected to CSV text, then the shared parser runs with `source: "excel"`.
 
 ```
 .csv bytes
@@ -127,6 +131,11 @@ No `public.products` writes. Permission `products.add` inside `bulkQuickAddProdu
   → parseProductImportCsv (source: "csv", packMode set)
   → ProductImportReviewSheet
   → commitNormalizedProductImport({ bulkQuickAddProducts })
+
+.xlsx / .xlsm / .xls / .ods bytes
+  → parseProductImportWorkbook (first sheet → CSV text)
+  → parseProductImportCsv (source: "excel", packMode set)
+  → same review + commit
 ```
 
 | Template | Headers |
@@ -136,9 +145,9 @@ No `public.products` writes. Permission `products.add` inside `bulkQuickAddProdu
 
 Legacy mixed 7-column header → reject (not wizard-parity for packs).
 
-Limits: 500 rows, 256 KB. Excel not parsed.
+Limits: 500 rows. CSV max 256 KB. Excel workbook max 5 MB.
 
-Stock entry: **Import CSV** → two template downloads + file picker → shared review.
+Stock entry: **Import CSV / Excel** → two template downloads + file picker (`.csv` or workbook) → shared review.
 
 Existing AI bulk modal is **unchanged**. Add Product wizard is **unchanged**.
 
