@@ -39,6 +39,12 @@ function workbookBytes(headers: readonly string[], rows: readonly (readonly unkn
   return new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer);
 }
 
+function workbookFile(bytes: Uint8Array, name: string, type: string): File {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return new File([copy], name, { type });
+}
+
 function packRow(i: number, over: Partial<Record<number, unknown>> = {}): PackRow {
   const base: PackRow = [`Product ${i}`, "Groceries", "bottle", "carton", 24, 22000, 2000, 3];
   for (const [k, v] of Object.entries(over)) base[Number(k) as 0] = v as never;
@@ -361,20 +367,13 @@ describe("PHASE 1 — file routing and review copy", () => {
     const { parseProductImportCsvFile } = await import("./parseProductImportCsv");
     const bytes = workbookBytes(PACK_HEADERS, [["Pepsi 330ml", "Soft Drinks", "bottle", "carton", 24, 22000, 2000, 3]]);
 
-    const named = await parseProductImportCsvFile(
-      new File([bytes], "stock.xlsx", {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }),
-    );
+    const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const named = await parseProductImportCsvFile(workbookFile(bytes, "stock.xlsx", mime));
     expect(named.ok).toBe(true);
     expect(named.rows[0]?.source).toBe("excel");
     expect(named.rows[0]?.stockQty).toBe(72);
 
-    const mimeOnly = await parseProductImportCsvFile(
-      new File([bytes], "download", {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }),
-    );
+    const mimeOnly = await parseProductImportCsvFile(workbookFile(bytes, "download", mime));
     expect(mimeOnly.ok).toBe(true);
     expect(mimeOnly.rows[0]?.source).toBe("excel");
   });
