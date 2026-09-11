@@ -17,8 +17,10 @@ describe("Stock Overview Import CSV wiring", () => {
     const csv = resolveInventoryOverviewQuickActions("retail").find((a) => a.id === "importCsv");
     expect(csv?.perm).toBe("products.add");
     expect(csv?.labelKey).toBe("stockQuickImportCsv");
-    expect(t("en", "stockQuickImportCsv")).toBe("Import CSV");
+    expect(t("en", "stockQuickImportCsv")).toBe("Import CSV / Excel");
     expect(t("lg", "stockQuickImportCsv")).toContain("CSV");
+    expect(t("en", "csvImportTitle")).toMatch(/Excel/);
+    expect(t("en", "csvImportChooseFile")).toMatch(/Excel/);
   });
 
   it("owner/manager/stock_keeper can use hub Import CSV; cashier cannot", () => {
@@ -79,6 +81,8 @@ describe("Stock Overview Import CSV wiring", () => {
     expect(stock).not.toContain("parseProductImportCsv(");
     expect(src("src/components/stock/ProductImportReviewSheet.tsx")).toContain("commitNormalizedProductImport");
     expect(src("src/components/stock/ProductCsvImportSheet.tsx")).toContain("parseProductImportCsvFile");
+    expect(src("src/components/stock/ProductCsvImportSheet.tsx")).toContain(".xlsx");
     expect(src("src/lib/productImport/parseProductImportCsv.ts")).toContain("export function parseProductImportCsv");
+    expect(src("src/lib/productImport/parseProductImportCsv.ts")).toContain("parseProductImportWorkbook");
   });
 });

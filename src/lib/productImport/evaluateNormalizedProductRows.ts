@@ -51,13 +51,17 @@ export function evaluateNormalizedProductRows(input: EvaluateImportRowsInput): E
       row.packMode === "packed" &&
       row.buyingPackCostUgx != null &&
       !Number.isFinite(Number(row.buyingPackCostUgx));
-    const costStatus = costProvided ? ("provided" as const) : ("missing_fallback" as const);
     /**
      * Excel imports never receive an invented cost. A missing buying price is a
      * blocking error the operator must fix in the sheet or the review row, so no
      * fallback is offered for those rows.
      */
     const costFallbackAllowed = row.source !== "excel";
+    const costStatus = costProvided
+      ? ("provided" as const)
+      : costFallbackAllowed
+        ? ("missing_fallback" as const)
+        : ("missing_required" as const);
     const fallbackCostUgx = costFallbackAllowed && price > 0 ? defaultWizardUnitCostUgx(price) : null;
 
     if (row.enabled && !row.name.trim()) {

@@ -39,6 +39,12 @@ function workbookBytes(headers: readonly string[], rows: readonly (readonly unkn
   return new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer);
 }
 
+function workbookFile(bytes: Uint8Array, name: string, type: string): File {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return new File([copy], name, { type });
+}
+
 function packRow(i: number, over: Partial<Record<number, unknown>> = {}): PackRow {
   const base: PackRow = [`Product ${i}`, "Groceries", "bottle", "carton", 24, 22000, 2000, 3];
   for (const [k, v] of Object.entries(over)) base[Number(k) as 0] = v as never;
@@ -121,6 +127,7 @@ describe("PHASE 1 — Excel product import", () => {
 
     const evaluated = evaluateNormalizedProductRows({ rows: parsed.rows, pickerItems: [] });
     expect(evaluated[0]?.blocking).toBe(true);
+    expect(evaluated[0]?.costStatus).toBe("missing_required");
     expect(evaluated[0]?.issues.some((i) => i.kind === "missing_cost_required" && i.severity === "error")).toBe(true);
     // No fallback cost is offered for Excel rows.
     expect(evaluated[0]?.fallbackCostUgx).toBeNull();
@@ -344,8 +351,100 @@ describe("PHASE 1 — Excel format coverage", () => {
     expect(parsed.rows[0]?.source).toBe("csv");
 
     const evaluated = evaluateNormalizedProductRows({ rows: parsed.rows, pickerItems: [] });
+    expect(evaluated[0]?.costStatus).toBe("missing_fallback");
     expect(evaluated[0]?.issues.some((i) => i.kind === "cost_fallback" && i.severity === "warning")).toBe(true);
     expect(evaluated[0]?.issues.some((i) => i.kind === "missing_cost_required")).toBe(false);
     expect(evaluated[0]?.blocking).toBe(false);
+  });
+});
+
+describe("PHASE 1 — file routing and review copy", () => {
+  beforeEach(() => {
+    seedStore();
+  });
+
+  it("routes .xlsx and MIME-only workbooks through parseProductImportCsvFile", async () => {
+    const { parseProductImportCsvFile } = await import("./parseProductImportCsv");
+    const bytes = workbookBytes(PACK_HEADERS, [["Pepsi 330ml", "Soft Drinks", "bottle", "carton", 24, 22000, 2000, 3]]);
+
+    const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const named = await parseProductImportCsvFile(workbookFile(bytes, "stock.xlsx", mime));
+    expect(named.ok).toBe(true);
+    expect(named.rows[0]?.source).toBe("excel");
+    expect(named.rows[0]?.stockQty).toBe(72);
+
+    const mimeOnly = await parseProductImportCsvFile(workbookFile(bytes, "download", mime));
+    expect(mimeOnly.ok).toBe(true);
+    expect(mimeOnly.rows[0]?.source).toBe("excel");
+  });
+
+  it("routes .csv files through the CSV source, not Excel", async () => {
+    const { parseProductImportCsvFile } = await import("./parseProductImportCsv");
+    const csv =
+      "Product name,Section,Unit,Opening stock (units),Cost price,Selling price\n" +
+      "Sugar 1kg,Groceries,kg,10,2800,3500\n";
+    const parsed = await parseProductImportCsvFile(new File([csv], "stock.csv", { type: "text/csv" }));
+    expect(parsed.ok).toBe(true);
+    expect(parsed.rows[0]?.source).toBe("csv");
+    expect(parsed.rows[0]?.packMode).toBe("none");
+    expect(parsed.rows[0]?.stockQty).toBe(10);
+  });
+
+  it("parses a No Packs Excel workbook through the same pipeline", async () => {
+    const headers = [
+      "Product name",
+      "Section",
+      "Unit",
+      "Opening stock (units)",
+      "Cost price",
+      "Selling price",
+    ];
+    const parsed = await parseProductImportWorkbook(
+      workbookBytes(headers, [["Sugar 1kg", "Groceries", "kg", 10, 2800, 3500]]),
+    );
+    expect(parsed.ok).toBe(true);
+    expect(parsed.templateKind).toBe("no_packs");
+    expect(parsed.rows[0]?.source).toBe("excel");
+    expect(parsed.rows[0]?.packMode).toBe("none");
+    expect(parsed.rows[0]?.stockQty).toBe(10);
+    expect(parsed.rows[0]?.costPricePerUnitUgx).toBe(2800);
+    expect(commitViaStore(parsed.rows).added).toBe(1);
+  });
+
+  it("keeps Excel source row numbers when a blank row sits between products", async () => {
+    const parsed = await parseProductImportWorkbook(
+      workbookBytes(PACK_HEADERS, [
+        ["Pepsi 330ml", "Soft Drinks", "bottle", "carton", 24, 22000, 2000, 3],
+        ["", "", "", "", "", "", "", ""],
+        ["Coke 330ml", "Soft Drinks", "bottle", "carton", 24, 22000, 2000, 1],
+      ]),
+    );
+    expect(parsed.ok).toBe(true);
+    expect(parsed.rows).toHaveLength(2);
+    expect(parsed.blankRowCount).toBeGreaterThanOrEqual(1);
+    expect(parsed.rows[0]?.sourceRowNumber).toBe(2);
+    expect(parsed.rows[1]?.sourceRowNumber).toBe(4);
+  });
+
+  it("rejects an oversized Excel File before commit", async () => {
+    const { parseProductImportCsvFile } = await import("./parseProductImportCsv");
+    const { EXCEL_IMPORT_MAX_BYTES } = await import("./parseProductImportExcel");
+    const oversized = new File([new Uint8Array(EXCEL_IMPORT_MAX_BYTES + 1)], "huge.xlsx");
+    const parsed = await parseProductImportCsvFile(oversized);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.issues[0]?.kind).toBe("file_too_large");
+    expect(parsed.issues[0]?.messageKey).toBe("excelImportFileTooLarge");
+    expect(parsed.issues[0]?.params?.maxMb).toBe("5");
+  });
+
+  it("formats Excel size errors with maxMb for the import sheet", async () => {
+    const { formatProductImportCsvIssue } = await import("./formatProductImportIssue");
+    const text = formatProductImportCsvIssue("en", {
+      kind: "file_too_large",
+      messageKey: "excelImportFileTooLarge",
+      params: { maxMb: "5" },
+    });
+    expect(text).toContain("5");
+    expect(text).not.toContain("{maxMb}");
   });
 });

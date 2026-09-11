@@ -10,6 +10,8 @@ import {
   CSV_IMPORT_MAX_ROWS,
   CSV_IMPORT_NO_PACK_TEMPLATE_FILENAME,
   CSV_IMPORT_WITH_PACK_TEMPLATE_FILENAME,
+  EXCEL_IMPORT_MAX_BYTES,
+  formatProductImportCsvIssue,
   officialCsvImportHeadersNoPack,
   officialCsvImportHeadersWithPack,
   parseProductImportCsvFile,
@@ -25,16 +27,6 @@ type Props = {
   onClose: () => void;
   onParsed: (rows: NormalizedProductImportRow[]) => void;
 };
-
-function issueText(lang: Language, issue: ProductImportCsvIssue): string {
-  return tTemplate(lang, issue.messageKey, {
-    row: issue.rowNumber != null ? String(issue.rowNumber) : "",
-    columns: issue.column ?? issue.params?.columns ?? "",
-    max: issue.params?.max ?? String(CSV_IMPORT_MAX_ROWS),
-    count: issue.params?.count ?? "",
-    maxKb: issue.params?.maxKb ?? String(Math.floor(CSV_IMPORT_MAX_BYTES / 1024)),
-  });
-}
 
 export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +103,7 @@ export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) 
         {tTemplate(lang, "csvImportLimit", {
           max: String(CSV_IMPORT_MAX_ROWS),
           maxKb: String(Math.floor(CSV_IMPORT_MAX_BYTES / 1024)),
+          maxMb: String(Math.floor(EXCEL_IMPORT_MAX_BYTES / (1024 * 1024))),
         })}
       </p>
 
@@ -169,7 +162,9 @@ export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) 
       {issues.length ? (
         <ul className="mt-4 space-y-1 rounded-2xl bg-warning-muted px-3 py-2 text-sm font-bold text-warning-foreground">
           {issues.map((issue, i) => (
-            <li key={`${issue.kind}-${issue.rowNumber ?? i}-${issue.column ?? ""}`}>{issueText(lang, issue)}</li>
+            <li key={`${issue.kind}-${issue.rowNumber ?? i}-${issue.column ?? ""}`}>
+              {formatProductImportCsvIssue(lang, issue)}
+            </li>
           ))}
         </ul>
       ) : null}

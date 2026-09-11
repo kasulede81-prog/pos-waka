@@ -92,7 +92,7 @@ export type ImportRowIssue = {
   severity: ImportRowIssueSeverity;
 };
 
-export type ImportCostStatus = "provided" | "missing_fallback";
+export type ImportCostStatus = "provided" | "missing_fallback" | "missing_required";
 
 export type EvaluatedImportRow = {
   row: NormalizedProductImportRow;

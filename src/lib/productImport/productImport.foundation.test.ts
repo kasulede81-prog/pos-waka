@@ -98,6 +98,16 @@ describe("normalized product import foundation", () => {
     expect(mapped[0]?.costPricePerUnitUgx).toBeUndefined();
   });
 
+  it("blocks Excel rows that omit a buying price and does not invent a fallback", () => {
+    const row = createNormalizedProductImportRow({ name: "Soap", sellingPriceUgx: 2000 }, "excel");
+    const evaluated = evaluateNormalizedProductRows({ rows: [row], pickerItems: [] });
+    expect(evaluated[0]?.costStatus).toBe("missing_required");
+    expect(evaluated[0]?.fallbackCostUgx).toBeNull();
+    expect(evaluated[0]?.blocking).toBe(true);
+    expect(evaluated[0]?.issues.some((i) => i.kind === "missing_cost_required" && i.severity === "error")).toBe(true);
+    expect(evaluated[0]?.issues.some((i) => i.kind === "cost_fallback")).toBe(false);
+  });
+
   it("carries opening quantity through to bulkQuickAddProducts", () => {
     const bulk = vi.fn().mockReturnValue({ added: 1, skipped: 0 });
     const row = createNormalizedProductImportRow({

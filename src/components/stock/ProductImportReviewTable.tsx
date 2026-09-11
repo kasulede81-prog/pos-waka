@@ -224,7 +224,11 @@ export function ProductImportReviewTable({
                         }
                         aria-label={t(lang, "importColCostPerPack")}
                       />
-                      {costStatus === "missing_fallback" && !issues.some((i) => i.kind === "invalid_cost") ? (
+                      {costStatus === "missing_required" || issues.some((i) => i.kind === "missing_cost_required") ? (
+                        <p className="mt-1 text-[11px] font-bold text-destructive">{t(lang, "importCostRequiredHint")}</p>
+                      ) : costStatus === "missing_fallback" &&
+                        fallbackCostUgx != null &&
+                        !issues.some((i) => i.kind === "invalid_cost") ? (
                         <p className="mt-1 text-[11px] font-bold text-warning">{t(lang, "importPackCostFallbackHint")}</p>
                       ) : isImportCostProvided(row) ? (
                         <p className="mt-1 text-[11px] font-bold text-success">
@@ -272,7 +276,11 @@ export function ProductImportReviewTable({
                         }
                         aria-label={t(lang, "importColCost")}
                       />
-                      {costStatus === "missing_fallback" && !issues.some((i) => i.kind === "invalid_cost") ? (
+                      {costStatus === "missing_required" || issues.some((i) => i.kind === "missing_cost_required") ? (
+                        <p className="mt-1 text-[11px] font-bold text-destructive">{t(lang, "importCostRequiredHint")}</p>
+                      ) : costStatus === "missing_fallback" &&
+                        fallbackCostUgx != null &&
+                        !issues.some((i) => i.kind === "invalid_cost") ? (
                         <p className="mt-1 text-[11px] font-bold text-warning">{t(lang, "importCostFallbackHint")}</p>
                       ) : isImportCostProvided(row) ? (
                         <p className="mt-1 text-[11px] font-bold text-success">{t(lang, "importCostProvidedHint")}</p>
