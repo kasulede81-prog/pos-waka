@@ -30,6 +30,7 @@ const ISSUE_I18N: Record<ImportRowIssueKind, string> = {
   duplicate_name: "importIssueDuplicateName",
   duplicate_existing: "importIssueDuplicateExisting",
   cost_fallback: "importIssueCostFallback",
+  missing_cost_required: "importIssueMissingCostRequired",
   suspicious_cost_above_sell: "importIssueCostAboveSell",
   pharmacy_stock_required: "importIssuePharmacyStock",
   pharmacy_cost_required: "importIssuePharmacyCost",

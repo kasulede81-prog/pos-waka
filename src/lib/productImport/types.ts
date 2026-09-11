@@ -4,7 +4,7 @@ import type { SellingMode } from "../../types";
  * Provenance of a normalized import row. Does not change product business rules.
  * paper_ocr is reserved — this phase does not implement OCR.
  */
-export type ProductImportSource = "manual" | "ai" | "csv" | "paper_ocr";
+export type ProductImportSource = "manual" | "ai" | "csv" | "excel" | "paper_ocr";
 
 /**
  * Wizard pack mode mirrored on the import row.
@@ -81,6 +81,7 @@ export type ImportRowIssueKind =
   | "duplicate_name"
   | "duplicate_existing"
   | "cost_fallback"
+  | "missing_cost_required"
   | "suspicious_cost_above_sell"
   | "pharmacy_stock_required"
   | "pharmacy_cost_required";

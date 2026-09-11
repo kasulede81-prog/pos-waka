@@ -10,7 +10,7 @@ export const CSV_TEMPLATE_A_COLUMNS = {
   name: "Product name",
   section: "Section",
   unit: "Unit",
-  openingQty: "Opening quantity",
+  openingQty: "Opening stock (units)",
   costPrice: "Cost price",
   sellingPrice: "Selling price",
 } as const;
@@ -22,7 +22,7 @@ export const CSV_TEMPLATE_B_COLUMNS = {
   unit: "Unit",
   packLabel: "Pack",
   packSize: "Pack size",
-  openingPacks: "Opening packs",
+  openingPacks: "Opening stock (packs)",
   costPerPack: "Cost per pack",
   sellingPrice: "Selling price",
 } as const;
@@ -90,6 +90,7 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
     "pack size",
     "pieces per pack",
     "units per pack",
+    "units in pack",
     "conversion",
     "conversion rate",
     "obunene bweppak",
@@ -99,6 +100,7 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
   openingQty: [
     "opening quantity",
     "opening qty",
+    "opening stock units",
     "quantity",
     "qty",
     "stock",
@@ -108,6 +110,8 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
   ],
   openingPacks: [
     "opening packs",
+    "opening stock packs",
+    "opening stock packs units",
     "packs on hand",
     "number of packs",
     "pack quantity",
@@ -123,6 +127,7 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
   ],
   costPerPack: [
     "cost per pack",
+    "buying price per pack",
     "pack cost",
     "buying pack cost",
     "cost of pack",
@@ -132,6 +137,7 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
     "selling price",
     "sell price",
     "price",
+    "selling price per unit",
     "selling price ugx",
     "omutundu gwotunda",
     "omutundu gw otunda ugx",

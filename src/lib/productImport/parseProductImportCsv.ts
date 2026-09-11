@@ -12,7 +12,7 @@ import {
   sellUnitsFromOpeningPacks,
   unitCostFromImportPackCost,
 } from "./packImportSemantics";
-import type { NormalizedProductImportRow } from "./types";
+import type { NormalizedProductImportRow, ProductImportSource } from "./types";
 
 export type ProductImportCsvIssueKind =
   | "missing_column"
@@ -99,6 +99,7 @@ function mapNoPackRecord(
   record: readonly string[],
   index: Partial<Record<CsvImportField, number>>,
   sourceRowNumber: number,
+  source: ProductImportSource,
 ): { row: NormalizedProductImportRow; issues: ProductImportCsvIssue[] } {
   const issues: ProductImportCsvIssue[] = [];
   const name = cell(record, index, "name").trim();
@@ -151,7 +152,7 @@ function mapNoPackRecord(
 
   const row: NormalizedProductImportRow = {
     clientId: newImportClientId(),
-    source: "csv",
+    source,
     enabled: true,
     name,
     categoryInput: section,
@@ -175,6 +176,7 @@ function mapWithPackRecord(
   record: readonly string[],
   index: Partial<Record<CsvImportField, number>>,
   sourceRowNumber: number,
+  source: ProductImportSource,
 ): { row: NormalizedProductImportRow; issues: ProductImportCsvIssue[] } {
   const issues: ProductImportCsvIssue[] = [];
   const name = cell(record, index, "name").trim();
@@ -272,7 +274,7 @@ function mapWithPackRecord(
 
   const row: NormalizedProductImportRow = {
     clientId: newImportClientId(),
-    source: "csv",
+    source,
     enabled: true,
     name,
     categoryInput: section,
@@ -292,7 +294,16 @@ function mapWithPackRecord(
   return { row, issues };
 }
 
-export function parseProductImportCsv(text: string): ParseProductImportCsvResult {
+export type ParseProductImportCsvOptions = {
+  /** Provenance for the produced rows. Excel rows get stricter cost rules. */
+  source?: ProductImportSource;
+};
+
+export function parseProductImportCsv(
+  text: string,
+  options: ParseProductImportCsvOptions = {},
+): ParseProductImportCsvResult {
+  const source: ProductImportSource = options.source ?? "csv";
   const bytes = new TextEncoder().encode(text).length;
   if (bytes > CSV_IMPORT_MAX_BYTES) {
     return fail([
@@ -350,8 +361,8 @@ export function parseProductImportCsv(text: string): ParseProductImportCsvResult
     }
     const mapped =
       templateKind === "with_packs"
-        ? mapWithPackRecord(record, index, sourceRowNumber)
-        : mapNoPackRecord(record, index, sourceRowNumber);
+        ? mapWithPackRecord(record, index, sourceRowNumber, source)
+        : mapNoPackRecord(record, index, sourceRowNumber, source);
     rows.push(mapped.row);
     issues.push(...mapped.issues);
   }
@@ -372,9 +383,10 @@ export function parseProductImportCsv(text: string): ParseProductImportCsvResult
 }
 
 export async function parseProductImportCsvFile(file: File): Promise<ParseProductImportCsvResult> {
-  const name = file.name.toLowerCase();
-  if (/\.(xlsx|xls|ods)$/.test(name)) {
-    return fail([issue("excel_not_supported", "csvImportExcelNotSupported")]);
+  const { isExcelImportFilename, parseProductImportWorkbook } = await import("./parseProductImportExcel");
+  if (isExcelImportFilename(file.name)) {
+    const buffer = await file.arrayBuffer();
+    return parseProductImportWorkbook(new Uint8Array(buffer));
   }
   if (file.size > CSV_IMPORT_MAX_BYTES) {
     return fail([

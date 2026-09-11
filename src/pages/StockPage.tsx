@@ -691,7 +691,21 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     setImportReviewRows([]);
   };
 
-  const handleNormalizedImported = (result: { added: number; skipped: number }) => {
+  const handleNormalizedImported = (result: {
+    added: number;
+    skipped: number;
+    skippedReason?: "planProductLimit";
+  }) => {
+    // TASK 7 — a plan cap must never read as a silent success.
+    if (result.skippedReason === "planProductLimit" && result.skipped > 0) {
+      toast.warning(
+        tTemplate(lang, "importResultPlanLimit", {
+          added: String(result.added),
+          skipped: String(result.skipped),
+        }),
+      );
+      return;
+    }
     if (result.added > 0 && result.skipped > 0) {
       toast.warning(
         tTemplate(lang, "importResultCombined", {

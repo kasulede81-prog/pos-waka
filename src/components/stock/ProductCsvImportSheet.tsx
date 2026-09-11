@@ -162,7 +162,7 @@ export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) 
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,text/csv,text/plain"
+        accept=".csv,.xlsx,.xlsm,.xls,.ods,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet"
         className="sr-only"
         onChange={(e) => void handleFile(e.target.files?.[0])}
       />

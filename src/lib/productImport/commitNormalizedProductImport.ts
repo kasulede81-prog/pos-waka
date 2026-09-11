@@ -6,7 +6,13 @@ import {
 import { mapNormalizedRowsToBulkQuickAdd } from "./mapNormalizedRowsToBulkQuickAdd";
 import type { BulkQuickAddProductRow, EvaluatedImportRow, NormalizedProductImportRow } from "./types";
 
-export type BulkQuickAddFn = (rows: BulkQuickAddProductRow[]) => { added: number; skipped: number };
+export type BulkQuickAddResult = {
+  added: number;
+  skipped: number;
+  skippedReason?: "planProductLimit";
+};
+
+export type BulkQuickAddFn = (rows: BulkQuickAddProductRow[]) => BulkQuickAddResult;
 
 export type CommitNormalizedProductImportInput = EvaluateImportRowsInput & {
   rows: readonly NormalizedProductImportRow[];
@@ -18,6 +24,8 @@ export type CommitNormalizedProductImportResult = {
   added: number;
   skipped: number;
   blocked: boolean;
+  /** Present when the shop plan capped the batch (TASK 7). */
+  skippedReason?: "planProductLimit";
   evaluated: EvaluatedImportRow[];
 };
 
@@ -51,6 +59,7 @@ export function commitNormalizedProductImport(
     added: result.added,
     skipped: result.skipped,
     blocked: false,
+    ...(result.skippedReason ? { skippedReason: result.skippedReason } : {}),
     evaluated,
   };
 }

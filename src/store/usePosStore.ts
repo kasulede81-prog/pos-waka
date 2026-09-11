@@ -1218,7 +1218,7 @@ export type PosState = {
       quickPresetsMoneyUgx?: number[];
       quickPresetsQty?: number[];
     }>,
-  ) => { added: number; skipped: number };
+  ) => { added: number; skipped: number; skippedReason?: "planProductLimit" };
   duplicateProduct: (productId: string, nameSuffix: string) => { ok: boolean; errorKey?: string };
   removeProduct: (productId: string, reason: string) => { ok: boolean; errorKey?: string };
   updateProductQuickPresets: (
@@ -1837,16 +1837,20 @@ function commitNewProducts(
   set: (...args: any[]) => void,
   drafts: Product[],
   pushAudit: ProductAuditPush,
-): { ok: true; added: number } | { ok: false; errorKey: string; added: number } {
-  if (drafts.length === 0) return { ok: true, added: 0 };
+):
+  | { ok: true; added: number; limitReached: boolean }
+  | { ok: false; errorKey: string; added: number; limitReached: boolean } {
+  if (drafts.length === 0) return { ok: true, added: 0, limitReached: false };
 
   const state = get();
   const { snapshot, authMode } = getStoreSubscriptionContext();
   const tier = resolveStorePlanTier(snapshot, authMode);
   const accepted: Product[] = [];
+  let limitReached = false;
   for (let i = 0; i < drafts.length; i += 1) {
     const cap = validateCanAddProduct(state.products.length + accepted.length, tier);
     if (!cap.ok) {
+      limitReached = true;
       if (accepted.length === 0) {
         pushAudit("auth_forbidden", "Denied addProduct (plan product limit)", {
           permission: "products.add",
@@ -1854,13 +1858,13 @@ function commitNewProducts(
           attemptedRole: state.sessionActor?.role ?? null,
           errorKey: cap.errorKey,
         });
-        return { ok: false, errorKey: cap.errorKey ?? "planProductLimit", added: 0 };
+        return { ok: false, errorKey: cap.errorKey ?? "planProductLimit", added: 0, limitReached };
       }
       break;
     }
     accepted.push(drafts[i]!);
   }
-  if (accepted.length === 0) return { ok: false, errorKey: "planProductLimit", added: 0 };
+  if (accepted.length === 0) return { ok: false, errorKey: "planProductLimit", added: 0, limitReached };
 
   const shopKey = inventoryMovementNamespace();
   const openingMovements = accepted
@@ -1892,7 +1896,7 @@ function commitNewProducts(
 
   // Shrink native debounce kill-window after catalog creates.
   queueMicrotask(() => flushPendingPersist());
-  return { ok: true, added: accepted.length };
+  return { ok: true, added: accepted.length, limitReached };
 }
 
 function normalizeCustomer(c: Customer): Customer {
@@ -6157,6 +6161,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const committed = commitNewProducts(get, set, drafts, pushAudit);
     const added = committed.added;
     const skippedTotal = skipped + (drafts.length - added);
+    // TASK 7 — never let the caller believe every row landed when the plan capped it.
+    const skippedReason = committed.limitReached ? ("planProductLimit" as const) : undefined;
     if (added > 0) {
       pushAudit("product_add", `Bulk added ${added} products`, {
         bulk: true,
@@ -6165,7 +6171,7 @@ export const usePosStore = create<PosState>((set, get) => {
         category: cat,
       });
     }
-    return { added, skipped: skippedTotal };
+    return { added, skipped: skippedTotal, ...(skippedReason ? { skippedReason } : {}) };
   },
 
   duplicateProduct: (productId, nameSuffix) => {

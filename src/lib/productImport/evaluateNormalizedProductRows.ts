@@ -52,7 +52,13 @@ export function evaluateNormalizedProductRows(input: EvaluateImportRowsInput): E
       row.buyingPackCostUgx != null &&
       !Number.isFinite(Number(row.buyingPackCostUgx));
     const costStatus = costProvided ? ("provided" as const) : ("missing_fallback" as const);
-    const fallbackCostUgx = price > 0 ? defaultWizardUnitCostUgx(price) : null;
+    /**
+     * Excel imports never receive an invented cost. A missing buying price is a
+     * blocking error the operator must fix in the sheet or the review row, so no
+     * fallback is offered for those rows.
+     */
+    const costFallbackAllowed = row.source !== "excel";
+    const fallbackCostUgx = costFallbackAllowed && price > 0 ? defaultWizardUnitCostUgx(price) : null;
 
     if (row.enabled && !row.name.trim()) {
       issues.push({ clientId: row.clientId, kind: "missing_name", severity: "error" });
@@ -118,8 +124,13 @@ export function evaluateNormalizedProductRows(input: EvaluateImportRowsInput): E
       issues.push({ clientId: row.clientId, kind: "pharmacy_cost_required", severity: "error" });
     }
 
-    if (row.enabled && !costProvided && !costUnreadable && !packCostUnreadable && !pharmacy && price > 0) {
-      issues.push({ clientId: row.clientId, kind: "cost_fallback", severity: "warning" });
+    if (row.enabled && !costProvided && !costUnreadable && !packCostUnreadable && !pharmacy) {
+      if (!costFallbackAllowed) {
+        // TASK 4 — Excel: never silently invent a cost.
+        issues.push({ clientId: row.clientId, kind: "missing_cost_required", severity: "error" });
+      } else if (price > 0) {
+        issues.push({ clientId: row.clientId, kind: "cost_fallback", severity: "warning" });
+      }
     }
 
     const nk = nameKey(row.name);
@@ -158,6 +169,8 @@ export type ImportReviewSummary = {
   warningRows: number;
   errorRows: number;
   selected: number;
+  /** Rows flagged as a duplicate name (in-file) or an existing catalog name. */
+  duplicateRows: number;
 };
 
 export function summarizeImportReview(evaluated: readonly EvaluatedImportRow[]): ImportReviewSummary {
@@ -165,9 +178,13 @@ export function summarizeImportReview(evaluated: readonly EvaluatedImportRow[]):
   let warningRows = 0;
   let errorRows = 0;
   let selected = 0;
+  let duplicateRows = 0;
   for (const e of evaluated) {
     if (!e.row.enabled) continue;
     selected += 1;
+    if (e.issues.some((i) => i.kind === "duplicate_name" || i.kind === "duplicate_existing")) {
+      duplicateRows += 1;
+    }
     if (e.blocking) {
       errorRows += 1;
       continue;
@@ -175,5 +192,5 @@ export function summarizeImportReview(evaluated: readonly EvaluatedImportRow[]):
     ready += 1;
     if (e.issues.some((i) => i.severity === "warning")) warningRows += 1;
   }
-  return { detected: evaluated.length, ready, warningRows, errorRows, selected };
+  return { detected: evaluated.length, ready, warningRows, errorRows, selected, duplicateRows };
 }

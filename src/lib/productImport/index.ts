@@ -21,13 +21,24 @@ export type { ImportReviewSummary } from "./evaluateNormalizedProductRows";
 export { applyCategoryResolutionToRow, destinationsExist } from "./resolveImportCategory";
 export { mapNormalizedRowsToBulkQuickAdd } from "./mapNormalizedRowsToBulkQuickAdd";
 export { commitNormalizedProductImport } from "./commitNormalizedProductImport";
-export type { BulkQuickAddFn, CommitNormalizedProductImportResult } from "./commitNormalizedProductImport";
+export type {
+  BulkQuickAddFn,
+  BulkQuickAddResult,
+  CommitNormalizedProductImportResult,
+} from "./commitNormalizedProductImport";
 export { parseCsvText, isCsvRecordBlank } from "./parseCsvText";
 export {
   parseProductImportCsv,
   parseProductImportCsvFile,
   parseImportNumber,
 } from "./parseProductImportCsv";
+export type { ParseProductImportCsvOptions } from "./parseProductImportCsv";
+export {
+  EXCEL_IMPORT_MAX_BYTES,
+  isExcelImportFilename,
+  parseProductImportWorkbook,
+  workbookBytesToCsvText,
+} from "./parseProductImportExcel";
 export type { ParseProductImportCsvResult, ProductImportCsvIssue } from "./parseProductImportCsv";
 export {
   buildWakaProductImportTemplateCsv,

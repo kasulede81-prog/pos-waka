@@ -22,7 +22,11 @@ type Props = {
   pharmacyModeEnabled?: boolean | null;
   generalCategoryLabel?: string;
   bulkQuickAddProducts: BulkQuickAddFn;
-  onImported?: (result: { added: number; skipped: number }) => void;
+  onImported?: (result: {
+    added: number;
+    skipped: number;
+    skippedReason?: "planProductLimit";
+  }) => void;
 };
 
 export function ProductImportReviewSheet({
@@ -60,7 +64,11 @@ export function ProductImportReviewSheet({
       ...extras,
     });
     if (result.blocked) return;
-    onImported?.({ added: result.added, skipped: result.skipped });
+    onImported?.({
+      added: result.added,
+      skipped: result.skipped,
+      ...(result.skippedReason ? { skippedReason: result.skippedReason } : {}),
+    });
     if (result.added > 0) onClose();
   };
 
@@ -77,13 +85,18 @@ export function ProductImportReviewSheet({
             {t(lang, "cancel")}
           </WakaButton>
           <WakaButton type="button" className="flex-1" disabled={!canCommit} onClick={handleImport}>
-            {t(lang, "importReviewConfirm")}
+            {summary.ready > 0
+              ? tTemplate(lang, "importReviewConfirmCount", { count: String(summary.ready) })
+              : t(lang, "importReviewConfirm")}
           </WakaButton>
         </div>
       }
     >
+      <p className="mb-1 text-base font-black text-foreground">
+        {tTemplate(lang, "importSummaryFound", { count: String(summary.detected) })}
+      </p>
       <p className="mb-3 text-sm font-semibold text-muted-foreground">{t(lang, "importReviewSub")}</p>
-      <dl className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <dl className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
         <div className="rounded-2xl border border-border bg-muted/60 px-3 py-2">
           <dt className="text-[11px] font-bold uppercase text-muted-foreground">{t(lang, "importSummaryDetected")}</dt>
           <dd className="text-lg font-black text-foreground">{summary.detected}</dd>
@@ -99,6 +112,12 @@ export function ProductImportReviewSheet({
         <div className="rounded-2xl border border-border bg-muted/60 px-3 py-2">
           <dt className="text-[11px] font-bold uppercase text-muted-foreground">{t(lang, "importSummaryErrors")}</dt>
           <dd className="text-lg font-black text-destructive">{summary.errorRows}</dd>
+        </div>
+        <div className="rounded-2xl border border-border bg-muted/60 px-3 py-2">
+          <dt className="text-[11px] font-bold uppercase text-muted-foreground">
+            {t(lang, "importSummaryDuplicates")}
+          </dt>
+          <dd className="text-lg font-black text-warning">{summary.duplicateRows}</dd>
         </div>
       </dl>
       {summary.errorRows > 0 ? (
