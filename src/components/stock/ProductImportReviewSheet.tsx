@@ -5,6 +5,8 @@ import { t, tTemplate } from "../../lib/i18n";
 import { commitNormalizedProductImport } from "../../lib/productImport/commitNormalizedProductImport";
 import type { BulkQuickAddFn } from "../../lib/productImport/commitNormalizedProductImport";
 import { evaluateNormalizedProductRows, summarizeImportReview } from "../../lib/productImport/evaluateNormalizedProductRows";
+import type { HeaderMappingDecision } from "../../lib/productImport/headerMappingConfidence";
+import type { CsvImportField } from "../../lib/productImport/csvColumns";
 import type { NormalizedProductImportRow } from "../../lib/productImport/types";
 import { ModalSheet } from "../layout/ModalSheet";
 import { WakaButton } from "../ui/wakaPrimitives";
@@ -16,6 +18,8 @@ type Props = {
   onClose: () => void;
   rows: NormalizedProductImportRow[];
   onChange: (rows: NormalizedProductImportRow[]) => void;
+  /** Phase 6 — per-column mapping confidence for the imported sheet (optional; empty for manual/AI rows). */
+  headerMappings?: readonly HeaderMappingDecision[];
   pickerItems: readonly CatalogPickerItem[];
   existingProductNames?: readonly string[];
   businessType?: BusinessType;
@@ -29,12 +33,26 @@ type Props = {
   }) => void;
 };
 
+const FIELD_LABEL_KEY: Record<CsvImportField, string> = {
+  name: "importFieldLabelName",
+  section: "importFieldLabelSection",
+  unit: "importFieldLabelUnit",
+  openingQty: "importFieldLabelOpeningStock",
+  openingPacks: "importFieldLabelOpeningStockPacks",
+  costPrice: "importFieldLabelCostPrice",
+  costPerPack: "importFieldLabelCostPerPack",
+  sellingPrice: "importFieldLabelSellingPrice",
+  packLabel: "importFieldLabelPack",
+  packSize: "importFieldLabelPackSize",
+};
+
 export function ProductImportReviewSheet({
   lang,
   open,
   onClose,
   rows,
   onChange,
+  headerMappings,
   pickerItems,
   existingProductNames,
   businessType,
@@ -44,8 +62,15 @@ export function ProductImportReviewSheet({
   onImported,
 }: Props) {
   const extras = useMemo(
-    () => ({ pickerItems, existingProductNames, businessType, pharmacyModeEnabled, generalCategoryLabel }),
-    [pickerItems, existingProductNames, businessType, pharmacyModeEnabled, generalCategoryLabel],
+    () => ({
+      pickerItems,
+      existingProductNames,
+      businessType,
+      pharmacyModeEnabled,
+      generalCategoryLabel,
+      headerMappings,
+    }),
+    [pickerItems, existingProductNames, businessType, pharmacyModeEnabled, generalCategoryLabel, headerMappings],
   );
   const { canCommit, fallbackCount } = productImportReviewCanCommit(rows, extras);
   const summary = useMemo(
@@ -127,6 +152,47 @@ export function ProductImportReviewSheet({
         <p className="mb-3 rounded-2xl bg-warning-muted px-3 py-2 text-sm font-bold text-warning-foreground">
           {tTemplate(lang, "importCostFallbackBanner", { count: String(fallbackCount) })}
         </p>
+      ) : null}
+      {headerMappings?.length ? (
+        <div className="mb-3 rounded-2xl border border-border bg-muted/50 px-3 py-3">
+          <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">
+            {t(lang, "importMappingTitle")}
+          </p>
+          <ul className="space-y-1.5">
+            {headerMappings.map((decision, i) => {
+              const fieldLabel = decision.canonicalField ? t(lang, FIELD_LABEL_KEY[decision.canonicalField]) : null;
+              const icon = decision.confidence === "high" ? "✓" : "⚠";
+              const tone =
+                decision.confidence === "high"
+                  ? "text-foreground"
+                  : decision.confidence === "medium"
+                    ? "text-warning-foreground"
+                    : "text-destructive";
+              return (
+                <li key={`${decision.sourceHeader}-${i}`} className={`text-sm font-semibold ${tone}`}>
+                  <span className="font-black">{decision.sourceHeader}</span>
+                  {" → "}
+                  {fieldLabel ? (
+                    <>
+                      {fieldLabel} <span aria-hidden>{icon}</span>
+                    </>
+                  ) : (
+                    <span>{t(lang, "importMappingNotSafelyMapped")}</span>
+                  )}
+                  {decision.reason === "competing_columns" ? (
+                    <span className="ml-1 text-xs font-bold">({t(lang, "importMappingReviewRecommended")})</span>
+                  ) : null}
+                  {decision.reason === "generic_term" ? (
+                    <span className="ml-1 text-xs font-bold">({t(lang, "importMappingReviewRecommended")})</span>
+                  ) : null}
+                  {decision.reason === "pack_price_conflict" ? (
+                    <span className="ml-1 text-xs font-bold">({t(lang, "importMappingActionRequired")})</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ) : null}
       <ProductImportReviewTable
         lang={lang}

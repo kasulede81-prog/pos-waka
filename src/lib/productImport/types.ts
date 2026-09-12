@@ -84,7 +84,13 @@ export type ImportRowIssueKind =
   | "missing_cost_required"
   | "suspicious_cost_above_sell"
   | "pharmacy_stock_required"
-  | "pharmacy_cost_required";
+  | "pharmacy_cost_required"
+  /** Two or more source columns mapped to the same canonical field; the first was used. */
+  | "mapping_ambiguous"
+  /** A generic/overloaded header (e.g. bare "Price") was accepted as its best-guess field. */
+  | "mapping_unresolved"
+  /** A price/cost header referenced a pack unit (carton/box/crate/...) and was not trusted as a unit price. */
+  | "mapping_pack_price_conflict";
 
 export type ImportRowIssue = {
   clientId: string;
@@ -93,6 +99,16 @@ export type ImportRowIssue = {
 };
 
 export type ImportCostStatus = "provided" | "missing_fallback";
+
+/**
+ * One worksheet in an uploaded workbook that scored as a plausible product
+ * sheet (Phase 1 sheet detection). `headerPreview` is the raw header cells,
+ * trimmed, for display in a sheet picker — never used for parsing itself.
+ */
+export type WorkbookSheetCandidate = {
+  sheetName: string;
+  headerPreview: readonly string[];
+};
 
 export type EvaluatedImportRow = {
   row: NormalizedProductImportRow;

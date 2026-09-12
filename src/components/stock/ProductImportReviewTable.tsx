@@ -34,6 +34,9 @@ const ISSUE_I18N: Record<ImportRowIssueKind, string> = {
   suspicious_cost_above_sell: "importIssueCostAboveSell",
   pharmacy_stock_required: "importIssuePharmacyStock",
   pharmacy_cost_required: "importIssuePharmacyCost",
+  mapping_ambiguous: "importIssueMappingAmbiguous",
+  mapping_unresolved: "importIssueMappingUnresolved",
+  mapping_pack_price_conflict: "importIssueMappingPackPriceConflict",
 };
 
 const INPUT =

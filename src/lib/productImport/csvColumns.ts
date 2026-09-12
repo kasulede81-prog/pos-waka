@@ -53,7 +53,7 @@ export type CsvImportField =
   | "costPerPack"
   | "sellingPrice";
 
-function normalizeHeader(raw: string): string {
+export function normalizeHeader(raw: string): string {
   return raw
     .replace(/^\uFEFF/, "")
     .trim()
@@ -72,6 +72,7 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
     "product",
     "item",
     "item name",
+    "description",
     "erinnya lyekintu",
     "erinnya ly ekintu",
   ],
@@ -82,6 +83,8 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
     "shelf",
     "category",
     "shelf category",
+    "department",
+    "group",
     "ekifo folder",
     "ekifo",
   ],
@@ -91,12 +94,13 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
     "pieces per pack",
     "units per pack",
     "units in pack",
+    "qty per pack",
     "conversion",
     "conversion rate",
     "obunene bweppak",
     "obunene bw eppak",
   ],
-  packLabel: ["pack", "pack label", "buying unit", "pack type"],
+  packLabel: ["pack", "pack label", "buying unit", "pack type", "buying pack", "package"],
   openingQty: [
     "opening quantity",
     "opening qty",
@@ -122,12 +126,15 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
     "cost",
     "buy price",
     "buying price",
+    "purchase price",
+    "cost per unit",
     "omuwendo ogugula",
     "omuwendo ogugula ugx",
   ],
   costPerPack: [
     "cost per pack",
     "buying price per pack",
+    "purchase price per pack",
     "pack cost",
     "buying pack cost",
     "cost of pack",
@@ -136,6 +143,7 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
   sellingPrice: [
     "selling price",
     "sell price",
+    "retail price",
     "price",
     "selling price per unit",
     "selling price ugx",
@@ -152,6 +160,24 @@ for (const [field, names] of Object.entries(ALIASES) as Array<[CsvImportField, r
 
 export function csvImportFieldFromHeader(header: string): CsvImportField | null {
   return ALIAS_INDEX.get(normalizeHeader(header)) ?? null;
+}
+
+/**
+ * Build the field→column-index map from one header row.
+ * First occurrence wins per field; internal columns (id, sku, ...) are skipped.
+ * Shared by the CSV parser and the Excel sheet scorer so "does this look like
+ * a header row" is answered by exactly one implementation.
+ */
+export function mapCsvImportHeaderRow(record: readonly string[]): Partial<Record<CsvImportField, number>> {
+  const index: Partial<Record<CsvImportField, number>> = {};
+  for (let i = 0; i < record.length; i += 1) {
+    const header = record[i] ?? "";
+    if (isIgnoredInternalCsvHeader(header)) continue;
+    const field = csvImportFieldFromHeader(header);
+    if (!field) continue;
+    if (index[field] == null) index[field] = i;
+  }
+  return index;
 }
 
 export function officialCsvImportHeadersNoPack(): string[] {

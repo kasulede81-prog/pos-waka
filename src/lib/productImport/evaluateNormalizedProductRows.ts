@@ -3,6 +3,12 @@ import { resolveCatalogSectionInput, type CatalogPickerItem } from "../catalogHi
 import { pharmacyQuickAddRequiresBuyPrice } from "../pharmacyCostIntegrity";
 import { defaultWizardUnitCostUgx } from "../simpleProductWizard";
 import { isImportCostProvided } from "./createNormalizedRow";
+import {
+  hasCompetingColumns,
+  hasGenericTerm,
+  hasPackPriceConflict,
+  type HeaderMappingDecision,
+} from "./headerMappingConfidence";
 import { applyCategoryResolutionToRow } from "./resolveImportCategory";
 import type {
   EvaluatedImportRow,
@@ -17,6 +23,13 @@ export type EvaluateImportRowsInput = {
   businessType?: BusinessType;
   pharmacyModeEnabled?: boolean | null;
   generalCategoryLabel?: string;
+  /**
+   * Phase 4/7 — header-mapping confidence for the sheet these rows came from.
+   * Optional and additive: omitted by every existing caller (manual add, AI
+   * bulk import, and any test that predates this), which reproduces the
+   * exact prior behaviour — none of these new checks ever fire.
+   */
+  headerMappings?: readonly HeaderMappingDecision[];
 };
 
 function nameKey(name: string): string {
@@ -31,6 +44,11 @@ export function evaluateNormalizedProductRows(input: EvaluateImportRowsInput): E
     input.pharmacyModeEnabled,
   );
   const existing = new Set((input.existingProductNames ?? []).map(nameKey).filter(Boolean));
+
+  const headerMappings = input.headerMappings ?? [];
+  const mappingHasPackConflict = hasPackPriceConflict(headerMappings);
+  const mappingHasCompeting = hasCompetingColumns(headerMappings);
+  const mappingHasGeneric = hasGenericTerm(headerMappings);
 
   const enabledNameCounts = new Map<string, number>();
   for (const row of input.rows) {
@@ -130,6 +148,28 @@ export function evaluateNormalizedProductRows(input: EvaluateImportRowsInput): E
         issues.push({ clientId: row.clientId, kind: "missing_cost_required", severity: "error" });
       } else if (price > 0) {
         issues.push({ clientId: row.clientId, kind: "cost_fallback", severity: "warning" });
+      }
+    }
+
+    // Phase 7 — header-mapping confidence surfaces as row-level issues. These
+    // are sheet-wide facts (about the header, not this row's values), so the
+    // same decision applies to every row in the sheet.
+    if (row.enabled && mappingHasCompeting) {
+      issues.push({ clientId: row.clientId, kind: "mapping_ambiguous", severity: "warning" });
+    }
+    if (row.enabled && mappingHasGeneric) {
+      issues.push({ clientId: row.clientId, kind: "mapping_unresolved", severity: "warning" });
+    }
+    if (row.enabled && mappingHasPackConflict) {
+      // A pack-cardinality price header was not trusted as a unit price
+      // (see headerMappingConfidence.ts). If that leaves the selling price or
+      // a required cost genuinely missing, block with a specific explanation
+      // rather than the generic invalid_price/missing_cost_required alone.
+      const costRequiredHere = pharmacy || !costFallbackAllowed;
+      if (price <= 0) {
+        issues.push({ clientId: row.clientId, kind: "mapping_pack_price_conflict", severity: "error" });
+      } else if (costRequiredHere && !costProvided && !costUnreadable && !packCostUnreadable) {
+        issues.push({ clientId: row.clientId, kind: "mapping_pack_price_conflict", severity: "error" });
       }
     }
 

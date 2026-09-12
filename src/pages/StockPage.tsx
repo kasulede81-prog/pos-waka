@@ -36,6 +36,7 @@ import {
   catalogShopIdFromPreferences,
 } from "../lib/catalogHierarchy";
 import type { NormalizedProductImportRow } from "../lib/productImport/types";
+import type { HeaderMappingDecision } from "../lib/productImport/headerMappingConfidence";
 import { inferProductGuess, uiPlaceholder } from "../lib/pharmacyUx";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
 import {
@@ -204,6 +205,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [importReviewOpen, setImportReviewOpen] = useState(false);
   const [importReviewRows, setImportReviewRows] = useState<NormalizedProductImportRow[]>([]);
+  const [importHeaderMappings, setImportHeaderMappings] = useState<readonly HeaderMappingDecision[]>([]);
   const [wizardPrefill, setWizardPrefill] = useState<SimpleAddWizardPrefill | undefined>();
   const [wizardInitialStep, setWizardInitialStep] = useState<SimpleAddWizardStep | undefined>();
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -680,15 +682,17 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     setCsvImportOpen(true);
   };
 
-  const handleCsvParsed = (rows: NormalizedProductImportRow[]) => {
+  const handleCsvParsed = (rows: NormalizedProductImportRow[], headerMappings: readonly HeaderMappingDecision[]) => {
     setCsvImportOpen(false);
     setImportReviewRows(rows);
+    setImportHeaderMappings(headerMappings);
     setImportReviewOpen(true);
   };
 
   const handleImportReviewClose = () => {
     setImportReviewOpen(false);
     setImportReviewRows([]);
+    setImportHeaderMappings([]);
   };
 
   const handleNormalizedImported = (result: {
@@ -1606,6 +1610,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         onClose={handleImportReviewClose}
         rows={importReviewRows}
         onChange={setImportReviewRows}
+        headerMappings={importHeaderMappings}
         pickerItems={importPickerItems}
         existingProductNames={existingImportNames}
         businessType={preferences.businessType}

@@ -8,7 +8,19 @@ export type {
   NormalizedProductImportRow,
   ProductImportPackMode,
   ProductImportSource,
+  WorkbookSheetCandidate,
 } from "./types";
+export {
+  analyzeHeaderMappings,
+  hasCompetingColumns,
+  hasGenericTerm,
+  hasPackPriceConflict,
+} from "./headerMappingConfidence";
+export type {
+  HeaderMappingConfidence,
+  HeaderMappingDecision,
+  HeaderMappingReason,
+} from "./headerMappingConfidence";
 export { createNormalizedProductImportRow, isImportCostProvided, newImportClientId } from "./createNormalizedRow";
 export {
   evaluateNormalizedProductRows,
@@ -32,13 +44,14 @@ export {
   parseProductImportCsvFile,
   parseImportNumber,
 } from "./parseProductImportCsv";
-export type { ParseProductImportCsvOptions } from "./parseProductImportCsv";
+export type { ParseProductImportCsvOptions, ParseProductImportCsvFileOptions } from "./parseProductImportCsv";
 export {
   EXCEL_IMPORT_MAX_BYTES,
   isExcelImportFilename,
   parseProductImportWorkbook,
   workbookBytesToCsvText,
 } from "./parseProductImportExcel";
+export type { ParseProductImportWorkbookOptions } from "./parseProductImportExcel";
 export type { ParseProductImportCsvResult, ProductImportCsvIssue } from "./parseProductImportCsv";
 export {
   buildWakaProductImportTemplateCsv,

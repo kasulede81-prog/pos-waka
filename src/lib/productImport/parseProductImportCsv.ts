@@ -1,10 +1,10 @@
 import {
-  csvImportFieldFromHeader,
   detectCsvImportTemplate,
-  isIgnoredInternalCsvHeader,
+  mapCsvImportHeaderRow,
   type CsvImportField,
   type CsvImportTemplateKind,
 } from "./csvColumns";
+import { analyzeHeaderMappings, type HeaderMappingDecision } from "./headerMappingConfidence";
 import { CSV_IMPORT_MAX_BYTES, CSV_IMPORT_MAX_ROWS } from "./csvLimits";
 import { newImportClientId } from "./createNormalizedRow";
 import { isCsvRecordBlank, parseCsvText } from "./parseCsvText";
@@ -12,7 +12,7 @@ import {
   sellUnitsFromOpeningPacks,
   unitCostFromImportPackCost,
 } from "./packImportSemantics";
-import type { NormalizedProductImportRow, ProductImportSource } from "./types";
+import type { NormalizedProductImportRow, ProductImportSource, WorkbookSheetCandidate } from "./types";
 
 export type ProductImportCsvIssueKind =
   | "missing_column"
@@ -24,7 +24,11 @@ export type ProductImportCsvIssueKind =
   | "invalid_number"
   | "excel_not_supported"
   | "legacy_template"
-  | "unrecognized_template";
+  | "unrecognized_template"
+  /** Phase 1: no worksheet in the workbook scored as product data. */
+  | "no_product_sheet"
+  /** Phase 1: more than one worksheet scored as product data — caller must choose. */
+  | "multiple_sheets_found";
 
 export type ProductImportCsvIssue = {
   kind: ProductImportCsvIssueKind;
@@ -40,6 +44,14 @@ export type ParseProductImportCsvResult = {
   issues: ProductImportCsvIssue[];
   blankRowCount: number;
   templateKind?: CsvImportTemplateKind;
+  /** Per-column mapping confidence for this sheet's header row (Phase 4). */
+  headerMappings?: readonly HeaderMappingDecision[];
+  /**
+   * Set only when the source workbook has more than one worksheet that looks
+   * like product data. The caller must re-invoke with `{ sheetName }` set to
+   * one of these before rows are produced. `ok` is false in this state.
+   */
+  sheetChoices?: readonly WorkbookSheetCandidate[];
 };
 
 export type ParsedImportNumber =
@@ -75,18 +87,6 @@ export function parseImportNumber(raw: string): ParsedImportNumber {
   const value = Number(s);
   if (!Number.isFinite(value)) return { status: "invalid" };
   return { status: "ok", value };
-}
-
-function mapHeader(record: readonly string[]): Partial<Record<CsvImportField, number>> {
-  const index: Partial<Record<CsvImportField, number>> = {};
-  for (let i = 0; i < record.length; i += 1) {
-    const header = record[i] ?? "";
-    if (isIgnoredInternalCsvHeader(header)) continue;
-    const field = csvImportFieldFromHeader(header);
-    if (!field) continue;
-    if (index[field] == null) index[field] = i;
-  }
-  return index;
 }
 
 function cell(record: readonly string[], index: Partial<Record<CsvImportField, number>>, field: CsvImportField): string {
@@ -332,7 +332,7 @@ export function parseProductImportCsv(
     return fail([issue("empty_file", "csvImportEmpty")]);
   }
 
-  const index = mapHeader(header);
+  const index = mapCsvImportHeaderRow(header);
   const detected = detectCsvImportTemplate(index);
 
   if (detected.status === "legacy") {
@@ -379,14 +379,30 @@ export function parseProductImportCsv(
     ]);
   }
 
-  return { ok: true, rows, issues, blankRowCount, templateKind };
+  // Phase 4 — smart header mapping: analyze the SAME header row for
+  // confidence, without changing which column `mapCsvImportHeaderRow`
+  // actually used. Presentational + validation input only.
+  const headerMappings = analyzeHeaderMappings(header);
+
+  return { ok: true, rows, issues, blankRowCount, templateKind, headerMappings };
 }
 
-export async function parseProductImportCsvFile(file: File): Promise<ParseProductImportCsvResult> {
+export type ParseProductImportCsvFileOptions = {
+  /**
+   * A worksheet name the caller already chose (from a previous `sheetChoices`
+   * result). Only meaningful for Excel workbooks; ignored for CSV.
+   */
+  sheetName?: string;
+};
+
+export async function parseProductImportCsvFile(
+  file: File,
+  options: ParseProductImportCsvFileOptions = {},
+): Promise<ParseProductImportCsvResult> {
   const { isExcelImportFilename, parseProductImportWorkbook } = await import("./parseProductImportExcel");
   if (isExcelImportFilename(file.name)) {
     const buffer = await file.arrayBuffer();
-    return parseProductImportWorkbook(new Uint8Array(buffer));
+    return parseProductImportWorkbook(new Uint8Array(buffer), { sheetName: options.sheetName });
   }
   if (file.size > CSV_IMPORT_MAX_BYTES) {
     return fail([

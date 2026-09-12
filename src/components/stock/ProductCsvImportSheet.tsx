@@ -13,9 +13,10 @@ import {
   officialCsvImportHeadersNoPack,
   officialCsvImportHeadersWithPack,
   parseProductImportCsvFile,
+  type HeaderMappingDecision,
   type ProductImportCsvIssue,
 } from "../../lib/productImport";
-import type { NormalizedProductImportRow } from "../../lib/productImport/types";
+import type { NormalizedProductImportRow, WorkbookSheetCandidate } from "../../lib/productImport/types";
 import { ModalSheet } from "../layout/ModalSheet";
 import { WakaButton } from "../ui/wakaPrimitives";
 
@@ -23,7 +24,7 @@ type Props = {
   lang: Language;
   open: boolean;
   onClose: () => void;
-  onParsed: (rows: NormalizedProductImportRow[]) => void;
+  onParsed: (rows: NormalizedProductImportRow[], headerMappings: readonly HeaderMappingDecision[]) => void;
 };
 
 function issueText(lang: Language, issue: ProductImportCsvIssue): string {
@@ -40,10 +41,18 @@ export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) 
   const inputRef = useRef<HTMLInputElement>(null);
   const [issues, setIssues] = useState<ProductImportCsvIssue[]>([]);
   const [busy, setBusy] = useState(false);
+  // Phase 2 — sheet selection. Only populated when an Excel workbook has more
+  // than one sheet that looks like product data; CSV never sets this.
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [sheetChoices, setSheetChoices] = useState<readonly WorkbookSheetCandidate[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState<string>("");
 
   const reset = () => {
     setIssues([]);
     setBusy(false);
+    setPendingFile(null);
+    setSheetChoices([]);
+    setSelectedSheet("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -72,14 +81,38 @@ export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) 
     if (!file) return;
     setBusy(true);
     setIssues([]);
+    setSheetChoices([]);
     const result = await parseProductImportCsvFile(file);
+    setBusy(false);
+    if (!result.ok) {
+      // Phase 2 — more than one product-shaped sheet: ask which one, keep the
+      // file so "Continue" can re-parse without a second upload.
+      if (result.sheetChoices?.length) {
+        setPendingFile(file);
+        setSheetChoices(result.sheetChoices);
+        setSelectedSheet(result.sheetChoices[0]!.sheetName);
+        return;
+      }
+      setIssues(result.issues);
+      return;
+    }
+    if (result.issues.length) setIssues(result.issues);
+    onParsed(result.rows, result.headerMappings ?? []);
+    reset();
+  };
+
+  const handleContinueWithSheet = async () => {
+    if (!pendingFile || !selectedSheet) return;
+    setBusy(true);
+    setIssues([]);
+    const result = await parseProductImportCsvFile(pendingFile, { sheetName: selectedSheet });
     setBusy(false);
     if (!result.ok) {
       setIssues(result.issues);
       return;
     }
     if (result.issues.length) setIssues(result.issues);
-    onParsed(result.rows);
+    onParsed(result.rows, result.headerMappings ?? []);
     reset();
   };
 
@@ -91,81 +124,125 @@ export function ProductCsvImportSheet({ lang, open, onClose, onParsed }: Props) 
       panelClassName="!max-w-lg"
       title={t(lang, "csvImportTitle")}
       footer={
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <WakaButton type="button" variant="secondary" className="flex-1" onClick={handleClose}>
-            {t(lang, "cancel")}
-          </WakaButton>
-          <WakaButton
-            type="button"
-            className="flex-1"
-            loading={busy}
-            onClick={() => inputRef.current?.click()}
-          >
-            {t(lang, "csvImportChooseFile")}
-          </WakaButton>
-        </div>
+        sheetChoices.length ? (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <WakaButton type="button" variant="secondary" className="flex-1" onClick={reset}>
+              {t(lang, "cancel")}
+            </WakaButton>
+            <WakaButton type="button" className="flex-1" loading={busy} onClick={() => void handleContinueWithSheet()}>
+              {t(lang, "csvImportContinue")}
+            </WakaButton>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <WakaButton type="button" variant="secondary" className="flex-1" onClick={handleClose}>
+              {t(lang, "cancel")}
+            </WakaButton>
+            <WakaButton
+              type="button"
+              className="flex-1"
+              loading={busy}
+              onClick={() => inputRef.current?.click()}
+            >
+              {t(lang, "csvImportChooseFile")}
+            </WakaButton>
+          </div>
+        )
       }
     >
-      <p className="mb-3 text-sm font-semibold text-muted-foreground">{t(lang, "csvImportSub")}</p>
-      <p className="mb-3 text-sm font-semibold text-foreground">
-        {tTemplate(lang, "csvImportLimit", {
-          max: String(CSV_IMPORT_MAX_ROWS),
-          maxKb: String(Math.floor(CSV_IMPORT_MAX_BYTES / 1024)),
-        })}
-      </p>
-
-      <div className="mb-3 rounded-2xl border border-border bg-muted/50 px-3 py-3 text-sm font-semibold text-foreground">
-        <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">
-          {t(lang, "csvImportWhichTemplate")}
-        </p>
-        <p className="mb-3 text-sm text-muted-foreground">{t(lang, "csvImportWhichTemplateHint")}</p>
-
-        <div className="mb-3 space-y-1 rounded-xl bg-card/80 px-3 py-2">
-          <p className="font-black text-foreground">{t(lang, "csvImportNoPackTitle")}</p>
-          <p className="text-xs text-muted-foreground">{t(lang, "csvImportNoPackDesc")}</p>
-          <p className="text-[11px] text-muted-foreground">{officialCsvImportHeadersNoPack().join(" · ")}</p>
-          <WakaButton
-            type="button"
-            variant="secondary"
-            className="mt-2 w-full"
-            iconLeft={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
-            onClick={() => void downloadNoPack()}
-          >
-            {t(lang, "csvImportDownloadNoPack")}
-          </WakaButton>
+      {sheetChoices.length ? (
+        // Phase 2 — the workbook has more than one sheet that looks like
+        // product data. CSV files never reach this branch (sheetChoices is
+        // Excel-only), so the ordinary CSV upload experience is unaffected.
+        <div>
+          <p className="mb-1 text-sm font-black text-foreground">{t(lang, "csvImportMultipleSheetsTitle")}</p>
+          <p className="mb-3 text-sm font-semibold text-muted-foreground">{t(lang, "csvImportMultipleSheetsHint")}</p>
+          <div className="space-y-2">
+            {sheetChoices.map((sheet) => (
+              <label
+                key={sheet.sheetName}
+                className="flex cursor-pointer flex-col gap-1 rounded-xl border border-border bg-card px-3 py-2"
+              >
+                <span className="flex items-center gap-2 font-black text-foreground">
+                  <input
+                    type="radio"
+                    name="import-sheet-choice"
+                    checked={selectedSheet === sheet.sheetName}
+                    onChange={() => setSelectedSheet(sheet.sheetName)}
+                  />
+                  {sheet.sheetName}
+                </span>
+                <span className="pl-6 text-[11px] text-muted-foreground">
+                  {sheet.headerPreview.filter(Boolean).join(" · ")}
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
+      ) : (
+        <>
+          <p className="mb-3 text-sm font-semibold text-muted-foreground">{t(lang, "csvImportSub")}</p>
+          <p className="mb-3 text-sm font-semibold text-foreground">
+            {tTemplate(lang, "csvImportLimit", {
+              max: String(CSV_IMPORT_MAX_ROWS),
+              maxKb: String(Math.floor(CSV_IMPORT_MAX_BYTES / 1024)),
+            })}
+          </p>
 
-        <div className="space-y-1 rounded-xl bg-card/80 px-3 py-2">
-          <p className="font-black text-foreground">{t(lang, "csvImportWithPackTitle")}</p>
-          <p className="text-xs text-muted-foreground">{t(lang, "csvImportWithPackDesc")}</p>
-          <p className="text-[11px] text-muted-foreground">{officialCsvImportHeadersWithPack().join(" · ")}</p>
-          <WakaButton
+          <div className="mb-3 rounded-2xl border border-border bg-muted/50 px-3 py-3 text-sm font-semibold text-foreground">
+            <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">
+              {t(lang, "csvImportWhichTemplate")}
+            </p>
+            <p className="mb-3 text-sm text-muted-foreground">{t(lang, "csvImportWhichTemplateHint")}</p>
+
+            <div className="mb-3 space-y-1 rounded-xl bg-card/80 px-3 py-2">
+              <p className="font-black text-foreground">{t(lang, "csvImportNoPackTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t(lang, "csvImportNoPackDesc")}</p>
+              <p className="text-[11px] text-muted-foreground">{officialCsvImportHeadersNoPack().join(" · ")}</p>
+              <WakaButton
+                type="button"
+                variant="secondary"
+                className="mt-2 w-full"
+                iconLeft={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
+                onClick={() => void downloadNoPack()}
+              >
+                {t(lang, "csvImportDownloadNoPack")}
+              </WakaButton>
+            </div>
+
+            <div className="space-y-1 rounded-xl bg-card/80 px-3 py-2">
+              <p className="font-black text-foreground">{t(lang, "csvImportWithPackTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t(lang, "csvImportWithPackDesc")}</p>
+              <p className="text-[11px] text-muted-foreground">{officialCsvImportHeadersWithPack().join(" · ")}</p>
+              <WakaButton
+                type="button"
+                variant="secondary"
+                className="mt-2 w-full"
+                iconLeft={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
+                onClick={() => void downloadWithPack()}
+              >
+                {t(lang, "csvImportDownloadWithPack")}
+              </WakaButton>
+            </div>
+          </div>
+
+          <button
             type="button"
-            variant="secondary"
-            className="mt-2 w-full"
-            iconLeft={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
-            onClick={() => void downloadWithPack()}
+            onClick={() => inputRef.current?.click()}
+            className="flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-border bg-card px-4 py-8 text-center"
           >
-            {t(lang, "csvImportDownloadWithPack")}
-          </WakaButton>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-border bg-card px-4 py-8 text-center"
-      >
-        <Upload className="h-6 w-6 text-muted-foreground" aria-hidden />
-        <span className="text-sm font-black text-foreground">{t(lang, "csvImportDropHint")}</span>
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".csv,.xlsx,.xlsm,.xls,.ods,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet"
-        className="sr-only"
-        onChange={(e) => void handleFile(e.target.files?.[0])}
-      />
+            <Upload className="h-6 w-6 text-muted-foreground" aria-hidden />
+            <span className="text-sm font-black text-foreground">{t(lang, "csvImportDropHint")}</span>
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".csv,.xlsx,.xlsm,.xls,.ods,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet"
+            className="sr-only"
+            onChange={(e) => void handleFile(e.target.files?.[0])}
+          />
+        </>
+      )}
       {issues.length ? (
         <ul className="mt-4 space-y-1 rounded-2xl bg-warning-muted px-3 py-2 text-sm font-bold text-warning-foreground">
           {issues.map((issue, i) => (
