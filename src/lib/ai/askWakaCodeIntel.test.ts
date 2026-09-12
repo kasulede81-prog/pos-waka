@@ -203,10 +203,14 @@ describe("ASK-INTEL-2 code intelligence", () => {
     expect(formatClientSafeCitation(safe[0])).toContain("WAKA source");
   });
 
-  it("T13: CODE questions do not invoke POS tools", () => {
+  it("T13: CODE questions route to the knowledge lane (tool availability is separate — ASK-4A.1)", () => {
     const r = routeAskWakaSources("How does WAKA handle stock?");
     expect(r.lanes).toContain("CODE");
-    expect(r.offerPosTools).toBe(false);
+    // Tools are offered to every non-refused request now (ASK-4A.1) — a CODE
+    // question is not forced to use them (requirePosTools only fires for
+    // classification.kind === "quantitative"), but offering is not the same
+    // as calling: the model is expected to answer from retrieved knowledge.
+    expect(r.requirePosTools).toBe(false);
   });
 
   it("T14: MIXED questions can combine code + live POS", () => {
@@ -242,5 +246,14 @@ describe("ASK-INTEL-2 code intelligence", () => {
   it("prompt forbids reproducing retrieved source", () => {
     expect(ASK_WAKA_SYSTEM_PROMPT).toContain("does not authorize you to reproduce it");
     expect(ASK_WAKA_SYSTEM_PROMPT).toContain("Private retrieval context is not automatically safe");
+  });
+
+  it("ASK-4A.1: prompt reinforces no-figures-without-a-tool-call now that tools are always offered", () => {
+    // This is the documented, honest mitigation for the guard gap: the hard
+    // code-level block (guardAskWakaFinalAnswer) only fires for
+    // classification.kind === "quantitative" — general_business answers with
+    // zero tool calls are not code-blocked. This prompt line is a real but
+    // advisory (not code-enforced) reinforcement of "no tool result → no figure".
+    expect(ASK_WAKA_SYSTEM_PROMPT).toContain("If you have not called any tool yet, you may not state a specific sales figure");
   });
 });

@@ -6,9 +6,11 @@ import { logAiRequest } from "../_shared/aiUsage.ts";
 import { llmModelFromSettings, ollamaBaseUrlFromSettings } from "../_shared/platformAiSettings.v2.ts";
 import { ASK_WAKA_SYSTEM_PROMPT, buildAskWakaUserPrompt } from "../_shared/askWakaPrompts.ts";
 import {
+  ASK_WAKA_MAX_ORCHESTRATION_MS,
   ASK_WAKA_MAX_TOOL_ROUNDS,
   ASK_WAKA_MAX_TOOLS_PER_ROUND,
   ASK_WAKA_TOOL_DEFINITIONS,
+  createAskWakaToolRunner,
   executeAskWakaTool,
   resolveAskWakaShopScope,
   validateAskWakaMessage,
@@ -56,6 +58,8 @@ import { OLLAMA_FINAL_ANSWER_INSTRUCTION } from "../_shared/ollamaClient.ts";
 
 const FEATURE = "ask_waka";
 const KIND = "ask_waka_chat";
+/** ASK-4A: internal marker distinguishing a whole-orchestration timeout from a genuine provider failure. */
+const ASK_WAKA_ORCHESTRATION_TIMEOUT = "ask_waka_orchestration_timeout";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -297,8 +301,17 @@ Deno.serve(async (req) => {
     );
   }
 
-  const chatModel = llmModelFromSettings(guard.settings);
   const offerTools = route.offerPosTools;
+  // ASK-4A: deepseek-reasoner's function-calling support is not verified for this
+  // integration (llmProvider.ts sends the same tools/tool_choice payload to every
+  // DeepSeek model). Rather than risk silently broken tool calls, force deepseek-chat
+  // for any request that will actually offer tools; reasoner remains usable for
+  // pure-knowledge requests where no tools are sent.
+  const configuredModel = llmModelFromSettings(guard.settings);
+  const chatModel =
+    offerTools && configuredModel === "deepseek-reasoner" && String(guard.settings.provider || "").toLowerCase() === "deepseek"
+      ? "deepseek-chat"
+      : configuredModel;
   const messages: LlmChatMessage[] = [
     { role: "system", content: ASK_WAKA_SYSTEM_PROMPT },
     {
@@ -319,15 +332,44 @@ Deno.serve(async (req) => {
 
   let finalAnswer: string | null = null;
 
+  // ASK-4A: whole-orchestration wall-clock budget — covers every LLM call and
+  // every tool execution in this request, not just one HTTP call.
+  const orchestrationDeadline = Date.now() + ASK_WAKA_MAX_ORCHESTRATION_MS;
+  function withDeadline<T>(promise: Promise<T>): Promise<T> {
+    const remaining = orchestrationDeadline - Date.now();
+    if (remaining <= 0) return Promise.reject(new Error(ASK_WAKA_ORCHESTRATION_TIMEOUT));
+    let timer: number | undefined;
+    const timeout = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(ASK_WAKA_ORCHESTRATION_TIMEOUT)), remaining);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
+  }
+
+  // ASK-4A: request-local dedup cache + total-call budget. Never persisted,
+  // never shared across requests — lives only for this one invocation.
+  const toolRunner = createAskWakaToolRunner({
+    execute: (toolName, rawArgs) =>
+      withDeadline(executeAskWakaTool({ userClient, boundShopId: shopId, toolName, rawArgs })),
+    budgetExhaustedResult: (toolName) => ({
+      ok: false as const,
+      tool: toolName,
+      code: "tool_budget_exhausted",
+      reason: "Tool call budget exceeded for this request",
+    }),
+  });
+  const runTool = toolRunner.run;
+
+  let orchestrationTimedOut = false;
+
   try {
-    for (let round = 0; round < ASK_WAKA_MAX_TOOL_ROUNDS; round++) {
-      const llm = await provider.chat({
+    for (let round = 0; round < ASK_WAKA_MAX_TOOL_ROUNDS && !toolRunner.isBudgetExhausted(); round++) {
+      const llm = await withDeadline(provider.chat({
         model: chatModel,
         messages,
         tools: offerTools ? ASK_WAKA_TOOL_DEFINITIONS : undefined,
         temperature: 0.2,
         maxTokens: 1200,
-      });
+      }));
       tokensIn += llm.tokensIn;
       tokensOut += llm.tokensOut;
 
@@ -348,12 +390,7 @@ Deno.serve(async (req) => {
 
       for (const call of sequentialCalls) {
         const parsedArgs = parseToolArguments(call);
-        const result = await executeAskWakaTool({
-          userClient,
-          boundShopId: shopId,
-          toolName: call.function.name,
-          rawArgs: parsedArgs,
-        });
+        const result = await runTool(call.function.name, parsedArgs);
 
         if (result.ok) {
           toolsUsed.push(result.tool);
@@ -363,7 +400,7 @@ Deno.serve(async (req) => {
             content: JSON.stringify(result.data),
           });
         } else {
-          toolsFailed = true;
+          if (result.code !== "tool_budget_exhausted") toolsFailed = true;
           messages.push({
             role: "tool",
             tool_call_id: call.id,
@@ -379,6 +416,7 @@ Deno.serve(async (req) => {
 
     // Force-execute required tools when the model skipped them for a quantitative ask.
     if (
+      !toolRunner.isBudgetExhausted() &&
       route.offerPosTools &&
       classification.kind === "quantitative" &&
       !quantitativeToolsSatisfied(classification, toolsUsed)
@@ -386,12 +424,7 @@ Deno.serve(async (req) => {
       const toRun = classification.requiredTools.slice(0, 2);
       for (const toolName of toRun) {
         if (toolsUsed.includes(toolName)) continue;
-        const result = await executeAskWakaTool({
-          userClient,
-          boundShopId: shopId,
-          toolName,
-          rawArgs: defaultArgsForAskWakaTool(toolName as AskWakaToolName, classification),
-        });
+        const result = await runTool(toolName, defaultArgsForAskWakaTool(toolName as AskWakaToolName, classification));
         if (result.ok) {
           toolsUsed.push(result.tool);
           messages.push({
@@ -404,7 +437,7 @@ Deno.serve(async (req) => {
               },
             }),
           });
-        } else {
+        } else if (result.code !== "tool_budget_exhausted") {
           toolsFailed = true;
         }
       }
@@ -417,6 +450,7 @@ Deno.serve(async (req) => {
           } },
           preferOllama: isOllamaProvider(provider.name),
           hasKnowledge: Boolean(knowledge?.found),
+          withDeadline,
         });
       } else {
         finalAnswer = ASK_WAKA_SAFE_TOOL_FAILURE;
@@ -430,6 +464,7 @@ Deno.serve(async (req) => {
         preferOllama: isOllamaProvider(provider.name),
         toolsFailed,
         hasKnowledge: Boolean(knowledge?.found),
+        withDeadline,
       });
     }
 
@@ -438,27 +473,32 @@ Deno.serve(async (req) => {
       finalAnswer = ASK_WAKA_SAFE_TOOL_FAILURE;
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "ai_provider_failed";
-    await logAiRequest(admin, {
-      shopId,
-      userId,
-      feature: FEATURE,
-      kind: KIND,
-      tokensIn,
-      tokensOut,
-      cacheHit: false,
-      success: false,
-      latencyMs: Date.now() - started,
-      provider: guard.settings.provider,
-      errorReason: askWakaObservabilityTags({
-        classification,
-        toolsUsed,
-        toolsFailed,
-        blockedReason: "provider_failed",
-        providerFailed: true,
-      }) + `;detail=${msg.slice(0, 120)}`,
-    });
-    return aiFailure("AI provider failed", "ai_provider_failed", 502);
+    if (e instanceof Error && e.message === ASK_WAKA_ORCHESTRATION_TIMEOUT) {
+      orchestrationTimedOut = true;
+      finalAnswer = ASK_WAKA_SAFE_TOOL_FAILURE;
+    } else {
+      const msg = e instanceof Error ? e.message : "ai_provider_failed";
+      await logAiRequest(admin, {
+        shopId,
+        userId,
+        feature: FEATURE,
+        kind: KIND,
+        tokensIn,
+        tokensOut,
+        cacheHit: false,
+        success: false,
+        latencyMs: Date.now() - started,
+        provider: guard.settings.provider,
+        errorReason: askWakaObservabilityTags({
+          classification,
+          toolsUsed,
+          toolsFailed,
+          blockedReason: "provider_failed",
+          providerFailed: true,
+        }) + `;detail=${msg.slice(0, 120)}`,
+      });
+      return aiFailure("AI provider failed", "ai_provider_failed", 502);
+    }
   }
 
   let guarded = guardAskWakaFinalAnswer({
@@ -510,7 +550,7 @@ Deno.serve(async (req) => {
       classification,
       toolsUsed,
       toolsFailed,
-      blockedReason: guarded.reason,
+      blockedReason: orchestrationTimedOut ? "orchestration_timeout" : guarded.reason,
     }),
   });
 
@@ -550,6 +590,7 @@ async function requestFinalAnswer(
     preferOllama: boolean;
     toolsFailed?: boolean;
     hasKnowledge?: boolean;
+    withDeadline: <T>(promise: Promise<T>) => Promise<T>;
   },
 ): Promise<string | null> {
   const baseInstruction = opts.toolsFailed
@@ -562,19 +603,19 @@ async function requestFinalAnswer(
     ? `${baseInstruction}\n\n${OLLAMA_FINAL_ANSWER_INSTRUCTION}`
     : baseInstruction;
 
-  const closing = await provider.chat({
+  const closing = await opts.withDeadline(provider.chat({
     model: chatModel,
     messages: [...messages, { role: "user", content: instruction }],
     temperature: 0.2,
     maxTokens: 800,
-  });
+  }));
   opts.tokens.add(closing.tokensIn, closing.tokensOut);
   const text = (closing.content ?? "").trim();
   if (text) return text;
 
   // Ollama/Qwen sometimes returns empty content after tools; one more controlled nudge.
   if (opts.preferOllama) {
-    const retry = await provider.chat({
+    const retry = await opts.withDeadline(provider.chat({
       model: chatModel,
       messages: [
         ...messages,
@@ -583,7 +624,7 @@ async function requestFinalAnswer(
       ],
       temperature: 0.1,
       maxTokens: 800,
-    });
+    }));
     opts.tokens.add(retry.tokensIn, retry.tokensOut);
     return (retry.content ?? "").trim() || null;
   }

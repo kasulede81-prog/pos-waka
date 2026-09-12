@@ -3,6 +3,7 @@ import {
   ASK_WAKA_MAX_LIMIT,
   ASK_WAKA_WRITE_TOOLS,
   answerRequiresToolData,
+  createAskWakaToolRunner,
   isAskWakaToolName,
   isAskWakaWriteTool,
   limitAskWakaRows,
@@ -15,6 +16,7 @@ import {
   shapeShiftReportForModel,
   shapeShiftSalesForModel,
   stripCustomerPiiForAskWaka,
+  toolCacheKey,
   validateAskWakaMessage,
   validateAskWakaToolCall,
 } from "./askWakaToolContracts";
@@ -525,5 +527,98 @@ describe("Ask WAKA Phase 2 intelligence layer (ASK-INTEL-3)", () => {
       expect(r.ok, tool).toBe(false);
       if (!r.ok) expect(r.code).toBe("shop_id_forbidden");
     }
+  });
+});
+
+type FakeToolResult = { ok: true; tool: string; data: Record<string, unknown> } | { ok: false; tool: string; code: string; reason: string };
+
+function budgetExhausted(toolName: string): FakeToolResult {
+  return { ok: false, tool: toolName, code: "tool_budget_exhausted", reason: "Tool call budget exceeded for this request" };
+}
+
+describe("ASK-4A tool-call runner (dedup + total budget)", () => {
+  it("toolCacheKey is stable regardless of argument key order", () => {
+    expect(toolCacheKey("get_today_sales", { day: "today", week: null })).toBe(
+      toolCacheKey("get_today_sales", { week: null, day: "today" }),
+    );
+    expect(toolCacheKey("get_today_sales", { day: "today" })).not.toBe(
+      toolCacheKey("get_today_sales", { day: "yesterday" }),
+    );
+    expect(toolCacheKey("get_today_sales", {})).not.toBe(toolCacheKey("get_top_products", {}));
+  });
+
+  it("17 — an identical (tool + arguments) call executes only once; the second call reuses the cached result", async () => {
+    let executions = 0;
+    const runner = createAskWakaToolRunner<FakeToolResult>({
+      execute: async (toolName, rawArgs) => {
+        executions += 1;
+        return { ok: true, tool: toolName, data: { call: executions, args: rawArgs as Record<string, unknown> } };
+      },
+      budgetExhaustedResult: budgetExhausted,
+    });
+
+    const first = await runner.run("get_today_sales", { day: "today" });
+    const second = await runner.run("get_today_sales", { day: "today" });
+
+    expect(executions).toBe(1);
+    expect(second).toEqual(first);
+    expect(runner.totalCalls).toBe(1);
+
+    // A genuinely different call still executes.
+    const third = await runner.run("get_today_sales", { day: "yesterday" });
+    expect(executions).toBe(2);
+    expect(third).not.toEqual(first);
+  });
+
+  it("18 — no more than the configured total tool calls ever execute in one request", async () => {
+    let executions = 0;
+    const runner = createAskWakaToolRunner<FakeToolResult>({
+      execute: async (toolName) => {
+        executions += 1;
+        return { ok: true, tool: toolName, data: { n: executions } };
+      },
+      maxTotalCalls: 6,
+      budgetExhaustedResult: budgetExhausted,
+    });
+
+    // Ask for 10 distinct tool calls — well past the budget.
+    const results: FakeToolResult[] = [];
+    for (let i = 0; i < 10; i++) {
+      results.push(await runner.run("get_today_sales", { call: i }));
+    }
+
+    expect(executions).toBe(6);
+    expect(runner.totalCalls).toBe(6);
+    expect(runner.isBudgetExhausted()).toBe(true);
+    const succeeded = results.filter((r) => r.ok);
+    const exhausted = results.filter((r) => !r.ok && (r as { code: string }).code === "tool_budget_exhausted");
+    expect(succeeded).toHaveLength(6);
+    expect(exhausted).toHaveLength(4);
+    // Never fabricates data for the calls it refused to run.
+    for (const r of exhausted) {
+      expect((r as { ok: false }).ok).toBe(false);
+    }
+  });
+
+  it("a repeated call after the budget is exhausted still hits the cache, not the budget check, if seen before", async () => {
+    let executions = 0;
+    const runner = createAskWakaToolRunner<FakeToolResult>({
+      execute: async (toolName) => {
+        executions += 1;
+        return { ok: true, tool: toolName, data: { n: executions } };
+      },
+      maxTotalCalls: 2,
+      budgetExhaustedResult: budgetExhausted,
+    });
+
+    const a = await runner.run("get_today_sales", {});
+    await runner.run("get_top_products", {});
+    // Budget now exhausted for any NEW call...
+    const blocked = await runner.run("get_slow_products", {});
+    expect(blocked.ok).toBe(false);
+    // ...but re-asking for the FIRST call reuses its cached result, no new execution.
+    const aAgain = await runner.run("get_today_sales", {});
+    expect(aAgain).toEqual(a);
+    expect(executions).toBe(2);
   });
 });

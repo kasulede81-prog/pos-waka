@@ -60,9 +60,35 @@ function looksLivePosMetric(text: string): boolean {
     "expenses this",
     "staff sales",
     "who sold",
+    // Open-ended business-assistant phrasing (ASK-4A) — a genuine business
+    // question about the shop's own performance, not a project/code/history
+    // or pure general-knowledge question. Deliberately phrase-specific
+    // rather than a broad heuristic, to avoid reclassifying "What is WAKA?"
+    // / "How does X work?" / general-knowledge questions as live-POS.
+    "how is my shop",
+    "how is my business",
+    "how's my shop",
+    "how's my business",
+    "shop doing",
+    "business doing",
+    "worry about",
+    "should i worry",
+    "what should i focus",
+    "focus on this week",
+    "who is selling",
+    "selling the most",
+    "restock",
+    "reorder",
+    "running out",
+    "lower than usual",
+    "why are sales",
+    "why were sales",
+    "sales lower",
+    "sales down",
+    "cash flow",
   ]) || (
-    /\b(sell|sold|sales|cash|inventory|stock|expense|debt|customer|revenue)\b/.test(text) &&
-    /\b(how much|how many|today|this week|last week|this month|last month|ugx)\b/.test(text)
+    /\b(sell|sold|sales|selling|cash|inventory|stock|expense|debt|customer|revenue)\b/.test(text) &&
+    /\b(how much|how many|today|yesterday|this week|last week|this month|last month|ugx)\b/.test(text)
   );
 }
 
@@ -283,8 +309,15 @@ export function routeAskWakaSources(message: string): AskWakaSourceRoute {
 
   const unique = [...new Set(lanes)];
   const needsKnowledge = unique.some((l) => l === "PROJECT" || l === "CODE" || l === "HISTORY");
-  const offerPosTools = unique.includes("LIVE_POS");
-  const requirePosTools = offerPosTools && posClassification.kind === "quantitative";
+  // ASK-4A.1: POS tool ELIGIBILITY is decoupled from the knowledge-lane/live-metric
+  // router above. Reaching this point already means the request passed safety
+  // classification (write/SQL requests return early with offerPosTools=false in
+  // their own branch, above) — every other legitimate request gets the full
+  // allowlisted tool set and the MODEL decides whether to call anything. `lanes`
+  // above still drives WAKA-knowledge retrieval only; it is not a positive gate
+  // for tool availability, and no phrase list controls this value.
+  const offerPosTools = true;
+  const requirePosTools = posClassification.kind === "quantitative";
   const mixed = needsKnowledge && offerPosTools;
 
   return {

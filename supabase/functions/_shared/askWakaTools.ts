@@ -45,6 +45,10 @@ export const ASK_WAKA_MAX_LIMIT = 20;
 export const ASK_WAKA_MAX_DATE_SPAN_DAYS = 92;
 export const ASK_WAKA_MAX_TOOL_ROUNDS = 3;
 export const ASK_WAKA_MAX_TOOLS_PER_ROUND = 4;
+/** ASK-4A: hard ceiling on distinct tool EXECUTIONS per request, independent of round/per-round shape. Cache hits (see toolCacheKey) never count against this. */
+export const ASK_WAKA_MAX_TOTAL_TOOL_CALLS = 6;
+/** ASK-4A: whole-orchestration wall-clock budget (LLM calls + tool execution + retries), not a single HTTP timeout. */
+export const ASK_WAKA_MAX_ORCHESTRATION_MS = 45_000;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -600,6 +604,68 @@ export function validateAskWakaMessage(
     return reject("message_too_long", `message exceeds ${ASK_WAKA_MAX_MESSAGE_CHARS} characters`);
   }
   return { ok: true, message: trimmed };
+}
+
+/** Deterministic key regardless of object-key order, so repeated identical calls always collide. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+}
+
+/**
+ * Request-local dedup key for a tool call (ASK-4A). Two calls with the same
+ * tool name and semantically-equal arguments (any key order) collide, so the
+ * model asking for "today's sales" twice reuses the first result instead of
+ * executing it again. Never persisted — lives only for one request's Map.
+ */
+export function toolCacheKey(toolName: string, args: unknown): string {
+  return `${toolName}::${stableStringify(args ?? {})}`;
+}
+
+/**
+ * ASK-4A tool-call runner: request-local dedup cache + hard total-call budget,
+ * decoupled from actual execution (injected as `execute`) so this decision
+ * logic is unit-testable without a real Supabase client. The edge runtime
+ * constructs one of these per request with `executeAskWakaTool` as `execute`;
+ * nothing here is persisted or shared across requests.
+ */
+export function createAskWakaToolRunner<TResult extends { ok: boolean }>(params: {
+  execute: (toolName: string, rawArgs: unknown) => Promise<TResult>;
+  maxTotalCalls?: number;
+  budgetExhaustedResult: (toolName: string) => TResult;
+}) {
+  const cache = new Map<string, TResult>();
+  const maxTotalCalls = params.maxTotalCalls ?? ASK_WAKA_MAX_TOTAL_TOOL_CALLS;
+  let totalCalls = 0;
+  let budgetExhausted = false;
+
+  async function run(toolName: string, rawArgs: unknown): Promise<TResult> {
+    const key = toolCacheKey(toolName, rawArgs);
+    const cached = cache.get(key);
+    if (cached) return cached;
+    if (totalCalls >= maxTotalCalls) {
+      budgetExhausted = true;
+      return params.budgetExhaustedResult(toolName);
+    }
+    const result = await params.execute(toolName, rawArgs);
+    totalCalls += 1;
+    cache.set(key, result);
+    return result;
+  }
+
+  return {
+    run,
+    isBudgetExhausted: () => budgetExhausted,
+    get totalCalls() {
+      return totalCalls;
+    },
+    get cacheSize() {
+      return cache.size;
+    },
+  };
 }
 
 function limitRows<T>(rows: T[], limit: number): T[] {

@@ -430,3 +430,52 @@ describe("Ask WAKA Phase 2 intelligence layer classification (ASK-INTEL-3)", () 
     expect(defaultArgsForAskWakaTool("get_notable_sales", weekC)).toMatchObject({ week: "this" });
   });
 });
+
+describe("ASK-4A: final-answer guardrail is unchanged for quantitative questions, even with tools now offered more broadly", () => {
+  it("16 — a direct quantitative question with zero successful tool calls is still hard-blocked (unchanged)", () => {
+    const c = classifyAskWakaQuestion("How much did I sell yesterday?");
+    expect(c.kind).toBe("quantitative");
+    const g = guardAskWakaFinalAnswer({
+      classification: c,
+      toolsUsed: [],
+      toolsFailed: true,
+      answer: "You sold about UGX 300,000 yesterday.",
+    });
+    expect(g.blocked).toBe(true);
+    expect(g.answer).toBe(ASK_WAKA_SAFE_TOOL_FAILURE);
+    expect(g.answer).not.toContain("300,000");
+  });
+
+  it("a quantitative question is still blocked even when tools were offered but the model never called one", () => {
+    // Router now offers tools broadly (ASK-4A), but offering is not calling —
+    // the existing quantitative guard is the unchanged backstop either way.
+    const c = classifyAskWakaQuestion("What were my sales this week?");
+    expect(c.kind).toBe("quantitative");
+    const g = guardAskWakaFinalAnswer({
+      classification: c,
+      toolsUsed: [],
+      toolsFailed: false,
+      answer: "Sales this week were roughly UGX 1,200,000.",
+    });
+    expect(g.blocked).toBe(true);
+    expect(g.answer).toBe(ASK_WAKA_SAFE_TOOL_FAILURE);
+  });
+
+  it("documents the known residual scope: a general_business-kind open question is not hard-blocked by this guard even with zero tool calls", () => {
+    // "How is my shop doing today?" is intentionally classified general_business
+    // (ASK-4A does not force it into "quantitative", which would wrongly force a
+    // specific required tool on an open-ended question). This guard's hard block
+    // only fires for classification.kind === "quantitative" — so this remains a
+    // prompt-level expectation (never invent figures), not a code-level guarantee,
+    // for this exact question shape. Documented explicitly rather than silently relied on.
+    const c = classifyAskWakaQuestion("How is my shop doing today?");
+    expect(c.kind).toBe("general_business");
+    const g = guardAskWakaFinalAnswer({
+      classification: c,
+      toolsUsed: [],
+      toolsFailed: false,
+      answer: "You're doing okay today.",
+    });
+    expect(g.blocked).toBe(false);
+  });
+});
