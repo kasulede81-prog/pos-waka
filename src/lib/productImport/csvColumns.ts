@@ -128,6 +128,7 @@ const ALIASES: Record<CsvImportField, readonly string[]> = {
     "buying price",
     "purchase price",
     "cost per unit",
+    "cost price per unit",
     "omuwendo ogugula",
     "omuwendo ogugula ugx",
   ],

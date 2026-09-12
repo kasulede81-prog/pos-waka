@@ -218,6 +218,82 @@ describe("Expanded header aliases (additive, Phase 3)", () => {
   });
 });
 
+describe("No-pack real-world header regression (IMPORT-NOPACK-FIX-01)", () => {
+  beforeEach(() => seedStore());
+
+  const REAL_WORLD_NO_PACK_HEADERS = [
+    "Product name",
+    "Section",
+    "Unit",
+    "Opening stock (units)",
+    "Cost price per unit",
+    "Selling price per unit",
+  ];
+
+  it("1 — 'Cost price per unit' resolves to costPrice (the exact header that previously failed)", () => {
+    expect(csvImportFieldFromHeader("Cost price per unit")).toBe("costPrice");
+    expect(csvImportFieldFromHeader("Selling price per unit")).toBe("sellingPrice");
+    // Every existing WAKA-template header must still resolve (additive change only).
+    for (const h of officialCsvImportHeadersNoPack()) expect(csvImportFieldFromHeader(h)).not.toBeNull();
+    for (const h of officialCsvImportHeadersWithPack()) expect(csvImportFieldFromHeader(h)).not.toBeNull();
+  });
+
+  it("2 — the reported 300-product file's exact header pattern imports as no_packs, not blocked on 'Missing required column: Cost price'", () => {
+    const csv = [REAL_WORLD_NO_PACK_HEADERS.join(","), "Sugar 2kg B,Groceries,kg,92,3600,6800"].join("\n");
+    const parsed = parseProductImportCsv(csv);
+    expect(parsed.ok, JSON.stringify(parsed.issues)).toBe(true);
+    expect(parsed.templateKind).toBe("no_packs");
+    expect(parsed.rows[0]?.stockQty).toBe(92);
+    expect(parsed.rows[0]?.costPricePerUnitUgx).toBe(3600);
+    expect(parsed.rows[0]?.sellingPriceUgx).toBe(6800);
+    // No pack fields introduced for a no-pack sheet.
+    expect(parsed.rows[0]?.packMode).toBe("none");
+    expect(parsed.rows[0]?.conversionRate).toBeNull();
+    expect(parsed.rows[0]?.openingPacks).toBeNull();
+    expect(parsed.rows[0]?.buyingPackCostUgx).toBeNull();
+
+    expect(commitViaStore(parsed.rows).added).toBe(1);
+  });
+
+  it("3 — CSV and XLSX with the same real-world header pattern produce identical normalized products", () => {
+    const rowValues = ["Roll-on Deodorant Small", "Personal Care", "piece", "56", "5000", "7500"] as const;
+    const csv = [REAL_WORLD_NO_PACK_HEADERS.join(","), rowValues.join(",")].join("\n");
+    const csvParsed = parseProductImportCsv(csv);
+    expect(csvParsed.ok, JSON.stringify(csvParsed.issues)).toBe(true);
+
+    const bytes = singleSheetWorkbookBytes(REAL_WORLD_NO_PACK_HEADERS, [rowValues]);
+    return parseProductImportWorkbook(bytes).then((xlsxParsed) => {
+      expect(xlsxParsed.ok, JSON.stringify(xlsxParsed.issues)).toBe(true);
+      const c = csvParsed.rows[0]!;
+      const x = xlsxParsed.rows[0]!;
+      expect(x.name).toBe(c.name);
+      expect(x.baseUnit).toBe(c.baseUnit);
+      expect(x.stockQty).toBe(c.stockQty);
+      expect(x.costPricePerUnitUgx).toBe(c.costPricePerUnitUgx);
+      expect(x.sellingPriceUgx).toBe(c.sellingPriceUgx);
+      expect(x.packMode).toBe(c.packMode);
+    });
+  });
+
+  it("4 — pack-specific cost headers are NOT mapped to no-pack unit cost", () => {
+    expect(csvImportFieldFromHeader("Cost per Pack")).toBe("costPerPack");
+    expect(csvImportFieldFromHeader("Buying Price per Pack")).toBe("costPerPack");
+    expect(csvImportFieldFromHeader("Cost per Pack")).not.toBe("costPrice");
+  });
+
+  it("5 — packed sheets still work exactly as before (this fix is additive only)", () => {
+    const csv = [
+      WITH_PACK_HEADERS.join(","),
+      ["Pepsi 330ml", "Drinks", "bottle", "crate", "24", "1", "18000", "2000"].join(","),
+    ].join("\n");
+    const parsed = parseProductImportCsv(csv);
+    expect(parsed.ok, JSON.stringify(parsed.issues)).toBe(true);
+    expect(parsed.templateKind).toBe("with_packs");
+    expect(parsed.rows[0]?.stockQty).toBe(24);
+    expect(parsed.rows[0]?.costPricePerUnitUgx).toBe(unitCostFromPackTotal(18000, 24));
+  });
+});
+
 describe("Mapping confidence (Phase 4/6/7)", () => {
   beforeEach(() => seedStore());
 
