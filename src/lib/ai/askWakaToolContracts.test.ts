@@ -7,6 +7,7 @@ import {
   isAskWakaWriteTool,
   limitAskWakaRows,
   resolveAskWakaShopScope,
+  shapeShiftReportForModel,
   stripCustomerPiiForAskWaka,
   validateAskWakaMessage,
   validateAskWakaToolCall,
@@ -184,5 +185,137 @@ describe("Ask WAKA tool contracts", () => {
     const bad = validateAskWakaMessage("x".repeat(2001));
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.code).toBe("message_too_long");
+  });
+});
+
+describe("Ask WAKA get_shift_report (ASK-SHIFT-REPORT-IMPLEMENT-01)", () => {
+  const SHIFT_ID = "33333333-3333-4333-8333-333333333333";
+
+  it("accepts get_shift_report with no shift_id (server resolves the current shift)", () => {
+    const r = validateAskWakaToolCall("get_shift_report", {});
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.args).toEqual({});
+  });
+
+  it("accepts a valid shift_id UUID", () => {
+    const r = validateAskWakaToolCall("get_shift_report", { shift_id: SHIFT_ID });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.args.shift_id).toBe(SHIFT_ID);
+  });
+
+  it("rejects a non-UUID shift_id rather than silently ignoring it", () => {
+    const r = validateAskWakaToolCall("get_shift_report", { shift_id: "not-a-uuid" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("invalid_args");
+  });
+
+  it("rejects a model-supplied shop_id on get_shift_report same as every other tool", () => {
+    const r = validateAskWakaToolCall("get_shift_report", { shop_id: "11111111-1111-4111-8111-111111111111" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("shop_id_forbidden");
+  });
+
+  it("shapes a closed-shift RPC row: net sales and expected cash are pass-through arithmetic on stored fields, never a new formula", () => {
+    const data = shapeShiftReportForModel(
+      {
+        ok: true,
+        shift_id: SHIFT_ID,
+        actor_user_id: "u1",
+        actor_name: "Amina",
+        start_at: "2026-09-12T08:00:00Z",
+        end_at: "2026-09-12T14:00:00Z",
+        status: "closed",
+        sales_total_ugx: 100000,
+        discounts_ugx: 1000,
+        returns_ugx: 10000,
+        voids_ugx: 0,
+        net_sales_ugx: 90000, // = greatest(0, 100000 - 10000 - 0), computed by the RPC
+        debt_issued_ugx: 5000,
+        debt_payments_collected_ugx: 2000,
+        cash_collected_ugx: 83000,
+        opening_cash_ugx: 20000,
+        counted_cash_ugx: 101000,
+        expected_cash_ugx: 100000, // = counted - difference, computed by the RPC
+        cash_difference_ugx: 1000,
+        verification_status: "matched",
+      },
+      "shopA",
+    );
+    expect(data.status).toBe("ok");
+    expect(data.net_sales_ugx).toBe(90000);
+    expect(data.expected_cash_ugx).toBe(100000);
+    expect(data.cash_difference_ugx).toBe(1000);
+    expect(data.cash_reconciliation_available).toBe(true);
+    expect(data.shift_status).toBe("closed");
+    expect(data.actor_name).toBe("Amina");
+    expect(data.shop_id).toBe("shopA");
+    // Unsupported dimensions are explicitly labeled, never fabricated as 0/fake fields.
+    expect(data.payment_methods_note).toMatch(/Mobile Money|Card/i);
+    expect(data.expenses_note).toMatch(/not tracked/i);
+    expect(data.inventory_note).toMatch(/not tied to this shift/i);
+  });
+
+  it("an open shift never carries fabricated closing-cash figures", () => {
+    const data = shapeShiftReportForModel(
+      {
+        ok: true,
+        shift_id: SHIFT_ID,
+        actor_user_id: "u1",
+        actor_name: "Amina",
+        start_at: "2026-09-12T08:00:00Z",
+        end_at: null,
+        status: "open",
+        sales_total_ugx: 40000,
+        discounts_ugx: 0,
+        returns_ugx: 0,
+        voids_ugx: 0,
+        net_sales_ugx: 40000,
+        debt_issued_ugx: 0,
+        debt_payments_collected_ugx: 0,
+        cash_collected_ugx: 40000,
+        opening_cash_ugx: 20000,
+        counted_cash_ugx: null,
+        expected_cash_ugx: null,
+        cash_difference_ugx: null,
+        verification_status: null,
+      },
+      "shopA",
+    );
+    expect(data.shift_status).toBe("open");
+    expect(data.counted_cash_ugx).toBeNull();
+    expect(data.expected_cash_ugx).toBeNull();
+    expect(data.cash_difference_ugx).toBeNull();
+    expect(data.cash_reconciliation_available).toBe(false);
+  });
+
+  it("shift_not_found never falls back to a fabricated report", () => {
+    const data = shapeShiftReportForModel({ ok: false, error: "shift_not_found" }, "shopA");
+    expect(data.status).toBe("shift_not_found");
+    expect(data.sales_total_ugx).toBeUndefined();
+    expect(String(data.note)).toMatch(/not found/i);
+  });
+
+  it("no_shift_found never falls back to today's sales", () => {
+    const data = shapeShiftReportForModel({ ok: false, error: "no_shift_found" }, "shopA");
+    expect(data.status).toBe("no_shift_found");
+    expect(String(data.note)).toMatch(/do not substitute today/i);
+  });
+
+  it("multiple_open_shifts surfaces candidates for clarification instead of guessing", () => {
+    const data = shapeShiftReportForModel(
+      {
+        ok: false,
+        error: "multiple_open_shifts",
+        candidates: [
+          { id: "s1", actor_user_id: "u1", actor_name: "Amina", start_at: "2026-09-12T08:00:00Z" },
+          { id: "s2", actor_user_id: "u2", actor_name: "Ben", start_at: "2026-09-12T09:00:00Z" },
+        ],
+      },
+      "shopA",
+    );
+    expect(data.status).toBe("multiple_open_shifts");
+    expect(Array.isArray(data.candidates)).toBe(true);
+    expect((data.candidates as unknown[]).length).toBe(2);
+    expect(String(data.note)).toMatch(/ask the user which/i);
   });
 });

@@ -18,6 +18,7 @@ export const ASK_WAKA_TOOL_NAMES = [
   "get_expense_summary",
   "get_customer_summary",
   "get_staff_sales_summary",
+  "get_shift_report",
 ] as const;
 
 export type AskWakaToolName = (typeof ASK_WAKA_TOOL_NAMES)[number];
@@ -175,6 +176,16 @@ export function validateAskWakaToolCall(
       if (typeof limit === "object") return limit;
       return { ok: true, args: { ...calendarWeekToolArgs(weekRaw), limit } };
     }
+    case "get_shift_report": {
+      const shiftIdRaw = args.shift_id;
+      if (shiftIdRaw == null || shiftIdRaw === "") {
+        return { ok: true, args: {} };
+      }
+      if (typeof shiftIdRaw !== "string" || !UUID_RE.test(shiftIdRaw)) {
+        return reject("invalid_args", "shift_id must be a valid UUID");
+      }
+      return { ok: true, args: { shift_id: shiftIdRaw } };
+    }
     default:
       return reject("unknown_tool", `Unknown tool: ${toolName}`);
   }
@@ -243,6 +254,73 @@ export function stripCustomerPiiForAskWaka(row: Record<string, unknown>): Record
     purchase_count: row.purchase_count ?? 0,
     lifetime_revenue_ugx: row.lifetime_revenue_ugx ?? 0,
     debt_balance_ugx: row.debt_balance_ugx ?? 0,
+  };
+}
+
+/**
+ * Shape shop_get_shift_report's raw RPC row for the model.
+ * Mirrors supabase/functions/_shared/askWakaTools.ts (edge runtime copy) —
+ * duplicated here only for unit testability, per this file's existing pattern.
+ * All financial fields pass through as-is from the RPC — no recomputation.
+ * Non-"ok" statuses carry zero financial data by construction, so the model
+ * has nothing to invent from; each carries a `note` steering the model away
+ * from ever substituting today's sales for a missing/ambiguous shift.
+ */
+export function shapeShiftReportForModel(
+  row: Record<string, unknown>,
+  boundShopId: string,
+): Record<string, unknown> {
+  if (row.error === "shift_not_found") {
+    return {
+      status: "shift_not_found",
+      note: "The requested shift was not found for this shop. Do not report today's sales instead — tell the user this shift could not be found.",
+      shop_id: boundShopId,
+    };
+  }
+  if (row.error === "no_shift_found") {
+    return {
+      status: "no_shift_found",
+      note: "No open or recently closed shift exists for this shop. Do not substitute today's sales — tell the user no shift was found.",
+      shop_id: boundShopId,
+    };
+  }
+  if (row.error === "multiple_open_shifts") {
+    return {
+      status: "multiple_open_shifts",
+      candidates: Array.isArray(row.candidates) ? row.candidates : [],
+      note: "More than one staff member currently has an open shift. Ask the user which cashier/shift they mean instead of guessing or reporting today's sales.",
+      shop_id: boundShopId,
+    };
+  }
+  return {
+    status: "ok",
+    shift_id: row.shift_id,
+    actor_user_id: row.actor_user_id,
+    actor_name: row.actor_name ?? null,
+    start_at: row.start_at,
+    end_at: row.end_at ?? null,
+    shift_status: row.status,
+    sales_total_ugx: row.sales_total_ugx,
+    discounts_ugx: row.discounts_ugx,
+    returns_ugx: row.returns_ugx,
+    voids_ugx: row.voids_ugx,
+    net_sales_ugx: row.net_sales_ugx,
+    debt_issued_ugx: row.debt_issued_ugx,
+    debt_payments_collected_ugx: row.debt_payments_collected_ugx,
+    cash_collected_ugx: row.cash_collected_ugx,
+    opening_cash_ugx: row.opening_cash_ugx ?? null,
+    counted_cash_ugx: row.counted_cash_ugx ?? null,
+    expected_cash_ugx: row.expected_cash_ugx ?? null,
+    cash_difference_ugx: row.cash_difference_ugx ?? null,
+    verification_status: row.verification_status ?? null,
+    cash_reconciliation_available: row.status === "closed" && row.counted_cash_ugx != null,
+    payment_methods_note:
+      "Only Cash and Debt/Credit are tracked per shift in WAKA POS. Mobile Money/Card/Voucher breakdowns are not available at shift level — do not invent them.",
+    expenses_note:
+      "Shift-level expenses are not tracked in WAKA POS (expenses are recorded by date, not by shift) — do not state an expense total for this shift.",
+    inventory_note:
+      "Inventory is not tied to this shift. Use get_inventory_summary separately if asked, and label it as a current shop-wide snapshot, not sales during this shift.",
+    shop_id: boundShopId,
   };
 }
 

@@ -16,7 +16,8 @@ export type AskWakaToolName =
   | "get_low_stock_products"
   | "get_expense_summary"
   | "get_customer_summary"
-  | "get_staff_sales_summary";
+  | "get_staff_sales_summary"
+  | "get_shift_report";
 
 function isAskWakaToolName(value: string): value is AskWakaToolName {
   return value in ASK_WAKA_TOOL_LABELS;
@@ -39,7 +40,8 @@ export type AskWakaToolCategory =
   | "expenses"
   | "customers"
   | "staff_sales"
-  | "comparison";
+  | "comparison"
+  | "shift_report";
 
 export type AskWakaClassification = {
   kind: AskWakaQuestionKind;
@@ -74,6 +76,7 @@ export const ASK_WAKA_TOOL_LABELS: Record<AskWakaToolName, string> = {
   get_expense_summary: "Expenses",
   get_customer_summary: "Customers",
   get_staff_sales_summary: "Staff sales",
+  get_shift_report: "Shift report",
 };
 
 const CATEGORY_TOOLS: Record<AskWakaToolCategory, AskWakaToolName[]> = {
@@ -87,7 +90,25 @@ const CATEGORY_TOOLS: Record<AskWakaToolCategory, AskWakaToolName[]> = {
   customers: ["get_customer_summary"],
   staff_sales: ["get_staff_sales_summary"],
   comparison: ["get_week_comparison"],
+  shift_report: ["get_shift_report"],
 };
+
+const SHIFT_REPORT_PHRASES = [
+  "shift report",
+  "end of shift",
+  "end-of-shift",
+  "close my shift",
+  "closing my shift",
+  "closed my shift",
+  "my shift",
+  "this shift",
+  "current shift",
+  "shift summary",
+  "shift totals",
+  "how did my shift go",
+  "cash up",
+  "cash-up",
+] as const;
 
 function includesAny(text: string, needles: readonly string[]): boolean {
   return needles.some((n) => text.includes(n));
@@ -168,6 +189,19 @@ export function classifyAskWakaQuestion(message: string): AskWakaClassification 
     ) {
       return { kind: "out_of_scope", categories: [], requiredTools: [], primaryTool: null, weekScope: null };
     }
+  }
+
+  // A shift is a real cashier session, never a calendar day — this must win
+  // over "today"/period sales detection below so get_today_sales is never
+  // substituted for a requested shift report.
+  if (includesAny(text, SHIFT_REPORT_PHRASES)) {
+    return {
+      kind: "quantitative",
+      categories: ["shift_report"],
+      requiredTools: ["get_shift_report"],
+      primaryTool: "get_shift_report",
+      weekScope: null,
+    };
   }
 
   const categories: AskWakaToolCategory[] = [];
@@ -431,6 +465,8 @@ export function defaultArgsForAskWakaTool(
     case "get_customer_summary":
     case "get_staff_sales_summary":
       return { limit: 10, week: classification?.weekScope === "last" ? "last" : "this" };
+    case "get_shift_report":
+      return {};
     default:
       return {};
   }

@@ -6,6 +6,7 @@ import {
   ASK_WAKA_SQL_REFUSAL,
   ASK_WAKA_TOOL_LABELS,
   classifyAskWakaQuestion,
+  defaultArgsForAskWakaTool,
   ensureAskWakaDataAsOfInAnswer,
   formatAskWakaDataAsOf,
   formatAskWakaToolLabel,
@@ -240,5 +241,73 @@ describe("Ask WAKA ASK-3 guardrails", () => {
     expect(g.blocked).toBe(false);
     expect(g.answer).toContain("No sales were recorded");
     expect(g.answer).not.toBe(ASK_WAKA_SAFE_TOOL_FAILURE);
+  });
+});
+
+describe("Ask WAKA true shift report (ASK-SHIFT-REPORT-IMPLEMENT-01)", () => {
+  it("R: end-of-shift phrasing requires get_shift_report, not get_today_sales", () => {
+    const c = classifyAskWakaQuestion("Give me my end-of-shift report.");
+    expect(c.kind).toBe("quantitative");
+    expect(c.requiredTools).toEqual(["get_shift_report"]);
+    expect(c.primaryTool).toBe("get_shift_report");
+    expect(c.requiredTools).not.toContain("get_today_sales");
+  });
+
+  it("S: 'shift report' / 'this shift' / 'cash up' phrasing all route to get_shift_report", () => {
+    for (const q of [
+      "What's my shift report?",
+      "How did this shift go?",
+      "Give me a cash up for my shift.",
+      "I just closed my shift, give me the summary.",
+    ]) {
+      const c = classifyAskWakaQuestion(q);
+      expect(c.requiredTools, q).toEqual(["get_shift_report"]);
+    }
+  });
+
+  it("T: shift phrasing wins over 'today' — never substitutes get_today_sales", () => {
+    const c = classifyAskWakaQuestion("Give me my end of shift report for today.");
+    expect(c.requiredTools).toEqual(["get_shift_report"]);
+    expect(c.requiredTools).not.toContain("get_today_sales");
+  });
+
+  it("U: shift report tool failure never invents a number", () => {
+    const c = classifyAskWakaQuestion("Give me my end-of-shift report.");
+    const g = guardAskWakaFinalAnswer({
+      classification: c,
+      toolsUsed: [],
+      toolsFailed: true,
+      answer: "Your shift made UGX 500,000.",
+    });
+    expect(g.blocked).toBe(true);
+    expect(g.answer).toBe(ASK_WAKA_SAFE_TOOL_FAILURE);
+    expect(g.answer).not.toContain("500,000");
+  });
+
+  it("V: a successful shift report (open shift, no counted cash yet) is not blocked", () => {
+    const c = classifyAskWakaQuestion("Give me my end-of-shift report.");
+    const g = guardAskWakaFinalAnswer({
+      classification: c,
+      toolsUsed: ["get_shift_report"],
+      toolsFailed: false,
+      answer: "Your shift is still open — no closing cash has been recorded yet. Sales so far: UGX 120,000.",
+    });
+    expect(g.blocked).toBe(false);
+    expect(g.answer).toContain("still open");
+  });
+
+  it("W: shift report tool label is never leaked as a raw tool/RPC name", () => {
+    expect(formatAskWakaToolLabel("get_shift_report")).toBe("Shift report");
+    expect(formatAskWakaToolLabel("get_shift_report")).not.toMatch(/^get_/);
+    const scrubbed = scrubInternalToolNamesFromAnswer(
+      "I used get_shift_report and shop_get_shift_report to answer.",
+    );
+    expect(scrubbed).not.toContain("get_shift_report");
+    expect(scrubbed).toContain("Shift report");
+  });
+
+  it("X: defaultArgsForAskWakaTool(get_shift_report) forces no model-supplied shift_id", () => {
+    // Force-exec path never guesses a shift_id from the model — the RPC resolves it server-side.
+    expect(defaultArgsForAskWakaTool("get_shift_report")).toEqual({});
   });
 });

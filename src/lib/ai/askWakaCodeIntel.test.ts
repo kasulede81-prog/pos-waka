@@ -235,8 +235,8 @@ describe("ASK-INTEL-2 code intelligence", () => {
     expect(toml).toMatch(/\[functions\.ai-ask-waka\]\s*\nverify_jwt\s*=\s*true/);
   });
 
-  it("T17: live POS tool names unchanged", () => {
-    expect(ASK_WAKA_TOOL_NAMES).toHaveLength(10);
+  it("T17: live POS tool names unchanged (plus ASK-SHIFT-REPORT-IMPLEMENT-01's get_shift_report)", () => {
+    expect(ASK_WAKA_TOOL_NAMES).toHaveLength(11);
   });
 
   it("prompt forbids reproducing retrieved source", () => {
