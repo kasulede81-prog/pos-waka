@@ -5,7 +5,7 @@
  * Security: no SQL, no shop_id from the model, no write tools.
  */
 
-import { calendarWeekToolArgs } from "./askWakaPeriods";
+import { calendarWeekToolArgs, kampalaToday } from "./askWakaPeriods";
 
 export const ASK_WAKA_TOOL_NAMES = [
   "get_today_sales",
@@ -19,6 +19,12 @@ export const ASK_WAKA_TOOL_NAMES = [
   "get_customer_summary",
   "get_staff_sales_summary",
   "get_shift_report",
+  "get_payment_method_summary",
+  "get_notable_sales",
+  "get_unsold_products",
+  "get_credit_sales",
+  "get_shift_sales",
+  "get_inventory_movements",
 ] as const;
 
 export type AskWakaToolName = (typeof ASK_WAKA_TOOL_NAMES)[number];
@@ -65,6 +71,35 @@ function parseLimit(raw: unknown, fallback: number): number | AskWakaArgError {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 1) return reject("invalid_args", "Invalid limit");
   return Math.min(ASK_WAKA_MAX_LIMIT, Math.floor(n));
+}
+
+/**
+ * Resolve a day="today" or week=this|last argument to a start/end range.
+ * "today" always wins — a shift is never confused with either, and this
+ * never substitutes for one.
+ */
+function dayOrWeekArgs(args: Record<string, unknown>): {
+  start_day: string;
+  end_day: string;
+  scope: "day" | "week";
+  week: "this" | "last" | null;
+  period_label: string;
+  in_progress: boolean;
+} {
+  if (args.day === "today") {
+    const today = kampalaToday();
+    return { start_day: today, end_day: today, scope: "day", week: null, period_label: "Today", in_progress: true };
+  }
+  const weekRaw = String(args.week ?? "this").toLowerCase() === "last" ? "last" : "this";
+  const week = calendarWeekToolArgs(weekRaw);
+  return {
+    start_day: week.start_day,
+    end_day: week.end_day,
+    scope: "week",
+    week: week.week === "last" ? "last" : "this",
+    period_label: week.period_label,
+    in_progress: week.in_progress,
+  };
 }
 
 function assertNoShopId(args: Record<string, unknown>): AskWakaArgError | null {
@@ -150,13 +185,18 @@ export function validateAskWakaToolCall(
     }
     case "get_top_products":
     case "get_slow_products": {
-      const weekRaw = String(args.week ?? "this").toLowerCase();
-      if (weekRaw !== "this" && weekRaw !== "last") {
-        return reject("invalid_args", "week must be this or last");
+      if (args.day != null && args.day !== "today") {
+        return reject("invalid_args", "day must be 'today'");
+      }
+      if (args.week != null) {
+        const weekRaw = String(args.week).toLowerCase();
+        if (weekRaw !== "this" && weekRaw !== "last") {
+          return reject("invalid_args", "week must be this or last");
+        }
       }
       const limit = parseLimit(args.limit, 10);
       if (typeof limit === "object") return limit;
-      return { ok: true, args: { ...calendarWeekToolArgs(weekRaw), limit } };
+      return { ok: true, args: { ...dayOrWeekArgs(args), limit } };
     }
     case "get_inventory_summary":
     case "get_expense_summary":
@@ -176,7 +216,8 @@ export function validateAskWakaToolCall(
       if (typeof limit === "object") return limit;
       return { ok: true, args: { ...calendarWeekToolArgs(weekRaw), limit } };
     }
-    case "get_shift_report": {
+    case "get_shift_report":
+    case "get_shift_sales": {
       const shiftIdRaw = args.shift_id;
       if (shiftIdRaw == null || shiftIdRaw === "") {
         return { ok: true, args: {} };
@@ -185,6 +226,65 @@ export function validateAskWakaToolCall(
         return reject("invalid_args", "shift_id must be a valid UUID");
       }
       return { ok: true, args: { shift_id: shiftIdRaw } };
+    }
+    case "get_payment_method_summary": {
+      if (args.day != null && args.day !== "today") {
+        return reject("invalid_args", "day must be 'today'");
+      }
+      if (args.week != null) {
+        const weekRaw = String(args.week).toLowerCase();
+        if (weekRaw !== "this" && weekRaw !== "last") {
+          return reject("invalid_args", "week must be this or last");
+        }
+      }
+      return { ok: true, args: dayOrWeekArgs(args) };
+    }
+    case "get_notable_sales": {
+      if (args.day != null && args.day !== "today") {
+        return reject("invalid_args", "day must be 'today'");
+      }
+      if (args.week != null) {
+        const weekRaw = String(args.week).toLowerCase();
+        if (weekRaw !== "this" && weekRaw !== "last") {
+          return reject("invalid_args", "week must be this or last");
+        }
+      }
+      const limit = parseLimit(args.limit, 5);
+      if (typeof limit === "object") return limit;
+      return { ok: true, args: { ...dayOrWeekArgs(args), limit } };
+    }
+    case "get_unsold_products": {
+      const weekRaw = String(args.week ?? "this").toLowerCase();
+      if (weekRaw !== "this" && weekRaw !== "last") {
+        return reject("invalid_args", "week must be this or last");
+      }
+      const limit = parseLimit(args.limit, 50);
+      if (typeof limit === "object") return limit;
+      return { ok: true, args: { ...calendarWeekToolArgs(weekRaw), limit } };
+    }
+    case "get_credit_sales": {
+      const day = parseDay(args.day, "day");
+      if (day && typeof day === "object" && "ok" in day && day.ok === false) return day;
+      return { ok: true, args: day ? { day } : {} };
+    }
+    case "get_inventory_movements": {
+      if (args.day != null && args.day !== "today") {
+        return reject("invalid_args", "day must be 'today'");
+      }
+      if (args.week != null) {
+        const weekRaw = String(args.week).toLowerCase();
+        if (weekRaw !== "this" && weekRaw !== "last") {
+          return reject("invalid_args", "week must be this or last");
+        }
+      }
+      const reasonRaw = args.reason;
+      if (
+        reasonRaw != null &&
+        !["sale", "return", "adjustment", "initial", "transfer", "waste", "other"].includes(String(reasonRaw))
+      ) {
+        return reject("invalid_args", "invalid reason");
+      }
+      return { ok: true, args: { ...dayOrWeekArgs(args), reason: reasonRaw ?? null } };
     }
     default:
       return reject("unknown_tool", `Unknown tool: ${toolName}`);
@@ -321,6 +421,184 @@ export function shapeShiftReportForModel(
     inventory_note:
       "Inventory is not tied to this shift. Use get_inventory_summary separately if asked, and label it as a current shop-wide snapshot, not sales during this shift.",
     shop_id: boundShopId,
+  };
+}
+
+function minifyProducts(products: unknown, limit: number): Record<string, unknown>[] {
+  if (!Array.isArray(products)) return [];
+  return limitAskWakaRows(products as Record<string, unknown>[], limit).map((p) => ({
+    name: p.name ?? "Item",
+    quantity: p.quantity ?? p.qty ?? 0,
+    revenue_ugx: p.revenue_ugx ?? 0,
+    profit_ugx: p.profit_ugx ?? null,
+  }));
+}
+
+/** Shape shop_get_top_products/shop_get_unsold_products for day or week scope. */
+export function shapeProductsForModel(
+  row: Record<string, unknown>,
+  args: Record<string, unknown>,
+  limit: number,
+): Record<string, unknown> {
+  const products = minifyProducts(row.products, limit);
+  return {
+    scope: args.scope ?? "week",
+    week: args.week ?? null,
+    start_day: args.start_day ?? row.start_day,
+    end_day: args.end_day ?? row.end_day,
+    period_label: args.period_label ?? null,
+    in_progress: args.in_progress === true,
+    order: row.order ?? null,
+    products,
+    empty_confirmed: products.length === 0,
+  };
+}
+
+function minifyPaymentMethods(methods: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(methods)) return [];
+  return (methods as Record<string, unknown>[]).map((m) => ({
+    method: m.method,
+    amount_ugx: m.amount_ugx ?? 0,
+  }));
+}
+
+/** Shape shop_get_payment_method_summary's raw RPC row for the model. */
+export function shapePaymentMethodSummaryForModel(
+  row: Record<string, unknown>,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const methods = minifyPaymentMethods(row.methods);
+  return {
+    scope: args.scope ?? "week",
+    week: args.week ?? null,
+    start_day: args.start_day ?? row.start_day,
+    end_day: args.end_day ?? row.end_day,
+    period_label: args.period_label ?? null,
+    methods,
+    total_ugx: row.total_ugx ?? 0,
+    empty_confirmed: methods.length === 0,
+    note: "Only payment methods with a recorded payment appear here. Debt/credit sales are reported separately (see get_credit_sales / get_customer_summary), not as a payment method.",
+  };
+}
+
+/** Shape shop_get_notable_sales's raw RPC row for the model. No customer identity, by design. */
+export function shapeNotableSalesForModel(
+  row: Record<string, unknown>,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const salesRaw = Array.isArray(row.sales) ? (row.sales as Record<string, unknown>[]) : [];
+  const sales = salesRaw.map((s) => ({
+    sale_id: s.sale_id,
+    completed_at: s.completed_at,
+    total_ugx: s.total_ugx,
+    item_count: s.item_count,
+    payment_methods: minifyPaymentMethods(s.payment_methods),
+  }));
+  return {
+    scope: args.scope ?? "week",
+    week: args.week ?? null,
+    start_day: args.start_day ?? row.start_day,
+    end_day: args.end_day ?? row.end_day,
+    period_label: args.period_label ?? null,
+    sales,
+    empty_confirmed: sales.length === 0,
+  };
+}
+
+/** Shape shop_get_credit_sales's raw RPC row for the model. Never confuse with cumulative outstanding debt. */
+export function shapeCreditSalesForModel(row: Record<string, unknown>): Record<string, unknown> {
+  const rowsRaw = Array.isArray(row.credit_sales) ? (row.credit_sales as Record<string, unknown>[]) : [];
+  const creditSales = rowsRaw.map((c) => ({
+    customer_name: c.customer_name ?? "Customer",
+    sale_total_ugx: c.sale_total_ugx,
+    debt_amount_ugx: c.debt_amount_ugx,
+    completed_at: c.completed_at,
+  }));
+  return {
+    day: row.day,
+    credit_sales: creditSales,
+    total_debt_created_ugx: row.total_debt_created_ugx ?? 0,
+    empty_confirmed: creditSales.length === 0,
+    note: "total_debt_created_ugx is debt created ON THIS DAY only — not the customer's total outstanding balance (use get_customer_summary for that).",
+  };
+}
+
+/**
+ * Shape shop_get_shift_sales's raw RPC row for the model. Mirrors
+ * shapeShiftReportForModel's non-"ok" handling: every non-ok status
+ * carries zero item data and an explicit note, never a substitute.
+ */
+export function shapeShiftSalesForModel(
+  row: Record<string, unknown>,
+  boundShopId: string,
+): Record<string, unknown> {
+  if (row.error === "shift_not_found") {
+    return {
+      status: "shift_not_found",
+      note: "The requested shift was not found for this shop. Do not report today's sales instead.",
+      shop_id: boundShopId,
+    };
+  }
+  if (row.error === "no_shift_found") {
+    return {
+      status: "no_shift_found",
+      note: "No open or recently closed shift exists for this shop. Do not substitute today's sales.",
+      shop_id: boundShopId,
+    };
+  }
+  if (row.error === "multiple_open_shifts") {
+    return {
+      status: "multiple_open_shifts",
+      candidates: Array.isArray(row.candidates) ? row.candidates : [],
+      note: "More than one staff member currently has an open shift. Ask the user which cashier/shift they mean.",
+      shop_id: boundShopId,
+    };
+  }
+  if (row.status === "shift_sales_not_supported") {
+    return {
+      status: "shift_sales_not_supported",
+      shift_id: row.shift_id,
+      note: row.note ?? "Item-level sales cannot be safely attributed to this shift.",
+      shop_id: boundShopId,
+    };
+  }
+  const products = minifyProducts(row.products, 20);
+  return {
+    status: "ok",
+    shift_id: row.shift_id,
+    start_at: row.start_at,
+    end_at: row.end_at ?? null,
+    transaction_count: row.transaction_count,
+    products,
+    empty_confirmed: products.length === 0,
+    mismatch_note:
+      Number(row.mismatched_seller_sales_count ?? 0) > 0
+        ? `${row.mismatched_seller_sales_count} sale(s) in this shift show a different logged seller than the shift owner — figures still include them.`
+        : null,
+    shop_id: boundShopId,
+  };
+}
+
+/** Shape shop_get_inventory_movements's raw RPC row for the model. */
+export function shapeInventoryMovementsForModel(
+  row: Record<string, unknown>,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const rowsRaw = Array.isArray(row.movements) ? (row.movements as Record<string, unknown>[]) : [];
+  const movements = limitAskWakaRows(rowsRaw, 30).map((m) => ({
+    name: m.name ?? "Item",
+    quantity_delta: m.quantity_delta,
+    reason: m.reason,
+    occurred_at: m.occurred_at,
+  }));
+  return {
+    scope: args.scope ?? "week",
+    week: args.week ?? null,
+    start_day: args.start_day ?? row.start_day,
+    end_day: args.end_day ?? row.end_day,
+    reason_filter: row.reason_filter ?? null,
+    movements,
+    empty_confirmed: movements.length === 0,
   };
 }
 

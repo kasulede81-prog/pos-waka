@@ -169,7 +169,7 @@ describe("ASK-INTEL-1 knowledge retrieval", () => {
     expect(ASK_WAKA_WRITE_TOOLS).toEqual([]);
   });
 
-  it("P: existing 10 POS tools remain unchanged, plus ASK-SHIFT-REPORT-IMPLEMENT-01's get_shift_report", () => {
+  it("P: existing 10 POS tools remain unchanged, plus the shift report and intelligence-layer additions", () => {
     expect(ASK_WAKA_TOOL_NAMES).toEqual([
       "get_today_sales",
       "get_sales_for_period",
@@ -182,6 +182,12 @@ describe("ASK-INTEL-1 knowledge retrieval", () => {
       "get_customer_summary",
       "get_staff_sales_summary",
       "get_shift_report",
+      "get_payment_method_summary",
+      "get_notable_sales",
+      "get_unsold_products",
+      "get_credit_sales",
+      "get_shift_sales",
+      "get_inventory_movements",
     ]);
   });
 

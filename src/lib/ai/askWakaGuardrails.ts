@@ -17,7 +17,13 @@ export type AskWakaToolName =
   | "get_expense_summary"
   | "get_customer_summary"
   | "get_staff_sales_summary"
-  | "get_shift_report";
+  | "get_shift_report"
+  | "get_payment_method_summary"
+  | "get_notable_sales"
+  | "get_unsold_products"
+  | "get_credit_sales"
+  | "get_shift_sales"
+  | "get_inventory_movements";
 
 function isAskWakaToolName(value: string): value is AskWakaToolName {
   return value in ASK_WAKA_TOOL_LABELS;
@@ -41,7 +47,13 @@ export type AskWakaToolCategory =
   | "customers"
   | "staff_sales"
   | "comparison"
-  | "shift_report";
+  | "shift_report"
+  | "payment_methods"
+  | "notable_sales"
+  | "unsold_products"
+  | "credit_sales"
+  | "shift_sales"
+  | "inventory_movements";
 
 export type AskWakaClassification = {
   kind: AskWakaQuestionKind;
@@ -51,6 +63,8 @@ export type AskWakaClassification = {
   primaryTool: AskWakaToolName | null;
   /** Server-resolved week for this/last/compare questions. */
   weekScope: "this" | "last" | "compare" | null;
+  /** True when the question explicitly asked about "today" for a day-or-week-capable tool. */
+  dayScope?: boolean;
 };
 
 export const ASK_WAKA_SAFE_TOOL_FAILURE =
@@ -77,6 +91,12 @@ export const ASK_WAKA_TOOL_LABELS: Record<AskWakaToolName, string> = {
   get_customer_summary: "Customers",
   get_staff_sales_summary: "Staff sales",
   get_shift_report: "Shift report",
+  get_payment_method_summary: "Payment methods",
+  get_notable_sales: "Notable sales",
+  get_unsold_products: "Unsold products",
+  get_credit_sales: "Credit sales",
+  get_shift_sales: "Shift sales",
+  get_inventory_movements: "Inventory movements",
 };
 
 const CATEGORY_TOOLS: Record<AskWakaToolCategory, AskWakaToolName[]> = {
@@ -91,6 +111,12 @@ const CATEGORY_TOOLS: Record<AskWakaToolCategory, AskWakaToolName[]> = {
   staff_sales: ["get_staff_sales_summary"],
   comparison: ["get_week_comparison"],
   shift_report: ["get_shift_report"],
+  payment_methods: ["get_payment_method_summary"],
+  notable_sales: ["get_notable_sales"],
+  unsold_products: ["get_unsold_products"],
+  credit_sales: ["get_credit_sales"],
+  shift_sales: ["get_shift_sales"],
+  inventory_movements: ["get_inventory_movements"],
 };
 
 const SHIFT_REPORT_PHRASES = [
@@ -193,18 +219,121 @@ export function classifyAskWakaQuestion(message: string): AskWakaClassification 
 
   // A shift is a real cashier session, never a calendar day — this must win
   // over "today"/period sales detection below so get_today_sales is never
-  // substituted for a requested shift report.
+  // substituted for a requested shift report. A question can ask for BOTH
+  // the shift's financial report AND its item-level sales in one go.
   if (includesAny(text, SHIFT_REPORT_PHRASES)) {
+    const alsoWantsItems = includesAny(text, [
+      "what did i sell",
+      "what i sold",
+      "items i sold",
+      "products i sold",
+      "what did i sell during",
+      "sold during my shift",
+      "sold during this shift",
+      "biggest sale during",
+      "biggest sale this shift",
+      "tell me what i sold",
+    ]);
+    const shiftCategories: AskWakaToolCategory[] = alsoWantsItems ? ["shift_report", "shift_sales"] : ["shift_report"];
+    const shiftTools: AskWakaToolName[] = alsoWantsItems ? ["get_shift_report", "get_shift_sales"] : ["get_shift_report"];
     return {
       kind: "quantitative",
-      categories: ["shift_report"],
-      requiredTools: ["get_shift_report"],
+      categories: shiftCategories,
+      requiredTools: shiftTools,
       primaryTool: "get_shift_report",
       weekScope: null,
     };
   }
 
   const categories: AskWakaToolCategory[] = [];
+
+  if (
+    includesAny(text, [
+      "how much cash",
+      "how much was cash",
+      "paid in cash",
+      "paid by cash",
+      "sell in cash",
+      "sold in cash",
+      "in cash",
+      "mobile money",
+      "momo",
+      "airtel money",
+      "airtel",
+      "by card",
+      "paid by card",
+      "payment method",
+      "payment breakdown",
+      "how much came through",
+    ]) ||
+    /\bbreak(down| down)\b.{0,20}\bpayment\b/.test(text)
+  ) {
+    categories.push("payment_methods");
+  }
+
+  if (
+    includesAny(text, [
+      "biggest sale",
+      "biggest transaction",
+      "largest sale",
+      "largest transaction",
+      "highest sale",
+      "notable sale",
+      "my biggest",
+      "top sale",
+    ])
+  ) {
+    categories.push("notable_sales");
+  }
+
+  if (
+    includesAny(text, [
+      "haven't sold",
+      "havent sold",
+      "hasn't sold",
+      "hasnt sold",
+      "never sold",
+      "didn't sell",
+      "didnt sell",
+      "zero sales",
+      "no sales this week",
+      "which products haven't",
+    ])
+  ) {
+    categories.push("unsold_products");
+  }
+
+  if (
+    includesAny(text, [
+      "bought on credit",
+      "buy on credit",
+      "sold on credit",
+      "on credit today",
+      "credit sale",
+      "credit sales today",
+      "who bought on credit",
+    ])
+  ) {
+    categories.push("credit_sales");
+  }
+
+  if (
+    includesAny(text, [
+      "stock received",
+      "what came in",
+      "came in",
+      "restocked",
+      "stock movement",
+      "inventory movement",
+      "why did the stock",
+      "why did this product's stock",
+      "stock adjustment",
+      "what was adjusted",
+      "what products were adjusted",
+    ])
+  ) {
+    categories.push("inventory_movements");
+  }
 
   if (
     includesAny(text, [
@@ -223,7 +352,25 @@ export function classifyAskWakaQuestion(message: string): AskWakaClassification 
     categories.push("inventory");
   }
 
-  if (includesAny(text, ["top product", "best sell", "best-selling", "top selling", "what sold most", "fastest selling"])) {
+  if (
+    includesAny(text, [
+      "top product",
+      "best sell",
+      "best-selling",
+      "top selling",
+      "what sold most",
+      "fastest selling",
+      "sold items",
+      "items we sold",
+      "items sold",
+      "products we sold",
+      "what did we sell",
+      "what did i sell",
+      "what sold today",
+      "top 10 products",
+      "top products today",
+    ])
+  ) {
     categories.push("top_products");
   }
   if (includesAny(text, ["slow product", "slowest", "not selling", "worst selling"])) {
@@ -234,7 +381,7 @@ export function classifyAskWakaQuestion(message: string): AskWakaClassification 
     categories.push("expenses");
   }
 
-  if (includesAny(text, ["customer", "debtor", "how many customers", "top customer"])) {
+  if (includesAny(text, ["customer", "debtor", "how many customers", "top customer", "owes us", "owe us", "who owes"])) {
     categories.push("customers");
   }
 
@@ -266,6 +413,7 @@ export function classifyAskWakaQuestion(message: string): AskWakaClassification 
     "todays sales",
     "cash today",
   ]);
+  const dayScope = asksTodayExplicit && !asksThisWeek && !asksLastWeek;
 
   let weekScope: AskWakaClassification["weekScope"] = null;
   if (asksCompare && (asksThisWeek || asksLastWeek || includesAny(text, ["week"]))) {
@@ -278,7 +426,7 @@ export function classifyAskWakaQuestion(message: string): AskWakaClassification 
   }
 
   if (weekScope !== "compare") {
-    if (asksTodayExplicit && asksSales && !asksThisWeek && !asksLastWeek) {
+    if (!categories.length && asksTodayExplicit && asksSales && !asksThisWeek && !asksLastWeek) {
       categories.push("today_sales");
     } else if (
       !categories.length &&
@@ -320,6 +468,7 @@ export function classifyAskWakaQuestion(message: string): AskWakaClassification 
     requiredTools,
     primaryTool: requiredTools[0] ?? null,
     weekScope,
+    dayScope,
   };
 }
 
@@ -459,14 +608,33 @@ export function defaultArgsForAskWakaTool(
       return { period: "week", week: classification?.weekScope === "last" ? "last" : "this" };
     case "get_top_products":
     case "get_slow_products":
-      return { limit: 10, week: classification?.weekScope === "last" ? "last" : "this" };
+      return classification?.dayScope
+        ? { limit: 10, day: "today" }
+        : { limit: 10, week: classification?.weekScope === "last" ? "last" : "this" };
     case "get_low_stock_products":
       return { limit: 15 };
     case "get_customer_summary":
     case "get_staff_sales_summary":
       return { limit: 10, week: classification?.weekScope === "last" ? "last" : "this" };
     case "get_shift_report":
+    case "get_shift_sales":
       return {};
+    case "get_payment_method_summary":
+      return classification?.dayScope
+        ? { day: "today" }
+        : { week: classification?.weekScope === "last" ? "last" : "this" };
+    case "get_notable_sales":
+      return classification?.dayScope
+        ? { limit: 5, day: "today" }
+        : { limit: 5, week: classification?.weekScope === "last" ? "last" : "this" };
+    case "get_unsold_products":
+      return { limit: 50, week: classification?.weekScope === "last" ? "last" : "this" };
+    case "get_credit_sales":
+      return {};
+    case "get_inventory_movements":
+      return classification?.dayScope
+        ? { day: "today" }
+        : { week: classification?.weekScope === "last" ? "last" : "this" };
     default:
       return {};
   }

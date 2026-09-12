@@ -7,7 +7,13 @@ import {
   isAskWakaWriteTool,
   limitAskWakaRows,
   resolveAskWakaShopScope,
+  shapeCreditSalesForModel,
+  shapeInventoryMovementsForModel,
+  shapeNotableSalesForModel,
+  shapePaymentMethodSummaryForModel,
+  shapeProductsForModel,
   shapeShiftReportForModel,
+  shapeShiftSalesForModel,
   stripCustomerPiiForAskWaka,
   validateAskWakaMessage,
   validateAskWakaToolCall,
@@ -317,5 +323,207 @@ describe("Ask WAKA get_shift_report (ASK-SHIFT-REPORT-IMPLEMENT-01)", () => {
     expect(Array.isArray(data.candidates)).toBe(true);
     expect((data.candidates as unknown[]).length).toBe(2);
     expect(String(data.note)).toMatch(/ask the user which/i);
+  });
+});
+
+describe("Ask WAKA Phase 2 intelligence layer (ASK-INTEL-3)", () => {
+  const SHIFT_ID = "33333333-3333-4333-8333-333333333333";
+
+  it("2A: get_top_products/get_slow_products accept day='today' as well as week", () => {
+    const dayCall = validateAskWakaToolCall("get_top_products", { day: "today" });
+    expect(dayCall.ok).toBe(true);
+    if (dayCall.ok) {
+      expect(dayCall.args.scope).toBe("day");
+      expect(dayCall.args.start_day).toBe(dayCall.args.end_day);
+    }
+    const weekCall = validateAskWakaToolCall("get_slow_products", { week: "last" });
+    expect(weekCall.ok).toBe(true);
+    if (weekCall.ok) expect(weekCall.args.scope).toBe("week");
+    const bad = validateAskWakaToolCall("get_top_products", { day: "yesterday" });
+    expect(bad.ok).toBe(false);
+  });
+
+  it("2A: shapeProductsForModel reports today's sold items with an explicit scope", () => {
+    const data = shapeProductsForModel(
+      {
+        ok: true,
+        order: "top",
+        products: [
+          { name: "Product A", quantity: 15, revenue_ugx: 75000 },
+          { name: "Product B", quantity: 8, revenue_ugx: 64000 },
+        ],
+      },
+      { scope: "day", start_day: "2026-09-12", end_day: "2026-09-12" },
+      10,
+    );
+    expect(data.scope).toBe("day");
+    expect((data.products as unknown[]).length).toBe(2);
+    expect(data.empty_confirmed).toBe(false);
+  });
+
+  it("2B: get_payment_method_summary validates day/week and rejects a model-supplied shop_id", () => {
+    const ok = validateAskWakaToolCall("get_payment_method_summary", { day: "today" });
+    expect(ok.ok).toBe(true);
+    const badWeek = validateAskWakaToolCall("get_payment_method_summary", { week: "next" });
+    expect(badWeek.ok).toBe(false);
+    const noShop = validateAskWakaToolCall("get_payment_method_summary", { shop_id: "x" });
+    expect(noShop.ok).toBe(false);
+    if (!noShop.ok) expect(noShop.code).toBe("shop_id_forbidden");
+  });
+
+  it("2B: shapePaymentMethodSummaryForModel never reports debt as a payment method", () => {
+    const data = shapePaymentMethodSummaryForModel(
+      { ok: true, methods: [{ method: "cash", amount_ugx: 12000 }, { method: "mtn_momo", amount_ugx: 7500 }], total_ugx: 19500 },
+      { scope: "day", start_day: "2026-09-12", end_day: "2026-09-12" },
+    );
+    expect(data.total_ugx).toBe(19500);
+    expect((data.methods as Record<string, unknown>[]).map((m) => m.method)).toEqual(["cash", "mtn_momo"]);
+    expect(String(data.note)).toMatch(/debt.*credit sales/i);
+  });
+
+  it("2C: get_notable_sales enforces the <=20 limit and day/week scope", () => {
+    const r = validateAskWakaToolCall("get_notable_sales", { day: "today", limit: 999 });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.args.limit).toBe(20);
+  });
+
+  it("2C: shapeNotableSalesForModel never includes customer identity", () => {
+    const data = shapeNotableSalesForModel(
+      {
+        ok: true,
+        sales: [
+          { sale_id: "s1", completed_at: "2026-09-12T10:00:00Z", total_ugx: 19500, item_count: 4, payment_methods: [{ method: "cash", amount_ugx: 19500 }] },
+        ],
+      },
+      { scope: "day", start_day: "2026-09-12", end_day: "2026-09-12" },
+    );
+    const sale = (data.sales as Record<string, unknown>[])[0];
+    expect(sale.total_ugx).toBe(19500);
+    expect(Object.keys(sale)).not.toContain("customer_name");
+    expect(Object.keys(sale)).not.toContain("customer_id");
+  });
+
+  it("2D: get_unsold_products validates week scope and a bounded limit", () => {
+    const r = validateAskWakaToolCall("get_unsold_products", { week: "this", limit: 500 });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.args.limit).toBe(ASK_WAKA_MAX_LIMIT);
+    const bad = validateAskWakaToolCall("get_unsold_products", { week: "next" });
+    expect(bad.ok).toBe(false);
+  });
+
+  it("2E: get_credit_sales validates an optional day and rejects a bad date", () => {
+    const ok = validateAskWakaToolCall("get_credit_sales", {});
+    expect(ok.ok).toBe(true);
+    const bad = validateAskWakaToolCall("get_credit_sales", { day: "not-a-date" });
+    expect(bad.ok).toBe(false);
+  });
+
+  it("2E: shapeCreditSalesForModel distinguishes debt CREATED today from outstanding balance", () => {
+    const data = shapeCreditSalesForModel({
+      ok: true,
+      day: "2026-09-12",
+      credit_sales: [{ customer_name: "John Buyer", sale_total_ugx: 8000, debt_amount_ugx: 8000, completed_at: "2026-09-12T10:00:00Z" }],
+      total_debt_created_ugx: 8000,
+    });
+    expect(data.total_debt_created_ugx).toBe(8000);
+    expect(String(data.note)).toMatch(/not the customer's total outstanding balance/i);
+  });
+
+  it("2F: get_staff_sales_summary tool contract is unchanged (still just week/limit)", () => {
+    const r = validateAskWakaToolCall("get_staff_sales_summary", { week: "this", limit: 5 });
+    expect(r.ok).toBe(true);
+  });
+
+  it("2G: get_sales_for_period contract is unchanged by the day/week net-earnings backport", () => {
+    const r = validateAskWakaToolCall("get_sales_for_period", { period: "week", week: "this" });
+    expect(r.ok).toBe(true);
+  });
+
+  it("2H: get_shift_sales accepts an optional shift_id like get_shift_report and rejects shop_id", () => {
+    const ok = validateAskWakaToolCall("get_shift_sales", {});
+    expect(ok.ok).toBe(true);
+    const withId = validateAskWakaToolCall("get_shift_sales", { shift_id: SHIFT_ID });
+    expect(withId.ok).toBe(true);
+    const badId = validateAskWakaToolCall("get_shift_sales", { shift_id: "nope" });
+    expect(badId.ok).toBe(false);
+    const noShop = validateAskWakaToolCall("get_shift_sales", { shop_id: "x" });
+    expect(noShop.ok).toBe(false);
+    if (!noShop.ok) expect(noShop.code).toBe("shop_id_forbidden");
+  });
+
+  it("2H: shapeShiftSalesForModel — ok status includes item-level products and an honesty mismatch note", () => {
+    const data = shapeShiftSalesForModel(
+      {
+        ok: true,
+        shift_id: SHIFT_ID,
+        start_at: "2026-09-12T08:00:00Z",
+        end_at: null,
+        transaction_count: 2,
+        products: [{ name: "Sugar 1kg", quantity: 3, revenue_ugx: 10500 }],
+        mismatched_seller_sales_count: 1,
+      },
+      "shopA",
+    );
+    expect(data.status).toBe("ok");
+    expect((data.products as unknown[]).length).toBe(1);
+    expect(String(data.mismatch_note)).toMatch(/different logged seller/i);
+  });
+
+  it("2H: shapeShiftSalesForModel — shift_sales_not_supported is never silently substituted", () => {
+    const data = shapeShiftSalesForModel(
+      { ok: true, shift_id: SHIFT_ID, status: "shift_sales_not_supported", note: "PIN-only staff, no linked Auth identity." },
+      "shopA",
+    );
+    expect(data.status).toBe("shift_sales_not_supported");
+    expect(data.products).toBeUndefined();
+  });
+
+  it("2H: shapeShiftSalesForModel — no_shift_found and multiple_open_shifts never fall back to today's sales", () => {
+    const noShift = shapeShiftSalesForModel({ ok: false, error: "no_shift_found" }, "shopA");
+    expect(noShift.status).toBe("no_shift_found");
+    expect(String(noShift.note)).toMatch(/do not substitute today/i);
+
+    const multi = shapeShiftSalesForModel(
+      { ok: false, error: "multiple_open_shifts", candidates: [{ id: "s1" }] },
+      "shopA",
+    );
+    expect(multi.status).toBe("multiple_open_shifts");
+    expect((multi.candidates as unknown[]).length).toBe(1);
+  });
+
+  it("2I: get_inventory_movements validates day/week/reason and rejects an unknown reason", () => {
+    const ok = validateAskWakaToolCall("get_inventory_movements", { day: "today", reason: "adjustment" });
+    expect(ok.ok).toBe(true);
+    const bad = validateAskWakaToolCall("get_inventory_movements", { reason: "theft" });
+    expect(bad.ok).toBe(false);
+  });
+
+  it("2I: shapeInventoryMovementsForModel shapes movement history with a reason filter echoed back", () => {
+    const data = shapeInventoryMovementsForModel(
+      {
+        ok: true,
+        reason_filter: "adjustment",
+        movements: [{ name: "Sugar 1kg", quantity_delta: -2, reason: "adjustment", occurred_at: "2026-09-12T09:00:00Z" }],
+      },
+      { scope: "day", start_day: "2026-09-12", end_day: "2026-09-12" },
+    );
+    expect(data.reason_filter).toBe("adjustment");
+    expect((data.movements as unknown[]).length).toBe(1);
+    expect(data.empty_confirmed).toBe(false);
+  });
+
+  it("SECURITY: every new tool rejects a model-supplied shop_id, same as existing tools", () => {
+    for (const tool of [
+      "get_payment_method_summary",
+      "get_notable_sales",
+      "get_unsold_products",
+      "get_credit_sales",
+      "get_shift_sales",
+      "get_inventory_movements",
+    ] as const) {
+      const r = validateAskWakaToolCall(tool, { shop_id: "11111111-1111-4111-8111-111111111111" });
+      expect(r.ok, tool).toBe(false);
+      if (!r.ok) expect(r.code).toBe("shop_id_forbidden");
+    }
   });
 });

@@ -311,3 +311,122 @@ describe("Ask WAKA true shift report (ASK-SHIFT-REPORT-IMPLEMENT-01)", () => {
     expect(defaultArgsForAskWakaTool("get_shift_report")).toEqual({});
   });
 });
+
+describe("Ask WAKA Phase 2 intelligence layer classification (ASK-INTEL-3)", () => {
+  it("2A: 'today's sold items' uses get_top_products with day scope, not just get_today_sales", () => {
+    const c = classifyAskWakaQuestion("Show me today's sold items.");
+    expect(c.requiredTools).toContain("get_top_products");
+    expect(c.dayScope).toBe(true);
+    expect(defaultArgsForAskWakaTool("get_top_products", c)).toMatchObject({ day: "today" });
+  });
+
+  it("2A: 'top 10 products today' also resolves to day scope", () => {
+    const c = classifyAskWakaQuestion("What were our top 10 products today?");
+    expect(c.requiredTools).toContain("get_top_products");
+    expect(c.dayScope).toBe(true);
+  });
+
+  it("2B: payment-method questions route to get_payment_method_summary", () => {
+    for (const q of [
+      "How much did we sell in cash today?",
+      "How much came through MTN Mobile Money?",
+      "Break down today's sales by payment method.",
+    ]) {
+      const c = classifyAskWakaQuestion(q);
+      expect(c.requiredTools, q).toContain("get_payment_method_summary");
+    }
+  });
+
+  it("2C: 'biggest sale' routes to get_notable_sales, not get_today_sales", () => {
+    const c = classifyAskWakaQuestion("What was our biggest sale today?");
+    expect(c.requiredTools).toEqual(["get_notable_sales"]);
+    expect(c.dayScope).toBe(true);
+  });
+
+  it("2D: 'which products haven't sold this week' routes to get_unsold_products, not get_slow_products", () => {
+    const c = classifyAskWakaQuestion("Which products haven't sold this week?");
+    expect(c.requiredTools).toEqual(["get_unsold_products"]);
+    expect(c.requiredTools).not.toContain("get_slow_products");
+  });
+
+  it("2D: 'slowest products' still routes to the existing get_slow_products (unchanged)", () => {
+    const c = classifyAskWakaQuestion("What are our slowest products this week?");
+    expect(c.requiredTools).toEqual(["get_slow_products"]);
+  });
+
+  it("2E: 'who bought on credit today' routes to get_credit_sales, not get_customer_summary", () => {
+    const c = classifyAskWakaQuestion("Who bought on credit today?");
+    expect(c.requiredTools).toEqual(["get_credit_sales"]);
+  });
+
+  it("2E: 'who owes us the most' still routes to the existing get_customer_summary (unchanged)", () => {
+    const c = classifyAskWakaQuestion("Who owes us the most?");
+    expect(c.requiredTools).toContain("get_customer_summary");
+    expect(c.requiredTools).not.toContain("get_credit_sales");
+  });
+
+  it("2F: 'who sold the most' still routes to the existing get_staff_sales_summary (unchanged)", () => {
+    const c = classifyAskWakaQuestion("Who sold the most?");
+    expect(c.requiredTools).toEqual(["get_staff_sales_summary"]);
+  });
+
+  it("2H: 'what did I sell during this shift' requires BOTH get_shift_report and get_shift_sales", () => {
+    const c = classifyAskWakaQuestion("What did I sell during this shift?");
+    expect(c.requiredTools).toContain("get_shift_report");
+    expect(c.requiredTools).toContain("get_shift_sales");
+  });
+
+  it("2H: a plain end-of-shift request still requires only get_shift_report (unchanged)", () => {
+    const c = classifyAskWakaQuestion("Give me my end-of-shift report.");
+    expect(c.requiredTools).toEqual(["get_shift_report"]);
+  });
+
+  it("2H: shift phrasing still wins over 'today' for the new item-level tools too", () => {
+    const c = classifyAskWakaQuestion("What did I sell during this shift today?");
+    expect(c.requiredTools).not.toContain("get_top_products");
+    expect(c.requiredTools).toContain("get_shift_sales");
+  });
+
+  it("2I: stock-movement questions route to get_inventory_movements", () => {
+    for (const q of ["What stock came in today?", "What products were adjusted today?"]) {
+      const c = classifyAskWakaQuestion(q);
+      expect(c.requiredTools, q).toContain("get_inventory_movements");
+    }
+  });
+
+  it("tool failure on any new tool never invents a number (guardrail applies uniformly)", () => {
+    const c = classifyAskWakaQuestion("What was our biggest sale today?");
+    const g = guardAskWakaFinalAnswer({
+      classification: c,
+      toolsUsed: [],
+      toolsFailed: true,
+      answer: "Your biggest sale was UGX 900,000.",
+    });
+    expect(g.blocked).toBe(true);
+    expect(g.answer).toBe(ASK_WAKA_SAFE_TOOL_FAILURE);
+    expect(g.answer).not.toContain("900,000");
+  });
+
+  it("new tool labels are never leaked as raw tool/RPC names", () => {
+    expect(formatAskWakaToolLabel("get_payment_method_summary")).toBe("Payment methods");
+    expect(formatAskWakaToolLabel("get_notable_sales")).toBe("Notable sales");
+    expect(formatAskWakaToolLabel("get_unsold_products")).toBe("Unsold products");
+    expect(formatAskWakaToolLabel("get_credit_sales")).toBe("Credit sales");
+    expect(formatAskWakaToolLabel("get_shift_sales")).toBe("Shift sales");
+    expect(formatAskWakaToolLabel("get_inventory_movements")).toBe("Inventory movements");
+    for (const name of Object.keys(ASK_WAKA_TOOL_LABELS)) {
+      expect(formatAskWakaToolLabel(name)).not.toMatch(/^get_/);
+    }
+  });
+
+  it("defaultArgsForAskWakaTool never lets a model-supplied shift_id through the force-exec path", () => {
+    expect(defaultArgsForAskWakaTool("get_shift_sales")).toEqual({});
+  });
+
+  it("defaultArgsForAskWakaTool resolves day vs week correctly for the new day-capable tools", () => {
+    const todayC = classifyAskWakaQuestion("What was our biggest sale today?");
+    expect(defaultArgsForAskWakaTool("get_notable_sales", todayC)).toMatchObject({ day: "today" });
+    const weekC = classifyAskWakaQuestion("What was our biggest sale this week?");
+    expect(defaultArgsForAskWakaTool("get_notable_sales", weekC)).toMatchObject({ week: "this" });
+  });
+});
