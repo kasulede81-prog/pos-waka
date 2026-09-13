@@ -78,6 +78,7 @@ export {
   CSV_IMPORT_WITH_PACK_TEMPLATE_FILENAME,
 } from "./csvLimits";
 export {
+  sellingModeFromImportUnit,
   sellUnitsFromOpeningPacks,
   unitCostFromImportPackCost,
   syncPackedImportDerivedFields,

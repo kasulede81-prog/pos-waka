@@ -9,6 +9,7 @@ import { CSV_IMPORT_MAX_BYTES, CSV_IMPORT_MAX_ROWS } from "./csvLimits";
 import { newImportClientId } from "./createNormalizedRow";
 import { isCsvRecordBlank, parseCsvText } from "./parseCsvText";
 import {
+  sellingModeFromImportUnit,
   sellUnitsFromOpeningPacks,
   unitCostFromImportPackCost,
 } from "./packImportSemantics";
@@ -158,6 +159,7 @@ function mapNoPackRecord(
     categoryInput: section,
     category: "",
     baseUnit: unitRaw || "piece",
+    sellingMode: sellingModeFromImportUnit(unitRaw || "piece"),
     packMode: "none",
     buyingUnit: undefined,
     conversionRate: null,
@@ -280,6 +282,7 @@ function mapWithPackRecord(
     categoryInput: section,
     category: "",
     baseUnit: unitRaw || "piece",
+    sellingMode: sellingModeFromImportUnit(unitRaw || "piece"),
     packMode: "packed",
     buyingUnit: packLabel ? packLabel.toLowerCase() : "",
     conversionRate,

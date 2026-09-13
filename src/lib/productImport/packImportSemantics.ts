@@ -1,4 +1,6 @@
+import type { SellingMode } from "../../types";
 import { unitCostFromPackTotal } from "../costPrecision";
+import { parseSellUnitFromBaseUnit, sellingModeFromSellKind } from "../simpleProductWizard";
 import type { NormalizedProductImportRow, ProductImportPackMode } from "./types";
 
 /**
@@ -64,6 +66,20 @@ export function syncPackedImportDerivedFields(
     buyingPackCostUgx,
     costPricePerUnitUgx,
   };
+}
+
+/**
+ * Wizard-parity sellingMode derivation for import rows (Template A and B alike).
+ *
+ * The wizard never lets product-name guessing decide `sellingMode` once the
+ * admin has picked a sell unit — `sellingModeFromSellKind()` maps kg/litre to
+ * "weighted" deterministically. Import rows must get the same treatment from
+ * their explicit "Unit" cell; reuses the wizard's own unit parser/derivation
+ * rather than re-deriving the rule here.
+ */
+export function sellingModeFromImportUnit(unitRaw: string): SellingMode {
+  const parsed = parseSellUnitFromBaseUnit(unitRaw);
+  return sellingModeFromSellKind(parsed.kind, parsed.custom);
 }
 
 export function isPackedImportRow(
