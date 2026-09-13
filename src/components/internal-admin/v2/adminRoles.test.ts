@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { adminPermissions, canManageAi, canManageShopAiSetup, canRemoteSupport } from "./adminRoles";
+import {
+  adminPermissions,
+  canManageAi,
+  canManageShopAiSetup,
+  canPermanentlyDeleteShopAccount,
+  canRemoteSupport,
+  canResetShopBusinessData,
+} from "./adminRoles";
 
 describe("canRemoteSupport", () => {
   it("allows support_admin and super_admin only", () => {
@@ -24,6 +31,51 @@ describe("canRemoteSupport", () => {
     expect(finance.canResolveSupport).toBe(true);
     expect(finance.canRemoteSupport).toBe(false);
     expect(finance.canManageAi).toBe(false);
+  });
+});
+
+describe("canResetShopBusinessData", () => {
+  it("allows super_admin and operations_admin only — broader than permanent delete, still not everyone", () => {
+    expect(canResetShopBusinessData("super_admin")).toBe(true);
+    expect(canResetShopBusinessData("operations_admin")).toBe(true);
+    expect(canResetShopBusinessData("support_admin")).toBe(false);
+    expect(canResetShopBusinessData("field_agent")).toBe(false);
+    expect(canResetShopBusinessData("finance_admin")).toBe(false);
+    expect(canResetShopBusinessData("subscriptions_admin")).toBe(false);
+  });
+
+  it("is strictly broader than canPermanentlyDeleteShopAccount, never narrower", () => {
+    const roles = ["super_admin", "operations_admin", "support_admin", "field_agent", "finance_admin", "subscriptions_admin"];
+    for (const role of roles) {
+      if (canPermanentlyDeleteShopAccount(role)) {
+        expect(canResetShopBusinessData(role)).toBe(true);
+      }
+    }
+  });
+
+  it("is exposed on adminPermissions", () => {
+    const ops = adminPermissions({
+      id: "1",
+      email: "a@b.c",
+      full_name: "Ops",
+      role: "operations_admin",
+      assigned_district_ids: [],
+      active: true,
+      max_shops: null,
+    });
+    expect(ops.canResetShopBusinessData).toBe(true);
+    expect(ops.canPermanentlyDeleteShopAccount).toBe(false);
+
+    const support = adminPermissions({
+      id: "2",
+      email: "b@c.d",
+      full_name: "Support",
+      role: "support_admin",
+      assigned_district_ids: [],
+      active: true,
+      max_shops: null,
+    });
+    expect(support.canResetShopBusinessData).toBe(false);
   });
 });
 

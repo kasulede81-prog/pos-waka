@@ -43,6 +43,16 @@ export function canPermanentlyDeleteShopAccount(role: string): boolean {
   return role === "super_admin";
 }
 
+/**
+ * Reset a shop's business/test data (products, sales, inventory movements,
+ * etc.) while preserving the shop, org, and owner login (destructive, but
+ * less severe than permanent account deletion — so operations_admin is
+ * included alongside super_admin).
+ */
+export function canResetShopBusinessData(role: string): boolean {
+  return role === "super_admin" || role === "operations_admin";
+}
+
 export function canShopSubs(role: string): boolean {
   return canManageTrials(role);
 }
@@ -93,6 +103,7 @@ export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
     canManageShopAiSetup: canManageShopAiSetup(role),
     canEditShopProfile: canEditShopProfile(role),
     canPermanentlyDeleteShopAccount: canPermanentlyDeleteShopAccount(role),
+    canResetShopBusinessData: canResetShopBusinessData(role),
     canRemoteSupport: canRemoteSupport(role),
     districtCount: adminRow?.assigned_district_ids?.length ?? 0,
   };

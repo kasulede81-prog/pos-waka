@@ -114,6 +114,7 @@ export type AuditAction =
   | "back_office_unlock_failed"
   | "admin_pin_clear_applied"
   | "admin_staff_credentials_clear_applied"
+  | "admin_shop_reset_resync_applied"
   | "shift_start"
   | "shift_end"
   | "product_add"

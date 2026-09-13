@@ -1,5 +1,6 @@
 import { AccountRecoveryPanel } from "../../../AccountRecoveryPanel";
 import { AdminPermanentDeletePanel } from "../../../AdminPermanentDeletePanel";
+import { AdminShopResetPanel } from "../../../AdminShopResetPanel";
 import { RescueActionButton, RescueRow, RescueSection } from "../../../rescue/RescuePrimitives";
 import { adminSetShopActive } from "../../../../../lib/wakaInternalAdmin";
 import { runShopConsoleRescueAction } from "../rescueRun";
@@ -20,6 +21,16 @@ export function ShopConsoleSecurityTab({ ctx, onDeleted }: Props) {
         <AccountRecoveryPanel
           lang={ctx.lang}
           shopId={detail.shop.id}
+          detail={detail}
+          busy={busy}
+          previewMode={previewMode}
+          onBusy={setBusy}
+          onToast={setToast}
+        />
+      ) : null}
+
+      {perms.canResetShopBusinessData ? (
+        <AdminShopResetPanel
           detail={detail}
           busy={busy}
           previewMode={previewMode}

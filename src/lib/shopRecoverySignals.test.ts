@@ -9,6 +9,7 @@ const mockClearLegacySensitiveSession = vi.fn();
 const mockApplyShopSecurityPinRecoveryClear = vi.fn();
 const mockBlockMigration = vi.fn();
 const mockSetRecoveryNotice = vi.fn();
+const mockPullShopDataFromCloud = vi.fn().mockResolvedValue(null);
 
 vi.mock("../store/usePosStore", () => ({
   usePosStore: {
@@ -25,6 +26,7 @@ vi.mock("./enterpriseSecurity/securitySession", () => ({
 
 vi.mock("../offline/cloudSync", () => ({
   resolveShopCtx: vi.fn().mockResolvedValue({ shopId: "shop-1", userId: "user-1" }),
+  pullShopDataFromCloud: (...args: unknown[]) => mockPullShopDataFromCloud(...args),
 }));
 
 vi.mock("./cloudSnapshotSync", () => ({
@@ -194,5 +196,52 @@ describe("shopRecoverySignals", () => {
       expect.any(String),
       expect.objectContaining({ shopId: "shop-1", recoveryCompleted: true }),
     );
+  });
+
+  it("applyAdminForceFullResync forces a full cloud pull instead of replaying local cache", async () => {
+    const { applyAdminForceFullResync } = await import("./shopRecoverySignals");
+    const signalAt = "2026-09-13T16:00:00.000Z";
+
+    const applied = await applyAdminForceFullResync("shop-1", signalAt, "admin_shop_reset_signal");
+    expect(applied).toBe(true);
+    expect(mockPullShopDataFromCloud).toHaveBeenCalledWith({
+      forceFull: true,
+      pullReason: "admin_shop_reset_signal",
+    });
+    expect(mockLogAuditAction).toHaveBeenCalledWith(
+      "admin_shop_reset_resync_applied",
+      expect.any(String),
+      expect.objectContaining({ shopId: "shop-1", signalAt, recoveryAppliedOnDevice: true }),
+    );
+  });
+
+  it("applyAdminForceFullResync is idempotent for the same signal timestamp", async () => {
+    const { applyAdminForceFullResync } = await import("./shopRecoverySignals");
+    const signalAt = "2026-09-13T16:00:00.000Z";
+    storage.set("waka.recovery.forceFullResyncApplied.v1::shop-1", signalAt);
+
+    const applied = await applyAdminForceFullResync("shop-1", signalAt);
+    expect(applied).toBe(false);
+    expect(mockPullShopDataFromCloud).not.toHaveBeenCalled();
+  });
+
+  it("applyShopRecoverySignalsForShop triggers a full resync when the RPC returns force_full_resync_at", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase!.rpc).mockResolvedValue({
+      data: { force_full_resync_at: "2026-09-13T17:00:00.000Z" },
+      error: null,
+      count: null,
+      status: 200,
+      statusText: "OK",
+      success: true,
+    } as never);
+
+    const { applyShopRecoverySignalsForShop } = await import("./shopRecoverySignals");
+    const applied = await applyShopRecoverySignalsForShop("shop-1", "cloud_reconnect");
+    expect(applied).toBe(true);
+    expect(mockPullShopDataFromCloud).toHaveBeenCalledWith({
+      forceFull: true,
+      pullReason: "cloud_reconnect",
+    });
   });
 });

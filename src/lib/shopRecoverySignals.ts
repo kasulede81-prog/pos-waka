@@ -8,6 +8,7 @@ import { stripStaffCredentialsForRecovery } from "./staffCredentialRecoveryOps";
 
 const APPLIED_PIN_CLEAR_KEY = "waka.recovery.pinClearApplied.v1";
 const APPLIED_STAFF_CLEAR_KEY = "waka.recovery.staffClearApplied.v1";
+const APPLIED_FORCE_RESYNC_KEY = "waka.recovery.forceFullResyncApplied.v1";
 
 function appliedPinClearKey(shopId: string): string {
   return `${APPLIED_PIN_CLEAR_KEY}::${shopId}`;
@@ -53,10 +54,33 @@ function writeAppliedStaffClearAt(shopId: string, at: string): void {
   }
 }
 
+function appliedForceResyncKey(shopId: string): string {
+  return `${APPLIED_FORCE_RESYNC_KEY}::${shopId}`;
+}
+
+function readAppliedForceResyncAt(shopId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(appliedForceResyncKey(shopId));
+  } catch {
+    return null;
+  }
+}
+
+function writeAppliedForceResyncAt(shopId: string, at: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(appliedForceResyncKey(shopId), at);
+  } catch {
+    /* ignore */
+  }
+}
+
 type RecoverySignalsPayload = {
   clear_back_office_pin_at?: string | null;
   clear_staff_credentials_at?: string | null;
   password_reset_requested_at?: string | null;
+  force_full_resync_at?: string | null;
 };
 
 async function fetchRecoverySignalsPayload(shopId: string): Promise<RecoverySignalsPayload | null> {
@@ -204,6 +228,36 @@ export async function applyAdminStaffCredentialsClear(
   return { applied: true, clearedAt, affectedStaffCount };
 }
 
+/**
+ * Apply an admin "reset shop business data" signal on this device: instead of
+ * replaying whatever sales/products/etc. are still cached locally, force a
+ * fresh full pull from cloud (which will now come back empty/near-empty,
+ * since the server-side reset already ran). Mirrors applyAdminBackOfficePinClear
+ * / applyAdminStaffCredentialsClear's dedupe-by-timestamp shape.
+ */
+export async function applyAdminForceFullResync(
+  shopId: string,
+  signalAt: string,
+  reason?: string,
+): Promise<boolean> {
+  const lastApplied = readAppliedForceResyncAt(shopId);
+  if (lastApplied === signalAt) return false;
+
+  const { pullShopDataFromCloud } = await import("../offline/cloudSync");
+  await pullShopDataFromCloud({ forceFull: true, pullReason: reason ?? "admin_shop_reset_signal" });
+
+  writeAppliedForceResyncAt(shopId, signalAt);
+
+  const { usePosStore } = await import("../store/usePosStore");
+  usePosStore.getState().logAuditAction(
+    "admin_shop_reset_resync_applied",
+    "Fresh full sync applied after admin business-data reset",
+    { shopId, signalAt, recoveryReason: reason ?? "admin_shop_reset_signal", recoveryAppliedOnDevice: true },
+  );
+
+  return true;
+}
+
 /** Apply server-side admin Shop Security PIN clear on this device (after cloud sync / login). */
 export async function applyShopRecoverySignalsForCurrentShop(
   reason?: ShopSecurityPinRecoveryTrigger,
@@ -237,6 +291,11 @@ export async function applyShopRecoverySignalsForShop(
   if (staffClearedAt) {
     const staffResult = await applyAdminStaffCredentialsClear(shopId, reason as StaffCredentialRecoveryTrigger, staffClearedAt);
     applied = staffResult.applied || applied;
+  }
+
+  const forceResyncAt = String(payload.force_full_resync_at ?? "").trim();
+  if (forceResyncAt) {
+    applied = (await applyAdminForceFullResync(shopId, forceResyncAt, reason)) || applied;
   }
 
   return applied;
