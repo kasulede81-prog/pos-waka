@@ -4340,6 +4340,25 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       },
     });
     if (!storeHasCoreRecoveryData()) {
+      // Admin-reset safety net: zero products/sales/customers after a gated
+      // recovery pull is NOT a broken recovery when this shop has an
+      // outstanding admin force-full-resync signal — it is the correct,
+      // expected result of a legitimate reset. Without this check, a device
+      // recovering right after a shop reset deterministically throws here on
+      // every single retry (the shop really is empty), leaving it stuck on
+      // the "Restoring your business…" screen forever: Retry just repeats
+      // the same failure, and Continue Offline is unavailable because the
+      // device's local cache is empty too (that's why it needed recovery in
+      // the first place). Fails open (falls through to the original throw)
+      // if the signal lookup itself can't be confirmed — same conservative
+      // default as before this check existed.
+      const ctx = await resolveShopCtx();
+      if (ctx) {
+        const { hasUnacknowledgedForceFullResync } = await import("../lib/shopRecoverySignals");
+        if (await hasUnacknowledgedForceFullResync(ctx.shopId).catch(() => false)) {
+          return;
+        }
+      }
       logRecoveryDiagnosticEvent("merge_produced_empty_store");
       throw new Error(MERGE_PRODUCED_EMPTY_STORE_ERROR);
     }

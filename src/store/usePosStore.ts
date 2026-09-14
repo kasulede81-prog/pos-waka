@@ -9262,7 +9262,9 @@ export async function applyRestoredSnapshotFromBackup(
     });
 
     void import("../lib/shopRecoveryOrchestration").then(({ scheduleShopRecovery }) => {
-      void scheduleShopRecovery("app_launch");
+      void import("../lib/monitoring").then(({ ignoreReportedSyncFailure }) => {
+        void scheduleShopRecovery("app_launch").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
+      });
     });
   } finally {
     release();

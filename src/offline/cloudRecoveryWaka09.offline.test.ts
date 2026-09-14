@@ -341,6 +341,87 @@ describe("WAKA-09 — full/bootstrap pull tombstones voided sales", () => {
   });
 });
 
+describe("Admin-reset safety net — gated cloud recovery on a genuinely reset (empty) shop", () => {
+  // INCIDENT: a device recovering after an internal-admin "reset shop
+  // business data" action got stuck forever on the "Restoring your
+  // business…" screen at 0%. Root cause: `assertCloudRecoveryStoreHydrated`
+  // (src/offline/cloudSync.ts) treats zero products/sales/customers after a
+  // gated (`cloudRecovery: true`) merge as evidence of a BROKEN recovery and
+  // throws `merge_produced_empty_store` — correct for an actually-broken
+  // pull, but wrong for a shop that was legitimately reset to zero. Since
+  // the shop really is empty, every Retry deterministically reproduces the
+  // same throw, and "Continue Offline" is unavailable because the device's
+  // local cache is empty too (that's why gated recovery engaged at all) —
+  // a permanent dead end. The fix consults the same admin
+  // force-full-resync signal already used to gate the outbox/snapshot
+  // guards to tell "legitimately reset" apart from "genuinely broken."
+  let scope: OfflineScope;
+  const RESET_SIGNAL_AT = "2026-09-13T22:01:21.000Z";
+
+  beforeEach(async () => {
+    resetShopCtxTickForTests();
+    scope = activateOfflineScope();
+    await setStore({
+      _hydrated: true,
+      products: [],
+      sales: [],
+      customers: [],
+      debtPayments: [],
+      dayCloses: [],
+    });
+  });
+
+  function makeResetShopClient(forceFullResyncAt: string | null): void {
+    const client = createFakeSupabaseClient({
+      user: {
+        id: HARNESS_USER_ID,
+        email: "harness@waka.test",
+        email_confirmed_at: "2026-01-01T00:00:00.000Z",
+      },
+      // No products/sales/customers/etc rows configured at all — a
+      // genuinely reset shop. `pullCatalogFromRpc` / `pullShopPolicyFromRpc`
+      // still succeed against the unconfigured `shop_pull_catalog` /
+      // `shop_pull_shop_policy` RPCs (resolving null/default, not erroring),
+      // which is what makes `hasCloud` true and lets the merge proceed far
+      // enough to reach `assertCloudRecoveryStoreHydrated` at all.
+      tables: organizationTablesFor(scope),
+      rpc: {
+        shop_server_now: RESET_SIGNAL_AT,
+        shop_fetch_recovery_signal: {
+          clear_back_office_pin_at: null,
+          clear_staff_credentials_at: null,
+          password_reset_requested_at: null,
+          force_full_resync_at: forceFullResyncAt,
+        },
+      },
+    });
+    fake.client = client;
+  }
+
+  it("REGRESSION — a genuinely broken/empty recovery (no reset signal) still throws", async () => {
+    makeResetShopClient(null);
+
+    const { pullCloudAndMergeIntoStore } = await import("./cloudSync");
+    await expect(
+      pullCloudAndMergeIntoStore({ forceFull: true, cloudRecovery: true, pullReason: "cloud_recovery" }),
+    ).rejects.toThrow("merge_produced_empty_store");
+  });
+
+  it("FIX — gated recovery on a shop with an outstanding admin reset signal completes successfully, empty", async () => {
+    makeResetShopClient(RESET_SIGNAL_AT);
+
+    const { pullCloudAndMergeIntoStore } = await import("./cloudSync");
+    await expect(
+      pullCloudAndMergeIntoStore({ forceFull: true, cloudRecovery: true, pullReason: "cloud_recovery" }),
+    ).resolves.toBe(true);
+
+    const state = await getStore();
+    expect(state.products).toHaveLength(0);
+    expect(state.sales).toHaveLength(0);
+    expect(state.customers).toHaveLength(0);
+  });
+});
+
 describe("WAKA-09 — shop-scoped snapshot isolation", () => {
   it("7b — restoring Shop A snapshot cannot leak into Shop B's namespace", async () => {
     const { writeSnapshot, readSnapshot } = await import("./localDb");
