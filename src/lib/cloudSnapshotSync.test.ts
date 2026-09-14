@@ -9,6 +9,7 @@ const mockIsCloudRecoveryLockActive = vi.fn().mockReturnValue(false);
 const mockAssertOrganizationOperationsAllowed = vi.fn().mockResolvedValue(undefined);
 const mockUpsert = vi.fn().mockResolvedValue({ error: null });
 const mockGetSession = vi.fn().mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
+const mockSnapshotSelect = vi.fn().mockResolvedValue({ data: null, error: null });
 
 vi.mock("../store/usePosStore", () => ({
   usePosStore: { getState: () => mockGetState() },
@@ -46,6 +47,11 @@ vi.mock("./supabase", () => ({
     auth: { getSession: (...args: unknown[]) => mockGetSession(...args) },
     from: (table: string) => ({
       upsert: (...args: unknown[]) => mockUpsert(table, ...args),
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => mockSnapshotSelect(table),
+        }),
+      }),
     }),
   },
 }));
@@ -154,6 +160,7 @@ describe("uploadShopCloudSnapshot — admin-reset safety net (TEST 7 / TEST 8)",
     mockAssertOrganizationOperationsAllowed.mockResolvedValue(undefined);
     mockGetSession.mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
     mockUpsert.mockResolvedValue({ error: null });
+    mockSnapshotSelect.mockResolvedValue({ data: null, error: null });
     mockResolvePrimaryOrganizationForUser.mockResolvedValue({ organizationId: "org-1", shopId: "shop-1" });
   });
 
@@ -191,5 +198,51 @@ describe("uploadShopCloudSnapshot — admin-reset safety net (TEST 7 / TEST 8)",
     await expect(uploadShopCloudSnapshot({ force: true })).resolves.toBe(false);
 
     expect(mockUpsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("restoreShopFromCloudSnapshot — admin-reset safety net", () => {
+  // INCIDENT: a device recovering right after an admin reset restored from a
+  // snapshot that still contained stale sales (the real `sales` table was
+  // correctly empty, but the snapshot row — uploaded by a device that hadn't
+  // yet reconciled the reset — was not). `restoreShopFromCloudSnapshot`
+  // applies whatever the snapshot contains directly, with none of the
+  // authoritative-replace protection `pullCloudAndMergeIntoStore` has.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsCloudRecoveryLockActive.mockReturnValue(false);
+    mockAssertOrganizationOperationsAllowed.mockResolvedValue(undefined);
+    mockGetSession.mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
+    mockSnapshotSelect.mockResolvedValue({ data: null, error: null });
+    mockResolvePrimaryOrganizationForUser.mockResolvedValue({ organizationId: "org-1", shopId: "shop-1" });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("refuses to trust a downloaded snapshot while a reset signal is unacknowledged — never even queries shop_cloud_snapshots", async () => {
+    mockCanPublishShopCloudSnapshot.mockResolvedValue(false);
+
+    const { restoreShopFromCloudSnapshot } = await import("./cloudSnapshotSync");
+    await expect(restoreShopFromCloudSnapshot()).resolves.toBe(false);
+
+    // Proves the guard short-circuits BEFORE the snapshot fast path can
+    // apply unverified content — the caller (runCloudDataRestore) sees
+    // "no usable snapshot" and correctly falls through to the
+    // authoritative-replace-protected full pull instead.
+    expect(mockSnapshotSelect).not.toHaveBeenCalled();
+  });
+
+  it("proceeds to check for a snapshot normally once there is no outstanding (or already-acknowledged) reset signal", async () => {
+    mockCanPublishShopCloudSnapshot.mockResolvedValue(true);
+
+    const { restoreShopFromCloudSnapshot } = await import("./cloudSnapshotSync");
+    // No snapshot row configured (mockSnapshotSelect resolves null) — this
+    // just proves the guard let the function proceed to actually look.
+    await expect(restoreShopFromCloudSnapshot()).resolves.toBe(false);
+
+    expect(mockSnapshotSelect).toHaveBeenCalledTimes(1);
+    expect(mockSnapshotSelect.mock.calls[0]?.[0]).toBe("shop_cloud_snapshots");
   });
 });

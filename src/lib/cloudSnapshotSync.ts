@@ -291,6 +291,25 @@ export async function restoreShopFromCloudSnapshot(
   const ctx = await resolveShopCtx();
   if (!ctx || !supabase) return false;
 
+  // Admin-reset safety net: refuse to treat a downloaded snapshot as
+  // authoritative while this shop has an outstanding, unacknowledged reset
+  // signal. This "new phone" fast path applies whatever the snapshot row
+  // contains directly (`applyRestoredSnapshotFromBackup` below) with no
+  // per-entity authoritative-replace check at all — that protection only
+  // lives in `pullCloudAndMergeIntoStore`'s full-pull path. A snapshot
+  // uploaded by another device that hadn't yet reconciled the reset (or
+  // uploaded in the race window right after one) can still contain stale
+  // business data even though the real tables are empty. Reusing
+  // `canPublishShopCloudSnapshot`'s fail-closed check here for the same
+  // reason it exists on the upload side: returning `false` here just means
+  // "no usable snapshot" to the caller (`runCloudDataRestore`), which
+  // correctly falls through to the authoritative-replace-protected full
+  // pull instead of silently trusting unverified snapshot content.
+  const { canPublishShopCloudSnapshot } = await import("./shopRecoverySignals");
+  if (!(await canPublishShopCloudSnapshot(ctx.shopId))) {
+    return false;
+  }
+
   const { data, error } = await supabase
     .from("shop_cloud_snapshots")
     .select("snapshot, updated_at")
