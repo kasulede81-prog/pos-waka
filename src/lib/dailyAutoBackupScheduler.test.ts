@@ -305,21 +305,19 @@ describe("SYNC-INV-01 daily auto-backup scheduler", () => {
     expect(engine.slice(manualIdx)).toContain("readCurrentBackupSnapshot");
   });
 
-  it("TEST J — inventory valuation formula is unchanged", () => {
+  it("TEST J — inventory valuation is not referenced by the backup/scheduler files, and uses current cost", () => {
     expect(src("src/lib/costPrecision.ts")).toContain("export function inventoryValueAtCostUgx");
     expect(src("src/lib/dailyAutoBackupScheduler.ts")).not.toContain("inventoryValueAtCostUgx");
     expect(src("src/offline/backupEngine.ts")).not.toContain("inventoryValueAtCostUgx");
+    // `costPricePerUnitUgx` (current cost) is always what's used, never
+    // `buyingPackCostUgx` — a stale pack invoice total no longer affects
+    // this figure (see costPrecision.test.ts for the full regression suite).
     expect(
       inventoryValueAtCostUgx([
-        { stockOnHand: 10, costPricePerUnitUgx: 500, conversionRate: null },
-        {
-          stockOnHand: 24,
-          costPricePerUnitUgx: 833,
-          buyingPackCostUgx: 20_000,
-          conversionRate: 24,
-        },
+        { stockOnHand: 10, costPricePerUnitUgx: 500 },
+        { stockOnHand: 24, costPricePerUnitUgx: 833 },
       ]),
-    ).toBe(5_000 + 20_000);
+    ).toBe(5_000 + 24 * 833);
   });
 
   it("maybeAppendDailyAutoBackup is a cheap no-op when the day is already saved", async () => {

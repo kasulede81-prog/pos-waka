@@ -212,25 +212,42 @@ export function lineCostFromSaleLine(line: {
   return lineCostUgx(normalizeUnitCostUgx(line.unitCostUgx), qty);
 }
 
+/**
+ * Current on-hand inventory value for ONE product — deliberately NOT routed
+ * through `lineCostForProductQuantity`/`buyingPackCostUgxForProduct`.
+ *
+ * Those functions exist for SALE-LINE COGS, where a pack-priced product's
+ * FIFO slot allocation must sum exactly to its buying-pack invoice total —
+ * `buyingPackCostUgx` is the right source of truth there. But `recordPurchase`
+ * (usePosStore.ts) only recomputes `costPricePerUnitUgx` on restock and never
+ * touches `buyingPackCostUgx`, so that field can silently go stale relative
+ * to the live unit cost. Routing inventory VALUATION through the same
+ * pack-cost-preferring path meant "Stock value" (and every other consumer of
+ * this function — Stock page, Receipts, Monthly Business Report, Finance
+ * Diagnostics, cloud recovery/trust-center reporting) could understate a
+ * pack-priced product's value using a stale invoice figure instead of its
+ * current per-unit cost, even though the Products table/export — which read
+ * `costPricePerUnitUgx` directly — showed the correct number.
+ *
+ * Inventory valuation and sale COGS are different questions ("what is this
+ * stock worth right now" vs "what did this specific sale actually cost,
+ * FIFO-allocated against the invoice it came from") and deliberately use
+ * different formulas. This function answers only the first one, always from
+ * the current live unit cost — matching the Products table/CSV export.
+ */
 export function inventoryLineValueAtCostUgx(product: {
   stockOnHand: number;
   costPricePerUnitUgx: number;
-  buyingPackCostUgx?: number | null;
-  conversionRate?: number | null;
-  packCostUnitsDepleted?: number | null;
 }): number {
   const stock = Math.max(0, Number(product.stockOnHand) || 0);
   if (stock <= 0) return 0;
-  return lineCostForProductQuantity(product, stock);
+  return lineCostUgx(costPerBaseUnitUgxFromProduct(product), stock);
 }
 
 export function inventoryValueAtCostUgx(
   products: Array<{
     stockOnHand: number;
     costPricePerUnitUgx: number;
-    buyingPackCostUgx?: number | null;
-    conversionRate?: number | null;
-    packCostUnitsDepleted?: number | null;
   }>,
 ): number {
   return products.reduce((sum, p) => sum + inventoryLineValueAtCostUgx(p), 0);
