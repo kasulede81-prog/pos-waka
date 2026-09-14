@@ -302,10 +302,20 @@ describe("WAKA-09 — full/bootstrap pull tombstones voided sales", () => {
 
     const state = await getStore();
     expect(state.sales.find((s) => s.id === SALE_LIVE_ID)).toBeTruthy();
-    expect(state.sales.find((s) => s.id === SALE_SHOP_A_ID)).toBeTruthy();
+    // The CORE protection this test proves: Shop A's "void" status must
+    // never tombstone anything for Shop B, regardless of id collisions.
     const { readEntityManifest } = await import("./entityStore");
     const manifest = await readEntityManifest();
     expect(manifest?.voidedSaleIds?.[SALE_SHOP_A_ID]).toBeFalsy();
+    // SALE_SHOP_A_ID itself is no longer expected to survive: it was never
+    // Shop B's data to begin with (the fake server, correctly shop-scoped
+    // via `.eq("shop_id", ctx.shopId)`, never returns it for this pull), and
+    // the admin-reset authoritative-replace fix (`salesAuthoritative` in
+    // cloudSync.ts) now treats a complete full pull as the source of truth
+    // for which sales belong to the active shop. A stray cross-shop leftover
+    // sitting in this device's local cache gets correctly cleaned up, not
+    // preserved — it was contamination, not legitimate Shop B history.
+    expect(state.sales.find((s) => s.id === SALE_SHOP_A_ID)).toBeUndefined();
   });
 
   it("8 — a failed recovery leaves local state intact and is retryable", async () => {

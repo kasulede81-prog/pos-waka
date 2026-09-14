@@ -120,6 +120,8 @@ import {
   patchProductsWithServerStock,
   pendingProductCatalogIds,
   pendingRestockProductIds,
+  pendingSaleMutationIds,
+  pendingCustomerMutationIds,
   type ServerProductStockRow,
 } from "../lib/inventoryIntegrity";
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
@@ -4647,9 +4649,24 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     // deleted just because the pull predates its push).
     .filter((p) => !cloudProductIds || cloudProductIds.has(p.id) || pendingCatalogIds.has(p.id));
 
-  const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (local, remote) =>
-    mergeSaleFromCloudPull(local, remote),
-  );
+  // Admin-reset safety net: mirrors `productsAuthoritative` for sales. A
+  // complete pull (`mode==="full"`, not truncated, no entityErrors.sales)
+  // makes the server's sale id list authoritative. Without this, a sale the
+  // admin-reset RPC hard-deleted is invisible to `voidedSaleSet` below —
+  // that set is a STATUS tombstone (built from rows the server explicitly
+  // marked void/refunded/cancelled), and a hard-deleted row has no status
+  // left to tombstone — so it survived every merge forever. (Confirmed live:
+  // a shop reset left 8 stale sales in this device's cache, which then got
+  // re-published to `shop_cloud_snapshots` ~95s later.) Reuses the same
+  // `salesTruncated` completeness signal already used for `ledgerAuthoritative`.
+  const salesAuthoritative =
+    cloud.stats.mode === "full" && cloud.stats.salesTruncated !== true && !cloud.stats.entityErrors?.sales;
+  const cloudSaleIds = salesAuthoritative ? new Set(cloud.sales.map((s) => s.id)) : null;
+  const pendingSaleIds = pendingSaleMutationIds(queue);
+
+  const mergedSales = (
+    await mergeByIdChunked(state.sales, cloud.sales, (local, remote) => mergeSaleFromCloudPull(local, remote))
+  ).filter((s) => !cloudSaleIds || cloudSaleIds.has(s.id) || pendingSaleIds.has(s.id));
   const salesUnfiltered = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
 
   const debtPayments = mergeDebtPaymentsFromCloudPull(state.debtPayments, cloud.debtPayments);
@@ -4658,11 +4675,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   // full pull (no truncated/failed sales or debt-payment pages) may request
   // ledger overwrite; mergeCustomerFromCloudPull still refuses an incomplete
   // per-customer subset.
-  const ledgerAuthoritative =
-    cloud.stats.mode === "full" &&
-    cloud.stats.salesTruncated !== true &&
-    !cloud.stats.entityErrors?.sales &&
-    !cloud.stats.entityErrors?.debt_payments;
+  const ledgerAuthoritative = salesAuthoritative && !cloud.stats.entityErrors?.debt_payments;
 
   // WAKA-01: `sales` (and the return/void records it absorbs) must be declared
   // before the customer merge, which reads it to reconcile debt balances. The
@@ -4677,9 +4690,21 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     [...voidRecords, ...(state.archivedVoidRecords ?? [])],
   );
 
-  const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) =>
-    mergeCustomerFromCloudPull(a, b, sales, debtPayments, { ledgerAuthoritative }),
-  );
+  // Admin-reset safety net: mirrors `productsAuthoritative`/`salesAuthoritative`
+  // for customers. A local-only customer record survives a complete pull
+  // only if this device has an unsynced edit for them (a `"customer"` op
+  // whose payload is a plain profile edit — not a `debt_payment`, which
+  // shares the same outer op kind but has nothing to do with whether the
+  // customer PROFILE row still exists).
+  const customersAuthoritative = cloud.stats.mode === "full" && !cloud.stats.entityErrors?.customers;
+  const cloudCustomerIds = customersAuthoritative ? new Set(cloud.customers.map((c) => c.id)) : null;
+  const pendingCustomerIds = pendingCustomerMutationIds(queue);
+
+  const customers = (
+    await mergeByIdChunked(state.customers, cloud.customers, (a, b) =>
+      mergeCustomerFromCloudPull(a, b, sales, debtPayments, { ledgerAuthoritative }),
+    )
+  ).filter((c) => !cloudCustomerIds || cloudCustomerIds.has(c.id) || pendingCustomerIds.has(c.id));
 
   const mergedCashExpenses =
     cloud.cashExpenses.length > 0

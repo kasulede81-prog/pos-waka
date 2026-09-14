@@ -193,6 +193,38 @@ export function pendingProductCatalogIds(
   return ids;
 }
 
+export function pendingSaleMutationIds(
+  ops: Array<{ kind: string; payload?: unknown }>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const op of ops) {
+    if (op.kind !== "sale" && op.kind !== "pending_sales") continue;
+    const payload = op.payload && typeof op.payload === "object" ? (op.payload as { saleId?: unknown }) : {};
+    const id = String(payload.saleId ?? "").trim();
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+export function pendingCustomerMutationIds(
+  ops: Array<{ kind: string; payload?: unknown }>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const op of ops) {
+    if (op.kind !== "customer") continue;
+    const payload =
+      op.payload && typeof op.payload === "object" ? (op.payload as { id?: unknown; kind?: unknown }) : {};
+    // Debt-payment ops share the "customer" outer kind (see usePosStore's
+    // queueRemote("customer", { kind: "debt_payment", paymentId })) but
+    // carry a paymentId, not a customer profile id — skip those so a queued
+    // payment never falsely protects an unrelated customer record.
+    if (payload.kind === "debt_payment") continue;
+    const id = String(payload.id ?? "").trim();
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
 export function pendingRestockProductIds(
   ops: Array<{ kind: string; payload?: unknown }>,
   returns: Array<{ id: string; productId: string; reason: ReturnReason }>,

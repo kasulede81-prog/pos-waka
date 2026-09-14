@@ -165,6 +165,31 @@ describe("WAKA-01 — pullCloudAndMergeIntoStore merges a customer that already 
    */
   it("CONTROL — merges a cloud customer when local ids do not intersect", async () => {
     await setStore({ customers: [unrelatedLocalCustomer()] });
+    // A real full pull for a healthy shop with two customers returns BOTH —
+    // the admin-reset authoritative-replace fix (see cloudSync.ts,
+    // `customersAuthoritative`) now correctly drops a local-only customer a
+    // complete full pull doesn't confirm, so this fixture must reflect what
+    // a genuinely healthy server would actually return, not just the one
+    // customer this test cares about merging.
+    fake.client = createFakeSupabaseClient({
+      user: {
+        id: "00000000-0000-4000-8000-000000000001",
+        email: "harness@waka.test",
+        email_confirmed_at: "2026-01-01T00:00:00.000Z",
+      },
+      tables: {
+        ...organizationTablesFor(scope),
+        customers: [
+          cloudCustomerRow(scope),
+          cloudCustomerRow(scope, {
+            id: OTHER_CUSTOMER_ID,
+            name: "Okello Peter",
+            phone_e164: "+256700000002",
+            metadata: { location: "Wandegeya", version: 1, debtBalanceUgx: 0, phone: "+256700000002" },
+          }),
+        ],
+      },
+    });
 
     const { pullCloudAndMergeIntoStore } = await import("./cloudSync");
 
