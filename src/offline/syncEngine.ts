@@ -25,6 +25,24 @@ import {
   verifyHistoricalReturnFollowThrough,
 } from "../lib/historicalSaleHeaderRepair";
 
+/**
+ * True when `createdAt` (a client-clock timestamp) predates `cutoff` (a
+ * server-clock timestamp), after correcting for this device's known clock
+ * skew (server time minus device time, both sampled around the same
+ * instant). Falls back to a plain string comparison — identical to the
+ * pre-existing behavior — whenever either timestamp fails to parse, so an
+ * unparseable value never throws or silently passes/fails differently than
+ * before.
+ */
+export function isCreatedBeforeStaleResetCutoff(createdAt: string, cutoff: string, clockSkewMs: number): boolean {
+  const createdMs = Date.parse(createdAt);
+  const cutoffMs = Date.parse(cutoff);
+  if (!Number.isFinite(createdMs) || !Number.isFinite(cutoffMs)) {
+    return createdAt < cutoff;
+  }
+  return createdMs + clockSkewMs < cutoffMs;
+}
+
 export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attempts?: number }): Promise<void> {
   const shopId = op.shopId ?? getActiveShopId() ?? undefined;
   const full: SyncOperation = {
@@ -113,11 +131,61 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
       : async () => false;
   const retryQuarantined = opts?.retryQuarantined === true;
   const activeShop = getActiveShopId();
+
+  // Admin-reset safety net: an op queued BEFORE a shop reset (a pending
+  // product edit/create, sale, or stock/inventory mutation) must never be
+  // pushed once the shop's server-side business data has been wiped —
+  // `pushProductCatalogToCloud` upserts on `id`, so pushing a pre-reset
+  // product op would literally re-insert the row the reset just deleted.
+  // Only fetched when the queue actually holds one of these kinds, so a
+  // normal flush with no pending business mutations costs nothing extra.
+  const STALE_RESET_GUARDED_KINDS = new Set<SyncOperation["kind"]>([
+    "product",
+    "sale",
+    "pending_sales",
+    "pending_stock_updates",
+    "stock_move",
+    "customer",
+  ]);
+  let staleResetCutoff: string | null = null;
+  // Corrects for this device's clock running behind (or ahead of) the
+  // server's: `op.createdAt` is stamped from the client clock at enqueue
+  // time, while `staleResetCutoff` is the server's own clock. Compared
+  // directly, a device whose clock runs meaningfully behind the server could
+  // have a genuinely POST-reset mutation's `createdAt` still read as earlier
+  // than the reset moment — silently dropping a legitimate, never-replayed
+  // transaction. Only fetched in this same rare (queue-has-guarded-kinds AND
+  // a signal is outstanding) path, via the existing `fetchShopServerNow`
+  // primitive already used for this identical class of problem (WAKA-05).
+  // Falls back to the original uncorrected comparison if the server-time
+  // fetch itself fails — never blocks the flush on this.
+  let clockSkewMs = 0;
+  if (activeShop && queue.some((op) => STALE_RESET_GUARDED_KINDS.has(op.kind))) {
+    const { staleForceFullResyncCutoff } = await import("../lib/shopRecoverySignals");
+    staleResetCutoff = await staleForceFullResyncCutoff(activeShop).catch(() => null);
+    if (staleResetCutoff) {
+      const { fetchShopServerNow } = await import("../lib/serverNow");
+      const deviceNowMs = Date.now();
+      const serverNowIso = await fetchShopServerNow().catch(() => null);
+      const serverNowMs = serverNowIso ? Date.parse(serverNowIso) : NaN;
+      if (Number.isFinite(serverNowMs)) clockSkewMs = serverNowMs - deviceNowMs;
+    }
+  }
+
   const ready: SyncOperation[] = [];
   let skippedBackoff = 0;
   for (const op of queue) {
     const opShopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
     if (activeShop && opShopId && opShopId !== activeShop) {
+      continue;
+    }
+    if (
+      staleResetCutoff &&
+      STALE_RESET_GUARDED_KINDS.has(op.kind) &&
+      isCreatedBeforeStaleResetCutoff(op.createdAt, staleResetCutoff, clockSkewMs)
+    ) {
+      await removeSyncOperation(op.id);
+      reportSyncIssue("sync_op_dropped_stale_pre_reset", { kind: op.kind, opId: op.id });
       continue;
     }
     if (op.attempts >= SYNC_QUARANTINE_AFTER_ATTEMPTS && !isQuarantinedSyncOp(op)) {

@@ -4590,6 +4590,25 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     ...(state.archivedReturnRecords ?? []),
   ]);
 
+  // Admin-reset safety net: a `mode==="full"` pull with no products-entity
+  // error is, by construction, a complete/untruncated fetch of every active
+  // product this shop has (`pullProductsFull` loops via
+  // `pullOffsetRangeUntilExhausted`, which has no page cap and rethrows on any
+  // fetch error rather than returning a partial result — so "no exception" and
+  // "complete" are the same fact here, unlike the sales full-pull which tracks
+  // `truncated` separately). Mirrors the existing `ledgerAuthoritative` gate
+  // used a few lines below for the customer debt ledger.
+  //
+  // Without this, a hard `DELETE` (e.g. the admin shop-reset RPC) is
+  // invisible to the merge below: the soft-delete (`is_active=false`) query
+  // `pullProductsFull` also runs finds nothing, `deletedProductSet` stays
+  // empty, and a plain id-merge only ever adds/updates — it can never remove
+  // a product the server no longer has. A forced full pull that correctly
+  // finds 0 server products would otherwise leave every stale local product
+  // untouched forever.
+  const productsAuthoritative = cloud.stats.mode === "full" && !cloud.stats.entityErrors?.products;
+  const cloudProductIds = productsAuthoritative ? new Set(cloud.products.map((p) => p.id)) : null;
+
   const products = (
     await mergeByIdChunked(
       state.products.filter((p) => !tombstoneIds.has(p.id) && !deletedProductSet.has(p.id)),
@@ -4601,7 +4620,13 @@ export async function pullCloudAndMergeIntoStore(opts?: {
         }),
       tombstoneIds,
     )
-  ).filter((p) => !deletedProductSet.has(p.id));
+  )
+    .filter((p) => !deletedProductSet.has(p.id))
+    // Local-only survivors of an authoritative full pull are dropped UNLESS
+    // this device has an unsynced local mutation for them (a genuinely new
+    // or edited product not yet acknowledged by the server must never be
+    // deleted just because the pull predates its push).
+    .filter((p) => !cloudProductIds || cloudProductIds.has(p.id) || pendingCatalogIds.has(p.id));
 
   const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (local, remote) =>
     mergeSaleFromCloudPull(local, remote),

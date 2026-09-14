@@ -213,6 +213,23 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
       const ctx = await resolveShopCtx();
       if (!ctx || !supabase) return false;
 
+      // Admin-reset safety net: refuse to publish this device's local state
+      // unless it can positively confirm there is no outstanding admin
+      // force-full-resync signal for this shop. Without this, a device that
+      // hasn't yet reconciled a shop reset can re-seed `shop_cloud_snapshots`
+      // with its stale, pre-reset products/sales — which
+      // `restoreShopFromCloudSnapshot` (the "new phone" / fresh-install
+      // restore path) would then hand right back to any other device that
+      // restores from it. Deliberately fails CLOSED on a network error or
+      // timeout (unlike the outbox guard, which fails open) — skipping one
+      // upload cycle costs almost nothing, while wrongly publishing a stale
+      // snapshot can resurrect the reset data everywhere. See
+      // `canPublishShopCloudSnapshot`'s doc comment for the full reasoning.
+      const { canPublishShopCloudSnapshot } = await import("./shopRecoverySignals");
+      if (!(await canPublishShopCloudSnapshot(ctx.shopId))) {
+        return false;
+      }
+
       const snap = await snapshotFromStoreWithTombstones();
       if (!snap) return false;
       if (snap.products.length === 0 && snap.sales.length === 0) return false;

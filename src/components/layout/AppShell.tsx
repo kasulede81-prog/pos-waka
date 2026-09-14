@@ -267,6 +267,17 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     });
   }, [preferences.posLocked, preferences.backOfficePin]);
 
+  // Admin force-full-resync recovery must run regardless of whether this shop
+  // has a Back-Office PIN configured — unlike the PIN/staff-credential
+  // recovery above (intentionally still gated), a pending shop reset has
+  // nothing to do with PIN configuration. Narrow call (not the full
+  // `ensureShopRecoveryApplied`) so this stays a no-op for PIN/staff state.
+  useEffect(() => {
+    void import("../../lib/shopRecoverySignals").then(({ applyPendingForceFullResyncForCurrentShop }) => {
+      void applyPendingForceFullResyncForCurrentShop();
+    });
+  }, []);
+
   useEffect(() => {
     if (!preferences.posLocked) return;
     if (canLockPos(preferences)) return;

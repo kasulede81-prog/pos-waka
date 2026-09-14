@@ -269,6 +269,27 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       if (bootGenRef.current !== gen) return;
 
       recordStartupStep("recovery_check");
+      // Admin-reset safety net: check for (and apply) an outstanding admin
+      // force-full-resync signal BEFORE the stale disk-hydrated business data
+      // above is allowed to render. `bootstrapPosCriticalFromDisk` has already
+      // loaded whatever this device had cached locally into the store, but
+      // nothing has painted yet (`finishReady` below is what flips the UI on).
+      // A short, fail-closed RPC check here — reusing the existing recovery
+      // signal, never a second recovery system — means a device whose shop
+      // was just reset authoritatively replaces its stale product cache
+      // in-place before the user ever sees it, instead of only fixing itself
+      // later via the unrelated PIN-recovery pipeline that runs after render.
+      if (hasSupabaseConfig && accountKey?.startsWith("sb:")) {
+        try {
+          const { applyPendingForceFullResyncForCurrentShop } = await import("../lib/shopRecoverySignals");
+          await applyPendingForceFullResyncForCurrentShop();
+        } catch {
+          // Never block boot on this check — offline/slow network just means
+          // the device proceeds with whatever it already has, same as today.
+        }
+      }
+      if (bootGenRef.current !== gen) return;
+
       finishReady("critical_hydrate", userId);
       bootTrace("BOOT-012", "PosDataProvider.runBoot", "SUCCESS", { via: "critical_hydrate" });
 

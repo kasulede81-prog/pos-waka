@@ -69,6 +69,14 @@ export type FakeSupabaseOptions = {
    * client sent a status/shop filter and the server honoured it (WAKA-09).
    */
   columnFilterTables?: string[];
+  /**
+   * Opt-in per-table query failure. Every `.select()`/`.then()`/`.maybeSingle()`/
+   * `.single()` resolution for a listed table returns `{ data: null, error }`
+   * instead of the configured rows. Absent (the default) changes nothing for
+   * any existing test — used to prove a fetch failure never has the client
+   * discard/replace local data, only tables it names ever produce an error.
+   */
+  tableErrors?: Record<string, { message: string; code?: string }>;
 };
 
 type QueryOutcome = { data: unknown; error: null };
@@ -117,6 +125,7 @@ class FakeQueryBuilder implements PromiseLike<QueryOutcome> {
   private orderAscending = true;
   private orders: Array<{ column: string; ascending: boolean }> = [];
   private rowLimit: number | null = null;
+  private readonly queryError: { message: string; code?: string } | null;
 
   constructor(
     table: string,
@@ -124,12 +133,14 @@ class FakeQueryBuilder implements PromiseLike<QueryOutcome> {
     writes: FakeSupabaseWrite[],
     keyset = false,
     columnFilters = false,
+    queryError: { message: string; code?: string } | null = null,
   ) {
     this.table = table;
     this.rows = rows;
     this.writes = writes;
     this.keyset = keyset;
     this.columnFilters = columnFilters;
+    this.queryError = queryError;
     for (const method of CHAIN_METHODS) {
       (this as unknown as Record<string, unknown>)[method] = () => this;
     }
@@ -241,11 +252,13 @@ class FakeQueryBuilder implements PromiseLike<QueryOutcome> {
     return this;
   }
 
-  maybeSingle(): Promise<{ data: unknown; error: null }> {
+  maybeSingle(): Promise<{ data: unknown; error: unknown }> {
+    if (this.queryError) return Promise.resolve({ data: null, error: this.queryError });
     return Promise.resolve({ data: this.resolveRows()[0] ?? null, error: null });
   }
 
-  single(): Promise<{ data: unknown; error: null }> {
+  single(): Promise<{ data: unknown; error: unknown }> {
+    if (this.queryError) return Promise.resolve({ data: null, error: this.queryError });
     return Promise.resolve({ data: this.resolveRows()[0] ?? null, error: null });
   }
 
@@ -253,10 +266,10 @@ class FakeQueryBuilder implements PromiseLike<QueryOutcome> {
     onfulfilled?: ((value: QueryOutcome) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve({ data: this.resolveRows(), error: null } as QueryOutcome).then(
-      onfulfilled,
-      onrejected,
-    );
+    const outcome = this.queryError
+      ? { data: null, error: this.queryError }
+      : { data: this.resolveRows(), error: null };
+    return Promise.resolve(outcome as QueryOutcome).then(onfulfilled, onrejected);
   }
 }
 
@@ -320,6 +333,7 @@ export function createFakeSupabaseClient(options: FakeSupabaseOptions = {}): Fak
         writes,
         options.keyset === true,
         options.columnFilterTables?.includes(table) === true,
+        options.tableErrors?.[table] ?? null,
       ),
     rpc: async (fn: string, args?: Record<string, unknown>) => {
       rpcCalls.push({ fn, args });
