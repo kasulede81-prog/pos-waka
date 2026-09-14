@@ -154,23 +154,64 @@ export async function fetchCloudEntityCounts(): Promise<{
     }
   };
 
+  // These 16 counts are independent of each other — running them
+  // sequentially (the original `await` in each object-literal line) meant
+  // certification paid the full network round-trip latency 16 times over on
+  // a slow/mobile connection. `Promise.all` runs them concurrently instead;
+  // `safeCount` still isolates each one's own try/catch into `errors`, so
+  // this changes only timing, not error-handling semantics.
+  const [
+    products,
+    customers,
+    sales,
+    returns,
+    debtPayments,
+    expenses,
+    suppliers,
+    purchases,
+    supplierPayments,
+    cashAdjustments,
+    dayOpens,
+    shifts,
+    dayCloses,
+    inventoryCounts,
+    stockMovements,
+    auditLogs,
+  ] = await Promise.all([
+    safeCount("products", () => countTable(shopId, "products", { is_active: true })),
+    safeCount("customers", () => countTable(shopId, "customers")),
+    safeCount("sales", () => countTable(shopId, "sales", { status: "completed" })),
+    safeCount("returns", () => countTable(shopId, "sale_returns")),
+    safeCount("debtPayments", () => countTable(shopId, "customer_debt_payments")),
+    safeCount("expenses", () => countTable(shopId, "expenses")),
+    safeCount("suppliers", () => countTable(shopId, "shop_suppliers")),
+    safeCount("purchases", () => countTable(shopId, "shop_purchases")),
+    safeCount("supplierPayments", () => countTable(shopId, "shop_supplier_payments")),
+    safeCount("cashAdjustments", () => countTable(shopId, "shop_cash_drawer_adjustments")),
+    safeCount("dayOpens", () => countTable(shopId, "shop_day_drawer_opens")),
+    safeCount("shifts", () => countTable(shopId, "shop_shifts")),
+    safeCount("dayCloses", () => countTable(shopId, "shop_day_closes")),
+    safeCount("inventoryCounts", () => countTable(shopId, "shop_inventory_count_sessions")),
+    safeCount("stockMovements", () => countTable(shopId, "shop_stock_movements")),
+    safeCount("auditLogs", () => countTable(shopId, "audit_logs")),
+  ]);
   const counts: FullEntityCounts = {
-    products: await safeCount("products", () => countTable(shopId, "products", { is_active: true })),
-    customers: await safeCount("customers", () => countTable(shopId, "customers")),
-    sales: await safeCount("sales", () => countTable(shopId, "sales", { status: "completed" })),
-    returns: await safeCount("returns", () => countTable(shopId, "sale_returns")),
-    debtPayments: await safeCount("debtPayments", () => countTable(shopId, "customer_debt_payments")),
-    expenses: await safeCount("expenses", () => countTable(shopId, "expenses")),
-    suppliers: await safeCount("suppliers", () => countTable(shopId, "shop_suppliers")),
-    purchases: await safeCount("purchases", () => countTable(shopId, "shop_purchases")),
-    supplierPayments: await safeCount("supplierPayments", () => countTable(shopId, "shop_supplier_payments")),
-    cashAdjustments: await safeCount("cashAdjustments", () => countTable(shopId, "shop_cash_drawer_adjustments")),
-    dayOpens: await safeCount("dayOpens", () => countTable(shopId, "shop_day_drawer_opens")),
-    shifts: await safeCount("shifts", () => countTable(shopId, "shop_shifts")),
-    dayCloses: await safeCount("dayCloses", () => countTable(shopId, "shop_day_closes")),
-    inventoryCounts: await safeCount("inventoryCounts", () => countTable(shopId, "shop_inventory_count_sessions")),
-    stockMovements: await safeCount("stockMovements", () => countTable(shopId, "shop_stock_movements")),
-    auditLogs: await safeCount("auditLogs", () => countTable(shopId, "audit_logs")),
+    products,
+    customers,
+    sales,
+    returns,
+    debtPayments,
+    expenses,
+    suppliers,
+    purchases,
+    supplierPayments,
+    cashAdjustments,
+    dayOpens,
+    shifts,
+    dayCloses,
+    inventoryCounts,
+    stockMovements,
+    auditLogs,
     staff: 0,
   };
 
