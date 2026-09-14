@@ -220,6 +220,66 @@ describe("reporting consistency", () => {
     expect(finAfter.grossProfitUgx).toBe(finBefore.grossProfitUgx);
     expect(finAfter.cogsUgx).toBe(finBefore.cogsUgx);
   });
+
+  /**
+   * P0 FIX — traces a NEW correct fractional pack-priced sale (Basimat-style,
+   * 2.5 kg at UGX 3,000/kg, pack-priced 75,000/25) end to end: finalization
+   * snapshot -> resolveSaleLineFinancials -> the same report-facing functions
+   * ("dashboard profit matches financial metrics" above) already prove read
+   * fidelity for. Confirms the corrected COGS propagates as
+   * revenue/COGS/profit/margin, not just at the point of calculation.
+   */
+  it("P0 FIX — a new fractional pack-priced sale propagates correct revenue/COGS/profit/margin into saleFinancialEngine and reports", () => {
+    const product = baseProduct({
+      id: "prod-basimat",
+      name: "Basimat",
+      baseUnit: "kg",
+      sellingPricePerUnitUgx: 4000,
+      costPricePerUnitUgx: 3000,
+      buyingPackCostUgx: 75_000,
+      conversionRate: 25,
+      stockOnHand: 121.5,
+      packCostUnitsDepleted: 0,
+    });
+    const lines = finalizeSaleLineFinancials(
+      [
+        draftLine({
+          productId: product.id,
+          name: product.name,
+          quantity: 2.5,
+          unitPriceUgx: 4000,
+          lineTotalUgx: 10_000,
+          unitCostUgx: product.costPricePerUnitUgx,
+          estimatedProfitUgx: 1_000, // pre-finalize estimate is irrelevant — finalize recomputes it
+        }),
+      ],
+      [product],
+      0,
+    );
+
+    // 1. The finalized line snapshot itself.
+    expect(lines[0]!.cogsUgx).toBe(7_500);
+    expect(lines[0]!.cogsUgx).not.toBe(9_000); // the old ceil(2.5)=3-slot bug
+    expect(lines[0]!.netRevenueUgx).toBe(10_000);
+    expect(lines[0]!.grossProfitUgx).toBe(2_500);
+
+    // 2. resolveSaleLineFinancials reads the stored snapshot (never live product cost).
+    const fin = resolveSaleLineFinancials(lines[0]!);
+    expect(fin.revenueUgx).toBe(10_000);
+    expect(fin.cogsUgx).toBe(7_500);
+    expect(fin.grossProfitUgx).toBe(2_500);
+    const marginPercent = (fin.grossProfitUgx / fin.revenueUgx) * 100;
+    expect(marginPercent).toBe(25);
+
+    // 3. The same functions the Home dashboard and Reports page read.
+    const sale = completedSale(lines);
+    const map = new Map([[product.id, product]]);
+    const breakdown = computeTodayProfitBreakdown([sale], map);
+    const completed = getCompletedFinancials([sale], [], [product], { day: DAY });
+    expect(breakdown.profitUgx).toBe(2_500);
+    expect(completed.revenueUgx).toBe(10_000);
+    expect(completed.profitUgx).toBe(2_500);
+  });
 });
 
 describe("legacy sale fallback", () => {

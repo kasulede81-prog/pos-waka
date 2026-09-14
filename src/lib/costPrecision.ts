@@ -16,10 +16,16 @@ export function normalizePackCostUgx(raw: number | null | undefined): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+/**
+ * Fractional-quantity sales (e.g. 2.5 kg) leave the pack depleted by a
+ * fractional amount (e.g. slot 3.5) — flooring here would silently discard
+ * that progress and misalign the very next sale's slot boundary. Only
+ * clamps NaN/negative to 0; does not round.
+ */
 export function resolvePackCostUnitsDepleted(product: { packCostUnitsDepleted?: number | null }): number {
   const n = Number(product.packCostUnitsDepleted);
   if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.floor(n);
+  return n;
 }
 
 /** Exact unit cost from pack invoice ÷ pieces (no truncation). */
@@ -86,7 +92,23 @@ export function packSlotUnitCostUgx(packCostUgx: number, unitsPerPack: number, s
   return slot < remainder ? base + 1 : base;
 }
 
-/** FIFO slot COGS — 24 separate unit sales sum exactly to packCostUgx. */
+/**
+ * FIFO slot COGS — 24 separate unit sales sum exactly to packCostUgx.
+ *
+ * `startSlot`/`quantity` may be fractional (e.g. 2.5 kg sold starting at
+ * slot 3.5). Each integer-indexed slot has a constant per-unit cost rate
+ * (`packSlotUnitCostUgx`); a fractional quantity consumes a proportional
+ * fraction of whichever slot(s) the continuous range
+ * [startSlot, startSlot + quantity) overlaps — it must NOT be rounded up
+ * to a whole slot count (that overcharges every fractional-quantity sale,
+ * e.g. charging a full 3rd slot for a 2.5-unit sale). Rounding is applied
+ * once at the very end, matching `lineCostUgx` elsewhere in this file.
+ *
+ * For an integer `startSlot`/`quantity` this collapses to exactly the same
+ * per-slot summation as a whole-unit loop — each slot is either fully
+ * included or fully excluded, never partially — so existing whole-unit
+ * behavior is unchanged.
+ */
 export function lineCostFromPackSlots(
   packCostUgx: number,
   unitsPerPack: number,
@@ -95,12 +117,19 @@ export function lineCostFromPackSlots(
 ): number {
   const qty = Math.max(0, Number(quantity) || 0);
   if (qty <= 0) return 0;
-  const start = Math.max(0, Math.floor(startSlot));
+  const start = Math.max(0, Number(startSlot) || 0);
+  const EPSILON = 1e-9;
+  let cursor = start;
+  let remaining = qty;
   let total = 0;
-  for (let i = 0; i < qty; i++) {
-    total += packSlotUnitCostUgx(packCostUgx, unitsPerPack, start + i);
+  while (remaining > EPSILON) {
+    const slotIndex = Math.floor(cursor);
+    const take = Math.min(remaining, slotIndex + 1 - cursor);
+    total += take * packSlotUnitCostUgx(packCostUgx, unitsPerPack, slotIndex);
+    cursor += take;
+    remaining -= take;
   }
-  return total;
+  return Math.round(total);
 }
 
 /** @deprecated Use lineCostFromPackSlots — proportional round drifts per-unit sales. */

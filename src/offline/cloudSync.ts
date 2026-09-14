@@ -322,9 +322,13 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
       meta.buyingPackCostUgx != null && Number(meta.buyingPackCostUgx) > 0
         ? normalizePackCostUgx(Number(meta.buyingPackCostUgx))
         : null,
+    // Not floored: a fractional-quantity sale (e.g. 2.5 kg) leaves this
+    // counter fractional (e.g. slot 3.5) — flooring on every cloud
+    // round-trip would silently discard that progress and misalign the
+    // next sale's pack-slot boundary. See costPrecision.ts resolvePackCostUnitsDepleted.
     packCostUnitsDepleted:
       meta.packCostUnitsDepleted != null && Number.isFinite(Number(meta.packCostUnitsDepleted))
-        ? Math.max(0, Math.floor(Number(meta.packCostUnitsDepleted)))
+        ? Math.max(0, Number(meta.packCostUnitsDepleted))
         : undefined,
     stockOnHand: Number(row.stock_on_hand ?? 0),
     minimumStockAlert: Number(row.minimum_stock_alert ?? row.reorder_level ?? 0),
