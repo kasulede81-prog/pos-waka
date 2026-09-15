@@ -202,9 +202,17 @@ export type SaleLineLookupResult =
 
 /**
  * Read-only lookup of a specific sale line's current server-stored financial snapshot,
- * for populating the correction dialog's "before" state. Relies entirely on RLS
- * (sale_lines_select / sales_select) — an internal admin without
- * internal_can_view_sensitive_shop_data() will get zero rows back, not an error.
+ * for populating the correction dialog's "before" state.
+ *
+ * Calls public.shop_lookup_sale_line_for_correction — a dedicated SECURITY DEFINER RPC
+ * using the SAME internal-admin role gate (super_admin/finance_admin) as
+ * shop_correct_sale_line_financials, not generic table RLS. A prior version of this
+ * function read sale_line_items directly, which depends on RLS requiring either real
+ * shop membership or the separate can_view_sensitive_data flag on internal_admins
+ * (distinct from role, defaults to false) — an internal admin authorized to correct
+ * financials was not guaranteed to have that flag, and got zero rows back with no
+ * error, indistinguishable from the line not existing. This RPC never references
+ * can_view_sensitive_data.
  */
 export async function lookupSaleLineForCorrection(
   shopId: string,
@@ -212,47 +220,53 @@ export async function lookupSaleLineForCorrection(
 ): Promise<SaleLineLookupResult> {
   if (!supabase) return { found: false, error: "offline" };
 
-  const { data, error } = await supabase
-    .from("sale_line_items")
-    .select(
-      "id, sale_id, product_id, quantity, line_total_ugx, financial_revision, metadata, sales!inner(shop_id, status), products(name, conversion_rate)",
-    )
-    .eq("id", saleLineItemId)
-    .eq("sales.shop_id", shopId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("shop_lookup_sale_line_for_correction", {
+    p_shop_id: shopId,
+    p_sale_line_item_id: saleLineItemId,
+  });
 
   if (error) return { found: false, error: error.message };
-  if (!data) return { found: false, error: "not_found_or_no_access" };
 
-  const meta = (data.metadata ?? {}) as Record<string, unknown>;
-  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
-  const unitCostUgx = num(meta.unitCostUgx);
-  const cogsUgx = num(meta.cogsUgx);
-  const grossProfitUgx = num(meta.grossProfitUgx);
-  const estimatedProfitUgx = num(meta.estimatedProfitUgx);
+  const row = data as
+    | {
+        ok?: boolean;
+        error?: string;
+        saleLineItemId?: string;
+        saleId?: string;
+        shopId?: string;
+        productId?: string;
+        productName?: string;
+        quantity?: number;
+        lineTotalUgx?: number;
+        financialRevision?: number;
+        currentUnitCostUgx?: number;
+        currentCogsUgx?: number;
+        currentGrossProfitUgx?: number;
+        currentEstimatedProfitUgx?: number;
+        conversionRate?: number | null;
+      }
+    | null;
 
-  if (unitCostUgx === null || cogsUgx === null || grossProfitUgx === null || estimatedProfitUgx === null) {
-    return { found: false, error: "malformed_or_missing_financial_snapshot" };
-  }
-
-  const sale = Array.isArray(data.sales) ? data.sales[0] : data.sales;
-  const product = Array.isArray(data.products) ? data.products[0] : data.products;
-
-  if (sale?.status !== "completed") {
-    return { found: false, error: "sale_not_completed" };
+  if (!row || row.ok !== true) {
+    return { found: false, error: row?.error ?? "lookup_failed" };
   }
 
   return {
     found: true,
-    shopId,
-    saleId: data.sale_id,
-    saleLineItemId: data.id,
-    productId: data.product_id,
-    productName: product?.name ?? "",
-    quantity: Number(data.quantity),
-    lineTotalUgx: Number(data.line_total_ugx),
-    financialRevision: Number(data.financial_revision ?? 0),
-    current: { unitCostUgx, cogsUgx, grossProfitUgx, estimatedProfitUgx },
-    conversionRate: product?.conversion_rate != null ? Number(product.conversion_rate) : null,
+    shopId: row.shopId ?? shopId,
+    saleId: row.saleId ?? "",
+    saleLineItemId: row.saleLineItemId ?? saleLineItemId,
+    productId: row.productId ?? "",
+    productName: row.productName ?? "",
+    quantity: Number(row.quantity ?? 0),
+    lineTotalUgx: Number(row.lineTotalUgx ?? 0),
+    financialRevision: Number(row.financialRevision ?? 0),
+    current: {
+      unitCostUgx: Number(row.currentUnitCostUgx ?? 0),
+      cogsUgx: Number(row.currentCogsUgx ?? 0),
+      grossProfitUgx: Number(row.currentGrossProfitUgx ?? 0),
+      estimatedProfitUgx: Number(row.currentEstimatedProfitUgx ?? 0),
+    },
+    conversionRate: row.conversionRate != null ? Number(row.conversionRate) : null,
   };
 }
