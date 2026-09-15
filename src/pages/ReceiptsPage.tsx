@@ -34,6 +34,7 @@ import { ReturnReceiptActionsModal, buildReturnReceiptContext } from "../compone
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
 import { VoidLineModal } from "../components/pos/VoidLineModal";
 import { ReturnProductModal } from "../components/pos/ReturnProductModal";
+import { ReportFinancialIssueModal } from "../components/receipts/ReportFinancialIssueModal";
 import type { VoidReason } from "../types";
 import { getCompletedFinancialsFromScoped, getCompletedRevenue } from "../lib/financialMetrics";
 import { partitionReceiptsSales, revenueEligibleSales } from "../lib/receiptsGrouping";
@@ -149,6 +150,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const [showCancelled, setShowCancelled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
+  const [reportIssueTarget, setReportIssueTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(
+    null,
+  );
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
   const [returnReceiptCtx, setReturnReceiptCtx] = useState<import("../lib/receiptDocuments").ReturnReceiptContext | null>(null);
 
@@ -390,6 +394,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       onVoidLine={(s, lineIndex, line) =>
         void runProtected("void_sale", () => setVoidTarget({ sale: s, lineIndex, line }))
       }
+      onReportFinancialIssue={(s, lineIndex, line) => setReportIssueTarget({ sale: s, lineIndex, line })}
     />
   );
 
@@ -538,6 +543,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                   onVoidLine={(s, lineIndex, line) =>
                     void runProtected("void_sale", () => setVoidTarget({ sale: s, lineIndex, line }))
                   }
+                  onReportFinancialIssue={(s, lineIndex, line) => setReportIssueTarget({ sale: s, lineIndex, line })}
                   hideCard
                   forceOpenActions
                   onActionsClose={() => setDesktopActionSale(null)}
@@ -598,6 +604,13 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           });
           setVoidTarget(null);
         }}
+      />
+
+      <ReportFinancialIssueModal
+        open={reportIssueTarget !== null}
+        sale={reportIssueTarget?.sale ?? null}
+        line={reportIssueTarget?.line ?? null}
+        onClose={() => setReportIssueTarget(null)}
       />
 
       <ReturnProductModal

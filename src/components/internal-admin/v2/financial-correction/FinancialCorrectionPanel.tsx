@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   lookupSaleLineForCorrection,
   regenerateDayCloseForCorrection,
   type SaleLineLookupResult,
 } from "../../../../lib/financialCorrectionApi";
+import { linkFinancialCorrectionRequest } from "../../../../lib/financialIssueReportApi";
 import { FinancialCorrectionDialog, type FinancialCorrectionTarget } from "./FinancialCorrectionDialog";
 
 function ugx(n: number): string {
@@ -13,17 +14,30 @@ function ugx(n: number): string {
 /**
  * Forensic, single-line lookup — not a sales browser. Historical financial correction
  * is a rare, targeted operation on a specific line already identified by investigation
- * (support ticket, audit review), never a bulk workflow. The admin supplies the exact
- * sale_line_item_id and the pack-cost/conversion-rate evidence for that one line.
+ * (support ticket, audit review, or a user-submitted financial_correction_requests row).
+ * The admin supplies the pack-cost/conversion-rate evidence for that one line; the
+ * sale_line_item_id itself either comes from manual entry or — when opened from the
+ * request queue — is pre-filled and looked up automatically via initialSaleLineItemId,
+ * so the admin never has to copy/paste it either.
  */
 export function FinancialCorrectionPanel({
   shopId,
   actorRole,
+  initialSaleLineItemId,
+  linkedRequestId,
+  onLinked,
 }: {
   shopId: string;
   actorRole: string;
+  /** Pre-fills and auto-looks-up this line — set when opened from a user report. */
+  initialSaleLineItemId?: string;
+  /** When set, a successful correction is automatically linked back to this report via
+   * internal_link_financial_correction_request (super_admin/finance_admin only, same
+   * gate as the correction RPC itself). */
+  linkedRequestId?: string;
+  onLinked?: () => void;
 }) {
-  const [lineIdInput, setLineIdInput] = useState("");
+  const [lineIdInput, setLineIdInput] = useState(initialSaleLineItemId ?? "");
   const [packCostInput, setPackCostInput] = useState("");
   const [conversionRateInput, setConversionRateInput] = useState("");
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -38,6 +52,7 @@ export function FinancialCorrectionPanel({
     affectedDateKey: string;
     regenStatus?: string;
   } | null>(null);
+  const [linkStatus, setLinkStatus] = useState<string | null>(null);
 
   async function handleLookup() {
     const id = lineIdInput.trim();
@@ -55,6 +70,11 @@ export function FinancialCorrectionPanel({
     setFound(result);
     setConversionRateInput(result.conversionRate != null ? String(result.conversionRate) : "");
   }
+
+  useEffect(() => {
+    if (initialSaleLineItemId) void handleLookup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSaleLineItemId]);
 
   const packCost = Number(packCostInput);
   const conversionRate = Number(conversionRateInput);
@@ -196,6 +216,7 @@ export function FinancialCorrectionPanel({
             <p className="text-emerald-900/70">No active close on {lastResult.affectedDateKey} — nothing to regenerate.</p>
           )}
           {lastResult.regenStatus ? <p className="font-mono text-emerald-900/80">regen: {lastResult.regenStatus}</p> : null}
+          {linkStatus ? <p className="font-mono text-emerald-900/80">report link: {linkStatus}</p> : null}
         </div>
       ) : null}
 
@@ -211,6 +232,12 @@ export function FinancialCorrectionPanel({
             setLineIdInput("");
             setPackCostInput("");
             setConversionRateInput("");
+            if (linkedRequestId) {
+              void linkFinancialCorrectionRequest(linkedRequestId, result.correctionId).then((r) => {
+                setLinkStatus(r.ok ? "linked" : `error: ${r.error}`);
+                if (r.ok) onLinked?.();
+              });
+            }
           }}
         />
       ) : null}

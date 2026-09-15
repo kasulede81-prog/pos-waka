@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileDown, FileText, MoreHorizontal, Printer, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, FileDown, FileText, MoreHorizontal, Printer, RotateCcw, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import type { Language, Product, ReturnRecord, Sale, SaleLine } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -67,12 +67,14 @@ type SaleActionSheetProps = {
   discountBreakdown: ReturnType<typeof computeSaleDiscountBreakdown> | null;
   allowAdjust: boolean;
   voidableLines: { line: SaleLine; lineIndex: number }[];
+  reportableLines: { line: SaleLine; lineIndex: number }[];
   open: boolean;
   onClose: () => void;
   onPrint: (sale: Sale) => void;
   onReceiptPdf: (sale: Sale) => void;
   onReturn: (sale: Sale) => void;
   onVoidLine: (sale: Sale, lineIndex: number, line: SaleLine) => void;
+  onReportFinancialIssue: (sale: Sale, lineIndex: number, line: SaleLine) => void;
 };
 
 function SaleActionSheet({
@@ -85,12 +87,14 @@ function SaleActionSheet({
   discountBreakdown,
   allowAdjust,
   voidableLines,
+  reportableLines,
   open,
   onClose,
   onPrint,
   onReceiptPdf,
   onReturn,
   onVoidLine,
+  onReportFinancialIssue,
 }: SaleActionSheetProps) {
   if (!open) return null;
 
@@ -219,6 +223,18 @@ function SaleActionSheet({
                 </li>
               ))
             : null}
+          {reportableLines.map(({ line, lineIndex }) => (
+            <li key={`report-${lineIndex}`}>
+              <button
+                type="button"
+                onClick={() => closeAnd(() => onReportFinancialIssue(sale, lineIndex, line))}
+                className="flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-amber-900 active:bg-amber-50"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+                {`Report issue: ${line.name}`}
+              </button>
+            </li>
+          ))}
         </ul>
 
         <button
@@ -246,6 +262,7 @@ type Props = {
   onReceiptPdf: (sale: Sale) => void;
   onReturn: (sale: Sale) => void;
   onVoidLine: (sale: Sale, lineIndex: number, line: SaleLine) => void;
+  onReportFinancialIssue: (sale: Sale, lineIndex: number, line: SaleLine) => void;
   /** Phase 30.1 — host action sheet from desktop table without showing the card. */
   hideCard?: boolean;
   forceOpenActions?: boolean;
@@ -266,6 +283,7 @@ export function SalesHistoryRow({
   onReceiptPdf,
   onReturn,
   onVoidLine,
+  onReportFinancialIssue,
   hideCard = false,
   forceOpenActions = false,
   onActionsClose,
@@ -280,6 +298,13 @@ export function SalesHistoryRow({
   const allowAdjust = completed && canVoid && !isVoidedSale(sale);
   const discountBreakdown = completed ? computeSaleDiscountBreakdown(sale) : null;
   const voidableLines = sale.lines.map((line, lineIndex) => ({ line, lineIndex })).filter(({ line }) => !line.voided);
+  // Reporting a suspected issue is available to any user viewing a completed, non-voided
+  // sale — never gated by the (elevated) void permission, since reporting isn't a
+  // financial mutation at all.
+  const reportableLines =
+    completed && !isVoidedSale(sale)
+      ? sale.lines.map((line, lineIndex) => ({ line, lineIndex })).filter(({ line }) => !line.voided)
+      : [];
   const { day, time } = formatSaleDateTime(sale.createdAt, lang);
   const paymentLabel = salesHistoryPaymentMethodLabel(lang, sale);
 
@@ -358,12 +383,14 @@ export function SalesHistoryRow({
         discountBreakdown={discountBreakdown}
         allowAdjust={allowAdjust}
         voidableLines={voidableLines}
+        reportableLines={reportableLines}
         open={sheetOpen}
         onClose={closeActions}
         onPrint={onPrint}
         onReceiptPdf={onReceiptPdf}
         onReturn={onReturn}
         onVoidLine={onVoidLine}
+        onReportFinancialIssue={onReportFinancialIssue}
       />
     </>
   );
