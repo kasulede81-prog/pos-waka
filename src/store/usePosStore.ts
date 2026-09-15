@@ -1907,7 +1907,12 @@ function normalizeCustomer(c: Customer): Customer {
   return { ...c, debtBalanceUgx, pharmacyProfile };
 }
 
-function normalizeSaleLine(line: SaleLine): SaleLine {
+export function normalizeSaleLine(rawLine: SaleLine): SaleLine {
+  // Structural backstop for the COMPLETED SALE LINE => stable UUID invariant: this runs
+  // on every local load/import, so any line reaching here without a valid id (e.g. a
+  // legacy-localStorage import that predates the id field) gets one assigned exactly
+  // once. ensureSaleLineId is idempotent — it never regenerates an id a line already has.
+  const line = ensureSaleLineId(rawLine);
   const unitPriceUgx = Math.max(0, Math.floor(Number(line.unitPriceUgx) || 0));
   const unitCostUgx = normalizeUnitCostUgx(line.unitCostUgx);
   const lineTotalUgx = Math.max(0, Math.floor(Number(line.lineTotalUgx) || 0));
@@ -1946,7 +1951,7 @@ function normalizeSaleLine(line: SaleLine): SaleLine {
   };
 }
 
-function normalizeSale(s: Sale): Sale {
+export function normalizeSale(s: Sale): Sale {
   const lines = (s.lines ?? []).map(normalizeSaleLine);
   const estimatedProfitUgx = Number.isFinite(s.estimatedProfitUgx)
     ? Math.round(s.estimatedProfitUgx)

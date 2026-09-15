@@ -1810,6 +1810,14 @@ export type SaleLine = {
   baseUnit?: string;
   /** Financial snapshot completeness — cloud / legacy hydration */
   financialDataStatus?: "complete" | "repaired" | "legacy" | "needs_repair";
+  /**
+   * Count of admin financial-correction events applied to this line (0 = never
+   * corrected). Server-authoritative — only shop_correct_sale_line_financials ever
+   * increments it. Used to guard against a stale device overwriting a corrected
+   * cogsUgx/unitCostUgx/grossProfitUgx/estimatedProfitUgx snapshot on re-push, and as
+   * the basis for the financial-fingerprint snapshot-certification check.
+   */
+  financialRevision?: number;
   /** When inputMode is money, what the customer handed */
   moneyAmountUgx?: number | null;
   /** Pharmacy POS: unit the cashier sold (display only; `quantity` is base units). */
@@ -1873,6 +1881,13 @@ export type Sale = {
   /** Running total voided from this sale after completion */
   voidedTotalUgx?: number;
   estimatedProfitUgx: number;
+  /**
+   * Count of admin financial-correction events applied to any line within this sale
+   * (0 = never corrected). Guards sales.metadata.estimatedProfitUgx against the same
+   * stale-push resurrection vector as SaleLine.financialRevision guards line-level
+   * fields — see that field's doc comment for the full mechanism.
+   */
+  financialRevision?: number;
   /** True when cloud/legacy lines lack repairable financial snapshots */
   financialRepairRequired?: boolean;
   /** True when sale lines originate from legacy migration without cost data */
@@ -1981,6 +1996,17 @@ export type DayCloseDocumentSnapshot = {
   adjustmentInflowsUgx?: number;
   adjustmentOutflowsUgx?: number;
   cashRefundsUgx?: number;
+  /**
+   * Present only on a close that supersedes an earlier one specifically to apply a
+   * historical financial correction (as opposed to an ordinary same-day recount
+   * supersede, which carries no such marker). The superseded original close's own
+   * documentSnapshot is never touched — this field only appears on the NEW active close.
+   */
+  priorPeriodAdjustment?: {
+    cogsDeltaUgx: number;
+    profitDeltaUgx: number;
+    correctionRecordIds: string[];
+  } | null;
 };
 
 export type DayCloseSummary = {
