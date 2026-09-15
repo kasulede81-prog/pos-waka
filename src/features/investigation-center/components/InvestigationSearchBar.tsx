@@ -1,6 +1,6 @@
 import { Download, Search, SlidersHorizontal } from "lucide-react";
 import type { Language } from "../../../types";
-import { t, tTemplate } from "../../../lib/i18n";
+import { t } from "../../../lib/i18n";
 
 type Props = {
   lang: Language;
@@ -9,8 +9,6 @@ type Props = {
   onOpenFilters: () => void;
   onOpenExport: () => void;
   resultCount: number;
-  matchingTotal?: number;
-  hideResultCount?: boolean;
 };
 
 export function InvestigationSearchBar({
@@ -20,8 +18,6 @@ export function InvestigationSearchBar({
   onOpenFilters,
   onOpenExport,
   resultCount,
-  matchingTotal,
-  hideResultCount = false,
 }: Props) {
   return (
     <div className="sticky top-0 z-20 -mx-1 space-y-2 rounded-2xl border border-border/80 bg-card/95 p-3 shadow-sm backdrop-blur-sm">
@@ -53,18 +49,9 @@ export function InvestigationSearchBar({
           <Download className="h-5 w-5" aria-hidden />
         </button>
       </div>
-      {hideResultCount ? null : matchingTotal != null && matchingTotal > resultCount ? (
-        <p className="px-1 text-[11px] font-semibold text-muted-foreground">
-          {tTemplate(lang, "icShowingOfTotal", {
-            shown: resultCount.toLocaleString(),
-            total: matchingTotal.toLocaleString(),
-          })}
-        </p>
-      ) : resultCount > 0 ? (
-        <p className="px-1 text-[11px] font-semibold text-muted-foreground">
-          {t(lang, "auditResultCount")}: {resultCount.toLocaleString()}
-        </p>
-      ) : null}
+      <p className="px-1 text-[11px] font-semibold text-muted-foreground">
+        {t(lang, "auditResultCount")}: {resultCount.toLocaleString()}
+      </p>
     </div>
   );
 }

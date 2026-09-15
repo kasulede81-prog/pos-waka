@@ -50,7 +50,6 @@ describe("enterprise foundation — stock transfers", () => {
         {
           id: "1",
           productId: "p1",
-          destinationProductId: null,
           productName: "Item",
           quantity: 2,
           batchId: null,

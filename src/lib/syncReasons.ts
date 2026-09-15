@@ -10,7 +10,6 @@ export type SyncReason =
   | "reconnect"
   | "sale_ack"
   | "catalog_change"
-  | "shop_policy_change"
   | "realtime"
   | "staff_ack"
   | "staff_realtime"
@@ -35,10 +34,7 @@ export type IncrementalPullEntity =
   | "inventory_count_sessions"
   | "shifts"
   | "day_closes"
-  | "stock_movements"
-  | "catalog"
-  | "shop_policy"
-  | "audit_logs";
+  | "stock_movements";
 
 export const ALL_INCREMENTAL_PULL_ENTITIES: readonly IncrementalPullEntity[] = [
   "products",
@@ -56,38 +52,25 @@ export const ALL_INCREMENTAL_PULL_ENTITIES: readonly IncrementalPullEntity[] = [
   "shifts",
   "day_closes",
   "stock_movements",
-  "catalog",
-  "shop_policy",
-  "audit_logs",
 ] as const;
 
 /** Sale ACK: sales only. Stock is already applied locally on checkout. */
 const SALE_ACK_ENTITIES: readonly IncrementalPullEntity[] = ["sales"];
 
-/** After a catalog push ACK: catalog tree plus product category rows (rename). */
-const CATALOG_CHANGE_ENTITIES: readonly IncrementalPullEntity[] = ["catalog", "products"];
-
-/** After a shop-policy push ACK: shop policy only — not catalog. */
-const SHOP_POLICY_CHANGE_ENTITIES: readonly IncrementalPullEntity[] = ["shop_policy"];
-
 export function incrementalEntitiesForReason(reason: string): IncrementalPullEntity[] {
   if (reason === "sale_ack") return [...SALE_ACK_ENTITIES];
-  if (reason === "catalog_change") return [...CATALOG_CHANGE_ENTITIES];
-  if (reason === "shop_policy_change") return [...SHOP_POLICY_CHANGE_ENTITIES];
   return [...ALL_INCREMENTAL_PULL_ENTITIES];
 }
 
 /** Hospitality / staff / device / PIN belong on resume/reconnect/startup, not sale ACK. */
 export function shouldRunAncillaryCloudBundle(reason: string): boolean {
-  return reason !== "sale_ack" && reason !== "catalog_change" && reason !== "shop_policy_change";
+  return reason !== "sale_ack";
 }
 
 export function isEventPullReason(reason: string): boolean {
   return (
     reason === "realtime" ||
     reason === "sale_ack" ||
-    reason === "catalog_change" ||
-    reason === "shop_policy_change" ||
     reason === "reconnect" ||
     reason === "foreground" ||
     reason === "resume" ||
@@ -103,7 +86,7 @@ export function isEventPullReason(reason: string): boolean {
  * Startup / resume / reconnect / recovery / realtime may still force.
  */
 export function shouldForceCloudPull(reason: string, requestedForce?: boolean): boolean {
-  if (reason === "sale_ack" || reason === "catalog_change" || reason === "shop_policy_change") return false;
+  if (reason === "sale_ack") return false;
   return requestedForce === true;
 }
 
@@ -140,9 +123,6 @@ export type IncrementalCheckpointTimes = {
   shiftsAt?: string;
   dayClosesAt?: string;
   stockMovementsAt?: string;
-  catalogAt?: string;
-  shopPolicyAt?: string;
-  auditLogsAt?: string;
 };
 
 /** Only advance cursors for entities that were actually pulled. */
@@ -165,9 +145,6 @@ export function incrementalCheckpointPatch(
   shifts?: boolean;
   dayCloses?: boolean;
   stockMovements?: boolean;
-  catalog?: boolean;
-  shopPolicy?: boolean;
-  auditLogs?: boolean;
   salesAt?: string;
   productsAt?: string;
   customersAt?: string;
@@ -183,9 +160,6 @@ export function incrementalCheckpointPatch(
   shiftsAt?: string;
   dayClosesAt?: string;
   stockMovementsAt?: string;
-  catalogAt?: string;
-  shopPolicyAt?: string;
-  auditLogsAt?: string;
 } {
   const pulled = new Set(pulledEntities);
   return {
@@ -204,9 +178,6 @@ export function incrementalCheckpointPatch(
     shifts: pulled.has("shifts"),
     dayCloses: pulled.has("day_closes"),
     stockMovements: pulled.has("stock_movements"),
-    catalog: pulled.has("catalog"),
-    shopPolicy: pulled.has("shop_policy"),
-    auditLogs: pulled.has("audit_logs"),
     salesAt: checkpoints?.salesAt,
     productsAt: checkpoints?.productsAt,
     customersAt: checkpoints?.customersAt,
@@ -222,8 +193,5 @@ export function incrementalCheckpointPatch(
     shiftsAt: checkpoints?.shiftsAt,
     dayClosesAt: checkpoints?.dayClosesAt,
     stockMovementsAt: checkpoints?.stockMovementsAt,
-    catalogAt: checkpoints?.catalogAt,
-    shopPolicyAt: checkpoints?.shopPolicyAt,
-    auditLogsAt: checkpoints?.auditLogsAt,
   };
 }

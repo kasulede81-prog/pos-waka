@@ -6,7 +6,6 @@ import { t } from "../../../lib/i18n";
 import type { TransferDraftMetadata } from "../../../lib/transferWorkspace";
 import { summarizeTransferDraft } from "../../../lib/transferWorkspace";
 import type { Product } from "../../../types";
-import { inventoryMovementsHref } from "../../../lib/inventoryWorkspaceTiles";
 import { WIZARD_BTN_FOOTER_BASE } from "./transferTokens";
 
 type Props = {
@@ -59,7 +58,7 @@ export function TransferCompletionScreen({ lang, draft, products, onCreateAnothe
           </button>
         ) : null}
         <Link
-          to={inventoryMovementsHref("/stock")}
+          to="/stock?tab=movements"
           className={clsx(
             WIZARD_BTN_FOOTER_BASE,
             "gap-2 border border-border bg-card px-4 text-foreground hover:bg-muted",

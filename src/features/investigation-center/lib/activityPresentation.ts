@@ -28,7 +28,6 @@ import {
   isPharmacyInvestigationKpiId,
 } from "../extensions/pharmacy/computePharmacyInvestigationKpis";
 import { severityStatusBadge, severityStatusIcon } from "../../../lib/statusTokens";
-import { investigationRefundsKpiHintKey } from "./investigationRefundAuthority";
 
 const SALES: ReadonlySet<AuditAction> = new Set(["sale_completed", "sale_void", "receipt_reprint", "receipt_pdf_export"]);
 const INVENTORY: ReadonlySet<AuditAction> = new Set([
@@ -39,7 +38,6 @@ const INVENTORY: ReadonlySet<AuditAction> = new Set([
   "inventory_count_approved",
   "inventory_count_applied",
   "inventory_count_cancelled",
-  "inventory_transfer",
 ]);
 const PRODUCTS: ReadonlySet<AuditAction> = new Set([
   "product_add",
@@ -49,7 +47,7 @@ const PRODUCTS: ReadonlySet<AuditAction> = new Set([
   "product_restore",
 ]);
 const PURCHASES: ReadonlySet<AuditAction> = new Set(["purchase_saved", "purchase_void"]);
-const SUPPLIERS: ReadonlySet<AuditAction> = new Set(["supplier_add", "supplier_edit", "supplier_payment", "supplier_remove"]);
+const SUPPLIERS: ReadonlySet<AuditAction> = new Set(["supplier_add", "supplier_edit", "supplier_payment"]);
 const CUSTOMERS: ReadonlySet<AuditAction> = new Set(["customer_add", "customer_merge"]);
 const DEBTS: ReadonlySet<AuditAction> = new Set(["debt_payment", "debt_manual_adjust", "debt_reconcile"]);
 const EXPENSES: ReadonlySet<AuditAction> = new Set([
@@ -59,32 +57,7 @@ const EXPENSES: ReadonlySet<AuditAction> = new Set([
   "cash_expense_rejected",
   "cash_expense_edited",
 ]);
-/** Cash drawer + day drawer + float + day close (cash day lifecycle). */
-const CASH_DRAWER: ReadonlySet<AuditAction> = new Set([
-  "cash_drawer_adjustment",
-  "drawer_open",
-  "shift_start",
-  "shift_end",
-  "shift_close_count",
-  "shift_recovery_close",
-  "day_drawer_open",
-  "day_drawer_open_void",
-  "day_drawer_open_supersede",
-  "shift_float_verified",
-  "shift_float_mismatch",
-  "shift_float_override",
-  "shift_handoff_ready",
-  "shift_handoff_verified",
-  "shift_handoff_override",
-  "day_close",
-  "day_close_blocked",
-  "day_close_preflight_failed",
-  "day_close_reopened",
-  "day_close_emergency",
-  "day_close_preflight_warning",
-  "day_close_override",
-  "variance_override",
-]);
+const CASH_DRAWER: ReadonlySet<AuditAction> = new Set(["cash_drawer_adjustment", "shift_start", "shift_end", "shift_close_count"]);
 const REFUNDS: ReadonlySet<AuditAction> = new Set(["sale_return", "sale_refund"]);
 const DISCOUNTS: ReadonlySet<AuditAction> = new Set(["discount_given"]);
 const PRICE_CHANGES: ReadonlySet<AuditAction> = new Set(["price_change"]);
@@ -107,13 +80,18 @@ const SECURITY: ReadonlySet<AuditAction> = new Set([
 ]);
 const USERS: ReadonlySet<AuditAction> = new Set(["staff_login", "staff_logout"]);
 const PERMISSIONS: ReadonlySet<AuditAction> = new Set(["auth_forbidden"]);
-/** Shop settings / preference audits — day-close lives under cash_drawer. */
-const SETTINGS: ReadonlySet<AuditAction> = new Set([]);
+const SETTINGS: ReadonlySet<AuditAction> = new Set(["day_close", "day_close_override", "day_close_preflight_warning"]);
 const CLOUD_SYNC: ReadonlySet<AuditAction> = new Set(["sync_unknown_operation"]);
-const SYSTEM: ReadonlySet<AuditAction> = new Set(["archive_purge", "archive_purge_blocked"]);
+const SYSTEM: ReadonlySet<AuditAction> = new Set([
+  "archive_purge",
+  "archive_purge_blocked",
+  "day_close_preflight_warning",
+]);
 
-/** True system/permission failures — authorized sale_void is not an error. */
 const ERROR_ACTIONS: ReadonlySet<AuditAction> = new Set([
+  "sale_void",
+  "purchase_void",
+  "cash_expense_voided",
   "cash_expense_rejected",
   "back_office_unlock_failed",
   "auth_forbidden",
@@ -122,8 +100,6 @@ const ERROR_ACTIONS: ReadonlySet<AuditAction> = new Set([
   "device_login_blocked",
   "device_limit_hit",
   "sync_unknown_operation",
-  "day_close_blocked",
-  "day_close_preflight_failed",
 ]);
 
 const WARNING_ACTIONS: ReadonlySet<AuditAction> = new Set([
@@ -135,43 +111,9 @@ const WARNING_ACTIONS: ReadonlySet<AuditAction> = new Set([
   "day_close_override",
   "device_suspicious_fingerprint",
   "cash_drawer_adjustment",
-  "purchase_void",
-  "cash_expense_voided",
-  "shift_float_mismatch",
-  "shift_float_override",
-  "sale_void",
 ]);
 
-/**
- * Only actions that represent sync pipeline failures.
- * sync_override is an intentional day-close override — not a failed sync.
- */
 const FAILED_SYNC_ACTIONS: ReadonlySet<AuditAction> = new Set(["sync_unknown_operation"]);
-
-/** Exported for category coverage tests. */
-export const INVESTIGATION_CATEGORY_ACTION_SETS = {
-  sales: SALES,
-  inventory: INVENTORY,
-  products: PRODUCTS,
-  purchases: PURCHASES,
-  suppliers: SUPPLIERS,
-  customers: CUSTOMERS,
-  debts: DEBTS,
-  expenses: EXPENSES,
-  cash_drawer: CASH_DRAWER,
-  refunds: REFUNDS,
-  discounts: DISCOUNTS,
-  price_changes: PRICE_CHANGES,
-  returns: RETURNS,
-  authentication: AUTH,
-  security: SECURITY,
-  users: USERS,
-  permissions: PERMISSIONS,
-  settings: SETTINGS,
-  cloud_sync: CLOUD_SYNC,
-  system: SYSTEM,
-  failed_syncs: FAILED_SYNC_ACTIONS,
-} as const;
 
 /** setPreferences keys from automatic background sync — not actionable security incidents. */
 const BACKGROUND_SET_PREFERENCES_KEYS = new Set([
@@ -242,18 +184,12 @@ export function getActivitySeverity(entry: AuditLogEntry): ActivitySeverity {
     entry.action === "debt_payment" ||
     entry.action === "purchase_saved" ||
     entry.action === "inventory_count_applied" ||
-    entry.action === "inventory_transfer" ||
     entry.action === "back_office_unlock_success" ||
     entry.action === "staff_login"
   ) {
     return "completed";
   }
   return "info";
-}
-
-/** sale_void is visible and highlightable as warning — never classified as system error. */
-export function isAuthorizedVoidSeverity(action: AuditAction): boolean {
-  return action === "sale_void";
 }
 
 export function severityLabelKey(severity: ActivitySeverity): string {
@@ -290,10 +226,7 @@ export function applyKpiFilter(
     return applyPharmacyKpiFilter(entries, kpiId as PharmacyInvestigationKpiId);
   }
   if (kpiId === "activities_today") {
-    // Entries are already date-range filtered; do not re-narrow to calendar today
-    // when the KPI represents "activities in range".
-    void todayKey;
-    return entries;
+    return entries.filter((e) => dateKeyKampala(e.at) === todayKey);
   }
   if (kpiId === "sales") return entries.filter((e) => SALES.has(e.action) || e.action === "sale_completed");
   if (kpiId === "inventory") return entries.filter((e) => INVENTORY.has(e.action));
@@ -312,8 +245,6 @@ export function computeInvestigationKpis(
   refundsCount: number,
 ): InvestigationKpiCard[] {
   const todayKey = dateKeyKampala(new Date());
-  const activitiesLabelKey =
-    dateFrom === todayKey && dateTo === todayKey ? "icKpiActivitiesToday" : "icKpiActivitiesInRange";
   let activitiesToday = 0;
   let sales = 0;
   let inventory = 0;
@@ -336,37 +267,15 @@ export function computeInvestigationKpis(
     if (FAILED_SYNC_ACTIONS.has(e.action)) failedSyncs += 1;
   }
 
-  // When the filter is not today-only, "activities" counts the full range (same as other KPIs).
-  const activitiesValue =
-    dateFrom === todayKey && dateTo === todayKey
-      ? activitiesToday
-      : (() => {
-          let n = 0;
-          for (const idx of index.sortedIndices) {
-            const e = index.entries[idx]!;
-            if (shouldHideFromInvestigationCenter(e)) continue;
-            const dk = index.dateKeys[idx]!;
-            if (dk < dateFrom || dk > dateTo) continue;
-            n += 1;
-          }
-          return n;
-        })();
-
   return [
-    { id: "activities_today", labelKey: activitiesLabelKey, value: activitiesValue, iconTone: "orange" },
+    { id: "activities_today", labelKey: "icKpiActivitiesToday", value: activitiesToday, iconTone: "orange" },
     { id: "sales", labelKey: "icKpiSales", value: sales, iconTone: "green" },
     { id: "inventory", labelKey: "icKpiInventory", value: inventory, iconTone: "slate" },
     { id: "security", labelKey: "icKpiSecurity", value: security, iconTone: "purple" },
     { id: "warnings", labelKey: "icKpiWarnings", value: warnings, iconTone: "yellow" },
     { id: "errors", labelKey: "icKpiErrors", value: errors, iconTone: "red" },
     { id: "failed_syncs", labelKey: "icKpiFailedSyncs", value: failedSyncs, iconTone: "red" },
-    {
-      id: "refunds",
-      labelKey: "icKpiRefunds",
-      value: refundsCount,
-      iconTone: "orange",
-      hintKey: investigationRefundsKpiHintKey(),
-    },
+    { id: "refunds", labelKey: "icKpiRefunds", value: refundsCount, iconTone: "orange" },
   ];
 }
 
@@ -457,27 +366,6 @@ export function buildEventTimelineSteps(lang: Language, action: AuditAction): st
     return [t(lang, "icStepAuthRequested"), t(lang, "icStepLoginSuccess")];
   }
   return [auditActionLabel(lang, action)];
-}
-
-/** Synthetic steps are illustrative only — never confirmed audit events. */
-export function isSyntheticTimelineIllustrative(): boolean {
-  return true;
-}
-
-export function syntheticTimelineSectionLabelKey(): string {
-  return "icIllustrativeSequence";
-}
-
-/**
- * Purchase void audit proves an audit event was recorded — not that durable stock (mig 173) applied.
- */
-export function purchaseVoidInvestigationLabelKey(entry: AuditLogEntry): string | null {
-  if (entry.action !== "purchase_void") return null;
-  return "icPurchaseVoidAuditOnly";
-}
-
-export function purchaseVoidClaimsDurableStock(_entry: AuditLogEntry): boolean {
-  return false;
 }
 
 export function buildAuditJsonExport(lang: Language, entries: AuditLogEntry[]): string {

@@ -1,7 +1,5 @@
 import { activeSessions } from "./hospitalityStats";
 import type { ShiftRecord, ShopPreferences } from "../types";
-import type { SessionActor } from "./sessionActor";
-import { shiftOwnerUserId } from "./sessionActor";
 
 export function getActiveShiftForActor(
   shifts: ShiftRecord[] | undefined,
@@ -16,41 +14,14 @@ export type ActiveShiftGuardResult =
 
 /** Store-level guard — UI checks alone are insufficient. */
 export function requireActiveShift(state: {
-  sessionActor: Pick<SessionActor, "userId" | "authUserId"> | null;
+  sessionActor: { userId: string } | null;
   preferences: Pick<ShopPreferences, "shifts">;
 }): ActiveShiftGuardResult {
   const actor = state.sessionActor;
   if (!actor) return { ok: false, errorKey: "noSelection" };
-  const ownerId = shiftOwnerUserId(actor);
-  if (!ownerId) return { ok: false, errorKey: "noSelection" };
-  const shift = getActiveShiftForActor(state.preferences.shifts, ownerId);
+  const shift = getActiveShiftForActor(state.preferences.shifts, actor.userId);
   if (!shift) return { ok: false, errorKey: "noActiveShift" };
   return { ok: true, shift };
-}
-
-/**
- * Re-key orphaned `staff:<id>` open shifts to the authenticated writer (client-only).
- * No sale rewrite; no cloud schema change.
- */
-export function rekeySharedTerminalOpenShifts(
-  shifts: ShiftRecord[] | undefined,
-  writerUserId: string | null | undefined,
-): ShiftRecord[] | undefined {
-  const writer = writerUserId?.trim() ?? "";
-  if (!writer || writer.startsWith("staff:")) return shifts;
-  const list = shifts ?? [];
-  let changed = false;
-  const next = list.map((sh) => {
-    if (sh.endAt || !sh.actorUserId.startsWith("staff:")) return sh;
-    changed = true;
-    return {
-      ...sh,
-      actorUserId: writer,
-      pendingSync: true,
-      updatedAt: new Date().toISOString(),
-    };
-  });
-  return changed ? next : shifts;
 }
 
 export type ShiftCloseBlockState = {

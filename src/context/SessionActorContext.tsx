@@ -10,12 +10,7 @@ export function SessionActorProvider({ value, children }: { value: SessionActor;
 export function useSessionActor(): SessionActor {
   const v = useContext(SessionActorContext);
   if (!v) {
-    return {
-      userId: "unknown",
-      role: "cashier",
-      authUserId: "unknown",
-      authRole: "cashier",
-    };
+    return { userId: "unknown", role: "cashier" };
   }
   return v;
 }

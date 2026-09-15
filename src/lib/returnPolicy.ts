@@ -1,14 +1,8 @@
 import type { ReturnReason, UserRole } from "../types";
 
-const UNSELLABLE_RETURN_REASONS: ReadonlySet<ReturnReason> = new Set([
-  "damaged",
-  "broken",
-  "warm_bad",
-]);
-
-/** Sellable returns go back on the shelf. Damaged / broken / warm stay out (write-off). */
+/** Only sellable returns go back on the shelf; damaged/warm/broken stay out of stock. */
 export function returnRestocksInventory(reason: ReturnReason): boolean {
-  return !UNSELLABLE_RETURN_REASONS.has(reason);
+  return reason === "wrong_item";
 }
 
 const UNLINKED_RETURN_ROLES: ReadonlySet<UserRole> = new Set(["owner", "manager"]);
@@ -25,11 +19,8 @@ export type ReturnAuthInput = {
 };
 
 export function validateReturnAuthorization(input: ReturnAuthInput): { ok: true } | { ok: false; errorKey: string } {
-  const hasSaleId = Boolean(String(input.saleId ?? "").trim());
-  if (hasSaleId && !input.saleFound) {
-    return { ok: false, errorKey: "returnSaleUnavailable" };
-  }
-  if (hasSaleId && input.saleFound) return { ok: true };
+  const linked = Boolean(input.saleId && input.saleFound);
+  if (linked) return { ok: true };
 
   if (!canPerformUnlinkedReturn(input.role)) {
     return { ok: false, errorKey: "returnUnlinkedForbidden" };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { ArrowRight, Mail, UserPlus, Users } from "lucide-react";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
@@ -10,7 +10,6 @@ import { EnterprisePasswordField } from "../components/auth/EnterprisePasswordFi
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { t } from "../lib/i18n";
 import { formatAuthError, consumeAuthRedirectError } from "../lib/authConfig";
-import { staffAcceptReturnPath } from "../lib/staffInvite";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../lib/staffOfflineAuth";
@@ -45,7 +44,6 @@ export function LoginPage({
   onClearRememberedStaff,
   mode,
 }: Props) {
-  const [searchParams] = useSearchParams();
   const [view, setView] = useState<"owner" | "staff">("owner");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,12 +52,9 @@ export function LoginPage({
   const [googleBusy, setGoogleBusy] = useState(false);
 
   const showGoogle = mode === "supabase" && hasSupabaseConfig && isGoogleAuthUiAvailable();
-  /** Safe staff-accept return path (pathname + search). Never renders the raw token. */
-  const staffInviteNext = staffAcceptReturnPath(searchParams.get("next"));
-  const inviteLoginContext = Boolean(staffInviteNext);
 
   if (isAuthenticated) {
-    return <Navigate to={staffInviteNext ?? "/"} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const canOwnerSignIn = mode === "supabase" || mode === "local";
@@ -129,16 +124,6 @@ export function LoginPage({
           </h1>
           <p className="mt-1.5 text-sm font-semibold text-muted-foreground">{t(lang, "loginWelcomeSub")}</p>
         </div>
-
-        {inviteLoginContext ? (
-          <p
-            className="mt-4 rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-center text-xs font-semibold text-waka-900 dark:border-waka-800 dark:bg-waka-950/40 dark:text-waka-100"
-            role="status"
-            data-testid="login-invite-context"
-          >
-            {t(lang, "loginInviteContext")}
-          </p>
-        ) : null}
 
         {mode === "local" ? (
           <p className="mt-4 rounded-xl bg-muted px-3 py-2 text-center text-xs font-medium text-muted-foreground">
@@ -223,46 +208,36 @@ export function LoginPage({
           </button>
         </form>
 
-        {!inviteLoginContext ? (
-          <div className="mt-8 space-y-3">
-            <div className="flex items-center gap-3" aria-hidden>
-              <span className="h-px flex-1 bg-border" />
-              <span className="text-xs font-semibold lowercase text-muted-foreground">{t(lang, "loginOrDivider")}</span>
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
-            <div className="space-y-1.5">
-              <button
-                type="button"
-                onClick={() => setView("staff")}
-                className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground transition active:bg-muted"
-                data-testid="login-shared-terminal-pin"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  {t(lang, "loginStaffPinEntry")}
-                </span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
-              </button>
-              <p className="px-1 text-xs font-medium text-muted-foreground">{t(lang, "loginStaffPinHint")}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Link
-                to="/register"
-                className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground transition active:bg-muted"
-                data-testid="login-register-shop"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  {t(lang, "loginCreateNewAccount")}
-                </span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
-              </Link>
-              <p className="px-1 text-xs font-medium text-muted-foreground">{t(lang, "loginRegisterShopHint")}</p>
-            </div>
+        <div className="mt-8 space-y-3">
+          <div className="flex items-center gap-3" aria-hidden>
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs font-semibold lowercase text-muted-foreground">{t(lang, "loginOrDivider")}</span>
+            <span className="h-px flex-1 bg-border" />
           </div>
-        ) : null}
+
+          <button
+            type="button"
+            onClick={() => setView("staff")}
+            className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground transition active:bg-muted"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" aria-hidden />
+              {t(lang, "loginStaffPinEntry")}
+            </span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+          </button>
+
+          <Link
+            to="/register"
+            className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold text-foreground transition active:bg-muted"
+          >
+            <span className="inline-flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden />
+              {t(lang, "loginCreateNewAccount")}
+            </span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+          </Link>
+        </div>
 
         {!hasSupabaseConfig && canOwnerSignIn ? (
           <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950" role="status">

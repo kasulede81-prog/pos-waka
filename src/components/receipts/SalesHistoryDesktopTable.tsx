@@ -5,9 +5,7 @@ import type { Language, Sale } from "../../types";
 import { t } from "../../lib/i18n";
 import { buildReceiptNumberForSale } from "../../lib/receiptPrint";
 import { receiptPrintActionLabel } from "../../lib/printActionLabels";
-import { isCompletedSale, isPreCompletionVoidedSale, isVoidedSale, saleStatusOf, voidedSaleHistoryNumber } from "../../lib/saleStatus";
-import { salesHistoryPaymentMethodLabel } from "../../lib/salesHistoryTender";
-import { resolveSaleLineQuantity } from "../../lib/saleQuantityLabel";
+import { isCompletedSale, saleStatusOf } from "../../lib/saleStatus";
 import { statusTokens } from "../../lib/statusTokens";
 import {
   EnterpriseDataTable,
@@ -29,18 +27,9 @@ type Props = {
 };
 
 function paymentLabel(lang: Language, sale: Sale): string {
-  return salesHistoryPaymentMethodLabel(lang, sale);
-}
-
-/** Compact WHAT summary from already-loaded sale.lines — no extra fetch. */
-function saleItemsSummary(sale: Sale): string {
-  const parts: string[] = [];
-  for (const line of sale.lines) {
-    if (line.voided) continue;
-    const qty = resolveSaleLineQuantity(line);
-    parts.push(`${line.name} ×${qty}`);
-  }
-  return parts.length > 0 ? parts.join(" · ") : "—";
+  if (sale.debtUgx > 0 && sale.cashPaidUgx > 0) return `${t(lang, "paymentMethod_cash")}+${t(lang, "paymentMethod_credit")}`;
+  if (sale.debtUgx > 0) return t(lang, "paymentMethod_credit");
+  return t(lang, "paymentMethod_cash");
 }
 
 function formatWhen(iso: string, lang: Language): string {
@@ -73,58 +62,44 @@ export function SalesHistoryDesktopTable({
       {
         id: "receipt",
         header: t(lang, "receipts"),
-        width: "minmax(112px,1fr)",
-        cell: (sale) =>
-          isPreCompletionVoidedSale(sale) ? voidedSaleHistoryNumber(sale) : buildReceiptNumberForSale(sale, allSales),
-        className: "text-base font-bold text-foreground",
-      },
-      {
-        id: "items",
-        header: t(lang, "salesHistoryItemsSold"),
-        width: "minmax(168px,1.6fr)",
-        hideBelow: "xl",
-        cell: (sale) => {
-          const summary = saleItemsSummary(sale);
-          return (
-            <span className="block truncate font-semibold text-foreground" title={summary}>
-              {summary}
-            </span>
-          );
-        },
-      },
-      {
-        id: "customer",
-        header: t(lang, "customers"),
-        width: "minmax(128px,1.2fr)",
-        cell: (sale) => <span className="font-semibold text-foreground">{customerNameFor(sale)}</span>,
+        width: "minmax(100px,1fr)",
+        cell: (sale) => buildReceiptNumberForSale(sale, allSales),
+        className: "text-foreground",
       },
       {
         id: "cashier",
         header: "Cashier",
-        width: "minmax(108px,1fr)",
-        cell: (sale) => <span className="font-medium text-muted-foreground">{cashierLabelFor(sale)}</span>,
+        width: "minmax(100px,1fr)",
+        hideBelow: "lg",
+        cell: (sale) => cashierLabelFor(sale),
+      },
+      {
+        id: "customer",
+        header: t(lang, "customers"),
+        width: "minmax(120px,1.2fr)",
+        hideBelow: "lg",
+        cell: (sale) => customerNameFor(sale),
       },
       {
         id: "date",
         header: "Date",
-        width: "minmax(128px,1.1fr)",
-        cell: (sale) => <span className="font-medium text-muted-foreground">{formatWhen(sale.createdAt, lang)}</span>,
+        width: "minmax(120px,1.1fr)",
+        cell: (sale) => formatWhen(sale.createdAt, lang),
       },
       {
         id: "payment",
         header: t(lang, "salesHistoryPaymentMethods"),
-        width: "minmax(108px,0.9fr)",
-        cell: (sale) => (
-          <span className={clsx(statusTokens.business.badge, "max-w-full truncate")}>{paymentLabel(lang, sale)}</span>
-        ),
+        width: "minmax(96px,0.9fr)",
+        hideBelow: "xl",
+        cell: (sale) => paymentLabel(lang, sale),
       },
       {
         id: "total",
         header: t(lang, "purchasesColTotal"),
-        width: "minmax(108px,1fr)",
+        width: "minmax(96px,1fr)",
         align: "right",
         cell: (sale) => (
-          <span className="text-base font-bold tabular-nums text-foreground">UGX {sale.totalUgx.toLocaleString()}</span>
+          <span className="font-bold tabular-nums text-foreground">UGX {sale.totalUgx.toLocaleString()}</span>
         ),
       },
       {
@@ -134,9 +109,6 @@ export function SalesHistoryDesktopTable({
         cell: (sale) => {
           const status = saleStatusOf(sale);
           if (status === "pending") return <span className={statusTokens.warning.badge}>{t(lang, "salesHistoryStatusPending")}</span>;
-          if (isVoidedSale(sale) || isPreCompletionVoidedSale(sale)) {
-            return <span className={statusTokens.danger.badge}>{t(lang, "salesHistoryStatusVoided")}</span>;
-          }
           if (status === "cancelled") return <span className={statusTokens.draft.badge}>{t(lang, "salesHistoryStatusCancelled")}</span>;
           return <span className={statusTokens.success.badge}>{t(lang, "salesHistoryStatusCompleted")}</span>;
         },
@@ -181,35 +153,27 @@ export function SalesHistoryDesktopTable({
         rowKey={(s) => s.id}
         selection={selection}
         onRowActivate={onOpenActions}
-        minWidthPx={1100}
-        estimateRowHeight={56}
-        className="sales-history-table"
+        minWidthPx={980}
         ariaLabel={t(lang, "receipts")}
         rowActions={(sale) => (
-          <div className="relative flex items-center gap-1">
+          <div className="relative flex items-center gap-0.5">
             {isCompletedSale(sale) ? (
               <button
                 type="button"
                 title={receiptPrintActionLabel(lang)}
                 onClick={() => onPrint(sale)}
-                className={clsx(
-                  "inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-waka-800 hover:bg-waka-50",
-                  themeUi.focusRing,
-                )}
+                className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted"
               >
-                <Printer className="h-4 w-4" />
+                <Printer className="h-3.5 w-3.5" />
               </button>
             ) : null}
             <button
               type="button"
               title={t(lang, "salesHistoryMoreActions")}
               onClick={() => onOpenActions(sale)}
-              className={clsx(
-                "inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted",
-                themeUi.focusRing,
-              )}
+              className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted"
             >
-              <MoreHorizontal className="h-4 w-4" />
+              <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </div>
         )}

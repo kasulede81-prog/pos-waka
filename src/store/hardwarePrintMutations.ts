@@ -42,17 +42,10 @@ import {
 } from "../lib/restaurantReceiptPrint";
 import { dateKeyKampala, saleReportingDayKey } from "../lib/datesUg";
 import { pulseDrawer, pulseDrawerOnPrinter } from "../services/hardware/cashDrawerAdapter";
-import { detectPrinterCapabilities, testPrintProfile } from "../services/hardware/printerAdapter";
-import { canDeliverEscPosWithoutChooser } from "../services/hardware/hardwareTransport";
+import { testPrintProfile } from "../services/hardware/printerAdapter";
 import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
 import { computeRestaurantBillTotals, billDraftFromSale } from "../lib/restaurantBilling";
 import { readUiLanguageCacheSync } from "../lib/uiLanguage";
-import {
-  authorizePreferencesPatch,
-  requiredPermissionsForPreferencesPatch,
-} from "../lib/settingsAuthorization";
-import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
-import type { StoreAuthResult } from "../lib/storeAuthorization";
 import type { PosState } from "./usePosStore";
 
 type StoreGet = () => PosState;
@@ -80,29 +73,6 @@ function printLang(): Language {
 export function createHardwarePrintStoreActions(deps: Deps) {
   const { get, set, pushAudit, flushPendingPersist } = deps;
 
-  const authorizePersistentHardwareConfig = (
-    state: PosState,
-    patch: Partial<ShopPreferences>,
-    action: string,
-  ): StoreAuthResult => {
-    const { snapshot, authMode } = getStoreSubscriptionContext();
-    const result = authorizePreferencesPatch(state.sessionActor, patch, {
-      snapshot,
-      authMode,
-      currentStaffAccounts: state.preferences.staffAccounts ?? [],
-    });
-    if (!result.ok) {
-      pushAudit("auth_forbidden", `Denied ${action}`, {
-        permission: requiredPermissionsForPreferencesPatch(patch).join(","),
-        action,
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: result.errorKey,
-        keys: Object.keys(patch),
-      });
-    }
-    return result;
-  };
-
   const scheduleQueue = () => {
     const state = get();
     void (async () => {
@@ -123,7 +93,6 @@ export function createHardwarePrintStoreActions(deps: Deps) {
     const state = get();
     const hw = resolveHospitalityHardware(state.preferences);
     if (!hw.autoPrintKitchen || !tickets.length) return;
-    const caps = await detectPrinterCapabilities();
     let prefs = state.preferences;
     for (const ticket of tickets) {
       const printer = resolvePrinterForStation(
@@ -133,7 +102,6 @@ export function createHardwarePrintStoreActions(deps: Deps) {
         ticket.stationType,
       );
       if (!printer) continue;
-      if (!canDeliverEscPosWithoutChooser(printer, caps.transports)) continue;
       const chitOpts = {
         shopName: state.preferences.shopDisplayName?.trim() || "Waka POS",
         businessDate: dateKeyKampala(ticket.firedAt),
@@ -231,41 +199,21 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       isDefaultReceipt?: boolean;
       networkHost?: string | null;
       networkPort?: number | null;
-      pairedDeviceKey?: string | null;
-      bluetoothTransport?: "classic" | "ble" | null;
-      pairedDeviceName?: string | null;
     }) => {
       const state = get();
-      const existing = input.id
-        ? resolveHospitalityHardware(state.preferences).printers.find((p) => p.id === input.id)
-        : undefined;
       const profile: PrinterProfile = {
-        id: input.id ?? existing?.id ?? crypto.randomUUID(),
-        name: input.name.trim() || existing?.name || "Printer",
+        id: input.id ?? crypto.randomUUID(),
+        name: input.name.trim() || "Printer",
         connectionType: input.connectionType,
         paperWidth: input.paperWidth,
         stationRoles: input.stationRoles,
-        isDefaultReceipt: input.isDefaultReceipt ?? existing?.isDefaultReceipt ?? false,
-        vendorHint: existing?.vendorHint ?? "generic",
-        networkHost: input.networkHost !== undefined ? input.networkHost : existing?.networkHost ?? null,
-        networkPort: input.networkPort !== undefined ? input.networkPort : existing?.networkPort ?? 9100,
-        pairedDeviceKey:
-          input.pairedDeviceKey !== undefined ? input.pairedDeviceKey : existing?.pairedDeviceKey ?? null,
-        bluetoothTransport:
-          input.bluetoothTransport !== undefined ? input.bluetoothTransport : existing?.bluetoothTransport ?? null,
-        pairedDeviceName:
-          input.pairedDeviceName !== undefined ? input.pairedDeviceName : existing?.pairedDeviceName ?? null,
-        isEnabled: existing?.isEnabled ?? true,
-        lastSeenAt: existing?.lastSeenAt,
-        lastError: existing?.lastError ?? null,
+        isDefaultReceipt: input.isDefaultReceipt ?? false,
+        vendorHint: "generic",
+        networkHost: input.networkHost ?? null,
+        networkPort: input.networkPort ?? 9100,
+        isEnabled: true,
       };
       const next = upsertPrinterProfile(state.preferences, profile);
-      const auth = authorizePersistentHardwareConfig(
-        state,
-        { hospitalityHardware: next.hospitalityHardware },
-        "upsertPrinter",
-      );
-      if (!auth.ok) return { ok: false as const, errorKey: auth.errorKey };
       set({ preferences: next });
       flushPendingPersist();
       return { ok: true as const, printerId: profile.id };
@@ -273,14 +221,7 @@ export function createHardwarePrintStoreActions(deps: Deps) {
 
     removePrinter: (printerId: string) => {
       const state = get();
-      const next = removePrinterProfile(state.preferences, printerId);
-      const auth = authorizePersistentHardwareConfig(
-        state,
-        { hospitalityHardware: next.hospitalityHardware },
-        "removePrinter",
-      );
-      if (!auth.ok) return { ok: false as const, errorKey: auth.errorKey };
-      set({ preferences: next });
+      set({ preferences: removePrinterProfile(state.preferences, printerId) });
       flushPendingPersist();
       return { ok: true as const };
     },
@@ -289,12 +230,6 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       const state = get();
       const floor = state.preferences.hospitalityFloor;
       if (!floor) return { ok: false as const, errorKey: "invalid" };
-      const auth = authorizePersistentHardwareConfig(
-        state,
-        { hospitalityHardware: resolveHospitalityHardware(state.preferences) },
-        "assignStationPrinter",
-      );
-      if (!auth.ok) return { ok: false as const, errorKey: auth.errorKey };
       const nextFloor = assignPrinterToStation(floor, stationId, printerId);
       set({
         preferences: {
@@ -340,12 +275,6 @@ export function createHardwarePrintStoreActions(deps: Deps) {
     setHospitalityHardwarePrefs: (patch: Partial<HospitalityHardwarePrefs>) => {
       const state = get();
       const hw = patchHospitalityHardware(state.preferences, patch);
-      const auth = authorizePersistentHardwareConfig(
-        state,
-        { hospitalityHardware: hw },
-        "setHospitalityHardwarePrefs",
-      );
-      if (!auth.ok) return { ok: false as const, errorKey: auth.errorKey };
       set({
         preferences: {
           ...state.preferences,
@@ -429,35 +358,32 @@ export function createHardwarePrintStoreActions(deps: Deps) {
         splitIndex: context?.splitIndex ?? null,
       };
       if (printer) {
-        const caps = await detectPrinterCapabilities();
-        if (canDeliverEscPosWithoutChooser(printer, caps.transports)) {
-          const bytes =
-            receiptKind === "void" || context?.voidReceipt
-              ? buildVoidRestaurantReceiptEscPos(ctx, printer.paperWidth)
-              : buildRestaurantReceiptEscPos(ctx, printer.paperWidth);
-          const prefs = await enqueuePrintJob(state.preferences, {
-            kind: "receipt",
-            printerId: printer.id,
-            saleId,
-            tableSessionId: sale.tableSessionId ?? null,
-            tableLabel: ctx.tableLabel,
-            businessDate: ctx.businessDate,
-            payloadSummary:
-              receiptKind === "void"
-                ? `VOID ${restaurantReceiptSummary(ctx)}`
-                : receiptKind === "guest"
-                  ? `Guest ${restaurantReceiptSummary(ctx)}`
-                  : restaurantReceiptSummary(ctx),
-            bytes,
-          });
-          set({ preferences: prefs });
-          flushPendingPersist();
-          scheduleQueue();
-          if (context?.reprint || receiptKind === "reprint") {
-            pushAudit("receipt_reprint", `Reprint ${restaurantReceiptSummary(ctx)}`, { saleId });
-          }
-          return { ok: true as const, mode: "escpos" as const };
+        const bytes =
+          receiptKind === "void" || context?.voidReceipt
+            ? buildVoidRestaurantReceiptEscPos(ctx, printer.paperWidth)
+            : buildRestaurantReceiptEscPos(ctx, printer.paperWidth);
+        const prefs = await enqueuePrintJob(state.preferences, {
+          kind: "receipt",
+          printerId: printer.id,
+          saleId,
+          tableSessionId: sale.tableSessionId ?? null,
+          tableLabel: ctx.tableLabel,
+          businessDate: ctx.businessDate,
+          payloadSummary:
+            receiptKind === "void"
+              ? `VOID ${restaurantReceiptSummary(ctx)}`
+              : receiptKind === "guest"
+                ? `Guest ${restaurantReceiptSummary(ctx)}`
+                : restaurantReceiptSummary(ctx),
+          bytes,
+        });
+        set({ preferences: prefs });
+        flushPendingPersist();
+        scheduleQueue();
+        if (context?.reprint || receiptKind === "reprint") {
+          pushAudit("receipt_reprint", `Reprint ${restaurantReceiptSummary(ctx)}`, { saleId });
         }
+        return { ok: true as const, mode: "escpos" as const };
       }
       const { printReceiptWithFallback } = await import("../lib/receiptPrint");
       const text = buildRestaurantReceiptLines(ctx).join("\n");

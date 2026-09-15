@@ -62,7 +62,7 @@ export function ProfitProductDetailSheet({ lang, open, product, productRecord, l
             { label: t(lang, "profitStatRevenue"), value: formatShortUgx(product.salesUgx) },
             { label: t(lang, "profitStatCost"), value: formatShortUgx(product.costUgx) },
             {
-              label: t(lang, "profitStatGrossProfit"),
+              label: t(lang, "profitStatNetProfit"),
               value: formatShortUgx(product.profitUgx),
               valueClass: loss ? "text-rose-700" : "text-teal-800",
             },

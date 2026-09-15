@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://pos.waka.ug/sitemap.xml

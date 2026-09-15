@@ -24,7 +24,6 @@ import {
 } from "../../../lib/commandCenterPageView";
 import { sumCashExpensesInBounds, sumCashExpensesOnDay } from "../../../lib/cashReconciliation";
 import { overlayClosedDayExpenses } from "../../../lib/closedDayAuthority";
-import { attributeSalePaymentBuckets } from "../../../lib/cashPosition";
 import type {
   AiInsightCard,
   AnalyticsKpiCard,
@@ -71,17 +70,13 @@ function pctChange(current: number, previous: number): number | null {
 export function computePaymentMethodMix(sales: Sale[], bounds: DateFilterBounds): PaymentMixSlice[] {
   const buckets = { cash: 0, mobile_money: 0, atm: 0, credit: 0, mixed: 0 };
   for (const s of revenueSalesInBounds(sales, bounds)) {
-    // Same collected/debt split as Cash Position — sums to sale.totalUgx; debt payments are not sales.
-    const attributed = attributeSalePaymentBuckets(s);
+    const amt = Math.max(0, s.totalUgx);
     const method = s.paymentMethod ?? (s.debtUgx > 0 ? "credit" : "cash");
-    buckets.credit += attributed.credit;
-    buckets.mobile_money += attributed.mobile_money;
-    buckets.atm += attributed.card;
-    if (method === "mixed") {
-      buckets.mixed += attributed.cash;
-    } else {
-      buckets.cash += attributed.cash;
-    }
+    if (method === "cash") buckets.cash += amt;
+    else if (method === "mobile_money") buckets.mobile_money += amt;
+    else if (method === "atm") buckets.atm += amt;
+    else if (method === "credit") buckets.credit += amt;
+    else buckets.mixed += amt;
   }
   const total = Object.values(buckets).reduce((a, b) => a + b, 0) || 1;
   const defs: Array<{ id: keyof typeof buckets; labelKey: string; colorClass: string }> = [
@@ -260,7 +255,7 @@ export function buildAiInsights(params: {
       tone: "blue",
     });
   }
-  if (params.canProfit && params.inventoryValue > 0) {
+  if (params.inventoryValue > 0) {
     insights.push({
       id: "inventory-value",
       textKey: "baInsightInventoryValue",
@@ -299,39 +294,12 @@ export function buildAiInsights(params: {
   return insights.slice(0, 5);
 }
 
-/** Reports inventory cost/value follows `reports.profit` (`canProfit`), not inventory-workspace stock.adjust. */
-export function reportsInventoryCostPresentation(
-  canProfit: boolean,
-  valueUgx: number,
-): { visible: true; valueUgx: number } | { visible: false } {
-  if (!canProfit) return { visible: false };
-  return { visible: true, valueUgx };
-}
-
-function isConsecutiveDailyTrend(days: { day: string }[]): boolean {
-  if (days.length <= 1) return true;
-  for (let i = 1; i < days.length; i++) {
-    if (addDaysToDateKey(days[i - 1]!.day, 1) !== days[i]!.day) return false;
-  }
-  return true;
-}
-
 export function trendBars(days: { day: string; revenueUgx: number }[]) {
   const max = Math.max(1, ...days.map((d) => d.revenueUgx));
-  const consecutive = isConsecutiveDailyTrend(days);
-  const monthly = !consecutive && days.every((d) => /^\d{4}-\d{2}-01$/.test(d.day));
   return days.map((d) => {
     const parts = d.day.split("-").map(Number);
-    let label: string;
-    if (consecutive) {
-      const dt = new Date(parts[0] ?? 2020, (parts[1] ?? 1) - 1, parts[2] ?? 1);
-      label = dt.toLocaleDateString([], { weekday: "short" }).slice(0, 3);
-    } else if (monthly) {
-      const anchor = new Date(Date.UTC(parts[0] ?? 2020, (parts[1] ?? 1) - 1, 1, 12, 0, 0));
-      label = new Intl.DateTimeFormat("en-UG", { month: "short", timeZone: "Africa/Kampala" }).format(anchor);
-    } else {
-      label = `${String(parts[1] ?? 1).padStart(2, "0")}/${String(parts[2] ?? 1).padStart(2, "0")}`;
-    }
+    const dt = new Date(parts[0] ?? 2020, (parts[1] ?? 1) - 1, parts[2] ?? 1);
+    const label = dt.toLocaleDateString([], { weekday: "short" }).slice(0, 3);
     return {
       day: d.day,
       label,
@@ -370,7 +338,6 @@ export function computeRangeAnalytics(
     : null;
 
   const liveExpenses = sumCashExpensesInBounds(cashExpenses, bounds);
-  const closedDayBreakdownUnavailable = current.closedDayBreakdownUnavailable;
 
   return {
     current,
@@ -379,14 +346,13 @@ export function computeRangeAnalytics(
     priorBounds,
     customerCount: countUniqueCustomers(sales, bounds),
     priorCustomerCount: compareEnabled ? countUniqueCustomers(sales, priorBounds) : 0,
-    sparkline: closedDayBreakdownUnavailable ? [] : computeDailyRevenueSparkline(sales, 7),
-    paymentMix: closedDayBreakdownUnavailable ? [] : computePaymentMethodMix(sales, bounds),
-    closedDayBreakdownUnavailable,
+    sparkline: computeDailyRevenueSparkline(sales, 7),
+    paymentMix: computePaymentMethodMix(sales, bounds),
     inventory: localGetInventoryInsights(products),
     expensesUgx: overlayClosedDayExpenses(liveExpenses, dayCloses, bounds, (day) =>
       sumCashExpensesOnDay(cashExpenses, day),
     ),
-    trendBars: closedDayBreakdownUnavailable ? [] : trendBars(current.dailyTrend),
+    trendBars: trendBars(current.dailyTrend),
   };
 }
 

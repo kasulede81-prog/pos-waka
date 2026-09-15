@@ -35,7 +35,6 @@ import {
   type StaffControlRow,
 } from "./ownerCommandCenterBuilders";
 import { snapshotFromPartial } from "../offline/backupEngine";
-import { dateKeyKampala } from "./datesUg";
 import { listSyncConflicts } from "./syncConflictLog";
 import { readSyncHealthMeta } from "./syncMeta";
 
@@ -52,130 +51,31 @@ export type OwnerCommandCenterBundle = {
   financial: OwnerFinancialExtended;
 };
 
-/** Linear mutation token — count + deterministic 32-bit roll. Not a crypto hash. */
-function mutationFingerprint(parts: string[]): string {
-  let h = 0;
-  for (const part of parts) {
-    for (let i = 0; i < part.length; i++) {
-      h = (Math.imul(31, h) + part.charCodeAt(i)) | 0;
-    }
-  }
-  return `${parts.length}:${h}`;
-}
-
-function salesMutationFingerprint(sales: OwnerCommandCenterInput["sales"]): string {
-  return mutationFingerprint(
-    sales.map(
-      (s) =>
-        `${s.id}:${s.updatedAt ?? ""}:${s.status ?? ""}:${s.saleVoidedAt ?? ""}:${s.totalUgx}:${s.estimatedProfitUgx}`,
-    ),
-  );
-}
-
-function returnsMutationFingerprint(returns: OwnerCommandCenterInput["returnRecords"]): string {
-  return mutationFingerprint(
-    returns.map(
-      (r) => `${r.id}:${r.saleId ?? ""}:${r.refundAmountUgx}:${r.quantity}:${r.createdAt}:${r.cogsUgx ?? ""}`,
-    ),
-  );
-}
-
-function voidsMutationFingerprint(voids: OwnerCommandCenterInput["voidRecords"]): string {
-  return mutationFingerprint(voids.map((v) => `${v.id}:${v.saleId}:${v.amountUgx}:${v.createdAt}`));
-}
-
-function dayCloseMutationFingerprint(closes: OwnerCommandCenterInput["dayCloses"]): string {
-  return mutationFingerprint(
-    closes.map((c) => {
-      const snap = c.documentSnapshot;
-      return [
-        c.id,
-        c.dateKey,
-        c.supersededAt ?? "",
-        c.updatedAt ?? c.createdAt,
-        c.expectedCashUgx,
-        c.countedCashUgx,
-        c.differenceUgx,
-        c.totalSalesUgx,
-        c.profitEstimateUgx,
-        c.totalDebtUgx,
-        snap?.expectedCashUgx ?? "",
-        snap?.totalSalesUgx ?? "",
-        snap?.profitEstimateUgx ?? "",
-        snap?.expenseUgx ?? "",
-        snap?.totalDebtUgx ?? "",
-        snap?.transactionCount ?? "",
-        snap?.cashFromSalesUgx ?? "",
-      ].join(":");
-    }),
-  );
-}
-
-/** Fields consumed by sumCashExpensesInBounds / OnDay (approval + void + amount + paidOn). */
-function expensesMutationFingerprint(expenses: OwnerCommandCenterInput["cashExpenses"]): string {
-  return mutationFingerprint(
-    expenses
-      .map(
-        (e) =>
-          `${e.id}:${e.amountUgx}:${e.approvalStatus ?? "approved"}:${e.deletedAt ?? ""}:${e.paidOn}`,
-      )
-      .sort(),
-  );
-}
-
-/** Fields consumed by adjustmentInBounds + cash-control inflow/outflow totals. */
-function adjustmentsMutationFingerprint(
-  adjustments: OwnerCommandCenterInput["cashDrawerAdjustments"],
-): string {
-  return mutationFingerprint(
-    adjustments
-      .map((a) => `${a.id}:${a.amountUgx}:${a.type}:${a.occurredAt}:${a.deletedAt ?? ""}`)
-      .sort(),
-  );
-}
-
-/**
- * Fields consumed by inventory value, stock KPIs, low-stock, and pharmacy expiry.
- * Archive/removal is identity (id); catalog products have no in-place archived flag.
- */
-function productsMutationFingerprint(products: OwnerCommandCenterInput["products"]): string {
-  return mutationFingerprint(
-    products
-      .map(
-        (p) =>
-          `${p.id}:${p.costPricePerUnitUgx}:${p.stockOnHand}:${p.minimumStockAlert}:${p.expiryDate ?? ""}:${p.buyingPackCostUgx ?? ""}:${p.conversionRate ?? ""}:${p.packCostUnitsDepleted ?? ""}`,
-      )
-      .sort(),
-  );
-}
-
 export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInput): string {
   const { bounds, sales, products, shifts, customers, suppliers, debtPayments, stockMovements, purchases } = input;
+  const salesFp = `${sales.length}:${sales[0]?.id ?? ""}:${sales[sales.length - 1]?.id ?? ""}`;
   return [
     bounds.fromKey,
     bounds.toKey,
     bounds.isSingleDay ? "1d" : "rng",
-    salesMutationFingerprint(sales),
-    productsMutationFingerprint(products),
+    salesFp,
+    products.length,
     shifts.length,
     customers.length,
     suppliers.length,
     debtPayments.length,
     stockMovements.length,
-    input.archivedStockMovements?.length ?? 0,
     purchases.length,
     input.inventoryCountSessions.length,
-    adjustmentsMutationFingerprint(input.cashDrawerAdjustments),
-    expensesMutationFingerprint(input.cashExpenses),
+    input.cashDrawerAdjustments.length,
+    input.cashExpenses.length,
     input.auditLogs.length,
     input.acknowledgements.length,
     input.syncPendingCount,
     input.syncErrorCount,
-    input.expectedCashUgx ?? "na",
+    input.expectedCashUgx,
     input.pharmacyMode ? "rx" : "std",
-    dayCloseMutationFingerprint(input.dayCloses),
-    returnsMutationFingerprint(input.returnRecords),
-    voidsMutationFingerprint(input.voidRecords),
+    input.dayCloses.length,
     input.devicesOnline ?? 0,
     input.devicesStale ?? 0,
   ].join(":");
@@ -208,7 +108,6 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
     debtPayments: input.debtPayments,
     products: input.products,
     stockMovements: input.stockMovements,
-    archivedStockMovements: input.archivedStockMovements,
     dayDrawerOpens: input.dayDrawerOpens,
     shifts: input.shifts,
     syncPendingCount: input.syncPendingCount,
@@ -252,7 +151,6 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
     sales: input.sales,
     debtPayments: input.debtPayments,
     stockMovements: input.stockMovements,
-    archivedStockMovements: input.archivedStockMovements,
     suppliers: input.suppliers,
     purchases: input.purchases,
     supplierPayments: input.supplierPayments,
@@ -263,33 +161,12 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
     sales: input.sales,
     debtPayments: input.debtPayments,
     stockMovements: input.stockMovements,
-    archivedStockMovements: input.archivedStockMovements,
     suppliers: input.suppliers,
     purchases: input.purchases,
     supplierPayments: input.supplierPayments,
     preferences: input.preferences,
   });
   const snapshotTrimStatus = partial ? buildSnapshotTrimStatus(partial) : "ok";
-
-  const financial = buildFinancialExtended({
-    sales: input.sales,
-    returnRecords: input.returnRecords,
-    products: input.products,
-    customers: input.customers,
-    suppliers: input.suppliers,
-    purchases: input.purchases,
-    debtPayments: input.debtPayments,
-    cashExpenses: input.cashExpenses,
-    bounds: input.bounds,
-    salesIndex: revenueIndex,
-    dayCloses: input.dayCloses,
-    currentPeriod: {
-      revenueUgx: overview.revenueUgx,
-      profitUgx: overview.profitUgx,
-      transactionCount: overview.transactionCount,
-      costIncomplete: overview.costIncomplete,
-    },
-  });
 
   return {
     overview,
@@ -305,7 +182,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
     liveOps: buildLiveOperationsSnapshot({
       shifts: input.shifts,
       dayDrawerOpens: input.dayDrawerOpens,
-      primaryDayKey: dateKeyKampala(new Date()),
+      primaryDayKey: input.bounds.toKey,
       syncPendingCount: input.syncPendingCount,
       syncHealth,
       devicesOnline: input.devicesOnline,
@@ -319,7 +196,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
       dayCloses: input.dayCloses,
       shifts: input.shifts,
       cashDrawerAdjustments: input.cashDrawerAdjustments,
-      expensesPeriodUgx: financial.expensesPeriodUgx,
+      cashExpenses: input.cashExpenses,
       expectedCashUgx: input.expectedCashUgx,
       lang: input.lang,
     }),
@@ -331,7 +208,24 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
       input.bounds,
       input.auditLogs,
     ),
-    financial,
+    financial: buildFinancialExtended({
+      sales: input.sales,
+      returnRecords: input.returnRecords,
+      products: input.products,
+      customers: input.customers,
+      suppliers: input.suppliers,
+      purchases: input.purchases,
+      debtPayments: input.debtPayments,
+      cashExpenses: input.cashExpenses,
+      bounds: input.bounds,
+      salesIndex: revenueIndex,
+      dayCloses: input.dayCloses,
+      currentPeriod: {
+        revenueUgx: overview.revenueUgx,
+        profitUgx: overview.profitUgx,
+        transactionCount: overview.transactionCount,
+      },
+    }),
   };
 }
 

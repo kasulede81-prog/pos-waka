@@ -63,13 +63,7 @@ export type InvestigationCenterContext = {
   onSearchTextChange: (value: string) => void;
   debouncedSearchText: string;
   filters: AuditSearchFilters;
-  dataComplete: boolean;
-  salesDependentReady: boolean;
   filtered: AuditLogEntry[];
-  matchingEntries: AuditLogEntry[];
-  matchingTotal: number;
-  hasMoreResults: boolean;
-  loadMoreResults: () => void;
   kpiCards: InvestigationKpiCard[];
   pharmacyKpiCards: PharmacyInvestigationKpiCard[];
   periodLabel: string;
@@ -81,8 +75,6 @@ export type InvestigationCenterContext = {
   shopName: string;
   productById: Map<string, { name: string }>;
   customerById: Map<string, { name: string }>;
-  /** Staff id → display name for investigation actor resolution. */
-  staffNameById: Map<string, string>;
   saleById: Map<string, Sale>;
   integrityReport: RefundIntegrityReport;
   returnsInRange: ReturnRecord[];

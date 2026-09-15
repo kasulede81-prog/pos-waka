@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 import { askWaka, type AskWakaLocale, type AskWakaUsage } from "../lib/ai/askWaka";
-import type { AskWakaSourceRecord } from "../lib/ai/askWakaKnowledge";
 import { useAiFeatureGate } from "./useAiFeatureGate";
 
 export type AskWakaChatRole = "user" | "assistant";
@@ -10,7 +9,6 @@ export type AskWakaChatMessage = {
   role: AskWakaChatRole;
   content: string;
   tools_used?: string[];
-  sources?: AskWakaSourceRecord[];
   data_as_of?: string | null;
   usage?: AskWakaUsage | null;
   error?: boolean;
@@ -104,7 +102,6 @@ export function useAskWaka(opts?: { locale?: AskWakaLocale | null }) {
             role: "assistant",
             content: result.answer,
             tools_used: result.tools_used,
-            sources: result.sources,
             data_as_of: result.data_as_of,
             usage: result.usage,
           },

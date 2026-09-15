@@ -13,7 +13,6 @@ import {
   resolvePackCostUnitsDepleted,
 } from "./costPrecision";
 import { quantityFromMoneyUgx } from "./sellingEngine";
-import { moneyLineAmountForQuantity } from "./saleAdjustments";
 
 export type SaleLineFinancials = {
   quantity: number;
@@ -72,20 +71,19 @@ export function allocateCartDiscountUgx(
   return shares;
 }
 
-/** Persist money-sale quantity from list amount ÷ unit price at finalize. Price discounts do not change qty. */
+/** Persist money-sale quantity from amount ÷ unit price at finalize. */
 export function ensureMoneySaleQuantity(line: SaleLine, product: Product): SaleLine {
   if (line.inputMode !== "money") return line;
   const unitPrice = Math.max(0, Math.floor(Number(line.unitPriceUgx) || 0));
-  const amountForQty = moneyLineAmountForQuantity(line);
-  const paidAmount = Math.max(0, Math.floor(Number(line.lineTotalUgx) || 0));
-  if (unitPrice <= 0 || amountForQty <= 0) return line;
-  const quantity = quantityFromMoneyUgx(product, amountForQty);
+  const amount = Math.max(0, Math.floor(Number(line.moneyAmountUgx ?? line.lineTotalUgx) || 0));
+  if (unitPrice <= 0 || amount <= 0) return line;
+  const quantity = quantityFromMoneyUgx(product, amount);
   return {
     ...line,
     quantity,
-    lineTotalUgx: paidAmount > 0 ? paidAmount : line.lineTotalUgx,
-    moneyAmountUgx: line.moneyAmountUgx ?? amountForQty,
-    originalLineTotalUgx: line.originalLineTotalUgx ?? amountForQty,
+    lineTotalUgx: amount,
+    moneyAmountUgx: amount,
+    originalLineTotalUgx: line.originalLineTotalUgx ?? amount,
   };
 }
 

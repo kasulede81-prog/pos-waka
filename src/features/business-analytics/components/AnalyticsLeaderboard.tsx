@@ -7,20 +7,14 @@ type Props = {
   title: string;
   rows: LeaderboardRow[];
   emptyKey?: string;
-  emptyHintKey?: string;
 };
 
-export function AnalyticsLeaderboard({ lang, title, rows, emptyKey = "noSalesYet", emptyHintKey }: Props) {
+export function AnalyticsLeaderboard({ lang, title, rows, emptyKey = "noSalesYet" }: Props) {
   return (
     <section className="min-w-0 max-w-full rounded-2xl border border-border/90 bg-card p-4 shadow-sm">
       <h3 className="text-sm font-black text-foreground">{title}</h3>
       {rows.length === 0 ? (
-        <div className="mt-3 space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">{t(lang, emptyKey)}</p>
-          {emptyHintKey ? (
-            <p className="text-[11px] font-medium leading-snug text-muted-foreground">{t(lang, emptyHintKey)}</p>
-          ) : null}
-        </div>
+        <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, emptyKey)}</p>
       ) : (
         <ol className="mt-3 space-y-2">
           {rows.map((row, index) => (

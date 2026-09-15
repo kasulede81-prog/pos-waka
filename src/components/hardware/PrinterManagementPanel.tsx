@@ -1,22 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Printer, Trash2, Wifi } from "lucide-react";
 import type { Language, PrinterConnectionType, PrinterStationRole } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { resolveHospitalityHardware } from "../../lib/hospitalityHardware";
-import { hospitalityUiActive } from "../../lib/hospitalityUx";
 import { stationLabel } from "../../lib/printerRegistry";
-import { RetailReceiptPrinterPanel } from "./RetailReceiptPrinterPanel";
-import { detectPrinterCapabilities, testNetworkPrinterConnection } from "../../services/hardware/printerAdapter";
-import {
-  addPrinterConnectionTypes,
-  defaultPrinterConnectionType,
-} from "../../services/hardware/hardwareTransport";
-import { disconnectNativeBluetoothPrinter } from "../../lib/nativeBluetoothPrinter";
-import type { NativeBluetoothDeviceRow, NativeClassicDiagnostic } from "../../lib/nativeBluetoothPrinter";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
-import { BluetoothPrinterFinder } from "./BluetoothPrinterFinder";
-import { ClassicSppDiagnosticPanel } from "./ClassicSppDiagnosticPanel";
 
 const ROLE_OPTIONS: PrinterStationRole[] = [
   "kitchen",
@@ -30,9 +19,7 @@ const ROLE_OPTIONS: PrinterStationRole[] = [
   "other",
 ];
 
-function hardwareMutationDeniedStatus(lang: Language, errorKey?: string): string {
-  return t(lang, errorKey === "forbidden" || errorKey === "noSelection" ? "forbidden" : "invalid");
-}
+const CONNECTION_OPTIONS: PrinterConnectionType[] = ["usb", "bluetooth", "network", "builtin"];
 
 export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
@@ -49,26 +36,13 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const openCashDrawerManual = usePosStore((s) => s.openCashDrawerManual);
 
   const [name, setName] = useState("Kitchen printer");
-  const [connectionType, setConnectionType] = useState<PrinterConnectionType>("bluetooth");
-  const [connectionOptions, setConnectionOptions] = useState<PrinterConnectionType[]>(["bluetooth", "network"]);
+  const [connectionType, setConnectionType] = useState<PrinterConnectionType>("usb");
   const [paperWidth, setPaperWidth] = useState<"58mm" | "80mm">("80mm");
   const [roles, setRoles] = useState<PrinterStationRole[]>(["kitchen"]);
   const [networkHost, setNetworkHost] = useState("");
   const [networkPort, setNetworkPort] = useState("9100");
   const [status, setStatus] = useState("");
   const [isDefaultReceipt, setIsDefaultReceipt] = useState(false);
-  const [pendingBt, setPendingBt] = useState<NativeBluetoothDeviceRow | null>(null);
-  const [draftPrinterId, setDraftPrinterId] = useState<string | null>(null);
-  const [bindForId, setBindForId] = useState<string | null>(null);
-  const [classicDiagnostic, setClassicDiagnostic] = useState<NativeClassicDiagnostic | null>(null);
-  const hospitality = hospitalityUiActive(preferences.businessType, preferences.hospitalityModeEnabled);
-
-  useEffect(() => {
-    void detectPrinterCapabilities().then((caps) => {
-      setConnectionOptions(addPrinterConnectionTypes(caps.transports));
-      setConnectionType(defaultPrinterConnectionType(caps.transports));
-    });
-  }, []);
 
   const toggleRole = (role: PrinterStationRole) => {
     setRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
@@ -76,20 +50,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
 
   const addPrinter = () => {
     if (!name.trim()) return;
-    if (connectionType === "usb" || connectionType === "builtin") {
-      setStatus("USB thermal printing is not supported in this browser yet.");
-      return;
-    }
-    if (connectionType === "bluetooth" && !pendingBt) {
-      setStatus("Select a Bluetooth printer first.");
-      return;
-    }
-    if (connectionType === "network" && !networkHost.trim()) {
-      setStatus("Enter a private LAN address (for example 192.168.x.x).");
-      return;
-    }
-    const result = upsertPrinter({
-      id: draftPrinterId ?? undefined,
+    upsertPrinter({
       name,
       connectionType,
       paperWidth,
@@ -97,68 +58,9 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       isDefaultReceipt,
       networkHost: connectionType === "network" ? networkHost.trim() || null : null,
       networkPort: connectionType === "network" ? Number(networkPort) || 9100 : null,
-      pairedDeviceKey: connectionType === "bluetooth" ? pendingBt?.id ?? null : null,
-      bluetoothTransport: connectionType === "bluetooth" ? pendingBt?.transport ?? null : null,
-      pairedDeviceName: connectionType === "bluetooth" ? pendingBt?.name ?? null : null,
     });
-    if (result.ok && result.printerId) setDraftPrinterId(result.printerId);
-    if (!result.ok) {
-      setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
-      return;
-    }
     setStatus(t(lang, "hardwarePrinterAdded"));
   };
-
-  const persistHospitalityBluetooth = (device: NativeBluetoothDeviceRow) => {
-    setPendingBt(device);
-    const result = upsertPrinter({
-      id: draftPrinterId ?? undefined,
-      name: (name.trim() && name.trim() !== "Kitchen printer" ? name.trim() : device.name) || "Printer",
-      connectionType: "bluetooth",
-      paperWidth,
-      stationRoles: roles.length ? roles : ["kitchen"],
-      isDefaultReceipt,
-      pairedDeviceKey: device.id,
-      bluetoothTransport: device.transport,
-      pairedDeviceName: device.name,
-    });
-    if (!result.ok) {
-      setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
-      return;
-    }
-    if (result.printerId) setDraftPrinterId(result.printerId);
-    setStatus(`${device.name} — ${t(lang, "hardwarePrinterConfiguredReady")}`);
-  };
-
-  if (!hospitality) {
-    return (
-      <div className="space-y-5">
-        <RetailReceiptPrinterPanel lang={lang} />
-        {hw.printQueue.length > 0 ? (
-          <article className="rounded-3xl border-2 border-amber-200 bg-amber-50/80 p-5">
-            <p className="text-sm font-black text-amber-950">{t(lang, "hardwarePrintQueuePending")}</p>
-            <ul className="mt-2 space-y-1 text-xs font-semibold">
-              {hw.printQueue.map((job) => (
-                <li key={job.id} className="flex items-center justify-between gap-2">
-                  <span>
-                    {job.status} · {job.payloadSummary}
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-lg border border-amber-300 px-2 py-0.5 text-[10px] font-black"
-                    onClick={() => cancelQueuedPrintJob(job.id)}
-                  >
-                    {t(lang, "cancel")}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </article>
-        ) : null}
-        {status ? <p className="text-sm font-bold text-muted-foreground">{status}</p> : null}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-5">
@@ -185,9 +87,9 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
               value={connectionType}
               onChange={(e) => setConnectionType(e.target.value as PrinterConnectionType)}
             >
-              {connectionOptions.map((c) => (
+              {CONNECTION_OPTIONS.map((c) => (
                 <option key={c} value={c}>
-                  {c === "bluetooth" ? "Bluetooth" : "Network"}
+                  {c}
                 </option>
               ))}
             </select>
@@ -222,28 +124,9 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                   onChange={(e) => setNetworkPort(e.target.value)}
                 />
               </label>
-              <p className="sm:col-span-2 text-xs font-semibold text-muted-foreground">
-                Use a private LAN address (for example 192.168.x.x) and port 9100. Browsers cannot open that port
-                directly — printing uses the WAKA desktop app or the WAKA Android app.
-              </p>
             </>
           ) : null}
         </div>
-
-        {connectionType === "bluetooth" ? (
-          <BluetoothPrinterFinder
-            selectedId={
-              pendingBt?.id ??
-              hw.printers.find((p) => p.id === draftPrinterId)?.pairedDeviceKey ??
-              null
-            }
-            onSelect={(device) => {
-              if (device) persistHospitalityBluetooth(device);
-              else setPendingBt(null);
-            }}
-            onStatus={setStatus}
-          />
-        ) : null}
 
         <p className="mt-3 text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "hardwarePrinterRoles")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -287,13 +170,6 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                   <p className="font-black text-foreground">{p.name}</p>
                   <p className="text-xs font-semibold text-muted-foreground">
                     {p.connectionType} · {p.paperWidth} · {p.stationRoles.join(", ")}
-                    {p.connectionType === "bluetooth" && p.pairedDeviceName
-                      ? ` · ${p.pairedDeviceName}`
-                      : p.connectionType === "bluetooth" && p.pairedDeviceKey
-                        ? " · Bluetooth saved"
-                        : p.connectionType === "bluetooth"
-                          ? " · no device selected"
-                          : ""}
                   </p>
                   {p.lastError ? <p className="mt-1 text-xs font-bold text-red-700">{p.lastError}</p> : null}
                 </div>
@@ -302,25 +178,10 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                     type="button"
                     className="rounded-xl border-2 border-border px-3 py-1 text-xs font-black"
                     onClick={() => {
-                      void (async () => {
-                        if (p.connectionType === "network") {
-                          setStatus("Connecting...");
-                          const probe = await testNetworkPrinterConnection(p);
-                          if (!probe.ok) {
-                            setStatus(probe.error ?? "Could not connect to printer");
-                            return;
-                          }
-                        }
-                        setStatus(t(lang, "hardwareTestConnecting"));
-                        setClassicDiagnostic(null);
-                        const r = await testConfiguredPrinter(p.id);
-                        if (r.diagnostic) setClassicDiagnostic(r.diagnostic);
-                        setStatus(
-                          r.ok
-                            ? `✓ ${t(lang, "hardwareTestSentTo")} ${p.pairedDeviceName || p.name}`
-                            : `✕ ${t(lang, "hardwareTestCouldNotPrint")}\n${r.error ?? t(lang, "hardwarePrinterTestFail")}`,
-                        );
-                      })();
+                      setStatus(t(lang, "hardwarePrinterTesting"));
+                      void testConfiguredPrinter(p.id).then((r) =>
+                        setStatus(r.ok ? t(lang, "hardwarePrinterTestOk") : (r.error ?? t(lang, "hardwarePrinterTestFail"))),
+                      );
                     }}
                   >
                     {t(lang, "hardwarePrinterTest")}
@@ -328,84 +189,13 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                   <button
                     type="button"
                     className="rounded-xl border-2 border-red-200 px-2 py-1 text-red-800"
-                    onClick={() => {
-                      const result = removePrinter(p.id);
-                      if (!result.ok) {
-                        setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
-                      }
-                    }}
+                    onClick={() => removePrinter(p.id)}
                     aria-label={t(lang, "hardwarePrinterRemove")}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
-              {p.connectionType === "bluetooth" ? (
-                <div className="mt-3 space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-xl border-2 border-border px-3 py-1 text-xs font-black"
-                      onClick={() => setBindForId(bindForId === p.id ? null : p.id)}
-                    >
-                      Find device
-                    </button>
-                    {p.pairedDeviceKey ? (
-                      <button
-                        type="button"
-                        className="rounded-xl border-2 border-border px-3 py-1 text-xs font-black"
-                        onClick={() => {
-                          void disconnectNativeBluetoothPrinter(p.pairedDeviceKey ?? undefined);
-                          const result = upsertPrinter({
-                            id: p.id,
-                            name: p.name,
-                            connectionType: p.connectionType,
-                            paperWidth: p.paperWidth,
-                            stationRoles: p.stationRoles,
-                            isDefaultReceipt: p.isDefaultReceipt,
-                            pairedDeviceKey: null,
-                            bluetoothTransport: null,
-                            pairedDeviceName: null,
-                          });
-                          if (!result.ok) {
-                            setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
-                            return;
-                          }
-                          setStatus("Bluetooth device forgotten on this printer profile.");
-                        }}
-                      >
-                        Forget device
-                      </button>
-                    ) : null}
-                  </div>
-                  {bindForId === p.id ? (
-                    <BluetoothPrinterFinder
-                      selectedId={p.pairedDeviceKey ?? null}
-                      onSelect={(device) => {
-                        if (!device) return;
-                        const result = upsertPrinter({
-                          id: p.id,
-                          name: p.name,
-                          connectionType: "bluetooth",
-                          paperWidth: p.paperWidth,
-                          stationRoles: p.stationRoles,
-                          isDefaultReceipt: p.isDefaultReceipt,
-                          pairedDeviceKey: device.id,
-                          bluetoothTransport: device.transport,
-                          pairedDeviceName: device.name,
-                        });
-                        if (!result.ok) {
-                          setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
-                          return;
-                        }
-                        setBindForId(null);
-                        setStatus(`Saved ${device.name}`);
-                      }}
-                      onStatus={setStatus}
-                    />
-                  ) : null}
-                </div>
-              ) : null}
             </li>
           ))}
         </ul>
@@ -424,12 +214,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                 <select
                   className="rounded-xl border-2 border-amber-200 px-2 py-1 text-sm font-semibold"
                   value={station.futureHooks?.printerIds?.[0] ?? ""}
-                  onChange={(e) => {
-                    const result = assignStationPrinter(station.id, e.target.value || null);
-                    if (!result.ok) {
-                      setStatus(hardwareMutationDeniedStatus(lang, result.errorKey));
-                    }
-                  }}
+                  onChange={(e) => assignStationPrinter(station.id, e.target.value || null)}
                 >
                   <option value="">{t(lang, "hardwareStationAuto")}</option>
                   {hw.printers.map((p) => (
@@ -449,34 +234,22 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
         <div className="mt-3 space-y-2 text-sm font-bold text-foreground">
           <WakaSwitch
             checked={hw.autoPrintKitchen}
-            onCheckedChange={(checked) => {
-              const result = setHospitalityHardwarePrefs({ autoPrintKitchen: checked });
-              if (!result.ok) setStatus(t(lang, "forbidden"));
-            }}
+            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ autoPrintKitchen: checked })}
             label={t(lang, "hardwareAutoKitchen")}
           />
           <WakaSwitch
             checked={hw.autoPrintReceipt}
-            onCheckedChange={(checked) => {
-              const result = setHospitalityHardwarePrefs({ autoPrintReceipt: checked });
-              if (!result.ok) setStatus(t(lang, "forbidden"));
-            }}
+            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ autoPrintReceipt: checked })}
             label={t(lang, "hardwareAutoReceipt")}
           />
           <WakaSwitch
             checked={hw.openDrawerOnPayment}
-            onCheckedChange={(checked) => {
-              const result = setHospitalityHardwarePrefs({ openDrawerOnPayment: checked });
-              if (!result.ok) setStatus(t(lang, "forbidden"));
-            }}
+            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ openDrawerOnPayment: checked })}
             label={t(lang, "hardwareDrawerOnPayment")}
           />
           <WakaSwitch
             checked={hw.customerDisplayEnabled}
-            onCheckedChange={(checked) => {
-              const result = setHospitalityHardwarePrefs({ customerDisplayEnabled: checked });
-              if (!result.ok) setStatus(t(lang, "forbidden"));
-            }}
+            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ customerDisplayEnabled: checked })}
             label={t(lang, "hardwareCustomerDisplay")}
           />
         </div>
@@ -556,7 +329,6 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       ) : null}
 
       {status ? <p className="text-sm font-bold text-muted-foreground">{status}</p> : null}
-      {classicDiagnostic ? <ClassicSppDiagnosticPanel diagnostic={classicDiagnostic} /> : null}
     </div>
   );
 }

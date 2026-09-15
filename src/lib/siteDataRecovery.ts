@@ -1,14 +1,4 @@
 const CHUNK_RELOAD_KEY = "waka.chunk_reload_attempted";
-export const HTML_BOOT_RECOVERY_KEY = "waka.html-boot-recovery";
-
-/** Allow a later deploy mismatch to recover again after a successful boot. */
-export function clearHtmlBootRecoveryFlag(): void {
-  try {
-    sessionStorage.removeItem(HTML_BOOT_RECOVERY_KEY);
-  } catch {
-    /* ignore */
-  }
-}
 
 /** One automatic reload per session when a lazy chunk fails after deploy. */
 export function markChunkReloadAttempted(): void {
@@ -35,21 +25,10 @@ export function clearChunkReloadAttempted(): void {
   }
 }
 
-export async function clearServiceWorkerCaches(): Promise<void> {
-  if (typeof caches === "undefined") return;
-  try {
-    const keys = await caches.keys();
-    await Promise.all(keys.map((key) => caches.delete(key)));
-  } catch {
-    /* ignore */
-  }
-}
-
 export async function unregisterServiceWorkers(): Promise<void> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
   const registrations = await navigator.serviceWorker.getRegistrations();
   await Promise.all(registrations.map((r) => r.unregister()));
-  await clearServiceWorkerCaches();
 }
 
 async function deleteIndexedDb(name: string): Promise<void> {

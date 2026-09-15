@@ -5,7 +5,6 @@
 
 import type { Permission, ShopPreferences } from "../types";
 import type { SessionActor } from "./sessionActor";
-import { authOperatorRole } from "./sessionActor";
 import {
   checkStorePermission,
   checkStorePermissionEffective,
@@ -24,12 +23,11 @@ const OPERATIONAL_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "posSellCategoryFilter",
   "celebratedFirstSale",
   "posLocked",
-  "activeStaffId",
   "activeTableSessionId",
 ]);
 
-/** Device / hardware receipt width and printer profiles — owner devices settings. */
-const DEVICES_PREFERENCE_KEYS = new Set<keyof ShopPreferences>(["receiptPaperSize", "hospitalityHardware"]);
+/** Device / hardware receipt width — owner devices settings. */
+const DEVICES_PREFERENCE_KEYS = new Set<keyof ShopPreferences>(["receiptPaperSize"]);
 
 /** POS UI mode toggle — separate from shop settings. */
 const UI_MODE_KEYS = new Set<keyof ShopPreferences>(["posUiMode"]);
@@ -70,21 +68,12 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "kioskQuickSell",
   "discountControlMode",
   "discountMaxPercentThreshold",
-  "registerMode",
-  "primaryDeviceFingerprint",
   "dataRetentionPolicy",
   "lastAutoBackupDateKey",
   "lastArchiveRunAt",
   "lastMonthlyReportPromptMonth",
   "posPinnedShelfKeys",
-  "posPinnedShelfKeysUpdatedAt",
-  "posPinnedShelfKeyRevisions",
   "posShelfLayout",
-  "catalogHierarchyEnabled",
-  "catalogHierarchyEnabledUpdatedAt",
-  "posCatalogNodes",
-  "posCatalogTombstones",
-  "posShelfLayoutTombstones",
   "posQuickSellProductIds",
   "posShelfPresetId",
   "posShelfDefaultScale",
@@ -178,7 +167,7 @@ export function authorizePreferencesPatch(
   for (const key of Object.keys(patch) as (keyof ShopPreferences)[]) {
     const perm = permissionForPreferenceKey(key);
     if (!perm) continue;
-    if (OWNER_ONLY_PREFERENCE_KEYS.has(key) && (!actor || authOperatorRole(actor) !== "owner")) {
+    if (OWNER_ONLY_PREFERENCE_KEYS.has(key) && (!actor || actor.role !== "owner")) {
       return { ok: false, errorKey: "forbidden" };
     }
     const effectiveCheck =
@@ -199,60 +188,4 @@ export function authorizePreferencesPatch(
   }
 
   return { ok: true };
-}
-
-/**
- * Same gates as createCatalogShelf: shelves.customize (effective) plus
- * authorizePreferencesPatch for posCatalogNodes (settings.shop).
- * UI must not offer Create new shelf unless this is true.
- */
-/**
- * Product archive/unarchive is stored on preferences (`inventoryArchivedProductIds`)
- * and therefore uses the same `authorizePreferencesPatch` contract as
- * `setPreferences` — `settings.shop` (effective). UI must not offer Archive
- * unless this is true.
- */
-export function canPersistInventoryArchivePreferences(
-  actor: SessionActor | null | undefined,
-  input?: {
-    snapshot: SubscriptionSnapshot;
-    authMode: "supabase" | "local";
-  },
-): boolean {
-  const ctx = input ?? getStoreSubscriptionContext();
-  return authorizePreferencesPatch(actor ?? null, { inventoryArchivedProductIds: [] }, ctx).ok;
-}
-
-/**
- * Supplier tags live on preferences (`inventoryProductTags`) and use the same
- * `authorizePreferencesPatch` / `settings.shop` contract as `setPreferences`.
- * UI must not offer Bulk → Supplier unless this is true.
- */
-export function canPersistInventoryProductTagsPreferences(
-  actor: SessionActor | null | undefined,
-  input?: {
-    snapshot: SubscriptionSnapshot;
-    authMode: "supabase" | "local";
-  },
-): boolean {
-  const ctx = input ?? getStoreSubscriptionContext();
-  return authorizePreferencesPatch(actor ?? null, { inventoryProductTags: {} }, ctx).ok;
-}
-
-export function canPersistCatalogShelfPreferences(
-  actor: SessionActor | null | undefined,
-  input?: {
-    snapshot: SubscriptionSnapshot;
-    authMode: "supabase" | "local";
-  },
-): boolean {
-  const ctx = input ?? getStoreSubscriptionContext();
-  const customize = checkStorePermissionEffective(
-    actor ?? null,
-    "shelves.customize",
-    ctx.snapshot,
-    ctx.authMode,
-  );
-  if (!customize.ok) return false;
-  return authorizePreferencesPatch(actor ?? null, { posCatalogNodes: [] }, ctx).ok;
 }

@@ -107,7 +107,7 @@ export function resolveOpeningFloatUgx(
     formulaVersion?: CashDrawerFormulaVersion;
   },
 ): number {
-  const formulaVersion = opts?.formulaVersion ?? "v2";
+  const formulaVersion = opts?.formulaVersion ?? "v1";
   if (formulaVersion === "v2") {
     const active = activeDayDrawerOpenForDate(opts?.dayDrawerOpens ?? [], day);
     return active ? Math.max(0, Math.floor(active.openingFloatUgx)) : 0;

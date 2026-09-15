@@ -6,7 +6,6 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
-import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 
@@ -54,7 +53,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const hospitality = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const todayKey = dateKeyKampala(new Date());
 
-  const homeMetrics = resolveVisibleHomeMetrics(authOperatorRole(actor));
+  const homeMetrics = resolveVisibleHomeMetrics(actor.role);
   const canFloor = actorHasEffectivePermission(actor, "hospitality.floor", snapshot, authMode);
   const kitchenEnabled = isKitchenEnabledForHospitality(
     preferences.businessType,
@@ -82,15 +81,15 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   }, [floor, sales]);
 
   const scopedSales = useMemo(
-    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor),
-    [sales, homeMetrics.scope, actor],
+    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor.userId),
+    [sales, homeMetrics.scope, actor.userId],
   );
 
   const todayRevenue = useMemo(() => {
     if (!homeMetrics.showShopWideRevenue && !homeMetrics.showPersonalRevenue) return null;
-    const scopedReturns = filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor);
+    const scopedReturns = filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor.userId);
     return localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey, dayCloses).totalRevenueUgx;
-  }, [homeMetrics, scopedSales, products, returnRecords, sales, actor, todayKey, dayCloses]);
+  }, [homeMetrics, scopedSales, products, returnRecords, sales, actor.userId, todayKey, dayCloses]);
 
   const hasOpenSessions = (floor?.sessions.some((s) => s.status === "open" || s.status === "payment_pending") ?? false);
 

@@ -1,6 +1,5 @@
 import type { Language, PharmacyPrescription, PharmacyPrescriptionLine, ShopPreferences } from "../types";
 import { t } from "./i18n";
-import { printIsolatedHtmlDocument } from "./isolatedPrint";
 
 export function printPrescriptionSummary(
   lang: Language,
@@ -25,6 +24,9 @@ ${opts?.voided ? `<div class="void">${t(lang, "pharmacyRxVoidWatermark")}</div>`
 <p><strong>${prescription.prescriptionNumber}</strong> · ${prescription.patientName ?? ""}</p>
 <p>${t(lang, "pharmacyRxDoctor")}: ${prescription.doctorName ?? "—"} · ${prescription.prescriptionDate}</p>
 <table><thead><tr><th>${t(lang, "pharmacyTerm_medicine")}</th><th>${t(lang, "pharmacyStrengthLabel")}</th><th>Qty</th><th>${t(lang, "pharmacyRxDirections")}</th></tr></thead><tbody>${lines}</tbody></table>
-</body></html>`;
-  printIsolatedHtmlDocument(html);
+<script>window.print();</script></body></html>`;
+  const w = window.open("", "_blank", "width=640,height=800");
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
 }

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { Language, PosShelfColor, PosShelfLayoutConfig, PosShelfPresetId, Product } from "../../types";
-import { t, tTemplate } from "../../lib/i18n";
+import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { useShelfDragReorder } from "../../hooks/useShelfDragReorder";
 import { useShelfGridColumns } from "../../hooks/useShelfGridColumns";
@@ -19,8 +19,6 @@ import {
 } from "../../lib/posShelfLayout";
 import { shelfGridTemplateColumns } from "../../lib/posShelfGridColumns";
 import { formatShelfProductCountLabel } from "../../lib/posShelfDisplayLabel";
-import { UNCATEGORIZED_SENTINEL } from "../../lib/productCategories";
-import { isCatalogHierarchyEnabled } from "../../lib/catalogHierarchy";
 import { POS_SHELF_PRESET_IDS, applyShelfPreset } from "../../lib/posShelfPresets";
 import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
 import { PosShelfTile } from "./PosShelfTile";
@@ -28,8 +26,6 @@ import { ShelfColorWheel } from "./ShelfColorWheel";
 import { ShelfScaleSlider } from "./ShelfScaleSlider";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
 import { WakaCheckbox } from "../enterprise/WakaCheckbox";
-import { EmptyShelvesPanel } from "./EmptyShelvesPanel";
-import { CatalogFoldersPanel } from "./CatalogFoldersPanel";
 
 const PRESET_LABEL_KEY: Record<
   PosShelfPresetId,
@@ -71,15 +67,8 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   const quickSellIds = quickSellIdsRaw ?? EMPTY_SHELF_ORDER;
   const defaultScale = clampShelfScale(defaultScaleRaw ?? 35);
   const setPreferences = usePosStore((s) => s.setPreferences);
-  const renameShelfCategory = usePosStore((s) => s.renameShelfCategory);
-  const deleteEmptyShelf = usePosStore((s) => s.deleteEmptyShelf);
-  const hierarchyOn = usePosStore((s) => isCatalogHierarchyEnabled(s.preferences));
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [nameDraftKey, setNameDraftKey] = useState<string | null>(null);
-  const [nameDraft, setNameDraft] = useState("");
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [nameSaved, setNameSaved] = useState(false);
   const [quickPickerOpen, setQuickPickerOpen] = useState(false);
   const arrangeGridRef = useRef<HTMLDivElement>(null);
   const arrangeColumnCount = useShelfGridColumns(arrangeGridRef);
@@ -120,19 +109,6 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   const isQuickSellSelected = selectedKey === QUICK_SELL_SHELF_KEY;
 
   const selectedCard = selectedKey ? shelfCards.find((c) => c.key === selectedKey) : null;
-
-  if (selectedKey !== nameDraftKey) {
-    setNameDraftKey(selectedKey);
-    if (!selectedKey) {
-      setNameDraft("");
-    } else {
-      const card = shelfCards.find((c) => c.key === selectedKey);
-      const layoutName = shelfLayout[selectedKey]?.displayName?.trim();
-      setNameDraft(layoutName || card?.label || selectedKey);
-    }
-    setNameError(null);
-    setNameSaved(false);
-  }
   const selectedScale = selectedConfig
     ? shelfScaleFromConfig(selectedConfig, Boolean(selectedConfig.featured), defaultScale)
     : defaultScale;
@@ -147,50 +123,6 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
     },
     [selectedKey, setPreferences, shelfLayout],
   );
-
-  const saveShelfName = useCallback(() => {
-    if (!selectedKey) return;
-    setNameError(null);
-    setNameSaved(false);
-    if (selectedKey === UNCATEGORIZED_SENTINEL) {
-      setNameError(t(lang, "shelfRenameUncategorized"));
-      return;
-    }
-    if (selectedKey === QUICK_SELL_SHELF_KEY) {
-      patchSelected({ displayName: nameDraft.trim() || undefined });
-      setNameSaved(true);
-      return;
-    }
-    const result = renameShelfCategory(selectedKey, nameDraft);
-    if (!result.ok) {
-      setNameError(t(lang, result.errorKey ?? "invalid"));
-      return;
-    }
-    if (result.toKey) setSelectedKey(result.toKey);
-    setNameSaved(true);
-  }, [lang, nameDraft, patchSelected, renameShelfCategory, selectedKey]);
-
-  const canDeleteSelectedShelf =
-    Boolean(selectedKey) &&
-    selectedKey !== UNCATEGORIZED_SENTINEL &&
-    selectedKey !== QUICK_SELL_SHELF_KEY &&
-    (selectedCard?.count ?? 0) === 0 &&
-    !selectedCard?.isQuickSell;
-
-  const confirmDeleteSelectedShelf = useCallback(() => {
-    if (!selectedKey || !canDeleteSelectedShelf) return;
-    setNameError(null);
-    setNameSaved(false);
-    const label = nameDraft.trim() || selectedCard?.label || selectedKey;
-    const ok = window.confirm(tTemplate(lang, "posShelfDeleteConfirm", { name: label }));
-    if (!ok) return;
-    const result = deleteEmptyShelf(selectedKey);
-    if (!result.ok) {
-      setNameError(t(lang, result.errorKey ?? "invalid"));
-      return;
-    }
-    setSelectedKey(null);
-  }, [canDeleteSelectedShelf, deleteEmptyShelf, lang, nameDraft, selectedCard, selectedKey]);
 
   const applyPreset = useCallback(
     (presetId: PosShelfPresetId) => {
@@ -225,34 +157,14 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   if (shelfCards.length === 0) {
     return (
-      <div className="space-y-4">
-        <section className="rounded-2xl border border-border bg-card p-3">
-          <WakaSwitch
-            checked={hierarchyOn}
-            onCheckedChange={(checked) => setPreferences({ catalogHierarchyEnabled: checked })}
-            label={<span className="text-sm font-black text-foreground">{t(lang, "catalogHierarchyEnable")}</span>}
-            description={<span className="text-sm font-medium text-muted-foreground">{t(lang, "catalogHierarchyEnableHint")}</span>}
-          />
-        </section>
-        {hierarchyOn ? <CatalogFoldersPanel lang={lang} /> : null}
-        <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-sm font-semibold text-warning-foreground">
-          {t(lang, "posEmptySub")}
-        </p>
-      </div>
+      <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-sm font-semibold text-warning-foreground">
+        {t(lang, "posEmptySub")}
+      </p>
     );
   }
 
   const content = (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-border bg-card p-3">
-        <WakaSwitch
-          checked={hierarchyOn}
-          onCheckedChange={(checked) => setPreferences({ catalogHierarchyEnabled: checked })}
-          label={<span className="text-sm font-black text-foreground">{t(lang, "catalogHierarchyEnable")}</span>}
-            description={<span className="text-sm font-medium text-muted-foreground">{t(lang, "catalogHierarchyEnableHint")}</span>}
-          />
-        </section>
-      {hierarchyOn ? <CatalogFoldersPanel lang={lang} /> : null}
       <section className="rounded-2xl border border-border bg-card p-3">
         <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posShelfDefaultScaleTitle")}</p>
         <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "posShelfDefaultScaleSub")}</p>
@@ -329,47 +241,14 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
           <label className="block space-y-1">
             <span className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditName")}</span>
-            <p className="text-[11px] font-medium text-muted-foreground">{t(lang, "posShelfRenameHint")}</p>
             <input
               type="text"
-              value={nameDraft}
-              maxLength={80}
-              disabled={selectedKey === UNCATEGORIZED_SENTINEL}
-              placeholder={selectedCard?.label ?? ""}
-              onChange={(e) => {
-                setNameDraft(e.target.value);
-                setNameError(null);
-                setNameSaved(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  saveShelfName();
-                }
-              }}
-              className="w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+              value={selectedConfig.displayName ?? ""}
+              placeholder={shelfCards.find((c) => c.key === selectedKey)?.label ?? ""}
+              onChange={(e) => patchSelected({ displayName: e.target.value })}
+              className="w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold"
             />
-            {nameError ? <p className="text-xs font-bold text-danger">{nameError}</p> : null}
-            {nameSaved ? <p className="text-xs font-bold text-success">{t(lang, "posShelfRenamed")}</p> : null}
-            <button
-              type="button"
-              disabled={selectedKey === UNCATEGORIZED_SENTINEL}
-              onClick={saveShelfName}
-              className="mt-1 min-h-[40px] rounded-xl bg-waka-600 px-4 text-xs font-black text-white active:bg-waka-700 disabled:opacity-40"
-            >
-              {t(lang, "posShelfRenameSave")}
-            </button>
           </label>
-
-          {canDeleteSelectedShelf ? (
-            <button
-              type="button"
-              onClick={confirmDeleteSelectedShelf}
-              className="min-h-[40px] w-full rounded-xl border-2 border-danger/40 bg-danger-muted px-4 text-xs font-black text-danger active:opacity-80 sm:w-auto"
-            >
-              {t(lang, "posShelfDelete")}
-            </button>
-          ) : null}
 
           <div>
             <p className="text-xs font-bold text-muted-foreground">{t(lang, "posShelfEditColor")}</p>
@@ -497,8 +376,6 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
           ) : null}
         </section>
       ) : null}
-
-      <EmptyShelvesPanel lang={lang} />
     </div>
   );
 

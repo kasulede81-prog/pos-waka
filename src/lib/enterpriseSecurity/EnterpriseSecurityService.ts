@@ -3,7 +3,6 @@
  */
 
 import type { SessionActor } from "../sessionActor";
-import { authOperatorRole } from "../sessionActor";
 import type { ShopPreferences, StaffAccount, UserRole } from "../../types";
 import {
   staffHasBackOfficeUnlockSecret,
@@ -165,10 +164,9 @@ export async function verifySecurityCredential(input: VerifyContext): Promise<En
   const secret = input.secret?.trim() ?? "";
 
   if (input.credentialType === "biometric") {
-    const opRole = input.sessionActor ? authOperatorRole(input.sessionActor) : "owner";
     const user = sessionActorToUser(
       input.sessionActor,
-      opRole === "manager" ? "manager" : "owner",
+      input.sessionActor?.role === "manager" ? "manager" : "owner",
     );
     return successResult(input, "biometric", "biometric", user, auditId);
   }
@@ -186,7 +184,7 @@ export async function verifySecurityCredential(input: VerifyContext): Promise<En
       return successResult(input, "owner_override", "staff_pin", staffToUser(ownerStaff), auditId);
     }
     const shopOk = await verifyShopSecurityPinAsync(secret, input.preferences.backOfficePin);
-    if (shopOk && input.sessionActor && authOperatorRole(input.sessionActor) === "owner") {
+    if (shopOk && input.sessionActor?.role === "owner") {
       return successResult(
         input,
         "owner_override",
@@ -212,8 +210,12 @@ export async function verifySecurityCredential(input: VerifyContext): Promise<En
     if (!secret) return failureResult(input, "shop_security_pin", "missing_secret", auditId);
     const ok = await verifyShopSecurityPinAsync(secret, input.preferences.backOfficePin);
     if (!ok) return failureResult(input, "shop_security_pin", "invalid", auditId);
-    const opRole = input.sessionActor ? authOperatorRole(input.sessionActor) : "owner";
-    const role = opRole === "manager" ? "manager" : opRole === "owner" ? "owner" : "owner";
+    const role =
+      input.sessionActor?.role === "manager"
+        ? "manager"
+        : input.sessionActor?.role === "owner"
+          ? "owner"
+          : "owner";
     return successResult(
       input,
       "shop_security_pin",
@@ -254,7 +256,7 @@ export async function verifyBackOfficeShellCredential(
 
   if (!stored) {
     if (staff.length === 0) {
-      const role = sessionActor ? authOperatorRole(sessionActor) : "owner";
+      const role = sessionActor?.role ?? "owner";
       return successResult(
         input,
         "shop_security_pin",
@@ -268,8 +270,8 @@ export async function verifyBackOfficeShellCredential(
 
   const shopOk = await verifyShopSecurityPinAsync(pin, stored);
   if (shopOk) {
-    const opRole = sessionActor ? authOperatorRole(sessionActor) : "owner";
-    const role = opRole === "manager" ? "manager" : opRole === "owner" ? "owner" : "owner";
+    const role =
+      sessionActor?.role === "manager" ? "manager" : sessionActor?.role === "owner" ? "owner" : "owner";
     return successResult(
       input,
       "shop_security_pin",
@@ -309,7 +311,7 @@ export function verifyBackOfficeShellCredentialSync(
 
   if (!stored) {
     if (staff.length === 0) {
-      const role = sessionActor ? authOperatorRole(sessionActor) : "owner";
+      const role = sessionActor?.role ?? "owner";
       return successResult(
         input,
         "shop_security_pin",
@@ -322,8 +324,8 @@ export function verifyBackOfficeShellCredentialSync(
   }
 
   if (verifyShopSecurityPinSync(pin, stored)) {
-    const opRole = sessionActor ? authOperatorRole(sessionActor) : "owner";
-    const role = opRole === "manager" ? "manager" : opRole === "owner" ? "owner" : "owner";
+    const role =
+      sessionActor?.role === "manager" ? "manager" : sessionActor?.role === "owner" ? "owner" : "owner";
     return successResult(
       input,
       "shop_security_pin",

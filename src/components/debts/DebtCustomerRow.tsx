@@ -10,7 +10,6 @@ import {
 } from "../../lib/customerDebtActivity";
 import type { DateFilterBounds } from "../../lib/dateFilters";
 import { t } from "../../lib/i18n";
-import { formatReceiptIdentityForUi } from "../../lib/receiptIdentity";
 
 const ICON_TONES = [
   "bg-amber-100 text-amber-800",
@@ -127,10 +126,7 @@ function DebtCustomerMenuPanel({
                         {entry.kind === "credit_sale"
                           ? t(lang, "creditSaleActivity")
                           : t(lang, "debtPaymentActivity")}
-                        {(() => {
-                          const receiptLabel = formatReceiptIdentityForUi(entry);
-                          return receiptLabel ? ` ${receiptLabel}` : "";
-                        })()}
+                        {entry.receiptSeq != null ? ` #${String(entry.receiptSeq).padStart(3, "0")}` : ""}
                       </p>
                       <p className="text-muted-foreground">{formatActivityWhen(entry.at, lang)}</p>
                     </div>

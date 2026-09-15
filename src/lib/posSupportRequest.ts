@@ -39,23 +39,8 @@ export function canSeePosNeedHelp(input: {
   authenticated: boolean;
   internalAdminRoute?: boolean;
   posLocked?: boolean;
-  /** Platform Remote Support master switch. Fail closed when missing or off. */
-  remoteSupportEnabled?: boolean;
 }): boolean {
-  return (
-    input.authenticated === true &&
-    input.internalAdminRoute !== true &&
-    input.posLocked !== true &&
-    input.remoteSupportEnabled === true
-  );
-}
-
-/** Opens the existing Need Help form. Does not start Remote Support. */
-export const POS_NEED_HELP_OPEN_EVENT = "waka:pos-need-help:open";
-
-export function openPosNeedHelpForm(): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new Event(POS_NEED_HELP_OPEN_EVENT));
+  return input.authenticated === true && input.internalAdminRoute !== true && input.posLocked !== true;
 }
 
 export function normalizePosSupportCategory(raw: string | null | undefined): PosSupportCategory | null {
@@ -83,7 +68,7 @@ export function buildPosSupportDiagnostics(input?: { category?: PosSupportCatego
 } {
   return {
     deviceId: getOrCreateDeviceId(),
-    appVersion: import.meta.env.VITE_APP_VERSION?.trim() || "1.0.13",
+    appVersion: import.meta.env.VITE_APP_VERSION?.trim() || "1.0.12",
     source: "pos_need_help",
     category: input?.category ?? null,
     role: input?.role ?? null,
@@ -122,22 +107,11 @@ export async function submitPosSupportTicket(input: {
     p_issue_type: parsed.category ?? "pos_support",
     p_diagnostics: diagnostics,
   });
-  if (error) {
-    if (import.meta.env.DEV) {
-      console.error("Support request failed", error);
-    }
-    return { ok: false, error: "failed", message: error.message };
-  }
+  if (error) return { ok: false, error: "failed", message: error.message };
   const j = data as { ok?: boolean; ticket_id?: string; error?: string };
   if (j?.ok && j.ticket_id) return { ok: true, ticketId: String(j.ticket_id) };
   if (j?.error === "forbidden" || j?.error === "not_authenticated" || j?.error === "description_required") {
-    if (import.meta.env.DEV) {
-      console.error("Support request failed", j);
-    }
     return { ok: false, error: j.error };
-  }
-  if (import.meta.env.DEV) {
-    console.error("Support request failed", j);
   }
   return { ok: false, error: "failed", message: j?.error ?? "Failed" };
 }

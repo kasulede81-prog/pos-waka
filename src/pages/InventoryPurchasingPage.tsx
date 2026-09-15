@@ -1,5 +1,6 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo } from "react";
+import clsx from "clsx";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -7,7 +8,6 @@ import { useSessionActor } from "../context/SessionActorContext";
 
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
-import { Package, ShoppingCart } from "lucide-react";
 import { WakaButton } from "../components/ui/wakaPrimitives";
 import { StockPage } from "./StockPage";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
@@ -16,10 +16,10 @@ import { InventoryWorkspaceOverview } from "../components/inventory/workspace/In
 import { PurchasesTab } from "../features/inventory-purchasing/components/PurchasesTab";
 import { SuppliersTab } from "../features/inventory-purchasing/components/SuppliersTab";
 import { PaymentsTab } from "../features/inventory-purchasing/components/PaymentsTab";
+import { PurchaseDetailSheet } from "../features/inventory-purchasing/components/PurchaseDetailSheet";
+import { SupplierDetailSheet } from "../features/inventory-purchasing/components/SupplierDetailSheet";
 import { useInventoryPurchasingTab } from "../features/inventory-purchasing/hooks/useInventoryPurchasingTab";
 import type { InventoryPurchasingTab } from "../features/inventory-purchasing/types";
-import { PurchaseDetailPage } from "./PurchaseDetailPage";
-import { SupplierDetailPage } from "./SupplierDetailPage";
 import { RestockPage } from "./RestockPage";
 
 export function InventoryPurchasingPage({ lang }: { lang: Language }) {
@@ -59,41 +59,28 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <EnterprisePageContainer variant="workspace" className="inventory-workspace">
-      <div className="inventory-hub-header inventory-enter inventory-enter--0 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <span className="inventory-hub-mark mt-6 hidden sm:flex">
-            <Package className="h-5 w-5" aria-hidden />
-          </span>
-          <EnterprisePageHeader
-            lang={lang}
-            title={t(lang, "ipPageTitle")}
-            subtitle={t(lang, "ipPageSub")}
-            backFallback="/office"
-            backLabel={t(lang, "officeBackToHub")}
-            compact
-            className="inventory-hub-header__identity min-w-0 flex-1"
-          />
-        </div>
+    <EnterprisePageContainer className="space-y-3">
+      <EnterprisePageHeader
+        lang={lang}
+        title={t(lang, "ipPageTitle")}
+        subtitle={t(lang, "ipPageSub")}
+        backFallback="/office"
+        backLabel={t(lang, "officeBackToHub")}
+        compact
+      >
         {canPurchasesRecord ? (
-          <WakaButton
-            type="button"
-            variant="primary"
-            className="inventory-hub-cta shrink-0 sm:mt-6"
-            iconLeft={<ShoppingCart className="h-5 w-5" aria-hidden />}
-            onClick={openNewPurchaseFlow}
-          >
-            <span className="flex flex-col items-start leading-tight">
-              <span>{t(lang, "ipActionNewPurchase")}</span>
-              <span className="hidden text-xs font-semibold opacity-90 sm:inline">
-                {t(lang, "ipActionNewPurchaseHint")}
-              </span>
-            </span>
+          <WakaButton type="button" variant="primary" onClick={openNewPurchaseFlow}>
+            + {t(lang, "ipActionNewPurchase")}
           </WakaButton>
         ) : null}
-      </div>
+      </EnterprisePageHeader>
 
-      <div className="inventory-hub-nav sticky top-0 z-20 -mx-3 px-3 py-2 md:-mx-6 md:px-6">
+      <div
+        className={clsx(
+          "sticky top-0 z-20 -mx-3 border-b border-border/80 bg-muted/95 px-3 py-2 backdrop-blur-md",
+          "supports-[backdrop-filter]:bg-muted/88 md:-mx-6 md:px-6",
+        )}
+      >
         <InventoryPurchasingTabs lang={lang} active={tab} onChange={setTab} visibleTabs={visibleTabs} />
       </div>
 
@@ -102,15 +89,13 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
           lang={lang}
           onSetTab={setTab}
           onReceiveStock={openNewPurchaseFlow}
-          onAddProduct={() => setTab("products", { add: "1", stockView: null, import: null })}
-          onImportCsv={() => setTab("products", { import: "csv", stockView: null, add: null })}
+          onAddProduct={() => setTab("products", { add: "1", stockView: null })}
         />
       ) : null}
 
       {tab === "purchases" && (canPurchasesView || canPurchasesRecord) ? (
-        purchaseId && canPurchasesView ? (
-          <PurchaseDetailPage lang={lang} purchaseId={purchaseId} embedded onClose={() => setPurchaseId(null)} />
-        ) : openNewPurchase && canPurchasesRecord ? (
+        openNewPurchase && canPurchasesRecord ? (
+          /* Phase 31.1 — single receive workflow surface (no ModalSheet → page nesting) */
           <RestockPage lang={lang} embedded onSaved={() => setOpenNewPurchase(false)} />
         ) : (
           <PurchasesTab lang={lang} onOpenPurchase={setPurchaseId} onNewPurchase={() => setOpenNewPurchase(true)} />
@@ -118,21 +103,7 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
       ) : null}
 
       {tab === "suppliers" && canSuppliers ? (
-        supplierId ? (
-          <SupplierDetailPage
-            lang={lang}
-            supplierId={supplierId}
-            embedded
-            onClose={() => setSupplierId(null)}
-            onOpenPurchase={(id) => {
-              setSupplierId(null);
-              setPurchaseId(id);
-              setTab("purchases");
-            }}
-          />
-        ) : (
-          <SuppliersTab lang={lang} onOpenSupplier={setSupplierId} />
-        )
+        <SuppliersTab lang={lang} onOpenSupplier={setSupplierId} />
       ) : null}
 
       {tab === "products" && canStock ? <StockPage lang={lang} workspaceEmbed /> : null}
@@ -141,7 +112,24 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
         <PaymentsTab
           lang={lang}
           onRecordPayment={() => setTab("suppliers")}
-          onOpenSupplier={(id) => setTab("suppliers", { supplierId: id })}
+          onOpenSupplier={setSupplierId}
+        />
+      ) : null}
+
+      {canPurchasesView ? (
+        <PurchaseDetailSheet lang={lang} purchaseId={purchaseId} onClose={() => setPurchaseId(null)} />
+      ) : null}
+
+      {canSuppliers ? (
+        <SupplierDetailSheet
+          lang={lang}
+          supplierId={supplierId}
+          onClose={() => setSupplierId(null)}
+          onOpenPurchase={(id) => {
+            setSupplierId(null);
+            setPurchaseId(id);
+            setTab("purchases");
+          }}
         />
       ) : null}
     </EnterprisePageContainer>

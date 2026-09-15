@@ -113,22 +113,6 @@ describe("P0-2 Hospitality settlement failure (store path)", () => {
       draftLines: [line],
       draftCartDiscountUgx: 0,
       activePendingSaleId: "pending-table-1",
-      sales: [
-        {
-          id: "pending-table-1",
-          status: "pending",
-          createdAt: "2026-06-02T10:00:00.000Z",
-          updatedAt: "2026-06-02T10:00:00.000Z",
-          subtotalUgx: 10_000,
-          totalUgx: 10_000,
-          cashPaidUgx: 0,
-          debtUgx: 0,
-          estimatedProfitUgx: 7_000,
-          lines: [line],
-          pendingSync: false,
-          lastSyncError: null,
-        },
-      ],
     });
   });
 
@@ -175,7 +159,6 @@ describe("P0-4 Credit permissions", () => {
       sales: [],
       draftLines: [line],
       draftCartDiscountUgx: 0,
-      activePendingSaleId: null,
     });
   });
 

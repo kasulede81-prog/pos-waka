@@ -72,18 +72,4 @@ describe("immediateSync", () => {
     await vi.waitFor(() => expect(mocks.runPosPushOnlyUpload).toHaveBeenCalled());
     vi.useRealTimers();
   });
-
-  it("reports when the immediate push scheduler throws", async () => {
-    vi.useFakeTimers();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    mocks.runPosPushOnlyUpload.mockRejectedValueOnce(new Error("push scheduler down"));
-    const { scheduleImmediateSyncForKind } = await import("./immediateSync");
-    scheduleImmediateSyncForKind("pending_stock_updates", { kind: "adjustment" });
-    await vi.runAllTimersAsync();
-    await vi.waitFor(() => expect(mocks.runPosPushOnlyUpload).toHaveBeenCalled());
-    await vi.waitFor(() => {
-      expect(JSON.stringify(warn.mock.calls)).toContain("immediate_push_failed");
-    });
-    vi.useRealTimers();
-  });
 });

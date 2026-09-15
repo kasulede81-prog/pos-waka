@@ -14,17 +14,14 @@ vi.mock("../offline/localDb", () => ({
 
 vi.mock("../offline/cloudSync", () => ({
   processCloudSyncOperation: vi.fn(async () => true),
-  probeBlockedReturnRecovery: async () => false,
 }));
 
 import { flushSyncQueue } from "../offline/syncEngine";
 import { readSyncQueue, removeSyncOperation } from "../offline/localDb";
 
 describe("localQueuePreservation", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-    const { usePosStore } = await import("../store/usePosStore");
-    usePosStore.setState({ _hydrated: true });
   });
 
   it("does not remove queue ops when Supabase is not configured", async () => {

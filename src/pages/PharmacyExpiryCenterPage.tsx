@@ -18,8 +18,6 @@ import { AdjustmentMovementPreview } from "../components/inventory/adjustments/A
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { Pill } from "lucide-react";
-import { printHtmlDocument } from "../lib/documentPrint";
-import { pharmacyReceiveReplacementHref } from "../lib/pharmacyReceiveDeepLink";
 
 const BUCKETS = ["expired", "today", "d7", "d30", "d60", "d90"] as const;
 
@@ -173,19 +171,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => {
-              const items = rows
-                .map(
-                  (row) =>
-                    `<li>${row.productName} · ${row.batchNumber} · ${row.expiryDate} · ${row.quantity} · ${formatUgx(row.valueUgx)}</li>`,
-                )
-                .join("");
-              printHtmlDocument(
-                `<article><h1>${t(lang, "pharmacyExpiryCenterTitle")}</h1><h2>${t(lang, BUCKET_LABEL[activeBucket])}</h2><ul>${items || `<li>${t(lang, "pharmacyExpiryEmpty")}</li>`}</ul></article>`,
-                "a4",
-                t(lang, "pharmacyExpiryCenterTitle"),
-              );
-            }}
+            onClick={() => window.print()}
             className="inline-flex min-h-[48px] items-center rounded-2xl border border-border bg-card px-4 text-sm font-black text-foreground touch-manipulation"
           >
             {t(lang, "pharmacyExpiryPrint")}
@@ -302,7 +288,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
                     <button
                       type="button"
                       onClick={() => {
-                        window.location.assign(pharmacyReceiveReplacementHref(row.productId));
+                        window.location.assign(`/pharmacy/inventory?productId=${row.productId}&receive=1`);
                       }}
                       className="min-h-[48px] rounded-2xl border border-teal-200 bg-teal-50 px-4 text-sm font-black text-teal-900 touch-manipulation"
                     >

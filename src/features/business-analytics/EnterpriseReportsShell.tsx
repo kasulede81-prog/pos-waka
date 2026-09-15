@@ -6,7 +6,6 @@ import { actorHasPermission } from "../../lib/actorAuthorization";
 import { usePosStore } from "../../store/usePosStore";
 import { useReportingSales } from "../../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../../hooks/useReportingReturnRecords";
-import { useDayClosesForAuthority } from "../../hooks/useDayClosesForAuthority";
 import { useShopReportBundle } from "../../hooks/useShopReporting";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { MONTH_TO_DATE_FILTER } from "../../lib/dateFilters";
@@ -15,17 +14,13 @@ import { formatDateFilterViewingLabel, isSingleDayFilter, selectedDayKeyForFilte
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../../lib/profitVisibility";
-import { authOperatorPermissions, authOperatorRole } from "../../lib/sessionActor";
 import { buildDailyReportText, shareText } from "../../lib/reportExport";
 import { downloadDailyReportPdf, printDailyReportPdf, shareDailyReportPdf } from "../../lib/dailyReportPdf";
-import { canExportReportsData, runReportsExportIfComplete } from "../../lib/reportsDataCompleteness";
-import { resolveCashDrawerFormulaVersion } from "../../lib/dayDrawerOpen";
 import { statusFromAuthority, ugxLabel, type ReportDocumentModel } from "../../lib/reportDocumentModel";
 import { printReportDocumentModel } from "../../lib/reportDocumentPrint";
 import { buildAnalyticsReportRows } from "../../lib/analyticsReportExport";
-import { computeReportsPeriodCashFlow } from "../../lib/reportsCashFlow";
 import { exportCsvFile, exportXlsxFile } from "../../lib/reportExportEngine";
-import { sumPurchasesForReporting } from "../../lib/purchaseReporting";
+import { filterPurchases } from "../../lib/purchaseReporting";
 import { computeHospitalityReports } from "../../lib/hospitalityReports";
 import { isHospitalityMode, totalOpenTablesPendingUgx } from "../../lib/hospitality";
 import { activeSessions } from "../../lib/hospitalityStats";
@@ -41,7 +36,6 @@ import {
   kpiCategoryForId,
   productLeaderboard,
 } from "./lib/analyticsPageView";
-import { presentReportsKpiSparkline } from "./lib/reportsKpiSparklineContext";
 import { buildSoldByNameByUserId } from "../../lib/soldByLabels";
 import { createReportSlotRenderer } from "./registry/enterpriseReportsRegistry";
 import { resolveReportsPageTitle } from "./registry/reportsCatalog";
@@ -60,9 +54,8 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const debtPayments = usePosStore((s) => s.debtPayments);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
-  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
-  const dayCloses = useDayClosesForAuthority();
+  const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const stockMovements = usePosStore((s) => s.stockMovements);
@@ -93,12 +86,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
 
   const can = useCallback((perm: Parameters<typeof actorHasPermission>[1]) => actorHasPermission(actor, perm), [actor]);
   const canViewReports = actorHasPermission(actor, "reports.view");
-  const { canProfit } = resolveProfitVisibility({
-    role: authOperatorRole(actor),
-    snapshot,
-    authMode,
-    actorPermissions: authOperatorPermissions(actor),
-  });
+  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
 
   const analytics = useMemo(
     () =>
@@ -121,45 +109,13 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, filter), [filter, lang]);
   const pageTitle = useMemo(() => resolveReportsPageTitle(lang, mode), [lang, mode]);
 
-  const purchasesInPeriodUgx = useMemo(() => sumPurchasesForReporting(purchases, bounds).totalUgx, [purchases, bounds]);
+  const purchasesInPeriodUgx = useMemo(() => {
+    return filterPurchases(purchases, bounds).reduce((a, p) => a + p.totalCostUgx, 0);
+  }, [purchases, bounds]);
 
-  const cashFlow = useMemo(
-    () =>
-      computeReportsPeriodCashFlow({
-        sales,
-        returns: returnRecords,
-        products,
-        debtPayments,
-        cashExpenses,
-        supplierPayments,
-        cashDrawerAdjustments,
-        shifts,
-        dayDrawerOpens,
-        formulaVersion: resolveCashDrawerFormulaVersion(preferences),
-        dayCloses,
-        bounds,
-      }),
-    [
-      sales,
-      returnRecords,
-      products,
-      debtPayments,
-      cashExpenses,
-      supplierPayments,
-      cashDrawerAdjustments,
-      shifts,
-      dayDrawerOpens,
-      preferences,
-      dayCloses,
-      bounds,
-    ],
-  );
-
-  const purchasesTodayUgx = useMemo(
-    () =>
-      sumPurchasesForReporting(purchases, { fromKey: reportDayKey, toKey: reportDayKey, isSingleDay: true }).totalUgx,
-    [purchases, reportDayKey],
-  );
+  const purchasesTodayUgx = useMemo(() => {
+    return purchases.filter((p) => dateKeyKampala(p.createdAt) === reportDayKey).reduce((a, p) => a + p.totalCostUgx, 0);
+  }, [purchases, reportDayKey]);
 
   const hospitalityReports = useMemo(() => {
     if (!isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) return null;
@@ -201,46 +157,43 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     [report.marginLeaders],
   );
 
-  const kpiCards = useMemo(() => {
-    if (report.loading) return [];
-    const liveReady = report.dataComplete;
-    return buildAnalyticsKpiCards({
-      revenue: report.revenue,
-      profit: report.profit,
-      count: report.count,
-      customerCount: liveReady ? analytics.customerCount : 0,
-      debtOutstanding: report.debtOutstanding,
-      canProfit,
-      compareEnabled: liveReady && compareEnabled,
-      priorRevenue: liveReady ? (analytics.prior?.summary.totalRevenueUgx ?? 0) : 0,
-      priorProfit: liveReady ? (analytics.prior?.profitUgx ?? 0) : 0,
-      priorCount: liveReady ? (analytics.prior?.summary.transactionCount ?? 0) : 0,
-      priorCustomers: liveReady ? analytics.priorCustomerCount : 0,
-      priorDebt: liveReady ? (analytics.prior?.customers.totalDebtOutstandingUgx ?? report.debtOutstanding) : report.debtOutstanding,
-      sparkline: presentReportsKpiSparkline(liveReady ? analytics.sparkline : [], {
-        dataComplete: liveReady,
-        closedDayBreakdownUnavailable: analytics.closedDayBreakdownUnavailable,
-        selectedBounds: bounds,
+  const kpiCards = useMemo(
+    () =>
+      buildAnalyticsKpiCards({
+        revenue: report.revenue,
+        profit: report.profit,
+        count: report.count,
+        customerCount: analytics.customerCount,
+        debtOutstanding: report.debtOutstanding,
+        canProfit,
+        compareEnabled,
+        priorRevenue: analytics.prior?.summary.totalRevenueUgx ?? 0,
+        priorProfit: analytics.prior?.profitUgx ?? 0,
+        priorCount: analytics.prior?.summary.transactionCount ?? 0,
+        priorCustomers: analytics.priorCustomerCount,
+        priorDebt: analytics.prior?.customers.totalDebtOutstandingUgx ?? report.debtOutstanding,
+        sparkline: analytics.sparkline,
       }),
-    });
-  }, [report, analytics, canProfit, compareEnabled, bounds]);
+    [report, analytics, canProfit, compareEnabled],
+  );
 
-  const aiInsights = useMemo(() => {
-    if (!report.dataComplete) return [];
-    return buildAiInsights({
-      revenue: report.revenue,
-      profit: report.profit,
-      priorRevenue: analytics.prior?.summary.totalRevenueUgx ?? 0,
-      priorProfit: analytics.prior?.profitUgx ?? 0,
-      topProduct: report.topProducts[0],
-      inventoryValue: analytics.inventory.stockValueAtCostUgx,
-      lowStockCount: analytics.inventory.lowStock.length,
-      lowStockProduct: analytics.inventory.lowStock[0]?.name,
-      customerCount: analytics.customerCount,
-      priorCustomerCount: analytics.priorCustomerCount,
-      canProfit,
-    });
-  }, [report, analytics, canProfit]);
+  const aiInsights = useMemo(
+    () =>
+      buildAiInsights({
+        revenue: report.revenue,
+        profit: report.profit,
+        priorRevenue: analytics.prior?.summary.totalRevenueUgx ?? 0,
+        priorProfit: analytics.prior?.profitUgx ?? 0,
+        topProduct: report.topProducts[0],
+        inventoryValue: analytics.inventory.stockValueAtCostUgx,
+        lowStockCount: analytics.inventory.lowStock.length,
+        lowStockProduct: analytics.inventory.lowStock[0]?.name,
+        customerCount: analytics.customerCount,
+        priorCustomerCount: analytics.priorCustomerCount,
+        canProfit,
+      }),
+    [report, analytics, canProfit],
+  );
 
   const soldByNameByUserId = useMemo(
     () =>
@@ -248,32 +201,29 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
         staffAccounts: preferences.staffAccounts,
         shifts,
         auditLogs,
-        ownerUserId: actor.authUserId ?? (actor.userId.startsWith("staff:") ? null : actor.userId),
+        ownerUserId: actor.userId.startsWith("staff:") ? null : actor.userId,
         ownerDisplayName: actor.displayName,
         shopDisplayName: preferences.shopDisplayName,
       }),
-    [preferences.staffAccounts, preferences.shopDisplayName, shifts, auditLogs, actor.authUserId, actor.userId, actor.displayName],
+    [preferences.staffAccounts, preferences.shopDisplayName, shifts, auditLogs, actor.userId, actor.displayName],
   );
 
   const searchNeedle = searchQuery.trim().toLowerCase();
 
   const topProducts = useMemo(() => {
-    if (report.closedDayBreakdownUnavailable) return [];
     const rows = productLeaderboard(report.topProducts, "revenue");
     if (!searchNeedle) return rows;
     return rows.filter((r) => r.label.toLowerCase().includes(searchNeedle));
-  }, [report.closedDayBreakdownUnavailable, report.topProducts, searchNeedle]);
+  }, [report.topProducts, searchNeedle]);
 
   const topCustomers = useMemo(() => {
-    if (report.closedDayBreakdownUnavailable) return [];
     const rows = customerLeaderboard(customers, sales, filter);
     if (!searchNeedle) return rows;
     return rows.filter((r) => r.label.toLowerCase().includes(searchNeedle));
-  }, [report.closedDayBreakdownUnavailable, customers, sales, filter, searchNeedle]);
+  }, [customers, sales, filter, searchNeedle]);
 
   const topCashiers = useMemo(
     () => {
-      if (report.closedDayBreakdownUnavailable) return [];
       const rows = computeTopCashiers(sales, analytics.bounds, {
         lang,
         nameByUserId: soldByNameByUserId,
@@ -282,7 +232,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       if (!searchNeedle) return rows;
       return rows.filter((r) => r.label.toLowerCase().includes(searchNeedle));
     },
-    [report.closedDayBreakdownUnavailable, sales, analytics.bounds, lang, soldByNameByUserId, preferences.shopDisplayName, searchNeedle],
+    [sales, analytics.bounds, lang, soldByNameByUserId, preferences.shopDisplayName, searchNeedle],
   );
 
   const exportSummaryText = useMemo(() => {
@@ -308,8 +258,6 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       supplierPayments,
       cashDrawerAdjustments,
       shifts,
-      dayDrawerOpens,
-      formulaVersion: resolveCashDrawerFormulaVersion(preferences),
       includeProfit: canProfit,
       dayCloses,
     });
@@ -329,8 +277,6 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     supplierPayments,
     cashDrawerAdjustments,
     shifts,
-    dayDrawerOpens,
-    preferences,
     dayCloses,
   ]);
 
@@ -363,8 +309,6 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       supplierPayments,
       cashDrawerAdjustments,
       shifts,
-      dayDrawerOpens,
-      formulaVersion: resolveCashDrawerFormulaVersion(preferences),
       topProducts: report.topProducts,
       includeProfit: canProfit,
       dayCloses,
@@ -372,7 +316,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     [
       lang,
       reportDayKey,
-      preferences,
+      preferences.shopDisplayName,
       sales,
       products,
       returnRecords,
@@ -381,7 +325,6 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       supplierPayments,
       cashDrawerAdjustments,
       shifts,
-      dayDrawerOpens,
       report.topProducts,
       canProfit,
       dayCloses,
@@ -389,10 +332,6 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   );
 
   const onExportPdf = useCallback(() => {
-    if (!canExportReportsData(report)) {
-      setReportHint(t(lang, "baReportExportNotReady"));
-      return;
-    }
     if (showDailyExport) {
       void downloadDailyReportPdf(dailyPdfInput).then((ok) =>
         setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")),
@@ -400,7 +339,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     } else {
       setReportHint(t(lang, "baExportDailyOnly"));
     }
-  }, [showDailyExport, dailyPdfInput, lang, report]);
+  }, [showDailyExport, dailyPdfInput, lang]);
 
   const analyticsExportRows = useMemo(
     () =>
@@ -411,47 +350,32 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
         report,
         expensesUgx: analytics.expensesUgx,
         purchasesInPeriodUgx,
-        cashFlow,
         canProfit,
       }),
-    [lang, pageTitle, periodLabel, report, analytics.expensesUgx, purchasesInPeriodUgx, cashFlow, canProfit],
+    [lang, pageTitle, periodLabel, report, analytics.expensesUgx, purchasesInPeriodUgx, canProfit],
   );
 
   const onExportCsv = useCallback(async () => {
-    const rows = runReportsExportIfComplete(report.dataComplete, () => analyticsExportRows);
-    if (!rows) {
-      setReportHint(t(lang, "baReportExportNotReady"));
-      return;
-    }
     const result = await exportCsvFile(
       "reports",
       `waka-report-${dateKeyKampala(new Date())}.csv`,
-      rows,
+      analyticsExportRows,
       { shareDialogTitle: pageTitle },
     );
     setReportHint(result.ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
-  }, [analyticsExportRows, lang, pageTitle, report.dataComplete]);
+  }, [analyticsExportRows, lang, pageTitle]);
 
   const onExportExcel = useCallback(async () => {
-    const rows = runReportsExportIfComplete(report.dataComplete, () => analyticsExportRows);
-    if (!rows) {
-      setReportHint(t(lang, "baReportExportNotReady"));
-      return;
-    }
     const result = await exportXlsxFile(
       "reports",
       `waka-report-${dateKeyKampala(new Date())}.xlsx`,
-      rows,
+      analyticsExportRows,
       { shareDialogTitle: pageTitle, sheetName: "Report" },
     );
     setReportHint(result.ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
-  }, [analyticsExportRows, lang, pageTitle, report.dataComplete]);
+  }, [analyticsExportRows, lang, pageTitle]);
 
   const onPrint = useCallback(async () => {
-    if (!canExportReportsData(report)) {
-      setReportHint(t(lang, "baReportExportNotReady"));
-      return;
-    }
     let ok = false;
     if (showDailyExport) {
       ok = await printDailyReportPdf(dailyPdfInput);
@@ -486,10 +410,6 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   }, [showDailyExport, dailyPdfInput, preferences.shopDisplayName, lang, pageTitle, periodLabel, report, canProfit]);
 
   const onShare = useCallback(() => {
-    if (!canExportReportsData(report)) {
-      setReportHint(t(lang, "baReportExportNotReady"));
-      return;
-    }
     if (showDailyExport) {
       void shareDailyReportPdf(dailyPdfInput).then((ok) =>
         setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")),
@@ -499,16 +419,12 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     void shareText(exportSummaryText, pageTitle, "reports").then((ok) =>
       setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")),
     );
-  }, [showDailyExport, dailyPdfInput, exportSummaryText, lang, pageTitle, report]);
+  }, [showDailyExport, dailyPdfInput, exportSummaryText, lang, pageTitle]);
 
   const onCopy = useCallback(() => {
-    if (!canExportReportsData(report)) {
-      setReportHint(t(lang, "baReportExportNotReady"));
-      return;
-    }
     void navigator.clipboard.writeText(exportSummaryText);
     setReportHint(t(lang, "reportCopied"));
-  }, [exportSummaryText, lang, report]);
+  }, [exportSummaryText, lang]);
 
   const ctx = useMemo((): ReportsCenterContext => ({
     lang,
@@ -550,7 +466,6 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     marginLeaders,
     purchasesTodayUgx,
     purchasesInPeriodUgx,
-    cashFlow,
     showDailyExport,
     reportDayKey,
     exportSummaryText,
@@ -612,7 +527,6 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     marginLeaders,
     purchasesTodayUgx,
     purchasesInPeriodUgx,
-    cashFlow,
     showDailyExport,
     reportDayKey,
     exportSummaryText,

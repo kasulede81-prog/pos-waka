@@ -98,16 +98,14 @@ export function formatDraftLineQty(product: Product, line: SaleLine): string {
   return formatSaleLineQuantity(line, product, "short");
 }
 
-/**
- * Rebuild a quantity line; scales an existing line discount proportionally.
- * Money-mode cart lines convert to quantity when the cashier uses +/- / qty edit.
- */
+/** Rebuild a quantity line; scales an existing line discount proportionally. */
 export function rebuildDraftLineQuantity(
   product: Product,
   quantity: number,
   prior?: SaleLine,
   packSlotStart?: number,
 ): SaleLine | null {
+  if (prior?.inputMode === "money") return null;
   const slotStart = packSlotStart ?? resolvePackCostUnitsDepleted(product);
   const built = buildSaleLine(product, "quantity", quantity, { packSlotStart: slotStart });
   if (!built.line) return null;
@@ -116,11 +114,9 @@ export function rebuildDraftLineQuantity(
     ...built.line,
     id: prior?.id ?? built.line.id ?? crypto.randomUUID(),
     updatedAt: now,
-    stockVersionAtAdd: prior?.stockVersionAtAdd ?? product.version ?? 1,
-    moneyAmountUgx: null as number | null,
+    stockVersionAtAdd: product.version ?? 1,
   };
-  // Money → quantity: drop money stamp; do not scale a money "discount" shape.
-  if (!prior || prior.inputMode === "money" || lineDiscountUgx(prior) <= 0) return line;
+  if (!prior || lineDiscountUgx(prior) <= 0) return line;
 
   const oldList = listPriceForLine(prior);
   const newList = line.lineTotalUgx;
@@ -138,14 +134,10 @@ export function rebuildDraftLineQuantity(
   };
 }
 
-/**
- * Same product (and hospitality config) may merge on cart add.
- * Money+money merges by summing amounts; money+quantity stays separate.
- */
+/** Money-mode lines must never be merged via quantity rebuild. */
 export function shouldMergeDraftSaleLines(existing: SaleLine | undefined, incoming: SaleLine): boolean {
   if (!existing) return false;
-  if (existing.inputMode === "money" && incoming.inputMode !== "money") return false;
-  if (existing.inputMode !== "money" && incoming.inputMode === "money") return false;
+  if (existing.inputMode === "money" || incoming.inputMode === "money") return false;
   return saleLineMergeKey(existing) === saleLineMergeKey(incoming);
 }
 

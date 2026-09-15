@@ -1,19 +1,18 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { inventoryPurchasingTabFromSearch } from "../../../lib/pharmacyReceiveDeepLink";
-import type { InventoryPurchasingTab } from "../types";
+import { INVENTORY_PURCHASING_TABS, type InventoryPurchasingTab } from "../types";
+
+function parseTab(raw: string | null): InventoryPurchasingTab {
+  if (raw && INVENTORY_PURCHASING_TABS.includes(raw as InventoryPurchasingTab)) {
+    return raw as InventoryPurchasingTab;
+  }
+  return "overview";
+}
 
 export function useInventoryPurchasingTab() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const tab = useMemo(
-    () =>
-      inventoryPurchasingTabFromSearch({
-        tab: searchParams.get("tab"),
-        receive: searchParams.get("receive"),
-      }),
-    [searchParams],
-  );
+  const tab = useMemo(() => parseTab(searchParams.get("tab")), [searchParams]);
 
   const setTab = useCallback(
     (next: InventoryPurchasingTab, extra?: Record<string, string | null>) => {

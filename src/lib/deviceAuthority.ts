@@ -5,8 +5,6 @@
 
 import { getOrCreateDeviceId } from "./deviceId";
 import { resolveShopCtx } from "../offline/cloudSync";
-import { getActiveAccountKey, onActiveAccountKeyChange } from "../offline/accountScope";
-import { getActiveShopId } from "../offline/shopScope";
 import { supabase } from "./supabase";
 
 export type DeviceFormFactor = "tablet" | "phone" | "windows" | "kitchen" | "bar";
@@ -96,7 +94,7 @@ export function seedOwnerApprovedDeviceAuthority(shopId: string): DeviceAuthorit
   return ctx;
 }
 
-type CachedEntry = { ctx: DeviceAuthorityContext; at: number; accountKey: string | null };
+type CachedEntry = { ctx: DeviceAuthorityContext; at: number };
 let memoryCache: CachedEntry | null = null;
 const refreshListeners = new Set<() => void>();
 
@@ -116,20 +114,13 @@ export function subscribeDeviceAuthorityRefresh(listener: () => void): () => voi
   return () => refreshListeners.delete(listener);
 }
 
-function cacheMatchesActiveContext(entry: CachedEntry, shopId?: string | null): boolean {
-  if ((entry.accountKey ?? null) !== (getActiveAccountKey() ?? null)) return false;
-  if (shopId && entry.ctx.shopId !== shopId) return false;
-  return true;
-}
-
 function readOfflineCache(shopId: string): DeviceAuthorityContext | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedEntry;
-    if (!parsed?.ctx) return null;
-    if (!cacheMatchesActiveContext(parsed, shopId)) return null;
+    if (parsed.ctx.shopId !== shopId) return null;
     return parsed.ctx;
   } catch {
     return null;
@@ -137,10 +128,12 @@ function readOfflineCache(shopId: string): DeviceAuthorityContext | null {
 }
 
 function writeOfflineCache(ctx: DeviceAuthorityContext): void {
-  const entry: CachedEntry = { ctx, at: Date.now(), accountKey: getActiveAccountKey() };
-  memoryCache = entry;
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+  if (typeof window === "undefined") {
+    memoryCache = { ctx, at: Date.now() };
+    return;
+  }
+  memoryCache = { ctx, at: Date.now() };
+  window.localStorage.setItem(CACHE_KEY, JSON.stringify(memoryCache));
 }
 
 /** Test helper — seed authority cache without cloud round-trip. */
@@ -192,8 +185,7 @@ function parseContext(data: unknown, shopId: string, fp: string): DeviceAuthorit
 }
 
 export function isDeviceAuthorizedForManagement(ctx: DeviceAuthorityContext | null | undefined): boolean {
-  const shopId = ctx?.shopId ?? getActiveShopId();
-  if (isShopOwnerDeviceAuthorityBypassActive(shopId)) return true;
+  if (isShopOwnerDeviceAuthorityBypassActive(ctx?.shopId)) return true;
   if (!ctx) return false;
   return ctx.isDeviceAuthorized;
 }
@@ -210,7 +202,7 @@ export async function fetchDeviceAuthorityContext(
   if (
     !opts?.force &&
     memoryCache &&
-    cacheMatchesActiveContext(memoryCache, ctx.shopId) &&
+    memoryCache.ctx.shopId === ctx.shopId &&
     Date.now() - memoryCache.at < CACHE_TTL_MS
   ) {
     return memoryCache.ctx;
@@ -246,19 +238,12 @@ export async function refreshDeviceAuthorityContext(
 }
 
 export function getCachedDeviceAuthoritySync(): DeviceAuthorityContext | null {
-  const activeShop = getActiveShopId();
-  if (memoryCache && cacheMatchesActiveContext(memoryCache, activeShop)) {
-    return memoryCache.ctx;
-  }
+  if (memoryCache) return memoryCache.ctx;
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedEntry;
-    if (!parsed?.ctx || !cacheMatchesActiveContext(parsed, activeShop)) {
-      memoryCache = null;
-      return null;
-    }
     memoryCache = parsed;
     return parsed.ctx;
   } catch {
@@ -267,18 +252,15 @@ export function getCachedDeviceAuthoritySync(): DeviceAuthorityContext | null {
 }
 
 export function isDeviceAuthorizedForManagementSync(): boolean {
-  const cached = getCachedDeviceAuthoritySync();
-  const shopId = getActiveShopId() ?? cached?.shopId ?? null;
-  if (isShopOwnerDeviceAuthorityBypassActive(shopId)) return true;
-  return isDeviceAuthorizedForManagement(cached);
+  if (isShopOwnerDeviceAuthorityBypassActive(getCachedDeviceAuthoritySync()?.shopId)) return true;
+  return isDeviceAuthorizedForManagement(getCachedDeviceAuthoritySync());
 }
 
 export function isDeviceApprovedCachedSync(): boolean {
-  const cached = getCachedDeviceAuthoritySync();
-  const shopId = getActiveShopId() ?? cached?.shopId ?? null;
-  if (isShopOwnerDeviceAuthorityBypassActive(shopId)) return true;
-  if (!cached) return false;
-  return cached.isApproved && cached.approvalStatus !== "pending";
+  if (isShopOwnerDeviceAuthorityBypassActive(getCachedDeviceAuthoritySync()?.shopId)) return true;
+  const ctx = getCachedDeviceAuthoritySync();
+  if (!ctx) return false;
+  return ctx.isApproved && ctx.approvalStatus !== "pending";
 }
 
 export function canPerformDeviceAuthorizedActionSync(_action: DeviceAuthorizedAction): boolean {
@@ -316,10 +298,4 @@ export async function setDeviceApprovalStatus(
   };
   if (result.ok) notifyAuthorityRefreshListeners();
   return result;
-}
-
-if (typeof onActiveAccountKeyChange === "function") {
-  onActiveAccountKeyChange(() => {
-    clearDeviceAuthorityCache();
-  });
 }

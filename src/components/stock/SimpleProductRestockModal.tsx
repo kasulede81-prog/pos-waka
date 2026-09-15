@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import clsx from "clsx";
 import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -20,7 +20,6 @@ import { ReceiveSummaryPanel } from "../inventory/receive/ReceiveSummaryPanel";
 import { ReceiveFooter } from "../inventory/receive/ReceiveFooter";
 import { ReceiveStatusStrip } from "../inventory/receive/ReceiveStatusStrip";
 import { wizardChoiceButtonClass } from "../inventory/receive/receiveTokens";
-import { releaseRestockSubmit, submitRestockOnce } from "../../lib/restockSubmitGuard";
 
 type Props = {
   lang: Language;
@@ -50,8 +49,6 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
   const [invoiceTotal, setInvoiceTotal] = useState("");
   const [restockUnit, setRestockUnit] = useState<PharmacyRestockUnit>("box");
   const [supplierId, setSupplierId] = useState(WALK_IN_SUPPLIER_ID);
-  const [submitting, setSubmitting] = useState(false);
-  const submitLockRef = useRef(false);
 
   const pharmacyPack = product ? isPharmacyPackagingActive(product) : false;
   const pkg = product?.pharmacyPackaging;
@@ -73,8 +70,6 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
 
   useEffect(() => {
     if (!open) return;
-    releaseRestockSubmit(submitLockRef);
-    setSubmitting(false);
     setPackQty("1");
     setPackPrice("");
     setInvoiceTotal("");
@@ -124,54 +119,37 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (submitLockRef.current) return;
     const qty = Math.max(0, Number(packQty.replace(/[^\d.]/g, "")) || 0);
     if (qty <= 0) return;
 
     if (pharmacyPack && preview && invoiceN > 0) {
-      setSubmitting(true);
-      const attempt = submitRestockOnce(submitLockRef, () =>
-        onSave({
-          productId: product.id,
-          packQty: qty,
-          costPerPackUgx: Math.round(invoiceN / qty),
-          supplierId: supplierId === WALK_IN_SUPPLIER_ID ? WALK_IN_SUPPLIER_ID : supplierId,
-          supplierName,
-          pharmacyRestock: {
-            unit: restockUnit,
-            invoiceTotalUgx: invoiceN,
-            baseUnitsIn: preview.baseUnitsAdded,
-            costPerBaseUnitUgx: preview.costPerBaseUnitUgx,
-          },
-        }),
-      );
-      if (!attempt.started) return;
-      if (!attempt.result.ok) {
-        setSubmitting(false);
-        return;
-      }
-      onClose();
+      const r = onSave({
+        productId: product.id,
+        packQty: qty,
+        costPerPackUgx: Math.round(invoiceN / qty),
+        supplierId: supplierId === WALK_IN_SUPPLIER_ID ? WALK_IN_SUPPLIER_ID : supplierId,
+        supplierName,
+        pharmacyRestock: {
+          unit: restockUnit,
+          invoiceTotalUgx: invoiceN,
+          baseUnitsIn: preview.baseUnitsAdded,
+          costPerBaseUnitUgx: preview.costPerBaseUnitUgx,
+        },
+      });
+      if (r.ok) onClose();
       return;
     }
 
     const cost = Math.floor(Number(packPrice.replace(/\D/g, "")) || 0);
     if (cost <= 0) return;
-    setSubmitting(true);
-    const attempt = submitRestockOnce(submitLockRef, () =>
-      onSave({
-        productId: product.id,
-        packQty: qty,
-        costPerPackUgx: cost,
-        supplierId: supplierId === WALK_IN_SUPPLIER_ID ? WALK_IN_SUPPLIER_ID : supplierId,
-        supplierName,
-      }),
-    );
-    if (!attempt.started) return;
-    if (!attempt.result.ok) {
-      setSubmitting(false);
-      return;
-    }
-    onClose();
+    const r = onSave({
+      productId: product.id,
+      packQty: qty,
+      costPerPackUgx: cost,
+      supplierId: supplierId === WALK_IN_SUPPLIER_ID ? WALK_IN_SUPPLIER_ID : supplierId,
+      supplierName,
+    });
+    if (r.ok) onClose();
   };
 
   const unitSelector =
@@ -225,15 +203,7 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
       onSubmit={onSubmit}
       onRequestClose={onClose}
       statusStrip={<ReceiveStatusStrip lang={lang} />}
-      footer={
-        <ReceiveFooter
-          lang={lang}
-          onCancel={onClose}
-          primaryLabelKey="stockRestockSave"
-          primaryBusy={submitting}
-          primaryDisabled={submitting}
-        />
-      }
+      footer={<ReceiveFooter lang={lang} onCancel={onClose} primaryLabelKey="stockRestockSave" />}
     >
       <PurchaseLineEditor
         lang={lang}

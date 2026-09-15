@@ -6,48 +6,26 @@ import { logAiRequest } from "../_shared/aiUsage.ts";
 import { llmModelFromSettings, ollamaBaseUrlFromSettings } from "../_shared/platformAiSettings.v2.ts";
 import { ASK_WAKA_SYSTEM_PROMPT, buildAskWakaUserPrompt } from "../_shared/askWakaPrompts.ts";
 import {
-  ASK_WAKA_MAX_ORCHESTRATION_MS,
   ASK_WAKA_MAX_TOOL_ROUNDS,
   ASK_WAKA_MAX_TOOLS_PER_ROUND,
   ASK_WAKA_TOOL_DEFINITIONS,
-  createAskWakaToolRunner,
   executeAskWakaTool,
   resolveAskWakaShopScope,
   validateAskWakaMessage,
   type AskWakaToolName,
 } from "../_shared/askWakaTools.ts";
 import {
+  ASK_WAKA_OUT_OF_SCOPE,
   ASK_WAKA_READ_ONLY_REFUSAL,
   ASK_WAKA_SAFE_TOOL_FAILURE,
   ASK_WAKA_SQL_REFUSAL,
   askWakaObservabilityTags,
+  classifyAskWakaQuestion,
   defaultArgsForAskWakaTool,
   ensureAskWakaDataAsOfInAnswer,
   guardAskWakaFinalAnswer,
   quantitativeToolsSatisfied,
 } from "../_shared/askWakaGuardrails.ts";
-import { routeAskWakaSources } from "../_shared/askWakaSourceRouter.ts";
-import {
-  ASK_WAKA_KNOWLEDGE_NOT_FOUND,
-  buildPosToolSourceRecords,
-  mergeAskWakaSources,
-  retrieveWakaKnowledge,
-  shouldShortCircuitKnowledgeNotFound,
-  type AskWakaSourceRecord,
-} from "../_shared/askWakaKnowledge.ts";
-import {
-  ASK_WAKA_PATH_REFUSAL,
-  ASK_WAKA_SECRET_REFUSAL,
-  ASK_WAKA_SOURCE_DUMP_REFUSAL,
-  ensureDisclosureLead,
-  isAskWakaPathProbe,
-  isAskWakaSecretProbe,
-  isAskWakaSourceDumpRequest,
-  looksLikeRawSourceDump,
-  scrubInternalPathsFromAnswer,
-  toClientSafeSources,
-} from "../_shared/askWakaCodeIntel.ts";
-import { WAKA_KNOWLEDGE_ARTIFACT } from "../_shared/wakaKnowledgeArtifactLoad.ts";
 import {
   createLlmChatProvider,
   type LlmChatMessage,
@@ -58,8 +36,6 @@ import { OLLAMA_FINAL_ANSWER_INSTRUCTION } from "../_shared/ollamaClient.ts";
 
 const FEATURE = "ask_waka";
 const KIND = "ask_waka_chat";
-/** ASK-4A: internal marker distinguishing a whole-orchestration timeout from a genuine provider failure. */
-const ASK_WAKA_ORCHESTRATION_TIMEOUT = "ask_waka_orchestration_timeout";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -96,8 +72,7 @@ Deno.serve(async (req) => {
     return aiFailure(messageCheck.reason, messageCheck.code, 400);
   }
 
-  const route = routeAskWakaSources(messageCheck.message);
-  const classification = route.posClassification;
+  const classification = classifyAskWakaQuestion(messageCheck.message);
 
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
@@ -166,22 +141,19 @@ Deno.serve(async (req) => {
   let tokensIn = 0;
   let tokensOut = 0;
   let toolsFailed = false;
-  let sources: AskWakaSourceRecord[] = [];
 
-  const knowledge = route.needsKnowledge
-    ? retrieveWakaKnowledge(messageCheck.message, route.lanes, WAKA_KNOWLEDGE_ARTIFACT, {
-        nowIso: dataAsOf,
-      })
-    : null;
-  if (knowledge) sources = knowledge.sources;
-
-  // Short-circuit write / SQL without tool calls or LLM spend.
-  // Out-of-scope jokes are no longer auto-refused — they route as GENERAL.
-  if (route.refuse) {
+  // Short-circuit write / SQL / out-of-scope without tool calls or LLM spend.
+  if (
+    classification.kind === "write_request" ||
+    classification.kind === "sql_request" ||
+    classification.kind === "out_of_scope"
+  ) {
     const canned =
-      route.actionKind === "write"
+      classification.kind === "write_request"
         ? ASK_WAKA_READ_ONLY_REFUSAL
-        : ASK_WAKA_SQL_REFUSAL;
+        : classification.kind === "sql_request"
+          ? ASK_WAKA_SQL_REFUSAL
+          : ASK_WAKA_OUT_OF_SCOPE;
 
     await logAiRequest(admin, {
       shopId,
@@ -205,69 +177,6 @@ Deno.serve(async (req) => {
     return aiSuccess({
       answer: canned,
       tools_used: [],
-      sources: [],
-      data_as_of: dataAsOf,
-      conversation_id: body.conversation_id ?? null,
-      usage: { tokens_in: 0, tokens_out: 0, latency_ms: Date.now() - started },
-    });
-  }
-
-  if (isAskWakaSecretProbe(messageCheck.message)) {
-    await logAiRequest(admin, {
-      shopId,
-      userId,
-      feature: FEATURE,
-      kind: KIND,
-      tokensIn: 0,
-      tokensOut: 0,
-      cacheHit: true,
-      success: true,
-      latencyMs: Date.now() - started,
-      provider: guard.settings.provider,
-      errorReason: askWakaObservabilityTags({
-        classification,
-        toolsUsed: [],
-        toolsFailed: false,
-        blockedReason: "secret_probe",
-      }),
-    });
-    return aiSuccess({
-      answer: ASK_WAKA_SECRET_REFUSAL,
-      tools_used: [],
-      sources: [],
-      data_as_of: dataAsOf,
-      conversation_id: body.conversation_id ?? null,
-      usage: { tokens_in: 0, tokens_out: 0, latency_ms: Date.now() - started },
-    });
-  }
-
-  if (
-    knowledge &&
-    shouldShortCircuitKnowledgeNotFound(route.lanes, knowledge.found)
-  ) {
-    await logAiRequest(admin, {
-      shopId,
-      userId,
-      feature: FEATURE,
-      kind: KIND,
-      tokensIn: 0,
-      tokensOut: 0,
-      cacheHit: true,
-      success: true,
-      latencyMs: Date.now() - started,
-      provider: guard.settings.provider,
-      errorReason: askWakaObservabilityTags({
-        classification,
-        toolsUsed: [],
-        toolsFailed: false,
-        blockedReason: "knowledge_not_found",
-      }),
-    });
-
-    return aiSuccess({
-      answer: ASK_WAKA_KNOWLEDGE_NOT_FOUND,
-      tools_used: [],
-      sources: [],
       data_as_of: dataAsOf,
       conversation_id: body.conversation_id ?? null,
       usage: { tokens_in: 0, tokens_out: 0, latency_ms: Date.now() - started },
@@ -301,17 +210,8 @@ Deno.serve(async (req) => {
     );
   }
 
-  const offerTools = route.offerPosTools;
-  // ASK-4A: deepseek-reasoner's function-calling support is not verified for this
-  // integration (llmProvider.ts sends the same tools/tool_choice payload to every
-  // DeepSeek model). Rather than risk silently broken tool calls, force deepseek-chat
-  // for any request that will actually offer tools; reasoner remains usable for
-  // pure-knowledge requests where no tools are sent.
-  const configuredModel = llmModelFromSettings(guard.settings);
-  const chatModel =
-    offerTools && configuredModel === "deepseek-reasoner" && String(guard.settings.provider || "").toLowerCase() === "deepseek"
-      ? "deepseek-chat"
-      : configuredModel;
+  const chatModel = llmModelFromSettings(guard.settings);
+  const offerTools = classification.kind === "quantitative" || classification.kind === "general_business";
   const messages: LlmChatMessage[] = [
     { role: "system", content: ASK_WAKA_SYSTEM_PROMPT },
     {
@@ -323,53 +223,21 @@ Deno.serve(async (req) => {
         dataAsOf,
         questionKind: classification.kind,
         requiredTools: classification.requiredTools,
-        lanes: route.lanes,
-        retrievedKnowledge: knowledge?.context ?? "",
-        knowledgeFound: knowledge?.found === true,
       }),
     },
   ];
 
   let finalAnswer: string | null = null;
 
-  // ASK-4A: whole-orchestration wall-clock budget — covers every LLM call and
-  // every tool execution in this request, not just one HTTP call.
-  const orchestrationDeadline = Date.now() + ASK_WAKA_MAX_ORCHESTRATION_MS;
-  function withDeadline<T>(promise: Promise<T>): Promise<T> {
-    const remaining = orchestrationDeadline - Date.now();
-    if (remaining <= 0) return Promise.reject(new Error(ASK_WAKA_ORCHESTRATION_TIMEOUT));
-    let timer: number | undefined;
-    const timeout = new Promise<T>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(ASK_WAKA_ORCHESTRATION_TIMEOUT)), remaining);
-    });
-    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
-  }
-
-  // ASK-4A: request-local dedup cache + total-call budget. Never persisted,
-  // never shared across requests — lives only for this one invocation.
-  const toolRunner = createAskWakaToolRunner({
-    execute: (toolName, rawArgs) =>
-      withDeadline(executeAskWakaTool({ userClient, boundShopId: shopId, toolName, rawArgs })),
-    budgetExhaustedResult: (toolName) => ({
-      ok: false as const,
-      tool: toolName,
-      code: "tool_budget_exhausted",
-      reason: "Tool call budget exceeded for this request",
-    }),
-  });
-  const runTool = toolRunner.run;
-
-  let orchestrationTimedOut = false;
-
   try {
-    for (let round = 0; round < ASK_WAKA_MAX_TOOL_ROUNDS && !toolRunner.isBudgetExhausted(); round++) {
-      const llm = await withDeadline(provider.chat({
+    for (let round = 0; round < ASK_WAKA_MAX_TOOL_ROUNDS; round++) {
+      const llm = await provider.chat({
         model: chatModel,
         messages,
         tools: offerTools ? ASK_WAKA_TOOL_DEFINITIONS : undefined,
         temperature: 0.2,
         maxTokens: 1200,
-      }));
+      });
       tokensIn += llm.tokensIn;
       tokensOut += llm.tokensOut;
 
@@ -390,7 +258,12 @@ Deno.serve(async (req) => {
 
       for (const call of sequentialCalls) {
         const parsedArgs = parseToolArguments(call);
-        const result = await runTool(call.function.name, parsedArgs);
+        const result = await executeAskWakaTool({
+          userClient,
+          boundShopId: shopId,
+          toolName: call.function.name,
+          rawArgs: parsedArgs,
+        });
 
         if (result.ok) {
           toolsUsed.push(result.tool);
@@ -400,7 +273,7 @@ Deno.serve(async (req) => {
             content: JSON.stringify(result.data),
           });
         } else {
-          if (result.code !== "tool_budget_exhausted") toolsFailed = true;
+          toolsFailed = true;
           messages.push({
             role: "tool",
             tool_call_id: call.id,
@@ -416,15 +289,18 @@ Deno.serve(async (req) => {
 
     // Force-execute required tools when the model skipped them for a quantitative ask.
     if (
-      !toolRunner.isBudgetExhausted() &&
-      route.offerPosTools &&
       classification.kind === "quantitative" &&
       !quantitativeToolsSatisfied(classification, toolsUsed)
     ) {
       const toRun = classification.requiredTools.slice(0, 2);
       for (const toolName of toRun) {
         if (toolsUsed.includes(toolName)) continue;
-        const result = await runTool(toolName, defaultArgsForAskWakaTool(toolName as AskWakaToolName, classification));
+        const result = await executeAskWakaTool({
+          userClient,
+          boundShopId: shopId,
+          toolName,
+          rawArgs: defaultArgsForAskWakaTool(toolName as AskWakaToolName, classification),
+        });
         if (result.ok) {
           toolsUsed.push(result.tool);
           messages.push({
@@ -437,7 +313,7 @@ Deno.serve(async (req) => {
               },
             }),
           });
-        } else if (result.code !== "tool_budget_exhausted") {
+        } else {
           toolsFailed = true;
         }
       }
@@ -449,8 +325,6 @@ Deno.serve(async (req) => {
             tokensOut += outT;
           } },
           preferOllama: isOllamaProvider(provider.name),
-          hasKnowledge: Boolean(knowledge?.found),
-          withDeadline,
         });
       } else {
         finalAnswer = ASK_WAKA_SAFE_TOOL_FAILURE;
@@ -463,8 +337,6 @@ Deno.serve(async (req) => {
         } },
         preferOllama: isOllamaProvider(provider.name),
         toolsFailed,
-        hasKnowledge: Boolean(knowledge?.found),
-        withDeadline,
       });
     }
 
@@ -473,32 +345,27 @@ Deno.serve(async (req) => {
       finalAnswer = ASK_WAKA_SAFE_TOOL_FAILURE;
     }
   } catch (e) {
-    if (e instanceof Error && e.message === ASK_WAKA_ORCHESTRATION_TIMEOUT) {
-      orchestrationTimedOut = true;
-      finalAnswer = ASK_WAKA_SAFE_TOOL_FAILURE;
-    } else {
-      const msg = e instanceof Error ? e.message : "ai_provider_failed";
-      await logAiRequest(admin, {
-        shopId,
-        userId,
-        feature: FEATURE,
-        kind: KIND,
-        tokensIn,
-        tokensOut,
-        cacheHit: false,
-        success: false,
-        latencyMs: Date.now() - started,
-        provider: guard.settings.provider,
-        errorReason: askWakaObservabilityTags({
-          classification,
-          toolsUsed,
-          toolsFailed,
-          blockedReason: "provider_failed",
-          providerFailed: true,
-        }) + `;detail=${msg.slice(0, 120)}`,
-      });
-      return aiFailure("AI provider failed", "ai_provider_failed", 502);
-    }
+    const msg = e instanceof Error ? e.message : "ai_provider_failed";
+    await logAiRequest(admin, {
+      shopId,
+      userId,
+      feature: FEATURE,
+      kind: KIND,
+      tokensIn,
+      tokensOut,
+      cacheHit: false,
+      success: false,
+      latencyMs: Date.now() - started,
+      provider: guard.settings.provider,
+      errorReason: askWakaObservabilityTags({
+        classification,
+        toolsUsed,
+        toolsFailed,
+        blockedReason: "provider_failed",
+        providerFailed: true,
+      }) + `;detail=${msg.slice(0, 120)}`,
+    });
+    return aiFailure("AI provider failed", "ai_provider_failed", 502);
   }
 
   let guarded = guardAskWakaFinalAnswer({
@@ -519,22 +386,6 @@ Deno.serve(async (req) => {
     };
   }
 
-  sources = toClientSafeSources(
-    mergeAskWakaSources(knowledge?.sources ?? [], buildPosToolSourceRecords({
-      toolsUsed: [...new Set(toolsUsed)],
-      dataAsOf,
-    })),
-  ) as unknown as AskWakaSourceRecord[];
-
-  let answer = guarded.answer;
-  if (isAskWakaSourceDumpRequest(messageCheck.message) || looksLikeRawSourceDump(answer)) {
-    answer = ensureDisclosureLead(scrubInternalPathsFromAnswer(answer), ASK_WAKA_SOURCE_DUMP_REFUSAL);
-  } else if (isAskWakaPathProbe(messageCheck.message)) {
-    answer = ensureDisclosureLead(scrubInternalPathsFromAnswer(answer), ASK_WAKA_PATH_REFUSAL);
-  } else {
-    answer = scrubInternalPathsFromAnswer(answer);
-  }
-
   await logAiRequest(admin, {
     shopId,
     userId,
@@ -550,14 +401,13 @@ Deno.serve(async (req) => {
       classification,
       toolsUsed,
       toolsFailed,
-      blockedReason: orchestrationTimedOut ? "orchestration_timeout" : guarded.reason,
+      blockedReason: guarded.reason,
     }),
   });
 
   return aiSuccess({
-    answer,
+    answer: guarded.answer,
     tools_used: [...new Set(toolsUsed)],
-    sources,
     data_as_of: dataAsOf,
     conversation_id: body.conversation_id ?? null,
     usage: {
@@ -589,33 +439,29 @@ async function requestFinalAnswer(
     tokens: { add: (inT: number, outT: number) => void };
     preferOllama: boolean;
     toolsFailed?: boolean;
-    hasKnowledge?: boolean;
-    withDeadline: <T>(promise: Promise<T>) => Promise<T>;
   },
 ): Promise<string | null> {
   const baseInstruction = opts.toolsFailed
-    ? "Using only the tool results and retrieved WAKA knowledge above, write the final concise answer. If POS tools failed, say the shop figures could not be retrieved. Do not invent numbers, files, or commits. Do not mention internal tool names."
-    : opts.hasKnowledge
-      ? "Write the final concise answer using retrieved WAKA knowledge and any POS tool results. Prefer current code over old docs for how WAKA works now. Do not invent numbers, files, commits, or milestones. Separate FACT from RECOMMENDATION. Do not mention internal tool names."
-      : "Using only the tool results above, write the final concise business answer. State the period. Use UGX without unnecessary decimals. If a figure is zero, say zero clearly. Separate FACT from RECOMMENDATION if you give advice. Do not invent numbers. Do not mention internal tool names.";
+    ? "Using only the tool results above, write the final concise business answer. If tools failed, say the information could not be retrieved. Do not invent numbers. Do not mention internal tool names."
+    : "Using only the tool results above, write the final concise business answer. State the period. Use UGX without unnecessary decimals. If a figure is zero, say zero clearly. Separate FACT from RECOMMENDATION if you give advice. Do not invent numbers. Do not mention internal tool names.";
 
   const instruction = opts.preferOllama
     ? `${baseInstruction}\n\n${OLLAMA_FINAL_ANSWER_INSTRUCTION}`
     : baseInstruction;
 
-  const closing = await opts.withDeadline(provider.chat({
+  const closing = await provider.chat({
     model: chatModel,
     messages: [...messages, { role: "user", content: instruction }],
     temperature: 0.2,
     maxTokens: 800,
-  }));
+  });
   opts.tokens.add(closing.tokensIn, closing.tokensOut);
   const text = (closing.content ?? "").trim();
   if (text) return text;
 
   // Ollama/Qwen sometimes returns empty content after tools; one more controlled nudge.
   if (opts.preferOllama) {
-    const retry = await opts.withDeadline(provider.chat({
+    const retry = await provider.chat({
       model: chatModel,
       messages: [
         ...messages,
@@ -624,7 +470,7 @@ async function requestFinalAnswer(
       ],
       temperature: 0.1,
       maxTokens: 800,
-    }));
+    });
     opts.tokens.add(retry.tokensIn, retry.tokensOut);
     return (retry.content ?? "").trim() || null;
   }

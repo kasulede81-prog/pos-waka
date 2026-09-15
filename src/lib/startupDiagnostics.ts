@@ -294,10 +294,7 @@ export type StartupPhaseId =
   | "device_classification"
   | "recovery_applicable"
   | "onboarding_required"
-  | "dashboard_ready"
-  | "staff_auth_hydrate"
-  | "staff_invite_accepted"
-  | "staff_invite_pending_skip_owner_bootstrap";
+  | "dashboard_ready";
 
 /** Structured startup phase log for diagnosing registration / boot failures. */
 export function logStartupPhase(phase: StartupPhaseId, detail?: Record<string, unknown>): void {

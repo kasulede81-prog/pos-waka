@@ -1,19 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
-import type {
-  CashExpense,
-  CashDrawerAdjustment,
-  CashDrawerFormulaVersion,
-  DayCloseSummary,
-  DayDrawerOpen,
-  DebtPayment,
-  Language,
-  Product,
-  ReturnRecord,
-  Sale,
-  ShiftRecord,
-  SupplierPayment,
-} from "../types";
+import type { CashExpense, CashDrawerAdjustment, DayCloseSummary, DebtPayment, Language, Product, ReturnRecord, Sale, ShiftRecord, SupplierPayment } from "../types";
 import { t } from "./i18n";
 import { dateKeyKampala } from "./datesUg";
 import { getDrawerCashForDayInput } from "./cashReconciliation";
@@ -31,9 +18,6 @@ export type DailyReportExportInput = {
   supplierPayments?: SupplierPayment[];
   cashDrawerAdjustments?: CashDrawerAdjustment[];
   shifts?: ShiftRecord[];
-  dayDrawerOpens?: DayDrawerOpen[];
-  /** Prefer resolveCashDrawerFormulaVersion(preferences); unset → V2 via drawer default. */
-  formulaVersion?: CashDrawerFormulaVersion;
   /** When false, profit line is omitted (Free tier). */
   includeProfit?: boolean;
   dayCloses?: DayCloseSummary[];
@@ -84,15 +68,11 @@ export function buildDailyReportText(
     supplierPayments: input.supplierPayments ?? [],
     cashDrawerAdjustments: input.cashDrawerAdjustments ?? [],
     shifts: input.shifts ?? [],
-    dayDrawerOpens: input.dayDrawerOpens ?? [],
-    formulaVersion: input.formulaVersion,
     day: dateKey,
   });
   const frozen = resolveReportAuthority(input.dayCloses, dateKey).frozenTotals;
   const total = frozen?.totalSalesUgx ?? fin.revenueUgx;
-  /** cashInHand = physical drawer cash from sales (MoMo/ATM excluded), same as Close Day / Cash Position. */
-  const cashUnavailable = Boolean(frozen) && frozen?.cashFromSalesUgx == null;
-  const cash = cashUnavailable ? null : (frozen?.cashFromSalesUgx ?? drawer.cashFromSalesUgx);
+  const cash = frozen?.cashFromSalesUgx ?? fin.cashCollectedUgx;
   const debt = frozen?.totalDebtUgx ?? fin.debtIssuedUgx;
   const profit = frozen?.profitEstimateUgx ?? fin.profitUgx;
   const txnCount = frozen?.transactionCount ?? fin.transactionCount;
@@ -105,11 +85,7 @@ export function buildDailyReportText(
   }
   lines.push(`${t(lang, "salesCount")}: ${txnCount}`);
   lines.push(`${t(lang, "totalSales")}: UGX ${total.toLocaleString()}`);
-  lines.push(
-    cashUnavailable || cash == null
-      ? `${t(lang, "cashInHand")}: ${t(lang, "reportsClosedBreakdownUnavailable")}`
-      : `${t(lang, "cashInHand")}: UGX ${cash.toLocaleString()}`,
-  );
+  lines.push(`${t(lang, "cashInHand")}: UGX ${cash.toLocaleString()}`);
   lines.push(`${t(lang, "ownerCardExpectedCash")}: UGX ${expectedCash.toLocaleString()}`);
   lines.push(`${t(lang, "creditLabel")}: UGX ${debt.toLocaleString()}`);
   if (includeProfit) {

@@ -11,7 +11,6 @@ type Props = {
   lang: Language;
   cards: KpiCardModel[];
   periodLabel: string;
-  comparisonLabelKey?: string;
 };
 
 const KPI_ICONS: Record<string, LucideIcon> = {
@@ -23,7 +22,7 @@ const KPI_ICONS: Record<string, LucideIcon> = {
   cash: Wallet,
 };
 
-export function CommandCenterKpiGrid({ lang, cards, periodLabel, comparisonLabelKey = "cmdCenterVsYesterday" }: Props) {
+export function CommandCenterKpiGrid({ lang, cards, periodLabel }: Props) {
   return (
     <section>
       <div className="mb-2 flex items-end justify-between gap-2">
@@ -44,7 +43,7 @@ export function CommandCenterKpiGrid({ lang, cards, periodLabel, comparisonLabel
                 <MiniSparkline points={card.sparkline} />
               </div>
             }
-            hint={card.pctChange ? `${card.pctChange} ${t(lang, comparisonLabelKey)}` : undefined}
+            hint={card.pctChange ? `${card.pctChange} ${t(lang, "cmdCenterVsYesterday")}` : undefined}
           />
         ))}
       </div>

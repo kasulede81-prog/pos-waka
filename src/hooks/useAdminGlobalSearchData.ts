@@ -8,7 +8,7 @@ import {
 } from "../lib/internalAdminPreview";
 import { PREVIEW_APP_RELEASES } from "../lib/releaseManagementAdmin";
 import { opsListActivationRequests, type OpsActivationRow } from "../lib/businessActivation";
-import { fetchFleetDevices, fetchInternalAdmins, fetchSupportTickets } from "../lib/wakaInternalAdmin";
+import { fetchFleetDevices, fetchInternalAdmins, fetchShopsBySignupDate, fetchSupportTickets } from "../lib/wakaInternalAdmin";
 import { fetchAppReleases } from "../lib/releaseManagementAdmin";
 import { internalListMarketingAgents } from "../lib/referralAgents";
 import { fetchPricingCampaigns, type PricingCampaign } from "../lib/pricingCampaignsAdmin";
@@ -45,8 +45,6 @@ export type FeatureFlagSearchRow = {
 export const INTERNAL_ADMIN_FEATURE_FLAGS: FeatureFlagSearchRow[] = [
   { id: "pilot", label: "Pilot cohort", path: "/internal/waka/pilot" },
   { id: "display_scale", label: "POS display scale", path: "/internal/waka/display-scale" },
-  { id: "remote_support", label: "Remote Support", path: "/internal/waka/remote-support" },
-  { id: "ai_settings", label: "AI Control Center", path: "/internal/waka/ai-settings" },
   { id: "business_types", label: "Business types", path: "/internal/waka/business-types" },
 ];
 
@@ -124,6 +122,7 @@ export function useAdminGlobalSearchData(previewMode: boolean): AdminGlobalSearc
       return;
     }
     const [
+      shopRows,
       ticketRows,
       deviceRows,
       adminRows,
@@ -133,6 +132,7 @@ export function useAdminGlobalSearchData(previewMode: boolean): AdminGlobalSearc
       pricingRows,
       growthRows,
     ] = await Promise.all([
+      fetchShopsBySignupDate(100),
       fetchSupportTickets(80),
       fetchFleetDevices(120),
       fetchInternalAdmins(),
@@ -142,7 +142,7 @@ export function useAdminGlobalSearchData(previewMode: boolean): AdminGlobalSearc
       fetchPricingCampaigns(),
       fetchGrowthCampaigns(),
     ]);
-    setShops([]);
+    setShops(shopRows);
     setTickets(ticketRows);
     setDevices(deviceRows);
     setAdmins(adminRows);

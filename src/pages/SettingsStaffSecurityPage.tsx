@@ -6,7 +6,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { Navigate } from "react-router-dom";
 import { STAFF_AUTO_LOCK_OPTIONS, lockPos } from "../lib/auth";
 import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSaveShell";
-import { PreferencesAutoSaveProvider, usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
+import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 
 function StaffSecurityBody({ lang }: { lang: Language }) {
@@ -22,7 +22,6 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
           onChange={(e) =>
             savePreferences({
               staffAutoLockMinutes: Number(e.target.value) as (typeof STAFF_AUTO_LOCK_OPTIONS)[number],
-              ...(Number(e.target.value) === 0 ? { posLocked: false } : {}),
             })
           }
           className="mt-1.5 w-full rounded-2xl border-2 border-border px-4 py-3 dark:bg-foreground"
@@ -38,12 +37,7 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
 
       <WakaSwitch
         checked={preferences.staffRequirePinAfterIdle !== false}
-        onCheckedChange={(checked) =>
-          savePreferences({
-            staffRequirePinAfterIdle: checked,
-            ...(!checked ? { posLocked: false } : {}),
-          })
-        }
+        onCheckedChange={(checked) => savePreferences({ staffRequirePinAfterIdle: checked })}
         label={t(lang, "settingsStaffRequirePinIdle")}
       />
       <WakaSwitch
@@ -97,29 +91,10 @@ function StaffSecurityBody({ lang }: { lang: Language }) {
   );
 }
 
-export function SettingsStaffSecurityPage({
-  lang,
-  embedded = false,
-}: {
-  lang: Language;
-  embedded?: boolean;
-}) {
+export function SettingsStaffSecurityPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
-  }
-  if (embedded) {
-    return (
-      <PreferencesAutoSaveProvider lang={lang}>
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-black text-foreground">{t(lang, "staffCenterTabSecurity")}</h2>
-            <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "settingsStaffSecuritySub")}</p>
-          </div>
-          <StaffSecurityBody lang={lang} />
-        </div>
-      </PreferencesAutoSaveProvider>
-    );
   }
   return (
     <SettingsAutoSaveShell

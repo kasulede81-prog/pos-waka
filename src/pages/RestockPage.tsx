@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -8,9 +8,7 @@ import { usePosStore } from "../store/usePosStore";
 import { purchaseLineCostTotalUgx } from "../lib/sellingEngine";
 import { WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { dateKeyKampala } from "../lib/datesUg";
-import { RestockLineCard, type RestockLinePatch, type RestockLineRow } from "../components/stock/RestockLineCard";
-import { buildRestockPurchaseLines } from "../lib/restockPurchaseLines";
-import { shouldTrackBatchesForProduct } from "../lib/pharmacyStoreBatch";
+import { RestockLineCard, type RestockLineRow } from "../components/stock/RestockLineCard";
 import { RestockProductPicker } from "../components/stock/RestockProductPicker";
 import { ReceiveOperationShell } from "../components/inventory/receive/ReceiveOperationShell";
 import { SupplierSelector } from "../components/inventory/receive/SupplierSelector";
@@ -21,15 +19,8 @@ import { ReceiveFooter } from "../components/inventory/receive/ReceiveFooter";
 import { ReceiveStatusStrip } from "../components/inventory/receive/ReceiveStatusStrip";
 import { WIZARD_INPUT_TEXT } from "../components/inventory/receive/receiveTokens";
 import { RECEIVE_FIELD_LABEL } from "../components/inventory/receive/receiveTokens";
-import {
-  paidUgxForReceiveStatus,
-  type ReceivePayStatus,
-} from "../components/inventory/receive/receivePaymentStatus";
-import {
-  defaultReceiveBuySource,
-  type ReceiveBuySource,
-} from "../components/inventory/receive/receiveBuySourceDefault";
-import { releaseRestockSubmit, submitRestockOnce } from "../lib/restockSubmitGuard";
+
+type BuySource = "town" | "supplier";
 
 export function RestockPage({
   lang,
@@ -42,27 +33,18 @@ export function RestockPage({
 }) {
   const suppliers = usePosStore((s) => s.suppliers);
   const products = usePosStore((s) => s.products);
-  const preferences = usePosStore((s) => s.preferences);
   const recordPurchase = usePosStore((s) => s.recordPurchase);
 
-  const [buySource, setBuySource] = useState<ReceiveBuySource>(() =>
-    defaultReceiveBuySource(usePosStore.getState().suppliers),
-  );
+  const [buySource, setBuySource] = useState<BuySource>("town");
   const [supplierId, setSupplierId] = useState("");
   const [townPlace, setTownPlace] = useState("");
   const [lines, setLines] = useState<RestockLineRow[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [payStatus, setPayStatus] = useState<ReceivePayStatus>(() =>
-    defaultReceiveBuySource(usePosStore.getState().suppliers) === "supplier" ? "unpaid" : "paid",
-  );
   const [paidStr, setPaidStr] = useState("");
   const [notes, setNotes] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [msgTone, setMsgTone] = useState<"ok" | "err">("ok");
-  const [submitting, setSubmitting] = useState(false);
-  const submitLockRef = useRef(false);
 
   const walkIn = buySource === "town";
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -92,8 +74,7 @@ export function RestockPage({
     return { sum, units, count: lines.length };
   }, [lines, productById]);
 
-  const typedPaid = Math.floor(Number(paidStr.replace(/\D/g, "")) || 0);
-  const paidAmount = walkIn ? totals.sum : paidUgxForReceiveStatus(payStatus, totals.sum, typedPaid);
+  const paidAmount = Math.floor(Number(paidStr.replace(/\D/g, "")) || 0);
   const balanceOwed = walkIn ? 0 : Math.max(0, totals.sum - paidAmount);
 
   useEffect(() => {
@@ -101,33 +82,14 @@ export function RestockPage({
     if (!supplierId && suppliers.length > 0) setSupplierId(suppliers[0]!.id);
   }, [walkIn, supplierId, suppliers]);
 
-  useEffect(() => {
-    if (lines.length > 0) return;
-    if (!submitLockRef.current && !submitting) return;
-    releaseRestockSubmit(submitLockRef);
-    setSubmitting(false);
-  }, [lines.length, submitting]);
-
   const addProductLine = (productId: string) => {
-    setLines((prev) => [
-      ...prev,
-      {
-        key: crypto.randomUUID(),
-        productId,
-        qtyBuyingStr: "1",
-        costPerBuyingStr: "",
-        batchNumber: "",
-        expiryDate: "",
-        manufactureDate: "",
-        location: "",
-      },
-    ]);
+    setLines((prev) => [...prev, { key: crypto.randomUUID(), productId, qtyBuyingStr: "1", costPerBuyingStr: "" }]);
     setPickerOpen(false);
     setPickerQuery("");
     setMsg(null);
   };
 
-  const updateLine = (key: string, patch: RestockLinePatch) => {
+  const updateLine = (key: string, patch: Partial<Pick<RestockLineRow, "qtyBuyingStr" | "costPerBuyingStr">>) => {
     setLines((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   };
 
@@ -141,18 +103,18 @@ export function RestockPage({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (submitLockRef.current) return;
     setMsg(null);
-    const invoice = invoiceNumber.trim().slice(0, 40);
-    const built = buildRestockPurchaseLines(lines, products, {
-      businessType: preferences.businessType,
-      pharmacyModeEnabled: preferences.pharmacyModeEnabled,
-      purchaseInvoice: invoice || null,
-    });
+    const built = lines
+      .map((r) => ({
+        productId: r.productId,
+        qtyBuyingUnits: Number(r.qtyBuyingStr) || 0,
+        costPerBuyingUnitUgx: Math.floor(Number(r.costPerBuyingStr.replace(/\D/g, "")) || 0),
+      }))
+      .filter((r) => r.productId && r.qtyBuyingUnits > 0 && r.costPerBuyingUnitUgx >= 0);
 
-    if (!built.ok) {
+    if (!built.length) {
       setMsgTone("err");
-      setMsg(t(lang, built.errorKey));
+      setMsg(t(lang, "restockAddLineHint"));
       return;
     }
 
@@ -164,22 +126,15 @@ export function RestockPage({
 
     const paid = walkIn ? totals.sum : paidAmount;
 
-    setSubmitting(true);
-    const attempt = submitRestockOnce(submitLockRef, () =>
-      recordPurchase({
-        supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
-        supplierName,
-        lines: built.lines,
-        amountPaidUgx: paid,
-        notes: notes.trim(),
-        invoiceNumber: invoice || undefined,
-      }),
-    );
+    const r = recordPurchase({
+      supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
+      supplierName,
+      lines: built,
+      amountPaidUgx: paid,
+      notes: notes.trim(),
+    });
 
-    if (!attempt.started) return;
-
-    if (!attempt.result.ok) {
-      setSubmitting(false);
+    if (!r.ok) {
       setMsgTone("err");
       setMsg(t(lang, "restockSaveError"));
       return;
@@ -187,12 +142,9 @@ export function RestockPage({
 
     setLines([]);
     setPaidStr("");
-    setInvoiceNumber("");
     setNotes("");
     setTownPlace("");
-    const nextSource = defaultReceiveBuySource(usePosStore.getState().suppliers);
-    setBuySource(nextSource);
-    setPayStatus(nextSource === "supplier" ? "unpaid" : "paid");
+    setBuySource("town");
     setMsgTone("ok");
     setMsg(t(lang, "restockSavedShort"));
     onSaved?.();
@@ -220,8 +172,7 @@ export function RestockPage({
             lang={lang}
             layout="single"
             primaryLabelKey="restockFinish"
-            primaryDisabled={!lines.length || submitting}
-            primaryBusy={submitting}
+            primaryDisabled={!lines.length}
             fixed={!embedded}
           />
         }
@@ -233,31 +184,11 @@ export function RestockPage({
           supplierId={supplierId}
           onSupplierIdChange={setSupplierId}
           buySource={buySource}
-          onBuySourceChange={(next) => {
-            setBuySource(next);
-            if (next === "town") {
-              setPayStatus("paid");
-              setPaidStr("");
-            } else {
-              setPayStatus("unpaid");
-              setPaidStr("");
-            }
-          }}
+          onBuySourceChange={setBuySource}
           townPlace={townPlace}
           onTownPlaceChange={setTownPlace}
           addSupplierHref="/stock?tab=suppliers"
         />
-
-        <label className="block">
-          <span className={RECEIVE_FIELD_LABEL}>{t(lang, "restockInvoiceNumber")}</span>
-          <input
-            value={invoiceNumber}
-            onChange={(e) => setInvoiceNumber(e.target.value.slice(0, 40))}
-            placeholder={t(lang, "restockInvoiceNumberPh")}
-            className={`${WIZARD_INPUT_TEXT} mt-2 text-base`}
-            autoComplete="off"
-          />
-        </label>
 
         <section className="space-y-3">
           <ReceiveHeader title={t(lang, "restockProductsTitle")} />
@@ -277,11 +208,6 @@ export function RestockPage({
                     lang={lang}
                     product={p}
                     row={row}
-                    batchTracked={shouldTrackBatchesForProduct(
-                      preferences.businessType,
-                      preferences.pharmacyModeEnabled,
-                      p,
-                    )}
                     onChange={(patch) => updateLine(row.key, patch)}
                     onRemove={() => removeLine(row.key)}
                   />
@@ -306,11 +232,6 @@ export function RestockPage({
               lang={lang}
               totalUgx={totals.sum}
               showPartialPayment={!walkIn}
-              payStatus={payStatus}
-              onPayStatusChange={(status) => {
-                setPayStatus(status);
-                if (status !== "partial") setPaidStr("");
-              }}
               paidStr={paidStr}
               onPaidChange={setPaidStr}
               balanceOwedUgx={balanceOwed}
@@ -322,9 +243,7 @@ export function RestockPage({
               unitsReceived={totals.units}
               supplierName={supplierName}
               businessDate={dateKeyKampala(new Date())}
-              purchaseReference={invoiceNumber.trim() || notes.trim() || undefined}
-              paidNowUgx={paidAmount}
-              balanceDueUgx={balanceOwed}
+              purchaseReference={notes.trim() || undefined}
             />
           </>
         ) : null}

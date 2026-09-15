@@ -38,7 +38,6 @@ function minimalCtx(mode: ReportsCenterContext["mode"], overrides: Partial<Repor
     report: {
       source: "local",
       authority: "live",
-      closedDayBreakdownUnavailable: false,
       revenue: 0,
       cash: 0,
       profit: 0,
@@ -54,8 +53,6 @@ function minimalCtx(mode: ReportsCenterContext["mode"], overrides: Partial<Repor
       stockValueAtCost: 0,
       supplierDebtTotal: 0,
       loading: false,
-      dataComplete: true,
-      remainderReady: true,
     },
     analytics: {
       customerCount: 0,
@@ -74,7 +71,6 @@ function minimalCtx(mode: ReportsCenterContext["mode"], overrides: Partial<Repor
       prior: null,
       priorBounds: { fromKey: "2026-06-24", toKey: "2026-06-30", isSingleDay: false },
       current: {} as never,
-      closedDayBreakdownUnavailable: false,
     } as ReportsCenterContext["analytics"],
     kpiCards: [],
     aiInsights: [],
@@ -84,7 +80,6 @@ function minimalCtx(mode: ReportsCenterContext["mode"], overrides: Partial<Repor
     marginLeaders: [],
     purchasesTodayUgx: 0,
     purchasesInPeriodUgx: 0,
-    cashFlow: { cashInUgx: 0, cashOutUgx: 0, netUgx: 0, unavailable: false },
     showDailyExport: false,
     reportDayKey: "2026-07-09",
     exportSummaryText: "",
@@ -187,13 +182,5 @@ describe("enterprise reports registry", () => {
 
   it("renderSlot returns null for empty slots", () => {
     expect(renderReportSlot("financial", minimalCtx("retail"))).toBeNull();
-  });
-
-  it("RPT-P3-12-1 — Performance keeps toolbar, category chips, and content; drops shell archive widgets", () => {
-    const ctx = minimalCtx("retail", { category: "performance" });
-    expect(resolveReportWidgets("search", ctx).some((w) => w.id === "retail-toolbar")).toBe(true);
-    expect(resolveReportWidgets("filters", ctx).some((w) => w.id === "retail-category-filters")).toBe(true);
-    expect(resolveReportWidgets("reports", ctx).some((w) => w.id === "retail-category-content")).toBe(true);
-    expect(resolveReportWidgets("header", ctx).some((w) => w.id === "retail-header")).toBe(true);
   });
 });

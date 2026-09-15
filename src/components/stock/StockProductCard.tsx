@@ -25,7 +25,6 @@ type Props = {
   preferences: ShopPreferences;
   locked: boolean;
   canAdd: boolean;
-  canEdit?: boolean;
   canRemove: boolean;
   canSell: boolean;
   canRestock: boolean;
@@ -43,7 +42,6 @@ export function StockProductCard({
   preferences,
   locked,
   canAdd,
-  canEdit,
   canRemove,
   canSell,
   canRestock,
@@ -161,7 +159,7 @@ export function StockProductCard({
                     {pharmacyMode ? pt("stockCardSell") : t(lang, "stockCardSell")}
                   </button>
                 ) : null}
-                {canEdit ?? canAdd ? (
+                {canAdd ? (
                   <button
                     type="button"
                     onClick={() => onAction("edit")}
@@ -172,7 +170,7 @@ export function StockProductCard({
                 ) : null}
               </>
             )}
-            {(canAdd || canEdit || canRestock || canRemove) ? (
+            {(canAdd || canRestock || canRemove) ? (
               <button
                 type="button"
                 aria-expanded={sheetOpen}
@@ -192,10 +190,8 @@ export function StockProductCard({
         open={sheetOpen}
         productName={p.name}
         canAdd={canAdd}
-        canEdit={canEdit}
         canRestock={canRestock}
         canRemove={canRemove}
-        canSell={canSell}
         onClose={() => setSheetOpen(false)}
         onAction={(action) => onAction(action)}
       />

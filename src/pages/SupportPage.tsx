@@ -6,8 +6,6 @@ import { MarketingLayout } from "../components/marketing/MarketingLayout";
 import { SeoHead } from "../components/marketing/SeoHead";
 import { WakaSupportCard } from "../components/support/WakaSupportCard";
 import { PilotSupportCard } from "../components/settings/PilotSupportCard";
-import { RemoteSupportStatusCard } from "../components/remote-support/RemoteSupportStatusCard";
-import { PosNeedHelpHost } from "../components/support/PosNeedHelpHost";
 import { t } from "../lib/i18n";
 import { useSubscription } from "../context/SubscriptionContext";
 import { publicBrandHref, useAuthShellForPublicPage } from "../lib/nativeApp";
@@ -32,7 +30,7 @@ type Props = {
 
 export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
   const brandHref = publicBrandHref(isAuthenticated);
-  const { userId, snapshot } = useSubscription();
+  const { userId } = useSubscription();
 
   const content = (
     <>
@@ -85,17 +83,8 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
         </div>
 
         {isAuthenticated ? (
-          <div className="mt-8 space-y-4">
-            <RemoteSupportStatusCard lang={lang} />
+          <div className="mt-8">
             <PilotSupportCard lang={lang} userId={userId} />
-            <PosNeedHelpHost
-              lang={lang}
-              shopId={snapshot.kind === "remote" ? snapshot.row.shop_id : null}
-              authenticated
-              internalAdminRoute={false}
-              posLocked={false}
-              placement="event-only"
-            />
           </div>
         ) : null}
 

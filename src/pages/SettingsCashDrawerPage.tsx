@@ -4,7 +4,6 @@ import type { CashDrawerFormulaVersion, Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { authOperatorRole } from "../lib/sessionActor";
 import { authorizePreferencesPatch } from "../lib/settingsAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
@@ -21,7 +20,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
-  const isOwner = authOperatorRole(actor) === "owner";
+  const isOwner = actor.role === "owner";
 
   const [pct, setPct] = useState(String(preferences.cashVarianceThresholdPct ?? 5));
   const [fixed, setFixed] = useState(String(preferences.cashVarianceThresholdUgxFixed ?? 10_000));
@@ -122,7 +121,6 @@ export function SettingsCashDrawerPage({ lang }: Props) {
         </label>
         <fieldset className="mt-4">
           <legend className="text-sm font-bold text-foreground">{t(lang, "cashSettingsFormula")}</legend>
-          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "cashSettingsFormulaHint")}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {(["v1", "v2"] as const).map((v) => (
               <button
@@ -133,7 +131,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
                   formula === v ? "bg-foreground text-background" : "border border-border bg-card text-foreground"
                 }`}
               >
-                {t(lang, v === "v2" ? "cashSettingsFormulaV2" : "cashSettingsFormulaV1")}
+                {v.toUpperCase()}
               </button>
             ))}
           </div>

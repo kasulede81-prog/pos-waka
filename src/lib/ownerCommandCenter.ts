@@ -31,7 +31,6 @@ import {
 import { activeDayDrawerOpenForDate } from "./dayDrawerOpen";
 import { readClosedDayTotals } from "./closedDayAuthority";
 import { sumDebtPaymentsInBounds } from "./customerDebtActivity";
-import { attributeSalePaymentBuckets } from "./cashPosition";
 import { sumCashExpensesInBounds } from "./cashReconciliation";
 import { isLowStock } from "./sellingEngine";
 import { buildInventoryCountVarianceReport } from "./inventoryCount";
@@ -42,7 +41,6 @@ import {
   ownerRiskCardTitle,
   type OwnerRiskCard,
 } from "./ownerRiskDashboard";
-import { isUnhealthyQueueHealth } from "./autoSync";
 import type { OwnerDashboardIntegritySnapshot } from "./ownerDashboardIntegrityCache";
 import {
   buildDayCloseVarianceAttentionItems,
@@ -187,8 +185,6 @@ export type OwnerCommandCenterInput = {
   cashExpenses: CashExpense[];
   debtPayments: DebtPayment[];
   stockMovements: StockMovement[];
-  /** Overflow from the 4000-row active window — required for inventory integrity. */
-  archivedStockMovements?: StockMovement[];
   inventoryCountSessions: InventoryCountSession[];
   auditLogs: AuditLogEntry[];
   voidRecords: VoidRecord[];
@@ -197,8 +193,7 @@ export type OwnerCommandCenterInput = {
   supplierPayments: SupplierPayment[];
   preferences: ShopPreferences;
   acknowledgements: OwnerAlertAcknowledgement[];
-  /** Single-day Drawer V2 expected cash; null for multi-day Command Center ranges. */
-  expectedCashUgx: number | null;
+  expectedCashUgx: number;
   pharmacyMode: boolean;
   syncPendingCount: number;
   syncErrorCount: number;
@@ -545,7 +540,8 @@ export function buildIntegritySignals(
 ): IntegritySignal[] {
   const syncErr = integrity.syncErrorCount || integrity.syncStats.errorCount;
   const pending = integrity.syncPendingCount || integrity.syncStats.unsyncedCount;
-  const queueDegraded = isUnhealthyQueueHealth(integrity.syncHealth.queueHealth);
+  const queueDegraded =
+    integrity.syncHealth.queueHealth === "degraded" || integrity.syncHealth.queueHealth === "backing_off";
 
   const drawerConflict =
     integrity.periodDrawerDuplicateOpens > 0 ||
@@ -870,12 +866,14 @@ export function buildFinancialSnapshot(input: {
   };
 
   for (const s of scopedSales) {
-    const buckets = attributeSalePaymentBuckets(s);
-    mix.cashUgx += buckets.cash;
-    mix.mobileMoneyUgx += buckets.mobile_money;
-    mix.atmUgx += buckets.card;
-    mix.creditUgx += buckets.credit;
-    mix.otherUgx += buckets.bank_transfer;
+    const amt = s.totalUgx;
+    const method = s.paymentMethod ?? (s.debtUgx > 0 ? "credit" : "cash");
+    if (method === "cash") mix.cashUgx += amt;
+    else if (method === "mobile_money") mix.mobileMoneyUgx += amt;
+    else if (method === "atm") mix.atmUgx += amt;
+    else if (method === "credit") mix.creditUgx += amt;
+    else if (method === "mixed") mix.mixedUgx += amt;
+    else mix.otherUgx += amt;
   }
 
   const expensesPeriodUgx = sumCashExpensesInBounds(input.cashExpenses, input.bounds);

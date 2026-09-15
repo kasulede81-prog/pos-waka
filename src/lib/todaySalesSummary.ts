@@ -1,18 +1,11 @@
 import type { Sale } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { scanTodaySalesHead } from "./salesDayIndex";
-import { saleSoldByMatchesActor, type SellerMatchActor } from "./sellerIdentity";
 
-export function summarizeTodaySales(
-  sales: Sale[],
-  now = new Date(),
-  opts?: { soldByUserId?: string; matchActor?: SellerMatchActor },
-) {
+export function summarizeTodaySales(sales: Sale[], now = new Date(), opts?: { soldByUserId?: string }) {
   const todayKey = dateKeyKampala(now);
   let daySales = scanTodaySalesHead(sales, todayKey).todaySales;
-  if (opts?.matchActor) {
-    daySales = daySales.filter((s) => saleSoldByMatchesActor(s, opts.matchActor));
-  } else if (opts?.soldByUserId) {
+  if (opts?.soldByUserId) {
     daySales = daySales.filter((s) => s.soldByUserId === opts.soldByUserId);
   }
   const cash = daySales.reduce((a, s) => a + s.cashPaidUgx, 0);

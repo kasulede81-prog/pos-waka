@@ -20,8 +20,6 @@ import type {
   VoidRecord,
 } from "../types";
 import { getActiveAccountKey } from "./accountScope";
-import { getPersistenceNamespace } from "./shopScope";
-import { reportSwallowedSyncFailure } from "../lib/monitoring";
 
 /**
  * IndexedDB layout (multi-account safe):
@@ -137,10 +135,10 @@ function isSnapshotShape(v: unknown): v is PersistedSnapshot {
 }
 
 function scopedKey(name: string): string | null {
-  const ns = getPersistenceNamespace();
-  if (!ns) return null;
-  if (ns.startsWith("demo:")) return null;
-  return `${ns}::${name}`;
+  const acc = getActiveAccountKey();
+  if (!acc) return null;
+  if (acc.startsWith("demo:")) return null;
+  return `${acc}::${name}`;
 }
 
 /** Open IndexedDB early (e.g. from main.tsx) so first sign-in reads faster. */
@@ -192,8 +190,7 @@ export async function readKv<T>(key: string): Promise<T | null> {
     const db = await getLocalDb();
     const row = await db.get("kv", k);
     return (row ?? null) as T | null;
-  } catch (err) {
-    reportSwallowedSyncFailure("idb_kv_read_failed", err, { key: k });
+  } catch {
     return null;
   }
 }
@@ -220,8 +217,7 @@ async function readScopedSnapshot(): Promise<Partial<PersistedSnapshot> | null> 
     const row = await db.get("kv", k);
     if (!row) return null;
     return row as Partial<PersistedSnapshot>;
-  } catch (err) {
-    reportSwallowedSyncFailure("idb_snapshot_read_failed", err, { key: "snapshot" });
+  } catch {
     return null;
   }
 }
@@ -234,8 +230,7 @@ async function readScopedLastGood(): Promise<Partial<PersistedSnapshot> | null> 
     const row = await db.get("kv", k);
     if (!row) return null;
     return row as Partial<PersistedSnapshot>;
-  } catch (err) {
-    reportSwallowedSyncFailure("idb_snapshot_read_failed", err, { key: "last_good_snapshot" });
+  } catch {
     return null;
   }
 }
@@ -262,7 +257,7 @@ export async function readSnapshotWithFallback(): Promise<Partial<PersistedSnaps
  * Returns the legacy snapshot if it was claimed in this call, otherwise null.
  */
 export async function claimLegacySnapshotForCurrentAccount(): Promise<Partial<PersistedSnapshot> | null> {
-  const acc = getPersistenceNamespace() ?? getActiveAccountKey();
+  const acc = getActiveAccountKey();
   if (!acc) return null;
   if (typeof window === "undefined") return null;
   let claimed: { accountKey?: string } | null = null;
@@ -275,27 +270,19 @@ export async function claimLegacySnapshotForCurrentAccount(): Promise<Partial<Pe
   if (claimed?.accountKey) return null;
   try {
     const db = await getLocalDb();
-    // R3: every IDB read/write for this claim must use the same readwrite
-    // transaction. `db.get()` opens a *new* transaction; awaiting it lets the
-    // outer tx auto-commit, and the later put/delete throw TransactionInactiveError.
-    const tx = db.transaction("kv", "readwrite");
-    const kv = tx.objectStore("kv");
-    const legacy = (await kv.get(LEGACY_SNAPSHOT_KEY)) as Partial<PersistedSnapshot> | undefined;
+    const legacy = (await db.get("kv", LEGACY_SNAPSHOT_KEY)) as Partial<PersistedSnapshot> | undefined;
     if (!legacy || !isSnapshotShape(legacy)) {
-      await tx.done;
-      window.localStorage.setItem(
-        LEGACY_CLAIMED_FLAG,
-        JSON.stringify({ accountKey: acc, at: new Date().toISOString(), empty: true }),
-      );
+      window.localStorage.setItem(LEGACY_CLAIMED_FLAG, JSON.stringify({ accountKey: acc, at: new Date().toISOString(), empty: true }));
       return null;
     }
-    await kv.put(legacy, `${acc}::${LEGACY_SNAPSHOT_KEY}`);
-    const legacyFb = (await kv.get(LEGACY_LAST_GOOD_KEY)) as Partial<PersistedSnapshot> | undefined;
+    const tx = db.transaction("kv", "readwrite");
+    await tx.objectStore("kv").put(legacy, `${acc}::${LEGACY_SNAPSHOT_KEY}`);
+    const legacyFb = (await db.get("kv", LEGACY_LAST_GOOD_KEY)) as Partial<PersistedSnapshot> | undefined;
     if (legacyFb && isSnapshotShape(legacyFb)) {
-      await kv.put(legacyFb, `${acc}::${LEGACY_LAST_GOOD_KEY}`);
+      await tx.objectStore("kv").put(legacyFb, `${acc}::${LEGACY_LAST_GOOD_KEY}`);
     }
-    await kv.delete(LEGACY_SNAPSHOT_KEY);
-    await kv.delete(LEGACY_LAST_GOOD_KEY);
+    await tx.objectStore("kv").delete(LEGACY_SNAPSHOT_KEY);
+    await tx.objectStore("kv").delete(LEGACY_LAST_GOOD_KEY);
     await tx.done;
     window.localStorage.setItem(LEGACY_CLAIMED_FLAG, JSON.stringify({ accountKey: acc, at: new Date().toISOString() }));
     return legacy;
@@ -313,12 +300,6 @@ export async function writeSnapshot(
   data: Omit<PersistedSnapshot, "updatedAt">,
   opts?: WriteSnapshotOptions,
 ): Promise<void> {
-  const next: PersistedSnapshot = {
-    ...data,
-    updatedAt: new Date().toISOString(),
-  };
-  // WAKA-09 — never install an incomplete/corrupt payload as the active snapshot.
-  if (!isSnapshotShape(next)) return;
   const mainKey = scopedKey(LEGACY_SNAPSHOT_KEY);
   const fbKey = scopedKey(LEGACY_LAST_GOOD_KEY);
   if (!mainKey || !fbKey) return;
@@ -336,23 +317,27 @@ export async function writeSnapshot(
       /* ignore */
     }
   }
+  const next: PersistedSnapshot = {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  };
   await kv.put(next, mainKey);
   await tx.done;
 }
 
 export async function readSyncQueue(): Promise<SyncOperation[]> {
-  const ns = getPersistenceNamespace();
-  if (!ns) return [];
+  const acc = getActiveAccountKey();
+  if (!acc) return [];
   const db = await getLocalDb();
   const all = await db.getAll("syncQueue");
-  return all.filter((op) => (op as SyncOperation & { accountKey?: string }).accountKey === ns);
+  return all.filter((op) => (op as SyncOperation & { accountKey?: string }).accountKey === acc);
 }
 
 export async function appendSyncOperation(op: SyncOperation): Promise<void> {
-  const ns = getPersistenceNamespace();
-  if (!ns) return;
+  const acc = getActiveAccountKey();
+  if (!acc) return;
   const db = await getLocalDb();
-  const row: SyncOperation & { accountKey: string } = { ...op, accountKey: ns };
+  const row: SyncOperation & { accountKey: string } = { ...op, accountKey: acc };
   await db.put("syncQueue", row);
 }
 
@@ -362,13 +347,13 @@ export async function removeSyncOperation(id: string): Promise<void> {
 }
 
 export async function clearSyncQueue(): Promise<void> {
-  const ns = getPersistenceNamespace();
-  if (!ns) return;
+  const acc = getActiveAccountKey();
+  if (!acc) return;
   const db = await getLocalDb();
   const all = await db.getAll("syncQueue");
   const tx = db.transaction("syncQueue", "readwrite");
   for (const op of all) {
-    if ((op as SyncOperation & { accountKey?: string }).accountKey === ns) {
+    if ((op as SyncOperation & { accountKey?: string }).accountKey === acc) {
       await tx.objectStore("syncQueue").delete(op.id);
     }
   }
@@ -386,7 +371,7 @@ function restoreQueueArchiveKey(accountKey: string): string {
 
 /** Move pending sync ops to archive and clear queue — used after backup restore. */
 export async function archiveAndClearSyncQueue(): Promise<{ clearedCount: number; archivedCount: number }> {
-  const acc = getPersistenceNamespace();
+  const acc = getActiveAccountKey();
   if (!acc) return { clearedCount: 0, archivedCount: 0 };
   const queue = await readSyncQueue();
   const clearedCount = queue.length;
@@ -406,7 +391,7 @@ export async function archiveAndClearSyncQueue(): Promise<{ clearedCount: number
 }
 
 export async function countArchivedRestoreQueueOps(): Promise<number> {
-  const acc = getPersistenceNamespace();
+  const acc = getActiveAccountKey();
   if (!acc) return 0;
   const db = await getLocalDb();
   const archives = (await db.get("kv", restoreQueueArchiveKey(acc))) as RestoreQueueArchiveEntry[] | undefined;
@@ -415,14 +400,14 @@ export async function countArchivedRestoreQueueOps(): Promise<number> {
 }
 
 export async function appendBackupRecord(rec: LocalBackupRecord): Promise<void> {
-  const acc = getPersistenceNamespace();
+  const acc = getActiveAccountKey();
   if (!acc) return;
   const db = await getLocalDb();
   await db.put("backups", { ...rec, accountKey: acc });
 }
 
 export async function listBackupRecords(): Promise<LocalBackupRecord[]> {
-  const acc = getPersistenceNamespace();
+  const acc = getActiveAccountKey();
   if (!acc) return [];
   const db = await getLocalDb();
   if (!db.objectStoreNames.contains("backups")) return [];
@@ -433,7 +418,7 @@ export async function listBackupRecords(): Promise<LocalBackupRecord[]> {
 }
 
 export async function getBackupRecord(id: string): Promise<LocalBackupRecord | null> {
-  const acc = getPersistenceNamespace();
+  const acc = getActiveAccountKey();
   if (!acc) return null;
   const db = await getLocalDb();
   if (!db.objectStoreNames.contains("backups")) return null;

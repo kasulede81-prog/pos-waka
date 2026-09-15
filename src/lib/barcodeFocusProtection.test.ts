@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { shouldBufferHidWedgeKey } from "../services/hardware/barcodeAdapter";
-import { setPosCashKeypadHardwareCapture } from "./desktopPosKeyHandlers";
 
 function mockTarget(tagName: string, contentEditable = false): EventTarget {
   return { tagName, isContentEditable: contentEditable } as unknown as EventTarget;
@@ -18,13 +17,6 @@ describe("barcode HID wedge focus protection", () => {
   });
 
   it("buffers keys when focus is on body (scanner wedge active)", () => {
-    expect(shouldBufferHidWedgeKey({ target: mockTarget("BODY") })).toBe(true);
-  });
-
-  it("does not buffer keys while the cash keypad owns hardware digits", () => {
-    setPosCashKeypadHardwareCapture(true);
-    expect(shouldBufferHidWedgeKey({ target: mockTarget("BODY") })).toBe(false);
-    setPosCashKeypadHardwareCapture(false);
     expect(shouldBufferHidWedgeKey({ target: mockTarget("BODY") })).toBe(true);
   });
 

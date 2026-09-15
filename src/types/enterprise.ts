@@ -66,7 +66,6 @@ export type StockTransferStatus =
 export type EnterpriseStockTransferLine = {
   id: string;
   productId: string | null;
-  destinationProductId: string | null;
   productName: string;
   quantity: number;
   batchId: string | null;

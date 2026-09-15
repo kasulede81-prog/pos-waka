@@ -1,53 +1,14 @@
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation } from "../types";
-import { computeSyncBackoffMs, markSyncOpFailed, markSyncOpQuarantined, shouldRetrySyncOp, isQuarantinedSyncOp, SYNC_QUARANTINE_AFTER_ATTEMPTS, QUARANTINED_MAX_ATTEMPTS_ERROR, QUARANTINED_NO_SHOP_ERROR, clearSyncOpQuarantine } from "../lib/autoSync";
-import {
-  isBlockedBusinessSyncError,
-  markSyncOpBlockedBusiness,
-  syncProcessLastError,
-  syncProcessStatus,
-  type SyncProcessResult,
-} from "../lib/saleAdjustmentSync";
-import { usePosStore } from "../store/usePosStore";
+import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "../lib/autoSync";
 import { sortSyncQueueByPriority } from "../lib/syncQueuePriority";
 import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
-import { getActiveShopId } from "./shopScope";
-import { inferShopIdFromQueueRow } from "./shopScopeMigration";
-import {
-  clearBlockedReturnRecoveryAttempts,
-  hasBlockedReturnRecoveryAttempt,
-  markBlockedReturnRecoveryAttempted,
-} from "../lib/blockedReturnRecovery";
-import {
-  maybeRepairHistoricalSaleHeader,
-  verifyHistoricalReturnFollowThrough,
-} from "../lib/historicalSaleHeaderRepair";
-
-/**
- * True when `createdAt` (a client-clock timestamp) predates `cutoff` (a
- * server-clock timestamp), after correcting for this device's known clock
- * skew (server time minus device time, both sampled around the same
- * instant). Falls back to a plain string comparison — identical to the
- * pre-existing behavior — whenever either timestamp fails to parse, so an
- * unparseable value never throws or silently passes/fails differently than
- * before.
- */
-export function isCreatedBeforeStaleResetCutoff(createdAt: string, cutoff: string, clockSkewMs: number): boolean {
-  const createdMs = Date.parse(createdAt);
-  const cutoffMs = Date.parse(cutoff);
-  if (!Number.isFinite(createdMs) || !Number.isFinite(cutoffMs)) {
-    return createdAt < cutoff;
-  }
-  return createdMs + clockSkewMs < cutoffMs;
-}
 
 export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attempts?: number }): Promise<void> {
-  const shopId = op.shopId ?? getActiveShopId() ?? undefined;
   const full: SyncOperation = {
     ...op,
-    shopId,
     attempts: op.attempts ?? 0,
     lastAttemptAt: op.lastAttemptAt ?? null,
   };
@@ -67,149 +28,38 @@ export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attemp
  * (local-only mode) so they can sync once cloud is configured.
  * When configured but signed out, ops are retried later.
  */
-async function processOne(op: SyncOperation): Promise<SyncProcessResult> {
-  if (!hasSupabaseConfig || !supabase) return "retry";
+async function processOne(op: SyncOperation): Promise<boolean> {
+  if (!hasSupabaseConfig || !supabase) return false;
 
   const { data: session } = await supabase.auth.getSession();
-  if (!session.session) return "retry";
-
-  const opShopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
-  if (!opShopId) {
-    reportSyncIssue("sync_quarantined_no_shop", { kind: op.kind, opId: op.id });
-    return { status: "block", lastError: QUARANTINED_NO_SHOP_ERROR };
-  }
-
-  const activeShop = getActiveShopId();
-  if (activeShop && opShopId !== activeShop) {
-    return "retry";
-  }
+  if (!session.session) return false;
 
   try {
-    const cloud = await import("./cloudSync");
-    if (
-      "processCloudSyncOperationResult" in cloud &&
-      typeof cloud.processCloudSyncOperationResult === "function"
-    ) {
-      return await cloud.processCloudSyncOperationResult({ ...op, shopId: opShopId });
-    }
-    return (await processCloudSyncOperation({ ...op, shopId: opShopId })) ? "ack" : "retry";
+    return await processCloudSyncOperation(op);
   } catch {
-    return "retry";
+    return false;
   }
 }
 
-export async function flushSyncQueue(onProgress?: (done: number, total: number) => void, opts?: { retryQuarantined?: boolean }): Promise<{
+export async function flushSyncQueue(onProgress?: (done: number, total: number) => void): Promise<{
   failed: number;
   remaining: number;
   skippedBackoff: number;
 }> {
   const { withGlobalSyncMutex } = await import("../lib/globalSyncMutex");
-  return withGlobalSyncMutex("flushSyncQueue", () => flushSyncQueueInner(onProgress, opts));
+  return withGlobalSyncMutex("flushSyncQueue", () => flushSyncQueueInner(onProgress));
 }
 
-export async function flushSyncQueueInner(onProgress?: (done: number, total: number) => void, opts?: { retryQuarantined?: boolean }): Promise<{
+export async function flushSyncQueueInner(onProgress?: (done: number, total: number) => void): Promise<{
   failed: number;
   remaining: number;
   skippedBackoff: number;
 }> {
-  const repair = await maybeRepairHistoricalSaleHeader();
-  if (repair.allowReturnRecovery) {
-    clearBlockedReturnRecoveryAttempts();
-  }
-  // WAKA-06: never process/ACK entity ops while persisted state is still
-  // hydrating. A RAM miss during this window is not proof the row is gone.
-  if (!usePosStore.getState()._hydrated) {
-    const remaining = (await readSyncQueue()).length;
-    return { failed: 0, remaining, skippedBackoff: remaining };
-  }
   const queue = sortSyncQueueByPriority(await readSyncQueue());
-  const dayCloses = usePosStore.getState().dayCloses;
-  const cloudMod = await import("./cloudSync");
-  const probeBlockedReturnRecovery =
-    typeof cloudMod.probeBlockedReturnRecovery === "function"
-      ? cloudMod.probeBlockedReturnRecovery
-      : async () => false;
-  const retryQuarantined = opts?.retryQuarantined === true;
-  const activeShop = getActiveShopId();
-
-  // Admin-reset safety net: an op queued BEFORE a shop reset (a pending
-  // product edit/create, sale, or stock/inventory mutation) must never be
-  // pushed once the shop's server-side business data has been wiped —
-  // `pushProductCatalogToCloud` upserts on `id`, so pushing a pre-reset
-  // product op would literally re-insert the row the reset just deleted.
-  // Only fetched when the queue actually holds one of these kinds, so a
-  // normal flush with no pending business mutations costs nothing extra.
-  const STALE_RESET_GUARDED_KINDS = new Set<SyncOperation["kind"]>([
-    "product",
-    "sale",
-    "pending_sales",
-    "pending_stock_updates",
-    "stock_move",
-    "customer",
-  ]);
-  let staleResetCutoff: string | null = null;
-  // Corrects for this device's clock running behind (or ahead of) the
-  // server's: `op.createdAt` is stamped from the client clock at enqueue
-  // time, while `staleResetCutoff` is the server's own clock. Compared
-  // directly, a device whose clock runs meaningfully behind the server could
-  // have a genuinely POST-reset mutation's `createdAt` still read as earlier
-  // than the reset moment — silently dropping a legitimate, never-replayed
-  // transaction. Only fetched in this same rare (queue-has-guarded-kinds AND
-  // a signal is outstanding) path, via the existing `fetchShopServerNow`
-  // primitive already used for this identical class of problem (WAKA-05).
-  // Falls back to the original uncorrected comparison if the server-time
-  // fetch itself fails — never blocks the flush on this.
-  let clockSkewMs = 0;
-  if (activeShop && queue.some((op) => STALE_RESET_GUARDED_KINDS.has(op.kind))) {
-    const { staleForceFullResyncCutoff } = await import("../lib/shopRecoverySignals");
-    staleResetCutoff = await staleForceFullResyncCutoff(activeShop).catch(() => null);
-    if (staleResetCutoff) {
-      const { fetchShopServerNow } = await import("../lib/serverNow");
-      const deviceNowMs = Date.now();
-      const serverNowIso = await fetchShopServerNow().catch(() => null);
-      const serverNowMs = serverNowIso ? Date.parse(serverNowIso) : NaN;
-      if (Number.isFinite(serverNowMs)) clockSkewMs = serverNowMs - deviceNowMs;
-    }
-  }
-
   const ready: SyncOperation[] = [];
   let skippedBackoff = 0;
   for (const op of queue) {
-    const opShopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
-    if (activeShop && opShopId && opShopId !== activeShop) {
-      continue;
-    }
-    if (
-      staleResetCutoff &&
-      STALE_RESET_GUARDED_KINDS.has(op.kind) &&
-      isCreatedBeforeStaleResetCutoff(op.createdAt, staleResetCutoff, clockSkewMs)
-    ) {
-      await removeSyncOperation(op.id);
-      reportSyncIssue("sync_op_dropped_stale_pre_reset", { kind: op.kind, opId: op.id });
-      continue;
-    }
-    if (op.attempts >= SYNC_QUARANTINE_AFTER_ATTEMPTS && !isQuarantinedSyncOp(op)) {
-      await appendSyncOperation(markSyncOpQuarantined(op, QUARANTINED_MAX_ATTEMPTS_ERROR));
-      continue;
-    }
-    if (isQuarantinedSyncOp(op)) {
-      if (retryQuarantined) {
-        ready.push(clearSyncOpQuarantine(op));
-      }
-      continue;
-    }
-    if (isBlockedBusinessSyncError(op.lastError)) {
-      if (op.kind === "pending_returns" && !hasBlockedReturnRecoveryAttempt(op.id)) {
-        const recoverable = await probeBlockedReturnRecovery(op);
-        if (recoverable) {
-          markBlockedReturnRecoveryAttempted(op.id);
-          ready.push(op);
-          continue;
-        }
-      }
-      continue;
-    }
-    if (!shouldRetrySyncOp(op, Date.now(), dayCloses)) {
+    if (!shouldRetrySyncOp(op)) {
       skippedBackoff += 1;
       continue;
     }
@@ -224,79 +74,37 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   let done = skippedBackoff;
   const { mapPool } = await import("../lib/asyncPool");
   const { SYNC_QUEUE_FLUSH_CONCURRENCY } = await import("../lib/syncTiming");
-  const { markSyncOpWaitingForSale, partitionSaleBeforeAdjustment } = await import("../lib/saleAdjustmentSync");
-  const { saleUploads, other } = partitionSaleBeforeAdjustment(ready);
 
-  const processReady = async (op: SyncOperation): Promise<boolean> => {
+  await mapPool(ready, SYNC_QUEUE_FLUSH_CONCURRENCY, async (op) => {
     try {
-      // OBS-1 D2 — sale queue-drain attempt (fire-and-forget; never awaited).
-      if (op.kind === "pending_sales" || op.kind === "sale") {
-        void import("../lib/syncDiagnostics")
-          .then((m) => {
-            try {
-              m.recordSalePushQueueAttempt();
-            } catch {
-              /* isolated */
-            }
-          })
-          .catch(() => {});
-      }
-      const result = await processOne(op);
-      const status = syncProcessStatus(result);
-      if (status === "ack") {
+      const ok = await processOne(op);
+      if (ok) {
         await removeSyncOperation(op.id);
-      } else if (status === "wait") {
-        if (op.attempts < SYNC_QUARANTINE_AFTER_ATTEMPTS) {
-          await appendSyncOperation(markSyncOpWaitingForSale(op));
-        }
-      } else if (status === "block") {
-        const blockedError = syncProcessLastError(result);
-        await appendSyncOperation(
-          blockedError === QUARANTINED_NO_SHOP_ERROR
-            ? markSyncOpQuarantined(op, QUARANTINED_NO_SHOP_ERROR)
-            : markSyncOpBlockedBusiness(op, blockedError),
-        );
       } else {
         failed += 1;
         void import("../lib/syncDiagnostics").then(({ recordSyncRetry }) => {
           recordSyncRetry(op.kind, op.attempts + 1);
         });
-        const nextAttempts = op.attempts + 1;
-        if (nextAttempts >= SYNC_QUARANTINE_AFTER_ATTEMPTS) {
-          await appendSyncOperation(markSyncOpQuarantined(op, QUARANTINED_MAX_ATTEMPTS_ERROR));
-        } else {
-          const { syncOpEntityId, takeClosedBusinessDatePark } = await import("../lib/closedBusinessDateSync");
-          await appendSyncOperation({
-            ...markSyncOpFailed(op, status === "retry" ? syncProcessLastError(result) : undefined),
-            ...takeClosedBusinessDatePark(syncOpEntityId(op)),
-          });
+        if (op.attempts < 100) {
+          await appendSyncOperation(markSyncOpFailed(op));
         }
       }
     } catch {
       failed += 1;
       reportSyncIssue("sync_flush_error", { kind: op.kind, attempts: op.attempts + 1 });
-      try {
-        if (op.attempts + 1 >= SYNC_QUARANTINE_AFTER_ATTEMPTS) {
-          await appendSyncOperation(markSyncOpQuarantined(op, QUARANTINED_MAX_ATTEMPTS_ERROR));
-        } else {
+      if (op.attempts < 100) {
+        try {
           await appendSyncOperation(markSyncOpFailed(op));
+        } catch {
+          reportSyncIssue("sync_queue_corrupt", { kind: op.kind });
         }
-      } catch {
-        reportSyncIssue("sync_queue_corrupt", { kind: op.kind });
       }
       return false;
     }
     done += 1;
     onProgress?.(done, total);
     return true;
-  };
-
-  await mapPool(saleUploads, SYNC_QUEUE_FLUSH_CONCURRENCY, processReady);
-  await mapPool(other, SYNC_QUEUE_FLUSH_CONCURRENCY, processReady);
-
-  if (repair.allowReturnRecovery) {
-    await verifyHistoricalReturnFollowThrough();
-  }
+  });
 
   const remaining = (await readSyncQueue()).length;
   return { failed, remaining, skippedBackoff };
@@ -306,7 +114,6 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
 export function nextQueueRetryMs(queue: SyncOperation[], nowMs = Date.now()): number | null {
   let minWait: number | null = null;
   for (const op of queue) {
-    if (isBlockedBusinessSyncError(op.lastError) || isQuarantinedSyncOp(op)) continue;
     if (shouldRetrySyncOp(op, nowMs)) continue;
     const last = op.lastAttemptAt ? new Date(op.lastAttemptAt).getTime() : nowMs;
     const wait = computeSyncBackoffMs(op.attempts) - (nowMs - last);

@@ -2,22 +2,13 @@ import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { initDeviceOnlineTracking } from "./deviceOnline";
 import { prepareNativeSplash, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "./nativeSplash";
 import { registerNativeAuthDeepLinkHandler } from "./nativeAuthDeepLink";
-import { registerNativePrintDeepLinkHandler } from "./webPrintHandoff";
 
 /**
  * Native shell polish: edge-to-edge system bars (Capacitor 8 SystemBars — no deprecated Window color APIs).
  */
 export async function initCapacitorShell(): Promise<void> {
-  if (!Capacitor.isNativePlatform()) {
-    // WAKA-04: the rest of this shell is native-only, but web/Electron still
-    // need online tracking so reconnect can flip `getDeviceOnline()`.
-    await initDeviceOnlineTracking();
-    return;
-  }
-  document.documentElement.classList.add("waka-native");
-  document.documentElement.classList.add(`waka-${Capacitor.getPlatform()}`);
+  if (!Capacitor.isNativePlatform()) return;
   registerNativeAuthDeepLinkHandler();
-  registerNativePrintDeepLinkHandler();
   await prepareNativeSplash();
   scheduleSplashMaxDuration();
   scheduleSplashSafetyTimeout();

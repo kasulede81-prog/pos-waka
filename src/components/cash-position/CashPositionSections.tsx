@@ -75,23 +75,17 @@ export function CashPositionHeroSummary({
   lang,
   extendedSummary,
   rangeLabel,
-  ledgerClosed = false,
 }: {
   lang: Language;
   extendedSummary: import("../../lib/cashPositionDashboard").CashPositionExtendedSummary;
   rangeLabel: string;
-  ledgerClosed?: boolean;
 }) {
   const kpis = [
     { label: t(lang, "cashPositionTransactions"), value: extendedSummary.transactionCount.toLocaleString() },
-    ...(ledgerClosed
-      ? []
-      : [{ label: t(lang, "cashPositionItemsSold"), value: extendedSummary.itemsSold.toLocaleString() }]),
+    { label: t(lang, "cashPositionItemsSold"), value: extendedSummary.itemsSold.toLocaleString() },
     { label: t(lang, "cashPositionGrossProfit"), value: `UGX ${extendedSummary.grossProfitUgx.toLocaleString()}` },
     { label: t(lang, "cashPositionAverageSale"), value: `UGX ${extendedSummary.averageSaleUgx.toLocaleString()}` },
-    ...(ledgerClosed
-      ? []
-      : [{ label: t(lang, "cashPositionLargestSale"), value: `UGX ${extendedSummary.largestSaleUgx.toLocaleString()}` }]),
+    { label: t(lang, "cashPositionLargestSale"), value: `UGX ${extendedSummary.largestSaleUgx.toLocaleString()}` },
   ];
 
   return (
@@ -155,11 +149,7 @@ export function CashPositionPaymentMethods({
   report: import("../../lib/cashPosition").CashPositionReport;
 }) {
   if (report.paymentMethods.length === 0 && report.paymentAdjustmentUgx === 0) {
-    return (
-      <p className="text-base font-medium text-muted-foreground">
-        {t(lang, report.closedDayBreakdownUnavailable ? "cashPositionClosedBreakdownUnavailable" : "cashPositionNoSalesToday")}
-      </p>
-    );
+    return <p className="text-base font-medium text-muted-foreground">{t(lang, "cashPositionNoSalesToday")}</p>;
   }
 
   return (
@@ -222,7 +212,7 @@ export function CashPositionBreakdown({
   const outflowLines = [
     { label: t(lang, "cashPositionSupplierPayments"), value: cp.supplierPaymentsUgx },
     { label: t(lang, "cashPositionExpenses"), value: cp.expensesUgx },
-    { label: t(lang, "cashPositionRefunds"), value: cp.cashRefundsUgx },
+    { label: t(lang, "cashPositionRefunds"), value: cp.refundsUgx },
     { label: cashDrawerAdjustmentTypeLabel(lang, "cash_removed"), value: bd.cash_removed ?? 0 },
     { label: cashDrawerAdjustmentTypeLabel(lang, "owner_withdrawal"), value: bd.owner_withdrawal ?? 0 },
     { label: cashDrawerAdjustmentTypeLabel(lang, "bank_deposit"), value: bd.bank_deposit ?? 0 },
@@ -248,7 +238,7 @@ export function CashPositionBreakdown({
       <div className="rounded-2xl bg-gradient-to-br from-waka-500 to-waka-700 px-4 py-5 text-white shadow-md">
         <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "cashPositionExpectedCash")}</p>
         <p className="mt-1 text-3xl font-black tabular-nums sm:text-4xl">
-          {cp.expectedCashUgx == null ? "—" : `UGX ${cp.expectedCashUgx.toLocaleString()}`}
+          UGX {cp.expectedCashUgx.toLocaleString()}
         </p>
       </div>
     </div>
@@ -258,18 +248,12 @@ export function CashPositionBreakdown({
 export function CashPositionActivityTimeline({
   lang,
   events,
-  unavailable = false,
 }: {
   lang: Language;
   events: import("../../lib/cashPositionDashboard").CashActivityEvent[];
-  unavailable?: boolean;
 }) {
   if (events.length === 0) {
-    return (
-      <p className="text-sm font-medium text-muted-foreground">
-        {t(lang, unavailable ? "cashPositionClosedBreakdownUnavailable" : "cashPositionTimelineEmpty")}
-      </p>
-    );
+    return <p className="text-sm font-medium text-muted-foreground">{t(lang, "cashPositionTimelineEmpty")}</p>;
   }
 
   return (

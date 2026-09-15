@@ -3,7 +3,7 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { OwnerCashExtended } from "../../lib/ownerCommandCenterBuilders";
-import { formatOfficialHeadlineUgx, formatShortUgx } from "../../lib/commandCenterPageView";
+import { formatShortUgx } from "../../lib/commandCenterPageView";
 import { EnterpriseCard } from "../enterprise/EnterpriseCard";
 import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
 import { WakaButton } from "../ui/wakaPrimitives";
@@ -29,11 +29,7 @@ export function CommandCenterCashCard({ lang, cash }: Props) {
       }
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <EnterpriseKpiCard
-          icon={Wallet}
-          label={t(lang, "ownerCashExpected")}
-          value={cash.periodExpectedCashUgx != null ? formatShortUgx(cash.periodExpectedCashUgx) : "—"}
-        />
+        <EnterpriseKpiCard icon={Wallet} label={t(lang, "ownerCashExpected")} value={formatShortUgx(cash.periodExpectedCashUgx)} />
         <EnterpriseKpiCard
           icon={Scale}
           label={t(lang, "ownerCashCounted")}
@@ -47,7 +43,7 @@ export function CommandCenterCashCard({ lang, cash }: Props) {
         />
         <EnterpriseKpiCard icon={PiggyBank} label={t(lang, "ownerCashOwnerWithdrawal")} value={formatShortUgx(cash.ownerWithdrawalsUgx)} />
         <EnterpriseKpiCard icon={Landmark} label={t(lang, "ownerCashBankDeposit")} value={formatShortUgx(cash.bankDepositsUgx)} />
-        <EnterpriseKpiCard icon={Receipt} label={t(lang, "ownerCashExpenses")} value={formatOfficialHeadlineUgx(cash.cashExpensesUgx)} />
+        <EnterpriseKpiCard icon={Receipt} label={t(lang, "ownerCashExpenses")} value={formatShortUgx(cash.cashExpensesUgx)} />
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">

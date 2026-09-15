@@ -51,11 +51,11 @@ export function EnterpriseDashboardShell({ ctx }: { ctx: DashboardCenterContext 
     );
   }
 
-  let skipCash = false;
+  let skipStaff = false;
   return (
     <div className={className}>
       {orderedSlots.map((slot) => {
-        if (slot === "cash" && skipCash) return null;
+        if (slot === "staff" && skipStaff) return null;
 
         if (slot === "attention") {
           const content = renderDashboardSlot("attention", ctx);
@@ -67,20 +67,20 @@ export function EnterpriseDashboardShell({ ctx }: { ctx: DashboardCenterContext 
           );
         }
 
-        if (slot === "financial") {
-          const financial = renderDashboardSlot("financial", ctx);
+        if (slot === "cash") {
           const cash = renderDashboardSlot("cash", ctx);
-          skipCash = Boolean(financial && cash);
-          if (!financial && !cash) return null;
-          if (skipCash) {
+          const staff = renderDashboardSlot("staff", ctx);
+          skipStaff = Boolean(cash && staff);
+          if (!cash && !staff) return null;
+          if (skipStaff) {
             return (
-              <div key="financial-cash" className="grid gap-4 lg:grid-cols-2">
-                {financial}
+              <div key="cash-staff" className="grid gap-4 lg:grid-cols-2">
                 {cash}
+                {staff}
               </div>
             );
           }
-          return <div key={slot}>{financial}</div>;
+          return <div key={slot}>{cash}</div>;
         }
 
         const content = renderSlot(slot as DashboardWidgetSlot);

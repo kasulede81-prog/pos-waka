@@ -26,8 +26,6 @@ type Props = {
   footer?: ReactNode;
   onSubmit?: (e: FormEvent) => void;
   zClassName?: string;
-  /** When true, backdrop / X asks before closing. Save still calls onClose directly. */
-  dirty?: boolean;
 };
 
 /**
@@ -51,14 +49,8 @@ export function ProductWizardShell({
   footer,
   onSubmit,
   zClassName = "z-[80]",
-  dirty = false,
 }: Props) {
   if (!open) return null;
-
-  const requestClose = () => {
-    if (dirty && !window.confirm(t(lang, "productEditorDiscardConfirm"))) return;
-    onClose();
-  };
 
   return createPortal(
     <AppModalOverlay
@@ -70,7 +62,7 @@ export function ProductWizardShell({
       aria-modal
       aria-labelledby={titleId}
       aria-describedby={descId}
-      onClick={requestClose}
+      onClick={onClose}
     >
       <div
         className="flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-border/60 bg-card shadow-2xl sm:max-h-[90dvh] sm:rounded-3xl"
@@ -94,7 +86,7 @@ export function ProductWizardShell({
             </div>
             <button
               type="button"
-              onClick={requestClose}
+              onClick={onClose}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label={t(lang, "cancel")}
             >

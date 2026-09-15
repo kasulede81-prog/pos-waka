@@ -27,7 +27,7 @@ type Props = {
   onBatchTap?: (line: SaleLine) => void;
 };
 
-/** Compact verification row — name / qty×price / line total (collapsed 4+ preview only). */
+/** Compact verification row — name / qty×price / line total (collapsed + auto-show). */
 function SheetCartPreviewRow({
   line,
   product,
@@ -55,8 +55,8 @@ function SheetCartPreviewRow({
 
 /**
  * M1.1-R4 — expandable cart items for mobile checkout sheet.
- * 1–3 lines: full editable rows (qty / discount / remove). 4+: preview + View all.
- * Expanded list scrolls; totals / payment / keypad stay outside (pinned by parent).
+ * 1–3 lines: all visible. 4+: preview + View all. Expanded list scrolls;
+ * totals / payment / keypad stay outside this component (pinned by parent).
  */
 export function MobileSheetCartItems({
   lang,
@@ -131,7 +131,7 @@ export function MobileSheetCartItems({
           POS_CHECKOUT_SCROLL_CLASS,
         )}
       >
-        {visibility.showAllLines ? (
+        {visibility.showAllLines && visibility.showDisclosure ? (
           <VirtualizedDraftCartList
             lines={draftLines}
             estimateRowPx={pharmacyMode ? 108 : 92}
@@ -156,7 +156,7 @@ export function MobileSheetCartItems({
           />
         ) : (
           <div role="list" aria-label={t(lang, "posCartProductsShort")}>
-            {previewLines.map((line) => (
+            {(visibility.showAllLines ? draftLines : previewLines).map((line) => (
               <div key={line.productId} role="listitem">
                 <SheetCartPreviewRow
                   line={line}

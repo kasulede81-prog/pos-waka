@@ -4,7 +4,6 @@
 
 import type { Product, ReturnReason, Sale, StockMovement } from "../types";
 import { returnRestocksInventory } from "./returnPolicy";
-import { allStockMovementsForIntegrity } from "./stockMovementLedger";
 
 /** Namespace UUID for deterministic sale movement ids (matches server inventory_movement_uuid). */
 export const INVENTORY_MOVEMENT_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fdcb4fe";
@@ -180,101 +179,14 @@ export function mergeProductCatalogFields(local: Product, remote: Product): Prod
   };
 }
 
-export function pendingProductCatalogIds(
-  ops: Array<{ kind: string; payload?: unknown }>,
-): Set<string> {
-  const ids = new Set<string>();
-  for (const op of ops) {
-    if (op.kind !== "product") continue;
-    const payload = op.payload && typeof op.payload === "object" ? (op.payload as { id?: unknown }) : {};
-    const id = String(payload.id ?? "").trim();
-    if (id) ids.add(id);
-  }
-  return ids;
-}
-
-export function pendingSaleMutationIds(
-  ops: Array<{ kind: string; payload?: unknown }>,
-): Set<string> {
-  const ids = new Set<string>();
-  for (const op of ops) {
-    if (op.kind !== "sale" && op.kind !== "pending_sales") continue;
-    const payload = op.payload && typeof op.payload === "object" ? (op.payload as { saleId?: unknown }) : {};
-    const id = String(payload.saleId ?? "").trim();
-    if (id) ids.add(id);
-  }
-  return ids;
-}
-
-export function pendingCustomerMutationIds(
-  ops: Array<{ kind: string; payload?: unknown }>,
-): Set<string> {
-  const ids = new Set<string>();
-  for (const op of ops) {
-    if (op.kind !== "customer") continue;
-    const payload =
-      op.payload && typeof op.payload === "object" ? (op.payload as { id?: unknown; kind?: unknown }) : {};
-    // Debt-payment ops share the "customer" outer kind (see usePosStore's
-    // queueRemote("customer", { kind: "debt_payment", paymentId })) but
-    // carry a paymentId, not a customer profile id — skip those so a queued
-    // payment never falsely protects an unrelated customer record.
-    if (payload.kind === "debt_payment") continue;
-    const id = String(payload.id ?? "").trim();
-    if (id) ids.add(id);
-  }
-  return ids;
-}
-
-export function pendingRestockProductIds(
-  ops: Array<{ kind: string; payload?: unknown }>,
-  returns: Array<{ id: string; productId: string; reason: ReturnReason }>,
-): Set<string> {
-  const byId = new Map(returns.map((row) => [row.id, row]));
-  const ids = new Set<string>();
-  for (const op of ops) {
-    if (op.kind !== "pending_returns") continue;
-    const payload =
-      op.payload && typeof op.payload === "object" ? (op.payload as { returnId?: unknown; productId?: unknown }) : {};
-    const returnId = String(payload.returnId ?? "").trim();
-    const rec = returnId ? byId.get(returnId) : undefined;
-    if (rec) {
-      if (returnRestocksInventory(rec.reason)) ids.add(rec.productId);
-      continue;
-    }
-    const productId = String(payload.productId ?? "").trim();
-    if (productId) ids.add(productId);
-  }
-  return ids;
-}
-
 /**
- * Cloud pull merge: server stock, cost, and pack fields are the shared catalog.
- * Local version is incremented on every sale, so it must not keep a stale cost.
- * Unpushed catalog edits (`pendingLocalCatalog`) still use version-wins price/cost.
+ * Cloud pull merge: server stock_on_hand is authoritative (movement ledger truth).
  */
-export function mergeProductFromCloudPull(
-  local: Product,
-  remote: Product,
-  opts?: { pendingLocalCatalog?: boolean; pendingLocalRestock?: boolean },
-): Product {
+export function mergeProductFromCloudPull(local: Product, remote: Product): Product {
   const catalog = mergeProductCatalogFields(local, remote);
-  const stockOnHand = opts?.pendingLocalRestock ? local.stockOnHand : remote.stockOnHand;
-  if (opts?.pendingLocalCatalog) {
-    return {
-      ...catalog,
-      stockOnHand,
-      updatedAt: remote.updatedAt,
-    };
-  }
   return {
     ...catalog,
-    stockOnHand,
-    sellingPricePerUnitUgx: remote.sellingPricePerUnitUgx,
-    costPricePerUnitUgx: remote.costPricePerUnitUgx,
-    buyingPackCostUgx: remote.buyingPackCostUgx ?? null,
-    packCostUnitsDepleted: remote.packCostUnitsDepleted,
-    conversionRate: remote.conversionRate,
-    buyingUnit: remote.buyingUnit,
+    stockOnHand: remote.stockOnHand,
     updatedAt: remote.updatedAt,
   };
 }
@@ -517,7 +429,9 @@ export function verifyInventoryIntegrity(input: {
   archivedMovements?: StockMovement[];
   openingStockByProduct?: Record<string, number>;
 }): { ok: boolean; mismatches: InventoryIntegrityMismatch[] } {
-  const allMovements = allStockMovementsForIntegrity(input.movements, input.archivedMovements);
+  const allMovements = input.archivedMovements?.length
+    ? [...input.archivedMovements, ...input.movements]
+    : input.movements;
   const opening = input.openingStockByProduct ?? {};
   const deltasByProduct = new Map<string, number>();
 

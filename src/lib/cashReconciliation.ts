@@ -16,6 +16,7 @@ import type {
 } from "../types";
 import type { DateFilterBounds } from "./dateFilters";
 import { enumerateDaysInBounds } from "./dateFilters";
+import { externalReturnRefundsUgx } from "./canonicalRevenue";
 import {
   adjustmentBreakdownByType,
   computeExpectedDrawerCashV2,
@@ -25,7 +26,7 @@ import {
   type AdjustmentBreakdownByType,
   type ExpectedDrawerCashV2Input,
 } from "./cashDrawerLedger";
-import { externalPhysicalCashRefundsUgx, getCashDrawerSalesInput } from "./cashDrawerSales";
+import { getCashDrawerSalesInput } from "./cashDrawerSales";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesOnDay } from "./financialMetrics";
 
@@ -171,7 +172,7 @@ export function getDrawerCashForDayInput(input: DrawerCashInput): DrawerCashSnap
     supplierPayments = [],
     shifts = [],
     dayDrawerOpens = [],
-    formulaVersion = "v2",
+    formulaVersion = "v1",
     day,
   } = input;
   const expenseUgx = sumCashExpensesOnDay(cashExpenses, day);
@@ -203,14 +204,14 @@ export function getDrawerCashForDay(
   cashDrawerAdjustments: CashDrawerAdjustment[] = [],
   shifts: ShiftRecord[] = [],
   dayDrawerOpens: DayDrawerOpen[] = [],
-  formulaVersion: CashDrawerFormulaVersion = "v2",
+  formulaVersion: CashDrawerFormulaVersion = "v1",
 ): DrawerCashSnapshot {
   const fin = getCompletedFinancials(sales, returns, products, { day });
   const daySales = revenueSalesOnDay(sales, day);
   const dayReturns = returns.filter((r) => dateKeyKampala(r.createdAt) === day);
   const debtCollectedUgx = sumDebtPaymentsOnDay(debtPayments, day);
   const refundsUgx = sumRefundsOnDay(returns, day);
-  const cashRefundsUgx = externalPhysicalCashRefundsUgx(daySales, dayReturns);
+  const cashRefundsUgx = externalReturnRefundsUgx(daySales, dayReturns);
   const drawerSales = getCashDrawerSalesInput(sales, day);
   const openingFloatUgx = resolveOpeningFloatUgx(day, cashDrawerAdjustments, shifts, {
     dayDrawerOpens,

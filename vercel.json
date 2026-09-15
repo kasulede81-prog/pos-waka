@@ -6,7 +6,7 @@
       "destination": "https://ljaedextsenbkxzzgxcg.supabase.co/auth/v1/:match*"
     },
     {
-      "source": "/:path((?!sitemap\\.xml$|robots\\.txt$|assets/|sw\\.js$|workbox-.*|manifest\\.webmanifest$|boot-recovery\\.js$).*)",
+      "source": "/:path((?!sitemap\\.xml$|robots\\.txt$|assets/|sw\\.js$|workbox-.*|manifest\\.webmanifest$).*)",
       "destination": "/index.html"
     }
   ],
@@ -34,10 +34,6 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {
-      "source": "/boot-recovery.js",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
-    },
-    {
       "source": "/workbox-(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
@@ -50,7 +46,7 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "source": "/((?!sw\\.js$|workbox-).+)\\.(css|woff2|ico|svg|png|webp)",
+      "source": "/(.*)\\.(js|css|woff2|ico|svg|png|webp)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     }
   ]

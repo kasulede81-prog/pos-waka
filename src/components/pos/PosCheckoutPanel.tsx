@@ -1,6 +1,6 @@
 import { memo, useEffect, useState, type ReactNode, type RefObject } from "react";
 import clsx from "clsx";
-import { Banknote, Check, Keyboard } from "lucide-react";
+import { Check } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DraftCartStats, DraftCheckoutTotals } from "../../lib/draftCart";
@@ -14,16 +14,8 @@ import { DraftCartLineRow } from "./DraftCartLineRow";
 import { DraftCartTotalsStack } from "./DraftCartTotalsStack";
 import { MobileSheetCartItems } from "./MobileSheetCartItems";
 import { VirtualizedDraftCartList } from "./VirtualizedDraftCartList";
-import { CheckoutNotePicker } from "./CheckoutNotePicker";
 import { POS_CHECKOUT_SCROLL_CLASS } from "../../lib/posTouchInteraction";
 import { MOBILE_CHECKOUT_ITEMS_AUTO_SHOW_MAX } from "../../lib/posMobileCheckoutItems";
-import {
-  mapEventToNumericKeypad,
-  setPosCashKeypadHardwareCapture,
-  shouldCaptureCashKeypadHardwareKey,
-} from "../../lib/desktopPosKeyHandlers";
-
-type CashWorkspaceView = "currency" | "keypad";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -107,8 +99,6 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveDisabled,
   saveButtonRef,
   sidebar = false,
-  /** Fill remaining overlay height so 7–9 / 0 are not clipped on short Windows web viewports. */
-  fluid = false,
   keypadMode = "numeric",
   onKeypadModeChange,
   showAlphaToggle = false,
@@ -121,144 +111,36 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveDisabled: boolean;
   saveButtonRef?: RefObject<HTMLButtonElement | null>;
   sidebar?: boolean;
-  fluid?: boolean;
   keypadMode?: CheckoutKeypadMode;
   onKeypadModeChange?: (mode: CheckoutKeypadMode) => void;
   showAlphaToggle?: boolean;
 }) {
-  const keyClass = fluid
-    ? "min-h-0 h-full rounded-lg bg-muted text-lg font-bold text-foreground active:bg-muted sm:text-xl"
-    : sidebar
-      ? "min-h-[44px] rounded-lg bg-muted py-1 text-xl font-bold text-foreground active:bg-muted"
-      : "min-h-[52px] rounded-xl bg-muted py-1.5 text-2xl font-bold text-foreground active:bg-muted";
-  const alphaKeyClass = sidebar || fluid
-    ? "pos-ds-keypad-label min-h-[28px] rounded-md bg-muted py-0 text-[10px] font-bold leading-none text-foreground active:bg-muted"
-    : "pos-ds-keypad-label min-h-[32px] rounded-lg bg-muted py-0 text-[11px] font-bold leading-none text-foreground active:bg-muted sm:min-h-[34px] sm:text-xs";
+  const keyClass = sidebar
+    ? "min-h-[44px] rounded-lg bg-muted py-1 text-xl font-bold text-foreground active:bg-muted"
+    : "min-h-[52px] rounded-xl bg-muted py-1.5 text-2xl font-bold text-foreground active:bg-muted";
+  const alphaKeyClass = sidebar
+    ? "min-h-[28px] rounded-md bg-muted py-0 text-[10px] font-bold leading-none text-foreground active:bg-muted"
+    : "min-h-[32px] rounded-lg bg-muted py-0 text-[11px] font-bold leading-none text-foreground active:bg-muted sm:min-h-[34px] sm:text-xs";
   const modeToggleClass = clsx(
-    "pos-ds-keypad-label rounded-lg font-black active:opacity-90",
-    sidebar || fluid ? "min-h-[28px] text-[10px]" : "min-h-[32px] text-[10px] sm:min-h-[34px] sm:text-xs",
+    "rounded-lg font-black active:opacity-90",
+    sidebar ? "min-h-[28px] text-[10px]" : "min-h-[32px] text-[10px] sm:min-h-[34px] sm:text-xs",
     keypadMode === "alpha" ? "bg-waka-600 text-white" : "bg-muted text-foreground",
   );
-  const gapClass = sidebar ? "gap-0.5" : fluid ? "gap-1.5" : "gap-1";
-  const numericGapClass = sidebar ? "gap-1.5" : fluid ? "gap-1.5" : "gap-2";
 
   const pressKey = (k: string) => {
     if (k === "⌫") onDigit("back");
     else onDigit(k);
   };
 
-  useEffect(() => {
-    setPosCashKeypadHardwareCapture(true);
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!shouldCaptureCashKeypadHardwareKey(e)) return;
-      if (keypadMode === "alpha") {
-        if (e.key === "Enter" || e.code === "NumpadEnter") {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          if (!saveDisabled) onSave();
-          return;
-        }
-        if (e.key === "Backspace") {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          onDigit("back");
-          return;
-        }
-        if (e.key === "Delete") {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          onClear();
-          return;
-        }
-        if (e.key === " " || e.key === "Spacebar") {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          onDigit("space");
-          return;
-        }
-        if (/^[a-zA-Z]$/.test(e.key)) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          onDigit(e.key);
-        }
-        return;
-      }
-      const mapped = mapEventToNumericKeypad(e, false);
-      if (!mapped) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (mapped === "enter") {
-        if (!saveDisabled) onSave();
-        return;
-      }
-      if (mapped === "C") {
-        onClear();
-        return;
-      }
-      onDigit(mapped);
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown, true);
-      setPosCashKeypadHardwareCapture(false);
-    };
-  }, [keypadMode, onClear, onDigit, onSave, saveDisabled]);
-
-  const numericKeys = (
-    <>
-      <div className={clsx("grid min-h-0 grid-cols-3", numericGapClass, fluid && "h-full grid-rows-3")}>
-        {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
-          <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
-            {k}
-          </button>
-        ))}
-      </div>
-      <div className={clsx("grid min-h-0 grid-cols-3", numericGapClass, fluid && "h-full")}>
-        {showAlphaToggle ? (
-          <button
-            type="button"
-            onClick={() => onKeypadModeChange?.("alpha")}
-            className={clsx(keyClass, "text-sm font-black uppercase tracking-wide")}
-            aria-label={t(lang, "posKeypadAlpha")}
-          >
-            abcd
-          </button>
-        ) : (
-          <button type="button" onClick={() => onDigit("00")} className={keyClass}>
-            00
-          </button>
-        )}
-        <button type="button" onClick={() => onDigit("0")} className={keyClass}>
-          0
-        </button>
-        <button type="button" onClick={() => onDigit("back")} className={keyClass}>
-          ⌫
-        </button>
-      </div>
-    </>
-  );
-
   return (
-    <div
-      className={clsx(
-        "grid min-h-0",
-        fluid ? "h-full grid-cols-[minmax(0,1fr)_4.5rem] gap-1.5" : sidebar ? "grid-cols-[1fr_4.25rem] gap-2" : "grid-cols-[1fr_5rem] gap-2",
-      )}
-      data-pos-checkout-numpad={fluid ? "fluid" : sidebar ? "sidebar" : "sheet"}
-    >
-      <div
-        className={
-          fluid && keypadMode === "numeric"
-            ? "grid h-full min-h-0 grid-rows-[3fr_1fr] gap-1.5"
-            : clsx("flex min-h-0 flex-col", gapClass)
-        }
-      >
+    <div className={clsx("grid gap-2", sidebar ? "grid-cols-[1fr_4.25rem]" : "grid-cols-[1fr_5rem]")}>
+      <div className={clsx("flex min-h-0 flex-col", sidebar ? "gap-0.5" : "gap-1")}>
         {keypadMode === "alpha" ? (
           <>
             {CHECKOUT_ALPHA_ROWS.map((row, rowIdx) => (
               <div
                 key={rowIdx}
-                className={clsx("grid", sidebar || fluid ? "gap-0.5" : "gap-1")}
+                className={clsx("grid", sidebar ? "gap-0.5" : "gap-1")}
                 style={{ gridTemplateColumns: `repeat(${CHECKOUT_ALPHA_ROW_COLS[rowIdx]}, minmax(0, 1fr))` }}
               >
                 {row.map((k) => (
@@ -268,7 +150,7 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
                 ))}
               </div>
             ))}
-            <div className={clsx("grid grid-cols-3", sidebar || fluid ? "gap-0.5" : "gap-1")}>
+            <div className={clsx("grid grid-cols-3", sidebar ? "gap-0.5" : "gap-1")}>
               <button
                 type="button"
                 onClick={() => onKeypadModeChange?.("numeric")}
@@ -287,16 +169,46 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
             </div>
           </>
         ) : (
-          numericKeys
+          <>
+            <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
+              {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
+                <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
+                  {k}
+                </button>
+              ))}
+            </div>
+            <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
+              {showAlphaToggle ? (
+                <button
+                  type="button"
+                  onClick={() => onKeypadModeChange?.("alpha")}
+                  className={clsx(keyClass, "text-sm font-black uppercase tracking-wide")}
+                  aria-label={t(lang, "posKeypadAlpha")}
+                >
+                  abcd
+                </button>
+              ) : (
+                <button type="button" onClick={() => onDigit("00")} className={keyClass}>
+                  00
+                </button>
+              )}
+              <button type="button" onClick={() => onDigit("0")} className={keyClass}>
+                0
+              </button>
+              <button type="button" onClick={() => onDigit("back")} className={keyClass}>
+                ⌫
+              </button>
+            </div>
+          </>
         )}
       </div>
-      <div className={clsx("flex min-h-0 flex-col gap-1.5", fluid ? "h-full" : "self-start gap-2")}>
+      <div className="flex min-h-0 flex-col gap-2 self-start">
         <button
           type="button"
           onClick={onClear}
           className={clsx(
             "rounded-xl bg-danger font-black text-white active:bg-danger",
-            fluid ? "min-h-[2.25rem] shrink-0 text-lg" : sidebar ? "min-h-[44px] text-lg" : "min-h-[52px] text-xl",
+            sidebar ? "min-h-[44px] text-lg" : "min-h-[52px] text-xl",
           )}
         >
           C
@@ -307,17 +219,11 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           onClick={onSave}
           disabled={saveDisabled}
           className={clsx(
-            "flex min-h-0 flex-col items-center justify-center gap-1 rounded-xl bg-success px-1 py-2 font-black leading-tight text-white shadow-md active:bg-success/90 disabled:opacity-40",
-            fluid
-              ? "flex-1 text-xs"
-              : sidebar
-                ? "min-h-[7.5rem] text-xs"
-                : keypadMode === "alpha"
-                  ? "min-h-[8.5rem] text-sm"
-                  : "min-h-0 flex-1",
+            "flex flex-col items-center justify-center gap-1 rounded-xl bg-success px-1 py-2 font-black leading-tight text-white shadow-md active:bg-success/90 disabled:opacity-40",
+            sidebar ? "min-h-[7.5rem] text-xs" : keypadMode === "alpha" ? "min-h-[8.5rem] text-sm" : "min-h-0 flex-1",
           )}
         >
-          <Check className={clsx("stroke-[3]", sidebar || fluid ? "h-6 w-6" : "h-7 w-7")} aria-hidden />
+          <Check className={clsx("stroke-[3]", sidebar ? "h-6 w-6" : "h-7 w-7")} aria-hidden />
           <span className="text-center">{saveLabel}</span>
         </button>
       </div>
@@ -355,8 +261,6 @@ type PaymentBlockProps = {
   hideCreditDockPanel?: boolean;
   /** Desktop sidebar with external catalog dock — tighter payment strip. */
   sidebarCompact?: boolean;
-  /** Open the on-screen keypad to type cash received (cash / pay-later). */
-  onOpenAmountKeypad?: () => void;
 };
 
 function PaymentBlock({
@@ -388,7 +292,6 @@ function PaymentBlock({
   onSaleCustomerPhone,
   hideCreditDockPanel = false,
   sidebarCompact = false,
-  onOpenAmountKeypad,
 }: PaymentBlockProps) {
   const amountBtnClass = enterprise
     ? "mt-1 flex min-h-[40px] w-full items-center justify-end rounded-lg border-2 px-3 py-1.5 text-lg font-black"
@@ -483,10 +386,7 @@ function PaymentBlock({
           </p>
           <button
             type="button"
-            onClick={() => {
-              onCheckoutInputField("cash");
-              onOpenAmountKeypad?.();
-            }}
+            onClick={() => onCheckoutInputField("cash")}
             className={clsx(
               amountBtnClass,
               sidebarCompact && "mt-1 min-h-[36px] rounded-lg px-2 py-1 text-base",
@@ -920,11 +820,6 @@ export type PosCheckoutPanelProps = {
   onSaleCustomerPhone: (phone: string) => void;
   onSavePending: () => void;
   onFinishSale: () => void;
-  /**
-   * Add one banknote/coin to existing `cashInput` (same helper as desktop catalog dock).
-   * When set on mobile/compact cash checkout, the pull affordance opens the currency workspace.
-   */
-  onAddCashNote?: (ugx: number) => void;
   /** Desktop sidebar — focus catalog to add more products. */
   onAddItems?: () => void;
   /** Full desktop — numpad + pay-later render in the catalog column. */
@@ -1078,7 +973,6 @@ export function PosCheckoutPanel({
   onSaleCustomerPhone,
   onSavePending,
   onFinishSale,
-  onAddCashNote,
   onAddItems,
   catalogDock = false,
   catalogNumpadOpen: catalogNumpadOpenProp,
@@ -1095,27 +989,13 @@ export function PosCheckoutPanel({
   const emptyCart = draftLines.length === 0;
   const [sheetCartExpanded, setSheetCartExpanded] = useState(false);
   const [sidebarNumpadOpenLocal, setSidebarNumpadOpenLocal] = useState(false);
-  const [cashWorkspaceView, setCashWorkspaceView] = useState<CashWorkspaceView>("currency");
   const sidebarNumpadOpen = catalogDock ? (catalogNumpadOpenProp ?? false) : sidebarNumpadOpenLocal;
   const setSidebarNumpadOpen = catalogDock && onCatalogNumpadOpenChange ? onCatalogNumpadOpenChange : setSidebarNumpadOpenLocal;
   const needsAmountKeypad = paymentMethod === "cash" || paymentMethod === "credit";
-  const mobileCashCurrencyEnabled = Boolean(mobileSheetBudget && onAddCashNote);
-  const showMobileCashCurrencyWorkspace =
-    mobileCashCurrencyEnabled && paymentMethod === "cash" && sidebarNumpadOpen;
-
-  const openMobileCashWorkspace = (view: CashWorkspaceView = "currency") => {
-    onCheckoutInputField("cash");
-    setCashWorkspaceView(mobileCashCurrencyEnabled ? view : "keypad");
-    setSidebarNumpadOpen(true);
-  };
 
   useEffect(() => {
     if (!needsAmountKeypad) setSidebarNumpadOpen(false);
   }, [needsAmountKeypad]);
-
-  useEffect(() => {
-    if (!sidebarNumpadOpen) setCashWorkspaceView("currency");
-  }, [sidebarNumpadOpen]);
 
   useEffect(() => {
     if (draftLines.length <= MOBILE_CHECKOUT_ITEMS_AUTO_SHOW_MAX) {
@@ -1169,14 +1049,6 @@ export function PosCheckoutPanel({
     onSaleCustomerId,
     onSaleCustomerName,
     onSaleCustomerPhone,
-    onOpenAmountKeypad: () => {
-      if (!needsAmountKeypad) return;
-      if (mobileCashCurrencyEnabled && paymentMethod === "cash") {
-        openMobileCashWorkspace("currency");
-        return;
-      }
-      setSidebarNumpadOpen(true);
-    },
   };
 
   return (
@@ -1196,23 +1068,17 @@ export function PosCheckoutPanel({
           isSidebar && "rounded-t-[1.35rem]",
         )}
       >
-        {emptyCart ? (
-          <span
-            className={clsx("shrink-0", catalogDock && isSidebar ? "w-10" : isCompact ? "w-12" : "w-[4.5rem]")}
-            aria-hidden
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={onClearDraft}
-            className={clsx(
-              "shrink-0 rounded-full border border-rose-200 bg-card font-semibold text-rose-800 shadow-sm active:bg-rose-50",
-              catalogDock && isSidebar ? "px-2.5 py-1 text-xs" : "px-3 py-2 text-sm",
-            )}
-          >
-            {clearSaleLabel}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onClearDraft}
+          disabled={emptyCart}
+          className={clsx(
+            "shrink-0 rounded-full border border-border bg-card font-semibold text-muted-foreground shadow-sm active:bg-muted disabled:opacity-40",
+            catalogDock && isSidebar ? "px-2.5 py-1 text-xs" : "px-3 py-2 text-sm",
+          )}
+        >
+          {clearSaleLabel}
+        </button>
         <h2
           id="pos-checkout-title"
           className={clsx(
@@ -1322,118 +1188,18 @@ export function PosCheckoutPanel({
                 {savePendingLabel}
               </button>
             ) : null}
-            {showMobileCashCurrencyWorkspace && onAddCashNote ? (
-              <div className="space-y-1.5" data-checkout-cash-workspace="mobile">
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onCheckoutInputField("cash");
-                      setCashWorkspaceView("currency");
-                    }}
-                    aria-label="Add Ugandan cash denominations"
-                    aria-pressed={cashWorkspaceView === "currency"}
-                    className={clsx(
-                      "flex h-11 flex-1 items-center justify-center rounded-xl border shadow-sm active:opacity-90",
-                      cashWorkspaceView === "currency"
-                        ? "border-waka-500 bg-waka-50 text-waka-950"
-                        : "border-border bg-muted text-foreground",
-                    )}
-                  >
-                    <Banknote className="h-6 w-6" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onCheckoutInputField("cash");
-                      setCashWorkspaceView("keypad");
-                    }}
-                    aria-label={t(lang, "posKeypadShow")}
-                    aria-pressed={cashWorkspaceView === "keypad"}
-                    className={clsx(
-                      "flex h-11 flex-1 items-center justify-center rounded-xl border shadow-sm active:opacity-90",
-                      cashWorkspaceView === "keypad"
-                        ? "border-waka-500 bg-waka-50 text-waka-950"
-                        : "border-border bg-muted text-foreground",
-                    )}
-                  >
-                    <Keyboard className="h-6 w-6" aria-hidden />
-                  </button>
-                </div>
-                {cashWorkspaceView === "currency" ? (
-                  <div className="max-h-[min(34dvh,17rem)] overflow-y-auto overscroll-y-contain">
-                    <CheckoutNotePicker density="touch" onAddNote={onAddCashNote} />
-                  </div>
-                ) : (
-                  <CheckoutNumpadDock {...numpadDockProps} />
-                )}
-                {cashWorkspaceView === "currency" ? (
-                  <button
-                    ref={saveButtonRef}
-                    type="button"
-                    onClick={onFinishSale}
-                    disabled={emptyCart}
-                    className="pos-ds-checkout-btn min-h-[52px] w-full rounded-xl bg-success py-3.5 text-lg font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
-                  >
-                    {saveSaleLabel}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setSidebarNumpadOpen(false)}
-                  className="w-full rounded-lg py-1 text-center text-[11px] font-bold text-muted-foreground active:text-foreground"
-                >
-                  {t(lang, "posKeypadHide")}
-                </button>
-              </div>
-            ) : paymentMethod === "credit" || (paymentMethod === "cash" && sidebarNumpadOpen) ? (
-              <>
-                <CheckoutNumpadDock {...numpadDockProps} />
-                {paymentMethod === "cash" ? (
-                  <button
-                    type="button"
-                    onClick={() => setSidebarNumpadOpen(false)}
-                    className="mt-1.5 w-full rounded-lg py-1 text-center text-[11px] font-bold text-muted-foreground active:text-foreground"
-                  >
-                    {t(lang, "posKeypadHide")}
-                  </button>
-                ) : null}
-              </>
+            {needsAmountKeypad ? (
+              <CheckoutNumpadDock {...numpadDockProps} />
             ) : (
-              <div className="flex gap-2">
-                {paymentMethod === "cash" ? (
-                  <button
-                    type="button"
-                    onClick={() => openMobileCashWorkspace(mobileCashCurrencyEnabled ? "currency" : "keypad")}
-                    aria-label={
-                      mobileCashCurrencyEnabled
-                        ? "Add Ugandan cash denominations"
-                        : t(lang, "posKeypadShow")
-                    }
-                    title={
-                      mobileCashCurrencyEnabled
-                        ? "Add Ugandan cash denominations"
-                        : t(lang, "posKeypadShow")
-                    }
-                    className="flex h-[52px] w-14 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground shadow-sm active:bg-muted/80"
-                  >
-                    {mobileCashCurrencyEnabled ? (
-                      <Banknote className="h-6 w-6" aria-hidden />
-                    ) : (
-                      <Keyboard className="h-6 w-6" aria-hidden />
-                    )}
-                  </button>
-                ) : null}
-                <button
-                  ref={saveButtonRef}
-                  type="button"
-                  onClick={onFinishSale}
-                  disabled={emptyCart}
-                  className="pos-ds-checkout-btn min-h-[52px] flex-1 rounded-xl bg-success py-3.5 text-lg font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
-                >
-                  {saveSaleLabel}
-                </button>
-              </div>
+              <button
+                ref={saveButtonRef}
+                type="button"
+                onClick={onFinishSale}
+                disabled={emptyCart}
+                className="pos-ds-checkout-btn w-full rounded-xl bg-success py-3.5 text-lg font-black text-white shadow-lg active:bg-success/90 disabled:opacity-40"
+              >
+                {saveSaleLabel}
+              </button>
             )}
           </div>
         </div>

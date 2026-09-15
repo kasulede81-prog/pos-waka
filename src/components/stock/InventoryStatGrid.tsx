@@ -2,7 +2,7 @@ import { AlertTriangle, Boxes, FolderOpen, Package } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatUgx } from "../../lib/formatUgx";
-import { Caption, MonoNumber } from "../enterprise/EnterpriseTypography";
+import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
 
 type Props = {
   lang: Language;
@@ -10,7 +10,6 @@ type Props = {
   lowStockCount: number;
   shelfCount: number;
   inventoryValueUgx: number;
-  showInventoryValue?: boolean;
   onLowStockTap?: () => void;
 };
 
@@ -20,38 +19,36 @@ export function InventoryStatGrid({
   lowStockCount,
   shelfCount,
   inventoryValueUgx,
-  showInventoryValue = true,
   onLowStockTap,
 }: Props) {
-  const low = lowStockCount > 0;
   return (
-    <div className="inventory-products-summary" aria-label={t(lang, "stockStatTotalProducts")}>
-      <div className="inventory-products-summary__item">
-        <Package className="h-4 w-4 text-muted-foreground" aria-hidden />
-        <Caption className="inventory-products-summary__label">{t(lang, "stockStatTotalProducts")}</Caption>
-        <MonoNumber className="inventory-products-summary__value">{totalProducts}</MonoNumber>
-      </div>
-      <button
-        type="button"
-        className={low ? "inventory-products-summary__item is-low" : "inventory-products-summary__item"}
+    <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+      <EnterpriseKpiCard
+        icon={Package}
+        label={t(lang, "stockStatTotalProducts")}
+        value={String(totalProducts)}
+        hint={t(lang, "stockStatProductsHint")}
+      />
+      <EnterpriseKpiCard
+        icon={AlertTriangle}
+        label={t(lang, "stockStatLow")}
+        value={String(lowStockCount)}
+        hint={t(lang, "stockStatLowHint")}
+        tone={lowStockCount > 0 ? "danger" : "default"}
         onClick={onLowStockTap}
-      >
-        <AlertTriangle className="h-4 w-4" aria-hidden />
-        <Caption className="inventory-products-summary__label">{t(lang, "stockStatLow")}</Caption>
-        <MonoNumber className="inventory-products-summary__value">{lowStockCount}</MonoNumber>
-      </button>
-      <div className="inventory-products-summary__item">
-        <FolderOpen className="h-4 w-4 text-muted-foreground" aria-hidden />
-        <Caption className="inventory-products-summary__label">{t(lang, "stockStatShelves")}</Caption>
-        <MonoNumber className="inventory-products-summary__value">{shelfCount}</MonoNumber>
-      </div>
-      <div className="inventory-products-summary__item">
-        <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden />
-        <Caption className="inventory-products-summary__label">{t(lang, "stockStatValueShort")}</Caption>
-        <MonoNumber className="inventory-products-summary__value">
-          {showInventoryValue ? formatUgx(inventoryValueUgx) : "—"}
-        </MonoNumber>
-      </div>
+      />
+      <EnterpriseKpiCard
+        icon={FolderOpen}
+        label={t(lang, "stockStatShelves")}
+        value={String(shelfCount)}
+        hint={t(lang, "stockStatShelvesHint")}
+      />
+      <EnterpriseKpiCard
+        icon={Boxes}
+        label={t(lang, "stockStatValueShort")}
+        value={formatUgx(inventoryValueUgx)}
+        hint={t(lang, "stockStatValueHint")}
+      />
     </div>
   );
 }

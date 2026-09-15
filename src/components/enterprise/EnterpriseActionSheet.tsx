@@ -37,8 +37,8 @@ export function EnterpriseActionSheet({
   subtitle,
   actions,
   cancelLabel,
-  clearNav = true,
-  zIndexClass = "z-[var(--waka-z-pos-overlay,80)]",
+  clearNav = false,
+  zIndexClass = "z-[54]",
   children,
 }: Props) {
   const run = (item: EnterpriseActionSheetItem) => {

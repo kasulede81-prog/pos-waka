@@ -7,8 +7,6 @@ import {
   mergeProductCatalogFields,
   mergeProductFromCloudPull,
   mergeProductInventory,
-  pendingProductCatalogIds,
-  pendingRestockProductIds,
   movementsToDeltas,
   patchProductsWithServerStock,
   returnStockDelta,
@@ -137,69 +135,6 @@ describe("inventoryIntegrity — cloud pull merge", () => {
     const local = product(12, "2026-05-31T12:00:00.000Z");
     const remote = product(2, "2026-05-31T11:00:00.000Z");
     expect(mergeProductInventory(local, remote).stockOnHand).toBe(2);
-  });
-
-  it("cloud pull uses remote cost even when local version is higher from sales", () => {
-    const local = product(12, "2026-05-31T12:00:00.000Z", {
-      costPricePerUnitUgx: 80,
-      sellingPricePerUnitUgx: 2_000,
-      version: 80,
-    });
-    const remote = product(5, "2026-05-31T11:00:00.000Z", {
-      costPricePerUnitUgx: 200,
-      sellingPricePerUnitUgx: 1_000,
-      version: 3,
-    });
-    const merged = mergeProductFromCloudPull(local, remote);
-    expect(merged.stockOnHand).toBe(5);
-    expect(merged.costPricePerUnitUgx).toBe(200);
-    expect(merged.sellingPricePerUnitUgx).toBe(1_000);
-  });
-
-  it("cloud pull keeps local cost when a catalog push is still queued", () => {
-    const local = product(12, "2026-05-31T12:00:00.000Z", {
-      costPricePerUnitUgx: 80,
-      version: 80,
-    });
-    const remote = product(5, "2026-05-31T11:00:00.000Z", {
-      costPricePerUnitUgx: 200,
-      version: 3,
-    });
-    const merged = mergeProductFromCloudPull(local, remote, { pendingLocalCatalog: true });
-    expect(merged.stockOnHand).toBe(5);
-    expect(merged.costPricePerUnitUgx).toBe(80);
-  });
-
-  it("cloud pull keeps local stock when a restocking return is still queued", () => {
-    const local = product(12, "2026-05-31T12:00:00.000Z");
-    const remote = product(11, "2026-05-31T11:00:00.000Z");
-    const merged = mergeProductFromCloudPull(local, remote, { pendingLocalRestock: true });
-    expect(merged.stockOnHand).toBe(12);
-  });
-
-  it("collects pending restock product ids from queued sellable returns", () => {
-    expect(
-      [...pendingRestockProductIds(
-        [{ kind: "pending_returns", payload: { returnId: "ret-1", productId: PRODUCT_ID } }],
-        [{ id: "ret-1", productId: PRODUCT_ID, reason: "wrong_item" }],
-      )],
-    ).toEqual([PRODUCT_ID]);
-    expect(
-      [...pendingRestockProductIds(
-        [{ kind: "pending_returns", payload: { returnId: "ret-2", productId: PRODUCT_ID } }],
-        [{ id: "ret-2", productId: PRODUCT_ID, reason: "damaged" }],
-      )],
-    ).toEqual([]);
-  });
-
-  it("collects pending product catalog ids from the queue", () => {
-    expect(
-      [...pendingProductCatalogIds([
-        { kind: "product", payload: { id: PRODUCT_ID } },
-        { kind: "pending_sales", payload: { saleId: SALE_A } },
-        { kind: "product", payload: { id: " " } },
-      ])],
-    ).toEqual([PRODUCT_ID]);
   });
 
   it("field-safe merge keeps local price when local version is higher", () => {
@@ -386,40 +321,6 @@ describe("inventoryIntegrity — verification", () => {
       openingStockByProduct: { [PRODUCT_ID]: 10 },
     });
     expect(ok).toBe(true);
-  });
-
-  it("active window alone is a false mismatch when the opening lives in archive", () => {
-    const products = [product(10, "2026-05-31T12:00:00.000Z")];
-    const saleOut: StockMovement = {
-      id: "m-sale",
-      at: "2026-05-31T11:00:00.000Z",
-      productId: PRODUCT_ID,
-      productName: "Item",
-      deltaBaseUnits: -2,
-      kind: "sale_out",
-      summary: "Sale",
-      refId: SALE_A,
-      supplierId: null,
-    };
-    const opening: StockMovement = {
-      id: "m-open",
-      at: "2026-05-31T09:00:00.000Z",
-      productId: PRODUCT_ID,
-      productName: "Item",
-      deltaBaseUnits: 12,
-      kind: "opening_stock",
-      summary: "Opening",
-      refId: PRODUCT_ID,
-      supplierId: null,
-    };
-    expect(verifyInventoryIntegrity({ products, movements: [saleOut] }).ok).toBe(false);
-    expect(
-      verifyInventoryIntegrity({
-        products,
-        movements: [saleOut],
-        archivedMovements: [opening],
-      }).ok,
-    ).toBe(true);
   });
 });
 

@@ -166,35 +166,19 @@ export function BackOfficePinForm({ lang }: Props) {
 
           }
 
+          if (!shopId) {
+
+            setBoPinFeedback(t(lang, "settingsBackOfficePinOffline"));
+
+            setResetSignal((n) => n + 1);
+
+            return false;
+
+          }
+
           setSaving(true);
 
-          void (async () => {
-
-            let id = shopId;
-
-            if (!id) {
-
-              const ctx = await resolveShopCtx();
-
-              id = ctx?.shopId ?? null;
-
-              if (id) setShopId(id);
-
-            }
-
-            if (!id) {
-
-              setSaving(false);
-
-              setBoPinFeedback(t(lang, "settingsBackOfficePinOffline"));
-
-              setResetSignal((n) => n + 1);
-
-              return;
-
-            }
-
-            const hash = await hashShopSecurityPin(pin);
+          void hashShopSecurityPin(pin).then(async (hash) => {
 
             if (!hash) {
 
@@ -208,7 +192,7 @@ export function BackOfficePinForm({ lang }: Props) {
 
             }
 
-            const uploaded = await saveShopSecurityPinToCloud(id, hash);
+            const uploaded = await saveShopSecurityPinToCloud(shopId, hash);
 
             if (!uploaded.ok) {
 
@@ -234,7 +218,7 @@ export function BackOfficePinForm({ lang }: Props) {
 
             setBoPinFeedback(t(lang, "settingsBackOfficePinSaved"));
 
-          })();
+          });
 
           return true;
 

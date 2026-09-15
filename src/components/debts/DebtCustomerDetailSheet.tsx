@@ -2,7 +2,6 @@ import clsx from "clsx";
 import type { Customer, Language } from "../../types";
 import type { CreditActivityEntry } from "../../lib/customerDebtActivity";
 import { t } from "../../lib/i18n";
-import { formatReceiptIdentityForUi } from "../../lib/receiptIdentity";
 import { customerInitials, formatActivityWhen } from "../../lib/debtsPageView";
 import { ModalSheet } from "../layout/ModalSheet";
 import { EnterpriseEmptyState } from "../enterprise/EnterpriseEmptyState";
@@ -10,7 +9,6 @@ import { Caption, MonoNumber, SectionTitle } from "../enterprise/EnterpriseTypog
 import { WakaButton } from "../ui/wakaPrimitives";
 import { Wallet } from "lucide-react";
 import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
-import { DocumentActionsBar } from "../documents/DocumentActionsBar";
 
 type Props = {
   lang: Language;
@@ -20,9 +18,6 @@ type Props = {
   onClose: () => void;
   onReceive: () => void;
   canDebt: boolean;
-  onPrintStatement?: () => void;
-  onDownloadStatementPdf?: () => void;
-  onShareStatementPdf?: () => void;
 };
 
 export function DebtCustomerDetailSheet({
@@ -33,9 +28,6 @@ export function DebtCustomerDetailSheet({
   onClose,
   onReceive,
   canDebt,
-  onPrintStatement,
-  onDownloadStatementPdf,
-  onShareStatementPdf,
 }: Props) {
   if (!customer) return null;
 
@@ -101,10 +93,7 @@ export function DebtCustomerDetailSheet({
               <div className="min-w-0">
                 <Caption className="font-bold normal-case text-foreground">
                   {entry.kind === "credit_sale" ? t(lang, "creditSaleActivity") : t(lang, "debtPaymentActivity")}
-                  {(() => {
-                    const receiptLabel = formatReceiptIdentityForUi(entry);
-                    return receiptLabel ? ` ${receiptLabel}` : "";
-                  })()}
+                  {entry.receiptSeq != null ? ` #${String(entry.receiptSeq).padStart(3, "0")}` : ""}
                 </Caption>
                 <Caption>{formatActivityWhen(entry.at, localeLang)}</Caption>
               </div>
@@ -120,18 +109,6 @@ export function DebtCustomerDetailSheet({
           ))}
         </ul>
       )}
-
-      {onPrintStatement && onDownloadStatementPdf && onShareStatementPdf ? (
-        <div className="mt-4">
-          <DocumentActionsBar
-            lang={lang}
-            compact
-            onPrint={onPrintStatement}
-            onDownloadPdf={onDownloadStatementPdf}
-            onSharePdf={onShareStatementPdf}
-          />
-        </div>
-      ) : null}
     </ModalSheet>
   );
 }

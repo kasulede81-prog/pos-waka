@@ -28,42 +28,32 @@ function varianceLabel(lang: Language, kind: CashPositionReconciliation["varianc
   return t(lang, "cashPositionExcess");
 }
 
-function closedBreakdownUnavailable(report: CashPositionReport): boolean {
-  return Boolean(report.closedDayBreakdownUnavailable || (report.ledgerClosed && report.paymentMethods.length === 0));
-}
-
 function appendCashPositionSections(
   lang: Language,
   report: CashPositionReport,
   reconciliation: CashPositionReconciliation | null | undefined,
   lines: string[],
 ): void {
-  const breakdownUnavailable = closedBreakdownUnavailable(report);
   lines.push(`${t(lang, "cashPositionTotalSales")}: UGX ${report.summary.totalSalesUgx.toLocaleString()}`);
   lines.push(`${t(lang, "cashPositionTransactions")}: ${report.summary.transactionCount}`);
-  if (!breakdownUnavailable) {
-    lines.push(`${t(lang, "cashPositionItemsSold")}: ${report.summary.itemsSold.toLocaleString()}`);
-  }
+  lines.push(`${t(lang, "cashPositionItemsSold")}: ${report.summary.itemsSold.toLocaleString()}`);
   lines.push("");
-  if (breakdownUnavailable) {
-    lines.push(t(lang, "dailyReportClosedAuthorityNote"));
-    lines.push(t(lang, "cashPositionClosedBreakdownUnavailable"));
-    lines.push("");
-  } else {
-    lines.push(t(lang, "cashPositionSectionPayments"));
-    for (const row of report.paymentMethods) {
-      lines.push(
-        `  ${paymentLabel(lang, row.key)}: UGX ${row.amountUgx.toLocaleString()} (${row.percent}%) · ${row.transactionCount}`,
-      );
-    }
-    if (report.paymentAdjustmentUgx !== 0) {
-      lines.push(
-        `  ${t(lang, "cashPositionPaymentAdjustment")}: UGX ${report.paymentAdjustmentUgx.toLocaleString()}`,
-      );
-    }
-    lines.push(`  ${t(lang, "cashPositionGrandTotal")}: UGX ${report.summary.totalSalesUgx.toLocaleString()}`);
-    lines.push("");
+  if (report.ledgerClosed) {
+    lines.push(t(lang, "dailyReportOperationalDetails"));
   }
+  lines.push(t(lang, "cashPositionSectionPayments"));
+  for (const row of report.paymentMethods) {
+    lines.push(
+      `  ${paymentLabel(lang, row.key)}: UGX ${row.amountUgx.toLocaleString()} (${row.percent}%) · ${row.transactionCount}`,
+    );
+  }
+  if (report.paymentAdjustmentUgx !== 0) {
+    lines.push(
+      `  ${t(lang, "cashPositionPaymentAdjustment")}: UGX ${report.paymentAdjustmentUgx.toLocaleString()}`,
+    );
+  }
+  lines.push(`  ${t(lang, "cashPositionGrandTotal")}: UGX ${report.summary.totalSalesUgx.toLocaleString()}`);
+  lines.push("");
   lines.push(t(lang, "cashPositionSectionCash"));
   if (report.cashPosition.openingFloatUgx > 0) {
     lines.push(`  ${t(lang, "cashPositionOpeningFloat")}: UGX ${report.cashPosition.openingFloatUgx.toLocaleString()}`);
@@ -82,41 +72,33 @@ function appendCashPositionSections(
   }
   lines.push(`  ${t(lang, "cashPositionSupplierPayments")}: UGX ${report.cashPosition.supplierPaymentsUgx.toLocaleString()}`);
   lines.push(`  ${t(lang, "cashPositionExpenses")}: UGX ${report.cashPosition.expensesUgx.toLocaleString()}`);
-  lines.push(`  ${t(lang, "cashPositionRefunds")}: UGX ${report.cashPosition.cashRefundsUgx.toLocaleString()}`);
-  if (report.cashPosition.expectedCashUgx == null) {
-    lines.push(`  ${t(lang, "cashPositionExpectedCash")}: —`);
-  } else {
-    lines.push(
-      `  ${t(lang, "cashPositionExpectedCash")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
-    );
-  }
+  lines.push(`  ${t(lang, "cashPositionRefunds")}: UGX ${report.cashPosition.refundsUgx.toLocaleString()}`);
+  lines.push(
+    `  ${t(lang, "cashPositionExpectedCash")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
+  );
   if (reconciliation) {
     lines.push("");
     lines.push(t(lang, "cashPositionSectionReconcile"));
     lines.push(`  ${t(lang, "cashPositionPhysicalCount")}: UGX ${reconciliation.physicalCountUgx.toLocaleString()}`);
-    if (report.cashPosition.expectedCashUgx != null) {
-      lines.push(
-        `  ${t(lang, "cashPositionExpectedLabel")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
-      );
-    }
+    lines.push(
+      `  ${t(lang, "cashPositionExpectedLabel")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
+    );
     lines.push(`  ${t(lang, "cashPositionActualLabel")}: UGX ${reconciliation.physicalCountUgx.toLocaleString()}`);
     lines.push(
       `  ${t(lang, "cashPositionVariance")}: ${reconciliation.varianceUgx >= 0 ? "+" : ""}UGX ${reconciliation.varianceUgx.toLocaleString()} · ${varianceLabel(lang, reconciliation.varianceKind)}`,
     );
   }
-  if (!breakdownUnavailable) {
-    lines.push("");
-    lines.push(t(lang, "cashPositionSectionCategories"));
-    for (const row of report.categories) {
-      lines.push(`  ${row.categoryLabel}: UGX ${row.amountUgx.toLocaleString()} (${row.percent}%)`);
-    }
-    lines.push("");
-    lines.push(t(lang, "cashPositionSectionCashiers"));
-    for (const row of report.cashiers) {
-      lines.push(
-        `  ${row.name}: UGX ${row.salesUgx.toLocaleString()} · ${row.transactionCount} ${t(lang, "cashPositionTransactions").toLowerCase()}`,
-      );
-    }
+  lines.push("");
+  lines.push(t(lang, "cashPositionSectionCategories"));
+  for (const row of report.categories) {
+    lines.push(`  ${row.categoryLabel}: UGX ${row.amountUgx.toLocaleString()} (${row.percent}%)`);
+  }
+  lines.push("");
+  lines.push(t(lang, "cashPositionSectionCashiers"));
+  for (const row of report.cashiers) {
+    lines.push(
+      `  ${row.name}: UGX ${row.salesUgx.toLocaleString()} · ${row.transactionCount} ${t(lang, "cashPositionTransactions").toLowerCase()}`,
+    );
   }
 }
 
@@ -140,44 +122,30 @@ export function cashPositionToCsv(
   const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
   const rows: string[] = [];
   rows.push(["section", "label", "value"].map(esc).join(","));
-  const breakdownUnavailable = closedBreakdownUnavailable(report);
   rows.push(["summary", "day", report.dayKey].map(esc).join(","));
   rows.push(["summary", "total_sales_ugx", report.summary.totalSalesUgx].map(esc).join(","));
   rows.push(["summary", "transactions", report.summary.transactionCount].map(esc).join(","));
-  if (!breakdownUnavailable) {
-    rows.push(["summary", "items_sold", report.summary.itemsSold].map(esc).join(","));
-  }
+  rows.push(["summary", "items_sold", report.summary.itemsSold].map(esc).join(","));
   rows.push(["cash", "cash_sales_ugx", report.cashPosition.cashSalesUgx].map(esc).join(","));
   rows.push(["cash", "opening_float_ugx", report.cashPosition.openingFloatUgx].map(esc).join(","));
   rows.push(["cash", "debt_collected_ugx", report.cashPosition.debtCollectedUgx].map(esc).join(","));
   rows.push(["cash", "adjustment_inflows_ugx", report.cashPosition.adjustmentInflowsUgx].map(esc).join(","));
   rows.push(["cash", "adjustment_outflows_ugx", report.cashPosition.adjustmentOutflowsUgx].map(esc).join(","));
   rows.push(["cash", "refunds_ugx", report.cashPosition.refundsUgx].map(esc).join(","));
-  rows.push(["cash", "cash_refunds_ugx", report.cashPosition.cashRefundsUgx].map(esc).join(","));
   rows.push(["cash", "expenses_ugx", report.cashPosition.expensesUgx].map(esc).join(","));
   rows.push(["cash", "supplier_payments_ugx", report.cashPosition.supplierPaymentsUgx].map(esc).join(","));
-  rows.push([
-    "cash",
-    "expected_cash_ugx",
-    report.cashPosition.expectedCashUgx == null ? "" : report.cashPosition.expectedCashUgx,
-  ]
-    .map(esc)
-    .join(","));
-  if (breakdownUnavailable) {
-    rows.push(["note", "closed_breakdown", "unavailable"].map(esc).join(","));
-  } else {
-    if (report.paymentAdjustmentUgx !== 0) {
-      rows.push(["payment", "adjustment", report.paymentAdjustmentUgx].map(esc).join(","));
-    }
-    for (const p of report.paymentMethods) {
-      rows.push(["payment", p.key, `${p.amountUgx}|${p.percent}|${p.transactionCount}`].map(esc).join(","));
-    }
-    for (const c of report.categories) {
-      rows.push(["category", c.categoryLabel, `${c.amountUgx}|${c.percent}`].map(esc).join(","));
-    }
-    for (const c of report.cashiers) {
-      rows.push(["cashier", c.cashierId, `${c.name}|${c.salesUgx}|${c.transactionCount}|${c.kind}`].map(esc).join(","));
-    }
+  rows.push(["cash", "expected_cash_ugx", report.cashPosition.expectedCashUgx].map(esc).join(","));
+  if (report.paymentAdjustmentUgx !== 0) {
+    rows.push(["payment", "adjustment", report.paymentAdjustmentUgx].map(esc).join(","));
+  }
+  for (const p of report.paymentMethods) {
+    rows.push(["payment", p.key, `${p.amountUgx}|${p.percent}|${p.transactionCount}`].map(esc).join(","));
+  }
+  for (const c of report.categories) {
+    rows.push(["category", c.categoryLabel, `${c.amountUgx}|${c.percent}`].map(esc).join(","));
+  }
+  for (const c of report.cashiers) {
+    rows.push(["cashier", c.cashierId, `${c.name}|${c.salesUgx}|${c.transactionCount}|${c.kind}`].map(esc).join(","));
   }
   if (reconciliation) {
     rows.push(["reconcile", "physical_count_ugx", reconciliation.physicalCountUgx].map(esc).join(","));
@@ -192,44 +160,7 @@ export function buildCashPositionDocument(
   report: CashPositionReport,
   reconciliation?: CashPositionReconciliation | null,
 ): ReportDocumentModel {
-  const breakdownUnavailable = closedBreakdownUnavailable(report);
-  const liveBreakdownSections = breakdownUnavailable
-    ? [
-        {
-          title: t(lang, "cashPositionClosedBreakdownUnavailable"),
-          rows: [{ label: t(lang, "dailyReportClosedAuthorityNote"), value: "—" }],
-        },
-      ]
-    : [
-        {
-          title: t(lang, "cashPositionSectionPayments"),
-          rows: [
-            { label: t(lang, "cashPositionItemsSold"), value: report.summary.itemsSold.toLocaleString() },
-            ...report.paymentMethods.map((row) => ({
-              label: paymentLabel(lang, row.key),
-              value: `${ugxLabel(row.amountUgx)} (${row.percent}%) · ${row.transactionCount}`,
-            })),
-            ...(report.paymentAdjustmentUgx !== 0
-              ? [{ label: t(lang, "cashPositionPaymentAdjustment"), value: ugxLabel(report.paymentAdjustmentUgx) }]
-              : []),
-            { label: t(lang, "cashPositionGrandTotal"), value: ugxLabel(report.summary.totalSalesUgx), bold: true },
-          ],
-        },
-        {
-          title: t(lang, "cashPositionSectionCategories"),
-          rows: report.categories.map((row) => ({
-            label: row.categoryLabel,
-            value: `${ugxLabel(row.amountUgx)} (${row.percent}%)`,
-          })),
-        },
-        {
-          title: t(lang, "cashPositionSectionCashiers"),
-          rows: report.cashiers.map((row) => ({
-            label: row.name,
-            value: `${ugxLabel(row.salesUgx)} · ${row.transactionCount}`,
-          })),
-        },
-      ];
+  const live = Boolean(report.ledgerClosed);
   return {
     kind: "cash_position",
     lang,
@@ -247,17 +178,10 @@ export function buildCashPositionDocument(
           { label: t(lang, "cashPositionTransactions"), value: String(report.summary.transactionCount) },
           { label: t(lang, "cashPositionCashSales"), value: ugxLabel(report.cashPosition.cashSalesUgx) },
           { label: t(lang, "cashPositionDebtCollected"), value: ugxLabel(report.cashPosition.debtCollectedUgx) },
-          { label: t(lang, "cashPositionRefunds"), value: ugxLabel(report.cashPosition.cashRefundsUgx) },
+          { label: t(lang, "cashPositionRefunds"), value: ugxLabel(report.cashPosition.refundsUgx) },
           { label: t(lang, "cashPositionExpenses"), value: ugxLabel(report.cashPosition.expensesUgx) },
           { label: t(lang, "cashPositionSupplierPayments"), value: ugxLabel(report.cashPosition.supplierPaymentsUgx) },
-          {
-            label: t(lang, "cashPositionExpectedCash"),
-            value:
-              report.cashPosition.expectedCashUgx == null
-                ? "—"
-                : ugxLabel(report.cashPosition.expectedCashUgx),
-            bold: true,
-          },
+          { label: t(lang, "cashPositionExpectedCash"), value: ugxLabel(report.cashPosition.expectedCashUgx), bold: true },
           ...(reconciliation
             ? [
                 { label: t(lang, "cashPositionPhysicalCount"), value: ugxLabel(reconciliation.physicalCountUgx) },
@@ -269,7 +193,37 @@ export function buildCashPositionDocument(
             : []),
         ],
       },
-      ...liveBreakdownSections,
+      {
+        title: t(lang, "cashPositionSectionPayments"),
+        live,
+        rows: [
+          { label: t(lang, "cashPositionItemsSold"), value: report.summary.itemsSold.toLocaleString() },
+          ...report.paymentMethods.map((row) => ({
+            label: paymentLabel(lang, row.key),
+            value: `${ugxLabel(row.amountUgx)} (${row.percent}%) · ${row.transactionCount}`,
+          })),
+          ...(report.paymentAdjustmentUgx !== 0
+            ? [{ label: t(lang, "cashPositionPaymentAdjustment"), value: ugxLabel(report.paymentAdjustmentUgx) }]
+            : []),
+          { label: t(lang, "cashPositionGrandTotal"), value: ugxLabel(report.summary.totalSalesUgx), bold: true },
+        ],
+      },
+      {
+        title: t(lang, "cashPositionSectionCategories"),
+        live,
+        rows: report.categories.map((row) => ({
+          label: row.categoryLabel,
+          value: `${ugxLabel(row.amountUgx)} (${row.percent}%)`,
+        })),
+      },
+      {
+        title: t(lang, "cashPositionSectionCashiers"),
+        live,
+        rows: report.cashiers.map((row) => ({
+          label: row.name,
+          value: `${ugxLabel(row.salesUgx)} · ${row.transactionCount}`,
+        })),
+      },
     ],
   };
 }

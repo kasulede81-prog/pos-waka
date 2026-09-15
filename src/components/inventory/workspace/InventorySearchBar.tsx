@@ -17,7 +17,10 @@ export function InventorySearchBar({ lang, onSearch }: Props) {
   };
 
   return (
-    <section aria-label={t(lang, "iwSearchLabel")}>
+    <section className="space-y-1.5" aria-label={t(lang, "iwSearchLabel")}>
+      <p className="px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+        {t(lang, "iwSearchLabel")}
+      </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();

@@ -3,11 +3,10 @@ import {
   ArrowLeftRight,
   AlertTriangle,
   BarChart3,
-  ClipboardCheck,
+  ClipboardList,
   FolderOpen,
   History,
   Package,
-  PackagePlus,
   Receipt,
   Scale,
   Shield,
@@ -15,7 +14,6 @@ import {
   Truck,
   Users,
   UtensilsCrossed,
-  Upload,
   Warehouse,
 } from "lucide-react";
 import type { BusinessType, Permission } from "../types";
@@ -42,7 +40,6 @@ export type InventoryQuickActionDef = {
   actionId?: string;
   perm?: Permission;
   primary?: boolean;
-  hintKey?: string;
 };
 
 export function inventoryWorkspaceMode(
@@ -60,46 +57,14 @@ export function inventoryWorkspaceBasePath(mode: InventoryWorkspaceMode): string
 }
 
 /**
- * Stock Transfer UI is productionized (MB-4C) on the deployed migration 167 engine.
- * Keep gated by `enterprise.transfers` on tiles and routes.
+ * Stock Transfer UI exists as a placeholder only (`InventoryTransferPage`).
+ * Keep false until persistence is shipped — never surface Transfer in production nav.
  */
-export const INVENTORY_TRANSFER_ENABLED = true;
+export const INVENTORY_TRANSFER_ENABLED = false;
 
-export function tabHref(base: string, tab: string, extra?: Record<string, string>): string {
+function tabHref(base: string, tab: string, extra?: Record<string, string>): string {
   const p = new URLSearchParams({ tab, ...extra });
   return `${base}?${p.toString()}`;
-}
-
-/** Products workspace Movements view — not a hub tab. */
-export function inventoryMovementsHref(basePath = "/stock"): string {
-  return tabHref(basePath, "products", { stockView: "movements" });
-}
-
-/** Products workspace Shelves view + one-shot Add Product for a specific shelf. */
-export function inventoryAddProductToShelfHref(shelfId: string, basePath = "/stock"): string {
-  return tabHref(basePath, "products", {
-    stockView: "shelves",
-    shelf: shelfId,
-    add: "1",
-  });
-}
-
-export type InventoryWorkspaceStockTab = "products" | "shelves" | "low" | "movements";
-
-/** How embedded StockPage maps hub query params onto the products workspace view. */
-export function resolveInventoryWorkspaceView(search: {
-  stockView?: string | null;
-  shelf?: string | null;
-}): { stockTab: InventoryWorkspaceStockTab; selectedShelf: string | null } {
-  const view = search.stockView ?? null;
-  const shelf = (search.shelf ?? "").trim() || null;
-  if (view === "low" || view === "movements") {
-    return { stockTab: view, selectedShelf: shelf };
-  }
-  if (view === "shelves" || shelf) {
-    return { stockTab: "shelves", selectedShelf: shelf };
-  }
-  return { stockTab: "products", selectedShelf: null };
 }
 
 /** Hub directory — completed destinations only (Phase 27.1). */
@@ -119,7 +84,7 @@ export function resolveInventoryNavTiles(
     {
       id: "count",
       labelKey: "iwNavInventoryCount",
-      Icon: ClipboardCheck,
+      Icon: ClipboardList,
       href: "/stock/count",
       perm: "stock.count",
     },
@@ -158,7 +123,7 @@ export function resolveInventoryNavTiles(
       labelKey: "iwNavTransfer",
       Icon: ArrowLeftRight,
       href: "/stock/transfer",
-      perm: "enterprise.transfers",
+      perm: "stock.view",
     });
   }
   if (mode === "wholesale") {
@@ -179,22 +144,12 @@ export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMo
       actionId: "receiveStock",
       perm: "purchases.record",
       primary: true,
-      hintKey: "ipActionReceiveHint",
     },
     {
       id: "newProduct",
       labelKey: "stockAddProductBtn",
-      Icon: PackagePlus,
+      Icon: Package,
       actionId: "newProduct",
-      perm: "products.add",
-      primary: true,
-      hintKey: "stockAddProductHint",
-    },
-    {
-      id: "importCsv",
-      labelKey: "stockQuickImportCsv",
-      Icon: Upload,
-      actionId: "importCsv",
       perm: "products.add",
       primary: true,
     },
@@ -208,7 +163,7 @@ export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMo
     {
       id: "count",
       labelKey: "iwNavInventoryCount",
-      Icon: ClipboardCheck,
+      Icon: ClipboardList,
       href: "/stock/count",
       perm: "stock.count",
     },
@@ -219,7 +174,7 @@ export function resolveInventoryOverviewQuickActions(_mode: InventoryWorkspaceMo
       labelKey: "iwQuickTransfer",
       Icon: ArrowLeftRight,
       href: "/stock/transfer",
-      perm: "enterprise.transfers",
+      perm: "stock.view",
     });
   }
   return actions;
@@ -238,7 +193,7 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
     {
       id: "newProduct",
       labelKey: "stockAddProductBtn",
-      Icon: PackagePlus,
+      Icon: Package,
       actionId: "newProduct",
       perm: "products.add",
       primary: true,
@@ -246,7 +201,7 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
     {
       id: "count",
       labelKey: "iwNavInventoryCount",
-      Icon: ClipboardCheck,
+      Icon: ClipboardList,
       href: "/stock/count",
       perm: "stock.count",
     },
@@ -278,7 +233,7 @@ export function resolveInventoryQuickActions(mode: InventoryWorkspaceMode): Inve
       labelKey: "iwQuickTransfer",
       Icon: ArrowLeftRight,
       href: "/stock/transfer",
-      perm: "enterprise.transfers",
+      perm: "stock.view",
     });
   }
 

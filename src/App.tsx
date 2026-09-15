@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -14,7 +14,6 @@ import { AuthRecoveryPage } from "./pages/AuthRecoveryPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
-import { StaffAcceptPage } from "./pages/StaffAcceptPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { SettingsHubPage } from "./pages/SettingsHubPage";
 import { SettingsCashDrawerPage } from "./pages/SettingsCashDrawerPage";
@@ -78,8 +77,6 @@ import { CashPositionPage } from "./pages/CashPositionPage";
 import { DayOpenPage } from "./pages/DayOpenPage";
 import { CashExpensesPage } from "./pages/CashExpensesPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
-import { StaffCenterLayout } from "./pages/StaffCenterLayout";
-import { StaffCenterActivityPage } from "./pages/StaffCenterActivityPage";
 import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
 import { PilotSupportCenterPage } from "./pages/PilotSupportCenterPage";
@@ -132,9 +129,6 @@ const MarketingAgentPage = lazy(() =>
   import("./pages/MarketingAgentPage").then((m) => ({ default: m.MarketingAgentPage })),
 );
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
-const InventoryTransferPage = lazy(() =>
-  import("./pages/InventoryTransferPage").then((m) => ({ default: m.InventoryTransferPage })),
-);
 const PosPage = lazy(() => import("./pages/PosPage").then((m) => ({ default: m.PosPage })));
 const OfficeHubPage = lazy(() => import("./pages/OfficeHubPage").then((m) => ({ default: m.OfficeHubPage })));
 const OfficeHubSectionPage = lazy(() =>
@@ -234,21 +228,14 @@ function LazyWait() {
   );
 }
 
-function StabilityDiagnosticsHost() {
-  const { pathname } = useLocation();
-  const enabled = isDiagnosticsEnabled();
-
-  useEffect(() => {
-    if (enabled) installNetworkDiagnosticsProbe();
-  }, [enabled]);
-
-  if (!enabled || pathname === "/") return null;
-  return <StabilityDiagnosticsOverlay />;
-}
-
 function AppRoutes() {
   const auth = useAuth();
   const { lang, setLang, ready: langReady } = useUiLanguage();
+  const showDiagnostics = isDiagnosticsEnabled();
+
+  useEffect(() => {
+    if (showDiagnostics) installNetworkDiagnosticsProbe();
+  }, [showDiagnostics]);
 
   return (
     <ToastProvider lang={lang}>
@@ -259,23 +246,12 @@ function AppRoutes() {
       isAuthenticated={auth.isAuthenticated}
       onSignOut={auth.signOut}
     >
-      <StabilityDiagnosticsHost />
+      {showDiagnostics ? <StabilityDiagnosticsOverlay /> : null}
       <RouteSeoController />
       <NativeSplashGate authReady={!auth.initializing} waitForPos={auth.isAuthenticated} />
       <Routes>
         <Route element={<NativePublicGuard isAuthenticated={auth.isAuthenticated} />}>
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
-        <Route
-          path="/staff/accept"
-          element={
-            <StaffAcceptPage
-              lang={lang}
-              isAuthenticated={auth.isAuthenticated}
-              initializing={auth.initializing}
-              onLogin={auth.signIn}
-            />
-          }
-        />
 
         <Route
           path="/login"
@@ -448,10 +424,6 @@ function AppRoutes() {
                   />
                   <Route
                     path="internal/waka/display-scale"
-                    element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
-                  />
-                  <Route
-                    path="internal/waka/remote-support"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
                   <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
@@ -718,13 +690,7 @@ function AppRoutes() {
             />
             <Route
               path="stock/transfer"
-              element={
-                <EnterpriseProtectedRoute permission="enterprise.transfers">
-                  <Suspense fallback={<LazyWait />}>
-                    <InventoryTransferPage lang={lang} />
-                  </Suspense>
-                </EnterpriseProtectedRoute>
-              }
+              element={<Navigate to="/stock" replace />}
             />
             <Route path="suppliers" element={<Navigate to="/stock?tab=suppliers" replace />} />
             <Route path="suppliers/:supplierId" element={<LegacySupplierDetailRedirect />} />
@@ -989,36 +955,15 @@ function AppRoutes() {
               }
             />
             <Route
-              path="staff-center"
+              path="staff-access"
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SensitiveActionGate lang={lang} kind="manage_users" deniedTo="/settings">
-                    <StaffCenterLayout lang={lang} />
+                    <StaffAccessPage lang={lang} />
                   </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
-            >
-              <Route index element={<Navigate to="team" replace />} />
-              <Route path="team" element={<StaffAccessPage lang={lang} embedded />} />
-              <Route
-                path="roles"
-                element={
-                  <SettingsChangeGate lang={lang}>
-                    <SettingsStaffRolesPage lang={lang} embedded />
-                  </SettingsChangeGate>
-                }
-              />
-              <Route path="activity" element={<StaffCenterActivityPage lang={lang} />} />
-              <Route
-                path="security"
-                element={
-                  <SettingsChangeGate lang={lang}>
-                    <SettingsStaffSecurityPage lang={lang} embedded />
-                  </SettingsChangeGate>
-                }
-              />
-            </Route>
-            <Route path="staff-access" element={<Navigate to="/staff-center/team" replace />} />
+            />
             <Route
               path="owner"
               element={
@@ -1180,7 +1125,7 @@ function AppRoutes() {
             <Route
               path="settings/receipt"
               element={
-                <RoleProtectedRoute permission="settings.receipt">
+                <RoleProtectedRoute permission="settings.shop">
                   <SettingsChangeGate lang={lang}>
                     <SettingsReceiptPage lang={lang} />
                   </SettingsChangeGate>
@@ -1271,13 +1216,33 @@ function AppRoutes() {
                 </RoleProtectedRoute>
               }
             />
-            <Route path="settings/staff-roles" element={<Navigate to="/staff-center/roles" replace />} />
-            <Route path="settings/staff-security" element={<Navigate to="/staff-center/security" replace />} />
+            <Route
+              path="settings/staff-roles"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsStaffRolesPage lang={lang} />
+                  </SettingsChangeGate>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/staff-security"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsStaffSecurityPage lang={lang} />
+                  </SettingsChangeGate>
+                </RoleProtectedRoute>
+              }
+            />
             <Route
               path="settings/pin"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsPinPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsPinPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />

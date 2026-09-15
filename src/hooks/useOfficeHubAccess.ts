@@ -5,7 +5,6 @@ import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
 import { fetchMarketingAgentMe } from "../lib/referralAgents";
 import { useMarketingAgentPortal } from "./useMarketingAgentPortal";
 import type { Permission } from "../types";
-import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { canUseBackupRestore } from "../lib/subscriptionEntitlements";
@@ -34,12 +33,12 @@ export function useOfficeHubAccess() {
 
   const can = (perm: Permission) => actorHasEffectivePermission(actor, perm, snapshot, authMode);
   const canBackup = canUseBackupRestore(snapshot, authMode);
-  const canRecordExpense = canRecordCashExpenses(authOperatorRole(actor), preferences, actor.authPermissions);
+  const canRecordExpense = canRecordCashExpenses(actor.role, preferences, actor.permissions);
   const profitVisibility = resolveProfitVisibility({
-    role: authOperatorRole(actor),
+    role: actor.role,
     snapshot,
     authMode,
-    actorPermissions: actor.authPermissions,
+    actorPermissions: actor.permissions,
   });
   const canProfit = profitVisibility.canProfit && can("back_office.access");
   const canShopSettings = can("settings.shop");

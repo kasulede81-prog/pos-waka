@@ -10,8 +10,7 @@ import {
 } from "./cloudSnapshotSync";
 import { needsCloudRecoveryBootstrap } from "./cloudAuthorityAudit";
 import { captureAppException } from "./crashReporting";
-import { reportSyncIssue, ignoreReportedSyncFailure } from "./monitoring";
-import { recordBackgroundSyncFailure } from "./syncMeta";
+import { reportSyncIssue } from "./monitoring";
 import {
   beginCloudRecoverySession,
   failCloudRecoverySession,
@@ -389,7 +388,7 @@ async function runCloudDataRestore(opts: {
       await runFullCloudPull({ onStep, cloudRecovery });
     }
     const { scheduleShopRecovery } = await import("./shopRecoveryOrchestration");
-    await scheduleShopRecovery("owner_login").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
+    await scheduleShopRecovery("owner_login").catch(() => undefined);
     return;
   }
 
@@ -461,7 +460,7 @@ async function runHydrateAccountFromCloudInner(opts?: {
   }
 
   const { hydrateLocalShopProfileFromCloud } = await import("./businessProfile");
-  await hydrateLocalShopProfileFromCloud().catch(ignoreReportedSyncFailure("shop_profile_hydrate_failed"));
+  await hydrateLocalShopProfileFromCloud().catch(() => undefined);
 
   let cloudProbe = opts?.cloudProbe ?? null;
   if (!cloudProbe && isLocalShopDataEmpty()) {
@@ -482,16 +481,13 @@ async function runHydrateAccountFromCloudInner(opts?: {
     }
     await runCloudDataRestore({ ...opts, cloudProbe });
   } else if (getDeviceOnline()) {
-    await syncShopWithCloud({ pull: false }).catch((err) => recordBackgroundSyncFailure("post_auth_push_failed", err));
+    await syncShopWithCloud({ pull: false }).catch(() => undefined);
   }
 
   if (getDeviceOnline() && shouldRecoverFromCloud && !opts?.recoveryMode) {
-    await pushShopPendingToCloud().catch((err) => recordBackgroundSyncFailure("post_auth_push_failed", err));
+    await pushShopPendingToCloud().catch(() => undefined);
     const { isNativeApp } = await import("./nativeApp");
-    runWhenIdle(
-      () => void uploadShopCloudSnapshot().catch(ignoreReportedSyncFailure("cloud_snapshot_upload_failed")),
-      isNativeApp() ? 12_000 : 3000,
-    );
+    runWhenIdle(() => void uploadShopCloudSnapshot().catch(() => false), isNativeApp() ? 12_000 : 3000);
   }
 
   if (!opts?.recoveryMode) {

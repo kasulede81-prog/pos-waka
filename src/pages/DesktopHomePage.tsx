@@ -1,18 +1,13 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { useEffect } from "react";
 import { prefetchOfficeHub } from "../lib/prefetchRoutes";
 import { runWhenIdle } from "../lib/uiYield";
 import { DesktopHomeTiles } from "../components/home/DesktopHomeTiles";
 import { DesktopLicenseBar } from "../components/home/DesktopLicenseBar";
 import { useSessionActor } from "../context/SessionActorContext";
-import {
-  HOME_CONTENT_MEASURE_CLASS,
-  HOME_FOOTER_GUTTER_CLASS,
-  HOME_PAGE_GUTTER_CLASS,
-} from "../lib/homePresentation";
-import { HOME_TYPE_SCALE } from "../lib/homeComposition";
 
 type Props = { lang: Language };
 
@@ -24,7 +19,7 @@ function homeGreetingKey(hour: number): string {
 
 /**
  * Phase 34.1 — executive Home shell.
- * HOME CINEMATIC V3.1 — content-sized composition. Footer is a compact status line.
+ * Health/subscription live above the fold inside DesktopHomeTiles; footer keeps license only.
  */
 export function DesktopHomePage({ lang }: Props) {
   const shopName = usePosStore((s) => s.preferences.shopDisplayName?.trim());
@@ -38,26 +33,25 @@ export function DesktopHomePage({ lang }: Props) {
   const firstName = actor.displayName?.trim().split(/\s+/)[0];
 
   return (
-    <div className="home-cinematic-shell home-cinematic-shell--stage home-cinematic-shell--living min-h-full">
-      <div className="home-cinematic-shell__wash" aria-hidden />
-      <div className={`${HOME_CONTENT_MEASURE_CLASS} ${HOME_PAGE_GUTTER_CLASS} flex flex-col`}>
-        <header className="home-cinematic-greeting home-console-greeting mb-1.5 hidden w-full text-center sm:mb-2 sm:text-left md:block">
+    <div className="flex min-h-full flex-col lg:min-h-[calc(100dvh-4.5rem)]">
+      <div className="flex flex-1 flex-col items-center px-4 py-4 sm:px-8 sm:py-6 lg:px-10 xl:px-14">
+        <header className="mb-3 w-full max-w-none text-center sm:mb-4 sm:text-left">
           {firstName ? (
-            <h1 className={`${HOME_TYPE_SCALE.greeting} text-foreground`}>
+            <h1 className="text-lg font-black tracking-tight text-foreground sm:text-xl">
               {t(lang, greetingKey).replace("{name}", firstName)}
             </h1>
           ) : (
             <h1 className="sr-only">{t(lang, "desktopHomeTitle")}</h1>
           )}
-          <p className={`mt-0.5 ${HOME_TYPE_SCALE.greetingSub}`}>
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">
             {shopName ? `${shopName} · ` : ""}
             {t(lang, "desktopHomeGreetingSub")}
           </p>
         </header>
         <DesktopHomeTiles lang={lang} />
       </div>
-      <footer className="home-license-footer">
-        <div className={`${HOME_CONTENT_MEASURE_CLASS} ${HOME_FOOTER_GUTTER_CLASS}`}>
+      <footer className="shrink-0 border-t border-border bg-card/90 px-4 py-3 backdrop-blur-sm sm:px-8 lg:px-10 xl:px-14">
+        <div className="mx-auto w-full max-w-none">
           <DesktopLicenseBar lang={lang} />
         </div>
       </footer>

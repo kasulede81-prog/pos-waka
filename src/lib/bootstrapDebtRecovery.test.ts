@@ -52,12 +52,13 @@ describe("bootstrapDebtRecovery", () => {
     expect(rec.healthy).toBe(true);
   });
 
-  it("leaves a higher cloud balance alone when local sales are a subset", () => {
+  it("matches incremental mergeCustomerFromCloudPull ledger result", () => {
     const sales = [creditSale(50_000)];
+    const payments: DebtPayment[] = [];
     const remote = customer(80_000);
 
-    const bootstrap = reconcileCustomersForBootstrapRecovery([remote], sales, []);
-    expect(bootstrap[0]!.debtBalanceUgx).toBe(80_000);
+    const bootstrap = reconcileCustomersForBootstrapRecovery([remote], sales, payments);
+    expect(bootstrap[0]!.debtBalanceUgx).toBe(50_000);
   });
 
   it("leaves customers unchanged when no sales or payments", () => {

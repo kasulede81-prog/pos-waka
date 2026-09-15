@@ -5,8 +5,7 @@
 import { getDeviceOnline } from "./deviceOnline";
 import { hasSupabaseConfig, supabase } from "./supabase";
 import { shouldPausePosBackgroundPush } from "./backgroundWorkPolicy";
-import { readSyncHealthMeta, writeSyncHealthMeta, publishShopSyncHealth, publishShopSyncHealthAfterPushCycle, formatCloudSyncLastError, countPendingOutboundFromKnown } from "./syncMeta";
-import { deriveQueueHealth } from "./autoSync";
+import { readSyncHealthMeta, writeSyncHealthMeta } from "./syncMeta";
 import { countUnsyncedSales } from "../offline/cloudSync";
 import {
   MIN_POS_PUSH_GAP_MS,
@@ -169,7 +168,7 @@ export async function runPosPushOnlyUpload(opts?: {
 
   try {
     const { pushShopPendingToCloud } = await import("../offline/cloudSync");
-    const { push, queueFailed, hadOutboundWork } = await pushShopPendingToCloud();
+    const { push, queueFailed } = await pushShopPendingToCloud();
     const uploadMs = performance.now() - uploadStarted;
     void import("./syncDiagnostics").then(({ recordPushDuration, recordAckLatency }) => {
       recordPushDuration(uploadMs);
@@ -186,23 +185,6 @@ export async function runPosPushOnlyUpload(opts?: {
     } else if (push.fail > 0 || queueFailed > 0) {
       writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
     }
-    try {
-      const { readSyncQueue } = await import("../offline/localDb");
-      const durable = await readSyncQueue();
-      const queueHealth = deriveQueueHealth(durable);
-      publishShopSyncHealthAfterPushCycle({
-        pendingOutbound: countPendingOutboundFromKnown(durable.length, countUnsyncedSales()),
-        pushFail: push.fail,
-        queueFailed,
-        queueHealth,
-        lastPushOkAt: attemptAt,
-        lastError: formatCloudSyncLastError(readSyncHealthMeta()),
-        pushOk: push.ok,
-        hadOutboundWork,
-      });
-    } catch {
-      /* telemetry must not fail the push path */
-    }
     return {
       ran: true,
       skipped: false,
@@ -212,10 +194,6 @@ export async function runPosPushOnlyUpload(opts?: {
     };
   } catch {
     recordPosPushFailure();
-    publishShopSyncHealth({
-      lastError: "error",
-      includeLastError: true,
-    });
     return { ran: true, skipped: false, pushOk: 0, pushFail: 1, queueFailed: 0 };
   } finally {
     pushInFlight = false;

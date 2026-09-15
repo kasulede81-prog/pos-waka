@@ -13,8 +13,6 @@ import {
   readSnapshotWithFallback,
   type LocalBackupRecord,
 } from "./localDb";
-import { assembleSnapshotFromEntities } from "./entityStore";
-import { getPersistenceNamespace } from "./shopScope";
 
 const MAX_BACKUPS = 28;
 
@@ -48,9 +46,6 @@ export function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSna
     cashDrawerAdjustments: p.cashDrawerAdjustments ?? [],
     dayDrawerOpens: p.dayDrawerOpens ?? [],
     inventoryCountSessions: p.inventoryCountSessions ?? [],
-    pharmacyPrescriptions: p.pharmacyPrescriptions ?? [],
-    pharmacyDoctors: p.pharmacyDoctors ?? [],
-    pharmacyControlledRegister: p.pharmacyControlledRegister ?? [],
     deletedProductIds: p.deletedProductIds ?? [],
     voidedSaleIds: p.voidedSaleIds ?? [],
     updatedAt: p.updatedAt ?? new Date().toISOString(),
@@ -66,60 +61,14 @@ async function pruneOldBackups(): Promise<void> {
   }
 }
 
-let persistFlushForBackup: () => Promise<void> = async () => {};
-
-/**
- * Wired by the POS store so backup can await the existing persist-timer flush
- * without a backupEngine ↔ usePosStore import cycle.
- */
-export function registerBackupPersistFlush(fn: () => Promise<void>): void {
-  persistFlushForBackup = fn;
-}
-
-/**
- * Authoritative local backup/export snapshot.
- *
- * Ordinary mutations persist to entity buckets, not the legacy KV snapshot.
- * Backup therefore:
- * 1. awaits the existing persist-timer flush (so pending incremental writes land)
- * 2. assembles from the entity store (durable current source)
- * 3. falls back to legacy KV only when no entity manifest exists
- *
- * Then runs through `snapshotFromPartial` so the external backup/export envelope
- * stays unchanged (including pharmacy defaults).
- */
-export async function readCurrentBackupSnapshot(): Promise<PersistedSnapshot | null> {
-  await persistFlushForBackup();
-
-  const assembled = await assembleSnapshotFromEntities();
-  if (assembled) return snapshotFromPartial(assembled);
-
-  const raw = await readSnapshotWithFallback();
-  return snapshotFromPartial(raw ?? {});
-}
-
-/**
- * Write the daily auto-backup record. Callers on the persist path must go
- * through `scheduleDailyAutoBackup` so this expensive assemble is not launched
- * per persist. Manual/export still uses `readCurrentBackupSnapshot` directly.
- */
-export async function maybeAppendDailyAutoBackup(
-  lastSavedDateKey: string | undefined,
-  opts?: { expectedNamespace?: string | null },
-): Promise<string | undefined> {
+/** After a successful snapshot write, once per Kampala calendar day. */
+export async function maybeAppendDailyAutoBackup(lastSavedDateKey: string | undefined): Promise<string | undefined> {
   const today = dateKeyKampala(new Date());
   if (lastSavedDateKey === today) return lastSavedDateKey;
 
-  if (opts?.expectedNamespace != null && getPersistenceNamespace() !== opts.expectedNamespace) {
-    return lastSavedDateKey;
-  }
-
-  const snap = await readCurrentBackupSnapshot();
+  const raw = await readSnapshotWithFallback();
+  const snap = snapshotFromPartial(raw ?? {});
   if (!snap) return lastSavedDateKey;
-
-  if (opts?.expectedNamespace != null && getPersistenceNamespace() !== opts.expectedNamespace) {
-    return lastSavedDateKey;
-  }
 
   const id = `auto-${today}`;
   const rec: LocalBackupRecord = {
@@ -139,7 +88,8 @@ export async function maybeAppendDailyAutoBackup(
 }
 
 export async function appendManualBackup(): Promise<{ ok: true; id: string } | { ok: false }> {
-  const snap = await readCurrentBackupSnapshot();
+  const raw = await readSnapshotWithFallback();
+  const snap = snapshotFromPartial(raw ?? {});
   if (!snap) return { ok: false };
   const id = `manual-${Date.now()}`;
   const rec: LocalBackupRecord = {

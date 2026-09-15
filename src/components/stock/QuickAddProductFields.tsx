@@ -5,7 +5,7 @@ import { useWholesaleTerms } from "../../lib/wholesaleTerms";
 import { hospitalityUiActive } from "../../lib/hospitalityUx";
 import { pharmacyUiActive, uiPlaceholder, wholesaleUiActive } from "../../lib/pharmacyUx";
 import { QUICK_ADD_SELL_UNITS } from "../../lib/quickAddProductForm";
-import { ShelfDestinationPicker } from "./ShelfDestinationPicker";
+import { CategoryShelfPicker } from "./CategoryShelfPicker";
 
 export type QuickAddProductFieldsState = {
   name: string;
@@ -96,7 +96,7 @@ export function QuickAddProductFields({
       <div className="block">
         <StepLabel n={2} text={pharmacy ? pt("quickAddStep2") : wholesale ? wt("quickAddStep2") : t(lang, "quickAddStep2")} />
         <div className="mt-2">
-          <ShelfDestinationPicker
+          <CategoryShelfPicker
             lang={lang}
             options={categorySuggestions}
             value={values.category}

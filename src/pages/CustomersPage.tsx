@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate } from "react-router-dom";
-import { ChevronDown, FileDown, Printer, UserPlus, Users } from "lucide-react";
+import { ChevronDown, FileDown, UserPlus, Users } from "lucide-react";
 import clsx from "clsx";
 import type { Customer, Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
-import { formatReceiptIdentityForUi } from "../lib/receiptIdentity";
 import { useShopAction } from "../hooks/useShopAction";
 import {
   buildCreditActivityIndex,
@@ -55,18 +54,10 @@ import {
   computeAverageCollectionDays,
   countCustomersOwing,
   countOverdueAccounts,
-  selectCustomersForDebtView,
-  sumAuthoritativeCustomerDebt,
+  customerMatchesQuickFilter,
+  customerMatchesSearch,
   type DebtsQuickFilter,
 } from "../lib/debtsPageView";
-import {
-  downloadCustomerStatementPdf,
-  printCustomerDebtList,
-  printCustomerStatement,
-  shareCustomerStatementPdf,
-  type CustomerDebtListDocumentInput,
-  type CustomerStatementDocumentInput,
-} from "../lib/customerAccountDocuments";
 import { shareText } from "../lib/reportExport";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
@@ -116,7 +107,10 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const orphanDebts = useMemo(() => findOrphanDebtSales(sales), [sales]);
   const orphanDebtTotal = useMemo(() => sumOrphanDebtUgx(sales), [sales]);
 
-  const totalDebtUgx = useMemo(() => sumAuthoritativeCustomerDebt(customers), [customers]);
+  const totalDebtUgx = useMemo(
+    () => customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0),
+    [customers],
+  );
 
   const collectedUgx = useMemo(
     () => sumDebtPaymentsInBounds(debtPayments, bounds),
@@ -143,19 +137,19 @@ export function CustomersPage({ lang }: { lang: Language }) {
     [debtPayments, creditActivityIndex],
   );
 
-  const filteredCustomers = useMemo(
-    () =>
-      selectCustomersForDebtView({
-        customers,
-        searchQuery,
-        quickFilter,
-        index: creditActivityIndex,
-        bounds,
-        todayKey,
-        sortBy,
-      }),
-    [customers, searchQuery, quickFilter, creditActivityIndex, bounds, todayKey, sortBy],
-  );
+  const filteredCustomers = useMemo(() => {
+    let list = customers.filter(
+      (c) =>
+        customerMatchesSearch(c, searchQuery) &&
+        customerMatchesQuickFilter(c, quickFilter, creditActivityIndex, bounds, todayKey),
+    );
+    list = [...list].sort((a, b) => {
+      if (sortBy === "name_az") return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      if (sortBy === "balance_asc") return a.debtBalanceUgx - b.debtBalanceUgx;
+      return b.debtBalanceUgx - a.debtBalanceUgx;
+    });
+    return list;
+  }, [customers, searchQuery, quickFilter, creditActivityIndex, bounds, todayKey, sortBy]);
 
   const detailTimeline = useMemo(() => {
     if (!detailCustomer) return [];
@@ -232,30 +226,6 @@ export function CustomersPage({ lang }: { lang: Language }) {
     await shareText(lines.join("\n"), modeTerm("debts"));
   };
 
-  const debtListDocumentInput = (): CustomerDebtListDocumentInput => ({
-    lang,
-    shopName,
-    shopAddress: preferences.shopAddressLine,
-    shopPhone: preferences.shopPhoneE164,
-    title: modeTerm("debts"),
-    dateFilter: filter,
-    searchQuery,
-    quickFilter,
-    sortBy,
-    customers: filteredCustomers,
-    creditIndex: creditActivityIndex,
-  });
-
-  const statementDocumentInput = (customer: Customer): CustomerStatementDocumentInput => ({
-    lang,
-    shopName,
-    shopAddress: preferences.shopAddressLine,
-    shopPhone: preferences.shopPhoneE164,
-    dateFilter: filter,
-    customer,
-    timeline: detailTimeline,
-  });
-
   if (!canView) {
     return <Navigate to="/" replace />;
   }
@@ -288,14 +258,6 @@ export function CustomersPage({ lang }: { lang: Language }) {
           >
             <UserPlus className="h-4 w-4" aria-hidden />
             <span className="hidden sm:inline">{t(lang, "debtsAddPerson")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void printCustomerDebtList(debtListDocumentInput())}
-            className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-foreground shadow-sm active:bg-muted"
-          >
-            <Printer className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="hidden sm:inline">{t(lang, "monthlyReportPrint")}</span>
           </button>
           {customers.length > 0 ? (
             <button
@@ -356,10 +318,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
                 <li key={o.saleId} className="rounded-xl border border-danger/30 bg-card p-3">
                   <p className="text-xs font-semibold text-danger">
                     {new Date(o.createdAt).toLocaleString()}
-                    {(() => {
-                      const receiptLabel = formatReceiptIdentityForUi(o);
-                      return receiptLabel ? ` · ${receiptLabel}` : "";
-                    })()}
+                    {o.receiptSeq != null ? ` · #${String(o.receiptSeq).padStart(3, "0")}` : ""}
                   </p>
                   <p className="mt-1 text-base font-black text-danger">UGX {o.debtUgx.toLocaleString()}</p>
                   {canDebt && customers.length > 0 ? (
@@ -486,30 +445,6 @@ export function CustomersPage({ lang }: { lang: Language }) {
         onClose={() => setDetailCustomer(null)}
         onReceive={() => detailCustomer && setPayCustomer(detailCustomer)}
         canDebt={canDebt}
-        onPrintStatement={
-          detailCustomer
-            ? () =>
-                void printCustomerStatement(statementDocumentInput(detailCustomer)).then(
-                  (ok) => !ok && window.alert(t(lang, "monthlyReportPrintFail")),
-                )
-            : undefined
-        }
-        onDownloadStatementPdf={
-          detailCustomer
-            ? () =>
-                void downloadCustomerStatementPdf(statementDocumentInput(detailCustomer)).then(
-                  (ok) => !ok && window.alert(t(lang, "receiptPdfFailed")),
-                )
-            : undefined
-        }
-        onShareStatementPdf={
-          detailCustomer
-            ? () =>
-                void shareCustomerStatementPdf(statementDocumentInput(detailCustomer)).then(
-                  (ok) => !ok && window.alert(t(lang, "receiptPdfFailed")),
-                )
-            : undefined
-        }
       />
 
       {debtReceiptCtx ? (
@@ -535,14 +470,9 @@ export function CustomersPage({ lang }: { lang: Language }) {
               lang={lang}
               compact
               onPrint={() =>
-                void printDebtPaymentReceipt(debtReceiptCtx).then((r) => {
-                  if (r.ok) return;
-                  window.alert(
-                    r.mode === "thermal"
-                      ? (r.error ?? t(lang, "receiptPrintThermalFailed"))
-                      : t(lang, "receiptPdfFailed"),
-                  );
-                })
+                void printDebtPaymentReceipt(debtReceiptCtx).then(
+                  (r) => !r.ok && window.alert(t(lang, "receiptPdfFailed")),
+                )
               }
               onDownloadPdf={() =>
                 void downloadDebtPaymentReceiptPdf(debtReceiptCtx).then(

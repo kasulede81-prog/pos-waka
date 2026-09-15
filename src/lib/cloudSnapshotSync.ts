@@ -9,7 +9,6 @@ import {
 import { storeHasCoreRecoveryData } from "./recoveryHydration";
 import { hasSupabaseConfig, supabase } from "./supabase";
 import { yieldUiTick } from "./uiYield";
-import { reportSwallowedSyncFailure, ignoreReportedSyncFailure } from "./monitoring";
 
 const MIN_UPLOAD_INTERVAL_MS = 5 * 60_000;
 let lastCloudSnapshotUploadAt = 0;
@@ -202,82 +201,50 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
   if (cloudSnapshotUploadInFlight) return cloudSnapshotUploadInFlight;
 
   const run = async (): Promise<boolean> => {
-    try {
-      const { assertOrganizationOperationsAllowed } = await import("./organizationDeletionState");
-      try {
-        await assertOrganizationOperationsAllowed();
-      } catch {
-        return false;
-      }
+  const { assertOrganizationOperationsAllowed } = await import("./organizationDeletionState");
+  try {
+    await assertOrganizationOperationsAllowed();
+  } catch {
+    return false;
+  }
 
-      const ctx = await resolveShopCtx();
-      if (!ctx || !supabase) return false;
+  const ctx = await resolveShopCtx();
+  if (!ctx || !supabase) return false;
 
-      // Admin-reset safety net: refuse to publish this device's local state
-      // unless it can positively confirm there is no outstanding admin
-      // force-full-resync signal for this shop. Without this, a device that
-      // hasn't yet reconciled a shop reset can re-seed `shop_cloud_snapshots`
-      // with its stale, pre-reset products/sales — which
-      // `restoreShopFromCloudSnapshot` (the "new phone" / fresh-install
-      // restore path) would then hand right back to any other device that
-      // restores from it. Deliberately fails CLOSED on a network error or
-      // timeout (unlike the outbox guard, which fails open) — skipping one
-      // upload cycle costs almost nothing, while wrongly publishing a stale
-      // snapshot can resurrect the reset data everywhere. See
-      // `canPublishShopCloudSnapshot`'s doc comment for the full reasoning.
-      const { canPublishShopCloudSnapshot } = await import("./shopRecoverySignals");
-      if (!(await canPublishShopCloudSnapshot(ctx.shopId))) {
-        return false;
-      }
+  const snap = await snapshotFromStoreWithTombstones();
+  if (!snap) return false;
+  if (snap.products.length === 0 && snap.sales.length === 0) return false;
 
-      const snap = await snapshotFromStoreWithTombstones();
-      if (!snap) return false;
-      if (snap.products.length === 0 && snap.sales.length === 0) return false;
+  const trimAnalysis = analyzeSnapshotTrim(snap);
+  recordSnapshotUploadTrimAnalysis(trimAnalysis);
 
-      const trimAnalysis = analyzeSnapshotTrim(snap);
-      recordSnapshotUploadTrimAnalysis(trimAnalysis);
+  const payload = await trimSnapshotForUpload(snap);
+  const envelope = buildExportEnvelope(payload);
+  const json = JSON.stringify(envelope);
 
-      const payload = await trimSnapshotForUpload(snap);
-      const envelope = buildExportEnvelope(payload);
-      const json = JSON.stringify(envelope);
+  const { error } = await supabase.from("shop_cloud_snapshots").upsert(
+    {
+      shop_id: ctx.shopId,
+      snapshot: envelope,
+      schema_version: WAKA_BACKUP_FILE_VERSION,
+      byte_size: json.length,
+      updated_at: new Date().toISOString(),
+      updated_by: ctx.userId,
+    },
+    { onConflict: "shop_id" },
+  );
 
-      const { error } = await supabase.from("shop_cloud_snapshots").upsert(
-        {
-          shop_id: ctx.shopId,
-          snapshot: envelope,
-          schema_version: WAKA_BACKUP_FILE_VERSION,
-          byte_size: json.length,
-          updated_at: new Date().toISOString(),
-          updated_by: ctx.userId,
-        },
-        { onConflict: "shop_id" },
-      );
-
-      if (error) {
-        reportSwallowedSyncFailure("cloud_snapshot_upload_failed", error, {
-          code: (error as { code?: string }).code ?? "unknown",
-        });
-        return false;
-      }
-      lastCloudSnapshotUploadAt = Date.now();
-      lastCloudSnapshotUploadIso = new Date().toISOString();
-      return true;
-    } catch (err) {
-      reportSwallowedSyncFailure("cloud_snapshot_upload_failed", err);
-      return false;
-    }
+  if (!error) {
+    lastCloudSnapshotUploadAt = Date.now();
+    lastCloudSnapshotUploadIso = new Date().toISOString();
+  }
+  return !error;
   };
 
   cloudSnapshotUploadInFlight = run().finally(() => {
     cloudSnapshotUploadInFlight = null;
   });
   return cloudSnapshotUploadInFlight;
-}
-
-/** Missing `shop_cloud_snapshots` is expected on older deploys — not a restore failure. */
-export function isAbsentCloudSnapshotTableError(error: { code?: string } | null | undefined): boolean {
-  const code = error?.code;
-  return code === "42P01" || code === "PGRST205";
 }
 
 /** Download cloud snapshot and replace local store (new phone). */
@@ -291,25 +258,6 @@ export async function restoreShopFromCloudSnapshot(
   const ctx = await resolveShopCtx();
   if (!ctx || !supabase) return false;
 
-  // Admin-reset safety net: refuse to treat a downloaded snapshot as
-  // authoritative while this shop has an outstanding, unacknowledged reset
-  // signal. This "new phone" fast path applies whatever the snapshot row
-  // contains directly (`applyRestoredSnapshotFromBackup` below) with no
-  // per-entity authoritative-replace check at all — that protection only
-  // lives in `pullCloudAndMergeIntoStore`'s full-pull path. A snapshot
-  // uploaded by another device that hadn't yet reconciled the reset (or
-  // uploaded in the race window right after one) can still contain stale
-  // business data even though the real tables are empty. Reusing
-  // `canPublishShopCloudSnapshot`'s fail-closed check here for the same
-  // reason it exists on the upload side: returning `false` here just means
-  // "no usable snapshot" to the caller (`runCloudDataRestore`), which
-  // correctly falls through to the authoritative-replace-protected full
-  // pull instead of silently trusting unverified snapshot content.
-  const { canPublishShopCloudSnapshot } = await import("./shopRecoverySignals");
-  if (!(await canPublishShopCloudSnapshot(ctx.shopId))) {
-    return false;
-  }
-
   const { data, error } = await supabase
     .from("shop_cloud_snapshots")
     .select("snapshot, updated_at")
@@ -317,10 +265,8 @@ export async function restoreShopFromCloudSnapshot(
     .maybeSingle();
 
   if (error) {
-    if (isAbsentCloudSnapshotTableError(error)) return false;
-    reportSwallowedSyncFailure("cloud_snapshot_restore_failed", error, {
-      code: (error as { code?: string }).code ?? "unknown",
-    });
+    const code = (error as { code?: string }).code;
+    if (code === "42P01" || code === "PGRST205") return false;
     return false;
   }
   if (!data?.snapshot) return false;
@@ -328,8 +274,7 @@ export async function restoreShopFromCloudSnapshot(
   let envelope;
   try {
     envelope = validateImportEnvelope(data.snapshot);
-  } catch (err) {
-    reportSwallowedSyncFailure("cloud_snapshot_restore_invalid", err);
+  } catch {
     return false;
   }
 
@@ -342,7 +287,7 @@ export async function restoreShopFromCloudSnapshot(
   await yieldUiTick();
 
   const { pullDayDrawerOpensForRecovery } = await import("./dayDrawerOpenCloudSync");
-  await pullDayDrawerOpensForRecovery(ctx).catch(ignoreReportedSyncFailure("cloud_snapshot_restore_drawer_pull_failed"));
+  await pullDayDrawerOpensForRecovery(ctx).catch(() => false);
 
   if (opts?.cloudRecovery) {
     const { reportRecoveryManualProgress } = await import("./cloudRecoverySession");

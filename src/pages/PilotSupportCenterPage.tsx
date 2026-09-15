@@ -4,7 +4,6 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
-import { authOperatorRole } from "../lib/sessionActor";
 import { useSubscription } from "../context/SubscriptionContext";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
@@ -16,7 +15,6 @@ import { readPilotEvents } from "../lib/pilotEventLog";
 import { wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../config/wakaSupport";
 import { Navigate } from "react-router-dom";
 import { canTogglePilotMode } from "../lib/pilotMode";
-import { SyncForensicSnapshotCard } from "../components/SyncForensicSnapshotCard";
 import { submitPilotSupportTicket } from "../lib/internalOpsHardening";
 import { Capacitor } from "@capacitor/core";
 import { pickImageForUpload } from "../lib/nativeImagePicker";
@@ -94,7 +92,7 @@ export function PilotSupportCenterPage({ lang }: Props) {
     };
   }, [authMode, tier, shopId, cloudRole, actor.role, preferences.businessType, sync.health, sync.pendingCount, sync.pendingBreakdown, events]);
 
-  if (!canTogglePilotMode(authOperatorRole(actor))) {
+  if (!canTogglePilotMode(actor.role)) {
     return <Navigate to="/" replace />;
   }
 
@@ -271,8 +269,6 @@ export function PilotSupportCenterPage({ lang }: Props) {
       </div>
 
       {sentHint ? <p className="text-sm font-semibold text-teal-900">{sentHint}</p> : null}
-
-      <SyncForensicSnapshotCard lang={lang} />
 
       {events.length > 0 ? (
         <section className="rounded-2xl border border-border bg-card p-4">

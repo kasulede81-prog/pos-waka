@@ -4,8 +4,6 @@
 
 import type { Sale, SaleLine } from "../types";
 import { isCompletedSale } from "./saleStatus";
-import { mergeStampedReceiptIdentity } from "./receiptIdentity";
-import { mergeCommercialSellerFields } from "./sellerIdentity";
 
 export type SaleFinancialFields = Pick<
   Sale,
@@ -17,7 +15,6 @@ export type SaleFinancialFields = Pick<
   | "voidedTotalUgx"
   | "estimatedProfitUgx"
   | "createdAt"
-  | "tenderCashUgx"
 >;
 
 export function saleCompletedAt(sale: Sale): string {
@@ -34,7 +31,6 @@ function financialFields(sale: Sale): SaleFinancialFields {
     voidedTotalUgx: sale.voidedTotalUgx,
     estimatedProfitUgx: sale.estimatedProfitUgx,
     createdAt: sale.createdAt,
-    tenderCashUgx: sale.tenderCashUgx,
   };
 }
 
@@ -96,7 +92,6 @@ function mergeCompletedSaleMetadata(financialBase: Sale, other: Sale): Sale {
   const newerIsRemote = recencyMs(other) > recencyMs(financialBase);
   const meta = newerIsRemote ? other : financialBase;
   const fin = financialFields(financialBase);
-  const seller = mergeCommercialSellerFields(financialBase, other);
   return {
     ...financialBase,
     ...fin,
@@ -104,14 +99,11 @@ function mergeCompletedSaleMetadata(financialBase: Sale, other: Sale): Sale {
     referenceLabel: meta.referenceLabel ?? financialBase.referenceLabel,
     tableSessionId: meta.tableSessionId ?? financialBase.tableSessionId,
     updatedAt: meta.updatedAt ?? financialBase.updatedAt,
-    receiptSeq: financialBase.receiptSeq ?? other.receiptSeq ?? meta.receiptSeq,
-    receiptTerminal: financialBase.receiptTerminal ?? other.receiptTerminal ?? meta.receiptTerminal,
-    soldByUserId: seller.soldByUserId,
-    soldByAuthUserId: seller.soldByAuthUserId,
+    receiptSeq: meta.receiptSeq ?? financialBase.receiptSeq,
+    soldByUserId: meta.soldByUserId ?? financialBase.soldByUserId,
     customerId: meta.customerId ?? financialBase.customerId,
     paymentMethod: meta.paymentMethod ?? financialBase.paymentMethod,
     amountPaidUgx: meta.amountPaidUgx ?? financialBase.amountPaidUgx,
-    tenderCashUgx: financialBase.tenderCashUgx ?? meta.tenderCashUgx,
     changeGivenUgx: meta.changeGivenUgx ?? financialBase.changeGivenUgx,
     splitBreakdown: meta.splitBreakdown ?? financialBase.splitBreakdown,
     lines: mergeLinesPreservingFinancial(financialBase, other),
@@ -135,24 +127,15 @@ export function mergeSaleFromCloudPull(local: Sale, remote: Sale): Sale {
 
   if (localDone && remoteDone) {
     const financialBase = pickAuthoritativeCompletedFinancial(local, remote);
-    return {
-      ...mergeCompletedSaleMetadata(financialBase, local === financialBase ? remote : local),
-      ...mergeStampedReceiptIdentity(local, remote),
-    };
+    return mergeCompletedSaleMetadata(financialBase, local === financialBase ? remote : local);
   }
 
   if (localDone && !remoteDone) {
-    return {
-      ...mergeCompletedSaleMetadata(local, remote),
-      ...mergeStampedReceiptIdentity(local, remote),
-    };
+    return mergeCompletedSaleMetadata(local, remote);
   }
 
   if (!localDone && remoteDone) {
-    return {
-      ...mergeCompletedSaleMetadata(remote, local),
-      ...mergeStampedReceiptIdentity(local, remote),
-    };
+    return mergeCompletedSaleMetadata(remote, local);
   }
 
   return recencyMs(remote) >= recencyMs(local) ? remote : local;

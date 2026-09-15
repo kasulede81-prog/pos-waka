@@ -151,7 +151,6 @@ describe("getDrawerCashForDayInput integration", () => {
         productName: "Item",
         quantity: 1,
         refundAmountUgx: 20_000,
-        refundCashUgx: 20_000,
         reason: "other",
         actorUserId: "owner",
         createdAt: `${DAY}T14:00:00.000Z`,
@@ -167,7 +166,6 @@ describe("getDrawerCashForDayInput integration", () => {
       cashDrawerAdjustments: adjustments,
       shifts: [],
       day: DAY,
-      formulaVersion: "v1",
     });
     expect(drawer.openingFloatUgx).toBe(50_000);
     expect(drawer.adjustmentInflowsUgx).toBe(100_000);
@@ -184,13 +182,6 @@ describe("shift refund cashReduce", () => {
     expect(cashReduceFromRefund(mixed, 5_000)).toBe(3_000);
   });
 
-  it("MoMo and ATM refunds do not reduce physical drawer cash", () => {
-    const momo = sale({ totalUgx: 10_000, cashPaidUgx: 10_000, paymentMethod: "mobile_money" });
-    const atm = sale({ totalUgx: 10_000, cashPaidUgx: 10_000, paymentMethod: "atm" });
-    expect(cashReduceFromRefund(momo, 10_000)).toBe(0);
-    expect(cashReduceFromRefund(atm, 10_000)).toBe(0);
-  });
-
   it("shift expected includes opening float", () => {
     const sh: ShiftRecord = {
       id: "sh1",
@@ -204,7 +195,7 @@ describe("shift refund cashReduce", () => {
       openingFloatUgx: 50_000,
       debtPaymentsTotalUgx: 10_000,
     };
-    expect(shiftExpectedCash(sh, { formulaVersion: "v1" })).toBe(110_000);
+    expect(shiftExpectedCash(sh)).toBe(110_000);
   });
 });
 

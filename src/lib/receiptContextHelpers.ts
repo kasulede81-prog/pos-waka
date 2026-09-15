@@ -1,4 +1,4 @@
-import type { AuditLogEntry, Language, Product, Sale, ShopPreferences } from "../types";
+import type { Language, Product, Sale, ShopPreferences } from "../types";
 import type { SessionActor } from "./sessionActor";
 import { buildReceiptNumberForSale, type ReceiptLabels } from "./receiptPrint";
 import { brandingFromSale } from "./receiptBranding";
@@ -34,21 +34,8 @@ export function soldByLabelForSale(
   sale: Sale,
   staffAccounts: ShopPreferences["staffAccounts"],
   shopDisplayName?: string | null,
-  identity?: {
-    shifts?: ShopPreferences["shifts"];
-    auditLogs?: AuditLogEntry[];
-    ownerUserId?: string | null;
-    ownerDisplayName?: string | null;
-  },
 ): string {
-  const nameByUserId = buildSoldByNameByUserId({
-    staffAccounts,
-    shopDisplayName,
-    shifts: identity?.shifts,
-    auditLogs: identity?.auditLogs,
-    ownerUserId: identity?.ownerUserId,
-    ownerDisplayName: identity?.ownerDisplayName,
-  });
+  const nameByUserId = buildSoldByNameByUserId({ staffAccounts, shopDisplayName });
   return resolveSoldByUserId(lang, sale.soldByUserId, nameByUserId, shopDisplayName);
 }
 
@@ -63,18 +50,16 @@ export function buildSaleReceiptContext(params: {
   customerPhone?: string | null;
   customerBalanceUgx?: number | null;
   planTier?: SubscriptionPlanCode;
-  auditLogs?: AuditLogEntry[];
 }): SaleReceiptContext {
   const { lang, sale, allSales, preferences, products, actor, customerName, customerPhone, customerBalanceUgx, planTier } =
     params;
   const branding = brandingFromSale(sale, preferences, planTier ?? "waka_plus");
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
-  const cashier = soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName, {
-    shifts: preferences.shifts,
-    auditLogs: params.auditLogs,
-    ownerUserId: actor.authUserId ?? (actor.userId.startsWith("staff:") ? null : actor.userId),
-    ownerDisplayName: actor.displayName,
-  });
+  const cashier =
+    sale.soldByUserId && sale.soldByUserId === actor.userId
+      ? actor.displayName?.trim() ||
+        soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName)
+      : soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName);
 
   const resolvedCustomerName = sale.receiptCustomerName ?? customerName ?? null;
   const resolvedCustomerPhone = sale.receiptCustomerPhone ?? customerPhone ?? null;

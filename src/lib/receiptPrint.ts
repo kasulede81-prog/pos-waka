@@ -1,14 +1,12 @@
 import type { Product, ReceiptDisplayOptions, ReceiptPaperSize, Sale, SaleLine } from "../types";
 import { defaultReceiptDisplayOptions, receiptFooterLinesForPrint } from "./receiptBranding";
 import { dateKeyKampala } from "./datesUg";
-import { formatPersistedReceiptIdentity } from "./receiptIdentity";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { buildReceiptLineQuantityDisplay, formatReceiptLineCalculation } from "./saleQuantityLabel";
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { customerPaidUgxForSaleLine } from "./refundBreakdown";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
-import { printIsolatedHtmlDocument } from "./isolatedPrint";
 import { isNativePrintPlatform } from "./nativeReceiptPrint";
 
 export type ReceiptLabels = {
@@ -120,17 +118,20 @@ function formatTimeUg(value: string): string {
 }
 
 export function buildReceiptNumberForSale(sale: Sale, allSales: Sale[]): string {
-  const stamped = formatPersistedReceiptIdentity(sale);
-  if (stamped) return stamped;
-  const dayKey = dateKeyKampala(sale.createdAt);
-  const daySales = allSales
-    .filter((s) => dateKeyKampala(s.createdAt) === dayKey)
-    .sort((a, b) => {
-      if (a.createdAt === b.createdAt) return a.id.localeCompare(b.id);
-      return a.createdAt.localeCompare(b.createdAt);
-    });
-  const idx = daySales.findIndex((s) => s.id === sale.id);
-  const seq = idx >= 0 ? idx + 1 : daySales.length + 1;
+  let seq: number;
+  if (Number.isFinite(sale.receiptSeq) && (sale.receiptSeq ?? 0) > 0) {
+    seq = Math.floor(sale.receiptSeq ?? 0);
+  } else {
+    const dayKey = dateKeyKampala(sale.createdAt);
+    const daySales = allSales
+      .filter((s) => dateKeyKampala(s.createdAt) === dayKey)
+      .sort((a, b) => {
+        if (a.createdAt === b.createdAt) return a.id.localeCompare(b.id);
+        return a.createdAt.localeCompare(b.createdAt);
+      });
+    const idx = daySales.findIndex((s) => s.id === sale.id);
+    seq = idx >= 0 ? idx + 1 : daySales.length + 1;
+  }
   return `INV-${String(seq).padStart(6, "0")}`;
 }
 
@@ -559,11 +560,56 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 <body><pre>${safe}</pre></body></html>`;
 }
 
-/** Print via isolated document (popup or full-size iframe — never the live POS UI). */
+/** Print via hidden iframe (avoids popup blockers; works with AirPrint / system dialog). */
 export function printReceiptText(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): boolean {
   if (typeof document === "undefined") return false;
   if (isNativePrintPlatform()) return false;
-  return printIsolatedHtmlDocument(receiptHtml(receiptPlain, paper));
+
+  const html = receiptHtml(receiptPlain, paper);
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "Waka receipt print");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const doc = iframe.contentDocument ?? win?.document;
+  if (!win || !doc) {
+    document.body.removeChild(iframe);
+    return false;
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => {
+    window.setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 800);
+  };
+
+  const doPrint = () => {
+    try {
+      win.focus();
+      win.print();
+      cleanup();
+    } catch {
+      cleanup();
+      return false;
+    }
+    return true;
+  };
+
+  if (doc.readyState === "complete") {
+    window.setTimeout(doPrint, 150);
+    return true;
+  }
+
+  iframe.onload = () => {
+    window.setTimeout(doPrint, 150);
+  };
+
+  return true;
 }
 
 function toThermalWidth(paper: ReceiptPaperSize): PrinterPaperWidth {

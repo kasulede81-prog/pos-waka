@@ -6,8 +6,7 @@ import {
   type AdminShopAiBundle,
 } from "../../../lib/ai/shopAiAdmin";
 import type { ShopAiSettings } from "../../../lib/ai/shopAiSettings";
-import { DEFAULT_SHOP_AI_SETTINGS, SHOP_LIVE_AI_FEATURES } from "../../../lib/ai/shopAiSettings";
-import { AI_FEATURES, COMING_SOON_AI_FEATURES } from "../../../lib/ai/aiFeatures";
+import { DEFAULT_SHOP_AI_SETTINGS } from "../../../lib/ai/shopAiSettings";
 import { WakaSwitch } from "../../enterprise/WakaSwitch";
 
 type Props = {
@@ -16,10 +15,14 @@ type Props = {
   previewMode?: boolean;
 };
 
-const LIVE_FEATURE_FIELDS = SHOP_LIVE_AI_FEATURES.map((key) => ({
-  key,
-  label: AI_FEATURES[key].label,
-}));
+const FEATURE_FIELDS: Array<{ key: keyof ShopAiSettings; label: string }> = [
+  { key: "product_assistant", label: "Product Assistant" },
+  { key: "business_setup_assistant", label: "Business Setup Assistant" },
+  { key: "inventory_assistant", label: "Inventory Assistant" },
+  { key: "marketing_assistant", label: "Marketing Assistant" },
+  { key: "marketplace_assistant", label: "Marketplace Assistant" },
+  { key: "ask_waka", label: "Ask WAKA" },
+];
 
 function formatActivity(at: string | null): string {
   if (!at) return "Never";
@@ -83,8 +86,8 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
       product_assistant: draft.product_assistant,
       business_setup_assistant: draft.business_setup_assistant,
       inventory_assistant: draft.inventory_assistant,
-      marketing_assistant: false,
-      marketplace_assistant: false,
+      marketing_assistant: draft.marketing_assistant,
+      marketplace_assistant: draft.marketplace_assistant,
       ask_waka: draft.ask_waka,
       monthly_request_limit: draft.monthly_request_limit,
     });
@@ -133,12 +136,12 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
           checked={draft.ai_enabled}
           disabled={!canManage || previewMode}
           onCheckedChange={(checked) => setDraft({ ...draft, ai_enabled: checked })}
-          label="Authorize this shop for AI"
+          label="AI access"
         />
       </div>
 
       <div className="space-y-2">
-        {LIVE_FEATURE_FIELDS.map(({ key, label }) => (
+        {FEATURE_FIELDS.map(({ key, label }) => (
           <div
             key={key}
             className="rounded-xl border border-border bg-muted px-4 py-3"
@@ -151,19 +154,6 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
             />
           </div>
         ))}
-        <div className="rounded-xl border border-dashed border-border bg-muted/40 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Coming soon</p>
-          <ul className="mt-2 space-y-1 text-xs font-semibold text-muted-foreground">
-            {COMING_SOON_AI_FEATURES.filter((k) => k === "marketing_assistant" || k === "marketplace_assistant").map(
-              (k) => (
-                <li key={k} className="flex justify-between">
-                  <span>{AI_FEATURES[k].label}</span>
-                  <span>Not deployed</span>
-                </li>
-              ),
-            )}
-          </ul>
-        </div>
       </div>
 
       <label className="block text-[11px] font-black uppercase tracking-wide text-muted-foreground">

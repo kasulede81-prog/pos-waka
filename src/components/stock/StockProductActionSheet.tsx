@@ -9,8 +9,6 @@ type Props = {
   open: boolean;
   productName: string;
   canAdd: boolean;
-  /** Catalog edit — store `updateProduct` requires `stock.adjust`. Defaults to `canAdd`. */
-  canEdit?: boolean;
   canRestock: boolean;
   canRemove: boolean;
   canSell?: boolean;
@@ -19,29 +17,11 @@ type Props = {
   onAction: (action: Action) => void;
 };
 
-export function resolveStockProductSheetActionIds(input: {
-  canAdd: boolean;
-  canEdit?: boolean;
-  canRestock: boolean;
-  canRemove: boolean;
-  canSell?: boolean;
-}): Action[] {
-  const canEdit = input.canEdit ?? input.canAdd;
-  const ids: Action[] = [];
-  if (input.canSell) ids.push("sell");
-  if (canEdit) ids.push("edit");
-  if (input.canAdd) ids.push("duplicate");
-  if (input.canRestock) ids.push("restock");
-  if (input.canRemove) ids.push("remove");
-  return ids;
-}
-
 export function StockProductActionSheet({
   lang,
   open,
   productName,
   canAdd,
-  canEdit,
   canRestock,
   canRemove,
   canSell = false,
@@ -50,13 +30,11 @@ export function StockProductActionSheet({
   onAction,
 }: Props) {
   const actions: { id: Action; label: string; destructive?: boolean }[] = [];
-  for (const id of resolveStockProductSheetActionIds({ canAdd, canEdit, canRestock, canRemove, canSell })) {
-    if (id === "sell") actions.push({ id, label: sellLabel ?? t(lang, "stockCardSell") });
-    else if (id === "edit") actions.push({ id, label: t(lang, "stockCardEdit") });
-    else if (id === "duplicate") actions.push({ id, label: t(lang, "stockActionDuplicate") });
-    else if (id === "restock") actions.push({ id, label: t(lang, "stockGoRestock") });
-    else actions.push({ id, label: t(lang, "stockActionRemove"), destructive: true });
-  }
+  if (canSell) actions.push({ id: "sell", label: sellLabel ?? t(lang, "stockCardSell") });
+  if (canAdd) actions.push({ id: "edit", label: t(lang, "stockCardEdit") });
+  if (canAdd) actions.push({ id: "duplicate", label: t(lang, "stockActionDuplicate") });
+  if (canRestock) actions.push({ id: "restock", label: t(lang, "stockGoRestock") });
+  if (canRemove) actions.push({ id: "remove", label: t(lang, "stockActionRemove"), destructive: true });
 
   return (
     <EnterpriseActionSheet
@@ -64,8 +42,7 @@ export function StockProductActionSheet({
       onClose={onClose}
       title={productName}
       cancelLabel={t(lang, "cancel")}
-      clearNav
-      zIndexClass="z-[var(--waka-z-pos-overlay,80)]"
+      clearNav={false}
       actions={actions.map((item) => ({
         id: item.id,
         label: item.label,

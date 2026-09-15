@@ -14,7 +14,6 @@ import {
 import { findPurchaseVoidAudit, isPurchaseVoided } from "../lib/purchaseCorrections";
 import { dateKeyKampala } from "../lib/datesUg";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
-import { MobileScrollTail } from "../components/layout/MobileScrollTail";
 
 export function PurchaseDetailPage({
   lang,
@@ -91,7 +90,7 @@ export function PurchaseDetailPage({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-16">
       {!embedded ? (
         <PageHeader
           lang={lang}
@@ -269,7 +268,6 @@ export function PurchaseDetailPage({
           )}
         </section>
       ) : null}
-      {embedded ? <MobileScrollTail /> : null}
     </div>
   );
 }

@@ -39,7 +39,6 @@ async function persistArrayDelta<T extends { id: string }>(
   next: T[],
   sortKey: (row: T) => string,
   stats: { entityWrites: number; bytesWritten: number },
-  opts?: { removeIds?: "all" | ReadonlySet<string> },
 ): Promise<void> {
   const { upserts, removedIds } = diffById(prev, next);
   if (upserts.length === 0 && removedIds.length === 0) return;
@@ -51,78 +50,14 @@ async function persistArrayDelta<T extends { id: string }>(
     stats.entityWrites += upserts.length;
     stats.bytesWritten += upserts.reduce((n, row) => n + JSON.stringify(row).length, 0);
   }
-  const allow = opts?.removeIds ?? "all";
   for (const id of removedIds) {
-    if (allow !== "all" && !allow.has(id)) continue;
     await deleteEntityRecord(bucket, id);
     stats.entityWrites += 1;
   }
 }
 
-/**
- * RAM sales are a complete authoritative dataset only after staged hydration
- * has finished. Critical/interactive/background windows, and an in-flight
- * salesHistoryHydration, are partial — missing IDs are not deletes.
- */
-export function isSalesPersistAuthoritative(state: {
-  salesHistoryHydration?: { active: boolean } | null;
-  hydrationStage?: PosState["hydrationStage"];
-}): boolean {
-  if (state.salesHistoryHydration?.active === true) return false;
-  const stage = state.hydrationStage;
-  if (stage === "critical" || stage === "interactive" || stage === "background") return false;
-  return true;
-}
-
-/** Sale rows that left RAM because they were archived or void-tombstoned. */
-export function explainedSaleEntityRemovals(
-  next: Pick<PosState, "archivedSales" | "voidRecords" | "archivedVoidRecords">,
-  manifest: { voidedSaleIds?: Record<string, string> },
-): Set<string> {
-  const ids = new Set<string>();
-  for (const s of next.archivedSales) ids.add(s.id);
-  for (const id of Object.keys(manifest.voidedSaleIds ?? {})) ids.add(id);
-  for (const v of next.voidRecords) ids.add(v.saleId);
-  for (const v of next.archivedVoidRecords) ids.add(v.saleId);
-  return ids;
-}
-
 function salesOrderFromArray(sales: Sale[]): string[] {
   return sales.map((s) => s.id);
-}
-
-/**
- * SYNC-01 / R2 — a non-authoritative sales persist must not shrink the
- * manifest. RAM order is newest-first; IDs still on disk (including ones that
- * merely left this persist's previous RAM) are appended in existing order.
- * Voided / archived IDs are allowed to leave salesOrder. Authoritative
- * persists normalize to RAM.
- */
-export function resolveSalesOrderForIncrementalPersist(input: {
-  existingSalesOrder: string[];
-  prevSales: Sale[];
-  nextSales: Sale[];
-  nextArchivedSales: Sale[];
-  voidedSaleIds?: Record<string, string>;
-  /** True when RAM is a partial/hydration dataset, not a complete authority. */
-  salesHistoryHydrationActive: boolean;
-}): string[] {
-  const ramOrder = salesOrderFromArray(input.nextSales);
-  if (!input.salesHistoryHydrationActive) {
-    return ramOrder;
-  }
-  const seen = new Set(ramOrder);
-  const archived = new Set(input.nextArchivedSales.map((s) => s.id));
-  const voided = input.voidedSaleIds ?? {};
-  const preserved: string[] = [];
-  for (const id of input.existingSalesOrder) {
-    if (!id || seen.has(id)) continue;
-    if (voided[id]) continue;
-    if (archived.has(id)) continue;
-    preserved.push(id);
-    seen.add(id);
-  }
-  return [...ramOrder, ...preserved];
 }
 
 /** Incremental entity writes — normal POS operations. */
@@ -138,10 +73,7 @@ export async function flushIncrementalPersist(prev: PosState, next: PosState): P
 
   await persistArrayDelta("product", prev.products, next.products, (p) => p.updatedAt, stats);
   await persistArrayDelta("customer", prev.customers, next.customers, (c) => c.createdAt, stats);
-  await persistArrayDelta("sale", prev.sales, next.sales, (s) => s.createdAt, stats, {
-    // Partial RAM (hydration / staged bootstrap) may only delete explained ids.
-    removeIds: isSalesPersistAuthoritative(next) ? "all" : explainedSaleEntityRemovals(next, manifest),
-  });
+  await persistArrayDelta("sale", prev.sales, next.sales, (s) => s.createdAt, stats);
   await persistArrayDelta("archivedSale", prev.archivedSales, next.archivedSales, (s) => s.createdAt, stats);
   await persistArrayDelta("debtPayment", prev.debtPayments, next.debtPayments, (d) => d.createdAt, stats);
   await persistArrayDelta("dayClose", prev.dayCloses, next.dayCloses, (d) => d.createdAt, stats);
@@ -232,14 +164,7 @@ export async function flushIncrementalPersist(prev: PosState, next: PosState): P
   );
 
   if (prev.sales !== next.sales) {
-    manifest.salesOrder = resolveSalesOrderForIncrementalPersist({
-      existingSalesOrder: manifest.salesOrder,
-      prevSales: prev.sales,
-      nextSales: next.sales,
-      nextArchivedSales: next.archivedSales,
-      voidedSaleIds: manifest.voidedSaleIds,
-      salesHistoryHydrationActive: !isSalesPersistAuthoritative(next),
-    });
+    manifest.salesOrder = salesOrderFromArray(next.sales);
   }
   if (prev.archivedSales !== next.archivedSales) {
     manifest.archivedSalesOrder = salesOrderFromArray(next.archivedSales);

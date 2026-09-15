@@ -12,7 +12,5 @@ describe("hardware capability snapshot", () => {
     expect(typeof snapshot.barcodeCamera).toBe("boolean");
     expect(typeof snapshot.barcodeWedge).toBe("boolean");
     expect(typeof snapshot.escPos).toBe("boolean");
-    expect(typeof snapshot.transports.environment).toBe("string");
-    expect(typeof snapshot.transports.bluetooth.classic.supported).toBe("boolean");
   });
 });

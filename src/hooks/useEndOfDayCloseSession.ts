@@ -4,7 +4,6 @@ import type { Language } from "../types";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { activeDayCloseForDate } from "../lib/dayCloseIdempotency";
 import { dateKeyKampala } from "../lib/datesUg";
-import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import {
   evaluateDayClosePreflightSync,
   runDayClosePreflight,
@@ -19,7 +18,6 @@ import {
 } from "../lib/sequentialBusinessDays";
 import { readSyncQueue } from "../offline/localDb";
 import { ensureAllActiveSalesLoaded, usePosStore } from "../store/usePosStore";
-import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useDrawerCashForDay } from "./useDrawerCashForDay";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
@@ -153,7 +151,7 @@ export function useEndOfDayCloseSession(lang: Language) {
         cashDrawerAdjustments,
         shifts,
         dayDrawerOpens,
-        formulaVersion: resolveCashDrawerFormulaVersion(preferences),
+        formulaVersion: preferences.cashDrawerFormulaVersion ?? "v1",
         staffAccounts,
         generalCategoryLabel: t(lang, "uncategorized") || "General",
       }),
@@ -319,7 +317,7 @@ export function useEndOfDayCloseSession(lang: Language) {
     Boolean(preferences.backOfficePin?.trim()) ||
     (preferences.staffAccounts ?? []).some((s) => Boolean(s.pinHash || s.pin));
   const sessionCanApproveWithoutPin =
-    !pinConfigured && ["owner", "manager", "supervisor"].includes(authOperatorRole(actor));
+    !pinConfigured && ["owner", "manager", "supervisor"].includes(actor.role);
   const canSubmitNormal = Boolean(
     preflight?.canClose &&
       (!needsManagerPin || managerPin.trim().length > 0 || sessionCanApproveWithoutPin) &&

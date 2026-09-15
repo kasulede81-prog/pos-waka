@@ -18,25 +18,16 @@ import type {
   Supplier,
   SupplierPayment,
 } from "../types";
-import { isPendingSale, isPreCompletionVoidedSale, saleStatusOf } from "../lib/saleStatus";
+import { isPendingSale, saleStatusOf } from "../lib/saleStatus";
 import {
   interpretCancelPendingSaleResult,
-  pendingCloneForUnsavedCartVoidUpload,
   saleUploadRpcForLocalSale,
   settleCancelPendingSaleQueueOps,
-  shouldUpsertDraftBeforeCancel,
 } from "../lib/cancelPendingSaleAck";
 import { hydrateSaleFinancialsFromCloud } from "../lib/saleLineFinancialHydration";
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { decodeSaleLineFromCloud, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
 import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
-import { parsePersistedTenderCashUgx } from "../lib/saleTenderCash";
-import { normalizeReceiptTerminal, parseReceiptSeq } from "../lib/receiptIdentity";
-import { buildCashExpensePushPayload, cashExpenseFromCloudRow } from "../lib/cashExpenses";
-import {
-  soldByAuthUserIdFromCloudSaleRow,
-  soldByUserIdFromCloudSaleRow,
-} from "../lib/sellerIdentity";
 import { normalizeProductMenu } from "../lib/menuModifiers";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
@@ -46,13 +37,8 @@ import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
 import { isCloudRecoveryLockActive } from "../lib/cloudRecoverySession";
 import { SYNC_EVENT_PULL_MIN_MS, SYNC_INCREMENTAL_PULL_CONCURRENCY, SYNC_PULL_MIN_INTERVAL_MS, SYNC_REALTIME_COALESCE_MS } from "../lib/syncTiming";
 import { isNativeApp } from "../lib/nativeApp";
-import {
-  writeSyncHealthMeta,
-  readSyncHealthMeta,
-  recordBackgroundSyncFailure,
-  publishShopSyncHealth,
-} from "../lib/syncMeta";
-import { consumeOrResolveShopCtx, clearShopCtxTick, rememberShopCtxForTick, setCachedShopId } from "../lib/shopSyncContext";
+import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
+import { consumeOrResolveShopCtx, clearShopCtxTick, setCachedShopId } from "../lib/shopSyncContext";
 import {
   ALL_INCREMENTAL_PULL_ENTITIES,
   incrementalEntitiesForReason,
@@ -65,38 +51,17 @@ import {
 import { createIncrementalPullCoalescer } from "../lib/incrementalPullCoalesce";
 import { mapPool } from "../lib/asyncPool";
 import { pullEntitySafe } from "../lib/pullEntitySafe";
-import { applyNormalSyncAuditPull, pullAuditLogsFromCloudIncremental } from "../lib/auditCloudSync";
 import { recordEntityPullErrors } from "../lib/pullDiagnostics";
 import {
   markBootstrapSyncComplete,
-  markProductCostAuthorityRefreshDone,
   needsBootstrapPull,
-  needsProductCostAuthorityRefresh,
   readSyncCheckpoints,
   updateCheckpointsAfterIncrementalPull,
 } from "../lib/syncCheckpoints";
-import { fetchShopServerNow } from "../lib/serverNow";
-import { maxIsoTimestamp } from "../lib/maxIsoTimestamp";
-import {
-  applyIncrementalKeyset,
-  asIncrementalKeyset,
-  incrementalKeysetFromSince,
-  keysetFromLastRow,
-  type IncrementalKeyset,
-} from "../lib/incrementalKeyset";
 import { usePosStore } from "../store/usePosStore";
 import type { SyncOperation } from "../types";
-import { reportSyncIssue, ignoreReportedSyncFailure } from "../lib/monitoring";
+import { reportSyncIssue } from "../lib/monitoring";
 import { mergeReturnRecordsForRecovery, rowToReturnRecord, type CloudReturnRow } from "../lib/returnRecovery";
-import {
-  absorbCloudSaleAdjustmentLedgers,
-  mergeVoidRecordsForRecovery,
-  rowToVoidRecord,
-  type CloudVoidRow,
-} from "../lib/saleAdjustmentLedger";
-import { resolveSaleVoidQueueLedger } from "../lib/saleVoidQueueLedger";
-import { dateKeyKampala } from "../lib/datesUg";
-import { isBusinessDateLocked } from "../lib/businessDateLock";
 import {
   buildPurchaseCloudPushPayload,
   mergePurchaseRecoveryBundle,
@@ -110,18 +75,8 @@ import { isWalkInSupplierId } from "../lib/walkInSupplier";
 import { isPurchaseVoided } from "../lib/purchaseCorrections";
 import { purchaseLineBaseUnitsIn } from "../lib/purchaseLineSync";
 import {
-  isPurchaseStockLineSynced,
-  purchaseStockLinesNeedingCloudPush,
-  purchaseStockSyncNote,
-  withPurchaseStockLineSynced,
-} from "../lib/purchaseStockSyncIdempotency";
-import {
   mergeProductFromCloudPull,
   patchProductsWithServerStock,
-  pendingProductCatalogIds,
-  pendingRestockProductIds,
-  pendingSaleMutationIds,
-  pendingCustomerMutationIds,
   type ServerProductStockRow,
 } from "../lib/inventoryIntegrity";
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
@@ -146,18 +101,6 @@ import {
 import { mergeShiftsFromCloudPull } from "../lib/shiftRecovery";
 import { pullShiftsFromRpc, pushShiftToCloud } from "../lib/shiftCloudSync";
 import {
-  applyCatalogDocumentToPreferences,
-  catalogDocumentFromPreferences,
-  mergeCatalogDocuments,
-  pullCatalogFromRpc,
-  type CatalogCloudDocument,
-} from "../lib/catalogCloudSync";
-import {
-  mergeShopPolicyPreferences,
-  pullShopPolicyFromRpc,
-  type ShopPolicyCloudDocument,
-} from "../lib/shopPolicyCloudSync";
-import {
   pullStockMovementsFull,
   pullStockMovementsIncremental,
 } from "../lib/stockMovementCloudSync";
@@ -167,28 +110,6 @@ import { applySuccessfulDayClosePush, pullDayClosesFromRpc, pushDayCloseToCloud 
 import { normalizeUnitCostUgx, normalizePackCostUgx } from "../lib/costPrecision";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 import { pullCursorUntilExhausted, pullOffsetRangeUntilExhausted } from "../lib/cloudPullPagination";
-import { getActiveShopId, isValidShopId } from "./shopScope";
-import { inferShopIdFromQueueRow } from "./shopScopeMigration";
-
-/** MB-1 — immediate cash push requires an immutable stamped shopId (never active-shop fallback). */
-export function stampedShopIdForImmediateCashSync(shopId?: string | null): string | null {
-  if (!isValidShopId(shopId)) return null;
-  return shopId.trim();
-}
-import { classifyPendingStockPayload, shouldAckR3StockResult } from "../lib/stockDurableSync";
-import {
-  classifyPostgrestSyncError,
-  classifyShopPushSaleReturnOutcome,
-  classifySyncExceptionMessage,
-  isBlockedBusinessSyncError,
-  isSaleCloudAcked,
-  isSyncAck,
-  linkedSaleAdjustmentDecision,
-  type SyncProcessResult,
-} from "../lib/saleAdjustmentSync";
-import { saleHeaderForCloudComplete } from "../lib/saleCloudCompleteFinancials";
-import { evaluateSaleReturnCeilings } from "../lib/saleReturnCeilings";
-import { cloudReturnAlreadySynced, idSuffix, isUnrecoverableZeroHeaderReturn, recordBlockedReturnProbe } from "../lib/blockedReturnRecovery";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -201,16 +122,6 @@ function isUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 }
 
-/**
- * Phase 8 — commercial seller for cloud `sold_by_user_id`.
- * Prefer stamped linked Auth UUID (shared-terminal PIN); else Auth UUID in soldByUserId.
- */
-export function resolveSoldByAuthUserIdForPush(sale: Sale): string | null {
-  if (sale.soldByAuthUserId && isUuid(sale.soldByAuthUserId)) return sale.soldByAuthUserId;
-  if (sale.soldByUserId && isUuid(sale.soldByUserId)) return sale.soldByUserId;
-  return null;
-}
-
 export async function resolveShopCtx(): Promise<ShopCtx | null> {
   return consumeOrResolveShopCtx(async () => {
     if (!hasSupabaseConfig || !supabase) return null;
@@ -219,13 +130,6 @@ export async function resolveShopCtx(): Promise<ShopCtx | null> {
     const userId = user?.id;
     if (!userId || !user) return null;
     if (!isSupabaseEmailVerified(user)) return null;
-
-    const active = getActiveShopId();
-    if (active) {
-      setCachedShopId(active);
-      return { shopId: active, userId };
-    }
-
     const orgShop = await resolvePrimaryOrganizationForUser(userId);
     if (!orgShop) {
       setCachedShopId(null);
@@ -233,19 +137,6 @@ export async function resolveShopCtx(): Promise<ShopCtx | null> {
     }
     return { shopId: orgShop.shopId, userId };
   });
-}
-
-/** MB-1 — shop identity from operation stamp; never falls back to current active shop. */
-export async function resolveShopCtxForOperation(op: SyncOperation): Promise<ShopCtx | null> {
-  if (!hasSupabaseConfig || !supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  const userId = data.session?.user?.id;
-  if (!userId) return null;
-
-  const shopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
-  if (!shopId) return null;
-
-  return rememberShopCtxForTick({ shopId, userId });
 }
 
 function productSku(p: Product): string {
@@ -322,13 +213,9 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
       meta.buyingPackCostUgx != null && Number(meta.buyingPackCostUgx) > 0
         ? normalizePackCostUgx(Number(meta.buyingPackCostUgx))
         : null,
-    // Not floored: a fractional-quantity sale (e.g. 2.5 kg) leaves this
-    // counter fractional (e.g. slot 3.5) — flooring on every cloud
-    // round-trip would silently discard that progress and misalign the
-    // next sale's pack-slot boundary. See costPrecision.ts resolvePackCostUnitsDepleted.
     packCostUnitsDepleted:
       meta.packCostUnitsDepleted != null && Number.isFinite(Number(meta.packCostUnitsDepleted))
-        ? Math.max(0, Number(meta.packCostUnitsDepleted))
+        ? Math.max(0, Math.floor(Number(meta.packCostUnitsDepleted)))
         : undefined,
     stockOnHand: Number(row.stock_on_hand ?? 0),
     minimumStockAlert: Number(row.minimum_stock_alert ?? row.reorder_level ?? 0),
@@ -411,9 +298,6 @@ function hospitalitySaleMetadata(sale: Sale): Record<string, unknown> {
     billPayments: sale.billPayments ?? null,
     splitBreakdown: sale.splitBreakdown ?? null,
     paymentMethod: sale.paymentMethod ?? null,
-    tenderCashUgx: sale.tenderCashUgx ?? null,
-    receiptSeq: sale.receiptSeq ?? null,
-    receiptTerminal: sale.receiptTerminal ?? null,
   };
 }
 
@@ -470,8 +354,7 @@ function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null
     pendingSync: false,
     lastSyncError: null,
     customerId: (row.customer_id as string | null) ?? null,
-    soldByUserId: soldByUserIdFromCloudSaleRow(row),
-    soldByAuthUserId: soldByAuthUserIdFromCloudSaleRow(row),
+    soldByUserId: (row.created_by as string | null) ?? null,
     billDraft: parseBillDraftFromMeta(meta),
     saleVoidedAt: meta.saleVoidedAt != null ? String(meta.saleVoidedAt) : null,
     saleVoidReason: meta.saleVoidReason != null ? String(meta.saleVoidReason) : null,
@@ -483,9 +366,6 @@ function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null
     billPayments: Array.isArray(meta.billPayments) ? (meta.billPayments as Sale["billPayments"]) : null,
     splitBreakdown: Array.isArray(meta.splitBreakdown) ? (meta.splitBreakdown as Sale["splitBreakdown"]) : null,
     paymentMethod: meta.paymentMethod != null ? (meta.paymentMethod as Sale["paymentMethod"]) : undefined,
-    tenderCashUgx: parsePersistedTenderCashUgx(meta.tenderCashUgx),
-    receiptSeq: parseReceiptSeq(meta.receiptSeq),
-    receiptTerminal: normalizeReceiptTerminal(meta.receiptTerminal),
     receiptHeaderSnapshot: parseReceiptHeaderSnapshot(meta.receiptHeaderSnapshot),
     receiptFooterSnapshot: parseReceiptFooterSnapshot(meta.receiptFooterSnapshot),
     receiptCustomerName: meta.receiptCustomerName != null ? String(meta.receiptCustomerName) : null,
@@ -532,10 +412,6 @@ function customerToRow(c: Customer, shopId: string) {
       phone: c.phone ?? "",
       wakaClient: true,
     },
-    // WAKA-05: inert since migration 182 — `trg_customers_updated` now fires on
-    // INSERT as well as UPDATE, so the server stamps `customers.updated_at` (the
-    // customers pull cursor) and this client value never lands. Kept so the
-    // upsert payload shape is unchanged for older deployments.
     updated_at: new Date().toISOString(),
   };
 }
@@ -587,18 +463,6 @@ async function mergeByIdChunked<T extends { id: string }>(
   }
   return [...map.values()];
 }
-
-function mergeCatalogPreferences(
-  prefs: import("../types").ShopPreferences,
-  catalog: CatalogCloudDocument | null | undefined,
-): import("../types").ShopPreferences {
-  if (!catalog) return prefs;
-  return applyCatalogDocumentToPreferences(
-    prefs,
-    mergeCatalogDocuments(catalogDocumentFromPreferences(prefs), catalog),
-  );
-}
-
 
 function markSaleSyncState(saleId: string, synced: boolean, errorCode: string | null): void {
   usePosStore.setState((s) => ({
@@ -718,152 +582,20 @@ export async function pushProductStockToCloud(
   return true;
 }
 
-async function pushR3DurableStockRpc(
-  rpcName:
-    | "shop_apply_stock_adjustment"
-    | "shop_apply_inventory_count_stock"
-    | "shop_apply_sale_void_stock"
-    | "shop_apply_purchase_void_stock",
-  productId: string,
-  ctx: ShopCtx,
-  payload: Record<string, unknown>,
-): Promise<boolean> {
-  if (!supabase || !isUuid(productId)) return false;
-  const { data, error } = await supabase.rpc(rpcName, {
-    p_shop_id: ctx.shopId,
-    p_payload: payload,
-  });
-  if (error) {
-    reportSyncIssue("r3_stock_rpc_failed", { productId, rpc: rpcName, code: error.code ?? "unknown" });
-    return false;
-  }
-  const result = data as {
-    ok?: boolean;
-    error?: string;
-    idempotent?: boolean;
-    stock_on_hand?: number;
-    updated_at?: string;
-  } | null;
-  if (!shouldAckR3StockResult(result)) {
-    if (result?.error === "closed_business_date") {
-      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-      const { dateKeyKampala } = await import("../lib/datesUg");
-      const saleId = typeof payload.sale_id === "string" ? payload.sale_id : "";
-      const sale = saleId ? usePosStore.getState().sales.find((s) => s.id === saleId) : undefined;
-      noteClosedBusinessDateRejection(dateKeyKampala(sale?.createdAt ?? new Date()), saleId || productId);
-    }
-    reportSyncIssue("r3_stock_rpc_rejected", {
-      productId,
-      rpc: rpcName,
-      error: result?.error ?? "unknown",
-    });
-    return false;
-  }
-  const serverStock = Number(result?.stock_on_hand ?? 0);
-  const serverUpdatedAt = String(result?.updated_at ?? new Date().toISOString());
-  usePosStore.setState((s) => ({
-    products: s.products.map((p) =>
-      p.id === productId
-        ? { ...p, stockOnHand: serverStock, updatedAt: serverUpdatedAt, version: p.version + 1 }
-        : p,
-    ),
-  }));
-  return true;
-}
-
-export async function pushR3StockAdjustmentToCloud(
-  productId: string,
-  ctx: ShopCtx,
-  opts: { delta: number; referenceId: string; note?: string },
-): Promise<boolean> {
-  return pushR3DurableStockRpc("shop_apply_stock_adjustment", productId, ctx, {
-    product_id: productId,
-    adjustment_id: opts.referenceId,
-    reference_id: opts.referenceId,
-    delta: opts.delta,
-    note: opts.note ?? "",
-  });
-}
-
-export async function pushR3InventoryCountStockToCloud(
-  productId: string,
-  ctx: ShopCtx,
-  opts: { delta: number; referenceId: string; note?: string },
-): Promise<boolean> {
-  return pushR3DurableStockRpc("shop_apply_inventory_count_stock", productId, ctx, {
-    product_id: productId,
-    session_id: opts.referenceId,
-    reference_id: opts.referenceId,
-    delta: opts.delta,
-    note: opts.note ?? "",
-  });
-}
-
-/** SALE-VOID-STOCK-1.0 — durable void restock; never stale_version rebase. */
-export async function pushSaleVoidStockToCloud(
-  productId: string,
-  ctx: ShopCtx,
-  opts: {
-    delta: number;
-    referenceId: string;
-    note?: string;
-    saleId?: string;
-    amountUgx?: number;
-    lineIndex?: number;
-    saleVoidedAt?: string | null;
-    productName?: string;
-  },
-): Promise<boolean> {
-  const payload: Record<string, unknown> = {
-    product_id: productId,
-    void_record_id: opts.referenceId,
-    reference_id: opts.referenceId,
-    delta: opts.delta,
-    note: opts.note ?? "",
-  };
-  if (opts.saleId && isUuid(opts.saleId)) payload.sale_id = opts.saleId;
-  if (opts.amountUgx != null && Number.isFinite(opts.amountUgx) && opts.amountUgx > 0) {
-    payload.amount_ugx = Math.floor(opts.amountUgx);
-  }
-  if (opts.lineIndex != null && Number.isFinite(opts.lineIndex)) payload.line_index = opts.lineIndex;
-  if (opts.saleVoidedAt) payload.sale_voided_at = opts.saleVoidedAt;
-  if (opts.productName) payload.product_name = opts.productName;
-
-  const ok = await pushR3DurableStockRpc("shop_apply_sale_void_stock", productId, ctx, payload);
-  return ok;
-}
-
-/** PURCHASE-VOID-STOCK-1.0 — durable purchase-void stock reversal; never stale_version rebase. */
-export async function pushPurchaseVoidStockToCloud(
-  productId: string,
-  ctx: ShopCtx,
-  opts: { delta: number; referenceId: string; note?: string },
-): Promise<boolean> {
-  return pushR3DurableStockRpc("shop_apply_purchase_void_stock", productId, ctx, {
-    product_id: productId,
-    purchase_id: opts.referenceId,
-    reference_id: opts.referenceId,
-    delta: opts.delta,
-    note: opts.note ?? "purchase_void",
-  });
-}
-
 export async function pushAuditLogToCloud(entry: AuditLogEntry, ctx: ShopCtx): Promise<boolean> {
   if (!supabase) return false;
 
+  const actorId = isUuid(entry.actorUserId) ? entry.actorUserId : ctx.userId;
   const clientEntryId = isUuid(entry.id) ? entry.id : null;
   if (!clientEntryId) return false;
 
-  const { prepareAuditCloudPush } = await import("../lib/investigationActorAttribution");
-  const prepared = prepareAuditCloudPush(entry, ctx.userId);
-
   const row: Record<string, unknown> = {
     shop_id: ctx.shopId,
-    actor_user_id: prepared.actorUserIdForRow,
+    actor_user_id: actorId,
     role: entry.role,
     action: entry.action,
     payload_summary: entry.payloadSummary.slice(0, 500),
-    payload: prepared.payload,
+    payload: entry.payload,
     device_id: entry.deviceId ?? null,
     client_entry_id: clientEntryId,
     created_at: entry.at,
@@ -880,60 +612,31 @@ export async function pushAuditLogToCloud(entry: AuditLogEntry, ctx: ShopCtx): P
   return true;
 }
 
-/**
- * WAKA-06 — resolve a queued debt payment from the hydrated in-memory store,
- * then fall back to the persisted entity store on disk. A queue op enqueued
- * before the store finished hydrating (or after RAM was trimmed) still has its
- * row safely on disk; the flush must not treat "absent from RAM" as done.
- */
-async function resolveDebtPaymentForSync(paymentId: string): Promise<DebtPayment | null> {
-  const inRam = usePosStore.getState().debtPayments.find((p) => p.id === paymentId);
-  if (inRam) return inRam;
-  const { getEntitiesByIds } = await import("./entityStore");
-  const [fromDisk] = await getEntitiesByIds<DebtPayment>("debtPayment", [paymentId]);
-  return fromDisk ?? null;
-}
-
-/**
- * WAKA-06 — RAM first, then the persisted entity bucket. Missing from both
- * is "not yet known", never "done". Callers must `return false` (retry).
- */
-async function resolveEntityFromRamOrDisk<T>(
-  id: string,
-  ram: T | undefined,
-  bucket: import("./entityStore").EntityBucket,
-): Promise<T | null> {
-  if (ram) return ram;
-  if (!id) return null;
-  const { getEntitiesByIds } = await import("./entityStore");
-  const [fromDisk] = await getEntitiesByIds<T>(bucket, [id]);
-  return fromDisk ?? null;
-}
-
-async function resolveShiftForSync(shiftId: string): Promise<ShiftRecord | null> {
-  const inRam = (usePosStore.getState().preferences.shifts ?? []).find((r) => r.id === shiftId);
-  if (inRam) return inRam;
-  const { readEntityManifest } = await import("./entityStore");
-  const manifest = await readEntityManifest();
-  return (manifest?.preferences.shifts ?? []).find((r) => r.id === shiftId) ?? null;
-}
-
-export async function pushDebtPaymentToCloud(paymentId: string, ctx: ShopCtx): Promise<boolean> {
+export async function pushDebtPaymentToCloud(
+  paymentId: string,
+  ctx: ShopCtx,
+  attempt = 0,
+): Promise<boolean> {
   if (!supabase || !isUuid(paymentId)) return false;
 
-  // WAKA-06: the persisted queue/entity store is the source of truth. A payment
-  // that is merely missing from the not-yet-hydrated RAM store must retry
-  // (return false), never be acknowledged and deleted from the queue.
-  const payment = await resolveDebtPaymentForSync(paymentId);
-  if (!payment) return false;
+  const state = usePosStore.getState();
+  const payment = state.debtPayments.find((p) => p.id === paymentId);
+  if (!payment) return true;
 
-  if (!isUuid(payment.customerId)) return true;
+  const customer = state.customers.find((c) => c.id === payment.customerId);
+  if (!customer || !isUuid(customer.id)) return true;
 
-  const { buildDebtPaymentRpcPayload, interpretDebtPaymentRpcResult } = await import("../lib/debtPaymentPush");
+  const expectedBalance = customer.debtBalanceUgx + payment.amountUgx;
 
   const { data, error } = await supabase.rpc("shop_push_debt_payment", {
     p_shop_id: ctx.shopId,
-    p_payload: buildDebtPaymentRpcPayload(payment),
+    p_payload: {
+      payment_id: payment.id,
+      customer_id: payment.customerId,
+      amount_ugx: payment.amountUgx,
+      created_at: payment.createdAt,
+      expected_balance_ugx: expectedBalance,
+    },
   });
 
   if (error) {
@@ -941,35 +644,33 @@ export async function pushDebtPaymentToCloud(paymentId: string, ctx: ShopCtx): P
     return false;
   }
 
-  const decision = interpretDebtPaymentRpcResult(
-    data as {
-      ok?: boolean;
-      idempotent?: boolean;
-      error?: string;
-      new_balance_ugx?: number;
-      server_balance_ugx?: number;
-      payment_id?: string;
-    } | null,
-  );
+  const result = data as {
+    ok?: boolean;
+    error?: string;
+    server_balance_ugx?: number;
+    new_balance_ugx?: number;
+  } | null;
 
-  if (!decision.ack) {
-    reportSyncIssue("debt_payment_push_failed", { paymentId, error: decision.error ?? "unknown" });
-    if (decision.error === "closed_business_date") {
-      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-      const { dateKeyKampala } = await import("../lib/datesUg");
-      noteClosedBusinessDateRejection(dateKeyKampala(payment.createdAt), payment.id);
+  if (!result?.ok) {
+    if (result?.error === "stale_balance" && attempt < 2) {
+      const serverBalance = Number(result.server_balance_ugx ?? customer.debtBalanceUgx);
+      usePosStore.setState((s) => ({
+        customers: s.customers.map((c) =>
+          c.id === payment.customerId ? { ...c, debtBalanceUgx: serverBalance, version: c.version + 1 } : c,
+        ),
+      }));
+      return pushDebtPaymentToCloud(paymentId, ctx, attempt + 1);
     }
+    reportSyncIssue("debt_payment_push_failed", { paymentId, error: result?.error ?? "unknown" });
     return false;
   }
 
-  if (decision.applyBalanceUgx != null) {
-    const nextBal = decision.applyBalanceUgx;
-    usePosStore.setState((s) => ({
-      customers: s.customers.map((c) =>
-        c.id === payment.customerId ? { ...c, debtBalanceUgx: nextBal, version: c.version + 1 } : c,
-      ),
-    }));
-  }
+  const newBalance = Number(result.new_balance_ugx ?? customer.debtBalanceUgx);
+  usePosStore.setState((s) => ({
+    customers: s.customers.map((c) =>
+      c.id === payment.customerId ? { ...c, debtBalanceUgx: newBalance, version: c.version + 1 } : c,
+    ),
+  }));
   return true;
 }
 
@@ -1005,29 +706,27 @@ async function resolveReturnForSync(returnId: string): Promise<ReturnRecord | nu
   return fromArchiveDisk ?? null;
 }
 
-export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
+function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
   const qtyByProduct = new Map<string, number>();
   for (const line of sale.lines) {
     if (line.voided || !isUuid(line.productId)) continue;
     qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + line.quantity);
   }
 
-  const header = saleHeaderForCloudComplete(sale);
   const activeLines = sale.lines.filter((line) => !line.voided).map(ensureSaleLineId);
   return {
     sale: {
       id: sale.id,
       customer_id: sale.customerId && isUuid(sale.customerId) ? sale.customerId : null,
-      payment_status: header.debtUgx > 0 ? "partial" : "paid",
-      subtotal_ugx: header.subtotalUgx,
+      payment_status: sale.debtUgx > 0 ? "partial" : "paid",
+      subtotal_ugx: sale.subtotalUgx,
       tax_ugx: 0,
-      discount_ugx: header.discountTotalUgx,
-      total_ugx: header.totalUgx,
-      cash_amount_ugx: header.cashPaidUgx,
-      debt_amount_ugx: header.debtUgx,
+      discount_ugx: sale.discountTotalUgx ?? 0,
+      total_ugx: sale.totalUgx,
+      cash_amount_ugx: sale.cashPaidUgx,
+      debt_amount_ugx: sale.debtUgx,
       issue_receipt: false,
-      created_by: ctx.userId,
-      sold_by_user_id: resolveSoldByAuthUserIdForPush(sale),
+      created_by: sale.soldByUserId && isUuid(sale.soldByUserId) ? sale.soldByUserId : ctx.userId,
       completed_at: sale.createdAt,
       metadata: {
         ...hospitalitySaleMetadata(sale),
@@ -1061,11 +760,11 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
       },
     })),
     payments:
-      header.cashPaidUgx > 0
+      sale.cashPaidUgx > 0
         ? [
             {
               method: "cash",
-              amount_ugx: header.cashPaidUgx,
+              amount_ugx: sale.cashPaidUgx,
               recorded_by: ctx.userId,
             },
           ]
@@ -1073,7 +772,7 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
   };
 }
 
-export function buildPendingSalePushPayload(
+function buildPendingSalePushPayload(
   sale: Sale,
   ctx: ShopCtx,
   opts?: { baseUpdatedAt?: string | null; deletedLineIds?: string[] },
@@ -1092,8 +791,7 @@ export function buildPendingSalePushPayload(
       total_ugx: sale.totalUgx,
       reference_label: sale.referenceLabel ?? null,
       table_session_id: sale.tableSessionId && isUuid(sale.tableSessionId) ? sale.tableSessionId : null,
-      created_by: ctx.userId,
-      sold_by_user_id: resolveSoldByAuthUserIdForPush(sale),
+      created_by: sale.soldByUserId && isUuid(sale.soldByUserId) ? sale.soldByUserId : ctx.userId,
       created_at: sale.createdAt,
       updated_at: sale.updatedAt ?? sale.createdAt,
       metadata: hospitalitySaleMetadata(sale),
@@ -1197,7 +895,6 @@ export async function pushPendingSaleToCloud(
     return false;
   }
   if (saleStatusOf(sale) === "cancelled") {
-    if (isPreCompletionVoidedSale(sale)) return pushUnsavedCartVoidToCloud(sale, ctx);
     return pushCancelPendingSaleToCloud(sale.id, ctx);
   }
   if (!isPendingSale(sale)) {
@@ -1248,11 +945,6 @@ export async function pushPendingSaleToCloud(
     }
     markSaleSyncState(sale.id, false, result?.error ?? "pending_sale_rejected");
     reportSyncIssue("pending_sale_rejected", { saleId: sale.id, error: result?.error ?? "unknown" });
-    if (result?.error === "closed_business_date") {
-      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-      const { dateKeyKampala } = await import("../lib/datesUg");
-      noteClosedBusinessDateRejection(dateKeyKampala(sale.createdAt), sale.id);
-    }
     return false;
   }
 
@@ -1292,26 +984,6 @@ export async function pushCancelPendingSaleToCloud(saleId: string, ctx: ShopCtx)
   return true;
 }
 
-/**
- * Unsaved-cart VOIDED record: cancel the draft if it exists; otherwise upsert as pending
- * then cancel. Never completes the sale (no shop_push_sale_complete / EFRIS).
- */
-export async function pushUnsavedCartVoidToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean> {
-  if (!isPreCompletionVoidedSale(sale)) {
-    return pushCancelPendingSaleToCloud(sale.id, ctx);
-  }
-  const cancelled = await pushCancelPendingSaleToCloud(sale.id, ctx);
-  if (cancelled) return true;
-  const error =
-    usePosStore.getState().sales.find((s) => s.id === sale.id)?.lastSyncError ??
-    usePosStore.getState().archivedSales.find((s) => s.id === sale.id)?.lastSyncError ??
-    sale.lastSyncError;
-  if (!shouldUpsertDraftBeforeCancel(error)) return false;
-  const upserted = await pushPendingSaleToCloud(pendingCloneForUnsavedCartVoidUpload(sale), ctx);
-  if (!upserted) return false;
-  return pushCancelPendingSaleToCloud(sale.id, ctx);
-}
-
 /** Route draft vs completed sales to the correct cloud RPC. */
 export async function pushSaleRowToCloud(
   sale: Sale,
@@ -1320,10 +992,7 @@ export async function pushSaleRowToCloud(
 ): Promise<boolean> {
   const rpc = saleUploadRpcForLocalSale(sale);
   if (rpc === "shop_push_pending_sale") return pushPendingSaleToCloud(sale, ctx, opts);
-  if (rpc === "shop_cancel_pending_sale") {
-    if (isPreCompletionVoidedSale(sale)) return pushUnsavedCartVoidToCloud(sale, ctx);
-    return pushCancelPendingSaleToCloud(sale.id, ctx);
-  }
+  if (rpc === "shop_cancel_pending_sale") return pushCancelPendingSaleToCloud(sale.id, ctx);
   if (rpc === "shop_patch_hospitality_sale_metadata") {
     return pushHospitalitySaleMetadataPatch(sale, ctx);
   }
@@ -1367,7 +1036,6 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
     return pushPendingSaleToCloud(sale, ctx);
   }
   if (saleStatusOf(sale) === "cancelled") {
-    if (isPreCompletionVoidedSale(sale)) return pushUnsavedCartVoidToCloud(sale, ctx);
     return pushCancelPendingSaleToCloud(sale.id, ctx);
   }
 
@@ -1391,11 +1059,6 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
   if (!result?.ok) {
     markSaleSyncState(sale.id, false, result?.error ?? "sale_rpc_rejected");
     reportSyncIssue("sale_rpc_rejected", { saleId: sale.id, error: result?.error ?? "unknown" });
-    if (result?.error === "closed_business_date") {
-      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-      const { dateKeyKampala } = await import("../lib/datesUg");
-      noteClosedBusinessDateRejection(dateKeyKampala(sale.createdAt), sale.id);
-    }
     return false;
   }
 
@@ -1443,50 +1106,8 @@ export async function refreshProductStockFromCloud(
   }));
 }
 
-function asQueryRows<T>(data: unknown): T[] {
-  if (data == null) return [];
-  return Array.isArray(data) ? (data as T[]) : [data as T];
-}
-
-function firstSaleReturnRow(data: unknown): {
-  id: string;
-  saleId: string | null;
-  productId: string;
-  quantity: number;
-  refundAmountUgx: number;
-} | null {
-  const row = asQueryRows<Record<string, unknown>>(data)[0];
-  if (!row || row.id == null) return null;
-  return {
-    id: String(row.id),
-    saleId: row.sale_id != null ? String(row.sale_id) : null,
-    productId: String(row.product_id ?? ""),
-    quantity: Number(row.quantity ?? 0),
-    refundAmountUgx: Number(row.refund_amount_ugx ?? 0),
-  };
-}
-
-async function selectCloudSaleReturnById(returnId: string): Promise<{
-  error: boolean;
-  row: { id: string; saleId: string | null; productId: string; quantity: number; refundAmountUgx: number } | null;
-}> {
-  if (!supabase || !isUuid(returnId)) return { error: true, row: null };
-  const existingRes = await supabase
-    .from("sale_returns")
-    .select("id, sale_id, product_id, quantity, refund_amount_ugx")
-    .eq("id", returnId)
-    .maybeSingle();
-  if (existingRes.error) return { error: true, row: null };
-  return { error: false, row: firstSaleReturnRow(existingRes.data) };
-}
-
-async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<SyncProcessResult> {
-  if (!supabase) return { status: "retry", lastError: "rpc_failed" };
-  if (!isUuid(returnRow.id)) return { status: "block", lastError: "invalid_uuid" };
-  const existing = await selectCloudSaleReturnById(returnRow.id);
-  if (!existing.error && existing.row && cloudReturnAlreadySynced({ returnId: returnRow.id, cloudReturns: [existing.row] })) {
-    return "ack";
-  }
+async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<boolean> {
+  if (!supabase || !isUuid(returnRow.id)) return false;
   const payload = {
     id: returnRow.id,
     sale_id: returnRow.saleId && isUuid(returnRow.saleId) ? returnRow.saleId : null,
@@ -1503,424 +1124,43 @@ async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise
       shiftId: returnRow.shiftId ?? null,
       cogsUgx: returnRow.cogsUgx ?? null,
       unitCostUgx: returnRow.unitCostUgx ?? null,
-      refundCashUgx: returnRow.refundCashUgx ?? null,
       wakaClient: true,
     },
   };
-  try {
-    const { data, error } = await supabase.rpc("shop_push_sale_return", {
-      p_shop_id: ctx.shopId,
-      p_payload: payload,
-    });
-    const outcome = classifyShopPushSaleReturnOutcome({
-      error: error ? { code: (error as { code?: string }).code, message: null } : null,
-      data: data as { ok?: boolean; error?: string | null } | null,
-    });
-    if (outcome.status === "park") {
-      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-      const { dateKeyKampala } = await import("../lib/datesUg");
-      noteClosedBusinessDateRejection(dateKeyKampala(returnRow.createdAt), returnRow.id);
-      return "park";
-    }
-    if (outcome.status === "ack") return "ack";
-    if (outcome.status === "block") {
-      return { status: "block", lastError: outcome.lastError ?? "invalid_payload" };
-    }
-    return { status: "retry", lastError: outcome.lastError ?? "rpc_failed" };
-  } catch (caught) {
-    const message = caught instanceof Error ? caught.message : "";
-    const token = classifySyncExceptionMessage(message);
-    if (token === "closed_business_date") {
-      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-      const { dateKeyKampala } = await import("../lib/datesUg");
-      noteClosedBusinessDateRejection(dateKeyKampala(returnRow.createdAt), returnRow.id);
-      return "park";
-    }
-    if (isBlockedBusinessSyncError(token)) {
-      return { status: "block", lastError: token };
-    }
-    return { status: "retry", lastError: token };
-  }
-}
-
-/** Read-only cloud SELECT + 086 ceiling mirror. Never writes, never calls shop_push_sale_return. */
-export async function probeBlockedReturnRecovery(op: SyncOperation): Promise<boolean> {
-  const payload = (op.payload && typeof op.payload === "object" ? op.payload : {}) as Record<string, unknown>;
-  const base = {
-    ok: false as const,
-    queueIdSuffix: idSuffix(op.id),
-    returnIdSuffix: idSuffix(String(payload.returnId ?? op.id ?? "")),
-    saleIdSuffix: idSuffix(typeof payload.saleId === "string" ? payload.saleId : ""),
-  };
-  if (op.kind !== "pending_returns" || !isBlockedBusinessSyncError(op.lastError)) {
-    return recordBlockedReturnProbe({ ...base, blocker: "not_blocked_kind" });
-  }
-  if (!supabase) {
-    return recordBlockedReturnProbe({ ...base, blocker: "no_supabase" });
-  }
-  try {
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) {
-      return recordBlockedReturnProbe({ ...base, blocker: "not_authenticated" });
-    }
-    const ctx = await resolveShopCtxForOperation(op);
-    if (!ctx) {
-      return recordBlockedReturnProbe({ ...base, blocker: "no_shop_ctx" });
-    }
-    const returnId = String(payload.returnId ?? op.id ?? "").trim();
-    const existing = await selectCloudSaleReturnById(returnId);
-    if (!existing.error && existing.row && cloudReturnAlreadySynced({ returnId, cloudReturns: [existing.row] })) {
-      return recordBlockedReturnProbe({
-        ...base,
-        ok: true,
-        blocker: "none",
-        returnIdSuffix: idSuffix(returnId),
-      });
-    }
-    const payloadSaleId = typeof payload.saleId === "string" ? payload.saleId.trim() : "";
-    if (isUuid(payloadSaleId) && String(op.lastError ?? "").trim() === "refund_exceeds_remaining") {
-      const zeroHeaderRes = await supabase
-        .from("sales")
-        .select("id, total_ugx")
-        .eq("id", payloadSaleId)
-        .eq("shop_id", ctx.shopId)
-        .maybeSingle();
-      if (
-        !zeroHeaderRes.error &&
-        zeroHeaderRes.data &&
-        isUnrecoverableZeroHeaderReturn({
-          lastError: op.lastError,
-          cloudSaleTotalUgx: Number(zeroHeaderRes.data.total_ugx ?? 0),
-        })
-      ) {
-        return recordBlockedReturnProbe({
-          ...base,
-          ok: true,
-          blocker: "none",
-          cloudSaleTotalUgx: 0,
-          saleRowPresent: true,
-          returnIdSuffix: idSuffix(returnId),
-          saleIdSuffix: idSuffix(payloadSaleId),
-        });
-      }
-    }
-    const row = await resolveReturnForSync(returnId);
-    if (!row) {
-      return recordBlockedReturnProbe({ ...base, blocker: "no_return" });
-    }
-    const saleId = row.saleId ?? (typeof payload.saleId === "string" ? payload.saleId : "");
-    base.saleIdSuffix = idSuffix(saleId);
-    base.returnIdSuffix = idSuffix(row.id);
-    if (!saleId || !isUuid(saleId)) {
-      return recordBlockedReturnProbe({ ...base, blocker: "no_return" });
-    }
-
-    const saleRes = await supabase
-      .from("sales")
-      .select(
-        "id, shop_id, total_ugx, cash_amount_ugx, debt_amount_ugx, subtotal_ugx, discount_ugx, status, payment_status, created_at, updated_at, completed_at, metadata",
-      )
-      .eq("id", saleId)
-      .eq("shop_id", ctx.shopId)
-      .maybeSingle();
-    if (saleRes.error) {
-      return recordBlockedReturnProbe({
-        ...base,
-        blocker: "select_error",
-        selectErrorCode: classifyPostgrestSyncError((saleRes.error as { code?: string }).code),
-      });
-    }
-
-    const lineRes = await supabase
-      .from("sale_line_items")
-      .select("product_id, quantity, unit_price_ugx, line_total_ugx, line_discount_ugx")
-      .eq("sale_id", saleId);
-    if (lineRes.error) {
-      return recordBlockedReturnProbe({
-        ...base,
-        blocker: "select_error",
-        selectErrorCode: classifyPostgrestSyncError((lineRes.error as { code?: string }).code),
-      });
-    }
-
-    const retRes = await supabase
-      .from("sale_returns")
-      .select("id, shop_id, sale_id, product_id, quantity, refund_amount_ugx, reason, created_at")
-      .eq("sale_id", saleId);
-    if (retRes.error) {
-      return recordBlockedReturnProbe({
-        ...base,
-        blocker: "select_error",
-        selectErrorCode: classifyPostgrestSyncError((retRes.error as { code?: string }).code),
-      });
-    }
-
-    if (!saleRes.data) {
-      return recordBlockedReturnProbe({
-        ...base,
-        blocker: "select_empty",
-        saleRowPresent: false,
-        cloudSaleTotalUgx: null,
-      });
-    }
-
-    const cloudSaleTotalUgx = Number(saleRes.data.total_ugx ?? 0);
-    const localSale = await resolveSaleForSync(saleId);
-    const ram = usePosStore.getState();
-    const saleOut = [...ram.stockMovements, ...(ram.archivedStockMovements ?? [])].find(
-      (m) => m.refId === saleId && m.productId === row.productId && m.kind === "sale_out",
-    );
-    const metadataKeys =
-      saleRes.data.metadata && typeof saleRes.data.metadata === "object" && !Array.isArray(saleRes.data.metadata)
-        ? Object.keys(saleRes.data.metadata as Record<string, unknown>).filter(
-            (key) => !/name|phone|email|token|secret/i.test(key),
-          )
-        : [];
-    const forensic = {
-      probeVersion: 2,
-      cloud: {
-        totalUgx: cloudSaleTotalUgx,
-        cashAmountUgx: Number(saleRes.data.cash_amount_ugx ?? 0),
-        debtAmountUgx: Number(saleRes.data.debt_amount_ugx ?? 0),
-        subtotalUgx: Number(saleRes.data.subtotal_ugx ?? 0),
-        discountUgx: Number(saleRes.data.discount_ugx ?? 0),
-        status: saleRes.data.status != null ? String(saleRes.data.status) : null,
-        paymentStatus: saleRes.data.payment_status != null ? String(saleRes.data.payment_status) : null,
-        createdAt: saleRes.data.created_at != null ? String(saleRes.data.created_at) : null,
-        updatedAt: saleRes.data.updated_at != null ? String(saleRes.data.updated_at) : null,
-        completedAt: saleRes.data.completed_at != null ? String(saleRes.data.completed_at) : null,
-        shopIdSuffix: idSuffix(String(saleRes.data.shop_id ?? "")),
-        metadataKeys,
-        voidedTotalPresent: false,
-        lines: (lineRes.data ?? []).map((line) => ({
-          productIdSuffix: idSuffix(String(line.product_id)),
-          quantity: Number(line.quantity ?? 0),
-          unitPriceUgx: line.unit_price_ugx == null ? null : Number(line.unit_price_ugx),
-          lineTotalUgx: Number(line.line_total_ugx ?? 0),
-          lineDiscountUgx: line.line_discount_ugx == null ? null : Number(line.line_discount_ugx),
-        })),
-        returns: (retRes.data ?? []).map((ret) => ({
-          idSuffix: idSuffix(String(ret.id)),
-          productIdSuffix: idSuffix(String(ret.product_id)),
-          quantity: Number(ret.quantity ?? 0),
-          refundAmountUgx: Number(ret.refund_amount_ugx ?? 0),
-          reason: ret.reason != null ? String(ret.reason) : null,
-          createdAt: ret.created_at != null ? String(ret.created_at) : null,
-          shopIdSuffix: idSuffix(String(ret.shop_id ?? "")),
-        })),
-      },
-      local: {
-        totalUgx: localSale?.totalUgx,
-        cashPaidUgx: localSale?.cashPaidUgx,
-        debtUgx: localSale?.debtUgx,
-        subtotalUgx: localSale?.subtotalUgx,
-        discountTotalUgx: localSale?.discountTotalUgx ?? null,
-        voidedTotalUgx: localSale?.voidedTotalUgx ?? null,
-        tenderCashUgx: localSale?.tenderCashUgx ?? null,
-        paymentMethod: localSale?.paymentMethod ?? null,
-        status: localSale?.status ?? null,
-        createdAt: localSale?.createdAt ?? null,
-        pendingSync: localSale?.pendingSync,
-        cloudCompleteTotalUgx: localSale?.cloudCompleteFinancials?.totalUgx ?? null,
-        lineCount: localSale?.lines.length,
-        lines: localSale?.lines.map((line) => ({
-          productIdSuffix: idSuffix(line.productId),
-          quantity: line.quantity,
-          unitPriceUgx: line.unitPriceUgx,
-          lineTotalUgx: line.lineTotalUgx,
-          voided: line.voided === true,
-        })),
-        returnQty: row.quantity,
-        returnRefundUgx: row.refundAmountUgx,
-        returnReason: row.reason ?? null,
-        returnCreatedAt: row.createdAt ?? null,
-        saleOutDelta: saleOut?.deltaBaseUnits ?? null,
-        saleOutSummary: saleOut?.summary ?? null,
-      },
-    };
-    if (
-      cloudReturnAlreadySynced({
-        returnId: row.id,
-        saleId,
-        productId: row.productId,
-        quantity: row.quantity,
-        refundUgx: row.refundAmountUgx,
-        cloudReturns: asQueryRows<{
-          id: unknown;
-          sale_id?: unknown;
-          product_id: unknown;
-          quantity: unknown;
-          refund_amount_ugx: unknown;
-        }>(retRes.data).map((ret) => ({
-          id: String(ret.id),
-          saleId: ret.sale_id != null ? String(ret.sale_id) : null,
-          productId: String(ret.product_id),
-          quantity: Number(ret.quantity ?? 0),
-          refundAmountUgx: Number(ret.refund_amount_ugx ?? 0),
-        })),
-      })
-    ) {
-      return recordBlockedReturnProbe({
-        ...base,
-        ok: true,
-        blocker: "none",
-        cloudSaleTotalUgx,
-        saleRowPresent: true,
-        ...forensic,
-      });
-    }
-    const verdict = evaluateSaleReturnCeilings({
-      shopId: ctx.shopId,
-      saleId,
-      sale: {
-        id: String(saleRes.data.id),
-        shopId: String(saleRes.data.shop_id),
-        totalUgx: cloudSaleTotalUgx,
-      },
-      lines: (lineRes.data ?? []).map((line) => ({
-        productId: String(line.product_id),
-        quantity: Number(line.quantity ?? 0),
-        lineTotalUgx: Number(line.line_total_ugx ?? 0),
-      })),
-      priorReturns: (retRes.data ?? []).map((ret) => ({
-        id: String(ret.id),
-        productId: String(ret.product_id),
-        quantity: Number(ret.quantity ?? 0),
-        refundAmountUgx: Number(ret.refund_amount_ugx ?? 0),
-      })),
-      excludeReturnId: row.id,
-      productId: row.productId,
-      quantity: row.quantity,
-      refundUgx: row.refundAmountUgx,
-    });
-    if (!verdict.ok) {
-      if (
-        isUnrecoverableZeroHeaderReturn({
-          lastError: op.lastError,
-          cloudSaleTotalUgx,
-        })
-      ) {
-        return recordBlockedReturnProbe({
-          ...base,
-          ok: true,
-          blocker: "none",
-          ceilingError: verdict.error,
-          cloudSaleTotalUgx,
-          saleRowPresent: true,
-          ...forensic,
-        });
-      }
-      return recordBlockedReturnProbe({
-        ...base,
-        blocker: "ceiling",
-        ceilingError: verdict.error,
-        cloudSaleTotalUgx,
-        saleRowPresent: true,
-        ...forensic,
-      });
-    }
-    return recordBlockedReturnProbe({
-      ...base,
-      ok: true,
-      blocker: "none",
-      cloudSaleTotalUgx,
-      saleRowPresent: true,
-      ...forensic,
-    });
-  } catch {
-    return recordBlockedReturnProbe({ ...base, blocker: "select_error", selectErrorCode: "rpc_failed" });
-  }
-}
-
-async function processPendingReturnAdjustment(
-  payload: Record<string, unknown>,
-  ctx: ShopCtx,
-  lastError?: string | null,
-): Promise<SyncProcessResult> {
-  const returnId = String(payload.returnId ?? "");
-  const existing = await selectCloudSaleReturnById(returnId);
-  if (!existing.error && existing.row && cloudReturnAlreadySynced({ returnId, cloudReturns: [existing.row] })) {
-    return "ack";
-  }
-  const saleId = typeof payload.saleId === "string" ? payload.saleId.trim() : "";
-  if (isUuid(saleId) && String(lastError ?? "").trim() === "refund_exceeds_remaining") {
-    const saleRes = await supabase
-      ?.from("sales")
-      .select("id, total_ugx")
-      .eq("id", saleId)
-      .eq("shop_id", ctx.shopId)
-      .maybeSingle();
-    if (
-      saleRes &&
-      !saleRes.error &&
-      saleRes.data &&
-      isUnrecoverableZeroHeaderReturn({
-        lastError,
-        cloudSaleTotalUgx: Number(saleRes.data.total_ugx ?? 0),
-      })
-    ) {
-      return "ack";
-    }
-  }
-  const row = await resolveReturnForSync(returnId);
-  if (!row) return "retry";
-  const linkedSaleId = row.saleId ?? (typeof payload.saleId === "string" ? payload.saleId : null);
-  if (linkedSaleAdjustmentDecision(undefined, linkedSaleId) === "wait") {
-    const sale = await resolveSaleForSync(String(linkedSaleId));
-    if (!isSaleCloudAcked(sale)) return "wait";
-  }
-  return pushReturnToCloud(row, ctx);
-}
-
-async function processSaleVoidAdjustment(
-  classified: { productId: string; delta: number; referenceId: string; note?: string },
-  payload: Record<string, unknown>,
-  ctx: ShopCtx,
-): Promise<SyncProcessResult> {
-  const state = usePosStore.getState();
-  const ledger = resolveSaleVoidQueueLedger({
-    payload,
-    voidRecords: [...state.voidRecords, ...(state.archivedVoidRecords ?? [])],
+  const { data, error } = await supabase.rpc("shop_push_sale_return", {
+    p_shop_id: ctx.shopId,
+    p_payload: payload,
   });
-  const referencedSaleId = ledger.saleId ?? (typeof payload.saleId === "string" ? payload.saleId : "");
-  if (referencedSaleId) {
-    const referencedSale = await resolveSaleForSync(referencedSaleId);
-    if (!isSaleCloudAcked(referencedSale)) return "wait";
+  if (error) {
+    if (isMissingTableError(error)) return false;
+    return false;
   }
-  let saleId = ledger.saleId;
-  let amountUgx = ledger.amountUgx;
-  let lineIndex = ledger.lineIndex;
-  let saleVoidedAt = ledger.saleVoidedAt;
-  let productName = ledger.productName;
-  // Enriched historical ops: do not attach financials when the sale day is closed
-  // (179 would reject the whole RPC). Stock-only replay still ACKs.
-  if (ledger.source === "void_record" && saleId && amountUgx) {
-    const sale =
-      state.sales.find((s) => s.id === saleId) ??
-      (state.archivedSales ?? []).find((s) => s.id === saleId);
-    if (!sale || isBusinessDateLocked(state.dayCloses ?? [], dateKeyKampala(sale.createdAt))) {
-      saleId = undefined;
-      amountUgx = undefined;
-      lineIndex = undefined;
-      saleVoidedAt = undefined;
-      productName = undefined;
-    }
-  }
-  const ok = await pushSaleVoidStockToCloud(classified.productId, ctx, {
-    delta: classified.delta,
-    referenceId: classified.referenceId,
-    note: classified.note,
-    saleId,
-    amountUgx,
-    lineIndex,
-    saleVoidedAt,
-    productName,
-  });
-  return ok ? "ack" : "retry";
+  const result = data as { ok?: boolean } | null;
+  return result?.ok === true;
 }
 
 function rowToCashExpense(raw: Record<string, unknown>): CashExpense | null {
-  return cashExpenseFromCloudRow(raw);
+  const id = String(raw.id ?? "").trim();
+  if (!id) return null;
+  const deletedAt = raw.deleted_at != null ? String(raw.deleted_at) : null;
+  return {
+    id,
+    category: String(raw.category ?? "Miscellaneous"),
+    amountUgx: Number(raw.amount_ugx ?? 0),
+    description: raw.description != null ? String(raw.description) : "",
+    paidOn: String(raw.paid_on ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+    createdAt: String(raw.created_at ?? new Date().toISOString()),
+    createdByUserId: String(raw.created_by ?? ""),
+    createdByLabel:
+      raw.recorded_by_label != null
+        ? String(raw.recorded_by_label)
+        : raw.metadata && typeof raw.metadata === "object"
+          ? String((raw.metadata as Record<string, unknown>).actorName ?? "")
+          : undefined,
+    pendingSync: false,
+    lastSyncError: null,
+    deletedAt,
+  };
 }
 
 async function pushCashExpenseToCloud(expense: CashExpense, ctx: ShopCtx, voided = false): Promise<boolean> {
@@ -1934,20 +1174,20 @@ async function pushCashExpenseToCloud(expense: CashExpense, ctx: ShopCtx, voided
       if (isMissingTableError(error)) return true;
       return false;
     }
-    const result = data as { ok?: boolean; error?: string } | null;
-    if (result?.error === "closed_business_date") {
-      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-      const { dateKeyKampala } = await import("../lib/datesUg");
-      noteClosedBusinessDateRejection(dateKeyKampala(expense.paidOn), expense.id);
-      usePosStore.setState((s) => ({
-        cashExpenses: s.cashExpenses.map((e) =>
-          e.id === expense.id ? { ...e, pendingSync: true, lastSyncError: "closed_business_date" } : e,
-        ),
-      }));
-    }
+    const result = data as { ok?: boolean } | null;
     return result?.ok === true;
   }
-  const payload = buildCashExpensePushPayload(expense);
+  const payload = {
+    id: expense.id,
+    category: expense.category,
+    amount_ugx: expense.amountUgx,
+    description: expense.description || null,
+    paid_on: expense.paidOn,
+    created_at: expense.createdAt,
+    recorded_by_staff_id: expense.createdByUserId.startsWith("staff:") ? expense.createdByUserId : null,
+    recorded_by_label: expense.createdByLabel ?? null,
+    metadata: { wakaClient: true },
+  };
   const { data, error } = await supabase.rpc("shop_push_cash_expense", {
     p_shop_id: ctx.shopId,
     p_payload: payload,
@@ -1956,36 +1196,17 @@ async function pushCashExpenseToCloud(expense: CashExpense, ctx: ShopCtx, voided
     if (isMissingTableError(error)) return true;
     return false;
   }
-  const result = data as { ok?: boolean; error?: string } | null;
-  if (result?.error === "closed_business_date") {
-    const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-    const { dateKeyKampala } = await import("../lib/datesUg");
-    noteClosedBusinessDateRejection(dateKeyKampala(expense.paidOn), expense.id);
-    usePosStore.setState((s) => ({
-      cashExpenses: s.cashExpenses.map((e) =>
-        e.id === expense.id ? { ...e, pendingSync: true, lastSyncError: "closed_business_date" } : e,
-      ),
-    }));
-  }
+  const result = data as { ok?: boolean } | null;
   return result?.ok === true;
 }
 
-export async function syncCashExpenseImmediately(
-  expenseId: string,
-  shopId?: string | null,
-): Promise<boolean> {
+export async function syncCashExpenseImmediately(expenseId: string): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
   if (!getDeviceOnline()) return false;
-  // MB-1: never fall back to active shop — require immutable stamped shop identity.
-  const stamped = stampedShopIdForImmediateCashSync(shopId);
-  if (!stamped) return false;
   const row = usePosStore.getState().cashExpenses.find((e) => e.id === expenseId);
   if (!row) return false;
-  if (!supabase) return false;
-  const { data } = await supabase.auth.getSession();
-  const userId = data.session?.user?.id;
-  if (!userId) return false;
-  const ctx: ShopCtx = { shopId: stamped, userId };
+  const ctx = await resolveShopCtx();
+  if (!ctx) return false;
   const ok = await pushCashExpenseToCloud(row, ctx, Boolean(row.deletedAt));
   if (!ok) {
     reportSyncIssue("cash_expense_push_failed", { expenseId });
@@ -2022,36 +1243,17 @@ async function pushCashDrawerAdjustmentToCloud(adj: CashDrawerAdjustment, ctx: S
     if (isMissingTableError(error)) return true;
     return false;
   }
-  const result = data as { ok?: boolean; error?: string } | null;
-  if (result?.error === "closed_business_date") {
-    const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-    const { dateKeyKampala } = await import("../lib/datesUg");
-    noteClosedBusinessDateRejection(dateKeyKampala(adj.occurredAt), adj.id);
-    usePosStore.setState((s) => ({
-      cashDrawerAdjustments: s.cashDrawerAdjustments.map((a) =>
-        a.id === adj.id ? { ...a, pendingSync: true, lastSyncError: "closed_business_date" } : a,
-      ),
-    }));
-  }
+  const result = data as { ok?: boolean } | null;
   return result?.ok === true;
 }
 
-export async function syncCashDrawerAdjustmentImmediately(
-  adjustmentId: string,
-  shopId?: string | null,
-): Promise<boolean> {
+export async function syncCashDrawerAdjustmentImmediately(adjustmentId: string): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
   if (!getDeviceOnline()) return false;
-  // MB-1: never fall back to active shop — require immutable stamped shop identity.
-  const stamped = stampedShopIdForImmediateCashSync(shopId);
-  if (!stamped) return false;
   const row = usePosStore.getState().cashDrawerAdjustments.find((a) => a.id === adjustmentId);
   if (!row) return false;
-  if (!supabase) return false;
-  const { data } = await supabase.auth.getSession();
-  const userId = data.session?.user?.id;
-  if (!userId) return false;
-  const ctx: ShopCtx = { shopId: stamped, userId };
+  const ctx = await resolveShopCtx();
+  if (!ctx) return false;
   const ok = await pushCashDrawerAdjustmentToCloud(row, ctx);
   if (ok) {
     usePosStore.setState((s) => ({
@@ -2097,11 +1299,11 @@ async function syncPurchaseVoidStockReversal(purchase: Purchase, ctx: ShopCtx): 
     if (baseOut <= 0) continue;
     const catalogOk = await pushProductCatalogToCloud(product, ctx);
     if (!catalogOk) return false;
-    // PURCHASE-VOID-STOCK-1.0 — durable RPC only; never shop_push_product_stock rebase.
-    const stockOk = await pushPurchaseVoidStockToCloud(product.id, ctx, {
+    const stockOk = await pushProductStockToCloud(product.id, ctx, {
       delta: -baseOut,
-      referenceId: purchase.id,
-      note: "purchase_void",
+      note: `purchase_void:${purchase.id}`,
+      baseUpdatedAt: product.updatedAt,
+      baseStockOnHand: product.stockOnHand + baseOut,
     });
     if (!stockOk) return false;
   }
@@ -2133,14 +1335,6 @@ async function syncPurchaseVoidBundle(purchaseId: string, ctx: ShopCtx): Promise
   return true;
 }
 
-function markPurchaseStockLineSynced(purchaseId: string, productId: string): void {
-  usePosStore.setState((s) => ({
-    purchases: s.purchases.map((p) =>
-      p.id === purchaseId ? withPurchaseStockLineSynced(p, productId) : p,
-    ),
-  }));
-}
-
 async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boolean> {
   const purchase = usePosStore.getState().purchases.find((p) => p.id === purchaseId);
   if (!purchase) return true;
@@ -2149,27 +1343,20 @@ async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boo
   const purchaseOk = await pushPurchaseToCloud(purchase, ctx);
   if (!purchaseOk) return false;
 
-  // Re-read after purchase upsert — another queue op may have progressed markers.
-  let current = usePosStore.getState().purchases.find((p) => p.id === purchaseId) ?? purchase;
-  const needing = purchaseStockLinesNeedingCloudPush(current, usePosStore.getState().products);
-
-  for (const item of needing) {
-    current = usePosStore.getState().purchases.find((p) => p.id === purchaseId) ?? current;
-    if (isPurchaseStockLineSynced(current, item.productId)) continue;
-
-    const product = usePosStore.getState().products.find((p) => p.id === item.productId);
+  for (const ln of purchase.lines) {
+    const product = usePosStore.getState().products.find((p) => p.id === ln.productId);
     if (!product) continue;
+    const baseIn = purchaseLineBaseUnitsIn(product, ln);
+    if (baseIn <= 0) continue;
     const catalogOk = await pushProductCatalogToCloud(product, ctx);
     if (!catalogOk) return false;
     const stockOk = await pushProductStockToCloud(product.id, ctx, {
-      delta: item.delta,
-      note: item.note || purchaseStockSyncNote(purchaseId),
+      delta: baseIn,
+      note: `purchase:${purchase.id}`,
       baseUpdatedAt: product.updatedAt,
-      baseStockOnHand: product.stockOnHand - item.delta,
+      baseStockOnHand: product.stockOnHand - baseIn,
     });
     if (!stockOk) return false;
-    // Persist line ack before the next line / before a duplicate queue op can re-enter.
-    markPurchaseStockLineSynced(purchaseId, item.productId);
   }
 
   if (!isWalkInSupplierId(purchase.supplierId)) {
@@ -2180,7 +1367,7 @@ async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boo
     }
   }
 
-  markPurchaseSynced(purchaseId, { stockSyncedAt: new Date().toISOString() });
+  markPurchaseSynced(purchaseId);
   return true;
 }
 
@@ -2267,7 +1454,7 @@ async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx
     if (isMissingTableError(error)) return false;
     return false;
   }
-  const result = data as { ok?: boolean; error?: string } | null;
+  const result = data as { ok?: boolean } | null;
   const ok = result?.ok === true;
   if (ok) {
     usePosStore.setState((s) => ({
@@ -2275,10 +1462,6 @@ async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx
         p.id === payment.id ? { ...p, pendingSync: false } : p,
       ),
     }));
-  } else if (result?.error === "closed_business_date") {
-    const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
-    const { dateKeyKampala } = await import("../lib/datesUg");
-    noteClosedBusinessDateRejection(dateKeyKampala(payment.createdAt), payment.id);
   }
   return ok;
 }
@@ -2295,40 +1478,18 @@ export async function syncSaleImmediately(saleId: string): Promise<boolean> {
 }
 
 export async function processCloudSyncOperation(op: SyncOperation): Promise<boolean> {
-  return isSyncAck(await processCloudSyncOperationResult(op));
-}
-
-export async function processCloudSyncOperationResult(op: SyncOperation): Promise<SyncProcessResult> {
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
   } catch {
-    return "retry";
+    return false;
   }
 
-  const ctx = await resolveShopCtxForOperation(op);
-  if (!ctx) return "retry";
+  const ctx = await resolveShopCtx();
+  if (!ctx) return false;
 
   const payload = op.payload as Record<string, unknown>;
 
-  if (op.kind === "pending_returns") {
-    return processPendingReturnAdjustment(payload, ctx, op.lastError);
-  }
-  if (op.kind === "pending_stock_updates" || op.kind === "stock_move") {
-    const classified = classifyPendingStockPayload(payload);
-    if (classified.route === "sale_void") {
-      return processSaleVoidAdjustment(classified, payload, ctx);
-    }
-  }
-
-  return (await processCloudSyncOperationLegacy(op, ctx, payload)) ? "ack" : "retry";
-}
-
-async function processCloudSyncOperationLegacy(
-  op: SyncOperation,
-  ctx: ShopCtx,
-  payload: Record<string, unknown>,
-): Promise<boolean> {
   switch (op.kind) {
     case "product": {
       const productId = String(payload.id ?? "");
@@ -2346,21 +1507,13 @@ async function processCloudSyncOperationLegacy(
         return !error;
       }
       if (payload.presets === true || payload.catalogOnly === true) {
-        const product = await resolveEntityFromRamOrDisk(
-          productId,
-          usePosStore.getState().products.find((p) => p.id === productId),
-          "product",
-        );
-        if (!product) return false;
+        const product = usePosStore.getState().products.find((p) => p.id === productId);
+        if (!product) return true;
         return pushProductCatalogToCloud(product, ctx);
       }
       const includeStock = payload.isNew === true;
-      const product = await resolveEntityFromRamOrDisk(
-        productId,
-        usePosStore.getState().products.find((p) => p.id === productId),
-        "product",
-      );
-      if (!product) return false;
+      const product = usePosStore.getState().products.find((p) => p.id === productId);
+      if (!product) return true;
       return pushProductCatalogToCloud(product, ctx, { includeStock });
     }
     case "pending_purchases": {
@@ -2368,32 +1521,6 @@ async function processCloudSyncOperationLegacy(
       if (!purchaseId) return true;
       if (payload.void === true) return syncPurchaseVoidBundle(purchaseId, ctx);
       return syncPurchaseBundle(purchaseId, ctx);
-    }
-    case "pending_transfer_dispatch": {
-      const transferId = String(payload.transferId ?? "");
-      if (!transferId) return true;
-      const { syncTransferDispatchFromQueue } = await import("../lib/enterprise/stockTransferSync");
-      const { parseInventoryTransferAuditSnapshot } = await import("../lib/enterprise/inventoryTransferAudit");
-      return syncTransferDispatchFromQueue(transferId, parseInventoryTransferAuditSnapshot(payload.auditSnapshot));
-    }
-    case "pending_transfer_receive": {
-      const transferId = String(payload.transferId ?? "");
-      const receiveEventId = String(payload.receiveEventId ?? "");
-      const lines = Array.isArray(payload.lines) ? payload.lines : [];
-      if (!transferId || !receiveEventId) return false;
-      const { syncTransferReceiveFromQueue } = await import("../lib/enterprise/stockTransferSync");
-      const { parseInventoryTransferAuditSnapshot } = await import("../lib/enterprise/inventoryTransferAudit");
-      return syncTransferReceiveFromQueue({
-        transferId,
-        receiveEventId,
-        lines: lines
-          .map((row) => {
-            const r = row as { lineId?: string; quantity?: number };
-            return { lineId: String(r.lineId ?? ""), quantity: Number(r.quantity ?? 0) };
-          })
-          .filter((r) => r.lineId && r.quantity > 0),
-        auditSnapshot: parseInventoryTransferAuditSnapshot(payload.auditSnapshot),
-      });
     }
     case "purchase": {
       const purchaseId = String(payload.purchaseId ?? payload.id ?? "");
@@ -2407,77 +1534,38 @@ async function processCloudSyncOperationLegacy(
         if (!isUuid(supplierId)) return true;
         return pushSupplierDeletedToCloud(supplierId, payload, ctx);
       }
-      const supplier = await resolveEntityFromRamOrDisk(
-        supplierId,
-        usePosStore.getState().suppliers.find((s) => s.id === supplierId),
-        "supplier",
-      );
-      if (!supplier) return false;
+      const supplier = usePosStore.getState().suppliers.find((s) => s.id === supplierId);
+      if (!supplier) return true;
       return pushSupplierToCloud(supplier, ctx);
     }
     case "pending_stock_updates":
     case "stock_move": {
-      const classified = classifyPendingStockPayload(payload);
-      if (classified.route === "purchase_void") {
-        if (!classified.purchaseId) return true;
-        return syncPurchaseVoidBundle(classified.purchaseId, ctx);
+      if (payload.kind === "purchase_void") {
+        const purchaseId = String(payload.purchaseId ?? "");
+        if (!purchaseId) return true;
+        return syncPurchaseVoidBundle(purchaseId, ctx);
       }
-      if (classified.route === "purchase_void_line") {
-        return pushPurchaseVoidStockToCloud(classified.productId, ctx, {
-          delta: classified.delta,
-          referenceId: classified.referenceId,
-          note: classified.note,
-        });
+      if (payload.kind === "purchase") {
+        const purchaseId = String(payload.purchaseId ?? "");
+        if (!purchaseId) return true;
+        return syncPurchaseBundle(purchaseId, ctx);
       }
-      if (classified.route === "purchase") {
-        if (!classified.purchaseId) return true;
-        return syncPurchaseBundle(classified.purchaseId, ctx);
-      }
-      if (classified.route === "purchase_note") {
-        return pushProductStockToCloud(classified.productId, ctx, {
-          delta: classified.delta,
-          note: classified.note,
+      const productId = String(payload.productId ?? payload.id ?? "");
+      const delta = Number(payload.delta ?? 0);
+      if (isUuid(productId) && delta !== 0) {
+        return pushProductStockToCloud(productId, ctx, {
+          delta,
+          note: typeof payload.note === "string" ? payload.note : "",
           baseUpdatedAt: typeof payload.baseUpdatedAt === "string" ? payload.baseUpdatedAt : null,
           baseStockOnHand: typeof payload.baseStockOnHand === "number" ? payload.baseStockOnHand : undefined,
         });
       }
-      if (classified.route === "r3_adjustment") {
-        return pushR3StockAdjustmentToCloud(classified.productId, ctx, {
-          delta: classified.delta,
-          referenceId: classified.referenceId,
-          note: classified.note,
-        });
-      }
-      if (classified.route === "r3_count") {
-        return pushR3InventoryCountStockToCloud(classified.productId, ctx, {
-          delta: classified.delta,
-          referenceId: classified.referenceId,
-          note: classified.note,
-        });
-      }
-      if (classified.route === "sale_void") {
-        return isSyncAck(await processSaleVoidAdjustment(classified, payload, ctx));
-      }
-      if (classified.route === "catalog_only") {
-        const productId = classified.productId ?? "";
-        const product = await resolveEntityFromRamOrDisk(
-          productId,
-          usePosStore.getState().products.find((p) => p.id === productId),
-          "product",
-        );
-        if (!product) return false;
+      if (payload.catalogOnly === true && isUuid(productId)) {
+        const product = usePosStore.getState().products.find((p) => p.id === productId);
+        if (!product) return true;
         return pushProductCatalogToCloud(product, ctx);
       }
-      if (classified.route === "quarantine") {
-        reportSyncIssue("sync_quarantined_stock_no_reference", {
-          kind: op.kind,
-          opId: op.id,
-          reason: classified.reason,
-          productId: classified.productId ?? "",
-        });
-        return false;
-      }
-      reportSyncIssue("stock_update_missing_delta", { productId: classified.productId, kind: op.kind });
+      reportSyncIssue("stock_update_missing_delta", { productId, kind: op.kind });
       return false;
     }
     case "pending_sales":
@@ -2485,10 +1573,6 @@ async function processCloudSyncOperationLegacy(
       if (payload.kind === "day_close") return true;
       const saleId = String(payload.saleId ?? "");
       if (payload.kind === "pending_cancel") {
-        const sale = await resolveSaleForSync(saleId);
-        if (sale && isPreCompletionVoidedSale(sale)) {
-          return pushUnsavedCartVoidToCloud(sale, ctx);
-        }
         return pushCancelPendingSaleToCloud(saleId, ctx);
       }
       const sale = await resolveSaleForSync(saleId);
@@ -2501,17 +1585,23 @@ async function processCloudSyncOperationLegacy(
       });
     }
     case "pending_returns": {
-      return isSyncAck(await processPendingReturnAdjustment(payload, ctx, op.lastError));
+      const returnId = String(payload.returnId ?? "");
+      const row = await resolveReturnForSync(returnId);
+      if (!row) return false;
+      if (row.saleId) {
+        const sale = await resolveSaleForSync(row.saleId);
+        if (sale) {
+          const synced = await pushSaleRowToCloud(sale, ctx);
+          if (!synced) return false;
+        }
+      }
+      return pushReturnToCloud(row, ctx);
     }
     case "pending_expenses":
       if (payload.kind === "supplier_payment") {
         const paymentId = String(payload.paymentId ?? "");
-        const payment = await resolveEntityFromRamOrDisk(
-          paymentId,
-          usePosStore.getState().supplierPayments.find((p) => p.id === paymentId),
-          "supplierPayment",
-        );
-        if (!payment) return false;
+        const payment = usePosStore.getState().supplierPayments.find((p) => p.id === paymentId);
+        if (!payment) return true;
         return pushSupplierPaymentToCloud(payment, ctx);
       }
       return true;
@@ -2523,12 +1613,8 @@ async function processCloudSyncOperationLegacy(
     case "pending_inventory_counts": {
       const sessionId = String(payload.sessionId ?? "");
       if (!sessionId) return true;
-      const session = await resolveEntityFromRamOrDisk(
-        sessionId,
-        usePosStore.getState().inventoryCountSessions.find((r) => r.id === sessionId),
-        "inventoryCountSession",
-      );
-      if (!session) return false;
+      const session = usePosStore.getState().inventoryCountSessions.find((r) => r.id === sessionId);
+      if (!session) return true;
       const ok = await pushInventoryCountSessionToCloud(session, ctx);
       if (ok) {
         usePosStore.setState((s) => ({
@@ -2542,8 +1628,8 @@ async function processCloudSyncOperationLegacy(
     case "pending_shifts": {
       const shiftId = String(payload.shiftId ?? "");
       if (!shiftId) return true;
-      const shift = await resolveShiftForSync(shiftId);
-      if (!shift) return false;
+      const shift = (usePosStore.getState().preferences.shifts ?? []).find((r) => r.id === shiftId);
+      if (!shift) return true;
       const ok = await pushShiftToCloud(shift, ctx);
       if (ok) {
         usePosStore.setState((s) => ({
@@ -2560,12 +1646,8 @@ async function processCloudSyncOperationLegacy(
     case "pending_day_closes": {
       const closeId = String(payload.closeId ?? "");
       if (!closeId) return true;
-      const close = await resolveEntityFromRamOrDisk(
-        closeId,
-        usePosStore.getState().dayCloses.find((r) => r.id === closeId),
-        "dayClose",
-      );
-      if (!close) return false;
+      const close = usePosStore.getState().dayCloses.find((r) => r.id === closeId);
+      if (!close) return true;
       const result = await pushDayCloseToCloud(close, ctx);
       if (result.ok) {
         usePosStore.setState((s) => ({
@@ -2576,12 +1658,8 @@ async function processCloudSyncOperationLegacy(
     }
     case "pending_cash_expenses": {
       const expenseId = String(payload.expenseId ?? "");
-      const row = await resolveEntityFromRamOrDisk(
-        expenseId,
-        usePosStore.getState().cashExpenses.find((e) => e.id === expenseId),
-        "cashExpense",
-      );
-      if (!row) return false;
+      const row = usePosStore.getState().cashExpenses.find((e) => e.id === expenseId);
+      if (!row) return true;
       const voided = Boolean(payload.void);
       const ok = await pushCashExpenseToCloud(row, ctx, voided);
       if (!ok) {
@@ -2599,7 +1677,7 @@ async function processCloudSyncOperationLegacy(
     case "pending_cash_drawer_adjustments": {
       const adjustmentId = String(payload.adjustmentId ?? "");
       if (!adjustmentId) return true;
-      return syncCashDrawerAdjustmentImmediately(adjustmentId, ctx.shopId);
+      return syncCashDrawerAdjustmentImmediately(adjustmentId);
     }
     case "customer": {
       if (payload.kind === "debt_payment") {
@@ -2608,25 +1686,13 @@ async function processCloudSyncOperationLegacy(
         return pushDebtPaymentToCloud(paymentId, ctx);
       }
       const customerId = String(payload.id ?? "");
-      const customer = await resolveEntityFromRamOrDisk(
-        customerId,
-        usePosStore.getState().customers.find((c) => c.id === customerId),
-        "customer",
-      );
-      if (!customer) return false;
+      const customer = usePosStore.getState().customers.find((c) => c.id === customerId);
+      if (!customer) return true;
       return pushCustomerToCloud(customer, ctx);
     }
     case "pending_hospitality": {
       const { processHospitalitySyncOperation } = await import("./hospitalityCloudSync");
       return processHospitalitySyncOperation(payload);
-    }
-    case "pending_catalog": {
-      const { processCatalogSyncOperation } = await import("../lib/catalogCloudSync");
-      return processCatalogSyncOperation(ctx);
-    }
-    case "pending_shop_policy": {
-      const { processShopPolicySyncOperation } = await import("../lib/shopPolicyCloudSync");
-      return processShopPolicySyncOperation(ctx);
     }
     case "pending_staff": {
       const { processPendingStaffSync } = await import("../lib/staffSyncQueue");
@@ -2673,7 +1739,6 @@ export type CloudPullStats = {
   stockMovements?: number;
   entityErrors?: Record<string, string>;
   partialSuccess?: boolean;
-  productCostAuthorityRefresh?: boolean;
 };
 
 export type CloudPullCheckpoints = {
@@ -2692,9 +1757,6 @@ export type CloudPullCheckpoints = {
   shiftsAt: string;
   dayClosesAt: string;
   stockMovementsAt: string;
-  catalogAt: string;
-  shopPolicyAt: string;
-  auditLogsAt: string;
 };
 
 export type CloudPullResult = {
@@ -2705,7 +1767,6 @@ export type CloudPullResult = {
   returnRecords: ReturnRecord[];
   /** Cloud rows with updated_at for merge (same ids as returnRecords). */
   returnCloudRows: CloudReturnRow[];
-  voidCloudRows: CloudVoidRow[];
   purchases: Purchase[];
   purchaseCloudRows: CloudPurchaseRow[];
   supplierCloudRows: CloudSupplierRow[];
@@ -2717,20 +1778,11 @@ export type CloudPullResult = {
   shifts: ShiftRecord[];
   dayCloses: DayCloseSummary[];
   stockMovements: StockMovement[];
-  catalog?: CatalogCloudDocument | null;
-  shopPolicy?: ShopPolicyCloudDocument | null;
   deletedProductIds: string[];
   voidedSaleIds: string[];
   stats: CloudPullStats;
   checkpoints?: CloudPullCheckpoints;
-  /**
-   * WAKA-05: Postgres `now()` taken once immediately before a full/bootstrap
-   * pull. Seed every entity cursor from this — never from the client clock.
-   */
-  bootstrapServerNow?: string;
   recoveredAuditLogs?: AuditLogEntry[];
-  /** Unseen shop audit events from normal incremental sync — merge into ACTIVE auditLogs. */
-  pulledAuditLogs?: AuditLogEntry[];
   /** Entities that completed successfully — only these cursors may advance. */
   pulledEntities: IncrementalPullEntity[];
 };
@@ -2753,10 +1805,7 @@ export function wasLastSalesPullTruncated(): boolean {
   return lastSalesPullTruncated;
 }
 
-// WAKA-05: `created_at` is server-stamped (the cursor); `client_created_at`
-// carries the cashier's clock for business-date purposes (migration 182).
-const CUSTOMER_DEBT_PAYMENTS_SELECT =
-  "id, shop_id, customer_id, amount_ugx, created_at, client_created_at, metadata";
+const CUSTOMER_DEBT_PAYMENTS_SELECT = "id, shop_id, customer_id, amount_ugx, created_at, metadata";
 
 const SHOP_PURCHASES_SELECT =
   "id, shop_id, supplier_id, supplier_name, total_cost_ugx, amount_paid_ugx, balance_delta_ugx, notes, lines, created_at, updated_at, voided_at, void_reason, metadata";
@@ -2770,8 +1819,10 @@ const SHOP_SUPPLIER_PAYMENTS_SELECT =
 const SALE_RETURNS_SELECT =
   "id, shop_id, sale_id, product_id, quantity, refund_amount_ugx, reason, note, created_by, created_at, updated_at, metadata";
 
-const SALE_VOIDS_SELECT =
-  "id, shop_id, sale_id, product_id, quantity, amount_ugx, line_index, note, sale_voided_at, created_by, created_at, updated_at, metadata";
+function maxIsoTimestamp(current: string, candidate: unknown): string {
+  const next = typeof candidate === "string" ? candidate : "";
+  return next && next > current ? next : current;
+}
 
 function maxRowUpdatedAt(rows: Record<string, unknown>[], since: string): string {
   let maxAt = since;
@@ -2779,21 +1830,6 @@ function maxRowUpdatedAt(rows: Record<string, unknown>[], since: string): string
     maxAt = maxIsoTimestamp(maxAt, row.updated_at ?? row.created_at);
   }
   return maxAt;
-}
-
-/**
- * WAKA-05 — the only legal way to settle a pull cursor.
- *
- * `observed` must be a timestamp the SERVER stamped on a row (via
- * `maxRowUpdatedAt` / `maxIsoTimestamp` / an RPC page checkpoint). The cursor
- * moves forward only when the server proves there was something newer, and
- * otherwise stays exactly where it was — an empty page is not evidence of
- * progress. The client clock is never a checkpoint source: a device running
- * fast would write a cursor into the server's future and permanently skip every
- * row written in the gap.
- */
-function serverCheckpoint(since: string, observed: string): string {
-  return maxIsoTimestamp(since, observed);
 }
 
 function estimatePayloadBytes(rows: unknown[]): number {
@@ -2810,7 +1846,7 @@ function parseSaleRows(rawRows: Record<string, unknown>[]): { sales: Sale[]; voi
   for (const raw of rawRows) {
     const status = String(raw.status ?? "completed");
     const id = String(raw.id ?? "");
-    if (status === "void" || status === "refunded" || status === "cancelled") {
+    if (status === "void" || status === "refunded") {
       if (isUuid(id)) voidedIds.push(id);
       continue;
     }
@@ -2859,7 +1895,7 @@ async function pullSalesFull(ctx: ShopCtx): Promise<{
       .from("sales")
       .select("id")
       .eq("shop_id", ctx.shopId)
-      .in("status", ["void", "refunded", "cancelled"])
+      .eq("status", "voided")
       .order("created_at", { ascending: true })
       .range(voidOffset, voidOffset + FULL_SALES_PAGE - 1);
     if (vErr) throw vErr;
@@ -2886,18 +1922,17 @@ async function pullSalesIncremental(
   const sales: Sale[] = [];
   const voidedIds: string[] = [];
   let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
+  let cursor = since;
   let checkpointAt = since;
   let truncated = false;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { data: saleRows, error: sErr } = await applyIncrementalKeyset(
-      supabase!
-        .from("sales")
-        .select("*, sale_line_items(*)")
-        .eq("shop_id", ctx.shopId),
-      "updated_at",
-      cursor,
-    ).limit(INCREMENTAL_SALES_LIMIT);
+    const { data: saleRows, error: sErr } = await supabase!
+      .from("sales")
+      .select("*, sale_line_items(*)")
+      .eq("shop_id", ctx.shopId)
+      .gt("updated_at", cursor)
+      .order("updated_at", { ascending: true })
+      .limit(INCREMENTAL_SALES_LIMIT);
     if (sErr) throw sErr;
     const batch = (saleRows ?? []) as Record<string, unknown>[];
     bytes += estimatePayloadBytes(batch);
@@ -2911,25 +1946,17 @@ async function pullSalesIncremental(
       truncated = true;
       lastSalesPullTruncated = true;
     }
-    cursor = keysetFromLastRow(batch, "updated_at", cursor);
+    cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   if (!truncated) {
     lastSalesPullTruncated = false;
   }
-  // WAKA-05: the sales cursor must only ever move to a timestamp the server
-  // actually stamped on a row. `checkpointAt` starts at `since` and is only
-  // advanced by `maxRowUpdatedAt` over real `updated_at` values, so an empty
-  // page leaves it at `since` (no advance) and a non-empty page moves it to a
-  // server time. It must never fall back to the client clock, which can be
-  // ahead of the server and would skip rows written in the gap forever.
-  return { sales, voidedIds, bytes, checkpointAt, truncated };
+  return { sales, voidedIds, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(), truncated };
 }
 
-async function pullProductsFull(
-  ctx: ShopCtx,
-): Promise<{ products: Product[]; deletedIds: string[]; bytes: number; checkpointAt: string }> {
+async function pullProductsFull(ctx: ShopCtx): Promise<{ products: Product[]; deletedIds: string[]; bytes: number }> {
   let bytes = 0;
   const productRows = await pullOffsetRangeUntilExhausted({
     pageSize: INCREMENTAL_PRODUCTS_LIMIT,
@@ -2975,14 +2002,7 @@ async function pullProductsFull(
     if (isUuid(id)) deletedIds.push(id);
   }
 
-  // WAKA-05: settle on the newest `updated_at` this pull actually saw, never on
-  // the local clock. The deactivated-rows query selects `id` only, so a product
-  // deactivated after the newest active row leaves the checkpoint slightly
-  // behind — which costs one re-fetch on the next incremental pull and can
-  // never skip a row. Behind is safe; ahead is the bug.
-  const checkpointAt = maxRowUpdatedAt(productRows, new Date(0).toISOString());
-
-  return { products, deletedIds, bytes, checkpointAt };
+  return { products, deletedIds, bytes };
 }
 
 async function pullProductsIncremental(
@@ -2992,14 +2012,16 @@ async function pullProductsIncremental(
   const products: Product[] = [];
   const deletedIds: string[] = [];
   let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
+  let cursor = since;
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { data: productRows, error: pErr } = await applyIncrementalKeyset(
-      supabase!.from("products").select("*").eq("shop_id", ctx.shopId),
-      "updated_at",
-      cursor,
-    ).limit(INCREMENTAL_PRODUCTS_LIMIT);
+    const { data: productRows, error: pErr } = await supabase!
+      .from("products")
+      .select("*")
+      .eq("shop_id", ctx.shopId)
+      .gt("updated_at", cursor)
+      .order("updated_at", { ascending: true })
+      .limit(INCREMENTAL_PRODUCTS_LIMIT);
     if (pErr) throw pErr;
     const rows = productRows ?? [];
     bytes += estimatePayloadBytes(rows);
@@ -3017,11 +2039,11 @@ async function pullProductsIncremental(
       if (p) products.push(p);
     }
     if (rows.length < INCREMENTAL_PRODUCTS_LIMIT) break;
-    cursor = keysetFromLastRow(rows as Record<string, unknown>[], "updated_at", cursor);
+    cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
-  return { products, deletedIds, bytes, checkpointAt: serverCheckpoint(since, checkpointAt) };
+  return { products, deletedIds, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString() };
 }
 
 async function pullCustomersFull(ctx: ShopCtx): Promise<{ customers: Customer[]; bytes: number }> {
@@ -3053,14 +2075,16 @@ async function pullCustomersIncremental(
 ): Promise<{ customers: Customer[]; bytes: number; checkpointAt: string }> {
   const customers: Customer[] = [];
   let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
+  let cursor = since;
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { data: customerRows, error: cErr } = await applyIncrementalKeyset(
-      supabase!.from("customers").select("*").eq("shop_id", ctx.shopId),
-      "updated_at",
-      cursor,
-    ).limit(INCREMENTAL_CUSTOMERS_LIMIT);
+    const { data: customerRows, error: cErr } = await supabase!
+      .from("customers")
+      .select("*")
+      .eq("shop_id", ctx.shopId)
+      .gt("updated_at", cursor)
+      .order("updated_at", { ascending: true })
+      .limit(INCREMENTAL_CUSTOMERS_LIMIT);
     if (cErr) throw cErr;
     const rows = customerRows ?? [];
     bytes += estimatePayloadBytes(rows);
@@ -3070,11 +2094,11 @@ async function pullCustomersIncremental(
       ...rows.map((r) => rowToCustomer(r as Record<string, unknown>)).filter((c): c is Customer => c != null),
     );
     if (rows.length < INCREMENTAL_CUSTOMERS_LIMIT) break;
-    cursor = keysetFromLastRow(rows as Record<string, unknown>[], "updated_at", cursor);
+    cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
-  return { customers, bytes, checkpointAt: serverCheckpoint(since, checkpointAt) };
+  return { customers, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString() };
 }
 
 const CASH_EXPENSE_SELECT =
@@ -3133,7 +2157,7 @@ async function pullExpensesIncremental(
       cashExpenses,
       count,
       bytes,
-      checkpointAt: serverCheckpoint(since, checkpointAt),
+      checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
     };
   } catch {
     return { cashExpenses: [], count: 0, bytes: 0, checkpointAt: since };
@@ -3180,7 +2204,7 @@ async function pullCashDrawerAdjustmentsIncremental(
       cashDrawerAdjustments: page.cashDrawerAdjustments,
       count: page.cashDrawerAdjustments.length,
       bytes: page.bytes,
-      checkpointAt: serverCheckpoint(since, page.checkpointAt),
+      checkpointAt: page.checkpointAt > since ? page.checkpointAt : new Date().toISOString(),
     };
   } catch {
     return { cashDrawerAdjustments: [], count: 0, bytes: 0, checkpointAt: since };
@@ -3204,7 +2228,7 @@ async function pullDayDrawerOpensIncremental(
       dayDrawerOpens: page.dayDrawerOpens,
       count: page.dayDrawerOpens.length,
       bytes: page.bytes,
-      checkpointAt: serverCheckpoint(since, page.checkpointAt),
+      checkpointAt: page.checkpointAt > since ? page.checkpointAt : new Date().toISOString(),
     };
   } catch {
     return { dayDrawerOpens: [], count: 0, bytes: 0, checkpointAt: since };
@@ -3229,30 +2253,26 @@ function parseReturnRows(rows: Record<string, unknown>[]): CloudReturnRow[] {
 
 async function pullReturnsPage(
   ctx: ShopCtx,
-  since: string | IncrementalKeyset,
-): Promise<{ rows: CloudReturnRow[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
-  const cursor = asIncrementalKeyset(since);
-  const { data, error } = await applyIncrementalKeyset(
-    supabase!.from("sale_returns").select(SALE_RETURNS_SELECT).eq("shop_id", ctx.shopId),
-    "updated_at",
-    cursor,
-  ).limit(INCREMENTAL_RETURNS_LIMIT);
+  since: string,
+): Promise<{ rows: CloudReturnRow[]; bytes: number; checkpointAt: string }> {
+  const { data, error } = await supabase!
+    .from("sale_returns")
+    .select(SALE_RETURNS_SELECT)
+    .eq("shop_id", ctx.shopId)
+    .gt("updated_at", since)
+    .order("updated_at", { ascending: true })
+    .limit(INCREMENTAL_RETURNS_LIMIT);
 
   if (error) {
     if (isMissingTableError(error)) {
-      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
+      return { rows: [], bytes: 0, checkpointAt: since };
     }
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseReturnRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
-  return {
-    rows,
-    bytes: estimatePayloadBytes(raw),
-    checkpointAt,
-    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
-  };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
+  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
 }
 
 async function pullReturnsFull(ctx: ShopCtx): Promise<{ returnRows: CloudReturnRow[]; bytes: number }> {
@@ -3270,7 +2290,7 @@ async function pullReturnsIncremental(
 ): Promise<{ returnRows: CloudReturnRow[]; bytes: number; checkpointAt: string }> {
   const returnRows: CloudReturnRow[] = [];
   let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
+  let cursor = since;
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullReturnsPage(ctx, cursor);
@@ -3279,86 +2299,14 @@ async function pullReturnsIncremental(
     checkpointAt = pageResult.checkpointAt;
     returnRows.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_RETURNS_LIMIT) break;
-    cursor = pageResult.nextCursor;
+    cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     returnRows,
     bytes,
-    checkpointAt: serverCheckpoint(since, checkpointAt),
-  };
-}
-
-function parseVoidRows(rows: Record<string, unknown>[]): CloudVoidRow[] {
-  const out: CloudVoidRow[] = [];
-  for (const row of rows) {
-    const parsed = rowToVoidRecord(row);
-    if (parsed) out.push(parsed);
-  }
-  return out;
-}
-
-async function pullVoidsPage(
-  ctx: ShopCtx,
-  since: string | IncrementalKeyset,
-): Promise<{ rows: CloudVoidRow[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
-  const cursor = asIncrementalKeyset(since);
-  const { data, error } = await applyIncrementalKeyset(
-    supabase!.from("sale_voids").select(SALE_VOIDS_SELECT).eq("shop_id", ctx.shopId),
-    "updated_at",
-    cursor,
-  ).limit(INCREMENTAL_RETURNS_LIMIT);
-
-  if (error) {
-    if (isMissingTableError(error)) {
-      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
-    }
-    throw error;
-  }
-  const raw = (data ?? []) as Record<string, unknown>[];
-  const rows = parseVoidRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
-  return {
-    rows,
-    bytes: estimatePayloadBytes(raw),
-    checkpointAt,
-    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
-  };
-}
-
-async function pullVoidsFull(ctx: ShopCtx): Promise<{ voidRows: CloudVoidRow[]; bytes: number }> {
-  const result = await pullCursorUntilExhausted({
-    initialCursor: new Date(0).toISOString(),
-    pageSizeHint: INCREMENTAL_RETURNS_LIMIT,
-    pullPage: (cursor) => pullVoidsPage(ctx, cursor),
-  });
-  return { voidRows: result.rows, bytes: result.bytes };
-}
-
-async function pullVoidsIncremental(
-  ctx: ShopCtx,
-  since: string,
-): Promise<{ voidRows: CloudVoidRow[]; bytes: number; checkpointAt: string }> {
-  const voidRows: CloudVoidRow[] = [];
-  let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
-  let checkpointAt = since;
-  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const pageResult = await pullVoidsPage(ctx, cursor);
-    bytes += pageResult.bytes;
-    if (pageResult.rows.length === 0) break;
-    checkpointAt = pageResult.checkpointAt;
-    voidRows.push(...pageResult.rows);
-    if (pageResult.rows.length < INCREMENTAL_RETURNS_LIMIT) break;
-    cursor = pageResult.nextCursor;
-    const { yieldUiTick } = await import("../lib/uiYield");
-    await yieldUiTick();
-  }
-  return {
-    voidRows,
-    bytes,
-    checkpointAt: serverCheckpoint(since, checkpointAt),
+    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
   };
 }
 
@@ -3391,30 +2339,24 @@ function parseSupplierPaymentRows(rows: Record<string, unknown>[]): SupplierPaym
 
 async function pullPurchasesPage(
   ctx: ShopCtx,
-  since: string | IncrementalKeyset,
-): Promise<{ rows: CloudPurchaseRow[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
-  const cursor = asIncrementalKeyset(since);
-  const { data, error } = await applyIncrementalKeyset(
-    supabase!.from("shop_purchases").select(SHOP_PURCHASES_SELECT).eq("shop_id", ctx.shopId),
-    "updated_at",
-    cursor,
-  ).limit(INCREMENTAL_PURCHASES_LIMIT);
+  since: string,
+): Promise<{ rows: CloudPurchaseRow[]; bytes: number; checkpointAt: string }> {
+  const { data, error } = await supabase!
+    .from("shop_purchases")
+    .select(SHOP_PURCHASES_SELECT)
+    .eq("shop_id", ctx.shopId)
+    .gt("updated_at", since)
+    .order("updated_at", { ascending: true })
+    .limit(INCREMENTAL_PURCHASES_LIMIT);
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
-    }
+    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parsePurchaseRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
-  return {
-    rows,
-    bytes: estimatePayloadBytes(raw),
-    checkpointAt,
-    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
-  };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
+  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
 }
 
 async function pullPurchasesFull(ctx: ShopCtx): Promise<{ purchaseRows: CloudPurchaseRow[]; bytes: number }> {
@@ -3432,7 +2374,7 @@ async function pullPurchasesIncremental(
 ): Promise<{ purchaseRows: CloudPurchaseRow[]; bytes: number; checkpointAt: string }> {
   const purchaseRows: CloudPurchaseRow[] = [];
   let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
+  let cursor = since;
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullPurchasesPage(ctx, cursor);
@@ -3441,43 +2383,37 @@ async function pullPurchasesIncremental(
     checkpointAt = pageResult.checkpointAt;
     purchaseRows.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_PURCHASES_LIMIT) break;
-    cursor = pageResult.nextCursor;
+    cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     purchaseRows,
     bytes,
-    checkpointAt: serverCheckpoint(since, checkpointAt),
+    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
   };
 }
 
 async function pullSuppliersPage(
   ctx: ShopCtx,
-  since: string | IncrementalKeyset,
-): Promise<{ rows: CloudSupplierRow[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
-  const cursor = asIncrementalKeyset(since);
-  const { data, error } = await applyIncrementalKeyset(
-    supabase!.from("shop_suppliers").select(SHOP_SUPPLIERS_SELECT).eq("shop_id", ctx.shopId),
-    "updated_at",
-    cursor,
-  ).limit(INCREMENTAL_SUPPLIERS_LIMIT);
+  since: string,
+): Promise<{ rows: CloudSupplierRow[]; bytes: number; checkpointAt: string }> {
+  const { data, error } = await supabase!
+    .from("shop_suppliers")
+    .select(SHOP_SUPPLIERS_SELECT)
+    .eq("shop_id", ctx.shopId)
+    .gt("updated_at", since)
+    .order("updated_at", { ascending: true })
+    .limit(INCREMENTAL_SUPPLIERS_LIMIT);
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
-    }
+    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseSupplierRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
-  return {
-    rows,
-    bytes: estimatePayloadBytes(raw),
-    checkpointAt,
-    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
-  };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
+  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
 }
 
 async function pullSuppliersFull(ctx: ShopCtx): Promise<{ supplierRows: CloudSupplierRow[]; bytes: number }> {
@@ -3495,7 +2431,7 @@ async function pullSuppliersIncremental(
 ): Promise<{ supplierRows: CloudSupplierRow[]; bytes: number; checkpointAt: string }> {
   const supplierRows: CloudSupplierRow[] = [];
   let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
+  let cursor = since;
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullSuppliersPage(ctx, cursor);
@@ -3504,43 +2440,37 @@ async function pullSuppliersIncremental(
     checkpointAt = pageResult.checkpointAt;
     supplierRows.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_SUPPLIERS_LIMIT) break;
-    cursor = pageResult.nextCursor;
+    cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     supplierRows,
     bytes,
-    checkpointAt: serverCheckpoint(since, checkpointAt),
+    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
   };
 }
 
 async function pullSupplierPaymentsPage(
   ctx: ShopCtx,
-  since: string | IncrementalKeyset,
-): Promise<{ rows: SupplierPayment[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
-  const cursor = asIncrementalKeyset(since);
-  const { data, error } = await applyIncrementalKeyset(
-    supabase!.from("shop_supplier_payments").select(SHOP_SUPPLIER_PAYMENTS_SELECT).eq("shop_id", ctx.shopId),
-    "updated_at",
-    cursor,
-  ).limit(INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT);
+  since: string,
+): Promise<{ rows: SupplierPayment[]; bytes: number; checkpointAt: string }> {
+  const { data, error } = await supabase!
+    .from("shop_supplier_payments")
+    .select(SHOP_SUPPLIER_PAYMENTS_SELECT)
+    .eq("shop_id", ctx.shopId)
+    .gt("updated_at", since)
+    .order("updated_at", { ascending: true })
+    .limit(INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT);
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
-    }
+    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseSupplierPaymentRows(raw);
-  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, cursor.at) : cursor.at;
-  return {
-    rows,
-    bytes: estimatePayloadBytes(raw),
-    checkpointAt,
-    nextCursor: keysetFromLastRow(raw, "updated_at", cursor),
-  };
+  const checkpointAt = raw.length > 0 ? maxRowUpdatedAt(raw, since) : since;
+  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
 }
 
 async function pullSupplierPaymentsFull(
@@ -3560,7 +2490,7 @@ async function pullSupplierPaymentsIncremental(
 ): Promise<{ supplierPayments: SupplierPayment[]; bytes: number; checkpointAt: string }> {
   const supplierPayments: SupplierPayment[] = [];
   let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
+  let cursor = since;
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullSupplierPaymentsPage(ctx, cursor);
@@ -3569,14 +2499,14 @@ async function pullSupplierPaymentsIncremental(
     checkpointAt = pageResult.checkpointAt;
     supplierPayments.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT) break;
-    cursor = pageResult.nextCursor;
+    cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     supplierPayments,
     bytes,
-    checkpointAt: serverCheckpoint(since, checkpointAt),
+    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
   };
 }
 
@@ -3590,43 +2520,33 @@ function maxDebtPaymentCreatedAt(rows: Record<string, unknown>[], since: string)
 
 async function pullDebtPaymentsPage(
   ctx: ShopCtx,
-  since: string | IncrementalKeyset,
-): Promise<{ rows: DebtPayment[]; bytes: number; checkpointAt: string; nextCursor: IncrementalKeyset }> {
-  const cursor = asIncrementalKeyset(since);
-  const { data, error } = await applyIncrementalKeyset(
-    supabase!.from("customer_debt_payments").select(CUSTOMER_DEBT_PAYMENTS_SELECT).eq("shop_id", ctx.shopId),
-    "created_at",
-    cursor,
-  ).limit(INCREMENTAL_DEBT_PAYMENTS_LIMIT);
+  since: string,
+): Promise<{ rows: DebtPayment[]; bytes: number; checkpointAt: string }> {
+  const { data, error } = await supabase!
+    .from("customer_debt_payments")
+    .select(CUSTOMER_DEBT_PAYMENTS_SELECT)
+    .eq("shop_id", ctx.shopId)
+    .gt("created_at", since)
+    .order("created_at", { ascending: true })
+    .limit(INCREMENTAL_DEBT_PAYMENTS_LIMIT);
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return { rows: [], bytes: 0, checkpointAt: cursor.at, nextCursor: cursor };
-    }
+    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
     throw error;
   }
   const raw = (data ?? []) as Record<string, unknown>[];
   const rows = parseDebtPaymentRows(raw);
-  const checkpointAt = raw.length > 0 ? maxDebtPaymentCreatedAt(raw, cursor.at) : cursor.at;
-  return {
-    rows,
-    bytes: estimatePayloadBytes(raw),
-    checkpointAt,
-    nextCursor: keysetFromLastRow(raw, "created_at", cursor),
-  };
+  const checkpointAt = raw.length > 0 ? maxDebtPaymentCreatedAt(raw, since) : since;
+  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
 }
 
-async function pullDebtPaymentsFull(
-  ctx: ShopCtx,
-): Promise<{ debtPayments: DebtPayment[]; bytes: number; checkpointAt: string }> {
+async function pullDebtPaymentsFull(ctx: ShopCtx): Promise<{ debtPayments: DebtPayment[]; bytes: number }> {
   const result = await pullCursorUntilExhausted({
     initialCursor: new Date(0).toISOString(),
     pageSizeHint: INCREMENTAL_DEBT_PAYMENTS_LIMIT,
     pullPage: (cursor) => pullDebtPaymentsPage(ctx, cursor),
   });
-  // WAKA-05: a full pull settles its cursor on the newest `created_at` the
-  // server actually returned, not on the local clock.
-  return { debtPayments: result.rows, bytes: result.bytes, checkpointAt: result.checkpointAt };
+  return { debtPayments: result.rows, bytes: result.bytes };
 }
 
 async function pullDebtPaymentsIncremental(
@@ -3635,7 +2555,7 @@ async function pullDebtPaymentsIncremental(
 ): Promise<{ debtPayments: DebtPayment[]; bytes: number; checkpointAt: string }> {
   const debtPayments: DebtPayment[] = [];
   let bytes = 0;
-  let cursor: IncrementalKeyset = incrementalKeysetFromSince(since);
+  let cursor = since;
   let checkpointAt = since;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const pageResult = await pullDebtPaymentsPage(ctx, cursor);
@@ -3644,14 +2564,14 @@ async function pullDebtPaymentsIncremental(
     checkpointAt = pageResult.checkpointAt;
     debtPayments.push(...pageResult.rows);
     if (pageResult.rows.length < INCREMENTAL_DEBT_PAYMENTS_LIMIT) break;
-    cursor = pageResult.nextCursor;
+    cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
   return {
     debtPayments,
     bytes,
-    checkpointAt: serverCheckpoint(since, checkpointAt),
+    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
   };
 }
 
@@ -3664,7 +2584,7 @@ export async function pullDebtPayments(opts?: {
   const cp = readSyncCheckpoints();
   if (opts?.forceFull === true || !cp.bootstrapComplete) {
     const full = await pullDebtPaymentsFull(ctx);
-    return { debtPayments: full.debtPayments, checkpointAt: full.checkpointAt };
+    return { debtPayments: full.debtPayments, checkpointAt: new Date().toISOString() };
   }
   const since = cp.lastDebtPaymentsSyncAt ?? new Date(0).toISOString();
   const inc = await pullDebtPaymentsIncremental(ctx, since);
@@ -3705,10 +2625,6 @@ export async function pullShopDataFromCloud(opts?: {
       ? "full"
       : "incremental";
 
-  // WAKA-05: one server clock, taken before the full download so rows written
-  // during the pull stay ahead of the cursor and are picked up incrementally.
-  const bootstrapServerNow = mode === "full" ? await fetchShopServerNow() : null;
-
   const cp = readSyncCheckpoints();
   let products: Product[] = [];
   let customers: Customer[] = [];
@@ -3722,10 +2638,7 @@ export async function pullShopDataFromCloud(opts?: {
   let shifts: ShiftRecord[] = [];
   let dayCloses: DayCloseSummary[] = [];
   let stockMovements: StockMovement[] = [];
-  let catalog: CatalogCloudDocument | null = null;
-  let shopPolicy: ShopPolicyCloudDocument | null = null;
   let returnCloudRows: CloudReturnRow[] = [];
-  let voidCloudRows: CloudVoidRow[] = [];
   let purchaseCloudRows: CloudPurchaseRow[] = [];
   let supplierCloudRows: CloudSupplierRow[] = [];
   let supplierPayments: SupplierPayment[] = [];
@@ -3743,9 +2656,7 @@ export async function pullShopDataFromCloud(opts?: {
 
   const entityErrors: Record<string, string> = {};
   let recoveredAuditLogs: AuditLogEntry[] = [];
-  let pulledAuditLogs: AuditLogEntry[] = [];
   const pulledEntities: IncrementalPullEntity[] = [];
-  let productCostAuthorityRefresh = false;
 
   if (mode === "full") {
     const p = await pullEntitySafe("products", entityErrors, () => pullProductsFull(ctx));
@@ -3786,11 +2697,6 @@ export async function pullShopDataFromCloud(opts?: {
       returnCount = retFull.returnRows.length;
       payloadBytes += retFull.bytes;
       opts?.onRecoveryStep?.("returns");
-    }
-    const voidFull = await pullEntitySafe("returns", entityErrors, () => pullVoidsFull(ctx));
-    if (voidFull) {
-      voidCloudRows = voidFull.voidRows;
-      payloadBytes += voidFull.bytes;
     }
 
     const purFull = await pullEntitySafe("purchases", entityErrors, () => pullPurchasesFull(ctx));
@@ -3871,20 +2777,7 @@ export async function pullShopDataFromCloud(opts?: {
       payloadBytes += smFull.bytes;
     }
 
-    const catFull = await pullEntitySafe("catalog", entityErrors, () => pullCatalogFromRpc(ctx, null));
-    if (catFull) {
-      catalog = catFull.document;
-      payloadBytes += catFull.bytes;
-    }
-
-    const policyFull = await pullEntitySafe("shop_policy", entityErrors, () => pullShopPolicyFromRpc(ctx, null));
-    if (policyFull) {
-      shopPolicy = policyFull.document;
-      payloadBytes += policyFull.bytes;
-    }
-
     for (const entity of ALL_INCREMENTAL_PULL_ENTITIES) {
-      if (entity === "audit_logs") continue;
       if (!entityErrors[entity]) pulledEntities.push(entity);
     }
   } else {
@@ -3904,9 +2797,6 @@ export async function pullShopDataFromCloud(opts?: {
     const sinceShifts = cp.lastShiftsSyncAt ?? new Date(0).toISOString();
     const sinceDayCloses = cp.lastDayClosesSyncAt ?? new Date(0).toISOString();
     const sinceStockMovements = cp.lastStockMovementsSyncAt ?? new Date(0).toISOString();
-    const sinceCatalog = cp.lastCatalogSyncAt ?? new Date(0).toISOString();
-    const sinceShopPolicy = cp.lastShopPolicySyncAt ?? new Date(0).toISOString();
-    const sinceAuditLogs = cp.lastAuditLogsSyncAt ?? new Date(0).toISOString();
 
     let p: Awaited<ReturnType<typeof pullProductsIncremental>> | undefined;
     let c: Awaited<ReturnType<typeof pullCustomersIncremental>> | undefined;
@@ -3923,9 +2813,6 @@ export async function pullShopDataFromCloud(opts?: {
     let sh: Awaited<ReturnType<typeof pullShiftsFromRpc>> | undefined;
     let dc: Awaited<ReturnType<typeof pullDayClosesFromRpc>> | undefined;
     let sm: Awaited<ReturnType<typeof pullStockMovementsIncremental>> | undefined;
-    let cat: Awaited<ReturnType<typeof pullCatalogFromRpc>> | undefined;
-    let pol: Awaited<ReturnType<typeof pullShopPolicyFromRpc>> | undefined;
-    let al: Awaited<ReturnType<typeof pullAuditLogsFromCloudIncremental>> | undefined;
 
     const jobs: Array<{ entity: IncrementalPullEntity; run: () => Promise<void> }> = [];
 
@@ -3933,22 +2820,8 @@ export async function pullShopDataFromCloud(opts?: {
       jobs.push({
         entity: "products",
         run: async () => {
-          const refreshCatalog = needsProductCostAuthorityRefresh();
-          p = await pullEntitySafe("products", entityErrors, async () => {
-            if (refreshCatalog) {
-              const full = await pullProductsFull(ctx);
-              return {
-                products: full.products,
-                deletedIds: full.deletedIds,
-                bytes: full.bytes,
-                // WAKA-05: server-derived, not `Date.now()`.
-                checkpointAt: serverCheckpoint(sinceProducts, full.checkpointAt),
-              };
-            }
-            return pullProductsIncremental(ctx, sinceProducts);
-          });
+          p = await pullEntitySafe("products", entityErrors, () => pullProductsIncremental(ctx, sinceProducts));
           if (!p) return;
-          productCostAuthorityRefresh = refreshCatalog;
           products = p.products;
           deletedProductIds = p.deletedIds;
           pulledEntities.push("products");
@@ -4002,17 +2875,6 @@ export async function pullShopDataFromCloud(opts?: {
           if (!ret) return;
           returnCloudRows = ret.returnRows;
           returnCount = ret.returnRows.length;
-          const voidInc = await pullEntitySafe("returns", entityErrors, () =>
-            pullVoidsIncremental(ctx, sinceReturns),
-          );
-          if (voidInc) {
-            voidCloudRows = voidInc.voidRows;
-            if (voidInc.checkpointAt > (ret.checkpointAt ?? sinceReturns)) {
-              ret = { ...ret, checkpointAt: voidInc.checkpointAt, bytes: ret.bytes + voidInc.bytes };
-            } else {
-              ret = { ...ret, bytes: ret.bytes + voidInc.bytes };
-            }
-          }
           pulledEntities.push("returns");
         },
       });
@@ -4144,41 +3006,6 @@ export async function pullShopDataFromCloud(opts?: {
         },
       });
     }
-    if (wanted.has("catalog")) {
-      jobs.push({
-        entity: "catalog",
-        run: async () => {
-          cat = await pullEntitySafe("catalog", entityErrors, () => pullCatalogFromRpc(ctx, sinceCatalog));
-          if (!cat) return;
-          catalog = cat.document;
-          pulledEntities.push("catalog");
-        },
-      });
-    }
-    if (wanted.has("shop_policy")) {
-      jobs.push({
-        entity: "shop_policy",
-        run: async () => {
-          pol = await pullEntitySafe("shop_policy", entityErrors, () => pullShopPolicyFromRpc(ctx, sinceShopPolicy));
-          if (!pol) return;
-          shopPolicy = pol.document;
-          pulledEntities.push("shop_policy");
-        },
-      });
-    }
-    if (wanted.has("audit_logs")) {
-      jobs.push({
-        entity: "audit_logs",
-        run: async () => {
-          al = await pullEntitySafe("audit_logs", entityErrors, () =>
-            pullAuditLogsFromCloudIncremental(ctx.shopId, sinceAuditLogs),
-          );
-          if (!al) return;
-          pulledAuditLogs = al.entries;
-          pulledEntities.push("audit_logs");
-        },
-      });
-    }
 
     await mapPool(jobs, SYNC_INCREMENTAL_PULL_CONCURRENCY, async (job) => {
       await job.run();
@@ -4200,10 +3027,7 @@ export async function pullShopDataFromCloud(opts?: {
       (ics?.bytes ?? 0) +
       (sh?.bytes ?? 0) +
       (dc?.bytes ?? 0) +
-      (sm?.bytes ?? 0) +
-      (cat?.bytes ?? 0) +
-      (pol?.bytes ?? 0) +
-      (al ? al.entries.reduce((n, e) => n + (e.payloadSummary?.length ?? 0) + 64, 0) : 0);
+      (sm?.bytes ?? 0);
 
     pullCheckpoints = {
       salesAt: s?.checkpointAt ?? sinceSales,
@@ -4221,31 +3045,32 @@ export async function pullShopDataFromCloud(opts?: {
       shiftsAt: sh?.checkpointAt ?? sinceShifts,
       dayClosesAt: dc?.checkpointAt ?? sinceDayCloses,
       stockMovementsAt: sm?.checkpointAt ?? sinceStockMovements,
-      catalogAt: cat?.checkpointAt ?? sinceCatalog,
-      shopPolicyAt: pol?.checkpointAt ?? sinceShopPolicy,
-      auditLogsAt: al?.checkpointAt ?? sinceAuditLogs,
     };
   }
 
-  // Full unlock pull still skips audit history (recovery/certification). Incremental sync
-  // pulls shop-scoped audit_logs into pulledAuditLogs → active auditLogs.
+  // Audit logs are deferred to background certification (non-blocking for POS unlock).
 
   recordEntityPullErrors(entityErrors);
 
-  const pulledAt = new Date().toISOString();
-  publishShopSyncHealth({
-    shopId: ctx.shopId,
-    lastPullAt: pulledAt,
-    includePendingOutbound: false,
-  });
+  void supabase
+    .from("sync_health")
+    .upsert(
+      {
+        shop_id: ctx.shopId,
+        last_pull_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "shop_id" },
+    )
+    .then(() => undefined);
 
+  const pulledAt = new Date().toISOString();
   const hasPartialIssue = salesTruncated || Object.keys(entityErrors).length > 0;
   writeSyncHealthMeta({
+    lastSuccessAt: pulledAt,
     lastPullAt: pulledAt,
     lastIssueCode: hasPartialIssue ? "partial" : "none",
     lastIssueAt: hasPartialIssue ? pulledAt : null,
-    entityPullErrors: entityErrors,
-    ...(hasPartialIssue ? {} : { lastSuccessAt: pulledAt }),
   });
 
   const stats: CloudPullStats = {
@@ -4267,7 +3092,6 @@ export async function pullShopDataFromCloud(opts?: {
     stockMovements: stockMovementCount,
     entityErrors: Object.keys(entityErrors).length > 0 ? entityErrors : undefined,
     partialSuccess: Object.keys(entityErrors).length > 0,
-    productCostAuthorityRefresh: mode === "full" || productCostAuthorityRefresh,
   };
 
   const { isDiagnosticsEnabled, recordCloudPullStats } = await import("../lib/stabilityDiagnostics");
@@ -4280,7 +3104,6 @@ export async function pullShopDataFromCloud(opts?: {
     debtPayments,
     returnRecords: returnCloudRows.map((r) => r.record),
     returnCloudRows,
-    voidCloudRows,
     purchases: purchaseCloudRows.map((r) => r.record),
     purchaseCloudRows,
     supplierCloudRows,
@@ -4292,15 +3115,11 @@ export async function pullShopDataFromCloud(opts?: {
     shifts,
     dayCloses,
     stockMovements,
-    catalog,
-    shopPolicy,
     deletedProductIds,
     voidedSaleIds,
     stats,
     checkpoints: pullCheckpoints,
-    bootstrapServerNow: bootstrapServerNow ?? undefined,
     recoveredAuditLogs: recoveredAuditLogs.length > 0 ? recoveredAuditLogs : undefined,
-    pulledAuditLogs: pulledAuditLogs.length > 0 ? pulledAuditLogs : undefined,
     pulledEntities,
   };
 }
@@ -4346,25 +3165,6 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       },
     });
     if (!storeHasCoreRecoveryData()) {
-      // Admin-reset safety net: zero products/sales/customers after a gated
-      // recovery pull is NOT a broken recovery when this shop has an
-      // outstanding admin force-full-resync signal — it is the correct,
-      // expected result of a legitimate reset. Without this check, a device
-      // recovering right after a shop reset deterministically throws here on
-      // every single retry (the shop really is empty), leaving it stuck on
-      // the "Restoring your business…" screen forever: Retry just repeats
-      // the same failure, and Continue Offline is unavailable because the
-      // device's local cache is empty too (that's why it needed recovery in
-      // the first place). Fails open (falls through to the original throw)
-      // if the signal lookup itself can't be confirmed — same conservative
-      // default as before this check existed.
-      const ctx = await resolveShopCtx();
-      if (ctx) {
-        const { hasUnacknowledgedForceFullResync } = await import("../lib/shopRecoverySignals");
-        if (await hasUnacknowledgedForceFullResync(ctx.shopId).catch(() => false)) {
-          return;
-        }
-      }
       logRecoveryDiagnosticEvent("merge_produced_empty_store");
       throw new Error(MERGE_PRODUCED_EMPTY_STORE_ERROR);
     }
@@ -4394,19 +3194,6 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     recordCheckpointDuration(performance.now() - checkpointStarted);
   });
   if (!cloud) return failMerge("cloud_pull_failed");
-  // WAKA-09 — a recovery/full pull that failed to download sales must not be
-  // treated as a successful hydration. The void-tombstone query lives on this
-  // path; claiming success here left local copies of voided sales in place.
-  if (opts?.cloudRecovery && cloud.stats.entityErrors?.sales) {
-    return failMerge("cloud_pull_entity_failed");
-  }
-
-  const noteProductCostAuthorityRefresh = () => {
-    if (cloud.stats.entityErrors?.products) return;
-    if (cloud.stats.mode === "full" || cloud.stats.productCostAuthorityRefresh) {
-      markProductCostAuthorityRefreshDone();
-    }
-  };
 
   const state = usePosStore.getState();
   if (!state._hydrated) return failMerge("store_not_hydrated");
@@ -4416,7 +3203,6 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     cloud.sales.length > 0 ||
     cloud.customers.length > 0 ||
     cloud.returnRecords.length > 0 ||
-    (cloud.voidCloudRows?.length ?? 0) > 0 ||
     cloud.purchaseCloudRows.length > 0 ||
     cloud.supplierCloudRows.length > 0 ||
     cloud.supplierPayments.length > 0 ||
@@ -4428,11 +3214,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     cloud.dayCloses.length > 0 ||
     cloud.stockMovements.length > 0 ||
     cloud.deletedProductIds.length > 0 ||
-    cloud.voidedSaleIds.length > 0 ||
-    Boolean(cloud.catalog) ||
-    cloud.pulledEntities.includes("catalog") ||
-    (cloud.shopPolicy != null && cloud.shopPolicy.empty !== true) ||
-    cloud.pulledEntities.includes("shop_policy");
+    cloud.voidedSaleIds.length > 0;
   const localEmpty =
     state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
 
@@ -4441,38 +3223,18 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       const { storeHasCoreRecoveryData } = await import("../lib/recoveryHydration");
       if (opts?.afterSnapshotRestore && storeHasCoreRecoveryData()) {
         await assertCloudRecoveryStoreHydrated();
-        noteProductCostAuthorityRefresh();
         return true;
       }
       const { logRecoveryDiagnosticEvent } = await import("../lib/cloudRecoverySession");
       logRecoveryDiagnosticEvent("merge_produced_empty_store");
       return failMerge("merge_produced_empty_store");
     }
-    if (cloud.pulledAuditLogs?.length) {
-      const mergedAudits = applyNormalSyncAuditPull(
-        state.auditLogs,
-        state.archivedAuditLogs,
-        cloud.pulledAuditLogs,
-      );
-      if (mergedAudits.added > 0) {
-        usePosStore.setState({
-          auditLogs: mergedAudits.auditLogs,
-          archivedAuditLogs: mergedAudits.archivedAuditLogs,
-        });
-        const { flushIncrementalPersist } = await import("./incrementalPersist");
-        await flushIncrementalPersist(state, usePosStore.getState());
-      }
-    }
-    if (cloud.stats.mode === "full") {
-      if (shouldMarkBootstrap && cloud.bootstrapServerNow && !cloud.stats.entityErrors?.sales) {
-        markBootstrapSyncComplete(cloud.bootstrapServerNow);
-      }
-    } else {
+    if (cloud.stats.mode === "full" && shouldMarkBootstrap) markBootstrapSyncComplete();
+    else {
       updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
     }
     const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
     if (isDiagnosticsEnabled()) recordSyncDuration(cloud.stats.durationMs);
-    noteProductCostAuthorityRefresh();
     return true;
   }
 
@@ -4512,56 +3274,38 @@ export async function pullCloudAndMergeIntoStore(opts?: {
         ? mergeStockMovementsFromCloudPull([], cloud.stockMovements)
         : state.stockMovements;
 
-    let recoveredActive = state.auditLogs;
     let archivedAuditLogs = state.archivedAuditLogs;
     if (cloud.recoveredAuditLogs?.length) {
       const { mergeAuditLogsFromCloudPull } = await import("../lib/auditCloudSync");
-      const { normalizeDataRetentionPolicy } = await import("../lib/dataRetention");
-      const recovered = mergeAuditLogsFromCloudPull(
+      archivedAuditLogs = mergeAuditLogsFromCloudPull(
         state.auditLogs,
         state.archivedAuditLogs,
         cloud.recoveredAuditLogs,
-        { policy: normalizeDataRetentionPolicy(state.preferences.dataRetentionPolicy) },
-      );
-      recoveredActive = recovered.auditLogs;
-      archivedAuditLogs = recovered.archivedAuditLogs;
+      ).archivedAuditLogs;
     }
-    const pulledActiveAudits = applyNormalSyncAuditPull(
-      recoveredActive,
-      archivedAuditLogs,
-      cloud.pulledAuditLogs ?? [],
-    );
 
     await applyRestoredSnapshotFromBackup(
       {
       products: cloud.products,
       customers,
-      sales: absorbCloudSaleAdjustmentLedgers(
-        cloud.sales,
-        mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows),
-        mergeVoidRecordsForRecovery(state.voidRecords, cloud.voidCloudRows ?? []),
-      ),
-      preferences: mergeShopPolicyPreferences(
-        mergeCatalogPreferences({ ...state.preferences, shifts: mergedShifts }, cloud.catalog),
-        cloud.shopPolicy,
-        getActiveShopId(),
-      ),
+      sales: cloud.sales,
+      preferences: { ...state.preferences, shifts: mergedShifts },
       debtPayments,
       dayCloses: mergedDayCloses,
-      auditLogs: pulledActiveAudits.auditLogs,
+      auditLogs: state.auditLogs,
       suppliers: purchaseRecovery.suppliers,
       purchases: purchaseRecovery.purchases,
       supplierPayments: purchaseRecovery.supplierPayments,
       stockMovements: mergedStockMovements,
-      voidRecords: mergeVoidRecordsForRecovery(state.voidRecords, cloud.voidCloudRows ?? []),
-      returnRecords: mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows),
+      voidRecords: state.voidRecords,
+      returnRecords: mergeReturnRecordsForRecovery([], cloud.returnCloudRows),
       cashExpenses: cloud.cashExpenses.length > 0 ? cloud.cashExpenses : state.cashExpenses,
       cashDrawerAdjustments:
         cloud.cashDrawerAdjustments.length > 0 ? cloud.cashDrawerAdjustments : state.cashDrawerAdjustments,
       dayDrawerOpens: mergedDayDrawerOpens,
       inventoryCountSessions: mergedInventoryCounts,
       archivedSales: state.archivedSales,
-      archivedAuditLogs: pulledActiveAudits.archivedAuditLogs,
+      archivedAuditLogs,
       archivedDayCloses: state.archivedDayCloses,
       archivedVoidRecords: state.archivedVoidRecords,
       archivedReturnRecords: state.archivedReturnRecords,
@@ -4575,18 +3319,14 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       cloudRecovery: opts?.cloudRecovery,
       skipEntityMigration: opts?.cloudRecovery === true,
     });
-    if (shouldMarkBootstrap && cloud.bootstrapServerNow && !cloud.stats.entityErrors?.sales) {
-      markBootstrapSyncComplete(cloud.bootstrapServerNow);
-    }
+    if (shouldMarkBootstrap) markBootstrapSyncComplete();
     runPostSyncDebtValidation({
       customers: usePosStore.getState().customers,
       sales: usePosStore.getState().sales,
       debtPayments: usePosStore.getState().debtPayments,
     });
     const { scheduleShopRecovery: scheduleRecoveryAfterMerge } = await import("../lib/shopRecoveryOrchestration");
-    await scheduleRecoveryAfterMerge("background_sync").catch(
-      ignoreReportedSyncFailure("shop_recovery_schedule_failed"),
-    );
+    await scheduleRecoveryAfterMerge("background_sync").catch(() => undefined);
     const { isDiagnosticsEnabled, recordCloudMergeDuration, recordSyncDuration } = await import(
       "../lib/stabilityDiagnostics",
     );
@@ -4595,124 +3335,49 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       recordSyncDuration(cloud.stats.durationMs);
     }
     await assertCloudRecoveryStoreHydrated();
-    noteProductCostAuthorityRefresh();
     return true;
   }
 
   const { readProductTombstones } = await import("./entityStore");
   const { markProductDeleted } = await import("./incrementalPersist");
-  const { readSyncQueue } = await import("./localDb");
   const tombstones = await readProductTombstones();
   const tombstoneIds = new Set(Object.keys(tombstones));
   for (const id of cloud.deletedProductIds) tombstoneIds.add(id);
 
   const deletedProductSet = new Set(cloud.deletedProductIds);
   const voidedSaleSet = new Set(cloud.voidedSaleIds);
-  const queue = await readSyncQueue();
-  const pendingCatalogIds = pendingProductCatalogIds(queue);
-  const pendingRestockIds = pendingRestockProductIds(queue, [
-    ...state.returnRecords,
-    ...(state.archivedReturnRecords ?? []),
-  ]);
-
-  // Admin-reset safety net: a `mode==="full"` pull with no products-entity
-  // error is, by construction, a complete/untruncated fetch of every active
-  // product this shop has (`pullProductsFull` loops via
-  // `pullOffsetRangeUntilExhausted`, which has no page cap and rethrows on any
-  // fetch error rather than returning a partial result — so "no exception" and
-  // "complete" are the same fact here, unlike the sales full-pull which tracks
-  // `truncated` separately). Mirrors the existing `ledgerAuthoritative` gate
-  // used a few lines below for the customer debt ledger.
-  //
-  // Without this, a hard `DELETE` (e.g. the admin shop-reset RPC) is
-  // invisible to the merge below: the soft-delete (`is_active=false`) query
-  // `pullProductsFull` also runs finds nothing, `deletedProductSet` stays
-  // empty, and a plain id-merge only ever adds/updates — it can never remove
-  // a product the server no longer has. A forced full pull that correctly
-  // finds 0 server products would otherwise leave every stale local product
-  // untouched forever.
-  const productsAuthoritative = cloud.stats.mode === "full" && !cloud.stats.entityErrors?.products;
-  const cloudProductIds = productsAuthoritative ? new Set(cloud.products.map((p) => p.id)) : null;
 
   const products = (
     await mergeByIdChunked(
       state.products.filter((p) => !tombstoneIds.has(p.id) && !deletedProductSet.has(p.id)),
       cloud.products,
-      (a, b) =>
-        mergeProductFromCloudPull(a, b, {
-          pendingLocalCatalog: pendingCatalogIds.has(a.id),
-          pendingLocalRestock: pendingRestockIds.has(a.id),
-        }),
+      (a, b) => mergeProductFromCloudPull(a, b),
       tombstoneIds,
     )
-  )
-    .filter((p) => !deletedProductSet.has(p.id))
-    // Local-only survivors of an authoritative full pull are dropped UNLESS
-    // this device has an unsynced local mutation for them (a genuinely new
-    // or edited product not yet acknowledged by the server must never be
-    // deleted just because the pull predates its push).
-    .filter((p) => !cloudProductIds || cloudProductIds.has(p.id) || pendingCatalogIds.has(p.id));
+  ).filter((p) => !deletedProductSet.has(p.id));
 
-  // Admin-reset safety net: mirrors `productsAuthoritative` for sales. A
-  // complete pull (`mode==="full"`, not truncated, no entityErrors.sales)
-  // makes the server's sale id list authoritative. Without this, a sale the
-  // admin-reset RPC hard-deleted is invisible to `voidedSaleSet` below —
-  // that set is a STATUS tombstone (built from rows the server explicitly
-  // marked void/refunded/cancelled), and a hard-deleted row has no status
-  // left to tombstone — so it survived every merge forever. (Confirmed live:
-  // a shop reset left 8 stale sales in this device's cache, which then got
-  // re-published to `shop_cloud_snapshots` ~95s later.) Reuses the same
-  // `salesTruncated` completeness signal already used for `ledgerAuthoritative`.
-  const salesAuthoritative =
-    cloud.stats.mode === "full" && cloud.stats.salesTruncated !== true && !cloud.stats.entityErrors?.sales;
-  const cloudSaleIds = salesAuthoritative ? new Set(cloud.sales.map((s) => s.id)) : null;
-  const pendingSaleIds = pendingSaleMutationIds(queue);
-
-  const mergedSales = (
-    await mergeByIdChunked(state.sales, cloud.sales, (local, remote) => mergeSaleFromCloudPull(local, remote))
-  ).filter((s) => !cloudSaleIds || cloudSaleIds.has(s.id) || pendingSaleIds.has(s.id));
-  const salesUnfiltered = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
+  const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (local, remote) =>
+    mergeSaleFromCloudPull(local, remote),
+  );
+  const sales = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
 
   const debtPayments = mergeDebtPaymentsFromCloudPull(state.debtPayments, cloud.debtPayments);
-  // R1: a checkpoint or a non-empty local payment list is not proof that this
-  // device holds the customer's full sales + payment history. Only a complete
-  // full pull (no truncated/failed sales or debt-payment pages) may request
-  // ledger overwrite; mergeCustomerFromCloudPull still refuses an incomplete
-  // per-customer subset.
-  const ledgerAuthoritative = salesAuthoritative && !cloud.stats.entityErrors?.debt_payments;
+  const cpBeforeMerge = readSyncCheckpoints();
+  const ledgerAuthoritative =
+    cloud.stats.mode === "full" ||
+    cloud.debtPayments.length > 0 ||
+    cpBeforeMerge.lastDebtPaymentsSyncAt != null ||
+    debtPayments.length > 0;
 
-  // WAKA-01: `sales` (and the return/void records it absorbs) must be declared
-  // before the customer merge, which reads it to reconcile debt balances. The
-  // declaration previously sat ~40 lines below this call, so every steady-state
-  // pull whose local + cloud customer ids intersected hit the temporal dead
-  // zone and threw, silently discarding the whole payload.
-  const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
-  const voidRecords = mergeVoidRecordsForRecovery(state.voidRecords, cloud.voidCloudRows ?? []);
-  const sales = absorbCloudSaleAdjustmentLedgers(
-    salesUnfiltered,
-    [...returnRecords, ...(state.archivedReturnRecords ?? [])],
-    [...voidRecords, ...(state.archivedVoidRecords ?? [])],
+  const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) =>
+    mergeCustomerFromCloudPull(a, b, sales, debtPayments, { ledgerAuthoritative }),
   );
-
-  // Admin-reset safety net: mirrors `productsAuthoritative`/`salesAuthoritative`
-  // for customers. A local-only customer record survives a complete pull
-  // only if this device has an unsynced edit for them (a `"customer"` op
-  // whose payload is a plain profile edit — not a `debt_payment`, which
-  // shares the same outer op kind but has nothing to do with whether the
-  // customer PROFILE row still exists).
-  const customersAuthoritative = cloud.stats.mode === "full" && !cloud.stats.entityErrors?.customers;
-  const cloudCustomerIds = customersAuthoritative ? new Set(cloud.customers.map((c) => c.id)) : null;
-  const pendingCustomerIds = pendingCustomerMutationIds(queue);
-
-  const customers = (
-    await mergeByIdChunked(state.customers, cloud.customers, (a, b) =>
-      mergeCustomerFromCloudPull(a, b, sales, debtPayments, { ledgerAuthoritative }),
-    )
-  ).filter((c) => !cloudCustomerIds || cloudCustomerIds.has(c.id) || pendingCustomerIds.has(c.id));
 
   const mergedCashExpenses =
     cloud.cashExpenses.length > 0
-      ? await mergeByIdChunked(state.cashExpenses, cloud.cashExpenses, newer)
+      ? await mergeByIdChunked(state.cashExpenses, cloud.cashExpenses, (a, b) =>
+          newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
+        )
       : state.cashExpenses;
 
   const mergedCashDrawerAdjustments =
@@ -4745,25 +3410,17 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       ? mergeStockMovementsFromCloudPull(state.stockMovements, cloud.stockMovements)
       : state.stockMovements;
 
-  let recoveredActive = state.auditLogs;
+  const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
+
   let mergedArchivedAuditLogs = state.archivedAuditLogs;
   if (cloud.recoveredAuditLogs?.length) {
     const { mergeAuditLogsFromCloudPull } = await import("../lib/auditCloudSync");
-    const { normalizeDataRetentionPolicy } = await import("../lib/dataRetention");
-    const recovered = mergeAuditLogsFromCloudPull(
+    mergedArchivedAuditLogs = mergeAuditLogsFromCloudPull(
       state.auditLogs,
       state.archivedAuditLogs,
       cloud.recoveredAuditLogs,
-      { policy: normalizeDataRetentionPolicy(state.preferences.dataRetentionPolicy) },
-    );
-    recoveredActive = recovered.auditLogs;
-    mergedArchivedAuditLogs = recovered.archivedAuditLogs;
+    ).archivedAuditLogs;
   }
-  const pulledActiveAudits = applyNormalSyncAuditPull(
-    recoveredActive,
-    mergedArchivedAuditLogs,
-    cloud.pulledAuditLogs ?? [],
-  );
 
   const { suspendStorePersist } = await import("../store/usePosStore");
   const release = suspendStorePersist();
@@ -4783,23 +3440,17 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       inventoryCountSessions: mergedInventoryCounts,
       dayCloses: mergedDayCloses,
       stockMovements: mergedStockMovements,
-      preferences: mergeShopPolicyPreferences(
-        mergeCatalogPreferences({ ...state.preferences, shifts: mergedShifts }, cloud.catalog),
-        cloud.shopPolicy,
-        getActiveShopId(),
-      ),
+      preferences: { ...state.preferences, shifts: mergedShifts },
       returnRecords,
-      voidRecords,
       purchases: purchaseRecovery.purchases,
       suppliers: purchaseRecovery.suppliers,
       supplierPayments: purchaseRecovery.supplierPayments,
-      auditLogs: pulledActiveAudits.auditLogs,
-      archivedAuditLogs: pulledActiveAudits.archivedAuditLogs,
+      archivedAuditLogs: mergedArchivedAuditLogs,
     });
 
     const next = usePosStore.getState();
-    const { flushIncrementalPersist } = await import("./incrementalPersist");
-    await flushIncrementalPersist(state, next);
+    const { flushFullSnapshotPersist } = await import("./incrementalPersist");
+    await flushFullSnapshotPersist(next, { skipLastGood: true });
     runPostSyncDebtValidation({
       customers: next.customers,
       sales: next.sales,
@@ -4816,15 +3467,13 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   await addVoidedSaleTombstones(cloud.voidedSaleIds);
 
   if (cloud.stats.mode === "full") {
-    if (shouldMarkBootstrap && cloud.bootstrapServerNow && !cloud.stats.entityErrors?.sales) {
-      markBootstrapSyncComplete(cloud.bootstrapServerNow);
-    }
+    if (shouldMarkBootstrap) markBootstrapSyncComplete();
   } else {
     updateCheckpointsAfterIncrementalPull(incrementalCheckpointPatch(cloud.pulledEntities, cloud.checkpoints));
   }
 
   const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
-  await scheduleShopRecovery("background_sync").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
+  await scheduleShopRecovery("background_sync").catch(() => undefined);
   if (opts?.cloudRecovery) {
     const { reconcileRecoveryInventoryLedger } = await import("../lib/recoveryInventoryReconciliation");
     const { recordRecoveryIntegrityDiagnostics } = await import("../lib/cloudRecoverySession");
@@ -4856,7 +3505,6 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     recordSyncDuration(cloud.stats.durationMs);
   }
   await assertCloudRecoveryStoreHydrated();
-  noteProductCostAuthorityRefresh();
   return true;
 }
 
@@ -4870,52 +3518,21 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   const ctx = await resolveShopCtx();
   if (!ctx) return { ok: 0, fail: 0 };
 
-  // OBS-1 E — scan push attempt (terminology: scan, not recovery-only).
-  void import("../lib/syncDiagnostics")
-    .then((m) => {
-      try {
-        m.recordPendingSyncScanPushAttempt();
-      } catch {
-        /* isolated */
-      }
-    })
-    .catch(() => {});
-
   const { mapPool } = await import("../lib/asyncPool");
   const { SYNC_SALE_PUSH_CONCURRENCY } = await import("../lib/syncTiming");
 
   let ok = 0;
   let fail = 0;
-  const { shouldSkipPendingClosedDateSync } = await import("../lib/closedBusinessDateSync");
-  const { dateKeyKampala } = await import("../lib/datesUg");
-  const dayCloses = usePosStore.getState().dayCloses;
   const { sales } = usePosStore.getState();
-  const pendingSales = sales.filter(
-    (s) =>
-      s.pendingSync &&
-      !shouldSkipPendingClosedDateSync(dateKeyKampala(s.createdAt), s.lastSyncError, dayCloses),
+  const pendingSales = sales.filter((s) => s.pendingSync);
+  const saleResults = await mapPool(pendingSales, SYNC_SALE_PUSH_CONCURRENCY, async (s) =>
+    pushSaleRowToCloud(s, ctx),
   );
-  const saleResults = await mapPool(pendingSales, SYNC_SALE_PUSH_CONCURRENCY, async (s) => {
-    // OBS-1 D3 — pendingSync-scan sale push attempt (not deduped with other paths).
-    void import("../lib/syncDiagnostics")
-      .then((m) => {
-        try {
-          m.recordSalePushPendingSyncAttempt();
-        } catch {
-          /* isolated */
-        }
-      })
-      .catch(() => {});
-    return pushSaleRowToCloud(s, ctx);
-  });
   ok += saleResults.ok;
   fail += saleResults.fail;
 
   for (const adj of usePosStore.getState().cashDrawerAdjustments) {
     if (!adj.pendingSync) continue;
-    if (shouldSkipPendingClosedDateSync(dateKeyKampala(adj.occurredAt), adj.lastSyncError, dayCloses)) {
-      continue;
-    }
     if (await pushCashDrawerAdjustmentToCloud(adj, ctx)) ok += 1;
     else fail += 1;
   }
@@ -5050,29 +3667,24 @@ async function runIncrementalCloudPull(reason: string, opts?: { force?: boolean 
 }
 
 /** Push pending sales/queue only (fast, for background sync). */
-async function pushShopPendingToCloudInner(opts?: { retryQuarantined?: boolean }): Promise<{
+async function pushShopPendingToCloudInner(): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
-  hadOutboundWork: boolean;
 }> {
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
   } catch {
-    return { push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false };
+    return { push: { ok: 0, fail: 0 }, queueFailed: 0 };
   }
 
   let push = { ok: 0, fail: 0 };
   let queueFailed = 0;
-  let hadOutboundWork = false;
   if (getDeviceOnline()) {
-    const { readSyncQueue } = await import("./localDb");
-    const queueBefore = (await readSyncQueue()).length;
     push = await pushAllPendingToCloud();
     const { flushSyncQueueInner } = await import("./syncEngine");
-    const result = await flushSyncQueueInner(undefined, { retryQuarantined: opts?.retryQuarantined === true });
+    const result = await flushSyncQueueInner();
     queueFailed = result.failed;
-    hadOutboundWork = push.ok > 0 || result.remaining < queueBefore;
     writeSyncHealthMeta({ lastPushAt: new Date().toISOString() });
     const ctx = await resolveShopCtx();
     if (ctx) {
@@ -5080,46 +3692,43 @@ async function pushShopPendingToCloudInner(opts?: { retryQuarantined?: boolean }
       void sendShopPresenceHeartbeat(ctx.shopId);
     }
   }
-  return { push, queueFailed, hadOutboundWork };
+  return { push, queueFailed };
 }
 
-export async function pushShopPendingToCloud(opts?: { retryQuarantined?: boolean }): Promise<{
+export async function pushShopPendingToCloud(): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
-  hadOutboundWork?: boolean;
 }> {
   const { withPushSyncMutex } = await import("../lib/globalSyncMutex");
-  return withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner(opts));
+  return withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner());
 }
 
 /** Pull cloud data, push pending local rows — push and pull run concurrently. */
 async function syncShopWithCloudInner(opts?: {
   pull?: boolean;
   forceFull?: boolean;
-  retryQuarantined?: boolean;
 }): Promise<{
   pulled: boolean;
   push: { ok: number; fail: number };
   queueFailed: number;
-  hadOutboundWork?: boolean;
 }> {
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
   } catch {
-    return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false };
+    return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
   }
 
   if (hasSupabaseConfig && supabase) {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
     if (user && !isSupabaseEmailVerified(user)) {
-      return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false };
+      return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
     }
   }
 
   const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
-  await scheduleShopRecovery("background_sync").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
+  await scheduleShopRecovery("background_sync").catch(() => undefined);
 
   const doPull =
     opts?.pull !== false &&
@@ -5145,38 +3754,26 @@ async function syncShopWithCloudInner(opts?: {
       : Promise.resolve(false);
 
   const pushPromise = getDeviceOnline()
-    ? withPushSyncMutex("pushPending", () =>
-        pushShopPendingToCloudInner({ retryQuarantined: opts?.retryQuarantined === true }),
-      )
-    : Promise.resolve({ push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false });
+    ? withPushSyncMutex("pushPending", () => pushShopPendingToCloudInner())
+    : Promise.resolve({ push: { ok: 0, fail: 0 }, queueFailed: 0 });
 
   const [pulled, pushResult] = await Promise.all([pullPromise, pushPromise]);
 
   if (getDeviceOnline() && pushResult.push.fail === 0) {
     const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
     const { runWhenIdle } = await import("../lib/uiYield");
-    runWhenIdle(
-      () => void uploadShopCloudSnapshot().catch(ignoreReportedSyncFailure("cloud_snapshot_upload_failed")),
-      isNativeApp() ? 15_000 : 4000,
-    );
+    runWhenIdle(() => void uploadShopCloudSnapshot().catch(() => false), isNativeApp() ? 15_000 : 4000);
   }
-  return {
-    pulled,
-    push: pushResult.push,
-    queueFailed: pushResult.queueFailed,
-    hadOutboundWork: pushResult.hadOutboundWork === true,
-  };
+  return { pulled, push: pushResult.push, queueFailed: pushResult.queueFailed };
 }
 
 export async function syncShopWithCloud(opts?: {
   pull?: boolean;
   forceFull?: boolean;
-  retryQuarantined?: boolean;
 }): Promise<{
   pulled: boolean;
   push: { ok: number; fail: number };
   queueFailed: number;
-  hadOutboundWork?: boolean;
 }> {
   const { recordSyncDuration } = await import("../lib/performanceMetrics");
   const started = performance.now();
@@ -5199,12 +3796,10 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
   backgroundSyncTimer = globalThis.setTimeout(() => {
     backgroundSyncTimer = null;
     if (opts?.pull === false) {
-      void pushShopPendingToCloud().catch((err) => recordBackgroundSyncFailure("background_push_failed", err));
+      void pushShopPendingToCloud().catch(() => undefined);
       return;
     }
-    void syncShopWithCloud({ pull: opts?.pull }).catch((err) =>
-      recordBackgroundSyncFailure("background_sync_failed", err),
-    );
+    void syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
   }, delay);
 }
 

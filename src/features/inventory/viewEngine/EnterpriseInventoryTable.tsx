@@ -4,12 +4,12 @@ import clsx from "clsx";
 import type { Language, Product, ShopPreferences } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { formatProductPriceLabel } from "../../../store/usePosStore";
-import { isLowStock } from "../../../lib/sellingEngine";
+import { formatStockLabel, isLowStock } from "../../../lib/sellingEngine";
+import { formatPharmacyStockPrimary, isPharmacyPackagingActive } from "../../../lib/pharmacyPackaging";
 import { normalizedCategoryKey } from "../../../lib/productCategories";
 import { formatMedicineListPrimary } from "../../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../../lib/pharmacy";
-import { resolveStockProductSheetActionIds, StockProductActionSheet } from "../../../components/stock/StockProductActionSheet";
-import { InventoryStockStatus, inventoryStockKind } from "../../../components/inventory/workspace/InventoryStockStatus";
+import { StockProductActionSheet } from "../../../components/stock/StockProductActionSheet";
 import {
   EnterpriseDataTable,
   type EnterpriseDataColumn,
@@ -27,11 +27,9 @@ type Props = {
   sort: InventoryListSortKey;
   onSort: (sort: InventoryListSortKey) => void;
   canAdd: boolean;
-  canEdit?: boolean;
   canRemove: boolean;
   canSell: boolean;
   canRestock: boolean;
-  canSeeCost?: boolean;
   onAction: (product: Product, action: InventoryRowAction) => void;
   onOpenDetail?: (product: Product) => void;
   onVisibleIdsChange?: (ids: string[]) => void;
@@ -53,10 +51,6 @@ function TableRowQuickActions({
   lang,
   product,
   locked,
-  canAdd,
-  canEdit,
-  canRestock,
-  canRemove,
   canSell,
   onAction,
   onOpenDetail,
@@ -64,35 +58,20 @@ function TableRowQuickActions({
   lang: Language;
   product: Product;
   locked: boolean;
-  canAdd: boolean;
-  canEdit: boolean;
-  canRestock: boolean;
-  canRemove: boolean;
   canSell: boolean;
   onAction: (action: InventoryRowAction) => void;
   onOpenDetail?: (product: Product) => void;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
   if (locked) return null;
-  const hasSheetActions = resolveStockProductSheetActionIds({
-    canAdd,
-    canEdit,
-    canRestock,
-    canRemove,
-    canSell,
-  }).length > 0;
   return (
     <div className="hidden items-center gap-0.5 group-hover:flex md:flex">
-      {canEdit ? (
-        <button type="button" title={t(lang, "stockActionEditDetails")} onClick={() => onAction("edit")} className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted">
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
-      {canRestock ? (
-        <button type="button" title={t(lang, "inventoryBulkStock")} onClick={() => onAction("restock")} className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted">
-          <Package className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
+      <button type="button" title={t(lang, "stockActionEditDetails")} onClick={() => onAction("edit")} className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted">
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+      <button type="button" title={t(lang, "inventoryBulkStock")} onClick={() => onAction("restock")} className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted">
+        <Package className="h-3.5 w-3.5" />
+      </button>
       {canSell ? (
         <button type="button" title={t(lang, "stockActionOpenSell")} onClick={() => onAction("sell")} className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted">
           <ShoppingCart className="h-3.5 w-3.5" />
@@ -111,19 +90,16 @@ function TableRowQuickActions({
       >
         <Barcode className="h-3.5 w-3.5" />
       </button>
-      {hasSheetActions ? (
-        <button type="button" title={t(lang, "stockMoreActions")} onClick={() => setMoreOpen(true)} className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted">
-          <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
+      <button type="button" title={t(lang, "stockMoreActions")} onClick={() => setMoreOpen(true)} className="inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg hover:bg-muted">
+        <MoreHorizontal className="h-3.5 w-3.5" />
+      </button>
       <StockProductActionSheet
         lang={lang}
         open={moreOpen}
         productName={product.name}
-        canAdd={canAdd}
-        canEdit={canEdit}
-        canRestock={canRestock}
-        canRemove={canRemove}
+        canAdd
+        canRestock
+        canRemove
         canSell={canSell}
         onClose={() => setMoreOpen(false)}
         onAction={(action) => onAction(action)}
@@ -140,12 +116,7 @@ function EnterpriseInventoryTableInner({
   lockedIds,
   sort,
   onSort,
-  canAdd,
-  canEdit,
-  canRemove,
   canSell,
-  canRestock,
-  canSeeCost = true,
   onAction,
   onOpenDetail,
   onVisibleIdsChange,
@@ -176,11 +147,7 @@ function EnterpriseInventoryTableInner({
         header: t(lang, "inventoryTableProduct"),
         width: "minmax(140px,2fr)",
         sortable: true,
-        cell: (p) => (
-          <span className="inventory-table-product">
-            {pharmacyMode ? formatMedicineListPrimary(p) : p.name}
-          </span>
-        ),
+        cell: (p) => (pharmacyMode ? formatMedicineListPrimary(p) : p.name),
         className: "text-foreground",
       },
       {
@@ -202,19 +169,19 @@ function EnterpriseInventoryTableInner({
         header: t(lang, "inventoryTableStock"),
         width: "minmax(64px,0.6fr)",
         sortable: true,
-        cell: (p) => <InventoryStockStatus product={p} />,
+        cell: (p) => (
+          <span className={clsx("font-bold", isLowStock(p) ? "text-danger" : "text-muted-foreground")}>
+            {isPharmacyPackagingActive(p) ? formatPharmacyStockPrimary(p) : formatStockLabel(p)}
+          </span>
+        ),
       },
-      ...(canSeeCost
-        ? [
-            {
-              id: "cost",
-              header: t(lang, "inventoryTableCost"),
-              width: "minmax(72px,0.7fr)",
-              hideBelow: "xl" as const,
-              cell: (p: Product) => formatCost(p),
-            },
-          ]
-        : []),
+      {
+        id: "cost",
+        header: t(lang, "inventoryTableCost"),
+        width: "minmax(72px,0.7fr)",
+        hideBelow: "xl",
+        cell: (p) => formatCost(p),
+      },
       {
         id: "price",
         header: t(lang, "inventoryTablePrice"),
@@ -225,13 +192,8 @@ function EnterpriseInventoryTableInner({
         id: "status",
         header: t(lang, "inventoryTableStatus"),
         width: "minmax(72px,0.7fr)",
-        cell: (p) => {
-          if (lockedIds.has(p.id)) return t(lang, "productLockedBadge");
-          const kind = inventoryStockKind(p);
-          if (kind === "out") return t(lang, "iwStatOutOfStock");
-          if (kind === "low") return t(lang, "cardLowStock");
-          return "—";
-        },
+        cell: (p) =>
+          lockedIds.has(p.id) ? t(lang, "productLockedBadge") : isLowStock(p) ? t(lang, "cardLowStock") : "—",
       },
       {
         id: "updated",
@@ -242,7 +204,7 @@ function EnterpriseInventoryTableInner({
         cell: (p) => formatUpdated(p),
       },
     ],
-    [lang, pharmacyMode, lockedIds, canSeeCost],
+    [lang, pharmacyMode, lockedIds],
   );
 
   return (
@@ -262,21 +224,13 @@ function EnterpriseInventoryTableInner({
       minWidthPx={980}
       ariaLabel={t(lang, "inventoryTableProduct")}
       getRowClassName={(p) =>
-        clsx(
-          lockedIds.has(p.id) && "opacity-55",
-          !lockedIds.has(p.id) && p.stockOnHand <= 0 && "inventory-row--out",
-          !lockedIds.has(p.id) && isLowStock(p) && p.stockOnHand > 0 && "inventory-row--low",
-        )
+        clsx(lockedIds.has(p.id) && "opacity-55", isLowStock(p) && !lockedIds.has(p.id) && "bg-danger-muted/20")
       }
       rowActions={(p) => (
         <TableRowQuickActions
           lang={lang}
           product={p}
           locked={lockedIds.has(p.id)}
-          canAdd={canAdd}
-          canEdit={canEdit ?? canAdd}
-          canRestock={canRestock}
-          canRemove={canRemove}
           canSell={canSell}
           onAction={(action) => onAction(p, action)}
           onOpenDetail={onOpenDetail}

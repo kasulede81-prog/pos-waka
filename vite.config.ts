@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import { defineConfig, loadEnv } from "vite";
@@ -42,11 +42,6 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "node",
       include: ["src/**/*.test.ts"],
-      // PHASE 0A — `*.offline.test.ts` runs in its own project
-      // (`vitest.offline.config.ts` / `npm run test:offline`) because this
-      // project's setup file globally mocks `src/offline/localDb`, which makes
-      // real IndexedDB and sync-queue behaviour impossible to observe.
-      exclude: ["**/node_modules/**", "**/dist/**", "src/**/*.offline.test.ts"],
       setupFiles: ["src/test/vitest.setup.ts"],
       testTimeout: 15_000,
       hookTimeout: 15_000,
@@ -110,40 +105,18 @@ export default defineConfig(({ mode }) => {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
-          // Plugin default is "index.html". That registers NavigationRoute bound to a
-          // file we no longer precache, so the new SW fails install and Android Chrome
-          // keeps the old cached "Loading…" shell after deploy.
-          navigateFallback: undefined,
-          // Do not precache index.html — a stale shell after deploy 404s hashed JS and
-          // leaves mobile Chrome on the HTML "Loading…" splash forever.
-          globPatterns: ["manifest.webmanifest", "favicon.svg", "icons/icon-192.webp"],
+          globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
+          /** Internal admin bundle is online-only; exclude from SW precache (exceeds 2 MiB default). */
           globIgnores: ["**/internal-admin-*.js"],
+          navigateFallback: "/index.html",
+          navigateFallbackDenylist: [
+            /^\/auth\/callback/,
+            /^\/auth\/recovery/,
+            /^\/reset-password/,
+            /^\/sitemap\.xml$/,
+            /^\/robots\.txt$/,
+          ],
           runtimeCaching: [
-            {
-              urlPattern: ({ request }) => request.mode === "navigate",
-              handler: "NetworkFirst",
-              options: {
-                cacheName: "waka-html-navigations",
-                networkTimeoutSeconds: 8,
-                expiration: { maxEntries: 8, maxAgeSeconds: 60 * 10 },
-              },
-            },
-            {
-              urlPattern: /\/assets\/.+\.(js|css)$/i,
-              handler: "CacheFirst",
-              options: {
-                cacheName: "waka-hashed-assets",
-                expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              },
-            },
-            {
-              urlPattern: /\/assets\/.+\.woff2$/i,
-              handler: "CacheFirst",
-              options: {
-                cacheName: "waka-fonts",
-                expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              },
-            },
             {
               urlPattern: /^https:\/\/.*supabase\.co\/.*/i,
               handler: "NetworkFirst",
@@ -152,20 +125,6 @@ export default defineConfig(({ mode }) => {
           ],
         },
       }),
-      {
-        name: "waka-sw-reload-stale-clients",
-        apply: "build",
-        closeBundle: {
-          sequential: true,
-          order: "post",
-          handler() {
-            const distSw = fileURLToPath(new URL("./dist/sw.js", import.meta.url));
-            const snippet = fileURLToPath(new URL("./src/lib/swReloadStaleClients.js", import.meta.url));
-            if (!existsSync(distSw) || !existsSync(snippet)) return;
-            appendFileSync(distSw, `\n${readFileSync(snippet, "utf8")}\n`);
-          },
-        },
-      },
     ],
   };
 });

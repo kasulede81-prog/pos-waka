@@ -2,15 +2,7 @@ import type { Language } from "../types";
 import { formatDateTimeKampala, REPORT_TIMEZONE } from "./datesUg";
 import { t } from "./i18n";
 
-export type ReportDocumentKind =
-  | "daily"
-  | "x_report"
-  | "cash_position"
-  | "profit"
-  | "monthly"
-  | "customer_debt"
-  | "customer_statement"
-  | "cash_expenses";
+export type ReportDocumentKind = "daily" | "x_report" | "cash_position" | "profit" | "monthly";
 
 export type ReportDocumentStatus = "closed_day" | "open_day" | "operational";
 
@@ -20,24 +12,11 @@ export type ReportDocumentRow = {
   bold?: boolean;
 };
 
-export type ReportDocumentTableColumn = {
-  header: string;
-  /** Fraction of the content width (0–1). */
-  width: number;
-  align?: "left" | "right";
-};
-
-export type ReportDocumentTable = {
-  columns: ReportDocumentTableColumn[];
-  records: string[][];
-};
-
 export type ReportDocumentSection = {
   title?: string;
   /** Live operational detail — must not be presented as the closed ledger. */
   live?: boolean;
   rows: ReportDocumentRow[];
-  table?: ReportDocumentTable;
 };
 
 export type ReportDocumentModel = {
@@ -45,14 +24,11 @@ export type ReportDocumentModel = {
   lang: Language;
   shopName: string;
   organizationName?: string | null;
-  shopAddress?: string | null;
-  shopPhone?: string | null;
   title: string;
   periodLabel: string;
   status: ReportDocumentStatus;
   generatedAtIso: string;
   empty: boolean;
-  emptyMessage?: string;
   sections: ReportDocumentSection[];
 };
 

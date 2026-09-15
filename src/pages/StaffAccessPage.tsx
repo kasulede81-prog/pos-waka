@@ -10,9 +10,8 @@ import { Body } from "../components/enterprise/EnterpriseTypography";
 import { WakaButton } from "../components/ui/wakaPrimitives";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { statusTokens } from "../lib/statusTokens";
-import type { Language, StaffAccount } from "../types";
+import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
-import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { useSubscription } from "../context/SubscriptionContext";
@@ -21,17 +20,12 @@ import { usePosStore } from "../store/usePosStore";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { supabase } from "../lib/supabase";
 import { StaffCreateWizard } from "../components/staff/StaffCreateWizard";
-import { StaffCloudInviteCard } from "../components/staff/StaffCloudInviteCard";
-import { StaffLegacyUpgradeDialog } from "../components/staff/StaffLegacyUpgradeDialog";
 import { StaffTeamList } from "../components/staff/StaffTeamList";
 import { StaffPinResetDialog, StaffPasswordResetDialog } from "../components/auth/StaffCredentialResetDialog";
 import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
 import type { StaffCreateRole } from "../lib/staffRoleCatalog";
-import { listStaffInvitations, type StaffInvitationRow } from "../lib/staffInvite";
-import { resolveShopCtx } from "../offline/cloudSync";
-import { normalizeLinkedAuthUserId } from "../lib/sessionActor";
 
-export function StaffAccessPage({ lang, embedded = false }: { lang: Language; embedded?: boolean }) {
+export function StaffAccessPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
   const canManage = actorHasPermission(actor, "settings.shop");
@@ -52,23 +46,6 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
   const [resetPinStaffId, setResetPinStaffId] = useState<string | null>(null);
   const [resetPasswordStaffId, setResetPasswordStaffId] = useState<string | null>(null);
   const [staffHydrating, setStaffHydrating] = useState(false);
-  const [upgradeStaff, setUpgradeStaff] = useState<StaffAccount | null>(null);
-  const [pendingInvites, setPendingInvites] = useState<StaffInvitationRow[]>([]);
-  const [pendingUpgradeStaffIds, setPendingUpgradeStaffIds] = useState<string[]>([]);
-
-  const refreshPendingInvites = useCallback(async () => {
-    if (authMode !== "supabase" || authOperatorRole(actor) !== "owner") {
-      setPendingInvites([]);
-      return;
-    }
-    const ctx = await resolveShopCtx();
-    if (!ctx) {
-      setPendingInvites([]);
-      return;
-    }
-    const rows = await listStaffInvitations(ctx.shopId);
-    setPendingInvites(rows.filter((i) => !i.accepted_at && !i.revoked_at));
-  }, [authMode, actor.authRole, actor.role]);
 
   const hydrateStaffFromCloud = useCallback(async () => {
     if (authMode !== "supabase" || !supabase) return;
@@ -78,18 +55,10 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
       if (!data.user || !isSupabaseEmailVerified(data.user)) return;
       const { hydrateStaffTeamFromCloud } = await import("../lib/staffRecovery");
       await hydrateStaffTeamFromCloud({ force: true });
-      await refreshPendingInvites();
-      const accounts = usePosStore.getState().preferences.staffAccounts ?? [];
-      setPendingUpgradeStaffIds((prev) =>
-        prev.filter((id) => {
-          const row = accounts.find((s) => s.id === id);
-          return row != null && normalizeLinkedAuthUserId(row.linkedAuthUserId) == null;
-        }),
-      );
     } finally {
       setStaffHydrating(false);
     }
-  }, [authMode, refreshPendingInvites]);
+  }, [authMode]);
 
   useEffect(() => {
     void hydrateStaffFromCloud();
@@ -106,25 +75,17 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
   if (!canManage) return <Navigate to="/" replace />;
 
   if (maxStaff <= 0) {
-    const limited = (
-      <>
-        {!embedded ? (
-          <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
-        ) : (
-          <div>
-            <h2 className="text-lg font-black text-foreground">{t(lang, "staffCenterTabTeam")}</h2>
-            <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "staffAccessSub")}</p>
-          </div>
-        )}
+    return (
+      <EnterprisePageContainer>
+        <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
         <EnterpriseCard muted>
           <Body>{t(lang, "upgradeWhyStaff")} → {t(lang, "upgradeWhyStaffPlan")}</Body>
         </EnterpriseCard>
         <Link to="/upgrade">
           <WakaButton variant="primary">{t(lang, "officePremiumUpgrade")} →</WakaButton>
         </Link>
-      </>
+      </EnterprisePageContainer>
     );
-    return embedded ? <div className="space-y-4">{limited}</div> : <EnterprisePageContainer>{limited}</EnterprisePageContainer>;
   }
 
   if (creating) {
@@ -173,16 +134,10 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
     );
   }
 
-  const main = (
-    <div className={embedded ? "space-y-5" : undefined}>
-      {!embedded ? (
-        <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
-      ) : (
-        <div>
-          <h2 className="text-lg font-black text-foreground">{t(lang, "staffCenterTabTeam")}</h2>
-          <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "staffAccessSub")}</p>
-        </div>
-      )}
+  return (
+    <DeviceApprovedGate lang={lang}>
+      <EnterprisePageContainer>
+      <EnterprisePageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
 
       <div className="grid gap-3 sm:grid-cols-2">
         {[
@@ -200,10 +155,6 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
         ))}
       </div>
 
-      {authMode === "supabase" && authOperatorRole(actor) === "owner" ? (
-        <StaffCloudInviteCard lang={lang} staff={staff} />
-      ) : null}
-
       <StaffTeamList
         lang={lang}
         businessType={preferences.businessType}
@@ -213,10 +164,6 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
         activeStaffId={activeStaffId}
         hydrating={staffHydrating}
         onRefresh={() => void hydrateStaffFromCloud()}
-        canUpgradeToCloud={authMode === "supabase" && authOperatorRole(actor) === "owner"}
-        pendingInvites={pendingInvites}
-        pendingUpgradeStaffIds={pendingUpgradeStaffIds}
-        onUpgradeToCloud={(row) => setUpgradeStaff(row)}
         onAddStaff={() => setCreating(true)}
         onToggleActive={(id, active) => updateStaffAccount(id, { active })}
         onUpdateRoleTemplate={(id, roleTemplateId, role) => updateStaffAccount(id, { role, roleTemplateId, customRoleId: null })}
@@ -242,21 +189,6 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
         onDelete={(id) => {
           if (!window.confirm(t(lang, "staffDeleteConfirm"))) return;
           removeStaffAccount(id);
-        }}
-      />
-
-      <StaffLegacyUpgradeDialog
-        lang={lang}
-        staff={upgradeStaff}
-        open={upgradeStaff != null}
-        onClose={() => setUpgradeStaff(null)}
-        onSent={() => {
-          if (upgradeStaff) {
-            setPendingUpgradeStaffIds((prev) =>
-              prev.includes(upgradeStaff.id) ? prev : [...prev, upgradeStaff.id],
-            );
-          }
-          void refreshPendingInvites();
         }}
       />
 
@@ -304,12 +236,7 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
           }
         }}
       />
-    </div>
-  );
-
-  return (
-    <DeviceApprovedGate lang={lang}>
-      {embedded ? main : <EnterprisePageContainer>{main}</EnterprisePageContainer>}
+      </EnterprisePageContainer>
     </DeviceApprovedGate>
   );
 }

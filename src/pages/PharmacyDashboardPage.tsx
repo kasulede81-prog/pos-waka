@@ -4,7 +4,6 @@ import type { Language } from "../types";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useSessionActor } from "../context/SessionActorContext";
-import { shiftOwnerUserId, authOperatorPermissions, authOperatorRole } from "../lib/sessionActor";
 import { useSubscription } from "../context/SubscriptionContext";
 
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
@@ -60,22 +59,17 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const canReceipts = actorHasEffectivePermission(actor, "receipts.view", snapshot, authMode);
   const canWriteOff = actorHasEffectivePermission(actor, "pharmacy.expired_writeoff", snapshot, authMode);
   const showActivityFeed = actorHasEffectivePermission(actor, "owner.activity", snapshot, authMode);
-  const homeMetrics = resolveVisibleHomeMetrics(authOperatorRole(actor));
-  const { canProfit } = resolveProfitVisibility({
-    role: authOperatorRole(actor),
-    snapshot,
-    authMode,
-    actorPermissions: authOperatorPermissions(actor),
-  });
+  const homeMetrics = resolveVisibleHomeMetrics(actor.role);
+  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
   const showRevenue = homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue;
 
   const scopedSales = useMemo(
-    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor),
-    [sales, homeMetrics.scope, actor],
+    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor.userId),
+    [sales, homeMetrics.scope, actor.userId],
   );
   const scopedReturns = useMemo(
-    () => filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor),
-    [returnRecords, sales, homeMetrics.scope, actor],
+    () => filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor.userId),
+    [returnRecords, sales, homeMetrics.scope, actor.userId],
   );
 
   const stats = useMemo(
@@ -111,11 +105,10 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
     return { todayCount, pendingDeliveries };
   }, [purchases, todayKey]);
 
-  const activeShift = useMemo(() => {
-    const ownerId = shiftOwnerUserId(actor);
-    if (!ownerId) return null;
-    return (shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === ownerId) ?? null;
-  }, [shifts, actor.authUserId, actor.userId]);
+  const activeShift = useMemo(
+    () => (shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
+    [shifts, actor.userId],
+  );
   const dayClosed = Boolean(activeDayCloseForDate(dayCloses, todayKey));
   const hw = resolveHospitalityHardware({
     hospitalityHardware: preferences.hospitalityHardware,

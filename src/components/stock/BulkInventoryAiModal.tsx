@@ -11,9 +11,6 @@ import {
 } from "../../lib/ai/bulkInventoryAi";
 import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 import { WakaButton } from "../ui/wakaPrimitives";
-import { usePosStore } from "../../store/usePosStore";
-import { applySharedCategoryToRows, isCatalogHierarchyEnabled } from "../../lib/catalogHierarchy";
-import { ShelfDestinationPicker } from "./ShelfDestinationPicker";
 
 type Props = {
   lang: Language;
@@ -40,8 +37,6 @@ export function BulkInventoryAiModal({
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
-  const [sharedShelf, setSharedShelf] = useState("");
-  const hierarchyOn = usePosStore((s) => isCatalogHierarchyEnabled(s.preferences));
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +46,6 @@ export function BulkInventoryAiModal({
     setError(null);
     setErrorCode(null);
     setImportResult(null);
-    setSharedShelf("");
   }, [open, shopName, businessType]);
 
   const selectedCount = useMemo(() => rows.filter((r) => r.enabled).length, [rows]);
@@ -177,20 +171,6 @@ export function BulkInventoryAiModal({
               <p className="text-xs font-semibold text-primary">
                 {tTemplate(lang, "aiBulkSlotsLeft", { count: String(productSlotsLeft) })}
               </p>
-            ) : null}
-            {rows.length > 0 && hierarchyOn ? (
-              <div className="space-y-2 rounded-2xl border border-border p-3">
-                <p className="text-sm font-bold text-foreground">{t(lang, "catalogApplyShelfToSet")}</p>
-                <ShelfDestinationPicker
-                  lang={lang}
-                  options={[]}
-                  value={sharedShelf}
-                  onChange={(next) => {
-                    setSharedShelf(next);
-                    if (next.trim()) setRows((prev) => applySharedCategoryToRows(prev, next));
-                  }}
-                />
-              </div>
             ) : null}
             <div className="overflow-x-auto rounded-2xl border border-border">
               <table className="min-w-full text-left text-sm">

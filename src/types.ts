@@ -114,7 +114,6 @@ export type AuditAction =
   | "back_office_unlock_failed"
   | "admin_pin_clear_applied"
   | "admin_staff_credentials_clear_applied"
-  | "admin_shop_reset_resync_applied"
   | "shift_start"
   | "shift_end"
   | "product_add"
@@ -203,7 +202,6 @@ export type AuditAction =
   | "inventory_count_approved"
   | "inventory_count_applied"
   | "inventory_count_cancelled"
-  | "inventory_transfer"
   | "day_drawer_open"
   | "day_drawer_open_supersede"
   | "day_drawer_open_void"
@@ -356,8 +354,6 @@ export type VoidRecord = {
   actorName?: string;
   shiftId?: string | null;
   createdAt: string;
-  /** Whole-bill void timestamp when the cloud void ledger carries it. */
-  saleVoidedAt?: string | null;
 };
 
 /** Customer brought product back — stock restored, sale totals adjusted. */
@@ -368,12 +364,6 @@ export type ReturnRecord = {
   productName: string;
   quantity: number;
   refundAmountUgx: number;
-  /**
-   * Physical cash that left the drawer for this return (integer UGX).
-   * Set at return time from the linked sale's physical-cash classifier.
-   * 0 = known non-cash / unknown original tender. Absent = legacy unknown (not cash).
-   */
-  refundCashUgx?: number | null;
   /** COGS reversed from original sale line snapshot */
   cogsUgx?: number;
   /** Unit cost per base unit from original sale line */
@@ -837,12 +827,8 @@ export type PrinterProfile = {
   vendorHint?: PrinterVendorHint;
   networkHost?: string | null;
   networkPort?: number | null;
-  /** Opaque native/Web Bluetooth device id (e.g. classic:AA:BB:… or ble:…). */
+  /** Opaque id from WebUSB / Web Bluetooth pairing session. */
   pairedDeviceKey?: string | null;
-  /** Android native radio used with pairedDeviceKey. */
-  bluetoothTransport?: "classic" | "ble" | null;
-  /** Last known Bluetooth display name (local only). */
-  pairedDeviceName?: string | null;
   isEnabled: boolean;
   lastSeenAt?: string | null;
   lastError?: string | null;
@@ -1674,7 +1660,7 @@ export type Purchase = {
   /** Added to supplier balance: totalCost - amountPaid (can be negative if overpaying old debt) */
   balanceDeltaUgx: number;
   notes: string;
-  /** Optional supplier invoice / bill number. */
+  /** Optional supplier invoice reference (future-ready). */
   invoiceNumber?: string;
   /** Set when voided — purchase is never hard-deleted. */
   voidedAt?: string | null;
@@ -1683,13 +1669,6 @@ export type Purchase = {
   preVoidCloudSynced?: boolean;
   /** Set after void stock reversal is pushed to cloud (prevents double subtraction). */
   voidStockSyncedAt?: string | null;
-  /**
-   * Client-only: product IDs whose purchase stock-in delta was acknowledged by cloud.
-   * Prevents duplicate queue paths / partial-bundle retries from re-pushing the same line.
-   */
-  stockSyncedProductIds?: string[];
-  /** Client-only: set when every purchase line's stock-in delta has been cloud-acked. */
-  stockSyncedAt?: string | null;
   createdAt: string;
   pendingSync: boolean;
 };
@@ -1810,6 +1789,14 @@ export type SaleLine = {
   baseUnit?: string;
   /** Financial snapshot completeness — cloud / legacy hydration */
   financialDataStatus?: "complete" | "repaired" | "legacy" | "needs_repair";
+  /**
+   * Count of admin financial-correction events applied to this line (0 = never
+   * corrected). Server-authoritative — only shop_correct_sale_line_financials ever
+   * increments it. Used to guard against a stale device overwriting a corrected
+   * cogsUgx/unitCostUgx/grossProfitUgx/estimatedProfitUgx snapshot on re-push, and as
+   * the basis for the financial-fingerprint snapshot-certification check.
+   */
+  financialRevision?: number;
   /** When inputMode is money, what the customer handed */
   moneyAmountUgx?: number | null;
   /** Pharmacy POS: unit the cashier sold (display only; `quantity` is base units). */
@@ -1858,10 +1845,8 @@ export type Sale = {
   tableSessionId?: string | null;
   /** Last cart update — used for sync merge */
   updatedAt?: string | null;
-  /** 1-based receipt sequence for this Kampala day on this till (001, 002...). */
+  /** 1-based receipt sequence for this Kampala day (001, 002...). */
   receiptSeq?: number;
-  /** Stable till code stamped at completion; qualifies receiptSeq across devices. */
-  receiptTerminal?: string;
   lines: SaleLine[];
   subtotalUgx: number;
   totalUgx: number;
@@ -1873,6 +1858,13 @@ export type Sale = {
   /** Running total voided from this sale after completion */
   voidedTotalUgx?: number;
   estimatedProfitUgx: number;
+  /**
+   * Count of admin financial-correction events applied to any line within this sale
+   * (0 = never corrected). Guards sales.metadata.estimatedProfitUgx against the same
+   * stale-push resurrection vector as SaleLine.financialRevision guards line-level
+   * fields — see that field's doc comment for the full mechanism.
+   */
+  financialRevision?: number;
   /** True when cloud/legacy lines lack repairable financial snapshots */
   financialRepairRequired?: boolean;
   /** True when sale lines originate from legacy migration without cost data */
@@ -1883,28 +1875,11 @@ export type Sale = {
   dispenseType?: PharmacyDispenseType | null;
   createdAt: string;
   pendingSync: boolean;
-  /**
-   * Immutable checkout header for first `shop_push_sale_complete`.
-   * Local returns/voids shrink live totals; this snapshot keeps the cloud
-   * complete payload aligned with the original paid sale.
-   */
-  cloudCompleteFinancials?: {
-    subtotalUgx: number;
-    totalUgx: number;
-    cashPaidUgx: number;
-    debtUgx: number;
-    discountTotalUgx: number;
-  } | null;
   lastSyncError?: string | null;
   /** When set, sale debt is linked to this person for balance tracking */
   customerId?: string | null;
   /** Staff who completed the sale (session actor); drives cashier performance on owner dashboard */
   soldByUserId?: string | null;
-  /**
-   * Auth UUID for commercial seller when PIN actor is `staff:<id>` but the profile is linked.
-   * Used for cloud `sold_by_user_id` only — does not replace local `soldByUserId`.
-   */
-  soldByAuthUserId?: string | null;
   /** Assigned waiter from table session — used for hospitality KPIs (not the bill closer). */
   waiterStaffId?: string | null;
   waiterName?: string | null;
@@ -1931,12 +1906,6 @@ export type Sale = {
   paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher";
   /** What customer actually handed over (when captured at checkout). */
   amountPaidUgx?: number | null;
-  /**
-   * Physical cash tender only (integer UGX).
-   * Not collected (`cashPaidUgx`), not total tender (`amountPaidUgx`), not debt.
-   * Absent on legacy sales — cannot be reconstructed from total − debt.
-   */
-  tenderCashUgx?: number | null;
   /** Change returned to customer at checkout (when captured). */
   changeGivenUgx?: number | null;
   /** Branding frozen at checkout — historical receipts must not change. */
@@ -1981,6 +1950,17 @@ export type DayCloseDocumentSnapshot = {
   adjustmentInflowsUgx?: number;
   adjustmentOutflowsUgx?: number;
   cashRefundsUgx?: number;
+  /**
+   * Present only on a close that supersedes an earlier one specifically to apply a
+   * historical financial correction (as opposed to an ordinary same-day recount
+   * supersede, which carries no such marker). The superseded original close's own
+   * documentSnapshot is never touched — this field only appears on the NEW active close.
+   */
+  priorPeriodAdjustment?: {
+    cogsDeltaUgx: number;
+    profitDeltaUgx: number;
+    correctionRecordIds: string[];
+  } | null;
 };
 
 export type DayCloseSummary = {
@@ -2087,8 +2067,6 @@ export type CashExpense = {
   /** Kampala calendar date YYYY-MM-DD */
   paidOn: string;
   createdAt: string;
-  /** Last local/cloud write — used for expense pull LWW (approval/void). */
-  updatedAt?: string;
   createdByUserId: string;
   createdByLabel?: string;
   deviceId?: string;
@@ -2157,11 +2135,6 @@ export type StaffAccount = {
   passwordChangedAt?: string | null;
   /** Set when internal admin bulk credential recovery invalidates secrets. */
   credentialsInvalidatedAt?: string | null;
-  /**
-   * Linked Supabase Auth user for this PIN profile (`shop_pos_staff.user_id`).
-   * NULL = legacy unlinked PIN. Used for cloud seller attribution on shared terminals.
-   */
-  linkedAuthUserId?: string | null;
 };
 
 /** Receipt printer paper — 58mm / 80mm thermal, or A4 for office printers. */
@@ -2212,22 +2185,6 @@ export type PosShelfColor = "default" | "red" | "orange" | "blue" | "green" | "p
 /** Optional shelf badge on Sell screen. */
 export type PosShelfBadge = "fast_moving" | "promotion";
 
-/**
- * Shop-scoped catalog folder overlay. Assignment identity is still
- * `Product.category` via `legacyShelfKey`. Ignored when hierarchy is off.
- */
-export type CatalogNode = {
-  id: string;
-  shopId: string;
-  parentId: string | null;
-  /** Matches Product.category. Not a display-only alias. */
-  legacyShelfKey: string;
-  name: string;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
 /** Per-shelf visual layout (keyed by category name or sentinel). */
 export type PosShelfLayoutConfig = {
   displayName?: string;
@@ -2240,26 +2197,6 @@ export type PosShelfLayoutConfig = {
   scale?: number;
   featured?: boolean;
   badge?: PosShelfBadge | null;
-  /** Last local/cloud mutation time for this shelf key (catalog sync). */
-  updatedAt?: string;
-};
-
-/** Tombstone for a deleted CatalogNode.id — prevents offline devices from resurrecting folders. */
-export type CatalogNodeTombstone = {
-  id: string;
-  deletedAt: string;
-};
-
-/** Tombstone for a removed Sell-shelf layout key. */
-export type CatalogLayoutTombstone = {
-  shelfKey: string;
-  deletedAt: string;
-};
-
-/** Per-key pin revision so concurrent pin/unpin merges without whole-array LWW. */
-export type PinnedShelfKeyRevision = {
-  pinned: boolean;
-  updatedAt: string;
 };
 
 /** Shop template for initial shelf layout. */
@@ -2387,25 +2324,8 @@ export type ShopPreferences = {
   posSellCategoryFilter?: string | null;
   /** Shop-wide Sell screen shelf order (set in stock/back office). */
   posPinnedShelfKeys?: string[];
-  /** Last mutation time for `posPinnedShelfKeys` order (catalog sync). */
-  posPinnedShelfKeysUpdatedAt?: string;
-  /** Per-key pin/unpin revisions for multi-device merge. */
-  posPinnedShelfKeyRevisions?: Record<string, PinnedShelfKeyRevision>;
   /** Per-shelf display overrides (name, color, icon, size, featured). */
   posShelfLayout?: Record<string, PosShelfLayoutConfig>;
-  /**
-   * Optional product-folder overlay. Missing / false = existing flat shelves.
-   * Sell/Stock nested browse is not gated on this in v1 — Add Product picker is.
-   */
-  catalogHierarchyEnabled?: boolean;
-  /** Last mutation time for `catalogHierarchyEnabled` (shop-level LWW). */
-  catalogHierarchyEnabledUpdatedAt?: string;
-  /** Hierarchy overlay nodes. Ignored by Sell/Stock discovery while the flag is off. */
-  posCatalogNodes?: CatalogNode[];
-  /** Deleted catalog node ids. Must persist across restarts so reconnect cannot resurrect. */
-  posCatalogTombstones?: CatalogNodeTombstone[];
-  /** Deleted shelf layout keys. */
-  posShelfLayoutTombstones?: CatalogLayoutTombstone[];
   /** Product ids on the Quick Sell strip (one-tap add on Sell screen). */
   posQuickSellProductIds?: string[];
   /** Last applied shop shelf preset id. */
@@ -2509,22 +2429,6 @@ export type ShopPreferences = {
   discountControlMode?: "unrestricted" | "manager_approval" | "max_percent";
   /** Percent threshold for manager_approval / max_percent modes. */
   discountMaxPercentThreshold?: number;
-  /**
-   * Per-field LWW clocks for shop-wide selling/cash policy sync.
-   * Metadata only — not a business preference value.
-   */
-  shopPolicyRevisions?: Partial<
-    Record<
-      | "discountControlMode"
-      | "discountMaxPercentThreshold"
-      | "kioskQuickSell"
-      | "staffCanRecordCashExpenses"
-      | "requireCashierExpenseApproval"
-      | "registerMode"
-      | "primaryDeviceFingerprint",
-      string
-    >
-  >;
   /** Cash drawer reconciliation formula — undefined = v1 (legacy dual float). New shops default v2. */
   cashDrawerFormulaVersion?: CashDrawerFormulaVersion;
   /** Owner may supersede/void day open after first sale with PIN + reason (formula v2). */
@@ -2559,11 +2463,7 @@ export type SyncOperationKind =
   | "pending_shifts"
   | "pending_day_closes"
   | "pending_purchases"
-  | "pending_transfer_dispatch"
-  | "pending_transfer_receive"
   | "pending_hospitality"
-  | "pending_catalog"
-  | "pending_shop_policy"
   | "pending_staff"
   /** Legacy queue kinds kept for backward compatibility */
   | "sale"
@@ -2582,14 +2482,6 @@ export type SyncOperation = {
   attempts: number;
   /** ISO time of last failed upload attempt — used for exponential backoff. */
   lastAttemptAt?: string | null;
-  /** MB-1 — immutable shop identity stamped at enqueue; never rewritten at flush. */
-  shopId?: string;
-  /** Permanent-ish RPC error (e.g. closed_business_date). Does not ACK the entity. */
-  lastError?: string | null;
-  /** Kampala date_key for a parked closed-business-date rejection. */
-  closedDateKey?: string | null;
-  /** WAKA-11 — ISO time the op entered dead-letter. Durable; never ACK'd. */
-  quarantinedAt?: string | null;
 };
 
 /** High-level connectivity for the tiny header strip */

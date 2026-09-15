@@ -7,8 +7,6 @@ import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
 import { isPharmacyMode } from "../../../lib/pharmacy";
 import { useSessionActor } from "../../../context/SessionActorContext";
-import { shiftOwnerUserId } from "../../../lib/sessionActor";
-import { useTerminalIdentity } from "../../../hooks/useTerminalIdentity";
 
 import { useSubscription } from "../../../context/SubscriptionContext";
 import {
@@ -22,7 +20,6 @@ import { PharmacyControlledDispenseGate } from "../compliance/PharmacyControlled
 import { PharmacyFefoBatchPicker } from "../PharmacyFefoBatchPicker";
 import { SellProductBrowsePanel } from "../../pos/SellProductBrowsePanel";
 import { PosCheckoutPanel } from "../../pos/PosCheckoutPanel";
-import { CartVoidConfirmDialog } from "../../pos/CartVoidConfirmDialog";
 import { PosDesktopCompactHeader } from "../../pos/PosDesktopCompactHeader";
 import { PosOfflineBanner } from "../../trust/PosOfflineBanner";
 import { ShiftSellGateway } from "../../pos/ShiftSellGateway";
@@ -72,14 +69,11 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   const patientParam = searchParams.get("patient");
 
   const actor = useSessionActor();
-  const terminalIdentity = useTerminalIdentity();
   const { snapshot, authMode } = useSubscription();
   const preferences = usePosStore((s) => s.preferences);
-  const terminalLabel = preferences.shopDisplayName?.trim() || null;
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const sales = usePosStore((s) => s.sales);
-  const auditLogs = usePosStore((s) => s.auditLogs);
   const prescriptions = usePosStore((s) => s.pharmacyPrescriptions);
   const draftLines = usePosStore((s) => s.draftLines);
   const activePharmacyPrescriptionId = usePosStore((s) => s.activePharmacyPrescriptionId);
@@ -129,11 +123,10 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   const canDispense = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
   const todaySalesSummary = useMemo(() => summarizeTodaySales(sales), [sales]);
   const pendingCount = useMemo(() => pendingSales(sales).length, [sales]);
-  const activeShift = useMemo(() => {
-    const ownerId = shiftOwnerUserId(actor);
-    if (!ownerId) return null;
-    return (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === ownerId) ?? null;
-  }, [preferences.shifts, actor.authUserId, actor.userId]);
+  const activeShift = useMemo(
+    () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
+    [preferences.shifts, actor.userId],
+  );
 
   const queue = useMemo(() => activePrescriptionQueue(prescriptions), [prescriptions]);
   const selectedRx = useMemo(
@@ -179,9 +172,8 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
       actor,
       customerName: cust?.name ?? null,
       customerBalanceUgx: cust?.debtBalanceUgx ?? null,
-      auditLogs,
     });
-  }, [receiptSale, customers, lang, sales, preferences, products, actor, auditLogs]);
+  }, [receiptSale, customers, lang, sales, preferences, products, actor]);
 
   const receiptHtmlPreview = useMemo(
     () => (receiptCtx ? saleReceiptHtml(receiptCtx) : ""),
@@ -353,8 +345,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
         <PosDesktopCompactHeader
           lang={lang}
           sellLabelKey="navDispense"
-          identity={terminalIdentity}
-          terminalLabel={terminalLabel}
+          cashierName={actor.displayName ?? actor.userId}
           shift={activeShift}
           todaySaleCount={todaySalesSummary.count}
           todaySalesUgx={todaySalesSummary.total}
@@ -589,14 +580,6 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
         />
       ) : null}
 
-      <CartVoidConfirmDialog
-        lang={lang}
-        open={checkout.cartVoidOpen}
-        copy={checkout.cartVoidCopy}
-        onKeep={checkout.keepCartVoid}
-        onConfirm={checkout.applyCartVoid}
-      />
-
       <DiscountLineModal
         lang={lang}
         open={discountLine !== null}
@@ -694,11 +677,9 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
                   void printSaleReceipt(receiptCtx).then((r) => {
                     if (r.ok) {
                       logReceiptReprintAudit(receiptSale, receiptCtx.receiptNumber);
-                      if (r.mode === "thermal") flash(t(lang, "receiptPrintThermalSent"));
-                      else if (r.mode === "handoff") flash(t(lang, "receiptPrintHandoffOpening"));
-                      else if (r.mode === "share" || isNativePrintPlatform()) flash(t(lang, "receiptPrintNativeOpened"));
+                      if (isNativePrintPlatform()) flash(t(lang, "receiptPrintNativeOpened"));
                     } else {
-                      flash(r.mode === "thermal" ? (r.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));
+                      flash(t(lang, "receiptPrintBlocked"));
                     }
                   });
                 }}

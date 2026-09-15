@@ -44,7 +44,7 @@ export function DraftCartTotalsStack({
   return (
     <section
       className={clsx(
-        "pos-ds-cart-totals rounded-xl border border-waka-200 bg-card shadow-sm",
+        "rounded-xl border border-waka-200 bg-card shadow-sm",
         sidebarCompact ? "px-2.5 py-2" : "px-3 py-2.5",
       )}
       aria-label={t(lang, "payableTotalLabel")}
@@ -98,7 +98,7 @@ export function DraftCartTotalsStack({
         </span>
         <span
           className={clsx(
-            "pos-ds-cart-payable font-black tabular-nums text-waka-800",
+            "font-black tabular-nums text-waka-800",
             sidebarCompact ? "text-lg" : "text-2xl",
           )}
           data-testid="draft-cart-payable"

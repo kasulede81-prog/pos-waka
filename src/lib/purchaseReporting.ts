@@ -40,25 +40,6 @@ export function filterPurchases(purchases: Purchase[], bounds: DateFilterBounds)
   return purchases.filter((p) => purchaseMatchesBounds(p, bounds));
 }
 
-/**
- * Reports / period purchase ledger: in-range and not voided.
- * Date-only `filterPurchases` remains available so Inventory can still list voids.
- */
-export function filterPurchasesForReporting(purchases: Purchase[], bounds: DateFilterBounds): Purchase[] {
-  return filterPurchases(purchases, bounds).filter((p) => !isPurchaseVoided(p));
-}
-
-export function sumPurchasesForReporting(
-  purchases: Purchase[],
-  bounds: DateFilterBounds,
-): { totalUgx: number; count: number } {
-  const scoped = filterPurchasesForReporting(purchases, bounds);
-  return {
-    count: scoped.length,
-    totalUgx: scoped.reduce((sum, p) => sum + p.totalCostUgx, 0),
-  };
-}
-
 export type PurchaseSearchQuery = {
   supplier?: string;
   product?: string;
@@ -366,6 +347,6 @@ export function buildRestockProductSuggestions(
 /** Map DateFilterValue to PurchaseListFilter for shared preset UI. */
 export function purchaseFilterFromDateFilter(value: DateFilterValue): PurchaseListFilter {
   if (value.kind === "day") return { kind: "day", dateKey: value.dateKey };
-  if (value.kind === "range") return { kind: "range", fromKey: value.fromKey, toKey: value.toKey };
+  if (value.kind === "range") return { kind: "day", dateKey: value.fromKey };
   return { kind: "preset", preset: value.preset };
 }

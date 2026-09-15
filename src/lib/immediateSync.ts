@@ -4,7 +4,7 @@
 
 import type { SyncOperationKind } from "../types";
 import { syncKindPriority, coalesceKeyForOp } from "./syncQueuePriority";
-import { logSync, coalesceMsForConnection, recordSalePushImmediateAttempt } from "./syncDiagnostics";
+import { logSync, coalesceMsForConnection } from "./syncDiagnostics";
 import { getDeviceOnline } from "./deviceOnline";
 import { IMMEDIATE_PUSH_COALESCE_MS } from "./syncTiming";
 
@@ -25,9 +25,8 @@ function scheduleImmediatePushUpload(opts?: { force?: boolean; source?: string }
     void import("./posPushScheduler").then(async ({ runPosPushOnlyUpload }) => {
       try {
         await runPosPushOnlyUpload({ force: opts?.force ?? true, source: opts?.source ?? "immediate" });
-      } catch (err) {
-        const { recordBackgroundSyncFailure } = await import("./syncMeta");
-        recordBackgroundSyncFailure("immediate_push_failed", err);
+      } catch {
+        // fire-and-forget push scheduler
       }
     });
   }, 0);
@@ -54,12 +53,6 @@ export async function runImmediateSaleSync(saleId: string): Promise<void> {
   logSync("enqueue", { kind: "sale", saleId, priority: 0 });
   const { syncSaleImmediately } = await import("../offline/cloudSync");
   const started = performance.now();
-  // OBS-1 D1 — attempt counter only (isolated; does not gate push).
-  try {
-    recordSalePushImmediateAttempt();
-  } catch {
-    /* OBS-1 must never alter sale sync */
-  }
   logSync("push_start", { kind: "sale", saleId });
   const ok = await syncSaleImmediately(saleId);
   recordPushIfNeeded(started);
@@ -106,7 +99,7 @@ export function scheduleImmediateSyncForKind(kind: SyncOperationKind, payload?: 
   }
 
   const coalesceKey = coalesceKeyForOp(kind, payload);
-  if (coalesceKey && (kind === "product" || kind === "customer" || kind === "supplier" || kind === "pending_staff" || kind === "pending_catalog" || kind === "pending_shop_policy")) {
+  if (coalesceKey && (kind === "product" || kind === "customer" || kind === "supplier" || kind === "pending_staff")) {
     scheduleCoalescedPush(kind, coalesceKey);
     return;
   }

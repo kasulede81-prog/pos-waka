@@ -6,14 +6,12 @@ import { formatShortUgx } from "../../lib/profitPageView";
 
 type Props = {
   lang: Language;
-  grossProfitUgx: number;
+  netProfitUgx: number;
   revenueUgx: number;
   costUgx: number;
   marginPct: number;
   bestShelf: string | null;
   bestProduct: string | null;
-  /** When true, headline gross profit is cost-incomplete (missing buy costs). */
-  costIncomplete?: boolean;
 };
 
 function StatCard({
@@ -58,22 +56,21 @@ function StatCard({
 
 export function ProfitStatGrid({
   lang,
-  grossProfitUgx,
+  netProfitUgx,
   revenueUgx,
   costUgx,
   marginPct,
   bestShelf,
   bestProduct,
-  costIncomplete = false,
 }: Props) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
       <StatCard
         icon={TrendingUp}
-        label={costIncomplete ? t(lang, "profitGrossProfitEstimated") : t(lang, "profitStatGrossProfit")}
-        value={formatShortUgx(grossProfitUgx)}
+        label={t(lang, "profitStatGrossProfit")}
+        value={formatShortUgx(netProfitUgx)}
         highlight
-        valueClass={grossProfitUgx >= 0 ? "text-waka-700" : "text-rose-700"}
+        valueClass={netProfitUgx >= 0 ? "text-waka-700" : "text-rose-700"}
       />
       <StatCard icon={ShoppingCart} label={t(lang, "profitStatRevenue")} value={formatShortUgx(revenueUgx)} />
       <StatCard icon={Package} label={t(lang, "profitStatCost")} value={formatShortUgx(costUgx)} valueClass="text-foreground" />

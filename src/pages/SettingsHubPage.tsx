@@ -1,12 +1,11 @@
 import { actorHasPermission, actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Camera, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
+import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Camera, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, ShieldCheck, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
-import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
@@ -16,7 +15,6 @@ import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
 import { PilotSupportCard } from "../components/settings/PilotSupportCard";
-import { RemoteSupportStatusCard } from "../components/remote-support/RemoteSupportStatusCard";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { PilotModeToggle } from "../components/pilot/PilotModeToggle";
 import { canTogglePilotMode, isPilotModeActive } from "../lib/pilotMode";
@@ -49,12 +47,12 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const canShop = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
   const canDrawerSettings = actorHasEffectivePermission(actor, "day.open_drawer", snapshot, authMode);
   const canOwnerFinanceDiagnostics =
-    canSeeFinanceDiagnostics(authOperatorRole(actor)) &&
+    canSeeFinanceDiagnostics(actor.role) &&
     actorHasEffectivePermission(actor, "owner.dashboard", snapshot, authMode);
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
   const canReceipt = actorHasPermission(actor, "settings.receipt");
   const canDevices = actorHasPermission(actor, "settings.devices");
-  const pilotActive = isPilotModeActive(authOperatorRole(actor), preferences);
+  const pilotActive = isPilotModeActive(actor.role, preferences);
   const showFloorSetup = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
   const showPharmacySettings = canShop && isPharmacyMode(businessType, pharmacyModeEnabled);
   const showHospitalitySettings = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
@@ -81,12 +79,11 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
       className="pb-8"
     >
       {canShop ? <ShopSupportNumberCard lang={lang} /> : null}
-      <RemoteSupportStatusCard lang={lang} />
 
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
         {canShop ? (
           <OfficeNavCard
-            to="/staff-center"
+            to="/staff-access"
             title={t(lang, "officeCardStaffAccess")}
             subtitle={t(lang, "officeCardStaffAccessSub")}
             Icon={UserCog}
@@ -156,12 +153,28 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={MonitorSmartphone}
           />
         ) : null}
-        {canShop && authOperatorRole(actor) === "owner" ? (
+        {canShop && actor.role === "owner" ? (
           <OfficeNavCard
             to="/settings/biometric"
             title={t(lang, "settingsHubBiometric")}
             subtitle={t(lang, "settingsHubBiometricSub")}
             Icon={Fingerprint}
+          />
+        ) : null}
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/staff-roles"
+            title={t(lang, "enterpriseRolesPageTitle")}
+            subtitle={t(lang, "enterpriseRolesPageSub")}
+            Icon={ShieldCheck}
+          />
+        ) : null}
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/staff-security"
+            title={t(lang, "settingsStaffSecurityTitle")}
+            subtitle={t(lang, "settingsStaffSecuritySub")}
+            Icon={Lock}
           />
         ) : null}
         {canShop ? (
@@ -283,8 +296,8 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
         ) : null}
       </OfficeNavSection>
 
-      {canTogglePilotMode(authOperatorRole(actor)) ? <PilotModeToggle lang={lang} /> : null}
-      {canTogglePilotMode(authOperatorRole(actor)) ? (
+      {canTogglePilotMode(actor.role) ? <PilotModeToggle lang={lang} /> : null}
+      {canTogglePilotMode(actor.role) ? (
         <OfficeNavCard
           to="/pilot-support"
           title={t(lang, "pilotSupportCenterTitle")}

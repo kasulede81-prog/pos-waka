@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { releaseSupplierPaymentSubmitsForAccount } from "../lib/supplierPaymentSubmitGuard";
-import { inventoryMovementNamespace } from "../lib/shopSyncContext";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowDownLeft, ArrowUpRight, Scale, Trash2, Wallet } from "lucide-react";
 import type { Language } from "../types";
@@ -32,7 +30,6 @@ import { isWalkInSupplierId } from "../lib/walkInSupplier";
 import { dateMatchesFilter, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 import { useShopAction } from "../hooks/useShopAction";
 import { ModalSheet } from "../components/layout/ModalSheet";
-import { MobileScrollTail } from "../components/layout/MobileScrollTail";
 
 export function SupplierDetailPage({
   lang,
@@ -60,7 +57,6 @@ export function SupplierDetailPage({
   const auditLogs = usePosStore((s) => s.auditLogs);
   const updateSupplier = usePosStore((s) => s.updateSupplier);
   const removeSupplier = usePosStore((s) => s.removeSupplier);
-  const addSupplierPayment = usePosStore((s) => s.addSupplierPayment);
   const purchases = usePosStore((s) => s.purchases);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const preferences = usePosStore((s) => s.preferences);
@@ -75,18 +71,7 @@ export function SupplierDetailPage({
   const [editNotes, setEditNotes] = useState("");
   const [editSaved, setEditSaved] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
-  const [payAmount, setPayAmount] = useState("");
-  const [paySubmitting, setPaySubmitting] = useState(false);
-  const paySubmitInFlightRef = useRef(false);
   const [statementFilter, setStatementFilter] = useState<DateFilterValue>({ kind: "preset", preset: "this_month" });
-
-  useEffect(() => {
-    if (!payOpen) return;
-    paySubmitInFlightRef.current = false;
-    setPaySubmitting(false);
-    releaseSupplierPaymentSubmitsForAccount(inventoryMovementNamespace());
-  }, [payOpen, supplierId]);
 
   const statementBounds = useMemo(() => resolveDateFilterBounds(statementFilter), [statementFilter]);
 
@@ -199,36 +184,6 @@ export function SupplierDetailPage({
     }
   };
 
-  const openPay = () => {
-    setPayAmount(String(Math.min(supplier.balanceOwedUgx, 50_000)));
-    setPayOpen(true);
-  };
-
-  const submitPay = async (e: FormEvent) => {
-    e.preventDefault();
-    if (paySubmitInFlightRef.current) return;
-    const n = Math.floor(Number(payAmount) || 0);
-    if (n <= 0) return;
-    paySubmitInFlightRef.current = true;
-    setPaySubmitting(true);
-    try {
-      const r = await runShopAction(
-        { lang, action: "supplier.payment", permitted: canManage },
-        () => addSupplierPayment(supplier.id, n),
-      );
-      if (r.ok) {
-        setPayOpen(false);
-        setPayAmount("");
-        return;
-      }
-      paySubmitInFlightRef.current = false;
-      setPaySubmitting(false);
-    } catch {
-      paySubmitInFlightRef.current = false;
-      setPaySubmitting(false);
-    }
-  };
-
   const content = (
     <>
       {!embedded ? (
@@ -252,11 +207,6 @@ export function SupplierDetailPage({
         {canManage && !editOpen ? (
           <WakaButton type="button" variant="secondary" onClick={openEdit} className="mb-4 w-full">
             {t(lang, "supplierEditTitle")}
-          </WakaButton>
-        ) : null}
-        {canManage && !editOpen && supplier.balanceOwedUgx > 0 ? (
-          <WakaButton type="button" variant="primary" onClick={openPay} className="mb-4 w-full">
-            {t(lang, "supplierPayButton")}
           </WakaButton>
         ) : null}
         {canDelete && !editOpen ? (
@@ -335,11 +285,6 @@ export function SupplierDetailPage({
             icon={ArrowUpRight}
             label={t(lang, "supplierTotalBuy")}
             value={`UGX ${supplier.totalPurchasesUgx.toLocaleString()}`}
-          />
-          <EnterpriseKpiCard
-            icon={ArrowDownLeft}
-            label={t(lang, "supplierPaidSoFar")}
-            value={`UGX ${Math.max(0, supplier.totalPurchasesUgx - supplier.balanceOwedUgx).toLocaleString()}`}
           />
           {supplier.lastSupplyAt ? (
             <div className="col-span-2">
@@ -477,24 +422,6 @@ export function SupplierDetailPage({
         )}
       </EnterpriseCard>
 
-      <ModalSheet open={payOpen} onClose={() => setPayOpen(false)} title={t(lang, "supplierPayTitle")}>
-        <form onSubmit={(e) => void submitPay(e)} className="space-y-3">
-          <SectionTitle as="p" className="!text-sm">{supplier.name}</SectionTitle>
-          <Caption>
-            {t(lang, "supplierBalanceLabel")}: UGX {supplier.balanceOwedUgx.toLocaleString()}
-          </Caption>
-          <EnterpriseTextField
-            value={payAmount}
-            onChange={(e) => setPayAmount(e.target.value)}
-            inputMode="numeric"
-            pos
-          />
-          <WakaButton type="submit" variant="primary" className="w-full" loading={paySubmitting}>
-            {t(lang, "supplierPaySave")}
-          </WakaButton>
-        </form>
-      </ModalSheet>
-
       <ModalSheet
         open={deleteOpen}
         onClose={() => setDeleteOpen(false)}
@@ -518,16 +445,11 @@ export function SupplierDetailPage({
   );
 
   if (embedded) {
-    return (
-      <div className="space-y-5">
-        {content}
-        <MobileScrollTail />
-      </div>
-    );
+    return <div className="space-y-5 pb-16">{content}</div>;
   }
 
   return (
-    <EnterprisePageContainer className="space-y-5">
+    <EnterprisePageContainer className="space-y-5 pb-16">
       {content}
     </EnterprisePageContainer>
   );

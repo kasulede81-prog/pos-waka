@@ -15,9 +15,6 @@ export type ReportExportKind =
   | "monthly"
   | "cash_position"
   | "inventory_count"
-  | "customer_debt"
-  | "customer_statement"
-  | "cash_expenses"
   | "other";
 
 type ReportDiagEvent = "export_start" | "export_done" | "export_fail" | "print_start" | "print_done" | "print_fail";

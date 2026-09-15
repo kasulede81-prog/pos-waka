@@ -14,11 +14,9 @@ type Props = {
   preferences: ShopPreferences;
   lockedIds: Set<string>;
   canAdd: boolean;
-  canEdit?: boolean;
   canRemove: boolean;
   canSell: boolean;
   canRestock: boolean;
-  canSeeCost?: boolean;
   isOnlyProduct: boolean;
   variant?: "default" | "lowStock";
   listSort: InventoryListSortKey;
@@ -34,11 +32,9 @@ function InventoryProductListInner({
   preferences,
   lockedIds,
   canAdd,
-  canEdit,
   canRemove,
   canSell,
   canRestock,
-  canSeeCost,
   isOnlyProduct,
   variant = "default",
   listSort,
@@ -79,11 +75,9 @@ function InventoryProductListInner({
         sort={listSort}
         onSort={onListSort}
         canAdd={canAdd}
-        canEdit={canEdit}
         canRemove={canRemove}
         canSell={canSell}
         canRestock={canRestock}
-        canSeeCost={canSeeCost}
         onAction={onAction}
         onOpenDetail={onOpenDetail}
         onVisibleIdsChange={onVisibleIdsChange}
@@ -116,7 +110,6 @@ function InventoryProductListInner({
                 viewMode={mode}
                 locked={lockedIds.has(p.id)}
                 canAdd={canAdd}
-                canEdit={canEdit}
                 canRemove={canRemove}
                 canSell={canSell}
                 canRestock={canRestock}

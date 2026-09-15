@@ -3,12 +3,9 @@ import { actorHasPermission } from "../lib/actorAuthorization";
 import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Banknote, Keyboard, ScanLine, Search, X } from "lucide-react";
+import { Banknote, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
-import type { CartVoidMode } from "../lib/saleLifecycle";
-import { CartVoidConfirmDialog } from "../components/pos/CartVoidConfirmDialog";
-import { useCartAbandonVoid } from "../hooks/useCartAbandonVoid";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
 import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
@@ -50,36 +47,16 @@ import { PosQuickProductChips } from "../components/pos/PosQuickProductChips";
 import { PosDesktopCatalogCheckoutDock } from "../components/pos/PosDesktopCatalogCheckoutDock";
 import {
   applyCheckoutAlphaKey,
-  applyCheckoutPhoneKey,
   applyCheckoutNumericKey,
+  applyCheckoutPhoneKey,
   preferredKeypadModeForField,
-  POS_CATALOG_KEYPAD_OVERLAY_CLASS,
-  POS_CATALOG_KEYPAD_OVERLAY_INNER_CLASS,
   type CheckoutInputField,
   type CheckoutKeypadMode,
 } from "../lib/posCheckoutKeypad";
 import { PosDesktopCompactHeader } from "../components/pos/PosDesktopCompactHeader";
 import { EmptyShelfPanel } from "../components/stock/EmptyShelfPanel";
-import { inventoryAddProductToShelfHref } from "../lib/inventoryWorkspaceTiles";
 import { PosDesktopProductCard } from "../components/pos/PosDesktopProductCard";
 import { PosDesktopStatusBar } from "../components/pos/PosDesktopStatusBar";
-import {
-  DesktopCartPanel,
-  DesktopCategoryRail,
-  DesktopOnScreenKeyboard,
-  DesktopPaymentPanel,
-  DesktopPosHeader,
-  DesktopPosShell,
-  DesktopQuickActions,
-  DesktopStatusBar,
-} from "../components/pos/desktop";
-import {
-  isDesktopPosCatalogUi,
-  isDesktopPosTerminal,
-  isWebFullDesktopPos,
-  useDesktopPosSplitLayout,
-} from "../lib/desktopPosTerminal";
-import { desktopCategoryRailModel, isSellHierarchyCatalogNav } from "../lib/desktopCategoryNav";
 import { PosSellProductCard } from "../components/pos/PosSellProductCard";
 import { PosSellCatalogShelfSection } from "../components/pos/PosSellCatalogShelfSection";
 import { PosExitConfirmModal } from "../components/pos/PosExitConfirmModal";
@@ -98,9 +75,7 @@ import {
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
-import { useTerminalIdentity } from "../hooks/useTerminalIdentity";
 import { useSessionActor } from "../context/SessionActorContext";
-import { shiftOwnerUserId, authOperatorRole } from "../lib/sessionActor";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { gateDraftSaleStockBeforeFinalize } from "../lib/preFinalizeStockGate";
@@ -120,8 +95,6 @@ import {
   isPharmacyPackagingActive,
 } from "../lib/pharmacyPackaging";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
-import { addDenominationToCashInput } from "../lib/cashDenominations";
-import { physicalCashTenderFromCheckoutInputs } from "../lib/saleTenderCash";
 import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import { brandingFromSale } from "../lib/receiptBranding";
@@ -161,10 +134,10 @@ import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../lib/auditRe
 import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from "../lib/receiptDocuments";
 import { isNativePrintPlatform } from "../lib/nativeReceiptPrint";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
-import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabels";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
+import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
 import { PosShelfDrillDownHeader } from "../components/pos/PosShelfDrillDownHeader";
 import { PosMobileShelfContinue, PosMobileShelfEndCue } from "../components/pos/PosMobileShelfContinue";
 import {
@@ -246,7 +219,6 @@ function parseDisplayQty(s: string): number {
 
 export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const terminalIdentity = useTerminalIdentity();
   const canSavePending = actorHasPermission(actor, "pending_sales.manage");
   const canIssueDebt = actorHasPermission(actor, "customers.debt");
   const checkoutMethods = useMemo(
@@ -254,8 +226,6 @@ export function PosPage({ lang }: { lang: Language }) {
     [canIssueDebt],
   );
   const shopPreferences = usePosStore((s) => s.preferences);
-  const terminalLabel = shopPreferences.shopDisplayName?.trim() || null;
-  const sellerDisplayName = terminalIdentity.sellerName;
   const pt = usePharmacyTerms(lang, shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
   const wt = useWholesaleTerms(lang, shopPreferences.businessType);
@@ -282,9 +252,9 @@ export function PosPage({ lang }: { lang: Language }) {
       summarizeTodaySales(
         sales,
         new Date(),
-        authOperatorRole(actor) === "cashier" ? { matchActor: actor } : undefined,
+        actor.role === "cashier" ? { soldByUserId: actor.userId } : undefined,
       ),
-    [sales, actor.authRole, actor.role, actor.userId, actor.linkedAuthUserId],
+    [sales, actor.role, actor.userId],
   );
   const customers = usePosStore(useShallow((s) => s.customers));
   const preferences = usePosStore(
@@ -323,24 +293,14 @@ export function PosPage({ lang }: { lang: Language }) {
   const setDraftInput = usePosStore((s) => s.setDraftInput);
   const addDraftLineFromInput = usePosStore((s) => s.addDraftLineFromInput);
   const removeDraftLine = usePosStore((s) => s.removeDraftLine);
+  const setDraftLineQuantity = usePosStore((s) => s.setDraftLineQuantity);
   const setDraftLineBatchOverride = usePosStore((s) => s.setDraftLineBatchOverride);
+  const adjustDraftLineQuantity = usePosStore((s) => s.adjustDraftLineQuantity);
   const applyDraftLineDiscount = usePosStore((s) => s.applyDraftLineDiscount);
   const draftCartDiscountUgx = usePosStore((s) => s.draftCartDiscountUgx);
   const setDraftCartDiscount = usePosStore((s) => s.setDraftCartDiscount);
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
-  const cartVoidMode: CartVoidMode = hospitalityMode
-    ? "hospitality"
-    : wholesaleMode
-      ? "wholesale"
-      : pharmacyMode
-        ? "pharmacy"
-        : "retail";
-  const setDraftPaymentMethod = usePosStore((s) => s.setDraftPaymentMethod);
-  const setDraftSaleCustomer = usePosStore((s) => s.setDraftSaleCustomer);
-  const storedDraftPaymentMethod = usePosStore((s) => s.draftPaymentMethod);
-  const saleCustomerId = usePosStore((s) => s.draftSaleCustomerId);
-  const saleCustomerName = usePosStore((s) => s.draftSaleCustomerName);
-  const saleCustomerPhone = usePosStore((s) => s.draftSaleCustomerPhone);
+  const clearDraft = usePosStore((s) => s.clearDraft);
   const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
   const savePendingSale = usePosStore((s) => s.savePendingSale);
   const setPreferences = usePosStore((s) => s.setPreferences);
@@ -437,14 +397,10 @@ export function PosPage({ lang }: { lang: Language }) {
     useDisplayScale();
   const displayScaleMultiplier = DISPLAY_SCALE_META[displayScaleLevel].multiplier;
   const isFullDesktopPos = posLayoutMode === "full";
-  const isDesktopPosTerminalUi = isDesktopPosTerminal();
-  const isWebFullDesktopPosLayout = isWebFullDesktopPos(isFullDesktopPos);
-  const useDesktopSplitLayout = useDesktopPosSplitLayout(isFullDesktopPos);
-  const isDesktopCatalogUi = isDesktopPosCatalogUi(isFullDesktopPos);
   const mobileSellFocus = posLayoutMode === "mobile";
   const compactSellFocus = posLayoutMode === "compact";
   /** Mobile, compact tablet, and full desktop share the catalog scroll pane model (Phase 25.3). */
-  const catalogSellMode = mobileSellFocus || useDesktopSplitLayout || compactSellFocus;
+  const catalogSellMode = mobileSellFocus || isFullDesktopPos || compactSellFocus;
   const catalogViewportLayout = catalogSellMode;
   const catalogScrollPaneClass =
     "pos-catalog-scroll-pane h-0 min-h-0 flex-1 overscroll-y-contain [-webkit-overflow-scrolling:touch]";
@@ -454,10 +410,10 @@ export function PosPage({ lang }: { lang: Language }) {
     draftLines.length,
     saleCheckoutMinimized,
   );
-  const desktopCheckoutCollapsed = useDesktopSplitLayout && saleCheckoutMinimized && draftLines.length > 0;
-  const useDesktopCatalogCheckoutDock = useDesktopSplitLayout && mountDesktopCheckoutSidebar && !desktopCheckoutCollapsed;
+  const desktopCheckoutCollapsed = isFullDesktopPos && saleCheckoutMinimized && draftLines.length > 0;
+  const useDesktopCatalogCheckoutDock = isFullDesktopPos && mountDesktopCheckoutSidebar && !desktopCheckoutCollapsed;
   const posSplitColumns =
-    mountDesktopCheckoutSidebar && useDesktopSplitLayout
+    mountDesktopCheckoutSidebar && isFullDesktopPos
       ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier, {
           collapsed: desktopCheckoutCollapsed,
         })
@@ -478,41 +434,20 @@ export function PosPage({ lang }: { lang: Language }) {
     return map;
   }, [draftLines]);
   const tapAddGuardRef = useRef<{ productId: string; at: number } | null>(null);
-  const activeShift = useMemo(() => {
-    const ownerId = shiftOwnerUserId(actor);
-    if (!ownerId) return null;
-    return (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === ownerId) ?? null;
-  }, [preferences.shifts, actor.authUserId, actor.userId]);
+  const activeShift = useMemo(
+    () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
+    [preferences.shifts, actor.userId],
+  );
   const [discountLine, setDiscountLine] = useState<SaleLine | null>(null);
   const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
   const [posExitOpen, setPosExitOpen] = useState(false);
   const posExitResolverRef = useRef<((choice: "lock" | "continue" | "cancel") => void) | null>(null);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
-  const paymentMethod: PaymentMethod =
-    storedDraftPaymentMethod === "voucher" || (storedDraftPaymentMethod === "credit" && !canIssueDebt)
-      ? "cash"
-      : storedDraftPaymentMethod;
-  const setPaymentMethod = useCallback(
-    (method: PaymentMethod) => {
-      setDraftPaymentMethod(method);
-    },
-    [setDraftPaymentMethod],
-  );
-  const setSaleCustomerId = useCallback(
-    (id: string) => setDraftSaleCustomer({ customerId: id }),
-    [setDraftSaleCustomer],
-  );
-  const setSaleCustomerName = useCallback(
-    (name: string) => setDraftSaleCustomer({ customerName: name }),
-    [setDraftSaleCustomer],
-  );
-  const setSaleCustomerPhone = useCallback(
-    (phone: string) => setDraftSaleCustomer({ customerPhone: phone }),
-    [setDraftSaleCustomer],
-  );
-  const [desktopOskOpen, setDesktopOskOpen] = useState(false);
-  const [desktopOskLayer, setDesktopOskLayer] = useState<"alpha" | "numeric">("alpha");
-  const finishSaleInFlightRef = useRef(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+
+  useEffect(() => {
+    if (paymentMethod === "credit" && !canIssueDebt) setPaymentMethod("cash");
+  }, [paymentMethod, canIssueDebt]);
 
   useEffect(() => {
     if (!displayScaleOn) return;
@@ -543,6 +478,9 @@ export function PosPage({ lang }: { lang: Language }) {
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
   const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutInputField>("cash");
   const [checkoutKeypadMode, setCheckoutKeypadMode] = useState<CheckoutKeypadMode>("numeric");
+  const [saleCustomerId, setSaleCustomerId] = useState<string>("");
+  const [saleCustomerName, setSaleCustomerName] = useState("");
+  const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
   const selectedPatientForGate = useMemo(() => {
     if (!saleCustomerId) return saleCustomerName.trim() || null;
     return customers.find((c) => c.id === saleCustomerId)?.name ?? (saleCustomerName.trim() || null);
@@ -578,12 +516,6 @@ export function PosPage({ lang }: { lang: Language }) {
   const sellRowMatchesSearch = browse.sellRowMatchesSearch;
   const selectedShelfLabel = browse.selectedShelfLabel;
   const favoriteIdSet = browse.favoriteIdSet;
-  const hierarchyEnabled = browse.hierarchyEnabled;
-  const hierarchyAtRoot = browse.hierarchyAtRoot;
-  const hierarchyPath = browse.hierarchyPath;
-  const hierarchyFolderCards = browse.hierarchyFolderCards;
-  const openCatalogFolder = browse.openCatalogFolder;
-  const jumpCatalogPath = browse.jumpCatalogPath;
 
   const quickSellProductIds = preferences.posQuickSellProductIds ?? EMPTY_QUICK_SELL_IDS;
   const soldTodayByProduct = useMemo(() => scanTodaySalesHead(sales).unitsByProduct, [sales]);
@@ -640,25 +572,19 @@ export function PosPage({ lang }: { lang: Language }) {
   const receiptSale = useMemo(() => sales.find((s) => s.id === receiptSaleId) ?? null, [sales, receiptSaleId]);
 
   const staffAccounts = preferences.staffAccounts ?? [];
-  const shifts = preferences.shifts ?? [];
-  const auditLogs = usePosStore((s) => s.auditLogs);
-  const soldByNameByUserId = useMemo(
-    () =>
-      buildSoldByNameByUserId({
-        staffAccounts,
-        shifts,
-        auditLogs,
-        ownerUserId: actor.authUserId ?? (actor.userId.startsWith("staff:") ? null : actor.userId),
-        ownerDisplayName: actor.displayName,
-        shopDisplayName: preferences.shopDisplayName,
-      }),
-    [staffAccounts, shifts, auditLogs, actor.authUserId, actor.userId, actor.displayName, preferences.shopDisplayName],
-  );
+  const staffNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of staffAccounts) m.set(s.id, s.name);
+    return m;
+  }, [staffAccounts]);
 
   const receiptCashierLabel = useCallback(
-    (sale: { soldByUserId?: string | null }) =>
-      resolveSoldByUserId(lang, sale.soldByUserId, soldByNameByUserId, preferences.shopDisplayName),
-    [lang, soldByNameByUserId, preferences.shopDisplayName],
+    (sale: { soldByUserId?: string | null }) => {
+      const id = sale.soldByUserId ?? "";
+      if (id.startsWith("staff:")) return staffNameById.get(id.slice("staff:".length)) ?? t(lang, "role_cashier");
+      return actor.displayName ?? t(lang, "role_owner");
+    },
+    [actor.displayName, lang, staffNameById],
   );
 
   const receiptDisplay = useMemo(() => {
@@ -1050,6 +976,30 @@ export function PosPage({ lang }: { lang: Language }) {
     [selected, pharmacyPackActive, setDraftInput, addDraftLineFromInput, lang, afterAddToCart, runWithExpiredGuard],
   );
 
+  const handleDraftQtyStep = useCallback(
+    (line: SaleLine, backwards: boolean) => {
+      const product = productById.get(line.productId);
+      const delta = product ? draftLineQuantityStep(product, backwards) : backwards ? -1 : 1;
+      const res = adjustDraftLineQuantity(line.productId, delta);
+      if (!res.ok) {
+        setToast(t(lang, res.errorKey ?? "saleError"));
+        window.setTimeout(() => setToast(null), 2200);
+      } else if (hapticsOn) void hapticTap();
+    },
+    [productById, adjustDraftLineQuantity, lang, hapticsOn],
+  );
+
+  const handleDraftQtyConfirm = useCallback(
+    (productId: string, quantity: number) => {
+      const res = setDraftLineQuantity(productId, quantity);
+      if (!res.ok) {
+        setToast(t(lang, res.errorKey ?? "saleError"));
+        window.setTimeout(() => setToast(null), 2200);
+      } else if (hapticsOn) void hapticTap();
+    },
+    [setDraftLineQuantity, lang, hapticsOn],
+  );
+
   const totalPaidInput = useMemo(() => {
     const cash = parseDisplayMoney(cashInput);
     const mobile = parseDisplayMoney(mobileMoneyInput);
@@ -1077,7 +1027,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const appendCheckoutDigit = useCallback(
     (d: string) => {
       if (checkoutKeypadMode === "alpha" && checkoutAmountField === "customerName") {
-        setSaleCustomerName(applyCheckoutAlphaKey(saleCustomerName, d));
+        setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
         return;
       }
       const applyNumeric = (prev: string) => applyCheckoutNumericKey(prev, d);
@@ -1087,23 +1037,17 @@ export function PosPage({ lang }: { lang: Language }) {
           setMobileMoneyInput(applyPhone);
           break;
         case "customerPhone":
-          setSaleCustomerPhone(applyPhone(saleCustomerPhone));
+          setSaleCustomerPhone(applyPhone);
           break;
         case "customerName":
-          setSaleCustomerName(applyCheckoutAlphaKey(saleCustomerName, d));
+          setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
           break;
         default:
           setCashInput(applyNumeric);
       }
     },
-    [checkoutAmountField, checkoutKeypadMode, saleCustomerName, saleCustomerPhone, setSaleCustomerName, setSaleCustomerPhone],
+    [checkoutAmountField, checkoutKeypadMode],
   );
-
-  const addCheckoutCashNote = useCallback((ugx: number) => {
-    setCheckoutAmountField("cash");
-    setCheckoutKeypadMode("numeric");
-    setCashInput((prev) => addDenominationToCashInput(prev, ugx));
-  }, []);
 
   const clearCheckoutAmount = useCallback(() => {
     switch (checkoutAmountField) {
@@ -1112,16 +1056,14 @@ export function PosPage({ lang }: { lang: Language }) {
         break;
       case "customerPhone":
         setSaleCustomerPhone("");
-        setDraftSaleCustomer({ customerPhone: "" });
         break;
       case "customerName":
         setSaleCustomerName("");
-        setDraftSaleCustomer({ customerName: "" });
         break;
       default:
         setCashInput("");
     }
-  }, [checkoutAmountField, setDraftSaleCustomer]);
+  }, [checkoutAmountField]);
 
   const commitSearch = useCallback((raw: string) => {
     const q = raw.trim();
@@ -1135,17 +1077,6 @@ export function PosPage({ lang }: { lang: Language }) {
     (r: ReturnType<typeof finalizeDraftSale>) => {
       setCheckoutBlockMessage(null);
       setCheckoutBlockModalOpen(false);
-      if (r.idempotent) {
-        setCashInput("");
-        setMobileMoneyInput("");
-        setSaleCustomerId("");
-        setSaleCustomerName("");
-        setSaleCustomerPhone("");
-        setCheckoutAmountField("cash");
-        setCheckoutKeypadMode("numeric");
-        setPaymentMethod("cash");
-        return;
-      }
       if (hapticsOn) void hapticSaleComplete();
       if (soundOn) playSaleSuccessTone();
 
@@ -1198,9 +1129,6 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const finishSale = useCallback(() => {
     void (async () => {
-    if (finishSaleInFlightRef.current) return;
-    finishSaleInFlightRef.current = true;
-    try {
     if (paymentMethod === "cash" && parseDisplayMoney(cashInput) > 0 && parseDisplayMoney(cashInput) < draftPayable) {
       setToast(t(lang, "paymentCashTooLow"));
       window.setTimeout(() => setToast(null), 2200);
@@ -1231,11 +1159,6 @@ export function PosPage({ lang }: { lang: Language }) {
       customerPhone: saleCustomerPhone.trim() || null,
       paymentMethod,
       amountPaidUgx: totalPaidInput,
-      tenderCashUgx: physicalCashTenderFromCheckoutInputs({
-        paymentMethod,
-        cashInput,
-        draftPayable,
-      }),
       changeGivenUgx: changeDue,
     };
     const r = pharmacyMode
@@ -1256,9 +1179,6 @@ export function PosPage({ lang }: { lang: Language }) {
       return;
     }
     applyFinalizeSuccess(r);
-    } finally {
-      finishSaleInFlightRef.current = false;
-    }
     })();
   }, [
     paymentMethod,
@@ -1316,50 +1236,6 @@ export function PosPage({ lang }: { lang: Language }) {
     setExpiryWarnProduct(null);
   }, []);
 
-  const resetCheckoutAfterCartVoid = useCallback(() => {
-    setCashInput("");
-    setMobileMoneyInput("");
-    setSaleCustomerId("");
-    setSaleCustomerName("");
-    setSaleCustomerPhone("");
-    setPaymentMethod("cash");
-  }, [setSaleCustomerId, setSaleCustomerName, setSaleCustomerPhone, setPaymentMethod]);
-
-  const cartAbandon = useCartAbandonVoid({
-    lang,
-    mode: cartVoidMode,
-    onAfterSuccessfulVoid: resetCheckoutAfterCartVoid,
-    onError: (message) => {
-      setToast(message);
-      window.setTimeout(() => setToast(null), 2200);
-    },
-  });
-
-  const handleDraftQtyStep = useCallback(
-    (line: SaleLine, backwards: boolean) => {
-      const product = productById.get(line.productId);
-      const delta = product ? draftLineQuantityStep(product, backwards) : backwards ? -1 : 1;
-      const nextQty = Math.round((line.quantity + delta) * 10000) / 10000;
-      const res = cartAbandon.requestSetLineQuantity(line.productId, nextQty);
-      if (!res.ok) {
-        setToast(t(lang, res.errorKey ?? "saleError"));
-        window.setTimeout(() => setToast(null), 2200);
-      } else if (hapticsOn) void hapticTap();
-    },
-    [productById, cartAbandon.requestSetLineQuantity, lang, hapticsOn],
-  );
-
-  const handleDraftQtyConfirm = useCallback(
-    (productId: string, quantity: number) => {
-      const res = cartAbandon.requestSetLineQuantity(productId, quantity);
-      if (!res.ok) {
-        setToast(t(lang, res.errorKey ?? "saleError"));
-        window.setTimeout(() => setToast(null), 2200);
-      } else if (hapticsOn) void hapticTap();
-    },
-    [cartAbandon.requestSetLineQuantity, lang, hapticsOn],
-  );
-
   const showDesktopCatalogCheckoutDock =
     useDesktopCatalogCheckoutDock && (catalogNumpadOpen || paymentMethod === "credit");
   const mountCompactCheckoutSlideover = shouldMountCompactCheckoutSlideover(
@@ -1411,9 +1287,18 @@ export function PosPage({ lang }: { lang: Language }) {
     closeExpiryWarn,
     firstSaleOpen,
     dismissFirstSale,
-    cartVoidOpen: cartAbandon.open,
-    onDismissCartVoid: cartAbandon.keep,
   });
+
+  useEffect(() => {
+    return registerPosLeaveGuard({
+      hasActiveSale: () => draftLines.length > 0,
+      confirmLeave: async () => {
+        const ok = window.confirm(t(lang, "posLeaveActiveSaleConfirm"));
+        if (ok) usePosStore.getState().clearDraft();
+        return ok;
+      },
+    });
+  }, [draftLines.length, lang]);
 
   useEffect(() => {
     return registerPosExitHandler({
@@ -1483,7 +1368,6 @@ export function PosPage({ lang }: { lang: Language }) {
         checkoutBlockModalOpen,
         receiptOpen: receiptSaleId !== null,
         shiftCloseOpen,
-        cartVoidOpen: cartAbandon.open,
       };
       const modalOpen = isPosShortcutModalOpen(shortcutModalState);
 
@@ -1497,7 +1381,7 @@ export function PosPage({ lang }: { lang: Language }) {
           searchInputRef.current?.focus();
           break;
         case "focus_checkout":
-          if (useDesktopSplitLayout) {
+          if (isFullDesktopPos) {
             saveButtonRef.current?.focus();
           } else if (draftLines.length > 0) {
             setSaleCheckoutMinimized(false);
@@ -1531,8 +1415,7 @@ export function PosPage({ lang }: { lang: Language }) {
           }
           break;
         case "close":
-          if (cartAbandon.open) cartAbandon.keep();
-          else if (receiptSaleId) setReceiptSaleId(null);
+          if (receiptSaleId) setReceiptSaleId(null);
           else if (cameraScanOpen) setCameraScanOpen(false);
           else if (checkoutBlockModalOpen) setCheckoutBlockModalOpen(false);
           else if (cartSaleDiscountOpen) setCartSaleDiscountOpen(false);
@@ -1582,8 +1465,6 @@ export function PosPage({ lang }: { lang: Language }) {
     sellPresets.length,
     sheetOpen,
     shiftCloseOpen,
-    cartAbandon.open,
-    cartAbandon.keep,
     showAdvanced,
   ]);
 
@@ -1599,19 +1480,19 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const prevDraftLineCountRef = useRef(draftLines.length);
   useEffect(() => {
-    if (useDesktopSplitLayout && prevDraftLineCountRef.current === 0 && draftLines.length > 0) {
+    if (isFullDesktopPos && prevDraftLineCountRef.current === 0 && draftLines.length > 0) {
       setSaleCheckoutMinimized(false);
     }
     prevDraftLineCountRef.current = draftLines.length;
-  }, [draftLines.length, useDesktopSplitLayout]);
+  }, [draftLines.length, isFullDesktopPos]);
 
   const focusCatalogForAdd = useCallback(() => {
     setCatalogNumpadOpen(false);
     // Phase 32.1 — collapse to rail (sidebar stays mounted); do not unmount checkout.
-    if (useDesktopSplitLayout) setSaleCheckoutMinimized(true);
+    if (isFullDesktopPos) setSaleCheckoutMinimized(true);
     catalogRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     window.requestAnimationFrame(() => searchInputRef.current?.focus());
-  }, [useDesktopSplitLayout]);
+  }, [isFullDesktopPos]);
 
   const checkoutPanelCommon = {
     lang,
@@ -1642,12 +1523,12 @@ export function PosPage({ lang }: { lang: Language }) {
     customerSelectRef,
     saveButtonRef,
     checkoutPanelRef,
-    onClearDraft: cartAbandon.requestClear,
+    onClearDraft: clearDraft,
     onIncrement: (line: SaleLine) => handleDraftQtyStep(line, false),
     onDecrement: (line: SaleLine) => handleDraftQtyStep(line, true),
     onQtyTap: setQtyEditLine,
     onLineDiscount: setDiscountLine,
-    onRemoveLine: cartAbandon.requestRemoveLine,
+    onRemoveLine: removeDraftLine,
     onOpenCartDiscount: () => setCartSaleDiscountOpen(true),
     pharmacyMode,
     onBatchTap: pharmacyMode ? setBatchPickerLine : undefined,
@@ -1661,40 +1542,20 @@ export function PosPage({ lang }: { lang: Language }) {
     onSaleCustomerPhone: setSaleCustomerPhone,
     onSavePending: handleSavePending,
     onFinishSale: finishSale,
-    onAddCashNote: addCheckoutCashNote,
   };
 
-  const hierarchyCatalogNav = isSellHierarchyCatalogNav({
-    catalogHierarchyEnabled: hierarchyEnabled,
-    searchQueryLength: sellSearchContext.q.length,
-    mobileSellFocus,
-    isDesktopCatalogUi,
-  });
-  const hierarchyCatalogNested = hierarchyCatalogNav && !hierarchyAtRoot;
-  const catalogLandingCards = hierarchyCatalogNav ? hierarchyFolderCards : shelfCards;
-
   const showCatalogShelfGrid =
-    catalogSellMode &&
-    sellSearchContext.q.length === 0 &&
-    (hierarchyCatalogNested || catalogLandingCards.length > 0);
+    catalogSellMode && shelfCards.length > 0 && sellSearchContext.q.length === 0;
   const showCatalogProductsBelow =
     showCatalogShelfGrid && sellCategoryKey !== CATEGORY_FILTER_ALL;
   /** Mobile + full desktop: open shelf products full-screen instead of below the grid. */
-  const catalogShelfDrillDown =
-    catalogSellMode && (hierarchyCatalogNested || (!hierarchyCatalogNav && showCatalogProductsBelow));
+  const catalogShelfDrillDown = catalogSellMode && showCatalogProductsBelow;
   const showCatalogSearchResults = catalogSellMode && sellSearchContext.q.length > 0;
 
-  const catalogShelfCards = hierarchyCatalogNav ? hierarchyFolderCards : shelfCards;
-  const desktopRail = desktopCategoryRailModel({
-    hierarchyEnabled,
-    atRoot: hierarchyAtRoot,
-    sellCategoryKey,
-    hierarchyFolderCards,
-    legacyShelfCards: shelfCards,
-  });
+  const catalogShelfCards = shelfCards;
 
   const quickProductChips = useMemo(() => {
-    if (!catalogSellMode || isDesktopCatalogUi) return [];
+    if (!catalogSellMode || isFullDesktopPos) return [];
     const seen = new Set<string>();
     const out: Product[] = [];
     for (const p of quickSellProducts) {
@@ -1710,28 +1571,13 @@ export function PosPage({ lang }: { lang: Language }) {
       }
     }
     return out.slice(0, 12);
-  }, [catalogSellMode, isDesktopCatalogUi, quickSellProducts, frequentToday]);
+  }, [catalogSellMode, isFullDesktopPos, quickSellProducts, frequentToday]);
 
   const handleCatalogShelfTap = useCallback(
     (shelfKey: string) => {
-      if (hierarchyEnabled && (mobileSellFocus || isDesktopCatalogUi)) {
-        if (shelfKey === CATEGORY_FILTER_ALL) {
-          jumpCatalogPath(null);
-          return;
-        }
-        openCatalogFolder(shelfKey);
-        return;
-      }
       setSellCategoryFilter(shelfKey);
     },
-    [
-      hierarchyEnabled,
-      mobileSellFocus,
-      isDesktopCatalogUi,
-      jumpCatalogPath,
-      openCatalogFolder,
-      setSellCategoryFilter,
-    ],
+    [setSellCategoryFilter],
   );
 
   const renderCatalogProductGrid = () => {
@@ -1742,7 +1588,11 @@ export function PosPage({ lang }: { lang: Language }) {
             lang={lang}
             shelfLabel={selectedShelfLabel}
             canAdd={actorHasPermission(actor, "products.add")}
-            onAddProduct={() => navigate(inventoryAddProductToShelfHref(sellCategoryKey))}
+            onAddProduct={() =>
+              navigate(
+                `/stock?tab=shelves&shelf=${encodeURIComponent(sellCategoryKey)}&add=1`,
+              )
+            }
           />
         );
       }
@@ -1763,15 +1613,15 @@ export function PosPage({ lang }: { lang: Language }) {
           addLabel={t(lang, "addToSale")}
           isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
           lockedBadge={t(lang, "productLockedBadge")}
-          variant={isDesktopCatalogUi ? "sellDesktop" : "sellMobile"}
-          favoriteIds={isDesktopCatalogUi ? favoriteIdSet : undefined}
-          onToggleFavorite={isDesktopCatalogUi ? toggleFavoriteProduct : undefined}
+          variant={isFullDesktopPos ? "sellDesktop" : "sellMobile"}
+          favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
+          onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
           cartQtyByProductId={cartQtyByProductId}
         />
       );
     }
     const grid = catalogGridFor(filteredProducts.length);
-    if (isDesktopCatalogUi) {
+    if (isFullDesktopPos) {
       return (
         <div
           className="grid gap-1.5"
@@ -1830,466 +1680,7 @@ export function PosPage({ lang }: { lang: Language }) {
       return;
     }
     scrollCatalogToTop(catalogRef.current);
-  }, [catalogSellMode, isDesktopCatalogUi, sellCategoryKey, sellSearchContext.q]);
-
-  const handleDesktopOskKey = useCallback(
-    (key: string) => {
-      if (key === "close") {
-        setDesktopOskOpen(false);
-        return;
-      }
-      if (checkoutAmountField === "customerName" || checkoutAmountField === "customerPhone") {
-        if (key === "enter") return;
-        if (checkoutAmountField === "customerName") {
-          setSaleCustomerName(key === "C" ? "" : applyCheckoutAlphaKey(saleCustomerName, key));
-        } else {
-          setSaleCustomerPhone(key === "C" ? "" : applyCheckoutPhoneKey(saleCustomerPhone, key));
-        }
-        return;
-      }
-      if (key === "enter") {
-        commitSearch(searchQuery);
-        return;
-      }
-      if (key === "C") setSearchQuery("");
-      else if (key === "back") setSearchQuery((q) => q.slice(0, -1));
-      else if (key === "space") setSearchQuery((q) => `${q} `);
-      else setSearchQuery((q) => (q + key).slice(0, 80));
-    },
-    [checkoutAmountField, commitSearch, searchQuery, saleCustomerName, saleCustomerPhone, setSaleCustomerName, setSaleCustomerPhone],
-  );
-
-  const renderPosSearchBar = () =>
-    products.length > 0 ? (
-      <div
-        className={clsx(
-          mobileSellFocus || compactSellFocus
-            ? "sticky top-0 z-20 shrink-0 -mx-0.5 space-y-0 bg-muted/95 px-2 pb-1 pt-0 backdrop-blur-md"
-            : isDesktopCatalogUi
-              ? "shrink-0 space-y-1"
-              : "space-y-1.5 rounded-[1.35rem] border border-border bg-card p-2 shadow-waka-sm",
-        )}
-      >
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            ref={searchInputRef}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onBlur={(e) => commitSearch(e.target.value)}
-            onFocus={() => {
-              if (isDesktopPosTerminalUi) {
-                setDesktopOskLayer("alpha");
-                setDesktopOskOpen(true);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitSearch(searchQuery);
-            }}
-            placeholder={
-              isDesktopCatalogUi
-                ? t(lang, "posDesktopSearchPlaceholder")
-                : pharmacyMode || hospitalityMode || wholesaleMode
-                  ? modeTerm("searchPlaceholder")
-                  : t(lang, "posSellSearchPlaceholder")
-            }
-            aria-label={
-              isDesktopCatalogUi
-                ? t(lang, "posDesktopSearchPlaceholder")
-                : pharmacyMode || hospitalityMode || wholesaleMode
-                  ? modeTerm("searchPlaceholder")
-                  : t(lang, "posSellSearchPlaceholder")
-            }
-            className={clsx(
-              "pos-ds-input w-full rounded-2xl border border-border bg-card pl-9 font-semibold text-foreground outline-none ring-waka-200 placeholder:text-muted-foreground transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
-              isDesktopPosTerminalUi ? "h-11 pr-[5.5rem] bg-muted/90 text-sm focus:bg-card focus:ring-1" : "pr-10",
-              mobileSellFocus
-                ? "h-10 rounded-xl text-sm shadow-sm"
-                : isDesktopCatalogUi
-                  ? "h-10 bg-muted/90 text-sm focus:bg-card focus:ring-1"
-                  : "h-11 bg-muted/90 text-base focus:bg-card focus:ring-1",
-            )}
-          />
-          {isDesktopPosTerminalUi ? (
-            <button
-              type="button"
-              className="absolute right-12 top-1/2 flex h-10 min-h-[40px] w-10 min-w-[40px] -translate-y-1/2 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground active:bg-muted"
-              onClick={() => {
-                setDesktopOskLayer("alpha");
-                setDesktopOskOpen((v) => !v);
-                searchInputRef.current?.focus();
-              }}
-              aria-label={t(lang, "posKeypadAlpha")}
-            >
-              <Keyboard className="h-4 w-4" />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
-            onClick={() => {
-              if (searchQuery.trim()) setSearchQuery("");
-              else if (detectBarcodeCapabilities().cameraScan) setCameraScanOpen(true);
-            }}
-            aria-label={searchQuery.trim() ? t(lang, "posClearSearch") : t(lang, "posBarcodeSoon")}
-          >
-            {searchQuery.trim() ? <X className="h-4 w-4" /> : <ScanLine className="h-4 w-4" />}
-          </button>
-        </div>
-        {!mobileSellFocus && !isDesktopCatalogUi && recentSearches.length > 0 ? (
-          <ul
-            className="m-0 flex max-w-full list-none gap-1 overflow-x-auto p-0 pb-0.5"
-            aria-label={t(lang, "posRecentSearches")}
-          >
-            {recentSearches.map((item) => (
-              <li key={item} className="shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery(item)}
-                  className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground active:bg-muted"
-                >
-                  {item}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {!mobileSellFocus && !isDesktopCatalogUi && frequentTodayVisible.length > 0 ? (
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFrequentToday")}</p>
-            <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-              {frequentTodayVisible.map(({ product, qty }) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => openProduct(product)}
-                  className="shrink-0 rounded-full border border-warning/30 bg-warning-muted px-2.5 py-1 text-xs font-bold text-warning-foreground active:bg-warning-muted"
-                >
-                  {product.name} · {qty}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {!mobileSellFocus && !isDesktopCatalogUi && favoriteProductsVisible.length > 0 ? (
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFavorites")}</p>
-            <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-              {favoriteProductsVisible.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => openProduct(p)}
-                  className="shrink-0 rounded-full border border-waka-300 bg-waka-50 px-2 py-0.5 text-xs font-bold text-waka-950 active:bg-waka-100"
-                >
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {!mobileSellFocus && !isDesktopCatalogUi && recentProductsVisible.length > 0 ? (
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posRecentProducts")}</p>
-            <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-              {recentProductsVisible.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => openProduct(p)}
-                  className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-foreground active:bg-muted"
-                >
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
-    ) : null;
-
-  const renderCatalogPane = () => (
-    <>
-      {mobileSellFocus && quickProductChips.length > 0 && !showCatalogShelfGrid ? (
-        <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} className="shrink-0" />
-      ) : null}
-
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {products.length === 0 &&
-        shelfCards.length === 0 &&
-        !(hierarchyCatalogNav && hierarchyFolderCards.length > 0) ? (
-          <section className="rounded-3xl border-2 border-dashed border-border bg-muted p-8 text-center">
-            <p className="text-2xl font-black text-foreground">{t(lang, "posEmptyTitle")}</p>
-            <p className="mt-2 text-lg text-muted-foreground">{t(lang, "posEmptySub")}</p>
-            {actorHasPermission(actor, "products.add") ? (
-              <Link
-                to="/stock"
-                className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"
-              >
-                {t(lang, "posEmptyCtaProducts")}
-              </Link>
-            ) : (
-              <p className="mt-4 text-base font-semibold text-muted-foreground">{t(lang, "posEmptyAskOwner")}</p>
-            )}
-          </section>
-        ) : showCatalogShelfGrid ? (
-          catalogShelfDrillDown ? (
-            <section
-              ref={catalogRef}
-              className={clsx(
-                "space-y-2",
-                catalogSellMode &&
-                  (mobileSellFocus
-                    ? isMobileShortShelf(filteredProducts.length)
-                      ? "pos-catalog-scroll-pane pos-catalog-scroll-pane--short-finish overscroll-y-contain [-webkit-overflow-scrolling:touch]"
-                      : "pos-catalog-scroll-pane pos-catalog-scroll-pane--natural overscroll-y-contain [-webkit-overflow-scrolling:touch]"
-                    : catalogScrollPaneClass),
-              )}
-              data-pos-catalog-scroll={catalogSellMode ? true : undefined}
-              data-pos-short-shelf={
-                mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? "1" : undefined
-              }
-            >
-              <PosShelfDrillDownHeader
-                lang={lang}
-                shelfLabel={selectedShelfLabel}
-                productCount={filteredProducts.length}
-                onBack={browse.backToShelves}
-                compact={mobileSellFocus}
-                className="shrink-0"
-                path={hierarchyCatalogNested ? hierarchyPath : undefined}
-                onPathSelect={hierarchyCatalogNested ? jumpCatalogPath : undefined}
-              />
-              {hierarchyCatalogNested && hierarchyFolderCards.length > 0 ? (
-                <PosSellCatalogShelfSection
-                  lang={lang}
-                  shelves={hierarchyFolderCards}
-                  onShelfTap={handleCatalogShelfTap}
-                  nested
-                />
-              ) : null}
-              {hierarchyCatalogNested &&
-              filteredProducts.length === 0 &&
-              hierarchyFolderCards.length > 0 ? null : (
-                <div className="shrink-0">{renderCatalogProductGrid()}</div>
-              )}
-              {!hierarchyCatalogNav && mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? (
-                <PosMobileShelfContinue
-                  lang={lang}
-                  otherShelves={catalogShelfCards
-                    .filter((s) => s.key !== sellCategoryKey && s.count > 0)
-                    .slice(0, MOBILE_SHORT_SHELF_OTHER_SHELVES_MAX)}
-                  onShelfTap={handleCatalogShelfTap}
-                  popularProducts={popularOutsideOpenShelf}
-                  onPickProduct={openProduct}
-                  onBackToShelves={browse.backToShelves}
-                  addLabel={t(lang, "addToSale")}
-                  lockedIds={lockedIds}
-                />
-              ) : !hierarchyCatalogNav &&
-                mobileSellFocus &&
-                shouldShowMobileShelfEndCue(filteredProducts.length) ? (
-                <PosMobileShelfEndCue lang={lang} onBackToShelves={browse.backToShelves} />
-              ) : null}
-            </section>
-          ) : (
-            <div
-              ref={catalogRef}
-              className={clsx(catalogSellMode && catalogScrollPaneClass, (mobileSellFocus || compactSellFocus) && "mt-1")}
-              data-pos-catalog-scroll={catalogSellMode ? true : undefined}
-            >
-              {catalogSellMode && !isDesktopCatalogUi && quickProductChips.length > 0 ? (
-                <PosQuickProductChips
-                  lang={lang}
-                  products={quickProductChips}
-                  onTap={quickTapAddProduct}
-                  className="mb-3 shrink-0"
-                />
-              ) : null}
-              {mobileSellFocus && frequentTodayVisible.length > 0 ? (
-                <div className="mb-3 grid grid-cols-2 gap-2">
-                  {frequentTodayVisible.slice(0, 4).map(({ product }) => (
-                    <PosSellProductCard
-                      key={`landing-${product.id}`}
-                      product={product}
-                      stockLabel={t(lang, "stockLabel")}
-                      addLabel={t(lang, "addToSale")}
-                      locked={isProductPlanLocked(product.id, lockedIds)}
-                      lockedBadge={t(lang, "productLockedBadge")}
-                      cartQty={cartQtyByProductId.get(product.id) ?? 0}
-                      onPick={openProduct}
-                    />
-                  ))}
-                </div>
-              ) : null}
-              <PosSellCatalogShelfSection
-                lang={lang}
-                shelves={catalogShelfCards}
-                onShelfTap={handleCatalogShelfTap}
-                desktop={isDesktopCatalogUi}
-              />
-            </div>
-          )
-        ) : showCatalogSearchResults ? (
-          <section
-            ref={catalogRef}
-            className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
-            data-pos-catalog-scroll={catalogSellMode ? true : undefined}
-          >
-            <p className="px-0.5 text-xs font-black text-muted-foreground">
-              {t(lang, "posSearchResults")}
-              <span className="font-semibold text-muted-foreground"> · {t(lang, "posMasterSearchAll")}</span>
-              {filteredProducts.length > 0 ? (
-                <span className="font-semibold text-muted-foreground"> ({filteredProducts.length})</span>
-              ) : null}
-            </p>
-            {filteredProducts.length === 0 ? (
-              <p className="rounded-xl bg-warning-muted px-3 py-4 text-center text-sm font-bold text-warning-foreground">
-                {t(lang, "posSellNoMatch")}
-              </p>
-            ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
-              <VirtualizedProductGrid
-                products={filteredProducts}
-                columnCount={productGridCols}
-                onPick={openProduct}
-                stockLabel={t(lang, "stockLabel")}
-                noShelfLabel={t(lang, "posNoShelf")}
-                addLabel={t(lang, "addToSale")}
-                isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
-                lockedBadge={t(lang, "productLockedBadge")}
-                variant={isDesktopCatalogUi ? "sellDesktop" : "sellMobile"}
-                favoriteIds={isDesktopCatalogUi ? favoriteIdSet : undefined}
-                onToggleFavorite={isDesktopCatalogUi ? toggleFavoriteProduct : undefined}
-                cartQtyByProductId={cartQtyByProductId}
-              />
-            ) : (
-              (() => {
-                const searchGrid = catalogGridFor(filteredProducts.length);
-                return isDesktopCatalogUi ? (
-                  <div
-                    className="grid gap-1.5"
-                    style={{
-                      gridTemplateColumns: searchGrid.gridTemplateColumns,
-                      justifyContent: searchGrid.justifyContent,
-                    }}
-                    data-pos-sparse-cols={searchGrid.columns}
-                    data-pos-sparse={searchGrid.sparse ? "1" : undefined}
-                  >
-                    {filteredProducts.map((p) => (
-                      <PosDesktopProductCard
-                        key={p.id}
-                        product={p}
-                        stockLabel={t(lang, "stockLabel")}
-                        sellLabel={t(lang, "addToSale")}
-                        locked={isProductPlanLocked(p.id, lockedIds)}
-                        lockedBadge={t(lang, "productLockedBadge")}
-                        favorite={favoriteIdSet.has(p.id)}
-                        cartQty={cartQtyByProductId.get(p.id) ?? 0}
-                        onPick={openProduct}
-                        onToggleFavorite={toggleFavoriteProduct}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    className="grid gap-2"
-                    style={{
-                      gridTemplateColumns: searchGrid.gridTemplateColumns,
-                      justifyContent: searchGrid.justifyContent,
-                    }}
-                    data-pos-sparse-cols={searchGrid.columns}
-                    data-pos-sparse={searchGrid.sparse ? "1" : undefined}
-                  >
-                    {filteredProducts.map((p) => (
-                      <PosSellProductCard
-                        key={p.id}
-                        product={p}
-                        stockLabel={t(lang, "stockLabel")}
-                        addLabel={t(lang, "addToSale")}
-                        locked={isProductPlanLocked(p.id, lockedIds)}
-                        lockedBadge={t(lang, "productLockedBadge")}
-                        cartQty={cartQtyByProductId.get(p.id) ?? 0}
-                        onPick={openProduct}
-                      />
-                    ))}
-                  </div>
-                );
-              })()
-            )}
-          </section>
-        ) : sellCategoryKey !== CATEGORY_FILTER_ALL ? (
-          <div ref={catalogRef} className={clsx(catalogSellMode && catalogScrollPaneClass)} data-pos-catalog-scroll={catalogSellMode ? true : undefined}>
-            {renderCatalogProductGrid()}
-          </div>
-        ) : null}
-
-        {showDesktopCatalogCheckoutDock ? (
-          <div className={POS_CATALOG_KEYPAD_OVERLAY_CLASS} data-pos-catalog-keypad-overlay>
-            <div className={POS_CATALOG_KEYPAD_OVERLAY_INNER_CLASS}>
-              <PosDesktopCatalogCheckoutDock
-                lang={lang}
-                paymentMethod={paymentMethod}
-                catalogNumpadOpen={catalogNumpadOpen}
-                onCatalogNumpadOpenChange={setCatalogNumpadOpen}
-                cashInput={cashInput}
-                mobileMoneyInput={mobileMoneyInput}
-                checkoutAmountField={checkoutAmountField}
-                checkoutKeypadMode={checkoutKeypadMode}
-                changeDue={changeDue}
-                computedDebt={computedDebt}
-                saleCustomerId={saleCustomerId}
-                saleCustomerName={saleCustomerName}
-                saleCustomerPhone={saleCustomerPhone}
-                customers={customers}
-                customerSelectRef={customerSelectRef}
-                saveButtonRef={saveButtonRef}
-                saveSaleLabel={modeTerm("saveSale")}
-                saveDisabled={draftLines.length === 0}
-                onCheckoutInputField={(field) => {
-                  handleCheckoutInputField(field);
-                  if (isDesktopPosTerminalUi && (field === "customerName" || field === "customerPhone")) {
-                    setDesktopOskLayer("alpha");
-                    setDesktopOskOpen(true);
-                  }
-                }}
-                onCheckoutKeypadModeChange={setCheckoutKeypadMode}
-                onAppendCheckoutDigit={appendCheckoutDigit}
-                onAddCashNote={addCheckoutCashNote}
-                onClearCheckoutAmount={clearCheckoutAmount}
-                onSaleCustomerId={setSaleCustomerId}
-                onSaleCustomerName={setSaleCustomerName}
-                onSaleCustomerPhone={setSaleCustomerPhone}
-                onFinishSale={finishSale}
-              />
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </>
-  );
-
-  const renderCheckoutAside = () =>
-    mountDesktopCheckoutSidebar ? (
-      <aside className={clsx(useDesktopSplitLayout ? "sticky top-0 min-h-0 self-stretch" : "sticky top-3")}>
-        {desktopCheckoutCollapsed ? (
-          <PosDesktopCheckoutRail
-            lang={lang}
-            productCount={draftCartStats.productCount}
-            payableUgx={draftPayable}
-            onExpand={() => setSaleCheckoutMinimized(false)}
-          />
-        ) : (
-          <PosCheckoutPanel
-            variant="sidebar"
-            {...checkoutPanelCommon}
-            onAddItems={focusCatalogForAdd}
-            catalogDock={useDesktopCatalogCheckoutDock}
-            catalogNumpadOpen={catalogNumpadOpen}
-            onCatalogNumpadOpenChange={setCatalogNumpadOpen}
-          />
-        )}
-      </aside>
-    ) : null;
+  }, [catalogSellMode, isFullDesktopPos, sellCategoryKey, sellSearchContext.q]);
 
   const sellActionFooter =
     draftLines.length > 0 ||
@@ -2299,7 +1690,7 @@ export function PosPage({ lang }: { lang: Language }) {
       mobileSellFocus ? (
         <PosSellActionChips>
           {draftLines.length > 0 ? (
-            <PosSellActionChip onClick={cartAbandon.requestClear}>{modeTerm("clearSale")}</PosSellActionChip>
+            <PosSellActionChip onClick={() => clearDraft()}>{modeTerm("clearSale")}</PosSellActionChip>
           ) : null}
           {canSavePending ? (
             <Link to="/pending-sales" className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-bold text-foreground active:bg-muted">
@@ -2326,7 +1717,7 @@ export function PosPage({ lang }: { lang: Language }) {
           {draftLines.length > 0 ? (
             <button
               type="button"
-              onClick={cartAbandon.requestClear}
+              onClick={() => clearDraft()}
               className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
             >
               {modeTerm("clearSale")}
@@ -2383,12 +1774,11 @@ export function PosPage({ lang }: { lang: Language }) {
       data-sell-workspace-mode={sellWorkspaceMode}
     >
       <PosOfflineBanner lang={lang} compact={catalogSellMode} />
-      {isWebFullDesktopPosLayout ? (
+      {isFullDesktopPos ? (
         <PosDesktopCompactHeader
           lang={lang}
           sellLabelKey={sellNavLabelKey}
-          identity={terminalIdentity}
-          terminalLabel={terminalLabel}
+          cashierName={actor.displayName ?? actor.userId}
           shift={activeShift}
           todaySaleCount={todaySalesSummary.count}
           todaySalesUgx={todaySalesSummary.total}
@@ -2399,7 +1789,7 @@ export function PosPage({ lang }: { lang: Language }) {
         <PosShiftSummaryCollapsible
           lang={lang}
           shift={activeShift}
-          cashierName={sellerDisplayName}
+          cashierName={actor.displayName ?? actor.userId}
           todaySaleCount={todaySalesSummary.count}
           todaySalesUgx={todaySalesSummary.total}
           pendingCount={pendingCount}
@@ -2412,12 +1802,12 @@ export function PosPage({ lang }: { lang: Language }) {
         <ActiveShiftBanner
           lang={lang}
           shift={activeShift}
-          cashierName={sellerDisplayName}
+          cashierName={actor.displayName ?? actor.userId}
           onCloseShift={() => setShiftCloseOpen(true)}
         />
       ) : null}
-      {!useDesktopSplitLayout ? <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} /> : null}
-      {!mobileSellFocus && !useDesktopSplitLayout ? (
+      {!isFullDesktopPos ? <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} /> : null}
+      {!mobileSellFocus && !isFullDesktopPos ? (
         <PosSellHeroCard
           lang={lang}
           sellLabel={t(lang, sellNavLabelKey)}
@@ -2441,102 +1831,402 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {isDesktopPosTerminalUi ? (
-        <DesktopPosShell
-          header={
-            <DesktopPosHeader
-              lang={lang}
-              sellLabelKey={sellNavLabelKey}
-              identity={terminalIdentity}
-              terminalLabel={terminalLabel}
-              shift={activeShift}
-              todaySaleCount={todaySalesSummary.count}
-              todaySalesUgx={todaySalesSummary.total}
-              pendingCount={pendingCount}
-              onCloseShift={() => setShiftCloseOpen(true)}
-            />
-          }
-          categoryRail={
-            <DesktopCategoryRail
-              lang={lang}
-              shelves={desktopRail.shelves}
-              selectedKey={desktopRail.selectedKey}
-              onSelect={handleCatalogShelfTap}
-              preserveOrder={desktopRail.preserveOrder}
-              showAll={desktopRail.showAll}
-              showBack={desktopRail.showBack}
-              onBack={browse.backToShelves}
-            />
-          }
-          quickActions={
-            <DesktopQuickActions
-              lang={lang}
-              canSavePending={canSavePending}
-              pendingCount={pendingCount}
-              hasCartDiscount={draftCartDiscountUgx > 0}
-              onHold={handleSavePending}
-              onCartDiscount={() => setCartSaleDiscountOpen(true)}
-            />
-          }
-          searchBar={renderPosSearchBar()}
-          catalog={renderCatalogPane()}
-          cart={<DesktopCartPanel>{renderCheckoutAside()}</DesktopCartPanel>}
-          paymentBar={
-            <DesktopPaymentPanel
-              lang={lang}
-              payableUgx={draftPayable}
-              paymentMethod={paymentMethod}
-              checkoutMethods={checkoutMethods}
-              onPaymentMethod={setPaymentMethod}
-              onCompleteSale={finishSale}
-              completeDisabled={draftLines.length === 0 || Boolean(checkoutBlockMessage)}
-              completeLabel={modeTerm("saveSale")}
-            />
-          }
-          statusBar={
-            <DesktopStatusBar lang={lang} identity={terminalIdentity} terminalLabel={terminalLabel} />
-          }
-          onScreenKeyboard={
-            <DesktopOnScreenKeyboard
-              lang={lang}
-              visible={desktopOskOpen}
-              onClose={() => setDesktopOskOpen(false)}
-              onKey={handleDesktopOskKey}
-              initialLayer={desktopOskLayer}
-            />
-          }
-        />
-      ) : (
+      <div
+        ref={catalogSplitRef}
+        className={clsx(
+          catalogSellMode && "min-h-0 flex-1 overflow-hidden",
+          mountDesktopCheckoutSidebar && isFullDesktopPos
+            ? "grid items-stretch gap-2"
+            : catalogSellMode && "flex flex-col",
+        )}
+        style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
+      >
         <div
-          ref={catalogSplitRef}
-          className={clsx(
-            catalogSellMode && "min-h-0 flex-1 overflow-hidden",
-            mountDesktopCheckoutSidebar && useDesktopSplitLayout
-              ? "grid items-stretch gap-2"
-              : catalogSellMode && "flex flex-col",
-          )}
-          style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
+          ref={catalogWidthRef}
+          className={clsx(isFullDesktopPos ? "flex min-h-0 min-w-0 flex-col gap-1.5" : catalogSellMode ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : "min-w-0 space-y-2")}
         >
-          <div
-            ref={catalogWidthRef}
-            className={clsx(
-              isDesktopCatalogUi
-                ? "flex min-h-0 min-w-0 flex-col gap-1.5"
-                : catalogSellMode
-                  ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-                  : "min-w-0 space-y-2",
-            )}
-          >
-            {renderPosSearchBar()}
-            {renderCatalogPane()}
-          </div>
-          {renderCheckoutAside()}
-        </div>
-      )}
 
-      {isWebFullDesktopPosLayout ? (
-        <PosDesktopStatusBar lang={lang} identity={terminalIdentity} terminalLabel={terminalLabel} />
+      {products.length > 0 ? (
+        <div
+          className={clsx(
+            mobileSellFocus || compactSellFocus
+              ? "sticky top-0 z-20 shrink-0 -mx-0.5 space-y-0 bg-muted/95 pb-1.5 pt-0.5 backdrop-blur-md"
+              : isFullDesktopPos
+                ? "shrink-0 space-y-1"
+                : "space-y-1.5 rounded-[1.35rem] border border-border bg-card p-2 shadow-waka-sm",
+          )}
+        >
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onBlur={(e) => commitSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitSearch(searchQuery);
+              }}
+              placeholder={
+                isFullDesktopPos
+                  ? t(lang, "posDesktopSearchPlaceholder")
+                  : pharmacyMode || hospitalityMode || wholesaleMode
+                    ? modeTerm("searchPlaceholder")
+                    : t(lang, "posSellSearchPlaceholder")
+              }
+              aria-label={
+                isFullDesktopPos
+                  ? t(lang, "posDesktopSearchPlaceholder")
+                  : pharmacyMode || hospitalityMode || wholesaleMode
+                    ? modeTerm("searchPlaceholder")
+                    : t(lang, "posSellSearchPlaceholder")
+              }
+              className={clsx(
+                "pos-ds-input w-full rounded-2xl border border-border bg-card pl-9 pr-10 font-semibold text-foreground outline-none ring-waka-200 placeholder:text-muted-foreground transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
+                mobileSellFocus
+                  ? "h-12 text-base shadow-sm"
+                  : isFullDesktopPos
+                    ? "h-10 bg-muted/90 text-sm focus:bg-card focus:ring-1"
+                    : "h-11 bg-muted/90 text-base focus:bg-card focus:ring-1",
+              )}
+            />
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
+              onClick={() => {
+                if (searchQuery.trim()) setSearchQuery("");
+                else if (detectBarcodeCapabilities().cameraScan) setCameraScanOpen(true);
+              }}
+              aria-label={searchQuery.trim() ? t(lang, "posClearSearch") : t(lang, "posBarcodeSoon")}
+            >
+              {searchQuery.trim() ? <X className="h-4 w-4" /> : <ScanLine className="h-4 w-4" />}
+            </button>
+          </div>
+          {!mobileSellFocus && !isFullDesktopPos && recentSearches.length > 0 ? (
+            <ul
+              className="m-0 flex max-w-full list-none gap-1 overflow-x-auto p-0 pb-0.5"
+              aria-label={t(lang, "posRecentSearches")}
+            >
+              {recentSearches.map((item) => (
+                <li key={item} className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery(item)}
+                    className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground active:bg-muted"
+                  >
+                    {item}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {!mobileSellFocus && !isFullDesktopPos && frequentTodayVisible.length > 0 ? (
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFrequentToday")}</p>
+              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
+                {frequentTodayVisible.map(({ product, qty }) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => openProduct(product)}
+                    className="shrink-0 rounded-full border border-warning/30 bg-warning-muted px-2.5 py-1 text-xs font-bold text-warning-foreground active:bg-warning-muted"
+                  >
+                    {product.name} · {qty}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {!mobileSellFocus && !isFullDesktopPos && favoriteProductsVisible.length > 0 ? (
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posFavorites")}</p>
+              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
+                {favoriteProductsVisible.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => openProduct(p)}
+                    className="shrink-0 rounded-full border border-waka-300 bg-waka-50 px-2 py-0.5 text-xs font-bold text-waka-950 active:bg-waka-100"
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {!mobileSellFocus && !isFullDesktopPos && recentProductsVisible.length > 0 ? (
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "posRecentProducts")}</p>
+              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
+                {recentProductsVisible.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => openProduct(p)}
+                      className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-foreground active:bg-muted"
+                    >
+                      {p.name}
+                    </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       ) : null}
+
+      {mobileSellFocus && quickProductChips.length > 0 && !showCatalogShelfGrid ? (
+        <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} className="shrink-0" />
+      ) : null}
+
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      {products.length === 0 && shelfCards.length === 0 ? (
+        <section className="rounded-3xl border-2 border-dashed border-border bg-muted p-8 text-center">
+          <p className="text-2xl font-black text-foreground">{t(lang, "posEmptyTitle")}</p>
+          <p className="mt-2 text-lg text-muted-foreground">{t(lang, "posEmptySub")}</p>
+          {actorHasPermission(actor, "products.add") ? (
+            <Link
+              to="/stock"
+              className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"
+            >
+              {t(lang, "posEmptyCtaProducts")}
+            </Link>
+          ) : (
+            <p className="mt-4 text-base font-semibold text-muted-foreground">{t(lang, "posEmptyAskOwner")}</p>
+          )}
+        </section>
+      ) : showCatalogShelfGrid ? (
+        catalogShelfDrillDown ? (
+          <section
+            ref={catalogRef}
+            className={clsx(
+              "space-y-2",
+              catalogSellMode &&
+                (mobileSellFocus
+                  ? isMobileShortShelf(filteredProducts.length)
+                    ? "pos-catalog-scroll-pane pos-catalog-scroll-pane--short-finish overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+                    : "pos-catalog-scroll-pane pos-catalog-scroll-pane--natural overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+                  : catalogScrollPaneClass),
+            )}
+            data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+            data-pos-short-shelf={
+              mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? "1" : undefined
+            }
+          >
+            <PosShelfDrillDownHeader
+              lang={lang}
+              shelfLabel={selectedShelfLabel}
+              productCount={filteredProducts.length}
+              onBack={browse.backToShelves}
+              compact={mobileSellFocus}
+              className="shrink-0"
+            />
+            <div className="shrink-0">{renderCatalogProductGrid()}</div>
+            {mobileSellFocus && isMobileShortShelf(filteredProducts.length) ? (
+              <PosMobileShelfContinue
+                lang={lang}
+                otherShelves={catalogShelfCards
+                  .filter((s) => s.key !== sellCategoryKey && s.count > 0)
+                  .slice(0, MOBILE_SHORT_SHELF_OTHER_SHELVES_MAX)}
+                onShelfTap={handleCatalogShelfTap}
+                popularProducts={popularOutsideOpenShelf}
+                onPickProduct={openProduct}
+                onBackToShelves={browse.backToShelves}
+                addLabel={t(lang, "addToSale")}
+                lockedIds={lockedIds}
+              />
+            ) : mobileSellFocus && shouldShowMobileShelfEndCue(filteredProducts.length) ? (
+              <PosMobileShelfEndCue lang={lang} onBackToShelves={browse.backToShelves} />
+            ) : null}
+          </section>
+        ) : (
+          <div
+            ref={catalogRef}
+            className={clsx(catalogSellMode && catalogScrollPaneClass, (mobileSellFocus || compactSellFocus) && "mt-2")}
+            data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+          >
+            {catalogSellMode && !isFullDesktopPos && quickProductChips.length > 0 ? (
+              <PosQuickProductChips
+                lang={lang}
+                products={quickProductChips}
+                onTap={quickTapAddProduct}
+                className="mb-3 shrink-0"
+              />
+            ) : null}
+            {/* M1.1 — mobile landing: popular products before shelves so Sell never feels empty. */}
+            {mobileSellFocus && frequentTodayVisible.length > 0 ? (
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                {frequentTodayVisible.slice(0, 4).map(({ product }) => (
+                  <PosSellProductCard
+                    key={`landing-${product.id}`}
+                    product={product}
+                    stockLabel={t(lang, "stockLabel")}
+                    addLabel={t(lang, "addToSale")}
+                    locked={isProductPlanLocked(product.id, lockedIds)}
+                    lockedBadge={t(lang, "productLockedBadge")}
+                    cartQty={cartQtyByProductId.get(product.id) ?? 0}
+                    onPick={openProduct}
+                  />
+                ))}
+              </div>
+            ) : null}
+            <PosSellCatalogShelfSection
+              lang={lang}
+              shelves={catalogShelfCards}
+              onShelfTap={handleCatalogShelfTap}
+              desktop={isFullDesktopPos}
+            />
+          </div>
+        )
+      ) : showCatalogSearchResults ? (
+        <section
+          ref={catalogRef}
+          className={clsx("space-y-2", catalogSellMode && catalogScrollPaneClass)}
+          data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+        >
+          <p className="px-0.5 text-xs font-black text-muted-foreground">
+            {t(lang, "posSearchResults")}
+            <span className="font-semibold text-muted-foreground"> · {t(lang, "posMasterSearchAll")}</span>
+            {filteredProducts.length > 0 ? (
+              <span className="font-semibold text-muted-foreground"> ({filteredProducts.length})</span>
+            ) : null}
+          </p>
+          {filteredProducts.length === 0 ? (
+            <p className="rounded-xl bg-warning-muted px-3 py-4 text-center text-sm font-bold text-warning-foreground">
+              {t(lang, "posSellNoMatch")}
+            </p>
+          ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
+            <VirtualizedProductGrid
+              products={filteredProducts}
+              columnCount={productGridCols}
+              onPick={openProduct}
+              stockLabel={t(lang, "stockLabel")}
+              noShelfLabel={t(lang, "posNoShelf")}
+              addLabel={t(lang, "addToSale")}
+              isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
+              lockedBadge={t(lang, "productLockedBadge")}
+              variant={isFullDesktopPos ? "sellDesktop" : "sellMobile"}
+              favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
+              onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
+              cartQtyByProductId={cartQtyByProductId}
+            />
+          ) : (
+            (() => {
+              const searchGrid = catalogGridFor(filteredProducts.length);
+              return isFullDesktopPos ? (
+                <div
+                  className="grid gap-1.5"
+                  style={{
+                    gridTemplateColumns: searchGrid.gridTemplateColumns,
+                    justifyContent: searchGrid.justifyContent,
+                  }}
+                  data-pos-sparse-cols={searchGrid.columns}
+                  data-pos-sparse={searchGrid.sparse ? "1" : undefined}
+                >
+                  {filteredProducts.map((p) => (
+                    <PosDesktopProductCard
+                      key={p.id}
+                      product={p}
+                      stockLabel={t(lang, "stockLabel")}
+                      sellLabel={t(lang, "addToSale")}
+                      locked={isProductPlanLocked(p.id, lockedIds)}
+                      lockedBadge={t(lang, "productLockedBadge")}
+                      favorite={favoriteIdSet.has(p.id)}
+                      cartQty={cartQtyByProductId.get(p.id) ?? 0}
+                      onPick={openProduct}
+                      onToggleFavorite={toggleFavoriteProduct}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="grid gap-2"
+                  style={{
+                    gridTemplateColumns: searchGrid.gridTemplateColumns,
+                    justifyContent: searchGrid.justifyContent,
+                  }}
+                  data-pos-sparse-cols={searchGrid.columns}
+                  data-pos-sparse={searchGrid.sparse ? "1" : undefined}
+                >
+                  {filteredProducts.map((p) => (
+                    <PosSellProductCard
+                      key={p.id}
+                      product={p}
+                      stockLabel={t(lang, "stockLabel")}
+                      addLabel={t(lang, "addToSale")}
+                      locked={isProductPlanLocked(p.id, lockedIds)}
+                      lockedBadge={t(lang, "productLockedBadge")}
+                      cartQty={cartQtyByProductId.get(p.id) ?? 0}
+                      onPick={openProduct}
+                    />
+                  ))}
+                </div>
+              );
+            })()
+          )}
+        </section>
+      ) : null}
+
+      {showDesktopCatalogCheckoutDock ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex max-h-[min(55%,28rem)] flex-col justify-end p-1.5">
+          <div className="pointer-events-auto min-h-0 overflow-hidden rounded-xl shadow-2xl ring-1 ring-border/80">
+            <PosDesktopCatalogCheckoutDock
+              lang={lang}
+              paymentMethod={paymentMethod}
+              catalogNumpadOpen={catalogNumpadOpen}
+              onCatalogNumpadOpenChange={setCatalogNumpadOpen}
+              cashInput={cashInput}
+              mobileMoneyInput={mobileMoneyInput}
+              checkoutAmountField={checkoutAmountField}
+              checkoutKeypadMode={checkoutKeypadMode}
+              changeDue={changeDue}
+              computedDebt={computedDebt}
+              saleCustomerId={saleCustomerId}
+              saleCustomerName={saleCustomerName}
+              saleCustomerPhone={saleCustomerPhone}
+              customers={customers}
+              customerSelectRef={customerSelectRef}
+              saveButtonRef={saveButtonRef}
+              saveSaleLabel={modeTerm("saveSale")}
+              saveDisabled={draftLines.length === 0}
+              onCheckoutInputField={handleCheckoutInputField}
+              onCheckoutKeypadModeChange={setCheckoutKeypadMode}
+              onAppendCheckoutDigit={appendCheckoutDigit}
+              onClearCheckoutAmount={clearCheckoutAmount}
+              onSaleCustomerId={setSaleCustomerId}
+              onSaleCustomerName={setSaleCustomerName}
+              onSaleCustomerPhone={setSaleCustomerPhone}
+              onFinishSale={finishSale}
+            />
+          </div>
+        </div>
+      ) : null}
+      </div>
+
+        </div>
+
+        {mountDesktopCheckoutSidebar ? (
+          <aside className={clsx(isFullDesktopPos ? "sticky top-0 min-h-0 self-stretch" : "sticky top-3")}>
+            {desktopCheckoutCollapsed ? (
+              <PosDesktopCheckoutRail
+                lang={lang}
+                productCount={draftCartStats.productCount}
+                payableUgx={draftPayable}
+                onExpand={() => setSaleCheckoutMinimized(false)}
+              />
+            ) : (
+              <PosCheckoutPanel
+                variant="sidebar"
+                {...checkoutPanelCommon}
+                onAddItems={focusCatalogForAdd}
+                catalogDock={useDesktopCatalogCheckoutDock}
+                catalogNumpadOpen={catalogNumpadOpen}
+                onCatalogNumpadOpenChange={setCatalogNumpadOpen}
+              />
+            )}
+          </aside>
+        ) : null}
+      </div>
+
+      {isFullDesktopPos ? <PosDesktopStatusBar lang={lang} /> : null}
 
       {mountCompactCheckoutSlideover ? (
         <PosCompactCheckoutSlideover
@@ -2818,16 +2508,13 @@ export function PosPage({ lang }: { lang: Language }) {
                     actor,
                     customerName: cust?.name ?? null,
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
-                    auditLogs,
                   });
                   void printSaleReceipt(ctx).then((r) => {
                     if (r.ok) {
                       logReceiptReprintAudit(receiptSale, ctx.receiptNumber);
-                      if (r.mode === "thermal") setToast(t(lang, "receiptPrintThermalSent"));
-                      else if (r.mode === "handoff") setToast(t(lang, "receiptPrintHandoffOpening"));
-                      else if (r.mode === "share" || isNativePrintPlatform()) setToast(t(lang, "receiptPrintNativeOpened"));
+                      if (isNativePrintPlatform()) setToast(t(lang, "receiptPrintNativeOpened"));
                     } else {
-                      window.alert(r.mode === "thermal" ? (r.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));
+                      window.alert(t(lang, "receiptPrintBlocked"));
                     }
                   });
                 }}
@@ -2842,7 +2529,6 @@ export function PosPage({ lang }: { lang: Language }) {
                     actor,
                     customerName: cust?.name ?? null,
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
-                    auditLogs,
                   });
                   void downloadSaleReceiptPdf(ctx).then((ok) => {
                     if (ok) logReceiptPdfExportAudit(receiptSale, ctx.receiptNumber);
@@ -2860,7 +2546,6 @@ export function PosPage({ lang }: { lang: Language }) {
                     actor,
                     customerName: cust?.name ?? null,
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
-                    auditLogs,
                   });
                   void shareSaleReceiptPdf(ctx).then((ok) => {
                     if (!ok) window.alert(t(lang, "receiptPdfFailed"));
@@ -2912,14 +2597,6 @@ export function PosPage({ lang }: { lang: Language }) {
           }
           setCartSaleDiscountOpen(false);
         }}
-      />
-
-      <CartVoidConfirmDialog
-        lang={lang}
-        open={cartAbandon.open}
-        copy={cartAbandon.copy}
-        onKeep={cartAbandon.keep}
-        onConfirm={cartAbandon.apply}
       />
 
       <ShiftCloseModal

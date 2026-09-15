@@ -15,7 +15,7 @@ import {
 } from "../offline/cloudSync";
 import { POS_PUSH_INTERVAL_MS, runPosPushOnlyUpload } from "../lib/posPushScheduler";
 import { scheduleImmediatePull } from "../lib/immediateSync";
-import { markSyncReconnecting, observeCurrentQueueMetrics } from "../lib/syncDiagnostics";
+import { markSyncReconnecting } from "../lib/syncDiagnostics";
 import { startRealtimeSyncPull, stopRealtimeSyncPull } from "../lib/realtimeSyncPull";
 import { scheduleForegroundSync } from "../lib/foregroundSync";
 import {
@@ -28,17 +28,7 @@ import {
   syncStartupIdleMs,
 } from "../lib/syncTiming";
 import { useOfflineStatus } from "./useOfflineStatus";
-import {
-  applySyncHealthAfterCycle,
-  countPendingOutboundFromKnown,
-  formatCloudSyncLastError,
-  publishShopSyncHealth,
-  publishShopSyncHealthAfterPushCycle,
-  readSyncHealthMeta,
-  writeSyncHealthMeta,
-  type SyncHealthMeta,
-} from "../lib/syncMeta";
-import { readLastEntityPullErrors } from "../lib/pullDiagnostics";
+import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
 import { appendPilotEvent } from "../lib/pilotEventLog";
 import { pilotSyncLog } from "../lib/pilotSyncLog";
 import { captureAppException } from "../lib/crashReporting";
@@ -108,12 +98,6 @@ async function pendingUploadStats(): Promise<{ total: number; breakdown: Pending
   for (const op of queue) {
     const bucket = bucketForKind(op.kind);
     breakdown[bucket] += 1;
-  }
-  // OBS-1 A/B/C: reuse this existing queue scan (kind + attempts only; never payloads).
-  try {
-    observeCurrentQueueMetrics(queue.map((op) => ({ kind: op.kind, attempts: op.attempts ?? 0 })));
-  } catch {
-    /* observer failure must not block sync status */
   }
   const total = Object.values(breakdown).reduce((sum, n) => sum + n, 0);
   return { total, breakdown, queueHealth: deriveQueueHealth(queue) };
@@ -206,70 +190,31 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
     setHealth(readSyncHealthMeta());
     try {
       const work = (async () => {
-        const retryQuarantined = showSpinner || forcePending;
         if (wantPull) {
-          const { pulled, push, queueFailed, hadOutboundWork } = await syncShopWithCloud({
-            pull: true,
-            forceFull,
-            retryQuarantined,
-          });
+          const { pulled, push, queueFailed } = await syncShopWithCloud({ pull: true, forceFull });
           lastFullSyncAtRef.current = Date.now();
           lastPushAtRef.current = lastFullSyncAtRef.current;
-          const entityPullErrors = readLastEntityPullErrors();
-          const pullPartial = pulled === false || Object.keys(entityPullErrors).length > 0;
-          const durable = await readSyncQueue();
-          const queueHealth = deriveQueueHealth(durable);
-          const meta = applySyncHealthAfterCycle({
-            attemptAt,
-            pullPartial,
-            entityPullErrors,
-            pushFail: push.fail,
-            queueFailed,
-            durableRemaining: durable.length,
-            queueHealth,
-          });
-          try {
-            publishShopSyncHealthAfterPushCycle({
-              pendingOutbound: countPendingOutboundFromKnown(durable.length, countUnsyncedSales()),
-              pushFail: push.fail,
-              queueFailed,
-              queueHealth,
-              lastPushOkAt: attemptAt,
-              lastError: formatCloudSyncLastError(meta),
-              pushOk: push.ok,
-              hadOutboundWork,
+          void pulled;
+          if (push.fail === 0 && queueFailed === 0) {
+            writeSyncHealthMeta({
+              lastSuccessAt: attemptAt,
+              lastIssueCode: "none",
+              lastIssueAt: null,
             });
-          } catch {
-            /* telemetry must not fail flush */
+          } else {
+            writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
           }
         } else {
-          const { push, queueFailed, hadOutboundWork } = await pushShopPendingToCloud({ retryQuarantined });
+          const { push, queueFailed } = await pushShopPendingToCloud();
           lastPushAtRef.current = Date.now();
-          const durable = await readSyncQueue();
-          const entityPullErrors = readLastEntityPullErrors();
-          const queueHealth = deriveQueueHealth(durable);
-          const meta = applySyncHealthAfterCycle({
-            attemptAt,
-            pullPartial: Object.keys(entityPullErrors).length > 0,
-            entityPullErrors,
-            pushFail: push.fail,
-            queueFailed,
-            durableRemaining: durable.length,
-            queueHealth,
-          });
-          try {
-            publishShopSyncHealthAfterPushCycle({
-              pendingOutbound: countPendingOutboundFromKnown(durable.length, countUnsyncedSales()),
-              pushFail: push.fail,
-              queueFailed,
-              queueHealth,
-              lastPushOkAt: attemptAt,
-              lastError: formatCloudSyncLastError(meta),
-              pushOk: push.ok,
-              hadOutboundWork,
+          if (push.fail === 0 && queueFailed === 0 && (push.ok > 0 || pendingRef.current === 0)) {
+            writeSyncHealthMeta({
+              lastSuccessAt: attemptAt,
+              lastIssueCode: "none",
+              lastIssueAt: null,
             });
-          } catch {
-            /* telemetry must not fail flush */
+          } else if (push.fail > 0 || queueFailed > 0) {
+            writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
           }
         }
       })();
@@ -284,14 +229,6 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
         lastIssueAt: attemptAt,
         lastIssueCode: "error",
       });
-      try {
-        publishShopSyncHealth({
-          lastError: "error",
-          includeLastError: true,
-        });
-      } catch {
-        /* telemetry must not fail flush */
-      }
       captureAppException(err, { scope: "sync_flush" });
       appendPilotEvent("sync_failure", "Sync flush failed", { at: attemptAt });
       pilotSyncLog("flush_error", { at: attemptAt });

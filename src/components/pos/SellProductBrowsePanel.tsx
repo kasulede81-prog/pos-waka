@@ -72,17 +72,9 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
     searchPlaceholder ??
     (pharmacyMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder"));
 
-  const showHierarchyRoot =
-    browse.hierarchyEnabled && browse.hierarchyAtRoot && browse.sellSearchContext.q.length === 0;
-  const showHierarchyNested =
-    browse.hierarchyEnabled && !browse.hierarchyAtRoot && browse.sellSearchContext.q.length === 0;
-  const showShelf =
-    !browse.hierarchyEnabled &&
-    browse.showCatalogShelfGrid &&
-    browse.sellCategoryKey === CATEGORY_FILTER_ALL;
-  const showDrillDown = browse.hierarchyEnabled ? showHierarchyNested : browse.catalogShelfDrillDown;
+  const showShelf = browse.showCatalogShelfGrid && browse.sellCategoryKey === CATEGORY_FILTER_ALL;
+  const showDrillDown = browse.catalogShelfDrillDown;
   const showSearchResults = browse.sellSearchContext.q.length > 0;
-  const landingShelves = showHierarchyRoot ? browse.hierarchyFolderCards : browse.shelfCards;
 
   return (
     <div className={clsx("flex h-full min-h-0 flex-1 flex-col", className)}>
@@ -119,13 +111,11 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
         className="pos-catalog-scroll-pane pos-catalog-scroll-pane--browse mt-3 h-0 min-h-0 flex-1"
         data-pos-catalog-scroll
       >
-        {showShelf || showHierarchyRoot ? (
+        {showShelf ? (
           <PosSellCatalogShelfSection
             lang={lang}
-            shelves={landingShelves}
-            onShelfTap={(key) =>
-              browse.hierarchyEnabled ? browse.openCatalogFolder(key) : browse.setSellCategoryFilter(key)
-            }
+            shelves={browse.shelfCards}
+            onShelfTap={(key) => browse.setSellCategoryFilter(key)}
           />
         ) : null}
 
@@ -137,22 +127,10 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
                 shelfLabel={browse.selectedShelfLabel}
                 productCount={browse.filteredProducts.length}
                 onBack={browse.backToShelves}
-                path={showHierarchyNested ? browse.hierarchyPath : undefined}
-                onPathSelect={showHierarchyNested ? browse.jumpCatalogPath : undefined}
-              />
-            ) : null}
-            {showHierarchyNested && browse.hierarchyFolderCards.length > 0 ? (
-              <PosSellCatalogShelfSection
-                lang={lang}
-                shelves={browse.hierarchyFolderCards}
-                onShelfTap={(key) => browse.openCatalogFolder(key)}
-                nested
               />
             ) : null}
             {browse.filteredProducts.length === 0 ? (
-              showHierarchyNested && browse.hierarchyFolderCards.length > 0 ? null : (
-                <p className="py-10 text-center text-sm font-semibold text-muted-foreground">{t(lang, "posSellNoMatch")}</p>
-              )
+              <p className="py-10 text-center text-sm font-semibold text-muted-foreground">{t(lang, "posSellNoMatch")}</p>
             ) : (
               <VirtualizedProductGrid
                 products={browse.filteredProducts}

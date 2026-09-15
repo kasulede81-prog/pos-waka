@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { ChevronDown } from "lucide-react";
 import type { Language, Product, ReturnReason, ReturnRecord, Sale, UserRole } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { formatSaleLineQuantity } from "../../lib/saleQuantityLabel";
-import { canPerformUnlinkedReturn, returnRestocksInventory } from "../../lib/returnPolicy";
+import { canPerformUnlinkedReturn } from "../../lib/returnPolicy";
 import {
   remainingRefundableAmount,
   remainingRefundableForLineQty,
@@ -14,14 +14,12 @@ import {
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { PosScreenPortal } from "../layout/PosScreenPortal";
 import { resolveReturnRefundUgx } from "../../lib/returnRefundInput";
-import { releaseReturnSubmitsForAccount } from "../../lib/returnSubmitGuard";
-import { inventoryMovementNamespace } from "../../lib/shopSyncContext";
 import { pricePerBaseUnitUgx } from "../../lib/sellingEngine";
 import { buildLineRefundBreakdown } from "../../lib/refundBreakdown";
 import { RefundBreakdownPanel } from "../returns/RefundBreakdownPanel";
 import { RefundReturnSummaryCard } from "../returns/RefundReturnSummaryCard";
 
-const REASONS: ReturnReason[] = ["wrong_item", "other", "damaged", "warm_bad", "broken"];
+const REASONS: ReturnReason[] = ["damaged", "warm_bad", "broken", "wrong_item", "other"];
 
 type Props = {
   lang: Language;
@@ -45,11 +43,10 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
   const [productId, setProductId] = useState("");
   const [qty, setQty] = useState("1");
   const [refund, setRefund] = useState("");
-  const [reason, setReason] = useState<ReturnReason>("wrong_item");
+  const [reason, setReason] = useState<ReturnReason>("damaged");
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showCalcDetails, setShowCalcDetails] = useState(false);
-  const submitInFlightRef = useRef(false);
 
   const allowUnlinked = canPerformUnlinkedReturn(actorRole);
   const lineOptions = sale?.lines.filter((l) => !l.voided) ?? [];
@@ -61,12 +58,10 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
 
   useEffect(() => {
     if (!open) return;
-    submitInFlightRef.current = false;
-    releaseReturnSubmitsForAccount(inventoryMovementNamespace());
     setProductId(pickList[0]?.id ?? "");
     setQty("1");
     setRefund("");
-    setReason("wrong_item");
+    setReason("damaged");
     setNote("");
     setSubmitError(null);
     setShowCalcDetails(false);
@@ -139,8 +134,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
     sale != null ? Math.max(0, sale.totalUgx - finalRefundUgx) : 0;
 
   const handleSubmit = () => {
-    if (!canSubmit || submitInFlightRef.current) return;
-    submitInFlightRef.current = true;
+    if (!canSubmit) return;
     setSubmitError(null);
     const r = onConfirm({
       saleId: sale?.id ?? null,
@@ -154,7 +148,6 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
       onClose();
       return;
     }
-    submitInFlightRef.current = false;
     const key = r.errorKey;
     setSubmitError(
       key ? t(lang, key as Parameters<typeof t>[1]) : t(lang, "returnSubmitError"),
@@ -336,9 +329,6 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs font-semibold text-muted-foreground">
-              {t(lang, returnRestocksInventory(reason) ? "returnRestockShelfHint" : "returnNoRestockShelfHint")}
-            </p>
 
             <label className="mt-3 block text-sm font-bold text-foreground">
               {!sale && allowUnlinked ? t(lang, "returnUnlinkedNoteRequired") : t(lang, "voidNoteOptional")}

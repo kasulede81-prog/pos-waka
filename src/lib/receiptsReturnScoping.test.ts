@@ -3,7 +3,7 @@ import type { Product, ReturnRecord, Sale } from "../types";
 import type { DateFilterBounds } from "./dateFilters";
 import { reduceSaleTotalsByAmount } from "./saleAdjustments";
 import { getCompletedFinancials, getCompletedFinancialsFromScoped, getCompletedRevenue } from "./financialMetrics";
-import { partitionReceiptsSales, revenueEligibleSales } from "./receiptsGrouping";
+import { partitionReceiptsSales } from "./receiptsGrouping";
 import { returnMatchesFilter, saleMatchesFilter } from "./dateFilters";
 
 const DAY1 = "2026-06-01";
@@ -84,12 +84,11 @@ function receiptsHeroTotals(
 ) {
   const filteredInRange = sales.filter((s) => saleMatchesFilter(s, rangeBounds));
   const completed = partitionReceiptsSales(filteredInRange).completed;
-  const revenueEligible = revenueEligibleSales(completed);
   const filteredReturns = returns.filter((r) => returnMatchesFilter(r, rangeBounds));
-  const financials = getCompletedFinancialsFromScoped(revenueEligible, filteredReturns, products);
+  const financials = getCompletedFinancialsFromScoped(completed, filteredReturns, products);
   return {
     profitUgx: financials.profitUgx,
-    revenueUgx: getCompletedRevenue(revenueEligible, filteredReturns, products),
+    revenueUgx: getCompletedRevenue(completed, filteredReturns, products),
   };
 }
 

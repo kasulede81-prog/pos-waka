@@ -47,8 +47,6 @@ export {
   endRemoteSupport,
   expireStaleRemoteSupport,
   fetchRemoteSupportCustomerInbox,
-  fetchRemoteSupportPlatformSettings,
-  adminUpdateRemoteSupportPlatformEnabled,
   remoteSupportErrorMessage,
   requestRemoteSupport,
   revokeRemoteSupport,
@@ -68,11 +66,3 @@ export type {
   RemoteSupportTransportStatus,
   RemoteSupportUiPhase,
 } from "./transport";
-export { parseRemoteSupportPlatformSettings, isRemoteSupportPlatformEnabled } from "./masterSwitch";
-export { DEFAULT_REMOTE_SUPPORT_PLATFORM_SETTINGS } from "./masterSwitch";
-export type { RemoteSupportPlatformSettings } from "./masterSwitch";
-export {
-  formatRemoteSupportDeviceLabel,
-  resolveRemoteSupportStatusCardModel,
-} from "./statusCard";
-export type { RemoteSupportStatusCardModel, RemoteSupportStatusTone } from "./statusCard";

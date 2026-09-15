@@ -59,7 +59,6 @@ function parsePurchaseLines(raw: unknown): PurchaseLine[] {
 
 /** Build cloud push payload for shop_push_purchase RPC. */
 export function buildPurchaseCloudPushPayload(purchase: Purchase): Record<string, unknown> {
-  const invoice = purchase.invoiceNumber?.trim();
   const payload: Record<string, unknown> = {
     id: purchase.id,
     supplier_id: purchase.supplierId,
@@ -70,10 +69,7 @@ export function buildPurchaseCloudPushPayload(purchase: Purchase): Record<string
     notes: purchase.notes,
     created_at: purchase.createdAt,
     lines: purchase.lines.map(serializePurchaseLineForCloud),
-    metadata: {
-      wakaClient: true,
-      ...(invoice ? { invoiceNumber: invoice } : {}),
-    },
+    metadata: { wakaClient: true },
   };
   if (purchase.voidedAt) {
     payload.voided_at = purchase.voidedAt;
@@ -93,9 +89,6 @@ export function rowToPurchase(row: Record<string, unknown>): CloudPurchaseRow | 
   const updatedAt = String(row.updated_at ?? createdAt);
   const totalCostUgx = Math.max(0, Math.floor(Number(row.total_cost_ugx ?? 0)));
   const voidFields = parseVoidFields(row);
-  const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {};
-  const invoiceRaw = row.invoice_number ?? meta.invoiceNumber ?? meta.invoice_number;
-  const invoiceNumber = invoiceRaw != null && String(invoiceRaw).trim() ? String(invoiceRaw).trim() : undefined;
 
   const record: Purchase = {
     id,
@@ -106,7 +99,6 @@ export function rowToPurchase(row: Record<string, unknown>): CloudPurchaseRow | 
     amountPaidUgx: Math.max(0, Math.floor(Number(row.amount_paid_ugx ?? 0))),
     balanceDeltaUgx: Math.floor(Number(row.balance_delta_ugx ?? totalCostUgx)),
     notes: String(row.notes ?? ""),
-    ...(invoiceNumber ? { invoiceNumber } : {}),
     createdAt,
     pendingSync: false,
     ...voidFields,
@@ -168,32 +160,14 @@ export function mergePurchaseRecord(local: Purchase, remote: Purchase): Purchase
   const localVoid = isPurchaseVoided(local);
   const remoteVoid = isPurchaseVoided(remote);
 
-  let winner: Purchase;
-  if (localVoid && !remoteVoid) winner = local;
-  else if (remoteVoid && !localVoid) winner = remote;
-  else if (localVoid && remoteVoid) {
-    winner = voidRecencyMs(remote) >= voidRecencyMs(local) ? remote : local;
-  } else if (recencyMs(local.createdAt) <= recencyMs(remote.createdAt)) {
-    winner = remote;
-  } else {
-    winner = local;
+  if (localVoid && !remoteVoid) return local;
+  if (remoteVoid && !localVoid) return remote;
+  if (localVoid && remoteVoid) {
+    return voidRecencyMs(remote) >= voidRecencyMs(local) ? remote : local;
   }
 
-  // Preserve client-only stock-sync progress across cloud pull merges.
-  const ids = [
-    ...(Array.isArray(local.stockSyncedProductIds) ? local.stockSyncedProductIds : []),
-    ...(Array.isArray(winner.stockSyncedProductIds) ? winner.stockSyncedProductIds : []),
-  ];
-  const stockSyncedProductIds = [...new Set(ids.filter(Boolean))];
-  const stockSyncedAt = local.stockSyncedAt ?? winner.stockSyncedAt ?? null;
-  const voidStockSyncedAt = local.voidStockSyncedAt ?? winner.voidStockSyncedAt ?? null;
-
-  return {
-    ...winner,
-    ...(stockSyncedProductIds.length ? { stockSyncedProductIds } : {}),
-    stockSyncedAt,
-    voidStockSyncedAt,
-  };
+  if (recencyMs(local.createdAt) <= recencyMs(remote.createdAt)) return remote;
+  return local;
 }
 
 export function mergePurchasesForRecovery(local: Purchase[], remote: CloudPurchaseRow[]): Purchase[] {

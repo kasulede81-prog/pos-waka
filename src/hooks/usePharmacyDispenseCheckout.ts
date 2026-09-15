@@ -4,8 +4,6 @@ import { usePosStore } from "../store/usePosStore";
 import { usePharmacyControlledCheckout } from "./usePharmacyControlledCheckout";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep } from "../lib/draftCart";
 import { parseDisplayMoney } from "../lib/posCheckoutMoney";
-import { physicalCashTenderFromCheckoutInputs } from "../lib/saleTenderCash";
-import { addDenominationToCashInput } from "../lib/cashDenominations";
 import {
   applyCheckoutAlphaKey,
   applyCheckoutNumericKey,
@@ -17,12 +15,8 @@ import {
 import { gateDraftSaleStockBeforeFinalize } from "../lib/preFinalizeStockGate";
 import { hasActorPermission } from "../lib/permissions";
 import { t } from "../lib/i18n";
-import { useCartAbandonVoid } from "./useCartAbandonVoid";
 import type { PosCheckoutPanelProps } from "../components/pos/PosCheckoutPanel";
 
-type FinalizeDraftSaleFn = ReturnType<typeof usePosStore.getState>["finalizeDraftSale"];
-type FinalizeDraftSaleOpts = Parameters<FinalizeDraftSaleFn>[0];
-type FinalizeDraftSaleResult = ReturnType<FinalizeDraftSaleFn>;
 type PaymentMethod = PosCheckoutPanelProps["paymentMethod"];
 type CheckoutAmountField = CheckoutInputField;
 
@@ -53,12 +47,11 @@ export function usePharmacyDispenseCheckout({
   const draftLines = usePosStore((s) => s.draftLines);
   const draftCartDiscountUgx = usePosStore((s) => s.draftCartDiscountUgx);
   const prescriptions = usePosStore((s) => s.pharmacyPrescriptions);
-  const setDraftPaymentMethod = usePosStore((s) => s.setDraftPaymentMethod);
-  const setDraftSaleCustomer = usePosStore((s) => s.setDraftSaleCustomer);
-  const storedDraftPaymentMethod = usePosStore((s) => s.draftPaymentMethod);
-  const saleCustomerId = usePosStore((s) => s.draftSaleCustomerId);
-  const saleCustomerName = usePosStore((s) => s.draftSaleCustomerName);
-  const saleCustomerPhone = usePosStore((s) => s.draftSaleCustomerPhone);
+  const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
+  const clearDraft = usePosStore((s) => s.clearDraft);
+  const removeDraftLine = usePosStore((s) => s.removeDraftLine);
+  const adjustDraftLineQuantity = usePosStore((s) => s.adjustDraftLineQuantity);
+  const setDraftLineQuantity = usePosStore((s) => s.setDraftLineQuantity);
   const savePendingSale = usePosStore((s) => s.savePendingSale);
 
   const selectedRx = useMemo(
@@ -74,49 +67,34 @@ export function usePharmacyDispenseCheckout({
     [canIssueDebt],
   );
 
-  const paymentMethod: PaymentMethod =
-    storedDraftPaymentMethod === "voucher" || (storedDraftPaymentMethod === "credit" && !canIssueDebt)
-      ? "cash"
-      : storedDraftPaymentMethod;
-  const setPaymentMethod = useCallback(
-    (method: PaymentMethod) => setDraftPaymentMethod(method),
-    [setDraftPaymentMethod],
-  );
-  const setSaleCustomerId = useCallback(
-    (id: string) => setDraftSaleCustomer({ customerId: id }),
-    [setDraftSaleCustomer],
-  );
-  const setSaleCustomerName = useCallback(
-    (name: string) => setDraftSaleCustomer({ customerName: name }),
-    [setDraftSaleCustomer],
-  );
-  const setSaleCustomerPhone = useCallback(
-    (phone: string) => setDraftSaleCustomer({ customerPhone: phone }),
-    [setDraftSaleCustomer],
-  );
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
   const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutAmountField>("cash");
   const [checkoutKeypadMode, setCheckoutKeypadMode] = useState<CheckoutKeypadMode>("numeric");
+  const [saleCustomerId, setSaleCustomerId] = useState("");
+  const [saleCustomerName, setSaleCustomerName] = useState("");
+  const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
   const [checkoutBlockMessage, setCheckoutBlockMessage] = useState<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
-  const finishSaleInFlightRef = useRef(false);
 
   const customerSelectRef = useRef<HTMLSelectElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const checkoutPanelRef = useRef<HTMLDivElement>(null);
-  const pendingFinalizeOptsRef = useRef<FinalizeDraftSaleOpts | null>(null);
+  const pendingFinalizeOptsRef = useRef<Parameters<typeof finalizeDraftSale>[0] | null>(null);
+
+  useEffect(() => {
+    if (paymentMethod === "credit" && !canIssueDebt) setPaymentMethod("cash");
+  }, [paymentMethod, canIssueDebt]);
 
   useEffect(() => {
     if (!selectedPatientId) return;
     const patient = customers.find((c) => c.id === selectedPatientId);
     if (!patient) return;
-    setDraftSaleCustomer({
-      customerId: patient.id,
-      customerName: patient.name,
-      customerPhone: patient.phone ?? "",
-    });
-  }, [selectedPatientId, customers, setDraftSaleCustomer]);
+    setSaleCustomerId(patient.id);
+    setSaleCustomerName(patient.name);
+    setSaleCustomerPhone(patient.phone ?? "");
+  }, [selectedPatientId, customers]);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const draftCartStats = useMemo(() => computeDraftCartStats(draftLines), [draftLines]);
@@ -154,7 +132,7 @@ export function usePharmacyDispenseCheckout({
   const appendCheckoutDigit = useCallback(
     (d: string) => {
       if (checkoutKeypadMode === "alpha" && checkoutAmountField === "customerName") {
-        setSaleCustomerName(applyCheckoutAlphaKey(saleCustomerName, d));
+        setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
         return;
       }
       const applyNumeric = (prev: string) => applyCheckoutNumericKey(prev, d);
@@ -164,23 +142,17 @@ export function usePharmacyDispenseCheckout({
           setMobileMoneyInput(applyPhone);
           break;
         case "customerPhone":
-          setSaleCustomerPhone(applyPhone(saleCustomerPhone));
+          setSaleCustomerPhone(applyPhone);
           break;
         case "customerName":
-          setSaleCustomerName(applyCheckoutAlphaKey(saleCustomerName, d));
+          setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
           break;
         default:
           setCashInput(applyNumeric);
       }
     },
-    [checkoutAmountField, checkoutKeypadMode, saleCustomerName, saleCustomerPhone, setSaleCustomerName, setSaleCustomerPhone],
+    [checkoutAmountField, checkoutKeypadMode],
   );
-
-  const addCheckoutCashNote = useCallback((ugx: number) => {
-    setCheckoutAmountField("cash");
-    setCheckoutKeypadMode("numeric");
-    setCashInput((prev) => addDenominationToCashInput(prev, ugx));
-  }, []);
 
   const clearCheckoutAmount = useCallback(() => {
     switch (checkoutAmountField) {
@@ -196,7 +168,7 @@ export function usePharmacyDispenseCheckout({
       default:
         setCashInput("");
     }
-  }, [checkoutAmountField, setSaleCustomerName, setSaleCustomerPhone]);
+  }, [checkoutAmountField]);
 
   const toast = useCallback(
     (message: string) => {
@@ -212,10 +184,10 @@ export function usePharmacyDispenseCheckout({
     setCheckoutKeypadMode("numeric");
     setPaymentMethod("cash");
     setCheckoutBlockMessage(null);
-  }, [setPaymentMethod]);
+  }, []);
 
   const applyFinalizeSuccess = useCallback(
-    (r: FinalizeDraftSaleResult) => {
+    (r: ReturnType<typeof finalizeDraftSale>) => {
       resetCheckoutFields();
       if (!selectedPatientId) {
         setSaleCustomerId("");
@@ -226,7 +198,7 @@ export function usePharmacyDispenseCheckout({
       onDispenseSuccess?.();
       toast(t(lang, "pharmacyRxDispensed"));
     },
-    [resetCheckoutFields, selectedPatientId, onDispenseSuccess, toast, lang, setSaleCustomerId, setSaleCustomerName, setSaleCustomerPhone],
+    [resetCheckoutFields, selectedPatientId, onDispenseSuccess, toast, lang],
   );
 
   const onControlledGateApproved = useCallback(() => {
@@ -246,9 +218,6 @@ export function usePharmacyDispenseCheckout({
 
   const finishSale = useCallback(() => {
     void (async () => {
-      if (finishSaleInFlightRef.current) return;
-      finishSaleInFlightRef.current = true;
-      try {
       if (paymentMethod === "cash" && parseDisplayMoney(cashInput) > 0 && parseDisplayMoney(cashInput) < draftPayable) {
         toast(t(lang, "paymentCashTooLow"));
         return;
@@ -273,11 +242,6 @@ export function usePharmacyDispenseCheckout({
         customerPhone,
         paymentMethod,
         amountPaidUgx: totalPaidInput,
-        tenderCashUgx: physicalCashTenderFromCheckoutInputs({
-          paymentMethod,
-          cashInput,
-          draftPayable,
-        }),
         changeGivenUgx: changeDue,
       };
       const r = controlledCheckout.attemptFinalize(finalizeOpts);
@@ -292,9 +256,6 @@ export function usePharmacyDispenseCheckout({
         return;
       }
       applyFinalizeSuccess(r);
-      } finally {
-        finishSaleInFlightRef.current = false;
-      }
     })();
   }, [
     paymentMethod,
@@ -318,43 +279,24 @@ export function usePharmacyDispenseCheckout({
 
   const handleSavePending = useCallback(() => {
     if (!canSavePending || draftLines.length === 0) return;
-    const res = savePendingSale();
+    const label = saleCustomerName.trim() || undefined;
+    const res = savePendingSale(label);
     if (!res.ok) {
       toast(t(lang, res.errorKey ?? "saleError"));
       return;
     }
     resetCheckoutFields();
-    if (!selectedPatientId) {
-      setSaleCustomerId("");
-      setSaleCustomerName("");
-      setSaleCustomerPhone("");
-    }
     toast(t(lang, "pendingSaved"));
-  }, [canSavePending, draftLines.length, savePendingSale, lang, toast, resetCheckoutFields, selectedPatientId, setSaleCustomerId, setSaleCustomerName, setSaleCustomerPhone]);
-
-  const cartAbandon = useCartAbandonVoid({
-    lang,
-    mode: "pharmacy",
-    onAfterSuccessfulVoid: () => {
-      resetCheckoutFields();
-      if (!selectedPatientId) {
-        setSaleCustomerId("");
-        setSaleCustomerName("");
-        setSaleCustomerPhone("");
-      }
-    },
-    onError: (message) => toast(message),
-  });
+  }, [canSavePending, draftLines.length, saleCustomerName, savePendingSale, lang, resetCheckoutFields, toast]);
 
   const handleDraftQtyStep = useCallback(
     (line: SaleLine, backwards: boolean) => {
       const product = productById.get(line.productId);
       const delta = product ? draftLineQuantityStep(product, backwards) : backwards ? -1 : 1;
-      const nextQty = Math.round((line.quantity + delta) * 10000) / 10000;
-      const res = cartAbandon.requestSetLineQuantity(line.productId, nextQty);
+      const res = adjustDraftLineQuantity(line.productId, delta);
       if (!res.ok) toast(t(lang, res.errorKey ?? "saleError"));
     },
-    [productById, cartAbandon, lang, toast],
+    [productById, adjustDraftLineQuantity, lang, toast],
   );
 
   const customerRows = useMemo(
@@ -378,7 +320,7 @@ export function usePharmacyDispenseCheckout({
       lang,
       variant: extras.variant,
       saleTitle: t(lang, "thisSale"),
-      clearSaleLabel: t(lang, "pharmacyTerm_clearBasket"),
+      clearSaleLabel: t(lang, "clearSale"),
       saveSaleLabel: t(lang, "saveSale"),
       draftLines,
       draftCartStats,
@@ -404,12 +346,12 @@ export function usePharmacyDispenseCheckout({
       customerSelectRef: customerSelectRef as RefObject<HTMLSelectElement | null>,
       saveButtonRef: saveButtonRef as RefObject<HTMLButtonElement | null>,
       checkoutPanelRef: checkoutPanelRef as RefObject<HTMLDivElement | null>,
-      onClearDraft: cartAbandon.requestClear,
+      onClearDraft: clearDraft,
       onIncrement: (line) => handleDraftQtyStep(line, false),
       onDecrement: (line) => handleDraftQtyStep(line, true),
       onQtyTap: extras.onQtyTap,
       onLineDiscount: extras.onLineDiscount,
-      onRemoveLine: cartAbandon.requestRemoveLine,
+      onRemoveLine: removeDraftLine,
       onOpenCartDiscount: extras.onOpenCartDiscount,
       pharmacyMode: true,
       onBatchTap: extras.onBatchTap,
@@ -423,7 +365,6 @@ export function usePharmacyDispenseCheckout({
       onSaleCustomerPhone: setSaleCustomerPhone,
       onSavePending: handleSavePending,
       onFinishSale: finishSale,
-      onAddCashNote: addCheckoutCashNote,
       onMinimize: extras.onMinimize,
       onAddItems: extras.onAddItems,
       catalogDock: extras.catalogDock,
@@ -452,19 +393,14 @@ export function usePharmacyDispenseCheckout({
       saleCustomerPhone,
       customerRows,
       canSavePending,
-      cartAbandon.requestClear,
-      handleSavePending,
-      finishSale,
-      addCheckoutCashNote,
+      clearDraft,
+      handleDraftQtyStep,
+      removeDraftLine,
       handleCheckoutInputField,
       appendCheckoutDigit,
       clearCheckoutAmount,
-      handleDraftQtyStep,
-      cartAbandon.requestRemoveLine,
-      setPaymentMethod,
-      setSaleCustomerId,
-      setSaleCustomerName,
-      setSaleCustomerPhone,
+      handleSavePending,
+      finishSale,
     ],
   );
 
@@ -476,11 +412,10 @@ export function usePharmacyDispenseCheckout({
     checkoutBlockMessage,
     setCheckoutBlockMessage,
     buildCheckoutPanelProps,
-    cartVoidOpen: cartAbandon.open,
-    cartVoidCopy: cartAbandon.copy,
-    keepCartVoid: cartAbandon.keep,
-    applyCartVoid: cartAbandon.apply,
-    setDraftLineQuantity: cartAbandon.requestSetLineQuantity,
+    setDraftLineQuantity: (productId: string, quantity: number) => {
+      const res = setDraftLineQuantity(productId, quantity);
+      return res;
+    },
     draftPayable,
     draftCartStats,
   };

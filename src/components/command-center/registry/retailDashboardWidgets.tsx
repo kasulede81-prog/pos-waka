@@ -35,8 +35,7 @@ function HeaderWidget({ ctx }: DashboardWidgetProps) {
         <button
           type="button"
           onClick={ctx.exportDashboard}
-          disabled={ctx.canExportOfficialFinancials === false}
-          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-black text-foreground shadow-sm"
         >
           <FileDown className="h-3.5 w-3.5" aria-hidden />
           {t(ctx.lang, "cmdCenterExport")}
@@ -99,12 +98,7 @@ function HealthHeroWidget({ ctx }: DashboardWidgetProps) {
 function KpiGridWidget({ ctx }: DashboardWidgetProps) {
   if (!COMMAND_CENTER_SURFACE(ctx) || !ctx.kpiCards) return null;
   return (
-    <CommandCenterKpiGrid
-      lang={ctx.lang}
-      cards={ctx.kpiCards}
-      periodLabel={ctx.periodLabel ?? ""}
-      comparisonLabelKey={ctx.comparisonLabelKey}
-    />
+    <CommandCenterKpiGrid lang={ctx.lang} cards={ctx.kpiCards} periodLabel={ctx.periodLabel ?? ""} />
   );
 }
 
@@ -142,7 +136,7 @@ function LiveOpsWidget({ ctx }: DashboardWidgetProps) {
     <CommandCenterLiveOpsTiles
       lang={ctx.lang}
       live={ctx.commandCenter.liveOps}
-      expectedCashUgx={ctx.heroExpectedCash ?? null}
+      expectedCashUgx={ctx.heroExpectedCash ?? 0}
     />
   );
 }
@@ -165,13 +159,7 @@ function StaffCardWidget({ ctx }: DashboardWidgetProps) {
 
 function InventoryCardWidget({ ctx }: DashboardWidgetProps) {
   if (!COMMAND_CENTER_SURFACE(ctx) || !ctx.commandCenter) return null;
-  return (
-    <CommandCenterInventoryCard
-      lang={ctx.lang}
-      inventory={ctx.commandCenter.inventory}
-      canProfit={ctx.canProfit !== false}
-    />
-  );
+  return <CommandCenterInventoryCard lang={ctx.lang} inventory={ctx.commandCenter.inventory} />;
 }
 
 function FinancialGridWidget({ ctx }: DashboardWidgetProps) {
@@ -182,9 +170,6 @@ function FinancialGridWidget({ ctx }: DashboardWidgetProps) {
       financial={ctx.commandCenter.financial}
       periodLabel={ctx.periodLabel ?? ""}
       revenueSparkline={ctx.revenueSparkline ?? []}
-      officialFinancials={ctx.officialFinancials}
-      canProfit={ctx.canProfit !== false}
-      comparisonLabelKey={ctx.comparisonLabelKey}
     />
   );
 }
@@ -221,7 +206,6 @@ function ExecutiveFooterWidget({ ctx }: DashboardWidgetProps) {
       onExport={ctx.exportDashboard ?? (() => {})}
       onShare={ctx.shareDashboard ?? (() => {})}
       onPrint={ctx.printDashboard ?? (() => {})}
-      exportEnabled={ctx.canExportOfficialFinancials !== false}
     />
   );
 }
@@ -235,8 +219,8 @@ export const RETAIL_DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   { id: "retail-health-hero", slot: "health-hero", priority: 10, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: HealthHeroWidget },
   { id: "retail-kpi-grid", slot: "kpi-grid", priority: 10, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: KpiGridWidget },
   { id: "retail-attention", slot: "attention", priority: 10, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: AttentionWidget },
+  { id: "retail-cloud-card", slot: "attention", priority: 20, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: CloudCardWidget },
   { id: "retail-live-ops", slot: "live-operations", priority: 10, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: LiveOpsWidget },
-  { id: "retail-cloud-card", slot: "live-operations", priority: 20, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: CloudCardWidget },
   { id: "retail-cash", slot: "cash", priority: 10, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: CashCardWidget },
   { id: "retail-staff", slot: "staff", priority: 10, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: StaffCardWidget },
   { id: "retail-inventory", slot: "inventory", priority: 10, businessTypes: "*", visible: COMMAND_CENTER_SURFACE, Component: InventoryCardWidget },

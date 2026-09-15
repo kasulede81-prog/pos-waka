@@ -7,7 +7,7 @@ import type { Product, ReturnRecord, Sale } from "../types";
 import { dateKeyKampala, saleReportingDayKey } from "./datesUg";
 import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
 import { computeTodayProfitBreakdown } from "./homeProfit";
-import { isRevenueSale } from "./saleStatus";
+import { isCompletedSale } from "./saleStatus";
 
 /** Pre-index revenue sales and returns by Kampala day — one pass, identical scoped results. */
 export type RevenueSalesIndex = {
@@ -18,7 +18,7 @@ export type RevenueSalesIndex = {
 export function buildRevenueSalesIndex(sales: Sale[], returns: ReturnRecord[]): RevenueSalesIndex {
   const salesByDay = new Map<string, Sale[]>();
   for (const s of sales) {
-    if (!isRevenueSale(s)) continue;
+    if (!isCompletedSale(s)) continue;
     const dk = saleReportingDayKey(s);
     const bucket = salesByDay.get(dk);
     if (bucket) bucket.push(s);
@@ -71,8 +71,10 @@ function scopedReturnsFromIndex(
   return returns;
 }
 
-/** Sales that count toward revenue (completed and not whole-bill voided). */
-export { isRevenueSale } from "./saleStatus";
+/** Sales that count toward revenue (completed only). */
+export function isRevenueSale(s: Sale): boolean {
+  return isCompletedSale(s);
+}
 
 export function revenueSales(sales: Sale[]): Sale[] {
   return sales.filter(isRevenueSale);
@@ -94,8 +96,6 @@ export type CompletedFinancialSnapshot = {
   debtIssuedUgx: number;
   discountsUgx: number;
   averageTransactionUgx: number;
-  /** True when any sale-time COGS line lacks trustworthy historical unit cost. */
-  costIncomplete: boolean;
 };
 
 export function getCompletedFinancialsFromScoped(
@@ -106,7 +106,7 @@ export function getCompletedFinancialsFromScoped(
 ): CompletedFinancialSnapshot {
   const productById = new Map(products.map((p) => [p.id, p]));
   const breakdown = opts?.skipProfit
-    ? { profitUgx: 0, salesUgx: 0, costUgx: 0, linesMissingCost: 0, costIncomplete: false }
+    ? { profitUgx: 0, salesUgx: 0, costUgx: 0, linesMissingCost: 0 }
     : computeTodayProfitBreakdown(scoped, productById, returnScoped);
   const tx = scoped.length;
   const revenue = computeCanonicalRevenueUgx(scoped, returnScoped);
@@ -128,7 +128,6 @@ export function getCompletedFinancialsFromScoped(
     debtIssuedUgx,
     discountsUgx,
     averageTransactionUgx: tx > 0 ? Math.round(revenue / tx) : 0,
-    costIncomplete: breakdown.costIncomplete,
   };
 }
 

@@ -1,9 +1,8 @@
 /** Per-entity cloud pull checkpoints (account-scoped, local only). */
 
-import { getPersistenceNamespace } from "../offline/shopScope";
+import { getActiveAccountKey } from "../offline/accountScope";
 
 const BASE_KEY = "waka.sync.checkpoints.v1";
-const PRODUCT_COST_AUTHORITY_KEY = "waka.sync.productCostAuthority.v1";
 
 export type SyncCheckpoints = {
   /** After first successful bootstrap pull, incremental mode is used. */
@@ -30,10 +29,6 @@ export type SyncCheckpoints = {
   lastShiftsSyncAt: string | null;
   lastDayClosesSyncAt: string | null;
   lastStockMovementsSyncAt: string | null;
-  lastCatalogSyncAt: string | null;
-  lastShopPolicySyncAt: string | null;
-  /** audit_logs pull cursor (created_at). */
-  lastAuditLogsSyncAt: string | null;
 };
 
 const empty: SyncCheckpoints = {
@@ -54,15 +49,12 @@ const empty: SyncCheckpoints = {
   lastShiftsSyncAt: null,
   lastDayClosesSyncAt: null,
   lastStockMovementsSyncAt: null,
-  lastCatalogSyncAt: null,
-  lastShopPolicySyncAt: null,
-  lastAuditLogsSyncAt: null,
 };
 
 function scopedKey(): string | null {
-  const ns = getPersistenceNamespace();
-  if (!ns) return null;
-  return `${BASE_KEY}::${ns}`;
+  const acc = getActiveAccountKey();
+  if (!acc) return null;
+  return `${BASE_KEY}::${acc}`;
 }
 
 export function readSyncCheckpoints(): SyncCheckpoints {
@@ -100,9 +92,6 @@ export function readSyncCheckpoints(): SyncCheckpoints {
       lastDayClosesSyncAt: typeof o.lastDayClosesSyncAt === "string" ? o.lastDayClosesSyncAt : null,
       lastStockMovementsSyncAt:
         typeof o.lastStockMovementsSyncAt === "string" ? o.lastStockMovementsSyncAt : null,
-      lastCatalogSyncAt: typeof o.lastCatalogSyncAt === "string" ? o.lastCatalogSyncAt : null,
-      lastShopPolicySyncAt: typeof o.lastShopPolicySyncAt === "string" ? o.lastShopPolicySyncAt : null,
-      lastAuditLogsSyncAt: typeof o.lastAuditLogsSyncAt === "string" ? o.lastAuditLogsSyncAt : null,
     };
   } catch {
     return { ...empty };
@@ -153,22 +142,11 @@ export function seedEntitySyncCursorsAt(at: string): SyncCheckpoints {
     lastShiftsSyncAt: at,
     lastDayClosesSyncAt: at,
     lastStockMovementsSyncAt: at,
-    lastCatalogSyncAt: at,
-    lastShopPolicySyncAt: at,
-    lastAuditLogsSyncAt: at,
   });
 }
 
-/**
- * Mark bootstrap done and set all entity cursors to the same timestamp.
- *
- * WAKA-05: `at` must be a server timestamp (see `fetchShopServerNow`). There is
- * no client-clock default — a fast device would seed every cursor into the
- * server's future and permanently skip rows stamped in the gap.
- */
-export function markBootstrapSyncComplete(at: string): SyncCheckpoints {
-  const ms = Date.parse(at);
-  if (!Number.isFinite(ms)) return readSyncCheckpoints();
+/** Mark bootstrap done and set all entity cursors to the same timestamp. */
+export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCheckpoints {
   return writeSyncCheckpoints({
     bootstrapComplete: true,
     lastSalesSyncAt: at,
@@ -187,9 +165,6 @@ export function markBootstrapSyncComplete(at: string): SyncCheckpoints {
     lastShiftsSyncAt: at,
     lastDayClosesSyncAt: at,
     lastStockMovementsSyncAt: at,
-    lastCatalogSyncAt: at,
-    lastShopPolicySyncAt: at,
-    lastAuditLogsSyncAt: at,
   });
 }
 
@@ -209,9 +184,6 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   shifts?: boolean;
   dayCloses?: boolean;
   stockMovements?: boolean;
-  catalog?: boolean;
-  shopPolicy?: boolean;
-  auditLogs?: boolean;
   /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
   salesAt?: string;
@@ -230,9 +202,6 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   shiftsAt?: string;
   dayClosesAt?: string;
   stockMovementsAt?: string;
-  catalogAt?: string;
-  shopPolicyAt?: string;
-  auditLogsAt?: string;
 }): SyncCheckpoints {
   const fallback = partial.at ?? new Date().toISOString();
   const patch: Partial<SyncCheckpoints> = {};
@@ -269,45 +238,10 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   if (partial.stockMovements) {
     patch.lastStockMovementsSyncAt = partial.stockMovementsAt ?? fallback;
   }
-  if (partial.catalog) {
-    patch.lastCatalogSyncAt = partial.catalogAt ?? fallback;
-  }
-  if (partial.shopPolicy) {
-    patch.lastShopPolicySyncAt = partial.shopPolicyAt ?? fallback;
-  }
-  if (partial.auditLogs) {
-    patch.lastAuditLogsSyncAt = partial.auditLogsAt ?? fallback;
-  }
   return writeSyncCheckpoints(patch);
 }
 
 export function needsBootstrapPull(localEmpty: boolean): boolean {
   const cp = readSyncCheckpoints();
   return localEmpty || !cp.bootstrapComplete;
-}
-
-function productCostAuthorityKey(): string | null {
-  const ns = getPersistenceNamespace();
-  if (!ns) return null;
-  return `${PRODUCT_COST_AUTHORITY_KEY}::${ns}`;
-}
-
-/** One-shot full product pull so stale local costs converge after version-wins pull. */
-export function needsProductCostAuthorityRefresh(): boolean {
-  try {
-    const k = productCostAuthorityKey();
-    if (!k) return false;
-    return localStorage.getItem(k) !== "done";
-  } catch {
-    return false;
-  }
-}
-
-export function markProductCostAuthorityRefreshDone(): void {
-  try {
-    const k = productCostAuthorityKey();
-    if (k) localStorage.setItem(k, "done");
-  } catch {
-    /* ignore quota */
-  }
 }

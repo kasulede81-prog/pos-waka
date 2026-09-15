@@ -1,14 +1,11 @@
 export type HomeTileIntensity = "calm" | "normal" | "high" | "alert";
 
-export type HomeKpiAvailability = "ready" | "loading" | "unavailable";
-
 export type HomeTileLiveStat = {
   /** Resolved label (may include the current month name). */
   label: string;
   value: string;
   trend?: string;
   intensity: HomeTileIntensity;
-  availability?: HomeKpiAvailability;
 };
 
 export type HomeExecutiveKpiId = "sales" | "transactions" | "profit" | "cash" | "lowStock" | "debts";
@@ -23,7 +20,6 @@ export type HomeExecutiveKpi = {
   hint?: string;
   tone: HomeExecutiveKpiTone;
   to: string;
-  availability?: HomeKpiAvailability;
 };
 
 function toneFromIntensity(intensity: HomeTileIntensity): HomeExecutiveKpiTone {
@@ -37,8 +33,6 @@ type BuildInput = {
   todayRevenueLabel: string;
   todayRevenueValue: string;
   todayRevenueIntensity: HomeTileIntensity;
-  todayRevenueHint?: string;
-  todayRevenueAvailability?: HomeKpiAvailability;
   showTodayRevenue: boolean;
   transactions?: HomeTileLiveStat;
   profit?: HomeTileLiveStat;
@@ -53,11 +47,6 @@ type BuildInput = {
   debtsPath: string;
 };
 
-function statHint(stat?: HomeTileLiveStat): string | undefined {
-  if (stat?.availability === "loading" || stat?.availability === "unavailable") return stat.trend;
-  return stat?.trend;
-}
-
 /** Map existing home live stats into a compact executive KPI strip (no new math). */
 export function buildHomeExecutiveKpis(input: BuildInput): HomeExecutiveKpi[] {
   const out: HomeExecutiveKpi[] = [];
@@ -67,10 +56,8 @@ export function buildHomeExecutiveKpis(input: BuildInput): HomeExecutiveKpi[] {
       id: "sales",
       label: input.todayRevenueLabel,
       value: input.todayRevenueValue,
-      hint: input.todayRevenueHint,
       tone: toneFromIntensity(input.todayRevenueIntensity),
       to: input.reportsPath,
-      availability: input.todayRevenueAvailability,
     });
   }
 
@@ -79,10 +66,8 @@ export function buildHomeExecutiveKpis(input: BuildInput): HomeExecutiveKpi[] {
       id: "transactions",
       label: input.transactions.label,
       value: input.transactions.value,
-      hint: statHint(input.transactions),
       tone: toneFromIntensity(input.transactions.intensity),
       to: input.receiptsPath,
-      availability: input.transactions.availability,
     });
   }
 
@@ -91,10 +76,9 @@ export function buildHomeExecutiveKpis(input: BuildInput): HomeExecutiveKpi[] {
       id: "profit",
       label: input.profit.label,
       value: input.profit.value,
-      hint: statHint(input.profit),
+      hint: input.profit.trend,
       tone: toneFromIntensity(input.profit.intensity),
       to: input.profitPath,
-      availability: input.profit.availability,
     });
   }
 
@@ -105,7 +89,6 @@ export function buildHomeExecutiveKpis(input: BuildInput): HomeExecutiveKpi[] {
       value: input.cash.value,
       tone: toneFromIntensity(input.cash.intensity),
       to: input.cashPath,
-      availability: input.cash.availability,
     });
   }
 
@@ -116,7 +99,6 @@ export function buildHomeExecutiveKpis(input: BuildInput): HomeExecutiveKpi[] {
       value: input.inventory.value,
       tone: toneFromIntensity(input.inventory.intensity),
       to: input.inventoryPath,
-      availability: input.inventory.availability,
     });
   }
 
@@ -127,7 +109,6 @@ export function buildHomeExecutiveKpis(input: BuildInput): HomeExecutiveKpi[] {
       value: input.debts.value,
       tone: toneFromIntensity(input.debts.intensity),
       to: input.debtsPath,
-      availability: input.debts.availability,
     });
   }
 

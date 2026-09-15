@@ -14,7 +14,6 @@ import {
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionActor } from "../context/SessionActorContext";
 
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
@@ -25,7 +24,7 @@ import { Body, Caption, MonoNumber, SectionTitle } from "../components/enterpris
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
 import { buildCashManagementSnapshot, canAccessCashManagement } from "../lib/cashManagementSnapshot";
-import { isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
+import { isFormulaV2 } from "../lib/dayDrawerOpen";
 import {
   classifyCashVariance,
   computeCashVarianceThresholdUgx,
@@ -95,7 +94,7 @@ function CashManagementHub({ lang }: Props) {
 
   const canOpen = actorHasPermission(actor, "day.open_drawer");
   const canClose = actorHasPermission(actor, "day.close");
-  const canShifts = authOperatorRole(actor) === "owner" || authOperatorRole(actor) === "manager";
+  const canShifts = actor.role === "owner" || actor.role === "manager";
   const canHistory = actorHasPermission(actor, "owner.cash_history");
   const needsDayOpen = isFormulaV2(preferences) && !snapshot.drawerOpen && canOpen;
 
@@ -121,9 +120,9 @@ function CashManagementHub({ lang }: Props) {
         .slice(0, 5),
     [shifts, todayKey],
   );
-  const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
+  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
 
-  if (!canAccessCashManagement(authOperatorRole(actor))) {
+  if (!canAccessCashManagement(actor.role)) {
     return <Navigate to="/office" replace />;
   }
 

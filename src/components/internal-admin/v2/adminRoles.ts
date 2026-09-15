@@ -43,16 +43,6 @@ export function canPermanentlyDeleteShopAccount(role: string): boolean {
   return role === "super_admin";
 }
 
-/**
- * Reset a shop's business/test data (products, sales, inventory movements,
- * etc.) while preserving the shop, org, and owner login (destructive, but
- * less severe than permanent account deletion — so operations_admin is
- * included alongside super_admin).
- */
-export function canResetShopBusinessData(role: string): boolean {
-  return role === "super_admin" || role === "operations_admin";
-}
-
 export function canShopSubs(role: string): boolean {
   return canManageTrials(role);
 }
@@ -71,19 +61,20 @@ export function canManageAppReleases(role: string): boolean {
   return role === "super_admin" || role === "operations_admin";
 }
 
-/** Platform AI Control Center + shop AI settings RPCs. */
-export function canManageAi(role: string): boolean {
-  return role === "super_admin" || role === "operations_admin";
-}
-
-/** Admin reset of shop AI onboarding templates (RPC includes support_admin). */
-export function canManageShopAiSetup(role: string): boolean {
-  return canManageAi(role) || role === "support_admin";
-}
-
 /** Remote Support request/revoke — not inherited from tickets or shop rescue. */
 export function canRemoteSupport(role: string): boolean {
   return role === "super_admin" || role === "support_admin";
+}
+
+/**
+ * Historical financial correction (sale-line COGS/profit) — the most sensitive
+ * financial-data-mutation capability in the internal admin console. Deliberately NOT
+ * inherited from canFieldOps/canManageTrials/canResolveSupport (finance_admin's other
+ * capabilities) — this is its own explicit check so it can never be granted by
+ * accident as a side effect of broadening one of those.
+ */
+export function canCorrectFinancials(role: string): boolean {
+  return role === "super_admin" || role === "finance_admin";
 }
 
 export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
@@ -99,12 +90,10 @@ export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
     canShopSubs: canShopSubs(role),
     canFieldOps: canFieldOps(role),
     canManageAppReleases: canManageAppReleases(role),
-    canManageAi: canManageAi(role),
-    canManageShopAiSetup: canManageShopAiSetup(role),
     canEditShopProfile: canEditShopProfile(role),
     canPermanentlyDeleteShopAccount: canPermanentlyDeleteShopAccount(role),
-    canResetShopBusinessData: canResetShopBusinessData(role),
     canRemoteSupport: canRemoteSupport(role),
+    canCorrectFinancials: canCorrectFinancials(role),
     districtCount: adminRow?.assigned_district_ids?.length ?? 0,
   };
 }

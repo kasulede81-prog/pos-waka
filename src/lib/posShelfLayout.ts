@@ -180,10 +180,6 @@ export function normalizePosShelfLayout(
     if (typeof v.featured === "boolean") entry.featured = v.featured;
     if (v.badge === null) entry.badge = null;
     else if (isPosShelfBadge(v.badge)) entry.badge = v.badge;
-    if (typeof v.updatedAt === "string" && v.updatedAt.trim()) {
-      const updatedAt = v.updatedAt.trim();
-      if (Number.isFinite(Date.parse(updatedAt))) entry.updatedAt = updatedAt;
-    }
     out[k] = entry;
   }
   return out;

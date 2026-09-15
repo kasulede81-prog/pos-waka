@@ -1,6 +1,5 @@
 import type { Customer, Language, Product } from "../../../types";
 import { t } from "../../../lib/i18n";
-import { reportsInventoryCostPresentation } from "../lib/analyticsPageView";
 import { StockMovementsPanel } from "../../../components/stock/StockMovementsPanel";
 import { ExpiryStatusBadge } from "../../../components/pharmacy/ExpiryStatusBadge";
 import { formatMedicineFullLabel } from "../../../lib/pharmacyMedicine";
@@ -64,16 +63,13 @@ export function PharmacyReportsSection({
   stockMovements,
   pharmacyExpiryReport,
   periodLabel,
-  canProfit,
 }: {
   lang: Language;
   products: Product[];
   stockMovements: StockMovement[];
   pharmacyExpiryReport: PharmacyExpiryReport;
   periodLabel?: string;
-  canProfit?: boolean;
 }) {
-  const expiryExport = { includeCost: canProfit === true };
   return (
     <section className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
       <h2 className="text-lg font-black text-emerald-950">{t(lang, "pharmacyReportsTitle")}</h2>
@@ -85,10 +81,10 @@ export function PharmacyReportsSection({
         <StockMovementsPanel lang={lang} movements={stockMovements} pharmacyMode emptyLabelKey="noStockMovementsInPeriod" />
       </div>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white" onClick={() => void downloadPharmacyExpiryPdf(lang, products, expiryExport)}>
+        <button type="button" className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white" onClick={() => void downloadPharmacyExpiryPdf(lang, products)}>
           {t(lang, "pharmacyExportPdf")}
         </button>
-        <button type="button" className="rounded-xl border border-emerald-300 bg-card px-3 py-2 text-xs font-black text-emerald-900" onClick={() => void downloadPharmacyExpiryCsv(products, expiryExport)}>
+        <button type="button" className="rounded-xl border border-emerald-300 bg-card px-3 py-2 text-xs font-black text-emerald-900" onClick={() => void downloadPharmacyExpiryCsv(products)}>
           {t(lang, "pharmacyExportCsv")}
         </button>
       </div>
@@ -108,7 +104,6 @@ export function PharmacyReportsSection({
 export function WholesaleReportsSection({
   lang,
   wholesaleSection,
-  canProfit,
 }: {
   lang: Language;
   wholesaleSection: {
@@ -117,9 +112,7 @@ export function WholesaleReportsSection({
     stockValueAtCost: number;
     customers: Customer[];
   };
-  canProfit: boolean;
 }) {
-  const warehouseCost = reportsInventoryCostPresentation(canProfit, wholesaleSection.stockValueAtCost);
   return (
     <section className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4 shadow-sm">
       <h2 className="text-lg font-black text-indigo-950">{t(lang, "wholesaleReportsHubTitle")}</h2>
@@ -134,11 +127,7 @@ export function WholesaleReportsSection({
         </article>
         <article className="rounded-2xl border border-indigo-100 bg-card p-3">
           <p className="text-xs font-black uppercase text-muted-foreground">{t(lang, "wholesaleReportsWarehouseValue")}</p>
-          <p className="mt-1 text-xl font-black text-indigo-950">
-            {warehouseCost.visible
-              ? `UGX ${warehouseCost.valueUgx.toLocaleString()}`
-              : t(lang, "baProfitLockedTitle")}
-          </p>
+          <p className="mt-1 text-xl font-black text-indigo-950">UGX {wholesaleSection.stockValueAtCost.toLocaleString()}</p>
         </article>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -294,7 +283,6 @@ type Props = {
   stockMovements: StockMovement[];
   pharmacyMode: boolean;
   wholesaleMode: boolean;
-  canProfit?: boolean;
   pharmacyExpiryReport: PharmacyExpiryReport | null;
   wholesaleSection: {
     debtOutstanding: number;
@@ -319,15 +307,14 @@ export function AnalyticsModeReports({
   hospitalityReports,
   hospitalityOpenBills,
   hospitalityFloor,
-  canProfit = false,
 }: Props) {
   const pharmacySection =
     pharmacyExpiryReport && pharmacyMode && !wholesaleMode ? (
-      <PharmacyReportsSection lang={lang} products={products} stockMovements={stockMovements} pharmacyExpiryReport={pharmacyExpiryReport} canProfit={canProfit} />
+      <PharmacyReportsSection lang={lang} products={products} stockMovements={stockMovements} pharmacyExpiryReport={pharmacyExpiryReport} />
     ) : null;
 
   const wholesalePanel = wholesaleSection && wholesaleMode ? (
-    <WholesaleReportsSection lang={lang} wholesaleSection={wholesaleSection} canProfit={canProfit} />
+    <WholesaleReportsSection lang={lang} wholesaleSection={wholesaleSection} />
   ) : null;
 
   const hospitalityPanel = hospitalityReports ? (

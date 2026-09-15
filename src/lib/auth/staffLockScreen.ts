@@ -14,22 +14,13 @@ import {
   recordUnlockFailure,
   unlockLimiterScope,
 } from "./staffLoginLimiter";
-import { isPosAutoLockEnabled, resolveStaffMaxFailedAttempts, touchStaffActivity } from "./staffSession";
+import { resolveStaffMaxFailedAttempts, touchStaffActivity } from "./staffSession";
 import { performStaffSwitch } from "./staffSwitchUser";
-
-export function refreshStaffCacheOnLockScreenOpen(): void {
-  void import("../staffCacheSync").then(({ refreshStaffCacheBackground }) =>
-    refreshStaffCacheBackground({ force: false }).catch(() => undefined),
-  );
-}
 
 export type LockPosReason = "manual" | "auto" | "session_expired";
 
 export function lockPos(reason: LockPosReason = "manual"): void {
   const store = usePosStore.getState();
-  if (reason !== "manual" && !isPosAutoLockEnabled(store.preferences)) {
-    return;
-  }
   if (!canLockPos(store.preferences) && !activeStaffCanUnlock(store.preferences.staffAccounts)) {
     return;
   }

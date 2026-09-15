@@ -5,13 +5,10 @@ import { usePosStore } from "../../store/usePosStore";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 
-import type { TerminalIdentityView } from "../../lib/terminalIdentity";
-import { TerminalIdentityStrip } from "./TerminalIdentityStrip";
-
-type Props = { lang: Language; identity: TerminalIdentityView; terminalLabel?: string | null };
+type Props = { lang: Language };
 
 /** Thin status bar at the bottom of enterprise desktop POS. */
-export function PosDesktopStatusBar({ lang, identity, terminalLabel }: Props) {
+export function PosDesktopStatusBar({ lang }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const sync = useSyncStatus();
   const { isOnline } = useOfflineStatus();
@@ -31,11 +28,10 @@ export function PosDesktopStatusBar({ lang, identity, terminalLabel }: Props) {
 
   return (
     <footer
-      className="pos-desktop-status-bar flex h-7 shrink-0 items-center justify-between gap-2 border-t border-border/90 bg-muted/90 px-3 text-[10px] font-semibold text-muted-foreground"
+      className="flex h-7 shrink-0 items-center justify-between gap-2 border-t border-border/90 bg-muted/90 px-3 text-[10px] font-semibold text-muted-foreground"
       role="contentinfo"
     >
       <span className="truncate">Waka POS · {t(lang, "posDesktopStatusDesktop")}</span>
-      <TerminalIdentityStrip lang={lang} identity={identity} terminalLabel={terminalLabel} className="hidden min-w-0 sm:flex" />
       <span className="hidden truncate sm:inline">
         {isOnline ? t(lang, "posDesktopStatusOnline") : t(lang, "posDesktopStatusOffline")}
         {sync.syncing ? ` · ${t(lang, "posDesktopStatusSyncing")}` : ""}

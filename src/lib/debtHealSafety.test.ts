@@ -24,9 +24,6 @@ const emptyCheckpoints: syncCheckpoints.SyncCheckpoints = {
   lastShiftsSyncAt: null,
   lastDayClosesSyncAt: null,
   lastStockMovementsSyncAt: null,
-  lastCatalogSyncAt: null,
-  lastShopPolicySyncAt: null,
-  lastAuditLogsSyncAt: null,
 };
 
 describe("debtHealSafety", () => {

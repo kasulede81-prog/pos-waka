@@ -17,8 +17,6 @@ export type CloudStaffRow = {
   email: string | null;
   permissions: Permission[];
   is_active: boolean;
-  /** Linked Auth user (`shop_pos_staff.user_id`); null = legacy PIN. */
-  user_id?: string | null;
   last_login_at: string | null;
   last_device_fingerprint: string | null;
   last_login_platform: string | null;
@@ -78,7 +76,6 @@ function cloudRowToStaff(row: CloudStaffRow): StaffAccount {
     failureWindowStartedAt: row.failure_window_started_at,
     pinChangedAt: row.pin_changed_at,
     passwordChangedAt: row.password_changed_at,
-    linkedAuthUserId: row.user_id ?? null,
   };
 }
 

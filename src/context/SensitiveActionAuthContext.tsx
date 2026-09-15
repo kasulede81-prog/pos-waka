@@ -29,7 +29,7 @@ import {
   EnterpriseSecurityDialog,
   type EnterpriseSecurityDialogMode,
 } from "../components/security/EnterpriseSecurityDialog";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { defaultSecurityAuditLogger } from "../lib/enterpriseSecurity/audit";
 
@@ -62,7 +62,6 @@ function dialogModeForKind(kind: SensitiveActionKind): EnterpriseSecurityDialogM
 }
 
 export function SensitiveActionAuthProvider({ lang, children }: { lang: Language; children: ReactNode }) {
-  const navigate = useNavigate();
   const biometricAuthEnabled = usePosStore((s) => s.preferences.biometricAuthEnabled);
   const { isUnlocked: backOfficeUnlocked } = useBackOfficeSession();
   const [pending, setPending] = useState<PendingRequest | null>(null);
@@ -73,12 +72,10 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
   const [statusKind, setStatusKind] = useState<"success" | "error" | null>(null);
   const pendingRef = useRef<PendingRequest | null>(null);
   const biometricFailuresRef = useRef(0);
-  const inflightRef = useRef(false);
 
   const finish = useCallback((granted: boolean) => {
     const req = pendingRef.current;
     pendingRef.current = null;
-    inflightRef.current = false;
     setPending(null);
     setForcePin(false);
     setPinSetupRequired(false);
@@ -152,8 +149,7 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
   );
 
   const runBiometric = useCallback(async () => {
-    if (!pending || inflightRef.current) return;
-    inflightRef.current = true;
+    if (!pending) return;
     setBusy(true);
     setStatusMessage(null);
     setStatusKind(null);
@@ -186,8 +182,6 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
       }
     }
 
-    inflightRef.current = false;
-
     if (!result.ok && result.userFallback) {
       setForcePin(true);
       return;
@@ -205,9 +199,7 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
 
   const submitPin = useCallback(
     async (pin: string) => {
-      if (!pending || inflightRef.current) return;
-      inflightRef.current = true;
-      setBusy(true);
+      if (!pending) return;
       const preferences = usePosStore.getState().preferences;
       const deviceId = getOrCreateDeviceId();
       const actor = usePosStore.getState().sessionActor;
@@ -240,8 +232,6 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
       }
 
       if (!verified.ok) {
-        inflightRef.current = false;
-        setBusy(false);
         setStatusKind("error");
         setStatusMessage(t(lang, "enterpriseSecurityWrongPin"));
         defaultSecurityAuditLogger(false, "Sensitive action PIN denied", {
@@ -262,11 +252,6 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
   const cancel = useCallback(() => {
     finish(false);
   }, [finish]);
-
-  const goSetShopPin = useCallback(() => {
-    finish(false);
-    navigate("/settings/pin");
-  }, [finish, navigate]);
 
   const value = useMemo(
     (): Ctx => ({
@@ -290,13 +275,13 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
               {t(lang, "shopSecurityPinRecoveryCreateNew")}
             </p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <button
-                type="button"
+              <Link
+                to="/settings/pin"
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
-                onClick={goSetShopPin}
+                onClick={() => finish(false)}
               >
                 {t(lang, "shopSecurityPinRecoveryBannerAction")}
-              </button>
+              </Link>
               <button
                 type="button"
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-border px-4 text-sm font-black text-foreground"

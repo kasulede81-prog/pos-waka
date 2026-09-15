@@ -1,6 +1,4 @@
-import { EnterpriseListFooter } from "../../../components/enterprise/EnterpriseListFooter";
 import { PageHeader } from "../../../components/layout/PageHeader";
-import { INVESTIGATION_PAGE_SIZE } from "../lib/investigationResultScope";
 import { IncludeArchivedFilter } from "../../../components/office/IncludeArchivedFilter";
 import { RefundCalculationDrawer } from "../../../components/returns/RefundCalculationDrawer";
 import { actorDisplayLabel } from "../../../lib/activityNarrative";
@@ -16,14 +14,8 @@ import { InvestigationRefundsSection } from "../components/InvestigationRefundsS
 import { InvestigationSearchBar } from "../components/InvestigationSearchBar";
 import { InvestigationStaffSection } from "../components/InvestigationStaffSection";
 import { InvestigationTabs } from "../components/InvestigationTabs";
-import { InvestigationIncompleteState } from "../components/InvestigationIncompleteState";
 import { VirtualizedActivityTimeline } from "../components/VirtualizedActivityTimeline";
 import type { InvestigationWidgetDef, InvestigationWidgetProps } from "./investigationWidgetTypes";
-import {
-  investigationRefundsTimelineHintKey,
-  shouldShowInvestigationRefundsTimelineHint,
-} from "../lib/investigationRefundAuthority";
-import { investigationRefundTracePresentation } from "../lib/investigationSalesDependentReadiness";
 
 function HeaderWidget({ ctx }: InvestigationWidgetProps) {
   return (
@@ -41,9 +33,6 @@ function DateFilterWidget({ ctx }: InvestigationWidgetProps) {
 }
 
 function SharedKpiGridWidget({ ctx }: InvestigationWidgetProps) {
-  if (!ctx.dataComplete) {
-    return <InvestigationIncompleteState lang={ctx.lang} variant="kpis" />;
-  }
   return (
     <InvestigationKpiGrid
       lang={ctx.lang}
@@ -73,9 +62,7 @@ function TimelineSearchWidget({ ctx }: InvestigationWidgetProps) {
       onSearchChange={ctx.onSearchTextChange}
       onOpenFilters={() => ctx.setFiltersOpen(true)}
       onOpenExport={() => ctx.setExportOpen(true)}
-      resultCount={ctx.dataComplete ? ctx.filtered.length : 0}
-      matchingTotal={ctx.dataComplete ? ctx.matchingTotal : undefined}
-      hideResultCount={!ctx.dataComplete}
+      resultCount={ctx.filtered.length}
     />
   );
 }
@@ -110,36 +97,17 @@ function TimelinePanelWidget({ ctx }: InvestigationWidgetProps) {
   return (
     <div className="space-y-3">
       <TimelineSearchWidget ctx={ctx} />
-      {ctx.dataComplete && shouldShowInvestigationRefundsTimelineHint(ctx.activeKpi, ctx.category) ? (
-        <p className="px-0.5 text-[11px] font-semibold text-muted-foreground">
-          {t(ctx.lang, investigationRefundsTimelineHintKey())}
-        </p>
-      ) : null}
       <TimelineCategoriesWidget ctx={ctx} />
-      {ctx.dataComplete ? <TimelineWidget ctx={ctx} /> : <InvestigationIncompleteState lang={ctx.lang} />}
-      {ctx.dataComplete && ctx.matchingTotal > 0 ? (
-        <EnterpriseListFooter
-          lang={ctx.lang}
-          truncated={ctx.hasMoreResults}
-          truncatedCount={ctx.filtered.length}
-          totalCount={ctx.matchingTotal}
-          hasMore={ctx.hasMoreResults}
-          onLoadMore={ctx.loadMoreResults}
-          endOfList={!ctx.hasMoreResults && ctx.matchingTotal > INVESTIGATION_PAGE_SIZE}
-        />
-      ) : null}
+      <TimelineWidget ctx={ctx} />
     </div>
   );
 }
 
 function StaffReportsWidget({ ctx }: InvestigationWidgetProps) {
-  if (!ctx.dataComplete) {
-    return <InvestigationIncompleteState lang={ctx.lang} />;
-  }
   return (
     <InvestigationStaffSection
       lang={ctx.lang}
-      entries={ctx.matchingEntries}
+      entries={ctx.filtered}
       shifts={ctx.shiftsInRange}
       productById={ctx.productById}
       customerById={ctx.customerById}
@@ -151,14 +119,10 @@ function StaffReportsWidget({ ctx }: InvestigationWidgetProps) {
 }
 
 function RefundsReportsWidget({ ctx }: InvestigationWidgetProps) {
-  if (!ctx.dataComplete) {
-    return <InvestigationIncompleteState lang={ctx.lang} />;
-  }
   return (
     <InvestigationRefundsSection
       lang={ctx.lang}
       integrityReport={ctx.integrityReport}
-      salesDependentReady={ctx.salesDependentReady}
       returns={ctx.returnsInRange}
       onTraceReturn={ctx.setTraceReturn}
     />
@@ -184,7 +148,7 @@ function FooterSheetsWidget({ ctx }: InvestigationWidgetProps) {
       <InvestigationExportSheet
         lang={ctx.lang}
         open={ctx.exportOpen}
-        disabled={!ctx.dataComplete || ctx.matchingTotal === 0}
+        disabled={ctx.filtered.length === 0}
         onClose={() => ctx.setExportOpen(false)}
         onExportCsv={() => ctx.downloadCsv()}
         onExportExcel={() => ctx.downloadExcel()}
@@ -200,7 +164,6 @@ function FooterSheetsWidget({ ctx }: InvestigationWidgetProps) {
         shopName={ctx.shopName}
         productById={ctx.productById}
         customerById={ctx.customerById}
-        staffNameById={ctx.staffNameById}
         open={ctx.selected !== null}
         onClose={() => ctx.setSelected(null)}
         onCopy={() => ctx.selected && void ctx.copyEntry(ctx.selected)}
@@ -230,13 +193,6 @@ function FooterSheetsWidget({ ctx }: InvestigationWidgetProps) {
         lang={ctx.lang}
         open={ctx.traceReturn !== null}
         sale={ctx.traceReturn?.saleId ? (ctx.saleById.get(ctx.traceReturn.saleId) ?? null) : null}
-        salePending={
-          investigationRefundTracePresentation({
-            salesDependentReady: ctx.salesDependentReady,
-            saleId: ctx.traceReturn?.saleId,
-            saleFound: Boolean(ctx.traceReturn?.saleId && ctx.saleById.get(ctx.traceReturn.saleId)),
-          }) === "loading"
-        }
         returnRecord={ctx.traceReturn}
         returnRecords={ctx.allReturns}
         actorLabel={

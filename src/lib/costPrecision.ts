@@ -16,16 +16,10 @@ export function normalizePackCostUgx(raw: number | null | undefined): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-/**
- * Fractional-quantity sales (e.g. 2.5 kg) leave the pack depleted by a
- * fractional amount (e.g. slot 3.5) — flooring here would silently discard
- * that progress and misalign the very next sale's slot boundary. Only
- * clamps NaN/negative to 0; does not round.
- */
 export function resolvePackCostUnitsDepleted(product: { packCostUnitsDepleted?: number | null }): number {
   const n = Number(product.packCostUnitsDepleted);
   if (!Number.isFinite(n) || n < 0) return 0;
-  return n;
+  return Math.floor(n);
 }
 
 /** Exact unit cost from pack invoice ÷ pieces (no truncation). */
@@ -92,23 +86,7 @@ export function packSlotUnitCostUgx(packCostUgx: number, unitsPerPack: number, s
   return slot < remainder ? base + 1 : base;
 }
 
-/**
- * FIFO slot COGS — 24 separate unit sales sum exactly to packCostUgx.
- *
- * `startSlot`/`quantity` may be fractional (e.g. 2.5 kg sold starting at
- * slot 3.5). Each integer-indexed slot has a constant per-unit cost rate
- * (`packSlotUnitCostUgx`); a fractional quantity consumes a proportional
- * fraction of whichever slot(s) the continuous range
- * [startSlot, startSlot + quantity) overlaps — it must NOT be rounded up
- * to a whole slot count (that overcharges every fractional-quantity sale,
- * e.g. charging a full 3rd slot for a 2.5-unit sale). Rounding is applied
- * once at the very end, matching `lineCostUgx` elsewhere in this file.
- *
- * For an integer `startSlot`/`quantity` this collapses to exactly the same
- * per-slot summation as a whole-unit loop — each slot is either fully
- * included or fully excluded, never partially — so existing whole-unit
- * behavior is unchanged.
- */
+/** FIFO slot COGS — 24 separate unit sales sum exactly to packCostUgx. */
 export function lineCostFromPackSlots(
   packCostUgx: number,
   unitsPerPack: number,
@@ -117,19 +95,12 @@ export function lineCostFromPackSlots(
 ): number {
   const qty = Math.max(0, Number(quantity) || 0);
   if (qty <= 0) return 0;
-  const start = Math.max(0, Number(startSlot) || 0);
-  const EPSILON = 1e-9;
-  let cursor = start;
-  let remaining = qty;
+  const start = Math.max(0, Math.floor(startSlot));
   let total = 0;
-  while (remaining > EPSILON) {
-    const slotIndex = Math.floor(cursor);
-    const take = Math.min(remaining, slotIndex + 1 - cursor);
-    total += take * packSlotUnitCostUgx(packCostUgx, unitsPerPack, slotIndex);
-    cursor += take;
-    remaining -= take;
+  for (let i = 0; i < qty; i++) {
+    total += packSlotUnitCostUgx(packCostUgx, unitsPerPack, start + i);
   }
-  return Math.round(total);
+  return total;
 }
 
 /** @deprecated Use lineCostFromPackSlots — proportional round drifts per-unit sales. */
@@ -241,42 +212,25 @@ export function lineCostFromSaleLine(line: {
   return lineCostUgx(normalizeUnitCostUgx(line.unitCostUgx), qty);
 }
 
-/**
- * Current on-hand inventory value for ONE product — deliberately NOT routed
- * through `lineCostForProductQuantity`/`buyingPackCostUgxForProduct`.
- *
- * Those functions exist for SALE-LINE COGS, where a pack-priced product's
- * FIFO slot allocation must sum exactly to its buying-pack invoice total —
- * `buyingPackCostUgx` is the right source of truth there. But `recordPurchase`
- * (usePosStore.ts) only recomputes `costPricePerUnitUgx` on restock and never
- * touches `buyingPackCostUgx`, so that field can silently go stale relative
- * to the live unit cost. Routing inventory VALUATION through the same
- * pack-cost-preferring path meant "Stock value" (and every other consumer of
- * this function — Stock page, Receipts, Monthly Business Report, Finance
- * Diagnostics, cloud recovery/trust-center reporting) could understate a
- * pack-priced product's value using a stale invoice figure instead of its
- * current per-unit cost, even though the Products table/export — which read
- * `costPricePerUnitUgx` directly — showed the correct number.
- *
- * Inventory valuation and sale COGS are different questions ("what is this
- * stock worth right now" vs "what did this specific sale actually cost,
- * FIFO-allocated against the invoice it came from") and deliberately use
- * different formulas. This function answers only the first one, always from
- * the current live unit cost — matching the Products table/CSV export.
- */
 export function inventoryLineValueAtCostUgx(product: {
   stockOnHand: number;
   costPricePerUnitUgx: number;
+  buyingPackCostUgx?: number | null;
+  conversionRate?: number | null;
+  packCostUnitsDepleted?: number | null;
 }): number {
   const stock = Math.max(0, Number(product.stockOnHand) || 0);
   if (stock <= 0) return 0;
-  return lineCostUgx(costPerBaseUnitUgxFromProduct(product), stock);
+  return lineCostForProductQuantity(product, stock);
 }
 
 export function inventoryValueAtCostUgx(
   products: Array<{
     stockOnHand: number;
     costPricePerUnitUgx: number;
+    buyingPackCostUgx?: number | null;
+    conversionRate?: number | null;
+    packCostUnitsDepleted?: number | null;
   }>,
 ): number {
   return products.reduce((sum, p) => sum + inventoryLineValueAtCostUgx(p), 0);

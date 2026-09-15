@@ -7,18 +7,16 @@ import { usePosStore } from "../store/usePosStore";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
-import { isRevenueSale } from "../lib/saleStatus";
+import { isCompletedSale } from "../lib/saleStatus";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
-import { authOperatorPermissions, authOperatorRole } from "../lib/sessionActor";
-import { computeProfitGroupedByCategory, mergeLinkedReturnsForScopedSales } from "../lib/homeProfit";
+import { computeProfitGroupedByCategory } from "../lib/homeProfit";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
-import { MONTH_TO_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
+import { MONTH_TO_DATE_FILTER } from "../lib/dateFilters";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
-import { resolveProfitPageDateAuthority } from "../lib/profitPageDateAuthority";
 import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
 import { ProfitStatGrid } from "../components/profit/ProfitStatGrid";
 import { ProfitTrendChart } from "../components/profit/ProfitTrendChart";
@@ -31,15 +29,12 @@ import { ProfitProductDetailSheet } from "../components/profit/ProfitProductDeta
 import { ProfitInsightsPanel } from "../components/profit/ProfitInsightsPanel";
 import { ProfitSkeletonList, ProfitStatGridSkeleton } from "../components/profit/ProfitSkeleton";
 import {
-  averageGrossProfitPerSale,
   computeDailyProfitTrend,
   flattenProfitProducts,
   lastSoldAtForProduct,
   marginPercent,
   matchesProfitSearch,
   matchesShelfSearch,
-  presentProfitPageFinancials,
-  presentProfitShelfRanking,
   type ProfitProductView,
   type ProfitQuickFilter,
 } from "../lib/profitPageView";
@@ -49,99 +44,58 @@ import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { buildProfitExportRows } from "../lib/analyticsReportExport";
 import { exportCsvFile } from "../lib/reportExportEngine";
 import { overlayPeriodFinancials, resolvePeriodReportAuthority } from "../lib/closedDayAuthority";
-import { useDayClosesForAuthority } from "../hooks/useDayClosesForAuthority";
 import { printProfitReportPdf } from "../lib/profitReportDocument";
-import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
-import {
-  canExportReportsData,
-  resolveReportsFinancialReadiness,
-  runReportsExportIfComplete,
-  sumFrozenPeriodHeadlines,
-} from "../lib/reportsDataCompleteness";
 
-type Props = {
-  lang: Language;
-  embedded?: boolean;
-  /** When set (Reports shell), this filter is the only date authority. */
-  dateFilter?: DateFilterValue;
-  includeArchived?: boolean;
-};
+type Props = { lang: Language; embedded?: boolean };
 
-export function ProfitPage({
-  lang,
-  embedded,
-  dateFilter: controlledFilter,
-  includeArchived: controlledArchived,
-}: Props) {
+export function ProfitPage({ lang, embedded }: Props) {
   const actor = useSessionActor();
   const { authMode, snapshot } = useSubscription();
-  const localDate = useReportingDateFilter(MONTH_TO_DATE_FILTER);
-  const { filter, bounds, controlled: dateControlled } = resolveProfitPageDateAuthority({
-    controlledFilter,
-    localFilter: localDate.filter,
-  });
-  const setFilter = localDate.setFilter;
-  const includeArchived = dateControlled ? Boolean(controlledArchived) : localDate.includeArchived;
-  const setIncludeArchived = localDate.setIncludeArchived;
-  const archiveNotice = dateControlled ? false : localDate.archiveNotice;
-  const archivedSalesCount = localDate.archivedSalesCount;
-  const needsArchive = dateControlled ? false : localDate.needsArchive;
+  const {
+    filter,
+    setFilter,
+    bounds,
+    includeArchived,
+    setIncludeArchived,
+    archiveNotice,
+    archivedSalesCount,
+    needsArchive,
+  } = useReportingDateFilter(MONTH_TO_DATE_FILTER);
   const rawSales = useReportingSales(includeArchived);
   const sales = useDeferredValue(rawSales);
   const salesRefreshing = rawSales !== sales;
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const products = usePosStore((s) => s.products);
-  const dayCloses = useDayClosesForAuthority();
-  const hydrationStage = usePosStore((s) => s.hydrationStage);
-  const salesHistoryHydration = usePosStore((s) => s.salesHistoryHydration);
-  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
-  const preferences = usePosStore((s) => s.preferences);
+  const dayCloses = usePosStore((s) => s.dayCloses);
   const shopName = usePosStore((s) => s.preferences.shopDisplayName?.trim() || "Waka POS");
   const [searchQuery, setSearchQuery] = useState("");
   const [quickFilter, setQuickFilter] = useState<ProfitQuickFilter>("all");
   const [detailProduct, setDetailProduct] = useState<ProfitProductView | null>(null);
 
-  const { canProfit: canViewProfit } = resolveProfitVisibility({
-    role: authOperatorRole(actor),
-    snapshot,
-    authMode,
-    actorPermissions: authOperatorPermissions(actor),
-  });
+  const { canProfit: canViewProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const generalLabel = t(lang, "uncategorized");
   const locale = lang === "sw" ? "sw-UG" : "en-UG";
 
   const filteredSales = useMemo(
-    () => sales.filter((s) => isRevenueSale(s) && saleMatchesFilter(s, bounds)),
+    () => sales.filter((s) => isCompletedSale(s) && saleMatchesFilter(s, bounds)),
     [sales, bounds],
   );
 
-  const allReturns = useMemo(
-    () => (includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords),
-    [includeArchived, returnRecords, archivedReturnRecords],
-  );
-
-  const filteredReturns = useMemo(
-    () => allReturns.filter((r) => returnMatchesFilter(r, bounds)),
-    [allReturns, bounds],
-  );
-
-  /** Include linked returns for scoped sales even when return date is outside the filter. */
-  const profitReturns = useMemo(
-    () => mergeLinkedReturnsForScopedSales(filteredSales, filteredReturns, allReturns),
-    [filteredSales, filteredReturns, allReturns],
-  );
+  const filteredReturns = useMemo(() => {
+    const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
+    return allReturnRecords.filter((r) => returnMatchesFilter(r, bounds));
+  }, [includeArchived, returnRecords, archivedReturnRecords, bounds]);
 
   const report = useMemo(
-    () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel, profitReturns),
-    [filteredSales, productById, generalLabel, profitReturns],
+    () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel, filteredReturns),
+    [filteredSales, productById, generalLabel, filteredReturns],
   );
 
   const { groups, total } = report;
-  const periodAuthority = resolvePeriodReportAuthority(dayCloses, bounds);
-  const closedPeriod = periodAuthority !== "live";
+  const closedPeriod = resolvePeriodReportAuthority(dayCloses, bounds) !== "live";
   const overlaid = overlayPeriodFinancials({
     live: {
       revenueUgx: total.salesUgx,
@@ -152,38 +106,19 @@ export function ProfitPage({
     dayCloses,
     bounds,
     sales: filteredSales,
-    returns: profitReturns,
+    returns: filteredReturns,
     products,
   });
-  const readiness = resolveReportsFinancialReadiness({
-    hydrationStage,
-    salesHistoryHydration,
-    authority: periodAuthority,
-  });
-  const frozenHeadlines = readiness.canShowFrozenHeadlines
-    ? sumFrozenPeriodHeadlines(dayCloses, bounds)
-    : null;
-  const presentation = presentProfitPageFinancials({
-    readiness,
-    overlaid,
-    liveCostUgx: total.costUgx,
-    closedPeriod,
-    frozenHeadlines,
-  });
-  const headlineProfitUgx = presentation.headlineProfitUgx;
-  const headlineRevenueUgx = presentation.headlineRevenueUgx;
-  const headlineCostUgx = presentation.headlineCostUgx;
+  const headlineProfitUgx = overlaid.profitUgx;
+  const headlineRevenueUgx = overlaid.revenueUgx;
   const marginPct = marginPercent(headlineRevenueUgx, headlineProfitUgx);
-  const costIncomplete = presentation.showLiveBreakdowns && total.costIncomplete;
-  const revenueEligibleTxnCount = presentation.revenueEligibleTxnCount;
-  const avgGrossProfitPerSale = averageGrossProfitPerSale(headlineProfitUgx, revenueEligibleTxnCount);
   const allProducts = useMemo(() => flattenProfitProducts(groups), [groups]);
-  const bestShelf = closedPeriod ? null : groups[0]?.categoryLabel ?? null;
-  const bestProduct = closedPeriod ? null : allProducts[0]?.name ?? null;
+  const bestShelf = groups[0]?.categoryLabel ?? null;
+  const bestProduct = allProducts[0]?.name ?? null;
 
   const dailyTrend = useMemo(
-    () => computeDailyProfitTrend(filteredSales, profitReturns, productById, locale),
-    [filteredSales, profitReturns, productById, locale],
+    () => computeDailyProfitTrend(filteredSales, filteredReturns, productById, locale),
+    [filteredSales, filteredReturns, productById, locale],
   );
 
   const searchedProducts = useMemo(() => {
@@ -194,12 +129,6 @@ export function ProfitPage({
     if (!searchQuery.trim()) return groups;
     return groups.filter((g) => matchesShelfSearch(searchQuery, g.categoryLabel));
   }, [groups, searchQuery]);
-
-  const shelfPresentation = presentProfitShelfRanking({
-    authority: periodAuthority,
-    groups: searchedGroups,
-    liveTotalProfitUgx: total.profitUgx,
-  });
 
   const displayProducts = useMemo(() => {
     let list = [...searchedProducts];
@@ -214,18 +143,10 @@ export function ProfitPage({
   const showLowMargin = quickFilter === "all" || quickFilter === "loss_making";
 
   const totalUnitsSold = useMemo(() => allProducts.reduce((sum, p) => sum + p.qty, 0), [allProducts]);
+  const avgProfitPerSale = filteredSales.length > 0 ? Math.round(total.profitUgx / filteredSales.length) : 0;
 
   const insights = useMemo(() => {
     const items: { text: string }[] = [];
-    if (closedPeriod) {
-      items.push({ text: `${t(lang, "reportDocLiveBreakdown")} — ${t(lang, "reportDocLiveBreakdownHint")}` });
-      return items;
-    }
-    if (costIncomplete) {
-      items.push({
-        text: t(lang, "profitCostIncompleteBanner").replace("{{count}}", String(total.linesMissingCost)),
-      });
-    }
     if (bestShelf) {
       items.push({ text: tTemplate(lang, "profitInsightBestShelf", { name: bestShelf }) });
     }
@@ -254,24 +175,14 @@ export function ProfitPage({
     if (belowCost.length > 0) {
       items.push({ text: tTemplate(lang, "profitInsightBelowCost", { count: String(belowCost.length) }) });
     }
-    if (avgGrossProfitPerSale !== 0) {
-      items.push({ text: tTemplate(lang, "profitInsightAvgProfit", { amount: avgGrossProfitPerSale.toLocaleString() }) });
+    if (avgProfitPerSale !== 0) {
+      items.push({ text: tTemplate(lang, "profitInsightAvgProfit", { amount: avgProfitPerSale.toLocaleString() }) });
     }
     if (totalUnitsSold > 0) {
       items.push({ text: tTemplate(lang, "profitInsightUnitsSold", { count: totalUnitsSold.toLocaleString() }) });
     }
     return items;
-  }, [
-    lang,
-    closedPeriod,
-    costIncomplete,
-    total.linesMissingCost,
-    bestShelf,
-    bestProduct,
-    allProducts,
-    avgGrossProfitPerSale,
-    totalUnitsSold,
-  ]);
+  }, [lang, bestShelf, bestProduct, allProducts, avgProfitPerSale, totalUnitsSold]);
 
   const detailLastSold = detailProduct ? lastSoldAtForProduct(filteredSales, detailProduct.productId) : null;
   const detailRecord = detailProduct ? productById.get(detailProduct.productId) : undefined;
@@ -283,29 +194,13 @@ export function ProfitPage({
       buildProfitExportRows({
         lang,
         periodLabel,
-        grossProfitUgx: headlineProfitUgx,
+        profitUgx: headlineProfitUgx,
         revenueUgx: headlineRevenueUgx,
-        costUgx: headlineCostUgx,
+        costUgx: total.costUgx,
         marginPct,
-        transactionCount: revenueEligibleTxnCount,
-        averageGrossProfitUgx: avgGrossProfitPerSale,
-        costIncomplete,
-        closedPeriod,
         groups,
       }),
-    [
-      lang,
-      periodLabel,
-      headlineProfitUgx,
-      headlineRevenueUgx,
-      headlineCostUgx,
-      marginPct,
-      revenueEligibleTxnCount,
-      avgGrossProfitPerSale,
-      costIncomplete,
-      closedPeriod,
-      groups,
-    ],
+    [lang, periodLabel, headlineProfitUgx, headlineRevenueUgx, total.costUgx, marginPct, groups],
   );
 
   if (!canViewProfit) {
@@ -313,64 +208,47 @@ export function ProfitPage({
   }
 
   const exportProfitCsv = async () => {
-    if (!canExportReportsData(readiness)) return;
-    const rows = runReportsExportIfComplete(readiness.dataComplete, () => exportProfitRows);
-    if (!rows) return;
-    await exportCsvFile("profit", `waka-profit-${dateKeyKampala(new Date())}.csv`, rows, {
+    await exportCsvFile("profit", `waka-profit-${dateKeyKampala(new Date())}.csv`, exportProfitRows, {
       shareDialogTitle: t(lang, "profitPageTitle"),
     });
   };
 
   const shareProfitReport = async () => {
-    if (!canExportReportsData(readiness)) return;
-    const payload = runReportsExportIfComplete(readiness.dataComplete, () => {
-      const dayKey = selectedDayKeyForFilter(filter);
-      if (dayKey) {
-        return buildDailyReportText(lang, dayKey, {
-          sales: filteredSales,
-          products,
-          returnRecords: filteredReturns,
-          dayDrawerOpens,
-          formulaVersion: resolveCashDrawerFormulaVersion(preferences),
-          includeProfit: true,
-          dayCloses,
-        });
-      }
-      return exportProfitRows.map((row) => row.join(": ")).join("\n");
-    });
-    if (!payload) return;
-    await shareText(payload, t(lang, "profitPageTitle"), "profit");
+    const dayKey = selectedDayKeyForFilter(filter);
+    if (dayKey) {
+      const body = buildDailyReportText(lang, dayKey, {
+        sales: filteredSales,
+        products,
+        returnRecords: filteredReturns,
+        includeProfit: true,
+        dayCloses,
+      });
+      await shareText(body, t(lang, "profitPageTitle"), "profit");
+      return;
+    }
+    const lines = exportProfitRows.map((row) => row.join(": ")).join("\n");
+    await shareText(lines, t(lang, "profitPageTitle"), "profit");
   };
 
   const printProfitReport = async () => {
-    if (!canExportReportsData(readiness)) return;
-    const payload = runReportsExportIfComplete(readiness.dataComplete, () => ({
+    await printProfitReportPdf({
       lang,
       shopName,
       periodLabel,
       bounds,
       sales: filteredSales,
-      returnRecords: profitReturns,
+      returnRecords: filteredReturns,
       products,
       dayCloses,
-      profitUgx: total.profitUgx,
-      revenueUgx: total.salesUgx,
+      profitUgx: headlineProfitUgx,
+      revenueUgx: headlineRevenueUgx,
       costUgx: total.costUgx,
       marginPct,
-      costIncomplete,
       groups,
-    }));
-    if (!payload) return;
-    await printProfitReportPdf(payload);
+    });
   };
 
   const hasData = filteredSales.length > 0 || groups.length > 0;
-  const showHeadlineSkeleton = presentation.showHeadlineSkeleton || (salesRefreshing && presentation.showLiveBreakdowns);
-  const showHeadlines =
-    !showHeadlineSkeleton &&
-    (presentation.headlineSource === "frozen" || (presentation.headlineSource === "overlay" && hasData));
-  const showLiveBreakdowns = presentation.showLiveBreakdowns && hasData && !salesRefreshing;
-  const showExportActions = presentation.canExport && hasData;
 
   return (
     <EnterprisePageContainer className={embedded ? "space-y-3" : undefined} variant={embedded ? "flush" : "default"}>
@@ -387,7 +265,7 @@ export function ProfitPage({
             />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 pt-8">
-            {showExportActions ? (
+            {hasData ? (
               <>
                 <button
                   type="button"
@@ -426,9 +304,9 @@ export function ProfitPage({
         </div>
       ) : null}
 
-      {showHeadlineSkeleton ? (
+      {salesRefreshing ? (
         <ProfitStatGridSkeleton />
-      ) : showHeadlines ? (
+      ) : hasData ? (
         <div className="space-y-2">
           {closedPeriod ? (
             <p className="rounded-xl border border-border bg-muted/70 px-3 py-2 text-xs font-semibold text-muted-foreground">
@@ -437,26 +315,23 @@ export function ProfitPage({
           ) : null}
           <ProfitStatGrid
             lang={lang}
-            grossProfitUgx={headlineProfitUgx}
+            netProfitUgx={headlineProfitUgx}
             revenueUgx={headlineRevenueUgx}
-            costUgx={headlineCostUgx}
+            costUgx={total.costUgx}
             marginPct={marginPct}
             bestShelf={bestShelf}
             bestProduct={bestProduct}
-            costIncomplete={costIncomplete}
           />
         </div>
       ) : null}
 
       {hasData ? (
         <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-muted/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
-          {dateControlled ? null : (
-            <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
-          )}
+          <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
           <ProfitQuickFilterChips lang={lang} active={quickFilter} onChange={setQuickFilter} />
           <ProfitSearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} />
         </div>
-      ) : dateControlled ? null : (
+      ) : (
         <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
       )}
 
@@ -474,20 +349,18 @@ export function ProfitPage({
         <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
       ) : null}
 
-      {dateControlled ? null : (
-        <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
-      )}
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      {presentation.showLiveBreakdowns && total.linesMissingCost > 0 ? (
+      {total.linesMissingCost > 0 ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
-          {t(lang, "profitCostIncompleteBanner").replace("{{count}}", String(total.linesMissingCost))}{" "}
+          {t(lang, "homeProfitMissingCost").replace("{{count}}", String(total.linesMissingCost))}{" "}
           <Link to="/stock" className="font-black text-waka-800 underline">
             {t(lang, "homeProfitAddCostCta")}
           </Link>
         </p>
       ) : null}
 
-      {!showHeadlines && !showHeadlineSkeleton ? (
+      {!hasData && !salesRefreshing ? (
         <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center">
           <TrendingUp className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
           <p className="mt-3 text-base font-black text-foreground">{t(lang, "profitEmptyTitle")}</p>
@@ -495,9 +368,9 @@ export function ProfitPage({
         </div>
       ) : null}
 
-      {showHeadlineSkeleton ? (
+      {salesRefreshing ? (
         <ProfitSkeletonList />
-      ) : showLiveBreakdowns ? (
+      ) : hasData ? (
         <div className="space-y-3 transition-opacity duration-300">
           {closedPeriod ? (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
@@ -508,51 +381,33 @@ export function ProfitPage({
 
           {insights.length > 0 ? <ProfitInsightsPanel lang={lang} insights={insights} /> : null}
 
-          {shelfPresentation.kind === "unavailable" ? (
-            <div className="rounded-2xl border border-dashed border-border bg-muted/60 px-6 py-12 text-center">
-              <p className="text-base font-black text-foreground">{t(lang, "reportsClosedBreakdownUnavailable")}</p>
-              <p className="mx-auto mt-2 max-w-sm text-sm font-medium text-muted-foreground">
-                {t(lang, "reportsClosedBreakdownUnavailableHint")}
-              </p>
-            </div>
-          ) : (
-            <>
-              {showShelves && shelfPresentation.groups.length > 0 ? (
-                <ProfitShelfRanking
-                  lang={lang}
-                  groups={shelfPresentation.groups}
-                  totalProfitUgx={shelfPresentation.totalProfitUgx}
-                  onShelfClick={(label) => setSearchQuery(label)}
-                />
-              ) : null}
+          {showShelves && searchedGroups.length > 0 ? (
+            <ProfitShelfRanking
+              lang={lang}
+              groups={searchedGroups}
+              totalProfitUgx={total.profitUgx}
+              onShelfClick={(label) => setSearchQuery(label)}
+            />
+          ) : null}
 
-              {showProducts && displayProducts.length > 0 ? (
-                <section className="space-y-2">
-                  <h3 className="px-0.5 text-xs font-black text-foreground">{t(lang, "profitTopProducts")}</h3>
-                  {displayProducts.map((p) => (
-                    <ProfitProductCard key={`${p.productId}-${p.name}`} lang={lang} product={p} onOpen={setDetailProduct} />
-                  ))}
-                </section>
-              ) : null}
+          {showProducts && displayProducts.length > 0 ? (
+            <section className="space-y-2">
+              <h3 className="px-0.5 text-xs font-black text-foreground">{t(lang, "profitTopProducts")}</h3>
+              {displayProducts.map((p) => (
+                <ProfitProductCard key={`${p.productId}-${p.name}`} lang={lang} product={p} onOpen={setDetailProduct} />
+              ))}
+            </section>
+          ) : null}
 
-              {showLowMargin ? (
-                <ProfitLowMarginList lang={lang} products={searchedProducts} onProductClick={setDetailProduct} />
-              ) : null}
-            </>
-          )}
+          {showLowMargin ? (
+            <ProfitLowMarginList lang={lang} products={searchedProducts} onProductClick={setDetailProduct} />
+          ) : null}
 
           {hasData && displayProducts.length === 0 && searchedGroups.length === 0 && searchQuery.trim() ? (
             <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">
               {t(lang, "posSellNoMatch")}
             </p>
           ) : null}
-        </div>
-      ) : presentation.headlineSource === "frozen" ? (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/60 px-6 py-12 text-center">
-          <p className="text-base font-black text-foreground">{t(lang, "reportsClosedBreakdownUnavailable")}</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm font-medium text-muted-foreground">
-            {t(lang, "reportsClosedBreakdownUnavailableHint")}
-          </p>
         </div>
       ) : null}
 

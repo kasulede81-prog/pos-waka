@@ -147,7 +147,7 @@ describe("staffOfflineAuth cache login", () => {
       ],
     });
 
-    const { authenticateOfflineStaff, StaffCacheMissingError } = await import("./staffOfflineAuth");
+    const { authenticateOfflineStaff } = await import("./staffOfflineAuth");
     await expect(
       authenticateOfflineStaff({
         businessName: "Corner Shop",
@@ -156,6 +156,6 @@ describe("staffOfflineAuth cache login", () => {
         pinOrPassword: "1234",
         rememberDevice: false,
       }),
-    ).rejects.toBeInstanceOf(StaffCacheMissingError);
+    ).rejects.toThrow("Invalid staff credentials.");
   });
 });

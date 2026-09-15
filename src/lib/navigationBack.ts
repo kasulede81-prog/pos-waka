@@ -10,7 +10,6 @@ export function historyCanGoBack(): boolean {
 export function getBackFallbackPath(pathname: string, opts?: { desktopTerminal?: boolean }): string {
   if (
     pathname === "/staff-access" ||
-    pathname.startsWith("/staff-center") ||
     pathname.startsWith("/office/hardware") ||
     pathname.startsWith("/office/vision")
   ) {

@@ -3,9 +3,7 @@ import type { ReportWidgetDef, ReportWidgetProps } from "./reportWidgetTypes";
 
 function WholesaleOperationsWidget({ ctx }: ReportWidgetProps) {
   if (!ctx.wholesaleSection) return null;
-  return (
-    <WholesaleReportsSection lang={ctx.lang} wholesaleSection={ctx.wholesaleSection} canProfit={ctx.canProfit} />
-  );
+  return <WholesaleReportsSection lang={ctx.lang} wholesaleSection={ctx.wholesaleSection} />;
 }
 
 /** Wholesale reports — operations overview uses existing analytics section. */

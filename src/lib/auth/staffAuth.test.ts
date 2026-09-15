@@ -8,7 +8,6 @@ import {
 } from "./staffLoginLimiter";
 import {
   computeSessionExpiresAt,
-  isPosAutoLockEnabled,
   isStaffSessionExpired,
   resolveStaffAutoLockMinutes,
   resolveStaffMaxFailedAttempts,
@@ -94,8 +93,5 @@ describe("staffSession", () => {
     expect(resolveStaffAutoLockMinutes(prefs())).toBe(5);
     expect(resolveStaffMaxFailedAttempts(prefs())).toBe(5);
     expect(staffRememberSessionEnabled(prefs({ staffRememberSession: false }))).toBe(false);
-    expect(isPosAutoLockEnabled(prefs())).toBe(true);
-    expect(isPosAutoLockEnabled(prefs({ staffAutoLockMinutes: 0 }))).toBe(false);
-    expect(isPosAutoLockEnabled(prefs({ staffRequirePinAfterIdle: false }))).toBe(false);
   });
 });

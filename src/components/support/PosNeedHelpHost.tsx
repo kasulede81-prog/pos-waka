@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { CircleHelp } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
-import { useRemoteSupportPlatformEnabled } from "../../hooks/useRemoteSupportPlatformEnabled";
 import {
   POS_SUPPORT_CATEGORIES,
   POS_SUPPORT_CATEGORY_LABEL_KEYS,
-  POS_NEED_HELP_OPEN_EVENT,
   canSeePosNeedHelp,
   submitPosSupportTicket,
   tryBeginPosHelpSubmit,
@@ -22,10 +20,8 @@ type Props = {
   authenticated: boolean;
   internalAdminRoute: boolean;
   posLocked: boolean;
-  placement: "inline" | "floating" | "event-only";
+  placement: "inline" | "floating";
   inverted?: boolean;
-  /** Icon-only chip for the compact Sell header. */
-  iconOnly?: boolean;
 };
 
 function errorCopy(lang: Language, result: Extract<PosSupportSubmitResult, { ok: false }>): string {
@@ -44,15 +40,7 @@ export function PosNeedHelpHost({
   posLocked,
   placement,
   inverted,
-  iconOnly = false,
 }: Props) {
-  const { enabled: remoteSupportEnabled } = useRemoteSupportPlatformEnabled();
-  const visible = canSeePosNeedHelp({
-    authenticated,
-    internalAdminRoute,
-    posLocked,
-    remoteSupportEnabled,
-  });
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
@@ -61,18 +49,7 @@ export function PosNeedHelpHost({
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
 
-  useEffect(() => {
-    const onOpen = () => {
-      if (!visible || busy) return;
-      setOpen(true);
-      setSent(false);
-      setError(null);
-    };
-    window.addEventListener(POS_NEED_HELP_OPEN_EVENT, onOpen);
-    return () => window.removeEventListener(POS_NEED_HELP_OPEN_EVENT, onOpen);
-  }, [busy, visible]);
-
-  if (!visible) return null;
+  if (!canSeePosNeedHelp({ authenticated, internalAdminRoute, posLocked })) return null;
 
   const reset = () => {
     setDescription("");
@@ -102,9 +79,6 @@ export function PosNeedHelpHost({
     setBusy(false);
     submitting.current = false;
     if (!result.ok) {
-      if (import.meta.env.DEV) {
-        console.error("Support request failed", result);
-      }
       setError(errorCopy(lang, result));
       return;
     }
@@ -113,7 +87,6 @@ export function PosNeedHelpHost({
 
   return (
     <>
-      {placement === "event-only" ? null : (
       <button
         type="button"
         onClick={() => {
@@ -122,8 +95,7 @@ export function PosNeedHelpHost({
           setError(null);
         }}
         className={clsx(
-          "flex touch-manipulation items-center rounded-xl border font-bold shadow-sm",
-          iconOnly ? "h-8 min-h-8 min-w-8 justify-center px-0" : "min-h-[38px] gap-1 px-2.5 py-1.5 text-xs",
+          "flex min-h-[38px] touch-manipulation items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-bold shadow-sm",
           placement === "floating" &&
             "fixed right-[max(0.75rem,env(safe-area-inset-right,0px))] top-[max(0.75rem,env(safe-area-inset-top,0px))] z-[45]",
           inverted
@@ -132,10 +104,9 @@ export function PosNeedHelpHost({
         )}
         aria-label={t(lang, "posHelpAria")}
       >
-        <CircleHelp className={iconOnly ? "h-3.5 w-3.5" : "h-4 w-4"} strokeWidth={2.25} aria-hidden />
-        {iconOnly ? null : t(lang, "posHelpButton")}
+        <CircleHelp className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+        {t(lang, "posHelpButton")}
       </button>
-      )}
 
       {open ? (
         <AppModalOverlay className="z-[80] flex items-center justify-center bg-overlay/55 p-4" role="dialog" aria-modal>

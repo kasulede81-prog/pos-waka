@@ -42,12 +42,8 @@ async function withPipelineMutex<T, K extends SyncTaskKind>(
   kindRef: { get: () => K | null; set: (k: K | null) => void },
   chainRef: { get: () => Promise<unknown>; set: (p: Promise<unknown>) => void },
   fn: () => Promise<T>,
-  opts?: { reentrant?: boolean },
 ): Promise<T> {
-  // Re-entry is for same-call-stack nesting (push → flush). Concurrent callers
-  // that see depth>0 after the first task has started must wait on the chain —
-  // otherwise two full pulls persist at once and starve IndexedDB.
-  if (opts?.reentrant !== false && depthRef.get() > 0) {
+  if (depthRef.get() > 0) {
     depthRef.set(depthRef.get() + 1);
     try {
       return await fn();
@@ -78,7 +74,6 @@ export async function withPullSyncMutex<T>(kind: PullSyncKind, fn: () => Promise
     { get: () => pullKind, set: (k) => { pullKind = k; } },
     { get: () => pullChain, set: (p) => { pullChain = p; } },
     fn,
-    { reentrant: false },
   );
 }
 

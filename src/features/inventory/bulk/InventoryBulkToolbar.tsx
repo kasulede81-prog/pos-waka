@@ -6,7 +6,6 @@ import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
 import { useInventorySelection } from "../selection/useInventorySelection";
 import {
-  BULK_PRICE_AUDIT_REASON,
   runInventoryBulkOperation,
   selectedProducts,
   type InventoryBulkOperation,
@@ -16,8 +15,6 @@ import { printProductLabels, exportProductLabelsHtml } from "../export/productLa
 import { saveExportedFile } from "../../../lib/fileDownload";
 import { ModalSheet } from "../../../components/layout/ModalSheet";
 import { WakaButton } from "../../../components/ui/wakaPrimitives";
-import { isCatalogHierarchyEnabled } from "../../../lib/catalogHierarchy";
-import { ShelfDestinationPicker } from "../../../components/stock/ShelfDestinationPicker";
 
 type Props = {
   lang: Language;
@@ -26,12 +23,7 @@ type Props = {
   preferences: ShopPreferences;
   suppliers: Supplier[];
   canEdit: boolean;
-  /** Preference-backed archive/unarchive — must match `setPreferences` (`settings.shop`). */
-  canArchive: boolean;
-  /** Preference-backed supplier tags — must match `setPreferences` (`settings.shop`). */
-  canPersistSupplierTags: boolean;
   canAdjust: boolean;
-  canSeeCost?: boolean;
   stockCategoryPicklist: string[];
   onClearSelection?: () => void;
 };
@@ -45,10 +37,7 @@ export function InventoryBulkToolbar({
   preferences,
   suppliers,
   canEdit,
-  canArchive,
-  canPersistSupplierTags,
   canAdjust,
-  canSeeCost = false,
   stockCategoryPicklist,
   onClearSelection,
 }: Props) {
@@ -81,12 +70,12 @@ export function InventoryBulkToolbar({
   };
 
   const exportSelected = async () => {
-    const csv = buildProductCatalogCsv(lang, selected, { includeCost: canSeeCost });
+    const csv = buildProductCatalogCsv(lang, selected);
     await saveExportedFile(productCatalogExportFilename("selected"), csv, "text/csv");
   };
 
   const exportFiltered = async () => {
-    const csv = buildProductCatalogCsv(lang, filteredProducts, { includeCost: canSeeCost });
+    const csv = buildProductCatalogCsv(lang, filteredProducts);
     await saveExportedFile(productCatalogExportFilename("filtered"), csv, "text/csv");
   };
 
@@ -97,7 +86,7 @@ export function InventoryBulkToolbar({
         role="toolbar"
         aria-label={t(lang, "inventoryBulkToolbarLabel")}
       >
-        <div className="inventory-bulk-toolbar flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-300 bg-indigo-950 px-3 py-2.5 text-white shadow-2xl">
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-300 bg-indigo-950 px-3 py-2.5 text-white shadow-2xl">
           <span className="text-xs font-black">
             {t(lang, "inventoryBulkSelected").replace("{count}", String(count))}
           </span>
@@ -170,7 +159,7 @@ export function InventoryBulkToolbar({
               onConfirm={() => {
                 const v = Number(inputValue);
                 if (!Number.isFinite(v)) return;
-                void run({ kind: "sellingPrice", mode: "set", valueUgx: v, reason: BULK_PRICE_AUDIT_REASON });
+                void run({ kind: "sellingPrice", mode: "set", valueUgx: v });
               }}
             />
           ) : sheet === "more" ? (
@@ -181,25 +170,16 @@ export function InventoryBulkToolbar({
         }
       >
         {sheet === "category" ? (
-          isCatalogHierarchyEnabled(preferences) ? (
-            <ShelfDestinationPicker
-              lang={lang}
-              options={stockCategoryPicklist}
-              value={selectValue}
-              onChange={setSelectValue}
-            />
-          ) : (
-            <select
-              value={selectValue}
-              onChange={(e) => setSelectValue(e.target.value)}
-              className="min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
-            >
-              <option value="">{t(lang, "inventoryBulkChooseShelf")}</option>
-              {stockCategoryPicklist.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          )
+          <select
+            value={selectValue}
+            onChange={(e) => setSelectValue(e.target.value)}
+            className="min-h-[40px] w-full rounded-xl border border-border px-2 text-sm font-bold"
+          >
+            <option value="">{t(lang, "inventoryBulkChooseShelf")}</option>
+            {stockCategoryPicklist.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         ) : null}
         {sheet === "stock" ? (
           <div className="space-y-2">
@@ -240,7 +220,7 @@ export function InventoryBulkToolbar({
             <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => exportProductLabelsHtml(lang, selected)}>
               {t(lang, "inventoryExportLabels")}
             </button>
-            {canArchive ? (
+            {canEdit ? (
               <>
                 <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "archive" })}>
                   <Archive className="mr-1 inline h-3.5 w-3.5" />{t(lang, "inventoryBulkArchive")}
@@ -248,21 +228,19 @@ export function InventoryBulkToolbar({
                 <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "unarchive" })}>
                   {t(lang, "inventoryBulkUnarchive")}
                 </button>
+                <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "deactivate" })}>
+                  {t(lang, "inventoryBulkDeactivate")}
+                </button>
+                {suppliers[0] ? (
+                  <button
+                    type="button"
+                    className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold"
+                    onClick={() => void run({ kind: "supplier", supplierId: suppliers[0]!.id, supplierName: suppliers[0]!.name })}
+                  >
+                    {t(lang, "inventoryBulkSupplier")}
+                  </button>
+                ) : null}
               </>
-            ) : null}
-            {canEdit ? (
-              <button type="button" className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold" onClick={() => void run({ kind: "deactivate" })}>
-                {t(lang, "inventoryBulkDeactivate")}
-              </button>
-            ) : null}
-            {canPersistSupplierTags && suppliers[0] ? (
-              <button
-                type="button"
-                className="w-full rounded-xl border border-border px-3 py-2 text-left text-xs font-bold"
-                onClick={() => void run({ kind: "supplier", supplierId: suppliers[0]!.id, supplierName: suppliers[0]!.name })}
-              >
-                {t(lang, "inventoryBulkSupplier")}
-              </button>
             ) : null}
           </div>
         ) : null}

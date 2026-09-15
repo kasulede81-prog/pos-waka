@@ -24,7 +24,6 @@ import { AdminAiSettingsPage } from "../components/internal-admin/v2/pages/Admin
 import { AdminReleaseManagementPage } from "../components/internal-admin/v2/pages/AdminReleaseManagementPage";
 import { AdminPlatformSubscriptionSettingsPage } from "../components/internal-admin/v2/pages/AdminPlatformSubscriptionSettingsPage";
 import { AdminPosDisplayScalePage } from "../components/internal-admin/v2/pages/AdminPosDisplayScalePage";
-import { AdminRemoteSupportSettingsPage } from "../components/internal-admin/v2/pages/AdminRemoteSupportSettingsPage";
 
 type Props = {
   lang: Language;
@@ -49,7 +48,6 @@ function sectionFromPath(pathname: string): AdminSectionId {
   if (pathname === "/internal/waka/subscription-settings") return "subscription_settings";
   if (pathname === "/internal/waka/releases") return "releases";
   if (pathname === "/internal/waka/display-scale") return "display_scale";
-  if (pathname === "/internal/waka/remote-support") return "remote_support";
   return "overview";
 }
 
@@ -122,8 +120,6 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     body = <AdminReleaseManagementPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "display_scale") {
     body = <AdminPosDisplayScalePage adminRow={shellAdmin} previewMode={previewMode} />;
-  } else if (section === "remote_support") {
-    body = <AdminRemoteSupportSettingsPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else {
     body = (
       <AdminOverviewPage lang={lang} email={email} adminRow={shellAdmin} previewMode={previewMode} />

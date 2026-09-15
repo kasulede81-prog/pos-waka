@@ -1,10 +1,8 @@
-import { useContext } from "react";
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { useVisualViewportBounds } from "../../../hooks/useVisualViewportBounds";
 import { WIZARD_BTN_FOOTER_BASE } from "./receiveTokens";
-import { ReceiveFormIdContext } from "./ReceiveOperationShell";
 
 type Props = {
   lang: Language;
@@ -33,8 +31,6 @@ export function ReceiveFooter({
   fixed,
   cancelLabelKey = "cancel",
 }: Props) {
-  const formId = useContext(ReceiveFormIdContext);
-  const submitFormId = primaryType === "submit" ? formId : undefined;
   const viewport = useVisualViewportBounds();
   // Fixed page footers sit under the soft keyboard — fall back to in-flow when keyboard is open.
   const useFixed = Boolean(fixed) && viewport.keyboardGap < 80;
@@ -61,7 +57,6 @@ export function ReceiveFooter({
           </button>
           <button
             type={primaryType}
-            form={submitFormId}
             disabled={primaryDisabled || primaryBusy}
             onClick={primaryType === "button" ? onPrimary : undefined}
             className={clsx(
@@ -75,7 +70,6 @@ export function ReceiveFooter({
       ) : (
         <button
           type={primaryType}
-          form={submitFormId}
           disabled={primaryDisabled || primaryBusy}
           onClick={primaryType === "button" ? onPrimary : undefined}
           className={clsx(

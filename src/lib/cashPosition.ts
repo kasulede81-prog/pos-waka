@@ -5,17 +5,14 @@
 
 import type { CashExpense, CashDrawerAdjustment, DebtPayment, Language, Product, ReturnRecord, Sale, ShiftRecord, StaffAccount, SupplierPayment } from "../types";
 import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
-import { physicalCashCollectedFromSale } from "./cashDrawerSales";
 import {
   getDrawerCashForDayInput,
   sumRefundsOnDay,
 } from "./cashReconciliation";
-import { hasAuthoritativeTenderCash } from "./saleTenderCash";
 import type { AdjustmentBreakdownByType } from "./cashDrawerLedger";
 import { dateKeyKampala } from "./datesUg";
 import { t } from "./i18n";
-import { isRevenueSale } from "./saleStatus";
-import { normalizeLinkedAuthUserId } from "./sessionActor";
+import { isCompletedSale } from "./saleStatus";
 
 export type CashPositionPaymentKey = "cash" | "mobile_money" | "card" | "bank_transfer" | "credit";
 
@@ -65,18 +62,13 @@ export type CashPositionReport = {
     cashRefundsUgx: number;
     expensesUgx: number;
     supplierPaymentsUgx: number;
-    expectedCashUgx: number | null;
+    expectedCashUgx: number;
   };
   adjustmentBreakdown: AdjustmentBreakdownByType;
   categories: CashPositionCategoryRow[];
   cashiers: CashPositionCashierRow[];
   /** True when this report's headlines come from an active day close. */
   ledgerClosed?: boolean;
-  /**
-   * Close snapshot does not persist payment mix / categories / cashiers / items.
-   * When true those fields are empty — do not treat them as historical close data.
-   */
-  closedDayBreakdownUnavailable?: boolean;
 };
 
 export type CashPositionReconciliation = {
@@ -145,22 +137,6 @@ function fillSalePaymentBuckets(sale: Sale, buckets: Record<CashPositionPaymentK
   if (collected <= 0) return;
 
   const pm = sale.paymentMethod ?? (debt > 0 ? "credit" : "cash");
-  if (hasAuthoritativeTenderCash(sale)) {
-    const cash = physicalCashCollectedFromSale(sale);
-    const remainder = Math.max(0, collected - cash);
-    if (pm === "mobile_money") {
-      buckets.mobile_money = collected;
-      return;
-    }
-    if (pm === "atm") {
-      buckets.card = collected;
-      return;
-    }
-    buckets.cash = cash;
-    if (remainder > 0) buckets.mobile_money = remainder;
-    return;
-  }
-
   switch (pm) {
     case "mobile_money":
       buckets.mobile_money = collected;
@@ -188,7 +164,6 @@ export function attributeSalePaymentBuckets(sale: Sale): Record<CashPositionPaym
 type StaffLookup = {
   nameById: Map<string, string>;
   activeById: Map<string, boolean>;
-  nameByAuthUserId: Map<string, string>;
 };
 
 function resolveCashierRow(
@@ -221,10 +196,6 @@ function resolveCashierRow(
   }
   if (uid === "unknown") {
     return { cashierId: uid, name: t(lang, "cashPositionUnknownCashier"), kind: "unknown" };
-  }
-  const linkedName = staff.nameByAuthUserId.get(uid);
-  if (linkedName) {
-    return { cashierId: uid, name: linkedName, kind: "staff" };
   }
   const label = uid.length > 12 ? `${uid.slice(0, 10)}…` : uid;
   return { cashierId: uid, name: label, kind: "legacy" };
@@ -283,7 +254,7 @@ export function buildCashPositionReport(params: {
     cashDrawerAdjustments = [],
     shifts = [],
     dayDrawerOpens = [],
-    formulaVersion = "v2",
+    formulaVersion = "v1",
     staffAccounts,
     generalCategoryLabel,
   } = params;
@@ -301,7 +272,7 @@ export function buildCashPositionReport(params: {
 
   const daySales: Sale[] = [];
   for (const sale of sales) {
-    if (isRevenueSale(sale) && saleDayKey(sale.createdAt) === dayKey) daySales.push(sale);
+    if (isCompletedSale(sale) && saleDayKey(sale.createdAt) === dayKey) daySales.push(sale);
   }
   const dayReturns: ReturnRecord[] = [];
   for (const rec of returnRecords) {
@@ -352,14 +323,6 @@ export function buildCashPositionReport(params: {
   const staffLookup: StaffLookup = {
     nameById: new Map(staffAccounts.map((s) => [s.id, s.name])),
     activeById: new Map(staffAccounts.map((s) => [s.id, s.active])),
-    nameByAuthUserId: new Map(
-      staffAccounts
-        .map((s) => {
-          const linked = normalizeLinkedAuthUserId(s.linkedAuthUserId);
-          return linked && s.name?.trim() ? ([linked, s.name.trim()] as const) : null;
-        })
-        .filter((row): row is readonly [string, string] => row != null),
-    ),
   };
 
   const cashierLabels = new Map<string, Pick<CashPositionCashierRow, "cashierId" | "name" | "kind">>();
@@ -409,24 +372,15 @@ export function buildCashPositionReport(params: {
       saleCounted = true;
     }
     if (collected > 0) {
-      const buckets = attributeSalePaymentBuckets(sale);
-      const parts: Array<[CashPositionPaymentKey, number]> = [
-        ["cash", buckets.cash],
-        ["mobile_money", buckets.mobile_money],
-        ["card", buckets.card],
-        ["bank_transfer", buckets.bank_transfer],
-      ];
-      let incrementCount = !saleCounted;
-      for (const [key, amt] of parts) {
-        if (amt <= 0) continue;
-        const cur = paymentAgg.get(key)!;
-        paymentAgg.set(key, {
-          amountUgx: cur.amountUgx + amt,
-          transactionCount: cur.transactionCount + (incrementCount ? 1 : 0),
-        });
-        incrementCount = false;
-        saleCounted = true;
-      }
+      const pm = sale.paymentMethod ?? (debt > 0 ? "credit" : "cash");
+      const key: CashPositionPaymentKey =
+        pm === "mobile_money" ? "mobile_money" : pm === "atm" ? "card" : "cash";
+      const cur = paymentAgg.get(key)!;
+      paymentAgg.set(key, {
+        amountUgx: cur.amountUgx + collected,
+        transactionCount: cur.transactionCount + (saleCounted ? 0 : 1),
+      });
+      saleCounted = true;
     }
     if (!saleCounted) {
       const cur = paymentAgg.get("cash")!;

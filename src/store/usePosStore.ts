@@ -37,8 +37,6 @@ import type {
   InventoryCountSession,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
-import { commercialAuthUserIdFromActor, authOperatorPermissions, authOperatorRole, authMembershipRole, shiftOwnerUserId } from "../lib/sessionActor";
-import { staffSwitchCartPlan, STAFF_SWITCH_HOLD_LABEL } from "../lib/staffSwitchCartPolicy";
 import { checkStorePermissionEffective } from "../lib/storeAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import {
@@ -67,12 +65,9 @@ import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
 import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
 import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
-import { getActiveShopId, getPersistenceNamespace } from "../offline/shopScope";
-import { r3AdjustmentStockPayload, r3PurchaseVoidStockPayload, r3SaleVoidStockPayload } from "../lib/stockDurableSync";
-import { catalogDuplicatePrefill } from "../lib/duplicateProductCatalog";
 import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
-import { mintLocalReceiptIdentity } from "../lib/receiptIdentity";
+import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import {
   buildTodayKpiSnapshotFromSales,
   bumpTodayKpiSnapshot,
@@ -91,12 +86,10 @@ import {
   defaultHospitalityFloor,
   defaultKitchenEnabledForBusinessType,
   isHospitalityBusinessType,
-  isHospitalityMode,
 } from "../lib/hospitality";
 import { sessionWaiterAttribution } from "../lib/waiterAttribution";
 import { isPharmacyBusinessType, isPharmacyMode } from "../lib/pharmacy";
 import { inferProductGuess } from "../lib/pharmacyUx";
-import { defaultWizardUnitCostUgx } from "../lib/simpleProductWizard";
 import { isProductExpired, normalizeExpiryDate, shouldBlockExpiredSale } from "../lib/pharmacyExpiry";
 import { pharmacyQuickAddRequiresBuyPrice } from "../lib/pharmacyCostIntegrity";
 import { buildPharmacySaleLine, buyingUnitFromPackaging } from "../lib/pharmacyPackaging";
@@ -133,7 +126,6 @@ import {
 } from "../lib/pharmacyComplianceOps";
 import { normalizeControlledRegisterEntry } from "../lib/pharmacyControlledRegister";
 import { detectComplianceAlerts } from "../lib/pharmacyComplianceAlerts";
-import { applyPharmacyRemainderHydration } from "../lib/pharmacyRemainderHydration";
 import { applyIndustryReceiptDefaults, buildReceiptBrandingSnapshot } from "../lib/receiptBranding";
 import type { SubscriptionPlanCode } from "../lib/subscriptionEntitlements";
 import { normalizeMedicineForm, normalizeMedicineStrength } from "../lib/pharmacyMedicine";
@@ -188,7 +180,6 @@ import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
 import { canEnableBiometricAuth } from "../lib/sensitiveActionAuth";
 import { archiveSalesBeyondActiveWindow, INITIAL_SALES_LOAD_COUNT, SALES_PAGE_LOAD_SIZE } from "../lib/activeSalesWindow";
 import { partitionForArchive } from "../lib/recordArchive";
-import { applyAuditActiveCap, mergeAuditLogEntriesById } from "../lib/auditActiveCap";
 import { normalizePosShelfLayout, clampShelfScale, fillDefaultShelfLayout } from "../lib/posShelfLayout";
 import { distinctTrimmedCategories } from "../lib/productCategories";
 import { POS_SHELF_PRESET_IDS } from "../lib/posShelfPresets";
@@ -197,27 +188,8 @@ import { normalizeLauncherTileLayout } from "../lib/launcherTiles";
 import { normalizeOfficeHubTileLayout } from "../lib/officeHubSections";
 import type { PosShelfPresetId } from "../types";
 import { assertBackupRestoreNotAborted, cancelBackupRestoreSession } from "../lib/backupRestoreSession";
-import { registerBackupPersistFlush } from "../offline/backupEngine";
-import {
-  configureDailyAutoBackupScheduler,
-  invalidateDailyAutoBackupSchedule,
-  scheduleDailyAutoBackup,
-} from "../lib/dailyAutoBackupScheduler";
+import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
 import { clearPersistedDraft, readPersistedDraft, resolveDraftFromPersisted, writePersistedDraft } from "../offline/draftStorage";
-import {
-  buildUnsavedCartVoidedSale,
-  emptyDraftCheckoutFields,
-  isDraftPaymentMethod,
-  markPendingSaleAsPreCompletionVoid,
-  resolveFinalizeCompletionTarget,
-  resolvePersistedDraftSaleBinding,
-  resumeWouldOverwriteUnrelatedCart,
-  stableVoidLineIdentity,
-  unsavedCartVoidPersistSucceeded,
-  stableVoidLineMovementId,
-  stableVoidRecordId,
-  type DraftPaymentMethod,
-} from "../lib/saleLifecycle";
 import type { PersistedSnapshot } from "../offline/localDb";
 import { tryMigrateLegacyLocalStorage, clearLegacyLocalStorage } from "../offline/migrateLegacyStore";
 import { enqueueSync } from "../offline/syncEngine";
@@ -242,7 +214,6 @@ import {
 import {
   assertCanCloseShift,
   getActiveShiftForActor,
-  rekeySharedTerminalOpenShifts,
   requireActiveShift,
 } from "../lib/shiftEnforcement";
 import {
@@ -276,9 +247,7 @@ import { dateKeyKampala } from "../lib/datesUg";
 import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { normalizeCashDrawerAdjustment } from "../lib/cashDrawerLedger";
-import { cashReduceFromRefund, physicalCashCollectedFromSale } from "../lib/cashDrawerSales";
-import { captureCloudCompleteFinancials } from "../lib/saleCloudCompleteFinancials";
-import { normalizeTenderCashUgx } from "../lib/saleTenderCash";
+import { cashReduceFromRefund } from "../lib/cashDrawerSales";
 import { resolveDebtorForSale } from "../lib/customerDebtActivity";
 import { draftQuantityExceedsStock, totalDraftQuantityForProduct } from "../lib/draftStockCheck";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
@@ -303,44 +272,13 @@ import {
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
-import { remainingVoidableLine, validateReturnAgainstSale } from "../lib/returnLimits";
+import { validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
-import { resolveLocalSaleForReturn } from "../lib/resolveLocalSaleForReturn";
-import { saleAdjustmentOutboxMeta, saleAdjustmentQueueId } from "../lib/saleAdjustmentSync";
 import { emitInventoryStockChanges, type InventoryStockSyncMessage, type InventorySyncEventType } from "../lib/inventorySyncChannel";
 import { mergeRemoteInventoryStock, validateDraftSaleStockBeforeFinalize } from "../lib/inventoryVersionProtection";
 import { assertCanFinalizeStockSale } from "../lib/primaryRegisterMode";
 import { isLocalStockFresh } from "../lib/stockFreshness";
 import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } from "../lib/settingsAuthorization";
-import { planShelfRename } from "../lib/renameShelfCategory";
-import { planDeleteEmptyShelf } from "../lib/deleteEmptyShelf";
-import {
-  bulkDeleteEmptyShelvesPreferencePatch,
-  planBulkDeleteEmptyShelves,
-} from "../lib/planBulkDeleteEmptyShelves";
-import { catalogIdentityHasChildFolders, planRefillEmptyShelf } from "../lib/emptyShelfManager";
-import {
-  catalogShopIdFromPreferences,
-  isCatalogHierarchyEnabled,
-  normalizeCatalogNodes,
-  planCreateCatalogShelf,
-  planReorderCatalogSiblings,
-  planReparentCatalogNode,
-  remapCatalogNodesForRename,
-  retireCatalogNodesForDeletedShelf,
-} from "../lib/catalogHierarchy";
-import {
-  appendCatalogTombstones,
-  preferencesPatchTouchesCatalog,
-  retiredCatalogNodeIds,
-  stampCatalogPreferencePatch,
-} from "../lib/catalogCloudSync";
-import {
-  normalizeShopPolicyRevisions,
-  preferencesPatchNeedsShopPolicySync,
-  preferencesPatchTouchesShopPolicy,
-  stampShopPolicyPreferencePatch,
-} from "../lib/shopPolicyCloudSync";
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
@@ -349,37 +287,15 @@ import {
   StaffAccountAuthorizationError,
 } from "../lib/staffAccountAuthorization";
 import { isDeviceAuthorizedForManagementSync } from "../lib/deviceAuthority";
-import { isCompletedSale, isPendingSale } from "../lib/saleStatus";
+import { isCompletedSale } from "../lib/saleStatus";
 import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
 import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
-import {
-  canRecordCashExpenses,
-  cashExpenseTransitionWouldAffectDrawer,
-  resolveNewExpenseApprovalStatus,
-} from "../lib/cashExpenses";
+import { canRecordCashExpenses, resolveNewExpenseApprovalStatus } from "../lib/cashExpenses";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
 import { saleStockMovementsFromSale, openingStockMovementFromProduct } from "../lib/inventoryIntegrity";
 import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
 import { repairLegacySaleFinancials } from "../lib/legacyFinancialRepair";
 import { inventoryMovementNamespace } from "../lib/shopSyncContext";
-import {
-  releaseReturnSubmit,
-  resetReturnSubmitLocksForTests,
-  returnSubmitLockKey,
-  tryBeginReturnSubmit,
-} from "../lib/returnSubmitGuard";
-import {
-  debtPaymentSubmitLockKey,
-  releaseDebtPaymentSubmit,
-  resetDebtPaymentSubmitLocksForTests,
-  tryBeginDebtPaymentSubmit,
-} from "../lib/debtPaymentSubmitGuard";
-import {
-  releaseSupplierPaymentSubmit,
-  resetSupplierPaymentSubmitLocksForTests,
-  supplierPaymentSubmitLockKey,
-  tryBeginSupplierPaymentSubmit,
-} from "../lib/supplierPaymentSubmitGuard";
 import { detectSaleStockConflict, logInventoryConflict } from "../lib/inventoryConflictLog";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
 import { resolveStaffPermissions, findRoleTemplate, permissionsFromTemplate } from "../lib/enterpriseRoles";
@@ -428,12 +344,11 @@ function queueHospitalityChange(input: { sessionIds?: string[]; ticketIds?: stri
   );
 }
 
-function mergeAuditLogs(
-  existing: AuditLogEntry[],
-  incoming: AuditLogEntry[],
-  archived: AuditLogEntry[] = [],
-): { auditLogs: AuditLogEntry[]; archivedAuditLogs: AuditLogEntry[] } {
-  return applyAuditActiveCap(mergeAuditLogEntriesById(existing, incoming), archived, MAX_AUDIT_LOGS);
+function mergeAuditLogs(existing: AuditLogEntry[], incoming: AuditLogEntry[]): AuditLogEntry[] {
+  const byId = new Map<string, AuditLogEntry>();
+  for (const e of existing) byId.set(e.id, e);
+  for (const e of incoming) byId.set(e.id, e);
+  return [...byId.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, MAX_AUDIT_LOGS);
 }
 
 function broadcastInventoryStock(products: Product[], type: InventorySyncEventType): void {
@@ -552,43 +467,14 @@ function normalizeCustomStaffRoles(raw: unknown): CustomStaffRole[] {
   return out;
 }
 
-/** BACKOFFICE-01 — assigned staff only; one updatedAt per logical role change. */
-function applyCustomRoleToAssignedStaff(
+function refreshStaffPermissionsForRoles(
   staffAccounts: StaffAccount[] | undefined,
   customRoles: CustomStaffRole[] | undefined,
-  roleId: string,
-  now: string,
-  unassign: boolean,
-): { staffAccounts: StaffAccount[]; affected: StaffAccount[] } {
-  const affected: StaffAccount[] = [];
-  const staffAccountsNext = (staffAccounts ?? []).map((staff) => {
-    if (staff.customRoleId !== roleId) return staff;
-    const nextBase = unassign ? { ...staff, customRoleId: null } : staff;
-    const row: StaffAccount = {
-      ...nextBase,
-      permissions: resolveStaffPermissions(nextBase, customRoles),
-      updatedAt: now,
-    };
-    affected.push(row);
-    return row;
-  });
-  return { staffAccounts: staffAccountsNext, affected };
-}
-
-function queueStaffPermissionSnapshots(affected: StaffAccount[]): void {
-  if (affected.length === 0) return;
-  for (const staff of affected) {
-    void import("../lib/shopStaffCloud").then(async ({ pushStaffToCloud }) => {
-      const ok = await pushStaffToCloud(staff);
-      if (ok) {
-        const { afterStaffCloudAck } = await import("../lib/staffSyncQueue");
-        await afterStaffCloudAck("update");
-      } else {
-        const { enqueuePendingStaffSync } = await import("../lib/staffSyncQueue");
-        await enqueuePendingStaffSync({ action: "update", staff });
-      }
-    });
-  }
+): StaffAccount[] {
+  return (staffAccounts ?? []).map((staff) => ({
+    ...staff,
+    permissions: resolveStaffPermissions(staff, customRoles),
+  }));
 }
 
 function normalizeShifts(raw: unknown): ShiftRecord[] {
@@ -702,12 +588,6 @@ export type PosState = {
   draftCartDiscountUgx: number;
   /** When set, draft cart belongs to an open table / pending sale */
   activePendingSaleId: string | null;
-  draftSaleCustomerId: string;
-  draftSaleCustomerName: string;
-  draftSaleCustomerPhone: string;
-  draftPaymentMethod: DraftPaymentMethod;
-  setDraftPaymentMethod: (method: DraftPaymentMethod) => void;
-  setDraftSaleCustomer: (input: { customerId?: string; customerName?: string; customerPhone?: string }) => void;
   /** Phase 8.4 — active prescription in dispensing workspace. */
   activePharmacyPrescriptionId: string | null;
   /** Phase 8.4 — OTC vs prescription dispensing mode. */
@@ -779,7 +659,6 @@ export type PosState = {
     purchases?: Purchase[];
     supplierPayments?: SupplierPayment[];
     stockMovements?: StockMovement[];
-    archivedStockMovements?: StockMovement[];
     voidRecords?: VoidRecord[];
     returnRecords?: ReturnRecord[];
     cashExpenses?: CashExpense[];
@@ -791,9 +670,6 @@ export type PosState = {
     archivedDayCloses?: DayCloseSummary[];
     archivedVoidRecords?: VoidRecord[];
     archivedReturnRecords?: ReturnRecord[];
-    pharmacyPrescriptions?: import("../types").PharmacyPrescription[];
-    pharmacyDoctors?: import("../types").PharmacyDoctor[];
-    pharmacyControlledRegister?: import("../types").PharmacyControlledRegisterEntry[];
   }) => void;
 
   /** Replace local state + disk from a full backup (owner only in UI). Prefer await applyRestoredSnapshotFromBackup. */
@@ -814,38 +690,6 @@ export type PosState = {
   setSessionActor: (actor: SessionActor | null) => void;
 
   setPreferences: (p: Partial<ShopPreferences>, opts?: { silent?: boolean }) => void;
-  /** Owner/manager: rename a shelf category everywhere (products + Sell layout). */
-  renameShelfCategory: (fromKey: string, toName: string) => { ok: boolean; errorKey?: string; toKey?: string };
-  /** Owner/manager: remove an empty shelf from layout/order only. Never mutates products. */
-  deleteEmptyShelf: (shelfKey: string) => { ok: boolean; errorKey?: string };
-  /** Owner/manager: remove several empty shelves in one preference update. Never mutates products. */
-  deleteEmptyShelves: (shelfKeys: string[]) => {
-    ok: boolean;
-    errorKey?: string;
-    deletedCount?: number;
-    skippedOccupiedCount?: number;
-    skippedBlockedCount?: number;
-  };
-  /** Catalog move onto an empty shelf. Only Product.category changes; stock is untouched. */
-  refillEmptyShelf: (
-    destinationKey: string,
-    productIds: string[],
-  ) => { ok: boolean; errorKey?: string; movedCount: number; failedCount: number };
-  /** Persist a catalog folder/shelf without creating a product or stock. */
-  createCatalogShelf: (input: {
-    name: string;
-    parentId?: string | null;
-  }) => { ok: boolean; errorKey?: string; legacyShelfKey?: string };
-  /** Overlay-only: change CatalogNode.parentId. Never mutates products or stock. */
-  reparentCatalogShelf: (
-    nodeId: string,
-    parentId: string | null,
-  ) => { ok: boolean; errorKey?: string };
-  /** Overlay-only: reorder CatalogNode siblings by sortOrder. Never mutates products. */
-  reorderCatalogSiblings: (
-    parentId: string | null,
-    orderedIds: string[],
-  ) => { ok: boolean; errorKey?: string };
   addStaffAccount: (input: {
     name: string;
     username?: string;
@@ -944,8 +788,6 @@ export type PosState = {
   applyDraftLineDiscount: (productId: string, mode: DiscountMode, value: number) => { ok: boolean; errorKey?: string };
   setDraftCartDiscount: (amountUgx: number) => { ok: boolean; errorKey?: string };
   clearDraft: () => void;
-  /** Confirmed cashier Void Sale: unsaved cart → historical VOIDED record; resumed pending → cancelPendingSale. Never voidSaleLine. */
-  voidCurrentCart: () => { ok: boolean; kind: "unsaved" | "pending"; errorKey?: string; saleId?: string; noop?: boolean };
   ensureHospitalityFloor: () => void;
   openTable: (input: {
     tableId: string;
@@ -1045,30 +887,20 @@ export type PosState = {
   };
   enqueueKitchenTicketPrints: (ticketIds: string[], kind?: import("../lib/kitchenChitPrint").KitchenChitPrintKind) => void;
   reprintKitchenTicket: (ticketId: string) => { ok: boolean; errorKey?: string };
-    upsertPrinter: (input: {
-      id?: string;
-      name: string;
-      connectionType: import("../types").PrinterConnectionType;
-      paperWidth: "58mm" | "80mm";
-      stationRoles: import("../types").PrinterStationRole[];
-      isDefaultReceipt?: boolean;
-      networkHost?: string | null;
-      networkPort?: number | null;
-      pairedDeviceKey?: string | null;
-      bluetoothTransport?: "classic" | "ble" | null;
-      pairedDeviceName?: string | null;
-    }) => { ok: boolean; printerId?: string; errorKey?: string };
-  removePrinter: (printerId: string) => { ok: boolean; errorKey?: string };
+  upsertPrinter: (input: {
+    id?: string;
+    name: string;
+    connectionType: import("../types").PrinterConnectionType;
+    paperWidth: "58mm" | "80mm";
+    stationRoles: import("../types").PrinterStationRole[];
+    isDefaultReceipt?: boolean;
+    networkHost?: string | null;
+    networkPort?: number | null;
+  }) => { ok: boolean; printerId?: string };
+  removePrinter: (printerId: string) => { ok: boolean };
   assignStationPrinter: (stationId: string, printerId: string | null) => { ok: boolean; errorKey?: string };
-  testConfiguredPrinter: (printerId: string) => Promise<{
-    ok: boolean;
-    error?: string;
-    diagnostic?: import("../lib/nativeBluetoothPrinter").NativeClassicDiagnostic;
-  }>;
-  setHospitalityHardwarePrefs: (patch: Partial<import("../types").HospitalityHardwarePrefs>) => {
-    ok: boolean;
-    errorKey?: string;
-  };
+  testConfiguredPrinter: (printerId: string) => Promise<{ ok: boolean; error?: string }>;
+  setHospitalityHardwarePrefs: (patch: Partial<import("../types").HospitalityHardwarePrefs>) => { ok: boolean };
   openCashDrawerManual: (reason?: string) => Promise<{ ok: boolean; error?: string }>;
   printRestaurantReceiptForSale: (
     saleId: string,
@@ -1160,15 +992,13 @@ export type PosState = {
     customerPhone?: string | null;
     paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher";
     amountPaidUgx?: number;
-    /** Physical cash tender only. Do not pass collected / total − debt. */
-    tenderCashUgx?: number;
     changeGivenUgx?: number;
     splitBreakdown?: import("../types").BillSplitLine[] | null;
     serviceChargeUgx?: number;
     tipUgx?: number;
     taxUgx?: number;
     billPayments?: import("../types").BillPaymentRecord[] | null;
-  }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string; idempotent?: boolean };
+  }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string };
 
   addProduct: (p: Omit<Product, "id" | "updatedAt" | "version"> & Partial<Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty">>) => void;
   quickAddProduct: (input: {
@@ -1218,7 +1048,7 @@ export type PosState = {
       quickPresetsMoneyUgx?: number[];
       quickPresetsQty?: number[];
     }>,
-  ) => { added: number; skipped: number; skippedReason?: "planProductLimit" };
+  ) => { added: number; skipped: number };
   duplicateProduct: (productId: string, nameSuffix: string) => { ok: boolean; errorKey?: string };
   removeProduct: (productId: string, reason: string) => { ok: boolean; errorKey?: string };
   updateProductQuickPresets: (
@@ -1395,7 +1225,6 @@ export type PosState = {
     }>;
     amountPaidUgx: number;
     notes?: string;
-    invoiceNumber?: string;
   }) => { ok: boolean; errorKey?: string };
 
   /** Move old sales / activity to archive per retention policy (never auto-deletes). */
@@ -1428,22 +1257,6 @@ let pendingPersistNext: PosState | null = null;
 let persistSuspended = 0;
 let snapshotWriteInFlight = false;
 let snapshotWriteQueued = false;
-const finalizeInFlightKeys = new Set<string>();
-let voidCartInFlight = false;
-
-function completionLockKey(pendingId: string | null | undefined): string {
-  return pendingId?.trim() || "__draft__";
-}
-
-function emptyDraftPatch() {
-  return {
-    draftLines: [] as SaleLine[],
-    draftInput: null as DraftLineInput | null,
-    draftCartDiscountUgx: 0,
-    activePendingSaleId: null as string | null,
-    ...emptyDraftCheckoutFields(),
-  };
-}
 
 /** Pause debounced snapshot writes during heavy store mutations. */
 export function suspendStorePersist(): () => void {
@@ -1451,16 +1264,6 @@ export function suspendStorePersist(): () => void {
   return () => {
     persistSuspended = Math.max(0, persistSuspended - 1);
   };
-}
-
-/** Disk→memory hydrate must not rewrite IndexedDB (SYNC-INV mobile starvation). */
-function runWithPersistSuspendedSync<T>(fn: () => T): T {
-  const release = suspendStorePersist();
-  try {
-    return fn();
-  } finally {
-    release();
-  }
 }
 
 function fireSnapshotWrite(forceFull = false): void {
@@ -1498,11 +1301,23 @@ function fireSnapshotWrite(forceFull = false): void {
       const after = usePosStore.getState();
       if (!after._hydrated || persistSuspended > 0) return;
 
-      scheduleDailyAutoBackup({
-        lastSavedDateKey: after.preferences.lastAutoBackupDateKey,
-        namespace: getPersistenceNamespace(),
-        hydrated: after._hydrated,
-      });
+      const runBackup = () => {
+        void (async () => {
+          const latest = usePosStore.getState();
+          if (!latest._hydrated) return;
+          const nextKey = await maybeAppendDailyAutoBackup(latest.preferences.lastAutoBackupDateKey);
+          if (nextKey && nextKey !== latest.preferences.lastAutoBackupDateKey) {
+            usePosStore.setState((st) => ({
+              preferences: { ...st.preferences, lastAutoBackupDateKey: nextKey },
+            }));
+          }
+        })();
+      };
+      if (isNativeApp()) {
+        runWhenIdle(runBackup, 4000);
+      } else {
+        runBackup();
+      }
     } finally {
       snapshotWriteInFlight = false;
       if (snapshotWriteQueued) {
@@ -1517,16 +1332,7 @@ function fireDraftWrite(s: PosState): void {
   const input = s.draftInput
     ? { productId: s.draftInput.product.id, inputMode: s.draftInput.inputMode, value: s.draftInput.value }
     : null;
-  void writePersistedDraft({
-    lines: s.draftLines,
-    input,
-    cartDiscountUgx: s.draftCartDiscountUgx,
-    activePendingSaleId: s.activePendingSaleId,
-    draftSaleCustomerId: s.draftSaleCustomerId,
-    draftSaleCustomerName: s.draftSaleCustomerName,
-    draftSaleCustomerPhone: s.draftSaleCustomerPhone,
-    draftPaymentMethod: s.draftPaymentMethod,
-  });
+  void writePersistedDraft(s.draftLines, input, s.draftCartDiscountUgx);
 }
 
 function schedulePersist(prev: PosState, next: PosState) {
@@ -1549,25 +1355,6 @@ function scheduleDraftPersist(get: () => PosState) {
   }, 400);
 }
 
-function consumePendingPersistTimer(): { prev: PosState; next: PosState } | null {
-  if (!persistTimer) return null;
-  clearTimeout(persistTimer);
-  persistTimer = null;
-  const next = pendingPersistNext ?? usePosStore.getState();
-  const prev = pendingPersistPrev ?? next;
-  pendingPersistPrev = null;
-  pendingPersistNext = null;
-  return { prev, next };
-}
-
-function flushDraftPersistTimer(): void {
-  if (!draftPersistTimer) return;
-  clearTimeout(draftPersistTimer);
-  draftPersistTimer = null;
-  const s = usePosStore.getState();
-  if (s._hydrated) fireDraftWrite(s);
-}
-
 /**
  * Synchronously fire any pending persist timers so the in-flight snapshot is
  * captured under the CURRENT account key before an account switch swaps the
@@ -1576,81 +1363,34 @@ function flushDraftPersistTimer(): void {
  * even after the active key flips to null / the next account.
  */
 export function flushPendingPersist(): void {
-  const pair = consumePendingPersistTimer();
-  if (pair && pair.next._hydrated && persistSuspended === 0) {
-    void import("../offline/incrementalPersist").then((m) => m.flushIncrementalPersist(pair.prev, pair.next));
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+    const next = pendingPersistNext ?? usePosStore.getState();
+    const prev = pendingPersistPrev ?? next;
+    pendingPersistPrev = null;
+    pendingPersistNext = null;
+    if (next._hydrated && persistSuspended === 0) {
+      void import("../offline/incrementalPersist").then((m) => m.flushIncrementalPersist(prev, next));
+    }
   }
-  flushDraftPersistTimer();
+  if (draftPersistTimer) {
+    clearTimeout(draftPersistTimer);
+    draftPersistTimer = null;
+    const s = usePosStore.getState();
+    if (s._hydrated) fireDraftWrite(s);
+  }
 }
 
-/**
- * Same pending-timer drain as `flushPendingPersist`, but awaits incremental
- * entity writes. Local backup/export uses this so the assembled snapshot cannot
- * be older than mutations already queued on the existing persist scheduler.
- */
-export async function flushPendingPersistAsync(): Promise<void> {
-  const pair = consumePendingPersistTimer();
-  if (pair && pair.next._hydrated && persistSuspended === 0) {
-    const { flushIncrementalPersist } = await import("../offline/incrementalPersist");
-    await flushIncrementalPersist(pair.prev, pair.next);
-  }
-  flushDraftPersistTimer();
-}
-
-registerBackupPersistFlush(flushPendingPersistAsync);
-configureDailyAutoBackupScheduler({
-  getNamespace: getPersistenceNamespace,
-  isHydrated: () => usePosStore.getState()._hydrated,
-  getLastSavedDateKey: () => usePosStore.getState().preferences.lastAutoBackupDateKey,
-  onSuccess: (dateKey) => {
-    const latest = usePosStore.getState();
-    if (!latest._hydrated) return;
-    if (latest.preferences.lastAutoBackupDateKey === dateKey) return;
-    usePosStore.setState((st) => ({
-      preferences: { ...st.preferences, lastAutoBackupDateKey: dateKey },
-    }));
-  },
-});
-
-async function queueRemote(kind: SyncOperationKind, payload: unknown, opts?: { id?: string }) {
+async function queueRemote(kind: SyncOperationKind, payload: unknown) {
   if (getActiveAccountKey()?.startsWith("demo:")) return;
-  const shopId = getActiveShopId() ?? undefined;
   await enqueueSync({
-    id: opts?.id?.trim() || crypto.randomUUID(),
+    id: crypto.randomUUID(),
     kind,
     payload,
     createdAt: new Date().toISOString(),
     attempts: 0,
-    shopId,
   });
-}
-
-function queueCatalogCloudSync() {
-  void queueRemote("pending_catalog", { type: "catalog" });
-  flushPendingPersist();
-}
-
-function queueShopPolicyCloudSync() {
-  void queueRemote("pending_shop_policy", { type: "shop_policy" });
-  flushPendingPersist();
-}
-
-function catalogPrefPatch(prev: ShopPreferences, patch: Partial<ShopPreferences>, now = new Date().toISOString()): Partial<ShopPreferences> {
-  let next = stampCatalogPreferencePatch(prev, patch, now);
-  if (patch.posCatalogNodes) {
-    const retired = retiredCatalogNodeIds(prev.posCatalogNodes ?? [], patch.posCatalogNodes);
-    if (retired.length > 0) {
-      next = {
-        ...next,
-        posCatalogTombstones: appendCatalogTombstones(
-          patch.posCatalogTombstones ?? prev.posCatalogTombstones,
-          retired,
-          now,
-        ),
-      };
-    }
-  }
-  return next;
 }
 
 function defaultQuickPresetsForProduct(p: Omit<Product, "id" | "updatedAt" | "version">): Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty"> {
@@ -1739,7 +1479,8 @@ function buildQuickAddProductDraft(
   if (pharmacyRequiresBuy) {
     if (costExplicit === null || costExplicit <= 0) return { ok: false, errorKey: "pharmacyBuyPriceRequired" };
   }
-  const cost = costExplicit !== null ? costExplicit : defaultWizardUnitCostUgx(price);
+  const cost =
+    costExplicit !== null ? costExplicit : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
   const minAlert =
     input.minimumStockAlert !== undefined
       ? Math.max(0, Math.floor(input.minimumStockAlert))
@@ -1837,20 +1578,16 @@ function commitNewProducts(
   set: (...args: any[]) => void,
   drafts: Product[],
   pushAudit: ProductAuditPush,
-):
-  | { ok: true; added: number; limitReached: boolean }
-  | { ok: false; errorKey: string; added: number; limitReached: boolean } {
-  if (drafts.length === 0) return { ok: true, added: 0, limitReached: false };
+): { ok: true; added: number } | { ok: false; errorKey: string; added: number } {
+  if (drafts.length === 0) return { ok: true, added: 0 };
 
   const state = get();
   const { snapshot, authMode } = getStoreSubscriptionContext();
   const tier = resolveStorePlanTier(snapshot, authMode);
   const accepted: Product[] = [];
-  let limitReached = false;
   for (let i = 0; i < drafts.length; i += 1) {
     const cap = validateCanAddProduct(state.products.length + accepted.length, tier);
     if (!cap.ok) {
-      limitReached = true;
       if (accepted.length === 0) {
         pushAudit("auth_forbidden", "Denied addProduct (plan product limit)", {
           permission: "products.add",
@@ -1858,13 +1595,13 @@ function commitNewProducts(
           attemptedRole: state.sessionActor?.role ?? null,
           errorKey: cap.errorKey,
         });
-        return { ok: false, errorKey: cap.errorKey ?? "planProductLimit", added: 0, limitReached };
+        return { ok: false, errorKey: cap.errorKey ?? "planProductLimit", added: 0 };
       }
       break;
     }
     accepted.push(drafts[i]!);
   }
-  if (accepted.length === 0) return { ok: false, errorKey: "planProductLimit", added: 0, limitReached };
+  if (accepted.length === 0) return { ok: false, errorKey: "planProductLimit", added: 0 };
 
   const shopKey = inventoryMovementNamespace();
   const openingMovements = accepted
@@ -1896,7 +1633,7 @@ function commitNewProducts(
 
   // Shrink native debounce kill-window after catalog creates.
   queueMicrotask(() => flushPendingPersist());
-  return { ok: true, added: accepted.length, limitReached };
+  return { ok: true, added: accepted.length };
 }
 
 function normalizeCustomer(c: Customer): Customer {
@@ -1907,7 +1644,12 @@ function normalizeCustomer(c: Customer): Customer {
   return { ...c, debtBalanceUgx, pharmacyProfile };
 }
 
-function normalizeSaleLine(line: SaleLine): SaleLine {
+export function normalizeSaleLine(rawLine: SaleLine): SaleLine {
+  // Structural backstop for the COMPLETED SALE LINE => stable UUID invariant: this runs
+  // on every local load/import, so any line reaching here without a valid id (e.g. a
+  // legacy-localStorage import that predates the id field) gets one assigned exactly
+  // once. ensureSaleLineId is idempotent — it never regenerates an id a line already has.
+  const line = ensureSaleLineId(rawLine);
   const unitPriceUgx = Math.max(0, Math.floor(Number(line.unitPriceUgx) || 0));
   const unitCostUgx = normalizeUnitCostUgx(line.unitCostUgx);
   const lineTotalUgx = Math.max(0, Math.floor(Number(line.lineTotalUgx) || 0));
@@ -1946,7 +1688,7 @@ function normalizeSaleLine(line: SaleLine): SaleLine {
   };
 }
 
-function normalizeSale(s: Sale): Sale {
+export function normalizeSale(s: Sale): Sale {
   const lines = (s.lines ?? []).map(normalizeSaleLine);
   const estimatedProfitUgx = Number.isFinite(s.estimatedProfitUgx)
     ? Math.round(s.estimatedProfitUgx)
@@ -1958,7 +1700,6 @@ function normalizeSale(s: Sale): Sale {
     estimatedProfitUgx,
     customerId: s.customerId ?? null,
     soldByUserId: s.soldByUserId ?? null,
-    soldByAuthUserId: s.soldByAuthUserId ?? null,
     waiterStaffId: s.waiterStaffId ?? null,
     waiterName: s.waiterName ?? null,
     referenceLabel: s.referenceLabel ?? null,
@@ -1979,20 +1720,13 @@ function normalizeSupplier(s: Supplier): Supplier {
 }
 
 function normalizePurchase(p: Purchase): Purchase {
-  const invoiceNumber = p.invoiceNumber?.trim();
-  const stockSyncedProductIds = Array.isArray(p.stockSyncedProductIds)
-    ? [...new Set(p.stockSyncedProductIds.filter((id) => typeof id === "string" && id))]
-    : undefined;
   return {
     ...p,
     pendingSync: p.pendingSync !== false,
     notes: p.notes ?? "",
-    invoiceNumber: invoiceNumber ? invoiceNumber : undefined,
     lines: Array.isArray(p.lines) ? p.lines : [],
     voidedAt: p.voidedAt ?? null,
     voidReason: p.voidReason ?? undefined,
-    stockSyncedProductIds: stockSyncedProductIds?.length ? stockSyncedProductIds : undefined,
-    stockSyncedAt: p.stockSyncedAt ?? null,
   };
 }
 
@@ -2017,7 +1751,6 @@ function normalizeCashExpense(e: CashExpense): CashExpense {
     lastSyncError: e.lastSyncError ?? null,
     deletedAt: e.deletedAt ?? null,
     approvalStatus: e.approvalStatus ?? "approved",
-    updatedAt: e.updatedAt ?? e.createdAt,
     deviceId: e.deviceId ?? undefined,
   };
 }
@@ -2036,10 +1769,7 @@ export const usePosStore = create<PosState>((set, get) => {
       payloadSummary,
       payload,
     };
-    set((s) => {
-      const merged = mergeAuditLogs(s.auditLogs, [entry], s.archivedAuditLogs);
-      return { auditLogs: merged.auditLogs, archivedAuditLogs: merged.archivedAuditLogs };
-    });
+    set((s) => ({ auditLogs: mergeAuditLogs(s.auditLogs, [entry]) }));
     logPilotEventFromAudit(action, payloadSummary, payload);
     void queueRemote("audit_log", { entry });
   };
@@ -2100,7 +1830,6 @@ export const usePosStore = create<PosState>((set, get) => {
   draftInput: null,
   draftCartDiscountUgx: 0,
   activePendingSaleId: null,
-  ...emptyDraftCheckoutFields(),
   activePharmacyPrescriptionId: null,
   pharmacyDispenseMode: null,
   pharmacyPrescriptions: [],
@@ -2112,15 +1841,7 @@ export const usePosStore = create<PosState>((set, get) => {
   hydrationStage: "none",
   todayKpiSnapshot: null,
 
-  hydrate: (data, opts) => {
-    const current = get();
-    const archivedSeed = data.archivedAuditLogs ?? [];
-    const auditCap = opts?.replaceAudit
-      ? applyAuditActiveCap(data.auditLogs ?? [], archivedSeed, MAX_AUDIT_LOGS)
-      : mergeAuditLogs(data.auditLogs ?? [], current.auditLogs, [
-          ...archivedSeed,
-          ...(current.archivedAuditLogs ?? []),
-        ]);
+  hydrate: (data, opts) =>
     set({
       products: data.products.map(normalizeProduct),
       customers: data.customers.map(normalizeCustomer),
@@ -2128,7 +1849,7 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: data.preferences,
       debtPayments: data.debtPayments ?? [],
       dayCloses: data.dayCloses ?? [],
-      auditLogs: auditCap.auditLogs,
+      auditLogs: opts?.replaceAudit ? (data.auditLogs ?? []) : mergeAuditLogs(data.auditLogs ?? [], get().auditLogs),
       suppliers: (data.suppliers ?? []).map(normalizeSupplier),
       purchases: (data.purchases ?? []).map(normalizePurchase),
       supplierPayments: (data.supplierPayments ?? []).map(normalizeSupplierPayment),
@@ -2150,7 +1871,7 @@ export const usePosStore = create<PosState>((set, get) => {
       dayDrawerOpens: (data.dayDrawerOpens ?? []).map(normalizeDayDrawerOpen),
       inventoryCountSessions: (data.inventoryCountSessions ?? []).map(normalizeInventoryCountSession),
       archivedSales: (data.archivedSales ?? []).map(normalizeSale),
-      archivedAuditLogs: auditCap.archivedAuditLogs,
+      archivedAuditLogs: data.archivedAuditLogs ?? [],
       archivedDayCloses: data.archivedDayCloses ?? [],
       archivedVoidRecords: data.archivedVoidRecords ?? [],
       archivedReturnRecords: data.archivedReturnRecords ?? [],
@@ -2164,11 +1885,14 @@ export const usePosStore = create<PosState>((set, get) => {
         const register = (data.pharmacyControlledRegister ?? [])
           .map(normalizeControlledRegisterEntry)
           .filter((e): e is NonNullable<ReturnType<typeof normalizeControlledRegisterEntry>> => Boolean(e));
+        const auditLogs = opts?.replaceAudit
+          ? (data.auditLogs ?? [])
+          : mergeAuditLogs(data.auditLogs ?? [], get().auditLogs);
         return {
           pharmacyControlledRegister: register,
           pharmacyComplianceAlerts: detectComplianceAlerts({
             register,
-            auditLogs: auditCap.auditLogs,
+            auditLogs,
             preferences: data.preferences,
           }),
         };
@@ -2179,8 +1903,7 @@ export const usePosStore = create<PosState>((set, get) => {
       draftLines: [],
       draftInput: null,
       draftCartDiscountUgx: 0,
-    });
-  },
+    }),
 
   hydrateEssentials: (data) => {
     const products = data.products.map(normalizeProduct);
@@ -2199,22 +1922,16 @@ export const usePosStore = create<PosState>((set, get) => {
       purchases: [],
       supplierPayments: [],
       stockMovements: [],
-      archivedStockMovements: [],
       voidRecords: [],
       returnRecords: [],
       cashExpenses: [],
       cashDrawerAdjustments: [],
-      dayDrawerOpens: [],
       inventoryCountSessions: [],
       archivedSales: [],
       archivedAuditLogs: [],
       archivedDayCloses: [],
       archivedVoidRecords: [],
       archivedReturnRecords: [],
-      pharmacyPrescriptions: [],
-      pharmacyDoctors: [],
-      pharmacyControlledRegister: [],
-      pharmacyComplianceAlerts: [],
       _hydrated: true,
       hydrationStage: "critical",
       draftLines: [],
@@ -2224,59 +1941,19 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   hydrateRemainder: (data) =>
-    set((s) => {
-      const sales = data.sales ? data.sales.map(normalizeSale) : s.sales;
-      const mergedAudit = mergeAuditLogs(
-        data.auditLogs ?? [],
-        s.auditLogs,
-        data.archivedAuditLogs ?? s.archivedAuditLogs,
-      );
-      const pharmacyPrescriptions = applyPharmacyRemainderHydration(
-        data.pharmacyPrescriptions,
-        s.pharmacyPrescriptions,
-        normalizePrescription,
-      );
-      const pharmacyDoctors = applyPharmacyRemainderHydration(
-        data.pharmacyDoctors,
-        s.pharmacyDoctors,
-        normalizePharmacyDoctor,
-      );
-      const pharmacyControlledRegister = applyPharmacyRemainderHydration(
-        data.pharmacyControlledRegister,
-        s.pharmacyControlledRegister,
-        normalizeControlledRegisterEntry,
-      );
-      return {
-      sales,
-      activePendingSaleId: resolvePersistedDraftSaleBinding(sales, s.activePendingSaleId, true),
+    set((s) => ({
+      sales: data.sales ? data.sales.map(normalizeSale) : s.sales,
       debtPayments: data.debtPayments ?? s.debtPayments,
       dayCloses: data.dayCloses ?? s.dayCloses,
-      ...mergedAudit,
+      auditLogs: mergeAuditLogs(data.auditLogs ?? [], s.auditLogs),
       suppliers: (data.suppliers ?? []).map(normalizeSupplier),
       purchases: (data.purchases ?? []).map(normalizePurchase),
       supplierPayments: (data.supplierPayments ?? []).map(normalizeSupplierPayment),
       ...(() => {
-        const persistedArchive = data.archivedStockMovements;
-        const archivedSeed =
-          persistedArchive === undefined
-            ? (s.archivedStockMovements ?? [])
-            : (() => {
-                const byId = new Map<string, StockMovement>();
-                for (const raw of persistedArchive) {
-                  if (!raw || typeof raw !== "object") continue;
-                  const id = String((raw as StockMovement).id ?? "").trim();
-                  if (!id) continue;
-                  byId.set(id, normalizeStockMovement(raw as StockMovement));
-                }
-                for (const row of s.archivedStockMovements ?? []) {
-                  if (row?.id) byId.set(row.id, row);
-                }
-                return [...byId.values()];
-              })();
         const merged = mergeStockMovements(
           data.stockMovements ?? [],
           s.stockMovements,
-          archivedSeed,
+          s.archivedStockMovements ?? [],
         );
         return {
           stockMovements: merged.stockMovements,
@@ -2296,23 +1973,12 @@ export const usePosStore = create<PosState>((set, get) => {
         ? data.inventoryCountSessions.map(normalizeInventoryCountSession)
         : s.inventoryCountSessions,
       archivedSales: data.archivedSales ? data.archivedSales.map(normalizeSale) : s.archivedSales,
+      archivedAuditLogs: data.archivedAuditLogs ?? s.archivedAuditLogs,
       archivedDayCloses: data.archivedDayCloses ?? s.archivedDayCloses,
       archivedVoidRecords: data.archivedVoidRecords ?? s.archivedVoidRecords,
       archivedReturnRecords: data.archivedReturnRecords ?? s.archivedReturnRecords,
-      pharmacyPrescriptions,
-      pharmacyDoctors,
-      pharmacyControlledRegister,
-      pharmacyComplianceAlerts:
-        data.pharmacyControlledRegister !== undefined
-          ? detectComplianceAlerts({
-              register: pharmacyControlledRegister,
-              auditLogs: mergedAudit.auditLogs,
-              preferences: s.preferences,
-            })
-          : s.pharmacyComplianceAlerts,
       hydrationStage: s.hydrationStage === "none" ? "background" : s.hydrationStage,
-    };
-    }),
+    })),
 
   applyRestoredSnapshot: (snap) => {
     void applyRestoredSnapshotFromBackup(snap);
@@ -2327,10 +1993,6 @@ export const usePosStore = create<PosState>((set, get) => {
       clearTimeout(draftPersistTimer);
       draftPersistTimer = null;
     }
-    resetReturnSubmitLocksForTests();
-    resetDebtPaymentSubmitLocksForTests();
-    resetSupplierPaymentSubmitLocksForTests();
-    invalidateDailyAutoBackupSchedule();
     set({
       _hydrated: false,
       products: [],
@@ -2344,24 +2006,20 @@ export const usePosStore = create<PosState>((set, get) => {
       purchases: [],
       supplierPayments: [],
       stockMovements: [],
-      archivedStockMovements: [],
       voidRecords: [],
       returnRecords: [],
       cashExpenses: [],
       cashDrawerAdjustments: [],
-      dayDrawerOpens: [],
       inventoryCountSessions: [],
       archivedSales: [],
       archivedAuditLogs: [],
       archivedDayCloses: [],
       archivedVoidRecords: [],
       archivedReturnRecords: [],
-      pharmacyPrescriptions: [],
-      pharmacyDoctors: [],
-      pharmacyControlledRegister: [],
-      pharmacyComplianceAlerts: [],
       sessionActor: null,
-      ...emptyDraftPatch(),
+      draftLines: [],
+      draftInput: null,
+      draftCartDiscountUgx: 0,
       salesHistoryHydration: null,
       hydrationStage: "none",
       todayKpiSnapshot: null,
@@ -2384,17 +2042,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
   },
 
-  setSessionActor: (actor) => {
-    set({ sessionActor: actor });
-    if (!actor) return;
-    const writerId = shiftOwnerUserId(actor);
-    if (!writerId || writerId.startsWith("staff:")) return;
-    const state = get();
-    const rekeyed = rekeySharedTerminalOpenShifts(state.preferences.shifts, writerId);
-    if (rekeyed && rekeyed !== state.preferences.shifts) {
-      set((s) => ({ preferences: { ...s.preferences, shifts: rekeyed } }));
-    }
-  },
+  setSessionActor: (actor) => set({ sessionActor: actor }),
 
   setPreferences: (p, opts) => {
     const state = get();
@@ -2416,9 +2064,6 @@ export const usePosStore = create<PosState>((set, get) => {
       }
       return;
     }
-    if (p.backOfficePin === null || p.backOfficePin === "") {
-      p = { ...p, backOfficePin: null, biometricAuthEnabled: false };
-    }
     if (p.biometricAuthEnabled === true) {
       const pin = p.backOfficePin ?? state.preferences.backOfficePin;
       if (!canEnableBiometricAuth({ backOfficePin: pin })) {
@@ -2433,13 +2078,6 @@ export const usePosStore = create<PosState>((set, get) => {
         return;
       }
     }
-    if (preferencesPatchTouchesCatalog(p)) {
-      p = catalogPrefPatch(state.preferences, p);
-    }
-    if (preferencesPatchTouchesShopPolicy(p)) {
-      p = stampShopPolicyPreferencePatch(state.preferences, p);
-    }
-    const shouldQueueShopPolicy = preferencesPatchNeedsShopPolicySync(state.preferences, p);
     set((s) => {
       let merged = { ...s.preferences, ...p };
       const role = s.sessionActor?.role ?? "cashier";
@@ -2449,324 +2087,6 @@ export const usePosStore = create<PosState>((set, get) => {
       merged = ensureHardwarePrefsOnBootstrap(merged);
       return { preferences: merged };
     });
-    if (preferencesPatchTouchesCatalog(p)) {
-      queueCatalogCloudSync();
-    }
-    if (shouldQueueShopPolicy) {
-      queueShopPolicyCloudSync();
-    }
-  },
-
-  renameShelfCategory: (fromKey, toName) => {
-    const denied = denyUnlessEffectivePermission("shelves.customize", "renameShelfCategory");
-    if (denied) return { ok: false, errorKey: denied.errorKey };
-
-    const state = get();
-    const plan = planShelfRename({
-      fromKey,
-      toName,
-      products: state.products,
-      layout: state.preferences.posShelfLayout ?? {},
-      orderKeys: state.preferences.posPinnedShelfKeys ?? [],
-      sellCategoryFilter: state.preferences.posSellCategoryFilter,
-    });
-    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
-
-    let prefPatch: Partial<ShopPreferences> = {
-      posShelfLayout: plan.layout,
-      posPinnedShelfKeys: plan.orderKeys,
-    };
-    if (plan.sellCategoryFilter !== undefined) {
-      prefPatch.posSellCategoryFilter = plan.sellCategoryFilter;
-    }
-    if (!plan.unchanged) {
-      prefPatch.posCatalogNodes = remapCatalogNodesForRename(
-        state.preferences.posCatalogNodes ?? [],
-        plan.fromKey,
-        plan.toKey,
-      );
-    }
-    prefPatch = catalogPrefPatch(state.preferences, prefPatch);
-    const { snapshot, authMode } = getStoreSubscriptionContext();
-    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
-      snapshot,
-      authMode,
-      currentStaffAccounts: state.preferences.staffAccounts ?? [],
-    });
-    if (!prefAuth.ok) {
-      pushAudit("auth_forbidden", "Denied renameShelfCategory preferences", {
-        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
-        action: "renameShelfCategory",
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: prefAuth.errorKey,
-      });
-      return { ok: false, errorKey: prefAuth.errorKey };
-    }
-
-    const idSet = new Set(plan.productIds);
-    const at = new Date().toISOString();
-    set((s) => ({
-      products: s.products.map((p) =>
-        idSet.has(p.id) ? { ...p, category: plan.toKey, updatedAt: at, version: p.version + 1 } : p,
-      ),
-      preferences: { ...s.preferences, ...prefPatch },
-    }));
-    for (const id of plan.productIds) {
-      void queueRemote("product", { id, catalogOnly: true });
-    }
-    queueCatalogCloudSync();
-    if (!plan.unchanged || plan.productIds.length > 0) {
-      pushAudit("product_update", `Renamed shelf ${plan.fromKey} → ${plan.toKey}`, {
-        fromKey: plan.fromKey,
-        toKey: plan.toKey,
-        productCount: plan.productIds.length,
-      });
-    }
-    return { ok: true, toKey: plan.toKey };
-  },
-
-  deleteEmptyShelf: (shelfKey) => {
-    const denied = denyUnlessEffectivePermission("shelves.customize", "deleteEmptyShelf");
-    if (denied) return { ok: false, errorKey: denied.errorKey };
-
-    const state = get();
-    if (
-      isCatalogHierarchyEnabled(state.preferences) &&
-      catalogIdentityHasChildFolders(
-        state.preferences.posCatalogNodes ?? [],
-        catalogShopIdFromPreferences(state.preferences),
-        shelfKey,
-      )
-    ) {
-      return { ok: false, errorKey: "catalogFoldersCannotDeleteChildren" };
-    }
-    const plan = planDeleteEmptyShelf({
-      shelfKey,
-      products: state.products,
-      layout: state.preferences.posShelfLayout ?? {},
-      orderKeys: state.preferences.posPinnedShelfKeys ?? [],
-      sellCategoryFilter: state.preferences.posSellCategoryFilter,
-    });
-    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
-
-    let prefPatch: Partial<ShopPreferences> = {
-      posShelfLayout: plan.layout,
-      posPinnedShelfKeys: plan.orderKeys,
-    };
-    if (plan.clearSellCategoryFilter) {
-      prefPatch.posSellCategoryFilter = null;
-    }
-    const existingNodes = state.preferences.posCatalogNodes ?? [];
-    const retiredNodes = retireCatalogNodesForDeletedShelf(existingNodes, plan.shelfKey);
-    if (retiredNodes !== existingNodes) {
-      prefPatch.posCatalogNodes = retiredNodes;
-    }
-    prefPatch = catalogPrefPatch(state.preferences, prefPatch);
-    const { snapshot, authMode } = getStoreSubscriptionContext();
-    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
-      snapshot,
-      authMode,
-      currentStaffAccounts: state.preferences.staffAccounts ?? [],
-    });
-    if (!prefAuth.ok) {
-      pushAudit("auth_forbidden", "Denied deleteEmptyShelf preferences", {
-        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
-        action: "deleteEmptyShelf",
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: prefAuth.errorKey,
-      });
-      return { ok: false, errorKey: prefAuth.errorKey };
-    }
-
-    set((s) => ({
-      preferences: { ...s.preferences, ...prefPatch },
-    }));
-    queueCatalogCloudSync();
-    return { ok: true };
-  },
-
-  deleteEmptyShelves: (shelfKeys) => {
-    const denied = denyUnlessEffectivePermission("shelves.customize", "deleteEmptyShelves");
-    if (denied) return { ok: false, errorKey: denied.errorKey, deletedCount: 0, skippedOccupiedCount: 0, skippedBlockedCount: 0 };
-
-    const state = get();
-    const plan = planBulkDeleteEmptyShelves({
-      shelfKeys,
-      products: state.products,
-      layout: state.preferences.posShelfLayout ?? {},
-      orderKeys: state.preferences.posPinnedShelfKeys ?? [],
-      sellCategoryFilter: state.preferences.posSellCategoryFilter,
-      nodes: state.preferences.posCatalogNodes ?? [],
-      hierarchyEnabled: isCatalogHierarchyEnabled(state.preferences),
-      shopId: catalogShopIdFromPreferences(state.preferences),
-      pharmacyMode: isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled),
-      hospitalityMode: isHospitalityMode(state.preferences.businessType, state.preferences.hospitalityModeEnabled),
-      businessType: state.preferences.businessType,
-    });
-    const skippedOccupiedCount = plan.skipped.filter((s) => s.reason === "occupied").length;
-    const skippedBlockedCount = plan.skipped.filter((s) => s.reason !== "occupied" && s.reason !== "emptyKey").length;
-    const prefPatchRaw = bulkDeleteEmptyShelvesPreferencePatch(plan);
-    if (!prefPatchRaw) {
-      return {
-        ok: true,
-        deletedCount: 0,
-        skippedOccupiedCount,
-        skippedBlockedCount,
-      };
-    }
-    const prefPatch = catalogPrefPatch(state.preferences, prefPatchRaw);
-    const { snapshot, authMode } = getStoreSubscriptionContext();
-    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
-      snapshot,
-      authMode,
-      currentStaffAccounts: state.preferences.staffAccounts ?? [],
-    });
-    if (!prefAuth.ok) {
-      pushAudit("auth_forbidden", "Denied deleteEmptyShelves preferences", {
-        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
-        action: "deleteEmptyShelves",
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: prefAuth.errorKey,
-      });
-      return { ok: false, errorKey: prefAuth.errorKey, deletedCount: 0, skippedOccupiedCount, skippedBlockedCount };
-    }
-
-    set((s) => ({
-      preferences: { ...s.preferences, ...prefPatch },
-    }));
-    queueCatalogCloudSync();
-    return {
-      ok: true,
-      deletedCount: plan.deletedKeys.length,
-      skippedOccupiedCount,
-      skippedBlockedCount,
-    };
-  },
-
-  refillEmptyShelf: (destinationKey, productIds) => {
-    const plan = planRefillEmptyShelf({
-      destinationKey,
-      productIds,
-      products: get().products,
-    });
-    if (!plan.ok) return { ok: false, errorKey: plan.errorKey, movedCount: 0, failedCount: 0 };
-
-    let movedCount = 0;
-    let failedCount = plan.skippedMissing.length;
-    for (const productId of plan.moveIds) {
-      const r = get().updateProduct(productId, { category: plan.destinationKey });
-      if (r.ok) movedCount += 1;
-      else failedCount += 1;
-    }
-    return { ok: true, movedCount, failedCount };
-  },
-
-  createCatalogShelf: (input) => {
-    const denied = denyUnlessEffectivePermission("shelves.customize", "createCatalogShelf");
-    if (denied) return { ok: false, errorKey: denied.errorKey };
-
-    const state = get();
-    const shopId = catalogShopIdFromPreferences(state.preferences);
-    const plan = planCreateCatalogShelf({
-      name: input.name,
-      parentId: input.parentId ?? null,
-      nodes: state.preferences.posCatalogNodes ?? [],
-      shopId,
-      layout: state.preferences.posShelfLayout ?? {},
-      orderKeys: state.preferences.posPinnedShelfKeys ?? [],
-    });
-    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
-
-    const prefPatch: Partial<ShopPreferences> = catalogPrefPatch(state.preferences, {
-      posCatalogNodes: plan.nodes,
-      posShelfLayout: plan.layout,
-      posPinnedShelfKeys: plan.orderKeys,
-    });
-    const { snapshot, authMode } = getStoreSubscriptionContext();
-    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
-      snapshot,
-      authMode,
-      currentStaffAccounts: state.preferences.staffAccounts ?? [],
-    });
-    if (!prefAuth.ok) {
-      pushAudit("auth_forbidden", "Denied createCatalogShelf preferences", {
-        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
-        action: "createCatalogShelf",
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: prefAuth.errorKey,
-      });
-      return { ok: false, errorKey: prefAuth.errorKey };
-    }
-
-    set((s) => ({
-      preferences: { ...s.preferences, ...prefPatch },
-    }));
-    queueCatalogCloudSync();
-    return { ok: true, legacyShelfKey: plan.node.legacyShelfKey };
-  },
-
-  reparentCatalogShelf: (nodeId, parentId) => {
-    const denied = denyUnlessEffectivePermission("shelves.customize", "reparentCatalogShelf");
-    if (denied) return { ok: false, errorKey: denied.errorKey };
-    const state = get();
-    const plan = planReparentCatalogNode({
-      nodeId,
-      parentId,
-      nodes: state.preferences.posCatalogNodes ?? [],
-      shopId: catalogShopIdFromPreferences(state.preferences),
-    });
-    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
-    const prefPatch: Partial<ShopPreferences> = catalogPrefPatch(state.preferences, { posCatalogNodes: plan.nodes });
-    const { snapshot, authMode } = getStoreSubscriptionContext();
-    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
-      snapshot,
-      authMode,
-      currentStaffAccounts: state.preferences.staffAccounts ?? [],
-    });
-    if (!prefAuth.ok) {
-      pushAudit("auth_forbidden", "Denied reparentCatalogShelf preferences", {
-        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
-        action: "reparentCatalogShelf",
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: prefAuth.errorKey,
-      });
-      return { ok: false, errorKey: prefAuth.errorKey };
-    }
-    set((s) => ({ preferences: { ...s.preferences, ...prefPatch } }));
-    queueCatalogCloudSync();
-    return { ok: true };
-  },
-
-  reorderCatalogSiblings: (parentId, orderedIds) => {
-    const denied = denyUnlessEffectivePermission("shelves.customize", "reorderCatalogSiblings");
-    if (denied) return { ok: false, errorKey: denied.errorKey };
-    const state = get();
-    const plan = planReorderCatalogSiblings({
-      parentId,
-      orderedIds,
-      nodes: state.preferences.posCatalogNodes ?? [],
-      shopId: catalogShopIdFromPreferences(state.preferences),
-    });
-    if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
-    const prefPatch: Partial<ShopPreferences> = catalogPrefPatch(state.preferences, { posCatalogNodes: plan.nodes });
-    const { snapshot, authMode } = getStoreSubscriptionContext();
-    const prefAuth = authorizePreferencesPatch(state.sessionActor, prefPatch, {
-      snapshot,
-      authMode,
-      currentStaffAccounts: state.preferences.staffAccounts ?? [],
-    });
-    if (!prefAuth.ok) {
-      pushAudit("auth_forbidden", "Denied reorderCatalogSiblings preferences", {
-        permission: requiredPermissionsForPreferencesPatch(prefPatch).join(","),
-        action: "reorderCatalogSiblings",
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: prefAuth.errorKey,
-      });
-      return { ok: false, errorKey: prefAuth.errorKey };
-    }
-    set((s) => ({ preferences: { ...s.preferences, ...prefPatch } }));
-    queueCatalogCloudSync();
-    return { ok: true };
   },
 
   addStaffAccount: async (input) => {
@@ -3039,32 +2359,25 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!inheritsFrom || inheritsFrom === "owner") return { ok: false, errorKey: "enterpriseRolesInvalidBase" };
     const nextPermissions = patch.permissions ? [...patch.permissions] : current.permissions;
     const nextStatus = patch.status ?? current.status ?? "active";
-    const now = new Date().toISOString();
     const updatedRole: CustomStaffRole = {
       ...current,
       name: nextName,
       inheritsFrom,
       permissions: nextPermissions,
       status: nextStatus,
-      updatedAt: now,
+      updatedAt: new Date().toISOString(),
     };
-    const state = get();
-    const customStaffRoles = (state.preferences.customStaffRoles ?? []).map((r) =>
-      r.id === id ? updatedRole : r,
-    );
-    const refreshed = applyCustomRoleToAssignedStaff(
-      state.preferences.staffAccounts,
-      customStaffRoles,
-      id,
-      now,
-      false,
-    );
-    set({
-      preferences: {
-        ...state.preferences,
-        customStaffRoles,
-        staffAccounts: refreshed.staffAccounts,
-      },
+    set((s) => {
+      const customStaffRoles = (s.preferences.customStaffRoles ?? []).map((r) =>
+        r.id === id ? updatedRole : r,
+      );
+      return {
+        preferences: {
+          ...s.preferences,
+          customStaffRoles,
+          staffAccounts: refreshStaffPermissionsForRoles(s.preferences.staffAccounts, customStaffRoles),
+        },
+      };
     });
     pushAudit("custom_role_updated", `Custom role updated: ${updatedRole.name}`, {
       roleId: updatedRole.id,
@@ -3072,7 +2385,6 @@ export const usePosStore = create<PosState>((set, get) => {
       status: updatedRole.status,
       permissionCount: updatedRole.permissions.length,
     });
-    queueStaffPermissionSnapshots(refreshed.affected);
     return { ok: true };
   },
 
@@ -3089,18 +2401,21 @@ export const usePosStore = create<PosState>((set, get) => {
     const current = roles.find((r) => r.id === id);
     if (!current) return { ok: false, errorKey: "enterpriseRolesNotFound" };
     const assigned = (get().preferences.staffAccounts ?? []).filter((s) => s.customRoleId === id);
-    const now = new Date().toISOString();
-    const state = get();
-    const customStaffRoles = (state.preferences.customStaffRoles ?? []).filter((r) => r.id !== id);
-    const refreshed = applyCustomRoleToAssignedStaff(
-      state.preferences.staffAccounts,
-      customStaffRoles,
-      id,
-      now,
-      true,
-    );
-    set({
-      preferences: { ...state.preferences, customStaffRoles, staffAccounts: refreshed.staffAccounts },
+    set((s) => {
+      const customStaffRoles = (s.preferences.customStaffRoles ?? []).filter((r) => r.id !== id);
+      const staffAccounts = refreshStaffPermissionsForRoles(
+        (s.preferences.staffAccounts ?? []).map((staff) =>
+          staff.customRoleId === id
+            ? {
+                ...staff,
+                customRoleId: null,
+                updatedAt: new Date().toISOString(),
+              }
+            : staff,
+        ),
+        customStaffRoles,
+      );
+      return { preferences: { ...s.preferences, customStaffRoles, staffAccounts } };
     });
     pushAudit("custom_role_deleted", `Custom role deleted: ${current.name}`, {
       roleId: current.id,
@@ -3115,7 +2430,6 @@ export const usePosStore = create<PosState>((set, get) => {
         roleName: current.name,
       });
     }
-    queueStaffPermissionSnapshots(refreshed.affected);
     return { ok: true };
   },
 
@@ -3362,62 +2676,18 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const prev = state.preferences.activeStaffId ?? null;
     const staff = state.preferences.staffAccounts ?? [];
-    if (id && id !== prev) {
-      const nextStaff = staff.find((s) => s.id === id && s.active);
-      if (!nextStaff) return { ok: false, errorKey: "noSelection" };
-    }
     if (!opts?.force && prev !== id) {
       const actor = state.sessionActor;
-      // Path L / Auth cashier: personal device cannot switch staff mid-shift.
-      // Path S shared terminal uses JWT owner membership — PIN switch stays allowed.
-      if (actor && authMembershipRole(actor) !== "owner") {
-        const writerId = shiftOwnerUserId(actor);
-        if (writerId) {
-          const open = getActiveShiftForActor(state.preferences.shifts, writerId);
-          if (open) return { ok: false, errorKey: "staffSwitchShiftOpen" };
-        }
+      if (actor) {
+        const open = getActiveShiftForActor(state.preferences.shifts, actor.userId);
+        if (open) return { ok: false, errorKey: "staffSwitchShiftOpen" };
       }
-    }
-    const cartPlan = staffSwitchCartPlan({
-      prevStaffId: prev,
-      nextStaffId: id,
-      draftLineCount: state.draftLines.length,
-      activePendingSaleId: state.activePendingSaleId,
-      activeTableSessionId: state.preferences.activeTableSessionId,
-    });
-    let nextSales = state.sales;
-    if (cartPlan === "park_and_detach" && state.draftLines.length > 0) {
-      const saleId = state.activePendingSaleId ?? crypto.randomUUID();
-      const existing = state.sales.find((s) => s.id === saleId);
-      const pendingSale = buildPendingSaleFromDraft({
-        saleId,
-        lines: state.draftLines,
-        cartDiscountUgx: state.draftCartDiscountUgx,
-        tableSessionId: state.preferences.activeTableSessionId ?? existing?.tableSessionId ?? null,
-        referenceLabel: existing?.referenceLabel?.trim() || STAFF_SWITCH_HOLD_LABEL,
-        soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
-        soldByAuthUserId:
-          commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
-        existing: existing ?? null,
-      });
-      nextSales = [pendingSale, ...state.sales.filter((s) => s.id !== saleId)];
-      void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
     }
     if (prev && prev !== id) {
       const prevStaff = staff.find((s) => s.id === prev);
       pushAudit("staff_logout", prevStaff?.name ?? prev, { staffId: prev, staffName: prevStaff?.name });
     }
-    const detachCart = cartPlan !== "none";
-    set((s) => ({
-      sales: nextSales,
-      ...(detachCart ? emptyDraftPatch() : {}),
-      preferences: {
-        ...s.preferences,
-        activeStaffId: id,
-        ...(detachCart ? { activeTableSessionId: null } : {}),
-      },
-    }));
-    if (detachCart) void clearPersistedDraft();
+    set((s) => ({ preferences: { ...s.preferences, activeStaffId: id } }));
     if (id && prev !== id) {
       const nextStaff = staff.find((s) => s.id === id);
       pushAudit("staff_login", nextStaff?.name ?? id, { staffId: id, staffName: nextStaff?.name, role: nextStaff?.role });
@@ -3434,7 +2704,7 @@ export const usePosStore = create<PosState>((set, get) => {
   acknowledgeOwnerAlert: (alertId) => {
     const state = get();
     const actor = state.sessionActor;
-    if (!actor || authOperatorRole(actor) !== "owner") return;
+    if (!actor || actor.role !== "owner") return;
     const trimmed = String(alertId).trim();
     if (!trimmed) return;
     const next = appendAcknowledgement(state.preferences.ownerAlertAcknowledgements, trimmed, actor.userId);
@@ -3454,18 +2724,14 @@ export const usePosStore = create<PosState>((set, get) => {
     const s = get();
     const actor = s.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    const writerId = shiftOwnerUserId(actor);
-    if (!writerId) return { ok: false, errorKey: "noSelection" };
-    const open = s.preferences.shifts?.find((sh) => !sh.endAt && sh.actorUserId === writerId);
+    const open = s.preferences.shifts?.find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
     if (open) return { ok: false, errorKey: "invalid" };
-    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "beginShift");
-    if (dateLock) return dateLock;
     const floatAmt = openingFloatUgx != null ? Math.max(0, Math.floor(openingFloatUgx)) : 0;
     const row: ShiftRecord = {
       id: crypto.randomUUID(),
-      actorUserId: writerId,
+      actorUserId: actor.userId,
       actorName: actor.displayName,
-      role: authOperatorRole(actor),
+      role: actor.role,
       startAt: new Date().toISOString(),
       endAt: null,
       salesTotalUgx: 0,
@@ -3489,7 +2755,7 @@ export const usePosStore = create<PosState>((set, get) => {
         shifts: [row, ...(st.preferences.shifts ?? [])],
       },
     }));
-    pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, { shiftId: row.id, actorUserId: writerId });
+    pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, { shiftId: row.id, actorUserId: actor.userId });
     void queueRemote("pending_shifts", { shiftId: row.id });
     return { ok: true };
   },
@@ -3497,7 +2763,7 @@ export const usePosStore = create<PosState>((set, get) => {
   endActiveShift: (actorUserId) => {
     const s = get();
     const actor = s.sessionActor;
-    const uid = actorUserId ?? (actor ? shiftOwnerUserId(actor) : null);
+    const uid = actorUserId ?? actor?.userId;
     if (!uid) return;
     const open = (s.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === uid);
     if (!open) return;
@@ -3658,9 +2924,12 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!built.line || built.error) {
       return { ok: false, errorKey: built.error ?? "invalid" };
     }
-    const existing = get().draftLines.find(
-      (l) => l.productId === built.line!.productId && shouldMergeDraftSaleLines(l, built.line!),
-    );
+    const existing =
+      built.line!.inputMode === "quantity"
+        ? get().draftLines.find(
+            (l) => l.productId === built.line!.productId && shouldMergeDraftSaleLines(l, built.line!),
+          )
+        : undefined;
     const nextQty = totalDraftQuantityForProduct(
       get().draftLines,
       built.line!.productId,
@@ -3724,7 +2993,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!rebuilt) return { ok: false, errorKey: "invalidQty" };
     const next = withPharmacyFefoPreview(rebuilt, product, line.pharmacyBatchOverrideId);
     set((s) => ({
-      draftLines: s.draftLines.map((l) => (l === line || (l.id != null && l.id === line.id) ? next : l)),
+      draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
     }));
     scheduleDraftPersist(get);
     return { ok: true };
@@ -3741,7 +3010,7 @@ export const usePosStore = create<PosState>((set, get) => {
       batchId,
     );
     set((s) => ({
-      draftLines: s.draftLines.map((l) => (l === line || (l.id != null && l.id === line.id) ? updated : l)),
+      draftLines: s.draftLines.map((l) => (l.productId === productId ? updated : l)),
     }));
     scheduleDraftPersist(get);
     return { ok: true };
@@ -3816,93 +3085,9 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
-  setDraftPaymentMethod: (method) => {
-    const next = isDraftPaymentMethod(method) ? method : "cash";
-    set({ draftPaymentMethod: next });
-    scheduleDraftPersist(get);
-  },
-
-  setDraftSaleCustomer: (input) => {
-    set({
-      draftSaleCustomerId: input.customerId ?? get().draftSaleCustomerId,
-      draftSaleCustomerName: input.customerName ?? get().draftSaleCustomerName,
-      draftSaleCustomerPhone: input.customerPhone ?? get().draftSaleCustomerPhone,
-    });
-    scheduleDraftPersist(get);
-  },
-
   clearDraft: () => {
-    set(emptyDraftPatch());
+    set({ draftLines: [], draftInput: null, draftCartDiscountUgx: 0, activePendingSaleId: null });
     void clearPersistedDraft();
-  },
-
-  voidCurrentCart: () => {
-    const pendingId = get().activePendingSaleId?.trim() || null;
-    if (pendingId) {
-      const cancelled = get().cancelPendingSale(pendingId);
-      if (!cancelled.ok) {
-        return { ok: false, kind: "pending" as const, errorKey: cancelled.errorKey };
-      }
-      return { ok: true, kind: "pending" as const, saleId: pendingId };
-    }
-
-    const state = get();
-    if (!state.draftLines.length) {
-      get().clearDraft();
-      return { ok: true, kind: "unsaved" as const, noop: true };
-    }
-    if (voidCartInFlight) {
-      return { ok: false, kind: "unsaved" as const, errorKey: "saleInProgress" };
-    }
-    voidCartInFlight = true;
-    try {
-      const snapshotLines = state.draftLines.map((l) => ({ ...l }));
-      const snapshotDiscount = state.draftCartDiscountUgx;
-      const snapshotCustomerId = state.draftSaleCustomerId;
-      const snapshotCustomerName = state.draftSaleCustomerName;
-      const snapshotCustomerPhone = state.draftSaleCustomerPhone;
-      const snapshotPayment = state.draftPaymentMethod;
-      const snapshotInput = state.draftInput;
-      const at = new Date().toISOString();
-      const saleId = crypto.randomUUID();
-      const actor = state.sessionActor;
-      const record = buildUnsavedCartVoidedSale({
-        saleId,
-        lines: snapshotLines,
-        cartDiscountUgx: snapshotDiscount,
-        at,
-        actorUserId: actor?.userId ?? null,
-        actorLabel: actor?.displayName?.trim() || null,
-        customerId: snapshotCustomerId,
-        customerName: snapshotCustomerName,
-        customerPhone: snapshotCustomerPhone,
-        paymentMethod: snapshotPayment,
-      });
-      set({
-        sales: [record, ...state.sales.filter((s) => s.id !== saleId)],
-        ...emptyDraftPatch(),
-      });
-      if (!unsavedCartVoidPersistSucceeded(get().sales, saleId, get().draftLines.length)) {
-        set({
-          sales: get().sales.filter((s) => s.id !== saleId),
-          draftLines: snapshotLines,
-          draftInput: snapshotInput,
-          draftCartDiscountUgx: snapshotDiscount,
-          draftSaleCustomerId: snapshotCustomerId,
-          draftSaleCustomerName: snapshotCustomerName,
-          draftSaleCustomerPhone: snapshotCustomerPhone,
-          draftPaymentMethod: snapshotPayment,
-          activePendingSaleId: null,
-        });
-        return { ok: false, kind: "unsaved" as const, errorKey: "saleError" };
-      }
-      void clearPersistedDraft();
-      void queueRemote("pending_sales", { saleId, kind: "pending_cancel" });
-      flushPendingPersist();
-      return { ok: true, kind: "unsaved" as const, saleId };
-    } finally {
-      voidCartInFlight = false;
-    }
   },
 
   ensureHospitalityFloor: () => {
@@ -3942,7 +3127,6 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel,
       soldByUserId: actor?.userId ?? null,
-      soldByAuthUserId: commercialAuthUserIdFromActor(actor),
       waiterStaffId: actor?.userId ?? null,
       waiterName: actor?.displayName ?? null,
     });
@@ -3986,7 +3170,6 @@ export const usePosStore = create<PosState>((set, get) => {
       draftCartDiscountUgx: 0,
       activePendingSaleId: saleId,
     });
-    scheduleDraftPersist(get);
     void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
     queueHospitalityChange({ sessionIds: [sessionId] });
     flushPendingPersist();
@@ -4021,7 +3204,6 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel: label,
       soldByUserId: actor?.userId ?? null,
-      soldByAuthUserId: commercialAuthUserIdFromActor(actor),
       waiterStaffId: actor?.userId ?? null,
       waiterName: actor?.displayName ?? null,
     });
@@ -4048,7 +3230,6 @@ export const usePosStore = create<PosState>((set, get) => {
       draftCartDiscountUgx: 0,
       activePendingSaleId: saleId,
     });
-    scheduleDraftPersist(get);
     void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
     queueHospitalityChange({ sessionIds: [sessionId] });
     flushPendingPersist();
@@ -4079,7 +3260,6 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: { ...fresh.preferences, activeTableSessionId: sessionId },
       draftInput: null,
     });
-    scheduleDraftPersist(get);
     return { ok: true };
   },
 
@@ -4103,8 +3283,6 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId ?? existing?.tableSessionId ?? null,
       referenceLabel: existing?.referenceLabel ?? null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
-      soldByAuthUserId:
-        commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
       waiterStaffId: existing?.waiterStaffId ?? tableWaiter.waiterStaffId,
       waiterName: existing?.waiterName ?? tableWaiter.waiterName,
       existing: existing ?? null,
@@ -4171,8 +3349,6 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel: existing?.referenceLabel ?? null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
-      soldByAuthUserId:
-        commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
       existing: existing ?? null,
     });
     let nextFloor = state.preferences.hospitalityFloor;
@@ -4220,8 +3396,6 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel: existing?.referenceLabel ?? null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
-      soldByAuthUserId:
-        commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
       existing: existing ?? null,
     });
     let nextFloor = state.preferences.hospitalityFloor;
@@ -4270,7 +3444,10 @@ export const usePosStore = create<PosState>((set, get) => {
 
   clearActiveTableOrder: () => {
     set({
-      ...emptyDraftPatch(),
+      activePendingSaleId: null,
+      draftLines: [],
+      draftInput: null,
+      draftCartDiscountUgx: 0,
       preferences: { ...get().preferences, activeTableSessionId: null },
     });
     void clearPersistedDraft();
@@ -4327,7 +3504,6 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: target.id,
       referenceLabel: targetSale.referenceLabel,
       soldByUserId: targetSale.soldByUserId ?? null,
-      soldByAuthUserId: targetSale.soldByAuthUserId ?? null,
       existing: targetSale,
     });
     const cancelledSource: Sale = { ...sourceSale, status: "cancelled", updatedAt: new Date().toISOString(), pendingSync: true };
@@ -4839,14 +4015,14 @@ export const usePosStore = create<PosState>((set, get) => {
       cartDiscountUgx: state.draftCartDiscountUgx,
       referenceLabel: referenceLabel?.trim() || existing?.referenceLabel || null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
-      soldByAuthUserId:
-        commercialAuthUserIdFromActor(state.sessionActor) ?? existing?.soldByAuthUserId ?? null,
       existing: existing ?? null,
     });
     set({
       sales: [pendingSale, ...state.sales.filter((s) => s.id !== saleId)],
-      ...emptyDraftPatch(),
       activePendingSaleId: saleId,
+      draftLines: [],
+      draftInput: null,
+      draftCartDiscountUgx: 0,
     });
     void clearPersistedDraft();
     void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
@@ -4854,22 +4030,14 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true, saleId };
   },
 
-  // SL-09: pending_sales.manage is shop-wide. Hospitality tables and counter holds
-  // are shared work, so we do not add soldBy ownership checks here.
   resumePendingSale: (saleId) => {
     const denied = denyUnlessEffectivePermission("pending_sales.manage", "resumePendingSale");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
-    if (
-      resumeWouldOverwriteUnrelatedCart({
-        draftLineCount: state.draftLines.length,
-        activePendingSaleId: state.activePendingSaleId,
-        resumeSaleId: saleId,
-      })
-    ) {
+    if (state.draftLines.length && !state.activePendingSaleId) {
       return { ok: false, errorKey: "invalid" };
     }
-    const sale = state.sales.find((s) => s.id === saleId && isPendingSale(s));
+    const sale = state.sales.find((s) => s.id === saleId && s.status === "pending");
     if (!sale) return { ok: false, errorKey: "invalid" };
     set({
       draftLines: sale.lines.map((l) => ({ ...l })),
@@ -4881,8 +4049,6 @@ export const usePosStore = create<PosState>((set, get) => {
         activeTableSessionId: sale.tableSessionId ?? null,
       },
     });
-    scheduleDraftPersist(get);
-    flushPendingPersist();
     return { ok: true };
   },
 
@@ -4892,13 +4058,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const sale = state.sales.find((s) => s.id === saleId && s.status === "pending");
     if (!sale) return { ok: false, errorKey: "invalid" };
-    const at = new Date().toISOString();
-    const actor = state.sessionActor;
-    const cancelled = markPendingSaleAsPreCompletionVoid(sale, {
-      at,
-      actorUserId: actor?.userId ?? null,
-      actorLabel: actor?.displayName?.trim() || null,
-    });
+    const cancelled: Sale = { ...sale, status: "cancelled", updatedAt: new Date().toISOString(), pendingSync: true };
     let nextPrefs = state.preferences;
     if (sale.tableSessionId && nextPrefs.hospitalityFloor) {
       nextPrefs = {
@@ -4911,7 +4071,9 @@ export const usePosStore = create<PosState>((set, get) => {
     set({
       sales: [cancelled, ...state.sales.filter((s) => s.id !== saleId)],
       preferences: nextPrefs,
-      ...(state.activePendingSaleId === saleId ? emptyDraftPatch() : {}),
+      ...(state.activePendingSaleId === saleId
+        ? { activePendingSaleId: null, draftLines: [], draftInput: null, draftCartDiscountUgx: 0 }
+        : {}),
     });
     void queueRemote("pending_sales", { saleId, kind: "pending_cancel" });
     flushPendingPersist();
@@ -4925,7 +4087,6 @@ export const usePosStore = create<PosState>((set, get) => {
     customerPhone,
     paymentMethod,
     amountPaidUgx,
-    tenderCashUgx,
     changeGivenUgx,
     splitBreakdown,
     serviceChargeUgx: inputServiceChargeUgx,
@@ -4940,25 +4101,6 @@ export const usePosStore = create<PosState>((set, get) => {
     if (dateLock) return dateLock;
 
     const state = get();
-    const target = resolveFinalizeCompletionTarget(state.sales, state.activePendingSaleId);
-    if (target.kind === "already_completed") {
-      set(emptyDraftPatch());
-      void clearPersistedDraft();
-      return { ok: true, saleId: target.sale.id, idempotent: true };
-    }
-    if (target.kind === "cancelled") {
-      return { ok: false, errorKey: "saleCancelledCannotComplete" };
-    }
-    if (target.kind === "stale_reference") {
-      return { ok: false, errorKey: "stalePendingCannotComplete" };
-    }
-
-    const lockKey = completionLockKey(state.activePendingSaleId);
-    if (finalizeInFlightKeys.has(lockKey)) {
-      return { ok: false, errorKey: "saleInProgress" };
-    }
-    finalizeInFlightKeys.add(lockKey);
-    try {
     const shiftGuard = requireActiveShift(state);
     if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
@@ -5141,14 +4283,8 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const actorId = state.sessionActor?.userId ?? null;
     const actor = state.sessionActor;
-    const soldByAuthUserId =
-      commercialAuthUserIdFromActor(actor) ?? existingPending?.soldByAuthUserId ?? null;
     const todayKey = dateKeyKampala(new Date());
-    const { receiptSeq, receiptTerminal } = mintLocalReceiptIdentity(
-      state.sales,
-      getOrCreateDeviceId(),
-      todayKey,
-    );
+    const receiptSeq = scanTodaySalesHead(state.sales, todayKey).nextReceiptSeq;
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const sessionWaiter = sessionWaiterAttribution(floor, existingPending?.tableSessionId);
     const receiptSnap = buildReceiptBrandingSnapshot(state.preferences, receiptSnapshotPlanTier(state.preferences));
@@ -5161,7 +4297,6 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: existingPending?.tableSessionId ?? null,
       updatedAt: new Date().toISOString(),
       receiptSeq,
-      receiptTerminal,
       receiptHeaderSnapshot: receiptSnap.header,
       receiptFooterSnapshot: receiptSnap.footer,
       receiptCustomerName: debtorCustomer?.name?.trim() || (customerName?.trim() || null),
@@ -5176,17 +4311,9 @@ export const usePosStore = create<PosState>((set, get) => {
       estimatedProfitUgx,
       createdAt: existingPending?.createdAt ?? new Date().toISOString(),
       pendingSync: true,
-      cloudCompleteFinancials: captureCloudCompleteFinancials({
-        subtotalUgx: listSubtotal,
-        totalUgx: total,
-        cashPaidUgx,
-        debtUgx: debt,
-        discountTotalUgx: discountTotal,
-      }),
       lastSyncError: null,
       customerId: customerId ?? null,
       soldByUserId: actorId,
-      soldByAuthUserId,
       waiterStaffId:
         existingPending?.waiterStaffId ?? sessionWaiter.waiterStaffId ?? null,
       waiterName: existingPending?.waiterName ?? sessionWaiter.waiterName ?? null,
@@ -5197,14 +4324,6 @@ export const usePosStore = create<PosState>((set, get) => {
       billPayments: billPayments?.length ? billPayments : null,
       paymentMethod: paymentMethod ?? (debt > 0 ? (cashPaidUgx > 0 ? "mixed" : "credit") : "cash"),
       amountPaidUgx: Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
-      ...(tenderCashUgx !== undefined
-        ? {
-            tenderCashUgx: normalizeTenderCashUgx(
-              tenderCashUgx,
-              Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
-            ),
-          }
-        : {}),
       changeGivenUgx: Number.isFinite(changeGivenUgx) ? Math.max(0, Math.floor(changeGivenUgx ?? 0)) : 0,
       prescriptionId: state.activePharmacyPrescriptionId ?? null,
       dispenseType: state.activePharmacyPrescriptionId
@@ -5296,16 +4415,15 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     }
     if (actor) {
-      const writerId = shiftOwnerUserId(actor);
       nextPreferences = {
         ...nextPreferences,
         shifts: (nextPreferences.shifts ?? []).map((sh) =>
-          !sh.endAt && writerId && sh.actorUserId === writerId
+          !sh.endAt && sh.actorUserId === actor.userId
             ? {
                 ...sh,
                 salesTotalUgx: sh.salesTotalUgx + total,
                 debtTotalUgx: sh.debtTotalUgx + debt,
-                estimatedCashUgx: sh.estimatedCashUgx + physicalCashCollectedFromSale(sale),
+                estimatedCashUgx: sh.estimatedCashUgx + cashPaidUgx,
                 discountsTotalUgx: (sh.discountsTotalUgx ?? 0) + discountTotal,
               }
             : sh,
@@ -5456,16 +4574,18 @@ export const usePosStore = create<PosState>((set, get) => {
       }
       nextComplianceAlerts = detectComplianceAlerts({
         register: nextControlledRegister,
-        auditLogs: mergeAuditLogs(state.auditLogs, auditEntries, state.archivedAuditLogs).auditLogs,
+        auditLogs: mergeAuditLogs(state.auditLogs, auditEntries),
         preferences: state.preferences,
       });
     }
 
-    const mergedAudits = mergeAuditLogs(state.auditLogs, auditEntries, state.archivedAuditLogs);
     set({
       products,
       sales: [sale, ...state.sales.filter((s) => s.id !== sale.id)],
-      ...emptyDraftPatch(),
+      draftLines: [],
+      draftInput: null,
+      draftCartDiscountUgx: 0,
+      activePendingSaleId: null,
       activePharmacyPrescriptionId: nextActiveRxId,
       pharmacyDispenseMode: nextDispenseMode,
       pharmacyPrescriptions: nextPharmacyPrescriptions,
@@ -5475,8 +4595,7 @@ export const usePosStore = create<PosState>((set, get) => {
       customers,
       ...movementMergePatch(state, saleMovements),
       preferences: nextPreferences,
-      auditLogs: mergedAudits.auditLogs,
-      archivedAuditLogs: mergedAudits.archivedAuditLogs,
+      auditLogs: mergeAuditLogs(state.auditLogs, auditEntries),
       todayKpiSnapshot: bumpTodayKpiSnapshot(state.todayKpiSnapshot, sale),
     });
 
@@ -5518,15 +4637,7 @@ export const usePosStore = create<PosState>((set, get) => {
       }
     });
     flushPendingPersist();
-    void import("../lib/efris/outbox")
-      .then(({ enqueueEfrisAfterCompletedSale }) => {
-        enqueueEfrisAfterCompletedSale(sale.id, sale.status);
-      })
-      .catch(() => undefined);
     return { ok: true, firstSale: isFirstSale, saleId: sale.id };
-    } finally {
-      finalizeInFlightKeys.delete(lockKey);
-    }
   },
 
   voidSaleLine: ({ saleId, lineIndex, reason, note }) => {
@@ -5546,43 +4657,22 @@ export const usePosStore = create<PosState>((set, get) => {
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
     const sale = saleForLock;
-    if (!isCompletedSale(sale)) return { ok: false, errorKey: "invalid" };
     const line = sale.lines[lineIndex];
     if (!line || line.voided) return { ok: false, errorKey: "invalid" };
 
-    const returnScoped = [...state.returnRecords, ...(state.archivedReturnRecords ?? [])];
-    const remaining = remainingVoidableLine(sale, line.productId, returnScoped);
-    if (remaining.quantity <= 0) return { ok: false, errorKey: "invalid" };
-    const amount = remaining.amountUgx;
-    const voidQty = remaining.quantity;
-    const profitReduce =
-      line.quantity > 0 ? Math.round((line.estimatedProfitUgx * voidQty) / line.quantity) : 0;
-    const physicalCashReduce = cashReduceFromRefund(sale, amount);
+    const amount = line.lineTotalUgx;
+    const cashReduce = Math.min(amount, sale.cashPaidUgx);
     const debtReduce = creditDebtReductionFromSaleAdjustment(sale, amount);
-    const openShift = (state.preferences.shifts ?? []).find(
-      (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(actor),
-    );
+    const openShift = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
     const at = new Date().toISOString();
-    const shopKey = inventoryMovementNamespace();
-    const lineIdentity = stableVoidLineIdentity(saleId, lineIndex, line.id);
-    const voidRecordId = stableVoidRecordId(shopKey, saleId, lineIdentity);
-    const movementId = stableVoidLineMovementId(shopKey, saleId, lineIdentity, line.productId);
-    if (
-      state.voidRecords.some((v) => v.id === voidRecordId) ||
-      (state.archivedVoidRecords ?? []).some((v) => v.id === voidRecordId) ||
-      state.stockMovements.some((m) => m.id === movementId) ||
-      (state.archivedStockMovements ?? []).some((m) => m.id === movementId)
-    ) {
-      return { ok: false, errorKey: "invalid" };
-    }
 
     const voidRec: VoidRecord = {
-      id: voidRecordId,
+      id: crypto.randomUUID(),
       saleId,
       lineIndex,
       productId: line.productId,
       productName: line.name,
-      quantity: voidQty,
+      quantity: line.quantity,
       amountUgx: amount,
       reason,
       note: note?.trim() || undefined,
@@ -5598,8 +4688,8 @@ export const usePosStore = create<PosState>((set, get) => {
       ...sale,
       ...totals,
       lines: updatedLines,
-      estimatedProfitUgx: Math.max(0, sale.estimatedProfitUgx - profitReduce),
-      pendingSync: sale.pendingSync === true,
+      estimatedProfitUgx: Math.max(0, sale.estimatedProfitUgx - line.estimatedProfitUgx),
+      pendingSync: true,
     };
 
     const products = [...state.products];
@@ -5609,9 +4699,9 @@ export const usePosStore = create<PosState>((set, get) => {
       const p = products[pIdx]!;
       products[pIdx] = {
         ...p,
-        stockOnHand: p.stockOnHand + voidQty,
+        stockOnHand: p.stockOnHand + line.quantity,
         packCostUnitsDepleted: hasPackCostAllocation(p)
-          ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, voidQty)
+          ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, line.quantity)
           : p.packCostUnitsDepleted,
         updatedAt: at,
         version: p.version + 1,
@@ -5619,13 +4709,13 @@ export const usePosStore = create<PosState>((set, get) => {
     }
 
     const movement: StockMovement = {
-      id: movementId,
+      id: crypto.randomUUID(),
       at,
       productId: line.productId,
       productName: line.name,
-      deltaBaseUnits: voidQty,
+      deltaBaseUnits: line.quantity,
       kind: "adjust_other",
-      summary: `Void +${voidQty}`,
+      summary: `Void +${line.quantity}`,
       refId: voidRec.id,
       supplierId: null,
     };
@@ -5645,7 +4735,7 @@ export const usePosStore = create<PosState>((set, get) => {
         saleId,
         productId: line.productId,
         productName: line.name,
-        quantity: voidQty,
+        quantity: line.quantity,
         reason: `${reason}${note ? `: ${note}` : ""}`,
         deviceId,
         batchNumber: line.pharmacyBatchNumber ?? null,
@@ -5674,7 +4764,7 @@ export const usePosStore = create<PosState>((set, get) => {
             sh.id === openShift.id
               ? {
                   ...sh,
-                  estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - physicalCashReduce),
+                  estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - cashReduce),
                   voidsTotalUgx: (sh.voidsTotalUgx ?? 0) + amount,
                   refundsUgx: sh.refundsUgx + amount,
                 }
@@ -5702,35 +4792,21 @@ export const usePosStore = create<PosState>((set, get) => {
         saleId,
         voidId: voidRec.id,
         productId: line.productId,
-        quantity: voidQty,
+        quantity: line.quantity,
         deviceId: getOrCreateDeviceId(),
         actorUserId: actor.userId,
         actorName: actor.displayName ?? null,
         actorRole: actor.role,
       });
     }
-    void queueRemote(
-      "pending_stock_updates",
-      {
-        ...r3SaleVoidStockPayload({
-          productId: line.productId,
-          delta: voidQty,
-          voidRecordId: voidRec.id,
-          baseUpdatedAt: preVoidProduct?.updatedAt ?? at,
-          baseStockOnHand: preVoidProduct?.stockOnHand,
-          saleId,
-          amountUgx: amount,
-          lineIndex,
-          productName: line.name,
-        }),
-        ...saleAdjustmentOutboxMeta({
-          operationType: "void",
-          saleId,
-          dateKey: saleDayKey,
-        }),
-      },
-      { id: saleAdjustmentQueueId(voidRec.id) },
-    );
+    void queueRemote("pending_stock_updates", {
+      productId: line.productId,
+      delta: line.quantity,
+      note: "void",
+      baseUpdatedAt: preVoidProduct?.updatedAt ?? at,
+      baseStockOnHand: preVoidProduct?.stockOnHand,
+    });
+    void queueRemote("sale", { saleId });
     if (sale.customerId && debtReduce > 0) {
       void queueRemote("customer", { id: sale.customerId });
     }
@@ -5756,15 +4832,11 @@ export const usePosStore = create<PosState>((set, get) => {
     const refund = Math.max(0, Math.floor(refundAmountUgx));
     if (qty <= 0 || refund <= 0) return { ok: false, errorKey: "invalid" };
 
-    const resolvedPrecheck = resolveLocalSaleForReturn(
-      saleId,
-      state.sales,
-      state.archivedSales ?? [],
-    );
+    const saleIdxPrecheck = saleId ? state.sales.findIndex((s) => s.id === saleId) : -1;
     const auth = validateReturnAuthorization({
       role: actor.role,
       saleId: saleId ?? null,
-      saleFound: resolvedPrecheck != null,
+      saleFound: saleIdxPrecheck >= 0,
       note: note ?? "",
     });
     if (!auth.ok) return { ok: false, errorKey: auth.errorKey };
@@ -5772,98 +4844,38 @@ export const usePosStore = create<PosState>((set, get) => {
     const product = state.products.find((p) => p.id === productId);
     if (!product) return { ok: false, errorKey: "missingProduct" };
 
-    const returnScopedPrecheck = [...state.returnRecords, ...(state.archivedReturnRecords ?? [])];
-    if (resolvedPrecheck) {
-      const limit = validateReturnAgainstSale({
-        sale: resolvedPrecheck.sale,
-        productId,
-        quantity: qty,
-        refundAmountUgx: refund,
-        returnRecords: returnScopedPrecheck,
-      });
-      if (!limit.ok) return { ok: false, errorKey: limit.errorKey };
-    }
-
-    const lockKey = returnSubmitLockKey({
-      accountKey: inventoryMovementNamespace(),
-      saleId: saleId ?? null,
-      productId,
-      quantity: qty,
-      refundAmountUgx: refund,
-      reason,
-    });
-    if (!tryBeginReturnSubmit(lockKey)) {
-      return { ok: false, errorKey: "invalid" };
-    }
-
-    try {
-    const live = get();
-    const liveActor = live.sessionActor;
-    if (!liveActor) {
-      releaseReturnSubmit(lockKey);
-      return { ok: false, errorKey: "noSelection" };
-    }
-    const liveProduct = live.products.find((p) => p.id === productId);
-    if (!liveProduct) {
-      releaseReturnSubmit(lockKey);
-      return { ok: false, errorKey: "missingProduct" };
-    }
-    const resolved = resolveLocalSaleForReturn(saleId, live.sales, live.archivedSales ?? []);
-    if (saleId && String(saleId).trim() && !resolved) {
-      releaseReturnSubmit(lockKey);
-      return { ok: false, errorKey: "returnSaleUnavailable" };
-    }
-    const returnScoped = [...live.returnRecords, ...(live.archivedReturnRecords ?? [])];
-    if (resolved) {
-      const limit = validateReturnAgainstSale({
-        sale: resolved.sale,
-        productId,
-        quantity: qty,
-        refundAmountUgx: refund,
-        returnRecords: returnScoped,
-      });
-      if (!limit.ok) {
-        releaseReturnSubmit(lockKey);
-        return { ok: false, errorKey: limit.errorKey };
-      }
-    }
-
-    const openShift = (live.preferences.shifts ?? []).find(
-      (sh) => !sh.endAt && sh.actorUserId === shiftOwnerUserId(liveActor),
-    );
+    const openShift = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
     const at = new Date().toISOString();
 
-    const linkedSale = resolved?.sale;
-    const cashReduce = cashReduceFromRefund(linkedSale, refund);
+    const linkedSale = saleId ? state.sales.find((s) => s.id === saleId) : undefined;
     const saleLine = findSaleLineForReturn(linkedSale, productId);
     const returnCogsUgx = saleLine
       ? resolveReturnCogsFromSaleLine(saleLine, qty)
-      : Math.round(qty * normalizeUnitCostUgx(liveProduct.costPricePerUnitUgx));
+      : Math.round(qty * normalizeUnitCostUgx(product.costPricePerUnitUgx));
     const returnUnitCostUgx = saleLine
       ? normalizeUnitCostUgx(saleLine.unitCostUgx)
-      : normalizeUnitCostUgx(liveProduct.costPricePerUnitUgx);
+      : normalizeUnitCostUgx(product.costPricePerUnitUgx);
 
     const returnRec: ReturnRecord = {
       id: crypto.randomUUID(),
       saleId: saleId ?? null,
       productId,
-      productName: liveProduct.name,
+      productName: product.name,
       quantity: qty,
       refundAmountUgx: refund,
-      refundCashUgx: cashReduce,
       cogsUgx: returnCogsUgx,
       unitCostUgx: returnUnitCostUgx,
       reason,
       note: note?.trim() || undefined,
-      actorUserId: liveActor.userId,
-      actorName: liveActor.displayName,
+      actorUserId: actor.userId,
+      actorName: actor.displayName,
       shiftId: openShift?.id ?? null,
       createdAt: at,
     };
 
     const restock = returnRestocksInventory(reason);
 
-    const products = live.products.map((p) =>
+    const products = state.products.map((p) =>
       p.id === productId && restock
         ? {
             ...p,
@@ -5882,7 +4894,7 @@ export const usePosStore = create<PosState>((set, get) => {
           id: crypto.randomUUID(),
           at,
           productId,
-          productName: liveProduct.name,
+          productName: product.name,
           deltaBaseUnits: qty,
           kind: "adjust_other",
           summary: `Return +${qty}`,
@@ -5891,40 +4903,40 @@ export const usePosStore = create<PosState>((set, get) => {
         }
       : null;
 
-    let sales = live.sales;
-    let archivedSales = live.archivedSales ?? [];
-    let customers = live.customers;
+    let sales = state.sales;
+    let customers = state.customers;
     let debtReduce = 0;
     let linkedCustomerId: string | null = null;
-    if (resolved) {
-      const sale = resolved.sale;
-      linkedCustomerId = sale.customerId ?? null;
-      debtReduce = creditDebtReductionFromSaleAdjustment(sale, refund);
-      const totals = reduceSaleTotalsByAmount(sale, refund);
-      const updated: Sale = { ...sale, ...totals, pendingSync: sale.pendingSync === true };
-      customers = applyCustomerDebtDelta(customers, sale.customerId, -debtReduce);
-      if (resolved.bucket === "sales") {
-        const saleIdx = sales.findIndex((s) => s.id === sale.id);
-        if (saleIdx >= 0) {
-          sales = [...sales];
-          sales[saleIdx] = updated;
-        }
-      } else {
-        const saleIdx = archivedSales.findIndex((s) => s.id === sale.id);
-        if (saleIdx >= 0) {
-          archivedSales = [...archivedSales];
-          archivedSales[saleIdx] = updated;
-        }
+    let cashReduce = refund;
+    if (saleId) {
+      const saleIdx = sales.findIndex((s) => s.id === saleId);
+      if (saleIdx >= 0) {
+        const sale = sales[saleIdx]!;
+        cashReduce = cashReduceFromRefund(sale, refund);
+        const limit = validateReturnAgainstSale({
+          sale,
+          productId,
+          quantity: qty,
+          refundAmountUgx: refund,
+          returnRecords: state.returnRecords,
+        });
+        if (!limit.ok) return { ok: false, errorKey: limit.errorKey };
+        linkedCustomerId = sale.customerId ?? null;
+        debtReduce = creditDebtReductionFromSaleAdjustment(sale, refund);
+        const totals = reduceSaleTotalsByAmount(sale, refund);
+        const updated: Sale = { ...sale, ...totals, pendingSync: true };
+        customers = applyCustomerDebtDelta(customers, sale.customerId, -debtReduce);
+        sales = [...sales];
+        sales[saleIdx] = updated;
       }
     }
 
     set({
       products,
       sales,
-      archivedSales,
       customers,
-      returnRecords: [returnRec, ...live.returnRecords],
-      ...(movement ? movementMergePatch(live, [movement]) : {}),
+      returnRecords: [returnRec, ...state.returnRecords],
+      ...(movement ? movementMergePatch(state, [movement]) : {}),
     });
 
     if (openShift) {
@@ -5945,31 +4957,23 @@ export const usePosStore = create<PosState>((set, get) => {
       }));
     }
 
-    pushAudit("sale_return", `Return ${liveProduct.name} UGX ${refund.toLocaleString()}`, {
+    pushAudit("sale_return", `Return ${product.name} UGX ${refund.toLocaleString()}`, {
       returnId: returnRec.id,
       saleId: saleId ?? null,
-      productName: liveProduct.name,
+      productName: product.name,
       quantity: qty,
       refundUgx: refund,
       reason,
       note: note ?? null,
-      actorUserId: liveActor.userId,
+      actorUserId: actor.userId,
     });
-    void queueRemote(
-      "pending_returns",
-      {
-        returnId: returnRec.id,
-        productId,
-        quantity: qty,
-        refundAmountUgx: refund,
-        ...saleAdjustmentOutboxMeta({
-          operationType: "return",
-          saleId: saleId ?? null,
-          dateKey: dateKeyKampala(at),
-        }),
-      },
-      { id: saleAdjustmentQueueId(returnRec.id) },
-    );
+    void queueRemote("pending_returns", {
+      returnId: returnRec.id,
+      saleId: saleId ?? null,
+      productId,
+      quantity: qty,
+      refundAmountUgx: refund,
+    });
     if (linkedCustomerId && debtReduce > 0) {
       void queueRemote("customer", { id: linkedCustomerId });
     }
@@ -5978,10 +4982,6 @@ export const usePosStore = create<PosState>((set, get) => {
       if (updated) broadcastInventoryStock([updated], "sale_return");
     }
     return { ok: true, returnRecord: returnRec };
-    } catch (err) {
-      releaseReturnSubmit(lockKey);
-      throw err;
-    }
   },
 
   closeShiftWithCashCount: (countedCashUgx, handoffFloatUgx, opts) => {
@@ -5996,7 +4996,6 @@ export const usePosStore = create<PosState>((set, get) => {
         pushAudit,
         queueRemote,
         denyUnlessEffectivePermission,
-        denyIfBusinessDateLocked,
       });
       return closeShiftWithHandoff({
         countedCashUgx,
@@ -6007,19 +5006,15 @@ export const usePosStore = create<PosState>((set, get) => {
       });
     }
 
-    const target = resolveShiftCloseTarget(
-      state.preferences.shifts,
-      shiftOwnerUserId(actor) ?? actor.userId,
-      opts?.shiftId,
-    );
+    const target = resolveShiftCloseTarget(state.preferences.shifts, actor.userId, opts?.shiftId);
     if (!target.ok) return { ok: false, errorKey: target.errorKey };
 
     const hasPermission = (permission: import("../types").Permission) =>
       denyUnlessEffectivePermission(permission, "closeShiftWithCashCount") === null;
     const authz = authorizeShiftClose(
       {
-        actorUserId: shiftOwnerUserId(actor) ?? actor.userId,
-        actorRole: authOperatorRole(actor),
+        actorUserId: actor.userId,
+        actorRole: actor.role,
         actorDisplayName: actor.displayName,
         hasPermission,
       },
@@ -6031,7 +5026,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const closeGuard = target.isRecovery ? assertCanRecoverShift(state) : assertCanCloseShift(state);
     if (!closeGuard.ok) return { ok: false, errorKey: closeGuard.errorKey };
 
-    const formulaVersion = resolveCashDrawerFormulaVersion(state.preferences);
+    const formulaVersion = "v1";
     const ctx = { formulaVersion } as const;
     const { counted, expected, differenceUgx } = computeShiftCloseAmounts(
       target.shift,
@@ -6161,8 +5156,6 @@ export const usePosStore = create<PosState>((set, get) => {
     const committed = commitNewProducts(get, set, drafts, pushAudit);
     const added = committed.added;
     const skippedTotal = skipped + (drafts.length - added);
-    // TASK 7 — never let the caller believe every row landed when the plan capped it.
-    const skippedReason = committed.limitReached ? ("planProductLimit" as const) : undefined;
     if (added > 0) {
       pushAudit("product_add", `Bulk added ${added} products`, {
         bulk: true,
@@ -6171,7 +5164,7 @@ export const usePosStore = create<PosState>((set, get) => {
         category: cat,
       });
     }
-    return { added, skipped: skippedTotal, ...(skippedReason ? { skippedReason } : {}) };
+    return { added, skipped: skippedTotal };
   },
 
   duplicateProduct: (productId, nameSuffix) => {
@@ -6186,18 +5179,17 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const p = state.products.find((x) => x.id === productId);
     if (!p) return { ok: false, errorKey: "missingProduct" };
-    const catalog = catalogDuplicatePrefill(p, nameSuffix);
     get().addProduct({
-      name: catalog.name,
+      name: `${p.name}${nameSuffix}`,
       sellingMode: p.sellingMode,
       baseUnit: p.baseUnit,
       buyingUnit: p.buyingUnit,
       conversionRate: p.conversionRate,
-      sellingPricePerUnitUgx: catalog.sellingPricePerUnitUgx,
-      costPricePerUnitUgx: catalog.costPricePerUnitUgx ?? 0,
-      stockOnHand: catalog.stockOnHand,
+      sellingPricePerUnitUgx: p.sellingPricePerUnitUgx,
+      costPricePerUnitUgx: p.costPricePerUnitUgx,
+      stockOnHand: p.stockOnHand,
       minimumStockAlert: p.minimumStockAlert,
-      category: catalog.category || p.category,
+      category: p.category,
       sku: `SKU-${Date.now()}`,
       quickPresetsMoneyUgx: p.quickPresetsMoneyUgx,
       quickPresetsQty: p.quickPresetsQty,
@@ -6413,18 +5405,14 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     });
 
-    if (Math.abs(stockDelta) > 1e-6 && movement) {
-      void queueRemote(
-        "pending_stock_updates",
-        r3AdjustmentStockPayload({
-          productId,
-          delta: stockDelta,
-          adjustmentId: movement.id,
-          note: "count",
-          baseUpdatedAt: prev.updatedAt,
-          baseStockOnHand: prevStock,
-        }),
-      );
+    if (Math.abs(stockDelta) > 1e-6) {
+      void queueRemote("pending_stock_updates", {
+        productId,
+        delta: stockDelta,
+        note: "count",
+        baseUpdatedAt: prev.updatedAt,
+        baseStockOnHand: prevStock,
+      });
     }
     void queueRemote("product", { id: productId, catalogOnly: true });
     const changes = diffProductCatalog(prev, normalized);
@@ -6486,17 +5474,13 @@ export const usePosStore = create<PosState>((set, get) => {
       ),
       ...movementMergePatch(s, [movement]),
     }));
-    void queueRemote(
-      "pending_stock_updates",
-      r3AdjustmentStockPayload({
-        productId,
-        delta,
-        adjustmentId: movement.id,
-        note: reason ?? "",
-        baseUpdatedAt: prev?.updatedAt ?? null,
-        baseStockOnHand: prev?.stockOnHand,
-      }),
-    );
+    void queueRemote("pending_stock_updates", {
+      productId,
+      delta,
+      note: reason ?? "",
+      baseUpdatedAt: prev?.updatedAt ?? null,
+      baseStockOnHand: prev?.stockOnHand,
+    });
     pushAudit("stock_adjust", `${auditReason} ${delta >= 0 ? "+" : ""}${delta} · ${prev?.name ?? productId}`, {
       productId,
       delta,
@@ -6583,17 +5567,13 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(s, [movement]),
     }));
 
-    void queueRemote(
-      "pending_stock_updates",
-      r3AdjustmentStockPayload({
-        productId,
-        delta,
-        adjustmentId: movement.id,
-        note: `writeoff_${writeReason}`,
-        baseUpdatedAt: p.updatedAt,
-        baseStockOnHand: p.stockOnHand,
-      }),
-    );
+    void queueRemote("pending_stock_updates", {
+      productId,
+      delta,
+      note: `writeoff_${writeReason}`,
+      baseUpdatedAt: p.updatedAt,
+      baseStockOnHand: p.stockOnHand,
+    });
 
     pushAudit("pharmacy_batch_writeoff", `Write-off ${p.name} −${qty} · ${writeReason} · UGX ${lossValueUgx.toLocaleString()}`, {
       writeOffId,
@@ -6660,17 +5640,13 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(s, [movement]),
     }));
 
-    void queueRemote(
-      "pending_stock_updates",
-      r3AdjustmentStockPayload({
-        productId,
-        delta,
-        adjustmentId: movement.id,
-        note: "supplier_return",
-        baseUpdatedAt: p.updatedAt,
-        baseStockOnHand: p.stockOnHand,
-      }),
-    );
+    void queueRemote("pending_stock_updates", {
+      productId,
+      delta,
+      note: "supplier_return",
+      baseUpdatedAt: p.updatedAt,
+      baseStockOnHand: p.stockOnHand,
+    });
 
     pushAudit("pharmacy_batch_return", `Supplier return ${p.name} −${writtenOff}`, {
       returnId,
@@ -7076,18 +6052,14 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(s, movements),
     }));
 
-    if (restoresStock && movements[0]) {
-      void queueRemote(
-        "pending_stock_updates",
-        r3AdjustmentStockPayload({
-          productId: product.id,
-          delta: qty,
-          adjustmentId: movements[0].id,
-          note: "controlled_return",
-          baseUpdatedAt: product.updatedAt,
-          baseStockOnHand: product.stockOnHand,
-        }),
-      );
+    if (restoresStock) {
+      void queueRemote("pending_stock_updates", {
+        productId: product.id,
+        delta: qty,
+        note: "controlled_return",
+        baseUpdatedAt: product.updatedAt,
+        baseStockOnHand: product.stockOnHand,
+      });
     }
 
     pushAudit(action, `${storeDisposition} ${product.name}`, {
@@ -7200,85 +6172,48 @@ export const usePosStore = create<PosState>((set, get) => {
     const pay = Math.min(amount, c.debtBalanceUgx);
     if (pay <= 0) return { ok: false, errorKey: "invalid" };
 
-    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addDebtPayment");
-    if (dateLock) return dateLock;
-
-    const lockKey = debtPaymentSubmitLockKey({
-      accountKey: inventoryMovementNamespace(),
+    const receiptSnap = buildReceiptBrandingSnapshot(state.preferences, receiptSnapshotPlanTier(state.preferences));
+    const payment: DebtPayment = {
+      id: crypto.randomUUID(),
       customerId,
       amountUgx: pay,
+      createdAt: new Date().toISOString(),
+      receiptHeaderSnapshot: receiptSnap.header,
+      receiptFooterSnapshot: receiptSnap.footer,
+    };
+
+    set({
+      customers: state.customers.map((x) =>
+        x.id === customerId
+          ? { ...x, debtBalanceUgx: x.debtBalanceUgx - pay, version: x.version + 1 }
+          : x,
+      ),
+      debtPayments: [payment, ...state.debtPayments],
     });
-    if (!tryBeginDebtPaymentSubmit(lockKey)) {
-      return { ok: false, errorKey: "invalid" };
+
+    const actor = state.sessionActor;
+    if (actor) {
+      set((st) => ({
+        preferences: {
+          ...st.preferences,
+          shifts: (st.preferences.shifts ?? []).map((sh) =>
+            !sh.endAt && sh.actorUserId === actor.userId
+              ? {
+                  ...sh,
+                  debtPaymentsTotalUgx: (sh.debtPaymentsTotalUgx ?? 0) + pay,
+                }
+              : sh,
+          ),
+        },
+      }));
     }
-
-    try {
-      const live = get();
-      const liveShift = requireActiveShift(live);
-      if (!liveShift.ok) {
-        return { ok: false, errorKey: liveShift.errorKey };
-      }
-      const liveCustomer = live.customers.find((x) => x.id === customerId);
-      if (!liveCustomer) {
-        return { ok: false, errorKey: "missingProduct" };
-      }
-      const livePay = Math.min(amount, liveCustomer.debtBalanceUgx);
-      if (livePay <= 0 || livePay !== pay) {
-        return { ok: false, errorKey: "invalid" };
-      }
-      const liveDateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addDebtPayment");
-      if (liveDateLock) {
-        return liveDateLock;
-      }
-
-      const receiptSnap = buildReceiptBrandingSnapshot(live.preferences, receiptSnapshotPlanTier(live.preferences));
-      const payment: DebtPayment = {
-        id: crypto.randomUUID(),
-        customerId,
-        amountUgx: livePay,
-        createdAt: new Date().toISOString(),
-        receiptHeaderSnapshot: receiptSnap.header,
-        receiptFooterSnapshot: receiptSnap.footer,
-      };
-
-      set({
-        customers: live.customers.map((x) =>
-          x.id === customerId
-            ? { ...x, debtBalanceUgx: x.debtBalanceUgx - livePay, version: x.version + 1 }
-            : x,
-        ),
-        debtPayments: [payment, ...live.debtPayments],
-      });
-
-      const actor = live.sessionActor;
-      if (actor) {
-        const writerId = shiftOwnerUserId(actor);
-        set((st) => ({
-          preferences: {
-            ...st.preferences,
-            shifts: (st.preferences.shifts ?? []).map((sh) =>
-              !sh.endAt && writerId && sh.actorUserId === writerId
-                ? {
-                    ...sh,
-                    debtPaymentsTotalUgx: (sh.debtPaymentsTotalUgx ?? 0) + livePay,
-                  }
-                : sh,
-            ),
-          },
-        }));
-      }
-      void queueRemote("customer", { kind: "debt_payment", paymentId: payment.id });
-      pushAudit("debt_payment", `Payment UGX ${livePay.toLocaleString()}`, {
-        customerId,
-        paymentId: payment.id,
-        amountUgx: livePay,
-      });
-      return { ok: true, payment };
-    } finally {
-      // R7: release on finish (success or failure). Overlapping in-flight
-      // submits still see the lock; a later legitimate payment does not.
-      releaseDebtPaymentSubmit(lockKey);
-    }
+    void queueRemote("customer", { kind: "debt_payment", paymentId: payment.id });
+    pushAudit("debt_payment", `Payment UGX ${pay.toLocaleString()}`, {
+      customerId,
+      paymentId: payment.id,
+      amountUgx: pay,
+    });
+    return { ok: true, payment };
   },
 
   addSupplier: (input) => {
@@ -7341,7 +6276,7 @@ export const usePosStore = create<PosState>((set, get) => {
 
   removeSupplier: (supplierId) => {
     const actor = get().sessionActor;
-    if (!actor || authOperatorRole(actor) !== "owner") {
+    if (!actor || actor.role !== "owner") {
       pushAudit("auth_forbidden", "Denied removeSupplier (owner only)", {
         permission: "suppliers.manage",
         action: "removeSupplier",
@@ -7400,72 +6335,32 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!sup) return { ok: false, errorKey: "missingSupplier" };
     const pay = Math.min(Math.floor(Math.max(0, amountUgx)), Math.max(0, sup.balanceOwedUgx));
     if (pay <= 0) return { ok: false, errorKey: "invalidMoney" };
-
-    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addSupplierPayment");
-    if (dateLock) return dateLock;
-
-    const lockKey = supplierPaymentSubmitLockKey({
-      accountKey: inventoryMovementNamespace(),
+    const actor = state.sessionActor;
+    const payment: SupplierPayment = {
+      id: crypto.randomUUID(),
       supplierId,
       amountUgx: pay,
+      createdByUserId: actor?.userId,
+      createdByName: actor?.displayName,
+      createdAt: new Date().toISOString(),
+      pendingSync: true,
+    };
+    set({
+      suppliers: state.suppliers.map((s) =>
+        s.id === supplierId
+          ? { ...s, balanceOwedUgx: Math.max(0, s.balanceOwedUgx - pay), version: s.version + 1 }
+          : s,
+      ),
+      supplierPayments: [payment, ...state.supplierPayments],
     });
-    if (!tryBeginSupplierPaymentSubmit(lockKey)) {
-      return { ok: false, errorKey: "invalid" };
-    }
-
-    try {
-      const live = get();
-      const liveSup = live.suppliers.find((x) => x.id === supplierId);
-      if (!liveSup) {
-        releaseSupplierPaymentSubmit(lockKey);
-        return { ok: false, errorKey: "missingSupplier" };
-      }
-      const livePay = Math.min(Math.floor(Math.max(0, amountUgx)), Math.max(0, liveSup.balanceOwedUgx));
-      if (livePay <= 0 || livePay !== pay) {
-        releaseSupplierPaymentSubmit(lockKey);
-        return { ok: false, errorKey: "invalidMoney" };
-      }
-      const liveDateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addSupplierPayment");
-      if (liveDateLock) {
-        releaseSupplierPaymentSubmit(lockKey);
-        return liveDateLock;
-      }
-
-      const actor = live.sessionActor;
-      const payment: SupplierPayment = {
-        id: crypto.randomUUID(),
-        supplierId,
-        amountUgx: livePay,
-        createdByUserId: actor?.userId,
-        createdByName: actor?.displayName,
-        createdAt: new Date().toISOString(),
-        pendingSync: true,
-      };
-      set({
-        suppliers: live.suppliers.map((s) =>
-          s.id === supplierId
-            ? { ...s, balanceOwedUgx: Math.max(0, s.balanceOwedUgx - livePay), version: s.version + 1 }
-            : s,
-        ),
-        supplierPayments: [payment, ...live.supplierPayments],
-      });
-      void queueRemote("pending_expenses", {
-        kind: "supplier_payment",
-        paymentId: payment.id,
-        supplierId,
-        amountUgx: livePay,
-      });
-      pushAudit("supplier_payment", `Paid supplier UGX ${livePay.toLocaleString()}`, {
-        supplierId,
-        supplierName: liveSup.name,
-        paymentId: payment.id,
-        amountUgx: livePay,
-      });
-      return { ok: true };
-    } catch (err) {
-      releaseSupplierPaymentSubmit(lockKey);
-      throw err;
-    }
+    void queueRemote("pending_expenses", { kind: "supplier_payment", paymentId: payment.id, supplierId, amountUgx: pay });
+    pushAudit("supplier_payment", `Paid supplier UGX ${pay.toLocaleString()}`, {
+      supplierId,
+      supplierName: sup.name,
+      paymentId: payment.id,
+      amountUgx: pay,
+    });
+    return { ok: true };
   },
 
   voidPurchase: (purchaseId, reason) => {
@@ -7546,28 +6441,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
 
     void queueRemote("pending_purchases", { purchaseId, void: true });
-    // PURCHASE-VOID-STOCK-1.0 — durable stock identity = purchase.id (one void per purchase).
-    for (const [productId, remove] of stockCheck.deltas) {
-      const p = products.find((x) => x.id === productId);
-      if (!p || remove <= 0) continue;
-      void queueRemote(
-        "pending_stock_updates",
-        r3PurchaseVoidStockPayload({
-          productId,
-          delta: -remove,
-          purchaseId,
-          baseUpdatedAt: p.updatedAt,
-          baseStockOnHand: p.stockOnHand,
-        }),
-      );
-    }
-    // Bundle route retained for in-flight / recovery (purchaseId is the durable void id).
-    void queueRemote("pending_stock_updates", {
-      kind: "purchase_void",
-      purchaseId,
-      referenceType: "purchase_void",
-      referenceId: purchaseId,
-    });
+    void queueRemote("pending_stock_updates", { kind: "purchase_void", purchaseId });
     if (!walkIn) void queueRemote("supplier", { id: purchase.supplierId });
     pushAudit("purchase_void", `Voided purchase UGX ${purchase.totalCostUgx.toLocaleString()} · ${purchase.supplierName}`, {
       purchaseId,
@@ -7729,7 +6603,6 @@ export const usePosStore = create<PosState>((set, get) => {
       amountPaidUgx,
       balanceDeltaUgx,
       notes: (input.notes ?? "").trim(),
-      invoiceNumber: (input.invoiceNumber ?? "").trim() || undefined,
       createdAt,
       pendingSync: true,
     };
@@ -7750,16 +6623,13 @@ export const usePosStore = create<PosState>((set, get) => {
 
     set({
       products,
-      purchases: [normalizePurchase(purchase), ...state.purchases],
+      purchases: [purchase, ...state.purchases],
       suppliers: suppliers.map(normalizeSupplier),
       ...movementMergePatch(state, movements),
     });
 
-    // Single authoritative sync path — syncPurchaseBundle pushes purchase + stock.
-    // Do not also enqueue pending_stock_updates(purchase): dual delivery double-counted
-    // stock via non-idempotent deltas (Restock Double-Count Fix R1). Legacy dual ops
-    // already in the queue remain safe via purchase-note idempotency + line markers.
     void queueRemote("pending_purchases", { purchaseId: purchase.id });
+    void queueRemote("pending_stock_updates", { kind: "purchase", purchaseId: purchase.id });
     if (!walkIn) void queueRemote("supplier", { id: supplierId });
     pushAudit("purchase_saved", `Restock UGX ${totalCostUgx.toLocaleString()} · ${supplierName}`, {
       purchaseId: purchase.id,
@@ -7906,11 +6776,11 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    if (!canRecordCashExpenses(authOperatorRole(actor), state.preferences, authOperatorPermissions(actor))) {
+    if (!canRecordCashExpenses(actor.role, state.preferences, actor.permissions)) {
       pushAudit("auth_forbidden", "Denied addCashExpense", {
         permission: "expenses.record",
         action: "addCashExpense",
-        attemptedRole: authOperatorRole(actor),
+        attemptedRole: actor.role,
       });
       return { ok: false, errorKey: "forbidden" };
     }
@@ -7921,7 +6791,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!category) return { ok: false, errorKey: "cashExpenseCategoryRequired" };
     const now = new Date().toISOString();
     const paidOn = dateKeyKampala(new Date());
-    const approvalStatus = resolveNewExpenseApprovalStatus(authOperatorRole(actor), state.preferences);
+    const approvalStatus = resolveNewExpenseApprovalStatus(actor.role, state.preferences);
     const row: CashExpense = {
       id: crypto.randomUUID(),
       category,
@@ -7929,7 +6799,6 @@ export const usePosStore = create<PosState>((set, get) => {
       description: (input.description ?? "").trim(),
       paidOn,
       createdAt: now,
-      updatedAt: now,
       createdByUserId: actor.userId,
       createdByLabel: actor.displayName,
       deviceId: getOrCreateDeviceId(),
@@ -7954,8 +6823,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     void queueRemote("pending_cash_expenses", { expenseId: row.id });
     if (hasSupabaseConfig) {
-      const stampedShopId = getActiveShopId();
-      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(row.id, stampedShopId));
+      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(row.id));
     }
     return { ok: true, expenseId: row.id };
   },
@@ -8001,10 +6869,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     void queueRemote("pending_cash_drawer_adjustments", { adjustmentId: row.id });
     if (hasSupabaseConfig) {
-      const stampedShopId = getActiveShopId();
-      void import("../offline/cloudSync").then((m) =>
-        m.syncCashDrawerAdjustmentImmediately(row.id, stampedShopId),
-      );
+      void import("../offline/cloudSync").then((m) => m.syncCashDrawerAdjustmentImmediately(row.id));
     }
     return { ok: true, adjustmentId: row.id };
   },
@@ -8019,10 +6884,6 @@ export const usePosStore = create<PosState>((set, get) => {
     const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
     if (!row) return { ok: false, errorKey: "invalid" };
     if ((row.approvalStatus ?? "approved") !== "pending") return { ok: false, errorKey: "invalid" };
-    if (cashExpenseTransitionWouldAffectDrawer(row, "approved")) {
-      const dateLock = denyIfBusinessDateLocked(row.paidOn, "approveCashExpense");
-      if (dateLock) return dateLock;
-    }
     const now = new Date().toISOString();
     set((s) => ({
       cashExpenses: s.cashExpenses.map((e) =>
@@ -8033,7 +6894,6 @@ export const usePosStore = create<PosState>((set, get) => {
               approvedByUserId: actor.userId,
               approvedByLabel: actor.displayName ?? null,
               approvedAt: now,
-              updatedAt: now,
               pendingSync: true,
             }
           : e,
@@ -8047,10 +6907,6 @@ export const usePosStore = create<PosState>((set, get) => {
       approvedByLabel: actor.displayName,
     });
     void queueRemote("pending_cash_expenses", { expenseId: id });
-    if (hasSupabaseConfig) {
-      const stampedShopId = getActiveShopId();
-      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(id, stampedShopId));
-    }
     return { ok: true };
   },
 
@@ -8064,10 +6920,6 @@ export const usePosStore = create<PosState>((set, get) => {
     const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
     if (!row) return { ok: false, errorKey: "invalid" };
     if ((row.approvalStatus ?? "approved") !== "pending") return { ok: false, errorKey: "invalid" };
-    if (cashExpenseTransitionWouldAffectDrawer(row, "rejected")) {
-      const dateLock = denyIfBusinessDateLocked(row.paidOn, "rejectCashExpense");
-      if (dateLock) return dateLock;
-    }
     const now = new Date().toISOString();
     set((s) => ({
       cashExpenses: s.cashExpenses.map((e) =>
@@ -8078,7 +6930,6 @@ export const usePosStore = create<PosState>((set, get) => {
               rejectedByUserId: actor.userId,
               rejectedByLabel: actor.displayName ?? null,
               rejectedAt: now,
-              updatedAt: now,
               pendingSync: true,
             }
           : e,
@@ -8092,10 +6943,6 @@ export const usePosStore = create<PosState>((set, get) => {
       rejectedByLabel: actor.displayName,
     });
     void queueRemote("pending_cash_expenses", { expenseId: id });
-    if (hasSupabaseConfig) {
-      const stampedShopId = getActiveShopId();
-      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(id, stampedShopId));
-    }
     return { ok: true };
   },
 
@@ -8110,14 +6957,10 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!actor) return { ok: false, errorKey: "noSelection" };
     const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
     if (!row) return { ok: false, errorKey: "invalid" };
-    if (cashExpenseTransitionWouldAffectDrawer(row, "voided")) {
-      const dateLock = denyIfBusinessDateLocked(row.paidOn, "voidCashExpense");
-      if (dateLock) return dateLock;
-    }
     const now = new Date().toISOString();
     set((s) => ({
       cashExpenses: s.cashExpenses.map((e) =>
-        e.id === id ? { ...e, deletedAt: now, updatedAt: now, pendingSync: true } : e,
+        e.id === id ? { ...e, deletedAt: now, pendingSync: true } : e,
       ),
     }));
     pushAudit("cash_expense_voided", `Removed ${row.category} UGX ${row.amountUgx.toLocaleString()}`, {
@@ -8128,10 +6971,6 @@ export const usePosStore = create<PosState>((set, get) => {
       reason: auditReason,
     });
     void queueRemote("pending_cash_expenses", { expenseId: id, void: true });
-    if (hasSupabaseConfig) {
-      const stampedShopId = getActiveShopId();
-      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(id, stampedShopId));
-    }
     return { ok: true };
   },
 
@@ -8622,7 +7461,6 @@ export const usePosStore = create<PosState>((set, get) => {
       pushAudit,
       queueRemote,
       denyUnlessEffectivePermission,
-      denyIfBusinessDateLocked,
     });
     void _omit;
     return dayDrawerActions;
@@ -8630,7 +7468,7 @@ export const usePosStore = create<PosState>((set, get) => {
 };
 });
 
-export function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
+function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
   return (
     a.products === b.products &&
     a.customers === b.customers &&
@@ -8654,10 +7492,7 @@ export function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
     a.archivedAuditLogs === b.archivedAuditLogs &&
     a.archivedDayCloses === b.archivedDayCloses &&
     a.archivedVoidRecords === b.archivedVoidRecords &&
-    a.archivedReturnRecords === b.archivedReturnRecords &&
-    a.pharmacyDoctors === b.pharmacyDoctors &&
-    a.pharmacyPrescriptions === b.pharmacyPrescriptions &&
-    a.pharmacyControlledRegister === b.pharmacyControlledRegister
+    a.archivedReturnRecords === b.archivedReturnRecords
   );
 }
 
@@ -8667,8 +7502,7 @@ usePosStore.subscribe((state, prev) => {
   schedulePersist(prev ?? state, state);
 });
 
-/** Backup/legacy-snapshot hydrate whitelist. Extra preference keys are dropped. */
-export function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreferences }>): ShopPreferences {
+function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreferences }>): ShopPreferences {
   const base = createDefaultPreferences();
   const p = raw.preferences;
   if (!p) {
@@ -8763,15 +7597,6 @@ export function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPre
           ? null
           : String(p.shopAddressLine),
     shopCurrency: normalizeShopCurrency(p.shopCurrency ?? base.shopCurrency),
-    staffCanRecordCashExpenses:
-      typeof p.staffCanRecordCashExpenses === "boolean"
-        ? p.staffCanRecordCashExpenses
-        : (base.staffCanRecordCashExpenses ?? false),
-    requireCashierExpenseApproval:
-      typeof p.requireCashierExpenseApproval === "boolean"
-        ? p.requireCashierExpenseApproval
-        : (base.requireCashierExpenseApproval ?? false),
-    shopPolicyRevisions: normalizeShopPolicyRevisions(p.shopPolicyRevisions) ?? base.shopPolicyRevisions,
     staffAccounts: normalizeStaffAccounts(p.staffAccounts, normalizeCustomStaffRoles(p.customStaffRoles ?? base.customStaffRoles)),
     customStaffRoles: normalizeCustomStaffRoles(p.customStaffRoles ?? base.customStaffRoles),
     activeStaffId:
@@ -8818,58 +7643,8 @@ export function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPre
     posPinnedShelfKeys: Array.isArray(p.posPinnedShelfKeys)
       ? (p.posPinnedShelfKeys as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 40)
       : base.posPinnedShelfKeys ?? [],
-    posPinnedShelfKeysUpdatedAt:
-      typeof p.posPinnedShelfKeysUpdatedAt === "string" && p.posPinnedShelfKeysUpdatedAt.trim()
-        ? p.posPinnedShelfKeysUpdatedAt
-        : base.posPinnedShelfKeysUpdatedAt,
-    posPinnedShelfKeyRevisions:
-      p.posPinnedShelfKeyRevisions && typeof p.posPinnedShelfKeyRevisions === "object"
-        ? Object.fromEntries(
-            Object.entries(p.posPinnedShelfKeyRevisions)
-              .map(([key, rev]) => {
-                if (!rev || typeof rev !== "object") return null;
-                const updatedAt = String((rev as { updatedAt?: unknown }).updatedAt ?? "").trim();
-                if (!key.trim() || !updatedAt) return null;
-                return [key, { pinned: (rev as { pinned?: unknown }).pinned !== false, updatedAt }] as const;
-              })
-              .filter((row): row is readonly [string, { pinned: boolean; updatedAt: string }] => row != null),
-          )
-        : base.posPinnedShelfKeyRevisions,
     posShelfLayout:
       p.posShelfLayout === undefined ? (base.posShelfLayout ?? {}) : normalizePosShelfLayoutFromStore(p.posShelfLayout),
-    catalogHierarchyEnabled: p.catalogHierarchyEnabled === true,
-    catalogHierarchyEnabledUpdatedAt:
-      typeof p.catalogHierarchyEnabledUpdatedAt === "string" && p.catalogHierarchyEnabledUpdatedAt.trim()
-        ? p.catalogHierarchyEnabledUpdatedAt
-        : base.catalogHierarchyEnabledUpdatedAt,
-    posCatalogNodes:
-      p.posCatalogNodes === undefined
-        ? (base.posCatalogNodes ?? [])
-        : normalizeCatalogNodes(p.posCatalogNodes, String(p.wakaShopId ?? base.wakaShopId ?? "local")),
-    posCatalogTombstones: Array.isArray(p.posCatalogTombstones)
-      ? p.posCatalogTombstones
-          .map((row) => {
-            if (!row || typeof row !== "object") return null;
-            const id = String((row as { id?: unknown }).id ?? "").trim();
-            const deletedAt = String((row as { deletedAt?: unknown }).deletedAt ?? "").trim();
-            if (!id || !deletedAt) return null;
-            return { id, deletedAt };
-          })
-          .filter((row): row is { id: string; deletedAt: string } => row != null)
-          .slice(0, 400)
-      : base.posCatalogTombstones,
-    posShelfLayoutTombstones: Array.isArray(p.posShelfLayoutTombstones)
-      ? p.posShelfLayoutTombstones
-          .map((row) => {
-            if (!row || typeof row !== "object") return null;
-            const shelfKey = String((row as { shelfKey?: unknown }).shelfKey ?? "").trim();
-            const deletedAt = String((row as { deletedAt?: unknown }).deletedAt ?? "").trim();
-            if (!shelfKey || !deletedAt) return null;
-            return { shelfKey, deletedAt };
-          })
-          .filter((row): row is { shelfKey: string; deletedAt: string } => row != null)
-          .slice(0, 400)
-      : base.posShelfLayoutTombstones,
     posQuickSellProductIds: Array.isArray(p.posQuickSellProductIds)
       ? (p.posQuickSellProductIds as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 24)
       : base.posQuickSellProductIds ?? [],
@@ -8920,22 +7695,13 @@ export function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPre
     lastArchiveRunAt:
       p.lastArchiveRunAt === undefined ? (base.lastArchiveRunAt ?? null) : p.lastArchiveRunAt === null ? null : String(p.lastArchiveRunAt),
     discountControlMode:
-      p.discountControlMode === "manager_approval" ||
-      p.discountControlMode === "max_percent" ||
-      p.discountControlMode === "unrestricted"
+      p.discountControlMode === "manager_approval" || p.discountControlMode === "max_percent"
         ? p.discountControlMode
         : (base.discountControlMode ?? "unrestricted"),
     discountMaxPercentThreshold:
       typeof p.discountMaxPercentThreshold === "number" && p.discountMaxPercentThreshold >= 0 && p.discountMaxPercentThreshold <= 100
         ? p.discountMaxPercentThreshold
         : (base.discountMaxPercentThreshold ?? 10),
-    registerMode: p.registerMode === "single" || p.registerMode === "multi" ? p.registerMode : base.registerMode,
-    primaryDeviceFingerprint:
-      p.primaryDeviceFingerprint === undefined
-        ? (base.primaryDeviceFingerprint ?? null)
-        : p.primaryDeviceFingerprint === null || String(p.primaryDeviceFingerprint).trim() === ""
-          ? null
-          : String(p.primaryDeviceFingerprint).trim(),
     cashDrawerFormulaVersion:
       p.cashDrawerFormulaVersion === "v2" ? "v2" : p.cashDrawerFormulaVersion === "v1" ? "v1" : (base.cashDrawerFormulaVersion ?? undefined),
     ownerDayOpenCorrectionAfterSales:
@@ -8983,32 +7749,12 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
   const draft = await readPersistedDraft();
   if (!draft) return;
   const products = usePosStore.getState().products;
-  const resolved = resolveDraftFromPersisted(draft, products);
-  const salesReady = usePosStore.getState().hydrationStage === "complete";
-  const activePendingSaleId = resolvePersistedDraftSaleBinding(
-    usePosStore.getState().sales,
-    resolved.activePendingSaleId,
-    salesReady,
-  );
-  if (
-    resolved.draftLines.length > 0 ||
-    resolved.draftInput ||
-    (draft.draftCartDiscountUgx ?? 0) > 0 ||
-    activePendingSaleId ||
-    resolved.draftSaleCustomerId ||
-    resolved.draftSaleCustomerName ||
-    resolved.draftSaleCustomerPhone ||
-    resolved.draftPaymentMethod !== "cash"
-  ) {
+  const { draftLines, draftInput } = resolveDraftFromPersisted(draft, products);
+  if (draftLines.length > 0 || draftInput || (draft.draftCartDiscountUgx ?? 0) > 0) {
     usePosStore.setState({
-      draftLines: resolved.draftLines,
-      draftInput: resolved.draftInput,
+      draftLines,
+      draftInput,
       draftCartDiscountUgx: Math.max(0, Math.floor(draft.draftCartDiscountUgx ?? 0)),
-      activePendingSaleId,
-      draftSaleCustomerId: resolved.draftSaleCustomerId,
-      draftSaleCustomerName: resolved.draftSaleCustomerName,
-      draftSaleCustomerPhone: resolved.draftSaleCustomerPhone,
-      draftPaymentMethod: resolved.draftPaymentMethod,
     });
   }
 }
@@ -9027,9 +7773,7 @@ async function hydrateSalesBatched(
   opts?: { batchSize?: number; sessionId?: number; onProgress?: (percent: number) => void },
 ): Promise<void> {
   if (raw.length === 0) {
-    runWithPersistSuspendedSync(() => {
-      usePosStore.setState({ sales: [] });
-    });
+    usePosStore.setState({ sales: [] });
     opts?.onProgress?.(100);
     return;
   }
@@ -9044,9 +7788,7 @@ async function hydrateSalesBatched(
       await yieldUiTick();
     }
   }
-  runWithPersistSuspendedSync(() => {
-    usePosStore.setState({ sales: normalized });
-  });
+  usePosStore.setState({ sales: normalized });
 }
 
 async function hydrateArchivedSalesBatched(
@@ -9207,7 +7949,6 @@ export async function applyRestoredSnapshotFromBackup(
       purchases: (restoredSnap.purchases ?? []).map(normalizePurchase),
       supplierPayments: (restoredSnap.supplierPayments ?? []).map(normalizeSupplierPayment),
       stockMovements: (restoredSnap.stockMovements ?? []).map(normalizeStockMovement),
-      archivedStockMovements: restoredSnap.archivedStockMovements ?? [],
       voidRecords: restoredSnap.voidRecords ?? [],
       returnRecords: restoredSnap.returnRecords ?? [],
       cashExpenses: (restoredSnap.cashExpenses ?? []).map(normalizeCashExpense),
@@ -9219,9 +7960,6 @@ export async function applyRestoredSnapshotFromBackup(
       archivedDayCloses: restoredSnap.archivedDayCloses ?? [],
       archivedVoidRecords: restoredSnap.archivedVoidRecords ?? [],
       archivedReturnRecords: restoredSnap.archivedReturnRecords ?? [],
-      pharmacyPrescriptions: restoredSnap.pharmacyPrescriptions ?? [],
-      pharmacyDoctors: restoredSnap.pharmacyDoctors ?? [],
-      pharmacyControlledRegister: restoredSnap.pharmacyControlledRegister ?? [],
     });
     reportRestoreProgress(opts?.onProgress, 8, 12, 100);
     await yieldUiTick();
@@ -9262,9 +8000,7 @@ export async function applyRestoredSnapshotFromBackup(
     });
 
     void import("../lib/shopRecoveryOrchestration").then(({ scheduleShopRecovery }) => {
-      void import("../lib/monitoring").then(({ ignoreReportedSyncFailure }) => {
-        void scheduleShopRecovery("app_launch").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
-      });
+      void scheduleShopRecovery("app_launch");
     });
   } finally {
     release();
@@ -9272,9 +8008,6 @@ export async function applyRestoredSnapshotFromBackup(
 }
 
 function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): void {
-  const allSalesPreview = (snap.sales ?? []) as Sale[];
-  const tailPreview = allSalesPreview.slice(INITIAL_SALES_LOAD_COUNT);
-  markSalesHistoryHydrationStarted(Math.max(tailPreview.length, 1));
   const run = () => {
     void (async () => {
       if (!usePosStore.getState()._hydrated) return;
@@ -9282,8 +8015,7 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
       const head = allSales.slice(0, INITIAL_SALES_LOAD_COUNT);
       const tail = allSales.slice(INITIAL_SALES_LOAD_COUNT);
       await hydrateSalesBatched(head);
-      runWithPersistSuspendedSync(() => {
-        usePosStore.getState().hydrateRemainder({
+      usePosStore.getState().hydrateRemainder({
         debtPayments: snap.debtPayments ?? [],
         dayCloses: snap.dayCloses ?? [],
         auditLogs: (snap as { auditLogs?: AuditLogEntry[] }).auditLogs ?? [],
@@ -9291,7 +8023,6 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         purchases: (snap as { purchases?: Purchase[] }).purchases ?? [],
         supplierPayments: (snap as { supplierPayments?: SupplierPayment[] }).supplierPayments ?? [],
         stockMovements: (snap as { stockMovements?: StockMovement[] }).stockMovements ?? [],
-        archivedStockMovements: (snap as { archivedStockMovements?: StockMovement[] }).archivedStockMovements ?? [],
         voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
         returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
         cashExpenses: ((snap as { cashExpenses?: CashExpense[] }).cashExpenses ?? []).map(normalizeCashExpense),
@@ -9307,15 +8038,9 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         archivedDayCloses: snap.archivedDayCloses ?? [],
         archivedVoidRecords: snap.archivedVoidRecords ?? [],
         archivedReturnRecords: snap.archivedReturnRecords ?? [],
-        pharmacyPrescriptions: snap.pharmacyPrescriptions ?? [],
-        pharmacyDoctors: snap.pharmacyDoctors ?? [],
-        pharmacyControlledRegister: snap.pharmacyControlledRegister ?? [],
-        });
       });
       if (tail.length > 0) {
         scheduleBackgroundSalesHydrate(tail);
-      } else {
-        finishSalesHistoryHydrationIfCaughtUp([]);
       }
     })();
   };
@@ -9326,110 +8051,62 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
   }
 }
 
-function markSalesHistoryHydrationStarted(total: number, loaded = 0): void {
-  if (total <= 0) return;
-  const existing = usePosStore.getState().salesHistoryHydration;
-  if (existing?.active && (existing.total ?? 0) >= total) return;
-  usePosStore.setState({
-    salesHistoryHydration: {
-      active: true,
-      loaded: existing?.loaded ?? loaded,
-      total: Math.max(total, existing?.total ?? 0),
-    },
-  });
-}
-
-function finishSalesHistoryHydrationIfCaughtUp(expectedIds: string[]): void {
-  if (expectedIds.length === 0) {
-    usePosStore.setState({ salesHistoryHydration: null });
-    return;
-  }
-  const have = new Set(usePosStore.getState().sales.map((s) => s.id));
-  const missing = expectedIds.filter((id) => !have.has(id));
-  if (missing.length === 0) {
-    usePosStore.setState({ salesHistoryHydration: null });
-    return;
-  }
-  usePosStore.setState({
-    salesHistoryHydration: {
-      active: true,
-      loaded: expectedIds.length - missing.length,
-      total: expectedIds.length,
-    },
-  });
-}
-
 /** Load remaining sales from entity store in background pages. */
 function scheduleBackgroundSalesHydrateByIds(ids: string[]): void {
-  if (ids.length === 0) return;
-  markSalesHistoryHydrationStarted(ids.length);
   void (async () => {
-    try {
-      const { getEntitiesByIds } = await import("../offline/entityStore");
-      let loaded = 0;
-      for (let i = 0; i < ids.length; i += SALES_PAGE_LOAD_SIZE) {
-        await yieldUiTick();
-        const batch = (await getEntitiesByIds<Sale>("sale", ids.slice(i, i + SALES_PAGE_LOAD_SIZE))).map(normalizeSale);
-        loaded += batch.length;
-        runWithPersistSuspendedSync(() => {
-          usePosStore.setState((s) => {
-            const have = new Set(s.sales.map((x) => x.id));
-            const merged = [...s.sales];
-            for (const row of batch) {
-              if (!have.has(row.id)) merged.push(row);
-            }
-            merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-            return {
-              sales: merged,
-              salesHistoryHydration: { active: true, loaded, total: ids.length },
-            };
-          });
-        });
-      }
-      finishSalesHistoryHydrationIfCaughtUp(ids);
-      const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
-      usePosStore.setState({ todayKpiSnapshot: snapshot });
-      void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
-    } catch {
-      finishSalesHistoryHydrationIfCaughtUp(ids);
+    const { getEntitiesByIds } = await import("../offline/entityStore");
+    usePosStore.setState({ salesHistoryHydration: { active: true, loaded: 0, total: ids.length } });
+    let loaded = 0;
+    for (let i = 0; i < ids.length; i += SALES_PAGE_LOAD_SIZE) {
+      await yieldUiTick();
+      const batch = (await getEntitiesByIds<Sale>("sale", ids.slice(i, i + SALES_PAGE_LOAD_SIZE))).map(normalizeSale);
+      loaded += batch.length;
+      usePosStore.setState((s) => {
+        const have = new Set(s.sales.map((x) => x.id));
+        const merged = [...s.sales];
+        for (const row of batch) {
+          if (!have.has(row.id)) merged.push(row);
+        }
+        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+        return {
+          sales: merged,
+          salesHistoryHydration: { active: true, loaded, total: ids.length },
+        };
+      });
     }
+    usePosStore.setState({ salesHistoryHydration: null });
+    const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
+    usePosStore.setState({ todayKpiSnapshot: snapshot });
+    void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
   })();
 }
 
 /** Load remaining sales in background without blocking checkout. */
 function scheduleBackgroundSalesHydrate(sales: Sale[]): void {
-  if (sales.length === 0) return;
-  markSalesHistoryHydrationStarted(sales.length);
-  const expectedIds = sales.map((row) => row.id);
   void (async () => {
-    try {
-      let loaded = 0;
-      for (let i = 0; i < sales.length; i += SALES_PAGE_LOAD_SIZE) {
-        await yieldUiTick();
-        const chunk = sales.slice(i, i + SALES_PAGE_LOAD_SIZE);
-        loaded += chunk.length;
-        runWithPersistSuspendedSync(() => {
-          usePosStore.setState((s) => {
-            const have = new Set(s.sales.map((x) => x.id));
-            const merged = [...s.sales];
-            for (const row of chunk) {
-              if (!have.has(row.id)) merged.push(normalizeSale(row));
-            }
-            merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-            return {
-              sales: merged,
-              salesHistoryHydration: { active: true, loaded, total: sales.length },
-            };
-          });
-        });
-      }
-      finishSalesHistoryHydrationIfCaughtUp(expectedIds);
-      const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
-      usePosStore.setState({ todayKpiSnapshot: snapshot });
-      void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
-    } catch {
-      finishSalesHistoryHydrationIfCaughtUp(expectedIds);
+    usePosStore.setState({ salesHistoryHydration: { active: true, loaded: 0, total: sales.length } });
+    let loaded = 0;
+    for (let i = 0; i < sales.length; i += SALES_PAGE_LOAD_SIZE) {
+      await yieldUiTick();
+      const chunk = sales.slice(i, i + SALES_PAGE_LOAD_SIZE);
+      loaded += chunk.length;
+      usePosStore.setState((s) => {
+        const have = new Set(s.sales.map((x) => x.id));
+        const merged = [...s.sales];
+        for (const row of chunk) {
+          if (!have.has(row.id)) merged.push(normalizeSale(row));
+        }
+        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+        return {
+          sales: merged,
+          salesHistoryHydration: { active: true, loaded, total: sales.length },
+        };
+      });
     }
+    usePosStore.setState({ salesHistoryHydration: null });
+    const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
+    usePosStore.setState({ todayKpiSnapshot: snapshot });
+    void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
   })();
 }
 
@@ -9451,33 +8128,18 @@ export async function ensureAllActiveSalesLoaded(): Promise<void> {
   const have = new Set(state.sales.map((s) => s.id));
   const missingIds = manifest.salesOrder.filter((id) => !have.has(id));
   if (missingIds.length === 0) return;
-  markSalesHistoryHydrationStarted(manifest.salesOrder.length, have.size);
-  try {
-    for (let i = 0; i < missingIds.length; i += SALES_PAGE_LOAD_SIZE) {
-      await yieldUiTick();
-      const batch = await getEntitiesByIds<Sale>("sale", missingIds.slice(i, i + SALES_PAGE_LOAD_SIZE));
-      runWithPersistSuspendedSync(() => {
-      usePosStore.setState((s) => {
-        const ids = new Set(s.sales.map((x) => x.id));
-        const merged = [...s.sales];
-        for (const row of batch) {
-          if (!ids.has(row.id)) merged.push(normalizeSale(row));
-        }
-        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-        return {
-          sales: merged,
-          salesHistoryHydration: {
-            active: true,
-            loaded: s.salesHistoryHydration?.loaded ?? have.size + i,
-            total: manifest.salesOrder.length,
-          },
-        };
-      });
-      });
-    }
-    finishSalesHistoryHydrationIfCaughtUp(manifest.salesOrder);
-  } catch {
-    finishSalesHistoryHydrationIfCaughtUp(manifest.salesOrder);
+  for (let i = 0; i < missingIds.length; i += SALES_PAGE_LOAD_SIZE) {
+    await yieldUiTick();
+    const batch = await getEntitiesByIds<Sale>("sale", missingIds.slice(i, i + SALES_PAGE_LOAD_SIZE));
+    usePosStore.setState((s) => {
+      const ids = new Set(s.sales.map((x) => x.id));
+      const merged = [...s.sales];
+      for (const row of batch) {
+        if (!ids.has(row.id)) merged.push(normalizeSale(row));
+      }
+      merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+      return { sales: merged };
+    });
   }
 }
 
@@ -9564,9 +8226,8 @@ async function runPostBootstrapTasks(): Promise<void> {
 
   const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
   const { scheduleShopRecovery } = await import("../lib/shopRecoveryOrchestration");
-  const { ignoreReportedSyncFailure } = await import("../lib/monitoring");
-  void hydrateLocalShopProfileFromCloud().catch(ignoreReportedSyncFailure("shop_profile_hydrate_failed"));
-  void scheduleShopRecovery("app_launch").catch(ignoreReportedSyncFailure("shop_recovery_schedule_failed"));
+  void hydrateLocalShopProfileFromCloud().catch(() => undefined);
+  void scheduleShopRecovery("app_launch").catch(() => undefined);
   const { isCloudRecoveryLockActive } = await import("../lib/cloudRecoverySession");
   if (isCloudRecoveryLockActive()) return;
   const { shouldRequireRecoveryLock } = await import("../lib/postAuthCloudHydrate");
@@ -9587,12 +8248,10 @@ async function runPostBootstrapTasks(): Promise<void> {
 
 function hydrateEssentialsFromSnap(snap: Partial<PersistedSnapshot>): void {
   const preferences = applyBootstrapPreferences(snap);
-  runWithPersistSuspendedSync(() => {
-    usePosStore.getState().hydrateEssentials({
-      products: (snap.products ?? []) as Product[],
-      customers: (snap.customers ?? []) as Customer[],
-      preferences,
-    });
+  usePosStore.getState().hydrateEssentials({
+    products: (snap.products ?? []) as Product[],
+    customers: (snap.customers ?? []) as Customer[],
+    preferences,
   });
 }
 
@@ -9676,7 +8335,6 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     purchasesRaw,
     supplierPaymentsRaw,
     stockMovementsRaw,
-    archivedStockMovementsRaw,
     voidRecordsRaw,
     returnRecordsRaw,
     cashExpensesRaw,
@@ -9687,9 +8345,6 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     archivedDayClosesRaw,
     archivedVoidRecordsRaw,
     archivedReturnRecordsRaw,
-    pharmacyPrescriptionsRaw,
-    pharmacyDoctorsRaw,
-    pharmacyControlledRegisterRaw,
   ] = await Promise.all([
     getEntitiesByBucket<DebtPayment>("debtPayment"),
     getEntitiesByBucket<DayCloseSummary>("dayClose"),
@@ -9698,7 +8353,6 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     getEntitiesByBucket<Purchase>("purchase"),
     getEntitiesByBucket<SupplierPayment>("supplierPayment"),
     getEntitiesByBucket<StockMovement>("stockMovement"),
-    getEntitiesByBucket<StockMovement>("archivedStockMovement"),
     getEntitiesByBucket<VoidRecord>("voidRecord"),
     getEntitiesByBucket<ReturnRecord>("returnRecord"),
     getEntitiesByBucket<CashExpense>("cashExpense"),
@@ -9709,13 +8363,9 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     getEntitiesByBucket<DayCloseSummary>("archivedDayClose"),
     getEntitiesByBucket<VoidRecord>("archivedVoidRecord"),
     getEntitiesByBucket<ReturnRecord>("archivedReturnRecord"),
-    getEntitiesByBucket<import("../types").PharmacyPrescription>("pharmacyPrescription"),
-    getEntitiesByBucket<import("../types").PharmacyDoctor>("pharmacyDoctor"),
-    getEntitiesByBucket<import("../types").PharmacyControlledRegisterEntry>("pharmacyControlledRegister"),
   ]);
   const archivedSalesRaw = (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale);
-  runWithPersistSuspendedSync(() => {
-    usePosStore.getState().hydrateRemainder({
+  usePosStore.getState().hydrateRemainder({
     debtPayments: debtPaymentsRaw,
     dayCloses: dayClosesRaw,
     auditLogs: auditLogsRaw,
@@ -9723,7 +8373,6 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     purchases: purchasesRaw.map(normalizePurchase),
     supplierPayments: supplierPaymentsRaw.map(normalizeSupplierPayment),
     stockMovements: stockMovementsRaw.map(normalizeStockMovement),
-    archivedStockMovements: archivedStockMovementsRaw,
     voidRecords: voidRecordsRaw,
     returnRecords: returnRecordsRaw,
     cashExpenses: cashExpensesRaw.map(normalizeCashExpense),
@@ -9735,10 +8384,6 @@ async function hydrateEntityRemainderFromManifest(manifest: import("../offline/e
     archivedDayCloses: archivedDayClosesRaw,
     archivedVoidRecords: archivedVoidRecordsRaw,
     archivedReturnRecords: archivedReturnRecordsRaw,
-    pharmacyPrescriptions: pharmacyPrescriptionsRaw,
-    pharmacyDoctors: pharmacyDoctorsRaw,
-    pharmacyControlledRegister: pharmacyControlledRegisterRaw,
-    });
   });
   if (manifest.salesOrder.length > INITIAL_SALES_LOAD_COUNT) {
     scheduleBackgroundSalesHydrateByIds(
@@ -9788,12 +8433,10 @@ export async function bootstrapPosCriticalFromDisk(): Promise<void> {
       const products = (await getEntitiesByBucket<Product>("product")).map(normalizeProduct);
       const customers = (await getEntitiesByBucket<Customer>("customer")).map(normalizeCustomer);
       const tombstones = manifest.tombstones ?? {};
-      runWithPersistSuspendedSync(() => {
-        usePosStore.getState().hydrateEssentials({
-          products: products.filter((p) => !tombstones[p.id]),
-          customers,
-          preferences: manifest.preferences,
-        });
+      usePosStore.getState().hydrateEssentials({
+        products: products.filter((p) => !tombstones[p.id]),
+        customers,
+        preferences: manifest.preferences,
       });
       await applyTodayKpiSnapshotFromDisk();
       return;
@@ -9810,9 +8453,7 @@ export async function bootstrapPosCriticalFromDisk(): Promise<void> {
       hydrateEssentialsFromSnap(snap);
     } else {
       const preferences = preferencesForAccountBootstrap(key);
-      runWithPersistSuspendedSync(() => {
-        usePosStore.getState().hydrateEssentials({ products: [], customers: [], preferences });
-      });
+      usePosStore.getState().hydrateEssentials({ products: [], customers: [], preferences });
       if (!key.startsWith("sb:")) {
         void writeSnapshot({
           products: [],
@@ -9838,12 +8479,10 @@ export async function bootstrapPosCriticalFromDisk(): Promise<void> {
     await raceBootstrap(load(), BOOTSTRAP_CRITICAL_TIMEOUT_MS);
   } catch (e) {
     if (!usePosStore.getState()._hydrated) {
-      runWithPersistSuspendedSync(() => {
-        usePosStore.getState().hydrateEssentials({
-          products: [],
-          customers: [],
-          preferences: preferencesForAccountBootstrap(key),
-        });
+      usePosStore.getState().hydrateEssentials({
+        products: [],
+        customers: [],
+        preferences: preferencesForAccountBootstrap(key),
       });
     }
     if (import.meta.env.DEV) console.warn("[waka-pos] bootstrap critical", e);
@@ -9867,14 +8506,7 @@ export async function bootstrapPosInteractiveFromDisk(): Promise<void> {
     const headSales = (await getEntitiesByIds<Sale>("sale", headIds)).map(normalizeSale);
     await hydrateSalesBatched(headSales);
     const snapshot = buildTodayKpiSnapshotFromSales(usePosStore.getState().sales);
-    const tailIds = manifest.salesOrder.slice(INITIAL_SALES_LOAD_COUNT).filter((id) => !voidedSales[id]);
-    usePosStore.setState({
-      todayKpiSnapshot: snapshot,
-      hydrationStage: "interactive",
-      ...(tailIds.length > 0
-        ? { salesHistoryHydration: { active: true, loaded: 0, total: tailIds.length } }
-        : {}),
-    });
+    usePosStore.setState({ todayKpiSnapshot: snapshot, hydrationStage: "interactive" });
     void writeTodayKpiSnapshot(snapshot).catch(() => undefined);
     markStartupPerf("interactive_hydrate_end");
     return;

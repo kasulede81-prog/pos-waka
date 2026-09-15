@@ -6,7 +6,7 @@ import type { Language, ShiftRecord } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatShiftDuration } from "../../lib/shiftEnforcement";
 import { shiftExpectedCash, shiftExpectedCashLabelParts } from "../../lib/saleAdjustments";
-import { activeDayDrawerOpenForDate, resolveCashDrawerFormulaVersion } from "../../lib/dayDrawerOpen";
+import { activeDayDrawerOpenForDate } from "../../lib/dayDrawerOpen";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { usePosStore } from "../../store/usePosStore";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
@@ -18,14 +18,10 @@ import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 import { POS_HOME_ROUTE } from "../../lib/posNavigation";
 import { DisplayScaleControl } from "./DisplayScaleControl";
 
-import type { TerminalIdentityView } from "../../lib/terminalIdentity";
-import { TerminalIdentityStrip } from "./TerminalIdentityStrip";
-
 type Props = {
   lang: Language;
   sellLabelKey: string;
-  identity: TerminalIdentityView;
-  terminalLabel?: string | null;
+  cashierName: string;
   shift: ShiftRecord | null;
   todaySaleCount: number;
   todaySalesUgx: number;
@@ -38,7 +34,7 @@ type Props = {
 function MetricCell({ label, value, emphasize }: { label: string; value: string; emphasize?: boolean }) {
   return (
     <div className="hidden min-w-0 xl:block">
-      <p className="pos-desktop-header-metric-label truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={clsx("truncate text-xs font-black leading-tight", emphasize ? "text-waka-800" : "text-foreground")}>
         {value}
       </p>
@@ -50,8 +46,7 @@ function MetricCell({ label, value, emphasize }: { label: string; value: string;
 export function PosDesktopCompactHeader({
   lang,
   sellLabelKey,
-  identity,
-  terminalLabel,
+  cashierName,
   shift,
   todaySaleCount,
   todaySalesUgx,
@@ -68,7 +63,7 @@ export function PosDesktopCompactHeader({
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const [now, setNow] = useState(() => Date.now());
 
-  const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
+  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
   const cashCtx = useMemo(() => ({ formulaVersion }), [formulaVersion]);
   const parts = useMemo(() => (shift ? shiftExpectedCashLabelParts(shift, cashCtx) : null), [shift, cashCtx]);
   const expected = shift ? shiftExpectedCash(shift, cashCtx) : 0;
@@ -101,7 +96,7 @@ export function PosDesktopCompactHeader({
   };
 
   return (
-    <header className="pos-desktop-compact-header flex h-14 shrink-0 items-center gap-2 border-b border-border/90 bg-card px-2 shadow-sm sm:gap-3 sm:px-3">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/90 bg-card px-2 shadow-sm sm:gap-3 sm:px-3">
       <button
         type="button"
         onClick={handleExit}
@@ -114,13 +109,18 @@ export function PosDesktopCompactHeader({
       <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
       <div className="hidden min-w-0 sm:block">
         <p className="truncate text-sm font-black text-foreground">Waka POS</p>
-        <p className="pos-desktop-header-metric-label truncate text-[10px] font-bold text-waka-700">{t(lang, sellLabelKey)}</p>
+        <p className="truncate text-[10px] font-bold text-waka-700">{t(lang, sellLabelKey)}</p>
       </div>
 
       <div className="mx-1 hidden h-8 w-px shrink-0 bg-muted lg:block" aria-hidden />
 
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
-        <TerminalIdentityStrip lang={lang} identity={identity} terminalLabel={terminalLabel} compact />
+        <div className="min-w-0 shrink">
+          <p className="truncate text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+            {t(lang, "activeShiftCashier")}
+          </p>
+          <p className="truncate text-xs font-black text-foreground">{cashierName}</p>
+        </div>
 
         <div className="hidden min-w-0 shrink items-center gap-1 text-muted-foreground md:flex">
           <Clock className="h-3.5 w-3.5 shrink-0 text-waka-600" aria-hidden />

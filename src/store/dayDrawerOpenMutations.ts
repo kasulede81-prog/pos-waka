@@ -23,7 +23,6 @@ import { assertBusinessDateNotLocked } from "../lib/businessDateLock";
 import { resolveFloatVerifyOverride } from "../lib/managerFloatVerify";
 import { type ShiftCashContext } from "../lib/saleAdjustments";
 import { assertCanCloseShift } from "../lib/shiftEnforcement";
-import { authOperatorRole, shiftOwnerUserId } from "../lib/sessionActor";
 import {
   assertCanRecoverShift,
   authorizeShiftClose,
@@ -49,10 +48,6 @@ type Deps = {
   denyUnlessEffectivePermission: (
     permission: import("../types").Permission,
     label: string,
-  ) => { ok: false; errorKey: string } | null;
-  denyIfBusinessDateLocked: (
-    dateKey: string,
-    action: string,
   ) => { ok: false; errorKey: string } | null;
 };
 
@@ -106,7 +101,7 @@ function assertDayDrawerOpenEditable(
 }
 
 export function createDayDrawerOpenStoreActions(deps: Deps) {
-  const { get, set, pushAudit, queueRemote, denyUnlessEffectivePermission, denyIfBusinessDateLocked } = deps;
+  const { get, set, pushAudit, queueRemote, denyUnlessEffectivePermission } = deps;
 
   const recordDayDrawerOpen = (input: {
     openingFloatUgx: number;
@@ -193,8 +188,6 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
 
     const prev = state.dayDrawerOpens.find((r) => r.id === input.previousId && r.status === "open");
     if (!prev) return { ok: false as const, errorKey: "invalid" };
-    const dateLock = denyIfBusinessDateLocked(prev.dateKey, "supersedeDayDrawerOpen");
-    if (dateLock) return dateLock;
     const editGate = assertDayDrawerOpenEditable(state, {
       dateKey: prev.dateKey,
       reason: (input.reason ?? input.note ?? "").trim(),
@@ -271,8 +264,6 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
 
     const row = state.dayDrawerOpens.find((r) => r.id === input.dayOpenId && r.status === "open");
     if (!row) return { ok: false as const, errorKey: "invalid" };
-    const dateLock = denyIfBusinessDateLocked(row.dateKey, "voidDayDrawerOpen");
-    if (dateLock) return dateLock;
     const editGate = assertDayDrawerOpenEditable(state, {
       dateKey: row.dateKey,
       reason: input.reason,
@@ -310,15 +301,10 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     const actor = state.sessionActor;
     if (!actor) return { ok: false as const, errorKey: "noSelection" };
 
-    const writerId = shiftOwnerUserId(actor);
-    if (!writerId) return { ok: false as const, errorKey: "noSelection" };
-
-    const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === writerId);
+    const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
     if (open) return { ok: false as const, errorKey: "invalid" };
 
     const todayKey = dateKeyKampala(new Date());
-    const dateLock = denyIfBusinessDateLocked(todayKey, "beginShiftV2");
-    if (dateLock) return dateLock;
     const dayOpen = activeDayDrawerOpenForDate(state.dayDrawerOpens, todayKey);
     if (!dayOpen) return { ok: false as const, errorKey: "dayDrawerNotOpen" };
 
@@ -426,9 +412,9 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     const now = new Date().toISOString();
     const row: ShiftRecord = {
       id: crypto.randomUUID(),
-      actorUserId: writerId,
+      actorUserId: actor.userId,
       actorName: actor.displayName,
-      role: authOperatorRole(actor),
+      role: actor.role,
       startAt: now,
       endAt: null,
       salesTotalUgx: 0,
@@ -471,7 +457,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     }));
     pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, {
       shiftId: row.id,
-      actorUserId: writerId,
+      actorUserId: actor.userId,
       verifiedFloatUgx: verified,
       segmentBaselineUgx: segmentBaseline,
       dayOpenId,
@@ -494,18 +480,15 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     const actor = state.sessionActor;
     if (!actor) return { ok: false as const, errorKey: "noSelection" };
 
-    const writerId = shiftOwnerUserId(actor);
-    if (!writerId) return { ok: false as const, errorKey: "noSelection" };
-
-    const target = resolveShiftCloseTarget(state.preferences.shifts, writerId, input.shiftId);
+    const target = resolveShiftCloseTarget(state.preferences.shifts, actor.userId, input.shiftId);
     if (!target.ok) return { ok: false as const, errorKey: target.errorKey };
 
     const hasPermission = (permission: import("../types").Permission) =>
       denyUnlessEffectivePermission(permission, "closeShiftWithCashCount") === null;
     const authz = authorizeShiftClose(
       {
-        actorUserId: writerId,
-        actorRole: authOperatorRole(actor),
+        actorUserId: actor.userId,
+        actorRole: actor.role,
         actorDisplayName: actor.displayName,
         hasPermission,
       },

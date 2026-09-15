@@ -263,11 +263,6 @@ export async function reconcilePrintQueue(prefs: ShopPreferences): Promise<ShopP
       changed = true;
       continue;
     }
-    if (job.status === "sending") {
-      changed = true;
-      queue.push({ ...job, status: "queued" });
-      continue;
-    }
     queue.push(job);
   }
   if (!changed) return prefs;

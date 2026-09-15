@@ -1,21 +1,16 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
-import { BarChart3, FileDown, Receipt, SearchX } from "lucide-react";
-import { themeUi } from "../lib/themeTokens";
-import { statusTokens } from "../lib/statusTokens";
-import { enterpriseMotion } from "../lib/enterpriseMotion";
-import clsx from "clsx";
+import { BarChart3, FileDown, Receipt } from "lucide-react";
 import type { Language, Sale, SaleLine } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useSessionActor } from "../context/SessionActorContext";
-import { authOperatorPermissions, authOperatorRole } from "../lib/sessionActor";
 import { VirtualizedReceiptList } from "../components/receipts/VirtualizedReceiptList";
 import { SalesHistoryDesktopTable } from "../components/receipts/SalesHistoryDesktopTable";
 import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
@@ -36,20 +31,17 @@ import { VoidLineModal } from "../components/pos/VoidLineModal";
 import { ReturnProductModal } from "../components/pos/ReturnProductModal";
 import type { VoidReason } from "../types";
 import { getCompletedFinancialsFromScoped, getCompletedRevenue } from "../lib/financialMetrics";
-import { partitionReceiptsSales, revenueEligibleSales } from "../lib/receiptsGrouping";
-import {
-  formatSalesHistoryPaymentMethodsSummary,
-  sumSalesHistoryPhysicalCashUgx,
-} from "../lib/salesHistoryTender";
+import { partitionReceiptsSales } from "../lib/receiptsGrouping";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { expenseCountsInDrawer } from "../lib/cashExpenses";
 import { inventoryValueAtCostUgx } from "../lib/purchaseRecovery";
-import { isCompletedSale, isPreCompletionVoidedSale, voidedSaleHistoryNumber } from "../lib/saleStatus";
+import { isCompletedSale } from "../lib/saleStatus";
 import { SalesHistoryRow } from "../components/receipts/SalesHistoryRow";
 import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { sumDebtPaymentsInBounds } from "../lib/customerDebtActivity";
 import { useProtectedAction } from "../hooks/useProtectedAction";
-import { SalesHistoryPeriodSummary } from "../components/receipts/SalesHistoryPeriodSummary";
+import { SalesHistoryStatGrid } from "../components/receipts/SalesHistoryStatGrid";
+import { SalesHistorySecondaryChips, buildSecondaryChips } from "../components/receipts/SalesHistorySecondaryChips";
 import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
 import { SalesHistorySearchBar } from "../components/receipts/SalesHistorySearchBar";
 import { SalesHistoryAnalyticsPanel } from "../components/receipts/SalesHistoryAnalyticsPanel";
@@ -57,15 +49,6 @@ import { SalesHistorySkeletonList } from "../components/receipts/SalesHistorySke
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { buildReceiptNumberForSale } from "../lib/receiptPrint";
 import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabels";
-import { saleSoldByMatchesActor } from "../lib/sellerIdentity";
-import { salesHistoryShowsInitialSkeleton } from "../lib/salesHistoryLoading";
-import { findProductByBarcode } from "../lib/pharmacyMedicine";
-import {
-  detectBarcodeCapabilities,
-  startBarcodeSession,
-  stopBarcodeSession,
-} from "../services/hardware/barcodeAdapter";
-import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 
 function countItemsSold(sales: Sale[]): number {
   let count = 0;
@@ -96,6 +79,18 @@ function bestSellingProductName(sales: Sale[]): string | null {
   return bestName;
 }
 
+function paymentMethodsSummary(lang: Language, sales: Sale[]): string {
+  let cash = 0;
+  let debt = 0;
+  for (const s of sales) {
+    cash += s.cashPaidUgx;
+    debt += s.debtUgx;
+  }
+  const parts: string[] = [];
+  if (cash > 0) parts.push(`${t(lang, "paymentMethod_cash")}: UGX ${cash.toLocaleString()}`);
+  if (debt > 0) parts.push(`${t(lang, "paymentMethod_credit")}: UGX ${debt.toLocaleString()}`);
+  return parts.length > 0 ? parts.join(" · ") : "—";
+}
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
@@ -103,9 +98,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const desktopTable = useWakaLayoutBand() === "desktop";
   const { runProtected } = useProtectedAction();
   const [desktopActionSale, setDesktopActionSale] = useState<Sale | null>(null);
-  const [cameraScanOpen, setCameraScanOpen] = useState(false);
-  const [cameraScanStatus, setCameraScanStatus] = useState("");
-  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const {
     filter,
     setFilter,
@@ -119,7 +111,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const rawSales = useReportingSales(includeArchived);
   const sales = useDeferredValue(rawSales);
   const salesRefreshing = rawSales !== sales;
-  const showInitialSkeleton = salesHistoryShowsInitialSkeleton(salesRefreshing, sales.length);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
@@ -134,12 +125,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const term = hospitalityMode ? ht : pharmacyMode ? pt : null;
   const canVoid = actorHasPermission(actor, "sale_void");
-  const { canProfit, canShopWideFinancials } = resolveProfitVisibility({
-    role: authOperatorRole(actor),
-    snapshot,
-    authMode,
-    actorPermissions: authOperatorPermissions(actor),
-  });
+  const { canProfit, canShopWideFinancials } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
   const showProfit = canProfit;
   const showShopSummaries = canShopWideFinancials;
   const products = usePosStore((s) => s.products);
@@ -151,37 +137,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
   const [returnReceiptCtx, setReturnReceiptCtx] = useState<import("../lib/receiptDocuments").ReturnReceiptContext | null>(null);
-
-  useEffect(() => {
-    if (!cameraScanOpen) return;
-    setCameraScanStatus(t(lang, "posBarcodeStarting"));
-    void startBarcodeSession("camera", {
-      videoElement: cameraVideoRef.current,
-      onScan: (code) => {
-        const hit = findProductByBarcode(products, code);
-        const name = hit?.name?.trim();
-        setSearchQuery(name || code);
-        void stopBarcodeSession();
-        setCameraScanOpen(false);
-      },
-      onError: (message) => setCameraScanStatus(message),
-    }).then((result) => {
-      if (!result.ok) setCameraScanStatus(result.error ?? t(lang, "posBarcodeSoon"));
-    });
-    return () => {
-      void stopBarcodeSession();
-    };
-  }, [cameraScanOpen, lang, products]);
-
-  const openCameraScan = () => {
-    if (!detectBarcodeCapabilities().cameraScan) return;
-    setCameraScanOpen(true);
-  };
-
-  const closeCameraScan = () => {
-    void stopBarcodeSession();
-    setCameraScanOpen(false);
-  };
 
   const shopLabel = preferences.shopDisplayName?.trim() || undefined;
   const customers = usePosStore((s) => s.customers);
@@ -195,11 +150,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         staffAccounts,
         shifts,
         auditLogs,
-        ownerUserId: actor.authUserId ?? (actor.userId.startsWith("staff:") ? null : actor.userId),
+        ownerUserId: actor.userId.startsWith("staff:") ? null : actor.userId,
         ownerDisplayName: actor.displayName,
         shopDisplayName: preferences.shopDisplayName,
       }),
-    [staffAccounts, shifts, auditLogs, actor.authUserId, actor.userId, actor.displayName, preferences.shopDisplayName],
+    [staffAccounts, shifts, auditLogs, actor.userId, actor.displayName, preferences.shopDisplayName],
   );
 
   const soldByLabel = (sale: Sale): string =>
@@ -224,7 +179,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       customerPhone: sale.receiptCustomerPhone ?? cust?.phone ?? null,
       customerBalanceUgx: cust?.debtBalanceUgx ?? null,
       planTier: receiptPlanTier,
-      auditLogs,
     });
   };
 
@@ -232,7 +186,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     const ctx = receiptCtxFor(sale);
     void printSaleReceipt(ctx).then((result) => {
       if (result.ok) logReceiptReprintAudit(sale, ctx.receiptNumber);
-      else window.alert(result.mode === "thermal" ? (result.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));
+      else window.alert(t(lang, "receiptPrintBlocked"));
     });
   };
 
@@ -246,17 +200,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const filteredInRange = useMemo(() => {
     const inRange = sales.filter((s) => saleMatchesFilter(s, bounds));
-    if (authOperatorRole(actor) !== "cashier") return inRange;
-    return inRange.filter((s) => saleSoldByMatchesActor(s, actor));
-  }, [sales, bounds, actor]);
+    if (actor.role !== "cashier") return inRange;
+    return inRange.filter((s) => s.soldByUserId && s.soldByUserId === actor.userId);
+  }, [sales, bounds, actor.role, actor.userId]);
 
   const partitioned = useMemo(() => partitionReceiptsSales(filteredInRange), [filteredInRange]);
-
-  /** KPI / financial rolls — excludes whole-bill voids; list still uses partitioned.completed. */
-  const revenueSalesInRange = useMemo(
-    () => revenueEligibleSales(partitioned.completed),
-    [partitioned.completed],
-  );
 
   const filteredReturns = useMemo(
     () => allReturns.filter((r) => returnMatchesFilter(r, bounds)),
@@ -265,42 +213,34 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const rangeFinancials = useMemo(
     () =>
-      getCompletedFinancialsFromScoped(revenueSalesInRange, filteredReturns, products, {
+      getCompletedFinancialsFromScoped(partitioned.completed, filteredReturns, products, {
         skipProfit: !showProfit,
       }),
-    [revenueSalesInRange, filteredReturns, products, showProfit],
+    [partitioned.completed, filteredReturns, products, showProfit],
   );
 
   const rangeRevenueUgx = useMemo(
-    () => getCompletedRevenue(revenueSalesInRange, filteredReturns, products),
-    [revenueSalesInRange, filteredReturns, products],
+    () => getCompletedRevenue(partitioned.completed, filteredReturns, products),
+    [partitioned.completed, filteredReturns, products],
   );
 
-  const itemsSoldCount = useMemo(() => countItemsSold(revenueSalesInRange), [revenueSalesInRange]);
-
-  /** Physical drawer cash — not cashPaidUgx (MoMo/ATM stay 0). */
-  const physicalCashInHandUgx = useMemo(
-    () => sumSalesHistoryPhysicalCashUgx(revenueSalesInRange),
-    [revenueSalesInRange],
-  );
+  const itemsSoldCount = useMemo(() => countItemsSold(partitioned.completed), [partitioned.completed]);
 
   const listSales = useMemo(() => {
-    const primary = [...partitioned.completed, ...partitioned.pending, ...partitioned.voided];
+    const primary = [...partitioned.completed, ...partitioned.pending];
     primary.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 
     const q = searchQuery.trim().toLowerCase();
     if (!q) return primary;
 
     return primary.filter((sale) => {
-      const invoice = (
-        isPreCompletionVoidedSale(sale) ? voidedSaleHistoryNumber(sale) : buildReceiptNumberForSale(sale, sales)
-      ).toLowerCase();
+      const invoice = buildReceiptNumberForSale(sale, sales).toLowerCase();
       if (invoice.includes(q)) return true;
       if (customerNameFor(sale).toLowerCase().includes(q)) return true;
       if (soldByLabel(sale).toLowerCase().includes(q)) return true;
       return sale.lines.some((line) => line.name.toLowerCase().includes(q));
     });
-  }, [partitioned.completed, partitioned.pending, partitioned.voided, searchQuery, sales, customers, soldByNameByUserId, lang]);
+  }, [partitioned.completed, partitioned.pending, searchQuery, sales, customers, soldByNameByUserId, lang]);
 
   const selectedDay = selectedDayKeyForFilter(filter);
   const isSingleDay = selectedDay != null;
@@ -322,21 +262,45 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     [debtPayments, bounds],
   );
 
+  const totalDebtUgx = useMemo(
+    () => customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0),
+    [customers],
+  );
+
+  const canViewDebts = actorHasPermission(actor, "customers.view");
   const syncErrorCount = countSalesWithSyncErrors();
 
+  const secondaryChips = useMemo(
+    () =>
+      buildSecondaryChips(lang, {
+        cashSalesUgx: rangeFinancials.cashCollectedUgx,
+        debtCollectedUgx,
+        expensesUgx,
+        expensesLabel: isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange"),
+        stockValueUgx,
+        showShopSummaries,
+      }),
+    [lang, rangeFinancials.cashCollectedUgx, debtCollectedUgx, expensesUgx, isSingleDay, stockValueUgx, showShopSummaries],
+  );
+
   const analyticsMetrics = useMemo(() => {
-    const bestProduct = bestSellingProductName(revenueSalesInRange);
+    const bestProduct = bestSellingProductName(partitioned.completed);
     const metrics = [
-      { label: t(lang, "salesHistoryCashInHand"), value: `UGX ${physicalCashInHandUgx.toLocaleString()}` },
+      { label: isSingleDay ? t(lang, "salesHistoryTodaySales") : t(lang, "salesHistorySalesInRange"), value: `UGX ${rangeRevenueUgx.toLocaleString()}` },
+      ...(showProfit
+        ? [{ label: t(lang, "salesHistoryProfits"), value: `UGX ${rangeFinancials.profitUgx.toLocaleString()}` }]
+        : []),
+      { label: t(lang, "salesHistoryCashInHand"), value: `UGX ${rangeFinancials.cashCollectedUgx.toLocaleString()}` },
       ...(showShopSummaries
         ? [
             { label: t(lang, "salesHistoryDebtCollected"), value: `UGX ${debtCollectedUgx.toLocaleString()}` },
             { label: isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange"), value: `UGX ${expensesUgx.toLocaleString()}` },
           ]
         : []),
+      { label: t(lang, "salesHistoryItemsSold"), value: String(itemsSoldCount) },
       { label: t(lang, "salesHistoryAverageSale"), value: `UGX ${rangeFinancials.averageTransactionUgx.toLocaleString()}` },
       { label: t(lang, "salesHistoryBestProduct"), value: bestProduct ?? "—" },
-      { label: t(lang, "salesHistoryPaymentMethods"), value: formatSalesHistoryPaymentMethodsSummary(lang, revenueSalesInRange) },
+      { label: t(lang, "salesHistoryPaymentMethods"), value: paymentMethodsSummary(lang, partitioned.completed) },
       ...(showShopSummaries
         ? [{ label: t(lang, "salesHistoryStockValue"), value: `UGX ${stockValueUgx.toLocaleString()}` }]
         : []),
@@ -345,12 +309,14 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   }, [
     lang,
     isSingleDay,
+    rangeRevenueUgx,
+    showProfit,
     rangeFinancials,
     showShopSummaries,
     debtCollectedUgx,
     expensesUgx,
-    revenueSalesInRange,
-    physicalCashInHandUgx,
+    itemsSoldCount,
+    partitioned.completed,
     stockValueUgx,
   ]);
 
@@ -394,8 +360,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   );
 
   return (
-    <EnterprisePageContainer variant="workspace" className="sales-history-workspace">
-      <div className="sales-history-header sales-history-enter flex items-start justify-between gap-3">
+    <EnterprisePageContainer className="space-y-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <PageHeader
             lang={lang}
@@ -403,14 +369,15 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             subtitle={term ? term("receiptsHint") : t(lang, "receiptsHint")}
             backFallback="/office"
             backLabel={t(lang, "officeBackToHub")}
+            compact
           />
         </div>
-        <div className="flex shrink-0 items-center gap-2 pt-1">
+        <div className="flex shrink-0 items-center gap-1.5">
           {partitioned.completed.length > 0 ? (
             <button
               type="button"
               onClick={() => void runProtected("export_data", onDownloadAll)}
-              className={clsx(themeUi.btnSecondary, "min-h-11 gap-1.5 px-3 text-sm")}
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-muted"
               title={t(lang, "receiptsDownloadPdf")}
             >
               <FileDown className="h-4 w-4 shrink-0" aria-hidden />
@@ -420,7 +387,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           {showShopSummaries ? (
             <Link
               to="/reports"
-              className={clsx(themeUi.btnGhost, "min-h-11 gap-1.5 px-3 text-sm")}
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-border bg-card px-2.5 text-xs font-bold text-muted-foreground shadow-sm active:bg-muted"
             >
               <BarChart3 className="h-4 w-4 shrink-0" aria-hidden />
               <span className="hidden sm:inline">{t(lang, "salesHistoryReports")}</span>
@@ -430,23 +397,32 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       </div>
 
       {syncErrorCount > 0 ? (
-        <p className={clsx(statusTokens.warning.banner, enterpriseMotion.toastEnter)}>
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
           {tTemplate(lang, "syncErrorCount", { count: String(syncErrorCount) })} — {t(lang, "syncErrorBanner")}
         </p>
       ) : null}
 
-      <div className="sales-history-zone--controls sticky top-0 z-10 -mx-3 space-y-3 px-3 pb-3 pt-1 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
-        {sales.length > 0 ? (
-          <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
-        ) : null}
-        <IncludeArchivedFilter
-          lang={lang}
-          checked={includeArchived}
-          onChange={setIncludeArchived}
-          className="border-waka-200/70 bg-card/90 py-2 shadow-elev"
-        />
-        {sales.length > 0 ? (
-          <>
+      {sales.length > 0 ? (
+        <>
+          <SalesHistoryStatGrid
+            lang={lang}
+            salesLabel={salesHeroLabel}
+            salesUgx={rangeRevenueUgx}
+            profitUgx={showProfit ? rangeFinancials.profitUgx : null}
+            showProfit={showProfit}
+            itemsSold={itemsSoldCount}
+            totalDebtUgx={totalDebtUgx}
+            showShopDebt={showShopSummaries && canViewDebts}
+          />
+
+          {hasAnyInRange && secondaryChips.length > 0 ? (
+            <SalesHistorySecondaryChips chips={secondaryChips} />
+          ) : null}
+
+          <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-muted/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
+            <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
+            <SalesHistorySearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} />
+
             {archiveNotice ? (
               <DateFilterArchiveNotice
                 lang={lang}
@@ -455,49 +431,30 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
               />
             ) : null}
             {needsArchive && includeArchived && archivedSalesCount > 0 ? (
-              <p className="text-sm font-semibold text-muted-foreground">{t(lang, "dateFilterArchiveIncluded")}</p>
+              <p className="text-xs font-semibold text-muted-foreground">{t(lang, "dateFilterArchiveIncluded")}</p>
             ) : null}
             {needsArchive && archivedSalesCount === 0 ? (
-              <p className={statusTokens.warning.banner}>{t(lang, "dateFilterArchiveEmpty")}</p>
+              <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
             ) : null}
-            <SalesHistorySearchBar
-              lang={lang}
-              value={searchQuery}
-              onChange={setSearchQuery}
-              onScan={openCameraScan}
-            />
-          </>
-        ) : null}
-      </div>
+          </div>
 
-      {sales.length > 0 ? (
-        <div className="sales-history-enter">
-          <SalesHistoryPeriodSummary
-            lang={lang}
-            salesLabel={salesHeroLabel}
-            salesUgx={rangeRevenueUgx}
-            itemsSold={itemsSoldCount}
-            profitUgx={showProfit ? rangeFinancials.profitUgx : null}
-            showProfit={showProfit}
-            compact={!desktopTable}
-          />
-        </div>
+          {hasAnyInRange ? <SalesHistoryAnalyticsPanel lang={lang} metrics={analyticsMetrics} /> : null}
+        </>
       ) : null}
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {sales.length > 0 && !hasAnyInRange ? (
-        <EnterpriseEmptyState
-          icon={Receipt}
-          title={t(lang, "receiptsNoSalesInRange")}
-          className="border-waka-200/70 bg-waka-50/50"
-        />
+        <p className="rounded-xl border border-border bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
+          {t(lang, "receiptsNoSalesInRange")}
+        </p>
       ) : null}
 
-      {sales.length === 0 && !showInitialSkeleton ? (
+      {sales.length === 0 && !salesRefreshing ? (
         <EnterpriseEmptyState
           icon={Receipt}
           title={t(lang, "salesHistoryEmptyTitle")}
           description={t(lang, "salesHistoryEmptyHint")}
-          className="border-waka-200/70 bg-waka-50/50"
           primaryAction={
             hasSellAccess
               ? { label: t(lang, "salesHistoryStartSelling"), onClick: () => navigate("/pos") }
@@ -506,10 +463,10 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         />
       ) : null}
 
-      {showInitialSkeleton ? (
+      {salesRefreshing ? (
         <SalesHistorySkeletonList />
       ) : listSales.length > 0 ? (
-        <section className="sales-history-zone--workspace sales-history-enter">
+        <section className="transition-opacity duration-300 ease-out">
           {desktopTable ? (
             <>
               <SalesHistoryDesktopTable
@@ -540,7 +497,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                   }
                   hideCard
                   forceOpenActions
-                  onActionsClose={() => setDesktopActionSale(null)}
                 />
               ) : null}
             </>
@@ -553,26 +509,17 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           )}
         </section>
       ) : hasAnyInRange && searchQuery.trim() ? (
-        <EnterpriseEmptyState
-          icon={SearchX}
-          title={t(lang, "salesHistoryNoMatchTitle")}
-          description={t(lang, "salesHistoryNoMatchHint")}
-          className="border-waka-200/70 bg-waka-50/50"
-        />
+        <p className="rounded-xl border border-border bg-muted px-4 py-8 text-center text-sm font-bold text-muted-foreground">
+          {t(lang, "posSellNoMatch")}
+        </p>
       ) : null}
 
-      {hasAnyInRange ? <SalesHistoryAnalyticsPanel lang={lang} metrics={analyticsMetrics} /> : null}
-
       {partitioned.cancelled.length > 0 ? (
-        <section className={clsx(themeUi.surfaceMuted, "space-y-3 p-4")}>
+        <section className="space-y-2">
           <button
             type="button"
             onClick={() => setShowCancelled((v) => !v)}
-            className={clsx(
-              "text-base font-bold text-muted-foreground underline-offset-2 hover:underline",
-              themeUi.focusRing,
-              "rounded-lg px-1",
-            )}
+            className="px-1 text-sm font-bold text-muted-foreground underline-offset-2 hover:underline"
           >
             {showCancelled ? t(lang, "receiptsHideCancelled") : t(lang, "receiptsShowCancelled")} (
             {partitioned.cancelled.length})
@@ -635,25 +582,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         ctx={returnReceiptCtx}
         onClose={() => setReturnReceiptCtx(null)}
       />
-
-      {cameraScanOpen ? (
-        <AppModalOverlay className="z-[90] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal>
-          <div className="w-full max-w-md rounded-3xl bg-card p-4 shadow-2xl">
-            <p className="text-lg font-black text-foreground">{t(lang, "posBarcodeSoon")}</p>
-            <video ref={cameraVideoRef} className="mt-3 h-56 w-full rounded-2xl bg-black object-cover" />
-            <p className="mt-2 text-xs font-semibold text-muted-foreground">
-              {cameraScanStatus || t(lang, "posBarcodeStarting")}
-            </p>
-            <button
-              type="button"
-              className="mt-3 min-h-[48px] w-full rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground"
-              onClick={closeCameraScan}
-            >
-              {t(lang, "cancel")}
-            </button>
-          </div>
-        </AppModalOverlay>
-      ) : null}
     </EnterprisePageContainer>
   );
 }

@@ -8,14 +8,14 @@ import {
   cancelBackupRestoreInProgress,
   persistRestoredSnapshotToDisk,
 } from "../store/usePosStore";
-import { getBackupRecord } from "../offline/localDb";
+import { readSnapshotWithFallback, getBackupRecord } from "../offline/localDb";
 import {
   appendManualBackup,
   buildExportEnvelope,
   listBackupMeta,
   MAX_BACKUP_IMPORT_BYTES,
   parseImportEnvelopeFromFile,
-  readCurrentBackupSnapshot,
+  snapshotFromPartial,
 } from "../offline/backupEngine";
 import {
   beginBackupRestoreSession,
@@ -31,26 +31,11 @@ import { captureAppException } from "../lib/crashReporting";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { authorizeBackupExport } from "../lib/backupExportAuthorization";
-import { authorizeBackupRestore, backupSurfaceDeniedMessageKey } from "../lib/backupRestoreAuthorization";
-import type { StoreAuthErrorKey } from "../lib/storeAuthorization";
+import { authorizeBackupRestore } from "../lib/backupRestoreAuthorization";
 
 type Props = { lang: Language; compact?: boolean; /** When false, show upgrade hint instead of backup actions. */ actionsEnabled?: boolean };
 
 type RestorePhase = "reading" | "parsing" | "restoring" | "saving" | null;
-
-function restoreDeniedMessageKey(err: unknown): string | null {
-  const msg = err instanceof Error ? err.message : "";
-  if (msg === "backup_restore_aborted") return "backupImportCancelled";
-  if (
-    msg === "forbidden" ||
-    msg === "noSelection" ||
-    msg === "backupRestoreNotEntitled" ||
-    msg === "deviceNotAuthorized"
-  ) {
-    return backupSurfaceDeniedMessageKey(msg as StoreAuthErrorKey, "backupRestoreFail");
-  }
-  return null;
-}
 
 function downloadJson(filename: string, body: string) {
   const blob = new Blob([body], { type: "application/json;charset=utf-8" });
@@ -164,7 +149,7 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
     try {
       const restoreAuth = authorizeBackupRestore({ actor, snapshot: subscriptionSnapshot, authMode });
       if (!restoreAuth.ok) {
-        setMsg(t(lang, backupSurfaceDeniedMessageKey(restoreAuth.errorKey, "backupRestoreFail")));
+        setMsg(t(lang, restoreAuth.errorKey === "backupRestoreNotEntitled" ? "backupUpgradeRequired" : "backupRestoreFail"));
         setBusy(false);
         setRestorePhase(null);
         return;
@@ -190,9 +175,8 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
       appendPilotEvent("restore", "Backup restore completed");
       setMsg(t(lang, "backupRestoreOk"));
     } catch (err) {
-      const deniedKey = restoreDeniedMessageKey(err);
-      if (deniedKey) {
-        setMsg(t(lang, deniedKey));
+      if ((err as Error).message === "backup_restore_aborted") {
+        setMsg(t(lang, "backupImportCancelled"));
       } else {
         captureAppException(err, { scope: "backup_restore" });
         throw err;
@@ -206,10 +190,11 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
     try {
       const auth = authorizeBackupExport({ actor, snapshot: subscriptionSnapshot, authMode });
       if (!auth.ok) {
-        setMsg(t(lang, backupSurfaceDeniedMessageKey(auth.errorKey, "backupExportFail")));
+        setMsg(t(lang, "backupExportFail"));
         return;
       }
-      const snap = await readCurrentBackupSnapshot();
+      const raw = await readSnapshotWithFallback();
+      const snap = snapshotFromPartial(raw ?? {});
       if (!snap) {
         setMsg(t(lang, "backupExportFail"));
         return;
@@ -226,11 +211,6 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
     setBusy(true);
     setMsg(null);
     try {
-      const auth = authorizeBackupExport({ actor, snapshot: subscriptionSnapshot, authMode });
-      if (!auth.ok) {
-        setMsg(t(lang, backupSurfaceDeniedMessageKey(auth.errorKey, "backupExportFail")));
-        return;
-      }
       const r = await appendManualBackup();
       setMsg(r.ok ? t(lang, "backupManualOk") : t(lang, "backupManualFail"));
       refresh();
@@ -252,10 +232,7 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
       });
       refresh();
     } catch (err) {
-      const deniedKey = restoreDeniedMessageKey(err);
-      if (deniedKey) {
-        setMsg(t(lang, deniedKey));
-      } else if ((err as Error).message !== "backup_restore_aborted" && (err as Error).message !== "missing") {
+      if ((err as Error).message !== "backup_restore_aborted" && (err as Error).message !== "missing") {
         setMsg(t(lang, "backupRestoreFail"));
       } else if ((err as Error).message === "missing") {
         setMsg(t(lang, "backupRestoreFail"));
@@ -298,10 +275,7 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
       await runRestorePipeline(async () => env, sessionId);
       refresh();
     } catch (err) {
-      const deniedKey = restoreDeniedMessageKey(err);
-      if (deniedKey) {
-        setMsg(t(lang, deniedKey));
-      } else if ((err as Error).message !== "backup_restore_aborted") {
+      if ((err as Error).message !== "backup_restore_aborted") {
         setMsg(t(lang, "backupImportFail"));
       }
     } finally {
@@ -335,9 +309,7 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
             </p>
             <p className="mt-2 text-xs font-semibold text-muted-foreground">{t(lang, "restoreCallWakaHint")}</p>
           </>
-        ) : (
-          <p className="text-xs font-medium leading-relaxed text-muted-foreground">{t(lang, "backupRestoreTip")}</p>
-        )}
+        ) : null}
         {msg ? (
           <div className="mt-2 space-y-1 rounded-xl bg-muted px-3 py-2">
             <p className="text-sm font-semibold text-foreground">{msg}</p>

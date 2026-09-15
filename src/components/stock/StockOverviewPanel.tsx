@@ -10,8 +10,6 @@ type Props = {
   onAddProduct: () => void;
   onImportProducts?: () => void;
   showImport?: boolean;
-  onCsvImport?: () => void;
-  showCsvImport?: boolean;
 };
 
 export function StockOverviewPanel({
@@ -23,8 +21,6 @@ export function StockOverviewPanel({
   onAddProduct,
   onImportProducts,
   showImport,
-  onCsvImport,
-  showCsvImport,
 }: Props) {
   return (
     <StockQuickActionsGrid
@@ -36,8 +32,6 @@ export function StockOverviewPanel({
       onAddProduct={onAddProduct}
       onImportProducts={onImportProducts}
       showImport={showImport}
-      onCsvImport={onCsvImport}
-      showCsvImport={showCsvImport}
     />
   );
 }

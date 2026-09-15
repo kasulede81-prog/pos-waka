@@ -1,6 +1,5 @@
 import { Navigate } from "react-router-dom";
 import { useSessionActor } from "../context/SessionActorContext";
-import { authOperatorRole } from "../lib/sessionActor";
 import { useSessionHydration } from "../context/SessionHydrationContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasSupabaseConfig } from "../lib/supabase";
@@ -32,7 +31,7 @@ export function OwnerProtectedRoute({ children }: Props) {
     return <SessionLoadingGate />;
   }
 
-  if (!hasSupabaseConfig || authMode !== "supabase" || authOperatorRole(actor) !== "owner") {
+  if (!hasSupabaseConfig || authMode !== "supabase" || actor.role !== "owner") {
     return <Navigate to="/office/account" replace />;
   }
 

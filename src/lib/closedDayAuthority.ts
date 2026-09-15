@@ -6,19 +6,14 @@
  * ledger. They must not rewrite frozen close totals. Sale-id membership is not
  * on the snapshot today; flagging those rows for reconciliation is CLOSE-DAY-1.2.
  *
- * Snapshot does not persist: payment mix, itemsSold, categories, cashiers,
- * hourly, top products, discounts, voids, or timeline.
- * Closed-day Cash Position must not present live rebuilds of those fields
- * as finalized historical values — strip them (unavailable), do not invent.
+ * Snapshot does not freeze: payment mix (MoMo/card/credit), itemsSold,
+ * categories, cashiers, hourly, top products, discounts, voids.
  */
 
 import type { CashPositionReport } from "./cashPosition";
-import { getCashDrawerSalesInput } from "./cashDrawerSales";
-import { dateKeyKampala, saleReportingDayKey } from "./datesUg";
 import { activeDayCloseForDate } from "./dayCloseIdempotency";
 import type { DayCloseSummary } from "../types";
-import { getCompletedFinancialsFromScoped, isRevenueSale } from "./financialMetrics";
-import { mergeLinkedReturnsForScopedSales } from "./homeProfit";
+import { getCompletedFinancials } from "./financialMetrics";
 import type { Product, ReturnRecord, Sale } from "../types";
 import { enumerateDaysInBounds, type DateFilterBounds } from "./dateFilters";
 
@@ -58,25 +53,6 @@ function opt(...values: Array<number | null | undefined>): number | null {
   return null;
 }
 
-/** Explicit presence: 0 is authoritative; null/undefined is unknown. */
-export function hasAuthoritativeClosedPhysicalCash(
-  tot: Pick<ClosedDayAuthoritativeTotals, "cashFromSalesUgx"> | null | undefined,
-): boolean {
-  return tot != null && tot.cashFromSalesUgx != null;
-}
-
-/** True when any closed day in the range lacks snapshot cashFromSalesUgx. */
-export function periodClosedPhysicalCashUnavailable(
-  dayCloses: DayCloseSummary[] | undefined,
-  bounds: DateFilterBounds,
-): boolean {
-  for (const day of enumerateDaysInBounds(bounds)) {
-    const auth = resolveReportAuthority(dayCloses, day);
-    if (auth.closed && !hasAuthoritativeClosedPhysicalCash(auth.frozenTotals)) return true;
-  }
-  return false;
-}
-
 /** Frozen totals for an active close. Snapshot fields win when present (v2); else the summary row. */
 export function readClosedDayTotals(close: DayCloseSummary): ClosedDayAuthoritativeTotals {
   const snap = close.documentSnapshot;
@@ -111,22 +87,6 @@ export function authoritativeCloseForDate(
   dateKey: string,
 ): DayCloseSummary | undefined {
   return activeDayCloseForDate(dayCloses ?? [], dateKey);
-}
-
-/**
- * P2-NEW-01/02 — financial authority may live in archivedDayCloses after retention.
- * Active non-superseded rows stay first so existing find/seen-by-dateKey wins.
- * Does not copy archive into active state.
- */
-export function dayClosesForAuthority(
-  dayCloses: DayCloseSummary[] | undefined,
-  archivedDayCloses?: DayCloseSummary[] | undefined,
-): DayCloseSummary[] {
-  const active = dayCloses ?? [];
-  const archived = archivedDayCloses ?? [];
-  if (archived.length === 0) return active;
-  if (active.length === 0) return archived;
-  return [...active, ...archived];
 }
 
 export type ReportAuthoritySource = "closed_snapshot" | "live";
@@ -184,11 +144,6 @@ export function resolvePeriodReportAuthority(
   return "mixed";
 }
 
-/** Unpersisted sales breakdowns must not be rebuilt from live rows when any day is closed. */
-export function periodSalesBreakdownsUnavailable(authority: PeriodReportAuthority): boolean {
-  return authority !== "live";
-}
-
 export function overlayClosedDayTrendPoint(
   dateKey: string,
   live: { revenueUgx: number; transactionCount: number },
@@ -235,8 +190,8 @@ export function boundsForMonthKey(monthKey: string): DateFilterBounds {
 }
 
 /**
- * Closed-date Cash Position: freeze ledger headlines from the close snapshot.
- * Unpersisted operational breakdowns are stripped — never left as live stand-ins.
+ * Headline cash-position fields for a closed date.
+ * Payment mix, categories, cashiers, itemsSold, and timeline are not on the snapshot — left live.
  */
 export function applyClosedDayToCashPositionReport(
   report: CashPositionReport,
@@ -246,17 +201,11 @@ export function applyClosedDayToCashPositionReport(
   return {
     ...report,
     ledgerClosed: true,
-    closedDayBreakdownUnavailable: true,
     summary: {
       ...report.summary,
       totalSalesUgx: tot.totalSalesUgx,
       transactionCount: tot.transactionCount ?? report.summary.transactionCount,
-      itemsSold: 0,
     },
-    paymentMethods: [],
-    paymentAdjustmentUgx: 0,
-    categories: [],
-    cashiers: [],
     cashPosition: {
       ...report.cashPosition,
       openingFloatUgx: tot.openingFloatUgx ?? report.cashPosition.openingFloatUgx,
@@ -292,7 +241,6 @@ export function overlayPeriodFinancials(input: {
   transactionCount: number;
   debtIssuedUgx: number;
   cashCollectedUgx: number;
-  physicalCashUnavailable: boolean;
 } {
   let revenueUgx = input.live.revenueUgx;
   let profitUgx = input.live.profitUgx;
@@ -300,7 +248,6 @@ export function overlayPeriodFinancials(input: {
   let debtIssuedUgx = input.live.debtIssuedUgx;
   const overlayCash = input.live.cashCollectedUgx != null;
   let cashCollectedUgx = input.live.cashCollectedUgx ?? 0;
-  let physicalCashUnavailable = false;
   const seen = new Set<string>();
 
   for (const close of input.dayCloses) {
@@ -309,30 +256,19 @@ export function overlayPeriodFinancials(input: {
     seen.add(close.dateKey);
     const frozen = resolveReportAuthority(input.dayCloses, close.dateKey).frozenTotals;
     if (!frozen) continue;
-    const daySales = input.sales.filter((s) => isRevenueSale(s) && saleReportingDayKey(s) === close.dateKey);
-    const dayDatedReturns = input.returns.filter((r) => dateKeyKampala(r.createdAt) === close.dateKey);
-    const dayProfitReturns = mergeLinkedReturnsForScopedSales(daySales, dayDatedReturns, input.returns);
-    const liveDay = getCompletedFinancialsFromScoped(daySales, dayProfitReturns, input.products);
+    const liveDay = getCompletedFinancials(input.sales, input.returns, input.products, { day: close.dateKey });
     revenueUgx += frozen.totalSalesUgx - liveDay.revenueUgx;
     profitUgx += frozen.profitEstimateUgx - liveDay.profitUgx;
     if (frozen.transactionCount != null) {
       transactionCount += frozen.transactionCount - liveDay.transactionCount;
     }
     debtIssuedUgx += frozen.totalDebtUgx - liveDay.debtIssuedUgx;
-    if (overlayCash) {
-      const frozenPhysicalCashUgx = frozen.cashFromSalesUgx;
-      if (frozenPhysicalCashUgx != null) {
-        // Frozen cashFromSalesUgx is physical drawer cash. Subtract the same unit
-        // (never getCompletedFinancials.cashCollectedUgx / cashPaidUgx).
-        const liveDayPhysicalCashUgx = getCashDrawerSalesInput(input.sales, close.dateKey).cashSalesUgx;
-        cashCollectedUgx += frozenPhysicalCashUgx - liveDayPhysicalCashUgx;
-      } else {
-        physicalCashUnavailable = true;
-      }
+    if (overlayCash && frozen.cashFromSalesUgx != null) {
+      cashCollectedUgx += frozen.cashFromSalesUgx - liveDay.cashCollectedUgx;
     }
   }
 
-  return { revenueUgx, profitUgx, transactionCount, debtIssuedUgx, cashCollectedUgx, physicalCashUnavailable };
+  return { revenueUgx, profitUgx, transactionCount, debtIssuedUgx, cashCollectedUgx };
 }
 
 /**

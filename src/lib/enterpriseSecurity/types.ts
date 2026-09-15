@@ -49,8 +49,6 @@ export type SecuritySession = {
   deviceId: string;
   lastActivity: number;
   auditId: string;
-  /** Account key at grant time — session is invalid after account switch/logout. */
-  accountKey: string | null;
 };
 
 export type VerifySecurityCredentialInput = {

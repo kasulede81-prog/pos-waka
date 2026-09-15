@@ -8,7 +8,6 @@ import { AnalyticsCategoryContent } from "../components/AnalyticsCategoryContent
 import { AnalyticsDateFilterSheet } from "../components/AnalyticsDateFilterSheet";
 import { AnalyticsExportFab, AnalyticsExportSheet } from "../components/AnalyticsExportSheet";
 import { AnalyticsKpiGrid } from "../components/AnalyticsKpiGrid";
-import { AnalyticsEmptyState } from "../components/AnalyticsLeaderboard";
 import { AnalyticsPageToolbar } from "../components/AnalyticsPageToolbar";
 import { renderReportWidgets } from "./enterpriseReportsRegistry";
 import type { ReportWidgetDef, ReportWidgetProps } from "./reportWidgetTypes";
@@ -31,33 +30,22 @@ function ToolbarWidget({ ctx }: ReportWidgetProps) {
       periodLabel={ctx.periodLabel}
       compareEnabled={ctx.compareEnabled}
       searchQuery={ctx.searchQuery}
-      hideDateRange={ctx.category === "performance"}
       onSearchChange={ctx.setSearchQuery}
       onOpenDateFilter={() => ctx.setDateOpen(true)}
       onToggleCompare={() => ctx.setCompareEnabled((v) => !v)}
       onOpenFilters={() => ctx.setDateOpen(true)}
       onOpenExport={() => ctx.setExportOpen(true)}
-      exportDisabled={!ctx.report.dataComplete}
     />
   );
 }
 
 function KpiGridWidget({ ctx }: ReportWidgetProps) {
-  if (ctx.report.loading) {
-    return (
-      <AnalyticsEmptyState
-        lang={ctx.lang}
-        titleKey="salesHistoryHydrationLoading"
-        bodyKey="baReportDataPreparing"
-      />
-    );
-  }
   return (
     <AnalyticsKpiGrid
       lang={ctx.lang}
       cards={ctx.kpiCards}
       activeId={ctx.activeKpi}
-      compareLabel={ctx.compareEnabled && ctx.report.dataComplete ? t(ctx.lang, "baComparePrior") : null}
+      compareLabel={ctx.compareEnabled ? t(ctx.lang, "baComparePrior") : null}
       onSelect={ctx.handleKpiSelect}
     />
   );
@@ -68,7 +56,6 @@ function AiInsightsWidget({ ctx }: ReportWidgetProps) {
 }
 
 function ArchiveStatusWidget({ ctx }: ReportWidgetProps) {
-  if (ctx.category === "performance") return null;
   return (
     <>
       {ctx.archiveNotice ? (
@@ -86,7 +73,6 @@ function ArchiveStatusWidget({ ctx }: ReportWidgetProps) {
 }
 
 function IncludeArchivedWidget({ ctx }: ReportWidgetProps) {
-  if (ctx.category === "performance") return null;
   return (
     <IncludeArchivedFilter lang={ctx.lang} checked={ctx.includeArchived} onChange={ctx.setIncludeArchived} />
   );
@@ -132,7 +118,6 @@ function CategoryContentWidget({ ctx }: ReportWidgetProps) {
       stockValueAtCost={ctx.report.stockValueAtCost}
       purchasesTodayUgx={ctx.purchasesTodayUgx}
       purchasesInPeriodUgx={ctx.purchasesInPeriodUgx}
-      cashFlow={ctx.cashFlow}
       marginLeaders={ctx.marginLeaders}
       weakProducts={ctx.report.slowProducts}
       products={ctx.products}
@@ -141,8 +126,6 @@ function CategoryContentWidget({ ctx }: ReportWidgetProps) {
       count={ctx.report.count}
       revenue={ctx.report.revenue}
       profit={ctx.report.profit}
-      dateFilter={ctx.filter}
-      includeArchived={ctx.includeArchived}
       modePanels={modePanels}
     />
   );
@@ -166,7 +149,6 @@ function FooterSheetsWidget({ ctx }: ReportWidgetProps) {
         lang={ctx.lang}
         open={ctx.exportOpen}
         onClose={() => ctx.setExportOpen(false)}
-        exportDisabled={!ctx.report.dataComplete}
         onExportPdf={ctx.onExportPdf}
         onExportCsv={ctx.onExportCsv}
         onExportExcel={ctx.onExportExcel}
@@ -179,13 +161,7 @@ function FooterSheetsWidget({ ctx }: ReportWidgetProps) {
 }
 
 function ExportFabWidget({ ctx }: ReportWidgetProps) {
-  return (
-    <AnalyticsExportFab
-      lang={ctx.lang}
-      disabled={!ctx.report.dataComplete}
-      onClick={() => ctx.setExportOpen(true)}
-    />
-  );
+  return <AnalyticsExportFab lang={ctx.lang} onClick={() => ctx.setExportOpen(true)} />;
 }
 
 /** Shared enterprise report widgets — available to every business mode. */

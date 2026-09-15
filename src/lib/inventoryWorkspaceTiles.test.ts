@@ -1,83 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
   INVENTORY_TRANSFER_ENABLED,
-  inventoryAddProductToShelfHref,
-  inventoryMovementsHref,
   resolveInventoryExtensionTiles,
   resolveInventoryNavTiles,
   resolveInventoryOverviewQuickActions,
-  resolveInventoryQuickActions,
-  tabHref,
 } from "./inventoryWorkspaceTiles";
 
-describe("inventoryWorkspaceTiles (MB-4C transfer enabled)", () => {
-  it("exposes Transfer in production navigation with enterprise.transfers gate", () => {
-    expect(INVENTORY_TRANSFER_ENABLED).toBe(true);
+describe("inventoryWorkspaceTiles (Phase 27.1)", () => {
+  it("keeps Transfer out of production navigation while disabled", () => {
+    expect(INVENTORY_TRANSFER_ENABLED).toBe(false);
     const nav = resolveInventoryNavTiles("retail", "/stock");
-    const transfer = nav.find((t) => t.id === "transfer");
-    expect(transfer).toMatchObject({
-      href: "/stock/transfer",
-      perm: "enterprise.transfers",
-    });
+    expect(nav.some((t) => t.id === "transfer")).toBe(false);
     const quick = resolveInventoryOverviewQuickActions("retail");
-    expect(quick.find((a) => a.id === "transfer")?.perm).toBe("enterprise.transfers");
-    expect(resolveInventoryQuickActions("retail").find((a) => a.id === "transfer")?.href).toBe("/stock/transfer");
+    expect(quick.some((a) => a.id === "transfer")).toBe(false);
   });
 
   it("exposes Add Product and Receive on the hub overview quick actions", () => {
     const quick = resolveInventoryOverviewQuickActions("retail");
     expect(quick.map((a) => a.id)).toEqual(
-      expect.arrayContaining(["receive", "newProduct", "importCsv", "adjust", "count", "transfer"]),
+      expect.arrayContaining(["receive", "newProduct", "adjust", "count"]),
     );
     expect(quick.find((a) => a.id === "newProduct")?.primary).toBe(true);
     expect(quick.find((a) => a.id === "receive")?.primary).toBe(true);
   });
 
-  it("places Import CSV beside Add Product on hub overview, gated by products.add", () => {
-    const quick = resolveInventoryOverviewQuickActions("retail");
-    const addIdx = quick.findIndex((a) => a.id === "newProduct");
-    const csvIdx = quick.findIndex((a) => a.id === "importCsv");
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(csvIdx).toBe(addIdx + 1);
-    expect(quick[csvIdx]).toMatchObject({
-      labelKey: "stockQuickImportCsv",
-      actionId: "importCsv",
-      perm: "products.add",
-      primary: true,
-    });
-  });
-
-  it("mounts completed hub destinations including transfer", () => {
+  it("mounts completed hub destinations only", () => {
     const nav = resolveInventoryNavTiles("retail", "/stock");
     expect(nav.map((t) => t.id)).toEqual([
       "products",
       "purchases",
       "count",
-      "transfer",
       "movements",
       "categories",
       "suppliers",
       "reports",
     ]);
-  });
-
-  it("INV-NEW-04 — empty-shelf add dest is Products + stockView=shelves, not tab=shelves", () => {
-    expect(inventoryAddProductToShelfHref("DRINKS")).toBe(
-      "/stock?tab=products&stockView=shelves&shelf=DRINKS&add=1",
-    );
-    expect(inventoryAddProductToShelfHref("DRINKS")).not.toContain("tab=shelves");
-    const categories = resolveInventoryNavTiles("retail", "/stock").find((t) => t.id === "categories");
-    expect(categories?.href).toBe(tabHref("/stock", "products", { stockView: "shelves" }));
-  });
-
-  it("INV-NEW-03 — movements dest is Products hub + stockView, not tab=movements", () => {
-    expect(tabHref("/stock", "products", { stockView: "movements" })).toBe(
-      "/stock?tab=products&stockView=movements",
-    );
-    expect(inventoryMovementsHref("/stock")).toBe("/stock?tab=products&stockView=movements");
-    expect(inventoryMovementsHref("/stock")).not.toBe("/stock?tab=movements");
-    const movements = resolveInventoryNavTiles("retail", "/stock").find((t) => t.id === "movements");
-    expect(movements?.href).toBe(inventoryMovementsHref("/stock"));
   });
 
   it("wires implemented extensions and hides unfinished ones", () => {

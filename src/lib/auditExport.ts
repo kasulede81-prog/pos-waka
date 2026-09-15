@@ -9,7 +9,6 @@ function escCsv(v: string): string {
 }
 
 export type AuditExportRow = {
-  id: string;
   timestamp: string;
   staff: string;
   role: string;
@@ -26,7 +25,6 @@ export function auditEntriesToExportRows(lang: Language, entries: AuditLogEntry[
   return entries.map((e) => {
     const d = extractAuditDetails(e, lang);
     return {
-      id: e.id,
       timestamp: e.at,
       staff: e.actorName?.trim() || actorDisplayLabel(e.actorUserId, lang),
       role: e.role,
@@ -44,7 +42,6 @@ export function auditEntriesToExportRows(lang: Language, entries: AuditLogEntry[
 export function buildAuditCsv(lang: Language, entries: AuditLogEntry[]): string {
   const rows = auditEntriesToExportRows(lang, entries);
   const header = [
-    t(lang, "auditExportColId"),
     t(lang, "auditExportColTimestamp"),
     t(lang, "auditExportColStaff"),
     t(lang, "auditExportColRole"),
@@ -60,7 +57,6 @@ export function buildAuditCsv(lang: Language, entries: AuditLogEntry[]): string 
   for (const r of rows) {
     lines.push(
       [
-        r.id,
         r.timestamp,
         r.staff,
         r.role,

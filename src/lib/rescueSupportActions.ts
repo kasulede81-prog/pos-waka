@@ -63,18 +63,13 @@ export async function fetchShopRecoverySignals(
   clearBackOfficePinAt: string | null;
   clearStaffCredentialsAt: string | null;
   passwordResetRequestedAt: string | null;
-  forceFullResyncAt: string | null;
 }> {
-  const empty = {
-    clearBackOfficePinAt: null,
-    clearStaffCredentialsAt: null,
-    passwordResetRequestedAt: null,
-    forceFullResyncAt: null,
-  };
-  if (!supabase) return empty;
+  if (!supabase) {
+    return { clearBackOfficePinAt: null, clearStaffCredentialsAt: null, passwordResetRequestedAt: null };
+  }
   const { data, error } = await supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: shopId });
   if (error || !data || typeof data !== "object") {
-    return empty;
+    return { clearBackOfficePinAt: null, clearStaffCredentialsAt: null, passwordResetRequestedAt: null };
   }
   const j = data as Record<string, unknown>;
   return {
@@ -82,7 +77,6 @@ export async function fetchShopRecoverySignals(
     clearStaffCredentialsAt: j.clear_staff_credentials_at != null ? String(j.clear_staff_credentials_at) : null,
     passwordResetRequestedAt:
       j.password_reset_requested_at != null ? String(j.password_reset_requested_at) : null,
-    forceFullResyncAt: j.force_full_resync_at != null ? String(j.force_full_resync_at) : null,
   };
 }
 

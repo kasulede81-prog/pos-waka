@@ -1,11 +1,5 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
-import {
-  canPersistInventoryArchivePreferences,
-  canPersistInventoryProductTagsPreferences,
-} from "../lib/settingsAuthorization";
-import { actorCanSeeInventoryCostValue } from "../lib/inventoryFinancialVisibility";
-import { countInventoryStockStatus } from "../lib/inventoryWorkspaceStats";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { useShallow } from "zustand/react/shallow";
@@ -26,23 +20,10 @@ import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { SimpleAddProductWizard, type SimpleAddWizardPrefill, type SimpleAddWizardStep } from "../components/stock/SimpleAddProductWizard";
 import { AiProductAssistSheet } from "../components/stock/AiProductAssistSheet";
 import { BulkInventoryAiModal } from "../components/stock/BulkInventoryAiModal";
-import { ProductCsvImportSheet } from "../components/stock/ProductCsvImportSheet";
-import { ProductImportReviewSheet } from "../components/stock/ProductImportReviewSheet";
 import { mapBulkRowsToQuickAdd } from "../lib/ai/bulkInventoryAi";
 import { useAiFeatureGate } from "../hooks/useAiFeatureGate";
-import { useToast } from "../context/ToastProvider";
-import {
-  buildCatalogPickerItems,
-  catalogShopIdFromPreferences,
-} from "../lib/catalogHierarchy";
-import type { NormalizedProductImportRow } from "../lib/productImport/types";
-import type { HeaderMappingDecision } from "../lib/productImport/headerMappingConfidence";
 import { inferProductGuess, uiPlaceholder } from "../lib/pharmacyUx";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
-import {
-  clearProductWizardSessionDraft,
-  readProductWizardSessionDraft,
-} from "../lib/productWizardSessionDraft";
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
 import { InventoryViewProvider } from "../features/inventory/viewEngine/InventoryViewContext";
@@ -79,42 +60,26 @@ import { EnterprisePageContainer } from "../components/layout/EnterprisePageCont
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { WakaButton } from "../components/ui/wakaPrimitives";
-import { FolderOpen, Package, PackagePlus } from "lucide-react";
+import { Package } from "lucide-react";
 import {
   costPerUnitFromPackAndStock,
   resolveQuickAddSellUnit,
   sellUnitPresetFromBaseUnit,
   sellingModeFromSellUnit,
 } from "../lib/quickAddProductForm";
-import { catalogDuplicatePrefill } from "../lib/duplicateProductCatalog";
 import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
+  distinctTrimmedCategories,
   normalizedCategoryKey,
 } from "../lib/productCategories";
 import {
   QUICK_SELL_SHELF_KEY,
+  collectShelfCategoryKeys,
   shelfHasUncategorizedSlot,
 } from "../lib/posShelfLayout";
-import { isHospitalityMode } from "../lib/hospitality";
-import { isPharmacyMode } from "../lib/pharmacy";
-import {
-  buildStockCatalogBrowseIndex,
-  resolveStockCatalogHierarchyView,
-  stockCatalogShopId,
-  stockDirectProductCountsByCategory,
-  stockHierarchyBrowseOrderKeys,
-  stockHierarchyCurrentInclusiveCount,
-  stockHierarchyEnabled,
-  stockHierarchyFolderTiles,
-  stockLegacyCategoryPicklist,
-  stockLegacyShelfFolderKeys,
-} from "../lib/stockCatalogBrowse";
-import {
-  jumpCatalogBrowseToIdentity,
-  popCatalogBrowseIdentity,
-  pushCatalogBrowseIdentity,
-} from "../lib/catalogBrowse";
+import { defaultMenuCategoriesForBusinessType, isHospitalityMode } from "../lib/hospitality";
+import { defaultPharmacyCategoriesForBusinessType, isPharmacyMode } from "../lib/pharmacy";
 import { shouldTrackBatchesForProduct } from "../lib/pharmacyStoreBatch";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
@@ -127,42 +92,29 @@ import {
   PharmacyBatchAdjustmentSheet,
   type PharmacyBatchAdjustmentKind,
 } from "../components/pharmacy/PharmacyBatchAdjustmentSheet";
-import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
-import { resolveStockPageHidScan } from "../lib/stockPageHidScan";
-import { resolvePharmacyReceiveDeepLink, stripPharmacyReceiveQuery } from "../lib/pharmacyReceiveDeepLink";
-import { resolveInventoryWorkspaceView } from "../lib/inventoryWorkspaceTiles";
-import { getProductBatches } from "../lib/pharmacyBatches";
-import { printHtmlDocument } from "../lib/documentPrint";
+import { findProductByBarcode } from "../lib/pharmacyMedicine";
 import { usePosViewportWidth } from "../hooks/usePosViewportWidth";
 import { isWakaMobile } from "../lib/responsiveBreakpoints";
-
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
 export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceEmbed?: boolean }) {
   usePageLoadMark("stock");
   const actor = useSessionActor();
-  const toast = useToast();
-  const { snapshot, authMode } = useSubscription();
+  const { snapshot } = useSubscription();
   const canRemove = actorHasPermission(actor, "products.remove");
   const canAdjust = actorHasPermission(actor, "stock.adjust");
   const canAdd = actorHasPermission(actor, "products.add");
-  /** Store `updateProduct` requires `stock.adjust`; create/duplicate stay `products.add`. */
-  const canEdit = canAdd && canAdjust;
-  const canArchive = canPersistInventoryArchivePreferences(actor, { snapshot, authMode });
-  const canPersistSupplierTags = canPersistInventoryProductTagsPreferences(actor, { snapshot, authMode });
-  const canSeeCost = actorCanSeeInventoryCostValue(actor, snapshot, authMode);
   const canPresets = actorHasPermission(actor, "products.edit_presets");
   const canSell = actorHasPermission(actor, "pos.sell");
   const canRestock = actorHasPermission(actor, "purchases.record");
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
 
-  const { products, suppliers, stockMovements, preferences, hydrated } = usePosStore(
+  const { products, suppliers, stockMovements, preferences } = usePosStore(
     useShallow((s) => ({
       products: s.products,
       suppliers: s.suppliers,
       stockMovements: s.stockMovements,
       preferences: s.preferences,
-      hydrated: s._hydrated,
     })),
   );
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
@@ -202,10 +154,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [bulkOpen, setBulkOpen] = useState(false);
   const [aiAssistOpen, setAiAssistOpen] = useState(false);
   const [bulkAiOpen, setBulkAiOpen] = useState(false);
-  const [csvImportOpen, setCsvImportOpen] = useState(false);
-  const [importReviewOpen, setImportReviewOpen] = useState(false);
-  const [importReviewRows, setImportReviewRows] = useState<NormalizedProductImportRow[]>([]);
-  const [importHeaderMappings, setImportHeaderMappings] = useState<readonly HeaderMappingDecision[]>([]);
   const [wizardPrefill, setWizardPrefill] = useState<SimpleAddWizardPrefill | undefined>();
   const [wizardInitialStep, setWizardInitialStep] = useState<SimpleAddWizardStep | undefined>();
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -217,12 +165,10 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [qaStock, setQaStock] = useState("");
   const [qaCategory, setQaCategory] = useState("");
   const [qaBuyPackTotal, setQaBuyPackTotal] = useState("");
-  const [qaDuplicateCost, setQaDuplicateCost] = useState<number | null>(null);
 
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
   const [stockTab, setStockTab] = useState<StockHubTab>(() => (workspaceEmbed ? "products" : "overview"));
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
-  const [hierarchyPathIds, setHierarchyPathIds] = useState<string[]>([]);
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [receiveProduct, setReceiveProduct] = useState<Product | null>(null);
@@ -246,85 +192,43 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { presets: savedFilterPresets, save: saveFilterPreset } = useInventorySavedFilters();
 
-  useLayoutEffect(() => {
-    const draft = readProductWizardSessionDraft();
-    if (!draft) return;
-    if (draft.kind === "pharmacy") {
-      if (!pharmacyMode) return;
-      setBulkOpen(true);
-      return;
-    }
-    if (pharmacyMode) return;
-    if (draft.fields.editingProductId) {
-      const p = usePosStore.getState().products.find((row) => row.id === draft.fields.editingProductId);
-      if (!p) {
-        clearProductWizardSessionDraft();
-        return;
-      }
-      setEditingProduct(p);
-    }
-    setBulkOpen(true);
-    // PRODUCT-CREATE-FLOW-1.1 — restore once when StockPage remounts after a hub tab switch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
     const caps = detectBarcodeCapabilities();
     if (!caps.hidWedge) return;
     void startBarcodeSession("hid", {
       onScan: (code) => {
-        const resolved = resolveStockPageHidScan(code, pharmacyMode);
         setStockTab("products");
-        setListQuery(resolved.listQuery);
-        if (resolved.detailProduct) setDetailProduct(resolved.detailProduct);
+        setListQuery(code);
+        if (pharmacyMode) {
+          const hit = findProductByBarcode(products, code);
+          if (hit) setDetailProduct(hit);
+        }
       },
     });
     return () => {
       void stopBarcodeSession();
     };
-  }, [pharmacyMode]);
+  }, [pharmacyMode, products]);
 
   useEffect(() => {
     if (workspaceEmbed) {
       const view = searchParams.get("stockView");
-      const shelf = searchParams.get("shelf");
-      const workspace = resolveInventoryWorkspaceView({ stockView: view, shelf });
       // Phase 31.1 — hub owns overview; never show nested overview inside products embed
-      setStockTab(workspace.stockTab);
-      if (workspace.selectedShelf) setSelectedShelf(workspace.selectedShelf);
+      if (view === "shelves" || view === "low" || view === "movements") {
+        setStockTab(view);
+      } else {
+        setStockTab("products");
+      }
       const q = searchParams.get("q");
       if (q) setListQuery(q);
-      const openAdd = searchParams.get("add") === "1" && canAdd && !freeProductLimitReached;
-      const importRequested = searchParams.get("import") === "csv";
-      if (openAdd) {
-        if (workspace.selectedShelf) {
-          const shelfName = workspace.selectedShelf === UNCATEGORIZED_SENTINEL ? "" : workspace.selectedShelf;
-          setWizardPrefill({
-            name: "",
-            shelf: shelfName,
-            sellUnit: "piece",
-            sellUnitCustom: "",
-            hasPack: false,
-            packKind: "crate",
-            packCustom: "",
-            piecesPerPack: "",
-          });
-          setWizardInitialStep("name");
-        } else {
-          setWizardPrefill(undefined);
-          setWizardInitialStep(undefined);
-        }
+      if (searchParams.get("add") === "1" && canAdd && !freeProductLimitReached) {
+        setWizardPrefill(undefined);
+        setWizardInitialStep(undefined);
         setBulkOpen(true);
-      }
-      if (importRequested && canAdd && !freeProductLimitReached) {
-        setCsvImportOpen(true);
-      }
-      if (openAdd || importRequested) {
         setSearchParams(
           (prev) => {
             const p = new URLSearchParams(prev);
-            if (openAdd) p.delete("add");
-            if (importRequested) p.delete("import");
+            p.delete("add");
             return p;
           },
           { replace: true },
@@ -360,39 +264,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   useEffect(() => {
     const productId = searchParams.get("productId");
-    const receive = searchParams.get("receive");
-    const resolved = resolvePharmacyReceiveDeepLink({
-      productId,
-      receive,
-      pharmacyMode,
-      products,
-      hydrated,
-    });
-
-    if (resolved.action === "wait") return;
-
-    if (resolved.action === "open") {
-      const hit = products.find((p) => p.id === resolved.productId);
-      if (hit) {
-        setReceiveProduct((current) => (current?.id === hit.id ? current : hit));
-        setStockTab("products");
-      }
-      setSearchParams((prev) => stripPharmacyReceiveQuery(prev, true), { replace: true });
-      return;
-    }
-
-    if (resolved.action === "miss") {
-      setSearchParams((prev) => stripPharmacyReceiveQuery(prev), { replace: true });
-      return;
-    }
-
     if (!productId || !pharmacyMode) return;
     const hit = products.find((p) => p.id === productId);
     if (hit) {
       setDetailProduct(hit);
       setStockTab("products");
     }
-  }, [searchParams, products, pharmacyMode, hydrated, setSearchParams]);
+  }, [searchParams, products, pharmacyMode]);
 
   const guessPreview = useMemo(() => {
     const n = qaName.trim();
@@ -411,25 +289,23 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     );
   }, [preferences.posPinnedShelfKeys, preferences.posShelfLayout]);
 
-  const stockCategoryPicklist = useMemo(
-    () =>
-      stockLegacyCategoryPicklist({
-        products,
-        savedShelfKeys,
-        layout: preferences.posShelfLayout ?? {},
-        businessType: preferences.businessType,
-        hospitalityModeEnabled: preferences.hospitalityModeEnabled,
-        pharmacyMode,
-      }),
-    [
-      products,
-      savedShelfKeys,
-      preferences.posShelfLayout,
-      preferences.businessType,
-      preferences.hospitalityModeEnabled,
-      pharmacyMode,
-    ],
-  );
+  const stockCategoryPicklist = useMemo(() => {
+    const fromProducts = distinctTrimmedCategories(products);
+    const fromSaved = savedShelfKeys.filter((k) => k !== UNCATEGORIZED_SENTINEL);
+    if (isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
+      const presets = defaultMenuCategoriesForBusinessType(preferences.businessType);
+      return [...new Set([...fromProducts, ...fromSaved, ...presets])].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" }),
+      );
+    }
+    if (pharmacyMode) {
+      const presets = defaultPharmacyCategoriesForBusinessType(preferences.businessType);
+      return [...new Set([...fromProducts, ...fromSaved, ...presets])].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" }),
+      );
+    }
+    return collectShelfCategoryKeys(products, savedShelfKeys, preferences.posShelfLayout ?? {});
+  }, [products, preferences.businessType, preferences.hospitalityModeEnabled, preferences.posShelfLayout, pharmacyMode, savedShelfKeys]);
   const stockHasUncategorized = useMemo(
     () =>
       shelfHasUncategorizedSlot(
@@ -439,19 +315,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       ),
     [products, preferences.posPinnedShelfKeys, preferences.posShelfLayout],
   );
-
-  const importPickerItems = useMemo(
-    () =>
-      buildCatalogPickerItems({
-        products,
-        layout: preferences.posShelfLayout ?? {},
-        orderKeys: preferences.posPinnedShelfKeys ?? [],
-        nodes: preferences.posCatalogNodes ?? [],
-        shopId: catalogShopIdFromPreferences(preferences),
-      }),
-    [products, preferences],
-  );
-  const existingImportNames = useMemo(() => products.map((p) => p.name), [products]);
 
   const productSearchIndex = useReconciledInventorySearchIndex(products, preferences, stockMovements);
 
@@ -491,70 +354,33 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     ],
   );
 
-  const stockStatus = useMemo(() => countInventoryStockStatus(unlockedProducts), [unlockedProducts]);
-  const lowStockCount = stockStatus.lowStockCount;
+  const lowStockCount = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)).length, [unlockedProducts]);
   const inventoryValueUgx = useMemo(() => inventoryValueAtCostUgx(unlockedProducts), [unlockedProducts]);
   const lowStockProducts = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)), [unlockedProducts]);
 
-  const hierarchyEnabled = stockHierarchyEnabled(preferences);
-  const catalogBrowseIndex = useMemo(() => {
-    if (!hierarchyEnabled) return null;
-    return buildStockCatalogBrowseIndex({
-      products: unlockedProducts,
-      layout: preferences.posShelfLayout ?? {},
-      nodes: preferences.posCatalogNodes ?? [],
-      shopId: stockCatalogShopId(preferences),
-      orderKeys: stockHierarchyBrowseOrderKeys({
-        savedShelfKeys,
-        businessType: preferences.businessType,
-        hospitalityModeEnabled: preferences.hospitalityModeEnabled,
-        pharmacyMode,
-      }),
-      uncategorizedLabel: t(lang, "uncategorized"),
+  const shelfFolders = useMemo(() => {
+    const keys = [...stockCategoryPicklist];
+    if (stockHasUncategorized) keys.push(UNCATEGORIZED_SENTINEL);
+    return keys.sort((a, b) => {
+      if (a === UNCATEGORIZED_SENTINEL) return 1;
+      if (b === UNCATEGORIZED_SENTINEL) return -1;
+      return a.localeCompare(b, undefined, { sensitivity: "base" });
     });
-  }, [
-    hierarchyEnabled,
-    unlockedProducts,
-    preferences,
-    savedShelfKeys,
-    pharmacyMode,
-    lang,
-  ]);
+  }, [stockCategoryPicklist, stockHasUncategorized]);
 
-  const resolvedHierarchyPath =
-    hierarchyEnabled && catalogBrowseIndex && hierarchyPathIds.length === 0 && selectedShelf
-      ? jumpCatalogBrowseToIdentity(catalogBrowseIndex, [], selectedShelf)
-      : hierarchyPathIds;
-
-  const hierarchyView = useMemo(
-    () =>
-      resolveStockCatalogHierarchyView({
-        enabled: hierarchyEnabled,
-        path: resolvedHierarchyPath,
-        index: catalogBrowseIndex,
-        layout: preferences.posShelfLayout ?? {},
-      }),
-    [hierarchyEnabled, resolvedHierarchyPath, catalogBrowseIndex, preferences.posShelfLayout],
-  );
-
-  const shelfFolders = useMemo(
-    () => stockLegacyShelfFolderKeys(stockCategoryPicklist, stockHasUncategorized),
-    [stockCategoryPicklist, stockHasUncategorized],
-  );
-
-  const shelfProductCounts = useMemo(
-    () => stockDirectProductCountsByCategory(unlockedProducts),
-    [unlockedProducts],
-  );
-
-  const activeShelf = hierarchyEnabled ? (hierarchyView?.currentIdentity ?? null) : selectedShelf;
-  const hierarchyFolderTiles = hierarchyView ? stockHierarchyFolderTiles(hierarchyView) : [];
-  const hierarchyAtRoot = !hierarchyView || hierarchyView.atRoot;
+  const shelfProductCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of unlockedProducts) {
+      const g = normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL;
+      m.set(g, (m.get(g) ?? 0) + 1);
+    }
+    return m;
+  }, [unlockedProducts]);
 
   const productsInSelectedShelf = useMemo(() => {
-    if (!activeShelf) return [];
+    if (!selectedShelf) return [];
     const shelfProducts = unlockedProducts.filter(
-      (p) => (normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL) === activeShelf,
+      (p) => (normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL) === selectedShelf,
     );
     return queryInventoryProducts({
       products: shelfProducts,
@@ -567,7 +393,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       filterContext,
       stockMovements,
     });
-  }, [activeShelf, unlockedProducts, listQuery, productSearchIndex, advancedFilters, filterContext, stockMovements]);
+  }, [selectedShelf, unlockedProducts, listQuery, productSearchIndex, advancedFilters, filterContext, stockMovements]);
 
   const recentMovements = useMemo(
     () => [...stockMovements].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
@@ -614,7 +440,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     const sellingMode = sellingModeFromSellUnit(sellUnit);
     const stockQty = Number(qaStock.replace(/[^\d.]/g, "")) || 0;
     const packTotal = Math.floor(Number(qaBuyPackTotal.replace(/\D/g, "")) || 0);
-    const costPerSell = costPerUnitFromPackAndStock(packTotal, stockQty) ?? qaDuplicateCost;
+    const costPerSell = costPerUnitFromPackAndStock(packTotal, stockQty);
     const r = quickAddProduct({
       name: qaName,
       priceUgx: price,
@@ -632,7 +458,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     setQaStock("");
     setQaCategory("");
     setQaBuyPackTotal("");
-    setQaDuplicateCost(null);
     setQuickOpen(false);
   };
 
@@ -675,60 +500,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const openBulkInventoryAi = () => {
     if (freeProductLimitReached || !aiInventoryAssistantEnabled) return;
     setBulkAiOpen(true);
-  };
-
-  const openCsvImport = () => {
-    if (!canAdd || freeProductLimitReached) return;
-    setCsvImportOpen(true);
-  };
-
-  const handleCsvParsed = (rows: NormalizedProductImportRow[], headerMappings: readonly HeaderMappingDecision[]) => {
-    setCsvImportOpen(false);
-    setImportReviewRows(rows);
-    setImportHeaderMappings(headerMappings);
-    setImportReviewOpen(true);
-  };
-
-  const handleImportReviewClose = () => {
-    setImportReviewOpen(false);
-    setImportReviewRows([]);
-    setImportHeaderMappings([]);
-  };
-
-  const handleNormalizedImported = (result: {
-    added: number;
-    skipped: number;
-    skippedReason?: "planProductLimit";
-  }) => {
-    // TASK 7 — a plan cap must never read as a silent success.
-    if (result.skippedReason === "planProductLimit" && result.skipped > 0) {
-      toast.warning(
-        tTemplate(lang, "importResultPlanLimit", {
-          added: String(result.added),
-          skipped: String(result.skipped),
-        }),
-      );
-      return;
-    }
-    if (result.added > 0 && result.skipped > 0) {
-      toast.warning(
-        tTemplate(lang, "importResultCombined", {
-          added: String(result.added),
-          skipped: String(result.skipped),
-        }),
-      );
-      return;
-    }
-    if (result.added > 0) {
-      toast.success(tTemplate(lang, "importResultSuccess", { added: String(result.added) }));
-      return;
-    }
-    toast.error(
-      tTemplate(lang, "importResultCombined", {
-        added: "0",
-        skipped: String(result.skipped),
-      }),
-    );
   };
 
   const handleBulkAiImport = (rows: ReturnType<typeof mapBulkRowsToQuickAdd>) => bulkQuickAddProducts(rows);
@@ -880,24 +651,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         setDetailProduct(null);
         navigate("/stock/transfer");
         break;
-      case "print": {
-        const batches = getProductBatches(p);
-        const lines =
-          batches.length === 0
-            ? `<p>—</p>`
-            : `<ul>${batches
-                .map(
-                  (b) =>
-                    `<li>${b.batchNumber} · ${b.expiryDate ?? "—"} · ${b.quantityRemaining}</li>`,
-                )
-                .join("")}</ul>`;
-        printHtmlDocument(
-          `<article><h1>${formatMedicineFullLabel(p)}</h1>${lines}</article>`,
-          "80mm",
-          t(lang, "pharmacyQuickPrintBatch"),
-        );
+      case "print":
+        window.print();
         break;
-      }
       default:
         break;
     }
@@ -905,16 +661,18 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   const openDuplicateToQuick = (p: Product) => {
     if (freeProductLimitReached) return;
-    const prefill = catalogDuplicatePrefill(p, " (2)");
-    setQaName(prefill.name);
-    setQaCategory(prefill.category);
+    setQaName(`${p.name} (2)`);
+    setQaCategory((p.category ?? "").trim());
     const preset = sellUnitPresetFromBaseUnit(p.baseUnit);
     setQaUnitPreset(preset);
     setQaUnitCustom(preset === "other" ? p.baseUnit : "");
-    setQaPrice(String(prefill.sellingPricePerUnitUgx));
-    setQaStock(String(prefill.stockOnHand));
-    setQaBuyPackTotal("");
-    setQaDuplicateCost(prefill.costPricePerUnitUgx);
+    setQaPrice(String(Math.floor(p.sellingPricePerUnitUgx)));
+    setQaStock(String(p.stockOnHand));
+    setQaBuyPackTotal(
+      p.stockOnHand > 0 && p.costPricePerUnitUgx > 0
+        ? String(Math.floor(p.costPricePerUnitUgx * p.stockOnHand))
+        : "",
+    );
     setQuickOpen(true);
   };
 
@@ -944,7 +702,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     }
     switch (action) {
       case "edit":
-        if (canEdit) openEditProduct(p);
+        if (canAdd) openEditProduct(p);
         break;
       case "add10":
         if (canAdjust) adjustStock(p.id, 10, "added");
@@ -1039,11 +797,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         preferences={preferences}
         lockedIds={lockedIds}
         canAdd={canAdd}
-        canEdit={canEdit}
         canRemove={canRemove}
         canSell={canSell}
         canRestock={canRestock}
-        canSeeCost={canSeeCost}
         isOnlyProduct={onlyProductInStock}
         variant={variant}
         listSort={listSort}
@@ -1059,46 +815,10 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     () =>
       shelfFolders.map((key) => ({
         key,
-        label:
-          key === UNCATEGORIZED_SENTINEL
-            ? t(lang, "uncategorized")
-            : preferences.posShelfLayout?.[key]?.displayName?.trim() || key,
+        label: key === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : key,
         count: shelfProductCounts.get(key) ?? 0,
       })),
-    [shelfFolders, shelfProductCounts, lang, preferences.posShelfLayout],
-  );
-  const displayedShelves = hierarchyEnabled ? hierarchyFolderTiles : shelfGridItems;
-
-  const openStockShelf = useCallback(
-    (key: string) => {
-      if (hierarchyEnabled && catalogBrowseIndex) {
-        setHierarchyPathIds((prev) => pushCatalogBrowseIdentity(catalogBrowseIndex, prev, key));
-        return;
-      }
-      setSelectedShelf(key);
-    },
-    [hierarchyEnabled, catalogBrowseIndex],
-  );
-
-  const backStockShelf = useCallback(() => {
-    if (hierarchyEnabled) {
-      const next = popCatalogBrowseIdentity(hierarchyPathIds);
-      setHierarchyPathIds(next);
-      if (next.length === 0) setSelectedShelf(null);
-      return;
-    }
-    setSelectedShelf(null);
-  }, [hierarchyEnabled, hierarchyPathIds]);
-
-  const jumpStockShelf = useCallback(
-    (identity: string) => {
-      if (hierarchyEnabled && catalogBrowseIndex) {
-        setHierarchyPathIds((prev) => jumpCatalogBrowseToIdentity(catalogBrowseIndex, prev, identity));
-        return;
-      }
-      setSelectedShelf(identity);
-    },
-    [hierarchyEnabled, catalogBrowseIndex],
+    [shelfFolders, shelfProductCounts, lang],
   );
 
   const handlePinnedSearch = (q: string) => {
@@ -1112,10 +832,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   const handleStockTabChange = (tab: StockHubTab) => {
     setStockTab(tab);
-    if (tab !== "shelves") {
-      setSelectedShelf(null);
-      setHierarchyPathIds([]);
-    }
+    if (tab !== "shelves") setSelectedShelf(null);
   };
 
   return (
@@ -1179,9 +896,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
               <WakaButton type="button" disabled={freeProductLimitReached} onClick={openAddProductSheet}>
                 {modeTerm("stockAddProduct")}
               </WakaButton>
-              <WakaButton type="button" variant="secondary" disabled={freeProductLimitReached} onClick={openCsvImport}>
-                {t(lang, "stockQuickImportCsv")}
-              </WakaButton>
               {aiProductAssistantEnabled ? (
                 <WakaButton type="button" variant="secondary" disabled={freeProductLimitReached} onClick={openAiProductAssist}>
                   {t(lang, "aiProductAssistBtn")}
@@ -1195,12 +909,23 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         </EnterpriseEmptyState>
       ) : (
         <>
+          {stockTab !== "movements" ? (
+            <InventoryStatGrid
+              lang={lang}
+              totalProducts={unlockedProducts.length}
+              lowStockCount={lowStockCount}
+              shelfCount={shelfFolders.length}
+              inventoryValueUgx={inventoryValueUgx}
+              onLowStockTap={() => setStockTab("low")}
+            />
+          ) : null}
+
           <div
             className={clsx(
-              "inventory-sub-nav -mx-3 space-y-2 px-3 py-2",
-              "md:-mx-6 md:px-6",
+              "-mx-3 space-y-2 border-b border-border/80 bg-muted/95 px-3 py-2",
+              "supports-[backdrop-filter]:bg-muted/88 md:-mx-6 md:px-6",
               // Phone: avoid nested sticky chrome that buries the product list (Phase 27.1 / 4A).
-              "md:sticky md:top-0 md:z-20",
+              "md:sticky md:top-0 md:z-20 md:backdrop-blur-md",
             )}
           >
             <StockSectionTabs
@@ -1224,32 +949,11 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
               onAddProduct={openAddProductSheet}
               showImport={aiInventoryAssistantEnabled}
               onImportProducts={openBulkInventoryAi}
-              showCsvImport={canAdd}
-              onCsvImport={openCsvImport}
             />
           ) : null}
 
           {stockTab === "products" ? (
-            <section className="inventory-products-stage space-y-2.5">
-              <div className="inventory-products-stage__header flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="inventory-products-stage__title">{t(lang, "stockTabProducts")}</h2>
-                  <p className="inventory-products-stage__count">
-                    {tTemplate(lang, "inventoryGroupItemCount", { count: String(unlockedProducts.length) })}
-                  </p>
-                </div>
-                {canAdd && !isPhone && !freeProductLimitReached ? (
-                  <WakaButton
-                    type="button"
-                    variant="primary"
-                    className="inventory-products-cta shrink-0"
-                    iconLeft={<PackagePlus className="h-4 w-4" aria-hidden />}
-                    onClick={openAddProductSheet}
-                  >
-                    {t(lang, "stockAddProductBtn")}
-                  </WakaButton>
-                ) : null}
-              </div>
+            <section className="space-y-3">
               <InventoryProductsControlBar
                 lang={lang}
                 isPhone={isPhone}
@@ -1282,19 +986,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 stockHasUncategorized={stockHasUncategorized}
                 groupByCategory={groupByCategory}
                 onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
-                canImportCsv={canAdd}
-                onImportCsv={openCsvImport}
-                csvImportDisabled={freeProductLimitReached}
-                canSeeCost={canSeeCost}
-              />
-              <InventoryStatGrid
-                lang={lang}
-                totalProducts={unlockedProducts.length}
-                lowStockCount={lowStockCount}
-                shelfCount={shelfFolders.length}
-                inventoryValueUgx={inventoryValueUgx}
-                showInventoryValue={canSeeCost}
-                onLowStockTap={() => setStockTab("low")}
               />
               <InventorySelectionToolbar
                 lang={lang}
@@ -1302,24 +993,15 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 filteredIds={listableProducts.map((p) => p.id)}
               />
               {groupByCategory && categoryGroups && listableProducts.length > 0 ? (
-                <div className="space-y-3">
-                  {categoryGroups.keys.map((gk) => {
-                    const groupProducts = categoryGroups.map.get(gk) ?? [];
-                    return (
-                      <div key={gk}>
-                        <h3 className="inventory-group-heading">
-                          <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                          <span className="inventory-group-heading__name">
-                            {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
-                          </span>
-                          <span className="inventory-group-heading__count">
-                            {tTemplate(lang, "inventoryGroupItemCount", { count: String(groupProducts.length) })}
-                          </span>
-                        </h3>
-                        {renderProductList(groupProducts)}
-                      </div>
-                    );
-                  })}
+                <div className="space-y-4">
+                  {categoryGroups.keys.map((gk) => (
+                    <div key={gk}>
+                      <h3 className="mb-2 px-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                        {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
+                      </h3>
+                      {renderProductList(categoryGroups.map.get(gk) ?? [])}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 renderProductList(listableProducts)
@@ -1330,24 +1012,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           {stockTab === "shelves" ? (
             <StockShelfGrid
               lang={lang}
-              shelves={displayedShelves}
-              selectedShelf={activeShelf}
+              shelves={shelfGridItems}
+              selectedShelf={selectedShelf}
               canArrangeShelves={canArrangeShelves}
-              onSelectShelf={openStockShelf}
-              onBack={backStockShelf}
-              path={hierarchyEnabled && hierarchyView && !hierarchyAtRoot ? hierarchyView.path : undefined}
-              onPathSelect={hierarchyEnabled && !hierarchyAtRoot ? jumpStockShelf : undefined}
-              nestedFolders={hierarchyEnabled && !hierarchyAtRoot ? hierarchyFolderTiles : undefined}
-              selectedLabel={
-                hierarchyEnabled ? hierarchyView?.currentLabel ?? undefined : undefined
-              }
-              selectedCount={
-                hierarchyEnabled && hierarchyView && !hierarchyAtRoot
-                  ? stockHierarchyCurrentInclusiveCount(hierarchyView)
-                  : undefined
-              }
+              onSelectShelf={setSelectedShelf}
+              onBack={() => setSelectedShelf(null)}
               shelfDetailHeader={
-                activeShelf ? (
+                selectedShelf ? (
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <StockListToolbar
@@ -1370,20 +1041,19 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 ) : undefined
               }
             >
-              {activeShelf ? (
-                productsInSelectedShelf.length === 0 &&
-                !(hierarchyEnabled && hierarchyFolderTiles.length > 0) ? (
+              {selectedShelf ? (
+                productsInSelectedShelf.length === 0 ? (
                   <EmptyShelfPanel
                     lang={lang}
                     shelfLabel={
-                      activeShelf === UNCATEGORIZED_SENTINEL
+                      selectedShelf === UNCATEGORIZED_SENTINEL
                         ? t(lang, "uncategorized")
-                        : hierarchyView?.currentLabel || activeShelf
+                        : selectedShelf
                     }
                     canAdd={canAdd && !freeProductLimitReached}
-                    onAddProduct={() => openAddProductForShelf(activeShelf)}
+                    onAddProduct={() => openAddProductForShelf(selectedShelf)}
                   />
-                ) : productsInSelectedShelf.length === 0 ? null : (
+                ) : (
                   renderProductList(productsInSelectedShelf)
                 )
               ) : null}
@@ -1391,7 +1061,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           ) : null}
 
           {stockTab === "low" ? (
-            <section className="inventory-products-stage space-y-3">
+            <section className="space-y-3">
               <div className="flex justify-end">
                 <InventoryViewSwitcher lang={lang} variant="inline" />
               </div>
@@ -1409,7 +1079,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             <StockMovementsPanel lang={lang} movements={recentMovements} pharmacyMode={pharmacyMode} wholesaleMode={wholesaleMode} />
           ) : null}
 
-          {isPhone && canAdd && !freeProductLimitReached ? (
+          {canAdd && !freeProductLimitReached ? (
             <StockFab lang={lang} onClick={openAddProductSheet} />
           ) : null}
         </>
@@ -1417,10 +1087,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
       <ModalSheet
         open={quickOpen}
-        onClose={() => {
-          setQaDuplicateCost(null);
-          setQuickOpen(false);
-        }}
+        onClose={() => setQuickOpen(false)}
         align="center"
         zIndexClass="z-[70]"
         title={
@@ -1436,14 +1103,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         }
         footer={
           <div className="grid grid-cols-2 gap-3">
-            <WakaButton
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setQaDuplicateCost(null);
-                setQuickOpen(false);
-              }}
-            >
+            <WakaButton type="button" variant="secondary" onClick={() => setQuickOpen(false)}>
               {t(lang, "cancel")}
             </WakaButton>
             <WakaButton type="submit" form="stock-quick-add-form">
@@ -1595,31 +1255,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         />
       ) : null}
 
-      {canAdd ? (
-        <ProductCsvImportSheet
-          lang={lang}
-          open={csvImportOpen}
-          onClose={() => setCsvImportOpen(false)}
-          onParsed={handleCsvParsed}
-        />
-      ) : null}
-
-      <ProductImportReviewSheet
-        lang={lang}
-        open={importReviewOpen}
-        onClose={handleImportReviewClose}
-        rows={importReviewRows}
-        onChange={setImportReviewRows}
-        headerMappings={importHeaderMappings}
-        pickerItems={importPickerItems}
-        existingProductNames={existingImportNames}
-        businessType={preferences.businessType}
-        pharmacyModeEnabled={preferences.pharmacyModeEnabled}
-        generalCategoryLabel={t(lang, "generalCategory")}
-        bulkQuickAddProducts={bulkQuickAddProducts}
-        onImported={handleNormalizedImported}
-      />
-
       {aiProductAssistantEnabled ? (
         <AiProductAssistSheet
           lang={lang}
@@ -1703,8 +1338,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         preferences={preferences}
         locked={detailProduct ? lockedIds.has(detailProduct.id) : false}
         canAdd={canAdd}
-        canEdit={canEdit}
-        canSeeCost={canSeeCost}
         canSell={canSell}
         onClose={() => setDetailProduct(null)}
         onSell={() => detailProduct && handleRowAction(detailProduct, "sell")}
@@ -1724,7 +1357,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           open
           onClose={() => setDetailProduct(null)}
           canReceive={canRestock}
-          canAdjust={canEdit}
+          canAdjust={canAdd}
           canWriteOff={canAdjust}
           canReturn={canRestock}
           onAction={(action) => handleBatchDetailAction(detailProduct, action)}
@@ -1763,10 +1396,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         open={actionSheetProduct !== null}
         productName={actionSheetProduct?.name ?? ""}
         canAdd={canAdd}
-        canEdit={canEdit}
         canRestock={canRestock}
         canRemove={canRemove}
-        canSell={canSell}
         onClose={() => setActionSheetProduct(null)}
         onAction={(action) => {
           if (actionSheetProduct) handleRowAction(actionSheetProduct, action);
@@ -1780,11 +1411,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         filteredProducts={listableProducts}
         preferences={preferences}
         suppliers={suppliers}
-        canEdit={canEdit}
-        canArchive={canArchive}
-        canPersistSupplierTags={canPersistSupplierTags}
+        canEdit={canAdd}
         canAdjust={canAdjust}
-        canSeeCost={canSeeCost}
         stockCategoryPicklist={stockCategoryPicklist}
         searchInputRef={searchInputRef}
         filteredIds={listableProducts.map((p) => p.id)}

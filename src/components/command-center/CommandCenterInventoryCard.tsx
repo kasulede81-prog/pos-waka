@@ -4,7 +4,6 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { OwnerInventoryExtended } from "../../lib/ownerCommandCenterBuilders";
 import { formatShortUgx } from "../../lib/commandCenterPageView";
-import { reportsInventoryCostPresentation } from "../../features/business-analytics/lib/analyticsPageView";
 import { EnterpriseCard } from "../enterprise/EnterpriseCard";
 import { EnterpriseKpiCard } from "../enterprise/EnterpriseKpiCard";
 import { Caption } from "../enterprise/EnterpriseTypography";
@@ -15,15 +14,13 @@ import clsx from "clsx";
 type Props = {
   lang: Language;
   inventory: OwnerInventoryExtended;
-  canProfit?: boolean;
 };
 
-export function CommandCenterInventoryCard({ lang, inventory, canProfit = true }: Props) {
+export function CommandCenterInventoryCard({ lang, inventory }: Props) {
   const accuracyPct =
     inventory.countVarianceCount === 0 && inventory.negativeStock.length === 0
       ? 99
       : Math.max(0, 100 - inventory.countVarianceCount * 5 - inventory.negativeStock.length * 3);
-  const inventoryCost = reportsInventoryCostPresentation(canProfit, inventory.inventoryValueUgx);
 
   return (
     <EnterpriseCard
@@ -36,11 +33,7 @@ export function CommandCenterInventoryCard({ lang, inventory, canProfit = true }
       }
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <EnterpriseKpiCard
-          icon={Package}
-          label={t(lang, "ownerInventoryValue")}
-          value={inventoryCost.visible ? formatShortUgx(inventoryCost.valueUgx) : t(lang, "baProfitLockedTitle")}
-        />
+        <EnterpriseKpiCard icon={Package} label={t(lang, "ownerInventoryValue")} value={formatShortUgx(inventory.inventoryValueUgx)} />
         <EnterpriseKpiCard
           icon={AlertTriangle}
           label={t(lang, "ownerInventoryNegative")}

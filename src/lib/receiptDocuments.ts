@@ -3,11 +3,10 @@ import {
   buildReceiptDisplayData,
   buildSaleReceiptHtml,
   buildSaleReceiptText,
-  printReceiptText,
   printReceiptWithFallback,
   type ReceiptLabels,
 } from "./receiptPrint";
-import { printHtmlDocument } from "./documentPrint";
+import { printHtmlDocumentWithDesktop } from "./documentPrint";
 import { isNativePrintPlatform } from "./nativePrintPlatform";
 import { sharePlainReceiptForPrint } from "./nativeReceiptPrint";
 import { dateKeyKampala } from "./datesUg";
@@ -137,55 +136,29 @@ export function receiptPdfFilename(kind: "sale" | "return" | "debt", id: string)
   return sanitizePdfStem(`waka-receipt-${kind}-${id.slice(0, 8)}-${day}`) + ".pdf";
 }
 
-export type SalePrintResult = {
-  ok: boolean;
-  mode: "thermal" | "html" | "share" | "handoff" | "none";
-  error?: string;
-};
-
-export async function printSaleReceipt(ctx: SaleReceiptContext): Promise<SalePrintResult> {
-  // Post-sale / reprint only. A configured native printer is the primary path.
-  // PDF/share is only offered when no native receipt printer is configured.
-  const { tryEnqueueRetailSaleReceiptEscPos } = await import("./retailReceiptPrint");
-  const thermal = await tryEnqueueRetailSaleReceiptEscPos(ctx);
-  if (thermal.enqueued) return { ok: true, mode: "thermal" };
-  if (thermal.nativePrinterConfigured) {
-    return {
-      ok: false,
-      mode: "thermal",
-      error: "Could not print to the receipt printer. Check that it is on and paired.",
-    };
-  }
-
+export async function printSaleReceipt(ctx: SaleReceiptContext): Promise<{ ok: boolean }> {
   const paper = ctx.paper ?? "80mm";
+  const plain = saleReceiptPlain(ctx);
   const html = saleReceiptHtml(ctx);
 
-  if (!isNativePrintPlatform()) {
-    const saleId = ctx.sale.id?.trim() ?? "";
-    if (saleId) {
-      const { tryLaunchDesktopPrintHandoff } = await import("./webPrintHandoff");
-      // Do not launch Android Intent handoff from the web SPA. Assigning
-      // window.location to intent:// unloads this tab (looks like logout) and
-      // opens the native app, which often does not have the sale locally.
-      if (tryLaunchDesktopPrintHandoff(saleId)) {
-        return { ok: true, mode: "handoff" };
-      }
-    }
-    if (printHtmlDocument(html, paper, "Waka receipt")) return { ok: true, mode: "html" };
-    const plain = saleReceiptPlain(ctx);
-    if (printReceiptText(plain, paper)) return { ok: true, mode: "html" };
-    return { ok: false, mode: "none" };
+  if (isNativePrintPlatform()) {
+    const result = await printReceiptWithFallback(plain, paper);
+    if (result.ok) return { ok: true };
+
+    const shared = await sharePlainReceiptForPrint(plain, paper, `receipt-${ctx.sale.id.slice(0, 8)}`);
+    if (shared) return { ok: true };
+
+    const { shareSaleReceiptPdf } = await import("./receiptPdfDocuments");
+    return { ok: await shareSaleReceiptPdf(ctx) };
   }
 
-  const plain = saleReceiptPlain(ctx);
+  const htmlOk = await printHtmlDocumentWithDesktop(html, paper, "Waka receipt");
+  if (htmlOk) return { ok: true };
+
   const result = await printReceiptWithFallback(plain, paper);
-  if (result.ok) return { ok: true, mode: result.mode === "native" ? "thermal" : "html" };
+  if (result.ok) return { ok: true };
 
-  const shared = await sharePlainReceiptForPrint(plain, paper, `receipt-${ctx.sale.id.slice(0, 8)}`);
-  if (shared) return { ok: true, mode: "share" };
-
-  const { shareSaleReceiptPdf } = await import("./receiptPdfDocuments");
-  return { ok: await shareSaleReceiptPdf(ctx), mode: "share" };
+  return { ok: false };
 }
 
 export async function downloadSaleReceiptPdf(ctx: SaleReceiptContext): Promise<boolean> {
@@ -198,27 +171,15 @@ export async function shareSaleReceiptPdf(ctx: SaleReceiptContext): Promise<bool
   return sharePdf(ctx);
 }
 
-export async function printReturnReceipt(ctx: ReturnReceiptContext): Promise<SalePrintResult> {
-  const { tryEnqueueReturnReceiptEscPos } = await import("./returnReceiptPrint");
-  const thermal = await tryEnqueueReturnReceiptEscPos(ctx);
-  if (thermal.enqueued) return { ok: true, mode: "thermal" };
-  if (thermal.nativePrinterConfigured) {
-    return {
-      ok: false,
-      mode: "thermal",
-      error: "Could not print to the receipt printer. Check that it is on and paired.",
-    };
-  }
-
+export async function printReturnReceipt(ctx: ReturnReceiptContext): Promise<{ ok: boolean }> {
   const paper = ctx.paper ?? "80mm";
-  if (!isNativePrintPlatform()) {
-    if (printHtmlDocument(returnReceiptHtml(ctx), paper, "Return receipt")) {
-      return { ok: true, mode: "html" };
-    }
-    return { ok: false, mode: "none" };
+  if (isNativePrintPlatform()) {
+    const { shareReturnReceiptPdf } = await import("./receiptPdfDocuments");
+    return { ok: await shareReturnReceiptPdf(ctx) };
   }
-  const { shareReturnReceiptPdf } = await import("./receiptPdfDocuments");
-  return { ok: await shareReturnReceiptPdf(ctx), mode: "share" };
+  const htmlOk = await printHtmlDocumentWithDesktop(returnReceiptHtml(ctx), paper, "Return receipt");
+  if (htmlOk) return { ok: true };
+  return { ok: false };
 }
 
 export async function downloadReturnReceiptPdf(ctx: ReturnReceiptContext): Promise<boolean> {
@@ -231,27 +192,15 @@ export async function shareReturnReceiptPdf(ctx: ReturnReceiptContext): Promise<
   return shareReturnReceiptPdf(ctx);
 }
 
-export async function printDebtPaymentReceipt(ctx: DebtPaymentReceiptContext): Promise<SalePrintResult> {
-  const { tryEnqueueDebtReceiptEscPos } = await import("./debtReceiptPrint");
-  const thermal = await tryEnqueueDebtReceiptEscPos(ctx);
-  if (thermal.enqueued) return { ok: true, mode: "thermal" };
-  if (thermal.nativePrinterConfigured) {
-    return {
-      ok: false,
-      mode: "thermal",
-      error: "Could not print to the receipt printer. Check that it is on and paired.",
-    };
-  }
-
+export async function printDebtPaymentReceipt(ctx: DebtPaymentReceiptContext): Promise<{ ok: boolean }> {
   const paper = ctx.paper ?? "80mm";
-  if (!isNativePrintPlatform()) {
-    if (printHtmlDocument(debtReceiptHtml(ctx), paper, "Debt payment receipt")) {
-      return { ok: true, mode: "html" };
-    }
-    return { ok: false, mode: "none" };
+  if (isNativePrintPlatform()) {
+    const { shareDebtPaymentReceiptPdf } = await import("./receiptPdfDocuments");
+    return { ok: await shareDebtPaymentReceiptPdf(ctx) };
   }
-  const { shareDebtPaymentReceiptPdf } = await import("./receiptPdfDocuments");
-  return { ok: await shareDebtPaymentReceiptPdf(ctx), mode: "share" };
+  const htmlOk = await printHtmlDocumentWithDesktop(debtReceiptHtml(ctx), paper, "Debt payment receipt");
+  if (htmlOk) return { ok: true };
+  return { ok: false };
 }
 
 export async function downloadDebtPaymentReceiptPdf(ctx: DebtPaymentReceiptContext): Promise<boolean> {

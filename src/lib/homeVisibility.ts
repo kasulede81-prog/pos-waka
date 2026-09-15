@@ -1,5 +1,4 @@
 import type { ReturnRecord, Sale, UserRole } from "../types";
-import { saleSoldByMatchesActor, type SellerMatchActor } from "./sellerIdentity";
 
 export type HomeMetricScope = "shop_wide" | "personal" | "inventory";
 
@@ -70,32 +69,27 @@ export function resolveVisibleHomeMetrics(role: UserRole): VisibleHomeMetrics {
 export function filterSalesForHomeScope(
   sales: Sale[],
   scope: HomeMetricScope,
-  actor: SellerMatchActor | string | null | undefined,
+  actorUserId: string | null | undefined,
 ): Sale[] {
   if (scope === "shop_wide") return sales;
   if (scope === "inventory") return [];
-  const matchActor =
-    typeof actor === "string" ? { userId: actor } : actor ?? null;
-  if (!matchActor?.userId) return [];
-  return sales.filter((s) => saleSoldByMatchesActor(s, matchActor));
+  if (!actorUserId) return [];
+  return sales.filter((s) => s.soldByUserId === actorUserId);
 }
 
 export function filterReturnsForHomeScope(
   returns: ReturnRecord[],
   sales: Sale[],
   scope: HomeMetricScope,
-  actor: SellerMatchActor | string | null | undefined,
+  actorUserId: string | null | undefined,
 ): ReturnRecord[] {
   if (scope === "shop_wide") return returns;
   if (scope === "inventory") return [];
-  const matchActor =
-    typeof actor === "string" ? { userId: actor } : actor ?? null;
-  if (!matchActor?.userId) return [];
+  if (!actorUserId) return [];
   const personalSaleIds = new Set(
-    sales.filter((s) => saleSoldByMatchesActor(s, matchActor)).map((s) => s.id),
+    sales.filter((s) => s.soldByUserId === actorUserId).map((s) => s.id),
   );
   return returns.filter(
-    (r) =>
-      (r.saleId && personalSaleIds.has(r.saleId)) || r.actorUserId === matchActor.userId,
+    (r) => (r.saleId && personalSaleIds.has(r.saleId)) || r.actorUserId === actorUserId,
   );
 }

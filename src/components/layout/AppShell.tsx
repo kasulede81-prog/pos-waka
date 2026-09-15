@@ -1,8 +1,8 @@
 import { actorHasPermission } from "../../lib/actorAuthorization";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ChevronDown, CircleHelp } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
@@ -17,13 +17,7 @@ import { ANDROID_BACK_PRIORITY } from "../../lib/androidBackStack";
 import { useShallow } from "zustand/react/shallow";
 import { usePosStore } from "../../store/usePosStore";
 import type { ShopPreferences } from "../../types";
-import {
-  resolveSessionActor,
-  authOperatorPermissions,
-  authOperatorRole,
-  authMembershipRole,
-} from "../../lib/sessionActor";
-import { resolveTerminalIdentityView } from "../../lib/terminalIdentity";
+import { resolveSessionActor } from "../../lib/sessionActor";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { SessionHydrationProvider } from "../../context/SessionHydrationContext";
 
@@ -43,13 +37,8 @@ import { AppModalOverlay } from "./AppModalOverlay";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { readCachedShopMemberRole, writeCachedShopMemberRole } from "../../lib/shopMemberRoleCache";
-import {
-  activeStaffCanUnlock,
-  canLockPos,
-  isBackOfficePinConfigured,
-  isSharedTerminalLockOperator,
-  shouldShowEnterpriseStaffLockScreen,
-} from "../../lib/lockPos";
+import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured, shouldSuppressPosLockScreen } from "../../lib/lockPos";
+import { ShiftCloseModal } from "../pos/ShiftCloseModal";
 import { DisplayScaleControl } from "../pos/DisplayScaleControl";
 import { EnterpriseStaffLockScreen } from "../auth/EnterpriseStaffLockScreen";
 import {
@@ -61,7 +50,6 @@ import {
 } from "../../lib/auth";
 import { getUnlockLockoutStatus, unlockLimiterScope } from "../../lib/auth/staffLoginLimiter";
 import { useStaffAutoLock, useStaffSessionBootstrap } from "../../hooks/useStaffAutoLock";
-import { clearPersonalStaffTerminalRuntimeState } from "../../lib/staffAuthHydrate";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { MobileModuleExitBar } from "./MobileModuleExitBar";
@@ -87,8 +75,6 @@ import {
 import { PwaUpdateBanner } from "../app-update/AppUpdateControls";
 import { RemoteSupportHost } from "../remote-support/RemoteSupportHost";
 import { PosNeedHelpHost } from "../support/PosNeedHelpHost";
-import { canSeePosNeedHelp, openPosNeedHelpForm } from "../../lib/posSupportRequest";
-import { useRemoteSupportPlatformEnabled } from "../../hooks/useRemoteSupportPlatformEnabled";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -114,7 +100,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const { logout, loggingOut } = useLogoutAction(onSignOut);
   useAndroidBackButton();
   useShopPresenceHeartbeat();
-  const hasPathSStaffSession = Boolean(staffSession);
+  useStaffAutoLock(true);
+  useStaffSessionBootstrap(true);
   const preferences = usePosStore(
     useShallow((s) => ({
       devRoleOverride: s.preferences.devRoleOverride,
@@ -137,10 +124,17 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const { noticeAt: staffCredentialRecoveryNotice, dismissNotice: dismissStaffCredentialRecoveryNotice } =
     useStaffCredentialRecoveryOwnerNotice(shopId);
   const setPosLocked = usePosStore((s) => s.setPosLocked);
+  const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
+  const shifts = usePosStore((s) => s.preferences.shifts);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { enabled: remoteSupportEnabled } = useRemoteSupportPlatformEnabled();
   useAndroidBackHandler("app-menu-drawer", ANDROID_BACK_PRIORITY.menuDrawer, menuOpen, () => setMenuOpen(false));
   const [lockSetupHint, setLockSetupHint] = useState<string | null>(null);
+  const [staffSwitchShiftOpen, setStaffSwitchShiftOpen] = useState(false);
+  const [staffSwitchCloseOpen, setStaffSwitchCloseOpen] = useState(false);
+  const [pendingStaffUnlock, setPendingStaffUnlock] = useState<{
+    staffId: string | null;
+    secret: string;
+  } | null>(null);
   const [isInternalAdmin, setIsInternalAdmin] = useState(false);
   const [shopMemberRole, setShopMemberRole] = useState<UserRole | null>(() => {
     if (authMode !== "supabase" || !user?.id) return null;
@@ -201,27 +195,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       }),
     [authMode, user, email, preferences, staffSession, shopMemberRole],
   );
-  const sharedTerminalLockOperator = isSharedTerminalLockOperator({
-    authOperatorRole: authMembershipRole(actor),
-    hasPathSStaffSession,
-  });
-  useStaffAutoLock(sharedTerminalLockOperator);
-  useStaffSessionBootstrap(sharedTerminalLockOperator);
-
-  useEffect(() => {
-    // Wait for membership before treating fail-closed waiter as Path L personal staff.
-    if (authMode === "supabase" && !roleReady) return;
-    if (sharedTerminalLockOperator) return;
-    clearPersonalStaffTerminalRuntimeState();
-  }, [
-    authMode,
-    roleReady,
-    sharedTerminalLockOperator,
-    preferences.posLocked,
-    preferences.activeStaffId,
-  ]);
-
-  const pilotActive = isPilotModeActive(authOperatorRole(actor), preferences as ShopPreferences);
+  const pilotActive = isPilotModeActive(actor.role, preferences as ShopPreferences);
   const tier = resolveEffectivePlanTier(snapshot);
   const canSwitchUser = tier === "business" || tier === "waka_plus";
 
@@ -229,15 +203,16 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     usePosStore.getState().setSessionActor(actor);
   }, [actor]);
 
-  const jwtOperatorName = useMemo(() => {
-    const meta = user?.user_metadata as Record<string, string> | undefined;
-    return meta?.full_name?.trim() || user?.email?.trim() || email?.trim() || null;
-  }, [user, email]);
-
-  const terminalIdentity = useMemo(
-    () => resolveTerminalIdentityView(actor, preferences as ShopPreferences, jwtOperatorName),
-    [actor, preferences, jwtOperatorName],
+  const activeShiftForActor = useMemo(
+    () => (shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
+    [shifts, actor.userId],
   );
+
+  const completeStaffUnlock = useCallback((staffId: string | null) => {
+    const r = completePosUnlock(staffId);
+    if (!r.ok) return;
+    setPendingStaffUnlock(null);
+  }, []);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -267,17 +242,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     });
   }, [preferences.posLocked, preferences.backOfficePin]);
 
-  // Admin force-full-resync recovery must run regardless of whether this shop
-  // has a Back-Office PIN configured — unlike the PIN/staff-credential
-  // recovery above (intentionally still gated), a pending shop reset has
-  // nothing to do with PIN configuration. Narrow call (not the full
-  // `ensureShopRecoveryApplied`) so this stays a no-op for PIN/staff state.
-  useEffect(() => {
-    void import("../../lib/shopRecoverySignals").then(({ applyPendingForceFullResyncForCurrentShop }) => {
-      void applyPendingForceFullResyncForCurrentShop();
-    });
-  }, []);
-
   useEffect(() => {
     if (!preferences.posLocked) return;
     if (canLockPos(preferences)) return;
@@ -286,7 +250,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   }, [preferences.posLocked, preferences.backOfficePin, preferences.staffAccounts, setPosLocked]);
 
   const requestPosLock = () => {
-    if (!sharedTerminalLockOperator) return;
     setLockSetupHint(null);
     if (!canLockPos(preferences)) {
       if (actorHasPermission(actor, "settings.shop")) {
@@ -305,19 +268,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const wholesaleNav = isWholesaleMode(preferences.businessType);
-  const terminalHome = resolveTerminalHomePath(
-    preferences,
-    authOperatorRole(actor),
-    authOperatorPermissions(actor) ?? actor.permissions,
-  );
+  const terminalHome = resolveTerminalHomePath(preferences, actor.role, actor.permissions);
   const onTerminalHome = location.pathname === terminalHome;
   const isLauncherHome = location.pathname === "/";
   const desktopTerminalHome = isDesktopLayout && isLauncherHome;
   const onSellScreen = isPosSellPath(location.pathname);
-  const phoneChrome = !isDesktopLayout;
-  const sellMobileChrome = onSellScreen && phoneChrome;
-  /** Home keeps the full toolbar; every other phone screen folds extras into one menu. */
-  const headerToolsCollapsed = phoneChrome && !isLauncherHome;
   const fullDesktopSell = onSellScreen && posLayoutMode === "full";
   const independentModule = isIndependentModuleRoute(location.pathname);
   /** lg+ terminal layout: full-width chrome outside the classic back-office column. */
@@ -362,12 +317,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const showMobileModuleExit =
     bottomChrome.mode === "module-exit" && bottomChrome.showMobileBar && !internalAdminRoute;
   const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout) && !onTerminalHome;
-  const showPosHelp = canSeePosNeedHelp({
-    authenticated: Boolean(user) || authMode === "local",
-    internalAdminRoute,
-    posLocked: Boolean(preferences.posLocked),
-    remoteSupportEnabled,
-  });
 
   return (
     <SessionHydrationProvider roleReady={roleReady}>
@@ -398,12 +347,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           />
         ) : null}
         {shopSecurityPinRecoveryNotice &&
-        authOperatorRole(actor) === "owner" &&
+        actor.role === "owner" &&
         !isBackOfficePinConfigured(preferences.backOfficePin) &&
         !internalAdminRoute ? (
           <ShopSecurityPinRecoveryBanner lang={lang} onDismiss={dismissShopSecurityPinRecoveryNotice} />
         ) : null}
-        {staffCredentialRecoveryNotice && authOperatorRole(actor) === "owner" && !internalAdminRoute ? (
+        {staffCredentialRecoveryNotice && actor.role === "owner" && !internalAdminRoute ? (
           <StaffCredentialRecoveryBanner lang={lang} onDismiss={dismissStaffCredentialRecoveryNotice} />
         ) : null}
         {pilotActive ? <PilotModeBanner lang={lang} /> : null}
@@ -411,36 +360,31 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <header
           className={clsx(
             "relative z-20 shrink-0 overflow-visible border-b shadow-sm backdrop-blur",
-            phoneChrome && "app-shell-mobile-header",
             isLauncherHome
               ? "border-waka-700/30 bg-waka-600/95 text-white supports-[backdrop-filter]:bg-waka-600/90"
-              : sellMobileChrome
+              : onSellScreen && !isDesktopLayout
                 ? "border-border/80 bg-gradient-to-b from-waka-50/90 via-card to-card supports-[backdrop-filter]:from-waka-50/80"
                 : "border-border/90 bg-card/95 supports-[backdrop-filter]:bg-card/90",
           )}
         >
           <div
             className={clsx(
-              "app-shell-header-bar mx-auto flex items-center justify-between",
-              phoneChrome
-                ? "max-w-none flex-nowrap gap-1 px-2 pb-0.5 pt-0.5"
-                : "flex-wrap gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
+              "mx-auto flex flex-wrap items-center justify-between gap-2 sm:px-4",
+              onSellScreen && !isDesktopLayout
+                ? "max-w-none px-2 pb-1 pt-[max(0.25rem,env(safe-area-inset-top,0px))]"
+                : "px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
               desktopTerminalMode || desktopTerminalHome || independentModule || isLauncherHome ? "max-w-none lg:px-8 xl:px-10" : !onSellScreen || isDesktopLayout ? "max-w-6xl" : "",
             )}
           >
-            <div className={clsx("flex min-w-0 flex-1 items-center", phoneChrome ? "gap-1" : "gap-1.5 sm:gap-2")}>
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
               {showHeaderExitButton ? (
-                <HeaderExitButton
-                  lang={lang}
-                  variant={sellMobileChrome ? "sellOrange" : "default"}
-                  className={phoneChrome ? "!min-h-8 gap-1 px-2.5 py-1" : undefined}
-                />
+                <HeaderExitButton lang={lang} variant={onSellScreen && !isDesktopLayout ? "sellOrange" : "default"} />
               ) : null}
               {showHeaderExit ? <HeaderBackButton lang={lang} /> : null}
-              {sellMobileChrome ? null : <WakaSymbolIcon size="xs" className={clsx("shrink-0", phoneChrome ? "h-7 w-7" : "h-8 w-8")} />}
+              {onSellScreen && !isDesktopLayout ? null : <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />}
               <div className="min-w-0">
-                {sellMobileChrome ? (
-                  <h1 className="truncate text-sm font-black tracking-tight text-foreground">
+                {onSellScreen && !isDesktopLayout ? (
+                  <h1 className="truncate text-base font-black tracking-tight text-foreground sm:text-lg">
                     {t(lang, sellNavLabelKey)}
                   </h1>
                 ) : (
@@ -448,9 +392,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 )}
               </div>
             </div>
-            <div className={clsx("flex shrink-0 items-center justify-end", phoneChrome ? "gap-1" : "gap-1.5")}>
-              {!headerToolsCollapsed && onSellScreen ? (
-                <DisplayScaleControl lang={lang} inverted={isLauncherHome} compact={phoneChrome} />
+            <div className="flex shrink-0 items-center justify-end gap-1.5">
+              {onSellScreen ? (
+                <DisplayScaleControl lang={lang} inverted={isLauncherHome} compact={!isDesktopLayout} />
               ) : null}
               <PosNeedHelpHost
                 lang={lang}
@@ -459,28 +403,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 authenticated={Boolean(user) || authMode === "local"}
                 internalAdminRoute={internalAdminRoute}
                 posLocked={Boolean(preferences.posLocked)}
-                placement={headerToolsCollapsed ? "event-only" : "inline"}
+                placement="inline"
                 inverted={isLauncherHome}
-                iconOnly={false}
               />
-              {headerToolsCollapsed ? null : (
-                <AppThemeToggle
-                  lang={lang}
-                  inverted={isLauncherHome}
-                  className={phoneChrome ? "!h-8 !w-8" : undefined}
-                />
-              )}
-              <div ref={userMenuRef} className="relative min-w-0">
+              <AppThemeToggle lang={lang} inverted={isLauncherHome} />
+              <div ref={userMenuRef} className="relative">
                 <button
                   type="button"
                   aria-expanded={menuOpen}
                   aria-haspopup="menu"
                   onClick={() => setMenuOpen((v) => !v)}
                   className={clsx(
-                    "flex touch-manipulation items-center truncate rounded-xl border font-bold shadow-sm",
-                    phoneChrome
-                      ? "min-h-8 max-w-[7.5rem] gap-0.5 px-2 py-1 text-[11px]"
-                      : "min-h-[38px] max-w-[12rem] gap-1.5 px-3 py-1.5 text-xs sm:max-w-[14rem]",
+                    "flex min-h-[38px] max-w-[12rem] touch-manipulation items-center gap-1.5 truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm sm:max-w-[14rem]",
                     isLauncherHome
                       ? "border-waka-400/50 bg-waka-700/50 text-white active:bg-waka-700"
                       : "border-border bg-card text-foreground active:bg-muted",
@@ -499,88 +433,43 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 {menuOpen ? (
                   <div
                     role="menu"
-                    className={clsx(
-                      "absolute right-0 top-[calc(100%+0.35rem)] z-50 origin-top-right rounded-xl border border-border bg-card py-1 shadow-lg ring-1 ring-foreground/5",
-                      headerToolsCollapsed ? "w-64" : "w-52",
-                    )}
+                    className="absolute right-0 top-[calc(100%+0.35rem)] z-50 w-52 origin-top-right rounded-xl border border-border bg-card py-1 shadow-lg ring-1 ring-foreground/5"
                   >
-                    {headerToolsCollapsed && onSellScreen ? (
-                      <div className="px-2 pb-2 pt-1" onClick={(e) => e.stopPropagation()}>
-                        <p className="mb-1 px-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
-                          {t(lang, "displayScaleControlLabel")}
-                        </p>
-                        <DisplayScaleControl lang={lang} compact={false} />
-                      </div>
-                    ) : null}
-                    {headerToolsCollapsed && showPosHelp ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          openPosNeedHelpForm();
-                        }}
-                      >
-                        <CircleHelp className="h-4 w-4 shrink-0" aria-hidden />
-                        {t(lang, "posHelpButton")}
-                      </button>
-                    ) : null}
-                    {headerToolsCollapsed ? (
-                      <>
-                        <div className="px-2 py-1">
-                          <AppThemeToggle lang={lang} variant="inline" className="w-full justify-start shadow-none" />
-                        </div>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
-                          onClick={() => setLang(nextLanguage(lang))}
-                        >
-                          {languageToggleLabel(lang)}
-                        </button>
-                        <div className="my-1 border-t border-border" />
-                      </>
-                    ) : null}
-                    {sharedTerminalLockOperator ? (
-                      <>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={!canSwitchUser}
-                          title={canSwitchUser ? undefined : t(lang, "userMenuComingSoon")}
-                          className={clsx(
-                            "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold",
-                            canSwitchUser
-                              ? "text-foreground hover:bg-muted"
-                              : "cursor-not-allowed text-muted-foreground",
-                          )}
-                          onClick={() => {
-                            if (!canSwitchUser) return;
-                            requestPosLock();
-                            setMenuOpen(false);
-                          }}
-                        >
-                          {t(lang, "userMenuSwitchUser")}
-                          {!canSwitchUser ? (
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                              {t(lang, "userMenuComingSoon")}
-                            </span>
-                          ) : null}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
-                          onClick={() => {
-                            requestPosLock();
-                            setMenuOpen(false);
-                          }}
-                        >
-                          {t(lang, "userMenuLockTerminal")}
-                        </button>
-                      </>
-                    ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={!canSwitchUser}
+                      title={canSwitchUser ? undefined : t(lang, "userMenuComingSoon")}
+                      className={clsx(
+                        "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold",
+                        canSwitchUser
+                          ? "text-foreground hover:bg-muted"
+                          : "cursor-not-allowed text-muted-foreground",
+                      )}
+                      onClick={() => {
+                        if (!canSwitchUser) return;
+                        requestPosLock();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {t(lang, "userMenuSwitchUser")}
+                      {!canSwitchUser ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                          {t(lang, "userMenuComingSoon")}
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
+                      onClick={() => {
+                        requestPosLock();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {t(lang, "userMenuLockTerminal")}
+                    </button>
                     <button
                       type="button"
                       role="menuitem"
@@ -603,7 +492,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     >
                       {t(lang, "settingsHubAppearance")}
                     </button>
-                    {authMode === "supabase" && !staffSession && authOperatorRole(actor) === "owner" ? (
+                    {authMode === "supabase" && !staffSession && actor.role === "owner" ? (
                       <button
                         type="button"
                         role="menuitem"
@@ -632,15 +521,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   </div>
                 ) : null}
               </div>
-              {headerToolsCollapsed ? null : (
               <button
                 type="button"
                 onClick={() => setLang(nextLanguage(lang))}
                 className={clsx(
-                  "truncate rounded-xl border font-bold shadow-sm",
-                  phoneChrome
-                    ? "min-h-8 max-w-[6.5rem] px-2 py-1 text-[11px]"
-                    : "min-h-[38px] max-w-[7.5rem] px-3 py-1.5 text-xs",
+                  "min-h-[38px] max-w-[7.5rem] truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm",
                   isLauncherHome
                     ? "border-waka-400/50 bg-waka-700/50 text-white active:bg-waka-700"
                     : "border-border bg-card text-foreground active:bg-muted",
@@ -649,7 +534,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               >
                 {languageToggleLabel(lang)}
               </button>
-              )}
             </div>
           </div>
         </header>
@@ -708,17 +592,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <HospitalityMobileNav lang={lang} visible={showHospitalityMobileNav} />
         <PharmacyMobileNav lang={lang} visible={showPharmacyMobileNav} />
         <EnterpriseScrollControls enabled={!viewportLocked} />
-        {shouldShowEnterpriseStaffLockScreen({
-          posLocked: Boolean(preferences.posLocked),
-          authOperatorRole: authMembershipRole(actor),
-          hasPathSStaffSession,
-          pathname: location.pathname,
-          canManageShopSettings: actorHasPermission(actor, "settings.shop"),
-        }) ? (
+        {preferences.posLocked && !shouldSuppressPosLockScreen(location.pathname, actorHasPermission(actor, "settings.shop")) ? (
           <EnterpriseStaffLockScreen
             lang={lang}
             preferences={preferences as ShopPreferences}
-            identity={terminalIdentity}
+            actorName={actor.displayName ?? t(lang, "role_owner")}
+            actorRole={actor.role}
             businessName={preferences.shopDisplayName ?? ""}
             canSwitchUser={canSwitchUser}
             isInternalAdmin={isInternalAdmin}
@@ -740,6 +619,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               });
               if (!verify.ok) {
                 return { ok: false as const, errorKey: verify.errorKey };
+              }
+              if (verify.switched && activeShiftForActor) {
+                setPendingStaffUnlock({ staffId: verify.staffId, secret });
+                setStaffSwitchShiftOpen(true);
+                return { ok: true as const };
               }
               const unlock = completePosUnlock(verify.staffId);
               if (!unlock.ok) {
@@ -763,12 +647,59 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               prepareSwitchUserLock();
             }}
             onEmergencyLogout={() => {
-              // Phase 11l: "Sign in with another account" — full terminal context clear → /login email.
               emergencyStaffLogout();
               logout();
             }}
           />
         ) : null}
+        {staffSwitchShiftOpen ? (
+          <AppModalOverlay className="z-[125] flex items-center justify-center bg-overlay/85 p-4">
+            <div className="w-full max-w-md rounded-3xl bg-card p-6 shadow-2xl">
+              <p className="text-xl font-black text-foreground">{t(lang, "staffSwitchShiftTitle")}</p>
+              <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "staffSwitchShiftBody")}</p>
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStaffSwitchShiftOpen(false);
+                    setPendingStaffUnlock(null);
+                  }}
+                  className="min-h-[48px] rounded-2xl border-2 font-bold"
+                >
+                  {t(lang, "cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStaffSwitchShiftOpen(false);
+                    setStaffSwitchCloseOpen(true);
+                  }}
+                  className="min-h-[48px] rounded-2xl bg-waka-600 font-black text-white"
+                >
+                  {t(lang, "shiftCloseBtn")}
+                </button>
+              </div>
+            </div>
+          </AppModalOverlay>
+        ) : null}
+        <ShiftCloseModal
+          lang={lang}
+          open={staffSwitchCloseOpen}
+          shift={activeShiftForActor}
+          onClose={() => {
+            setStaffSwitchCloseOpen(false);
+            setPendingStaffUnlock(null);
+          }}
+          onConfirm={(counted, handoff) => {
+            const r = closeShiftWithCashCount(counted, handoff);
+            if (!r.ok) {
+              return { ok: false };
+            }
+            setStaffSwitchCloseOpen(false);
+            if (pendingStaffUnlock) completeStaffUnlock(pendingStaffUnlock.staffId);
+            return { ok: true };
+          }}
+        />
         {lockSetupHint ? (
           <AppModalOverlay className="z-[115] flex items-center justify-center bg-overlay/70 p-4">
             <div className="w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">

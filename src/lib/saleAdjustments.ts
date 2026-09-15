@@ -1,6 +1,4 @@
 import type { CashDrawerFormulaVersion, Customer, Sale, SaleLine, ShiftRecord } from "../types";
-import { cashReduceFromRefund } from "./cashDrawerSales";
-import { hasAuthoritativeTenderCash } from "./saleTenderCash";
 
 export type DiscountMode = "percent" | "amount" | "final";
 
@@ -10,13 +8,6 @@ export function listPriceForLine(line: SaleLine): number {
 
 export function lineDiscountUgx(line: SaleLine): number {
   return Math.max(0, line.discountUgx ?? listPriceForLine(line) - line.lineTotalUgx);
-}
-
-/** List/original money used to compute how much product was sold — never the discounted payable. */
-export function moneyLineAmountForQuantity(line: SaleLine): number {
-  const list = Math.max(0, Math.floor(Number(line.originalLineTotalUgx) || 0));
-  if (list > 0) return list;
-  return Math.max(0, Math.floor(Number(line.moneyAmountUgx ?? line.lineTotalUgx) || 0));
 }
 
 export function applyDiscountToLine(line: SaleLine, mode: DiscountMode, rawValue: number): SaleLine | null {
@@ -46,16 +37,13 @@ export function applyDiscountToLine(line: SaleLine, mode: DiscountMode, rawValue
   }
 
   const discount = list - nextTotal;
-  const originalMoney = line.inputMode === "money" ? (line.moneyAmountUgx ?? list) : line.moneyAmountUgx;
   return {
     ...line,
-    quantity: line.quantity,
-    inputMode: line.inputMode,
     originalLineTotalUgx: list,
     discountUgx: discount,
     lineTotalUgx: nextTotal,
     estimatedProfitUgx: Math.round(nextTotal - line.quantity * line.unitCostUgx),
-    moneyAmountUgx: originalMoney,
+    moneyAmountUgx: line.inputMode === "money" ? nextTotal : line.moneyAmountUgx,
   };
 }
 
@@ -92,26 +80,19 @@ export function applyCustomerDebtDelta(
 export function reduceSaleTotalsByAmount(
   sale: Sale,
   amountUgx: number,
-): Pick<Sale, "totalUgx" | "cashPaidUgx" | "debtUgx" | "estimatedProfitUgx" | "voidedTotalUgx"> &
-  Partial<Pick<Sale, "tenderCashUgx">> {
+): Pick<Sale, "totalUgx" | "cashPaidUgx" | "debtUgx" | "estimatedProfitUgx" | "voidedTotalUgx"> {
   const amt = Math.max(0, Math.floor(amountUgx));
   const cashReduce = Math.min(amt, sale.cashPaidUgx);
   const debtReduce = amt - cashReduce;
   const nextTotal = Math.max(0, sale.totalUgx - amt);
   const profitScale = sale.totalUgx > 0 ? nextTotal / sale.totalUgx : 0;
-  const next: Pick<Sale, "totalUgx" | "cashPaidUgx" | "debtUgx" | "estimatedProfitUgx" | "voidedTotalUgx"> &
-    Partial<Pick<Sale, "tenderCashUgx">> = {
+  return {
     totalUgx: nextTotal,
     cashPaidUgx: Math.max(0, sale.cashPaidUgx - cashReduce),
     debtUgx: Math.max(0, sale.debtUgx - debtReduce),
     estimatedProfitUgx: Math.max(0, Math.round(sale.estimatedProfitUgx * profitScale)),
     voidedTotalUgx: (sale.voidedTotalUgx ?? 0) + amt,
   };
-  if (hasAuthoritativeTenderCash(sale)) {
-    const physicalReduce = cashReduceFromRefund(sale, amt);
-    next.tenderCashUgx = Math.max(0, Math.floor(sale.tenderCashUgx!) - physicalReduce);
-  }
-  return next;
 }
 
 export type ShiftCashContext = {
@@ -129,8 +110,7 @@ function shiftBaselineUgx(sh: ShiftRecord, formulaVersion: CashDrawerFormulaVers
 
 /** Shift running cash already reflects void/return payouts in estimatedCashUgx (Option A). */
 export function shiftExpectedCash(sh: ShiftRecord, ctx?: ShiftCashContext): number {
-  // Unset → v2 (same default as resolveCashDrawerFormulaVersion). Callers should pass explicit preference when known.
-  const formulaVersion = ctx?.formulaVersion ?? "v2";
+  const formulaVersion = ctx?.formulaVersion ?? "v1";
   const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
   const opening = shiftBaselineUgx(sh, formulaVersion);
   return Math.max(0, opening + sh.estimatedCashUgx + debtPayments);
@@ -145,7 +125,7 @@ export function shiftExpectedCashLabelParts(sh: ShiftRecord, ctx?: ShiftCashCont
   debtPayments: number;
   expected: number;
 } {
-  const formulaVersion = ctx?.formulaVersion ?? "v2";
+  const formulaVersion = ctx?.formulaVersion ?? "v1";
   const openingFloat = shiftBaselineUgx(sh, formulaVersion);
   const discounts = sh.discountsTotalUgx ?? 0;
   const voids = sh.voidsTotalUgx ?? 0;

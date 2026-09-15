@@ -1,4 +1,4 @@
-import { createContext, useId, type FormEvent, type ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { Package } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../../types";
@@ -6,9 +6,6 @@ import { t } from "../../../lib/i18n";
 import { ModalSheet } from "../../layout/ModalSheet";
 import { ReceiveValidationBanner } from "./ReceiveValidationBanner";
 import { enterpriseTypeClass } from "../../../lib/enterpriseTypography";
-
-/** Lets a sticky/fixed Save button submit even when it is rendered outside the <form>. */
-export const ReceiveFormIdContext = createContext<string | undefined>(undefined);
 
 type Props = {
   lang: Language;
@@ -53,9 +50,6 @@ export function ReceiveOperationShell({
   icon,
   pageClassName,
 }: Props) {
-  const uid = useId();
-  const formId = `receive-op-form-${uid.replace(/:/g, "")}`;
-
   const banner = error ? (
     <ReceiveValidationBanner message={error} tone="error" />
   ) : success ? (
@@ -65,28 +59,26 @@ export function ReceiveOperationShell({
   ) : null;
 
   const formBody = (
-    <form id={formId} className="space-y-5" onSubmit={onSubmit} noValidate>
+    <form className="space-y-5" onSubmit={onSubmit} noValidate>
       {statusStrip}
       {banner}
       {children}
-      {variant === "page" ? footer : null}
     </form>
   );
 
   if (variant === "page") {
     if (!open) return null;
     return (
-      <ReceiveFormIdContext.Provider value={formId}>
-        <div className={clsx("space-y-4", pageClassName)}>
-          <header>
-            {subtitle ? <p className={enterpriseTypeClass("caption")}>{subtitle}</p> : null}
-            <h2 id={titleId} className={enterpriseTypeClass("pageTitle")}>
-              {title}
-            </h2>
-          </header>
-          {formBody}
-        </div>
-      </ReceiveFormIdContext.Provider>
+      <div className={clsx("space-y-4", pageClassName)}>
+        <header>
+          {subtitle ? <p className={enterpriseTypeClass("caption")}>{subtitle}</p> : null}
+          <h2 id={titleId} className={enterpriseTypeClass("pageTitle")}>
+            {title}
+          </h2>
+        </header>
+        {formBody}
+        {footer}
+      </div>
     );
   }
 
@@ -105,20 +97,18 @@ export function ReceiveOperationShell({
   );
 
   return (
-    <ReceiveFormIdContext.Provider value={formId}>
-      <ModalSheet
-        open={open}
-        onClose={onRequestClose ?? (() => undefined)}
-        title={titleNode}
-        footer={footer}
-        zIndexClass={zClassName}
-        maxHeightClass="max-h-[min(94dvh,900px)]"
-        panelClassName="sm:max-w-lg"
-        aria-labelledby={titleId}
-      >
-        {formBody}
-        <span className="sr-only">{t(lang, "cancel")}</span>
-      </ModalSheet>
-    </ReceiveFormIdContext.Provider>
+    <ModalSheet
+      open={open}
+      onClose={onRequestClose ?? (() => undefined)}
+      title={titleNode}
+      footer={footer}
+      zIndexClass={zClassName}
+      maxHeightClass="max-h-[min(94dvh,900px)]"
+      panelClassName="sm:max-w-lg"
+      aria-labelledby={titleId}
+    >
+      {formBody}
+      <span className="sr-only">{t(lang, "cancel")}</span>
+    </ModalSheet>
   );
 }

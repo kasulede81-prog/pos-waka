@@ -4,7 +4,6 @@ import type { Language } from "../../types";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
-import { authOperatorRole } from "../../lib/sessionActor";
 import { hasBackOfficeShellAccess } from "../../lib/backOfficeAccess";
 import { usePosStore } from "../../store/usePosStore";
 import { isBackOfficePath, isStockKeeperPath, stockKeeperPathPermission, debtPathPermission } from "../../lib/backOfficePaths";
@@ -59,10 +58,10 @@ export function BackOfficeRouteGuard({ children, lang }: Props) {
 
   if (!hasBackOfficeShellAccess({
     pathname: location.pathname,
-    role: authOperatorRole(actor),
+    role: actor.role,
     snapshot,
     authMode,
-    actorPermissions: actor.authPermissions,
+    actorPermissions: actor.permissions,
   })) {
     return <Navigate to="/" replace state={{ backOfficeDenied: true }} />;
   }
