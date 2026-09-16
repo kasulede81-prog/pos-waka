@@ -307,6 +307,55 @@ export async function hasUnacknowledgedForceFullResync(shopId: string): Promise<
 }
 
 /**
+ * Tri-state outcome of a reset-signal lookup, for callers that must fail
+ * CLOSED (unlike `staleForceFullResyncCutoff`'s deliberate fail-open — see
+ * its own docstring for why that's safe for that call site specifically).
+ */
+export type StaleResetGuardState =
+  | { status: "clear" }
+  | { status: "signal"; cutoff: string }
+  | { status: "unknown" };
+
+/**
+ * Outbox-push guard (P1 remediation — financial certification audit, P1#2).
+ *
+ * `staleForceFullResyncCutoff` collapses "confirmed no signal" and "lookup
+ * failed/timed out" into the same `null`, which is safe for THAT call site
+ * because a false negative there costs at most one op that gets pushed and
+ * is later corrected by an authoritative full pull. That reasoning does NOT
+ * hold for guarded-kind outbox ops (product/sale/customer/stock): pushing a
+ * pre-reset op is a literal `upsert` against the live table, and a
+ * subsequent authoritative pull cannot distinguish the resurrected row from
+ * one that legitimately exists on the server — the resurrection is
+ * permanent, not self-correcting. So this function fails CLOSED: a lookup
+ * failure returns `{status:"unknown"}`, and the caller (syncEngine.ts) must
+ * hold guarded-kind ops in the queue — neither push them nor drop them —
+ * until a later flush can confirm the actual state. Mirrors
+ * `canPublishShopCloudSnapshot`'s existing fail-closed pattern.
+ */
+export async function resolveStaleResetGuardState(shopId: string): Promise<StaleResetGuardState> {
+  if (!hasSupabaseConfig || !supabase) return { status: "clear" };
+  try {
+    const rpc = supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: shopId });
+    const { data, error } = await Promise.race([
+      rpc,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("recovery_signal_check_timeout")), 4_000);
+      }),
+    ]);
+    if (error) throw new Error(typeof error === "object" && error && "message" in error ? String((error as { message: unknown }).message) : "recovery_signal_check_failed");
+    if (!data || typeof data !== "object") return { status: "clear" };
+    const forceResyncAt = String((data as Record<string, unknown>).force_full_resync_at ?? "").trim();
+    if (!forceResyncAt) return { status: "clear" };
+    const lastApplied = readAppliedForceResyncAt(shopId);
+    if (lastApplied === forceResyncAt) return { status: "clear" };
+    return { status: "signal", cutoff: forceResyncAt };
+  } catch {
+    return { status: "unknown" };
+  }
+}
+
+/**
  * Snapshot-publish safety check (Step 5). Unlike `hasUnacknowledgedForceFullResync`
  * above, this must fail CLOSED: `uploadShopCloudSnapshot` re-seeds
  * `shop_cloud_snapshots`, which `restoreShopFromCloudSnapshot` hands to any

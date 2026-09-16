@@ -5,6 +5,7 @@
 
 import { getActiveAccountKey } from "../offline/accountScope";
 import { hasIndexedDbDataForAccount } from "../offline/localDb";
+import { getDeviceOnline } from "./deviceOnline";
 import { resolvePrimaryOrganizationForUser } from "./fetchShopSubscription";
 import { isWorkspaceBootstrapped, unmarkWorkspaceBootstrapped } from "./workspaceBootstrapCache";
 
@@ -210,6 +211,16 @@ export async function refreshOrganizationDeletionState(
   if (org?.organizationId) {
     clearDeletionMarker(accountKey);
     return false;
+  }
+
+  // resolvePrimaryOrganizationForUser returns null both when the cloud
+  // authoritatively has no org for this user AND when the lookup itself
+  // failed (network error, request timeout, etc — it does not distinguish).
+  // A device that is offline must never have its organization marked
+  // "permanently deleted" from that ambiguity alone; wait for a real
+  // online lookup to confirm absence.
+  if (!getDeviceOnline()) {
+    return isOrganizationBlocked(accountKey);
   }
 
   const bootstrapped = isWorkspaceBootstrapped(userId);
