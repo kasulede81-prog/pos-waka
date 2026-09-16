@@ -89,6 +89,7 @@ import { RemoteSupportHost } from "../remote-support/RemoteSupportHost";
 import { PosNeedHelpHost } from "../support/PosNeedHelpHost";
 import { canSeePosNeedHelp, openPosNeedHelpForm } from "../../lib/posSupportRequest";
 import { useRemoteSupportPlatformEnabled } from "../../hooks/useRemoteSupportPlatformEnabled";
+import { useSupportUnreadCounts } from "../../hooks/useMerchantSupport";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -132,6 +133,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   );
   const { snapshot } = useSubscription();
   const shopId = snapshot.kind === "remote" ? snapshot.row.shop_id : null;
+  const unreadSupportCounts = useSupportUnreadCounts(shopId);
+  const supportAttentionTotal =
+    (unreadSupportCounts.data?.unreadNotifications ?? 0) +
+    (unreadSupportCounts.data?.waitingForYouTickets ?? 0);
   const { noticeAt: shopSecurityPinRecoveryNotice, dismissNotice: dismissShopSecurityPinRecoveryNotice } =
     useShopSecurityPinRecovery(shopId);
   const { noticeAt: staffCredentialRecoveryNotice, dismissNotice: dismissStaffCredentialRecoveryNotice } =
@@ -602,6 +607,22 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       }}
                     >
                       {t(lang, "settingsHubAppearance")}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:bg-muted"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/support-center", { preventScrollReset: true });
+                      }}
+                    >
+                      <span>{t(lang, "supportCenterNavLabel")}</span>
+                      {supportAttentionTotal > 0 ? (
+                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white">
+                          {supportAttentionTotal}
+                        </span>
+                      ) : null}
                     </button>
                     {authMode === "supabase" && !staffSession && authOperatorRole(actor) === "owner" ? (
                       <button

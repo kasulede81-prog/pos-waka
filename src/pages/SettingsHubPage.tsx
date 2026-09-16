@@ -17,6 +17,8 @@ import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
 import { PilotSupportCard } from "../components/settings/PilotSupportCard";
 import { RemoteSupportStatusCard } from "../components/remote-support/RemoteSupportStatusCard";
+import { useSupportUnreadCounts } from "../hooks/useMerchantSupport";
+import { useActiveShopId } from "../hooks/useActiveShopId";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { PilotModeToggle } from "../components/pilot/PilotModeToggle";
 import { canTogglePilotMode, isPilotModeActive } from "../lib/pilotMode";
@@ -34,6 +36,11 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const pharmacyModeEnabled = usePosStore((s) => s.preferences.pharmacyModeEnabled);
   const { userId, snapshot, authMode } = useSubscription();
   const { access: visionAccess } = useShopVisionSettings();
+  const { shopId: activeShopId, loading: activeShopLoading } = useActiveShopId();
+  const unreadCounts = useSupportUnreadCounts(activeShopLoading ? null : activeShopId);
+  const supportAttentionTotal =
+    (unreadCounts.data?.unreadNotifications ?? 0) +
+    (unreadCounts.data?.waitingForYouTickets ?? 0);
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const appVersion = import.meta.env.VITE_APP_VERSION?.trim() || "—";
   const preferences = usePosStore((s) => s.preferences);
@@ -281,6 +288,17 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Archive}
           />
         ) : null}
+      </OfficeNavSection>
+
+      <OfficeNavSection title={t(lang, "supportCenterSupportSection")}>
+        <OfficeNavCard
+          to="/support-center"
+          title={t(lang, "supportCenterNavLabel")}
+          subtitle={t(lang, "supportCenterSub")}
+          Icon={LifeBuoy}
+          highlight={supportAttentionTotal > 0}
+          trailing={supportAttentionTotal > 0 ? String(supportAttentionTotal) : undefined}
+        />
       </OfficeNavSection>
 
       {canTogglePilotMode(authOperatorRole(actor)) ? <PilotModeToggle lang={lang} /> : null}

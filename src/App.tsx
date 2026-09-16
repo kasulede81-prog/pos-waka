@@ -82,6 +82,12 @@ import { StaffCenterLayout } from "./pages/StaffCenterLayout";
 import { StaffCenterActivityPage } from "./pages/StaffCenterActivityPage";
 import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
+import { SupportCenterHomePage } from "./pages/SupportCenterHomePage";
+import { NotificationsListPage } from "./pages/NotificationsListPage";
+import { NotificationDetailPage } from "./pages/NotificationDetailPage";
+import { SupportTicketsPage } from "./pages/SupportTicketsPage";
+import { SupportTicketDetailPage } from "./pages/SupportTicketDetailPage";
+import { NewSupportTicketPage } from "./pages/NewSupportTicketPage";
 import { PilotSupportCenterPage } from "./pages/PilotSupportCenterPage";
 import { LegalPolicyPage } from "./pages/LegalPolicyPage";
 import { InternalAdminOutlet } from "./components/routing/InternalAdminOutlet";
@@ -655,6 +661,54 @@ function AppRoutes() {
               }
             />
             <Route path="upgrade" element={<UpgradePage lang={lang} />} />
+            <Route
+              path="support-center"
+              element={
+                <RouteErrorBoundary scope="SupportCenter">
+                  <SupportCenterHomePage lang={lang} />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="support-center/notifications"
+              element={
+                <RouteErrorBoundary scope="SupportCenter">
+                  <NotificationsListPage lang={lang} />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="support-center/notifications/:notificationId"
+              element={
+                <RouteErrorBoundary scope="SupportCenter">
+                  <NotificationDetailPage lang={lang} />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="support-center/tickets"
+              element={
+                <RouteErrorBoundary scope="SupportCenter">
+                  <SupportTicketsPage lang={lang} />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="support-center/tickets/:ticketId"
+              element={
+                <RouteErrorBoundary scope="SupportCenter">
+                  <SupportTicketDetailPage lang={lang} />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="support-center/new"
+              element={
+                <RouteErrorBoundary scope="SupportCenter">
+                  <NewSupportTicketPage lang={lang} />
+                </RouteErrorBoundary>
+              }
+            />
             <Route
               path="office/backup"
               element={
