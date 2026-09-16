@@ -235,6 +235,20 @@ export async function applyAdminStaffCredentialsClear(
  * since the server-side reset already ran). Mirrors applyAdminBackOfficePinClear
  * / applyAdminStaffCredentialsClear's dedupe-by-timestamp shape.
  */
+// `pullCloudAndMergeIntoStore` itself schedules a recovery check (pin +
+// staff credentials) once it finishes merging, which re-enters
+// `applyShopRecoverySignalsForShop` → this function for the SAME
+// outstanding signal — because `writeAppliedForceResyncAt` below only runs
+// AFTER the pull it guards has already returned. Without a reentrancy guard
+// that is unbounded recursion: the outer pull can never finish because it is
+// waiting on an inner call that is waiting on a pull that is waiting on
+// itself, deterministically, for as long as the signal stays unacknowledged
+// (i.e. forever, since the ack only ever happens on the return path that
+// never arrives). Confirmed live: this is the reason the Day-Close wizard's
+// preflight sync — the first caller in the app to actually await a full
+// syncShopWithCloud() to completion — hung indefinitely with no error.
+const forceFullResyncInFlight = new Set<string>();
+
 export async function applyAdminForceFullResync(
   shopId: string,
   signalAt: string,
@@ -242,35 +256,62 @@ export async function applyAdminForceFullResync(
 ): Promise<boolean> {
   const lastApplied = readAppliedForceResyncAt(shopId);
   if (lastApplied === signalAt) return false;
+  if (forceFullResyncInFlight.has(shopId)) return false;
+  forceFullResyncInFlight.add(shopId);
 
-  // `pullShopDataFromCloud` only fetches and returns a CloudPullResult — it
-  // never touches the store. `pullCloudAndMergeIntoStore` is the caller that
-  // actually merges that result into `usePosStore` via `setState`. Calling
-  // the former here silently fetched-and-discarded the reset shop's (now
-  // empty) server state and never updated the local store at all.
-  const { pullCloudAndMergeIntoStore } = await import("../offline/cloudSync");
-  const merged = await pullCloudAndMergeIntoStore({
-    forceFull: true,
-    pullReason: reason ?? "admin_shop_reset_signal",
-  });
-  // Never mark this signal "applied" on a failed pull (network error,
-  // organization check failure, store not hydrated, etc.) — doing so would
-  // permanently stop retrying the authoritative full pull AND disarm the
-  // outbox (Step 6) and snapshot (Step 5) guards while local state is still
-  // the stale pre-reset data. Leaving the signal outstanding lets the next
-  // boot/flush try again.
-  if (!merged) return false;
+  try {
+    // `pullShopDataFromCloud` only fetches and returns a CloudPullResult — it
+    // never touches the store. `pullCloudAndMergeIntoStore` is the caller that
+    // actually merges that result into `usePosStore` via `setState`. Calling
+    // the former here silently fetched-and-discarded the reset shop's (now
+    // empty) server state and never updated the local store at all.
+    //
+    // This is the ONLY caller of pullCloudAndMergeIntoStore that bypasses the
+    // shared pull mutex (every other caller — the periodic incremental pull,
+    // syncShopWithCloud's own full pull — goes through withPullSyncMutex in
+    // cloudSync.ts). Without also routing through it here, this pull can run
+    // fully concurrently with an unrelated pull already in flight (e.g. the
+    // periodic "safety_poll" pull), both racing to setState/persist into the
+    // same store at once. Confirmed live: with only the in-flight guard above
+    // (which stops this function recursively re-entering itself, but not two
+    // genuinely independent top-level triggers — e.g. a boot-time app_launch
+    // check and a periodic safety_poll pull — from overlapping), the app
+    // still hung indefinitely on this shop's long-outstanding, never-yet-
+    // acknowledged force_full_resync_at signal. Reusing the existing
+    // "hydrateAccountFromCloud" pull kind (already used for the equivalent
+    // full-hydration pull at login) queues this pull behind whatever else is
+    // currently pulling instead of racing it — safe to add here specifically
+    // because the in-flight guard above already guarantees this function
+    // never tries to re-acquire the mutex from within its own nested call.
+    const { pullCloudAndMergeIntoStore } = await import("../offline/cloudSync");
+    const { withPullSyncMutex } = await import("./globalSyncMutex");
+    const merged = await withPullSyncMutex("hydrateAccountFromCloud", () =>
+      pullCloudAndMergeIntoStore({
+        forceFull: true,
+        pullReason: reason ?? "admin_shop_reset_signal",
+      }),
+    );
+    // Never mark this signal "applied" on a failed pull (network error,
+    // organization check failure, store not hydrated, etc.) — doing so would
+    // permanently stop retrying the authoritative full pull AND disarm the
+    // outbox (Step 6) and snapshot (Step 5) guards while local state is still
+    // the stale pre-reset data. Leaving the signal outstanding lets the next
+    // boot/flush try again.
+    if (!merged) return false;
 
-  writeAppliedForceResyncAt(shopId, signalAt);
+    writeAppliedForceResyncAt(shopId, signalAt);
 
-  const { usePosStore } = await import("../store/usePosStore");
-  usePosStore.getState().logAuditAction(
-    "admin_shop_reset_resync_applied",
-    "Fresh full sync applied after admin business-data reset",
-    { shopId, signalAt, recoveryReason: reason ?? "admin_shop_reset_signal", recoveryAppliedOnDevice: true },
-  );
+    const { usePosStore } = await import("../store/usePosStore");
+    usePosStore.getState().logAuditAction(
+      "admin_shop_reset_resync_applied",
+      "Fresh full sync applied after admin business-data reset",
+      { shopId, signalAt, recoveryReason: reason ?? "admin_shop_reset_signal", recoveryAppliedOnDevice: true },
+    );
 
-  return true;
+    return true;
+  } finally {
+    forceFullResyncInFlight.delete(shopId);
+  }
 }
 
 /**

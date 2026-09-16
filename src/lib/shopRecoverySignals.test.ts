@@ -230,6 +230,31 @@ describe("shopRecoverySignals", () => {
     expect(mockPullCloudAndMergeIntoStore).not.toHaveBeenCalled();
   });
 
+  it("P1 regression: a reentrant call for the same shop while a resync is already in flight returns false immediately instead of recursing forever — pullCloudAndMergeIntoStore's own trailing scheduleShopRecovery re-enters applyShopRecoverySignalsForShop -> applyAdminForceFullResync for the SAME outstanding signal (writeAppliedForceResyncAt only runs after the outer pull returns, so without a reentrancy guard this is unbounded recursion: confirmed live as the cause of the Day-Close wizard's preflight sync hanging indefinitely with no error)", async () => {
+    const { applyAdminForceFullResync } = await import("./shopRecoverySignals");
+    const signalAt = "2026-09-13T16:00:00.000Z";
+
+    let reentrantCallCount = 0;
+    let reentrantResult: boolean | undefined;
+    mockPullCloudAndMergeIntoStore.mockImplementationOnce(async () => {
+      reentrantCallCount += 1;
+      // Simulates pullCloudAndMergeIntoStore's real trailing call to
+      // scheduleShopRecovery, which re-enters this exact function for the
+      // same shop/signal before the outer call has had a chance to write
+      // the dedupe flag.
+      reentrantResult = await applyAdminForceFullResync("shop-1", signalAt, "admin_shop_reset_signal");
+      return true;
+    });
+
+    const applied = await applyAdminForceFullResync("shop-1", signalAt, "admin_shop_reset_signal");
+
+    expect(reentrantCallCount).toBe(1);
+    expect(reentrantResult).toBe(false);
+    expect(mockPullCloudAndMergeIntoStore).toHaveBeenCalledTimes(1);
+    expect(applied).toBe(true);
+    expect(storage.get("waka.recovery.forceFullResyncApplied.v1::shop-1")).toBe(signalAt);
+  });
+
   it("does NOT mark the reset signal applied when the authoritative full pull fails, so a later retry is still possible", async () => {
     mockPullCloudAndMergeIntoStore.mockResolvedValue(false);
     const { applyAdminForceFullResync, staleForceFullResyncCutoff } = await import("./shopRecoverySignals");
