@@ -185,3 +185,112 @@ export function useDebouncedCallback<A extends unknown[]>(fn: (...args: A) => vo
     timerRef.current = window.setTimeout(() => fnRef.current(...args), ms);
   };
 }
+
+/**
+ * Phase 3 — Live Support Session realtime.
+ *
+ * Merchant banner: session rows for this shop (INSERT/UPDATE) plus activity
+ * events for any of this shop's open sessions. Admin console: session row
+ * updates for the expanded ticket plus its activity feed. All filters are
+ * RLS-scoped — a subscriber only ever receives rows it could SELECT anyway.
+ */
+
+export function subscribeShopSupportSessions(
+  shopId: string,
+  handlers: { onSessionsChanged?: () => void; onEventInserted?: (sessionId: string) => void },
+): Unsubscribe {
+  if (!supabase) return () => {};
+  const base = { schema: "public" as const };
+  const channel = supabase
+    .channel(`support-sessions-shop-${shopId}-${instanceId()}`)
+    .on("postgres_changes", { ...base, event: "INSERT", table: "merchant_support_sessions", filter: `shop_id=eq.${shopId}` }, () => handlers.onSessionsChanged?.())
+    .on("postgres_changes", { ...base, event: "UPDATE", table: "merchant_support_sessions", filter: `shop_id=eq.${shopId}` }, () => handlers.onSessionsChanged?.())
+    .on("postgres_changes", { ...base, event: "INSERT", table: "merchant_support_session_events", filter: `shop_id=eq.${shopId}` }, (payload) => {
+      const row = payload.new as Record<string, unknown>;
+      handlers.onEventInserted?.(String(row.session_id ?? ""));
+    })
+    .subscribe();
+  return () => {
+    if (supabase) void supabase.removeChannel(channel);
+  };
+}
+
+export function useShopSupportSessionsRealtime(
+  shopId: string | null,
+  handlers: { onSessionsChanged?: () => void; onEventInserted?: (sessionId: string) => void },
+): void {
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+
+  useEffect(() => {
+    if (!shopId) return;
+    return subscribeShopSupportSessions(shopId, {
+      onSessionsChanged: () => handlersRef.current.onSessionsChanged?.(),
+      onEventInserted: (sessionId) => handlersRef.current.onEventInserted?.(sessionId),
+    });
+  }, [shopId]);
+}
+
+export function subscribeSupportSessionFeed(
+  sessionId: string,
+  onEventInserted: () => void,
+): Unsubscribe {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`support-session-feed-${sessionId}-${instanceId()}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "merchant_support_session_events", filter: `session_id=eq.${sessionId}` },
+      onEventInserted,
+    )
+    .subscribe();
+  return () => {
+    if (supabase) void supabase.removeChannel(channel);
+  };
+}
+
+export function useSupportSessionFeedRealtime(
+  sessionId: string | null,
+  onEventInserted: () => void,
+): void {
+  const callbackRef = useRef(onEventInserted);
+  callbackRef.current = onEventInserted;
+
+  useEffect(() => {
+    if (!sessionId) return;
+    return subscribeSupportSessionFeed(sessionId, () => callbackRef.current());
+  }, [sessionId]);
+}
+
+export function subscribeAdminTicketSession(
+  ticketId: string,
+  handlers: { onSessionChanged?: () => void; onEventInserted?: () => void },
+): Unsubscribe {
+  if (!supabase) return () => {};
+  const base = { schema: "public" as const };
+  const channel = supabase
+    .channel(`support-admin-session-${ticketId}-${instanceId()}`)
+    .on("postgres_changes", { ...base, event: "INSERT", table: "merchant_support_sessions", filter: `ticket_id=eq.${ticketId}` }, () => handlers.onSessionChanged?.())
+    .on("postgres_changes", { ...base, event: "UPDATE", table: "merchant_support_sessions", filter: `ticket_id=eq.${ticketId}` }, () => handlers.onSessionChanged?.())
+    .on("postgres_changes", { ...base, event: "INSERT", table: "merchant_support_session_events", filter: `ticket_id=eq.${ticketId}` }, () => handlers.onEventInserted?.())
+    .subscribe();
+  return () => {
+    if (supabase) void supabase.removeChannel(channel);
+  };
+}
+
+export function useAdminTicketSessionRealtime(
+  ticketId: string | null,
+  handlers: { onSessionChanged?: () => void; onEventInserted?: () => void },
+): void {
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+
+  useEffect(() => {
+    if (!ticketId) return;
+    return subscribeAdminTicketSession(ticketId, {
+      onSessionChanged: () => handlersRef.current.onSessionChanged?.(),
+      onEventInserted: () => handlersRef.current.onEventInserted?.(),
+    });
+  }, [ticketId]);
+}

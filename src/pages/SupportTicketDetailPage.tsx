@@ -35,6 +35,7 @@ import {
 import { SupportStatusBadge } from "../components/support/merchant/SupportStatusBadge";
 import { AttachmentComposer } from "../components/support/AttachmentComposer";
 import { MessageAttachments } from "../components/support/MessageAttachments";
+import { MerchantLiveSessionSection } from "../components/support/merchant/MerchantLiveSessionSection";
 import { KeyboardSafePage } from "../components/layout/KeyboardSafePage";
 
 /**
@@ -179,6 +180,13 @@ export function SupportTicketDetailPage({ lang }: { lang: Language }) {
                 {t(lang, "supportCenterReplyWaitingBanner")}
               </p>
             ) : null}
+
+            <MerchantLiveSessionSection
+              lang={lang}
+              shopId={shopId}
+              ticketId={row.id}
+              ticketStatus={row.status}
+            />
 
             <section className="rounded-2xl border border-border/90 bg-card p-4 shadow-waka-sm">
               <h2 className="text-xs font-black uppercase tracking-wide text-muted-foreground">

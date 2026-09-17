@@ -27,6 +27,7 @@ import {
 } from "../../../../lib/supportRealtime";
 import { AttachmentComposer } from "../../../support/AttachmentComposer";
 import { MessageAttachments } from "../../../support/MessageAttachments";
+import { AdminLiveSessionPanel } from "./AdminLiveSessionPanel";
 import { whatsappUrlFromPhone } from "../../../../lib/wakaInternalAdmin";
 import type { Language } from "../../../../types";
 
@@ -342,6 +343,13 @@ export function MerchantTicketsConsole({ lang, canWorkTickets, previewMode }: Pr
                         </a>
                       ) : null}
                     </div>
+
+                    <AdminLiveSessionPanel
+                      lang={lang}
+                      ticketId={tk.id}
+                      ticketStatus={tk.status}
+                      writeDisabled={writeDisabled}
+                    />
 
                     {writeDisabled ? null : composerHidden ? (
                       <p className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-xs font-semibold text-muted-foreground">

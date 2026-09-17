@@ -90,6 +90,7 @@ import { PosNeedHelpHost } from "../support/PosNeedHelpHost";
 import { SupportFloatingButton } from "../support/SupportFloatingButton";
 import { canSeePosNeedHelp, openPosNeedHelpForm } from "../../lib/posSupportRequest";
 import { shouldShowSupportFloatingButton } from "../../lib/supportFloatingButton";
+import { SupportSessionBanner } from "../support/SupportSessionBanner";
 import { useRemoteSupportPlatformEnabled } from "../../hooks/useRemoteSupportPlatformEnabled";
 import { useSupportUnreadCounts } from "../../hooks/useMerchantSupport";
 
@@ -738,6 +739,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             attentionTotal={supportAttentionTotal}
             lifted={showPharmacyMobileNav || showHospitalityMobileNav || showMobileModuleExit}
           />
+        ) : null}
+        {user && shopId && !internalAdminRoute && !onSellScreen ? (
+          <SupportSessionBanner lang={lang} shopId={shopId} />
         ) : null}
         {showMobileModuleExit ? <MobileModuleExitBar lang={lang} terminalHome={terminalHome} /> : null}
         <HospitalityMobileNav lang={lang} visible={showHospitalityMobileNav} />
