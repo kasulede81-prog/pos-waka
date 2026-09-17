@@ -4,6 +4,8 @@ import { AdminShopInventoryPanel } from "../../../AdminShopInventoryPanel";
 import { AdminCollapsible } from "../../../adminUi";
 import { formatUgx } from "../../../../../lib/formatUgx";
 import { AdminShopOpsLedgerPanel } from "../AdminShopOpsLedgerPanel";
+import { FinancialCorrectionPanel } from "../../financial-correction/FinancialCorrectionPanel";
+import { FinancialCorrectionRequestQueue } from "../../financial-correction/FinancialCorrectionRequestQueue";
 import type { ShopConsoleState } from "../useShopConsoleState";
 
 type Props = { ctx: ShopConsoleState };
@@ -238,6 +240,19 @@ export function ShopConsoleBusinessTab({ ctx }: Props) {
             }
           />
         </AdminCollapsible>
+      ) : null}
+
+      {perms.canResolveSupport ? (
+        <FinancialCorrectionRequestQueue
+          shopId={detail.shop.id}
+          actorRole={perms.role}
+          canInvestigate={perms.canResolveSupport}
+          canCorrect={perms.canCorrectFinancials}
+        />
+      ) : null}
+
+      {perms.canCorrectFinancials ? (
+        <FinancialCorrectionPanel shopId={detail.shop.id} actorRole={perms.role} />
       ) : null}
     </div>
   );

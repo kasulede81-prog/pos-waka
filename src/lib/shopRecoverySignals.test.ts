@@ -230,6 +230,31 @@ describe("shopRecoverySignals", () => {
     expect(mockPullCloudAndMergeIntoStore).not.toHaveBeenCalled();
   });
 
+  it("P1 regression: a reentrant call for the same shop while a resync is already in flight returns false immediately instead of recursing forever — pullCloudAndMergeIntoStore's own trailing scheduleShopRecovery re-enters applyShopRecoverySignalsForShop -> applyAdminForceFullResync for the SAME outstanding signal (writeAppliedForceResyncAt only runs after the outer pull returns, so without a reentrancy guard this is unbounded recursion: confirmed live as the cause of the Day-Close wizard's preflight sync hanging indefinitely with no error)", async () => {
+    const { applyAdminForceFullResync } = await import("./shopRecoverySignals");
+    const signalAt = "2026-09-13T16:00:00.000Z";
+
+    let reentrantCallCount = 0;
+    let reentrantResult: boolean | undefined;
+    mockPullCloudAndMergeIntoStore.mockImplementationOnce(async () => {
+      reentrantCallCount += 1;
+      // Simulates pullCloudAndMergeIntoStore's real trailing call to
+      // scheduleShopRecovery, which re-enters this exact function for the
+      // same shop/signal before the outer call has had a chance to write
+      // the dedupe flag.
+      reentrantResult = await applyAdminForceFullResync("shop-1", signalAt, "admin_shop_reset_signal");
+      return true;
+    });
+
+    const applied = await applyAdminForceFullResync("shop-1", signalAt, "admin_shop_reset_signal");
+
+    expect(reentrantCallCount).toBe(1);
+    expect(reentrantResult).toBe(false);
+    expect(mockPullCloudAndMergeIntoStore).toHaveBeenCalledTimes(1);
+    expect(applied).toBe(true);
+    expect(storage.get("waka.recovery.forceFullResyncApplied.v1::shop-1")).toBe(signalAt);
+  });
+
   it("does NOT mark the reset signal applied when the authoritative full pull fails, so a later retry is still possible", async () => {
     mockPullCloudAndMergeIntoStore.mockResolvedValue(false);
     const { applyAdminForceFullResync, staleForceFullResyncCutoff } = await import("./shopRecoverySignals");
@@ -331,6 +356,113 @@ describe("shopRecoverySignals", () => {
 
       const { staleForceFullResyncCutoff } = await import("./shopRecoverySignals");
       await expect(staleForceFullResyncCutoff("shop-1")).resolves.toBeNull();
+    });
+  });
+
+  describe("resolveStaleResetGuardState (P1 remediation — fail-CLOSED outbox guard, financial certification audit P1#2)", () => {
+    // Regression test 1: reset signal available → correct behavior (signal, with cutoff)
+    it("returns {status:'signal', cutoff} when a signal is outstanding and unacknowledged", async () => {
+      const { supabase } = await import("./supabase");
+      vi.mocked(supabase!.rpc).mockResolvedValue({
+        data: { force_full_resync_at: "2026-09-13T22:01:21.853Z" },
+        error: null,
+        count: null,
+        status: 200,
+        statusText: "OK",
+        success: true,
+      } as never);
+
+      const { resolveStaleResetGuardState } = await import("./shopRecoverySignals");
+      await expect(resolveStaleResetGuardState("shop-1")).resolves.toEqual({
+        status: "signal",
+        cutoff: "2026-09-13T22:01:21.853Z",
+      });
+    });
+
+    // Regression test 2: no reset signal → correct behavior (clear)
+    it("returns {status:'clear'} when there is no force-resync signal at all", async () => {
+      const { supabase } = await import("./supabase");
+      vi.mocked(supabase!.rpc).mockResolvedValue({
+        data: {},
+        error: null,
+        count: null,
+        status: 200,
+        statusText: "OK",
+        success: true,
+      } as never);
+
+      const { resolveStaleResetGuardState } = await import("./shopRecoverySignals");
+      await expect(resolveStaleResetGuardState("shop-1")).resolves.toEqual({ status: "clear" });
+    });
+
+    it("returns {status:'clear'} once this device has already applied that exact signal", async () => {
+      const { supabase } = await import("./supabase");
+      vi.mocked(supabase!.rpc).mockResolvedValue({
+        data: { force_full_resync_at: "2026-09-13T22:01:21.853Z" },
+        error: null,
+        count: null,
+        status: 200,
+        statusText: "OK",
+        success: true,
+      } as never);
+      storage.set("waka.recovery.forceFullResyncApplied.v1::shop-1", "2026-09-13T22:01:21.853Z");
+
+      const { resolveStaleResetGuardState } = await import("./shopRecoverySignals");
+      await expect(resolveStaleResetGuardState("shop-1")).resolves.toEqual({ status: "clear" });
+    });
+
+    // Regression test 3: RPC error → {status:'unknown'} (operation must NOT be pushed by the caller)
+    it("FAILS CLOSED — returns {status:'unknown'} when the RPC errors, unlike staleForceFullResyncCutoff's fail-open null", async () => {
+      const { supabase } = await import("./supabase");
+      vi.mocked(supabase!.rpc).mockResolvedValue({
+        data: null,
+        error: { message: "network_error" },
+        count: null,
+        status: 500,
+        statusText: "Error",
+        success: false,
+      } as never);
+
+      const { resolveStaleResetGuardState, staleForceFullResyncCutoff } = await import("./shopRecoverySignals");
+      await expect(resolveStaleResetGuardState("shop-1")).resolves.toEqual({ status: "unknown" });
+      // Contrast: the (unchanged) fail-open helper still treats the same
+      // failure as "no confirmed signal" — proving these are deliberately
+      // different call sites, not an oversight.
+      await expect(staleForceFullResyncCutoff("shop-1")).resolves.toBeNull();
+    });
+
+    // Regression test 4: RPC timeout / outright rejection → {status:'unknown'}
+    it("FAILS CLOSED — returns {status:'unknown'} when Supabase rejects the RPC call outright (e.g. a timeout)", async () => {
+      const { supabase } = await import("./supabase");
+      vi.mocked(supabase!.rpc).mockRejectedValue(new Error("network_down"));
+
+      const { resolveStaleResetGuardState } = await import("./shopRecoverySignals");
+      await expect(resolveStaleResetGuardState("shop-1")).resolves.toEqual({ status: "unknown" });
+    });
+
+    // Regression test 5: recovery succeeds later → operation resumes according to the correct cutoff.
+    // Simulates two consecutive flush cycles on the same device: the first
+    // cycle's lookup fails (unknown — caller must hold the op), the second
+    // cycle's lookup succeeds and correctly reports the real signal state.
+    it("recovers on a later call once the RPC succeeds again, after a prior failed lookup", async () => {
+      const { supabase } = await import("./supabase");
+      const { resolveStaleResetGuardState } = await import("./shopRecoverySignals");
+
+      vi.mocked(supabase!.rpc).mockRejectedValueOnce(new Error("network_down"));
+      await expect(resolveStaleResetGuardState("shop-1")).resolves.toEqual({ status: "unknown" });
+
+      vi.mocked(supabase!.rpc).mockResolvedValueOnce({
+        data: { force_full_resync_at: "2026-09-13T22:01:21.853Z" },
+        error: null,
+        count: null,
+        status: 200,
+        statusText: "OK",
+        success: true,
+      } as never);
+      await expect(resolveStaleResetGuardState("shop-1")).resolves.toEqual({
+        status: "signal",
+        cutoff: "2026-09-13T22:01:21.853Z",
+      });
     });
   });
 

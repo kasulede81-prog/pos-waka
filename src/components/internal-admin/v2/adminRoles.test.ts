@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adminPermissions,
+  canCorrectFinancials,
   canManageAi,
   canManageShopAiSetup,
   canPermanentlyDeleteShopAccount,
@@ -89,5 +90,16 @@ describe("canManageAi", () => {
     expect(canManageAi("field_agent")).toBe(false);
     expect(canManageShopAiSetup("support_admin")).toBe(true);
     expect(canManageShopAiSetup("finance_admin")).toBe(false);
+  });
+});
+
+describe("canCorrectFinancials", () => {
+  it("allows only super_admin and finance_admin — never owner/manager/cashier-equivalent internal roles", () => {
+    expect(canCorrectFinancials("super_admin")).toBe(true);
+    expect(canCorrectFinancials("finance_admin")).toBe(true);
+    expect(canCorrectFinancials("operations_admin")).toBe(false);
+    expect(canCorrectFinancials("support_admin")).toBe(false);
+    expect(canCorrectFinancials("field_agent")).toBe(false);
+    expect(canCorrectFinancials("subscriptions_admin")).toBe(false);
   });
 });

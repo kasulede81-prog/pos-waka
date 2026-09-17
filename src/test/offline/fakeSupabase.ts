@@ -77,6 +77,15 @@ export type FakeSupabaseOptions = {
    * discard/replace local data, only tables it names ever produce an error.
    */
   tableErrors?: Record<string, { message: string; code?: string }>;
+  /**
+   * Opt-in per-RPC-function rejection, keyed by function name. When a
+   * function name is listed here, calling `rpc(fn, ...)` rejects (simulating
+   * a network error/timeout) instead of resolving with `rpcResults[fn]`.
+   * Absent (the default) changes nothing for any existing test — used to
+   * prove a reset-signal lookup failure never lets a guarded outbox op push
+   * (financial certification audit P1#2).
+   */
+  rpcErrors?: Record<string, Error>;
 };
 
 type QueryOutcome = { data: unknown; error: null };
@@ -337,6 +346,9 @@ export function createFakeSupabaseClient(options: FakeSupabaseOptions = {}): Fak
       ),
     rpc: async (fn: string, args?: Record<string, unknown>) => {
       rpcCalls.push({ fn, args });
+      if (options.rpcErrors && fn in options.rpcErrors) {
+        throw options.rpcErrors[fn];
+      }
       return { data: fn in rpcResults ? rpcResults[fn] : null, error: null };
     },
     channel: () => makeChannel(),

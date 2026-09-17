@@ -164,7 +164,7 @@ import {
 import { mergeStockMovementsFromCloudPull } from "../lib/stockMovementRecovery";
 import { mergeDayClosesFromCloudPull } from "../lib/dayCloseRecovery";
 import { applySuccessfulDayClosePush, pullDayClosesFromRpc, pushDayCloseToCloud } from "../lib/dayCloseCloudSync";
-import { normalizeUnitCostUgx, normalizePackCostUgx } from "../lib/costPrecision";
+import { normalizeUnitCostUgx, normalizePackCostUgx, hasPackCostAllocation } from "../lib/costPrecision";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 import { pullCursorUntilExhausted, pullOffsetRangeUntilExhausted } from "../lib/cloudPullPagination";
 import { getActiveShopId, isValidShopId } from "./shopScope";
@@ -1411,8 +1411,51 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
     );
   }
 
+  await syncPackSlotStateForSaleLines(sale, ctx);
+
   markSaleSyncState(sale.id, true, null);
   return true;
+}
+
+/**
+ * Stock deduction for a completed sale is authoritative server-side
+ * (apply_sale_stock_movements, called from shop_push_sale_complete) and only
+ * ever touches stock_on_hand — it has no concept of packCostUnitsDepleted,
+ * the client-only FIFO pack-slot allocation counter (costPrecision.ts) used
+ * for products whose buyingPackCostUgx doesn't divide evenly by
+ * conversionRate. Nothing else in the sale-completion flow pushes that
+ * counter to Supabase, so without this it only ever reaches the server
+ * incidentally (a full product-catalog push from an edit or restock) —
+ * every device restart / cloud restore / additional staff device would
+ * otherwise silently reset pack-slot allocation back to slot 0. Best-effort:
+ * a failure here must never fail the sale itself, since stock/revenue/COGS
+ * are already correctly recorded by this point — the next successful sale
+ * on this or another device will simply push a caught-up value (the RPC's
+ * GREATEST-based merge makes this self-healing and safe to retry/replay).
+ */
+async function syncPackSlotStateForSaleLines(sale: Sale, ctx: ShopCtx): Promise<void> {
+  if (!supabase) return;
+  const productIds = new Set(
+    sale.lines.filter((l) => !l.voided && isUuid(l.productId)).map((l) => l.productId),
+  );
+  if (productIds.size === 0) return;
+
+  const products = usePosStore.getState().products;
+  for (const productId of productIds) {
+    const product = products.find((p) => p.id === productId);
+    if (!product || !hasPackCostAllocation(product)) continue;
+    const depleted = product.packCostUnitsDepleted;
+    if (!Number.isFinite(depleted) || depleted == null) continue;
+    try {
+      await supabase.rpc("shop_sync_product_pack_slot_state", {
+        p_shop_id: ctx.shopId,
+        p_product_id: productId,
+        p_pack_cost_units_depleted: depleted,
+      });
+    } catch {
+      // best-effort — see docstring above
+    }
+  }
 }
 
 /** Fetch authoritative stock_on_hand from cloud after sale or pull. */
@@ -1892,6 +1935,14 @@ async function processSaleVoidAdjustment(
   let lineIndex = ledger.lineIndex;
   let saleVoidedAt = ledger.saleVoidedAt;
   let productName = ledger.productName;
+  // Resolved independently of the closed-day gate below — a pure void-status
+  // flag sync (no financial value) is safe to push even on a closed business
+  // date, unlike the amount/financials on the stock RPC payload.
+  const lineIdForVoidStateSync =
+    ledger.saleId != null && ledger.lineIndex != null
+      ? ((state.sales.find((s) => s.id === ledger.saleId) ??
+          (state.archivedSales ?? []).find((s) => s.id === ledger.saleId))?.lines?.[ledger.lineIndex]?.id ?? null)
+      : null;
   // Enriched historical ops: do not attach financials when the sale day is closed
   // (179 would reject the whole RPC). Stock-only replay still ACKs.
   if (ledger.source === "void_record" && saleId && amountUgx) {
@@ -1916,7 +1967,36 @@ async function processSaleVoidAdjustment(
     saleVoidedAt,
     productName,
   });
+  if (ok && lineIdForVoidStateSync && isUuid(lineIdForVoidStateSync)) {
+    await syncSaleLineVoidStateToCloud(lineIdForVoidStateSync, ctx);
+  }
   return ok ? "ack" : "retry";
+}
+
+/**
+ * DEFECT FIX (financial transaction laboratory, Phase 7 — void). Voiding a
+ * line correctly sets `voided: true` locally (usePosStore.ts voidSaleLine)
+ * and shop_apply_sale_void_stock correctly restores stock + records
+ * sale_voids server-side, but nothing previously pushed the voided flag
+ * itself onto sale_line_items.metadata — confirmed live: a voided line's
+ * server-side row was byte-identical to before the void. A device that
+ * never had this line locally (a different staff device, or this device
+ * after a full cloud restore) would pull it without the flag and wrongly
+ * re-include its revenue/COGS/profit. Best-effort and non-blocking: a
+ * failure here must never fail the void itself (stock/sale_voids are
+ * already correctly recorded by this point), and the RPC's own idempotent
+ * merge makes this safe to retry.
+ */
+async function syncSaleLineVoidStateToCloud(saleLineItemId: string, ctx: ShopCtx): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.rpc("shop_sync_sale_line_void_state", {
+      p_shop_id: ctx.shopId,
+      p_sale_line_item_id: saleLineItemId,
+    });
+  } catch {
+    // best-effort — see docstring above
+  }
 }
 
 function rowToCashExpense(raw: Record<string, unknown>): CashExpense | null {

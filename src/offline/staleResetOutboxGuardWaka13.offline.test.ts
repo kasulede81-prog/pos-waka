@@ -210,6 +210,78 @@ describe("Admin-reset safety net — outbox drops stale pre-reset business mutat
     expect(remaining.find((r) => r.id === OP_PRE_RESET_PRODUCT)).toBeTruthy();
   });
 
+  // P1 remediation (financial certification audit, P1#2): the reset-signal
+  // RPC lookup itself can fail (timeout/network error). Before the fix, a
+  // failed lookup was treated identically to "no signal" and the op was
+  // pushed — a stale pre-reset product/sale/customer/stock op could then
+  // resurrect the row the reset had just deleted, with no later pull able to
+  // tell it apart from a legitimate server row. The fix holds guarded-kind
+  // ops in the queue (neither pushed nor dropped) until a later flush can
+  // confirm the actual signal state.
+  it("P1 FIX — RPC error on the signal lookup: a guarded-kind op is HELD, not pushed and not dropped", async () => {
+    fake.client = createFakeSupabaseClient({
+      user: { id: HARNESS_USER_ID, email: "harness@waka.test", email_confirmed_at: "2026-01-01T00:00:00.000Z" },
+      tables: organizationTablesFor(scope),
+      rpcErrors: { shop_fetch_recovery_signal: new Error("network_error") },
+    });
+    const { appendSyncOperation, readSyncQueue } = await import("./localDb");
+    await appendSyncOperation(op(OP_PRE_RESET_PRODUCT, "product", "2026-09-10T00:00:00.000Z", scope.shopId));
+
+    const { flushSyncQueueInner } = await import("./syncEngine");
+    await flushSyncQueueInner();
+
+    // Held, not dropped: still present in the queue afterward.
+    const remaining = await readSyncQueue();
+    expect(remaining.find((r) => r.id === OP_PRE_RESET_PRODUCT)).toBeTruthy();
+    // Held, not pushed: the fake server recorded no write attempt for it.
+    expect(fake.client?.writes.length ?? 0).toBe(0);
+  });
+
+  it("P1 FIX — RPC timeout on the signal lookup: a guarded-kind op is HELD, not pushed and not dropped", async () => {
+    // The real lookup races the RPC against a 4s timeout and rejects on
+    // timeout; simulating that as an outright rejection exercises the same
+    // catch-and-fail-closed path in resolveStaleResetGuardState.
+    fake.client = createFakeSupabaseClient({
+      user: { id: HARNESS_USER_ID, email: "harness@waka.test", email_confirmed_at: "2026-01-01T00:00:00.000Z" },
+      tables: organizationTablesFor(scope),
+      rpcErrors: { shop_fetch_recovery_signal: new Error("recovery_signal_check_timeout") },
+    });
+    const { appendSyncOperation, readSyncQueue } = await import("./localDb");
+    await appendSyncOperation(op(OP_PRE_RESET_SALE, "sale", "2026-09-10T00:00:00.000Z", scope.shopId));
+
+    const { flushSyncQueueInner } = await import("./syncEngine");
+    await flushSyncQueueInner();
+
+    const remaining = await readSyncQueue();
+    expect(remaining.find((r) => r.id === OP_PRE_RESET_SALE)).toBeTruthy();
+    expect(fake.client?.writes.length ?? 0).toBe(0);
+  });
+
+  it("P1 FIX — an RPC error only holds guarded-kind ops; non-guarded kinds still flush normally", async () => {
+    fake.client = createFakeSupabaseClient({
+      user: { id: HARNESS_USER_ID, email: "harness@waka.test", email_confirmed_at: "2026-01-01T00:00:00.000Z" },
+      tables: organizationTablesFor(scope),
+      rpcErrors: { shop_fetch_recovery_signal: new Error("network_error") },
+    });
+    const { appendSyncOperation, readSyncQueue } = await import("./localDb");
+    await appendSyncOperation(op(OP_PRE_RESET_PRODUCT, "product", "2026-09-10T00:00:00.000Z", scope.shopId));
+    await appendSyncOperation(
+      op(OP_NON_GUARDED_KIND, "pending_shifts", "2026-09-01T00:00:00.000Z", scope.shopId, {
+        shiftId: "11111111-1111-4111-8111-000000000099",
+      }),
+    );
+
+    const { flushSyncQueueInner } = await import("./syncEngine");
+    await flushSyncQueueInner();
+
+    const remaining = await readSyncQueue();
+    // Guarded kind: held back by the failed lookup.
+    expect(remaining.find((r) => r.id === OP_PRE_RESET_PRODUCT)).toBeTruthy();
+    // Non-guarded kind: the reset-signal guard never applies to it at all,
+    // so it is attempted normally regardless of the lookup's outcome.
+    expect(remaining.find((r) => r.id === OP_NON_GUARDED_KIND)).toBeTruthy();
+  });
+
   // NOTE: the "already acknowledged this exact signal" dedupe path
   // (`readAppliedForceResyncAt` / `writeAppliedForceResyncAt`) is gated on
   // `typeof window`, and this offline test project deliberately never

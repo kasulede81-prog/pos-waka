@@ -30,6 +30,10 @@ vi.mock("../offline/localDb", () => ({
   hasIndexedDbDataForAccount: vi.fn(async () => true),
 }));
 
+vi.mock("./deviceOnline", () => ({
+  getDeviceOnline: vi.fn(() => true),
+}));
+
 describe("organizationDeletionState", () => {
   const accountKey = "sb:deleted-user";
   const userId = "deleted-user";
@@ -44,6 +48,30 @@ describe("organizationDeletionState", () => {
   it("marks deleted when cloud org is absent for bootstrapped user", async () => {
     const { resolvePrimaryOrganizationForUser } = await import("./fetchShopSubscription");
     vi.mocked(resolvePrimaryOrganizationForUser).mockResolvedValue(null);
+
+    const { refreshOrganizationDeletionState, isDeletedOrganization } = await import("./organizationDeletionState");
+    const deleted = await refreshOrganizationDeletionState(userId, accountKey);
+    expect(deleted).toBe(true);
+    expect(isDeletedOrganization(accountKey)).toBe(true);
+  });
+
+  it("P1 regression: does NOT mark deleted when device is offline — a failed/absent lookup is ambiguous (network error vs genuine absence) and must never be treated as confirmed deletion while offline", async () => {
+    const { resolvePrimaryOrganizationForUser } = await import("./fetchShopSubscription");
+    vi.mocked(resolvePrimaryOrganizationForUser).mockResolvedValue(null);
+    const { getDeviceOnline } = await import("./deviceOnline");
+    vi.mocked(getDeviceOnline).mockReturnValue(false);
+
+    const { refreshOrganizationDeletionState, isDeletedOrganization } = await import("./organizationDeletionState");
+    const deleted = await refreshOrganizationDeletionState(userId, accountKey);
+    expect(deleted).toBe(false);
+    expect(isDeletedOrganization(accountKey)).toBe(false);
+  });
+
+  it("still marks deleted when online and cloud org is confirmed absent (unaffected by the offline guard)", async () => {
+    const { resolvePrimaryOrganizationForUser } = await import("./fetchShopSubscription");
+    vi.mocked(resolvePrimaryOrganizationForUser).mockResolvedValue(null);
+    const { getDeviceOnline } = await import("./deviceOnline");
+    vi.mocked(getDeviceOnline).mockReturnValue(true);
 
     const { refreshOrganizationDeletionState, isDeletedOrganization } = await import("./organizationDeletionState");
     const deleted = await refreshOrganizationDeletionState(userId, accountKey);

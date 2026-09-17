@@ -79,6 +79,7 @@ export function EndOfDayClosingWizard({ lang, session }: Props) {
     preferences,
     submitClose,
     closeErrorKey,
+    setCloseErrorKey,
     activeCloseToday,
     doneMsg,
     last,
@@ -121,9 +122,17 @@ export function EndOfDayClosingWizard({ lang, session }: Props) {
 
   const onConfirmClose = async () => {
     setSubmitting(true);
-    const ok = emergencyMode ? await submitEmergency() : await submitClose();
-    setSubmitting(false);
-    if (ok) setStep("start");
+    try {
+      const ok = emergencyMode ? await submitEmergency() : await submitClose();
+      if (ok) setStep("start");
+    } catch (err) {
+      // An uncaught exception here must never leave the button permanently
+      // disabled with no explanation — surface it and let the operator retry.
+      console.error("[day-close] onConfirmClose threw", err);
+      setCloseErrorKey("dayClosePreflightFailed");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const stepReady = (id: EodWizardStepId): boolean => {

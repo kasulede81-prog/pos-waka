@@ -173,6 +173,9 @@ export type AuditAction =
   | "cash_expense_edited"
   | "customer_merge"
   | "product_restore"
+  | "hospitality_prep_batch"
+  | "hospitality_prep_waste"
+  | "hospitality_prep_cancel"
   | "staff_login"
   | "staff_logout"
   | "staff_login_failed"
@@ -685,6 +688,46 @@ export type Recipe = {
   prepNotes?: string | null;
 };
 
+/**
+ * Immutable preparation-time recipe snapshot stored on a PrepBatch (Phase 5.1).
+ * Lets cancellation restore EXACTLY the ingredients attributable to unconsumed
+ * portions even when the live recipe has since changed. Not a second recipe
+ * system — a frozen copy of the same RecipeLine structure.
+ */
+export type PrepRecipeSnapshot = {
+  yieldQty?: number;
+  lines: RecipeLine[];
+};
+
+/**
+ * Phase 5 — a preparation run that converts raw ingredients into prepared
+ * finished-menu portions BEFORE sale. `stockOnHand` on the menu product stays
+ * the authoritative physical counter; `remainingPortions` is batch provenance
+ * and must satisfy: SUM(active.remainingPortions) == prepared stock.
+ */
+export type PrepBatchStatus = "active" | "depleted" | "wasted" | "cancelled";
+
+export type PrepBatch = {
+  id: string;
+  /** Finished-menu product this batch was prepared for. */
+  menuProductId: string;
+  preparedAt: string;
+  portionsPrepared: number;
+  remainingPortions: number;
+  /** Historical recipe cost per portion at preparation time — never rewritten. */
+  unitCostUgx: number;
+  /** Frozen recipe (ratios, yield, waste) used at preparation time (Phase 5.1). */
+  recipeSnapshot?: PrepRecipeSnapshot | null;
+  status: PrepBatchStatus;
+  actorUserId?: string | null;
+  actorName?: string | null;
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version?: number;
+  pendingSync?: boolean;
+};
+
 export type ComboSlotChoice = {
   productId: string;
   priceDeltaUgx?: number;
@@ -716,6 +759,16 @@ export type MenuSectionDef = {
 
 export type ProductMenuConfig = {
   productKind?: ProductKind;
+  /**
+   * Phase 5 — how this finished-menu item is produced.
+   * "made_to_order" (default): ingredients deduct at sale time (Phase 4 behavior).
+   * "batch_prepared": portions are prepared ahead of sale via PrepBatches; sales
+   * consume prepared stock at the batch's historical cost. Only meaningful for
+   * finished_menu products with a recipe.
+   */
+  prepMode?: "made_to_order" | "batch_prepared";
+  /** Phase 5 — preparation batches for batch_prepared items (provenance + cost). */
+  prepBatches?: PrepBatch[];
   modifierGroups?: ModifierGroup[];
   variants?: ProductVariant[];
   combo?: ComboMealConfig | null;
@@ -1811,6 +1864,14 @@ export type SaleLine = {
   baseUnit?: string;
   /** Financial snapshot completeness — cloud / legacy hydration */
   financialDataStatus?: "complete" | "repaired" | "legacy" | "needs_repair";
+  /**
+   * Count of admin financial-correction events applied to this line (0 = never
+   * corrected). Server-authoritative — only shop_correct_sale_line_financials ever
+   * increments it. Used to guard against a stale device overwriting a corrected
+   * cogsUgx/unitCostUgx/grossProfitUgx/estimatedProfitUgx snapshot on re-push, and as
+   * the basis for the financial-fingerprint snapshot-certification check.
+   */
+  financialRevision?: number;
   /** When inputMode is money, what the customer handed */
   moneyAmountUgx?: number | null;
   /** Pharmacy POS: unit the cashier sold (display only; `quantity` is base units). */
@@ -1847,6 +1908,13 @@ export type SaleLine = {
   isComboMeal?: boolean;
   /** Product.version when line entered cart — cross-tab sale guard */
   stockVersionAtAdd?: number;
+  /**
+   * Phase 5.1 — Hospitality-only, non-financial provenance: which PrepBatches
+   * this line's prepared portions were consumed from (FIFO allocation, frozen
+   * at finalize). Lets a void restore each originating batch exactly. Absent
+   * for retail and made-to-order lines.
+   */
+  prepAllocation?: Array<{ batchId: string; portions: number }> | null;
 };
 
 export type Sale = {
@@ -1874,6 +1942,13 @@ export type Sale = {
   /** Running total voided from this sale after completion */
   voidedTotalUgx?: number;
   estimatedProfitUgx: number;
+  /**
+   * Count of admin financial-correction events applied to any line within this sale
+   * (0 = never corrected). Guards sales.metadata.estimatedProfitUgx against the same
+   * stale-push resurrection vector as SaleLine.financialRevision guards line-level
+   * fields — see that field's doc comment for the full mechanism.
+   */
+  financialRevision?: number;
   /** True when cloud/legacy lines lack repairable financial snapshots */
   financialRepairRequired?: boolean;
   /** True when sale lines originate from legacy migration without cost data */
@@ -1982,6 +2057,17 @@ export type DayCloseDocumentSnapshot = {
   adjustmentInflowsUgx?: number;
   adjustmentOutflowsUgx?: number;
   cashRefundsUgx?: number;
+  /**
+   * Present only on a close that supersedes an earlier one specifically to apply a
+   * historical financial correction (as opposed to an ordinary same-day recount
+   * supersede, which carries no such marker). The superseded original close's own
+   * documentSnapshot is never touched — this field only appears on the NEW active close.
+   */
+  priorPeriodAdjustment?: {
+    cogsDeltaUgx: number;
+    profitDeltaUgx: number;
+    correctionRecordIds: string[];
+  } | null;
 };
 
 export type DayCloseSummary = {

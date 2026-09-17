@@ -3,6 +3,7 @@
  */
 
 import type { Product, SaleLine } from "../types";
+import { shouldDeductFinishedProductStock, effectiveRecipe, productPrepMode } from "./recipeEngine";
 
 export function attachStockVersionToLine(product: Product, line: SaleLine): SaleLine {
   return { ...line, stockVersionAtAdd: product.version ?? 1 };
@@ -28,6 +29,13 @@ export function validateDraftSaleStockBeforeFinalize(
   for (const line of draftLines) {
     const product = products.find((p) => p.id === line.productId);
     if (!product) return { ok: false, errorKey: "missingProduct" };
+
+    // Recipe-driven made-to-order items are produced at sale time: the finished
+    // item's own stock is never deducted (ingredients are), so it must not gate
+    // the sale. Batch-prepared items DO sell from prepared finished stock.
+    const batchPrepared =
+      productPrepMode(product) === "batch_prepared" && effectiveRecipe(product) != null;
+    if (!shouldDeductFinishedProductStock(product) && !batchPrepared) continue;
 
     const available = Math.max(0, Number(product.stockOnHand) || 0);
     if (line.quantity > available + 0.0001) {

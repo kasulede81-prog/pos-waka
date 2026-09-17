@@ -1,5 +1,6 @@
 import type { Customer, Product, Sale, SaleLine } from "../types";
 import { flagLegacyFinancialLine } from "../lib/legacyFinancialRepair";
+import { ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { getActiveAccountKey } from "./accountScope";
 
 const LEGACY_KEY = "waka-pos-store-v1";
@@ -17,7 +18,7 @@ type LegacyItem = {
   updatedAt: string;
 };
 
-type LegacyLine = {
+export type LegacyLine = {
   itemId: string;
   name: string;
   qty: number;
@@ -63,22 +64,28 @@ function mapProduct(i: LegacyItem): Product {
   };
 }
 
-function mapLine(l: LegacyLine): SaleLine {
+export function mapLine(l: LegacyLine): SaleLine {
   const unitCostUgx = 0;
-  return flagLegacyFinancialLine({
-    productId: l.itemId,
-    name: l.name,
-    inputMode: "quantity",
-    quantity: l.qty,
-    unitPriceUgx: l.unitPrice,
-    unitCostUgx,
-    lineTotalUgx: l.lineTotal,
-    estimatedProfitUgx: 0,
-    moneyAmountUgx: null,
-  });
+  // Legacy pre-Supabase localStorage lines predate the SaleLine.id field entirely.
+  // ensureSaleLineId assigns a stable UUID exactly once here, at migration time, and
+  // is idempotent (a no-op) for any line that already carries a valid id — so re-running
+  // this migration (or normalizing an already-migrated sale) never regenerates it.
+  return ensureSaleLineId(
+    flagLegacyFinancialLine({
+      productId: l.itemId,
+      name: l.name,
+      inputMode: "quantity",
+      quantity: l.qty,
+      unitPriceUgx: l.unitPrice,
+      unitCostUgx,
+      lineTotalUgx: l.lineTotal,
+      estimatedProfitUgx: 0,
+      moneyAmountUgx: null,
+    }),
+  );
 }
 
-function mapSale(s: LegacySale): Sale {
+export function mapSale(s: LegacySale): Sale {
   const lines = s.lines.map(mapLine);
   const subtotal = Math.round(s.subtotal);
   const total = Math.round(s.total);

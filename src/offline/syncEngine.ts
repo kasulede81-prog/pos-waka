@@ -148,6 +148,12 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
     "customer",
   ]);
   let staleResetCutoff: string | null = null;
+  // P1 remediation (financial certification audit, P1#2): when the
+  // reset-signal lookup itself fails/times out, guarded-kind ops must be
+  // held back (neither pushed nor dropped) rather than defaulting to "safe
+  // to push" — see `resolveStaleResetGuardState`'s docstring for why the old
+  // fail-open behavior here was a real resurrection gap.
+  let guardedKindsBlocked = false;
   // Corrects for this device's clock running behind (or ahead of) the
   // server's: `op.createdAt` is stamped from the client clock at enqueue
   // time, while `staleResetCutoff` is the server's own clock. Compared
@@ -161,14 +167,17 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   // fetch itself fails — never blocks the flush on this.
   let clockSkewMs = 0;
   if (activeShop && queue.some((op) => STALE_RESET_GUARDED_KINDS.has(op.kind))) {
-    const { staleForceFullResyncCutoff } = await import("../lib/shopRecoverySignals");
-    staleResetCutoff = await staleForceFullResyncCutoff(activeShop).catch(() => null);
-    if (staleResetCutoff) {
+    const { resolveStaleResetGuardState } = await import("../lib/shopRecoverySignals");
+    const guardState = await resolveStaleResetGuardState(activeShop);
+    if (guardState.status === "signal") {
+      staleResetCutoff = guardState.cutoff;
       const { fetchShopServerNow } = await import("../lib/serverNow");
       const deviceNowMs = Date.now();
       const serverNowIso = await fetchShopServerNow().catch(() => null);
       const serverNowMs = serverNowIso ? Date.parse(serverNowIso) : NaN;
       if (Number.isFinite(serverNowMs)) clockSkewMs = serverNowMs - deviceNowMs;
+    } else if (guardState.status === "unknown") {
+      guardedKindsBlocked = true;
     }
   }
 
@@ -186,6 +195,13 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
     ) {
       await removeSyncOperation(op.id);
       reportSyncIssue("sync_op_dropped_stale_pre_reset", { kind: op.kind, opId: op.id });
+      continue;
+    }
+    if (guardedKindsBlocked && STALE_RESET_GUARDED_KINDS.has(op.kind)) {
+      // Reset-signal lookup failed/timed out this cycle — cannot confirm
+      // this op is safe to push (nor safe to drop). Hold it in the queue
+      // untouched; a later flush will re-check and resolve it.
+      reportSyncIssue("sync_op_held_reset_signal_unknown", { kind: op.kind, opId: op.id });
       continue;
     }
     if (op.attempts >= SYNC_QUARANTINE_AFTER_ATTEMPTS && !isQuarantinedSyncOp(op)) {

@@ -86,6 +86,17 @@ export function canRemoteSupport(role: string): boolean {
   return role === "super_admin" || role === "support_admin";
 }
 
+/**
+ * Historical financial correction (sale-line COGS/profit) — the most sensitive
+ * financial-data-mutation capability in the internal admin console. Deliberately NOT
+ * inherited from canFieldOps/canManageTrials/canResolveSupport (finance_admin's other
+ * capabilities) — this is its own explicit check so it can never be granted by
+ * accident as a side effect of broadening one of those.
+ */
+export function canCorrectFinancials(role: string): boolean {
+  return role === "super_admin" || role === "finance_admin";
+}
+
 export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
   const role = normalizeAdminRole(adminRow?.role);
   return {
@@ -105,6 +116,7 @@ export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
     canPermanentlyDeleteShopAccount: canPermanentlyDeleteShopAccount(role),
     canResetShopBusinessData: canResetShopBusinessData(role),
     canRemoteSupport: canRemoteSupport(role),
+    canCorrectFinancials: canCorrectFinancials(role),
     districtCount: adminRow?.assigned_district_ids?.length ?? 0,
   };
 }
