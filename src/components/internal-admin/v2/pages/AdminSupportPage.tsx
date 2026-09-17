@@ -18,6 +18,7 @@ import { AdminPasswordResetLogPanel } from "../../AdminPasswordResetLogPanel";
 import { SupportPasswordResetPanel } from "../../SupportPasswordResetPanel";
 import { AdminDiagnosticsImportPanel } from "../../ops/AdminDiagnosticsImportPanel";
 import { TicketInternalNotesPanel } from "../../ops/TicketInternalNotesPanel";
+import { MerchantTicketsConsole } from "../ops/MerchantTicketsConsole";
 
 type Props = {
   lang: Language;
@@ -51,6 +52,11 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
         ) : null}
       </div>
 
+      <MerchantTicketsConsole
+        canWorkTickets={perms.role === "super_admin" || perms.role === "support_admin"}
+        previewMode={previewMode}
+      />
+
       {perms.canShopSupport && (perms.role === "super_admin" || perms.role === "support_admin") ? (
         <SupportPasswordResetPanel
           lang={lang}
@@ -69,6 +75,9 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
 
       <AdminDiagnosticsImportPanel previewMode={previewMode} />
 
+      <h2 className="pt-2 text-sm font-black uppercase tracking-wide text-muted-foreground">
+        Legacy intake — app reports &amp; pilot tickets
+      </h2>
       <div className="flex gap-2">
         {(["open", "all"] as const).map((f) => (
           <button

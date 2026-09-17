@@ -6959,6 +6959,7 @@ const en: Dict = {
   supportFabFullHelp: "Open full help center",
 
   supportCenterNavLabel: "Notifications & Support",
+  supportCenterFabLabel: "Support",
   supportCenterTitle: "Notifications & Support",
   supportCenterSub: "Get help, track support requests, and stay informed about your WAKA account.",
   supportCenterNotificationsSection: "Notifications",
@@ -13761,6 +13762,7 @@ const lg: Dict = {
   supportFabFullHelp: "Ggulawo olupapula olw'obuyambi",
 
   supportCenterNavLabel: "Obubaka n'Obuyambi",
+  supportCenterFabLabel: "Buyambi",
   supportCenterTitle: "Obubaka n'Obuyambi",
   supportCenterSub: "Funa obuyambi, goberera eby'okusaba kwo, era weebake ku bya WAKA yo.",
   supportCenterNotificationsSection: "Obubaka",

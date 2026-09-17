@@ -87,7 +87,9 @@ import {
 import { PwaUpdateBanner } from "../app-update/AppUpdateControls";
 import { RemoteSupportHost } from "../remote-support/RemoteSupportHost";
 import { PosNeedHelpHost } from "../support/PosNeedHelpHost";
+import { SupportFloatingButton } from "../support/SupportFloatingButton";
 import { canSeePosNeedHelp, openPosNeedHelpForm } from "../../lib/posSupportRequest";
+import { shouldShowSupportFloatingButton } from "../../lib/supportFloatingButton";
 import { useRemoteSupportPlatformEnabled } from "../../hooks/useRemoteSupportPlatformEnabled";
 import { useSupportUnreadCounts } from "../../hooks/useMerchantSupport";
 
@@ -725,6 +727,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </section>
         </main>
+        {shouldShowSupportFloatingButton({
+          pathname: location.pathname,
+          authenticated: Boolean(user) || authMode === "local",
+          posLocked: Boolean(preferences.posLocked),
+          internalAdminRoute,
+        }) ? (
+          <SupportFloatingButton
+            lang={lang}
+            attentionTotal={supportAttentionTotal}
+            lifted={showPharmacyMobileNav || showHospitalityMobileNav || showMobileModuleExit}
+          />
+        ) : null}
         {showMobileModuleExit ? <MobileModuleExitBar lang={lang} terminalHome={terminalHome} /> : null}
         <HospitalityMobileNav lang={lang} visible={showHospitalityMobileNav} />
         <PharmacyMobileNav lang={lang} visible={showPharmacyMobileNav} />
