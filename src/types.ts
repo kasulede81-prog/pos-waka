@@ -689,6 +689,17 @@ export type Recipe = {
 };
 
 /**
+ * Immutable preparation-time recipe snapshot stored on a PrepBatch (Phase 5.1).
+ * Lets cancellation restore EXACTLY the ingredients attributable to unconsumed
+ * portions even when the live recipe has since changed. Not a second recipe
+ * system — a frozen copy of the same RecipeLine structure.
+ */
+export type PrepRecipeSnapshot = {
+  yieldQty?: number;
+  lines: RecipeLine[];
+};
+
+/**
  * Phase 5 — a preparation run that converts raw ingredients into prepared
  * finished-menu portions BEFORE sale. `stockOnHand` on the menu product stays
  * the authoritative physical counter; `remainingPortions` is batch provenance
@@ -705,6 +716,8 @@ export type PrepBatch = {
   remainingPortions: number;
   /** Historical recipe cost per portion at preparation time — never rewritten. */
   unitCostUgx: number;
+  /** Frozen recipe (ratios, yield, waste) used at preparation time (Phase 5.1). */
+  recipeSnapshot?: PrepRecipeSnapshot | null;
   status: PrepBatchStatus;
   actorUserId?: string | null;
   actorName?: string | null;
@@ -1894,6 +1907,13 @@ export type SaleLine = {
   isComboMeal?: boolean;
   /** Product.version when line entered cart — cross-tab sale guard */
   stockVersionAtAdd?: number;
+  /**
+   * Phase 5.1 — Hospitality-only, non-financial provenance: which PrepBatches
+   * this line's prepared portions were consumed from (FIFO allocation, frozen
+   * at finalize). Lets a void restore each originating batch exactly. Absent
+   * for retail and made-to-order lines.
+   */
+  prepAllocation?: Array<{ batchId: string; portions: number }> | null;
 };
 
 export type Sale = {

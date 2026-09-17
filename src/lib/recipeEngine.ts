@@ -1,4 +1,4 @@
-import type { IngredientShortage, PrepBatch, Product, Recipe, RecipeLine, SaleLine, SaleLineModifier } from "../types";
+import type { IngredientShortage, PrepBatch, PrepRecipeSnapshot, Product, Recipe, RecipeLine, SaleLine, SaleLineModifier } from "../types";
 import { productMenuConfig, resolveProductVariant } from "./menuModifiers";
 export function effectiveRecipe(product: Product, variantId?: string | null): Recipe | null {
   const menu = productMenuConfig(product);
@@ -165,7 +165,8 @@ export function saleLineConsumesIngredientsAtSale(product: Product): boolean {
 /**
  * FIFO consumption plan for selling `portions` prepared portions.
  * Returns the full (re-ordered, updated) batch list with remainingPortions
- * decremented oldest-first and the weighted historical unit cost, or an error
+ * decremented oldest-first, the weighted historical unit cost, and the exact
+ * per-batch allocation (frozen onto the SaleLine as provenance), or an error
  * when prepared stock is insufficient.
  */
 export function planPrepBatchConsumption(
@@ -173,7 +174,12 @@ export function planPrepBatchConsumption(
   portions: number,
   at: string,
 ):
-  | { ok: true; batches: PrepBatch[]; unitCostUgx: number }
+  | {
+      ok: true;
+      batches: PrepBatch[];
+      unitCostUgx: number;
+      allocation: Array<{ batchId: string; portions: number }>;
+    }
   | { ok: false; errorKey: "insufficientPreparedStock" } {
   const all = (productMenuConfig(product)?.prepBatches ?? []).map((b) => ({ ...b }));
   const total = preparedPortionsAvailable(product);
@@ -181,11 +187,13 @@ export function planPrepBatchConsumption(
 
   let remaining = portions;
   let cost = 0;
+  const allocation: Array<{ batchId: string; portions: number }> = [];
   for (const batch of activePrepBatches(product)) {
     if (remaining <= 0.0001) break;
     const take = Math.min(batch.remainingPortions, remaining);
     cost += take * batch.unitCostUgx;
     remaining -= take;
+    allocation.push({ batchId: batch.id, portions: Math.round(take * 10000) / 10000 });
     const idx = all.findIndex((b) => b.id === batch.id);
     if (idx === -1) continue;
     const nextRemaining = Math.round((batch.remainingPortions - take) * 10000) / 10000;
@@ -197,7 +205,56 @@ export function planPrepBatchConsumption(
       version: (all[idx]!.version ?? 1) + 1,
     };
   }
-  return { ok: true, batches: all, unitCostUgx: Math.round(cost / portions) };
+  return { ok: true, batches: all, unitCostUgx: Math.round(cost / portions), allocation };
+}
+
+/**
+ * Phase 5.1 — ingredient requirements attributable to `portions` portions of a
+ * batch, computed from the IMMUTABLE preparation-time recipe snapshot (ratios,
+ * yield, and waste frozen at prep). Used by cancellation so a later recipe
+ * edit never changes what a cancel restores.
+ */
+export function prepSnapshotRequirements(snapshot: PrepRecipeSnapshot, portions: number): Map<string, number> {
+  const yieldQty = snapshot.yieldQty ?? 1;
+  const totals = new Map<string, number>();
+  for (const line of snapshot.lines) {
+    const qty = recipeLineQtyWithWaste(line, portions, yieldQty);
+    if (qty <= 0) continue;
+    totals.set(line.ingredientProductId, (totals.get(line.ingredientProductId) ?? 0) + qty);
+  }
+  return totals;
+}
+
+/**
+ * Phase 5.1 — void support: credit each batch in a SaleLine's frozen
+ * prepAllocation back by its exact consumed portions. Batches not found in
+ * the product (e.g. cleaned-up history) are skipped. Returns the updated
+ * product, or null when nothing matched.
+ */
+export function creditPrepAllocation(
+  product: Product,
+  allocation: Array<{ batchId: string; portions: number }>,
+  at: string,
+): Product | null {
+  const batches = product.menu?.prepBatches ?? [];
+  if (!batches.length || !allocation.length) return null;
+  let touched = false;
+  const next = batches.map((b) => {
+    const credit = allocation.find((a) => a.batchId === b.id);
+    if (!credit || credit.portions <= 0) return b;
+    if (b.status === "cancelled" || b.status === "wasted") return b;
+    touched = true;
+    return {
+      ...b,
+      remainingPortions: Math.round((b.remainingPortions + credit.portions) * 10000) / 10000,
+      status: "active" as const,
+      updatedAt: at,
+      version: (b.version ?? 1) + 1,
+      pendingSync: true,
+    };
+  });
+  if (!touched) return null;
+  return { ...product, menu: { ...product.menu, prepBatches: next } };
 }
 
 export function applyRecipeStockDeduction(

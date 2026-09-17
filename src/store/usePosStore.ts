@@ -301,10 +301,12 @@ import {
   applyRecipeStockDeduction,
   checkIngredientAvailability,
   computeMenuItemFoodCostUgx,
+  creditPrepAllocation,
   effectiveRecipe,
   planPrepBatchConsumption,
   prepBatchUnitCostUgx,
   prepRequirementsForPortions,
+  prepSnapshotRequirements,
   preparedPortionsAvailable,
   productPrepMode,
   requirementsFromSaleLines,
@@ -5125,7 +5127,11 @@ export const usePosStore = create<PosState>((set, get) => {
       // Phase 5 — batch_prepared items sell from prepared portions: the finished
       // stock unit is deducted (FIFO batch consumption), raw ingredients are NOT
       // deducted again (they were consumed at preparation time — no double consumption).
-      let preparedPlan: { batches: PrepBatch[]; unitCostUgx: number } | null = null;
+      let preparedPlan: {
+        batches: PrepBatch[];
+        unitCostUgx: number;
+        allocation: Array<{ batchId: string; portions: number }>;
+      } | null = null;
       if (!deductFinished && productPrepMode(p) === "batch_prepared") {
         const preparedAvailable = preparedPortionsAvailable(p);
         // Unbatched finished-menu stock: never invent batch cost — block until reconciled.
@@ -5159,6 +5165,8 @@ export const usePosStore = create<PosState>((set, get) => {
           cogsUgx,
           baseUnit: p.baseUnit?.trim() || undefined,
           estimatedProfitUgx: lineProfitUgx(moneyLine.lineTotalUgx, cogsUgx),
+          // Phase 5.1 — non-financial provenance: exact batch allocation, frozen here.
+          prepAllocation: preparedPlan ? preparedPlan.allocation : (moneyLine.prepAllocation ?? null),
         }),
       );
       products[idx] = {
@@ -5683,25 +5691,43 @@ export const usePosStore = create<PosState>((set, get) => {
         version: p.version + 1,
       };
       // Phase 5 — batch-prepared provenance: the shared restock returns finished
-      // portions to stock; credit them back to the newest open batch so prepared
+      // portions to stock; credit them back to PrepBatch provenance so prepared
       // stock and Σ(remainingPortions) stay reconciled. Hospitality-only branch:
       // retail products never carry prepMode "batch_prepared".
       if (productPrepMode(p) === "batch_prepared") {
-        const batches = [...(p.menu?.prepBatches ?? [])];
-        const creditTarget = [...batches]
-          .filter((b) => b.status === "active" || b.status === "depleted")
-          .sort((a, b) => b.preparedAt.localeCompare(a.preparedAt))[0];
-        if (creditTarget) {
-          const idx = batches.findIndex((b) => b.id === creditTarget.id);
-          batches[idx] = {
-            ...batches[idx]!,
-            remainingPortions: batches[idx]!.remainingPortions + voidQty,
-            status: "active",
+        // Phase 5.1 — exact restoration from the SaleLine's frozen allocation
+        // (which batches this line consumed, and how much of each).
+        const allocation = line.prepAllocation?.filter((a) => a.portions > 0) ?? [];
+        const credited = allocation.length
+          ? creditPrepAllocation(p, allocation, at)
+          : null;
+        if (credited) {
+          nextProduct = {
+            ...credited,
+            stockOnHand: p.stockOnHand + voidQty,
+            packCostUnitsDepleted: nextProduct.packCostUnitsDepleted,
             updatedAt: at,
-            version: (batches[idx]!.version ?? 1) + 1,
-            pendingSync: true,
+            version: p.version + 1,
           };
-          nextProduct = { ...nextProduct, menu: { ...nextProduct.menu, prepBatches: batches } };
+        } else {
+          // Legacy fallback (sales finalized before provenance existed): credit
+          // the newest open batch.
+          const batches = [...(p.menu?.prepBatches ?? [])];
+          const creditTarget = [...batches]
+            .filter((b) => b.status === "active" || b.status === "depleted")
+            .sort((a, b) => b.preparedAt.localeCompare(a.preparedAt))[0];
+          if (creditTarget) {
+            const idx = batches.findIndex((b) => b.id === creditTarget.id);
+            batches[idx] = {
+              ...batches[idx]!,
+              remainingPortions: batches[idx]!.remainingPortions + voidQty,
+              status: "active",
+              updatedAt: at,
+              version: (batches[idx]!.version ?? 1) + 1,
+              pendingSync: true,
+            };
+            nextProduct = { ...nextProduct, menu: { ...nextProduct.menu, prepBatches: batches } };
+          }
         }
       }
       products[pIdx] = nextProduct;
@@ -6748,6 +6774,7 @@ export const usePosStore = create<PosState>((set, get) => {
 
     // 5–7. Batch record with historical per-portion recipe cost; prepared stock += portions.
     const unitCostUgx = prepBatchUnitCostUgx(p, state.products);
+    const recipeAtPrep = effectiveRecipe(p);
     const batch: PrepBatch = {
       id: batchId,
       menuProductId: p.id,
@@ -6755,6 +6782,14 @@ export const usePosStore = create<PosState>((set, get) => {
       portionsPrepared: qty,
       remainingPortions: qty,
       unitCostUgx,
+      // Immutable prep-time recipe copy: cancellation restores exactly what THIS
+      // preparation consumed per portion, even if the live recipe later changes.
+      recipeSnapshot: recipeAtPrep
+        ? {
+            yieldQty: recipeAtPrep.yieldQty,
+            lines: recipeAtPrep.lines.map((l) => ({ ...l })),
+          }
+        : null,
       status: "active",
       actorUserId: actor?.userId ?? null,
       actorName: actor?.displayName ?? null,
@@ -6955,9 +6990,12 @@ export const usePosStore = create<PosState>((set, get) => {
 
     // Only UNSOLD portions are reversed — sold portions are historical and stand.
     const reversePortions = batch.remainingPortions;
-    // Quantities restored use the CURRENT recipe ratios (documented behavior);
-    // cost is irrelevant here — ingredients return at current cost basis.
-    const requirements = prepRequirementsForPortions(product, reversePortions);
+    // Quantities restored come from the IMMUTABLE prep-time recipe snapshot when
+    // present (Phase 5.1), so a later recipe edit never changes what a cancel
+    // returns; legacy batches without a snapshot fall back to the current recipe.
+    const requirements = batch.recipeSnapshot
+      ? prepSnapshotRequirements(batch.recipeSnapshot, reversePortions)
+      : prepRequirementsForPortions(product, reversePortions);
 
     const shopKey = inventoryMovementNamespace();
     const movements: StockMovement[] = [];
