@@ -1,4 +1,11 @@
 import { supabase } from "./supabase";
+import type { UploadedAttachment } from "./supportAttachments";
+
+export {
+  listTicketAttachments,
+  type MerchantSupportAttachmentRow,
+  type SupportAttachmentKind,
+} from "./supportAttachments";
 
 /**
  * Merchant-facing "Notifications & Support" client API.
@@ -140,13 +147,21 @@ export async function createSupportTicket(input: {
 export async function replySupportTicket(
   ticketId: string,
   body: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const result = await rpc<{ ok: true }>("shop_reply_support_ticket", {
+  attachments: UploadedAttachment[] = [],
+): Promise<{ ok: true; messageId?: string } | { ok: false; error: string }> {
+  const result = await rpc<{ ok: true; message_id?: string }>("shop_reply_support_ticket", {
     p_ticket_id: ticketId,
     p_body: body,
+    p_attachments: attachments.map((a) => ({
+      storage_path: a.storagePath,
+      original_filename: a.originalFilename,
+      mime_type: a.mimeType,
+      file_size_bytes: a.fileSizeBytes,
+      attachment_kind: a.attachmentKind,
+    })),
   });
   if (!result.ok) return result;
-  return { ok: true };
+  return { ok: true, messageId: result.message_id != null ? String(result.message_id) : undefined };
 }
 
 export async function markTicketMessagesRead(

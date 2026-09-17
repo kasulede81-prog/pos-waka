@@ -5,6 +5,7 @@ import { t, tTemplate } from "../lib/i18n";
 import { useActiveShopId } from "../hooks/useActiveShopId";
 import {
   useNotificationList,
+  useSupportCenterRealtime,
   useSupportTicketList,
   useSupportUnreadCounts,
   useMarkNotificationRead,
@@ -32,6 +33,7 @@ export function SupportCenterHomePage({ lang }: { lang: Language }) {
   const notifications = useNotificationList(shopLoading ? null : shopId, false, 3);
   const tickets = useSupportTicketList(shopLoading ? null : shopId, "all");
   const markRead = useMarkNotificationRead(shopId);
+  useSupportCenterRealtime(shopLoading ? null : shopId);
 
   const ticketList = tickets.data?.ok === true ? tickets.data.tickets : [];
   const openCount = ticketList.filter((x) => x.status === "open").length;

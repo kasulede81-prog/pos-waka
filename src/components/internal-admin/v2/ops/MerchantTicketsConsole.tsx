@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import { Headset, MessageSquare, SendHorizonal } from "lucide-react";
 import {
+  fetchMerchantTicketAttachments,
   fetchMerchantTicketMessages,
   fetchMerchantTicketQueue,
   merchantTicketMatchesFilter,
@@ -13,9 +14,24 @@ import {
   type MerchantTicketQueueRow,
   type MerchantTicketStatus,
 } from "../../../../lib/merchantTicketsAdmin";
+import {
+  removeStagedAttachments,
+  uploadStagedAttachments,
+  type MerchantSupportAttachmentRow,
+  type PendingAttachment,
+} from "../../../../lib/supportAttachments";
+import {
+  useAdminTicketFeedRealtime,
+  useAdminTicketThreadRealtime,
+  useDebouncedCallback,
+} from "../../../../lib/supportRealtime";
+import { AttachmentComposer } from "../../../support/AttachmentComposer";
+import { MessageAttachments } from "../../../support/MessageAttachments";
 import { whatsappUrlFromPhone } from "../../../../lib/wakaInternalAdmin";
+import type { Language } from "../../../../types";
 
 type Props = {
+  lang: Language;
   /** super_admin / support_admin may write; other roles get read-only. */
   canWorkTickets: boolean;
   /** True when viewing the preview dataset — writes are disabled. */
@@ -37,19 +53,24 @@ const STATUS_STYLE: Record<MerchantTicketStatus, string> = {
   closed: "bg-muted text-muted-foreground ring-border",
 };
 
+/** Resolved and closed threads are read-only on the console too. */
+const COMPOSER_HIDDEN_STATUSES: MerchantTicketStatus[] = ["resolved", "closed"];
+
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export function MerchantTicketsConsole({ canWorkTickets, previewMode }: Props) {
+export function MerchantTicketsConsole({ lang, canWorkTickets, previewMode }: Props) {
   const [filter, setFilter] = useState<MerchantTicketFilter>("attention");
   const [tickets, setTickets] = useState<MerchantTicketQueueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [messagesByTicket, setMessagesByTicket] = useState<Record<string, MerchantTicketMessageRow[]>>({});
+  const [attachmentsByTicket, setAttachmentsByTicket] = useState<Record<string, MerchantSupportAttachmentRow[]>>({});
   const [messagesLoading, setMessagesLoading] = useState<string | null>(null);
   const [draftByTicket, setDraftByTicket] = useState<Record<string, string>>({});
+  const [pendingByTicket, setPendingByTicket] = useState<Record<string, PendingAttachment[]>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -61,9 +82,32 @@ export function MerchantTicketsConsole({ canWorkTickets, previewMode }: Props) {
     setLoading(false);
   }, []);
 
+  const reloadDebounced = useDebouncedCallback((activeFilter: MerchantTicketFilter) => void reload(activeFilter), 500);
+
   useEffect(() => {
     void reload(filter);
   }, [filter, reload]);
+
+  // Phase 2.5: new/updated tickets appear without a manual refresh.
+  useAdminTicketFeedRealtime(() => reloadDebounced(filter));
+
+  const refreshThread = useCallback(async (ticketId: string) => {
+    const [msgs, atts] = await Promise.all([
+      fetchMerchantTicketMessages(ticketId),
+      fetchMerchantTicketAttachments(ticketId),
+    ]);
+    setMessagesByTicket((prev) => ({ ...prev, [ticketId]: msgs }));
+    setAttachmentsByTicket((prev) => ({ ...prev, [ticketId]: atts }));
+  }, []);
+
+  const refreshThreadDebounced = useDebouncedCallback((ticketId: string) => void refreshThread(ticketId), 400);
+
+  useAdminTicketThreadRealtime(expandedId, {
+    onMessageInserted: () => {
+      if (expandedId) refreshThreadDebounced(expandedId);
+    },
+    onTicketUpdated: () => reloadDebounced(filter),
+  });
 
   const toggleTicket = async (ticketId: string) => {
     if (expandedId === ticketId) {
@@ -73,33 +117,49 @@ export function MerchantTicketsConsole({ canWorkTickets, previewMode }: Props) {
     setExpandedId(ticketId);
     if (!messagesByTicket[ticketId]) {
       setMessagesLoading(ticketId);
-      const msgs = await fetchMerchantTicketMessages(ticketId);
-      setMessagesByTicket((prev) => ({ ...prev, [ticketId]: msgs }));
+      await refreshThread(ticketId);
       setMessagesLoading(null);
     }
   };
 
   const sendReply = async (tk: MerchantTicketQueueRow) => {
     const body = (draftByTicket[tk.id] ?? "").trim();
-    if (!body) return;
+    const pending = pendingByTicket[tk.id] ?? [];
+    if ((!body && pending.length === 0) || busyId) return;
     setBusyId(tk.id);
     setNotice(null);
-    const r = await replyToMerchantTicket({
-      ticketId: tk.id,
-      shopId: tk.shopId,
-      ticketNumber: tk.ticketNumber,
-      subject: tk.subject,
-      body,
-    });
-    setBusyId(null);
-    if (!r.ok) {
-      setNotice(r.message ?? "Reply failed.");
-      return;
+    try {
+      let uploads: Awaited<ReturnType<typeof uploadStagedAttachments>> | null = null;
+      if (pending.length > 0) {
+        uploads = await uploadStagedAttachments({ shopId: tk.shopId, ticketId: tk.id, pending });
+        if (!uploads.ok) {
+          await removeStagedAttachments(uploads.uploadedPaths);
+          setNotice(uploads.error);
+          return;
+        }
+      }
+      const r = await replyToMerchantTicket({
+        ticketId: tk.id,
+        shopId: tk.shopId,
+        ticketNumber: tk.ticketNumber,
+        subject: tk.subject,
+        body,
+        attachments: uploads?.ok ? uploads.uploads : [],
+      });
+      if (!r.ok) {
+        if (uploads?.ok) {
+          await removeStagedAttachments(uploads.uploads.map((u) => u.storagePath));
+        }
+        setNotice(r.message ?? "Reply failed.");
+        return;
+      }
+      setDraftByTicket((prev) => ({ ...prev, [tk.id]: "" }));
+      setPendingByTicket((prev) => ({ ...prev, [tk.id]: [] }));
+      await refreshThread(tk.id);
+      void reload(filter);
+    } finally {
+      setBusyId(null);
     }
-    setDraftByTicket((prev) => ({ ...prev, [tk.id]: "" }));
-    const msgs = await fetchMerchantTicketMessages(tk.id);
-    setMessagesByTicket((prev) => ({ ...prev, [tk.id]: msgs }));
-    void reload(filter);
   };
 
   const changeStatus = async (tk: MerchantTicketQueueRow, status: MerchantTicketStatus) => {
@@ -132,7 +192,7 @@ export function MerchantTicketsConsole({ canWorkTickets, previewMode }: Props) {
           <div>
             <h2 className="text-base font-black text-foreground">Merchant tickets</h2>
             <p className="text-xs font-semibold text-muted-foreground">
-              Support Center conversations from the app (Phase 1) — replies notify the shop instantly.
+              Support Center conversations from the app — realtime, with attachments and voice notes.
             </p>
           </div>
         </div>
@@ -177,6 +237,14 @@ export function MerchantTicketsConsole({ canWorkTickets, previewMode }: Props) {
           tickets.map((tk) => {
             const expanded = expandedId === tk.id;
             const waUrl = whatsappUrlFromPhone(tk.shopPhoneE164);
+            const threadAttachments = attachmentsByTicket[tk.id] ?? [];
+            const attachmentsByMessage = new Map<string, MerchantSupportAttachmentRow[]>();
+            for (const a of threadAttachments) {
+              const list = attachmentsByMessage.get(a.messageId) ?? [];
+              list.push(a);
+              attachmentsByMessage.set(a.messageId, list);
+            }
+            const composerHidden = COMPOSER_HIDDEN_STATUSES.includes(tk.status);
             return (
               <article key={tk.id} className="overflow-hidden rounded-xl border border-border bg-muted/40">
                 <button
@@ -219,7 +287,11 @@ export function MerchantTicketsConsole({ canWorkTickets, previewMode }: Props) {
                                 : "mr-auto rounded-bl-sm bg-muted text-foreground ring-1 ring-border",
                             )}
                           >
-                            <p className="whitespace-pre-wrap">{m.body}</p>
+                            {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
+                            <MessageAttachments
+                              lang={lang}
+                              attachments={attachmentsByMessage.get(m.id) ?? []}
+                            />
                             <p className={clsx("mt-1 text-[10px] font-bold", m.authorKind === "merchant" ? "text-white/70" : "text-muted-foreground")}>
                               {m.authorKind === "merchant" ? "Merchant" : "WAKA"} · {formatWhen(m.createdAt)}
                             </p>
@@ -271,24 +343,43 @@ export function MerchantTicketsConsole({ canWorkTickets, previewMode }: Props) {
                       ) : null}
                     </div>
 
-                    {writeDisabled ? null : (
-                      <div className="mt-3 flex items-end gap-2">
-                        <textarea
-                          value={draftByTicket[tk.id] ?? ""}
-                          onChange={(e) => setDraftByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))}
-                          rows={2}
-                          placeholder="Reply to the merchant…"
-                          className="min-h-[44px] flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium outline-none ring-waka-500/40 focus:ring-2"
+                    {writeDisabled ? null : composerHidden ? (
+                      <p className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-xs font-semibold text-muted-foreground">
+                        {tk.status === "closed"
+                          ? "This ticket is closed — read-only. Cleanup removes its attachments."
+                          : "Resolved — reopen by changing status if the merchant still needs help."}
+                      </p>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        <AttachmentComposer
+                          lang={lang}
+                          pending={pendingByTicket[tk.id] ?? []}
+                          onChange={(next) => setPendingByTicket((prev) => ({ ...prev, [tk.id]: next }))}
+                          onRecordError={setNotice}
+                          disabled={busyId === tk.id}
+                          idPrefix={`admin-support-${tk.id}`}
                         />
-                        <button
-                          type="button"
-                          disabled={busyId === tk.id || !(draftByTicket[tk.id] ?? "").trim()}
-                          onClick={() => void sendReply(tk)}
-                          className="flex h-11 items-center gap-1.5 rounded-xl bg-gradient-to-br from-waka-500 to-orange-600 px-4 text-sm font-black text-white shadow-sm transition-transform active:scale-95 disabled:opacity-40"
-                        >
-                          <SendHorizonal className="h-4 w-4" aria-hidden />
-                          {busyId === tk.id ? "…" : "Send"}
-                        </button>
+                        <div className="flex items-end gap-2">
+                          <textarea
+                            value={draftByTicket[tk.id] ?? ""}
+                            onChange={(e) => setDraftByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))}
+                            rows={2}
+                            placeholder="Reply to the merchant…"
+                            className="min-h-[44px] flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium outline-none ring-waka-500/40 focus:ring-2"
+                          />
+                          <button
+                            type="button"
+                            disabled={
+                              busyId === tk.id ||
+                              (!(draftByTicket[tk.id] ?? "").trim() && (pendingByTicket[tk.id] ?? []).length === 0)
+                            }
+                            onClick={() => void sendReply(tk)}
+                            className="flex h-11 items-center gap-1.5 rounded-xl bg-gradient-to-br from-waka-500 to-orange-600 px-4 text-sm font-black text-white shadow-sm transition-transform active:scale-95 disabled:opacity-40"
+                          >
+                            <SendHorizonal className="h-4 w-4" aria-hidden />
+                            {busyId === tk.id ? "…" : "Send"}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

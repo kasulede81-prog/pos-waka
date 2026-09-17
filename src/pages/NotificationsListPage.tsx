@@ -6,6 +6,7 @@ import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotificationList,
+  useSupportCenterRealtime,
 } from "../hooks/useMerchantSupport";
 import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
@@ -26,6 +27,7 @@ export function NotificationsListPage({ lang }: { lang: Language }) {
   const notifications = useNotificationList(shopLoading ? null : shopId, unreadOnly);
   const markRead = useMarkNotificationRead(shopId);
   const markAll = useMarkAllNotificationsRead(shopId);
+  useSupportCenterRealtime(shopLoading ? null : shopId);
 
   return (
     <KeyboardSafePage className="px-3 sm:px-4 md:px-6">

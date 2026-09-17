@@ -1,4 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
+import type { UploadedAttachment } from "../lib/supportAttachments";
+import { useShopSupportRealtime } from "../lib/supportRealtime";
 import {
   createSupportTicket,
   getNotification,
@@ -8,6 +11,7 @@ import {
   listNotifications,
   listSupportTickets,
   listTicketMessages,
+  listTicketAttachments,
   markAllNotificationsRead,
   markNotificationRead,
   markTicketMessagesRead,
@@ -67,6 +71,15 @@ export function useTicketMessages(ticketId: string | null) {
   });
 }
 
+export function useTicketAttachments(ticketId: string | null) {
+  return useQuery({
+    queryKey: key(["ticket-attachments", ticketId]),
+    queryFn: () => listTicketAttachments(ticketId as string),
+    enabled: Boolean(ticketId),
+    staleTime: STALE_MS,
+  });
+}
+
 export function useNotificationList(shopId: string | null, unreadOnly = false, limit?: number) {
   return useQuery({
     queryKey: key(["notifications", shopId, unreadOnly, limit ?? 100]),
@@ -109,11 +122,14 @@ export function useCreateSupportTicket(shopId: string | null) {
 export function useReplySupportTicket(shopId: string | null, ticketId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) => replySupportTicket(ticketId as string, body),
+    mutationFn: (input: { body: string; attachments?: UploadedAttachment[] }) =>
+      replySupportTicket(ticketId as string, input.body, input.attachments ?? []),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: key(["ticket-messages", ticketId]) });
+      void qc.invalidateQueries({ queryKey: key(["ticket-attachments", ticketId]) });
       void qc.invalidateQueries({ queryKey: key(["ticket", ticketId]) });
       void qc.invalidateQueries({ queryKey: key(["tickets", shopId]) });
+      void qc.invalidateQueries({ queryKey: key(["unread-counts", shopId]) });
     },
   });
 }
@@ -151,4 +167,17 @@ export function useMarkAllNotificationsRead(shopId: string | null) {
       void qc.invalidateQueries({ queryKey: key(["unread-counts", shopId]) });
     },
   });
+}
+
+/**
+ * Phase 2.5: keep every merchant Support Center surface fresh without manual
+ * refresh — ticket list, notification feeds and unread badges react to
+ * shop-scoped realtime events (all RLS-filtered to this shop).
+ */
+export function useSupportCenterRealtime(shopId: string | null) {
+  const qc = useQueryClient();
+  const onEvent = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: key([]) });
+  }, [qc]);
+  useShopSupportRealtime(shopId, onEvent);
 }

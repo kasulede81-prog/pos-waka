@@ -53,6 +53,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
       </div>
 
       <MerchantTicketsConsole
+        lang={lang}
         canWorkTickets={perms.role === "super_admin" || perms.role === "support_admin"}
         previewMode={previewMode}
       />

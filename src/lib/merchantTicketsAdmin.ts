@@ -1,4 +1,19 @@
 import { supabase } from "./supabase";
+import {
+  listTicketAttachments,
+  type MerchantSupportAttachmentRow,
+  type UploadedAttachment,
+} from "./supportAttachments";
+
+export type { MerchantSupportAttachmentRow } from "./supportAttachments";
+
+/** All attachments of a ticket (internal read policy). */
+export async function fetchMerchantTicketAttachments(
+  ticketId: string,
+): Promise<MerchantSupportAttachmentRow[]> {
+  const r = await listTicketAttachments(ticketId);
+  return r.ok ? r.attachments : [];
+}
 
 /**
  * Internal-operations console for the Phase 1 merchant Support Center
@@ -161,22 +176,46 @@ export async function replyToMerchantTicket(input: {
   ticketNumber: number;
   subject: string;
   body: string;
+  attachments?: UploadedAttachment[];
 }): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: "Offline" };
   const body = input.body.trim();
-  if (!body) return { ok: false, message: "Reply is empty" };
+  const attachments = input.attachments ?? [];
+  if (!body && attachments.length === 0) return { ok: false, message: "Reply is empty" };
   // author_user_id references auth.users — use the signed-in admin's auth id,
   // never the internal_admins row id.
   const { data: sessionData } = await supabase.auth.getSession();
   const adminUserId = sessionData?.session?.user?.id ?? null;
   if (!adminUserId) return { ok: false, message: "Not signed in" };
-  const { error: msgErr } = await supabase.from("merchant_support_messages").insert({
-    ticket_id: input.ticketId,
-    author_user_id: adminUserId,
-    author_kind: "waka",
-    body,
-  });
+  const { data: inserted, error: msgErr } = await supabase
+    .from("merchant_support_messages")
+    .insert({
+      ticket_id: input.ticketId,
+      author_user_id: adminUserId,
+      author_kind: "waka",
+      body,
+    })
+    .select("id")
+    .single();
   if (msgErr) return { ok: false, message: msgErr.message };
+  const messageId = String(inserted?.id ?? "");
+  if (attachments.length > 0 && messageId) {
+    const { error: attErr } = await supabase.from("merchant_support_attachments").insert(
+      attachments.map((a) => ({
+        message_id: messageId,
+        ticket_id: input.ticketId,
+        shop_id: input.shopId,
+        storage_path: a.storagePath,
+        original_filename: a.originalFilename,
+        mime_type: a.mimeType,
+        file_size_bytes: a.fileSizeBytes,
+        attachment_kind: a.attachmentKind,
+      })),
+    );
+    // A metadata failure must not silently drop the reply text, but the
+    // attachments are unusable without metadata — surface it.
+    if (attErr) return { ok: false, message: attErr.message };
+  }
   const { error: tkErr } = await supabase
     .from("merchant_support_tickets")
     .update({ status: "waiting_for_merchant", last_message_at: new Date().toISOString() })

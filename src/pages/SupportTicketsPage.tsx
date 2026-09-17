@@ -6,6 +6,7 @@ import { t } from "../lib/i18n";
 import { useActiveShopId } from "../hooks/useActiveShopId";
 import {
   useMyFinancialCorrections,
+  useSupportCenterRealtime,
   useSupportTicketList,
 } from "../hooks/useMerchantSupport";
 import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
@@ -51,6 +52,7 @@ export function SupportTicketsPage({ lang }: { lang: Language }) {
     tab === "tickets",
   );
   const corrections = useMyFinancialCorrections(shopLoading ? null : shopId, tab === "financial");
+  useSupportCenterRealtime(shopLoading ? null : shopId);
 
   const setTab = (next: "tickets" | "financial") => {
     setSearchParams(next === "financial" ? { tab: "financial" } : {}, { replace: true });
