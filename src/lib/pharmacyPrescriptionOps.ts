@@ -14,9 +14,11 @@ import { withPharmacyFefoPreview } from "../lib/pharmacyBatches";
 import {
   canTransitionPrescriptionStatus,
   computeNextRefillDate,
+  derivePrescriptionDispenseStatus,
   generatePrescriptionNumber,
   normalizePrescription,
   prescriptionLineFromProduct,
+  prescriptionLineRemaining,
   remainingRefills,
 } from "../lib/pharmacyPrescriptions";
 import { ensureSaleLineId } from "../lib/pendingSaleMerge";
@@ -104,6 +106,15 @@ export function verifyPrescriptionRecord(
   });
 }
 
+/**
+ * Record a dispense event against a prescription. `lines`, when supplied,
+ * must already carry each line's true cumulative quantityDispensed (the
+ * caller — usePosStore.ts finalizeDraftSale — is responsible for adding
+ * this visit's quantity to any prior progress, not this function). Status
+ * is derived from prescribed vs. dispensed, never forced to "dispensed"
+ * just because a dispense occurred — a prescription that still has a
+ * remainder becomes "partially_dispensed" and stays resumable.
+ */
 export function markPrescriptionDispensed(
   prev: PharmacyPrescription,
   saleId: string,
@@ -111,12 +122,9 @@ export function markPrescriptionDispensed(
   lines?: PharmacyPrescriptionLine[],
 ): PharmacyPrescription {
   const now = new Date().toISOString();
-  const updatedLines = (lines ?? prev.lines).map((l) => ({
-    ...l,
-    quantityDispensed: l.quantityPrescribed,
-  }));
+  const updatedLines = lines ?? prev.lines;
   return patchPrescription(prev, {
-    status: "dispensed",
+    status: derivePrescriptionDispenseStatus(updatedLines),
     saleId,
     dispensedAt: now,
     dispensedByUserId: actor.userId,
@@ -169,7 +177,8 @@ export function prescriptionToDraftLines(
   for (const pl of prescription.lines) {
     const product = byId.get(pl.productId);
     if (!product) continue;
-    const qty = Math.max(1, pl.quantityPrescribed - pl.quantityDispensed);
+    const qty = prescriptionLineRemaining(pl);
+    if (qty <= 0) continue;
     const built = buildSaleLine(product, "quantity", qty, {
       packSlotStart: resolvePackCostUnitsDepleted(product),
     });

@@ -588,7 +588,21 @@ export type BatchIntegrityResult = {
   batches: PharmacyBatchRecord[];
 };
 
-/** Compare sum(batch remaining) with stockOnHand — never auto-repairs. */
+/**
+ * Compare sum(batch remaining) with stockOnHand — never auto-repairs.
+ *
+ * Responsibility boundary (WAKA POS pharmacy architecture): `stockOnHand`
+ * on the core `Product` is the single authoritative quantity — it is what
+ * every stock check, the sale-COGS engine, and inventory valuation read.
+ * The batch sub-ledger (`Product.pharmacyPackaging.batches[]`) exists only
+ * for operational visibility (which lot, which expiry, which supplier) and
+ * "should" sum to the same number, but it is never itself consulted for
+ * how much can be sold or what a sale costs. When the two disagree, this
+ * function surfaces the disagreement — it must never be used to silently
+ * rewrite `stockOnHand`/cost/any financial field. Call
+ * `reconcileBatchQuantitiesToStock` for the safe, explicit, audited way to
+ * bring the batch sub-ledger back in line with `stockOnHand`.
+ */
 export function computeBatchIntegrity(product: Product): BatchIntegrityResult {
   const batches = getProductBatches(product);
   const batchTracked = isBatchTrackedProduct(product);
@@ -605,6 +619,94 @@ export function computeBatchIntegrity(product: Product): BatchIntegrityResult {
     batchTracked,
     batches,
   };
+}
+
+export type BatchReconciliationResult = {
+  /** True when nothing needed changing (already reconciled, or not batch-tracked). */
+  ok: boolean;
+  /** stockOnHand - batchSum before reconciliation (0 when `ok`). */
+  delta: number;
+  /** Unchanged when `ok`; otherwise batch quantities adjusted to sum to stockOnHand. */
+  product: Product;
+};
+
+/**
+ * Safe reconciliation path for a batch/stockOnHand mismatch: adjusts ONLY
+ * the batch sub-ledger's `quantityRemaining` values so their sum matches
+ * the authoritative `stockOnHand` — it never touches `stockOnHand`,
+ * `costPricePerUnitUgx`, `packCostUnitsDepleted`, or any `Sale`/financial
+ * record. This is inventory bookkeeping cleanup, not a financial
+ * correction, and does not rewrite history: every adjustment is appended
+ * as a normal `"adjusted"` batch timeline event (auditable, not silent).
+ *
+ * Must be called explicitly (e.g. by a manager action) — this function is
+ * never invoked automatically from sale/purchase/write-off flows, and does
+ * nothing when the ledgers already agree.
+ *
+ * - Shortfall (stockOnHand > batchSum): the missing units are credited to
+ *   the batch with the FURTHEST expiry, so FEFO ordering among the
+ *   already-correctly-tracked batches is not disturbed by the correction.
+ * - Surplus (stockOnHand < batchSum): the excess is removed FEFO-first
+ *   (earliest-expiring batches first), consistent with the same ordering
+ *   used for real dispenses — the oldest stock is the most likely to have
+ *   already left the shelf without being recorded.
+ */
+export function reconcileBatchQuantitiesToStock(
+  product: Product,
+  opts?: { at?: string; actorUserId?: string | null; actorName?: string | null; note?: string | null },
+): BatchReconciliationResult {
+  const integrity = computeBatchIntegrity(product);
+  if (integrity.ok) {
+    return { ok: true, delta: 0, product };
+  }
+  const at = opts?.at ?? new Date().toISOString();
+  const note = opts?.note ?? "batch_integrity_reconcile";
+  const timelineExtra = (delta: number) =>
+    newEvent("adjusted", at, {
+      quantityDelta: delta,
+      actorUserId: opts?.actorUserId ?? null,
+      actorName: opts?.actorName ?? null,
+      note,
+    });
+
+  let batches = integrity.batches;
+  if (integrity.delta > 0) {
+    const furthestExpiry = batches.slice().sort((a, b) => b.expiryDate.localeCompare(a.expiryDate))[0];
+    batches = batches.map((b) =>
+      b.id === furthestExpiry?.id
+        ? { ...b, quantityRemaining: b.quantityRemaining + integrity.delta, timeline: [...b.timeline, timelineExtra(integrity.delta)] }
+        : b,
+    );
+  } else {
+    let toRemove = -integrity.delta;
+    const removalOrder = sortBatchesFefo(batches);
+    const deltaByBatchId = new Map<string, number>();
+    for (const batch of removalOrder) {
+      if (toRemove <= 0) break;
+      const take = Math.min(batch.quantityRemaining, toRemove);
+      if (take <= 0) continue;
+      deltaByBatchId.set(batch.id, take);
+      toRemove -= take;
+    }
+    batches = batches.map((b) => {
+      const take = deltaByBatchId.get(b.id);
+      if (!take) return b;
+      const remaining = Math.max(0, b.quantityRemaining - take);
+      return {
+        ...b,
+        quantityRemaining: remaining,
+        status: remaining <= 0 ? "depleted" : b.status,
+        timeline: [...b.timeline, timelineExtra(-take)],
+      };
+    });
+  }
+
+  const pkg = product.pharmacyPackaging!;
+  const reconciled = reconcileProductExpiryFromBatches({
+    ...product,
+    pharmacyPackaging: { ...pkg, batches },
+  });
+  return { ok: false, delta: integrity.delta, product: reconciled };
 }
 
 /** Attach FEFO preview fields to a draft sale line. */

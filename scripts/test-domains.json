@@ -41,7 +41,9 @@
     "src/lib/pharmacyCostIntegrity.test.ts",
     "src/lib/pharmacyRemediation.test.ts",
     "src/lib/pharmacyStoreRemediation.test.ts",
-    "src/lib/pharmacyPackaging.test.ts"
+    "src/lib/pharmacyPackaging.test.ts",
+    "src/lib/pharmacyPrescriptionOps.test.ts",
+    "src/lib/pharmacyPartialDispense.test.ts"
   ],
   "platform": [
     "src/lib/storeAuthorization.test.ts",

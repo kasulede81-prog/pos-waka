@@ -4,9 +4,14 @@ import {
   activePrescriptionQueue,
   canTransitionPrescriptionStatus,
   computeNextRefillDate,
+  derivePrescriptionDispenseStatus,
+  isPrescriptionFullyDispensed,
+  isPrescriptionPartiallyDispensed,
   isRefillEligible,
   mergePrescriptionLww,
   normalizePrescription,
+  prescriptionLineRemaining,
+  prescriptionRemainingTotal,
   remainingRefills,
   searchPrescriptions,
 } from "./pharmacyPrescriptions";
@@ -141,5 +146,82 @@ describe("pharmacyPrescriptions", () => {
     const remoteOlder = rx({ version: 1, updatedAt: "2026-07-06T13:00:00.000Z", notes: "old remote" });
     expect(mergePrescriptionLww(local, remoteNewer).notes).toBe("remote");
     expect(mergePrescriptionLww(local, remoteOlder).notes).toBe("local");
+  });
+});
+
+/**
+ * WAKA POS — Pharmacy Correction Phase 1: partial-dispensing status derivation.
+ *
+ * INCIDENT: quantityDispensed was updated with Math.max(prior, thisVisit)
+ * instead of accumulating, and the prescription was unconditionally stamped
+ * "dispensed" the moment any dispense event touched it — even when most of
+ * the prescribed quantity remained. These tests lock in the corrected,
+ * purely-derived status logic (quantityPrescribed vs. quantityDispensed),
+ * independent of the store action that calls it.
+ */
+describe("partial dispensing — status derivation", () => {
+  it("prescriptionLineRemaining never goes negative even if dispensed somehow exceeds prescribed", () => {
+    expect(prescriptionLineRemaining(line({ quantityPrescribed: 21, quantityDispensed: 10 }))).toBe(11);
+    expect(prescriptionLineRemaining(line({ quantityPrescribed: 21, quantityDispensed: 21 }))).toBe(0);
+    expect(prescriptionLineRemaining(line({ quantityPrescribed: 21, quantityDispensed: 25 }))).toBe(0);
+  });
+
+  it("prescriptionRemainingTotal sums remaining across all lines", () => {
+    const rx1 = rx({
+      lines: [
+        line({ id: "l1", quantityPrescribed: 21, quantityDispensed: 10 }),
+        line({ id: "l2", productId: "p2", quantityPrescribed: 10, quantityDispensed: 10 }),
+      ],
+    });
+    expect(prescriptionRemainingTotal(rx1)).toBe(11);
+  });
+
+  it("isPrescriptionFullyDispensed / isPrescriptionPartiallyDispensed classify correctly", () => {
+    const notStarted = [line({ quantityPrescribed: 21, quantityDispensed: 0 })];
+    const partial = [line({ quantityPrescribed: 21, quantityDispensed: 10 })];
+    const full = [line({ quantityPrescribed: 21, quantityDispensed: 21 })];
+
+    expect(isPrescriptionFullyDispensed(notStarted)).toBe(false);
+    expect(isPrescriptionPartiallyDispensed(notStarted)).toBe(false); // nothing dispensed yet
+
+    expect(isPrescriptionFullyDispensed(partial)).toBe(false);
+    expect(isPrescriptionPartiallyDispensed(partial)).toBe(true);
+
+    expect(isPrescriptionFullyDispensed(full)).toBe(true);
+    expect(isPrescriptionPartiallyDispensed(full)).toBe(false);
+  });
+
+  it("a multi-line prescription is only fully dispensed once every line is covered", () => {
+    const mixed = [
+      line({ id: "l1", quantityPrescribed: 21, quantityDispensed: 21 }),
+      line({ id: "l2", productId: "p2", quantityPrescribed: 10, quantityDispensed: 4 }),
+    ];
+    expect(isPrescriptionFullyDispensed(mixed)).toBe(false);
+    expect(isPrescriptionPartiallyDispensed(mixed)).toBe(true);
+    expect(derivePrescriptionDispenseStatus(mixed)).toBe("partially_dispensed");
+
+    const bothDone = [
+      line({ id: "l1", quantityPrescribed: 21, quantityDispensed: 21 }),
+      line({ id: "l2", productId: "p2", quantityPrescribed: 10, quantityDispensed: 10 }),
+    ];
+    expect(derivePrescriptionDispenseStatus(bothDone)).toBe("dispensed");
+  });
+
+  it("dispensing/ready/partially_dispensed can all transition into partially_dispensed and back", () => {
+    expect(canTransitionPrescriptionStatus("dispensing", "partially_dispensed")).toBe(true);
+    expect(canTransitionPrescriptionStatus("ready", "partially_dispensed")).toBe(true);
+    expect(canTransitionPrescriptionStatus("partially_dispensed", "dispensing")).toBe(true);
+    expect(canTransitionPrescriptionStatus("partially_dispensed", "dispensed")).toBe(true);
+    expect(canTransitionPrescriptionStatus("partially_dispensed", "cancelled")).toBe(true);
+    // A partially-dispensed rx must never be a dead end.
+    expect(canTransitionPrescriptionStatus("dispensed", "partially_dispensed")).toBe(false);
+  });
+
+  it("a partially_dispensed prescription stays in the active/working queue", () => {
+    const queue = activePrescriptionQueue([
+      rx({ id: "a", status: "partially_dispensed", updatedAt: "2026-07-06T12:00:00.000Z" }),
+      rx({ id: "b", status: "dispensed" }),
+    ]);
+    expect(queue.map((r) => r.id)).toEqual(["a"]);
   });
 });

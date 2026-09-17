@@ -17,6 +17,7 @@ export const PHARMACY_PRESCRIPTION_STATUSES: PharmacyPrescriptionStatus[] = [
   "verified",
   "dispensing",
   "ready",
+  "partially_dispensed",
   "dispensed",
   "cancelled",
   "archived",
@@ -35,8 +36,10 @@ const STATUS_TRANSITIONS: Partial<Record<PharmacyPrescriptionStatus, PharmacyPre
   draft: ["waiting_verification", "verified", "cancelled"],
   waiting_verification: ["verified", "cancelled", "draft"],
   verified: ["dispensing", "ready", "cancelled", "waiting_verification"],
-  dispensing: ["ready", "dispensed", "cancelled"],
-  ready: ["dispensing", "dispensed", "cancelled"],
+  dispensing: ["ready", "partially_dispensed", "dispensed", "cancelled"],
+  ready: ["dispensing", "partially_dispensed", "dispensed", "cancelled"],
+  /** A partially-dispensed rx must remain resumable — never a dead end. */
+  partially_dispensed: ["dispensing", "ready", "dispensed", "cancelled"],
   dispensed: ["archived"],
   cancelled: ["draft", "archived"],
 };
@@ -47,6 +50,40 @@ export function canTransitionPrescriptionStatus(
 ): boolean {
   if (from === to) return true;
   return STATUS_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+/** Units still owed on this line — never negative, never above what was prescribed. */
+export function prescriptionLineRemaining(line: PharmacyPrescriptionLine): number {
+  return Math.max(0, line.quantityPrescribed - line.quantityDispensed);
+}
+
+/** Total units still owed across every line. */
+export function prescriptionRemainingTotal(prescription: PharmacyPrescription): number {
+  return prescription.lines.reduce((sum, l) => sum + prescriptionLineRemaining(l), 0);
+}
+
+/** Every line fully covered — nothing left to give. */
+export function isPrescriptionFullyDispensed(lines: PharmacyPrescriptionLine[]): boolean {
+  return lines.length > 0 && lines.every((l) => prescriptionLineRemaining(l) <= 0);
+}
+
+/** Some quantity has gone out, but at least one line still has a remainder. */
+export function isPrescriptionPartiallyDispensed(lines: PharmacyPrescriptionLine[]): boolean {
+  const anyDispensed = lines.some((l) => l.quantityDispensed > 0);
+  return anyDispensed && !isPrescriptionFullyDispensed(lines);
+}
+
+/**
+ * Status after a dispense event, derived purely from quantityPrescribed vs
+ * quantityDispensed — never assume "dispensed" just because a dispense
+ * happened. Only meaningful once dispensing has actually started; callers
+ * still in the pre-dispense lifecycle (draft/verification/etc.) are
+ * untouched by this function.
+ */
+export function derivePrescriptionDispenseStatus(
+  lines: PharmacyPrescriptionLine[],
+): "dispensed" | "partially_dispensed" {
+  return isPrescriptionFullyDispensed(lines) ? "dispensed" : "partially_dispensed";
 }
 
 export function normalizePrescriptionLine(raw: unknown): PharmacyPrescriptionLine | null {
@@ -225,6 +262,7 @@ export function activePrescriptionQueue(
     "verified",
     "dispensing",
     "ready",
+    "partially_dispensed",
   ];
   return prescriptions
     .filter((rx) => active.includes(rx.status))
@@ -251,6 +289,7 @@ export function prescriptionStatusLabelKey(status: PharmacyPrescriptionStatus): 
     verified: "pharmacyRxStatusVerified",
     dispensing: "pharmacyRxStatusDispensing",
     ready: "pharmacyRxStatusReady",
+    partially_dispensed: "pharmacyRxStatusPartiallyDispensed",
     dispensed: "pharmacyRxStatusDispensed",
     cancelled: "pharmacyRxStatusCancelled",
     archived: "pharmacyRxStatusArchived",

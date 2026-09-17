@@ -1364,6 +1364,7 @@ export type PharmacyPrescriptionStatus =
   | "verified"
   | "dispensing"
   | "ready"
+  | "partially_dispensed"
   | "dispensed"
   | "cancelled"
   | "archived";

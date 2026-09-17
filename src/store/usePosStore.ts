@@ -113,7 +113,7 @@ import {
   verifyPrescriptionRecord,
   type CreatePrescriptionInput,
 } from "../lib/pharmacyPrescriptionOps";
-import { normalizePrescription } from "../lib/pharmacyPrescriptions";
+import { normalizePrescription, prescriptionLineRemaining } from "../lib/pharmacyPrescriptions";
 import { normalizePharmacyDoctor } from "../lib/pharmacyDoctors";
 import {
   ensurePharmacyPatientProfile,
@@ -5052,6 +5052,19 @@ export const usePosStore = create<PosState>((set, get) => {
     const stockCheck = validateDraftSaleStockBeforeFinalize(state.draftLines, state.products);
     if (!stockCheck.ok) return { ok: false, errorKey: stockCheck.errorKey };
 
+    if (state.activePharmacyPrescriptionId) {
+      const activeRx = state.pharmacyPrescriptions.find((r) => r.id === state.activePharmacyPrescriptionId);
+      if (activeRx) {
+        for (const line of state.draftLines) {
+          const rxLine = activeRx.lines.find((pl) => pl.productId === line.productId);
+          if (!rxLine) continue;
+          if (Math.floor(line.quantity) > prescriptionLineRemaining(rxLine)) {
+            return { ok: false, errorKey: "pharmacyRxOverDispense" };
+          }
+        }
+      }
+    }
+
     const ingredientReq = requirementsFromSaleLines(state.draftLines, state.products);
     const ingredientShortages = checkIngredientAvailability(ingredientReq, state.products);
     if (ingredientShortages.length > 0) return { ok: false, errorKey: "ingredientShortage" };
@@ -5325,7 +5338,13 @@ export const usePosStore = create<PosState>((set, get) => {
           return draft
             ? {
                 ...pl,
-                quantityDispensed: Math.max(pl.quantityDispensed, Math.floor(draft.quantity)),
+                // Cumulative across visits, never above what was prescribed —
+                // the over-dispense guard above already rejected anything
+                // that would exceed it, this clamp is a second, defensive line.
+                quantityDispensed: Math.min(
+                  pl.quantityPrescribed,
+                  pl.quantityDispensed + Math.max(0, Math.floor(draft.quantity)),
+                ),
                 batchNumber: draft.pharmacyBatchNumber ?? pl.batchNumber,
                 batchExpiry: draft.pharmacyBatchExpiry ?? pl.batchExpiry,
               }
@@ -6777,7 +6796,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const rx = state.pharmacyPrescriptions.find((r) => r.id === prescriptionId);
     if (!rx) return { ok: false, errorKey: "missingProduct" };
-    if (!["verified", "ready", "dispensing"].includes(rx.status)) {
+    if (!["verified", "ready", "dispensing", "partially_dispensed"].includes(rx.status)) {
       return { ok: false, errorKey: "pharmacyRxNotReady" };
     }
     const lines = prescriptionToDraftLines(rx, state.products);
