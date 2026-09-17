@@ -130,7 +130,7 @@ Working tree contained only the Phase 3 files listed in §1 before commit; temp 
 
 ## 20. Commit hash
 
-Filled in by the commit that adds this report (see git log).
+`64ebcba` — pushed to `origin waka/historical-financial-correction` (https://github.com/kasulede81-prog/pos-waka.git). Migration `20260917130000_support_phase3_live_sessions.sql` was applied to production before the push.
 
 ## 21. Limitations
 
