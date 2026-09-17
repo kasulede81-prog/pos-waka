@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
 /**
