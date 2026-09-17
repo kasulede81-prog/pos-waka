@@ -11,6 +11,7 @@ import { formatUgx } from "../lib/formatUgx";
 import { computeDraftCheckoutTotals } from "../lib/draftCart";
 import { computeRestaurantBillTotals, billDraftFromSale } from "../lib/restaurantBilling";
 import { isNamedTabSession, sessionDisplayLabel } from "../lib/hospitality";
+import { preparedPortionsAvailable, productPrepMode } from "../lib/recipeEngine";
 import { sessionKitchenSummary } from "../lib/hospitalityOps";
 import { BAR_FIRE_STATION_TYPES, KITCHEN_FIRE_STATION_TYPES } from "../lib/kitchenRouting";
 import { saveFloorViewState, loadFloorViewState } from "../lib/floorViewState";
@@ -414,6 +415,11 @@ export function TableOrderPage({ lang }: { lang: Language }) {
                         <div className="border-t border-border p-2">
                           <p className="line-clamp-2 text-xs font-black leading-snug text-foreground">{product.name}</p>
                           <p className="mt-1 text-sm font-black text-sky-800">{formatProductPriceLabel(product)}</p>
+                          {productPrepMode(product) === "batch_prepared" && (
+                            <p className="mt-0.5 text-[10px] font-black text-waka-700">
+                              {t(lang, "menuPrepAvailable")}: {preparedPortionsAvailable(product)}
+                            </p>
+                          )}
                         </div>
                       </button>
                     ))}

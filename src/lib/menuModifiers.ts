@@ -40,6 +40,8 @@ export function normalizeProductMenu(menu?: ProductMenuConfig | null): ProductMe
     .map((v, vi) => ({ ...v, sortOrder: v.sortOrder ?? vi, isActive: v.isActive !== false }));
   return {
     productKind: menu.productKind ?? "finished_menu",
+    prepMode: menu.prepMode ?? "made_to_order",
+    prepBatches: (menu.prepBatches ?? []).map((b) => ({ ...b, version: b.version ?? 1 })),
     modifierGroups: groups,
     variants,
     combo: menu.combo ?? null,

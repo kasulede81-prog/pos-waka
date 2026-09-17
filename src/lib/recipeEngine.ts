@@ -1,6 +1,5 @@
-import type { IngredientShortage, Product, Recipe, RecipeLine, SaleLine, SaleLineModifier } from "../types";
+import type { IngredientShortage, PrepBatch, Product, Recipe, RecipeLine, SaleLine, SaleLineModifier } from "../types";
 import { productMenuConfig, resolveProductVariant } from "./menuModifiers";
-
 export function effectiveRecipe(product: Product, variantId?: string | null): Recipe | null {
   const menu = productMenuConfig(product);
   const variant = resolveProductVariant(product, variantId);
@@ -123,6 +122,82 @@ export function shouldDeductFinishedProductStock(product: Product): boolean {
   if (kind === "ingredient") return true;
   if (kind === "finished_menu" && effectiveRecipe(product)) return false;
   return true;
+}
+
+// ─── Phase 5 — batch preparation ─────────────────────────────────────────────
+
+/** Explicit preparation mode (audit correction): never inferred from stock levels. */
+export function productPrepMode(product: Product): "made_to_order" | "batch_prepared" {
+  return productMenuConfig(product)?.prepMode ?? "made_to_order";
+}
+
+/** Active batches with portions remaining, FIFO by preparedAt. */
+export function activePrepBatches(product: Product): PrepBatch[] {
+  const batches = productMenuConfig(product)?.prepBatches ?? [];
+  return batches
+    .filter((b) => b.status === "active" && b.remainingPortions > 0.0001)
+    .sort((a, b) => a.preparedAt.localeCompare(b.preparedAt));
+}
+
+export function preparedPortionsAvailable(product: Product): number {
+  return activePrepBatches(product).reduce((sum, b) => sum + b.remainingPortions, 0);
+}
+
+/** Ingredient requirement map for preparing `portions` portions of a dish. */
+export function prepRequirementsForPortions(product: Product, portions: number): Map<string, number> {
+  return aggregateRecipeRequirements([{ product, quantity: portions }]);
+}
+
+/** Historical per-portion recipe cost at preparation time (frozen on the batch). */
+export function prepBatchUnitCostUgx(product: Product, products: Product[]): number {
+  return computeMenuItemFoodCostUgx(product, products);
+}
+
+/**
+ * True when a sale of this product deducts raw ingredients at sale time
+ * (Phase 4 made-to-order behavior). Batch-prepared recipe items do NOT —
+ * their ingredients were consumed at preparation time.
+ */
+export function saleLineConsumesIngredientsAtSale(product: Product): boolean {
+  return effectiveRecipe(product) != null && productPrepMode(product) !== "batch_prepared";
+}
+
+/**
+ * FIFO consumption plan for selling `portions` prepared portions.
+ * Returns the full (re-ordered, updated) batch list with remainingPortions
+ * decremented oldest-first and the weighted historical unit cost, or an error
+ * when prepared stock is insufficient.
+ */
+export function planPrepBatchConsumption(
+  product: Product,
+  portions: number,
+  at: string,
+):
+  | { ok: true; batches: PrepBatch[]; unitCostUgx: number }
+  | { ok: false; errorKey: "insufficientPreparedStock" } {
+  const all = (productMenuConfig(product)?.prepBatches ?? []).map((b) => ({ ...b }));
+  const total = preparedPortionsAvailable(product);
+  if (portions > total + 0.0001) return { ok: false, errorKey: "insufficientPreparedStock" };
+
+  let remaining = portions;
+  let cost = 0;
+  for (const batch of activePrepBatches(product)) {
+    if (remaining <= 0.0001) break;
+    const take = Math.min(batch.remainingPortions, remaining);
+    cost += take * batch.unitCostUgx;
+    remaining -= take;
+    const idx = all.findIndex((b) => b.id === batch.id);
+    if (idx === -1) continue;
+    const nextRemaining = Math.round((batch.remainingPortions - take) * 10000) / 10000;
+    all[idx] = {
+      ...all[idx]!,
+      remainingPortions: nextRemaining,
+      status: nextRemaining <= 0.0001 ? "depleted" : "active",
+      updatedAt: at,
+      version: (all[idx]!.version ?? 1) + 1,
+    };
+  }
+  return { ok: true, batches: all, unitCostUgx: Math.round(cost / portions) };
 }
 
 export function applyRecipeStockDeduction(

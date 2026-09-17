@@ -173,6 +173,9 @@ export type AuditAction =
   | "cash_expense_edited"
   | "customer_merge"
   | "product_restore"
+  | "hospitality_prep_batch"
+  | "hospitality_prep_waste"
+  | "hospitality_prep_cancel"
   | "staff_login"
   | "staff_logout"
   | "staff_login_failed"
@@ -685,6 +688,33 @@ export type Recipe = {
   prepNotes?: string | null;
 };
 
+/**
+ * Phase 5 — a preparation run that converts raw ingredients into prepared
+ * finished-menu portions BEFORE sale. `stockOnHand` on the menu product stays
+ * the authoritative physical counter; `remainingPortions` is batch provenance
+ * and must satisfy: SUM(active.remainingPortions) == prepared stock.
+ */
+export type PrepBatchStatus = "active" | "depleted" | "wasted" | "cancelled";
+
+export type PrepBatch = {
+  id: string;
+  /** Finished-menu product this batch was prepared for. */
+  menuProductId: string;
+  preparedAt: string;
+  portionsPrepared: number;
+  remainingPortions: number;
+  /** Historical recipe cost per portion at preparation time — never rewritten. */
+  unitCostUgx: number;
+  status: PrepBatchStatus;
+  actorUserId?: string | null;
+  actorName?: string | null;
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version?: number;
+  pendingSync?: boolean;
+};
+
 export type ComboSlotChoice = {
   productId: string;
   priceDeltaUgx?: number;
@@ -716,6 +746,16 @@ export type MenuSectionDef = {
 
 export type ProductMenuConfig = {
   productKind?: ProductKind;
+  /**
+   * Phase 5 — how this finished-menu item is produced.
+   * "made_to_order" (default): ingredients deduct at sale time (Phase 4 behavior).
+   * "batch_prepared": portions are prepared ahead of sale via PrepBatches; sales
+   * consume prepared stock at the batch's historical cost. Only meaningful for
+   * finished_menu products with a recipe.
+   */
+  prepMode?: "made_to_order" | "batch_prepared";
+  /** Phase 5 — preparation batches for batch_prepared items (provenance + cost). */
+  prepBatches?: PrepBatch[];
   modifierGroups?: ModifierGroup[];
   variants?: ProductVariant[];
   combo?: ComboMealConfig | null;

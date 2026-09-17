@@ -6,7 +6,10 @@ import type { Product, ReturnReason, Sale, StockMovement } from "../types";
 import { returnRestocksInventory } from "./returnPolicy";
 import { allStockMovementsForIntegrity } from "./stockMovementLedger";
 import {
+  effectiveRecipe,
+  productPrepMode,
   requirementsFromSaleLines,
+  saleLineConsumesIngredientsAtSale,
   shouldDeductFinishedProductStock,
 } from "./recipeEngine";
 
@@ -404,11 +407,16 @@ export function saleStockMovementsFromSale(
     const qty = Math.max(0, Number(line.quantity) || 0);
     if (qty <= 0) continue;
 
-    // Recipe-driven finished_menu items never deduct finished stock, so a
+    // Recipe-driven made-to-order items never deduct finished stock, so a
     // sale_out movement for them would corrupt the ledger. Their consumption
     // is recorded per ingredient instead (same math as the deduction itself).
+    // Batch-prepared items sell prepared finished stock — normal sale_out.
     const product = products?.find((p) => p.id === line.productId);
-    if (product && !shouldDeductFinishedProductStock(product)) continue;
+    if (product && !shouldDeductFinishedProductStock(product)) {
+      const batchPrepared =
+        productPrepMode(product) === "batch_prepared" && effectiveRecipe(product) != null;
+      if (!batchPrepared) continue;
+    }
 
     const cur = byProduct.get(line.productId) ?? { quantity: 0, name: line.name };
     byProduct.set(line.productId, {
@@ -429,11 +437,16 @@ export function saleStockMovementsFromSale(
     supplierId: null,
   }));
 
-  // Ingredient consumption for recipe-driven lines, computed with the exact
-  // same engine the finalize-time deduction uses (recipes + modifier options,
-  // with yield and waste), so the ledger always matches the stock deltas.
+  // Ingredient consumption for made-to-order recipe lines, computed with the
+  // exact same engine the finalize-time deduction uses (recipes + modifier
+  // options, with yield and waste), so the ledger always matches the stock
+  // deltas. Batch-prepared lines are excluded — their ingredients moved at prep.
   if (products) {
-    const activeLines = sale.lines.filter((l) => !l.voided && (Number(l.quantity) || 0) > 0);
+    const activeLines = sale.lines.filter((l) => {
+      if (l.voided || (Number(l.quantity) || 0) <= 0) return false;
+      const product = products.find((p) => p.id === l.productId);
+      return !product || saleLineConsumesIngredientsAtSale(product);
+    });
     const requirements = requirementsFromSaleLines(activeLines, products);
     for (const [productId, qty] of requirements.entries()) {
       if (qty <= 0) continue;

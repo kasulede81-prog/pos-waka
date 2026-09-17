@@ -1,9 +1,14 @@
 import { useState } from "react";
-import type { Language, ModifierGroup, ModifierOption, Product, ProductMenuConfig, ProductVariant, RecipeLine, ComboSlot } from "../../types";
+import type { Language, ModifierGroup, ModifierOption, PrepBatch, Product, ProductMenuConfig, ProductVariant, RecipeLine, ComboSlot } from "../../types";
 import { t } from "../../lib/i18n";
 import { DEFAULT_MENU_SECTIONS } from "../../lib/menuModifiers";
-import { computeMenuItemMargin } from "../../lib/recipeEngine";
+import {
+  computeMenuItemMargin,
+  prepRequirementsForPortions,
+  preparedPortionsAvailable,
+} from "../../lib/recipeEngine";
 import { formatUgx } from "../../lib/formatUgx";
+import { usePosStore } from "../../store/usePosStore";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 type Props = {
@@ -17,10 +22,73 @@ function newId(prefix: string) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+const WASTE_REASONS = ["spoiled", "burnt", "damaged", "unsold", "other"] as const;
+
 export function ProductMenuConfigFields({ lang, product, ingredientProducts, onSave }: Props) {
   const [menu, setMenu] = useState<ProductMenuConfig>(
     product.menu ?? { productKind: "finished_menu", modifierGroups: [], variants: [], recipe: { lines: [] } },
   );
+  // Phase 5 — preparation workflow state (batch truth always read from the store product).
+  const [prepOpen, setPrepOpen] = useState(false);
+  const [prepQty, setPrepQty] = useState("");
+  const [wasteFor, setWasteFor] = useState<string | null>(null);
+  const [wasteQty, setWasteQty] = useState("");
+  const [wasteReason, setWasteReason] = useState<(typeof WASTE_REASONS)[number]>("spoiled");
+  const [cancelFor, setCancelFor] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const storeProduct = usePosStore((s) => s.products.find((p) => p.id === product.id)) ?? product;
+  const storePrepMode = storeProduct.menu?.prepMode ?? "made_to_order";
+  const storeBatches = storeProduct.menu?.prepBatches ?? [];
+  const availablePrepared = preparedPortionsAvailable(storeProduct);
+  const prepareMenuBatch = usePosStore((s) => s.prepareMenuBatch);
+  const wastePreparedPortions = usePosStore((s) => s.wastePreparedPortions);
+  const cancelPrepBatch = usePosStore((s) => s.cancelPrepBatch);
+
+  const runAction = (fn: () => { ok: boolean; errorKey?: string }) => {
+    const result = fn();
+    setActionError(result.ok ? null : t(lang, result.errorKey ?? "invalid"));
+    return result.ok;
+  };
+
+  const confirmPrepare = () => {
+    const portions = Math.floor(Number(prepQty) || 0);
+    if (portions <= 0) {
+      setActionError(t(lang, "invalidQty"));
+      return;
+    }
+    // The action validates against the SAVED product — persist prepMode first if needed.
+    if (storePrepMode !== "batch_prepared") {
+      onSave({ ...menu, prepMode: "batch_prepared", prepBatches: storeBatches });
+    }
+    if (runAction(() => prepareMenuBatch({ productId: product.id, portions }))) {
+      setPrepOpen(false);
+      setPrepQty("");
+    }
+  };
+
+  const confirmWaste = (batchId: string) => {
+    const portions = Math.floor(Number(wasteQty) || 0);
+    if (runAction(() => wastePreparedPortions({ batchId, portions, reason: wasteReason }))) {
+      setWasteFor(null);
+      setWasteQty("");
+    }
+  };
+
+  const confirmCancel = (batchId: string) => {
+    if (runAction(() => cancelPrepBatch({ batchId }))) {
+      setCancelFor(null);
+    }
+  };
+
+  const prepPreviewPortions = Math.max(1, Math.floor(Number(prepQty) || storeProduct.menu?.recipe?.yieldQty || 1));
+  const prepPreview = prepRequirementsForPortions({ ...product, menu }, prepPreviewPortions);
+  const prepPreviewRows = [...prepPreview.entries()].map(([ingredientId, required]) => {
+    const ing = ingredientProducts.find((p) => p.id === ingredientId);
+    const available = ing?.stockOnHand ?? 0;
+    return { ingredientId, name: ing?.name ?? ingredientId, unit: ing?.baseUnit ?? "ea", required, available };
+  });
+  const prepHasShortage = prepPreviewRows.some((r) => r.required > r.available + 0.0001);
 
   const addModifierGroup = () => {
     const g: ModifierGroup = {
@@ -265,6 +333,193 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
         )}
       </section>
 
+      {(menu.productKind ?? "finished_menu") === "finished_menu" && (
+        <section className="rounded-2xl border border-border p-3">
+          <p className="mb-2 text-sm font-black text-foreground">{t(lang, "menuPrepMode")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["made_to_order", "batch_prepared"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setMenu({ ...menu, prepMode: mode })}
+                className={`min-h-[44px] rounded-xl border px-2 text-xs font-black ${
+                  (menu.prepMode ?? "made_to_order") === mode
+                    ? "border-waka-500 bg-waka-50 text-waka-700"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                {t(lang, mode === "made_to_order" ? "menuPrepMadeToOrder" : "menuPrepBatchPrepared")}
+              </button>
+            ))}
+          </div>
+
+          {(menu.prepMode ?? "made_to_order") === "batch_prepared" && (
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2">
+                <span className="text-xs font-bold text-muted-foreground">{t(lang, "menuPrepAvailable")}</span>
+                <span className="text-base font-black text-foreground">{availablePrepared}</span>
+              </div>
+
+              {!prepOpen ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionError(null);
+                    setPrepOpen(true);
+                  }}
+                  className="min-h-[44px] w-full rounded-xl bg-waka-600 text-sm font-black text-white"
+                >
+                  {t(lang, "menuPrepPrepare")}
+                </button>
+              ) : (
+                <div className="rounded-xl border border-waka-200 bg-waka-50 p-3">
+                  <label className="block">
+                    <span className="text-xs font-bold text-muted-foreground">{t(lang, "menuPrepPortions")}</span>
+                    <input
+                      value={prepQty}
+                      onChange={(e) => setPrepQty(e.target.value.replace(/\D/g, ""))}
+                      placeholder={String(storeProduct.menu?.recipe?.yieldQty ?? 1)}
+                      className="mt-1 min-h-[44px] w-full rounded-lg border border-border px-3 text-lg font-black"
+                    />
+                  </label>
+                  {prepPreviewRows.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {prepPreviewRows.map((row) => (
+                        <li key={row.ingredientId} className="flex items-center justify-between text-xs">
+                          <span className="font-bold">{row.name}</span>
+                          <span className={row.required > row.available + 0.0001 ? "font-black text-red-600" : "text-muted-foreground"}>
+                            {row.required} {row.unit} {t(lang, "menuPrepRequired").toLowerCase()} · {row.available} {t(lang, "prepAvailableShort")}
+                            {row.required > row.available + 0.0001 ? ` · ${t(lang, "menuPrepShortage")}` : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPrepOpen(false)}
+                      className="min-h-[44px] rounded-xl border border-border text-sm font-bold text-muted-foreground"
+                    >
+                      {t(lang, "cancel")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmPrepare}
+                      disabled={prepHasShortage || prepPreviewRows.length === 0}
+                      className="min-h-[44px] rounded-xl bg-waka-600 text-sm font-black text-white disabled:opacity-40"
+                    >
+                      {t(lang, "menuPrepConfirm")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {storeBatches.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-black uppercase text-muted-foreground">{t(lang, "menuPrepBatchesTitle")}</p>
+                  <ul className="space-y-2">
+                    {[...storeBatches].reverse().map((batch: PrepBatch) => (
+                      <li key={batch.id} className="rounded-xl border border-border p-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold">
+                            {t(lang, "menuPrepDate")}: {batch.preparedAt.slice(0, 10)}
+                          </span>
+                          <span
+                            className={`font-black ${
+                              batch.status === "active" ? "text-waka-700" : "text-muted-foreground"
+                            }`}
+                          >
+                            {batch.status}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                          <span>
+                            {batch.portionsPrepared} · {t(lang, "menuPrepRemaining")} {batch.remainingPortions}
+                          </span>
+                          <span>
+                            {formatUgx(batch.unitCostUgx)} / {formatUgx(batch.unitCostUgx * batch.portionsPrepared)}
+                          </span>
+                        </div>
+                        {batch.status === "active" && batch.remainingPortions > 0 && (
+                          <div className="mt-2 space-y-2">
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActionError(null);
+                                  setWasteFor(wasteFor === batch.id ? null : batch.id);
+                                  setCancelFor(null);
+                                  setWasteQty(String(batch.remainingPortions));
+                                }}
+                                className="min-h-[36px] flex-1 rounded-lg border border-border text-xs font-black text-red-700"
+                              >
+                                {t(lang, "menuPrepWaste")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActionError(null);
+                                  setCancelFor(cancelFor === batch.id ? null : batch.id);
+                                  setWasteFor(null);
+                                }}
+                                className="min-h-[36px] flex-1 rounded-lg border border-border text-xs font-black text-muted-foreground"
+                              >
+                                {t(lang, "menuPrepCancel")}
+                              </button>
+                            </div>
+                            {wasteFor === batch.id && (
+                              <div className="rounded-lg bg-muted p-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input
+                                    value={wasteQty}
+                                    onChange={(e) => setWasteQty(e.target.value.replace(/\D/g, ""))}
+                                    className="min-h-[36px] rounded-lg border border-border px-2 text-sm font-black"
+                                  />
+                                  <select
+                                    value={wasteReason}
+                                    onChange={(e) => setWasteReason(e.target.value as (typeof WASTE_REASONS)[number])}
+                                    className="min-h-[36px] rounded-lg border border-border px-2 text-xs font-bold"
+                                  >
+                                    {WASTE_REASONS.map((r) => (
+                                      <option key={r} value={r}>
+                                        {r}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => confirmWaste(batch.id)}
+                                  className="mt-2 min-h-[36px] w-full rounded-lg bg-red-600 text-xs font-black text-white"
+                                >
+                                  {t(lang, "menuPrepConfirmWaste")}
+                                </button>
+                              </div>
+                            )}
+                            {cancelFor === batch.id && (
+                              <button
+                                type="button"
+                                onClick={() => confirmCancel(batch.id)}
+                                className="min-h-[36px] w-full rounded-lg bg-red-600 text-xs font-black text-white"
+                              >
+                                {t(lang, "menuPrepCancel")} — {batch.remainingPortions}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {actionError && <p className="text-xs font-bold text-red-600">{actionError}</p>}
+
       <section className="rounded-2xl border border-border p-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-black text-foreground">{t(lang, "menuVariantsTitle")}</p>
@@ -391,7 +646,11 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
 
       <button
         type="button"
-        onClick={() => onSave(menu)}
+        onClick={() =>
+          // Batch provenance lives in the store (mutated by prepare/waste/cancel
+          // actions) — never clobber it with the editor's stale copy.
+          onSave({ ...menu, prepBatches: storeBatches.length ? storeBatches : (menu.prepBatches ?? []) })
+        }
         className="min-h-12 w-full rounded-2xl bg-waka-600 text-base font-black text-white"
       >
         {t(lang, "menuSaveConfig")}

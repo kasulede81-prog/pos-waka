@@ -11,6 +11,7 @@ import type {
   Product,
   Purchase,
   PurchaseLine,
+  PrepBatch,
   ReturnReason,
   ReturnRecord,
   Sale,
@@ -301,7 +302,13 @@ import {
   checkIngredientAvailability,
   computeMenuItemFoodCostUgx,
   effectiveRecipe,
+  planPrepBatchConsumption,
+  prepBatchUnitCostUgx,
+  prepRequirementsForPortions,
+  preparedPortionsAvailable,
+  productPrepMode,
   requirementsFromSaleLines,
+  saleLineConsumesIngredientsAtSale,
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
@@ -360,7 +367,7 @@ import {
   resolveNewExpenseApprovalStatus,
 } from "../lib/cashExpenses";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
-import { saleStockMovementsFromSale, openingStockMovementFromProduct } from "../lib/inventoryIntegrity";
+import { saleStockMovementsFromSale, openingStockMovementFromProduct, stableInventoryMovementId } from "../lib/inventoryIntegrity";
 import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
 import { repairLegacySaleFinancials } from "../lib/legacyFinancialRepair";
 import { inventoryMovementNamespace } from "../lib/shopSyncContext";
@@ -1267,6 +1274,26 @@ export type PosState = {
     reason?: import("../types").PharmacyWriteOffReason;
     batchId?: string;
   }) => { ok: boolean; errorKey?: string; lossValueUgx?: number };
+  /**
+   * Phase 5 — prepare `portions` portions of a batch_prepared finished-menu
+   * item. One atomic action: ingredient deduction + adjust_use movements +
+   * PrepBatch record + prepared stock increase. No Sale, no revenue, no payment.
+   * Idempotent by caller-supplied `batchId`.
+   */
+  prepareMenuBatch: (input: {
+    productId: string;
+    portions: number;
+    note?: string | null;
+    batchId?: string;
+  }) => { ok: boolean; errorKey?: string; batchId?: string };
+  /** Phase 5 — waste prepared portions from a batch. No ingredient restore. */
+  wastePreparedPortions: (input: {
+    batchId: string;
+    portions: number;
+    reason: string;
+  }) => { ok: boolean; errorKey?: string };
+  /** Phase 5 — cancel an active batch, restoring ingredients for unsold portions only. */
+  cancelPrepBatch: (input: { batchId: string; note?: string | null }) => { ok: boolean; errorKey?: string };
   pharmacySupplierReturn: (input: {
     productId: string;
     batchId: string;
@@ -5059,7 +5086,13 @@ export const usePosStore = create<PosState>((set, get) => {
     const stockCheck = validateDraftSaleStockBeforeFinalize(state.draftLines, state.products);
     if (!stockCheck.ok) return { ok: false, errorKey: stockCheck.errorKey };
 
-    const ingredientReq = requirementsFromSaleLines(state.draftLines, state.products);
+    // Batch-prepared items consumed their ingredients at preparation time —
+    // only made-to-order recipe lines draw ingredients at sale time.
+    const ingredientLines = state.draftLines.filter((l) => {
+      const product = state.products.find((x) => x.id === l.productId);
+      return !product || saleLineConsumesIngredientsAtSale(product);
+    });
+    const ingredientReq = requirementsFromSaleLines(ingredientLines, state.products);
     const ingredientShortages = checkIngredientAvailability(ingredientReq, state.products);
     if (ingredientShortages.length > 0) return { ok: false, errorKey: "ingredientShortage" };
 
@@ -5088,7 +5121,22 @@ export const usePosStore = create<PosState>((set, get) => {
         minimumStockAlert: p.minimumStockAlert,
       });
       if (conflict) logInventoryConflict(conflict);
-      const deductFinished = shouldDeductFinishedProductStock(p);
+      let deductFinished = shouldDeductFinishedProductStock(p);
+      // Phase 5 — batch_prepared items sell from prepared portions: the finished
+      // stock unit is deducted (FIFO batch consumption), raw ingredients are NOT
+      // deducted again (they were consumed at preparation time — no double consumption).
+      let preparedPlan: { batches: PrepBatch[]; unitCostUgx: number } | null = null;
+      if (!deductFinished && productPrepMode(p) === "batch_prepared") {
+        const preparedAvailable = preparedPortionsAvailable(p);
+        // Unbatched finished-menu stock: never invent batch cost — block until reconciled.
+        if (p.stockOnHand > preparedAvailable + 0.0001) {
+          return { ok: false, errorKey: "unbatchedStock" };
+        }
+        const plan = planPrepBatchConsumption(p, moneyLine.quantity, finalizeAt);
+        if (!plan.ok) return { ok: false, errorKey: plan.errorKey };
+        deductFinished = true;
+        preparedPlan = plan;
+      }
       const next = deductFinished ? p.stockOnHand - moneyLine.quantity : p.stockOnHand;
       if (deductFinished && next < -0.0001) return { ok: false, errorKey: "noStock" };
       const slotStart = resolvePackCostUnitsDepleted(p);
@@ -5096,10 +5144,13 @@ export const usePosStore = create<PosState>((set, get) => {
       // Recipe-driven finished_menu items skip finished-stock deduction, so their
       // COGS must come from recipe ingredient costs (with yield + waste), not the
       // finished product's cost/pack slots — otherwise food sales record COGS ≈ 0.
+      // Batch-prepared items instead use their FIFO batch historical cost.
       const recipe = !deductFinished ? effectiveRecipe(p, moneyLine.variantId) : null;
-      const unitCostUgx = recipe
-        ? computeMenuItemFoodCostUgx(p, products, moneyLine.variantId)
-        : slotCosts.unitCostUgx;
+      const unitCostUgx = preparedPlan
+        ? preparedPlan.unitCostUgx
+        : recipe
+          ? computeMenuItemFoodCostUgx(p, products, moneyLine.variantId)
+          : slotCosts.unitCostUgx;
       const cogsUgx = lineCostUgx(unitCostUgx, moneyLine.quantity);
       preCartLines.push(
         normalizeSaleLine({
@@ -5116,6 +5167,7 @@ export const usePosStore = create<PosState>((set, get) => {
         packCostUnitsDepleted: deductFinished
           ? advancePackCostUnitsDepleted(p.packCostUnitsDepleted, moneyLine.quantity)
           : p.packCostUnitsDepleted,
+        menu: preparedPlan ? { ...p.menu, prepBatches: preparedPlan.batches } : p.menu,
         updatedAt: finalizeAt,
         version: deductFinished ? p.version + 1 : p.version,
       };
@@ -5621,7 +5673,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const preVoidProduct = pIdx >= 0 ? products[pIdx]! : null;
     if (pIdx >= 0) {
       const p = products[pIdx]!;
-      products[pIdx] = {
+      let nextProduct: Product = {
         ...p,
         stockOnHand: p.stockOnHand + voidQty,
         packCostUnitsDepleted: hasPackCostAllocation(p)
@@ -5630,6 +5682,29 @@ export const usePosStore = create<PosState>((set, get) => {
         updatedAt: at,
         version: p.version + 1,
       };
+      // Phase 5 — batch-prepared provenance: the shared restock returns finished
+      // portions to stock; credit them back to the newest open batch so prepared
+      // stock and Σ(remainingPortions) stay reconciled. Hospitality-only branch:
+      // retail products never carry prepMode "batch_prepared".
+      if (productPrepMode(p) === "batch_prepared") {
+        const batches = [...(p.menu?.prepBatches ?? [])];
+        const creditTarget = [...batches]
+          .filter((b) => b.status === "active" || b.status === "depleted")
+          .sort((a, b) => b.preparedAt.localeCompare(a.preparedAt))[0];
+        if (creditTarget) {
+          const idx = batches.findIndex((b) => b.id === creditTarget.id);
+          batches[idx] = {
+            ...batches[idx]!,
+            remainingPortions: batches[idx]!.remainingPortions + voidQty,
+            status: "active",
+            updatedAt: at,
+            version: (batches[idx]!.version ?? 1) + 1,
+            pendingSync: true,
+          };
+          nextProduct = { ...nextProduct, menu: { ...nextProduct.menu, prepBatches: batches } };
+        }
+      }
+      products[pIdx] = nextProduct;
     }
 
     const movement: StockMovement = {
@@ -6621,6 +6696,378 @@ export const usePosStore = create<PosState>((set, get) => {
     });
 
     return { ok: true, lossValueUgx };
+  },
+
+  prepareMenuBatch: ({ productId, portions, note, batchId: inputBatchId }) => {
+    const denied = denyUnlessEffectivePermission("stock.adjust", "prepareMenuBatch");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const p = state.products.find((x) => x.id === productId);
+    if (!p) return { ok: false, errorKey: "missingProduct" };
+    if (productPrepMode(p) !== "batch_prepared") return { ok: false, errorKey: "prepModeRequiresBatch" };
+    if (!effectiveRecipe(p)) return { ok: false, errorKey: "prepRequiresRecipe" };
+
+    const qty = Math.floor(Number(portions) || 0);
+    if (qty <= 0) return { ok: false, errorKey: "invalidQty" };
+
+    // Idempotency: a retry with the same caller-supplied batchId is a no-op.
+    const batchId = inputBatchId?.trim() || crypto.randomUUID();
+    const existing = (p.menu?.prepBatches ?? []).find((b) => b.id === batchId);
+    if (existing) return { ok: true, batchId };
+
+    const at = new Date().toISOString();
+    const actor = state.sessionActor;
+
+    // 1–2. Requirements + availability (exact sale-time recipe math, incl. yield + waste).
+    const requirements = prepRequirementsForPortions(p, qty);
+    const shortages = checkIngredientAvailability(requirements, state.products);
+    if (shortages.length > 0) return { ok: false, errorKey: "ingredientShortage" };
+
+    // 3–4. Deduct ingredients + audited adjust_use movements (stable, idempotent ids).
+    const shopKey = inventoryMovementNamespace();
+    const deduction = applyRecipeStockDeduction([...state.products], requirements);
+    const movements: StockMovement[] = [];
+    for (const [ingredientId, required] of requirements) {
+      if (required <= 0) continue;
+      const ing = deduction.products.find((x) => x.id === ingredientId);
+      if (!ing) continue;
+      const rounded = Math.round(required * 10000) / 10000;
+      movements.push({
+        id: stableInventoryMovementId(shopKey, "prep", batchId, ingredientId),
+        at,
+        productId: ingredientId,
+        productName: ing.name,
+        deltaBaseUnits: -rounded,
+        kind: "adjust_use",
+        summary: `Prep −${rounded} ${ing.baseUnit ?? ""}`.trim(),
+        refId: batchId,
+        supplierId: null,
+      });
+    }
+
+    // 5–7. Batch record with historical per-portion recipe cost; prepared stock += portions.
+    const unitCostUgx = prepBatchUnitCostUgx(p, state.products);
+    const batch: PrepBatch = {
+      id: batchId,
+      menuProductId: p.id,
+      preparedAt: at,
+      portionsPrepared: qty,
+      remainingPortions: qty,
+      unitCostUgx,
+      status: "active",
+      actorUserId: actor?.userId ?? null,
+      actorName: actor?.displayName ?? null,
+      note: note?.trim() || null,
+      createdAt: at,
+      updatedAt: at,
+      version: 1,
+      pendingSync: true,
+    };
+
+    const base = deduction.products.find((x) => x.id === p.id)!;
+    const preparedProduct: Product = {
+      ...base,
+      stockOnHand: Math.max(0, base.stockOnHand) + qty,
+      menu: { ...base.menu, prepBatches: [...(base.menu?.prepBatches ?? []), batch] },
+      updatedAt: at,
+      version: base.version + 1,
+    };
+    const products = deduction.products.map((x) => (x.id === p.id ? preparedProduct : x));
+
+    // Prepared-stock increase is itself a ledger movement (positive adjust_use),
+    // so verifyInventoryIntegrity can explain every quantity change.
+    const stockMovement: StockMovement = {
+      id: stableInventoryMovementId(shopKey, "prep_stock", batchId, p.id),
+      at,
+      productId: p.id,
+      productName: p.name,
+      deltaBaseUnits: qty,
+      kind: "adjust_use",
+      summary: `Prep +${qty} portions`,
+      refId: batchId,
+      supplierId: null,
+    };
+
+    set((s) => ({
+      products,
+      ...movementMergePatch(s, [...movements, stockMovement]),
+    }));
+
+    // 8–9. Sync/version: durable stock updates ride the existing adjustment channel.
+    for (const m of movements) {
+      const before = state.products.find((x) => x.id === m.productId);
+      void queueRemote(
+        "pending_stock_updates",
+        r3AdjustmentStockPayload({
+          productId: m.productId,
+          delta: m.deltaBaseUnits,
+          adjustmentId: m.id,
+          note: `prep:${batchId}`,
+          baseUpdatedAt: before?.updatedAt,
+          baseStockOnHand: before?.stockOnHand,
+        }),
+      );
+    }
+    const baseBefore = state.products.find((x) => x.id === p.id);
+    void queueRemote(
+      "pending_stock_updates",
+      r3AdjustmentStockPayload({
+        productId: p.id,
+        delta: qty,
+        adjustmentId: batchId,
+        note: `prep_batch:${batchId}`,
+        baseUpdatedAt: baseBefore?.updatedAt,
+        baseStockOnHand: baseBefore?.stockOnHand,
+      }),
+    );
+
+    pushAudit("hospitality_prep_batch", `Prep ${p.name} +${qty} portions @ UGX ${unitCostUgx.toLocaleString()}`, {
+      batchId,
+      menuProductId: p.id,
+      productName: p.name,
+      portions: qty,
+      unitCostUgx,
+      totalCostUgx: unitCostUgx * qty,
+      note: note?.trim() || null,
+      actorUserId: actor?.userId ?? null,
+    });
+
+    return { ok: true, batchId };
+  },
+
+  wastePreparedPortions: ({ batchId, portions, reason }) => {
+    const denied = denyUnlessEffectivePermission("stock.adjust", "wastePreparedPortions");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const at = new Date().toISOString();
+    const actor = state.sessionActor;
+
+    let target: { product: Product; batch: PrepBatch } | null = null;
+    for (const product of state.products) {
+      const batch = (product.menu?.prepBatches ?? []).find((b) => b.id === batchId);
+      if (batch) {
+        target = { product, batch };
+        break;
+      }
+    }
+    if (!target) return { ok: false, errorKey: "missingProduct" };
+    const { product, batch } = target;
+    if (batch.status !== "active") return { ok: false, errorKey: "invalid" };
+
+    const qty = Math.floor(Number(portions) || 0);
+    if (qty <= 0 || qty > batch.remainingPortions + 0.0001) return { ok: false, errorKey: "invalidQty" };
+
+    const nextRemaining = Math.round((batch.remainingPortions - qty) * 10000) / 10000;
+    const nextBatches = (product.menu?.prepBatches ?? []).map((b) =>
+      b.id === batchId
+        ? {
+            ...b,
+            remainingPortions: nextRemaining,
+            status: (nextRemaining <= 0.0001 ? "wasted" : "active") as PrepBatch["status"],
+            updatedAt: at,
+            version: (b.version ?? 1) + 1,
+            pendingSync: true,
+          }
+        : b,
+    );
+
+    const wasteReason = reason?.trim() || "other";
+    const movementKind: StockMovementKind = ["spoiled", "burnt", "damaged"].includes(wasteReason)
+      ? "adjust_damage"
+      : "adjust_other";
+    const shopKey = inventoryMovementNamespace();
+    const movement: StockMovement = {
+      // Stable per batch-version id: a retried waste of the same version dedupes.
+      id: stableInventoryMovementId(shopKey, "prep_waste", batchId, String(batch.version ?? 1)),
+      at,
+      productId: product.id,
+      productName: product.name,
+      deltaBaseUnits: -qty,
+      kind: movementKind,
+      summary: `Prep waste −${qty} (${wasteReason})`,
+      refId: batchId,
+      supplierId: null,
+    };
+
+    const before = product.stockOnHand;
+    set((s) => ({
+      products: s.products.map((x) =>
+        x.id === product.id
+          ? {
+              ...x,
+              stockOnHand: Math.max(0, x.stockOnHand - qty),
+              menu: { ...x.menu, prepBatches: nextBatches },
+              updatedAt: at,
+              version: x.version + 1,
+            }
+          : x,
+      ),
+      ...movementMergePatch(s, [movement]),
+    }));
+
+    void queueRemote(
+      "pending_stock_updates",
+      r3AdjustmentStockPayload({
+        productId: product.id,
+        delta: -qty,
+        adjustmentId: movement.id,
+        note: `prep_waste:${wasteReason}`,
+        baseUpdatedAt: product.updatedAt,
+        baseStockOnHand: before,
+      }),
+    );
+
+    pushAudit("hospitality_prep_waste", `Prep waste ${product.name} −${qty} (${wasteReason})`, {
+      batchId,
+      menuProductId: product.id,
+      productName: product.name,
+      portions: qty,
+      reason: wasteReason,
+      actorUserId: actor?.userId ?? null,
+    });
+
+    return { ok: true };
+  },
+
+  cancelPrepBatch: ({ batchId, note }) => {
+    const denied = denyUnlessEffectivePermission("stock.adjust", "cancelPrepBatch");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const at = new Date().toISOString();
+    const actor = state.sessionActor;
+
+    let target: { product: Product; batch: PrepBatch } | null = null;
+    for (const product of state.products) {
+      const batch = (product.menu?.prepBatches ?? []).find((b) => b.id === batchId);
+      if (batch) {
+        target = { product, batch };
+        break;
+      }
+    }
+    if (!target) return { ok: false, errorKey: "missingProduct" };
+    const { product, batch } = target;
+    if (batch.status !== "active" || batch.remainingPortions <= 0.0001) {
+      return { ok: false, errorKey: "invalid" };
+    }
+
+    // Only UNSOLD portions are reversed — sold portions are historical and stand.
+    const reversePortions = batch.remainingPortions;
+    // Quantities restored use the CURRENT recipe ratios (documented behavior);
+    // cost is irrelevant here — ingredients return at current cost basis.
+    const requirements = prepRequirementsForPortions(product, reversePortions);
+
+    const shopKey = inventoryMovementNamespace();
+    const movements: StockMovement[] = [];
+    const restoredProducts = new Map<string, number>();
+    for (const [ingredientId, required] of requirements) {
+      if (required <= 0) continue;
+      const rounded = Math.round(required * 10000) / 10000;
+      restoredProducts.set(ingredientId, rounded);
+      const ing = state.products.find((x) => x.id === ingredientId);
+      movements.push({
+        id: stableInventoryMovementId(shopKey, "prep_cancel", batchId, ingredientId),
+        at,
+        productId: ingredientId,
+        productName: ing?.name ?? ingredientId,
+        deltaBaseUnits: rounded,
+        kind: "adjust_use",
+        summary: `Prep cancel +${rounded} ${ing?.baseUnit ?? ""}`.trim(),
+        refId: batchId,
+        supplierId: null,
+      });
+    }
+
+    const nextBatches = (product.menu?.prepBatches ?? []).map((b) =>
+      b.id === batchId
+        ? {
+            ...b,
+            remainingPortions: 0,
+            status: "cancelled" as const,
+            updatedAt: at,
+            version: (b.version ?? 1) + 1,
+            pendingSync: true,
+          }
+        : b,
+    );
+
+    const menuBefore = product.stockOnHand;
+    // Negative movement for the prepared-stock removal keeps the ledger complete.
+    const cancelStockMovement: StockMovement = {
+      id: stableInventoryMovementId(shopKey, "prep_cancel_stock", batchId, product.id),
+      at,
+      productId: product.id,
+      productName: product.name,
+      deltaBaseUnits: -Math.round(reversePortions * 10000) / 10000,
+      kind: "adjust_use",
+      summary: `Prep cancel −${reversePortions} portions`,
+      refId: batchId,
+      supplierId: null,
+    };
+    set((s) => ({
+      products: s.products.map((x) => {
+        if (x.id === product.id) {
+          return {
+            ...x,
+            stockOnHand: Math.max(0, x.stockOnHand - reversePortions),
+            menu: { ...x.menu, prepBatches: nextBatches },
+            updatedAt: at,
+            version: x.version + 1,
+          };
+        }
+        const restore = restoredProducts.get(x.id);
+        if (restore) {
+          return {
+            ...x,
+            stockOnHand: x.stockOnHand + restore,
+            updatedAt: at,
+            version: x.version + 1,
+          };
+        }
+        return x;
+      }),
+      ...movementMergePatch(s, [...movements, cancelStockMovement]),
+    }));
+
+    for (const m of movements) {
+      const before = state.products.find((x) => x.id === m.productId);
+      void queueRemote(
+        "pending_stock_updates",
+        r3AdjustmentStockPayload({
+          productId: m.productId,
+          delta: m.deltaBaseUnits,
+          adjustmentId: m.id,
+          note: `prep_cancel:${batchId}`,
+          baseUpdatedAt: before?.updatedAt,
+          baseStockOnHand: before?.stockOnHand,
+        }),
+      );
+    }
+    void queueRemote(
+      "pending_stock_updates",
+      r3AdjustmentStockPayload({
+        productId: product.id,
+        delta: -reversePortions,
+        adjustmentId: stableInventoryMovementId(shopKey, "prep_cancel_stock", batchId, product.id),
+        note: `prep_cancel_stock:${batchId}`,
+        baseUpdatedAt: product.updatedAt,
+        baseStockOnHand: menuBefore,
+      }),
+    );
+
+    pushAudit("hospitality_prep_cancel", `Prep cancel ${product.name} −${reversePortions} portions`, {
+      batchId,
+      menuProductId: product.id,
+      productName: product.name,
+      reversedPortions: reversePortions,
+      soldPortionsStand: batch.portionsPrepared - batch.remainingPortions,
+      note: note?.trim() || null,
+      actorUserId: actor?.userId ?? null,
+    });
+
+    return { ok: true };
   },
 
   pharmacySupplierReturn: ({ productId, batchId, quantity, reason }) => {
