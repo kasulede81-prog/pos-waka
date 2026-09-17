@@ -5,6 +5,10 @@
 import type { Product, ReturnReason, Sale, StockMovement } from "../types";
 import { returnRestocksInventory } from "./returnPolicy";
 import { allStockMovementsForIntegrity } from "./stockMovementLedger";
+import {
+  requirementsFromSaleLines,
+  shouldDeductFinishedProductStock,
+} from "./recipeEngine";
 
 /** Namespace UUID for deterministic sale movement ids (matches server inventory_movement_uuid). */
 export const INVENTORY_MOVEMENT_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fdcb4fe";
@@ -390,6 +394,7 @@ export function purchaseStockDeltasFromLines(
 export function saleStockMovementsFromSale(
   shopKey: string,
   sale: Pick<Sale, "id" | "createdAt" | "lines">,
+  products?: Product[],
 ): StockMovement[] {
   const at = sale.createdAt;
   const byProduct = new Map<string, { quantity: number; name: string }>();
@@ -398,6 +403,13 @@ export function saleStockMovementsFromSale(
     if (line.voided) continue;
     const qty = Math.max(0, Number(line.quantity) || 0);
     if (qty <= 0) continue;
+
+    // Recipe-driven finished_menu items never deduct finished stock, so a
+    // sale_out movement for them would corrupt the ledger. Their consumption
+    // is recorded per ingredient instead (same math as the deduction itself).
+    const product = products?.find((p) => p.id === line.productId);
+    if (product && !shouldDeductFinishedProductStock(product)) continue;
+
     const cur = byProduct.get(line.productId) ?? { quantity: 0, name: line.name };
     byProduct.set(line.productId, {
       quantity: Math.round((cur.quantity + qty) * 10000) / 10000,
@@ -405,7 +417,7 @@ export function saleStockMovementsFromSale(
     });
   }
 
-  return [...byProduct.entries()].map(([productId, { quantity, name }]) => ({
+  const movements: StockMovement[] = [...byProduct.entries()].map(([productId, { quantity, name }]) => ({
     id: stableInventoryMovementId(shopKey, "sale", sale.id, productId),
     at,
     productId,
@@ -416,6 +428,32 @@ export function saleStockMovementsFromSale(
     refId: sale.id,
     supplierId: null,
   }));
+
+  // Ingredient consumption for recipe-driven lines, computed with the exact
+  // same engine the finalize-time deduction uses (recipes + modifier options,
+  // with yield and waste), so the ledger always matches the stock deltas.
+  if (products) {
+    const activeLines = sale.lines.filter((l) => !l.voided && (Number(l.quantity) || 0) > 0);
+    const requirements = requirementsFromSaleLines(activeLines, products);
+    for (const [productId, qty] of requirements.entries()) {
+      if (qty <= 0) continue;
+      const ing = products.find((p) => p.id === productId);
+      const quantity = Math.round(qty * 10000) / 10000;
+      movements.push({
+        id: stableInventoryMovementId(shopKey, "recipe", sale.id, productId),
+        at,
+        productId,
+        productName: ing?.name ?? productId,
+        deltaBaseUnits: -quantity,
+        kind: "adjust_use",
+        summary: `Recipe consumption −${quantity}`,
+        refId: sale.id,
+        supplierId: null,
+      });
+    }
+  }
+
+  return movements;
 }
 
 /** Opening stock movement when a product is created with initial quantity. */

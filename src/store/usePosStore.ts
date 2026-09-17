@@ -299,6 +299,8 @@ import { normalizeProductMenu } from "../lib/menuModifiers";
 import {
   applyRecipeStockDeduction,
   checkIngredientAvailability,
+  computeMenuItemFoodCostUgx,
+  effectiveRecipe,
   requirementsFromSaleLines,
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
@@ -5091,11 +5093,18 @@ export const usePosStore = create<PosState>((set, get) => {
       if (deductFinished && next < -0.0001) return { ok: false, errorKey: "noStock" };
       const slotStart = resolvePackCostUnitsDepleted(p);
       const slotCosts = applyPackSlotCostsToSaleLine(p, moneyLine, slotStart);
-      const cogsUgx = lineCostUgx(slotCosts.unitCostUgx, moneyLine.quantity);
+      // Recipe-driven finished_menu items skip finished-stock deduction, so their
+      // COGS must come from recipe ingredient costs (with yield + waste), not the
+      // finished product's cost/pack slots — otherwise food sales record COGS ≈ 0.
+      const recipe = !deductFinished ? effectiveRecipe(p, moneyLine.variantId) : null;
+      const unitCostUgx = recipe
+        ? computeMenuItemFoodCostUgx(p, products, moneyLine.variantId)
+        : slotCosts.unitCostUgx;
+      const cogsUgx = lineCostUgx(unitCostUgx, moneyLine.quantity);
       preCartLines.push(
         normalizeSaleLine({
           ...moneyLine,
-          unitCostUgx: slotCosts.unitCostUgx,
+          unitCostUgx,
           cogsUgx,
           baseUnit: p.baseUnit?.trim() || undefined,
           estimatedProfitUgx: lineProfitUgx(moneyLine.lineTotalUgx, cogsUgx),
@@ -5232,7 +5241,7 @@ export const usePosStore = create<PosState>((set, get) => {
       id: sale.id,
       createdAt: sale.createdAt,
       lines: saleLines,
-    });
+    }, products);
 
     const auditEntries: AuditLogEntry[] = [];
     const buildAudit = (action: AuditAction, payloadSummary: string, payload: Record<string, unknown>): AuditLogEntry => ({

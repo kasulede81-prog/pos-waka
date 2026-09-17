@@ -61,11 +61,11 @@ function sumDeltasByProduct(movements: StockMovement[]): Map<string, number> {
   return out;
 }
 
-function synthesizeSaleMovementsFromSales(shopKey: string, sales: Sale[]): StockMovement[] {
+function synthesizeSaleMovementsFromSales(shopKey: string, sales: Sale[], products?: Product[]): StockMovement[] {
   const out: StockMovement[] = [];
   for (const sale of sales) {
     if (!isCompletedSale(sale)) continue;
-    out.push(...saleStockMovementsFromSale(shopKey, sale));
+    out.push(...saleStockMovementsFromSale(shopKey, sale, products));
   }
   return out;
 }
@@ -120,7 +120,7 @@ export function reconcileRecoveryInventoryLedger(input?: {
   const shopKey = input?.shopKey ?? inventoryMovementNamespace();
   const applyToStore = input?.applyToStore !== false;
 
-  const saleSynth = synthesizeSaleMovementsFromSales(shopKey, sales);
+  const saleSynth = synthesizeSaleMovementsFromSales(shopKey, sales, products);
   let merged = mergeStockMovementsFromCloudPull(movementsBefore, saleSynth);
   const syntheticSaleMovements = saleSynth.filter(
     (m) => !movementsBefore.some((existing) => existing.id === m.id),

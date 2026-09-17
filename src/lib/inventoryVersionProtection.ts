@@ -3,6 +3,7 @@
  */
 
 import type { Product, SaleLine } from "../types";
+import { shouldDeductFinishedProductStock } from "./recipeEngine";
 
 export function attachStockVersionToLine(product: Product, line: SaleLine): SaleLine {
   return { ...line, stockVersionAtAdd: product.version ?? 1 };
@@ -28,6 +29,10 @@ export function validateDraftSaleStockBeforeFinalize(
   for (const line of draftLines) {
     const product = products.find((p) => p.id === line.productId);
     if (!product) return { ok: false, errorKey: "missingProduct" };
+
+    // Recipe-driven finished_menu items are produced to order: the finished item's
+    // own stock is never deducted (ingredients are), so it must not gate the sale.
+    if (!shouldDeductFinishedProductStock(product)) continue;
 
     const available = Math.max(0, Number(product.stockOnHand) || 0);
     if (line.quantity > available + 0.0001) {

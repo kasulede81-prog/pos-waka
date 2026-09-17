@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { Language, ModifierGroup, ModifierOption, Product, ProductMenuConfig, ProductVariant, RecipeLine, ComboSlot } from "../../types";
 import { t } from "../../lib/i18n";
 import { DEFAULT_MENU_SECTIONS } from "../../lib/menuModifiers";
+import { computeMenuItemMargin } from "../../lib/recipeEngine";
+import { formatUgx } from "../../lib/formatUgx";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 type Props = {
@@ -39,9 +41,20 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
     };
     setMenu({
       ...menu,
-      recipe: { lines: [...(menu.recipe?.lines ?? []), line] },
+      recipe: { ...menu.recipe, yieldQty: menu.recipe?.yieldQty, prepNotes: menu.recipe?.prepNotes, lines: [...(menu.recipe?.lines ?? []), line] },
     });
   };
+
+  const updateRecipeLine = (li: number, next: RecipeLine) => {
+    const lines = [...(menu.recipe?.lines ?? [])];
+    lines[li] = next;
+    setMenu({ ...menu, recipe: { ...menu.recipe, lines } });
+  };
+
+  // Live food-cost panel: run the exact same engine the sale finalize path uses,
+  // against the in-progress (not yet saved) menu config.
+  const syntheticProduct: Product = { ...product, menu };
+  const liveMargin = computeMenuItemMargin(syntheticProduct, ingredientProducts);
 
   return (
     <div className="space-y-4">
@@ -156,40 +169,100 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
             + {t(lang, "menuAddIngredient")}
           </button>
         </div>
+
+        {(menu.recipe?.lines ?? []).length > 0 && (
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-xs font-bold text-muted-foreground">{t(lang, "menuRecipeYield")}</span>
+              <input
+                value={menu.recipe?.yieldQty ? String(menu.recipe.yieldQty) : ""}
+                onChange={(e) => {
+                  const v = Number(e.target.value.replace(/[^\d.]/g, "")) || 0;
+                  setMenu({ ...menu, recipe: { lines: menu.recipe?.lines ?? [], yieldQty: v > 0 ? v : undefined } });
+                }}
+                placeholder="1"
+                className="mt-1 min-h-[40px] w-full rounded-lg border border-border px-2 text-sm font-black"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-bold text-muted-foreground">{t(lang, "menuRecipePrepNotes")}</span>
+              <input
+                value={menu.recipe?.prepNotes ?? ""}
+                onChange={(e) => setMenu({ ...menu, recipe: { lines: menu.recipe?.lines ?? [], prepNotes: e.target.value || null } })}
+                className="mt-1 min-h-[40px] w-full rounded-lg border border-border px-2 text-sm"
+              />
+            </label>
+          </div>
+        )}
+
         {(menu.recipe?.lines ?? []).map((line, li) => (
-          <div key={li} className="mb-2 grid grid-cols-[1fr_80px_60px] gap-2">
-            <select
-              value={line.ingredientProductId}
-              onChange={(e) => {
-                const lines = [...(menu.recipe?.lines ?? [])];
-                const ing = ingredientProducts.find((p) => p.id === e.target.value);
-                lines[li] = {
-                  ...line,
-                  ingredientProductId: e.target.value,
-                  unitLabel: ing?.baseUnit ?? line.unitLabel,
-                };
-                setMenu({ ...menu, recipe: { lines } });
-              }}
-              className="min-h-[40px] rounded-lg border border-border px-2 text-sm"
-            >
-              {ingredientProducts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <input
-              value={String(line.quantityBase)}
-              onChange={(e) => {
-                const lines = [...(menu.recipe?.lines ?? [])];
-                lines[li] = { ...line, quantityBase: Math.max(0, Number(e.target.value) || 0) };
-                setMenu({ ...menu, recipe: { lines } });
-              }}
-              className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-black"
-            />
-            <span className="flex items-center text-xs font-bold text-muted-foreground">{line.unitLabel ?? "ea"}</span>
+          <div key={li} className="mb-2 rounded-xl bg-muted p-2">
+            <div className="grid grid-cols-[1fr_80px_44px] gap-2">
+              <select
+                value={line.ingredientProductId}
+                onChange={(e) => {
+                  const ing = ingredientProducts.find((p) => p.id === e.target.value);
+                  updateRecipeLine(li, {
+                    ...line,
+                    ingredientProductId: e.target.value,
+                    unitLabel: ing?.baseUnit ?? line.unitLabel,
+                  });
+                }}
+                className="min-h-[40px] rounded-lg border border-border px-2 text-sm"
+              >
+                {ingredientProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={String(line.quantityBase)}
+                onChange={(e) =>
+                  updateRecipeLine(li, { ...line, quantityBase: Math.max(0, Number(e.target.value) || 0) })
+                }
+                className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-black"
+              />
+              <span className="flex items-center text-xs font-bold text-muted-foreground">{line.unitLabel ?? "ea"}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-[90px_1fr] gap-2">
+              <label className="flex items-center gap-1">
+                <span className="text-[10px] font-bold text-muted-foreground">{t(lang, "menuWastePercent")}</span>
+                <input
+                  value={line.wastePercent ? String(line.wastePercent) : ""}
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 0));
+                    updateRecipeLine(li, { ...line, wastePercent: v > 0 ? v : null });
+                  }}
+                  placeholder="0"
+                  className="min-h-[36px] w-full rounded-lg border border-border px-2 text-sm font-black"
+                />
+              </label>
+              <input
+                value={line.prepNotes ?? ""}
+                onChange={(e) => updateRecipeLine(li, { ...line, prepNotes: e.target.value || null })}
+                placeholder={t(lang, "menuLineNotes")}
+                className="min-h-[36px] rounded-lg border border-border px-2 text-xs"
+              />
+            </div>
           </div>
         ))}
+
+        {(menu.recipe?.lines ?? []).length > 0 && (
+          <div className="mt-3 rounded-xl border border-waka-200 bg-waka-50 p-3">
+            <p className="mb-2 text-xs font-black uppercase text-waka-700">{t(lang, "menuCostPanelTitle")}</p>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+              <dt className="text-muted-foreground">{t(lang, "menuCostFoodCost")}</dt>
+              <dd className="text-right font-black">{formatUgx(liveMargin.foodCostUgx)}</dd>
+              <dt className="text-muted-foreground">{t(lang, "menuCostSellPrice")}</dt>
+              <dd className="text-right font-black">{formatUgx(liveMargin.sellPriceUgx)}</dd>
+              <dt className="text-muted-foreground">{t(lang, "menuCostProfit")}</dt>
+              <dd className="text-right font-black">{formatUgx(liveMargin.profitUgx)}</dd>
+              <dt className="text-muted-foreground">{t(lang, "menuCostMargin")}</dt>
+              <dd className="text-right font-black">{liveMargin.marginPct.toFixed(1)}%</dd>
+            </dl>
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-border p-3">
