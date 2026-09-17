@@ -3,6 +3,7 @@ import type {
   AuditAction,
   AuditLogEntry,
   BusinessType,
+  HospitalityOperatingStyle,
   ShopSellingStyle,
   Customer,
   DayCloseSummary,
@@ -932,15 +933,22 @@ export type PosState = {
   endActiveShift: (actorUserId?: string) => void;
   managerForceCloseOpenShift: (shiftId: string, reason?: string) => { ok: boolean; errorKey?: string };
   logAuditAction: (action: AuditAction, summary: string, payload?: Record<string, unknown>) => void;
-  completeBusinessOnboarding: (businessType: BusinessType) => void;
+  completeBusinessOnboarding: (
+    businessType: BusinessType,
+    hospitalityStyle?: HospitalityOperatingStyle | null,
+  ) => void;
   completeShopOnboardingWizard: (input: {
     businessType: BusinessType;
     sellingStyle: ShopSellingStyle;
+    hospitalityStyle?: HospitalityOperatingStyle | null;
     latitude?: number;
     longitude?: number;
     gpsSkipped?: boolean;
   }) => void;
-  updateBusinessType: (businessType: BusinessType) => void;
+  updateBusinessType: (
+    businessType: BusinessType,
+    hospitalityStyle?: HospitalityOperatingStyle | null,
+  ) => void;
 
   setDraftInput: (input: DraftLineInput | null) => void;
   addDraftLineFromInput: () => { ok: boolean; errorKey?: string };
@@ -3592,7 +3600,7 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
-  completeBusinessOnboarding: (businessType) => {
+  completeBusinessOnboarding: (businessType, hospitalityStyle) => {
     const prof = getBusinessProfile(businessType);
     const hospitality = isHospitalityBusinessType(businessType);
     const pharmacy = isPharmacyBusinessType(businessType);
@@ -3600,6 +3608,7 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: {
         ...s.preferences,
         businessType,
+        ...(hospitality && hospitalityStyle ? { hospitalityStyle } : {}),
         kioskQuickSell: prof.kioskQuickSellDefault,
         onboardingDone: true,
         onboardingWizardDone: true,
@@ -3612,7 +3621,7 @@ export const usePosStore = create<PosState>((set, get) => {
           : s.preferences.hospitalityFloor,
         hospitalityKitchenEnabled: hospitality
           ? (s.preferences.hospitalityKitchenEnabled ??
-            defaultKitchenEnabledForBusinessType(businessType))
+            defaultKitchenEnabledForBusinessType(businessType, hospitalityStyle))
           : s.preferences.hospitalityKitchenEnabled,
         ...applyIndustryReceiptDefaults(s.preferences, businessType),
       },
@@ -3627,6 +3636,7 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: {
         ...s.preferences,
         businessType: input.businessType,
+        ...(hospitality && input.hospitalityStyle ? { hospitalityStyle: input.hospitalityStyle } : {}),
         shopSellingStyle: input.sellingStyle,
         mixedPackSelling: input.sellingStyle === "mixed",
         kioskQuickSell: prof.kioskQuickSellDefault,
@@ -3641,14 +3651,14 @@ export const usePosStore = create<PosState>((set, get) => {
           : s.preferences.hospitalityFloor,
         hospitalityKitchenEnabled: hospitality
           ? (s.preferences.hospitalityKitchenEnabled ??
-            defaultKitchenEnabledForBusinessType(input.businessType))
+            defaultKitchenEnabledForBusinessType(input.businessType, input.hospitalityStyle))
           : s.preferences.hospitalityKitchenEnabled,
         ...applyIndustryReceiptDefaults(s.preferences, input.businessType),
       },
     }));
   },
 
-  updateBusinessType: (businessType) => {
+  updateBusinessType: (businessType, hospitalityStyle) => {
     const prof = getBusinessProfile(businessType);
     const hospitality = isHospitalityBusinessType(businessType);
     const pharmacy = isPharmacyBusinessType(businessType);
@@ -3656,6 +3666,7 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: {
         ...s.preferences,
         businessType,
+        ...(hospitalityStyle !== undefined ? { hospitalityStyle } : {}),
         kioskQuickSell: prof.kioskQuickSellDefault,
         schemaVersion: 2,
         cashDrawerFormulaVersion: "v2",
@@ -3666,7 +3677,7 @@ export const usePosStore = create<PosState>((set, get) => {
           : s.preferences.hospitalityFloor,
         hospitalityKitchenEnabled: hospitality
           ? (s.preferences.hospitalityKitchenEnabled ??
-            defaultKitchenEnabledForBusinessType(businessType))
+            defaultKitchenEnabledForBusinessType(businessType, hospitalityStyle))
           : s.preferences.hospitalityKitchenEnabled,
         ...applyIndustryReceiptDefaults(s.preferences, businessType),
       },

@@ -2,6 +2,7 @@ import type {
   BusinessType,
   DiningTable,
   HospitalityFloorState,
+  HospitalityOperatingStyle,
   Sale,
   SaleLine,
   TableSession,
@@ -17,6 +18,7 @@ import { computeDraftCheckoutTotals, estimatedProfitAfterCartDiscount } from "./
 import { ensureSaleLineId } from "./pendingSaleMerge";
 
 export const HOSPITALITY_BUSINESS_TYPES = [
+  "hospitality",
   "restaurant",
   "bar",
   "restaurant_bar",
@@ -111,24 +113,45 @@ export function isBarOnlyMode(
   businessType: BusinessType | undefined | null,
   hospitalityModeEnabled?: boolean | null,
   hospitalityKitchenEnabled?: boolean | null,
+  hospitalityStyle?: HospitalityOperatingStyle | null,
 ): boolean {
   if (!isHospitalityMode(businessType, hospitalityModeEnabled)) return false;
-  if (businessType !== "bar") return false;
-  return !isKitchenEnabledForHospitality(businessType, hospitalityKitchenEnabled);
+  if (hospitalityStyleForBusinessType(businessType, hospitalityStyle) !== "bar") return false;
+  return !isKitchenEnabledForHospitality(businessType, hospitalityKitchenEnabled, hospitalityStyle);
 }
 
-export function defaultKitchenEnabledForBusinessType(businessType: BusinessType | undefined | null): boolean {
-  return businessType !== "bar";
+/**
+ * Effective operating style for any hospitality business type.
+ * Explicit stored style wins; legacy business types derive their style;
+ * unspecific "hospitality" (and hotel) have no style → null.
+ */
+export function hospitalityStyleForBusinessType(
+  businessType: BusinessType | undefined | null,
+  style?: HospitalityOperatingStyle | null,
+): HospitalityOperatingStyle | null {
+  if (style === "restaurant" || style === "bar" || style === "restaurant_bar") return style;
+  if (businessType === "bar") return "bar";
+  if (businessType === "restaurant_bar") return "restaurant_bar";
+  if (businessType === "restaurant") return "restaurant";
+  return null;
+}
+
+export function defaultKitchenEnabledForBusinessType(
+  businessType: BusinessType | undefined | null,
+  hospitalityStyle?: HospitalityOperatingStyle | null,
+): boolean {
+  return hospitalityStyleForBusinessType(businessType, hospitalityStyle) !== "bar";
 }
 
 export function isKitchenEnabledForHospitality(
   businessType: BusinessType | undefined | null,
   hospitalityKitchenEnabled?: boolean | null,
+  hospitalityStyle?: HospitalityOperatingStyle | null,
 ): boolean {
   if (!isHospitalityBusinessType(businessType)) return false;
   if (hospitalityKitchenEnabled === true) return true;
   if (hospitalityKitchenEnabled === false) return false;
-  return defaultKitchenEnabledForBusinessType(businessType);
+  return defaultKitchenEnabledForBusinessType(businessType, hospitalityStyle);
 }
 
 export function emptyHospitalityFloor(): HospitalityFloorState {
@@ -541,14 +564,18 @@ export function totalOpenTablesPendingUgx(sales: Sale[], floor: HospitalityFloor
   return sum;
 }
 
-export function defaultMenuCategoriesForBusinessType(businessType: BusinessType | undefined | null): string[] {
-  if (businessType === "bar") {
+export function defaultMenuCategoriesForBusinessType(
+  businessType: BusinessType | undefined | null,
+  hospitalityStyle?: HospitalityOperatingStyle | null,
+): string[] {
+  const style = hospitalityStyleForBusinessType(businessType, hospitalityStyle);
+  if (style === "bar") {
     return ["Beer", "Wine", "Spirits", "Cocktails", "Soft Drinks", "Water", "Snacks"];
   }
-  if (businessType === "restaurant") {
+  if (style === "restaurant") {
     return ["Food", "Chicken", "Pork", "Fish", "Rice", "Soft Drinks", "Water", "Desserts", "Coffee"];
   }
-  if (businessType === "restaurant_bar" || businessType === "hotel") {
+  if (style === "restaurant_bar" || businessType === "restaurant_bar" || businessType === "hotel" || businessType === "hospitality") {
     return [
       "Food",
       "Chicken",

@@ -309,6 +309,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       return restaurant;
     case "bar":
       return bar;
+    case "hospitality":
     case "restaurant_bar":
       return restaurantBar;
     case "hotel":
