@@ -9,6 +9,11 @@ import {
   type TokenLookupResult,
 } from "../../lib/loyalty/loyaltyEnrollment";
 import { useLoyaltyQrScanner } from "../../hooks/useLoyaltyQrScanner";
+import {
+  detectNfcCapabilities,
+  startNfcSession,
+  stopNfcSession,
+} from "../../services/hardware/nfcAdapter";
 import { LoyaltyMemberQr } from "./LoyaltyMemberQr";
 
 type EnrollState =
@@ -42,7 +47,10 @@ export function LoyaltyEnrollmentPanel({
   const [enrollState, setEnrollState] = useState<EnrollState>({ phase: "idle" });
   const [lookupResult, setLookupResult] = useState<TokenLookupResult | null>(null);
   const [lookupBusy, setLookupBusy] = useState(false);
+  const [nfcActive, setNfcActive] = useState(false);
+  const [nfcStatus, setNfcStatus] = useState<string>("");
   const searchSeq = useRef(0);
+  const nfcCaps = detectNfcCapabilities();
 
   const runSearch = useCallback(
     async (q: string) => {
@@ -59,6 +67,36 @@ export function LoyaltyEnrollmentPanel({
     const handle = window.setTimeout(() => void runSearch(query), 250);
     return () => window.clearTimeout(handle);
   }, [query, runSearch]);
+
+  useEffect(() => {
+    return () => {
+      void stopNfcSession();
+    };
+  }, []);
+
+  const startNfcTap = async () => {
+    setLookupResult(null);
+    setNfcStatus(t(lang, "loyaltyNfcReady"));
+    const result = await startNfcSession({
+      onToken: (token) => {
+        setNfcActive(false);
+        void onScanned(token);
+      },
+      onError: () => setNfcStatus(t(lang, "loyaltyNfcError")),
+    });
+    if (!result.ok) {
+      setNfcActive(false);
+      setNfcStatus(t(lang, "loyaltyNfcError"));
+    } else {
+      setNfcActive(true);
+    }
+  };
+
+  const stopNfcTap = async () => {
+    await stopNfcSession();
+    setNfcActive(false);
+    setNfcStatus("");
+  };
 
   const submitEnroll = async () => {
     if (!selected) return;
@@ -207,15 +245,49 @@ export function LoyaltyEnrollmentPanel({
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={scanner.openCameraScan}
-            disabled={!scanner.caps.cameraScan}
-            className="mt-3 min-h-[48px] rounded-2xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-50"
-          >
-            {t(lang, "loyaltyScanQrAction")}
-          </button>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={scanner.openCameraScan}
+              disabled={!scanner.caps.cameraScan}
+              className="min-h-[48px] rounded-2xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-50"
+            >
+              {t(lang, "loyaltyScanQrAction")}
+            </button>
+            {nfcCaps.nfc ? (
+              nfcActive ? (
+                <button
+                  type="button"
+                  onClick={() => void stopNfcTap()}
+                  className="min-h-[48px] rounded-xl border-2 border-border px-4 text-sm font-black text-foreground"
+                >
+                  {t(lang, "loyaltyNfcStop")}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void startNfcTap()}
+                  className="min-h-[48px] rounded-2xl border-2 border-waka-600 px-5 text-sm font-black text-waka-700"
+                >
+                  {t(lang, "loyaltyNfcTapAction")}
+                </button>
+              )
+            ) : (
+              <p className="text-xs font-semibold text-muted-foreground">{t(lang, "loyaltyNfcUnsupported")}</p>
+            )}
+          </div>
         )}
+        {nfcActive || nfcStatus ? (
+          <p
+            className={
+              nfcActive
+                ? "mt-3 rounded-xl bg-success-muted px-3 py-2 text-sm font-bold text-success"
+                : "mt-3 rounded-xl bg-warning-muted px-3 py-2 text-sm font-bold text-warning-foreground"
+            }
+          >
+            {nfcStatus}
+          </p>
+        ) : null}
         {lookupBusy ? (
           <p className="mt-3 text-sm font-bold text-muted-foreground">{t(lang, "loyaltyLoading")}</p>
         ) : null}
