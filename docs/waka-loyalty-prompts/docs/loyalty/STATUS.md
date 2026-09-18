@@ -6,7 +6,7 @@ WAKA POS Loyalty System
 
 ## Current Phase
 
-`03-POS-INTEGRATION.md`
+`04-MERCHANT-LOYALTY-UI.md`
 
 ## Autonomous Execution
 
@@ -16,8 +16,7 @@ Kimi is authorized to continue from one successfully completed phase to the next
 
 - [x] 01 — Forensic Audit
 - [x] 02 — Loyalty Data Foundation
-- [ ] 02 — Loyalty Data Foundation
-- [ ] 03 — POS Integration
+- [x] 03 — POS Integration
 - [ ] 04 — Merchant Loyalty UI
 - [ ] 05 — Customer Enrollment
 - [ ] 06 — Google + Apple Wallet
@@ -72,6 +71,17 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
   again (pooler `EDBHANDLEREXITED` on 2026-09-18 ~02:57, same symptom as the
   earlier pause) — migration file is committed and ready to apply the moment
   the DB is resumed; not recorded in remote history yet.
+- Phase 03 — POS integration complete (commit `f1d368e`). Client data layer
+  `src/lib/loyalty/loyaltyClient.ts` (program config fetch with localStorage
+  offline cache, account fetch, enroll RPC — never credits points),
+  `src/hooks/useLoyaltyCheckoutPreview.ts` (fully failure-isolated, resolves
+  shop context from cloudSync), and `LoyaltyCheckoutBadge` rendered above the
+  customer section in both checkout surfaces (`PosCheckoutPanel` credit/payment
+  flow and `CreditCatalogDockPanel`). Badge shows nothing when the program is
+  disabled; otherwise an attach-customer hint or balance + expected points.
+  i18n keys added for en/lg/sw. Tests: loyalty suites (24 tests) + POS
+  regression batches (posScanToCart 9, checkout keypad/totals 7) green;
+  `tsc -b` clean.
 
 ## Blockers
 
