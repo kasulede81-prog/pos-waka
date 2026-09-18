@@ -6,7 +6,7 @@ WAKA POS Loyalty System
 
 ## Current Phase
 
-`09-PRODUCTION-HARDENING.md`
+`10-FINAL-E2E-AUDIT.md`
 
 ## Autonomous Execution
 
@@ -22,7 +22,7 @@ Kimi is authorized to continue from one successfully completed phase to the next
 - [x] 06 — Google + Apple Wallet
 - [x] 07 — NFC
 - [x] 08 — Rewards + Redemption
-- [ ] 09 — Production Hardening
+- [x] 09 — Production Hardening
 - [ ] 10 — Final E2E Audit
 
 ## Rules
@@ -130,17 +130,16 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
 
 ## Blockers
 
-- Supabase project still paused (pooler `EDBHANDLEREXITED`, since
-  2026-09-18 ~02:57). FOUR migrations are now committed and pending
-  application once the DB is back: `20260918024500_loyalty_data_foundation`,
-  `20260918090000_loyalty_merchant_ui`,
-  `20260918100000_loyalty_enrollment_identity`, and
-  `20260918110000_loyalty_rewards`. None is recorded in remote
-  history. Retry after each phase.
-- Wallet platform credentials are missing (Google Wallet issuer + service
+- NONE for the database: the Supabase project is back and ALL FOUR loyalty
+  migrations were applied to production and recorded in
+  `supabase_migrations.schema_migrations` during Phase 09 (verified: 5
+  tables, 12 RPCs present). Zero migrations pending.
+- Wallet platform credentials are still missing (Google Wallet issuer + service
   account; Apple Developer Pass Type ID certificate + WWDR). The issuance
   pipeline is code-complete and fail-closed; see
   `WALLET-INTEGRATION.md` for the setup checklist.
+- NFC real-device tap testing is still pending hardware (marked pending,
+  not done).
 
 ## Important Notes
 
@@ -182,3 +181,14 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
   RLS, happy-path pair, replay, per-account cap, insufficient balance,
   inactive reward, cross-shop denial, balance invariant) + 7 unit tests —
   103 loyalty tests green; `tsc -b` clean.
+- Phase 09 — Production hardening complete (commit `505e908`). Full audit in
+  `PHASE9-HARDENING-REPORT.md`: security (RLS, isolation, RPC authz, secret
+  scan clean, wallet fail-closed), data integrity (idempotency, reversals,
+  offline ordering gap, balance invariant), financial regression (83
+  financial + 126 retail + 41 payments + 13 cloud + 167 platform tests
+  green), performance (indexes + no N+1 evidence), Android (`tsc -b` +
+  `cap sync` clean), quality gates (`tsc -b`, 103 loyalty tests, production
+  build PASS). DEFECT FIXED: `p0Verification.test.ts` had a time-bombed
+  hardcoded `trial_ends_at: 2026-08-15` (pre-existing, unrelated to loyalty)
+  now rolling `now + 30 days`. PRODUCTION: all four loyalty migrations
+  applied to Supabase and recorded in remote history — zero pending.
