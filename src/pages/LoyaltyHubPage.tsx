@@ -22,6 +22,14 @@ import {
 import type { LoyaltyTransactionRow } from "../lib/loyalty/loyaltyMath";
 import { DEFAULT_LOYALTY_PROGRAM } from "../lib/loyalty/loyaltyMath";
 import { LoyaltyEnrollmentPanel } from "../components/loyalty/LoyaltyEnrollmentPanel";
+import { LoyaltyRewardsPanel } from "../components/loyalty/LoyaltyRewardsPanel";
+import {
+  fetchLoyaltyRewards,
+  isRewardEligible,
+  newRedemptionIdempotencyKey,
+  redeemLoyaltyReward,
+  type LoyaltyReward,
+} from "../lib/loyalty/loyaltyRewards";
 
 const KIND_LABEL_KEY: Record<string, string> = {
   earned: "loyaltyKindEarned",
@@ -125,6 +133,15 @@ function CustomerDetail({
   const [adjustPoints, setAdjustPoints] = useState("");
   const [adjustNote, setAdjustNote] = useState("");
   const [adjustState, setAdjustState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
+  const [pendingRedeem, setPendingRedeem] = useState<{ rewardId: string; key: string } | null>(null);
+  const [redeemState, setRedeemState] = useState<
+    | { phase: "idle" }
+    | { phase: "busy" }
+    | { phase: "done"; balance: number }
+    | { phase: "duplicate" }
+    | { phase: "error"; error: string; balance?: number; required?: number }
+  >({ phase: "idle" });
 
   useEffect(() => {
     let cancelled = false;
@@ -132,10 +149,35 @@ function CustomerDetail({
       const rows = await fetchAccountHistory(shopId, entry.accountId);
       if (!cancelled) setHistory(rows);
     })();
+    void (async () => {
+      const rows = await fetchLoyaltyRewards(shopId);
+      if (!cancelled) setRewards(rows);
+    })();
     return () => {
       cancelled = true;
     };
   }, [shopId, entry.accountId]);
+
+  const beginRedeem = (rewardId: string) => {
+    // One idempotency key per user intent: generated when the cashier taps
+    // Redeem and reused by the confirm tap + any retry, so double taps and
+    // network replays never deduct twice.
+    setRedeemState({ phase: "idle" });
+    setPendingRedeem({ rewardId, key: newRedemptionIdempotencyKey() });
+  };
+
+  const confirmRedeem = async () => {
+    if (!pendingRedeem) return;
+    setRedeemState({ phase: "busy" });
+    const result = await redeemLoyaltyReward(shopId, entry.accountId, pendingRedeem.rewardId, pendingRedeem.key);
+    if (result.ok) {
+      setRedeemState(result.alreadyRedeemed ? { phase: "duplicate" } : { phase: "done", balance: result.balance });
+      setPendingRedeem(null);
+      onAdjusted();
+    } else {
+      setRedeemState({ phase: "error", error: result.error, balance: result.balance, required: result.required });
+    }
+  };
 
   const submitAdjust = async () => {
     const points = Number(adjustPoints);
@@ -181,6 +223,84 @@ function CustomerDetail({
           <HistoryList lang={lang} rows={history} />
         )}
       </div>
+
+      {canManage ? (
+        <div className="rounded-2xl border border-border bg-card p-3">
+          <p className="text-sm font-black text-foreground">{t(lang, "loyaltyRedeemTitle")}</p>
+          {rewards.length === 0 ? (
+            <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyNoRewards")}</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-border">
+              {rewards
+                .filter((reward) => reward.active)
+                .map((reward) => (
+                  <li key={reward.id} className="flex items-center justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-foreground">{reward.name}</p>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {tTemplate(lang, "loyaltyRewardCost", { points: reward.pointsRequired })}
+                        {reward.description ? ` · ${reward.description}` : ""}
+                      </p>
+                    </div>
+                    {pendingRedeem?.rewardId === reward.id ? (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void confirmRedeem()}
+                          disabled={redeemState.phase === "busy"}
+                          className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
+                        >
+                          {redeemState.phase === "busy"
+                            ? t(lang, "loyaltyLoading")
+                            : tTemplate(lang, "loyaltyRedeemConfirm", { points: reward.pointsRequired })}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingRedeem(null);
+                            setRedeemState({ phase: "idle" });
+                          }}
+                          className="min-h-[40px] rounded-xl border-2 border-border bg-card px-3 text-xs font-black text-foreground"
+                        >
+                          {t(lang, "loyaltyCancel")}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => beginRedeem(reward.id)}
+                        disabled={!isRewardEligible(reward, entry.balancePoints)}
+                        className="min-h-[40px] shrink-0 rounded-xl border-2 border-waka-600 bg-card px-3 text-xs font-black text-waka-700 disabled:opacity-40"
+                      >
+                        {t(lang, "loyaltyRedeemAction")}
+                      </button>
+                    )}
+                  </li>
+                ))}
+            </ul>
+          )}
+          {redeemState.phase === "done" ? (
+            <p className="mt-2 text-sm font-bold text-success">
+              {tTemplate(lang, "loyaltyRedeemDone", { balance: redeemState.balance })}
+            </p>
+          ) : null}
+          {redeemState.phase === "duplicate" ? (
+            <p className="mt-2 text-sm font-bold text-muted-foreground">{t(lang, "loyaltyRedeemAlready")}</p>
+          ) : null}
+          {redeemState.phase === "error" ? (
+            <p className="mt-2 text-sm font-bold text-destructive">
+              {redeemState.error === "insufficient_points"
+                ? tTemplate(lang, "loyaltyInsufficientPoints", {
+                    balance: redeemState.balance ?? entry.balancePoints,
+                    required: redeemState.required ?? 0,
+                  })
+                : redeemState.error === "redemption_limit_reached"
+                  ? t(lang, "loyaltyRedeemLimitReached")
+                  : t(lang, "loyaltyRedeemFailed")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {canManage ? (
         <div className="rounded-2xl border border-border bg-card p-3">
@@ -487,6 +607,17 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
               </ul>
             )}
           </article>
+
+          {canManage && shopId ? (
+            <LoyaltyRewardsPanel
+              lang={lang}
+              shopId={shopId}
+              onChanged={() => {
+                void loadOverview(shopId);
+                void runSearch(shopId, search);
+              }}
+            />
+          ) : null}
 
           {shopId ? (
             <LoyaltyEnrollmentPanel
