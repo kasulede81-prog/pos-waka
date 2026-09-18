@@ -156,3 +156,27 @@ RLS policy exists for the table, the RPC keeps validation and authorization
 in one auditable place; the UI additionally guards with the `settings.shop`
 permission. After a successful save the client invalidates the offline
 program cache so checkout previews cannot show a stale rule.
+
+## Decision 017 — Enrollment Is Merchant-Mediated With Recorded Consent
+
+**Status:** Accepted (Phase 05)
+
+Membership is created by a shop member through `loyalty_enroll_customer`
+(cashier-or-above via `user_can_access_shop`), never by the customer
+directly — WAKA has no customer-facing auth, and an open self-enrollment
+endpoint would be an enumeration/abuse vector. Consent is explicit: the UI
+requires a consent checkbox and records `{accepted, accepted_at, accepted_by,
+note}` into `loyalty_accounts.metadata`. Duplicate membership is impossible
+(`unique(shop_id, customer_id)`; RPC reports `already_enrolled`).
+
+## Decision 018 — The Membership QR Carries Only an Opaque Token
+
+**Status:** Accepted (Phase 05)
+
+The QR payload is `WAKA-LOYALTY:<qr_token>` — the account's unguessable
+`qr_token` (md5 of random + clock timestamp) behind a distinguishing
+prefix. No name, phone, balance, or customer id is encoded. Scanning
+resolves the token server-side via `loyalty_account_by_token`, which
+re-checks shop access, so a code scanned at the wrong shop resolves to
+nothing and a forged token resolves to `not_found`. QR rendering uses the
+`qrcode` npm package (no native code, browser + Capacitor safe).

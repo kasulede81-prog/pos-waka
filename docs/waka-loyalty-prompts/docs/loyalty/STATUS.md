@@ -6,7 +6,7 @@ WAKA POS Loyalty System
 
 ## Current Phase
 
-`05-CUSTOMER-ENROLLMENT.md`
+`06-GOOGLE-APPLE-WALLET.md`
 
 ## Autonomous Execution
 
@@ -18,7 +18,7 @@ Kimi is authorized to continue from one successfully completed phase to the next
 - [x] 02 — Loyalty Data Foundation
 - [x] 03 — POS Integration
 - [x] 04 — Merchant Loyalty UI
-- [ ] 05 — Customer Enrollment
+- [x] 05 — Customer Enrollment
 - [ ] 06 — Google + Apple Wallet
 - [ ] 07 — NFC
 - [ ] 08 — Rewards + Redemption
@@ -99,13 +99,31 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
   manager upsert, cashier/outside denial, input validation, name/phone
   search, cross-shop non-leakage) + 4 unit tests — 40 loyalty tests green;
   `tsc -b` clean.
+- Phase 05 — Customer enrollment & identity complete (commit `bb9aa3e`).
+  Migration `20260918100000_loyalty_enrollment_identity.sql`: extends
+  `loyalty_enroll_customer` with consent recording (`p_consent_accepted`,
+  `p_consent_note`, `p_metadata` — stamped into account metadata with
+  timestamp + actor; old 2-arg signature dropped to avoid an overload
+  ambiguity, defaults keep it source-compatible) and adds
+  `loyalty_account_by_token` (access-checked opaque-token lookup for QR
+  identification). Client: `src/lib/loyalty/loyaltyEnrollment.ts` (customer
+  search with `normalizeUgPhoneE164` reuse, already-enrolled flagging,
+  consent-gated enroll wrapper, token lookup; `WAKA-LOYALTY:` QR payload
+  prefix helpers — no personal data in the QR). UI: `LoyaltyEnrollmentPanel`
+  in the hub (search → consent → enroll → membership QR; camera
+  scan-to-identify reusing the shared barcode adapter), `LoyaltyMemberQr`
+  rendered via new `qrcode` dependency. Tests: 8 new PGlite SQL-integration
+  tests (consent metadata, idempotent duplicates, backward-compat call,
+  cross-shop/outsider denial, token resolution, forged-token and empty-token
+  rejection) + 4 unit tests — 52 loyalty tests green; `tsc -b` clean.
 
 ## Blockers
 
 - Supabase project still paused (pooler `EDBHANDLEREXITED`, since
-  2026-09-18 ~02:57). TWO migrations are now committed and pending
-  application once the DB is back: `20260918024500_loyalty_data_foundation`
-  and `20260918090000_loyalty_merchant_ui`. Neither is recorded in remote
+  2026-09-18 ~02:57). THREE migrations are now committed and pending
+  application once the DB is back: `20260918024500_loyalty_data_foundation`,
+  `20260918090000_loyalty_merchant_ui`, and
+  `20260918100000_loyalty_enrollment_identity`. None is recorded in remote
   history. Retry after each phase.
 
 ## Important Notes
