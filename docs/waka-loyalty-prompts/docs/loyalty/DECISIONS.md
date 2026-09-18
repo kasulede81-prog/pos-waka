@@ -98,3 +98,35 @@ Refunds (`sale_returns` inserts, partial supported) and voids (`sale_voids`
 / `status → 'void'`) produce `reversed`/`adjusted` rows in
 `loyalty_transactions` referencing the original earned row and the
 return/void source. Historical activity is never deleted, per Decision 003.
+
+## Decision 012 — Customer Hard-Delete Cascades to Loyalty History
+
+**Status:** Accepted (Phase 02)
+
+`loyalty_accounts` and `loyalty_transactions` use `ON DELETE CASCADE` from
+`customers`/`shops`. WAKA already hard-deletes customers by design
+(`customers_delete` policy, manager+), so loyalty history does not outlive
+the customer it belongs to and can never block a customer deletion. The
+internal admin shop reset deletes loyalty rows explicitly before customers
+(program configuration in `loyalty_programs` survives, like shop settings).
+
+## Decision 013 — Loyalty Can Never Block a Financial Write
+
+**Status:** Accepted (Phase 02)
+
+Every loyalty trigger body (`trg_loyalty_sales_status`,
+`trg_loyalty_sale_returns`, `trg_loyalty_sale_voids`) wraps its work in an
+exception handler that downgrades any failure to `raise warning`. A loyalty
+defect can log a warning but can never abort or roll back a sale, return,
+or void.
+
+## Decision 014 — Eligible Spend Is the Gross Sale Total
+
+**Status:** Accepted (Phase 02)
+
+The spend rule divides `sales.total_ugx` (gross, after cart discount,
+including service charge/tax) by `earn_unit_ugx`, floored. Rationale: it is
+the amount the customer actually paid, it requires no per-line recomputation,
+and `tax_ugx` is rarely nonzero in current WAKA usage. If merchants later
+need net-of-tax rules, add a rule option — do not reinterpret retroactively
+(rule snapshots are stored on every ledger row).
