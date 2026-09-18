@@ -357,6 +357,8 @@ type PaymentBlockProps = {
   sidebarCompact?: boolean;
   /** Open the on-screen keypad to type cash received (cash / pay-later). */
   onOpenAmountKeypad?: () => void;
+  /** Loyalty preview badge rendered above the customer section (Phase 03). */
+  loyaltyBadge?: ReactNode;
 };
 
 function PaymentBlock({
@@ -389,6 +391,7 @@ function PaymentBlock({
   hideCreditDockPanel = false,
   sidebarCompact = false,
   onOpenAmountKeypad,
+  loyaltyBadge,
 }: PaymentBlockProps) {
   const amountBtnClass = enterprise
     ? "mt-1 flex min-h-[40px] w-full items-center justify-end rounded-lg border-2 px-3 py-1.5 text-lg font-black"
@@ -559,6 +562,7 @@ function PaymentBlock({
             {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
           </p>
           <div className="mt-2 space-y-2">
+            {loyaltyBadge}
             <div>
               <p className="text-[11px] font-semibold text-foreground">{t(lang, "paymentDebtNameLabel")}</p>
               <button
@@ -729,6 +733,7 @@ export function CreditCatalogDockPanel({
   onSaleCustomerName,
   onSaleCustomerPhone,
   useCustomKeypad = false,
+  loyaltyBadge,
 }: {
   lang: Language;
   cashInput: string;
@@ -746,6 +751,8 @@ export function CreditCatalogDockPanel({
   onSaleCustomerName: (name: string) => void;
   onSaleCustomerPhone: (phone: string) => void;
   useCustomKeypad?: boolean;
+  /** Loyalty preview badge rendered above the customer section (Phase 03). */
+  loyaltyBadge?: ReactNode;
 }) {
   return (
     <div className="space-y-4">
@@ -791,6 +798,7 @@ export function CreditCatalogDockPanel({
       ) : null}
       <div className="rounded-xl border border-border bg-muted p-4">
         <p className="text-sm font-black text-foreground">{t(lang, "paymentCreditCustomerDetails")}</p>
+        {loyaltyBadge}
         <div className="mt-3 space-y-3">
           <div>
             <p className="text-sm font-semibold text-foreground">{t(lang, "paymentDebtNameLabel")}</p>
@@ -936,6 +944,8 @@ export type PosCheckoutPanelProps = {
    * When true, overlay footer must not apply env(safe-area-inset-bottom) again.
    */
   sheetInsetOwned?: boolean;
+  /** Loyalty preview badge rendered above the checkout customer section (Phase 03). */
+  loyaltyBadge?: ReactNode;
 };
 
 function CartDockBody({
@@ -1084,6 +1094,7 @@ export function PosCheckoutPanel({
   catalogNumpadOpen: catalogNumpadOpenProp,
   onCatalogNumpadOpenChange,
   sheetInsetOwned = false,
+  loyaltyBadge,
 }: PosCheckoutPanelProps) {
   const isSidebar = variant === "sidebar";
   const isCompact = !isSidebar;
@@ -1177,6 +1188,7 @@ export function PosCheckoutPanel({
       }
       setSidebarNumpadOpen(true);
     },
+    loyaltyBadge,
   };
 
   return (

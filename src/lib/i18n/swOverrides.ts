@@ -1,5 +1,10 @@
 /** Kiswahili UI strings — keys not listed fall back to English via i18n.t(). */
 export const swOverrides: Record<string, string> = {
+  loyaltyAttachCustomerHint: "Ambatanisha mteja ili kupata pointi za uaminifu kwenye mauzo haya.",
+  loyaltyBalanceLabel: "Salio la uaminifu",
+  loyaltyPointsUnit: "pointi",
+  loyaltyEarnsSuffix: "kwenye mauzo haya",
+  loyaltyOfflineEstimate: "makadirio",
   appName: "Waka POS",
   brandTagline: "Teknolojia kwa kizazi kijacho",
   dashboard: "Nyumbani",
