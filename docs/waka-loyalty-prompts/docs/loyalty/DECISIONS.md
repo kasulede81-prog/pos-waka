@@ -180,3 +180,31 @@ resolves the token server-side via `loyalty_account_by_token`, which
 re-checks shop access, so a code scanned at the wrong shop resolves to
 nothing and a forged token resolves to `not_found`. QR rendering uses the
 `qrcode` npm package (no native code, browser + Capacitor safe).
+
+## Decision 019 — Wallet Signing Is Server-Side Only, With Injected Signers
+
+**Status:** Accepted (Phase 06)
+
+Wallet pass signing material (Google service account key, Apple pass
+certificate + WWDR + private key) lives exclusively in Supabase Edge Function
+secrets (`loyalty-wallet-pass`). All crypto modules are pure TypeScript +
+WebCrypto under `supabase/functions/_shared/loyaltyWallet/` so the same code
+runs in Deno (edge) and Node (vitest); signers are injected interfaces, the
+edge function supplies the secret-backed implementations. The function fails
+closed with `wallet_not_configured` when secrets are absent. Passes carry only
+the opaque `qr_token` barcode (same identifier as the QR fallback), member
+name, balance, and earning rule — no phone numbers. No Wallet UI ships until
+platform credentials exist.
+
+## Decision 020 — Wallet Credential Gap Is Documented, Not Faked
+
+**Status:** Accepted (Phase 06)
+
+WAKA has no Google Wallet issuer/service account and no Apple Developer Pass
+Type ID certificate today. Per the phase rule, the internal abstraction is
+implemented and unit-tested (PKCS#7 SignedData verified against the manifest
+with a real RSA-2048 key; ES256 JWT verified with a WebCrypto-generated key)
+while the missing external credentials are documented as blockers in
+WALLET-INTEGRATION.md with a concrete setup checklist. No claim of real-time
+Wallet balance updates is made (Apple requires webServiceURL + push; Google
+requires REST patches) — both are specified as follow-up work.

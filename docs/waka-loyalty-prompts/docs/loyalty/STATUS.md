@@ -6,7 +6,7 @@ WAKA POS Loyalty System
 
 ## Current Phase
 
-`06-GOOGLE-APPLE-WALLET.md`
+`07-NFC.md`
 
 ## Autonomous Execution
 
@@ -19,7 +19,7 @@ Kimi is authorized to continue from one successfully completed phase to the next
 - [x] 03 — POS Integration
 - [x] 04 — Merchant Loyalty UI
 - [x] 05 — Customer Enrollment
-- [ ] 06 — Google + Apple Wallet
+- [x] 06 — Google + Apple Wallet
 - [ ] 07 — NFC
 - [ ] 08 — Rewards + Redemption
 - [ ] 09 — Production Hardening
@@ -125,6 +125,10 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
   `20260918090000_loyalty_merchant_ui`, and
   `20260918100000_loyalty_enrollment_identity`. None is recorded in remote
   history. Retry after each phase.
+- Wallet platform credentials are missing (Google Wallet issuer + service
+  account; Apple Developer Pass Type ID certificate + WWDR). The issuance
+  pipeline is code-complete and fail-closed; see
+  `WALLET-INTEGRATION.md` for the setup checklist.
 
 ## Important Notes
 
@@ -134,3 +138,17 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
 - Duplicate point awards must be prevented server-side/database-side.
 - QR is the universal fallback for customer identification.
 - Wallet/NFC capabilities must be verified rather than assumed.
+- Phase 06 — Google + Apple Wallet complete (commit `5e22f03`). Server-side
+  issuance pipeline in `supabase/functions/_shared/loyaltyWallet/` (pure TS +
+  WebCrypto): Apple pass.json (storeCard) + manifest SHA-1 + store-only ZIP
+  + hand-built PKCS#7 SignedData signer (RSA-2048/SHA-256, cert + WWDR
+  embedded); Google LoyaltyClass/Object builders + ES256 JWT save-URL flow
+  with a WebCrypto PKCS#8 signer; validation + fail-closed orchestration.
+  Edge function `loyalty-wallet-pass` reads account/customer/shop with the
+  USER-context client (RLS enforces shop access), never exposes secrets,
+  returns `wallet_not_configured` (409) when credentials are absent. 25 unit
+  tests (CRC-32 vector, ZIP structure, manifest hashing, PKCS#7 structure +
+  signature verified with a real RSA key, ES256 JWT verified with a
+  WebCrypto key, fail-closed paths). External blockers (no Google issuer, no
+  Apple certs) documented honestly in `WALLET-INTEGRATION.md` with a setup
+  checklist; no Wallet UI ships yet; QR fallback unchanged.
