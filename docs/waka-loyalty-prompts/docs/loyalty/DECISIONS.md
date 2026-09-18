@@ -224,3 +224,32 @@ never block; unsupported devices keep QR/phone identification. Raw NFC bytes
 are never trusted: only prefixed payloads resolve, through the same
 shop-scoped `loyalty_account_by_token` lookup as QR, and points still come
 exclusively from the completed-sale trigger.
+
+## Decision 022 — Redemption Is a Paired, Idempotent, Atomic Write
+
+**Status:** Accepted (Phase 08)
+
+A redemption is exactly two rows written in one transaction: one
+`loyalty_redemptions` row (audit + idempotency) and one negative `redeemed`
+row in the immutable ledger, linked both ways with unique indexes
+(`loyalty_redemption_ledger_once`, and one completed redemption per
+idempotency key via `loyalty_redemption_key_once`). The cached
+`balance_points` is updated only by the existing ledger trigger, so the
+invariant `balance = earned - redeemed` holds by construction. The client
+generates one idempotency key per user intent (on Redeem, reused by Confirm
+and any retry), making double taps and network replays return the original
+redemption (`already_redeemed`) instead of deducting twice. Redemption writes
+go only through the security-definer `loyalty_redeem_reward` RPC; the
+redemptions table has no client insert policy.
+
+## Decision 023 — Free-Product Rewards Are Fulfilled at the POS, Not by Loyalty
+
+**Status:** Accepted (Phase 08)
+
+Loyalty never moves inventory or money. A `product`-kind reward records the
+points redemption (`loyalty_redemptions`, optionally linked to the fulfilling
+`sale_id` for audit); the actual free item is rung up by the merchant through
+the existing product/sale flow with their normal discount practice. This
+keeps the Retail/Kiosk Duka financial engine as the single source of truth —
+no second inventory ledger, no restaurant/POS-specific finalizer, and no
+financial behavior change from redeeming points.

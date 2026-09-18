@@ -6,7 +6,7 @@ WAKA POS Loyalty System
 
 ## Current Phase
 
-`08-REWARDS-REDEMPTION.md`
+`09-PRODUCTION-HARDENING.md`
 
 ## Autonomous Execution
 
@@ -21,7 +21,7 @@ Kimi is authorized to continue from one successfully completed phase to the next
 - [x] 05 — Customer Enrollment
 - [x] 06 — Google + Apple Wallet
 - [x] 07 — NFC
-- [ ] 08 — Rewards + Redemption
+- [x] 08 — Rewards + Redemption
 - [ ] 09 — Production Hardening
 - [ ] 10 — Final E2E Audit
 
@@ -131,10 +131,11 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
 ## Blockers
 
 - Supabase project still paused (pooler `EDBHANDLEREXITED`, since
-  2026-09-18 ~02:57). THREE migrations are now committed and pending
+  2026-09-18 ~02:57). FOUR migrations are now committed and pending
   application once the DB is back: `20260918024500_loyalty_data_foundation`,
-  `20260918090000_loyalty_merchant_ui`, and
-  `20260918100000_loyalty_enrollment_identity`. None is recorded in remote
+  `20260918090000_loyalty_merchant_ui`,
+  `20260918100000_loyalty_enrollment_identity`, and
+  `20260918110000_loyalty_rewards`. None is recorded in remote
   history. Retry after each phase.
 - Wallet platform credentials are missing (Google Wallet issuer + service
   account; Apple Developer Pass Type ID certificate + WWDR). The issuance
@@ -163,3 +164,21 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
   WebCrypto key, fail-closed paths). External blockers (no Google issuer, no
   Apple certs) documented honestly in `WALLET-INTEGRATION.md` with a setup
   checklist; no Wallet UI ships yet; QR fallback unchanged.
+- Phase 08 — Rewards + redemption complete (commit `9cc7595`). Migration
+  `20260918110000_loyalty_rewards.sql`: `loyalty_rewards` merchant catalog
+  (points cost, kind product/voucher/custom, optional product link, optional
+  per-account cap; RLS: members read, managers write) and
+  `loyalty_redemptions` (audit + idempotency; written ONLY through the
+  security-definer `loyalty_redeem_reward` RPC). One redemption = one
+  redemption row + one negative `redeemed` ledger row in a single
+  transaction, linked both ways with unique indexes; cached balance updates
+  via the existing ledger trigger so the balance invariant always holds.
+  Idempotent replay: same idempotency key returns the original redemption
+  (`already_redeemed`) with no second deduction. Client:
+  `src/lib/loyalty/loyaltyRewards.ts` (catalog CRUD, eligibility, RPC
+  wrapper), `LoyaltyRewardsPanel` (manager CRUD in the hub), two-step
+  Redeem → Confirm in the customer detail card with one key generated per
+  intent. i18n en/lg/sw. Tests: 8 new PGlite SQL-integration tests (catalog
+  RLS, happy-path pair, replay, per-account cap, insufficient balance,
+  inactive reward, cross-shop denial, balance invariant) + 7 unit tests —
+  103 loyalty tests green; `tsc -b` clean.
