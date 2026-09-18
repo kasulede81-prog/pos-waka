@@ -6,7 +6,7 @@ WAKA POS Loyalty System
 
 ## Current Phase
 
-`04-MERCHANT-LOYALTY-UI.md`
+`05-CUSTOMER-ENROLLMENT.md`
 
 ## Autonomous Execution
 
@@ -17,7 +17,7 @@ Kimi is authorized to continue from one successfully completed phase to the next
 - [x] 01 — Forensic Audit
 - [x] 02 — Loyalty Data Foundation
 - [x] 03 — POS Integration
-- [ ] 04 — Merchant Loyalty UI
+- [x] 04 — Merchant Loyalty UI
 - [ ] 05 — Customer Enrollment
 - [ ] 06 — Google + Apple Wallet
 - [ ] 07 — NFC
@@ -82,10 +82,31 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
   i18n keys added for en/lg/sw. Tests: loyalty suites (24 tests) + POS
   regression batches (posScanToCart 9, checkout keypad/totals 7) green;
   `tsc -b` clean.
+- Phase 04 — Merchant loyalty UI complete (commit `86e67f1`). New migration
+  `20260918090000_loyalty_merchant_ui.sql` with three security-definer RPCs
+  that re-check authorization internally: `loyalty_shop_overview` (program
+  config, member counts, issued/redeemed/reversed aggregates, 10-row recent
+  activity with customer names), `loyalty_update_program` (manager-only
+  upsert with spend-rule validation), `loyalty_search_accounts` (member
+  directory joined to customers, name/phone ILIKE search, capped limit).
+  Client layer `src/lib/loyalty/loyaltyMerchant.ts` (overview/search/history/
+  save/adjust; `validateProgramInput` client guard; program cache invalidated
+  after save). Page `src/pages/LoyaltyHubPage.tsx` at `/office/loyalty`
+  (route guarded by `customers.view`; config + adjustment controls only for
+  `settings.shop` managers; loading/empty/error states; i18n en/lg/sw).
+  Entry card added to the Office hub insights section. Tests: 12 new PGlite
+  SQL-integration tests (overview access/isolation/aggregates/activity,
+  manager upsert, cashier/outside denial, input validation, name/phone
+  search, cross-shop non-leakage) + 4 unit tests — 40 loyalty tests green;
+  `tsc -b` clean.
 
 ## Blockers
 
-None yet.
+- Supabase project still paused (pooler `EDBHANDLEREXITED`, since
+  2026-09-18 ~02:57). TWO migrations are now committed and pending
+  application once the DB is back: `20260918024500_loyalty_data_foundation`
+  and `20260918090000_loyalty_merchant_ui`. Neither is recorded in remote
+  history. Retry after each phase.
 
 ## Important Notes
 

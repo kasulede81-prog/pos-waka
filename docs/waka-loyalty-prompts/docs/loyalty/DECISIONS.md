@@ -130,3 +130,29 @@ the amount the customer actually paid, it requires no per-line recomputation,
 and `tax_ugx` is rarely nonzero in current WAKA usage. If merchants later
 need net-of-tax rules, add a rule option — do not reinterpret retroactively
 (rule snapshots are stored on every ledger row).
+
+## Decision 015 — Merchant Reads Go Through Aggregating RPCs
+
+**Status:** Accepted (Phase 04)
+
+Merchant dashboard data (member counts, issued/redeemed aggregates, recent
+activity, member search) is exposed through security-definer RPCs
+(`loyalty_shop_overview`, `loyalty_search_accounts`) that re-check
+`user_can_access_shop` / `user_can_manage_shop` internally, rather than
+client-side table scans. Rationale: aggregates and name/phone search are
+cheaper server-side, the authorization check lives next to the data, and no
+new RLS surface is invented. The ledger remains server-only-write (no insert
+policies).
+
+## Decision 016 — Program Configuration Is a Manager-Only RPC Upsert
+
+**Status:** Accepted (Phase 04)
+
+`loyalty_update_program` performs the upsert (with spend-rule validation:
+positive earn unit, positive integer points per unit, non-negative minimum
+spend) after a `user_can_manage_shop` check, instead of letting the client
+write `loyalty_programs` rows directly. Although a `loyalty_programs_update`
+RLS policy exists for the table, the RPC keeps validation and authorization
+in one auditable place; the UI additionally guards with the `settings.shop`
+permission. After a successful save the client invalidates the offline
+program cache so checkout previews cannot show a stale rule.
