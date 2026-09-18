@@ -140,7 +140,11 @@ export type EnrollResult =
   | { ok: false; error: string };
 
 /** Idempotent enrollment via the security-definer RPC (RLS-checked inside). */
-export async function enrollLoyaltyCustomer(shopId: string, customerId: string): Promise<EnrollResult> {
+export async function enrollLoyaltyCustomer(
+  shopId: string,
+  customerId: string,
+  opts: { consentAccepted?: boolean; consentNote?: string } = {},
+): Promise<EnrollResult> {
   if (!hasSupabaseConfig || !supabase || !shopId || !customerId) {
     return { ok: false, error: "loyalty_unavailable" };
   }
@@ -148,6 +152,8 @@ export async function enrollLoyaltyCustomer(shopId: string, customerId: string):
     const { data, error } = await supabase.rpc("loyalty_enroll_customer", {
       p_shop_id: shopId,
       p_customer_id: customerId,
+      p_consent_accepted: opts.consentAccepted ?? false,
+      p_consent_note: opts.consentNote ?? null,
     });
     if (error) return { ok: false, error: error.code ?? "loyalty_enroll_failed" };
     const result = (data ?? {}) as { ok?: boolean; error?: string; account_id?: string; qr_token?: string; already_enrolled?: boolean };

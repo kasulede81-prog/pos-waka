@@ -9,6 +9,7 @@ const BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "loyaltyB
 const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260918024500_loyalty_data_foundation.sql"),
   join(process.cwd(), "supabase", "migrations", "20260918090000_loyalty_merchant_ui.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260918100000_loyalty_enrollment_identity.sql"),
 ];
 
 function readSql(path: string): string {
@@ -97,6 +98,7 @@ export function rpcJson(row: Record<string, unknown> | undefined): Record<string
     row?.loyalty_shop_overview ??
     row?.loyalty_update_program ??
     row?.loyalty_search_accounts ??
+    row?.loyalty_account_by_token ??
     row?.result;
   if (raw && typeof raw === "object") return raw as Record<string, unknown>;
   if (typeof raw === "string") return JSON.parse(raw) as Record<string, unknown>;

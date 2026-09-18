@@ -21,6 +21,7 @@ import {
 } from "../lib/loyalty/loyaltyMerchant";
 import type { LoyaltyTransactionRow } from "../lib/loyalty/loyaltyMath";
 import { DEFAULT_LOYALTY_PROGRAM } from "../lib/loyalty/loyaltyMath";
+import { LoyaltyEnrollmentPanel } from "../components/loyalty/LoyaltyEnrollmentPanel";
 
 const KIND_LABEL_KEY: Record<string, string> = {
   earned: "loyaltyKindEarned",
@@ -486,6 +487,17 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
               </ul>
             )}
           </article>
+
+          {shopId ? (
+            <LoyaltyEnrollmentPanel
+              lang={lang}
+              shopId={shopId}
+              onEnrollmentChanged={() => {
+                void loadOverview(shopId);
+                void runSearch(shopId, search);
+              }}
+            />
+          ) : null}
 
           {overview.recentActivity.length > 0 ? (
             <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
