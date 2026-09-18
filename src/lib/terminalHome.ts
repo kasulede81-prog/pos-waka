@@ -14,5 +14,13 @@ export function resolveTerminalHomePath(
   ) {
     return "/floor";
   }
+  // Kitchen-only staff hold hospitality.kitchen but no floor/sell permission; "/" has nothing
+  // they may open, so land them on their screen.
+  if (
+    isHospitalityMode(prefs.businessType, prefs.hospitalityModeEnabled) &&
+    hasActorPermission(role, "hospitality.kitchen", actorPermissions)
+  ) {
+    return "/kitchen";
+  }
   return "/";
 }

@@ -14,6 +14,12 @@ describe("resolveTerminalHomePath", () => {
     ).toBe("/floor");
   });
 
+  it("routes kitchen-only staff to /kitchen (they hold no floor permission)", () => {
+    expect(
+      resolveTerminalHomePath({ businessType: "restaurant", pharmacyModeEnabled: false, hospitalityModeEnabled: true }, "kitchen"),
+    ).toBe("/kitchen");
+  });
+
   it("routes retail to /", () => {
     expect(
       resolveTerminalHomePath({ businessType: "kiosk_duka", pharmacyModeEnabled: false, hospitalityModeEnabled: false }, "owner"),

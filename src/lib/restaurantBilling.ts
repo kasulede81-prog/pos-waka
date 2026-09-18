@@ -237,6 +237,33 @@ export function splitBillByItem(
   );
 }
 
+/**
+ * Presentation-only split amounts (by seat / by item) are built from raw line totals, so they
+ * leave out the bill-level pieces of the authoritative total — service charge, exclusive tax,
+ * tip and the cart discount. Distribute the authoritative grand total across the splits so they
+ * add up EXACTLY to what finalizeDraftSale will record (largest-remainder rounding: no UGX is
+ * lost or invented, and no tax/service math is redone here).
+ */
+export function reconcileSplitsToTotal(splits: BillSplitLine[], totalUgx: number): BillSplitLine[] {
+  const total = Math.max(0, Math.floor(totalUgx));
+  const raw = splits.map((s) => Math.max(0, Math.floor(s.amountUgx)));
+  const rawSum = raw.reduce((a, n) => a + n, 0);
+  if (splits.length === 0 || rawSum === total || rawSum <= 0) return splits;
+
+  const exact = raw.map((n) => (n * total) / rawSum);
+  const floors = exact.map((x) => Math.floor(x));
+  let leftover = total - floors.reduce((a, n) => a + n, 0);
+  const order = exact
+    .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (const { i } of order) {
+    if (leftover <= 0) break;
+    floors[i]! += 1;
+    leftover -= 1;
+  }
+  return splits.map((s, i) => ({ ...s, amountUgx: floors[i]! }));
+}
+
 export function validateCustomSplits(splits: BillSplitLine[], totalUgx: number): boolean {
   const sum = splits.reduce((a, s) => a + Math.max(0, s.amountUgx), 0);
   return sum === totalUgx && totalUgx > 0;
@@ -337,7 +364,7 @@ export function canFinalizeBill(totals: RestaurantBillTotals): boolean {
 
 export function isDuplicatePayment(
   payments: BillPaymentRecord[],
-  candidate: { amountUgx: number; method: RestaurantPaymentMethod; reference?: string | null },
+  candidate: { amountUgx: number; method: RestaurantPaymentMethod; reference?: string | null; splitId?: string | null },
   withinMs = 5000,
 ): boolean {
   const now = Date.now();
@@ -347,7 +374,9 @@ export function isDuplicatePayment(
       age < withinMs &&
       p.amountUgx === candidate.amountUgx &&
       p.method === candidate.method &&
-      (p.reference ?? "") === (candidate.reference ?? "")
+      (p.reference ?? "") === (candidate.reference ?? "") &&
+      // Two guests paying the same amount for DIFFERENT splits are not a double tap.
+      (p.splitId ?? null) === (candidate.splitId ?? null)
     );
   });
 }

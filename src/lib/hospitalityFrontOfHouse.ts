@@ -18,6 +18,7 @@ import type {
 import { preferredPaymentMethodFromSales } from "./restaurantBilling";
 import { activeSessionForTable, syncTableDisplayStatuses } from "./hospitality";
 import { activeProductionTickets } from "./kitchenProduction";
+import { dateKeyKampala } from "./datesUg";
 
 export type FohActor = { userId?: string | null; label?: string | null };
 
@@ -86,7 +87,7 @@ export function reservationForTable(
   tableId: string,
   dateKey?: string,
 ): TableReservation | undefined {
-  const today = dateKey ?? new Date().toISOString().slice(0, 10);
+  const today = dateKey ?? dateKeyKampala(new Date());
   return (floor.reservations ?? []).find(
     (r) =>
       (r.status === "pending" || r.status === "confirmed") &&
@@ -269,7 +270,7 @@ export function cancelReservation(
 
 function applyReservationToTables(floor: HospitalityFloorState, reservation: TableReservation): HospitalityFloorState {
   if (reservation.status !== "pending" && reservation.status !== "confirmed") return floor;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateKeyKampala(new Date());
   if (reservation.reservationDate !== today) return floor;
   const tableIds = reservation.assignedTableIds?.length
     ? reservation.assignedTableIds
@@ -687,7 +688,7 @@ export function lookupCustomerProfile(
 export function computeFloorNotifications(floor: HospitalityFloorState, nowMs = Date.now()): FloorNotification[] {
   const alerts: FloorNotification[] = [];
   const now = new Date(nowMs);
-  const today = now.toISOString().slice(0, 10);
+  const today = dateKeyKampala(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   for (const r of floor.reservations ?? []) {

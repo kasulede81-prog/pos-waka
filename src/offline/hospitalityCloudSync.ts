@@ -47,16 +47,26 @@ function newerIso(a: string | undefined | null, b: string | undefined | null): b
   return ta >= tb;
 }
 
+/** Deletion tombstones travel in the existing jsonb `metadata` / `print_config` columns. */
+function deletedAtFrom(json: unknown): string | null {
+  if (!json || typeof json !== "object") return null;
+  const v = (json as Record<string, unknown>).deletedAt;
+  return typeof v === "string" && v ? v : null;
+}
+
 function rowToArea(row: Record<string, unknown>): DiningArea {
+  const deletedAt = deletedAtFrom(row.metadata);
   return {
     id: String(row.id),
     name: String(row.name ?? "Area"),
     sortOrder: Number(row.sort_order ?? 0),
-    isActive: row.is_active !== false,
+    isActive: deletedAt ? false : row.is_active !== false,
+    ...(deletedAt ? { deletedAt } : {}),
   };
 }
 
 function rowToTable(row: Record<string, unknown>): DiningTable {
+  const deletedAt = deletedAtFrom(row.metadata);
   return {
     id: String(row.id),
     areaId: String(row.area_id),
@@ -64,19 +74,30 @@ function rowToTable(row: Record<string, unknown>): DiningTable {
     capacity: row.capacity != null ? Number(row.capacity) : undefined,
     sortOrder: Number(row.sort_order ?? 0),
     displayStatus: (row.display_status as DiningTable["displayStatus"]) ?? "available",
-    isActive: row.is_active !== false,
+    isActive: deletedAt ? false : row.is_active !== false,
+    ...(deletedAt ? { deletedAt } : {}),
   };
 }
 
 function rowToStation(row: Record<string, unknown>): KitchenStation {
-  const hooks = row.future_hooks as KitchenStation["futureHooks"] | null | undefined;
+  // The table stores hooks in `print_config` (the RPC maps future_hooks -> print_config on write);
+  // reading only `future_hooks` dropped every printer assignment on the other devices.
+  const cfg = (row.print_config ?? row.future_hooks) as (Record<string, unknown> & KitchenStation["futureHooks"]) | null | undefined;
+  const deletedAt = deletedAtFrom(cfg);
+  let hooks: KitchenStation["futureHooks"] | undefined;
+  if (cfg && typeof cfg === "object") {
+    const rest: Record<string, unknown> = { ...cfg };
+    delete rest.deletedAt;
+    hooks = Object.keys(rest).length ? (rest as KitchenStation["futureHooks"]) : undefined;
+  }
   return {
     id: String(row.id),
     name: String(row.name ?? "Station"),
     stationType: (row.station_type as KitchenStation["stationType"]) ?? "kitchen",
     sortOrder: Number(row.sort_order ?? 0),
-    isActive: row.is_active !== false,
-    futureHooks: hooks ?? undefined,
+    isActive: deletedAt ? false : row.is_active !== false,
+    ...(deletedAt ? { deletedAt } : {}),
+    futureHooks: hooks,
   };
 }
 
@@ -254,6 +275,56 @@ function mergeCollection<T extends { id: string }>(
   return mergeById(local, remote, pick, getUpdatedAt);
 }
 
+/**
+ * Layout rows (areas / tables / stations) merge by id. A deletion tombstone from EITHER side wins:
+ * the cloud layout is upsert-only and pulls return every row, so without this a table deleted on
+ * one device was re-added from another device's older copy. Deletion is terminal (re-creating a
+ * table makes a new id), so no timestamp comparison is needed.
+ */
+export function mergeLayoutRow<T extends { deletedAt?: string | null }>(a: T, b: T): T {
+  const tomb = a.deletedAt ? a : b.deletedAt ? b : null;
+  if (!tomb) return { ...a, ...b };
+  const other = tomb === a ? b : a;
+  return { ...other, ...tomb };
+}
+
+const SEED_TABLE_LABELS = new Set(Array.from({ length: 8 }, (_, i) => `Table ${i + 1}`));
+
+/**
+ * True when the floor is still exactly the auto-created default (1 "Main Hall", "Table 1..8",
+ * Kitchen + Bar) with no orders, tickets, reservations or waitlist. Any rename / add / delete or
+ * any real activity makes it a real floor that must never be replaced.
+ */
+export function looksLikeUntouchedSeedFloor(floor: HospitalityFloorState): boolean {
+  if (
+    (floor.sessions?.length ?? 0) > 0 ||
+    (floor.kitchenTickets?.length ?? 0) > 0 ||
+    (floor.reservations?.length ?? 0) > 0 ||
+    (floor.waitlist?.length ?? 0) > 0
+  ) {
+    return false;
+  }
+  const areas = (floor.areas ?? []).filter((a) => !a.deletedAt);
+  if (areas.length !== 1 || areas[0]!.name !== "Main Hall") return false;
+  const tables = (floor.tables ?? []).filter((t) => !t.deletedAt);
+  if (tables.length !== SEED_TABLE_LABELS.size) return false;
+  if (!tables.every((t) => SEED_TABLE_LABELS.has(t.label) && t.isActive && t.areaId === areas[0]!.id)) return false;
+  if (new Set(tables.map((t) => t.label)).size !== tables.length) return false;
+  const stations = (floor.stations ?? []).filter((s) => !s.deletedAt);
+  return stations.length > 0 && stations.every((s) => (s.name === "Main Kitchen" && s.stationType === "kitchen") || (s.name === "Bar" && s.stationType === "bar"));
+}
+
+function shouldAdoptRemoteLayout(
+  local: HospitalityFloorState,
+  remote: { areas: DiningArea[]; tables: DiningTable[] },
+): boolean {
+  const remoteLive = remote.areas.some((a) => !a.deletedAt) && remote.tables.some((t) => !t.deletedAt);
+  if (!remoteLive || !looksLikeUntouchedSeedFloor(local)) return false;
+  const remoteTableIds = new Set(remote.tables.map((t) => t.id));
+  // Same layout already (this device pushed it): nothing to adopt.
+  return !(local.tables ?? []).some((t) => remoteTableIds.has(t.id));
+}
+
 export function mergeRemoteHospitalityFloor(
   local: HospitalityFloorState,
   remote: {
@@ -266,10 +337,28 @@ export function mergeRemoteHospitalityFloor(
     waitlist?: WaitlistEntry[];
   },
 ): HospitalityFloorState {
-  const areas = mergeCollection(local.areas ?? [], remote.areas, (a, b) => ({ ...a, ...b }), () => null);
-  const tables = mergeCollection(local.tables ?? [], remote.tables, (a, b) => ({ ...a, ...b }), () => null);
-  const stations = mergeCollection(local.stations ?? [], remote.stations, (a, b) => ({ ...a, ...b }), () => null);
-  const sessions = mergeCollection(local.sessions ?? [], remote.sessions, (a, b) => ({ ...a, ...b }), (s) => s.updatedAt);
+  // A device that only ever seeded the default layout adopts the shop's real layout instead of
+  // unioning its own random-id seed with it (which produced duplicate "Table 1..8").
+  if (shouldAdoptRemoteLayout(local, remote)) {
+    local = {
+      ...local,
+      areas: [],
+      tables: [],
+      stations: remote.stations.some((s) => !s.deletedAt) ? [] : local.stations,
+    };
+  }
+  const areas = mergeCollection(local.areas ?? [], remote.areas, mergeLayoutRow, () => null);
+  const tables = mergeCollection(local.tables ?? [], remote.tables, mergeLayoutRow, () => null);
+  const stations = mergeCollection(local.stations ?? [], remote.stations, mergeLayoutRow, () => null);
+  // Same rule as reservations/waitlist: the NEWER copy wins. The old `{ ...a, ...b }` let the
+  // second argument win regardless of age, and mergeById passes the newer copy first, so a
+  // session settled on one device was overwritten by another device's stale "open" copy.
+  const sessions = mergeCollection(
+    local.sessions ?? [],
+    remote.sessions,
+    (a, b) => (newerIso(a.updatedAt, b.updatedAt) ? { ...b, ...a } : { ...a, ...b }),
+    (s) => s.updatedAt,
+  );
   const kitchenTickets = mergeCollection(
     local.kitchenTickets ?? [],
     remote.tickets,
@@ -362,6 +451,7 @@ export async function pushHospitalityFloorLayoutToCloud(floor: HospitalityFloorS
       name: a.name,
       sort_order: a.sortOrder,
       is_active: a.isActive,
+      metadata: a.deletedAt ? { deletedAt: a.deletedAt } : {},
       updated_at: now,
     })),
     tables: floor.tables.map((t) => ({
@@ -372,6 +462,7 @@ export async function pushHospitalityFloorLayoutToCloud(floor: HospitalityFloorS
       sort_order: t.sortOrder,
       display_status: t.displayStatus,
       is_active: t.isActive,
+      metadata: t.deletedAt ? { deletedAt: t.deletedAt } : {},
       updated_at: now,
     })),
     stations: floor.stations.map((s) => ({
@@ -381,6 +472,7 @@ export async function pushHospitalityFloorLayoutToCloud(floor: HospitalityFloorS
       sort_order: s.sortOrder,
       is_active: s.isActive,
       future_hooks: s.futureHooks ?? null,
+      ...(s.deletedAt ? { print_config: { ...(s.futureHooks ?? {}), deletedAt: s.deletedAt } } : {}),
       updated_at: now,
     })),
     reservations: (floor.reservations ?? []).map((r) => ({
@@ -524,23 +616,60 @@ export function queueHospitalitySync(payload: Record<string, unknown>): void {
   });
 }
 
+let layoutEnsuredForShop: string | null = null;
+
+/** Test hook — forget which shop's layout this session already reconciled with the cloud. */
+export function resetHospitalityLayoutEnsuredForTests(): void {
+  layoutEnsuredForShop = null;
+}
+
+/**
+ * table_sessions.table_id and kitchen_tickets.station_id are foreign keys into the cloud layout,
+ * so sessions/tickets can only be stored once the layout is there. The layout is created locally
+ * (default floor at onboarding / business-type switch) and used to reach the cloud only when
+ * someone edited it. Reconcile once per app session: PULL first (a second device adopts the
+ * shop's existing layout instead of pushing a competing seed with different ids), then PUSH.
+ */
+async function ensureHospitalityLayoutOnCloud(): Promise<boolean> {
+  const ctx = await resolveShopCtx();
+  if (!ctx) return false;
+  if (layoutEnsuredForShop === ctx.shopId) return true;
+  if (!(await pullHospitalityStateFromCloud(true))) return false;
+  const floor = usePosStore.getState().preferences.hospitalityFloor;
+  if (!floor) return true;
+  const ok = await pushHospitalityFloorLayoutToCloud(floor);
+  if (ok) layoutEnsuredForShop = ctx.shopId;
+  return ok;
+}
+
 export async function processHospitalitySyncOperation(payload: Record<string, unknown>): Promise<boolean> {
   const type = String(payload.type ?? "");
   const floor = usePosStore.getState().preferences.hospitalityFloor;
   if (!floor) return true;
 
-  if (type === "floor_layout") return pushHospitalityFloorLayoutToCloud(floor);
-  if (type === "session") {
-    const sessionId = String(payload.sessionId ?? "");
-    const session = floor.sessions.find((s) => s.id === sessionId);
-    if (!session) return true;
-    return pushTableSessionToCloud(session);
+  if (type === "floor_layout") {
+    if (!(await ensureHospitalityLayoutOnCloud())) return false;
+    // Pull before every layout push: the push overwrites rows (including deletion tombstones), so
+    // a device that has not seen another device's delete yet must merge it first or it would
+    // resurrect the deleted table in the cloud.
+    if (!(await pullHospitalityStateFromCloud(false))) return false;
+    // Always push the latest layout (it may have changed since the layout was first ensured).
+    return pushHospitalityFloorLayoutToCloud(usePosStore.getState().preferences.hospitalityFloor ?? floor);
   }
-  if (type === "ticket") {
+  if (type === "session" || type === "ticket") {
+    if (!(await ensureHospitalityLayoutOnCloud())) return false;
+    // Re-read: the pull inside ensureHospitalityLayoutOnCloud may have replaced the floor.
+    const current = usePosStore.getState().preferences.hospitalityFloor ?? floor;
+    if (type === "session") {
+      const sessionId = String(payload.sessionId ?? "");
+      const session = current.sessions.find((s) => s.id === sessionId);
+      if (!session) return true;
+      return pushTableSessionToCloud(session);
+    }
     const ticketId = String(payload.ticketId ?? "");
-    const ticket = (floor.kitchenTickets ?? []).find((t) => t.id === ticketId);
+    const ticket = (current.kitchenTickets ?? []).find((t) => t.id === ticketId);
     if (!ticket) return true;
-    const station = floor.stations.find((s) => s.id === ticket.stationId);
+    const station = current.stations.find((s) => s.id === ticket.stationId);
     return pushKitchenTicketToCloud(ticket, station?.stationType ?? ticket.stationType);
   }
   if (type === "pull") return pullHospitalityStateFromCloud(Boolean(payload.forceFull));

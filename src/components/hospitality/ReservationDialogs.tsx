@@ -3,6 +3,7 @@ import type { HospitalityFloorState, Language, TableReservation } from "../../ty
 import { t } from "../../lib/i18n";
 import { lookupCustomerProfile } from "../../lib/hospitalityFrontOfHouse";
 import type { Sale } from "../../types";
+import { dateKeyKampala } from "../../lib/datesUg";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 type Props = {
@@ -182,7 +183,7 @@ export function ReservationFormDialog({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [guestCount, setGuestCount] = useState(2);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(dateKeyKampala(new Date()));
   const [time, setTime] = useState("19:00");
   const [areaId, setAreaId] = useState(areas[0]?.id ?? "");
   const [tableId, setTableId] = useState("");

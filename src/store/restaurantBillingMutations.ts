@@ -20,10 +20,12 @@ import {
   deriveAggregatePaymentMethod,
   isDuplicatePayment,
   mergeBillDraft,
+  reconcileSplitsToTotal,
+  validateCustomSplits,
 } from "../lib/restaurantBilling";
 import { ensureHospitalityFloor, syncTableDisplayStatuses } from "../lib/hospitality";
 import { appendHospitalityAudit } from "../lib/hospitalityFrontOfHouse";
-import { cartDiscountFromPendingSale } from "../lib/draftCart";
+import { physicalCashTenderFromCheckoutInputs } from "../lib/saleTenderCash";
 import { verifyOwnerPin } from "../lib/sensitiveActionAuth";
 import { dateKeyKampala } from "../lib/datesUg";
 import { canRoleBypassDiscountApproval } from "../lib/discountGovernance";
@@ -31,6 +33,7 @@ import { inventoryMovementNamespace } from "../lib/shopSyncContext";
 import { planWholeBillVoid } from "../lib/voidCompletedSale";
 import { r3SaleVoidStockPayload } from "../lib/stockDurableSync";
 import { shiftOwnerUserId } from "../lib/sessionActor";
+import { requireActiveShift } from "../lib/shiftEnforcement";
 import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
 import type { PosState } from "./usePosStore";
 
@@ -141,9 +144,26 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
       if (!saleId || !sessionId) return { ok: false as const, errorKey: "invalid" };
       const existing = state.sales.find((s) => s.id === saleId);
       if (!existing) return { ok: false as const, errorKey: "invalid" };
+      // Splits are an allocation of the ONE authoritative bill total (computeRestaurantBillTotals ->
+      // finalizeDraftSale). They must add up to it exactly: custom splits that do not are rejected,
+      // by-seat / by-item splits (raw line totals) are reconciled to it.
+      const totalsNow = computeRestaurantBillTotals({
+        lines: state.draftLines,
+        cartDiscountUgx: state.draftCartDiscountUgx,
+        billDraft: billDraftFromSale(existing, state.preferences),
+        prefs: state.preferences,
+      });
+      let splitsToStore = input.splits;
+      if (input.mode === "custom") {
+        if (!validateCustomSplits(splitsToStore, totalsNow.grandTotalUgx)) {
+          return { ok: false as const, errorKey: "splitTotalMismatch" };
+        }
+      } else {
+        splitsToStore = reconcileSplitsToTotal(splitsToStore, totalsNow.grandTotalUgx);
+      }
       const billDraft = mergeBillDraft(existing.billDraft, {
         splitMode: input.mode,
-        splits: input.splits,
+        splits: splitsToStore,
       }, state.preferences);
       const next = patchPendingSale(get, saleId, { billDraft });
       if (!next) return { ok: false as const, errorKey: "invalid" };
@@ -156,7 +176,7 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
           "bill_split",
           sessionId,
           { userId: actor.userId, label: actor.displayName ?? actor.userId },
-          { mode: input.mode, splits: input.splits },
+          { mode: input.mode, splits: splitsToStore },
         );
         set({ preferences: { ...state.preferences, hospitalityFloor: floor } });
         queueHospitalityChange({ sessionIds: [sessionId] });
@@ -185,9 +205,33 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
       const amount = Math.max(0, Math.floor(input.amountUgx));
       if (amount <= 0) return { ok: false as const, errorKey: "invalid" };
 
+      // Same rule as retail checkout (debt > 0 needs a chosen or named customer): a credit payment
+      // recorded without one could never be settled. The debtor itself is resolved by the shared
+      // resolveDebtorForSale inside finalizeDraftSale.
+      if (input.method === "credit") {
+        const chosen = state.draftSaleCustomerId?.trim();
+        const named = state.draftSaleCustomerName?.trim();
+        const isKnown = chosen ? state.customers.some((c) => c.id === chosen) : false;
+        if (!isKnown && !named) return { ok: false as const, errorKey: "debtRequiresCustomerName" };
+      }
+
       const draft = billDraftFromSale(existing, state.preferences);
       if (isDuplicatePayment(draft.payments, input)) {
         return { ok: false as const, errorKey: "billPaymentDuplicate" };
+      }
+
+      // Only cash may exceed the balance (the excess is change handed back). A mistyped MoMo /
+      // card / voucher / credit amount would otherwise be permanent and become phantom "change".
+      if (input.method !== "cash") {
+        const beforeTotals = computeRestaurantBillTotals({
+          lines: state.draftLines,
+          cartDiscountUgx: state.draftCartDiscountUgx,
+          billDraft: draft,
+          prefs: state.preferences,
+        });
+        if (amount > beforeTotals.remainingBalanceUgx) {
+          return { ok: false as const, errorKey: "billPaymentExceedsBalance" };
+        }
       }
 
       const actor = state.sessionActor;
@@ -278,15 +322,41 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
       const debtUgx = creditDebtFromBillPayments(payments, totals.grandTotalUgx);
       const amountPaidUgx = payments.reduce((a, p) => a + p.amountUgx, 0);
 
+      // finalizeDraftSale ADDS taxUgx to the sale total. In inclusive mode the tax is already
+      // inside the bill total (computeRestaurantBillTotals excludes it from grandTotalUgx), so
+      // passing it would record e.g. 115,254 for a 100,000 bill and inflate revenue.
+      const taxIsInclusive = (state.preferences.hospitalityTaxMode ?? "exclusive") === "inclusive";
+
+      // Kiosk/Duka retail is the source of truth for the cash drawer: reuse its shared
+      // tender rule (cash handed over; MoMo/card = 0; the drawer later caps it at total - debt)
+      // instead of a hospitality-specific formula. Without a tender, a mixed MoMo + cash bill
+      // was counted entirely as drawer cash.
+      const cashTenderedUgx = payments
+        .filter((p) => p.method === "cash")
+        .reduce((a, p) => a + Math.max(0, p.amountUgx), 0);
+      const tenderCashUgx = physicalCashTenderFromCheckoutInputs({
+        paymentMethod,
+        cashInput: String(cashTenderedUgx),
+        draftPayable: totals.grandTotalUgx,
+      });
+
       const res = finalizeDraftSale({
         debtUgx,
+        // Retail passes the checkout customer to finalizeDraftSale; do the same so credit uses the
+        // existing debt machinery (shared resolveDebtorForSale) instead of a hospitality path.
+        customerId: state.draftSaleCustomerId || null,
+        customerName: state.draftSaleCustomerName?.trim() || null,
+        customerPhone: state.draftSaleCustomerPhone?.trim() || null,
         paymentMethod,
         amountPaidUgx,
+        tenderCashUgx,
         changeGivenUgx: input?.changeGivenUgx ?? totals.changeDueUgx,
-        splitBreakdown: draft.splits.length > 0 ? draft.splits : null,
+        // Splits may be stale if lines/tip changed after they were applied; keep the breakdown
+        // consistent with the total that is actually being recorded.
+        splitBreakdown: draft.splits.length > 0 ? reconcileSplitsToTotal(draft.splits, totals.grandTotalUgx) : null,
         serviceChargeUgx: totals.serviceChargeUgx,
         tipUgx: totals.tipUgx,
-        taxUgx: totals.taxUgx,
+        taxUgx: taxIsInclusive ? 0 : totals.taxUgx,
         billPayments: payments,
       });
 
@@ -367,78 +437,17 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
       return { ok: true as const };
     },
 
-    reopenTableBill: (input: { sessionId: string; reason: string; managerPin: string }) => {
-      const denied = denyUnlessEffectivePermission("hospitality.settle", "reopenTableBill");
-      if (denied) return { ok: false as const, errorKey: denied.errorKey };
-      if (!canRoleBypassDiscountApproval(get().sessionActor?.role ?? "cashier")) {
-        if (!verifyOwnerPin(input.managerPin.trim(), get().preferences)) {
-          return { ok: false as const, errorKey: "managerPinInvalid" };
-        }
-      }
-      const reason = input.reason.trim();
-      if (!reason) return { ok: false as const, errorKey: "reasonRequired" };
-
-      const state = get();
-      const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
-      const session = floor.sessions.find((s) => s.id === input.sessionId);
-      if (!session || session.status !== "closed") return { ok: false as const, errorKey: "invalid" };
-
-      const sale = state.sales.find((s) => s.id === session.saleId && (s.status === "completed" || !s.status));
-      if (!sale) return { ok: false as const, errorKey: "invalid" };
-
-      const actor = state.sessionActor;
-      const previousTotalUgx = sale.totalUgx;
-      const reopenedSale: Sale = {
-        ...sale,
-        status: "pending",
-        billDraft: mergeBillDraft(sale.billDraft, {
-          reopenedAt: new Date().toISOString(),
-          reopenedByUserId: actor?.userId ?? null,
-          reopenedByLabel: actor?.displayName ?? null,
-          reopenedReason: reason,
-          previousTotalUgx,
-        }, state.preferences),
-        updatedAt: new Date().toISOString(),
-        pendingSync: true,
-      };
-
-      const sessions = floor.sessions.map((s) =>
-        s.id === input.sessionId
-          ? { ...s, status: "open" as const, closedAt: null, updatedAt: new Date().toISOString(), pendingSync: true }
-          : s,
-      );
-      let nextFloor = syncTableDisplayStatuses({ ...floor, sessions });
-      if (actor) {
-        nextFloor = auditBilling(
-          nextFloor,
-          "bill_reopened",
-          input.sessionId,
-          { userId: actor.userId, label: actor.displayName ?? actor.userId },
-          { previousTotalUgx, saleId: sale.id },
-          reason,
-        );
-      }
-
-      set({
-        sales: [reopenedSale, ...state.sales.filter((s) => s.id !== sale.id)],
-        draftLines: reopenedSale.lines.map((l) => ({ ...l })),
-        draftCartDiscountUgx: cartDiscountFromPendingSale(reopenedSale),
-        activePendingSaleId: reopenedSale.id,
-        preferences: {
-          ...state.preferences,
-          hospitalityFloor: nextFloor,
-          activeTableSessionId: input.sessionId,
-        },
-      });
-      void queueRemote("pending_sales", { saleId: reopenedSale.id, kind: "pending_upsert" });
-      queueHospitalityChange({ sessionIds: [input.sessionId] });
-      flushPendingPersist();
-      return { ok: true as const, sessionId: input.sessionId };
-    },
+    // reopenTableBill was removed on purpose: Kiosk/Duka retail has no way to turn a completed
+    // sale back into a pending one, and doing so here left stock, shift totals and the KPI
+    // snapshot untouched so re-settling counted the sale twice. Corrections go through
+    // voidSettledTableBill (retail's void lifecycle) followed by a new order.
 
     voidSettledTableBill: (input: { sessionId: string; reason: string; managerPin: string }) => {
       const denied = denyUnlessEffectivePermission("hospitality.settle", "voidSettledTableBill");
       if (denied) return { ok: false as const, errorKey: denied.errorKey };
+      // Kiosk/Duka retail is the source of truth for voids: same permission as voidSaleLine.
+      const voidDenied = denyUnlessEffectivePermission("sale_void", "voidSettledTableBill");
+      if (voidDenied) return { ok: false as const, errorKey: voidDenied.errorKey };
       if (!canRoleBypassDiscountApproval(get().sessionActor?.role ?? "cashier")) {
         if (!verifyOwnerPin(input.managerPin.trim(), get().preferences)) {
           return { ok: false as const, errorKey: "managerPinInvalid" };
@@ -454,6 +463,13 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
 
       const sale = state.sales.find((s) => s.id === session.saleId);
       if (!sale || sale.status === "pending") return { ok: false as const, errorKey: "invalid" };
+
+      // Same guards, in the same order, as retail voidSaleLine: closed business dates are
+      // immutable and a void needs an open shift to book its cash effect against.
+      const dateLock = denyIfBusinessDateLocked(dateKeyKampala(sale.createdAt), "voidSettledTableBill");
+      if (dateLock) return { ok: false as const, errorKey: dateLock.errorKey };
+      const shiftGuard = requireActiveShift(state);
+      if (!shiftGuard.ok) return { ok: false as const, errorKey: shiftGuard.errorKey };
 
       const actor = state.sessionActor;
       const at = new Date().toISOString();

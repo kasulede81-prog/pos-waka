@@ -47,7 +47,11 @@ export function selectFloorPlanSlice(s: { preferences: ShopPreferences; sales: S
 }
 
 export function resolveFloorDisplayPrefs(prefs: ShopPreferences): ResolvedFloorDisplayPrefs {
-  const ext = prefs.hospitalityFloorDisplay;
+  return resolveFloorDisplay(prefs.hospitalityFloorDisplay);
+}
+
+/** Pure resolver over the raw stored value — select the raw value from the store, resolve in useMemo. */
+export function resolveFloorDisplay(ext: HospitalityFloorDisplayPrefs | null | undefined): ResolvedFloorDisplayPrefs {
   return {
     tableShape: ext?.tableShape ?? DEFAULTS.tableShape,
     tableSize: ext?.tableSize ?? DEFAULTS.tableSize,

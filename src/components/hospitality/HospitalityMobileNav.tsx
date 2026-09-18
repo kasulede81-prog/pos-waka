@@ -6,9 +6,11 @@ import { t } from "../../lib/i18n";
 import { hasActorPermission } from "../../lib/permissions";
 import { useSessionActor } from "../../context/SessionActorContext";
 import {
-  HOSPITALITY_NAV_CATALOG,
   hospitalityNavItemActive,
+  visibleHospitalityNavItems,
 } from "../../lib/hospitalityNav";
+import { usePosStore } from "../../store/usePosStore";
+import { hospitalityBarOnlyFromPrefs, hospitalityKitchenEnabledFromPrefs } from "../../lib/hospitality";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 
@@ -23,9 +25,15 @@ export function HospitalityMobileNav({ lang, visible }: Props) {
   const navigate = useNavigate();
   const isDesktop = usePosDesktopLayout();
 
-  const items = HOSPITALITY_NAV_CATALOG.filter((item) =>
-    hasActorPermission(actor.role, item.perm, actor.permissions),
-  );
+  // Booleans keep these selectors reference-stable (no fresh objects under Zustand 5).
+  const kitchenEnabled = usePosStore((s) => hospitalityKitchenEnabledFromPrefs(s.preferences));
+  const barOnly = usePosStore((s) => hospitalityBarOnlyFromPrefs(s.preferences));
+
+  const items = visibleHospitalityNavItems({
+    hasPerm: (perm) => hasActorPermission(actor.role, perm, actor.permissions),
+    kitchenEnabled,
+    barOnly,
+  });
 
   const guardedNavigate = useCallback(
     (to: string) => {

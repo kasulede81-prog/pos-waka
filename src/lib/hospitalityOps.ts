@@ -9,6 +9,8 @@ import type {
   TableSession,
 } from "../types";
 import { ensureSaleLineId } from "./pendingSaleMerge";
+import { shouldMergeDraftSaleLines } from "./draftCart";
+import { mergeHospitalityDraftLine } from "./hospitalityLineMerge";
 import { syncTableDisplayStatuses } from "./hospitality";
 import { firedQtyByProductForSale, firedQtyByLineIdForSale, resolveStationForProduct } from "./kitchenRouting";
 import {
@@ -68,7 +70,8 @@ export function fireKitchenTicketsForLines(input: {
   for (const line of deltas) {
     const product = input.products.find((p) => p.id === line.productId);
     if (!product) continue;
-    const course = resolveProductDefaultCourse(product);
+    // The waiter can change a line's course; honour it, fall back to the product default.
+    const course = line.course ?? resolveProductDefaultCourse(product);
     if (courseFilter && !courseFilter.has(course)) continue;
     const station = resolveStationForProduct(product, input.floor.stations);
     if (!station) continue;
@@ -188,34 +191,47 @@ export function mergeSessionsOnFloor(
   if (source.id === target.id) return floor;
   const now = new Date().toISOString();
   const sessions = floor.sessions.map((s) => {
-    if (s.id === sourceSessionId) return { ...s, status: "merged" as const, closedAt: now };
+    if (s.id === sourceSessionId) {
+      return { ...s, status: "merged" as const, closedAt: now, updatedAt: now, pendingSync: true };
+    }
+    // The merged guests are now seated on the target order.
+    if (s.id === targetSessionId) {
+      return { ...s, guestCount: (s.guestCount ?? 0) + (source.guestCount ?? 0), updatedAt: now, pendingSync: true };
+    }
     return s;
   });
   return syncTableDisplayStatuses({ ...floor, sessions });
 }
 
-export function mergeSaleLines(target: SaleLine[], source: SaleLine[]): SaleLine[] {
+/**
+ * Combine the lines of two OPEN table orders into one (operational merge — no money moves here).
+ *
+ * Lines merge only when they are the same configured item (same merge key) and neither carries
+ * a discount; everything else stays a separate line so modifiers, variants, notes, course, seat
+ * and discounts are preserved exactly. Returns which source line ids were folded into which
+ * target line so already-fired kitchen tickets can be re-pointed (no duplicate kitchen orders).
+ */
+export function mergeTableSaleLines(
+  target: SaleLine[],
+  source: SaleLine[],
+  products: Product[],
+): { lines: SaleLine[]; lineIdRemap: Map<string, string> } {
   const merged = target.map((l) => ensureSaleLineId(l));
+  const lineIdRemap = new Map<string, string>();
   for (const line of source.map(ensureSaleLineId)) {
-    const idx = merged.findIndex((l) => l.productId === line.productId);
-    if (idx === -1) {
+    const idx = merged.findIndex(
+      (l) => l.productId === line.productId && shouldMergeDraftSaleLines(l, line),
+    );
+    const product = products.find((p) => p.id === line.productId);
+    const combined = idx >= 0 && product ? mergeHospitalityDraftLine(merged[idx]!, line, product, { keepDiscountedSeparate: true }) : null;
+    if (idx >= 0 && combined) {
+      merged[idx] = combined;
+      if (line.id && combined.id) lineIdRemap.set(line.id, combined.id);
+    } else {
       merged.push({ ...line });
-      continue;
     }
-    const cur = merged[idx]!;
-    const qty = cur.quantity + line.quantity;
-    const unit = cur.unitPriceUgx;
-    const now = new Date().toISOString();
-    merged[idx] = {
-      ...cur,
-      quantity: qty,
-      updatedAt: now,
-      lineTotalUgx: Math.round(unit * qty),
-      originalLineTotalUgx: Math.round((cur.originalLineTotalUgx ?? cur.lineTotalUgx) + (line.originalLineTotalUgx ?? line.lineTotalUgx)),
-      estimatedProfitUgx: cur.estimatedProfitUgx + line.estimatedProfitUgx,
-    };
   }
-  return merged;
+  return { lines: merged, lineIdRemap };
 }
 
 function deltaLinesSinceWithFired(
@@ -239,7 +255,12 @@ function deltaLinesSinceWithFired(
     const id = line.id ?? line.productId;
     const baseline = line.configFingerprint
       ? Math.max(prevByLine.get(id) ?? 0, firedQtyByLineId.get(id) ?? 0)
-      : Math.max(prev.get(line.productId) ?? 0, firedQtyByProduct.get(line.productId) ?? 0);
+      : Math.max(
+          prev.get(line.productId) ?? 0,
+          firedQtyByProduct.get(line.productId) ?? 0,
+          // Ticket items carry saleLineId, so what was already fired is only visible per line id.
+          firedQtyByLineId.get(id) ?? 0,
+        );
     const delta = line.quantity - baseline;
     if (delta > 0.0001) {
       out.push({ ...line, quantity: delta });

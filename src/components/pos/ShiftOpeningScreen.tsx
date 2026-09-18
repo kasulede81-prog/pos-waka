@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 
-import type { Language } from "../../types";
+import type { Language, ShiftRecord } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { ModalSheet } from "../layout/ModalSheet";
@@ -23,6 +23,9 @@ import {
 } from "../../lib/dayDrawerOpen";
 import { FloatVerifyOverrideModal } from "./FloatVerifyOverrideModal";
 
+// Stable reference: `?? []` inside a store selector is a new array per call and would loop (React #185).
+const NO_SHIFTS: ShiftRecord[] = [];
+
 type Props = {
   lang: Language;
   onShiftStarted: () => void;
@@ -40,7 +43,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const dayCloses = usePosStore((s) => s.dayCloses);
-  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const shifts = usePosStore((s) => s.preferences.shifts ?? NO_SHIFTS);
   const sales = usePosStore((s) => s.sales);
 
   const [floatInput, setFloatInput] = useState("");

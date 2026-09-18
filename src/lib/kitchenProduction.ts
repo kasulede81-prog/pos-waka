@@ -322,7 +322,16 @@ export function computeTicketPrepTargetMinutes(ticket: KitchenTicket): number | 
 export function computeTicketElapsedMinutes(ticket: KitchenTicket, nowMs = Date.now()): number {
   const fired = Date.parse(ticket.firedAt);
   if (!Number.isFinite(fired)) return 0;
-  return Math.max(0, Math.round((nowMs - fired) / 60_000));
+  // The kitchen's clock stops when the food is ready; otherwise ready/served tickets keep
+  // ageing into a false "overdue".
+  const finished =
+    ticket.status === "ready" ||
+    ticket.status === "picked_up" ||
+    ticket.status === "served" ||
+    ticket.status === "completed";
+  const readyMs = finished && ticket.readyAt ? Date.parse(ticket.readyAt) : Number.NaN;
+  const endMs = Number.isFinite(readyMs) ? Math.min(nowMs, readyMs) : nowMs;
+  return Math.max(0, Math.round((endMs - fired) / 60_000));
 }
 
 export function computeTicketTimerUrgency(ticket: KitchenTicket, nowMs = Date.now()): ProductionTimerUrgency {
@@ -561,20 +570,60 @@ export function mergeKitchenTicketMonotonic(local: KitchenTicket, remote: Kitche
   const r = normalizeKitchenTicket(remote);
   const lIdx = statusProgressIndex(l.status);
   const rIdx = statusProgressIndex(r.status);
-  const pickRemote = rIdx > lIdx || (rIdx === lIdx && newerIso(r.updatedAt, l.updatedAt));
+
+  // Cancellation is terminal and explicit: it must beat any live status. (statusProgressIndex
+  // ranks cancelled at -1, so without this a cancel lost to every other device's stale copy.)
+  if ((l.status === "cancelled") !== (r.status === "cancelled")) {
+    const cancelled = l.status === "cancelled" ? l : r;
+    const other = cancelled === l ? r : l;
+    return normalizeKitchenTicket({
+      ...other,
+      ...cancelled,
+      status: "cancelled",
+      statusHistory: mergeStatusHistory(l.statusHistory ?? [], r.statusHistory ?? []),
+      recallHistory: mergeRecallHistory(l.recallHistory ?? [], r.recallHistory ?? []),
+    });
+  }
+
+  // A recall deliberately moves a ticket backwards (ready -> preparing). Progress-only merging
+  // would revert it on every other device, so the side with more recalls decides the status
+  // as long as it is not older than the other side.
+  const lRecalls = l.recallHistory?.length ?? 0;
+  const rRecalls = r.recallHistory?.length ?? 0;
+  const recallSideWins =
+    lRecalls !== rRecalls &&
+    (lRecalls > rRecalls ? newerIso(l.updatedAt, r.updatedAt) : newerIso(r.updatedAt, l.updatedAt));
+  const pickRemote = recallSideWins
+    ? rRecalls > lRecalls
+    : rIdx > lIdx || (rIdx === lIdx && newerIso(r.updatedAt, l.updatedAt));
   const base = pickRemote ? { ...l, ...r } : { ...r, ...l };
-  const status = pickRemote
-    ? rIdx >= lIdx
+  const status = recallSideWins
+    ? pickRemote
       ? r.status
       : l.status
-    : lIdx >= rIdx
-      ? l.status
-      : r.status;
+    : pickRemote
+      ? rIdx >= lIdx
+        ? r.status
+        : l.status
+      : lIdx >= rIdx
+        ? l.status
+        : r.status;
   const statusHistory = mergeStatusHistory(l.statusHistory ?? [], r.statusHistory ?? []);
-  const recallHistory = [...(l.recallHistory ?? []), ...(r.recallHistory ?? [])].sort((a, b) =>
-    a.at.localeCompare(b.at),
-  );
+  const recallHistory = mergeRecallHistory(l.recallHistory ?? [], r.recallHistory ?? []);
   return normalizeKitchenTicket({ ...base, status, statusHistory, recallHistory });
+}
+
+/** De-duplicated union: the same recall seen from two devices must count once. */
+function mergeRecallHistory<T extends { at: string }>(a: T[], b: T[]): T[] {
+  const seen = new Set<string>();
+  return [...a, ...b]
+    .sort((x, y) => x.at.localeCompare(y.at))
+    .filter((e) => {
+      const key = JSON.stringify(e);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function mergeStatusHistory(a: KitchenTicketStatusEvent[], b: KitchenTicketStatusEvent[]): KitchenTicketStatusEvent[] {

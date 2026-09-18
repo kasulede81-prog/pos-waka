@@ -18,7 +18,7 @@ import {
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { dateKeyKampala } from "../lib/datesUg";
 import { localGetDailySalesSummary } from "../lib/localReporting";
-import { isHospitalityMode, isKitchenEnabledForHospitality } from "../lib/hospitality";
+import { hospitalityKitchenEnabledFromPrefs, isHospitalityMode } from "../lib/hospitality";
 import { formatUgx } from "../lib/formatUgx";
 import {
   activeSessions,
@@ -56,10 +56,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
 
   const homeMetrics = resolveVisibleHomeMetrics(authOperatorRole(actor));
   const canFloor = actorHasEffectivePermission(actor, "hospitality.floor", snapshot, authMode);
-  const kitchenEnabled = isKitchenEnabledForHospitality(
-    preferences.businessType,
-    preferences.hospitalityKitchenEnabled,
-  );
+  const kitchenEnabled = hospitalityKitchenEnabledFromPrefs(preferences);
   const canKitchen = kitchenEnabled && actorHasEffectivePermission(actor, "hospitality.kitchen", snapshot, authMode);
   const canSell = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
   const canStock = actorHasEffectivePermission(actor, "stock.view", snapshot, authMode);

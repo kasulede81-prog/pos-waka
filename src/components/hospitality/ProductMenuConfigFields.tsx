@@ -246,7 +246,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 value={menu.recipe?.yieldQty ? String(menu.recipe.yieldQty) : ""}
                 onChange={(e) => {
                   const v = Number(e.target.value.replace(/[^\d.]/g, "")) || 0;
-                  setMenu({ ...menu, recipe: { lines: menu.recipe?.lines ?? [], yieldQty: v > 0 ? v : undefined } });
+                  setMenu({ ...menu, recipe: { ...menu.recipe, lines: menu.recipe?.lines ?? [], yieldQty: v > 0 ? v : undefined } });
                 }}
                 placeholder="1"
                 className="mt-1 min-h-[40px] w-full rounded-lg border border-border px-2 text-sm font-black"
@@ -256,7 +256,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
               <span className="text-xs font-bold text-muted-foreground">{t(lang, "menuRecipePrepNotes")}</span>
               <input
                 value={menu.recipe?.prepNotes ?? ""}
-                onChange={(e) => setMenu({ ...menu, recipe: { lines: menu.recipe?.lines ?? [], prepNotes: e.target.value || null } })}
+                onChange={(e) => setMenu({ ...menu, recipe: { ...menu.recipe, lines: menu.recipe?.lines ?? [], prepNotes: e.target.value || null } })}
                 className="mt-1 min-h-[40px] w-full rounded-lg border border-border px-2 text-sm"
               />
             </label>

@@ -158,5 +158,6 @@ export function hospitalityTerm(
   key: HospitalityTermKey,
   hospitalityModeEnabled?: boolean | null,
 ): string {
-  return useHospitalityTerms(lang, businessType, hospitalityModeEnabled)(key);
+  const hospitality = isHospitalityMode(businessType, hospitalityModeEnabled);
+  return t(lang, hospitality ? HOSPITALITY_KEY[key] : RETAIL_FALLBACK[key]);
 }

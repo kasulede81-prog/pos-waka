@@ -849,6 +849,12 @@ export type DiningArea = {
   name: string;
   sortOrder: number;
   isActive: boolean;
+  /**
+   * Deletion tombstone. Removing a table/area/station is a soft delete (isActive=false + this
+   * timestamp) so the removal syncs: the cloud layout is upsert-only, so a hard local delete was
+   * silently undone by the next pull. Tombstoned rows are hidden everywhere.
+   */
+  deletedAt?: string | null;
 };
 
 export type DiningTable = {
@@ -859,6 +865,8 @@ export type DiningTable = {
   sortOrder: number;
   displayStatus: TableDisplayStatus;
   isActive: boolean;
+  /** Deletion tombstone — see DiningArea.deletedAt. */
+  deletedAt?: string | null;
   /** Manager lock — table cannot receive guests while set. */
   lockReason?: TableLockReason | null;
   lockNote?: string | null;
@@ -987,6 +995,8 @@ export type KitchenStation = {
   stationType: KitchenStationType;
   sortOrder: number;
   isActive: boolean;
+  /** Deletion tombstone — see DiningArea.deletedAt. */
+  deletedAt?: string | null;
   /** Phase 6.7 hardware — printer ids assigned in printer management. */
   futureHooks?: KitchenStationFutureHooks | null;
 };

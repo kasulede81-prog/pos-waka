@@ -36,8 +36,20 @@ type Props = {
   onReprint?: () => void;
 };
 
+const STATUS_LABEL_KEYS: Record<KitchenTicketStatus, string> = {
+  queued: "kitchenStatusQueued",
+  accepted: "kitchenStatusAccepted",
+  preparing: "kitchenStatusPreparing",
+  cooking: "kitchenStatusCooking",
+  ready: "kitchenStatusReady",
+  picked_up: "kitchenStatusPickedUp",
+  served: "kitchenStatusServed",
+  completed: "kitchenStatusCompleted",
+  cancelled: "kitchenStatusCancelled",
+};
+
 function statusLabelKey(status: KitchenTicketStatus): string {
-  return `kitchenStatus_${status}`;
+  return STATUS_LABEL_KEYS[status];
 }
 
 export function ProductionTicketCard({

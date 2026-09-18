@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import type { KitchenStationType, Language } from "../types";
 import { t } from "../lib/i18n";
@@ -8,7 +8,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useShallow } from "zustand/react/shallow";
 import { isHospitalityMode } from "../lib/hospitality";
 import { KITCHEN_STATION_TYPES, hospitalityRoutingLabelKey } from "../lib/productHospitalityRouting";
-import { resolveFloorDisplayPrefs } from "../lib/floorDisplayPrefs";
+import { resolveFloorDisplay } from "../lib/floorDisplayPrefs";
 import type { HospitalityFloorGridDensity, HospitalityTableShape, HospitalityTableSize } from "../types";
 
 export function SettingsFloorPage({ lang }: { lang: Language }) {
@@ -25,7 +25,10 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
   const upsertWaiterSection = usePosStore((s) => s.upsertWaiterSection);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const setHospitalityManualKitchenFire = usePosStore((s) => s.setHospitalityManualKitchenFire);
-  const floorDisplay = usePosStore((s) => resolveFloorDisplayPrefs(s.preferences));
+  // Select the raw stored value: resolveFloorDisplayPrefs(...) inside the selector built a new
+  // object per call, which loops forever under Zustand 5 (React #185).
+  const floorDisplayRaw = usePosStore((s) => s.preferences.hospitalityFloorDisplay);
+  const floorDisplay = useMemo(() => resolveFloorDisplay(floorDisplayRaw), [floorDisplayRaw]);
 
   const { floor, businessType, hospitalityModeEnabled, manualKitchenFire } = usePosStore(
     useShallow((s) => ({
@@ -50,13 +53,15 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
   }, [ensureHospitalityFloor]);
 
   useEffect(() => {
-    if (!newTableAreaId && floor?.areas[0]?.id) setNewTableAreaId(floor.areas[0].id);
+    const firstLiveAreaId = floor?.areas?.find((a) => !a.deletedAt)?.id;
+    if (!newTableAreaId && firstLiveAreaId) setNewTableAreaId(firstLiveAreaId);
   }, [floor?.areas, newTableAreaId]);
 
   const hospitality = isHospitalityMode(businessType, hospitalityModeEnabled);
-  const areas = floor?.areas ?? [];
-  const tables = floor?.tables ?? [];
-  const stations = floor?.stations ?? [];
+  // Deleted rows stay in the floor as sync tombstones but are never shown.
+  const areas = (floor?.areas ?? []).filter((a) => !a.deletedAt);
+  const tables = (floor?.tables ?? []).filter((t) => !t.deletedAt);
+  const stations = (floor?.stations ?? []).filter((s) => !s.deletedAt);
   const waiterSections = floor?.waiterSections ?? [];
 
   if (!hospitality) {

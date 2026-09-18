@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -10,6 +10,7 @@ import {
 } from "../lib/kitchenProduction";
 import { hospitalityRoutingLabelKey } from "../lib/productHospitalityRouting";
 import { usePosStore } from "../store/usePosStore";
+import { hospitalityBarOnlyFromPrefs } from "../lib/hospitality";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { useHospitalityFloorPoll } from "../hooks/useHospitalityFloorPoll";
 import { ProductionStationDashboard } from "../components/hospitality/ProductionStationDashboard";
@@ -38,18 +39,32 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
 
   useHospitalityFloorPoll(true);
 
+  // Elapsed minutes, urgency colours and overdue alerts depend on the clock; without a
+  // ticker they freeze whenever no data changes (a quiet kitchen).
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const activeStations = useMemo(
     () => (floor?.stations ?? []).filter((s) => s.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
     [floor?.stations],
   );
 
+  const barOnly = usePosStore((s) => hospitalityBarOnlyFromPrefs(s.preferences));
+
   const selectedStationId = useMemo(() => {
-    if (!stationParam) return activeStations[0]?.id;
+    // Bar-only shops have no kitchen: open on the bar station, not an empty "Main Kitchen".
+    if (!stationParam) {
+      const barStation = barOnly ? activeStations.find((s) => s.stationType === "bar") : undefined;
+      return (barStation ?? activeStations[0])?.id;
+    }
     const byId = activeStations.find((s) => s.id === stationParam);
     if (byId) return byId.id;
     const byType = activeStations.find((s) => s.stationType === stationParam);
     return byType?.id ?? activeStations[0]?.id;
-  }, [activeStations, stationParam]);
+  }, [activeStations, stationParam, barOnly]);
 
   const selectedStation = activeStations.find((s) => s.id === selectedStationId);
 
@@ -70,9 +85,9 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
       };
     }
     return computeStationProductionDashboard(floor, selectedStationId);
-  }, [floor, selectedStationId, tickets.length]);
+  }, [floor, selectedStationId, nowMs]);
 
-  const alerts = useMemo(() => (floor ? computeProductionAlerts(floor) : []), [floor, tickets.length]);
+  const alerts = useMemo(() => (floor ? computeProductionAlerts(floor, nowMs) : []), [floor, nowMs]);
   const stationAlerts = alerts.filter((a) => a.stationId === selectedStationId);
 
   const canRecall =

@@ -12,6 +12,7 @@ import {
   activeNamedTabs,
   activeSessionForTable,
   ensureHospitalityFloor,
+  hospitalityBarOnlyFromPrefs,
   isHospitalityMode,
   pendingSaleTotal,
   sessionDisplayLabel,
@@ -81,19 +82,24 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const [tableLookup, setTableLookup] = useState("");
   const [viewFilter, setViewFilter] = useState<"all" | "occupied" | "available" | "bill">("all");
 
+  const hospitality = isHospitalityMode(businessType, hospitalityModeEnabled);
+
   useLayoutEffect(() => {
+    // Only seed/repair the floor for hospitality shops: ensureFloorInStore also flips
+    // hospitalityModeEnabled on, which a retail shop opening /floor must not trigger.
+    if (!hospitality) return;
     if (!rawFloor) {
       ensureFloorInStore();
       return;
     }
     const normalized = ensureHospitalityFloor(rawFloor);
     if (normalized !== rawFloor) ensureFloorInStore();
-  }, [ensureFloorInStore, rawFloor]);
+  }, [ensureFloorInStore, rawFloor, hospitality]);
 
-  const hospitality = isHospitalityMode(businessType, hospitalityModeEnabled);
   useHospitalityFloorPoll(hospitality);
   const areas = floor?.areas?.filter((a) => a.isActive) ?? [];
-  const activeAreaId = areaId ?? areas[0]?.id ?? null;
+  // A saved area id can outlive a floor reset or shop switch; fall back instead of showing nothing.
+  const activeAreaId = areaId && areas.some((a) => a.id === areaId) ? areaId : (areas[0]?.id ?? null);
   const tables = useMemo(() => {
     if (!floor) return [];
     let list = visibleFloorTables(floor, activeAreaId).filter((tbl) => tbl.isActive);
@@ -128,6 +134,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
 
   const pendingTotal = floor ? totalOpenTablesPendingUgx(sales, floor) : 0;
   const canKitchen = actorHasPermission(actor, "hospitality.kitchen");
+  const barOnly = usePosStore((s) => hospitalityBarOnlyFromPrefs(s.preferences));
   const canOrder = actorHasPermission(actor, "hospitality.order");
   const namedTabs = floor ? activeNamedTabs(floor) : [];
 
@@ -139,8 +146,10 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
     );
   }
 
-  const openSheetTable = tables.find((tbl) => tbl.id === openSheetTableId);
-  const openSheetArea = openSheetTable ? areas.find((a) => a.id === openSheetTable.areaId) : undefined;
+  // Look up in the full floor, not the area/filter-limited list: keypad "Go", reservation
+  // "Seat" and waitlist seating can target a table that is not currently displayed.
+  const openSheetTable = openSheetTableId ? floor?.tables.find((tbl) => tbl.id === openSheetTableId) : undefined;
+  const openSheetArea = openSheetTable ? floor?.areas.find((a) => a.id === openSheetTable.areaId) : undefined;
 
   const goToOrder = (sessionId: string) => {
     persistView();
@@ -372,7 +381,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         onFloor={() => undefined}
         onReservations={() => navigate("/floor/reservations")}
         onDocuments={() => navigate("/pending-sales")}
-        onStats={() => navigate("/owner-dashboard")}
+        onStats={() => navigate("/owner")}
       />
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card px-3 py-2">
@@ -401,7 +410,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
                 onClick={() => navigate("/kitchen")}
                 className="min-h-9 rounded border border-border px-3 text-xs font-bold"
               >
-                {t(lang, "floorKitchenLink")}
+                {t(lang, barOnly ? "hospitalityStation_bar" : "floorKitchenLink")}
               </button>
             ) : null}
             <button

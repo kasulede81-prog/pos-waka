@@ -48,3 +48,21 @@ export const HOSPITALITY_NAV_CATALOG: HospitalityNavItem[] = [
   { path: "/floor/reservations", labelKey: "navReservations", Icon: Calendar, perm: "hospitality.floor" },
   { path: "/reports", labelKey: "navReports", Icon: BarChart3, perm: "reports.view" },
 ];
+
+/**
+ * Nav items a user sees. Style-aware:
+ *  - kitchen workflow off: no Expo (kitchen-to-pass screen); Kitchen becomes the Bar screen
+ *    when the shop is bar-only (its only production station).
+ * Permissions still decide everything else.
+ */
+export function visibleHospitalityNavItems(input: {
+  hasPerm: (perm: Permission) => boolean;
+  kitchenEnabled: boolean;
+  barOnly: boolean;
+}): HospitalityNavItem[] {
+  return HOSPITALITY_NAV_CATALOG.filter((item) => input.hasPerm(item.perm))
+    .filter((item) => input.kitchenEnabled || item.path !== "/expo")
+    .map((item) =>
+      item.path === "/kitchen" && input.barOnly ? { ...item, labelKey: "hospitalityStation_bar" } : item,
+    );
+}

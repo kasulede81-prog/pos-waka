@@ -154,6 +154,33 @@ export function isKitchenEnabledForHospitality(
   return defaultKitchenEnabledForBusinessType(businessType, hospitalityStyle);
 }
 
+/** The preference fields that decide kitchen vs bar operation (all optional / primitive). */
+export type HospitalityOpsPrefs = {
+  businessType?: BusinessType | null;
+  hospitalityModeEnabled?: boolean | null;
+  hospitalityKitchenEnabled?: boolean | null;
+  hospitalityStyle?: HospitalityOperatingStyle | null;
+};
+
+/**
+ * Single answer to "is the kitchen workflow on for this shop?". Explicit setting wins; otherwise
+ * the operating style decides (bar = off, restaurant / restaurant_bar = on). Callers must use this
+ * instead of `hospitalityKitchenEnabled !== false` or a resolver call that omits the style.
+ */
+export function hospitalityKitchenEnabledFromPrefs(prefs: HospitalityOpsPrefs): boolean {
+  return isKitchenEnabledForHospitality(prefs.businessType, prefs.hospitalityKitchenEnabled, prefs.hospitalityStyle);
+}
+
+/** Bar style with the kitchen workflow off — the bar station is the only production screen. */
+export function hospitalityBarOnlyFromPrefs(prefs: HospitalityOpsPrefs): boolean {
+  return isBarOnlyMode(
+    prefs.businessType,
+    prefs.hospitalityModeEnabled,
+    prefs.hospitalityKitchenEnabled,
+    prefs.hospitalityStyle,
+  );
+}
+
 export function emptyHospitalityFloor(): HospitalityFloorState {
   return {
     areas: [],

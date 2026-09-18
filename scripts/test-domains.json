@@ -27,7 +27,20 @@
     "src/lib/restaurantReceiptPrint.test.ts",
     "src/lib/kitchenChitPrint.test.ts",
     "src/lib/menuProduction.test.ts",
-    "src/lib/productHospitalityRouting.test.ts"
+    "src/lib/productHospitalityRouting.test.ts",
+    "src/lib/hospitalityTableWorkflow.test.ts",
+    "src/lib/hospitalitySplitBill.test.ts",
+    "src/lib/hospitalityStyleConfig.test.ts",
+    "src/lib/hospitalityCreditPayment.test.ts",
+    "src/lib/hospitalityDiscountApproval.test.ts",
+    "src/lib/hospitalitySelectorStability.test.ts",
+    "src/lib/hospitalitySyncMerge.test.ts",
+    "src/lib/hospitalityCloudSync.integration.test.ts",
+    "src/lib/hospitalityEnabledBusinessType.sql.integration.test.ts",
+    "src/lib/hospitalityTicketStaleGuards.sql.integration.test.ts",
+    "src/lib/floorDisplayPrefs.test.ts",
+    "src/lib/terminalHome.test.ts",
+    "src/config/hospitalityOnboardingVisibility.test.ts"
   ],
   "pharmacy": [
     "src/lib/pharmacyIsolation.test.ts",
@@ -130,7 +143,8 @@
   ],
   "kitchen": [
     "src/lib/kitchenChitPrint.test.ts",
-    "src/lib/menuProduction.test.ts"
+    "src/lib/menuProduction.test.ts",
+    "src/lib/kitchenProduction.test.ts"
   ],
   "payments": [
     "src/lib/debtWorkflow.test.ts",

@@ -37,6 +37,7 @@ import { useSubscription } from "../../context/SubscriptionContext";
 import { useAiFeatureGate } from "../../hooks/useAiFeatureGate";
 
 import { usePosStore } from "../../store/usePosStore";
+import { hospitalityBarOnlyFromPrefs } from "../../lib/hospitality";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { activeDayDrawerOpenForDate, isFormulaV2 } from "../../lib/dayDrawerOpen";
 import type { OfficeHubSectionId } from "../../lib/officeHubSections";
@@ -67,6 +68,7 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
   const pt = usePharmacyTerms(lang, access.preferences.businessType, access.preferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, access.preferences.businessType, access.preferences.hospitalityModeEnabled);
   const wt = useWholesaleTerms(lang, access.preferences.businessType);
+  const hospitalityBarOnly = hospitalityBarOnlyFromPrefs(preferences);
   const highlightCustomers = !access.pharmacyMode && !access.hospitalityMode && !access.wholesaleMode;
   const highlightPharmacyPatients = access.pharmacyMode;
   const highlightStock = true;
@@ -98,7 +100,7 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
         {access.hospitalityMode && access.can("hospitality.kitchen") ? (
           <OfficeNavCard
             to="/kitchen"
-            title={t(lang, "navKitchen")}
+            title={t(lang, hospitalityBarOnly ? "hospitalityStation_bar" : "navKitchen")}
             subtitle={t(lang, "officeCardKitchenSub")}
             Icon={ChefHat}
             highlight

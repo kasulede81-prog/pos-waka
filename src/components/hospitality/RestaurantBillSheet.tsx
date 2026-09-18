@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { Language, SaleLine, TableSession } from "../../types";
 import { t } from "../../lib/i18n";
@@ -53,6 +53,12 @@ export function RestaurantBillSheet({
   const recordTableBillPayment = usePosStore((s) => s.recordTableBillPayment);
   const finalizeTableBill = usePosStore((s) => s.finalizeTableBill);
   const printRestaurantReceiptForSale = usePosStore((s) => s.printRestaurantReceiptForSale);
+  // Same store fields and shared debt rule as retail checkout (PosCheckoutPanel).
+  const customers = usePosStore((s) => s.customers);
+  const saleCustomerId = usePosStore((s) => s.draftSaleCustomerId);
+  const saleCustomerName = usePosStore((s) => s.draftSaleCustomerName);
+  const saleCustomerPhone = usePosStore((s) => s.draftSaleCustomerPhone);
+  const setDraftSaleCustomer = usePosStore((s) => s.setDraftSaleCustomer);
 
   const billDraft = useMemo(
     () => billDraftFromSale(pendingSale, preferences),
@@ -81,12 +87,18 @@ export function RestaurantBillSheet({
     billDraft.tipMode === "percent" ? String(billDraft.tipPercent ?? 0) : String(billDraft.tipUgx ?? 0),
   );
   const [localBusy, setLocalBusy] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const payTapLockedRef = useRef(false);
   const [selectedSplitId, setSelectedSplitId] = useState<string | null>(null);
 
   const selectedSplit = billDraft.splits.find((s) => s.id === selectedSplitId) ?? null;
   const splitOwedUgx = selectedSplit ? splitRemainingUgx(selectedSplit) : totals.remainingBalanceUgx;
 
   const payUgx = Math.max(0, Math.floor(Number(payAmount.replace(/\D/g, "")) || 0));
+  const creditNeedsCustomer =
+    payMethod === "credit" &&
+    !(saleCustomerId && customers.some((c) => c.id === saleCustomerId)) &&
+    !saleCustomerName.trim();
   const openedAt = new Date(session.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const applyBillAdjustments = () => {
@@ -103,6 +115,14 @@ export function RestaurantBillSheet({
 
   const handleRecordPayment = () => {
     if (busy || localBusy) return;
+    // localBusy is set and cleared synchronously, so it never blocks a second tap: the first tap
+    // clears the amount box, and a fast second tap then fell back to the whole split balance.
+    if (payTapLockedRef.current) return;
+    payTapLockedRef.current = true;
+    window.setTimeout(() => {
+      payTapLockedRef.current = false;
+    }, 800);
+    setPayError(null);
     applyBillAdjustments();
     const amount = payUgx > 0 ? payUgx : splitOwedUgx;
     if (amount <= 0) return;
@@ -114,7 +134,10 @@ export function RestaurantBillSheet({
       splitId: selectedSplitId,
     });
     setLocalBusy(false);
-    if (!res.ok) return;
+    if (!res.ok) {
+      setPayError(res.errorKey ?? "saleError");
+      return;
+    }
     if (selectedSplitId && activePendingSaleId) {
       const splitIdx = billDraft.splits.findIndex((s) => s.id === selectedSplitId);
       void printRestaurantReceiptForSale(activePendingSaleId, {
@@ -140,9 +163,11 @@ export function RestaurantBillSheet({
     if (busy || localBusy) return;
     applyBillAdjustments();
     setLocalBusy(true);
+    setPayError(null);
     const res = finalizeTableBill();
     setLocalBusy(false);
     if (res.ok) onFinalized();
+    else setPayError(res.errorKey ?? "saleError");
   };
 
   if (!open) return null;
@@ -175,10 +200,15 @@ export function RestaurantBillSheet({
       }
       footer={
         <div className="space-y-2">
+          {payError ? (
+            <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-center text-sm font-bold text-rose-800">
+              {t(lang, payError)}
+            </p>
+          ) : null}
           {totals.remainingBalanceUgx > 0 ? (
             <button
               type="button"
-              disabled={busy || localBusy}
+              disabled={busy || localBusy || creditNeedsCustomer}
               onClick={handleRecordPayment}
               className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-waka-600 text-lg font-black text-white disabled:opacity-50"
             >
@@ -398,6 +428,48 @@ export function RestaurantBillSheet({
             className="mt-1 min-h-[48px] w-full rounded-xl border border-border px-4 text-xl font-black"
           />
         </label>
+        {payMethod === "credit" ? (
+          <div className="mb-2 space-y-2 rounded-xl bg-amber-50 p-3">
+            <p className="text-xs font-bold text-amber-950">{t(lang, "debtRequiresCustomerName")}</p>
+            <label className="block">
+              <span className="text-xs font-bold text-muted-foreground">{t(lang, "paymentDebtNameLabel")}</span>
+              <input
+                value={saleCustomerName}
+                onChange={(e) => setDraftSaleCustomer({ customerName: e.target.value })}
+                placeholder={t(lang, "paymentDebtNamePlaceholder")}
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-bold"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-bold text-muted-foreground">{t(lang, "paymentDebtPhoneLabel")}</span>
+              <input
+                value={saleCustomerPhone}
+                onChange={(e) => setDraftSaleCustomer({ customerPhone: e.target.value })}
+                placeholder={t(lang, "personPhonePh")}
+                inputMode="tel"
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-bold"
+              />
+            </label>
+            {customers.length > 0 ? (
+              <label className="block">
+                <span className="text-xs font-bold text-muted-foreground">{t(lang, "paymentPickExistingDebt")}</span>
+                <select
+                  value={saleCustomerId}
+                  onChange={(e) => setDraftSaleCustomer({ customerId: e.target.value })}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-bold"
+                >
+                  <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.debtBalanceUgx > 0 ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
         {(payMethod === "mobile_money" || payMethod === "voucher" || payMethod === "atm" || payMethod === "card") && (
           <label className="block">
             <span className="text-xs font-bold text-muted-foreground">{t(lang, "restaurantBillReference")}</span>

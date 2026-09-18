@@ -4,13 +4,14 @@ import { t } from "../lib/i18n";
 import { computeFloorNotifications, reservationsForDate } from "../lib/hospitalityFrontOfHouse";
 import { usePosStore } from "../store/usePosStore";
 import { PageBackBar } from "../components/layout/PageBackBar";
+import { dateKeyKampala } from "../lib/datesUg";
 
 type ViewMode = "daily" | "weekly" | "timeline";
 
 export function ReservationCalendarPage({ lang }: { lang: Language }) {
   const floor = usePosStore((s) => s.preferences.hospitalityFloor);
   const ensureHospitalityFloor = usePosStore((s) => s.ensureHospitalityFloor);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(dateKeyKampala(new Date()));
   const [view, setView] = useState<ViewMode>("daily");
   const updateReservation = usePosStore((s) => s.updateTableReservation);
 
@@ -21,6 +22,8 @@ export function ReservationCalendarPage({ lang }: { lang: Language }) {
 
   const weekDates = useMemo(() => {
     const start = new Date(date);
+    // A cleared date input yields "" -> Invalid Date, and toISOString() would throw during render.
+    if (Number.isNaN(start.getTime())) return [];
     const day = start.getDay();
     start.setDate(start.getDate() - day);
     return Array.from({ length: 7 }, (_, i) => {

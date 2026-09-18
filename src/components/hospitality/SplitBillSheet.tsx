@@ -7,6 +7,7 @@ import { ModalSheet } from "../layout/ModalSheet";
 import {
   splitBillByItem,
   splitBillBySeat,
+  reconcileSplitsToTotal,
   splitBillEqual,
   validateCustomSplits,
 } from "../../lib/restaurantBilling";
@@ -32,15 +33,18 @@ export function SplitBillSheet({ lang, open, totalUgx, lines = [], guestCount = 
   const [bucketLabels, setBucketLabels] = useState<Record<string, string>>({ A: "Bill A", B: "Bill B" });
 
   const equalSplits = useMemo(() => splitBillEqual(totalUgx, people), [people, totalUgx]);
-  const seatSplits = useMemo(() => splitBillBySeat(lines, people), [lines, people]);
+  const seatSplits = useMemo(
+    () => reconcileSplitsToTotal(splitBillBySeat(lines, people), totalUgx),
+    [lines, people, totalUgx],
+  );
   const itemSplits = useMemo(() => {
     const assignments: Record<string, string> = {};
     for (const line of lines) {
       const lineId = line.id ?? line.productId;
       assignments[lineId] = itemBuckets[lineId] ?? "A";
     }
-    return splitBillByItem(lines, assignments, bucketLabels);
-  }, [lines, itemBuckets, bucketLabels]);
+    return reconcileSplitsToTotal(splitBillByItem(lines, assignments, bucketLabels), totalUgx);
+  }, [lines, itemBuckets, bucketLabels, totalUgx]);
 
   const customSum = rows.reduce((a, r) => a + r.amountUgx, 0);
   const customValid = validateCustomSplits(rows, totalUgx);

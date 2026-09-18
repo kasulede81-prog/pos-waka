@@ -10,7 +10,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { formatUgx } from "../lib/formatUgx";
 import { computeDraftCheckoutTotals } from "../lib/draftCart";
 import { computeRestaurantBillTotals, billDraftFromSale } from "../lib/restaurantBilling";
-import { isNamedTabSession, sessionDisplayLabel } from "../lib/hospitality";
+import { hospitalityKitchenEnabledFromPrefs, isNamedTabSession, sessionDisplayLabel } from "../lib/hospitality";
 import { preparedPortionsAvailable, productPrepMode } from "../lib/recipeEngine";
 import { sessionKitchenSummary } from "../lib/hospitalityOps";
 import { BAR_FIRE_STATION_TYPES, KITCHEN_FIRE_STATION_TYPES } from "../lib/kitchenRouting";
@@ -50,7 +50,8 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const syncCustomerDisplay = usePosStore((s) => s.syncCustomerDisplay);
   const applyDraftLineDiscount = usePosStore((s) => s.applyDraftLineDiscount);
   const setDraftCartDiscount = usePosStore((s) => s.setDraftCartDiscount);
-  const setDraftLineQuantity = usePosStore((s) => s.setDraftLineQuantity);
+  const adjustDraftLineQuantityById = usePosStore((s) => s.adjustDraftLineQuantityById);
+  const requestTableBill = usePosStore((s) => s.requestTableBill);
   const addHospitalityDraftLine = usePosStore((s) => s.addHospitalityDraftLine);
   const productNeedsOrderConfig = usePosStore((s) => s.productNeedsOrderConfig);
   const removeDraftLineById = usePosStore((s) => s.removeDraftLineById);
@@ -67,8 +68,10 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const transferTableSession = usePosStore((s) => s.transferTableSession);
   const mergeTableSessions = usePosStore((s) => s.mergeTableSessions);
   const setHospitalityManualKitchenFire = usePosStore((s) => s.setHospitalityManualKitchenFire);
-  const manualKitchenFire = usePosStore((s) => s.preferences.hospitalityManualKitchenFire === true);
-  const kitchenEnabled = usePosStore((s) => s.preferences.hospitalityKitchenEnabled !== false);
+  const manualKitchenFire = usePosStore((s) => s.preferences.hospitalityManualKitchenFire);
+  // Style-aware: a bar has no kitchen unless the merchant switched it on (a raw `!== false`
+  // treated every bar as having one).
+  const kitchenEnabled = usePosStore((s) => hospitalityKitchenEnabledFromPrefs(s.preferences));
 
   const { products, draftLines, draftCartDiscountUgx, floor, favoriteProductIds } = usePosStore(
     useShallow((s) => ({
@@ -76,7 +79,9 @@ export function TableOrderPage({ lang }: { lang: Language }) {
       draftLines: s.draftLines,
       draftCartDiscountUgx: s.draftCartDiscountUgx,
       floor: s.preferences.hospitalityFloor,
-      favoriteProductIds: s.preferences.favoriteProductIds ?? [],
+      // Raw reference on purpose: `?? []` here is a fresh array per call whenever the
+      // shop has no favorites yet, which makes useShallow loop forever (React #185).
+      favoriteProductIds: s.preferences.favoriteProductIds,
     })),
   );
 
@@ -101,8 +106,11 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const [reviewMode, setReviewMode] = useState(false);
   const [keypadValue, setKeypadValue] = useState("");
 
+  // This screen is built around explicit "Send to kitchen / bar" buttons, so manual firing is the
+  // default — but only when the merchant never chose. Forcing it on every mount silently undid
+  // the shop's own "manual kitchen fire" setting.
   useEffect(() => {
-    if (manualKitchenFire) return;
+    if (manualKitchenFire !== undefined) return;
     setHospitalityManualKitchenFire(true);
   }, [manualKitchenFire, setHospitalityManualKitchenFire]);
 
@@ -117,13 +125,15 @@ export function TableOrderPage({ lang }: { lang: Language }) {
     if (!sessionId) return;
     let cancelled = false;
     void (async () => {
-      if (cancelled) return;
-      await resumeTableSession(sessionId);
+      const res = await resumeTableSession(sessionId);
+      // A closed/missing session or a sale that could not be loaded must not leave the
+      // waiter on an empty order screen (e.g. Back after settling).
+      if (!res.ok && !cancelled) navigate("/floor", { replace: true });
     })();
     return () => {
       cancelled = true;
     };
-  }, [sessionId, resumeTableSession]);
+  }, [sessionId, resumeTableSession, navigate]);
 
   useEffect(() => {
     syncCustomerDisplay();
@@ -188,8 +198,11 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const returnToFloor = useCallback(() => {
     const saved = loadFloorViewState();
     saveFloorViewState(saved ?? { areaId: area?.id ?? null, scrollTop: 0, zoom: 1 });
+    // Detach this table's cart (callers have already saved it). Otherwise the floor's
+    // Takeaway button opens /pos still bound to this table's pending sale.
+    clearActiveTableOrder();
     navigate("/floor");
-  }, [navigate, area?.id]);
+  }, [navigate, area?.id, clearActiveTableOrder]);
 
   const handleSaveAndReturn = useCallback(() => {
     setActionBusy(true);
@@ -219,18 +232,9 @@ export function TableOrderPage({ lang }: { lang: Language }) {
     [saveTableBill, fireTableStationTickets, lang, returnToFloor],
   );
 
-  if (!session || (!isNamedTab && !table)) {
-    return <Navigate to="/floor" replace />;
-  }
-
-  const canSettle = actorHasPermission(actor, "hospitality.settle");
-  const canTransfer = actorHasPermission(actor, "hospitality.transfer") && !isNamedTab;
-  const canSendKitchen = actorHasPermission(actor, "hospitality.order") && kitchenEnabled;
-  const canSendBar = actorHasPermission(actor, "hospitality.order");
-  const orderTitle = isNamedTab
-    ? sessionDisplayLabel(session, floor!)
-    : `${table!.label}${area ? ` · ${area.name}` : ""}`;
-
+  // Hooks must all run before the early return below (Rules of Hooks): a session
+  // that is missing on one render and present on the next would otherwise change
+  // the hook count and crash the page.
   const tryDiscount = useCallback(
     (action: () => { ok: boolean; errorKey?: string }, kind: "line" | "bill") => {
       const r = action();
@@ -252,6 +256,19 @@ export function TableOrderPage({ lang }: { lang: Language }) {
     clearActiveTableOrder();
     returnToFloor();
   }, [clearActiveTableOrder, returnToFloor]);
+
+  const sessionIsLive = session?.status === "open" || session?.status === "payment_pending";
+  if (!session || !sessionIsLive || (!isNamedTab && !table)) {
+    return <Navigate to="/floor" replace />;
+  }
+
+  const canSettle = actorHasPermission(actor, "hospitality.settle");
+  const canTransfer = actorHasPermission(actor, "hospitality.transfer") && !isNamedTab;
+  const canSendKitchen = actorHasPermission(actor, "hospitality.order") && kitchenEnabled;
+  const canSendBar = actorHasPermission(actor, "hospitality.order");
+  const orderTitle = isNamedTab
+    ? sessionDisplayLabel(session, floor!)
+    : `${table!.label}${area ? ` · ${area.name}` : ""}`;
 
   return (
     <ShiftSellGateway lang={lang}>
@@ -519,6 +536,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
           onTransfer={canTransfer ? () => setTableAction("transfer") : undefined}
           onRequestBill={() => {
             saveTableBill();
+            requestTableBill(session.id);
             setPreviewOpen(true);
           }}
           onSettle={() => {
@@ -709,8 +727,11 @@ export function TableOrderPage({ lang }: { lang: Language }) {
           onClose={() => setQtyEditLine(null)}
           onConfirm={(qty) => {
             if (!qtyEditLine) return;
-            const r = setDraftLineQuantity(qtyEditLine.productId, qty);
+            // Line-id based so variants, modifiers, notes and combo price survive the edit
+            // (setDraftLineQuantity rebuilt a plain product line and hit the wrong line).
+            const r = adjustDraftLineQuantityById(qtyEditLine.id ?? qtyEditLine.productId, qty - qtyEditLine.quantity);
             if (r.ok) saveTableBill();
+            else showDiscountError(r.errorKey);
             setQtyEditLine(null);
           }}
         />

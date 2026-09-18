@@ -162,7 +162,7 @@ import { KITCHEN_FIRE_STATION_TYPES } from "../lib/productHospitalityRouting";
 import {
   fireKitchenTicketsForLines,
   cancelKitchenTicket,
-  mergeSaleLines,
+  mergeTableSaleLines,
   mergeSessionsOnFloor,
   pruneServedKitchenTickets,
   transferSessionToTable,
@@ -1011,11 +1011,6 @@ export type PosState = {
     reason: string;
     managerPin?: string;
   }) => { ok: boolean; errorKey?: string };
-  reopenTableBill: (input: {
-    sessionId: string;
-    reason: string;
-    managerPin: string;
-  }) => { ok: boolean; errorKey?: string; sessionId?: string };
   voidSettledTableBill: (input: {
     sessionId: string;
     reason: string;
@@ -3626,6 +3621,9 @@ export const usePosStore = create<PosState>((set, get) => {
         ...applyIndustryReceiptDefaults(s.preferences, businessType),
       },
     }));
+    // The default floor is created locally with random ids; reconcile it with the cloud layout
+    // (pull first, then push) so sessions/tickets can sync and a 2nd device adopts the same floor.
+    if (hospitality) queueHospitalityChange({ layout: true });
   },
 
   completeShopOnboardingWizard: (input) => {
@@ -3656,6 +3654,9 @@ export const usePosStore = create<PosState>((set, get) => {
         ...applyIndustryReceiptDefaults(s.preferences, input.businessType),
       },
     }));
+    // The default floor is created locally with random ids; reconcile it with the cloud layout
+    // (pull first, then push) so sessions/tickets can sync and a 2nd device adopts the same floor.
+    if (hospitality) queueHospitalityChange({ layout: true });
   },
 
   updateBusinessType: (businessType, hospitalityStyle) => {
@@ -3682,6 +3683,9 @@ export const usePosStore = create<PosState>((set, get) => {
         ...applyIndustryReceiptDefaults(s.preferences, businessType),
       },
     }));
+    // The default floor is created locally with random ids; reconcile it with the cloud layout
+    // (pull first, then push) so sessions/tickets can sync and a 2nd device adopts the same floor.
+    if (hospitality) queueHospitalityChange({ layout: true });
   },
 
   setDraftInput: (input) => {
@@ -4108,10 +4112,28 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
-    const session = floor.sessions.find((s) => s.id === sessionId);
+    const session = floor.sessions?.find((s) => s.id === sessionId);
     if (!session || (session.status !== "open" && session.status !== "payment_pending")) {
       return { ok: false, errorKey: "invalid" };
     }
+    // Bind this table's cart immediately (or clear it): while the cloud refresh below is
+    // awaited — or if it rejects — the previous table's lines and pending-sale id must not
+    // stay active, or edits and Settle would hit the wrong table's sale.
+    const localSale = state.sales.find((s) => s.id === session.saleId);
+    set(
+      localSale
+        ? {
+            draftLines: localSale.lines.map((l) => ({ ...ensureSaleLineId(l) })),
+            draftCartDiscountUgx: cartDiscountFromPendingSale(localSale),
+            activePendingSaleId: localSale.id,
+            preferences: { ...state.preferences, activeTableSessionId: sessionId },
+            draftInput: null,
+          }
+        : {
+            ...emptyDraftPatch(),
+            preferences: { ...state.preferences, activeTableSessionId: sessionId },
+          },
+    );
     if (getDeviceOnline() && hasSupabaseConfig) {
       const { refreshPendingSaleFromCloud } = await import("../offline/cloudSync");
       await refreshPendingSaleFromCloud(session.saleId);
@@ -4138,6 +4160,11 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!saleId) return { ok: false, errorKey: "invalid" };
     const sessionId = state.preferences.activeTableSessionId;
     const existing = state.sales.find((s) => s.id === saleId);
+    // A settled (or voided) sale is immutable, exactly like retail: never rebuild it as a
+    // pending order. This used to be reachable when a stale activePendingSaleId pointed at it.
+    if (existing && (isCompletedSale(existing) || Boolean(existing.saleVoidedAt))) {
+      return { ok: false, errorKey: "invalid" };
+    }
     const baseUpdatedAt = existing?.updatedAt ?? null;
     const draftLines = state.draftLines.map((l) => ensureSaleLineId(l));
     const deletedLineIds = existing ? deletedLineIdsFromDraft(existing.lines, draftLines) : [];
@@ -4211,6 +4238,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const sessionId = state.preferences.activeTableSessionId;
     if (!saleId || !sessionId) return { ok: false, errorKey: "invalid" };
     const existing = state.sales.find((s) => s.id === saleId);
+    if (existing && (isCompletedSale(existing) || Boolean(existing.saleVoidedAt))) {
+      return { ok: false, errorKey: "invalid" };
+    }
     const pendingSale = buildPendingSaleFromDraft({
       saleId,
       lines: state.draftLines,
@@ -4232,7 +4262,9 @@ export const usePosStore = create<PosState>((set, get) => {
     nextFloor = fireKitchenTicketsForLines({
       floor: nextFloor,
       session,
-      previousLines: existing?.lines ?? [],
+      // Baseline is what tickets already fired, not the saved sale: saveTableBill has
+      // just written the draft into `existing`, so diffing against it always yields nothing.
+      previousLines: [],
       newLines: pendingSale.lines,
       products: state.products,
       tableLabel: sessionDisplayLabel(session, nextFloor),
@@ -4260,6 +4292,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const sessionId = state.preferences.activeTableSessionId;
     if (!saleId || !sessionId) return { ok: false, errorKey: "invalid" };
     const existing = state.sales.find((s) => s.id === saleId);
+    if (existing && (isCompletedSale(existing) || Boolean(existing.saleVoidedAt))) {
+      return { ok: false, errorKey: "invalid" };
+    }
     const pendingSale = buildPendingSaleFromDraft({
       saleId,
       lines: state.draftLines,
@@ -4281,7 +4316,9 @@ export const usePosStore = create<PosState>((set, get) => {
     nextFloor = fireKitchenTicketsForLines({
       floor: nextFloor,
       session,
-      previousLines: existing?.lines ?? [],
+      // Baseline is what tickets already fired, not the saved sale: saveTableBill has
+      // just written the draft into `existing`, so diffing against it always yields nothing.
+      previousLines: [],
       newLines: pendingSale.lines,
       products: state.products,
       tableLabel: sessionDisplayLabel(session, nextFloor),
@@ -4352,16 +4389,31 @@ export const usePosStore = create<PosState>((set, get) => {
   mergeTableSessions: (sourceSessionId, targetSessionId) => {
     const denied = denyUnlessEffectivePermission("hospitality.transfer", "mergeTableSessions");
     if (denied) return { ok: false, errorKey: denied.errorKey };
+    // Merging is an OPERATIONAL move of an open order onto another open order. It must never
+    // move, copy or drop financial history, so only live, unpaid, still-pending orders qualify.
+    if (sourceSessionId === targetSessionId) return { ok: false, errorKey: "invalid" };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
     const source = floor.sessions.find((s) => s.id === sourceSessionId);
     const target = floor.sessions.find((s) => s.id === targetSessionId);
     if (!source || !target) return { ok: false, errorKey: "invalid" };
+    const isLive = (s: { status: string }) => s.status === "open" || s.status === "payment_pending";
+    if (!isLive(source) || !isLive(target)) return { ok: false, errorKey: "invalid" };
     const sourceSale = state.sales.find((s) => s.id === source.saleId);
     const targetSale = state.sales.find((s) => s.id === target.saleId);
     if (!sourceSale || !targetSale) return { ok: false, errorKey: "missingProduct" };
-    const mergedLines = mergeSaleLines(targetSale.lines, sourceSale.lines);
+    // A settled / voided / cancelled sale is immutable (retail lifecycle).
+    if (!isPendingSale(sourceSale) || !isPendingSale(targetSale)) return { ok: false, errorKey: "invalid" };
+    // Payments and splits recorded on a bill belong to THAT bill; merging would either drop them
+    // (guests charged twice) or move them onto a different bill. Settle or clear them first.
+    const hasRecordedMoney = (sale: Sale) =>
+      (sale.billDraft?.payments?.length ?? 0) > 0 || (sale.billDraft?.splits?.length ?? 0) > 0;
+    if (hasRecordedMoney(sourceSale) || hasRecordedMoney(targetSale)) {
+      return { ok: false, errorKey: "mergeBlockedPaymentsRecorded" };
+    }
+
+    const { lines: mergedLines, lineIdRemap } = mergeTableSaleLines(targetSale.lines, sourceSale.lines, state.products);
     const mergedLineSubtotal = mergedLines.reduce((a, l) => a + l.lineTotalUgx, 0);
     const combinedCartDiscount = Math.min(
       mergedLineSubtotal,
@@ -4377,8 +4429,36 @@ export const usePosStore = create<PosState>((set, get) => {
       soldByAuthUserId: targetSale.soldByAuthUserId ?? null,
       existing: targetSale,
     });
-    const cancelledSource: Sale = { ...sourceSale, status: "cancelled", updatedAt: new Date().toISOString(), pendingSync: true };
-    const nextFloor = mergeSessionsOnFloor(floor, sourceSessionId, targetSessionId);
+    const at = new Date().toISOString();
+    const actor = state.sessionActor;
+    // Same pre-completion void marker retail's cancelPendingSale uses (audit trail included).
+    const cancelledSource = markPendingSaleAsPreCompletionVoid(sourceSale, {
+      at,
+      actorUserId: actor?.userId ?? null,
+      actorLabel: actor?.displayName?.trim() || null,
+    });
+    let nextFloor = mergeSessionsOnFloor(floor, sourceSessionId, targetSessionId);
+    // Tickets already fired for the source order now belong to the target order, and lines that
+    // were folded together keep counting as fired — otherwise the next "Send to kitchen"
+    // would re-send everything that came from the source table.
+    const movedTicketIds: string[] = [];
+    nextFloor = {
+      ...nextFloor,
+      kitchenTickets: (nextFloor.kitchenTickets ?? []).map((tk) => {
+        if (tk.tableSessionId !== sourceSessionId) return tk;
+        movedTicketIds.push(tk.id);
+        return {
+          ...tk,
+          tableSessionId: targetSessionId,
+          saleId: targetSale.id,
+          items: tk.items.map((it) =>
+            it.saleLineId && lineIdRemap.has(it.saleLineId) ? { ...it, saleLineId: lineIdRemap.get(it.saleLineId)! } : it,
+          ),
+          updatedAt: at,
+          pendingSync: true,
+        };
+      }),
+    };
     set({
       sales: [updatedTarget, cancelledSource, ...state.sales.filter((s) => s.id !== targetSale.id && s.id !== sourceSale.id)],
       preferences: { ...state.preferences, hospitalityFloor: nextFloor, activeTableSessionId: targetSessionId },
@@ -4392,7 +4472,7 @@ export const usePosStore = create<PosState>((set, get) => {
       baseUpdatedAt: targetSale.updatedAt ?? null,
     });
     void queueRemote("pending_sales", { saleId: sourceSale.id, kind: "pending_cancel" });
-    queueHospitalityChange({ sessionIds: [sourceSessionId, targetSessionId] });
+    queueHospitalityChange({ sessionIds: [sourceSessionId, targetSessionId], ticketIds: movedTicketIds });
     flushPendingPersist();
     return { ok: true };
   },
@@ -4541,9 +4621,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
     const next = removeDiningArea(floor, areaId);
-    if (next.tables.length === floor.tables.length && next.areas.length === floor.areas.length) {
-      return { ok: false, errorKey: "tableOccupied" };
-    }
+    // The editor returns the same floor object when it refuses (a table in the area has a live order).
+    if (next === floor) return { ok: false, errorKey: "tableOccupied" };
     set({ preferences: { ...state.preferences, hospitalityFloor: next } });
     queueHospitalityChange({ layout: true });
     flushPendingPersist();
@@ -4580,7 +4659,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
     const next = removeDiningTable(floor, tableId);
-    if (next.tables.length === floor.tables.length) return { ok: false, errorKey: "tableOccupied" };
+    if (next === floor) return { ok: false, errorKey: "tableOccupied" };
     set({ preferences: { ...state.preferences, hospitalityFloor: next } });
     queueHospitalityChange({ layout: true });
     flushPendingPersist();
@@ -4617,7 +4696,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
     const next = removeKitchenStation(floor, stationId);
-    if (next.stations.length === floor.stations.length) return { ok: false, errorKey: "kitchenStationBusy" };
+    if (next === floor) return { ok: false, errorKey: "kitchenStationBusy" };
     set({ preferences: { ...state.preferences, hospitalityFloor: next } });
     queueHospitalityChange({ layout: true });
     flushPendingPersist();

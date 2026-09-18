@@ -23,13 +23,8 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
 
-  if (!actorHasPermission(actor, "settings.shop")) {
-    return <Navigate to="/settings" replace />;
-  }
-  if (!isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
-    return <Navigate to="/settings" replace />;
-  }
-
+  // All hooks run before the guard returns below (Rules of Hooks): the permission /
+  // business-type guards can flip between renders when an admin switches the shop mode.
   const menuProducts = useMemo(
     () =>
       products.filter((p) => {
@@ -49,6 +44,13 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
   const topDishes = useMemo(() => aggregateDishSales(sales).slice(0, 5), [sales]);
   const topModifiers = useMemo(() => aggregateModifierPopularity(sales).slice(0, 5), [sales]);
   const lowMargin = useMemo(() => lowMarginMenuItems(products, 35).slice(0, 5), [products]);
+
+  if (!actorHasPermission(actor, "settings.shop")) {
+    return <Navigate to="/settings" replace />;
+  }
+  if (!isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
+    return <Navigate to="/settings" replace />;
+  }
 
   return (
     <div className="space-y-5 pb-8">
@@ -117,6 +119,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
         <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           {selected ? (
             <ProductMenuConfigFields
+              key={selected.id}
               lang={lang}
               product={selected}
               ingredientProducts={ingredientProducts.length ? ingredientProducts : products}

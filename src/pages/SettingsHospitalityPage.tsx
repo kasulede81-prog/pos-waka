@@ -8,7 +8,7 @@ import { usePosStore } from "../store/usePosStore";
 import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSaveShell";
 import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
-import { isHospitalityMode, isKitchenEnabledForHospitality } from "../lib/hospitality";
+import { hospitalityKitchenEnabledFromPrefs, hospitalityStyleForBusinessType, isHospitalityMode } from "../lib/hospitality";
 import { inferProductHospitalityRouting } from "../lib/productHospitalityRouting";
 import { resolveIngredientPolicyConfig } from "../lib/hospitalityHardware";
 import { computeRestaurantBillTotals } from "../lib/restaurantBilling";
@@ -20,10 +20,8 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
   const updateProduct = usePosStore((s) => s.updateProduct);
   const [applyMsg, setApplyMsg] = useState<string | null>(null);
 
-  const kitchenOn = isKitchenEnabledForHospitality(
-    preferences.businessType,
-    preferences.hospitalityKitchenEnabled,
-  );
+  const kitchenOn = hospitalityKitchenEnabledFromPrefs(preferences);
+  const barStyle = hospitalityStyleForBusinessType(preferences.businessType, preferences.hospitalityStyle) === "bar";
   const ingPolicy = resolveIngredientPolicyConfig(preferences);
   const taxPreview = computeRestaurantBillTotals({
     lines: [
@@ -57,7 +55,7 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
 
       <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <p className="text-base font-black text-foreground">{t(lang, "hospitalitySettingsKitchenTitle")}</p>
-        {preferences.businessType === "bar" ? (
+        {barStyle ? (
           <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "hospitalitySettingsKitchenDefaultBar")}</p>
         ) : null}
         <div className="mt-4 space-y-3">

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link2, RotateCcw, Unlink, XCircle } from "lucide-react";
+import { Link2, Unlink, XCircle } from "lucide-react";
 import type { HospitalityFloorState, Language, TableSession } from "../../types";
 import { t } from "../../lib/i18n";
 import { ModalSheet } from "../layout/ModalSheet";
@@ -17,7 +17,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Tab = "combine" | "split" | "reopen" | "void";
+type Tab = "combine" | "split" | "void";
 
 function closedSessions(floor: HospitalityFloorState): TableSession[] {
   return floor.sessions
@@ -28,7 +28,6 @@ function closedSessions(floor: HospitalityFloorState): TableSession[] {
 export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Props) {
   const combineTables = usePosStore((s) => s.combineTables);
   const splitCombinedTables = usePosStore((s) => s.splitCombinedTables);
-  const reopenTableBill = usePosStore((s) => s.reopenTableBill);
   const voidSettledTableBill = usePosStore((s) => s.voidSettledTableBill);
   const sales = usePosStore((s) => s.sales);
   const preferences = usePosStore((s) => s.preferences);
@@ -82,20 +81,6 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
     setStatus(t(lang, "hospitalitySplitDone"));
   };
 
-  const runReopen = (managerPin: string) => {
-    if (!selectedSessionId || !reason.trim()) return;
-    setBusy(true);
-    const res = reopenTableBill({ sessionId: selectedSessionId, reason: reason.trim(), managerPin });
-    setBusy(false);
-    if (!res.ok) {
-      setStatus(t(lang, res.errorKey ?? "saleError"));
-      setPinResetSignal((n) => n + 1);
-      return;
-    }
-    setStatus(t(lang, "hospitalityReopenDone"));
-    onClose();
-  };
-
   const runVoid = (managerPin: string) => {
     if (!selectedSessionId || !reason.trim()) return;
     setBusy(true);
@@ -113,7 +98,6 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
   const tabs: { id: Tab; label: string; Icon: typeof Link2 }[] = [
     { id: "combine", label: t(lang, "hospitalityManagerCombine"), Icon: Link2 },
     { id: "split", label: t(lang, "hospitalityManagerSplit"), Icon: Unlink },
-    { id: "reopen", label: t(lang, "hospitalityManagerReopen"), Icon: RotateCcw },
     { id: "void", label: t(lang, "hospitalityManagerVoid"), Icon: XCircle },
   ];
 
@@ -201,10 +185,10 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
         </div>
       ) : null}
 
-      {(tab === "reopen" || tab === "void") && (
+      {tab === "void" && (
         <div className="mt-4 space-y-3">
           <p className="text-sm font-medium text-muted-foreground">
-            {tab === "reopen" ? t(lang, "hospitalityReopenSub") : t(lang, "hospitalityVoidSub")}
+            {t(lang, "hospitalityVoidSub")}
           </p>
           <ul className="max-h-40 space-y-2 overflow-y-auto">
             {closed.map((session) => {
@@ -214,7 +198,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
                 <li key={session.id}>
                   <button
                     type="button"
-                    disabled={tab === "reopen" ? false : voided}
+                    disabled={voided}
                     onClick={() => setSelectedSessionId(session.id)}
                     className={`min-h-12 w-full rounded-xl border-2 px-3 text-left text-sm font-bold ${
                       selectedSessionId === session.id ? "border-waka-600 bg-waka-50" : "border-border"
@@ -243,11 +227,7 @@ export function HospitalityManagerToolsSheet({ lang, open, floor, onClose }: Pro
               if (!verifyManagerApprovalPinSync(managerPin, preferences)) {
                 return false;
               }
-              if (tab === "reopen") {
-                runReopen(managerPin);
-              } else {
-                runVoid(managerPin);
-              }
+              runVoid(managerPin);
               return true;
             }}
           />

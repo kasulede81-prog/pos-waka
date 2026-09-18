@@ -9,7 +9,8 @@ import type {
   SaleLineComboSelection,
   SaleLineModifier,
 } from "../types";
-import { mergeDraftSaleLine, shouldMergeDraftSaleLines } from "../lib/draftCart";
+import { shouldMergeDraftSaleLines } from "../lib/draftCart";
+import { mergeHospitalityDraftLine } from "../lib/hospitalityLineMerge";
 import { buildComboSaleLine, normalizeComboConfig } from "../lib/comboMeals";
 import {
   buildConfiguredSaleLine,
@@ -115,7 +116,10 @@ export function createHospitalityMenuStoreActions(deps: Deps) {
           (l) => l.productId === line.productId && shouldMergeDraftSaleLines(l, line),
         );
         if (existing && shouldMergeDraftSaleLines(existing, line)) {
-          const merged = mergeDraftSaleLine(existing, line, input.product);
+          // Shared rule: plain lines merge via the retail cart, configured lines keep their
+          // modifiers, combos never merge (see mergeHospitalityDraftLine).
+          const merged = mergeHospitalityDraftLine(existing, line, input.product);
+          if (!merged) return { draftLines: [...s.draftLines, line], draftInput: null };
           return {
             draftLines: s.draftLines.map((l) => (l.id === existing.id ? merged : l)),
             draftInput: null,
