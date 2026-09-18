@@ -6,12 +6,10 @@ import type { SqlExec } from "./transferEnginePgHarness";
 export type { SqlExec };
 
 const BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "loyaltyBootstrap.sql");
-const MIGRATION = join(
-  process.cwd(),
-  "supabase",
-  "migrations",
-  "20260918024500_loyalty_data_foundation.sql",
-);
+const MIGRATIONS = [
+  join(process.cwd(), "supabase", "migrations", "20260918024500_loyalty_data_foundation.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260918090000_loyalty_merchant_ui.sql"),
+];
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -39,7 +37,7 @@ export async function createLoyaltySqlHarness(): Promise<SqlExec> {
       },
     };
     await exec.exec(readSql(BOOTSTRAP));
-    await exec.exec(readSql(MIGRATION));
+    for (const migration of MIGRATIONS) await exec.exec(readSql(migration));
     await exec.exec(FORCE_RLS);
     return exec;
   }
@@ -61,7 +59,7 @@ export async function createLoyaltySqlHarness(): Promise<SqlExec> {
     },
   };
   await exec.exec(readSql(BOOTSTRAP));
-  await exec.exec(readSql(MIGRATION));
+  for (const migration of MIGRATIONS) await exec.exec(readSql(migration));
   await exec.exec(FORCE_RLS);
   return exec;
 }
@@ -96,6 +94,9 @@ export function rpcJson(row: Record<string, unknown> | undefined): Record<string
     row?.loyalty_reverse_for_sale ??
     row?.loyalty_enroll_customer ??
     row?.loyalty_adjust_points ??
+    row?.loyalty_shop_overview ??
+    row?.loyalty_update_program ??
+    row?.loyalty_search_accounts ??
     row?.result;
   if (raw && typeof raw === "object") return raw as Record<string, unknown>;
   if (typeof raw === "string") return JSON.parse(raw) as Record<string, unknown>;

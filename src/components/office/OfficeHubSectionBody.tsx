@@ -9,6 +9,7 @@ import {
   Share2,
   TrendingUp,
   CreditCard,
+  Gift,
   HelpCircle,
   User,
   Banknote,
@@ -212,6 +213,14 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             title={t(lang, "receipts")}
             subtitle={t(lang, "officeCardReceiptsSub")}
             Icon={Receipt}
+          />
+        ) : null}
+        {access.can("customers.view") ? (
+          <OfficeNavCard
+            to="/office/loyalty"
+            title={t(lang, "loyaltyHubTitle")}
+            subtitle={t(lang, "loyaltyHubSub")}
+            Icon={Gift}
           />
         ) : null}
         {askWakaGate.enabled && access.can("reports.view") ? (

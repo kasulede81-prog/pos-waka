@@ -77,6 +77,16 @@ function writeCachedProgram(shopId: string, config: LoyaltyProgramConfig): void 
   }
 }
 
+/** Drop the offline program cache after a merchant config change (Phase 04). */
+export function clearCachedProgram(shopId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PROGRAM_CACHE_PREFIX + shopId);
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Fetch the shop's loyalty program. On network failure fall back to the last
  * cached config so offline checkout can still show an *estimate* (the award
