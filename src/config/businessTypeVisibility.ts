@@ -46,7 +46,7 @@ export const REGISTRATION_SAFE_BUSINESS_TYPE_SETTINGS: PlatformBusinessTypeSetti
   showExperimental: false,
 };
 
-const HOSPITALITY_TYPES: BusinessType[] = ["restaurant", "bar", "restaurant_bar", "hotel"];
+const HOSPITALITY_TYPES: BusinessType[] = ["hospitality", "restaurant", "bar", "restaurant_bar", "hotel"];
 
 export function isExperimentalBusinessType(id: BusinessType): boolean {
   return (EXPERIMENTAL_BUSINESS_TYPE_IDS as readonly string[]).includes(id);

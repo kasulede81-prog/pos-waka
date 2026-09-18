@@ -28,6 +28,7 @@ export function businessCardIdFromType(businessType: BusinessType | null): strin
     case "bar":
     case "hotel":
     case "restaurant_bar":
+    case "hospitality":
       return "hospitality";
     default:
       return "retail";

@@ -227,6 +227,7 @@ const ShopRescueConsolePage = lazy(() =>
   import("./pages/ShopRescueConsolePage").then((m) => ({ default: m.ShopRescueConsolePage })),
 );
 const CustomersPage = lazy(() => import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage })));
+const LoyaltyHubPage = lazy(() => import("./pages/LoyaltyHubPage").then((m) => ({ default: m.LoyaltyHubPage })));
 const ProfitPage = lazy(() => import("./pages/ProfitPage").then((m) => ({ default: m.ProfitPage })));
 const AskWakaPage = lazy(() => import("./pages/AskWakaPage").then((m) => ({ default: m.AskWakaPage })));
 const ReportsPage = lazy(() => import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
@@ -523,6 +524,16 @@ function AppRoutes() {
                 <RoleProtectedRoute permission="back_office.access">
                   <Suspense fallback={<LazyWait />}>
                     <OfficeHubSectionPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/loyalty"
+              element={
+                <RoleProtectedRoute permission="customers.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <LoyaltyHubPage lang={lang} />
                   </Suspense>
                 </RoleProtectedRoute>
               }

@@ -15,6 +15,7 @@ import { ONBOARDING_BUSINESS_CARDS, ONBOARDING_SELLING_STYLES } from "../config/
 import {
   HOSPITALITY_ONBOARDING_GROUP_ID,
   businessTypeForHospitalityStyle,
+  hospitalityStyleForStyleId,
   hospitalityStyleIdForBusinessType,
   isHospitalityOnboardingGroupCard,
   type HospitalityOnboardingStyleId,
@@ -93,7 +94,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const [pickedHospitalityGroup, setPickedHospitalityGroup] = useState(false);
   const [hospitalityStyleId, setHospitalityStyleId] = useState<HospitalityOnboardingStyleId>(() => {
     const fromPrefs = preferences.businessType;
-    return hospitalityStyleIdForBusinessType(fromPrefs) ?? "restaurant";
+    return hospitalityStyleIdForBusinessType(fromPrefs, preferences.hospitalityStyle) ?? "restaurant";
   });
   const [sellingStyle, setSellingStyle] = useState<ShopSellingStyle>("piece");
   const [busy, setBusy] = useState(false);
@@ -173,14 +174,14 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
 
   useEffect(() => {
     const bt = preferences.businessType;
-    const style = hospitalityStyleIdForBusinessType(bt);
+    const style = hospitalityStyleIdForBusinessType(bt, preferences.hospitalityStyle);
     if (style) {
       setPickedHospitalityGroup(true);
       setSelectedBusinessCardId(HOSPITALITY_ONBOARDING_GROUP_ID);
       setHospitalityStyleId(style);
       setBusinessType(bt);
     }
-  }, [preferences.businessType]);
+  }, [preferences.businessType, preferences.hospitalityStyle]);
 
   const districtLabel = useMemo(
     () => districts.find((d) => d.id === districtId)?.name ?? "",
@@ -297,6 +298,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
         shopName,
         businessType,
         sellingStyle,
+        hospitalityStyle: hospitalityStyleForStyleId(hospitalityStyleId),
         phone: ph ?? "",
         districtId,
         latitude: opts.lat,

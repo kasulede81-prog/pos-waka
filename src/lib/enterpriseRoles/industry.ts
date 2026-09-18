@@ -13,6 +13,7 @@ export function resolveRoleIndustry(businessType: BusinessType | null | undefine
     case "bar":
     case "restaurant_bar":
     case "hotel":
+    case "hospitality":
       return "hospitality";
     default:
       return "retail";

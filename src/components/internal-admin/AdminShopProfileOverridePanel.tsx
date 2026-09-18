@@ -4,6 +4,28 @@ import { adminShopUpdateProfile, formatDisplayEmail, formatOwnerDisplayLabel } f
 import { fetchDistricts, type DistrictRow } from "../../lib/shopDistricts";
 import { BUSINESS_TYPE_IDS } from "../../config/businessTypes";
 import type { BusinessType } from "../../types";
+import { t } from "../../lib/i18n";
+
+/**
+ * Hospitality consolidation — restaurant / bar / restaurant_bar are legacy
+ * stored values, not separate top-level choices. They stay selectable ONLY
+ * when that is the shop's current stored value (no forced migration), and are
+ * clearly marked legacy.
+ */
+const LEGACY_HOSPITALITY_IDS: readonly BusinessType[] = ["restaurant", "bar", "restaurant_bar"];
+
+function selectableBusinessTypeIds(current: BusinessType): BusinessType[] {
+  const base = BUSINESS_TYPE_IDS.filter(
+    (id) => !(LEGACY_HOSPITALITY_IDS as readonly string[]).includes(id),
+  );
+  if ((LEGACY_HOSPITALITY_IDS as readonly string[]).includes(current)) return [...base, current];
+  return base;
+}
+
+function businessTypeLabel(id: BusinessType): string {
+  const label = t("en", `businessType_${id}`);
+  return (LEGACY_HOSPITALITY_IDS as readonly string[]).includes(id) ? `${label} (legacy)` : label;
+}
 
 type Props = {
   detail: ShopOpsDetail;
@@ -189,13 +211,18 @@ export function AdminShopProfileOverridePanel({
               onChange={(e) => setBusinessType(e.target.value as BusinessType)}
               className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
             >
-              {BUSINESS_TYPE_IDS.map((id) => (
+              {selectableBusinessTypeIds(businessType).map((id) => (
                 <option key={id} value={id}>
-                  {id.replace(/_/g, " ")}
+                  {businessTypeLabel(id)}
                 </option>
               ))}
             </select>
           </label>
+          <p className="text-[11px] font-medium text-muted-foreground">
+            Hospitality is one unified type — Restaurant / Bar / Restaurant + Bar are operating
+            configurations chosen on the owner's device, not separate architectures. Legacy
+            values remain selectable only for shops still storing them.
+          </p>
           <label className="block text-xs font-bold text-foreground">
             Address
             <input

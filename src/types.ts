@@ -398,6 +398,7 @@ export type BusinessType =
   | "wholesale"
   | "mini_supermarket"
   | "hardware"
+  | "hospitality"
   | "restaurant"
   | "bar"
   | "restaurant_bar"
@@ -409,6 +410,13 @@ export type BusinessType =
   | "produce_market"
   | "mobile_money_agent"
   | "other";
+
+/**
+ * Hospitality operating configuration — NOT a separate business architecture.
+ * Stored alongside businessType "hospitality"; legacy shops keep their original
+ * restaurant / bar / restaurant_bar businessType and derive the style from it.
+ */
+export type HospitalityOperatingStyle = "restaurant" | "bar" | "restaurant_bar";
 
 /** Client sale lifecycle — pending maps to DB draft */
 export type SaleStatus = "completed" | "pending" | "cancelled";
@@ -2558,6 +2566,13 @@ export type ShopPreferences = {
   dayReopenHistory?: DayReopenRecord[];
   /** Kill switch — when false, fall back to retail Sell even for hospitality business types */
   hospitalityModeEnabled?: boolean;
+  /**
+   * Operating configuration for businessType "hospitality" (restaurant / bar /
+   * restaurant_bar). UI emphasis only — never a separate financial or product
+   * architecture. null/undefined = unspecific hospitality. Legacy shops with
+   * businessType restaurant/bar/restaurant_bar derive the style from the type.
+   */
+  hospitalityStyle?: HospitalityOperatingStyle | null;
   /** Resume table order after refresh */
   activeTableSessionId?: string | null;
   /** When true, kitchen tickets fire only on explicit send (not each item tap) */

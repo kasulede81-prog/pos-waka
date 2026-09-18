@@ -1,4 +1,4 @@
-import type { BusinessType, ShopSellingStyle } from "../types";
+import type { BusinessType, HospitalityOperatingStyle, ShopSellingStyle } from "../types";
 import {
   finalizeOwnerOnboardingAfterCloudSave,
   messageForProfileSaveError,
@@ -13,6 +13,8 @@ export async function persistOnboardingChoices(input: {
   shopName: string;
   businessType: BusinessType;
   sellingStyle: ShopSellingStyle;
+  /** Operating configuration when businessType is "hospitality". */
+  hospitalityStyle?: HospitalityOperatingStyle | null;
   phone?: string;
   districtId: string;
   latitude?: number;
@@ -23,6 +25,7 @@ export async function persistOnboardingChoices(input: {
   store.completeShopOnboardingWizard({
     businessType: input.businessType,
     sellingStyle: input.sellingStyle,
+    hospitalityStyle: input.hospitalityStyle ?? null,
     latitude: input.latitude,
     longitude: input.longitude,
     gpsSkipped: input.gpsSkipped,

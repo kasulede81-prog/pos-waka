@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { ArrowLeft } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
@@ -36,6 +36,8 @@ type Props = {
   onSaleCustomerName: (name: string) => void;
   onSaleCustomerPhone: (phone: string) => void;
   onFinishSale: () => void;
+  /** Loyalty preview badge rendered above the pay-later customer section (Phase 03). */
+  loyaltyBadge?: ReactNode;
 };
 
 /** Full desktop — numpad and pay-later panel in the catalog (shelf) column. */
@@ -67,6 +69,7 @@ export function PosDesktopCatalogCheckoutDock({
   onSaleCustomerName,
   onSaleCustomerPhone,
   onFinishSale,
+  loyaltyBadge,
 }: Props) {
   const isCredit = paymentMethod === "credit";
   const needsAmountKeypad = paymentMethod === "cash" || paymentMethod === "credit";
@@ -133,6 +136,7 @@ export function PosDesktopCatalogCheckoutDock({
               onSaleCustomerName={onSaleCustomerName}
               onSaleCustomerPhone={onSaleCustomerPhone}
               useCustomKeypad
+              loyaltyBadge={loyaltyBadge}
             />
           </div>
         ) : null}

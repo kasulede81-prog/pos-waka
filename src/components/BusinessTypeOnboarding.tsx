@@ -9,6 +9,7 @@ import { AppModalOverlay } from "./layout/AppModalOverlay";
 import {
   NON_HOSPITALITY_BUSINESS_TYPE_IDS,
   businessTypeForHospitalityStyle,
+  hospitalityStyleForStyleId,
   hospitalityStyleIdForBusinessType,
   type HospitalityOnboardingStyleId,
 } from "../config/hospitalityOnboarding";
@@ -27,6 +28,7 @@ function featureKeyForBusinessType(type: BusinessType): string {
   if (type === "wholesale") return "businessTypeFeatures_wholesale";
   if (type === "mini_supermarket") return "businessTypeFeatures_mini_supermarket";
   if (type === "boutique") return "businessTypeFeatures_boutique";
+  if (type === "hospitality") return "businessTypeFeatures_restaurant_bar";
   if (type === "restaurant") return "businessTypeFeatures_restaurant";
   if (type === "bar") return "businessTypeFeatures_bar";
   if (type === "restaurant_bar") return "businessTypeFeatures_restaurant_bar";
@@ -76,7 +78,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
     isHospitalityBusinessType(preferences.businessType ?? null),
   );
   const [hospitalityStyleId, setHospitalityStyleId] = useState<HospitalityOnboardingStyleId>(() => {
-    return hospitalityStyleIdForBusinessType(preferences.businessType) ?? "restaurant";
+    return hospitalityStyleIdForBusinessType(preferences.businessType, preferences.hospitalityStyle) ?? "restaurant";
   });
   const [phone, setPhone] = useState(() => preferences.shopPhoneE164 ?? "");
   const [address, setAddress] = useState(() => preferences.shopAddressLine ?? "");
@@ -92,13 +94,16 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
       const d = JSON.parse(raw) as {
         shopName?: string;
         businessType?: BusinessType;
+        hospitalityStyleId?: HospitalityOnboardingStyleId;
         phone?: string;
         address?: string;
       };
       if (d.shopName) setShopName(d.shopName);
       if (d.businessType) {
         setBusinessType(d.businessType);
-        const style = hospitalityStyleIdForBusinessType(d.businessType);
+        const style =
+          (d.hospitalityStyleId as HospitalityOnboardingStyleId | undefined) ??
+          hospitalityStyleIdForBusinessType(d.businessType, preferences.hospitalityStyle);
         if (style) {
           setHospitalityFlow(true);
           setHospitalityStyleId(style);
@@ -113,11 +118,20 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
     }
   }, []);
 
-  const persistDraft = (next: { shopName: string; businessType: BusinessType; phone: string; address: string }) => {
+  const persistDraft = (next: {
+    shopName: string;
+    businessType: BusinessType;
+    phone: string;
+    address: string;
+    hospitalityStyleId?: HospitalityOnboardingStyleId;
+  }) => {
     try {
       const key = getDraftKey();
       if (!key) return;
-      localStorage.setItem(key, JSON.stringify(next));
+      localStorage.setItem(
+        key,
+        JSON.stringify({ ...next, hospitalityStyleId: next.hospitalityStyleId ?? hospitalityStyleId }),
+      );
     } catch {
       /* ignore */
     }
@@ -143,7 +157,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
     const bt = businessTypeForHospitalityStyle(styleId);
     setBusinessType(bt);
     triggerAiSetupPrefetch(bt);
-    persistDraft({ shopName, businessType: bt, phone, address });
+    persistDraft({ shopName, businessType: bt, phone, address, hospitalityStyleId: styleId });
   };
 
   return (
@@ -282,9 +296,12 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
               const resolvedType = hospitalityFlow
                 ? businessTypeForHospitalityStyle(hospitalityStyleId)
                 : businessType;
+              const resolvedStyle = hospitalityFlow
+                ? hospitalityStyleForStyleId(hospitalityStyleId)
+                : null;
               setBusy(true);
               try {
-                complete(resolvedType);
+                complete(resolvedType, resolvedStyle);
                 setPreferences({
                   shopDisplayName: shopName.trim(),
                   shopPhoneE164: phone.trim() || null,

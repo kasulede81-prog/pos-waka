@@ -72,6 +72,7 @@ export function industryReceiptFooterTemplate(businessType: BusinessType): strin
       return ["Keep medicines away from children", "Drugs sold are not returnable", "", ""];
     case "restaurant":
     case "hotel":
+    case "hospitality":
       return ["Thank you for dining with us", "Visit again", "", ""];
     case "bar":
     case "restaurant_bar":

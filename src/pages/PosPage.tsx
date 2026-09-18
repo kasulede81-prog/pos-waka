@@ -12,6 +12,7 @@ import { useCartAbandonVoid } from "../hooks/useCartAbandonVoid";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
 import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
+import { LoyaltyCheckoutBadge } from "../components/loyalty/LoyaltyCheckoutBadge";
 import { PosOperationalNav } from "../components/pos/PosOperationalNav";
 import { PosSellHeroCard } from "../components/pos/PosSellHeroCard";
 import { PosSellActionChip, PosSellActionChips } from "../components/pos/PosSellActionChips";
@@ -1662,6 +1663,9 @@ export function PosPage({ lang }: { lang: Language }) {
     onSavePending: handleSavePending,
     onFinishSale: finishSale,
     onAddCashNote: addCheckoutCashNote,
+    loyaltyBadge: (
+      <LoyaltyCheckoutBadge lang={lang} customerId={saleCustomerId} totalUgx={draftPayable} />
+    ),
   };
 
   const hierarchyCatalogNav = isSellHierarchyCatalogNav({
@@ -2260,6 +2264,9 @@ export function PosPage({ lang }: { lang: Language }) {
                 onSaleCustomerName={setSaleCustomerName}
                 onSaleCustomerPhone={setSaleCustomerPhone}
                 onFinishSale={finishSale}
+                loyaltyBadge={
+                  <LoyaltyCheckoutBadge lang={lang} customerId={saleCustomerId} totalUgx={draftPayable} />
+                }
               />
             </div>
           </div>
