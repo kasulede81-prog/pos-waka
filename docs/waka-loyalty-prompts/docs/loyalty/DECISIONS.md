@@ -253,3 +253,16 @@ the existing product/sale flow with their normal discount practice. This
 keeps the Retail/Kiosk Duka financial engine as the single source of truth —
 no second inventory ledger, no restaurant/POS-specific finalizer, and no
 financial behavior change from redeeming points.
+
+## Decision 024 — E2E Proof Is One Continuous Journey, Not a Checklist of Suites
+
+**Status:** Accepted (Phase 10)
+
+Final acceptance is evidenced by `loyaltyE2E.sql.integration.test.ts`: a
+single sequential story (merchant setup → enrollment → QR → sale → replay →
+return → void → redeem → replay → cross-shop attack → financial untouched)
+executed against real migration files in PGlite. Per-step suites from Phases
+02–08 remain as the detailed regression net, but the E2E file is the
+authoritative "the system works as one" proof and must stay green. External
+dependencies (Wallet issuer/certs, NFC hardware) are excluded from the
+journey by design and tracked as documented blockers, not hidden failures.
