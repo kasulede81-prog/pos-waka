@@ -100,7 +100,13 @@ import { defaultWizardUnitCostUgx } from "../lib/simpleProductWizard";
 import { isProductExpired, normalizeExpiryDate, shouldBlockExpiredSale } from "../lib/pharmacyExpiry";
 import { pharmacyQuickAddRequiresBuyPrice } from "../lib/pharmacyCostIntegrity";
 import { buildPharmacySaleLine, buyingUnitFromPackaging } from "../lib/pharmacyPackaging";
-import { applyBatchReceiveToProduct, applyPharmacyWriteOff, applySaleBatchFefo, shouldTrackBatchesForProduct } from "../lib/pharmacyStoreBatch";
+import {
+  applyBatchReceiveToProduct,
+  applyPharmacyWriteOff,
+  applySaleBatchFefo,
+  restoreSaleLineBatchQuantity,
+  shouldTrackBatchesForProduct,
+} from "../lib/pharmacyStoreBatch";
 import { createBatchOnReceive, withPharmacyFefoPreview } from "../lib/pharmacyBatches";
 import {
   buildNewPrescription,
@@ -5074,6 +5080,12 @@ export const usePosStore = create<PosState>((set, get) => {
     const finalizeAt = new Date().toISOString();
     const pendingId = state.activePendingSaleId;
     const existingPending = pendingId ? state.sales.find((s) => s.id === pendingId && s.status === "pending") : null;
+    // Computed once and reused for both the pharmacy batch-dispense audit
+    // trail (below) and the Sale itself (further down) — previously the
+    // batch-timeline refId used a separate `?? "draft"` fallback instead of
+    // this same id, so a fresh (non-resumed) sale's batch events could never
+    // be traced back to the sale that actually consumed them.
+    const saleId = existingPending?.id ?? crypto.randomUUID();
     const fefoOverrideAudits: Array<{
       productId: string;
       productName: string;
@@ -5100,15 +5112,6 @@ export const usePosStore = create<PosState>((set, get) => {
       const slotStart = resolvePackCostUnitsDepleted(p);
       const slotCosts = applyPackSlotCostsToSaleLine(p, moneyLine, slotStart);
       const cogsUgx = lineCostUgx(slotCosts.unitCostUgx, moneyLine.quantity);
-      preCartLines.push(
-        normalizeSaleLine({
-          ...moneyLine,
-          unitCostUgx: slotCosts.unitCostUgx,
-          cogsUgx,
-          baseUnit: p.baseUnit?.trim() || undefined,
-          estimatedProfitUgx: lineProfitUgx(moneyLine.lineTotalUgx, cogsUgx),
-        }),
-      );
       products[idx] = {
         ...p,
         stockOnHand: deductFinished ? Math.max(0, next) : p.stockOnHand,
@@ -5118,18 +5121,33 @@ export const usePosStore = create<PosState>((set, get) => {
         updatedAt: finalizeAt,
         version: deductFinished ? p.version + 1 : p.version,
       };
+      // Real FEFO allocation — computed BEFORE the SaleLine is built, so the
+      // persisted pharmacyBatchNumber/pharmacyBatchExpiry reflect what was
+      // actually deducted at finalize time, not the add-to-cart preview
+      // (which can go stale if stock changed between then and now). This
+      // also feeds the controlled-register audit entry and is what a later
+      // return/void resolves the restoration batch from.
+      let realBatchNumber = moneyLine.pharmacyBatchNumber ?? null;
+      let realBatchExpiry = moneyLine.pharmacyBatchExpiry ?? null;
+      let realBatchOverrideId = moneyLine.pharmacyBatchOverrideId ?? null;
       if (
         deductFinished &&
         shouldTrackBatchesForProduct(state.preferences.businessType, state.preferences.pharmacyModeEnabled, products[idx]!)
       ) {
         const fefo = applySaleBatchFefo(products[idx]!, moneyLine.quantity, {
           at: finalizeAt,
-          saleId: existingPending?.id ?? "draft",
+          saleId,
           actorUserId: state.sessionActor?.userId,
           actorName: state.sessionActor?.displayName,
           overrideBatchId: moneyLine.pharmacyBatchOverrideId,
         });
         products[idx] = fefo.product;
+        const primary = fefo.allocations[0];
+        if (primary) {
+          realBatchOverrideId = primary.batchId;
+          realBatchNumber = primary.batchNumber;
+          realBatchExpiry = primary.expiryDate;
+        }
         if (fefo.usedOverride) {
           fefoOverrideAudits.push({
             productId: p.id,
@@ -5140,6 +5158,18 @@ export const usePosStore = create<PosState>((set, get) => {
           });
         }
       }
+      preCartLines.push(
+        normalizeSaleLine({
+          ...moneyLine,
+          unitCostUgx: slotCosts.unitCostUgx,
+          cogsUgx,
+          baseUnit: p.baseUnit?.trim() || undefined,
+          estimatedProfitUgx: lineProfitUgx(moneyLine.lineTotalUgx, cogsUgx),
+          pharmacyBatchOverrideId: realBatchOverrideId,
+          pharmacyBatchNumber: realBatchNumber,
+          pharmacyBatchExpiry: realBatchExpiry,
+        }),
+      );
     }
 
     const recipeDeduction = applyRecipeStockDeduction(products, ingredientReq);
@@ -5168,7 +5198,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const debtorCustomer =
       customerId && debt > 0 ? customers.find((c) => c.id === customerId) : null;
     const sale: Sale = {
-      id: existingPending?.id ?? crypto.randomUUID(),
+      id: saleId,
       status: "completed",
       referenceLabel: existingPending?.referenceLabel ?? null,
       tableSessionId: existingPending?.tableSessionId ?? null,
@@ -5626,7 +5656,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const preVoidProduct = pIdx >= 0 ? products[pIdx]! : null;
     if (pIdx >= 0) {
       const p = products[pIdx]!;
-      products[pIdx] = {
+      let restored: Product = {
         ...p,
         stockOnHand: p.stockOnHand + voidQty,
         packCostUnitsDepleted: hasPackCostAllocation(p)
@@ -5635,6 +5665,22 @@ export const usePosStore = create<PosState>((set, get) => {
         updatedAt: at,
         version: p.version + 1,
       };
+      if (isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled)) {
+        // Core stockOnHand above is always correct and unconditional — this
+        // only tries to also put the units back in the specific batch they
+        // came from (resolved from the line's own batch reference, same as
+        // the existing controlled-return path). If the batch can no longer
+        // be resolved, this is a silent no-op — never an invented fallback
+        // batch — and computeBatchIntegrity stays the visible signal of any
+        // resulting drift, exactly as it already is for any other cause.
+        restored = restoreSaleLineBatchQuantity(
+          restored,
+          { pharmacyBatchOverrideId: line.pharmacyBatchOverrideId, pharmacyBatchNumber: line.pharmacyBatchNumber },
+          voidQty,
+          { type: "adjusted", at, refId: voidRec.id, actorUserId: actor.userId, actorName: actor.displayName, note: "sale_void" },
+        );
+      }
+      products[pIdx] = restored;
     }
 
     const movement: StockMovement = {
@@ -5882,19 +5928,34 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const restock = returnRestocksInventory(reason);
 
-    const products = live.products.map((p) =>
-      p.id === productId && restock
-        ? {
-            ...p,
-            stockOnHand: p.stockOnHand + qty,
-            packCostUnitsDepleted: hasPackCostAllocation(p)
-              ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, qty)
-              : p.packCostUnitsDepleted,
-            updatedAt: at,
-            version: p.version + 1,
-          }
-        : p,
-    );
+    const products = live.products.map((p) => {
+      if (p.id !== productId || !restock) return p;
+      let restored: Product = {
+        ...p,
+        stockOnHand: p.stockOnHand + qty,
+        packCostUnitsDepleted: hasPackCostAllocation(p)
+          ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, qty)
+          : p.packCostUnitsDepleted,
+        updatedAt: at,
+        version: p.version + 1,
+      };
+      if (isPharmacyMode(live.preferences.businessType, live.preferences.pharmacyModeEnabled)) {
+        // Same reasoning as voidSaleLine: core stockOnHand above is always
+        // correct; batch restoration is a best-effort addition, resolved
+        // from the original sale line's batch reference, silent no-op if
+        // unresolvable, never gating the core reversal.
+        restored = restoreSaleLineBatchQuantity(
+          restored,
+          {
+            pharmacyBatchOverrideId: saleLine?.pharmacyBatchOverrideId,
+            pharmacyBatchNumber: saleLine?.pharmacyBatchNumber,
+          },
+          qty,
+          { type: "returned", at, refId: returnRec.id, actorUserId: liveActor.userId, actorName: liveActor.displayName, note: "sale_return" },
+        );
+      }
+      return restored;
+    });
 
     const movement: StockMovement | null = restock
       ? {

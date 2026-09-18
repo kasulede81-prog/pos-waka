@@ -11,6 +11,7 @@ import {
   reconcileBatchQuantitiesToStock,
   sortBatchesFefo,
   sumBatchRemaining,
+  writeOffFromBatches,
 } from "./pharmacyBatches";
 
 function product(overrides: Partial<Product> = {}): Product {
@@ -47,14 +48,18 @@ describe("pharmacyBatches", () => {
   });
 
   it("allocates FEFO by earliest expiry first", () => {
+    // Explicit `at` anchor (well before either expiry date) keeps both
+    // batches genuinely "active" regardless of when this test actually
+    // runs — status is computed relative to `at`, not wall-clock "now".
+    const receivedAt = "2026-01-01T00:00:00.000Z";
     const p = product();
     let next = appendBatchToProduct(
       p,
-      createBatchOnReceive({ batchNumber: "LATE", expiryDate: "2027-06-01", quantityBase: 20, unitCostUgx: 100 }),
+      createBatchOnReceive({ batchNumber: "LATE", expiryDate: "2027-06-01", quantityBase: 20, unitCostUgx: 100, at: receivedAt }),
     );
     next = appendBatchToProduct(
       next,
-      createBatchOnReceive({ batchNumber: "SOON", expiryDate: "2026-03-01", quantityBase: 30, unitCostUgx: 100 }),
+      createBatchOnReceive({ batchNumber: "SOON", expiryDate: "2026-03-01", quantityBase: 30, unitCostUgx: 100, at: receivedAt }),
     );
     const batches = getProductBatches(next);
     const sorted = sortBatchesFefo(batches);
@@ -72,7 +77,13 @@ describe("pharmacyBatches", () => {
   it("deducts batches on dispense", () => {
     const next = appendBatchToProduct(
       product({ stockOnHand: 40 }),
-      createBatchOnReceive({ batchNumber: "A", expiryDate: "2026-04-01", quantityBase: 40, unitCostUgx: 100 }),
+      createBatchOnReceive({
+        batchNumber: "A",
+        expiryDate: "2026-04-01",
+        quantityBase: 40,
+        unitCostUgx: 100,
+        at: "2026-01-01T00:00:00.000Z", // keeps the batch "active" regardless of wall-clock "now"
+      }),
     );
     const result = deductProductBatchesFefo(next, 15, { at: "2026-01-01T10:00:00.000Z", refId: "sale-1" });
     expect(sumBatchRemaining(getProductBatches(result.product))).toBe(25);
@@ -186,13 +197,14 @@ describe("reconcileBatchQuantitiesToStock — safe reconciliation path (item 5)"
   });
 
   it("surplus: removes the excess FEFO-first (earliest-expiring batches first)", () => {
+    const receivedAt = "2026-01-01T00:00:00.000Z"; // keeps both batches "active" for the FEFO removal order
     let next = appendBatchToProduct(
       product({ stockOnHand: 20 }),
-      createBatchOnReceive({ batchNumber: "SOON", expiryDate: "2026-03-01", quantityBase: 15, unitCostUgx: 100 }),
+      createBatchOnReceive({ batchNumber: "SOON", expiryDate: "2026-03-01", quantityBase: 15, unitCostUgx: 100, at: receivedAt }),
     );
     next = appendBatchToProduct(
       next,
-      createBatchOnReceive({ batchNumber: "LATE", expiryDate: "2027-06-01", quantityBase: 15, unitCostUgx: 100 }),
+      createBatchOnReceive({ batchNumber: "LATE", expiryDate: "2027-06-01", quantityBase: 15, unitCostUgx: 100, at: receivedAt }),
     );
     // stockOnHand=20, batch sum=30 -> surplus of 10
     const result = reconcileBatchQuantitiesToStock(next);
@@ -231,7 +243,13 @@ describe("batch cost never creates a second COGS ledger (item J)", () => {
   it("sale-line COGS uses the product's authoritative cost, not a selected batch's unitCostUgx", () => {
     const p = appendBatchToProduct(
       product({ stockOnHand: 30, costPricePerUnitUgx: 200 }),
-      createBatchOnReceive({ batchNumber: "EXPENSIVE-BATCH", expiryDate: "2026-04-01", quantityBase: 30, unitCostUgx: 999 }),
+      createBatchOnReceive({
+        batchNumber: "EXPENSIVE-BATCH",
+        expiryDate: "2026-04-01",
+        quantityBase: 30,
+        unitCostUgx: 999,
+        at: "2026-01-01T00:00:00.000Z", // keeps the batch "active" so normal FEFO can select it
+      }),
     );
     // FEFO would select this exact (only) batch for a sale of 5 units.
     const fefo = deductProductBatchesFefo(p, 5, { at: "2026-01-01T10:00:00.000Z" });
@@ -242,5 +260,148 @@ describe("batch cost never creates a second COGS ledger (item J)", () => {
     // the product's own costPricePerUnitUgx (200).
     const cogs = lineCostForProductQuantity(fefo.product, 5);
     expect(cogs).toBe(1_000); // 5 * 200, NOT 5 * 999 = 4,995
+  });
+});
+
+/**
+ * WAKA POS — Pharmacy Phase 2: FEFO/expiry hardening.
+ *
+ * DEFECT FIXED: sortBatchesFefo/allocateFefo used to include
+ * status === "expired" batches in the DEFAULT (automatic) pool. Since an
+ * expired batch always sorts earliest, a product with both expired and
+ * active stock would have FEFO draw from the expired batch FIRST for an
+ * ordinary sale — even under a shop's "block expired sales" policy, because
+ * that policy's guard checks product-level expiry, which is false whenever
+ * ANY non-expired stock exists. Default is now to exclude expired batches
+ * from automatic allocation; write-offs explicitly opt back in via
+ * `{ includeExpired: true }` (the one legitimate exception — removing
+ * expired stock is the entire point of a write-off); an explicit
+ * `overrideBatchId` still bypasses status entirely, unchanged.
+ */
+describe("FEFO/expiry hardening — item B/C/E (Phase 2)", () => {
+  it("B — an expired batch is excluded from normal (automatic) FEFO allocation", () => {
+    let next = appendBatchToProduct(
+      product({ stockOnHand: 50 }),
+      createBatchOnReceive({
+        batchNumber: "EXPIRED",
+        expiryDate: "2026-03-01",
+        quantityBase: 20,
+        unitCostUgx: 100,
+        at: "2026-04-01T00:00:00.000Z", // received AFTER its own expiry -> status "expired" at creation
+      }),
+    );
+    next = appendBatchToProduct(
+      next,
+      createBatchOnReceive({
+        batchNumber: "ACTIVE",
+        expiryDate: "2027-01-01",
+        quantityBase: 30,
+        unitCostUgx: 100,
+        at: "2026-04-01T00:00:00.000Z",
+      }),
+    );
+    const batches = getProductBatches(next);
+    expect(batches.find((b) => b.batchNumber === "EXPIRED")!.status).toBe("expired");
+
+    const sorted = sortBatchesFefo(batches);
+    expect(sorted.map((b) => b.batchNumber)).toEqual(["ACTIVE"]); // EXPIRED never even appears in the pool
+
+    const alloc = allocateFefo(batches, 10);
+    expect(alloc.allocations).toHaveLength(1);
+    expect(alloc.allocations[0]!.batchNumber).toBe("ACTIVE"); // not EXPIRED, even though it expires "earlier"
+  });
+
+  it("B2 — an explicit overrideBatchId can still target an expired batch deliberately (unchanged)", () => {
+    const next = appendBatchToProduct(
+      product({ stockOnHand: 20 }),
+      createBatchOnReceive({
+        batchNumber: "EXPIRED",
+        expiryDate: "2026-03-01",
+        quantityBase: 20,
+        unitCostUgx: 100,
+        at: "2026-04-01T00:00:00.000Z",
+      }),
+    );
+    const expired = getProductBatches(next)[0]!;
+    const alloc = allocateFefo(getProductBatches(next), 5, expired.id);
+    expect(alloc.usedOverride).toBe(true);
+    expect(alloc.allocations[0]!.batchId).toBe(expired.id);
+  });
+
+  it("write-offs can still reach expired stock with no specific batch chosen (the one legitimate exception)", () => {
+    const next = appendBatchToProduct(
+      product({ stockOnHand: 20 }),
+      createBatchOnReceive({
+        batchNumber: "EXPIRED",
+        expiryDate: "2026-03-01",
+        quantityBase: 20,
+        unitCostUgx: 100,
+        at: "2026-04-01T00:00:00.000Z",
+      }),
+    );
+    const result = writeOffFromBatches(next, 5, "damaged"); // no batchId, reason isn't "expired" either
+    expect(result.writtenOff).toBe(5);
+    expect(getProductBatches(result.product)[0]!.quantityRemaining).toBe(15);
+  });
+
+  it("C — a depleted batch (quantityRemaining 0) is excluded regardless of expiry", () => {
+    let next = appendBatchToProduct(
+      product({ stockOnHand: 10 }),
+      createBatchOnReceive({ batchNumber: "DEPLETED", expiryDate: "2027-01-01", quantityBase: 10, unitCostUgx: 100, at: "2026-01-01T00:00:00.000Z" }),
+    );
+    // Deplete it fully first.
+    const depleted = deductProductBatchesFefo(next, 10, { at: "2026-01-02T00:00:00.000Z" }).product;
+    expect(getProductBatches(depleted)[0]!.quantityRemaining).toBe(0);
+    expect(getProductBatches(depleted)[0]!.status).toBe("depleted");
+
+    next = appendBatchToProduct(
+      depleted,
+      createBatchOnReceive({ batchNumber: "FRESH", expiryDate: "2027-06-01", quantityBase: 10, unitCostUgx: 100, at: "2026-01-02T00:00:00.000Z" }),
+    );
+    const alloc = allocateFefo(getProductBatches(next), 5);
+    expect(alloc.allocations).toHaveLength(1);
+    expect(alloc.allocations[0]!.batchNumber).toBe("FRESH");
+  });
+
+  it("E — insufficient total (eligible) batch quantity reports the shortfall instead of over-allocating", () => {
+    const next = appendBatchToProduct(
+      product({ stockOnHand: 8 }),
+      createBatchOnReceive({ batchNumber: "A", expiryDate: "2027-01-01", quantityBase: 8, unitCostUgx: 100, at: "2026-01-01T00:00:00.000Z" }),
+    );
+    const alloc = allocateFefo(getProductBatches(next), 15);
+    expect(alloc.allocations).toHaveLength(1);
+    expect(alloc.allocations[0]!.quantity).toBe(8); // took everything available
+    expect(alloc.remainingUnallocated).toBe(7); // honestly reports it couldn't fully allocate
+  });
+});
+
+/**
+ * WAKA POS — Pharmacy Phase 2: unbatched/legacy stock (item I).
+ *
+ * A product with NO batches at all (batches.length === 0) must be treated
+ * as explicitly out-of-scope for batch-quantity comparison — never a false
+ * "mismatch" — since core stockOnHand remains authoritative regardless.
+ */
+describe("unbatched/legacy stock — item I (Phase 2)", () => {
+  it("computeBatchIntegrity reports ok for a product with zero batches, any stockOnHand", () => {
+    const p = product({ stockOnHand: 250, pharmacyMaster: { batchTracked: true, expiryTracked: true } });
+    expect(getProductBatches(p)).toHaveLength(0);
+    const integrity = computeBatchIntegrity(p);
+    expect(integrity.ok).toBe(true);
+    expect(integrity.batchTracked).toBe(true); // tracked, just legitimately has no batches yet
+  });
+
+  it("deductProductBatchesFefo is a safe no-op for a product with zero batches", () => {
+    const p = product({ stockOnHand: 100 });
+    const result = deductProductBatchesFefo(p, 10, { at: "2026-01-01T00:00:00.000Z" });
+    expect(result.allocations).toHaveLength(0);
+    expect(result.product).toBe(p); // unchanged — core stockOnHand deduction (elsewhere) is unaffected by this no-op
+  });
+
+  it("reconcileBatchQuantitiesToStock is a safe no-op for a product with zero batches", () => {
+    const p = product({ stockOnHand: 100 });
+    const result = reconcileBatchQuantitiesToStock(p);
+    expect(result.ok).toBe(true);
+    expect(result.product).toBe(p);
   });
 });
