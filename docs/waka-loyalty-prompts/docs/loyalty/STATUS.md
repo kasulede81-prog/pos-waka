@@ -6,7 +6,7 @@ WAKA POS Loyalty System
 
 ## Current Phase
 
-`07-NFC.md`
+`08-REWARDS-REDEMPTION.md`
 
 ## Autonomous Execution
 
@@ -20,7 +20,7 @@ Kimi is authorized to continue from one successfully completed phase to the next
 - [x] 04 — Merchant Loyalty UI
 - [x] 05 — Customer Enrollment
 - [x] 06 — Google + Apple Wallet
-- [ ] 07 — NFC
+- [x] 07 — NFC
 - [ ] 08 — Rewards + Redemption
 - [ ] 09 — Production Hardening
 - [ ] 10 — Final E2E Audit
@@ -116,6 +116,17 @@ Do not mark a phase complete with failing tests or unresolved high-risk defects.
   tests (consent metadata, idempotent duplicates, backward-compat call,
   cross-shop/outsider denial, token resolution, forged-token and empty-token
   rejection) + 4 unit tests — 52 loyalty tests green; `tsc -b` clean.
+
+- Phase 07 — NFC feasibility + implementation complete (commit `21d7b42`).
+  Investigation matrix in `NFC-FEASIBILITY.md`: NDEF tag reading is the
+  supported mechanism (Web NFC where exposed); Apple Wallet VAS / Google
+  Smart Tap are external certifications, documented not faked; iOS stays on
+  QR until a native plugin exists. Android manifest declares optional NFC
+  permission; `src/services/hardware/nfcAdapter.ts` adds capability
+  detection + session + pure NDEF extraction accepting only `WAKA-LOYALTY:`
+  payloads; the hub scan card gains a tap action with graceful fallback.
+  10 unit tests (forgery guards, payload shapes, capability matrix).
+  Real-device tap testing is pending hardware — marked pending, not done.
 
 ## Blockers
 

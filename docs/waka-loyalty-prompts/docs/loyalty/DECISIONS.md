@@ -208,3 +208,19 @@ while the missing external credentials are documented as blockers in
 WALLET-INTEGRATION.md with a concrete setup checklist. No claim of real-time
 Wallet balance updates is made (Apple requires webServiceURL + push; Google
 requires REST patches) — both are specified as follow-up work.
+
+## Decision 021 — NFC Is NDEF Tag Reading for Identification Only
+
+**Status:** Accepted (Phase 07)
+
+The supported phone-to-credential mechanism is **NDEF tag reading** (the
+merchant device reads a sticker/card carrying `WAKA-LOYALTY:<qr_token>` via
+Web NFC where the platform exposes it). Phone-to-phone HCE is not practical
+(customer would need a custom app), Apple Wallet NFC requires Apple's VAS
+entitlement, and Google Smart Tap is for certified terminals — all three are
+documented as external dependencies in NFC-FEASIBILITY.md, not implemented.
+The Android manifest declares NFC as optional (`required=false`) so installs
+never block; unsupported devices keep QR/phone identification. Raw NFC bytes
+are never trusted: only prefixed payloads resolve, through the same
+shop-scoped `loyalty_account_by_token` lookup as QR, and points still come
+exclusively from the completed-sale trigger.
