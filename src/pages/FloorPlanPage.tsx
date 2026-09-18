@@ -33,7 +33,7 @@ import {
   reservationForTable,
   visibleFloorTables,
 } from "../lib/hospitalityFrontOfHouse";
-import { FLOOR_GRID_CLASS } from "../lib/floorDisplayPrefs";
+import { FLOOR_GRID_CLASS, selectFloorPlanSlice } from "../lib/floorDisplayPrefs";
 import { HospitalityOpsStatusStrip } from "../components/hospitality/HospitalityOpsStatusStrip";
 
 export function FloorPlanPage({ lang }: { lang: Language }) {
@@ -52,21 +52,11 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const suggestTablesForGuests = usePosStore((s) => s.suggestTablesForGuests);
   const startTableCleaning = usePosStore((s) => s.startTableCleaning);
   const finishTableCleaning = usePosStore((s) => s.finishTableCleaning);
-  const { businessType, hospitalityModeEnabled, rawFloor, sales, floorDisplayPrefs } = usePosStore(
-    useShallow((s) => {
-      const ext = s.preferences.hospitalityFloorDisplay;
-      return {
-        businessType: s.preferences.businessType,
-        hospitalityModeEnabled: s.preferences.hospitalityModeEnabled,
-        rawFloor: s.preferences.hospitalityFloor,
-        sales: s.sales,
-        floorDisplayPrefs: {
-          tableShape: ext?.tableShape ?? "classic",
-          tableSize: ext?.tableSize ?? "md",
-          gridDensity: ext?.gridDensity ?? "normal",
-        },
-      };
-    }),
+  const { businessType, hospitalityModeEnabled, rawFloor, sales, tableShape, tableSize, gridDensity } =
+    usePosStore(useShallow(selectFloorPlanSlice));
+  const floorDisplayPrefs = useMemo(
+    () => ({ tableShape, tableSize, gridDensity }),
+    [tableShape, tableSize, gridDensity],
   );
   const floor = useMemo(
     () => (rawFloor ? ensureHospitalityFloor(rawFloor) : undefined),

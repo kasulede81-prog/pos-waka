@@ -1,4 +1,4 @@
-import type { HospitalityFloorDisplayPrefs, ShopPreferences } from "../types";
+import type { HospitalityFloorDisplayPrefs, Sale, ShopPreferences } from "../types";
 
 export type ResolvedFloorDisplayPrefs = {
   tableShape: NonNullable<HospitalityFloorDisplayPrefs["tableShape"]>;
@@ -26,6 +26,25 @@ export const FLOOR_GRID_CLASS: Record<ResolvedFloorDisplayPrefs["gridDensity"], 
   normal: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6",
   spacious: "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4",
 };
+
+/**
+ * Store slice for FloorPlanPage, meant for `useShallow`. Every value must be a
+ * primitive or an existing store reference: `useShallow` compares top-level
+ * values with Object.is, so a nested object literal here is a new reference on
+ * every call and makes React loop forever (error #185).
+ */
+export function selectFloorPlanSlice(s: { preferences: ShopPreferences; sales: Sale[] }) {
+  const display = resolveFloorDisplayPrefs(s.preferences);
+  return {
+    businessType: s.preferences.businessType,
+    hospitalityModeEnabled: s.preferences.hospitalityModeEnabled,
+    rawFloor: s.preferences.hospitalityFloor,
+    sales: s.sales,
+    tableShape: display.tableShape,
+    tableSize: display.tableSize,
+    gridDensity: display.gridDensity,
+  };
+}
 
 export function resolveFloorDisplayPrefs(prefs: ShopPreferences): ResolvedFloorDisplayPrefs {
   const ext = prefs.hospitalityFloorDisplay;
