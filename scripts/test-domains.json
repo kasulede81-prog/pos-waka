@@ -105,7 +105,8 @@
     "src/lib/debtSyncIntegrity.test.ts",
     "src/offline/cashExpenseEntityPersist.test.ts",
     "src/lib/cancelPendingSaleAck.test.ts",
-    "src/offline/cancelPendingSaleUpload.test.ts"
+    "src/offline/cancelPendingSaleUpload.test.ts",
+    "src/offline/voidBeforeFirstAck.sync.integration.test.ts"
   ],
   "printing": [
     "src/lib/printQueue.test.ts",

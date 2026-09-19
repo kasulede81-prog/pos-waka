@@ -1082,7 +1082,14 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
   }
 
   const header = saleHeaderForCloudComplete(sale);
-  const activeLines = sale.lines.filter((line) => !line.voided).map(ensureSaleLineId);
+  // The first completion uploads the sale AS IT WAS PAID: the header above is the checkout snapshot, so the
+  // lines must be the checkout's lines too. A line voided afterwards (a whole-bill void voids them all)
+  // stays in this upload with its original amounts — the void reaches the server as an adjustment of this
+  // sale through the void ledger, never by rewriting it — and its index is its position in the sale, which
+  // is what the void record carries. (Dropping voided lines here made the lines disagree with the original
+  // header and the server rejected the sale with subtotal_mismatch.) Once a sale is completed on the server
+  // this payload is never applied again (shop_push_sale_complete acknowledges without mutating).
+  const activeLines = sale.lines.map(ensureSaleLineId);
   return {
     sale: {
       id: sale.id,
@@ -1405,26 +1412,52 @@ export async function pushSaleRowToCloud(
   return pushSaleToCloud(sale, ctx);
 }
 
+/** What shop_patch_hospitality_sale_metadata answers when the server has no COMPLETED sale with that id. */
+const SALE_NOT_COMPLETED_ON_SERVER = "sale_not_found_or_not_completed";
+
+type SaleMetadataPatchOutcome =
+  | { ok: true; updatedAt: string | undefined }
+  | { ok: false; error: string };
+
+async function patchHospitalitySaleMetadataOnce(sale: Sale, ctx: ShopCtx): Promise<SaleMetadataPatchOutcome> {
+  const { data, error } = await supabase!.rpc("shop_patch_hospitality_sale_metadata", {
+    p_shop_id: ctx.shopId,
+    p_sale_id: sale.id,
+    p_metadata: hospitalitySaleMetadata(sale),
+  });
+  if (error) return { ok: false, error: error.code ?? "sale_metadata_patch_failed" };
+  const result = data as { ok?: boolean; error?: string; updated_at?: string } | null;
+  if (!result?.ok) return { ok: false, error: result?.error ?? "sale_metadata_patch_rejected" };
+  return { ok: true, updatedAt: result.updated_at ? String(result.updated_at) : undefined };
+}
+
+/**
+ * Sync the void metadata (saleVoidedAt / reason / actor) of a whole-bill void onto the completed server sale.
+ *
+ * A void is an adjustment of a sale, never a replacement for it. If the bill was voided before its first cloud
+ * acknowledgement the server has no completed sale to patch (the patch RPC says so), and this device's queue
+ * row for the sale was routed here because the sale is now voided AND unsynced: the ORIGINAL sale is uploaded
+ * first (shop_push_sale_complete, idempotent — a sale that is already completed is acknowledged untouched), and
+ * only then is the void patched on. The sale stays unsynced (`pendingSync`) until the patch has succeeded, so
+ * the void's stock/ledger adjustments keep waiting for the sale exactly as they do for any other sale, and a
+ * failure at either step leaves the queue row in place to be retried from wherever it stopped.
+ */
 export async function pushHospitalitySaleMetadataPatch(sale: Sale, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(sale.id)) {
     markSaleSyncState(sale.id, false, "invalid_sale_id");
     return false;
   }
-  const { data, error } = await supabase.rpc("shop_patch_hospitality_sale_metadata", {
-    p_shop_id: ctx.shopId,
-    p_sale_id: sale.id,
-    p_metadata: hospitalitySaleMetadata(sale),
-  });
-  if (error) {
-    markSaleSyncState(sale.id, false, error.code ?? "sale_metadata_patch_failed");
+  let outcome = await patchHospitalitySaleMetadataOnce(sale, ctx);
+  if (!outcome.ok && outcome.error === SALE_NOT_COMPLETED_ON_SERVER) {
+    const completed = await pushSaleToCloud(sale, ctx, { deferAck: true });
+    if (!completed) return false; // pushSaleToCloud recorded why; the queue row stays and is retried
+    outcome = await patchHospitalitySaleMetadataOnce(sale, ctx);
+  }
+  if (!outcome.ok) {
+    markSaleSyncState(sale.id, false, outcome.error);
     return false;
   }
-  const result = data as { ok?: boolean; error?: string; updated_at?: string } | null;
-  if (!result?.ok) {
-    markSaleSyncState(sale.id, false, result?.error ?? "sale_metadata_patch_rejected");
-    return false;
-  }
-  const serverUpdatedAt = result.updated_at ? String(result.updated_at) : sale.updatedAt;
+  const serverUpdatedAt = outcome.updatedAt ?? sale.updatedAt;
   usePosStore.setState((s) => ({
     sales: s.sales.map((x) =>
       x.id === sale.id ? { ...x, updatedAt: serverUpdatedAt, pendingSync: false, lastSyncError: null } : x,
@@ -1433,7 +1466,7 @@ export async function pushHospitalitySaleMetadataPatch(sale: Sale, ctx: ShopCtx)
   return true;
 }
 
-export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean> {
+export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx, opts?: { deferAck?: boolean }): Promise<boolean> {
   if (!supabase || !isUuid(sale.id)) {
     markSaleSyncState(sale.id, false, "invalid_sale_id");
     return false;
@@ -1488,7 +1521,9 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
 
   await syncPackSlotStateForSaleLines(sale, ctx);
 
-  markSaleSyncState(sale.id, true, null);
+  // `deferAck`: the caller still has a follow-up upload (a void patch) to make before the sale counts as
+  // acknowledged, so the sale stays `pendingSync` until that has succeeded.
+  if (opts?.deferAck !== true) markSaleSyncState(sale.id, true, null);
   return true;
 }
 
