@@ -20,6 +20,7 @@ import { pricePerBaseUnitUgx } from "../../lib/sellingEngine";
 import { buildLineRefundBreakdown } from "../../lib/refundBreakdown";
 import { RefundBreakdownPanel } from "../returns/RefundBreakdownPanel";
 import { RefundReturnSummaryCard } from "../returns/RefundReturnSummaryCard";
+import { needsReturnLineChoice, resolveReturnLineId, returnLineChoices, returnProductPickList } from "../../lib/returnLineChoices";
 
 const REASONS: ReturnReason[] = ["wrong_item", "other", "damaged", "warm_bad", "broken"];
 
@@ -38,11 +39,14 @@ type Props = {
     refundAmountUgx: number;
     reason: ReturnReason;
     note: string;
+    /** The sale line the return comes from — always sent for a linked return. */
+    saleLineId?: string | null;
   }) => { ok: boolean; errorKey?: string };
 };
 
 export function ReturnProductModal({ lang, open, sale, products, returnRecords = [], actorRole, onClose, onConfirm }: Props) {
   const [productId, setProductId] = useState("");
+  const [pickedLineId, setPickedLineId] = useState<string | null>(null);
   const [qty, setQty] = useState("1");
   const [refund, setRefund] = useState("");
   const [reason, setReason] = useState<ReturnReason>("wrong_item");
@@ -53,8 +57,9 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
 
   const allowUnlinked = canPerformUnlinkedReturn(actorRole);
   const lineOptions = sale?.lines.filter((l) => !l.voided) ?? [];
-  const pickList = lineOptions.length
-    ? lineOptions.map((l) => ({ id: l.productId, name: l.name }))
+  // One entry per PRODUCT (two lines of one product used to give two options with the same value).
+  const pickList = sale && lineOptions.length
+    ? returnProductPickList(sale, (id) => products.find((p) => p.id === id)?.name)
     : allowUnlinked
       ? products.map((p) => ({ id: p.id, name: p.name }))
       : [];
@@ -64,6 +69,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
     submitInFlightRef.current = false;
     releaseReturnSubmitsForAccount(inventoryMovementNamespace());
     setProductId(pickList[0]?.id ?? "");
+    setPickedLineId(null);
     setQty("1");
     setRefund("");
     setReason("wrong_item");
@@ -73,21 +79,27 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
   }, [open, sale?.id, pickList.length, pickList[0]?.id]);
 
   const product = products.find((p) => p.id === productId) ?? null;
-  const saleLine = sale?.lines.find((l) => l.productId === productId && !l.voided);
+  // Which line of that product: the only one, or the one the cashier picked when there are several.
+  const lineChoices = sale && productId ? returnLineChoices(sale, productId, returnRecords) : [];
+  const showLinePicker = needsReturnLineChoice(lineChoices);
+  const selectedLineId = sale ? resolveReturnLineId(lineChoices, pickedLineId) : null;
+  const saleLine = sale?.lines.find((l) =>
+    selectedLineId ? l.id === selectedLineId : l.productId === productId && !l.voided,
+  );
   const qtyN = Math.max(0, Number(qty.replace(/[^\d.]/g, "")) || 0);
   const suggestedRefund =
     sale && productId && qtyN > 0
-      ? suggestReturnRefundUgx(sale, productId, qtyN, returnRecords)
+      ? suggestReturnRefundUgx(sale, productId, qtyN, returnRecords, selectedLineId)
       : product
         ? Math.round(pricePerBaseUnitUgx(product) * qtyN)
         : 0;
 
   const maxQty =
-    sale && productId ? remainingReturnableQuantity(sale, productId, returnRecords) : null;
+    sale && productId ? remainingReturnableQuantity(sale, productId, returnRecords, 0, selectedLineId) : null;
   const maxRefundSale = sale ? remainingRefundableAmount(sale) : null;
   const maxRefundLine =
     sale && productId && qtyN > 0
-      ? remainingRefundableForLineQty(sale, productId, qtyN, returnRecords)
+      ? remainingRefundableForLineQty(sale, productId, qtyN, returnRecords, selectedLineId)
       : null;
   const maxRefundUgx =
     maxRefundSale != null ? Math.min(maxRefundSale, maxRefundLine ?? maxRefundSale) : null;
@@ -131,6 +143,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
           returnRecords,
           finalRefundUgx: finalRefundUgx,
           product: product ?? undefined,
+          lineId: selectedLineId,
         })
       : null;
 
@@ -149,6 +162,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
       refundAmountUgx: finalRefundUgx,
       reason,
       note: note.trim(),
+      saleLineId: selectedLineId,
     });
     if (r.ok) {
       onClose();
@@ -192,6 +206,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                 value={productId}
                 onChange={(e) => {
                   setProductId(e.target.value);
+                  setPickedLineId(null);
                   setRefund("");
                   setSubmitError(null);
                   setShowCalcDetails(false);
@@ -205,6 +220,53 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                 ))}
               </select>
             </label>
+
+            {showLinePicker ? (
+              <fieldset className="mt-3">
+                <legend className="text-sm font-bold text-foreground">{t(lang, "returnLineLabel")}</legend>
+                <div className="mt-2 space-y-2">
+                  {lineChoices.map((c) => (
+                    <label
+                      key={c.lineId ?? c.name}
+                      className={clsx(
+                        "flex cursor-pointer items-start gap-3 rounded-2xl border-2 px-3 py-2",
+                        selectedLineId === c.lineId ? "border-warning bg-warning-muted" : "border-border",
+                        c.exhausted && "cursor-not-allowed opacity-50",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="return-line"
+                        className="mt-1"
+                        checked={selectedLineId === c.lineId}
+                        disabled={c.exhausted}
+                        onChange={() => {
+                          setPickedLineId(c.lineId);
+                          setRefund("");
+                          setSubmitError(null);
+                          setShowCalcDetails(false);
+                        }}
+                      />
+                      <span className="min-w-0 text-sm">
+                        <span className="block font-black text-foreground">
+                          {c.name}
+                          {c.context ? ` · ${c.context}` : ""}
+                        </span>
+                        <span className="block text-xs font-semibold text-muted-foreground">
+                          {c.exhausted
+                            ? t(lang, "returnLineExhausted")
+                            : tTemplate(lang, "returnLineDetail", {
+                                qty: String(c.remainingQty),
+                                unit: c.unitPriceUgx.toLocaleString(),
+                                total: c.lineTotalUgx.toLocaleString(),
+                              })}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
 
             <label className="mt-3 block text-sm font-bold text-foreground">
               {t(lang, "returnQtyLabel")}

@@ -11,6 +11,7 @@ import {
   activeSaleLine,
   originalLinePaidUgx,
   originalSaleTotalUgx,
+  refundsOnLine,
   refundsOnProduct,
   remainingRefundableAmount,
   remainingReturnableQuantity,
@@ -153,8 +154,10 @@ export function buildLineRefundBreakdown(input: {
   returnRecords: ReturnRecord[];
   finalRefundUgx?: number;
   product?: Product;
+  /** The sale line being returned (a sale can hold several lines of one product); omitted = the first active line. */
+  lineId?: string | null;
 }): LineRefundBreakdown | null {
-  const line = activeSaleLine(input.sale, input.productId);
+  const line = activeSaleLine(input.sale, input.productId, input.lineId);
   if (!line) return null;
 
   const qty = Math.max(0, Number(input.returnQty) || 0);
@@ -164,6 +167,8 @@ export function buildLineRefundBreakdown(input: {
     input.sale,
     input.productId,
     input.returnRecords,
+    0,
+    input.lineId,
   );
   const effectiveQty = Math.min(qty, returnableQty);
   if (effectiveQty <= 0) return null;
@@ -177,15 +182,14 @@ export function buildLineRefundBreakdown(input: {
     input.productId,
     effectiveQty,
     input.returnRecords,
+    input.lineId,
   );
   const cartDiscountAllocationUgx = Math.max(0, lineTotalForQty - customerPaidUgx);
 
-  const linePaidTotal = originalLinePaidUgx(input.sale, input.productId, input.returnRecords);
-  const previouslyRefundedUgx = refundsOnProduct(
-    input.returnRecords,
-    input.sale.id,
-    input.productId,
-  );
+  const linePaidTotal = originalLinePaidUgx(input.sale, input.productId, input.returnRecords, input.lineId);
+  const previouslyRefundedUgx = input.lineId
+    ? refundsOnLine(input.sale, line, input.returnRecords)
+    : refundsOnProduct(input.returnRecords, input.sale.id, input.productId);
 
   return {
     productId: input.productId,
@@ -232,6 +236,7 @@ export function buildReturnRefundTrace(input: {
     returnQty: returnRecord.quantity,
     returnRecords: priorReturns,
     finalRefundUgx: returnRecord.refundAmountUgx,
+    lineId: returnRecord.saleLineId ?? null,
   });
 
   return {
