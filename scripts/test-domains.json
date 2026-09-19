@@ -75,7 +75,8 @@
     "src/lib/pharmacyPrescriptionOps.test.ts",
     "src/lib/pharmacyPartialDispense.test.ts",
     "src/lib/pharmacyBatchProvenanceCodec.test.ts",
-    "src/offline/pharmacyBatchProvenance.sync.integration.test.ts"
+    "src/offline/pharmacyBatchProvenance.sync.integration.test.ts",
+    "src/lib/pharmacyPackagingBatchesSurvive.test.ts"
   ],
   "platform": [
     "src/lib/storeAuthorization.test.ts",

@@ -214,13 +214,30 @@ export function getPharmacyPackagingSellPresets(product: Product): PosSellPreset
   return presets;
 }
 
+/**
+ * Read a product's `pharmacyPackaging` back from its cloud metadata.
+ *
+ * The object is two things at once: the SELLING configuration (strip/box sizes and prices — active only when
+ * `enabled` is true, and every consumer checks that flag) and the container of the product's batch collection.
+ * A batch-tracked product without packaging levels legitimately has `enabled: false` AND real batches:
+ * appendBatchToProduct and product creation both build exactly that shape. Dropping the whole object because
+ * `enabled` is false therefore erased every batch of such a product on the device's own next pull.
+ *
+ * So: an object that carries batches is kept whatever its `enabled` flag says (the flag is preserved as it
+ * is, so the selling configuration stays inactive); an object with the flag off and NO batches has nothing to
+ * keep and is null exactly as before. Nothing else about this function changes.
+ */
 export function normalizePharmacyPackaging(raw: unknown): PharmacyPackaging | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  if (r.enabled !== true) return null;
+  const enabled = r.enabled === true;
+  const batches = Array.isArray(r.batches)
+    ? (r.batches.map(normalizeBatchRecord).filter(Boolean) as PharmacyBatchRecord[])
+    : [];
+  if (!enabled && batches.length === 0) return null;
   const sellRaw = (r.sell ?? {}) as Record<string, unknown>;
   return {
-    enabled: true,
+    enabled,
     baseUnit: String(r.baseUnit ?? "tablet"),
     level1: parseLevel1(r.level1),
     level2: parseLevel2(r.level2),
@@ -232,9 +249,7 @@ export function normalizePharmacyPackaging(raw: unknown): PharmacyPackaging | nu
     priceStripUgx: r.priceStripUgx != null ? Math.floor(Number(r.priceStripUgx)) : null,
     priceBoxUgx: r.priceBoxUgx != null ? Math.floor(Number(r.priceBoxUgx)) : null,
     lowStockAlertUnit: parseLowStockUnit(r.lowStockAlertUnit),
-    batches: Array.isArray(r.batches)
-      ? (r.batches.map(normalizeBatchRecord).filter(Boolean) as PharmacyBatchRecord[])
-      : [],
+    batches,
   };
 }
 
