@@ -42,6 +42,7 @@
     "src/lib/madeToOrderCloudStock.sql.integration.test.ts",
     "src/offline/madeToOrderCloudSync.processor.test.ts",
     "src/lib/saleVoidBoundedReversal.sql.integration.test.ts",
+    "src/lib/saleValidationBillCharges.sql.integration.test.ts",
     "src/lib/helperSearchPath.sql.integration.test.ts",
     "src/lib/hospitalityPendingCancel.test.ts",
     "src/lib/hospitalityIngredientShortage.test.ts",
