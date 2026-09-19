@@ -15,6 +15,8 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { usePosStore } from "../store/usePosStore";
 import { syncTableDisplayStatuses } from "../lib/hospitality";
+import { reservationStatusRank } from "../lib/hospitalityFrontOfHouse";
+import { SEED_AREA_KEY, SEED_BAR_KEY, SEED_KITCHEN_KEY, remapIdsDeep, seedFloorId, seedTableKey } from "../lib/hospitalitySeedIds";
 import { mergeKitchenTicketMonotonic, normalizeKitchenTicket } from "../lib/kitchenProduction";
 import { resolveShopCtx } from "./cloudSync";
 import { enqueueSync } from "./syncEngine";
@@ -314,6 +316,55 @@ export function looksLikeUntouchedSeedFloor(floor: HospitalityFloorState): boole
   return stations.length > 0 && stations.every((s) => (s.name === "Main Kitchen" && s.stationType === "kitchen") || (s.name === "Bar" && s.stationType === "bar"));
 }
 
+/** The default layout's SHAPE (activity such as open orders is ignored). */
+function hasSeedLayoutShape(floor: HospitalityFloorState): boolean {
+  const areas = floor.areas ?? [];
+  const tables = floor.tables ?? [];
+  const stations = floor.stations ?? [];
+  if (areas.length !== 1 || areas[0]!.name !== "Main Hall" || areas[0]!.deletedAt) return false;
+  if (tables.length !== SEED_TABLE_LABELS.size) return false;
+  if (!tables.every((t) => SEED_TABLE_LABELS.has(t.label) && t.isActive && !t.deletedAt && t.areaId === areas[0]!.id)) return false;
+  if (new Set(tables.map((t) => t.label)).size !== tables.length) return false;
+  return (
+    stations.length > 0 &&
+    stations.every(
+      (s) => !s.deletedAt && ((s.name === "Main Kitchen" && s.stationType === "kitchen") || (s.name === "Bar" && s.stationType === "bar")),
+    )
+  );
+}
+
+/**
+ * Give a never-synced default floor the shop's deterministic seed ids (see hospitalitySeedIds), so two
+ * devices that created the default floor concurrently converge on the SAME rows instead of colliding on
+ * the cloud's unique names. References (sessions, tickets, reservations, ...) are rewritten with it.
+ *
+ * Only for a full snapshot of the cloud in which none of this floor's rows exist yet: a floor that was
+ * already pushed (with whatever ids it had) must keep them, or the cloud would gain a second copy.
+ */
+export function alignSeedFloorToShop(
+  floor: HospitalityFloorState,
+  shopId: string,
+  remote: { areas: DiningArea[]; tables: DiningTable[]; stations: KitchenStation[] },
+): HospitalityFloorState {
+  if (!shopId || !hasSeedLayoutShape(floor)) return floor;
+  const remoteIds = new Set([...remote.areas, ...remote.tables, ...remote.stations].map((r) => r.id));
+  const localRows = [...floor.areas, ...floor.tables, ...floor.stations];
+  if (localRows.some((r) => remoteIds.has(r.id))) return floor; // already in the cloud — keep its ids
+
+  const idMap = new Map<string, string>();
+  idMap.set(floor.areas[0]!.id, seedFloorId(shopId, SEED_AREA_KEY));
+  for (const t of floor.tables) {
+    idMap.set(t.id, seedFloorId(shopId, seedTableKey(Number(t.label.replace("Table ", "")))));
+  }
+  for (const s of floor.stations) {
+    idMap.set(s.id, seedFloorId(shopId, s.stationType === "bar" ? SEED_BAR_KEY : SEED_KITCHEN_KEY));
+  }
+  // already aligned, or two rows would collapse into one id: leave it alone
+  if ([...idMap].every(([from, to]) => from === to)) return floor;
+  if (new Set(idMap.values()).size !== idMap.size) return floor;
+  return remapIdsDeep(floor, idMap);
+}
+
 function shouldAdoptRemoteLayout(
   local: HospitalityFloorState,
   remote: { areas: DiningArea[]; tables: DiningTable[] },
@@ -323,6 +374,13 @@ function shouldAdoptRemoteLayout(
   const remoteTableIds = new Set(remote.tables.map((t) => t.id));
   // Same layout already (this device pushed it): nothing to adopt.
   return !(local.tables ?? []).some((t) => remoteTableIds.has(t.id));
+}
+
+function mergeByLifecycle<T extends { status: string; updatedAt?: string | null }>(a: T, b: T): T {
+  const ra = reservationStatusRank(a.status);
+  const rb = reservationStatusRank(b.status);
+  if (ra !== rb) return ra > rb ? { ...b, ...a } : { ...a, ...b };
+  return newerIso(a.updatedAt, b.updatedAt) ? { ...b, ...a } : { ...a, ...b };
 }
 
 export function mergeRemoteHospitalityFloor(
@@ -336,6 +394,7 @@ export function mergeRemoteHospitalityFloor(
     reservations?: TableReservation[];
     waitlist?: WaitlistEntry[];
   },
+  opts?: { shopId?: string | null; fullSnapshot?: boolean },
 ): HospitalityFloorState {
   // A device that only ever seeded the default layout adopts the shop's real layout instead of
   // unioning its own random-id seed with it (which produced duplicate "Table 1..8").
@@ -346,6 +405,11 @@ export function mergeRemoteHospitalityFloor(
       tables: [],
       stations: remote.stations.some((s) => !s.deletedAt) ? [] : local.stations,
     };
+  }
+  // Never-synced default floor (busy or not): converge on the shop's deterministic seed ids so a
+  // concurrently created default floor on another device is the same set of rows, not a conflict.
+  if (opts?.fullSnapshot && opts.shopId) {
+    local = alignSeedFloorToShop(local, opts.shopId, remote);
   }
   const areas = mergeCollection(local.areas ?? [], remote.areas, mergeLayoutRow, () => null);
   const tables = mergeCollection(local.tables ?? [], remote.tables, mergeLayoutRow, () => null);
@@ -365,16 +429,19 @@ export function mergeRemoteHospitalityFloor(
     mergeKitchenTicketMonotonic,
     (t) => t.updatedAt,
   );
+  // A reservation / waitlist entry only moves forward (see RESERVATION_TRANSITIONS): the copy that is
+  // further along wins whatever its timestamp says, so a stale or clock-skewed device can neither
+  // "un-cancel" a reservation nor turn a seated one back into a pending one. Same rank -> newer wins.
   const reservations = mergeCollection(
     local.reservations ?? [],
     remote.reservations ?? [],
-    (a, b) => (newerIso(a.updatedAt, b.updatedAt) ? { ...b, ...a } : { ...a, ...b }),
+    (a, b) => mergeByLifecycle(a, b),
     (r) => r.updatedAt,
   );
   const waitlist = mergeCollection(
     local.waitlist ?? [],
     remote.waitlist ?? [],
-    (a, b) => (newerIso(a.updatedAt, b.updatedAt) ? { ...b, ...a } : { ...a, ...b }),
+    (a, b) => mergeByLifecycle(a, b),
     (w) => w.updatedAt,
   );
   const sameCollections =
@@ -424,7 +491,11 @@ export async function pullHospitalityStateFromCloud(forceFull = false): Promise<
   const local = state.preferences.hospitalityFloor;
   if (!local) return false;
 
-  const merged = mergeRemoteHospitalityFloor(local, { areas, tables, sessions, stations, tickets, reservations, waitlist });
+  const merged = mergeRemoteHospitalityFloor(
+    local,
+    { areas, tables, sessions, stations, tickets, reservations, waitlist },
+    { shopId: ctx.shopId, fullSnapshot: since === "1970-01-01T00:00:00.000Z" },
+  );
   if (merged !== local) {
     usePosStore.setState({
       preferences: { ...state.preferences, hospitalityFloor: merged },
@@ -621,6 +692,7 @@ let layoutEnsuredForShop: string | null = null;
 /** Test hook — forget which shop's layout this session already reconciled with the cloud. */
 export function resetHospitalityLayoutEnsuredForTests(): void {
   layoutEnsuredForShop = null;
+  ensureInFlight = null;
 }
 
 /**
@@ -630,7 +702,19 @@ export function resetHospitalityLayoutEnsuredForTests(): void {
  * someone edited it. Reconcile once per app session: PULL first (a second device adopts the
  * shop's existing layout instead of pushing a competing seed with different ids), then PUSH.
  */
+let ensureInFlight: Promise<boolean> | null = null;
+
 async function ensureHospitalityLayoutOnCloud(): Promise<boolean> {
+  // One reconciliation at a time: a session push, a ticket push and a layout push queued together
+  // would otherwise each pull and push the same seed floor concurrently.
+  if (ensureInFlight) return ensureInFlight;
+  ensureInFlight = ensureHospitalityLayoutOnCloudOnce().finally(() => {
+    ensureInFlight = null;
+  });
+  return ensureInFlight;
+}
+
+async function ensureHospitalityLayoutOnCloudOnce(): Promise<boolean> {
   const ctx = await resolveShopCtx();
   if (!ctx) return false;
   if (layoutEnsuredForShop === ctx.shopId) return true;

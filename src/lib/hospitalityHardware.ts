@@ -2,10 +2,12 @@ import type {
   BusinessType,
   HospitalityHardwarePrefs,
   HospitalityIngredientPolicyConfig,
+  IngredientShortage,
   IngredientStockPolicy,
   ReceiptTemplateConfig,
   ReceiptTemplateKind,
   ShopPreferences,
+  UserRole,
 } from "../types";
 
 export const PRINT_QUEUE_MAX_ATTEMPTS = 5;
@@ -55,6 +57,40 @@ export function resolveIngredientPolicyConfig(prefs: ShopPreferences): Hospitali
 
 export function effectiveIngredientPolicy(prefs: ShopPreferences): IngredientStockPolicy {
   return resolveIngredientPolicyConfig(prefs).policy;
+}
+
+export type IngredientShortageDecision =
+  | { allow: true; shortfall: boolean }
+  | { allow: false; errorKey: "ingredientShortage" | "ingredientShortageOverride" };
+
+/**
+ * ONE rule for "may this order proceed with too little ingredient stock?", used both when a dish is
+ * added to an order and when the bill is finalized (they used to disagree: the add step honoured the
+ * configured policy while finalize hard-blocked every shortage, stranding bills the policy had
+ * accepted).
+ *
+ *  - no shortage                    → proceed
+ *  - allowNegativeInventory / warn  → proceed; the shortfall is audited, stock still floors at 0
+ *  - manager_override               → proceed only for an owner/manager (or an explicit override)
+ *  - block                          → never
+ */
+export function decideIngredientShortage(input: {
+  prefs: ShopPreferences;
+  shortages: ReadonlyArray<IngredientShortage>;
+  role: UserRole | null | undefined;
+  managerOverride?: boolean;
+}): IngredientShortageDecision {
+  if (input.shortages.length === 0) return { allow: true, shortfall: false };
+  const cfg = resolveIngredientPolicyConfig(input.prefs);
+  if (cfg.allowNegativeInventory) return { allow: true, shortfall: true };
+  if (cfg.policy === "warn") return { allow: true, shortfall: true };
+  if (cfg.policy === "manager_override") {
+    const isManager = input.role === "owner" || input.role === "manager";
+    return input.managerOverride === true || isManager
+      ? { allow: true, shortfall: true }
+      : { allow: false, errorKey: "ingredientShortageOverride" };
+  }
+  return { allow: false, errorKey: "ingredientShortage" };
 }
 
 export function defaultHospitalityHardwarePrefs(businessType: BusinessType = "mini_supermarket"): HospitalityHardwarePrefs {

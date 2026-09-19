@@ -833,6 +833,75 @@ export async function pushSaleVoidStockToCloud(
   return ok;
 }
 
+/**
+ * Void of a made-to-order RECIPE line. The cloud derives the ingredient credit itself from the line's
+ * recorded provenance (nothing but the voided quantity comes from here) and records the void ledger row
+ * against the line. Returns false to let the caller fall back when the cloud has no such function yet
+ * (migration not applied): the previous void RPC is what that cloud's sale application matches.
+ */
+async function pushSaleVoidRecipeLineToCloud(
+  ctx: ShopCtx,
+  opts: {
+    delta: number;
+    referenceId: string;
+    saleId: string;
+    saleLineId: string;
+    note?: string;
+    amountUgx?: number;
+    lineIndex?: number;
+    saleVoidedAt?: string | null;
+    productName?: string;
+  },
+): Promise<"ok" | "retry" | "unavailable"> {
+  if (!supabase) return "retry";
+  const payload: Record<string, unknown> = {
+    void_record_id: opts.referenceId,
+    sale_id: opts.saleId,
+    sale_line_id: opts.saleLineId,
+    delta: opts.delta,
+    note: opts.note ?? "",
+  };
+  if (opts.amountUgx != null && Number.isFinite(opts.amountUgx) && opts.amountUgx > 0) payload.amount_ugx = Math.floor(opts.amountUgx);
+  if (opts.lineIndex != null && Number.isFinite(opts.lineIndex)) payload.line_index = opts.lineIndex;
+  if (opts.saleVoidedAt) payload.sale_voided_at = opts.saleVoidedAt;
+  if (opts.productName) payload.product_name = opts.productName;
+  const { data, error } = await supabase.rpc("shop_apply_sale_void_line_stock", { p_shop_id: ctx.shopId, p_payload: payload });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "42883" || code === "PGRST202") return "unavailable";
+    reportSyncIssue("r3_stock_rpc_failed", { productId: opts.saleLineId, rpc: "shop_apply_sale_void_line_stock", code: code ?? "unknown" });
+    return "retry";
+  }
+  const result = data as {
+    ok?: boolean;
+    error?: string;
+    stocks?: Array<{ product_id: string; stock_on_hand: number; updated_at: string }>;
+    stock_on_hand?: number;
+    updated_at?: string;
+  } | null;
+  if (!result?.ok) {
+    if (result?.error === "closed_business_date") {
+      const { noteClosedBusinessDateRejection } = await import("../lib/closedBusinessDateSync");
+      const { dateKeyKampala } = await import("../lib/datesUg");
+      const sale = usePosStore.getState().sales.find((s) => s.id === opts.saleId);
+      noteClosedBusinessDateRejection(dateKeyKampala(sale?.createdAt ?? new Date()), opts.saleId);
+    }
+    reportSyncIssue("r3_stock_rpc_rejected", { productId: opts.saleLineId, rpc: "shop_apply_sale_void_line_stock", error: result?.error ?? "unknown" });
+    return "retry";
+  }
+  // the cloud is authoritative for the stock it just changed (ingredients, or the sold product on a
+  // retail/legacy line that it delegated to the previous void RPC)
+  if (Array.isArray(result.stocks) && result.stocks.length > 0) {
+    usePosStore.setState((s) => ({
+      products: patchProductsWithServerStock(
+        s.products,
+        result.stocks!.map((r) => ({ product_id: String(r.product_id), stock_on_hand: Number(r.stock_on_hand), updated_at: String(r.updated_at) })),
+      ),
+    }));
+  }
+  return "ok";
+}
+
 /** PURCHASE-VOID-STOCK-1.0 — durable purchase-void stock reversal; never stale_version rebase. */
 export async function pushPurchaseVoidStockToCloud(
   productId: string,
@@ -1058,6 +1127,9 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
         baseUnit: line.baseUnit,
         estimatedProfitUgx: line.estimatedProfitUgx,
         lineIndex: idx,
+        // Made-to-order provenance (sale_line_items.metadata is stored verbatim by the RPC): lets any
+        // device that pulls this sale reverse exactly the ingredients the line consumed.
+        ...(Array.isArray(line.ingredientConsumption) ? { ingredientConsumption: line.ingredientConsumption } : {}),
       },
     })),
     payments:
@@ -1547,6 +1619,7 @@ async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise
       cogsUgx: returnRow.cogsUgx ?? null,
       unitCostUgx: returnRow.unitCostUgx ?? null,
       refundCashUgx: returnRow.refundCashUgx ?? null,
+      ...(returnRow.saleLineId ? { saleLineId: returnRow.saleLineId } : {}),
       wakaClient: true,
     },
   };
@@ -1957,16 +2030,40 @@ async function processSaleVoidAdjustment(
       productName = undefined;
     }
   }
-  const ok = await pushSaleVoidStockToCloud(classified.productId, ctx, {
-    delta: classified.delta,
-    referenceId: classified.referenceId,
-    note: classified.note,
-    saleId,
-    amountUgx,
-    lineIndex,
-    saleVoidedAt,
-    productName,
-  });
+  // A made-to-order recipe line reverses through the line-bound RPC (the cloud credits the ingredients it
+  // recorded for that line). Everything else — and a cloud that predates the RPC — uses the void RPC
+  // exactly as before.
+  const saleLineId = typeof payload.saleLineId === "string" ? payload.saleLineId : "";
+  let ok: boolean | undefined;
+  // (the sale id comes from the void's own ledger, not from `saleId`, which is cleared on a closed
+  // business date so that only the financials are withheld — the stock reversal must still be line-bound)
+  if (payload.recipeLine === true && isUuid(saleLineId) && referencedSaleId && isUuid(referencedSaleId)) {
+    const routed = await pushSaleVoidRecipeLineToCloud(ctx, {
+      delta: classified.delta,
+      referenceId: classified.referenceId,
+      saleId: referencedSaleId,
+      saleLineId,
+      note: classified.note,
+      amountUgx,
+      lineIndex,
+      saleVoidedAt,
+      productName,
+    });
+    if (routed === "ok") ok = true;
+    else if (routed === "retry") ok = false;
+  }
+  if (ok === undefined) {
+    ok = await pushSaleVoidStockToCloud(classified.productId, ctx, {
+      delta: classified.delta,
+      referenceId: classified.referenceId,
+      note: classified.note,
+      saleId,
+      amountUgx,
+      lineIndex,
+      saleVoidedAt,
+      productName,
+    });
+  }
   if (ok && lineIdForVoidStateSync && isUuid(lineIdForVoidStateSync)) {
     await syncSaleLineVoidStateToCloud(lineIdForVoidStateSync, ctx);
   }

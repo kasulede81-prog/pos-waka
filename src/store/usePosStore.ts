@@ -4,6 +4,7 @@ import type {
   AuditLogEntry,
   BusinessType,
   HospitalityOperatingStyle,
+  DiscountApprovalRequest,
   ShopSellingStyle,
   Customer,
   DayCloseSummary,
@@ -66,7 +67,7 @@ import { createRestaurantBillingStoreActions } from "./restaurantBillingMutation
 import { createHospitalityMenuStoreActions } from "./hospitalityMenuMutations";
 import { createHardwarePrintStoreActions, ensureHardwarePrefsOnBootstrap } from "./hardwarePrintMutations";
 import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
-import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
+import { decideIngredientShortage, resolveHospitalityHardware } from "../lib/hospitalityHardware";
 import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { getActiveShopId, getPersistenceNamespace } from "../offline/shopScope";
@@ -143,6 +144,8 @@ import {
   addWaitlistEntry as addWaitlistEntryOp,
   cancelReservation,
   cancelWaitlistEntry as cancelWaitlistEntryOp,
+  checkReservationTransition,
+  checkWaitlistTransition,
   combineTables as combineTablesOp,
   createReservation,
   finishTableCleaning as finishTableCleaningOp,
@@ -173,7 +176,11 @@ import {
   recallKitchenTicket as recallKitchenTicketOnFloor,
   cancelKitchenTicketItem as cancelKitchenTicketItemOnFloor,
 } from "../lib/kitchenProduction";
-import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
+import {
+  isDiscountApprovalValid,
+  validateCombinedDraftDiscount,
+  validateCombinedDraftDiscountWithApproval,
+} from "../lib/discountGovernance";
 import { verifyManagerApprovalPinSync } from "../lib/enterpriseSecurity/EnterpriseSecurityService";
 import {
   addDiningArea,
@@ -211,6 +218,7 @@ import {
   emptyDraftCheckoutFields,
   isDraftPaymentMethod,
   markPendingSaleAsPreCompletionVoid,
+  pendingSaleReceivedPaymentsUgx,
   resolveFinalizeCompletionTarget,
   resolvePersistedDraftSaleBinding,
   resumeWouldOverwriteUnrelatedCart,
@@ -299,10 +307,14 @@ import { assertSequentialBusinessDay } from "../lib/sequentialBusinessDays";
 import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
 import { normalizeProductMenu } from "../lib/menuModifiers";
 import {
+  allocateIngredientConsumption,
   applyRecipeStockDeduction,
   checkIngredientAvailability,
   computeMenuItemFoodCostUgx,
-  creditPrepAllocation,
+  creditIngredients,
+  hasIngredientProvenance,
+  ingredientReversalFor,
+  restorePrepBatchesForReversal,
   effectiveRecipe,
   planPrepBatchConsumption,
   prepBatchUnitCostUgx,
@@ -315,7 +327,7 @@ import {
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
-import { remainingVoidableLine, validateReturnAgainstSale } from "../lib/returnLimits";
+import { remainingVoidableLine, returnedQuantityOnLine, validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
 import { resolveLocalSaleForReturn } from "../lib/resolveLocalSaleForReturn";
 import { saleAdjustmentOutboxMeta, saleAdjustmentQueueId } from "../lib/saleAdjustmentSync";
@@ -654,6 +666,80 @@ function preferencesWithDefaultShelfLayout(
   return { ...preferences, posShelfLayout: layout };
 }
 
+/**
+ * Kitchen default that follows the operating style. An UNTOUCHED default (equal to what the previous
+ * style would have derived) follows a style change; an explicit merchant choice is always kept.
+ * Onboarding persists the derived default as a plain boolean, so without this a bar that became a
+ * restaurant kept "kitchen off" forever.
+ */
+function nextHospitalityKitchenEnabled(
+  prev: Pick<ShopPreferences, "businessType" | "hospitalityStyle" | "hospitalityKitchenEnabled">,
+  nextType: BusinessType,
+  nextStyle: HospitalityOperatingStyle | null | undefined,
+): boolean {
+  const nextDefault = defaultKitchenEnabledForBusinessType(nextType, nextStyle ?? prev.hospitalityStyle);
+  const existing = prev.hospitalityKitchenEnabled;
+  if (existing == null) return nextDefault;
+  const prevDefault = defaultKitchenEnabledForBusinessType(prev.businessType, prev.hospitalityStyle);
+  return existing === prevDefault ? nextDefault : existing;
+}
+
+/** Live (unsettled) table orders — what a mode change must never destroy. */
+function openHospitalityOrderCount(prefs: ShopPreferences): number {
+  return (prefs.hospitalityFloor?.sessions ?? []).filter((s) => s.status === "open" || s.status === "payment_pending").length;
+}
+
+/**
+ * When the shop crosses the hospitality boundary, the cart that is currently bound to a table order
+ * must not keep being "the" active cart of a mode that no longer shows tables (or, worse, be
+ * finalized from a retail screen). Nothing is deleted: unsaved lines are written back into that
+ * table's own pending sale first, the sale and its session stay exactly as they are, and only the
+ * active-cart BINDING is cleared. A cart that is not bound to a table (retail cart) is left alone.
+ */
+function detachActiveTableCartForModeChange(
+  state: Pick<PosState, "activePendingSaleId" | "draftLines" | "draftCartDiscountUgx" | "sales" | "sessionActor" | "preferences">,
+  fromType: BusinessType | undefined,
+  toType: BusinessType,
+): { patch: Partial<PosState>; prefsPatch: Partial<ShopPreferences> } | null {
+  if (isHospitalityBusinessType(fromType) === isHospitalityBusinessType(toType)) return null;
+  const saleId = state.activePendingSaleId;
+  const sale = saleId ? state.sales.find((s) => s.id === saleId) : undefined;
+  if (!sale || !sale.tableSessionId || !isPendingSale(sale)) return null;
+  let sales = state.sales;
+  // Write back only if the screen holds something the order does not: an untouched order stays
+  // byte-identical (no fresh updatedAt, nothing to re-sync).
+  const savedLines = sale.lines;
+  const unsaved =
+    state.draftLines.length !== savedLines.length ||
+    state.draftCartDiscountUgx !== cartDiscountFromPendingSale(sale) ||
+    state.draftLines.some((l, i) => {
+      const o = savedLines[i]!;
+      return (
+        (l.id ?? l.productId) !== (o.id ?? o.productId) ||
+        l.quantity !== o.quantity ||
+        l.lineTotalUgx !== o.lineTotalUgx ||
+        (l.notes ?? null) !== (o.notes ?? null) ||
+        (l.course ?? null) !== (o.course ?? null)
+      );
+    });
+  if (unsaved && state.draftLines.length > 0) {
+    const saved = buildPendingSaleFromDraft({
+      saleId: sale.id,
+      lines: state.draftLines.map((l) => ensureSaleLineId(l)),
+      cartDiscountUgx: state.draftCartDiscountUgx,
+      tableSessionId: sale.tableSessionId,
+      referenceLabel: sale.referenceLabel ?? null,
+      soldByUserId: sale.soldByUserId ?? state.sessionActor?.userId ?? null,
+      soldByAuthUserId: sale.soldByAuthUserId ?? commercialAuthUserIdFromActor(state.sessionActor) ?? null,
+      waiterStaffId: sale.waiterStaffId ?? null,
+      waiterName: sale.waiterName ?? null,
+      existing: sale,
+    });
+    sales = [saved, ...state.sales.filter((s) => s.id !== sale.id)];
+  }
+  return { patch: { ...emptyDraftPatch(), sales }, prefsPatch: { activeTableSessionId: null } };
+}
+
 /** Repair hospitality floor + hardware prefs when loading from disk or cloud. */
 function normalizeHospitalityPreferences(preferences: ShopPreferences): ShopPreferences {
   let next = ensureHardwarePrefsOnBootstrap(preferences);
@@ -712,6 +798,11 @@ export type PosState = {
   draftInput: DraftLineInput | null;
   /** Whole-cart discount in UGX (applied at checkout, not per line). */
   draftCartDiscountUgx: number;
+  /**
+   * The table-bill discount a cashier/waiter last attempted that needed manager approval. Approving
+   * consumes it, so the approval is bound to what was really attempted (never client-supplied).
+   */
+  discountApprovalRequest: DiscountApprovalRequest | null;
   /** When set, draft cart belongs to an open table / pending sale */
   activePendingSaleId: string | null;
   draftSaleCustomerId: string;
@@ -948,7 +1039,8 @@ export type PosState = {
   updateBusinessType: (
     businessType: BusinessType,
     hospitalityStyle?: HospitalityOperatingStyle | null,
-  ) => void;
+    opts?: { keepOpenOrders?: boolean },
+  ) => { ok: boolean; errorKey?: string; openOrders?: number };
 
   setDraftInput: (input: DraftLineInput | null) => void;
   addDraftLineFromInput: () => { ok: boolean; errorKey?: string };
@@ -1124,14 +1216,14 @@ export type PosState = {
   createTableReservation: (
     input: Omit<import("../types").TableReservation, "id" | "reservationNumber" | "status" | "createdAt" | "updatedAt" | "pendingSync">,
   ) => { ok: boolean; errorKey?: string; reservationId?: string };
-  updateTableReservation: (reservationId: string, patch: Partial<import("../types").TableReservation>) => void;
-  cancelTableReservation: (reservationId: string, reason: string) => void;
-  confirmTableReservation: (reservationId: string) => void;
-  markReservationNoShow: (reservationId: string) => void;
+  updateTableReservation: (reservationId: string, patch: Partial<import("../types").TableReservation>) => { ok: boolean; errorKey?: string };
+  cancelTableReservation: (reservationId: string, reason: string) => { ok: boolean; errorKey?: string };
+  confirmTableReservation: (reservationId: string) => { ok: boolean; errorKey?: string };
+  markReservationNoShow: (reservationId: string) => { ok: boolean; errorKey?: string };
   addWaitlistEntry: (
     input: Omit<import("../types").WaitlistEntry, "id" | "status" | "createdAt" | "updatedAt" | "pendingSync">,
   ) => { ok: boolean; entryId?: string };
-  cancelWaitlistEntry: (entryId: string) => void;
+  cancelWaitlistEntry: (entryId: string) => { ok: boolean; errorKey?: string };
   suggestTablesForGuests: (input: {
     guestCount: number;
     areaId?: string | null;
@@ -1161,6 +1253,8 @@ export type PosState = {
     refundAmountUgx: number;
     reason: ReturnReason;
     note?: string;
+    /** The sale line to return from (a sale can hold several lines of one product). Default: the first active line. */
+    saleLineId?: string | null;
   }) => { ok: boolean; errorKey?: string; returnRecord?: ReturnRecord };
   closeShiftWithCashCount: (
     countedCashUgx: number,
@@ -2138,6 +2232,7 @@ export const usePosStore = create<PosState>((set, get) => {
   draftLines: [],
   draftInput: null,
   draftCartDiscountUgx: 0,
+  discountApprovalRequest: null,
   activePendingSaleId: null,
   ...emptyDraftCheckoutFields(),
   activePharmacyPrescriptionId: null,
@@ -3599,9 +3694,12 @@ export const usePosStore = create<PosState>((set, get) => {
     const prof = getBusinessProfile(businessType);
     const hospitality = isHospitalityBusinessType(businessType);
     const pharmacy = isPharmacyBusinessType(businessType);
+    const detach = detachActiveTableCartForModeChange(get(), get().preferences.businessType, businessType);
     set((s) => ({
+      ...(detach?.patch ?? {}),
       preferences: {
         ...s.preferences,
+        ...(detach?.prefsPatch ?? {}),
         businessType,
         ...(hospitality && hospitalityStyle ? { hospitalityStyle } : {}),
         kioskQuickSell: prof.kioskQuickSellDefault,
@@ -3614,6 +3712,8 @@ export const usePosStore = create<PosState>((set, get) => {
         hospitalityFloor: hospitality
           ? (s.preferences.hospitalityFloor ?? defaultHospitalityFloor())
           : s.preferences.hospitalityFloor,
+        // First-time onboarding: an explicit earlier choice is always kept. (Following a style CHANGE
+        // is updateBusinessType's job, where an untouched derived default can be told apart.)
         hospitalityKitchenEnabled: hospitality
           ? (s.preferences.hospitalityKitchenEnabled ??
             defaultKitchenEnabledForBusinessType(businessType, hospitalityStyle))
@@ -3621,6 +3721,7 @@ export const usePosStore = create<PosState>((set, get) => {
         ...applyIndustryReceiptDefaults(s.preferences, businessType),
       },
     }));
+    if (detach) void clearPersistedDraft();
     // The default floor is created locally with random ids; reconcile it with the cloud layout
     // (pull first, then push) so sessions/tickets can sync and a 2nd device adopts the same floor.
     if (hospitality) queueHospitalityChange({ layout: true });
@@ -3659,13 +3760,28 @@ export const usePosStore = create<PosState>((set, get) => {
     if (hospitality) queueHospitalityChange({ layout: true });
   },
 
-  updateBusinessType: (businessType, hospitalityStyle) => {
+  updateBusinessType: (businessType, hospitalityStyle, opts) => {
     const prof = getBusinessProfile(businessType);
     const hospitality = isHospitalityBusinessType(businessType);
     const pharmacy = isPharmacyBusinessType(businessType);
+    const before = get();
+    // A merchant-initiated change away from hospitality must not silently strand live table orders.
+    // They are never deleted: proceeding needs an explicit choice to keep them as open orders.
+    const openOrders = openHospitalityOrderCount(before.preferences);
+    if (
+      isHospitalityBusinessType(before.preferences.businessType) &&
+      !hospitality &&
+      openOrders > 0 &&
+      !opts?.keepOpenOrders
+    ) {
+      return { ok: false, errorKey: "businessTypeChangeOpenOrders", openOrders };
+    }
+    const detach = detachActiveTableCartForModeChange(before, before.preferences.businessType, businessType);
     set((s) => ({
+      ...(detach?.patch ?? {}),
       preferences: {
         ...s.preferences,
+        ...(detach?.prefsPatch ?? {}),
         businessType,
         ...(hospitalityStyle !== undefined ? { hospitalityStyle } : {}),
         kioskQuickSell: prof.kioskQuickSellDefault,
@@ -3677,15 +3793,16 @@ export const usePosStore = create<PosState>((set, get) => {
           ? (s.preferences.hospitalityFloor ?? defaultHospitalityFloor())
           : s.preferences.hospitalityFloor,
         hospitalityKitchenEnabled: hospitality
-          ? (s.preferences.hospitalityKitchenEnabled ??
-            defaultKitchenEnabledForBusinessType(businessType, hospitalityStyle))
+          ? nextHospitalityKitchenEnabled(s.preferences, businessType, hospitalityStyle)
           : s.preferences.hospitalityKitchenEnabled,
         ...applyIndustryReceiptDefaults(s.preferences, businessType),
       },
     }));
+    if (detach) void clearPersistedDraft();
     // The default floor is created locally with random ids; reconcile it with the cloud layout
     // (pull first, then push) so sessions/tickets can sync and a 2nd device adopts the same floor.
     if (hospitality) queueHospitalityChange({ layout: true });
+    return { ok: true, openOrders };
   },
 
   setDraftInput: (input) => {
@@ -3832,8 +3949,31 @@ export const usePosStore = create<PosState>((set, get) => {
     const sale = state.activePendingSaleId
       ? state.sales.find((s) => s.id === state.activePendingSaleId)
       : undefined;
-    const discountApproved = Boolean(sale?.billDraft?.discountApproval?.approvedByUserId);
-    if (!discountApproved && !policy.ok) return { ok: false, errorKey: policy.errorKey };
+    // Only a valid approval BOUND to this sale, kind and amount can satisfy "manager approval
+    // required" (and never the hard max-percent cap).
+    const cartNow = Math.max(0, state.draftCartDiscountUgx);
+    const approved = isDiscountApprovalValid(sale?.billDraft?.discountApproval, {
+      saleId: sale?.id,
+      kind: "line",
+      lineDiscountUgx: lineDiscountTotal,
+      cartDiscountUgx: cartNow,
+      listSubtotalUgx: listSubtotal,
+    });
+    if (!policy.ok && !(policy.errorKey === "discountManagerApprovalRequired" && approved)) {
+      if (policy.errorKey === "discountManagerApprovalRequired" && sale?.tableSessionId) {
+        set({
+          discountApprovalRequest: {
+            saleId: sale.id,
+            kind: "line",
+            lineDiscountUgx: lineDiscountTotal,
+            cartDiscountUgx: cartNow,
+            listSubtotalUgx: listSubtotal,
+            at: new Date().toISOString(),
+          },
+        });
+      }
+      return { ok: false, errorKey: policy.errorKey };
+    }
     set((s) => ({
       draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
     }));
@@ -3859,8 +3999,28 @@ export const usePosStore = create<PosState>((set, get) => {
       const sale = state.activePendingSaleId
         ? state.sales.find((s) => s.id === state.activePendingSaleId)
         : undefined;
-      const discountApproved = Boolean(sale?.billDraft?.discountApproval?.approvedByUserId);
-      if (!discountApproved && !policy.ok) return { ok: false, errorKey: policy.errorKey };
+      const approved = isDiscountApprovalValid(sale?.billDraft?.discountApproval, {
+        saleId: sale?.id,
+        kind: "bill",
+        lineDiscountUgx: lineDiscountTotal,
+        cartDiscountUgx: capped,
+        listSubtotalUgx: listSubtotal,
+      });
+      if (!policy.ok && !(policy.errorKey === "discountManagerApprovalRequired" && approved)) {
+        if (policy.errorKey === "discountManagerApprovalRequired" && sale?.tableSessionId) {
+          set({
+            discountApprovalRequest: {
+              saleId: sale.id,
+              kind: "bill",
+              lineDiscountUgx: lineDiscountTotal,
+              cartDiscountUgx: capped,
+              listSubtotalUgx: listSubtotal,
+              at: new Date().toISOString(),
+            },
+          });
+        }
+        return { ok: false, errorKey: policy.errorKey };
+      }
     }
     set({ draftCartDiscountUgx: capped });
     scheduleDraftPersist(get);
@@ -3974,12 +4134,28 @@ export const usePosStore = create<PosState>((set, get) => {
     const denied = denyUnlessEffectivePermission("hospitality.floor", "openTable");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
+    // Opening a table replaces the active cart. An unsaved cart that is not bound to a pending sale
+    // (e.g. a takeaway or a retail cart from before a mode switch) would be silently destroyed.
+    if (state.draftLines.length > 0 && !state.activePendingSaleId) {
+      return { ok: false, errorKey: "draftCartInProgress" };
+    }
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const table = floor.tables.find((t) => t.id === tableId);
     if (!table || !table.isActive) return { ok: false, errorKey: "invalid" };
     if (!isTableSeatable(table, floor)) return { ok: false, errorKey: "tableOccupied" };
     if (floor.sessions.some((s) => s.tableId === tableId && (s.status === "open" || s.status === "payment_pending"))) {
       return { ok: false, errorKey: "tableOccupied" };
+    }
+    // Seating from a reservation / the waitlist is a status transition: refuse BEFORE creating an order
+    // if the reservation is cancelled / already seated / unknown, or the waitlist entry is no longer
+    // waiting (otherwise the order opens and the lifecycle change is silently skipped or forced).
+    if (reservationId) {
+      const check = checkReservationTransition(floor, reservationId, "seated");
+      if (!check.ok || check.noop) return { ok: false, errorKey: check.ok ? "reservationInvalidTransition" : check.errorKey };
+    }
+    if (waitlistEntryId) {
+      const check = checkWaitlistTransition(floor, waitlistEntryId, "seated");
+      if (!check.ok || check.noop) return { ok: false, errorKey: check.ok ? "waitlistInvalidTransition" : check.errorKey };
     }
     const area = floor.areas.find((a) => a.id === table.areaId);
     const saleId = crypto.randomUUID();
@@ -4047,6 +4223,9 @@ export const usePosStore = create<PosState>((set, get) => {
   openNamedTab: ({ tabLabel, guestCount, customerName, customerPhone }) => {
     const denied = denyUnlessEffectivePermission("hospitality.floor", "openNamedTab");
     if (denied) return { ok: false, errorKey: denied.errorKey };
+    if (get().draftLines.length > 0 && !get().activePendingSaleId) {
+      return { ok: false, errorKey: "draftCartInProgress" };
+    }
     const label = tabLabel.trim();
     if (!label) return { ok: false, errorKey: "invalid" };
     const state = get();
@@ -4719,10 +4898,14 @@ export const usePosStore = create<PosState>((set, get) => {
 
   updateTableReservation: (reservationId, patch) => {
     const denied = denyUnlessEffectivePermission("hospitality.floor", "updateTableReservation");
-    if (denied) return;
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
-    if (!floor) return;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const detailKeys = Object.keys(patch).filter((k) => k !== "status");
+    const check = checkReservationTransition(floor, reservationId, patch.status, { editsDetails: detailKeys.length > 0 });
+    if (!check.ok) return { ok: false, errorKey: check.errorKey };
+    if (check.noop) return { ok: true };
     const actor = state.sessionActor;
     set({
       preferences: {
@@ -4735,14 +4918,18 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     queueHospitalityChange({ layout: true });
     flushPendingPersist();
+    return { ok: true };
   },
 
   cancelTableReservation: (reservationId, reason) => {
     const denied = denyUnlessEffectivePermission("hospitality.floor", "cancelTableReservation");
-    if (denied) return;
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
-    if (!floor) return;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const check = checkReservationTransition(floor, reservationId, "cancelled");
+    if (!check.ok) return { ok: false, errorKey: check.errorKey };
+    if (check.noop) return { ok: true };
     const actor = state.sessionActor;
     set({
       preferences: {
@@ -4755,18 +4942,20 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     queueHospitalityChange({ layout: true });
     flushPendingPersist();
+    return { ok: true };
   },
 
-  confirmTableReservation: (reservationId) => {
-    get().updateTableReservation(reservationId, { status: "confirmed" });
-  },
+  confirmTableReservation: (reservationId) => get().updateTableReservation(reservationId, { status: "confirmed" }),
 
   markReservationNoShow: (reservationId) => {
     const denied = denyUnlessEffectivePermission("hospitality.floor", "markReservationNoShow");
-    if (denied) return;
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
-    if (!floor) return;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const check = checkReservationTransition(floor, reservationId, "no_show");
+    if (!check.ok) return { ok: false, errorKey: check.errorKey };
+    if (check.noop) return { ok: true };
     const actor = state.sessionActor;
     set({
       preferences: {
@@ -4779,6 +4968,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     queueHospitalityChange({ layout: true });
     flushPendingPersist();
+    return { ok: true };
   },
 
   addWaitlistEntry: (input) => {
@@ -4797,10 +4987,13 @@ export const usePosStore = create<PosState>((set, get) => {
 
   cancelWaitlistEntry: (entryId) => {
     const denied = denyUnlessEffectivePermission("hospitality.floor", "cancelWaitlistEntry");
-    if (denied) return;
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
-    if (!floor) return;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const check = checkWaitlistTransition(floor, entryId, "cancelled");
+    if (!check.ok) return { ok: false, errorKey: check.errorKey };
+    if (check.noop) return { ok: true };
     const actor = state.sessionActor;
     set({
       preferences: {
@@ -4813,6 +5006,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     queueHospitalityChange({ layout: true });
     flushPendingPersist();
+    return { ok: true };
   },
 
   suggestTablesForGuests: (input) => {
@@ -5018,6 +5212,11 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const sale = state.sales.find((s) => s.id === saleId && s.status === "pending");
     if (!sale) return { ok: false, errorKey: "invalid" };
+    // Money already taken on a table bill (cash / MoMo / card / voucher) is not booked to the shift
+    // until the sale is finalized, so cancelling here would leave it in the till with no record and
+    // no refund. Refuse instead: the bill must be settled and then voided through the shared void
+    // lifecycle, which books the refund. (Credit is a promise to pay, not money received.)
+    if (pendingSaleReceivedPaymentsUgx(sale) > 0) return { ok: false, errorKey: "pendingSalePaymentsRecorded" };
     const at = new Date().toISOString();
     const actor = state.sessionActor;
     const cancelled = markPendingSaleAsPreCompletionVoid(sale, {
@@ -5131,12 +5330,17 @@ export const usePosStore = create<PosState>((set, get) => {
     const cartDiscount = Math.min(Math.max(0, Math.floor(state.draftCartDiscountUgx)), lineSubtotal);
     const actorRole = state.sessionActor?.role ?? "cashier";
     const lineDiscountTotal = saleLinesPreview.reduce((a, l) => a + lineDiscountUgx(l), 0);
-    const discountPolicy = validateCombinedDraftDiscount({
+    // The calculation is unchanged; a stored manager approval merely lets the existing "manager
+    // approval required" check pass — only if it is bound to THIS pending sale and to exactly
+    // these line / cart amounts (see isDiscountApprovalValid).
+    const discountPolicy = validateCombinedDraftDiscountWithApproval({
       prefs: state.preferences,
       role: actorRole,
       listSubtotalUgx: listSubtotal,
       lineDiscountUgx: lineDiscountTotal,
       cartDiscountUgx: cartDiscount,
+      approval: target.kind === "pending" ? target.sale.billDraft?.discountApproval : null,
+      saleId: target.kind === "pending" ? target.sale.id : null,
     });
     if (!discountPolicy.ok) return { ok: false, errorKey: discountPolicy.errorKey };
 
@@ -5199,7 +5403,15 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     const ingredientReq = requirementsFromSaleLines(ingredientLines, state.products);
     const ingredientShortages = checkIngredientAvailability(ingredientReq, state.products);
-    if (ingredientShortages.length > 0) return { ok: false, errorKey: "ingredientShortage" };
+    // Same rule the order-taking step applies (add-time and finalize used to disagree). A permitted
+    // shortfall never drives stock below zero — the deduction floors at what is on the shelf — and is
+    // written to the audit trail below so the unrecorded consumption stays visible.
+    const shortageDecision = decideIngredientShortage({
+      prefs: state.preferences,
+      shortages: ingredientShortages,
+      role: state.sessionActor?.role,
+    });
+    if (!shortageDecision.allow) return { ok: false, errorKey: shortageDecision.errorKey };
 
     const products = [...state.products];
     const preCartLines: SaleLine[] = [];
@@ -5313,6 +5525,24 @@ export const usePosStore = create<PosState>((set, get) => {
       if (idx >= 0) products[idx] = updated;
     }
 
+    // Made-to-order provenance: which ingredients each recipe line actually took off the shelf. A later
+    // void/return gives back exactly its share of these (see ingredientReversalFor) instead of crediting
+    // a finished dish that never had stock. preCartLines is 1:1 with the draft lines.
+    const madeToOrderIdx = state.draftLines
+      .map((l, i) => ({ l, i, prod: state.products.find((x) => x.id === l.productId) }))
+      .filter((r) => r.prod != null && saleLineConsumesIngredientsAtSale(r.prod))
+      .map((r) => r.i);
+    if (madeToOrderIdx.length > 0) {
+      const provenance = allocateIngredientConsumption(
+        madeToOrderIdx.map((i) => preCartLines[i]!),
+        state.products,
+        new Map(recipeDeduction.deducted.map((d) => [d.productId, d.qty])),
+      );
+      madeToOrderIdx.forEach((lineIdx, k) => {
+        preCartLines[lineIdx] = { ...preCartLines[lineIdx]!, ingredientConsumption: provenance[k]! };
+      });
+    }
+
     const saleLines = applyCartDiscountSnapshot(preCartLines, cartDiscount);
     const estimatedProfitUgx = saleEstimatedProfitUgx(saleLines);
 
@@ -5400,11 +5630,19 @@ export const usePosStore = create<PosState>((set, get) => {
     }
 
     const shopKey = inventoryMovementNamespace();
+    const deductedByIngredient = new Map(recipeDeduction.deducted.map((d) => [d.productId, d.qty]));
     const saleMovements: StockMovement[] = saleStockMovementsFromSale(shopKey, {
       id: sale.id,
       createdAt: sale.createdAt,
       lines: saleLines,
-    }, products);
+    }, products).flatMap((m) => {
+      // A permitted ingredient shortfall (see decideIngredientShortage) floors the shelf at 0, exactly
+      // as the server does. Record what actually left the shelf so ledger and stock keep agreeing.
+      if (m.kind !== "adjust_use" || m.refId !== sale.id || !(m.deltaBaseUnits < 0)) return [m];
+      const actual = Math.round((deductedByIngredient.get(m.productId) ?? 0) * 10000) / 10000;
+      if (actual >= -m.deltaBaseUnits - 1e-9) return [m];
+      return actual > 0 ? [{ ...m, deltaBaseUnits: -actual, summary: `Recipe consumption −${actual}` }] : [];
+    });
 
     const auditEntries: AuditLogEntry[] = [];
     const buildAudit = (action: AuditAction, payloadSummary: string, payload: Record<string, unknown>): AuditLogEntry => ({
@@ -5444,6 +5682,20 @@ export const usePosStore = create<PosState>((set, get) => {
           saleId: sale.id,
           discountUgx: discountTotal,
           soldByUserId: actorId,
+        }),
+      );
+    }
+    if (ingredientShortages.length > 0) {
+      auditEntries.push(
+        buildAudit("hospitality_ingredient_shortage_sale", `Sold with ingredient shortfall (${ingredientShortages.length})`, {
+          saleId: sale.id,
+          soldByUserId: actorId,
+          shortages: ingredientShortages.map((s) => ({
+            ingredientProductId: s.ingredientProductId,
+            ingredientName: s.ingredientName,
+            requiredBase: s.requiredBase,
+            availableBase: s.availableBase,
+          })),
         }),
       );
     }
@@ -5734,7 +5986,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!line || line.voided) return { ok: false, errorKey: "invalid" };
 
     const returnScoped = [...state.returnRecords, ...(state.archivedReturnRecords ?? [])];
-    const remaining = remainingVoidableLine(sale, line.productId, returnScoped);
+    const remaining = remainingVoidableLine(sale, line.productId, returnScoped, line.id ?? null);
     if (remaining.quantity <= 0) return { ok: false, errorKey: "invalid" };
     const amount = remaining.amountUgx;
     const voidQty = remaining.quantity;
@@ -5773,6 +6025,7 @@ export const usePosStore = create<PosState>((set, get) => {
       actorName: actor.displayName,
       shiftId: openShift?.id ?? null,
       createdAt: at,
+      saleLineId: line.id ?? null,
     };
 
     const totals = reduceSaleTotalsByAmount(sale, amount);
@@ -5785,10 +6038,38 @@ export const usePosStore = create<PosState>((set, get) => {
       pendingSync: sale.pendingSync === true,
     };
 
-    const products = [...state.products];
+    let products = [...state.products];
     const pIdx = products.findIndex((p) => p.id === line.productId);
     const preVoidProduct = pIdx >= 0 ? products[pIdx]! : null;
-    if (pIdx >= 0) {
+    // Made-to-order recipe line: it consumed INGREDIENTS at sale, never finished-dish stock, so the
+    // reversal gives back its exact share of those ingredients and leaves the dish alone.
+    const viaIngredients = hasIngredientProvenance(line);
+    const ingredientMovements: StockMovement[] = [];
+    const ingredientProductsTouched: Product[] = [];
+    if (viaIngredients) {
+      const credited = creditIngredients(
+        products,
+        ingredientReversalFor(line, voidQty, Math.max(0, line.quantity - voidQty)),
+        at,
+      );
+      products = credited.products;
+      for (const c of credited.applied) {
+        const ing = products.find((p) => p.id === c.productId)!;
+        ingredientProductsTouched.push(ing);
+        ingredientMovements.push({
+          id: stableVoidLineMovementId(shopKey, saleId, lineIdentity, c.productId),
+          at,
+          productId: c.productId,
+          productName: ing.name,
+          deltaBaseUnits: c.quantity,
+          kind: "adjust_other",
+          summary: `Void +${c.quantity} (recipe)`,
+          refId: voidRec.id,
+          supplierId: null,
+        });
+      }
+    }
+    if (!viaIngredients && pIdx >= 0) {
       const p = products[pIdx]!;
       let nextProduct: Product = {
         ...p,
@@ -5799,45 +6080,12 @@ export const usePosStore = create<PosState>((set, get) => {
         updatedAt: at,
         version: p.version + 1,
       };
-      // Phase 5 — batch-prepared provenance: the shared restock returns finished
-      // portions to stock; credit them back to PrepBatch provenance so prepared
-      // stock and Σ(remainingPortions) stay reconciled. Hospitality-only branch:
-      // retail products never carry prepMode "batch_prepared".
+      // Phase 5 — batch-prepared provenance: the shared restock returns finished portions to
+      // stock; give the SAME portions back to their PrepBatches so prepared stock and
+      // Σ(remainingPortions) stay reconciled. Only the un-reversed part of the line is credited
+      // (a partial void after a return must not credit the returned portions again).
       if (productPrepMode(p) === "batch_prepared") {
-        // Phase 5.1 — exact restoration from the SaleLine's frozen allocation
-        // (which batches this line consumed, and how much of each).
-        const allocation = line.prepAllocation?.filter((a) => a.portions > 0) ?? [];
-        const credited = allocation.length
-          ? creditPrepAllocation(p, allocation, at)
-          : null;
-        if (credited) {
-          nextProduct = {
-            ...credited,
-            stockOnHand: p.stockOnHand + voidQty,
-            packCostUnitsDepleted: nextProduct.packCostUnitsDepleted,
-            updatedAt: at,
-            version: p.version + 1,
-          };
-        } else {
-          // Legacy fallback (sales finalized before provenance existed): credit
-          // the newest open batch.
-          const batches = [...(p.menu?.prepBatches ?? [])];
-          const creditTarget = [...batches]
-            .filter((b) => b.status === "active" || b.status === "depleted")
-            .sort((a, b) => b.preparedAt.localeCompare(a.preparedAt))[0];
-          if (creditTarget) {
-            const idx = batches.findIndex((b) => b.id === creditTarget.id);
-            batches[idx] = {
-              ...batches[idx]!,
-              remainingPortions: batches[idx]!.remainingPortions + voidQty,
-              status: "active",
-              updatedAt: at,
-              version: (batches[idx]!.version ?? 1) + 1,
-              pendingSync: true,
-            };
-            nextProduct = { ...nextProduct, menu: { ...nextProduct.menu, prepBatches: batches } };
-          }
-        }
+        nextProduct = restorePrepBatchesForReversal(nextProduct, line, voidQty, Math.max(0, line.quantity - voidQty), at);
       }
       products[pIdx] = nextProduct;
     }
@@ -5853,6 +6101,7 @@ export const usePosStore = create<PosState>((set, get) => {
       refId: voidRec.id,
       supplierId: null,
     };
+    const voidMovements: StockMovement[] = viaIngredients ? ingredientMovements : [movement];
 
     const sales = [...state.sales];
     sales[saleIdx] = updatedSale;
@@ -5887,7 +6136,7 @@ export const usePosStore = create<PosState>((set, get) => {
       customers,
       voidRecords: [voidRec, ...state.voidRecords],
       pharmacyControlledRegister: nextControlledRegister,
-      ...movementMergePatch(state, [movement]),
+      ...movementMergePatch(state, voidMovements),
     });
 
     if (openShift) {
@@ -5946,6 +6195,8 @@ export const usePosStore = create<PosState>((set, get) => {
           amountUgx: amount,
           lineIndex,
           productName: line.name,
+          saleLineId: line.id ?? null,
+          recipeLine: viaIngredients,
         }),
         ...saleAdjustmentOutboxMeta({
           operationType: "void",
@@ -5958,13 +6209,15 @@ export const usePosStore = create<PosState>((set, get) => {
     if (sale.customerId && debtReduce > 0) {
       void queueRemote("customer", { id: sale.customerId });
     }
-    if (pIdx >= 0) {
+    if (viaIngredients) {
+      if (ingredientProductsTouched.length > 0) broadcastInventoryStock(ingredientProductsTouched, "sale_void");
+    } else if (pIdx >= 0) {
       broadcastInventoryStock([products[pIdx]!], "sale_void");
     }
     return { ok: true };
   },
 
-  returnProduct: ({ saleId, productId, quantity, refundAmountUgx, reason, note }) => {
+  returnProduct: ({ saleId, productId, quantity, refundAmountUgx, reason, note, saleLineId }) => {
     const denied = denyUnlessEffectivePermission("sale_void", "returnProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
@@ -5997,6 +6250,13 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!product) return { ok: false, errorKey: "missingProduct" };
 
     const returnScopedPrecheck = [...state.returnRecords, ...(state.archivedReturnRecords ?? [])];
+    // The line this return comes from: the one asked for, else the product's first active line.
+    const precheckLine = resolvedPrecheck
+      ? saleLineId
+        ? resolvedPrecheck.sale.lines.find((l) => l.id === saleLineId && l.productId === productId && !l.voided) ?? null
+        : findSaleLineForReturn(resolvedPrecheck.sale, productId)
+      : null;
+    if (resolvedPrecheck && saleLineId && !precheckLine) return { ok: false, errorKey: "invalid" };
     if (resolvedPrecheck) {
       const limit = validateReturnAgainstSale({
         sale: resolvedPrecheck.sale,
@@ -6004,6 +6264,7 @@ export const usePosStore = create<PosState>((set, get) => {
         quantity: qty,
         refundAmountUgx: refund,
         returnRecords: returnScopedPrecheck,
+        lineId: precheckLine?.id ?? null,
       });
       if (!limit.ok) return { ok: false, errorKey: limit.errorKey };
     }
@@ -6038,6 +6299,15 @@ export const usePosStore = create<PosState>((set, get) => {
       return { ok: false, errorKey: "returnSaleUnavailable" };
     }
     const returnScoped = [...live.returnRecords, ...(live.archivedReturnRecords ?? [])];
+    const liveTargetLine = resolved
+      ? saleLineId
+        ? resolved.sale.lines.find((l) => l.id === saleLineId && l.productId === productId && !l.voided) ?? null
+        : findSaleLineForReturn(resolved.sale, productId)
+      : null;
+    if (resolved && saleLineId && !liveTargetLine) {
+      releaseReturnSubmit(lockKey);
+      return { ok: false, errorKey: "invalid" };
+    }
     if (resolved) {
       const limit = validateReturnAgainstSale({
         sale: resolved.sale,
@@ -6045,6 +6315,7 @@ export const usePosStore = create<PosState>((set, get) => {
         quantity: qty,
         refundAmountUgx: refund,
         returnRecords: returnScoped,
+        lineId: liveTargetLine?.id ?? null,
       });
       if (!limit.ok) {
         releaseReturnSubmit(lockKey);
@@ -6059,7 +6330,7 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const linkedSale = resolved?.sale;
     const cashReduce = cashReduceFromRefund(linkedSale, refund);
-    const saleLine = findSaleLineForReturn(linkedSale, productId);
+    const saleLine = liveTargetLine;
     const returnCogsUgx = saleLine
       ? resolveReturnCogsFromSaleLine(saleLine, qty)
       : Math.round(qty * normalizeUnitCostUgx(liveProduct.costPricePerUnitUgx));
@@ -6079,6 +6350,7 @@ export const usePosStore = create<PosState>((set, get) => {
       unitCostUgx: returnUnitCostUgx,
       reason,
       note: note?.trim() || undefined,
+      saleLineId: saleLine?.id ?? null,
       actorUserId: liveActor.userId,
       actorName: liveActor.displayName,
       shiftId: openShift?.id ?? null,
@@ -6087,33 +6359,62 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const restock = returnRestocksInventory(reason);
 
-    const products = live.products.map((p) =>
-      p.id === productId && restock
-        ? {
-            ...p,
-            stockOnHand: p.stockOnHand + qty,
-            packCostUnitsDepleted: hasPackCostAllocation(p)
-              ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, qty)
-              : p.packCostUnitsDepleted,
-            updatedAt: at,
-            version: p.version + 1,
-          }
-        : p,
-    );
+    // Batch-prepared dishes: returned portions go back to the PrepBatches the sale drew from
+    // (skipping portions an earlier return already gave back). No-op for every other product.
+    const priorReturnedQty =
+      linkedSale && saleLine
+        ? returnedQuantityOnLine(linkedSale, saleLine, returnScoped)
+        : returnScoped
+            .filter((r) => r.saleId === (saleId ?? null) && r.productId === productId)
+            .reduce((sum, r) => sum + r.quantity, 0);
+    // Made-to-order recipe line: the return gives back its share of the ingredients that line consumed
+    // (only for a sellable return reason, like every restock) and never touches the finished dish.
+    const returnViaIngredients = Boolean(saleLine && hasIngredientProvenance(saleLine));
+    const returnIngredientCredits =
+      returnViaIngredients && restock ? ingredientReversalFor(saleLine!, qty, priorReturnedQty) : [];
+    const returnCredited = creditIngredients(live.products, returnIngredientCredits, at);
+    const products = (returnViaIngredients ? returnCredited.products : live.products).map((p) => {
+      if (returnViaIngredients || p.id !== productId || !restock) return p;
+      const restocked: Product = {
+        ...p,
+        stockOnHand: p.stockOnHand + qty,
+        packCostUnitsDepleted: hasPackCostAllocation(p)
+          ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, qty)
+          : p.packCostUnitsDepleted,
+        updatedAt: at,
+        version: p.version + 1,
+      };
+      return saleLine ? restorePrepBatchesForReversal(restocked, saleLine, qty, priorReturnedQty, at) : restocked;
+    });
 
-    const movement: StockMovement | null = restock
-      ? {
-          id: crypto.randomUUID(),
-          at,
-          productId,
-          productName: liveProduct.name,
-          deltaBaseUnits: qty,
-          kind: "adjust_other",
-          summary: `Return +${qty}`,
-          refId: returnRec.id,
-          supplierId: null,
-        }
-      : null;
+    const returnShopKey = inventoryMovementNamespace();
+    const returnMovements: StockMovement[] = !restock
+      ? []
+      : returnViaIngredients
+        ? returnCredited.applied.map((c) => ({
+            id: stableInventoryMovementId(returnShopKey, "return_recipe", returnRec.id, c.productId),
+            at,
+            productId: c.productId,
+            productName: live.products.find((p) => p.id === c.productId)?.name ?? c.productId,
+            deltaBaseUnits: c.quantity,
+            kind: "adjust_other" as const,
+            summary: `Return +${c.quantity} (recipe)`,
+            refId: returnRec.id,
+            supplierId: null,
+          }))
+        : [
+            {
+              id: crypto.randomUUID(),
+              at,
+              productId,
+              productName: liveProduct.name,
+              deltaBaseUnits: qty,
+              kind: "adjust_other" as const,
+              summary: `Return +${qty}`,
+              refId: returnRec.id,
+              supplierId: null,
+            },
+          ];
 
     let sales = live.sales;
     let archivedSales = live.archivedSales ?? [];
@@ -6148,7 +6449,7 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedSales,
       customers,
       returnRecords: [returnRec, ...live.returnRecords],
-      ...(movement ? movementMergePatch(live, [movement]) : {}),
+      ...(returnMovements.length > 0 ? movementMergePatch(live, returnMovements) : {}),
     });
 
     if (openShift) {

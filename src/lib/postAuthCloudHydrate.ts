@@ -481,6 +481,9 @@ async function runHydrateAccountFromCloudInner(opts?: {
       recordProbeIntegrityDiagnostics(opts.cloudProbe);
     }
     await runCloudDataRestore({ ...opts, cloudProbe });
+    // The restored snapshot carries the business type it was taken with. The shop row is the
+    // authority (an admin may have switched it since), so apply it again over the restore.
+    await hydrateLocalShopProfileFromCloud().catch(ignoreReportedSyncFailure("shop_profile_hydrate_failed"));
   } else if (getDeviceOnline()) {
     await syncShopWithCloud({ pull: false }).catch((err) => recordBackgroundSyncFailure("post_auth_push_failed", err));
   }

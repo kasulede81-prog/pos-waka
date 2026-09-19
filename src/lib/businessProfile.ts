@@ -301,7 +301,33 @@ export async function hydrateLocalShopProfileFromCloud(): Promise<void> {
   // Only skip the wizard when cloud onboarding is actually complete.
   if (onboarding?.complete) {
     store.completeBusinessOnboarding(businessType);
+  } else if (store.preferences.onboardingDone && businessType !== store.preferences.businessType) {
+    // This device is already onboarded, so the wizard is not at stake — but the shop row is the
+    // authority for the business type (an admin can switch it). owner_onboarding_status() looks at
+    // the caller's oldest membership and needs a real e-mail, so phone-login staff, placeholder
+    // e-mails and multi-shop users never passed the check above and never picked the switch up.
+    // Live table orders are kept (never destroyed) while the mode changes.
+    store.updateBusinessType(businessType, undefined, { keepOpenOrders: true });
   }
+}
+
+let lastShopProfileRefreshAt = 0;
+
+/**
+ * Re-check the cloud business type without waiting for the next launch/login. Cheap and throttled:
+ * called when the app returns to the foreground, so a switch made by an admin reaches a terminal
+ * that was left running.
+ */
+export async function refreshShopProfileFromCloudThrottled(minIntervalMs = 5 * 60_000): Promise<void> {
+  const now = Date.now();
+  if (now - lastShopProfileRefreshAt < minIntervalMs) return;
+  lastShopProfileRefreshAt = now;
+  await hydrateLocalShopProfileFromCloud();
+}
+
+/** Test hook. */
+export function resetShopProfileRefreshThrottleForTests(): void {
+  lastShopProfileRefreshAt = 0;
 }
 
 /** Load active-shop row fields used by the location section in Settings. */

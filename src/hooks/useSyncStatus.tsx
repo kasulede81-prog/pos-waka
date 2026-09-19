@@ -378,6 +378,10 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
             () => {
               void runPosPushFlush({ showSpinner: false, force: job.forcePush });
               scheduleBackgroundPull("resume", { force: job.forcePull });
+              // A business-type switch made by an admin while this terminal stayed open.
+              void import("../lib/businessProfile")
+                .then((m) => m.refreshShopProfileFromCloudThrottled())
+                .catch(() => undefined);
             },
             0,
           );

@@ -87,6 +87,9 @@ export function r3SaleVoidStockPayload(input: {
   lineIndex?: number;
   saleVoidedAt?: string | null;
   productName?: string;
+  /** The sale line being voided (server binds the reversal to it) and whether it is a made-to-order recipe line. */
+  saleLineId?: string | null;
+  recipeLine?: boolean;
 }): R3StockQueuePayload {
   return {
     productId: input.productId,
@@ -101,6 +104,8 @@ export function r3SaleVoidStockPayload(input: {
     lineIndex: input.lineIndex,
     saleVoidedAt: input.saleVoidedAt,
     productName: input.productName,
+    ...(input.saleLineId ? { saleLineId: input.saleLineId } : {}),
+    ...(input.recipeLine ? { recipeLine: true } : {}),
   };
 }
 

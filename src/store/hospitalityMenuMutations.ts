@@ -23,8 +23,7 @@ import {
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
 import {
-  effectiveIngredientPolicy,
-  resolveIngredientPolicyConfig,
+  decideIngredientShortage,
 } from "../lib/hospitalityHardware";
 import type { PosState } from "./usePosStore";
 
@@ -87,20 +86,16 @@ export function createHospitalityMenuStoreActions(deps: Deps) {
       if (!built.line) return { ok: false as const, errorKey: built.errorKey ?? "invalid" };
 
       const line = built.line;
-      const ingPolicy = resolveIngredientPolicyConfig(state.preferences);
-      const policy = effectiveIngredientPolicy(state.preferences);
       const trialLines = [...state.draftLines, line];
       const requirements = requirementsFromSaleLines(trialLines, state.products);
-      const shortages = ingPolicy.allowNegativeInventory
-        ? []
-        : checkIngredientAvailability(requirements, state.products);
-
-      if (shortages.length > 0 && !input.managerOverride) {
-        if (policy === "block") return { ok: false as const, errorKey: "ingredientShortage", shortages };
-        if (policy === "manager_override") {
-          return { ok: false as const, errorKey: "ingredientShortageOverride", shortages };
-        }
-      }
+      const shortages = checkIngredientAvailability(requirements, state.products);
+      const shortageDecision = decideIngredientShortage({
+        prefs: state.preferences,
+        shortages,
+        role: state.sessionActor?.role,
+        managerOverride: input.managerOverride,
+      });
+      if (!shortageDecision.allow) return { ok: false as const, errorKey: shortageDecision.errorKey, shortages };
 
       if (shouldDeductFinishedProductStock(input.product)) {
         const existingQty =
@@ -176,19 +171,33 @@ export function createHospitalityMenuStoreActions(deps: Deps) {
       if (shouldDeductFinishedProductStock(product) && nextQty > product.stockOnHand + 1e-6) {
         return { ok: false as const, errorKey: "noStock" };
       }
-      const rebuilt = buildConfiguredSaleLine({
-        product,
-        quantity: nextQty,
-        variantId: line.variantId,
-        modifiers: line.selectedModifiers,
-        comboSelections: line.comboSelections,
-        notes: line.notes,
-        course: line.course,
-        seatNumber: line.seatNumber,
-        isComboMeal: line.isComboMeal,
-      });
-      if (!rebuilt.line) return { ok: false as const, errorKey: "invalid" };
-      const nextLine = { ...rebuilt.line, id: line.id };
+      // A combo is priced by the combo engine (combo price / component sum + slot extras, × qty).
+      // Rebuilding it as a plain configured product dropped that price and charged the bare product.
+      const isComboLine = Boolean(line.isComboMeal || line.comboSelections?.length) &&
+        Boolean(normalizeComboConfig(product.menu?.combo));
+      const rebuilt = isComboLine
+        ? buildComboSaleLine({
+            comboProduct: product,
+            selections: line.comboSelections ?? [],
+            products: state.products,
+            quantity: nextQty,
+            notes: line.notes,
+          })
+        : buildConfiguredSaleLine({
+            product,
+            quantity: nextQty,
+            variantId: line.variantId,
+            modifiers: line.selectedModifiers,
+            comboSelections: line.comboSelections,
+            notes: line.notes,
+            course: line.course,
+            seatNumber: line.seatNumber,
+            isComboMeal: line.isComboMeal,
+          });
+      if (!rebuilt.line) return { ok: false as const, errorKey: rebuilt.errorKey ?? "invalid" };
+      const nextLine = isComboLine
+        ? { ...rebuilt.line, id: line.id, course: line.course ?? rebuilt.line.course, seatNumber: line.seatNumber ?? null }
+        : { ...rebuilt.line, id: line.id };
       set((s) => ({
         draftLines: s.draftLines.map((l) => ((l.id ?? l.productId) === lineId ? nextLine : l)),
       }));

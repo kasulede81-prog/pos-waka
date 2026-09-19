@@ -7,6 +7,7 @@ import {
 import { cashReduceFromRefund } from "./cashDrawerSales";
 import { hasPackCostAllocation, retractPackCostUnitsDepleted } from "./costPrecision";
 import { remainingVoidableLine } from "./returnLimits";
+import { creditIngredients, hasIngredientProvenance, ingredientReversalFor, restorePrepBatchesForReversal } from "./recipeEngine";
 import { isCompletedSale, isVoidedSale } from "./saleStatus";
 import { stableVoidLineIdentity, stableVoidLineMovementId, stableVoidRecordId } from "./saleLifecycle";
 
@@ -46,12 +47,27 @@ export function planWholeBillVoid(input: {
   let amountVoidedUgx = 0;
   const returnRecords = input.returnRecords ?? [];
 
-  const restockLine = (line: SaleLine, quantity: number) => {
-    if (quantity <= 0) return;
+  /**
+   * Returns the ingredient credits when the line is a made-to-order recipe line (its reversal puts
+   * ingredients back and leaves the dish alone), otherwise null after restocking the finished product.
+   */
+  const restockLine = (line: SaleLine, quantity: number): Array<{ productId: string; quantity: number }> | null => {
+    if (quantity <= 0) return null;
+    if (hasIngredientProvenance(line)) {
+      const credited = creditIngredients(
+        products,
+        ingredientReversalFor(line, quantity, Math.max(0, line.quantity - quantity)),
+        input.at,
+      );
+      credited.products.forEach((p, i) => {
+        products[i] = p;
+      });
+      return credited.applied;
+    }
     const pIdx = products.findIndex((p) => p.id === line.productId);
-    if (pIdx < 0) return;
+    if (pIdx < 0) return null;
     const p = products[pIdx]!;
-    products[pIdx] = {
+    let restored: Product = {
       ...p,
       stockOnHand: p.stockOnHand + quantity,
       packCostUnitsDepleted: hasPackCostAllocation(p)
@@ -60,11 +76,16 @@ export function planWholeBillVoid(input: {
       updatedAt: input.at,
       version: p.version + 1,
     };
+    // Batch-prepared dishes: the finished portions go back to the exact PrepBatches they came from
+    // (no-op for every other product).
+    restored = restorePrepBatchesForReversal(restored, line, quantity, Math.max(0, line.quantity - quantity), input.at);
+    products[pIdx] = restored;
+    return null;
   };
 
   sale.lines.forEach((line, lineIndex) => {
     if (line.voided) return;
-    const remaining = remainingVoidableLine(sale, line.productId, returnRecords);
+    const remaining = remainingVoidableLine(sale, line.productId, returnRecords, line.id ?? null);
     if (remaining.quantity <= 0) return;
     const amount = remaining.amountUgx;
     const voidQty = remaining.quantity;
@@ -86,20 +107,37 @@ export function planWholeBillVoid(input: {
       actorName: input.actorName,
       shiftId: input.shiftId ?? null,
       createdAt: input.at,
+      saleLineId: line.id ?? null,
     };
     voidRecords.push(voidRec);
-    restockLine(line, voidQty);
-    movements.push({
-      id: stableVoidLineMovementId(input.shopKey, sale.id, identity, line.productId),
-      at: input.at,
-      productId: line.productId,
-      productName: line.name,
-      deltaBaseUnits: voidQty,
-      kind: "adjust_other",
-      summary: `Void +${voidQty}`,
-      refId: voidRec.id,
-      supplierId: null,
-    });
+    const ingredientCredits = restockLine(line, voidQty);
+    if (ingredientCredits) {
+      for (const c of ingredientCredits) {
+        movements.push({
+          id: stableVoidLineMovementId(input.shopKey, sale.id, identity, c.productId),
+          at: input.at,
+          productId: c.productId,
+          productName: products.find((p) => p.id === c.productId)?.name ?? c.productId,
+          deltaBaseUnits: c.quantity,
+          kind: "adjust_other",
+          summary: `Void +${c.quantity} (recipe)`,
+          refId: voidRec.id,
+          supplierId: null,
+        });
+      }
+    } else {
+      movements.push({
+        id: stableVoidLineMovementId(input.shopKey, sale.id, identity, line.productId),
+        at: input.at,
+        productId: line.productId,
+        productName: line.name,
+        deltaBaseUnits: voidQty,
+        kind: "adjust_other",
+        summary: `Void +${voidQty}`,
+        refId: voidRec.id,
+        supplierId: null,
+      });
+    }
     const debtReduce = creditDebtReductionFromSaleAdjustment(sale, amount);
     const totals = reduceSaleTotalsByAmount(sale, amount);
     customers = applyCustomerDebtDelta(customers, sale.customerId, -debtReduce);

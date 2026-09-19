@@ -39,6 +39,7 @@ export function rowToReturnRecord(row: Record<string, unknown>): CloudReturnRow 
     unitCostUgx: meta.unitCostUgx != null ? Math.max(0, Number(meta.unitCostUgx)) : undefined,
     reason: normalizeReturnReason(String(row.reason ?? "other")),
     note: row.note != null ? String(row.note) : undefined,
+    saleLineId: meta.saleLineId != null && String(meta.saleLineId).trim() ? String(meta.saleLineId).trim() : null,
     actorUserId: String(row.created_by ?? "unknown"),
     actorName: meta.actorName != null ? String(meta.actorName) : undefined,
     shiftId: meta.shiftId != null ? String(meta.shiftId) : null,

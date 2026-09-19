@@ -51,6 +51,66 @@ function lineNoteSuffix(line: SaleLine): string {
   return line.notes?.trim() ? ` [${line.notes.trim()}]` : "";
 }
 
+export type ReceiptTotals = {
+  listSubtotalUgx: number;
+  serviceChargeUgx: number;
+  tipUgx: number;
+  taxUgx: number;
+  grandTotalUgx: number;
+};
+
+/** A sale that has left the pending state carries its own frozen money — nothing is recomputed. */
+export function isSettledReceiptSale(sale: Sale): boolean {
+  return sale.status !== "pending";
+}
+
+/**
+ * Totals a receipt prints.
+ *
+ * Pending bills (the pre-payment check) are computed live from the current settings — that is the
+ * point of a preview. A settled/voided sale is HISTORY: its subtotal, service charge, tip, tax and total
+ * were recorded on the Sale when it was finalized, and a reprint must reproduce exactly that no matter
+ * what the service-charge %, tax rate/mode or tip settings say today. (Recomputing changed old
+ * receipts the moment the merchant edited a setting, and disagreed with the recorded revenue.)
+ * `voidedTotalUgx` is added back so a later void/return does not rewrite what the bill originally said.
+ */
+export function receiptTotalsForSale(
+  ctx: Pick<RestaurantReceiptContext, "sale" | "prefs" | "receiptKind">,
+  receiptLines: SaleLine[],
+  split: BillSplitLine | null,
+): ReceiptTotals {
+  const { sale } = ctx;
+  const draft = billDraftFromSale(sale, ctx.prefs);
+  if (!isSettledReceiptSale(sale)) {
+    const cartDiscountUgx = sale.lines.reduce((sum, l) => sum + (l.cartDiscountUgx ?? 0), 0);
+    const totals = computeRestaurantBillTotals({
+      lines: receiptLines,
+      cartDiscountUgx: ctx.receiptKind === "guest" && split ? 0 : cartDiscountUgx,
+      billDraft: ctx.receiptKind === "guest" && split ? { ...draft, splits: [split] } : draft,
+      prefs: ctx.prefs,
+    });
+    return {
+      listSubtotalUgx: totals.listSubtotalUgx,
+      serviceChargeUgx: totals.serviceChargeUgx,
+      tipUgx: totals.tipUgx,
+      taxUgx: totals.taxUgx,
+      grandTotalUgx: totals.grandTotalUgx,
+    };
+  }
+  if (ctx.receiptKind === "guest" && split) {
+    // One guest's share of a settled bill: their own lines, and the amount recorded for their split.
+    const listSubtotalUgx = receiptLines.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx ?? 0), 0);
+    return { listSubtotalUgx, serviceChargeUgx: 0, tipUgx: 0, taxUgx: 0, grandTotalUgx: split.amountUgx };
+  }
+  return {
+    listSubtotalUgx: sale.subtotalUgx,
+    serviceChargeUgx: Math.max(0, sale.serviceChargeUgx ?? 0),
+    tipUgx: Math.max(0, sale.tipUgx ?? 0),
+    taxUgx: Math.max(0, sale.taxUgx ?? 0),
+    grandTotalUgx: sale.totalUgx + Math.max(0, sale.voidedTotalUgx ?? 0),
+  };
+}
+
 export function buildRestaurantReceiptLines(
   ctx: RestaurantReceiptContext,
   paperWidth: EscPosPaperWidth = "80mm",
@@ -68,7 +128,6 @@ export function buildRestaurantReceiptLines(
   };
   const shop = ctx.prefs.shopDisplayName?.trim() || "Waka POS";
   const draft = billDraftFromSale(ctx.sale, ctx.prefs);
-  const cartDiscountUgx = ctx.sale.lines.reduce((sum, l) => sum + (l.cartDiscountUgx ?? 0), 0);
   const split =
     ctx.splitId != null ? draft.splits.find((s) => s.id === ctx.splitId) ?? null : null;
   const splitIndex =
@@ -78,12 +137,7 @@ export function buildRestaurantReceiptLines(
     split?.lineIds?.length && (ctx.receiptKind === "guest" || ctx.splitId)
       ? ctx.sale.lines.filter((l) => split.lineIds!.includes(l.id ?? l.productId))
       : ctx.sale.lines;
-  const totals = computeRestaurantBillTotals({
-    lines: receiptLines,
-    cartDiscountUgx: ctx.receiptKind === "guest" && split ? 0 : cartDiscountUgx,
-    billDraft: ctx.receiptKind === "guest" && split ? { ...draft, splits: [split] } : draft,
-    prefs: ctx.prefs,
-  });
+  const totals = receiptTotalsForSale(ctx, receiptLines, split);
   const discount = computeSaleDiscountBreakdown(ctx.sale);
   const lines: string[] = [];
   const isVoid = ctx.voidReceipt || ctx.receiptKind === "void";
@@ -235,12 +289,6 @@ export function buildRestaurantReceiptEscPos(ctx: RestaurantReceiptContext, pape
 
 export function restaurantReceiptSummary(ctx: RestaurantReceiptContext): string {
   const table = ctx.tableLabel ?? "—";
-  const cartDiscountUgx = ctx.sale.lines.reduce((sum, l) => sum + (l.cartDiscountUgx ?? 0), 0);
-  const total = computeRestaurantBillTotals({
-    lines: ctx.sale.lines,
-    cartDiscountUgx,
-    billDraft: billDraftFromSale(ctx.sale, ctx.prefs),
-    prefs: ctx.prefs,
-  }).grandTotalUgx;
+  const total = receiptTotalsForSale(ctx, ctx.sale.lines, null).grandTotalUgx;
   return `Receipt ${table} UGX ${total.toLocaleString()}`;
 }

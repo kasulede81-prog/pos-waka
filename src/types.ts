@@ -174,6 +174,7 @@ export type AuditAction =
   | "customer_merge"
   | "product_restore"
   | "hospitality_prep_batch"
+  | "hospitality_ingredient_shortage_sale"
   | "hospitality_prep_waste"
   | "hospitality_prep_cancel"
   | "staff_login"
@@ -361,6 +362,8 @@ export type VoidRecord = {
   createdAt: string;
   /** Whole-bill void timestamp when the cloud void ledger carries it. */
   saleVoidedAt?: string | null;
+  /** The sale line this void reversed (a sale can hold several lines of one product). */
+  saleLineId?: string | null;
 };
 
 /** Customer brought product back — stock restored, sale totals adjusted. */
@@ -383,6 +386,13 @@ export type ReturnRecord = {
   unitCostUgx?: number;
   reason: ReturnReason;
   note?: string;
+  /**
+   * The sale line this return was taken from. A sale can hold several lines of the SAME product (other
+   * variant, modifiers, combo), so (sale, product) alone cannot say which line — or which line's
+   * recipe/ingredients — was returned. Absent on returns recorded before this existed: those count
+   * against the product's first active line, exactly as they always did.
+   */
+  saleLineId?: string | null;
   actorUserId: string;
   actorName?: string;
   shiftId?: string | null;
@@ -1177,6 +1187,29 @@ export type RestaurantBillDiscountApproval = {
   reason: string;
   at: string;
   kind: "line" | "bill";
+  /**
+   * What was actually approved. An approval only authorizes the discount that was attempted when
+   * it was requested — never a larger one, never another kind, never another sale. Approvals
+   * without these fields (legacy) authorize nothing.
+   */
+  saleId?: string;
+  approvedLineDiscountUgx?: number;
+  approvedCartDiscountUgx?: number;
+  approvedDiscountUgx?: number;
+  approvedPercent?: number;
+  listSubtotalUgx?: number;
+  /** True when a manager PIN was entered by a non-manager actor (approver identity = PIN holder). */
+  viaManagerPin?: boolean;
+};
+
+/** The discount a cashier/waiter attempted that needs manager approval (in-memory, never synced). */
+export type DiscountApprovalRequest = {
+  saleId: string;
+  kind: "line" | "bill";
+  lineDiscountUgx: number;
+  cartDiscountUgx: number;
+  listSubtotalUgx: number;
+  at: string;
 };
 
 export type RestaurantBillDraft = {
@@ -1933,6 +1966,16 @@ export type SaleLine = {
    * for retail and made-to-order lines.
    */
   prepAllocation?: Array<{ batchId: string; portions: number }> | null;
+  /**
+   * Made-to-order recipe provenance — non-financial, frozen at finalize: the ingredient quantities
+   * that were ACTUALLY taken off the shelf for this line (yield, waste and modifiers included; a
+   * permitted shortfall is not invented). A void/return gives back exactly its share of these instead
+   * of crediting a finished dish that never had stock. Present (possibly empty) only on lines that
+   * consumed ingredients at sale; absent on retail, batch-prepared and pre-provenance lines, which keep
+   * their existing reversal behaviour. Never used to recompute cost: `unitCostUgx`/`cogsUgx` stay the
+   * sale-time snapshot.
+   */
+  ingredientConsumption?: Array<{ productId: string; quantity: number }> | null;
 };
 
 export type Sale = {

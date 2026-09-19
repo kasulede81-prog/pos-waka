@@ -1,4 +1,4 @@
-import type { ShopPreferences, UserRole } from "../types";
+import type { RestaurantBillDiscountApproval, ShopPreferences, UserRole } from "../types";
 
 export type DiscountControlMode = "unrestricted" | "manager_approval" | "max_percent";
 
@@ -61,4 +61,62 @@ export function validateDraftDiscount(opts: {
   }
 
   return { ok: true };
+}
+
+/**
+ * Does this stored approval authorize EXACTLY this discount on THIS sale? Pure — the financial
+ * calculation stays in finalizeDraftSale; an approval only lets the existing policy check pass.
+ *
+ * It must match the sale it was granted on, the kind it was granted for, and every amount it
+ * recorded: line discount, cart discount, their total and the percent of the list subtotal.
+ * A 10% approval never covers 20%; UGX 10,000 never covers UGX 50,000.
+ */
+export function isDiscountApprovalValid(
+  approval: RestaurantBillDiscountApproval | null | undefined,
+  ctx: {
+    saleId: string | null | undefined;
+    kind?: "line" | "bill";
+    lineDiscountUgx: number;
+    cartDiscountUgx: number;
+    listSubtotalUgx: number;
+  },
+): boolean {
+  if (!approval || !approval.approvedByUserId) return false;
+  if (!ctx.saleId || approval.saleId !== ctx.saleId) return false;
+  if (ctx.kind && approval.kind !== ctx.kind) return false;
+  const { approvedLineDiscountUgx: line, approvedCartDiscountUgx: cart, approvedDiscountUgx: total, approvedPercent: pct } = approval;
+  if ([line, cart, total, pct].some((n) => typeof n !== "number" || !Number.isFinite(n))) return false;
+  const lineNow = Math.max(0, ctx.lineDiscountUgx);
+  const cartNow = Math.max(0, ctx.cartDiscountUgx);
+  const totalNow = lineNow + cartNow;
+  if (lineNow > (line as number) + 1e-6) return false;
+  if (cartNow > (cart as number) + 1e-6) return false;
+  if (totalNow > (total as number) + 1e-6) return false;
+  return discountPercentOfSubtotal(totalNow, ctx.listSubtotalUgx) <= (pct as number) + 1e-6;
+}
+
+/**
+ * validateCombinedDraftDiscount, plus: a valid bound approval satisfies the "manager approval
+ * required" rule (and only that rule — the hard max-percent cap is never approvable).
+ */
+export function validateCombinedDraftDiscountWithApproval(opts: {
+  prefs: ShopPreferences;
+  role: UserRole;
+  listSubtotalUgx: number;
+  lineDiscountUgx: number;
+  cartDiscountUgx: number;
+  approval?: RestaurantBillDiscountApproval | null;
+  saleId?: string | null;
+  kind?: "line" | "bill";
+}): { ok: true } | { ok: false; errorKey: string } {
+  const base = validateCombinedDraftDiscount(opts);
+  if (base.ok || base.errorKey !== "discountManagerApprovalRequired") return base;
+  const approved = isDiscountApprovalValid(opts.approval, {
+    saleId: opts.saleId,
+    kind: opts.kind,
+    lineDiscountUgx: opts.lineDiscountUgx,
+    cartDiscountUgx: opts.cartDiscountUgx,
+    listSubtotalUgx: opts.listSubtotalUgx,
+  });
+  return approved ? { ok: true } : base;
 }

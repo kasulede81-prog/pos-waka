@@ -10,9 +10,11 @@ import type {
   SeatingTimelineEventType,
   TableDisplayStatus,
   TableLockReason,
+  ReservationStatus,
   TableReservation,
   WaiterSection,
   WaitlistEntry,
+  WaitlistEntryStatus,
   WaitlistPriority,
 } from "../types";
 import { preferredPaymentMethodFromSales } from "./restaurantBilling";
@@ -184,6 +186,82 @@ export function suggestTables(input: {
   return [...suggestions].sort((a, b) => b.score - a.score);
 }
 
+// ─── Status lifecycles (reservations + waitlist) ─────────────────────────────
+
+/**
+ * Reservation lifecycle. cancelled / no_show / completed are terminal; a seated party can only
+ * complete (it can no longer be cancelled or no-showed — it is at a table). Without this a cancelled
+ * reservation could be "confirmed" back to life (re-reserving its table), a seated one cancelled while
+ * its order was open, and any status could be forced through an edit patch.
+ */
+export const RESERVATION_TRANSITIONS: Readonly<Record<ReservationStatus, readonly ReservationStatus[]>> = {
+  pending: ["confirmed", "cancelled", "no_show", "seated"],
+  confirmed: ["cancelled", "no_show", "seated"],
+  seated: ["completed"],
+  no_show: [],
+  cancelled: [],
+  completed: [],
+};
+
+export const WAITLIST_TRANSITIONS: Readonly<Record<WaitlistEntryStatus, readonly WaitlistEntryStatus[]>> = {
+  waiting: ["seated", "cancelled", "no_show"],
+  seated: [],
+  cancelled: [],
+  no_show: [],
+};
+
+/** Reservations whose details (name, time, table, ...) may still be edited. */
+const RESERVATION_EDITABLE: ReadonlySet<ReservationStatus> = new Set(["pending", "confirmed"]);
+
+export type LifecycleCheck = { ok: true; noop: boolean } | { ok: false; errorKey: string };
+
+export function checkReservationTransition(
+  floor: HospitalityFloorState,
+  reservationId: string,
+  next: ReservationStatus | undefined,
+  opts?: { editsDetails?: boolean },
+): LifecycleCheck {
+  const r = (floor.reservations ?? []).find((x) => x.id === reservationId);
+  if (!r) return { ok: false, errorKey: "reservationNotFound" };
+  if (next && next === r.status && !opts?.editsDetails) return { ok: true, noop: true }; // idempotent repeat
+  if (next && next !== r.status && !RESERVATION_TRANSITIONS[r.status].includes(next)) {
+    return { ok: false, errorKey: "reservationInvalidTransition" };
+  }
+  if (opts?.editsDetails && !RESERVATION_EDITABLE.has(r.status)) {
+    return { ok: false, errorKey: "reservationNotEditable" };
+  }
+  return { ok: true, noop: false };
+}
+
+export function checkWaitlistTransition(
+  floor: HospitalityFloorState,
+  entryId: string,
+  next: WaitlistEntryStatus,
+): LifecycleCheck {
+  const e = (floor.waitlist ?? []).find((x) => x.id === entryId);
+  if (!e) return { ok: false, errorKey: "waitlistNotFound" };
+  if (e.status === next) return { ok: true, noop: true };
+  if (!WAITLIST_TRANSITIONS[e.status].includes(next)) return { ok: false, errorKey: "waitlistInvalidTransition" };
+  return { ok: true, noop: false };
+}
+
+/** Higher = further along. Used to reconcile two devices' copies without letting a stale one regress. */
+export function reservationStatusRank(status: string | undefined | null): number {
+  switch (status) {
+    case "confirmed":
+      return 1;
+    case "cancelled":
+    case "no_show":
+      return 2;
+    case "seated":
+      return 3;
+    case "completed":
+      return 4;
+    default:
+      return 0; // pending / waiting / unknown
+  }
+}
+
 // ─── Reservations CRUD ───────────────────────────────────────────────────────
 
 export function createReservation(
@@ -225,6 +303,9 @@ export function updateReservation(
   patch: Partial<TableReservation>,
   actor?: FohActor,
 ): HospitalityFloorState {
+  const detailKeys = Object.keys(patch).filter((k) => k !== "status");
+  const check = checkReservationTransition(floor, reservationId, patch.status, { editsDetails: detailKeys.length > 0 });
+  if (!check.ok || check.noop) return floor;
   const now = new Date().toISOString();
   let updated: TableReservation | undefined;
   const reservations = (floor.reservations ?? []).map((r) => {
@@ -251,6 +332,8 @@ export function cancelReservation(
   reason: string,
   actor?: FohActor,
 ): HospitalityFloorState {
+  const check = checkReservationTransition(floor, reservationId, "cancelled");
+  if (!check.ok || check.noop) return floor;
   const now = new Date().toISOString();
   const reservations = (floor.reservations ?? []).map((r) =>
     r.id === reservationId
@@ -311,6 +394,8 @@ export function markReservationNoShow(
   reservationId: string,
   actor?: FohActor,
 ): HospitalityFloorState {
+  const check = checkReservationTransition(floor, reservationId, "no_show");
+  if (!check.ok || check.noop) return floor;
   let next = updateReservation(floor, reservationId, { status: "no_show" }, actor);
   next = clearReservationFromTables(next, reservationId);
   return appendHospitalityAudit(next, {
@@ -353,6 +438,8 @@ export function cancelWaitlistEntry(
   entryId: string,
   actor?: FohActor,
 ): HospitalityFloorState {
+  const check = checkWaitlistTransition(floor, entryId, "cancelled");
+  if (!check.ok || check.noop) return floor;
   const now = new Date().toISOString();
   const waitlist = (floor.waitlist ?? []).map((e) =>
     e.id === entryId ? { ...e, status: "cancelled" as const, updatedAt: now, pendingSync: true } : e,
@@ -797,6 +884,8 @@ export function seatReservationOnFloor(
   sessionId: string,
   actor?: FohActor,
 ): HospitalityFloorState {
+  const check = checkReservationTransition(floor, reservationId, "seated");
+  if (!check.ok || check.noop) return floor;
   const now = new Date().toISOString();
   const reservations = (floor.reservations ?? []).map((r) =>
     r.id === reservationId
@@ -824,6 +913,8 @@ export function seatWaitlistOnFloor(
   sessionId: string,
   actor?: FohActor,
 ): HospitalityFloorState {
+  const check = checkWaitlistTransition(floor, entryId, "seated");
+  if (!check.ok || check.noop) return floor;
   const now = new Date().toISOString();
   const waitlist = (floor.waitlist ?? []).map((e) =>
     e.id === entryId ? { ...e, status: "seated" as const, seatedSessionId: sessionId, updatedAt: now, pendingSync: true } : e,

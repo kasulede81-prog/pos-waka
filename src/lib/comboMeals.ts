@@ -122,7 +122,7 @@ export function buildComboSaleLine(input: {
     sellingPricePerUnitUgx: Math.round(priceUgx / qty),
   };
 
-  return buildConfiguredSaleLine({
+  const built = buildConfiguredSaleLine({
     product: tempProduct,
     quantity: qty,
     comboSelections: validated.selections,
@@ -130,6 +130,21 @@ export function buildComboSaleLine(input: {
     isComboMeal: true,
     productsById: new Map(input.products.map((p) => [p.id, p])),
   });
+  if (!built.line) return built;
+  // computeComboLinePriceUgx is the ONE authority for a combo's price (combo price or component sum,
+  // plus slot extras, × quantity). buildConfiguredSaleLine adds the slot extras again (once, not per
+  // unit) on top of the unit price handed to it, which over-charged every combo by its extras and got
+  // worse with quantity — so the line money is pinned to the authoritative figure.
+  const unitCost = built.line.unitCostUgx ?? 0;
+  return {
+    line: {
+      ...built.line,
+      unitPriceUgx: Math.round(priceUgx / qty),
+      lineTotalUgx: priceUgx,
+      originalLineTotalUgx: priceUgx,
+      estimatedProfitUgx: Math.round(priceUgx - qty * unitCost),
+    },
+  };
 }
 
 export function comboSlotLabels(slot: ComboSlot): string {

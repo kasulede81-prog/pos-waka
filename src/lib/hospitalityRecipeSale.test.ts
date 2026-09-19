@@ -305,10 +305,10 @@ describe("hospitality recipe sale invariants", () => {
     const sale = s.sales.find((x) => x.id === saleId)!;
     expect(sale.lines[0]!.voided).toBe(true);
     expect(sale.totalUgx).toBe(0);
-    // Known limitation (documented in report): void restocks the finished item
-    // (never deducted) and does NOT return ingredients to stock.
-    expect(product(BURGER_ID).stockOnHand).toBe(2);
-    expect(product(BUN_ID).stockOnHand).toBe(98);
+    // Made-to-order: the void gives back the INGREDIENTS the line consumed (frozen provenance) and
+    // creates no finished-dish stock (see hospitalityMadeToOrderVoid.test.ts for the full matrix).
+    expect(product(BURGER_ID).stockOnHand).toBe(0);
+    expect(product(BUN_ID).stockOnHand).toBe(100);
   });
 
   it("M/N: sale is queued for sync and the movement ledger matches recorded stock for every product", () => {

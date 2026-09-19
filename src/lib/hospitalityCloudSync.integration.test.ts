@@ -112,12 +112,25 @@ const cloud = vi.hoisted(() => {
     }
     return err(`unknown rpc ${name}`);
   }
-  return { db, calls, reset, rpc };
+  // Table reads (used only to refresh open pending sales, which this suite does not exercise) find nothing.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chain: any = new Proxy(
+    {},
+    {
+      get: (_t, prop) => {
+        if (prop === "then") return (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null });
+        if (prop === "maybeSingle" || prop === "single") return async () => ({ data: null, error: null });
+        return () => chain;
+      },
+    },
+  );
+  const from = () => chain;
+  return { db, calls, reset, rpc, from };
 });
 
 vi.mock("../lib/supabase", async (orig) => {
   const actual = await orig<typeof import("../lib/supabase")>();
-  return { ...actual, hasSupabaseConfig: true, supabase: { rpc: cloud.rpc, auth: { getSession: async () => ({ data: { session: null } }) } } };
+  return { ...actual, hasSupabaseConfig: true, supabase: { rpc: cloud.rpc, from: cloud.from, auth: { getSession: async () => ({ data: { session: null } }) } } };
 });
 vi.mock("../lib/deviceOnline", async (orig) => ({ ...(await orig<typeof import("../lib/deviceOnline")>()), getDeviceOnline: () => true }));
 vi.mock("../offline/cloudSync", async (orig) => {
@@ -497,5 +510,99 @@ describe("kitchen tickets across two devices — the newest legitimate state sur
     expect(completedSales()).toBe(revenueBefore);
     expect(usePosStore.getState().products[0]!.stockOnHand).toBe(stockBefore);
     expect(usePosStore.getState().stockMovements.filter((m) => m.productId === "burger")).toHaveLength(0);
+  });
+});
+
+describe("concurrent default-floor creation converges (P9)", () => {
+  const SHOP = "11111111-1111-4111-8111-111111111111";
+
+  /** A device that took an order on its own random-id seed BEFORE it ever reached the cloud. */
+  function busySeedDevice(name: string) {
+    switchDevice(name);
+    const opened = usePosStore.getState().openTable({ tableId: floor().tables[0]!.id, guestCount: 2 });
+    expect(opened.ok).toBe(true);
+    const sessionId = (opened as { sessionId: string }).sessionId;
+    saveDevice(name);
+    return sessionId;
+  }
+  const sessionOp = (sessionId: string) => processHospitalitySyncOperation({ type: "session", sessionId });
+
+  it("two BUSY devices with different random seeds end up on one shared floor, and both orders sync", async () => {
+    const sa = busySeedDevice("A");
+    const sb = busySeedDevice("B");
+    const aIds = new Set(devices.A!.tables.map((t) => t.id));
+    expect(devices.B!.tables.some((t) => aIds.has(t.id))).toBe(false); // different random seeds
+
+    switchDevice("A");
+    expect(await sessionOp(sa)).toBe(true);
+    saveDevice("A");
+
+    switchDevice("B"); // used to fail forever on dining_areas_shop_name_unique
+    expect(await sessionOp(sb)).toBe(true);
+    saveDevice("B");
+
+    expect(cloud.db.areas.size).toBe(1);
+    expect(cloud.db.tables.size).toBe(8);
+    expect(cloud.db.stations.size).toBe(2);
+    expect(cloud.db.sessions.has(sa)).toBe(true);
+    expect(cloud.db.sessions.has(sb)).toBe(true);
+    // both sessions sit on real, existing cloud tables
+    for (const id of [sa, sb]) expect(cloud.db.tables.has(cloud.db.sessions.get(id)!.table_id)).toBe(true);
+    // and B's local order still points at its own (re-keyed) table
+    const bSession = floor().sessions.find((s) => s.id === sb)!;
+    expect(floor().tables.some((t) => t.id === bSession.tableId && !t.deletedAt)).toBe(true);
+    expect(floor().tables.filter((t) => !t.deletedAt)).toHaveLength(8);
+  });
+
+  it("the same op arriving several times at once (session + ticket + layout) creates exactly one floor", async () => {
+    const sa = busySeedDevice("A");
+    switchDevice("A");
+    // warm the module's own (mocked) dynamic import so the concurrent calls below share it
+    await processHospitalitySyncOperation({ type: "pull", forceFull: false });
+    const results = await Promise.all([sessionOp(sa), layout(), sessionOp(sa), layout()]);
+    expect(results).toEqual([true, true, true, true]);
+    expect(cloud.db.areas.size).toBe(1);
+    expect(cloud.db.tables.size).toBe(8);
+    expect(cloud.db.stations.size).toBe(2);
+  });
+
+  it("a floor that already reached the cloud keeps its ids (no second copy)", async () => {
+    switchDevice("A");
+    const legacy = floor();
+    // cloud already holds this floor under its own (random) ids — as pushed by an older app version
+    for (const a of legacy.areas) cloud.db.areas.set(a.id, { id: a.id, name: a.name, sort_order: 0, is_active: true, metadata: {}, updated_at: "2026-09-01T00:00:00.000Z" });
+    for (const t of legacy.tables) cloud.db.tables.set(t.id, { id: t.id, area_id: t.areaId, label: t.label, capacity: 4, sort_order: t.sortOrder, display_status: "available", is_active: true, metadata: {}, updated_at: "2026-09-01T00:00:00.000Z" });
+    for (const s of legacy.stations) cloud.db.stations.set(s.id, { id: s.id, name: s.name, station_type: s.stationType, sort_order: 0, is_active: true, print_config: {}, updated_at: "2026-09-01T00:00:00.000Z" });
+    const before = new Set(legacy.tables.map((t) => t.id));
+
+    expect(await layout()).toBe(true);
+    expect(cloud.db.tables.size).toBe(8);
+    expect(cloud.db.areas.size).toBe(1);
+    expect(new Set(floor().tables.map((t) => t.id))).toEqual(before);
+  });
+
+  it("the deterministic seed ids are the same on every device of the shop and differ between shops", async () => {
+    const { alignSeedFloorToShop } = await import("../offline/hospitalityCloudSync");
+    const empty = { areas: [], tables: [], stations: [] };
+    const f1 = alignSeedFloorToShop(defaultHospitalityFloor(), SHOP, empty);
+    const f2 = alignSeedFloorToShop(defaultHospitalityFloor(), SHOP, empty);
+    const other = alignSeedFloorToShop(defaultHospitalityFloor(), "22222222-2222-4222-8222-222222222222", empty);
+    expect(f1.areas[0]!.id).toBe(f2.areas[0]!.id);
+    expect(f1.tables.map((t) => t.id)).toEqual(f2.tables.map((t) => t.id));
+    expect(f1.stations.map((s) => s.id)).toEqual(f2.stations.map((s) => s.id));
+    expect(other.areas[0]!.id).not.toBe(f1.areas[0]!.id);
+    for (const id of [f1.areas[0]!.id, ...f1.tables.map((t) => t.id), ...f1.stations.map((s) => s.id)]) {
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    }
+    expect(new Set([f1.areas[0]!.id, ...f1.tables.map((t) => t.id), ...f1.stations.map((s) => s.id)]).size).toBe(11);
+    // every table still belongs to the (re-keyed) area
+    expect(f1.tables.every((t) => t.areaId === f1.areas[0]!.id)).toBe(true);
+  });
+
+  it("a customised floor is never re-keyed", async () => {
+    const { alignSeedFloorToShop } = await import("../offline/hospitalityCloudSync");
+    const custom = defaultHospitalityFloor();
+    custom.tables = custom.tables.slice(0, 7); // one table removed → a real, edited floor
+    expect(alignSeedFloorToShop(custom, SHOP, { areas: [], tables: [], stations: [] })).toBe(custom);
   });
 });

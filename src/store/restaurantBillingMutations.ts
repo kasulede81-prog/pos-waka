@@ -28,10 +28,11 @@ import { appendHospitalityAudit } from "../lib/hospitalityFrontOfHouse";
 import { physicalCashTenderFromCheckoutInputs } from "../lib/saleTenderCash";
 import { verifyOwnerPin } from "../lib/sensitiveActionAuth";
 import { dateKeyKampala } from "../lib/datesUg";
-import { canRoleBypassDiscountApproval } from "../lib/discountGovernance";
+import { canRoleBypassDiscountApproval, discountPercentOfSubtotal } from "../lib/discountGovernance";
 import { inventoryMovementNamespace } from "../lib/shopSyncContext";
 import { planWholeBillVoid } from "../lib/voidCompletedSale";
 import { r3SaleVoidStockPayload } from "../lib/stockDurableSync";
+import { hasIngredientProvenance } from "../lib/recipeEngine";
 import { shiftOwnerUserId } from "../lib/sessionActor";
 import { requireActiveShift } from "../lib/shiftEnforcement";
 import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
@@ -408,6 +409,14 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
       if (!saleId) return { ok: false as const, errorKey: "invalid" };
       const existing = state.sales.find((s) => s.id === saleId);
       if (!existing) return { ok: false as const, errorKey: "invalid" };
+      // An approval is for a specific attempted discount on THIS sale. The store recorded that
+      // attempt when it rejected the discount; approving consumes it, so the approved amounts
+      // can never be supplied (or inflated) by the caller.
+      const request = state.discountApprovalRequest;
+      if (!request || request.saleId !== saleId || request.kind !== input.kind) {
+        return { ok: false as const, errorKey: "discountApprovalNoRequest" };
+      }
+      const approvedDiscountUgx = request.lineDiscountUgx + request.cartDiscountUgx;
       const billDraft = mergeBillDraft(existing.billDraft, {
         discountApproval: {
           approvedByUserId: actor.userId,
@@ -415,6 +424,13 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
           reason,
           at: new Date().toISOString(),
           kind: input.kind,
+          saleId,
+          approvedLineDiscountUgx: request.lineDiscountUgx,
+          approvedCartDiscountUgx: request.cartDiscountUgx,
+          approvedDiscountUgx,
+          approvedPercent: discountPercentOfSubtotal(approvedDiscountUgx, request.listSubtotalUgx),
+          listSubtotalUgx: request.listSubtotalUgx,
+          viaManagerPin: !canRoleBypassDiscountApproval(actor.role),
         },
       }, state.preferences);
       const next = patchPendingSale(get, saleId, { billDraft });
@@ -555,24 +571,27 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
       }
 
       void queueRemote("sale", { saleId: sale.id });
-      for (const movement of planned.plan.movements) {
-        const pre = state.products.find((p) => p.id === movement.productId);
-        const voidRecordId = movement.refId;
-        if (!voidRecordId) continue;
-        const voidRec = planned.plan.voidRecords.find((v) => v.id === voidRecordId);
+      // One cloud void per VOID RECORD (the sold product + quantity + amount). The cloud void ledger
+      // (sale_voids) and the server's own sale deduction are keyed on the sold product, so this must not
+      // be derived from the local stock movements: a made-to-order line's movements are its ingredient
+      // credits (a local, provenance-driven reversal), which are not what the server ledger records.
+      for (const voidRec of planned.plan.voidRecords) {
+        const pre = state.products.find((p) => p.id === voidRec.productId);
         void queueRemote(
           "pending_stock_updates",
           r3SaleVoidStockPayload({
-            productId: movement.productId,
-            delta: movement.deltaBaseUnits,
-            voidRecordId,
+            productId: voidRec.productId,
+            delta: voidRec.quantity,
+            voidRecordId: voidRec.id,
             baseUpdatedAt: pre?.updatedAt ?? at,
             baseStockOnHand: pre?.stockOnHand,
             saleId: sale.id,
-            amountUgx: voidRec?.amountUgx,
-            lineIndex: voidRec?.lineIndex,
+            amountUgx: voidRec.amountUgx,
+            lineIndex: voidRec.lineIndex,
             saleVoidedAt: voidedSale.saleVoidedAt ?? null,
-            productName: voidRec?.productName,
+            productName: voidRec.productName,
+            saleLineId: voidRec.saleLineId ?? null,
+            recipeLine: hasIngredientProvenance(planned.plan.sale.lines[voidRec.lineIndex] ?? {}),
           }),
         );
       }

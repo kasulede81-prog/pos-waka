@@ -13,6 +13,7 @@ import { usePosStore } from "../store/usePosStore";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { CartVoidConfirmDialog } from "../components/pos/CartVoidConfirmDialog";
 import { useSessionActor } from "../context/SessionActorContext";
+import { useToast } from "../context/ToastProvider";
 import { useProtectedAction } from "../hooks/useProtectedAction";
 
 function formatWhen(iso: string): string {
@@ -41,6 +42,7 @@ function pendingCancelVoidMode(
 export function PendingSalesPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
+  const toast = useToast();
   const { runProtected } = useProtectedAction();
   const sales = usePosStore((s) => s.sales);
   const resumePendingSale = usePosStore((s) => s.resumePendingSale);
@@ -138,6 +140,7 @@ export function PendingSalesPage({ lang }: { lang: Language }) {
           void runProtected("delete_transaction", () => {
             const res = cancelPendingSale(saleId);
             if (res.ok) setVoidingSale(null);
+            else toast.warning(t(lang, res.errorKey ?? "saleError"));
           });
         }}
       />

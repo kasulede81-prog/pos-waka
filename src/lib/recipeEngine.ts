@@ -257,6 +257,153 @@ export function creditPrepAllocation(
   return { ...product, menu: { ...product.menu, prepBatches: next } };
 }
 
+/**
+ * Portions of a frozen prep allocation that a reversal should give back.
+ *
+ * The sale consumed batches FIFO and froze the exact allocation on the SaleLine. A reversal returns
+ * portions from the END of that allocation (last consumed, first returned). If part of the line was
+ * already reversed (`alreadyReversed` portions, e.g. an earlier partial return), those tail portions
+ * are skipped so the same batch portions are never credited twice.
+ */
+export function prepAllocationWindow(
+  allocation: ReadonlyArray<{ batchId: string; portions: number }>,
+  alreadyReversed: number,
+  take: number,
+): Array<{ batchId: string; portions: number }> {
+  const out = new Map<string, number>();
+  let skip = Math.max(0, alreadyReversed);
+  let remaining = Math.max(0, take);
+  for (let i = allocation.length - 1; i >= 0 && remaining > 1e-9; i--) {
+    const entry = allocation[i]!;
+    let available = Math.max(0, entry.portions);
+    if (skip > 1e-9) {
+      const s = Math.min(available, skip);
+      available -= s;
+      skip -= s;
+    }
+    if (available <= 1e-9) continue;
+    const t = Math.min(available, remaining);
+    out.set(entry.batchId, Math.round(((out.get(entry.batchId) ?? 0) + t) * 10000) / 10000);
+    remaining -= t;
+  }
+  return [...out].map(([batchId, portions]) => ({ batchId, portions }));
+}
+
+/**
+ * Put `qty` reversed portions of a batch_prepared line back into their PrepBatches (provenance
+ * only — the caller has already credited the finished stock, and raw ingredients are NEVER touched:
+ * they were consumed when the batch was prepared). Sales finalized before provenance existed fall
+ * back to crediting the newest open batch.
+ */
+export function restorePrepBatchesForReversal(
+  product: Product,
+  line: Pick<SaleLine, "prepAllocation">,
+  qty: number,
+  alreadyReversed: number,
+  at: string,
+): Product {
+  if (productPrepMode(product) !== "batch_prepared" || qty <= 0) return product;
+  const allocation = line.prepAllocation?.filter((a) => a.portions > 0) ?? [];
+  if (allocation.length) {
+    const credited = creditPrepAllocation(product, prepAllocationWindow(allocation, alreadyReversed, qty), at);
+    return credited ?? product;
+  }
+  const batches = [...(product.menu?.prepBatches ?? [])];
+  const target = [...batches]
+    .filter((b) => b.status === "active" || b.status === "depleted")
+    .sort((a, b) => b.preparedAt.localeCompare(a.preparedAt))[0];
+  if (!target) return product;
+  const idx = batches.findIndex((b) => b.id === target.id);
+  batches[idx] = {
+    ...batches[idx]!,
+    remainingPortions: batches[idx]!.remainingPortions + qty,
+    status: "active",
+    updatedAt: at,
+    version: (batches[idx]!.version ?? 1) + 1,
+    pendingSync: true,
+  };
+  return { ...product, menu: { ...product.menu, prepBatches: batches } };
+}
+
+// ─── Made-to-order reversal provenance ───────────────────────────────────────
+
+export type IngredientConsumption = Array<{ productId: string; quantity: number }>;
+
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+/**
+ * Attribute the ingredient quantities that were actually deducted at finalize to the made-to-order
+ * lines that consumed them (draft order, first come first served). Each line's share is capped by its
+ * own requirement, so with a permitted shortfall the recorded provenance never exceeds what really left
+ * the shelf, and the shares always sum to the deduction.
+ */
+export function allocateIngredientConsumption(
+  lines: ReadonlyArray<SaleLine>,
+  products: Product[],
+  deducted: ReadonlyMap<string, number>,
+): IngredientConsumption[] {
+  const remaining = new Map(deducted);
+  return lines.map((line) => {
+    const need = requirementsFromSaleLines([line], products);
+    const out: IngredientConsumption = [];
+    for (const [productId, required] of need) {
+      const left = remaining.get(productId) ?? 0;
+      const take = round4(Math.min(required, left));
+      if (take <= 0) continue;
+      remaining.set(productId, round4(left - take));
+      out.push({ productId, quantity: take });
+    }
+    return out;
+  });
+}
+
+/** True for lines that consumed ingredients at sale and carry the provenance to reverse them. */
+export function hasIngredientProvenance(line: Pick<SaleLine, "ingredientConsumption">): boolean {
+  return Array.isArray(line.ingredientConsumption);
+}
+
+/**
+ * The ingredient quantities a reversal of `qty` (of a line of `lineQty`) gives back, given that
+ * `alreadyReversed` units were reversed before. Computed on CUMULATIVE proportions so any sequence of
+ * partial reversals sums to exactly the original consumption — never more, never a rounding leftover.
+ */
+export function ingredientReversalFor(
+  line: Pick<SaleLine, "ingredientConsumption" | "quantity">,
+  qty: number,
+  alreadyReversed: number,
+): IngredientConsumption {
+  const consumption = line.ingredientConsumption ?? [];
+  const lineQty = Number(line.quantity) || 0;
+  if (lineQty <= 0 || qty <= 0) return [];
+  const before = Math.min(1, Math.max(0, alreadyReversed / lineQty));
+  const after = Math.min(1, Math.max(0, (alreadyReversed + qty) / lineQty));
+  const cum = (c: number, x: number) => (x >= 1 - 1e-9 ? c : round4(c * x));
+  const out: IngredientConsumption = [];
+  for (const c of consumption) {
+    const credit = round4(cum(c.quantity, after) - cum(c.quantity, before));
+    if (credit > 0) out.push({ productId: c.productId, quantity: credit });
+  }
+  return out;
+}
+
+/** Put ingredient quantities back on the shelf (missing/deleted ingredients are skipped). */
+export function creditIngredients(
+  products: Product[],
+  credits: IngredientConsumption,
+  at: string,
+): { products: Product[]; applied: IngredientConsumption } {
+  const next = [...products];
+  const applied: IngredientConsumption = [];
+  for (const c of credits) {
+    const idx = next.findIndex((p) => p.id === c.productId);
+    if (idx < 0) continue;
+    const p = next[idx]!;
+    next[idx] = { ...p, stockOnHand: round4(p.stockOnHand + c.quantity), updatedAt: at, version: p.version + 1 };
+    applied.push(c);
+  }
+  return { products: next, applied };
+}
+
 export function applyRecipeStockDeduction(
   products: Product[],
   requirements: Map<string, number>,

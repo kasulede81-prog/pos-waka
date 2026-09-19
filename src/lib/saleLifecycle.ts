@@ -338,6 +338,13 @@ export function buildUnsavedCartVoidedSale(input: {
   };
 }
 
+/** Money actually received on a pending (table) bill — credit is a promise to pay, not a receipt. */
+export function pendingSaleReceivedPaymentsUgx(sale: Pick<Sale, "billDraft">): number {
+  return (sale.billDraft?.payments ?? [])
+    .filter((p) => p.method !== "credit")
+    .reduce((sum, p) => sum + Math.max(0, p.amountUgx || 0), 0);
+}
+
 /** Parked/pending sale the cashier chose not to complete — same VOIDED history marker as an unsaved cart. */
 export function markPendingSaleAsPreCompletionVoid(
   sale: Sale,

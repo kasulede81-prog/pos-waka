@@ -153,6 +153,7 @@ export function rowToVoidRecord(row: Record<string, unknown>): CloudVoidRow | nu
     shiftId: meta.shiftId != null ? String(meta.shiftId) : null,
     createdAt,
     saleVoidedAt: row.sale_voided_at != null ? String(row.sale_voided_at) : null,
+    saleLineId: meta.saleLineId != null && String(meta.saleLineId).trim() ? String(meta.saleLineId).trim() : null,
   };
   return { record, updatedAt };
 }

@@ -40,8 +40,23 @@ export function encodeSaleLineForCloud(line: SaleLine, idx = 0): CloudSaleLineRo
       estimatedProfitUgx: line.estimatedProfitUgx,
       updatedAt: line.updatedAt,
       lineIndex: idx,
+      ...(Array.isArray(line.ingredientConsumption) ? { ingredientConsumption: line.ingredientConsumption } : {}),
     },
   };
+}
+
+/** Made-to-order provenance from line metadata; anything malformed reads as "no provenance". */
+function decodeIngredientConsumption(raw: unknown): SaleLine["ingredientConsumption"] {
+  if (!Array.isArray(raw)) return undefined;
+  const out: Array<{ productId: string; quantity: number }> = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object") return undefined;
+    const productId = String((e as Record<string, unknown>).productId ?? "");
+    const quantity = Number((e as Record<string, unknown>).quantity);
+    if (!productId || !Number.isFinite(quantity) || quantity <= 0) return undefined;
+    out.push({ productId, quantity });
+  }
+  return out;
 }
 
 /** Decode a cloud sale line row (mirrors cloudSync rowToSaleLine). */
@@ -85,6 +100,8 @@ export function decodeSaleLineFromCloud(row: CloudSaleLineRow): SaleLine {
           : 0,
     moneyAmountUgx: row.money_amount_ugx != null ? Math.floor(Number(row.money_amount_ugx)) : null,
   };
+  const consumption = decodeIngredientConsumption(meta.ingredientConsumption);
+  if (consumption) line.ingredientConsumption = consumption;
   if (lineDiscountRaw > 0) {
     line.discountUgx = lineDiscountRaw;
     line.originalLineTotalUgx = lineTotalUgx + lineDiscountRaw;
