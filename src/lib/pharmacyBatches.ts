@@ -230,10 +230,27 @@ export function appendBatchToProduct(product: Product, batch: PharmacyBatchRecor
   return reconcileProductExpiryFromBatches(next);
 }
 
-/** FEFO: sort active batches by expiry ascending. */
-export function sortBatchesFefo(batches: PharmacyBatchRecord[]): PharmacyBatchRecord[] {
+/**
+ * FEFO: sort eligible batches by expiry ascending.
+ *
+ * Excludes `status === "expired"` batches by default — normal/automatic
+ * dispensing must never silently draw from expired stock (an expired batch
+ * always sorts earliest, so including it here would make it the FIRST
+ * choice for every ordinary sale, defeating a shop's expired-sale "block"
+ * policy whenever any non-expired stock also exists for the same product).
+ * An explicit `overrideBatchId` in `allocateFefo` still bypasses this
+ * entirely — a pharmacist can always deliberately target a specific
+ * (including expired) batch; this only governs the *automatic* pool.
+ * Pass `{ includeExpired: true }` for the one legitimate exception:
+ * write-offs, which exist specifically to remove expired stock.
+ */
+export function sortBatchesFefo(
+  batches: PharmacyBatchRecord[],
+  opts?: { includeExpired?: boolean },
+): PharmacyBatchRecord[] {
+  const includeExpired = opts?.includeExpired ?? false;
   return batches
-    .filter((b) => b.quantityRemaining > 0 && (b.status === "active" || b.status === "expired"))
+    .filter((b) => b.quantityRemaining > 0 && (b.status === "active" || (includeExpired && b.status === "expired")))
     .slice()
     .sort((a, b) => {
       const cmp = a.expiryDate.localeCompare(b.expiryDate);
@@ -246,6 +263,7 @@ export function allocateFefo(
   batches: PharmacyBatchRecord[],
   quantity: number,
   overrideBatchId?: string | null,
+  opts?: { includeExpired?: boolean },
 ): FefoAllocationResult {
   const qty = Math.max(0, Math.floor(quantity));
   if (qty <= 0) return { allocations: [], remainingUnallocated: 0, usedOverride: false };
@@ -270,7 +288,7 @@ export function allocateFefo(
     };
   }
 
-  const sorted = sortBatchesFefo(batches);
+  const sorted = sortBatchesFefo(batches, opts);
   const allocations: FefoAllocation[] = [];
   let left = qty;
   for (const batch of sorted) {
@@ -492,7 +510,10 @@ export function writeOffFromBatches(
       left -= take;
     }
   } else {
-    const fefo = allocateFefo(batches, quantity);
+    // Write-offs (damaged/lost/recall) must still be able to reach expired
+    // stock even with no specific batch chosen — unlike a normal sale,
+    // removing expired stock here is the whole point.
+    const fefo = allocateFefo(batches, quantity, undefined, { includeExpired: true });
     allocations = fefo.allocations;
   }
   const writtenOff = allocations.reduce((s, a) => s + a.quantity, 0);
