@@ -1,7 +1,7 @@
 /**
  * SALES-SYNC-RETURN-RPC-OBSERVABILITY-01 — allowlisted lastError only.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "./autoSync";
 import {
   RPC_FAILED_ERROR,
@@ -153,11 +153,20 @@ describe("markSyncOpFailed observability", () => {
   });
 
   it("retryAt/backoff behavior remains unchanged", () => {
-    const now = Date.now();
-    const failed = markSyncOpFailed(op({ id: "c", attempts: 2, lastAttemptAt: new Date(now).toISOString() }), "401");
-    expect(computeSyncBackoffMs(failed.attempts)).toBe(computeSyncBackoffMs(3));
-    expect(shouldRetrySyncOp(failed, now + 1_000)).toBe(false);
-    expect(shouldRetrySyncOp(failed, now + computeSyncBackoffMs(failed.attempts))).toBe(true);
+    // Freeze the clock: markSyncOpFailed stamps lastAttemptAt with its own clock read, so on a real clock a
+    // millisecond can tick between it and this test's `now` and flip the last assertion (a flaky failure
+    // under load, unrelated to the retry/backoff logic under test).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-19T12:00:00.000Z"));
+    try {
+      const now = Date.now();
+      const failed = markSyncOpFailed(op({ id: "c", attempts: 2, lastAttemptAt: new Date(now).toISOString() }), "401");
+      expect(computeSyncBackoffMs(failed.attempts)).toBe(computeSyncBackoffMs(3));
+      expect(shouldRetrySyncOp(failed, now + 1_000)).toBe(false);
+      expect(shouldRetrySyncOp(failed, now + computeSyncBackoffMs(failed.attempts))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("existing WAIT behavior remains unchanged", () => {
