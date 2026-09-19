@@ -13,6 +13,12 @@ import { usePosStore } from "../store/usePosStore";
 import { sortSyncQueueByPriority } from "../lib/syncQueuePriority";
 import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
+import {
+  STALE_RESET_GUARDED_KINDS,
+  archiveAndDropStaleResetOps,
+  isCreatedBeforeStaleResetCutoff,
+  resolveClockSkewMs,
+} from "../lib/staleResetOutbox";
 import { getActiveShopId } from "./shopScope";
 import { inferShopIdFromQueueRow } from "./shopScopeMigration";
 import {
@@ -25,23 +31,7 @@ import {
   verifyHistoricalReturnFollowThrough,
 } from "../lib/historicalSaleHeaderRepair";
 
-/**
- * True when `createdAt` (a client-clock timestamp) predates `cutoff` (a
- * server-clock timestamp), after correcting for this device's known clock
- * skew (server time minus device time, both sampled around the same
- * instant). Falls back to a plain string comparison — identical to the
- * pre-existing behavior — whenever either timestamp fails to parse, so an
- * unparseable value never throws or silently passes/fails differently than
- * before.
- */
-export function isCreatedBeforeStaleResetCutoff(createdAt: string, cutoff: string, clockSkewMs: number): boolean {
-  const createdMs = Date.parse(createdAt);
-  const cutoffMs = Date.parse(cutoff);
-  if (!Number.isFinite(createdMs) || !Number.isFinite(cutoffMs)) {
-    return createdAt < cutoff;
-  }
-  return createdMs + clockSkewMs < cutoffMs;
-}
+export { isCreatedBeforeStaleResetCutoff };
 
 export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attempts?: number }): Promise<void> {
   const shopId = op.shopId ?? getActiveShopId() ?? undefined;
@@ -139,14 +129,6 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   // product op would literally re-insert the row the reset just deleted.
   // Only fetched when the queue actually holds one of these kinds, so a
   // normal flush with no pending business mutations costs nothing extra.
-  const STALE_RESET_GUARDED_KINDS = new Set<SyncOperation["kind"]>([
-    "product",
-    "sale",
-    "pending_sales",
-    "pending_stock_updates",
-    "stock_move",
-    "customer",
-  ]);
   let staleResetCutoff: string | null = null;
   // P1 remediation (financial certification audit, P1#2): when the
   // reset-signal lookup itself fails/times out, guarded-kind ops must be
@@ -166,16 +148,27 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   // Falls back to the original uncorrected comparison if the server-time
   // fetch itself fails — never blocks the flush on this.
   let clockSkewMs = 0;
+  // Ops dropped (archived first) by the guard this cycle. A guarded op that predates the cutoff but could NOT be
+  // archived is HELD, never deleted: the archive is the only evidence of an unsynced pre-reset sale.
+  const archivedStaleOpIds = new Set<string>();
   if (activeShop && queue.some((op) => STALE_RESET_GUARDED_KINDS.has(op.kind))) {
     const { resolveStaleResetGuardState } = await import("../lib/shopRecoverySignals");
     const guardState = await resolveStaleResetGuardState(activeShop);
     if (guardState.status === "signal") {
       staleResetCutoff = guardState.cutoff;
-      const { fetchShopServerNow } = await import("../lib/serverNow");
-      const deviceNowMs = Date.now();
-      const serverNowIso = await fetchShopServerNow().catch(() => null);
-      const serverNowMs = serverNowIso ? Date.parse(serverNowIso) : NaN;
-      if (Number.isFinite(serverNowMs)) clockSkewMs = serverNowMs - deviceNowMs;
+      clockSkewMs = await resolveClockSkewMs();
+      try {
+        const archived = await archiveAndDropStaleResetOps({
+          shopId: activeShop,
+          cutoff: guardState.cutoff,
+          clockSkewMs,
+          reason: "flush_guard",
+          queue,
+        });
+        for (const id of archived.droppedOpIds) archivedStaleOpIds.add(id);
+      } catch (err) {
+        reportSyncIssue("sync_stale_reset_archive_failed", { message: err instanceof Error ? err.message : "unknown" });
+      }
     } else if (guardState.status === "unknown") {
       guardedKindsBlocked = true;
     }
@@ -188,13 +181,14 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
     if (activeShop && opShopId && opShopId !== activeShop) {
       continue;
     }
+    if (archivedStaleOpIds.has(op.id)) continue; // archived + removed above
     if (
       staleResetCutoff &&
       STALE_RESET_GUARDED_KINDS.has(op.kind) &&
       isCreatedBeforeStaleResetCutoff(op.createdAt, staleResetCutoff, clockSkewMs)
     ) {
-      await removeSyncOperation(op.id);
-      reportSyncIssue("sync_op_dropped_stale_pre_reset", { kind: op.kind, opId: op.id });
+      // could not be archived: hold it (neither push a pre-reset mutation nor destroy the only copy)
+      reportSyncIssue("sync_op_held_stale_pre_reset_unarchived", { kind: op.kind, opId: op.id });
       continue;
     }
     if (guardedKindsBlocked && STALE_RESET_GUARDED_KINDS.has(op.kind)) {

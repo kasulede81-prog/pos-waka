@@ -260,6 +260,18 @@ export async function applyAdminForceFullResync(
   forceFullResyncInFlight.add(shopId);
 
   try {
+    // Archive-then-drop the stale pre-reset outbox BEFORE the authoritative pull. The pull deliberately keeps a
+    // local sale that still has a pending queue op, and once this signal is acknowledged the flush guard is inert,
+    // so without this step a pre-reset unsynced sale would be pushed and RESURRECT server data the reset deleted.
+    // The queue ops + sale bodies go to a durable local archive first (manual, classified recovery only).
+    try {
+      const { archiveAndDropStaleResetOps } = await import("./staleResetOutbox");
+      await archiveAndDropStaleResetOps({ shopId, cutoff: signalAt, reason: "boot_gate" });
+    } catch {
+      // Never block the resync; on failure nothing was removed (evidence-safe) and the flush guard still applies
+      // while the signal is unacknowledged.
+    }
+
     // `pullShopDataFromCloud` only fetches and returns a CloudPullResult — it
     // never touches the store. `pullCloudAndMergeIntoStore` is the caller that
     // actually merges that result into `usePosStore` via `setState`. Calling

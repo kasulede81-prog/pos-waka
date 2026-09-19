@@ -89,7 +89,9 @@
     "src/lib/deviceLimitPolicy.test.ts",
     "src/lib/deviceAuthority.test.ts",
     "src/lib/staffLoginSecurity.test.ts",
-    "src/lib/singleOwnerProtection.test.ts"
+    "src/lib/singleOwnerProtection.test.ts",
+    "src/lib/shopResetFkOrder.sql.integration.test.ts",
+    "src/lib/adminShopDataReset.test.ts"
   ],
   "sync": [
     "src/lib/autoSync.test.ts",

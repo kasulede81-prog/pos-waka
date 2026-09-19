@@ -8,7 +8,10 @@ vi.mock("./supabase", () => ({
   },
 }));
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
+  SHOP_RESET_COUNT_KEYS,
   adminPreviewShopReset,
   adminResetShopBusinessData,
   isShopResetVerified,
@@ -158,5 +161,56 @@ describe("isShopResetVerified", () => {
   it("is true only when every count is zero", () => {
     expect(isShopResetVerified(ZERO_COUNTS as ShopResetCounts)).toBe(true);
     expect(isShopResetVerified({ ...ZERO_COUNTS, products: 1 } as ShopResetCounts)).toBe(false);
+  });
+});
+
+describe("reset coverage stays in lockstep with the server-side plan", () => {
+  it("SHOP_RESET_COUNT_KEYS equals the tables of shop_reset_business_plan() in deletion order", () => {
+    const sql = readFileSync(
+      join(process.cwd(), "supabase", "migrations", "20260920100000_shop_reset_fk_ordered_plan.sql"),
+      "utf8",
+    );
+    const planBlock = sql.slice(
+      sql.indexOf("create or replace function public.shop_reset_business_plan"),
+      sql.indexOf("create or replace function public.shop_reset_table_classification"),
+    );
+    const planTables = [...planBlock.matchAll(/^\s+\((\d+),\s+'(\w+)',/gm)].map((m) => m[2]);
+    expect(planTables.length).toBeGreaterThan(30);
+    expect([...SHOP_RESET_COUNT_KEYS]).toEqual(planTables);
+  });
+
+  it("previously unverified tables now fail client verification (stock ledger, table sessions, loyalty redemptions)", () => {
+    const zero = Object.fromEntries(SHOP_RESET_COUNT_KEYS.map((k) => [k, 0])) as ShopResetCounts;
+    expect(isShopResetVerified(zero)).toBe(true);
+    for (const k of ["shop_stock_movements", "table_sessions", "loyalty_redemptions", "expenses"] as const) {
+      expect(isShopResetVerified({ ...zero, [k]: 1 })).toBe(false);
+    }
+  });
+
+  it("normalizes the new keys from the server response", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: { ok: true, phase: "preview", shop_name: "S", counts: { table_sessions: 1, shop_stock_movements: 100 } },
+      error: null,
+    });
+    const r = await adminPreviewShopReset(SHOP_ID);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.counts.table_sessions).toBe(1);
+      expect(r.counts.shop_stock_movements).toBe(100);
+      expect(r.counts.loyalty_redemptions).toBe(0);
+    }
+  });
+
+  it("surfaces the failing table of an atomic rollback", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: { ok: false, error: "reset_failed", detail: "verification_failed_rows_remaining=3", failed_table: "shop_stock_movements" },
+      error: null,
+    });
+    const r = await adminResetShopBusinessData(SHOP_ID, "RESET SHOP");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.failedTable).toBe("shop_stock_movements");
+      expect(r.message).toContain("shop_stock_movements");
+    }
   });
 });
