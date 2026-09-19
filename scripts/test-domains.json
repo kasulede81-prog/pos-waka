@@ -124,6 +124,7 @@
   ],
   "inventory": [
     "src/lib/inventoryIntegrity.test.ts",
+    "src/lib/prepBatchPullGuard.test.ts",
     "src/lib/inventoryCount.test.ts",
     "src/lib/stockMovementRecovery.test.ts",
     "src/lib/purchaseCorrections.test.ts",

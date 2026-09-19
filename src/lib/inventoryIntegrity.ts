@@ -2,7 +2,7 @@
  * Multi-device inventory merge, movement reconciliation, and integrity checks.
  */
 
-import type { Product, ReturnReason, Sale, StockMovement } from "../types";
+import type { PrepBatch, Product, ProductMenuConfig, ReturnReason, Sale, StockMovement } from "../types";
 import { returnRestocksInventory } from "./returnPolicy";
 import { allStockMovementsForIntegrity } from "./stockMovementLedger";
 import {
@@ -150,8 +150,44 @@ function rotl(x: number, n: number): number {
 }
 
 /**
+ * PrepBatch guard for a product pull (client-only safety net).
+ *
+ * `Product.menu.prepBatches` is maintained by the device that prepares, sells, wastes and reverses portions,
+ * and it is NOT part of what the server authoritatively holds for a product: the cloud product row carries
+ * whatever `menu` the last catalog upsert happened to contain (usually no batches at all, or a copy from
+ * before the latest sale). The server also re-stamps `updated_at` on every stock movement, so the pulled row
+ * almost always looks newer and used to replace the WHOLE `menu` — erasing local batches (or rolling them
+ * back) while the dish's stock stayed put.
+ *
+ * Invariant: a pull never removes a local PrepBatch. Batches are merged by id — a batch that exists only
+ * locally is kept; one that exists only on the incoming row is added; when both exist the higher per-batch
+ * `version` wins (every batch mutation bumps it), a tie goes to the local copy. Everything else in `menu`
+ * (recipe, modifiers, variants, prepMode…) and every other product field keeps following the normal merge.
+ * A product with no local batches is returned exactly as `base` (no behaviour change).
+ */
+export function mergePrepBatchesOnPull(local: Product, remote: Product, base: Product): Product {
+  const localBatches = local.menu?.prepBatches ?? [];
+  if (localBatches.length === 0) return base;
+
+  const incoming = new Map<string, PrepBatch>();
+  for (const b of remote.menu?.prepBatches ?? []) incoming.set(b.id, b);
+
+  const merged: PrepBatch[] = localBatches.map((mine) => {
+    const theirs = incoming.get(mine.id);
+    incoming.delete(mine.id);
+    return theirs && (theirs.version ?? 1) > (mine.version ?? 1) ? theirs : mine;
+  });
+  for (const theirs of incoming.values()) merged.push(theirs);
+
+  // If the incoming row has no `menu` at all, the local menu (which holds the batches) stays.
+  const menu: ProductMenuConfig = { ...(base.menu ?? local.menu), prepBatches: merged };
+  return { ...base, menu };
+}
+
+/**
  * Field-safe catalog merge: price/cost follow higher version; descriptive fields follow newer updatedAt.
  * Stock is never taken from this function — use mergeProductFromCloudPull for cloud sync.
+ * Local PrepBatches are protected from being replaced by the pulled row (see mergePrepBatchesOnPull).
  */
 export function mergeProductCatalogFields(local: Product, remote: Product): Product {
   const localMs = recencyMs(local.updatedAt);
@@ -166,7 +202,7 @@ export function mergeProductCatalogFields(local: Product, remote: Product): Prod
     return localMs >= remoteMs ? local[field] : remote[field];
   };
 
-  return {
+  return mergePrepBatchesOnPull(local, remote, {
     ...catalogBase,
     name: pickScalar("name"),
     category: pickScalar("category"),
@@ -184,7 +220,7 @@ export function mergeProductCatalogFields(local: Product, remote: Product): Prod
     sellingPricePerUnitUgx: priceCostSource.sellingPricePerUnitUgx,
     costPricePerUnitUgx: priceCostSource.costPricePerUnitUgx,
     version: Math.max(localVer, remoteVer, catalogBase.version ?? 1),
-  };
+  });
 }
 
 export function pendingProductCatalogIds(
