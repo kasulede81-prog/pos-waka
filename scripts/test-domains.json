@@ -73,7 +73,9 @@
     "src/lib/pharmacyStoreRemediation.test.ts",
     "src/lib/pharmacyPackaging.test.ts",
     "src/lib/pharmacyPrescriptionOps.test.ts",
-    "src/lib/pharmacyPartialDispense.test.ts"
+    "src/lib/pharmacyPartialDispense.test.ts",
+    "src/lib/pharmacyBatchProvenanceCodec.test.ts",
+    "src/offline/pharmacyBatchProvenance.sync.integration.test.ts"
   ],
   "platform": [
     "src/lib/storeAuthorization.test.ts",

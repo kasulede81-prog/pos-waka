@@ -28,7 +28,7 @@ import {
 } from "../lib/cancelPendingSaleAck";
 import { hydrateSaleFinancialsFromCloud } from "../lib/saleLineFinancialHydration";
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
-import { decodeSaleLineFromCloud, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
+import { decodeSaleLineFromCloud, pharmacyBatchProvenanceMetadata, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
 import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
 import { parsePersistedTenderCashUgx } from "../lib/saleTenderCash";
 import { normalizeReceiptTerminal, parseReceiptSeq } from "../lib/receiptIdentity";
@@ -1140,6 +1140,9 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
         // Batch-prepared provenance (same channel, same verbatim storage): another device that pulls this
         // sale restores each originating PrepBatch exactly instead of guessing the newest batch.
         ...(Array.isArray(line.prepAllocation) && line.prepAllocation.length > 0 ? { prepAllocation: line.prepAllocation } : {}),
+        // Pharmacy batch/lot provenance (passive; same channel, same verbatim storage): another device that pulls
+        // this sale can put a void/return back into the batch the units came from. See saleLineCloudCodec.
+        ...pharmacyBatchProvenanceMetadata(line),
       },
     })),
     payments:

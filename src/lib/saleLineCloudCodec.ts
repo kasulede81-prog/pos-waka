@@ -18,6 +18,43 @@ export type CloudSaleLineRow = {
   metadata: Record<string, unknown>;
 };
 
+/**
+ * Pharmacy batch provenance — which batch/lot a dispensed line was taken from.
+ *
+ * These three values are stamped on the finalized SaleLine by finalizeDraftSale (from the FEFO allocation that
+ * was actually deducted) and are what a later void or return uses to put the units back into that batch, and
+ * what a controlled-medicine return uses to resolve its batch. They are PASSIVE provenance carried in the
+ * sale line's own metadata: reading them never restores stock, creates a void or a return, or changes any
+ * amount — those only happen through the existing, guarded void/return actions. Only valid non-empty strings
+ * are written or read; anything else (null, a number, an object, an empty string) is "no provenance", never a
+ * guessed batch.
+ */
+export const PHARMACY_BATCH_PROVENANCE_KEYS = ["pharmacyBatchOverrideId", "pharmacyBatchNumber", "pharmacyBatchExpiry"] as const;
+type PharmacyBatchProvenanceKey = (typeof PHARMACY_BATCH_PROVENANCE_KEYS)[number];
+
+const provenanceString = (v: unknown): string | undefined => (typeof v === "string" && v.trim() !== "" ? v : undefined);
+
+/** The metadata entries to write for a line: exactly the provenance fields that hold a valid string. */
+export function pharmacyBatchProvenanceMetadata(line: Partial<Pick<SaleLine, PharmacyBatchProvenanceKey>>): Partial<Record<PharmacyBatchProvenanceKey, string>> {
+  const out: Partial<Record<PharmacyBatchProvenanceKey, string>> = {};
+  for (const key of PHARMACY_BATCH_PROVENANCE_KEYS) {
+    const value = provenanceString(line[key]);
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+/** The provenance to set on a decoded line: only valid strings from the line's metadata, never anything else. */
+export function decodePharmacyBatchProvenance(meta: Record<string, unknown> | null | undefined): Partial<Pick<SaleLine, PharmacyBatchProvenanceKey>> {
+  const out: Partial<Pick<SaleLine, PharmacyBatchProvenanceKey>> = {};
+  if (!meta || typeof meta !== "object") return out;
+  for (const key of PHARMACY_BATCH_PROVENANCE_KEYS) {
+    const value = provenanceString(meta[key]);
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 /** Encode a sale line for cloud push (mirrors cloudSync push payload). */
 export function encodeSaleLineForCloud(line: SaleLine, idx = 0): CloudSaleLineRow {
   return {
@@ -42,6 +79,7 @@ export function encodeSaleLineForCloud(line: SaleLine, idx = 0): CloudSaleLineRo
       lineIndex: idx,
       ...(Array.isArray(line.ingredientConsumption) ? { ingredientConsumption: line.ingredientConsumption } : {}),
       ...(Array.isArray(line.prepAllocation) && line.prepAllocation.length > 0 ? { prepAllocation: line.prepAllocation } : {}),
+      ...pharmacyBatchProvenanceMetadata(line),
     },
   };
 }
@@ -129,6 +167,7 @@ export function decodeSaleLineFromCloud(row: CloudSaleLineRow): SaleLine {
   if (consumption) line.ingredientConsumption = consumption;
   const prepAllocation = decodePrepAllocation(meta.prepAllocation, quantity);
   if (prepAllocation) line.prepAllocation = prepAllocation;
+  Object.assign(line, decodePharmacyBatchProvenance(meta));
   if (lineDiscountRaw > 0) {
     line.discountUgx = lineDiscountRaw;
     line.originalLineTotalUgx = lineTotalUgx + lineDiscountRaw;
