@@ -371,6 +371,14 @@ describe("legacy sale with no allocation", () => {
     seed();
     prepare("b1", 10);
     prepare("b2", 10);
+    // Two prepares can land in the same millisecond; the legacy path picks the newest by preparedAt, so make "b2 is newer" explicit.
+    usePosStore.setState((s) => ({
+      products: s.products.map((p) =>
+        p.id === DISH
+          ? { ...p, menu: { ...p.menu!, prepBatches: (p.menu?.prepBatches ?? []).map((b) => ({ ...b, preparedAt: b.id === "b1" ? "2026-09-19T08:00:00.000Z" : "2026-09-19T09:00:00.000Z" })) } }
+          : p,
+      ),
+    }));
     usePosStore.setState({ draftLines: [line(dish(), 12, "l1")] });
     finalize();
     becomeDeviceB({ dropAllocation: true });
