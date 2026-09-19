@@ -1130,6 +1130,9 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
         // Made-to-order provenance (sale_line_items.metadata is stored verbatim by the RPC): lets any
         // device that pulls this sale reverse exactly the ingredients the line consumed.
         ...(Array.isArray(line.ingredientConsumption) ? { ingredientConsumption: line.ingredientConsumption } : {}),
+        // Batch-prepared provenance (same channel, same verbatim storage): another device that pulls this
+        // sale restores each originating PrepBatch exactly instead of guessing the newest batch.
+        ...(Array.isArray(line.prepAllocation) && line.prepAllocation.length > 0 ? { prepAllocation: line.prepAllocation } : {}),
       },
     })),
     payments:

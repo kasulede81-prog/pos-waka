@@ -225,6 +225,12 @@ export function prepSnapshotRequirements(snapshot: PrepRecipeSnapshot, portions:
   return totals;
 }
 
+/** The most a batch can ever hold again: what it was prepared with (never less than it holds now). A batch
+ *  record from before `portionsPrepared` existed has no known ceiling, so it is not capped. */
+function prepBatchCapacity(b: Pick<PrepBatch, "portionsPrepared" | "remainingPortions">): number {
+  return Number.isFinite(b.portionsPrepared) ? Math.max(b.portionsPrepared, b.remainingPortions) : Number.POSITIVE_INFINITY;
+}
+
 /**
  * Phase 5.1 — void support: credit each batch in a SaleLine's frozen
  * prepAllocation back by its exact consumed portions. Batches not found in
@@ -242,11 +248,15 @@ export function creditPrepAllocation(
   const next = batches.map((b) => {
     const credit = allocation.find((a) => a.batchId === b.id);
     if (!credit || credit.portions <= 0) return b;
+    // Only a batch of THIS dish can take its portions back, and never one that was written off.
+    if (b.menuProductId && b.menuProductId !== product.id) return b;
     if (b.status === "cancelled" || b.status === "wasted") return b;
     touched = true;
     return {
       ...b,
-      remainingPortions: Math.round((b.remainingPortions + credit.portions) * 10000) / 10000,
+      // A reversal can give back at most what the batch ever held: a stale or replayed credit must not
+      // conjure portions that were never prepared.
+      remainingPortions: Math.min(prepBatchCapacity(b), Math.round((b.remainingPortions + credit.portions) * 10000) / 10000),
       status: "active" as const,
       updatedAt: at,
       version: (b.version ?? 1) + 1,
@@ -316,7 +326,7 @@ export function restorePrepBatchesForReversal(
   const idx = batches.findIndex((b) => b.id === target.id);
   batches[idx] = {
     ...batches[idx]!,
-    remainingPortions: batches[idx]!.remainingPortions + qty,
+    remainingPortions: Math.min(prepBatchCapacity(batches[idx]!), Math.round((batches[idx]!.remainingPortions + qty) * 10000) / 10000),
     status: "active",
     updatedAt: at,
     version: (batches[idx]!.version ?? 1) + 1,

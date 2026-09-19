@@ -37,6 +37,7 @@
     "src/lib/hospitalityRecipeVoid.test.ts",
     "src/lib/hospitalityMadeToOrderVoid.test.ts",
     "src/lib/hospitalitySameProductLines.test.ts",
+    "src/lib/hospitalityPrepAllocationCloud.test.ts",
     "src/lib/madeToOrderCloudStock.sql.integration.test.ts",
     "src/offline/madeToOrderCloudSync.processor.test.ts",
     "src/lib/saleVoidBoundedReversal.sql.integration.test.ts",

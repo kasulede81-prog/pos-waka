@@ -41,6 +41,7 @@ export function encodeSaleLineForCloud(line: SaleLine, idx = 0): CloudSaleLineRo
       updatedAt: line.updatedAt,
       lineIndex: idx,
       ...(Array.isArray(line.ingredientConsumption) ? { ingredientConsumption: line.ingredientConsumption } : {}),
+      ...(Array.isArray(line.prepAllocation) && line.prepAllocation.length > 0 ? { prepAllocation: line.prepAllocation } : {}),
     },
   };
 }
@@ -56,6 +57,30 @@ function decodeIngredientConsumption(raw: unknown): SaleLine["ingredientConsumpt
     if (!productId || !Number.isFinite(quantity) || quantity <= 0) return undefined;
     out.push({ productId, quantity });
   }
+  return out;
+}
+
+/**
+ * Batch-prepared provenance from line metadata: which PrepBatches this line's portions were taken from.
+ * A prepared sale consumes exactly its quantity, so a valid allocation is a list of positive
+ * {batchId, portions} that sums to the line quantity. Anything else — a different total, a non-positive
+ * amount, a malformed entry — reads as "no provenance" (the previous behaviour), never as a guess.
+ */
+export function decodePrepAllocation(raw: unknown, lineQuantity: number): SaleLine["prepAllocation"] {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: Array<{ batchId: string; portions: number }> = [];
+  let total = 0;
+  for (const e of raw) {
+    if (!e || typeof e !== "object") return undefined;
+    const rawBatchId = (e as Record<string, unknown>).batchId;
+    const portions = (e as Record<string, unknown>).portions;
+    if (typeof rawBatchId !== "string" || typeof portions !== "number") return undefined;
+    const batchId = rawBatchId.trim();
+    if (!batchId || !Number.isFinite(portions) || portions <= 0) return undefined;
+    out.push({ batchId, portions });
+    total += portions;
+  }
+  if (Math.abs(total - Number(lineQuantity)) > 0.001) return undefined;
   return out;
 }
 
@@ -102,6 +127,8 @@ export function decodeSaleLineFromCloud(row: CloudSaleLineRow): SaleLine {
   };
   const consumption = decodeIngredientConsumption(meta.ingredientConsumption);
   if (consumption) line.ingredientConsumption = consumption;
+  const prepAllocation = decodePrepAllocation(meta.prepAllocation, quantity);
+  if (prepAllocation) line.prepAllocation = prepAllocation;
   if (lineDiscountRaw > 0) {
     line.discountUgx = lineDiscountRaw;
     line.originalLineTotalUgx = lineTotalUgx + lineDiscountRaw;
