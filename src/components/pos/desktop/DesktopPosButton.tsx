@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 
 export type DesktopPosButtonVariant = "default" | "primary" | "success" | "warning" | "danger" | "payment";
 
@@ -13,17 +14,17 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClass: Record<DesktopPosButtonVariant, string> = {
   default:
-    "border-border bg-card text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:bg-muted active:bg-muted active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.12)]",
+    "border-border bg-card text-foreground shadow-sm hover:bg-muted active:bg-muted",
   primary:
-    "border-waka-600 bg-waka-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:bg-waka-700 active:bg-waka-800 active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]",
+    "border-primary bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:bg-primary/80",
   success:
-    "border-teal-700 bg-teal-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-teal-800 active:bg-teal-900 active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]",
+    "border-primary bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:bg-primary/80",
   warning:
-    "border-warning/40 bg-warning-muted text-warning-foreground hover:bg-warning-muted active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.08)]",
+    "border-warning/40 bg-warning-muted text-warning-foreground hover:bg-warning-muted",
   danger:
-    "border-danger/40 bg-danger-muted text-danger hover:bg-danger-muted active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]",
+    "border-danger/40 bg-danger-muted text-danger hover:bg-danger-muted",
   payment:
-    "border-border bg-card text-foreground font-black uppercase tracking-wide hover:border-waka-400 hover:bg-waka-50 active:bg-waka-100 active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]",
+    "border-border bg-card text-foreground font-black uppercase tracking-wide hover:border-primary/60 hover:bg-accent active:bg-muted",
 };
 
 const sizeClass: Record<NonNullable<Props["size"]>, string> = {
@@ -55,13 +56,13 @@ export function DesktopPosButton({
         "motion-reduce:active:scale-100 active:scale-[0.98]",
         variantClass[variant],
         sizeClass[size],
-        selected && variant === "payment" && "border-waka-600 bg-waka-600 text-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)]",
+         selected && variant === "payment" && "border-primary bg-primary text-primary-foreground shadow-sm",
         selected && variant !== "payment" && "ring-2 ring-waka-500 ring-offset-1",
         className,
       )}
       {...rest}
     >
-      {loading ? <span className="opacity-80">…</span> : children}
+      {loading ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> : children}
     </button>
   );
 }

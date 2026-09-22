@@ -77,6 +77,7 @@ export function HomeCashDrawerScene({
       </defs>
 
       <ellipse className="home-drawer-shadow" cx="44" cy="54.5" rx="33" ry="3.4" fill="rgba(15,23,42,0.34)" />
+      <ellipse className="home-drawer-ambient" cx="44" cy="30" rx="35" ry="24" fill="#fb923c" opacity="0.05" />
 
       <g className="home-drawer-housing">
         <path d="M12 8 L76 8 L80 14 L8 14 Z" fill={`url(#hd-lid-${uid})`} />
@@ -93,6 +94,7 @@ export function HomeCashDrawerScene({
       <g className="home-drawer-tray">
         <rect x="13" y="24" width="62" height="24" rx="3.2" fill={`url(#hd-tray-${uid})`} stroke="#0c0a09" strokeWidth="1" />
         <rect x="15" y="26" width="58" height="13" rx="2" fill="#141210" />
+        <rect className="home-drawer-well-light" x="16" y="27" width="56" height="11" rx="1.5" fill="#fdba74" opacity="0.04" />
         <g className="home-drawer-bills">
           <rect x="17" y="27.5" width="12" height="10" rx="1.1" fill={`url(#hd-bill-g-${uid})`} />
           <rect x="31" y="27" width="12" height="10.5" rx="1.1" fill={`url(#hd-bill-y-${uid})`} />

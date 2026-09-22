@@ -9,6 +9,8 @@ import {
 } from "../../lib/adminShopDataReset";
 import { formatWakaShopNumber } from "../../lib/shopNumber";
 import { WakaCheckbox } from "../enterprise/WakaCheckbox";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { WakaInlineLoading } from "../enterprise/WakaLoading";
 
 type Props = {
   detail: ShopOpsDetail;
@@ -159,7 +161,7 @@ export function AdminShopResetPanel({ detail, busy, previewMode, onBusy, onToast
         onClick={() => void runPreview()}
         className="mt-3 min-h-[44px] w-full rounded-xl border-2 border-rose-400 bg-white px-4 text-sm font-black text-rose-900 disabled:opacity-40"
       >
-        {previewing ? "Loading preview…" : "Preview what will be removed"}
+        {previewing ? <WakaInlineLoading label="Loading preview…" className="justify-center text-rose-900" /> : "Preview what will be removed"}
       </button>
 
       {previewCounts ? <CountsTable counts={previewCounts} /> : null}
@@ -198,8 +200,9 @@ export function AdminShopResetPanel({ detail, busy, previewMode, onBusy, onToast
         <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
           <p className="text-xs font-black uppercase tracking-wide text-emerald-800">Reset complete</p>
           <CountsTable counts={result.deleted} />
-          <p className="mt-2 text-xs font-bold text-emerald-900">
-            Verification: {isShopResetVerified(result.verification) ? "✓ all counts confirmed at 0" : "⚠ some counts are not 0 — see below"}
+          <p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-emerald-900">
+            {isShopResetVerified(result.verification) ? <CheckCircle2 className="size-4" aria-hidden /> : <AlertTriangle className="size-4 text-amber-700" aria-hidden />}
+            Verification: {isShopResetVerified(result.verification) ? "all counts confirmed at 0" : "some counts are not 0 — see below"}
           </p>
           {!isShopResetVerified(result.verification) ? <CountsTable counts={result.verification} /> : null}
         </div>

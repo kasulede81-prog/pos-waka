@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import clsx from "clsx";
 import { ChevronRight, RefreshCw, X } from "lucide-react";
 import { WakaCheckbox } from "../../enterprise/WakaCheckbox";
@@ -35,13 +35,14 @@ export function KpiPulseCard({
   onOpen?: () => void;
   accent?: boolean;
 }) {
+  const prefersReducedMotion = useReducedMotion();
   const inner = (
     <>
       <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
       <motion.span
         className={clsx("mt-1 font-mono text-xl font-black", accent ? "text-waka-700" : "text-foreground")}
-        animate={{ opacity: [0.85, 1, 0.85] }}
-        transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+        animate={prefersReducedMotion ? undefined : { opacity: [0.85, 1, 0.85] }}
+        transition={prefersReducedMotion ? undefined : { duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
       >
         {value}
       </motion.span>
@@ -204,6 +205,7 @@ export function AdminHeroV2({
           </div>
         </div>
         <button
+          data-admin-refresh
           type="button"
           onClick={onRefresh}
           disabled={refreshing}

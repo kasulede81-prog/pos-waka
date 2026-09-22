@@ -11,7 +11,7 @@ import {
 } from "../../lib/cashVarianceExperience";
 import type { ShopPreferences } from "../../types";
 import { statusTokens } from "../../lib/statusTokens";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import { useEffect, useMemo } from "react";
 
 type Props = {

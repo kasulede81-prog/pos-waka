@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Megaphone } from "lucide-react";
+import { useNavigate } from "@/lib/routerCompat";
+import { AlertTriangle, Headphones, MapPin, Megaphone, MonitorSmartphone, RefreshCw, TimerReset } from "lucide-react";
 import type { Language } from "../../../../types";
 import { t } from "../../../../lib/i18n";
 import { internalAdminPreviewHref } from "../../../../lib/internalAdminPreview";
@@ -11,6 +11,7 @@ import { ActivityFeedPanel, AnnouncementSheet, SystemStatusCenter } from "../ops
 import { adminKpiGridClass } from "../../../../lib/desktopLayout";
 import { AdminHeroV2, BottomSheet, EmptyState, KpiPulseCard } from "../primitives";
 import { InternalOpsQueuePanels } from "../../InternalOpsQueuePanels";
+import { WakaAdminOverviewSkeleton } from "../../../enterprise/WakaLoading";
 
 type Props = {
   lang: Language;
@@ -81,37 +82,45 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
         </p>
       ) : null}
 
-      {deleteMsg ? (
+      {data.opsLoading && !data.stats ? <WakaAdminOverviewSkeleton /> : null}
+
+      {!data.opsLoading && deleteMsg ? (
         <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-800">{deleteMsg}</p>
       ) : null}
 
-      <section>
+      {!data.opsLoading ? <section>
         <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">
           What needs attention ({attentionCount})
         </h2>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          <button type="button" onClick={() => setActiveSheet("trials")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => setActiveSheet("trials")} className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+            <TimerReset className="size-4 text-waka-500" aria-hidden />
             Trial requests <span className="font-mono text-waka-600">{data.pendingTrials.length}</span>
           </button>
-          <button type="button" onClick={() => setActiveSheet("annual")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => setActiveSheet("annual")} className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+            <AlertTriangle className="size-4 text-amber-500" aria-hidden />
             Annual subscriptions <span className="font-mono text-waka-600">{data.pendingAnnualTickets.length}</span>
           </button>
-          <button type="button" onClick={() => go("/internal/waka/support")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => go("/internal/waka/support")} className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+            <Headphones className="size-4 text-waka-500" aria-hidden />
             Open support <span className="font-mono text-waka-600">{data.statGrid.support}</span>
           </button>
-          <button type="button" onClick={() => go("/internal/waka/devices")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => go("/internal/waka/devices")} className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+            <MonitorSmartphone className="size-4 text-amber-500" aria-hidden />
             Unhealthy devices <span className="font-mono text-amber-700">{data.systemHealth.offlineShops}</span>
           </button>
-          <button type="button" onClick={() => go("/internal/waka/shops")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => go("/internal/waka/shops")} className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+            <RefreshCw className="size-4 text-rose-500" aria-hidden />
             Sync failures <span className="font-mono text-rose-700">{data.systemHealth.failedSyncs}</span>
           </button>
-          <button type="button" onClick={() => setActiveSheet("visits")} className="min-h-[44px] rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+          <button type="button" onClick={() => setActiveSheet("visits")} className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-bold shadow-sm">
+            <MapPin className="size-4 text-waka-500" aria-hidden />
             Field visits <span className="font-mono text-waka-600">{data.visits.length}</span>
           </button>
         </div>
-      </section>
+      </section> : null}
 
-      <ActivityFeedPanel events={data.activityFeed} previewMode={previewMode} />
+      {!data.opsLoading ? <ActivityFeedPanel events={data.activityFeed} previewMode={previewMode} /> : null}
 
       <div className="flex gap-2">
         <button
@@ -124,7 +133,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
         </button>
       </div>
 
-      <section>
+      {!data.opsLoading ? <section>
         <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">Quick pulse</h2>
         <div className={adminKpiGridClass()}>
           <KpiPulseCard label={t(lang, "internalStat_totalShops")} value={data.statGrid.total} onOpen={() => go("/internal/waka/shops")} />
@@ -132,7 +141,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
           <KpiPulseCard label={t(lang, "internalStat_paidSubs")} value={data.statGrid.paid} onOpen={() => go("/internal/waka/billing")} />
           <KpiPulseCard label="Devices online" value={data.statGrid.devices} onOpen={() => go("/internal/waka/devices")} />
         </div>
-      </section>
+      </section> : null}
 
       <InternalOpsQueuePanels
         lang={lang}

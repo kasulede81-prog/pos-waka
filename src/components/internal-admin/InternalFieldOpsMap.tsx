@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import Map, { Marker, NavigationControl, Popup, type MapRef } from "react-map-gl/mapbox";
-import Supercluster from "supercluster";
+import Supercluster, { type AnyProps, type ClusterFeature, type PointFeature } from "supercluster";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
@@ -16,7 +16,7 @@ type PinProps = {
   is_active: boolean;
 };
 
-type MapFeature = Supercluster.PointFeature<PinProps> | Supercluster.ClusterFeature<Supercluster.AnyProps>;
+type MapFeature = PointFeature<PinProps> | ClusterFeature<AnyProps>;
 
 function validPin(p: FieldMapPin): boolean {
   const { lat, lng } = p;
@@ -103,7 +103,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
       minPoints: 2,
       extent: 512,
     });
-    const features: Supercluster.PointFeature<PinProps>[] = validPins.map((p) => ({
+    const features: PointFeature<PinProps>[] = validPins.map((p) => ({
       type: "Feature",
       properties: {
         cluster: false,
@@ -204,7 +204,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
         }
         const sourcePins: FieldMapPin[] = [];
         for (const leaf of raw) {
-          const f = leaf as Supercluster.PointFeature<PinProps>;
+          const f = leaf as PointFeature<PinProps>;
           const sid = f.properties?.shop_id;
           if (!sid) continue;
           const full = pinById(validPins, sid);

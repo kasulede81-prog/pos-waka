@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import { FolderPlus, PackagePlus, Upload, Package, Sparkles } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";

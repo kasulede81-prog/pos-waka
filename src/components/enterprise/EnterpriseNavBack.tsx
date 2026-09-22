@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "@/lib/routerCompat";
 import { ArrowLeft } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../types";

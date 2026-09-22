@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { EmptyState } from "../primitives";
 import { ResponsiveDataTable } from "../../../shared/ResponsiveDataTable";
+import { EnterpriseSkeletonTable } from "../../../enterprise/EnterpriseSkeleton";
+import { WakaInlineLoading } from "../../../enterprise/WakaLoading";
 
 type Props = {
   loading: boolean;
@@ -24,7 +26,7 @@ export function AdminShopOpsLedgerPanel({
   rowCount,
 }: Props) {
   if (loading) {
-    return <p className="text-sm font-semibold text-muted-foreground">Loading…</p>;
+    return <EnterpriseSkeletonTable rows={4} columns={5} />;
   }
   if (error) {
     return (
@@ -47,7 +49,7 @@ export function AdminShopOpsLedgerPanel({
           onClick={onLoadMore}
           className="min-h-[44px] w-full rounded-xl border border-border text-sm font-black text-foreground disabled:opacity-40"
         >
-          {loadingMore ? "Loading…" : "Load more"}
+          {loadingMore ? <WakaInlineLoading label="Loading more…" className="justify-center" /> : "Load more"}
         </button>
       ) : null}
     </div>

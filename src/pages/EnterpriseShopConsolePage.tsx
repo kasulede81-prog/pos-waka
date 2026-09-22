@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "@/lib/routerCompat";
 import { AdminShell } from "../components/internal-admin/v2/AdminShell";
 import { BottomSheet } from "../components/internal-admin/v2/primitives";
 import type { AdminActionOption } from "../components/internal-admin/adminUi";
@@ -43,6 +43,7 @@ import {
 } from "../lib/wakaInternalAdmin";
 import type { Language } from "../types";
 import clsx from "clsx";
+import { WakaCustomerWorkspaceSkeleton, WakaSupportQueueSkeleton } from "../components/enterprise/WakaLoading";
 
 const ShopConsoleActivityTab = lazy(() =>
   import("../components/internal-admin/v2/shop-console/tabs/ShopConsoleActivityTab").then((m) => ({
@@ -82,16 +83,12 @@ const PLAN_AMOUNTS: Record<string, number> = {
 };
 
 function TabFallback() {
-  return (
-    <p className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
-      Loading…
-    </p>
-  );
+  return <WakaSupportQueueSkeleton count={3} />;
 }
 
 export function EnterpriseShopConsolePage({ lang }: Props) {
-  const { shopId } = useParams<{ shopId: string }>();
   const location = useLocation();
+  const shopId = location.pathname.match(/^\/internal\/waka\/shop\/([^/]+)/)?.[1];
   const navigate = useNavigate();
   const previewRequested = isInternalAdminPreviewActive(location.search);
 
@@ -366,47 +363,40 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
 
   const renderTab = () => {
     switch (activeTab) {
-      case "overview":
+      case "summary":
         return <ShopConsoleOverviewTab ctx={ctx} />;
-      case "business":
-        return <ShopConsoleBusinessTab ctx={ctx} />;
-      case "devices":
-        return <ShopConsoleDevicesTab ctx={ctx} />;
-      case "subscriptions":
-        return <ShopConsoleSubscriptionsTab ctx={ctx} />;
-      case "activity":
-        return (
-          <Suspense fallback={<TabFallback />}>
-            <ShopConsoleActivityTab ctx={ctx} />
-          </Suspense>
-        );
-      case "audit":
-        return (
-          <Suspense fallback={<TabFallback />}>
-            <ShopConsoleAuditTab ctx={ctx} />
-          </Suspense>
-        );
-      case "security":
-        return <ShopConsoleSecurityTab ctx={ctx} onDeleted={() => navigate("/internal/waka/shops")} />;
       case "support":
         return <ShopConsoleSupportTab ctx={ctx} />;
-      case "developer":
+      case "devices":
+        return <ShopConsoleDevicesTab ctx={ctx} />;
+      case "account":
         return (
-          <Suspense fallback={<TabFallback />}>
-            <ShopConsoleDeveloperTab ctx={ctx} />
-          </Suspense>
+          <div className="space-y-3">
+            <ShopConsoleSecurityTab ctx={ctx} onDeleted={() => navigate("/internal/waka/shops")} includeAdvanced={false} />
+            <ShopConsoleBusinessTab ctx={ctx} />
+            <ShopConsoleSubscriptionsTab ctx={ctx} />
+          </div>
         );
-      case "ai":
+      case "history":
         return (
-          <Suspense fallback={<TabFallback />}>
-            <ShopConsoleAiTab ctx={ctx} />
-          </Suspense>
+          <div className="space-y-3">
+            <Suspense fallback={<TabFallback />}><ShopConsoleActivityTab ctx={ctx} /></Suspense>
+            <Suspense fallback={<TabFallback />}><ShopConsoleAuditTab ctx={ctx} /></Suspense>
+          </div>
         );
-      case "vision":
+      case "platform":
         return (
-          <Suspense fallback={<TabFallback />}>
-            <ShopConsoleVisionTab ctx={ctx} />
-          </Suspense>
+          <div className="space-y-3">
+            <Suspense fallback={<TabFallback />}><ShopConsoleAiTab ctx={ctx} /></Suspense>
+            <Suspense fallback={<TabFallback />}><ShopConsoleVisionTab ctx={ctx} /></Suspense>
+          </div>
+        );
+      case "advanced":
+        return (
+          <div className="space-y-3">
+            <Suspense fallback={<TabFallback />}><ShopConsoleDeveloperTab ctx={ctx} /></Suspense>
+            <ShopConsoleSecurityTab ctx={ctx} onDeleted={() => navigate("/internal/waka/shops")} accountOnly />
+          </div>
         );
       default:
         return <ShopConsoleOverviewTab ctx={ctx} />;
@@ -423,9 +413,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
         ) : null}
 
         {loadingShop ? (
-          <p className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
-            {t(lang, "internalShopProfileLoading")}
-          </p>
+          <WakaCustomerWorkspaceSkeleton />
         ) : !detail ? (
           <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-8 text-center text-sm font-bold text-rose-900">
             {t(lang, "internalShopProfileError")}
@@ -435,7 +423,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
             <header className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-waka-800">Shop Console</p>
+                   <p className="text-[10px] font-black uppercase text-waka-500">Customer / Shop Workspace</p>
                   <h1 className="mt-1 truncate text-xl font-black text-foreground">{detail.shop.name}</h1>
                   <p className="mt-1 text-xs font-semibold text-muted-foreground">
                     {formatOwnerDisplayLabel({

@@ -11,14 +11,13 @@ import {
 } from "../../../../lib/wakaInternalAdmin";
 import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import { EmptyState, SupportTicketCard } from "../primitives";
 import { RemoteSupportTicketConnect } from "../../../remote-support/RemoteSupportTicketConnect";
-import { AdminPasswordResetLogPanel } from "../../AdminPasswordResetLogPanel";
-import { SupportPasswordResetPanel } from "../../SupportPasswordResetPanel";
-import { AdminDiagnosticsImportPanel } from "../../ops/AdminDiagnosticsImportPanel";
 import { TicketInternalNotesPanel } from "../../ops/TicketInternalNotesPanel";
 import { MerchantTicketsConsole } from "../ops/MerchantTicketsConsole";
+import { Inbox } from "lucide-react";
+import { WakaSupportQueueSkeleton } from "../../../enterprise/WakaLoading";
 
 type Props = {
   lang: Language;
@@ -32,7 +31,6 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
   const data = useInternalOpsData(adminRow, previewMode, "support");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"open" | "all">("open");
-  const [passwordLogKey, setPasswordLogKey] = useState(0);
 
   const list =
     filter === "open"
@@ -44,12 +42,9 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
       <div>
         <h1 className="text-xl font-black text-foreground">{t(lang, "internalSupportTitle")}</h1>
         <p className="text-sm text-muted-foreground">Helpdesk inbox</p>
-        {perms.canShopSupport ? (
-          <p className="mt-1 text-xs font-semibold text-amber-900">
-            Reset owner login or clear Shop Security PIN: Shops → open shop → <strong>Account recovery</strong> card, or use the
-            tool below.
-          </p>
-        ) : null}
+        <p className="mt-1 text-xs font-semibold text-muted-foreground">
+          Shared team queue. Account recovery and device interventions live in the Customer Workspace.
+        </p>
       </div>
 
       <MerchantTicketsConsole
@@ -57,24 +52,6 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
         canWorkTickets={perms.role === "super_admin" || perms.role === "support_admin"}
         previewMode={previewMode}
       />
-
-      {perms.canShopSupport && (perms.role === "super_admin" || perms.role === "support_admin") ? (
-        <SupportPasswordResetPanel
-          lang={lang}
-          previewMode={previewMode}
-          onSuccess={() => setPasswordLogKey((k) => k + 1)}
-          onToast={(toast) => {
-            if (toast.kind === "ok") window.alert(toast.text);
-            else window.alert(toast.text);
-          }}
-        />
-      ) : null}
-
-      {perms.canShopSupport ? (
-        <AdminPasswordResetLogPanel key={passwordLogKey} previewMode={previewMode} />
-      ) : null}
-
-      <AdminDiagnosticsImportPanel previewMode={previewMode} />
 
       <h2 className="pt-2 text-sm font-black uppercase tracking-wide text-muted-foreground">
         Legacy intake — app reports &amp; pilot tickets
@@ -95,18 +72,15 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
       </div>
 
       {data.opsLoading && list.length === 0 ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
-          ))}
-        </div>
+        <WakaSupportQueueSkeleton />
       ) : list.length === 0 ? (
-        <EmptyState>{t(lang, "internalSupportEmpty")}</EmptyState>
+        <EmptyState><Inbox className="mx-auto mb-2 size-5" aria-hidden />{t(lang, "internalSupportEmpty")}</EmptyState>
       ) : (
         <ul className="space-y-3">
           {list.map((tk) => {
             const phone = tk.shop_phone_e164 ?? tk.contact_phone_e164 ?? undefined;
             const ownerEmail = formatDisplayEmail(tk.owner_email);
+            const shopId = tk.shop_id;
             return (
               <li key={tk.id}>
                 <SupportTicketCard
@@ -136,8 +110,8 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
                       : undefined
                   }
                   onOpenShop={
-                    tk.shop_id
-                      ? () => navigate(internalAdminShopTabHref(tk.shop_id!, "support", previewMode))
+                    shopId
+                      ? () => navigate(internalAdminShopTabHref(shopId, "support", previewMode))
                       : undefined
                   }
                   onDelete={

@@ -1,34 +1,62 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 
 const SPOTLIGHT_MS = 2000;
 
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+export type HomeTileSpotlightStore = {
+  getSnapshot: () => string | null;
+  subscribe: (listener: () => void) => () => void;
+  setActive: (id: string | null) => void;
+};
+
+function createSpotlightStore(): HomeTileSpotlightStore {
+  let activeId: string | null = null;
+  const listeners = new Set<() => void>();
+  return {
+    getSnapshot: () => activeId,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    setActive: (id) => {
+      if (id === activeId) return;
+      activeId = id;
+      listeners.forEach((listener) => listener());
+    },
+  };
 }
 
 /** Only one home tile animates at a time — cycles every 2s for calm, battery-friendly motion. */
-export function useHomeTileSpotlight(tileIds: string[], paused: boolean): string | null {
-  const [activeId, setActiveId] = useState<string | null>(null);
+export function useHomeTileSpotlight(tileIds: string[], paused: boolean): HomeTileSpotlightStore {
+  const storeRef = useRef<HomeTileSpotlightStore | null>(null);
+  if (!storeRef.current) storeRef.current = createSpotlightStore();
+  const store = storeRef.current;
   const indexRef = useRef(0);
   const idsKey = tileIds.join("|");
 
   useEffect(() => {
-    if (paused || prefersReducedMotion() || tileIds.length === 0) {
-      setActiveId(null);
+    if (paused || tileIds.length === 0) {
+      store.setActive(null);
       return;
     }
 
     indexRef.current = 0;
-    setActiveId(tileIds[0] ?? null);
+    store.setActive(tileIds[0] ?? null);
 
     const timer = window.setInterval(() => {
       indexRef.current = (indexRef.current + 1) % tileIds.length;
-      setActiveId(tileIds[indexRef.current] ?? null);
+      store.setActive(tileIds[indexRef.current] ?? null);
     }, SPOTLIGHT_MS);
 
     return () => window.clearInterval(timer);
-  }, [idsKey, paused, tileIds]);
+  }, [idsKey, paused, store]);
 
-  return activeId;
+  return store;
+}
+
+export function useHomeTileSpotlightActive(store: HomeTileSpotlightStore, tileId: string, eligible: boolean): boolean {
+  const getSnapshot = useCallback(
+    () => eligible && store.getSnapshot() === tileId,
+    [eligible, store, tileId],
+  );
+  return useSyncExternalStore(store.subscribe, getSnapshot, () => false);
 }

@@ -76,6 +76,7 @@ export function LivingBusinessPulse({
     >
       <div className="home-business-hero__ambient" aria-hidden />
       <div className="home-living-pulse__glow" aria-hidden />
+      <div className="home-living-pulse__sweep" aria-hidden />
       {salesKpi || sellStat ? (
         <span
           key={salesKpi?.value ?? sellStat?.value ?? "none"}
@@ -139,6 +140,15 @@ export function LivingBusinessPulse({
                 <p className="mt-2 text-sm font-semibold text-muted-foreground">
                   <HomeLiveValue value={sellStat.value} availability={sellStat.availability} className="tabular-nums text-foreground" />
                 </p>
+              ) : null}
+              {showSpark && sparkMode ? (
+                <HomePulseSparkline
+                  className="home-living-pulse__trend mt-3 max-w-md"
+                  lang={lang}
+                  points={weekTrend}
+                  mode={sparkMode}
+                  intensity={intensity}
+                />
               ) : null}
               <HomeAskWakaShortcut lang={lang} />
             </div>

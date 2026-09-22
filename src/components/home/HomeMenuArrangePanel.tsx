@@ -25,8 +25,16 @@ import { HomeReportsPreview } from "./HomeReportsPreview";
 import { LivingDashboardCard } from "./LivingDashboardCard";
 import { HomeOrderedRegions } from "./HomeOrderedRegions";
 import { useHomeRegionLayout } from "../../hooks/useHomeRegionLayout";
+import type { HomeTileSpotlightStore } from "../../hooks/useHomeTileSpotlight";
 import { ShelfColorWheel } from "../pos/ShelfColorWheel";
 import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
+
+/** Settings arrange preview — no rotating spotlight. */
+const ARRANGE_SPOTLIGHT_STORE: HomeTileSpotlightStore = {
+  getSnapshot: () => null,
+  subscribe: () => () => {},
+  setActive: () => {},
+};
 
 const EMPTY_ORDER: string[] = [];
 const EMPTY_LAYOUT: Record<string, LauncherTileConfig> = {};
@@ -180,10 +188,11 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
       <LivingDashboardCard
         tile={tile}
         lang={lang}
-        spotlight={false}
+        spotlightStore={ARRANGE_SPOTLIGHT_STORE}
+        spotlightEligible={false}
         appearance="enterprise"
         density={density}
-        onClick={() => selectTile(tile.id, drag.shouldIgnoreClick)}
+        onOpen={() => selectTile(tile.id, drag.shouldIgnoreClick)}
         onPointerDown={(e) => drag.startDrag(tile.id, e)}
       />
     </ArrangeChrome>

@@ -1274,8 +1274,27 @@ export function PosCheckoutPanel({
       ) : null}
 
       {emptyCart ? (
-        <div className={clsx("min-h-0 flex-1 p-4", POS_CHECKOUT_SCROLL_CLASS)}>
-          <p className="py-8 text-center text-sm font-semibold text-muted-foreground">{t(lang, "posCartEmptyHint")}</p>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className={clsx("min-h-0 flex-1 p-4", POS_CHECKOUT_SCROLL_CLASS)}>
+            <p className="py-8 text-center text-sm font-semibold text-muted-foreground">{t(lang, "posCartEmptyHint")}</p>
+          </div>
+          <div className="shrink-0 border-y border-waka-200 px-3 py-2">
+            <DraftCartTotalsStack lang={lang} checkoutTotals={checkoutTotals} changeDue={changeDue} sidebarCompact={isSidebar} />
+          </div>
+          <div className="shrink-0 px-3 py-2">
+            <PaymentBlock {...paymentProps} sidebarCompact={isSidebar} />
+          </div>
+          <div className="shrink-0 border-t border-waka-200 bg-card p-3">
+            <button
+              ref={saveButtonRef}
+              type="button"
+              onClick={onFinishSale}
+              disabled
+              className="pos-ds-checkout-btn min-h-[52px] w-full rounded-xl bg-primary py-3.5 text-base font-black text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {saveSaleLabel}
+            </button>
+          </div>
         </div>
       ) : mobileSheetBudget ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

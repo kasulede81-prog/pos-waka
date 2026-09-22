@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
   adminUpdateRemoteSupportPlatformEnabled,
   fetchRemoteSupportPlatformSettings,
 } from "../../../../lib/remoteSupport";
 import { canRemoteSupport, normalizeAdminRole } from "../adminRoles";
+import { EnterpriseSkeletonForm } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -66,10 +66,7 @@ export function AdminRemoteSupportSettingsPage({ adminRow, previewMode = false }
       ) : null}
 
       {loading ? (
-        <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading…
-        </p>
+        <EnterpriseSkeletonForm fields={2} />
       ) : (
         <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <p className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">Status</p>

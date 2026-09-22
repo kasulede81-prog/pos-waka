@@ -16,6 +16,7 @@ import {
 } from "../../../../lib/platformBusinessTypes";
 import { isSuperAdmin, normalizeAdminRole } from "../adminRoles";
 import { WakaSwitch } from "../../../enterprise/WakaSwitch";
+import { EnterpriseSkeletonForm } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -166,7 +167,7 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
       ) : null}
 
       {loading || !settings ? (
-        <p className="text-sm text-muted-foreground">Loading business type settings…</p>
+        <EnterpriseSkeletonForm fields={5} />
       ) : (
         <>
           <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">

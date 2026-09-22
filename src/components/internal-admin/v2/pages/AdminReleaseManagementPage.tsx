@@ -31,6 +31,7 @@ import {
 import { adminPermissions } from "../adminRoles";
 import { WakaSwitch } from "../../../enterprise/WakaSwitch";
 import { AdminRichTextEditor } from "../AdminRichTextEditor";
+import { EnterpriseSkeletonTable } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -468,10 +469,7 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
           <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Release history</h2>
         </div>
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-12 text-sm font-semibold text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Loading…
-          </div>
+          <div className="p-4"><EnterpriseSkeletonTable rows={5} columns={6} /></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">

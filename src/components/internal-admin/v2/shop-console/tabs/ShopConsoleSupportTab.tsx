@@ -1,23 +1,11 @@
 import { useEffect } from "react";
 import { InternalNotesPanel } from "../../ops/OpsWidgets";
-import { SupportPasswordResetPanel } from "../../../SupportPasswordResetPanel";
 import { AdminCollapsible } from "../../../adminUi";
-import { RescueActionButton, RescueSection } from "../../../rescue/RescuePrimitives";
-import { fetchShopRecoverySignals, logRescueSupportAction } from "../../../../../lib/rescueSupportActions";
 import {
-  adminShopForceLogoutDevices,
   adminShopOpenSupportMessage,
-  adminShopResetBackOfficePin,
-  adminShopResetAllStaffCredentials,
-  adminShopResetSync,
-  adminShopSendOwnerPasswordReset,
-  adminShopLogPasswordResetEmail,
   whatsappUrlFromPhone,
-  formatDisplayEmail,
 } from "../../../../../lib/wakaInternalAdmin";
-import { sendOwnerPasswordResetEmail } from "../../../../../lib/shopRecoverySignals";
 import { t } from "../../../../../lib/i18n";
-import { runShopConsoleRescueAction } from "../rescueRun";
 import type { ShopConsoleState } from "../useShopConsoleState";
 
 type Props = { ctx: ShopConsoleState };
@@ -36,8 +24,6 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
     setSupportBody,
     executeAction,
     setToast,
-    setRescueField,
-    rescue,
     loadRescueData,
   } = ctx;
 
@@ -47,14 +33,7 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
 
   if (!detail) return null;
 
-  const ownerEmail = formatDisplayEmail(detail.owner_email);
   const waUrl = whatsappUrlFromPhone(detail.shop.phone_e164);
-
-  const refreshRecoverySignals = async () => {
-    if (!detail.shop.id) return;
-    const signals = await fetchShopRecoverySignals(detail.shop.id);
-    setRescueField("recoverySignals", signals);
-  };
 
   return (
     <div className="space-y-3">
@@ -117,110 +96,10 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
         </AdminCollapsible>
       ) : null}
 
-      {canSupport ? (
-        <RescueSection id="support-actions" title="Support Actions" summary="Non-destructive recovery tools">
-          <div className="flex flex-wrap gap-2">
-            <RescueActionButton
-              disabled={busy || !ownerEmail}
-              onClick={() =>
-                void runShopConsoleRescueAction(ctx, "rescue_password_reset", async () => {
-                  const audit = await adminShopSendOwnerPasswordReset(detail.shop.id);
-                  if (!audit.ok) return audit;
-                  const email = audit.ownerEmail ?? ownerEmail ?? "";
-                  if (!email) return { ok: false, message: "No owner email on file." };
-                  const sent = await sendOwnerPasswordResetEmail(email);
-                  await adminShopLogPasswordResetEmail(
-                    detail.shop.id,
-                    sent.ok,
-                    sent.ok ? `Email sent to ${email}` : sent.message ?? "send_failed",
-                  );
-                  return sent;
-                })
-              }
-            >
-              Password reset
-            </RescueActionButton>
-            <RescueActionButton
-              variant="secondary"
-              disabled={busy}
-              onClick={() =>
-                void runShopConsoleRescueAction(ctx, "rescue_staff_credentials_reset", async () => {
-                  const r = await adminShopResetAllStaffCredentials(detail.shop.id);
-                  if (r.ok) await refreshRecoverySignals();
-                  return r;
-                })
-              }
-            >
-              {t(lang, "internalAdminResetStaffCredentials")}
-            </RescueActionButton>
-            <RescueActionButton
-              variant="secondary"
-              disabled={busy}
-              onClick={() =>
-                void runShopConsoleRescueAction(ctx, "rescue_pin_reset", async () => {
-                  const r = await adminShopResetBackOfficePin(detail.shop.id);
-                  if (r.ok) await refreshRecoverySignals();
-                  return r;
-                })
-              }
-            >
-              {t(lang, "internalAdminClearShopSecurityPin")}
-            </RescueActionButton>
-            <RescueActionButton
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void runShopConsoleRescueAction(ctx, "rescue_force_logout", () => adminShopForceLogoutDevices(detail.shop.id))}
-            >
-              Force logout
-            </RescueActionButton>
-            <RescueActionButton
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void runShopConsoleRescueAction(ctx, "rescue_retry_sync", () => adminShopResetSync(detail.shop.id))}
-            >
-              Retry sync
-            </RescueActionButton>
-            {waUrl ? (
-              <RescueActionButton
-                variant="secondary"
-                disabled={busy}
-                onClick={() => {
-                  window.open(waUrl, "_blank", "noopener,noreferrer");
-                  void logRescueSupportAction({
-                    shopId: detail.shop.id,
-                    action: "rescue_whatsapp_contact",
-                    result: "ok",
-                  });
-                }}
-              >
-                WhatsApp shortcut
-              </RescueActionButton>
-            ) : null}
-          </div>
-          {rescue.recoverySignals.passwordResetRequestedAt ||
-          rescue.recoverySignals.clearBackOfficePinAt ||
-          rescue.recoverySignals.clearStaffCredentialsAt ? (
-            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground">
-              {rescue.recoverySignals.passwordResetRequestedAt ? (
-                <div>Password reset signal: {new Date(rescue.recoverySignals.passwordResetRequestedAt).toLocaleString("en-GB")}</div>
-              ) : null}
-              {rescue.recoverySignals.clearBackOfficePinAt ? (
-                <div>{t(lang, "internalAdminClearShopSecurityPinSignal")}: {new Date(rescue.recoverySignals.clearBackOfficePinAt).toLocaleString("en-GB")}</div>
-              ) : null}
-              {rescue.recoverySignals.clearStaffCredentialsAt ? (
-                <div>{t(lang, "internalAdminResetStaffCredentialsSignal")}: {new Date(rescue.recoverySignals.clearStaffCredentialsAt).toLocaleString("en-GB")}</div>
-              ) : null}
-            </dl>
-          ) : null}
-        </RescueSection>
-      ) : null}
-
-      {canSupport ? (
-        <SupportPasswordResetPanel
-          lang={lang}
-          previewMode={previewMode}
-          onToast={setToast}
-        />
+      {waUrl ? (
+        <a href={waUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[40px] items-center rounded-xl border border-border px-3 text-xs font-black text-foreground">
+          Contact customer on WhatsApp
+        </a>
       ) : null}
     </div>
   );

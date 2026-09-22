@@ -461,6 +461,10 @@ function AppRoutes() {
                     path="internal/waka/remote-support"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
+                  <Route
+                    path="internal/waka/platform"
+                    element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
+                  />
                   <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/shop/:shopId/rescue" element={<ShopRescueConsolePage lang={lang} email={auth.email} />} />
                 </Route>

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "@/lib/routerCompat";
 import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";

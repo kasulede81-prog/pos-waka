@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, MonitorSmartphone } from "lucide-react";
+import { MonitorSmartphone } from "lucide-react";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
   adminUpdatePlatformDisplayScaleEnabled,
@@ -8,6 +8,7 @@ import {
 import { DISPLAY_SCALE_LEVELS, DISPLAY_SCALE_META } from "../../../../lib/displayScale/scaleTokens";
 import { isSuperAdmin, normalizeAdminRole } from "../adminRoles";
 import { WakaSwitch } from "../../../enterprise/WakaSwitch";
+import { EnterpriseSkeletonForm } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -68,10 +69,7 @@ export function AdminPosDisplayScalePage({ adminRow, previewMode = false }: Prop
       ) : null}
 
       {loading ? (
-        <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading…
-        </p>
+        <EnterpriseSkeletonForm fields={1} />
       ) : (
         <div className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
           <WakaSwitch

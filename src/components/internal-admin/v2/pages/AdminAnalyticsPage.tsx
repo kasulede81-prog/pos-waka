@@ -3,6 +3,7 @@ import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminKpiGridClass } from "../../../../lib/desktopLayout";
 import { AppVersionPanel, PlatformAnalyticsPanel } from "../ops/OpsWidgets";
 import { KpiPulseCard } from "../primitives";
+import { EnterpriseSkeleton, EnterpriseSkeletonKpiGrid } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -24,17 +25,19 @@ export function AdminAnalyticsPage({ adminRow, previewMode }: Props) {
         <p className="text-sm text-muted-foreground">Growth & health trends · see Dashboard for live ops status</p>
       </div>
 
-      <div className={adminKpiGridClass()}>
-        <KpiPulseCard label="Paid subs" value={data.statGrid.paid} />
-        <KpiPulseCard label="Trials" value={data.statGrid.trial} accent />
-        <KpiPulseCard label="Churn signal %" value={`${churnHint}%`} />
-        <KpiPulseCard label="Sales (UGX)" value={data.statGrid.sales} accent />
-      </div>
+      {data.opsLoading && !data.stats ? <EnterpriseSkeletonKpiGrid count={4} /> : (
+        <div className={adminKpiGridClass()}>
+          <KpiPulseCard label="Paid subs" value={data.statGrid.paid} />
+          <KpiPulseCard label="Trials" value={data.statGrid.trial} accent />
+          <KpiPulseCard label="Churn signal %" value={`${churnHint}%`} />
+          <KpiPulseCard label="Sales (UGX)" value={data.statGrid.sales} accent />
+        </div>
+      )}
 
       {data.opsLoading && data.signups7.length === 0 ? (
         <div className="space-y-3">
-          <div className="h-36 animate-pulse rounded-2xl bg-muted" />
-          <div className="h-28 animate-pulse rounded-2xl bg-muted" />
+          <EnterpriseSkeleton variant="card" className="h-36" />
+          <EnterpriseSkeleton variant="card" className="h-28" />
         </div>
       ) : null}
 

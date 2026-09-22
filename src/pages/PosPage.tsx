@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useShallow } from "zustand/react/shallow";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "@/lib/routerCompat";
 import clsx from "clsx";
 import { Banknote, Keyboard, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
@@ -68,7 +68,6 @@ import {
   DesktopCartPanel,
   DesktopCategoryRail,
   DesktopOnScreenKeyboard,
-  DesktopPaymentPanel,
   DesktopPosHeader,
   DesktopPosShell,
   DesktopQuickActions,
@@ -440,6 +439,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const isFullDesktopPos = posLayoutMode === "full";
   const isDesktopPosTerminalUi = isDesktopPosTerminal();
   const isWebFullDesktopPosLayout = isWebFullDesktopPos(isFullDesktopPos);
+  const useProfessionalDesktopUi = isDesktopPosTerminalUi || isWebFullDesktopPosLayout;
   const useDesktopSplitLayout = useDesktopPosSplitLayout(isFullDesktopPos);
   const isDesktopCatalogUi = isDesktopPosCatalogUi(isFullDesktopPos);
   const mobileSellFocus = posLayoutMode === "mobile";
@@ -449,7 +449,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const catalogViewportLayout = catalogSellMode;
   const catalogScrollPaneClass =
     "pos-catalog-scroll-pane h-0 min-h-0 flex-1 overscroll-y-contain [-webkit-overflow-scrolling:touch]";
-  const mountDesktopCheckoutSidebar = shouldMountDesktopCheckoutSidebar(
+  const mountDesktopCheckoutSidebar = useProfessionalDesktopUi || shouldMountDesktopCheckoutSidebar(
     posLayoutMode,
     products.length > 0,
     draftLines.length,
@@ -1882,7 +1882,7 @@ export function PosPage({ lang }: { lang: Language }) {
             onChange={(e) => setSearchQuery(e.target.value)}
             onBlur={(e) => commitSearch(e.target.value)}
             onFocus={() => {
-              if (isDesktopPosTerminalUi) {
+              if (useProfessionalDesktopUi) {
                 setDesktopOskLayer("alpha");
                 setDesktopOskOpen(true);
               }
@@ -1906,7 +1906,7 @@ export function PosPage({ lang }: { lang: Language }) {
             }
             className={clsx(
               "pos-ds-input w-full rounded-2xl border border-border bg-card pl-9 font-semibold text-foreground outline-none ring-waka-200 placeholder:text-muted-foreground transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
-              isDesktopPosTerminalUi ? "h-11 pr-[5.5rem] bg-muted/90 text-sm focus:bg-card focus:ring-1" : "pr-10",
+              useProfessionalDesktopUi ? "h-12 pr-[5.5rem] bg-background text-base focus:bg-card focus:ring-2" : "pr-10",
               mobileSellFocus
                 ? "h-10 rounded-xl text-sm shadow-sm"
                 : isDesktopCatalogUi
@@ -1914,7 +1914,7 @@ export function PosPage({ lang }: { lang: Language }) {
                   : "h-11 bg-muted/90 text-base focus:bg-card focus:ring-1",
             )}
           />
-          {isDesktopPosTerminalUi ? (
+          {useProfessionalDesktopUi ? (
             <button
               type="button"
               className="absolute right-12 top-1/2 flex h-10 min-h-[40px] w-10 min-w-[40px] -translate-y-1/2 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground active:bg-muted"
@@ -2251,7 +2251,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 saveDisabled={draftLines.length === 0}
                 onCheckoutInputField={(field) => {
                   handleCheckoutInputField(field);
-                  if (isDesktopPosTerminalUi && (field === "customerName" || field === "customerPhone")) {
+                  if (useProfessionalDesktopUi && (field === "customerName" || field === "customerPhone")) {
                     setDesktopOskLayer("alpha");
                     setDesktopOskOpen(true);
                   }
@@ -2390,7 +2390,7 @@ export function PosPage({ lang }: { lang: Language }) {
       data-sell-workspace-mode={sellWorkspaceMode}
     >
       <PosOfflineBanner lang={lang} compact={catalogSellMode} />
-      {isWebFullDesktopPosLayout ? (
+      {isWebFullDesktopPosLayout && !useProfessionalDesktopUi ? (
         <PosDesktopCompactHeader
           lang={lang}
           sellLabelKey={sellNavLabelKey}
@@ -2415,7 +2415,7 @@ export function PosPage({ lang }: { lang: Language }) {
           canRecordExpense={canRecordCashExpenses(actor.role, shopPreferences, actor.permissions)}
           canSavePending={canSavePending}
         />
-      ) : activeShift ? (
+      ) : activeShift && !useProfessionalDesktopUi ? (
         <ActiveShiftBanner
           lang={lang}
           shift={activeShift}
@@ -2448,7 +2448,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {isDesktopPosTerminalUi ? (
+      {useProfessionalDesktopUi ? (
         <DesktopPosShell
           header={
             <DesktopPosHeader
@@ -2488,18 +2488,7 @@ export function PosPage({ lang }: { lang: Language }) {
           searchBar={renderPosSearchBar()}
           catalog={renderCatalogPane()}
           cart={<DesktopCartPanel>{renderCheckoutAside()}</DesktopCartPanel>}
-          paymentBar={
-            <DesktopPaymentPanel
-              lang={lang}
-              payableUgx={draftPayable}
-              paymentMethod={paymentMethod}
-              checkoutMethods={checkoutMethods}
-              onPaymentMethod={setPaymentMethod}
-              onCompleteSale={finishSale}
-              completeDisabled={draftLines.length === 0 || Boolean(checkoutBlockMessage)}
-              completeLabel={modeTerm("saveSale")}
-            />
-          }
+          paymentBar={null}
           statusBar={
             <DesktopStatusBar lang={lang} identity={terminalIdentity} terminalLabel={terminalLabel} />
           }
@@ -2541,7 +2530,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       )}
 
-      {isWebFullDesktopPosLayout ? (
+      {isWebFullDesktopPosLayout && !useProfessionalDesktopUi ? (
         <PosDesktopStatusBar lang={lang} identity={terminalIdentity} terminalLabel={terminalLabel} />
       ) : null}
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent } from "react";
 
 const MAX_PX = 4;
@@ -20,17 +20,45 @@ const REST: TilePointerState = { x: 0, y: 0, spotX: 50, spotY: 20, active: false
 export function useHomeTileParallax(enabled: boolean) {
   const [state, setState] = useState<TilePointerState>(REST);
   const frameRef = useRef<number | null>(null);
+  const elementRef = useRef<HTMLElement | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
+  const pendingRef = useRef<{ clientX: number; clientY: number } | null>(null);
+
+  const measure = useCallback(() => {
+    rectRef.current = elementRef.current?.getBoundingClientRect() ?? null;
+  }, []);
+
+  const setElement = useCallback((element: HTMLElement | null) => {
+    elementRef.current = element;
+    rectRef.current = element?.getBoundingClientRect() ?? null;
+  }, []);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    window.addEventListener("resize", measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [measure]);
 
   const onPointerMove = useCallback(
     (e: PointerEvent<HTMLElement>) => {
       if (!enabled || e.pointerType === "touch") return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const nx = (e.clientX - rect.left) / rect.width - 0.5;
-      const ny = (e.clientY - rect.top) / rect.height - 0.5;
-      const spotX = Math.round(((e.clientX - rect.left) / rect.width) * 1000) / 10;
-      const spotY = Math.round(((e.clientY - rect.top) / rect.height) * 1000) / 10;
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      pendingRef.current = { clientX: e.clientX, clientY: e.clientY };
+      if (frameRef.current !== null) return;
       frameRef.current = requestAnimationFrame(() => {
+        frameRef.current = null;
+        const rect = rectRef.current;
+        const pending = pendingRef.current;
+        if (!rect || !pending || rect.width === 0 || rect.height === 0) return;
+        const nx = (pending.clientX - rect.left) / rect.width - 0.5;
+        const ny = (pending.clientY - rect.top) / rect.height - 0.5;
+        const spotX = Math.round(((pending.clientX - rect.left) / rect.width) * 1000) / 10;
+        const spotY = Math.round(((pending.clientY - rect.top) / rect.height) * 1000) / 10;
         setState({
           x: Math.round(nx * MAX_PX * 10) / 10,
           y: Math.round(ny * MAX_PX * 10) / 10,
@@ -44,7 +72,9 @@ export function useHomeTileParallax(enabled: boolean) {
   );
 
   const onPointerLeave = useCallback(() => {
-    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+    pendingRef.current = null;
     setState(REST);
   }, []);
 
@@ -63,6 +93,8 @@ export function useHomeTileParallax(enabled: boolean) {
   return {
     onPointerMove,
     onPointerLeave,
+    onPointerEnter: measure,
+    setElement,
     sceneStyle,
     cardStyle,
   };

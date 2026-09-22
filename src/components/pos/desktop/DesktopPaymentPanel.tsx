@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Banknote, CreditCard, Smartphone, Wallet } from "lucide-react";
+import { Banknote, CheckCircle2, CreditCard, Smartphone, Wallet } from "lucide-react";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { DesktopPosButton } from "./DesktopPosButton";
@@ -41,13 +41,13 @@ export function DesktopPaymentPanel({
   return (
     <footer
       className={clsx(
-        "desktop-pos-payment-bar flex shrink-0 items-stretch gap-2 border-t border-border bg-card px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        "desktop-pos-payment-bar flex shrink-0 items-stretch gap-2 border-t border-border bg-card px-3 py-3 shadow-sm",
         className,
       )}
     >
-      <div className="flex min-w-[8rem] shrink-0 flex-col justify-center rounded-lg border border-border bg-muted/60 px-3 py-1.5">
+      <div className="flex min-w-[11rem] shrink-0 flex-col justify-center rounded-lg border border-primary/30 bg-primary/10 px-4 py-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{t(lang, "payableTotalLabel")}</p>
-        <p className="text-xl font-black tabular-nums text-waka-900">UGX {payableUgx.toLocaleString()}</p>
+        <p className="text-2xl font-black tabular-nums text-primary">UGX {payableUgx.toLocaleString()}</p>
       </div>
 
       <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5 sm:grid-cols-4">
@@ -74,10 +74,11 @@ export function DesktopPaymentPanel({
         <DesktopPosButton
           size="touch"
           variant="success"
-          className="min-w-[8.5rem] shrink-0 px-4 text-sm font-black uppercase"
+           className="min-w-[11rem] shrink-0 px-5 text-sm font-black uppercase"
           disabled={completeDisabled}
           onClick={onCompleteSale}
         >
+          <CheckCircle2 className="size-5" aria-hidden />
           {completeLabel}
         </DesktopPosButton>
       ) : null}
