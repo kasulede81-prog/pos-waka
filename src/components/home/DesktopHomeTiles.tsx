@@ -1,6 +1,6 @@
 import { actorHasEffectivePermission, actorHasPermission } from "../../lib/actorAuthorization";
-import { useCallback, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useMemo } from "react";
+import { useNavigate } from "@/lib/routerCompat";
 import { Share2 } from "lucide-react";
 import type { Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
@@ -55,7 +55,6 @@ const EMPTY_LAYOUT = {};
 export function DesktopHomeTiles({ lang }: Props) {
   const navigate = useNavigate();
   const actor = useSessionActor();
-  const tileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const { largeScreen, packExecutiveScan, mobileCockpit } = useHomeRegionLayout();
   const animPaused = useHomeDashboardAnimationPause();
   const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
@@ -179,7 +178,7 @@ export function DesktopHomeTiles({ lang }: Props) {
     useMemo(() => presentHomeMenuTiles({ hero, secondary }), [hero, secondary]);
 
   const primarySpotlightIds = useMemo(() => primaryTiles.map((tile) => tile.id), [primaryTiles]);
-  const spotlightId = useHomeTileSpotlight(primarySpotlightIds, animPaused);
+  const spotlightStore = useHomeTileSpotlight(primarySpotlightIds, animPaused);
   const { kick: drawerKick, settleKick } = useHomeCashDrawerKick();
 
   const openTile = useCallback(
@@ -190,7 +189,7 @@ export function DesktopHomeTiles({ lang }: Props) {
     [navigate],
   );
 
-  const renderCard = (
+  const renderCard = useCallback((
     tile: ResolvedHomeTile,
     density: "comfortable" | "compact" = "comfortable",
     weight: "primary" | "supporting" = "primary",
@@ -200,7 +199,8 @@ export function DesktopHomeTiles({ lang }: Props) {
       key={tile.id}
       tile={tile}
       lang={lang}
-      spotlight={weight === "primary" && spotlightId === tile.id}
+      spotlightStore={spotlightStore}
+      spotlightEligible={weight === "primary"}
       appearance="enterprise"
       density={density}
       weight={weight}
@@ -209,12 +209,9 @@ export function DesktopHomeTiles({ lang }: Props) {
       liveStat={liveStats[tile.id]}
       drawerKick={tile.id === "cash" ? drawerKick : null}
       onDrawerKickSettled={tile.id === "cash" ? settleKick : undefined}
-      buttonRef={(el) => {
-        tileRefs.current[tile.id] = el;
-      }}
-      onClick={() => openTile(tile.to)}
+      onOpen={openTile}
     />
-  );
+  ), [animPaused, drawerKick, lang, liveStats, openTile, settleKick, spotlightStore]);
 
   if (!hero && secondary.length === 0) {
     return (

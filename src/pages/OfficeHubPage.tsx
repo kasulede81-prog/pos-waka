@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { actorHasEffectivePermission } from "../lib/actorAuthorization";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import { Cloud, Share2 } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../types";

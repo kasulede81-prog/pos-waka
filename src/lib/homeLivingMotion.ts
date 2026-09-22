@@ -1,11 +1,15 @@
 import type { CashDrawerAuditEntry } from "../types";
 
-/** Ambient cycle lengths — compositor-only, 12–30s. */
+/**
+ * Ambient cycle lengths (seconds) — mirrored by `--home-motion-*` CSS vars on
+ * `.home-cinematic-shell`. Kept exported for tests / JS readers; compositor CSS
+ * is the runtime source of truth after Lovable motion hardening.
+ */
 export const HOME_LIVING_AMBIENT_S = {
-  shell: 20,
-  drift: 26,
+  shell: 18,
+  drift: 22,
   wash: 24,
-  hero: 16,
+  hero: 14,
   icon: 18,
   drawerIdle: 16,
   status: 3.6,

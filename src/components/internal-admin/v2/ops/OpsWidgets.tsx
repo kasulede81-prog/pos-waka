@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "@/lib/routerCompat";
 import clsx from "clsx";
 import { Search, ShieldAlert } from "lucide-react";
 import type { OpsActivationRow } from "../../../../lib/businessActivation";

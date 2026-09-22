@@ -9,15 +9,17 @@ import type { ShopConsoleState } from "../useShopConsoleState";
 type Props = {
   ctx: ShopConsoleState;
   onDeleted: () => void;
+  includeAdvanced?: boolean;
+  accountOnly?: boolean;
 };
 
-export function ShopConsoleSecurityTab({ ctx, onDeleted }: Props) {
+export function ShopConsoleSecurityTab({ ctx, onDeleted, includeAdvanced = true, accountOnly = false }: Props) {
   const { detail, canSupport, busy, previewMode, setBusy, setToast, perms } = ctx;
   if (!detail) return null;
 
   return (
     <div className="space-y-3">
-      {canSupport ? (
+      {canSupport && !accountOnly ? (
         <AccountRecoveryPanel
           lang={ctx.lang}
           shopId={detail.shop.id}
@@ -29,7 +31,7 @@ export function ShopConsoleSecurityTab({ ctx, onDeleted }: Props) {
         />
       ) : null}
 
-      {perms.canResetShopBusinessData ? (
+      {includeAdvanced && perms.canResetShopBusinessData ? (
         <AdminShopResetPanel
           detail={detail}
           busy={busy}
@@ -39,7 +41,7 @@ export function ShopConsoleSecurityTab({ ctx, onDeleted }: Props) {
         />
       ) : null}
 
-      {perms.canPermanentlyDeleteShopAccount ? (
+      {includeAdvanced && perms.canPermanentlyDeleteShopAccount ? (
         <AdminPermanentDeletePanel
           detail={detail}
           busy={busy}

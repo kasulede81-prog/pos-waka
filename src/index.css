@@ -1174,6 +1174,26 @@ html.marketing-theme-dark {
 
 /* HOME CINEMATIC V3 — full-viewport atmosphere. MICRO 100–180ms · STANDARD 200–450ms · AMBIENT 12–25s. */
 .home-cinematic-shell {
+  --home-motion-shell: 18s;
+  --home-motion-drift: 22s;
+  --home-motion-wash: 24s;
+  --home-motion-hero: 14s;
+  --home-motion-pulse-glow: 20s;
+  --home-motion-spark-aura: 18s;
+  --home-motion-icon: 18s;
+  --home-motion-scene-draw: 16s;
+  --home-motion-scene-scan: 14s;
+  --home-motion-drawer-idle: 16s;
+  --home-motion-drawer-led: 3.8s;
+  --home-motion-status: 3.6s;
+  --home-motion-status-warning: 2.8s;
+  --home-motion-environment-slow: 32s;
+  --home-motion-environment-deep: 38s;
+  --home-motion-business: 12s;
+  --home-motion-world: 9s;
+  --home-motion-world-slow: 15s;
+  --home-motion-event: 720ms;
+  --home-cinematic-ease: cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   isolation: isolate;
   min-height: 100%;
@@ -1616,6 +1636,45 @@ html.marketing-theme-dark {
   z-index: 0;
   background: radial-gradient(ellipse 70% 80% at 50% 40%, rgba(251, 146, 60, 0.14), transparent 70%);
   will-change: transform, opacity;
+}
+
+.home-living-pulse__sweep {
+  pointer-events: none;
+  position: absolute;
+  inset: -30% -18%;
+  z-index: 0;
+  opacity: 0.24;
+  transform: translate3d(-28%, 0, 0) rotate(-8deg);
+  background: linear-gradient(100deg, transparent 38%, rgba(255, 247, 237, 0.34) 50%, transparent 62%);
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-living-pulse__sweep {
+    animation: home-cinematic-sweep var(--home-motion-environment-slow) ease-in-out infinite;
+  }
+  .home-living-pulse[data-home-pulse-intensity="high"] .home-living-pulse__glow {
+    animation-duration: calc(var(--home-motion-pulse-glow) * 0.68);
+  }
+  .home-living-pulse[data-home-pulse-intensity="normal"] .home-living-pulse__glow {
+    animation-duration: calc(var(--home-motion-pulse-glow) * 0.84);
+  }
+}
+
+@keyframes home-cinematic-sweep {
+  0%,
+  18% {
+    opacity: 0;
+    transform: translate3d(-30%, 0, 0) rotate(-8deg);
+  }
+  42% {
+    opacity: 0.3;
+  }
+  68%,
+  100% {
+    opacity: 0;
+    transform: translate3d(30%, 0, 0) rotate(-8deg);
+  }
 }
 
 .home-stage {
@@ -2343,6 +2402,7 @@ html.marketing-theme-dark {
 html[data-home-anim-paused] .home-region-enter,
 html[data-home-anim-paused] .home-business-hero__ambient,
 html[data-home-anim-paused] .home-living-pulse__glow,
+html[data-home-anim-paused] .home-living-pulse__sweep,
 html[data-home-anim-paused] .home-new-sale-cta__glow,
 html[data-home-anim-paused] .home-living-pulse__sale-flash,
 html[data-home-anim-paused] .home-pulse-spark__aura,

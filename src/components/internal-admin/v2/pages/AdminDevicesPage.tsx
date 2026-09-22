@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
   adminShopDeviceSetActive,

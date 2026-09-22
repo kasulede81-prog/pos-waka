@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import type { Language } from "../../../../types";
 import { internalAdminShopHref, PREVIEW_RECENT_SHOPS } from "../../../../lib/internalAdminPreview";
 import {
@@ -198,7 +198,8 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
   return (
     <div className="space-y-4 pb-20">
       <div>
-        <h1 className="text-xl font-black text-foreground">Shops</h1>
+        <p className="text-[11px] font-black uppercase text-waka-500">Find customer</p>
+        <h1 className="mt-1 text-2xl font-black text-foreground">Customers</h1>
         <p className="text-sm text-muted-foreground">
           {filtered.length}
           {previewMode ? ` of ${PREVIEW_RECENT_SHOPS.length}` : hasMore ? "+" : ""} loaded ·{" "}
@@ -208,7 +209,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           Status, plan, and district filter loaded results only.
         </p>
         <p className="mt-1 text-xs font-semibold text-amber-900">
-          Open a shop → yellow <strong>Account recovery</strong> card to reset owner login or clear Shop Security PIN.
+          Search returns real matching shops. Open one Customer Workspace for support, devices, account recovery and history.
         </p>
       </div>
 
@@ -216,8 +217,9 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search name, shop number, owner…"
-        className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
+        placeholder="Search customer, shop number, owner email or phone…"
+        aria-label="Find customer"
+        className="w-full rounded-lg border border-waka-500/50 bg-card px-4 py-4 text-base font-semibold outline-none focus:ring-2 focus:ring-ring"
       />
 
       <div className="flex flex-wrap gap-2">

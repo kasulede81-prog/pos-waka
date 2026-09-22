@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import clsx from "clsx";
 import { ArrowLeft } from "lucide-react";
 import type { Language } from "../../types";

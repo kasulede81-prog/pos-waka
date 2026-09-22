@@ -6,17 +6,13 @@ import { SHOP_CONSOLE_TABS } from "../../../../lib/shopConsoleState";
 import type { ShopConsoleState } from "./useShopConsoleState";
 
 const TAB_LABELS: Record<ShopConsoleTab, string> = {
-  overview: "Overview",
-  business: "Business",
-  devices: "Devices",
-  subscriptions: "Subscriptions",
-  activity: "Activity",
-  audit: "Audit",
-  security: "Security",
+  summary: "Summary",
   support: "Support",
-  developer: "Developer",
-  ai: "AI",
-  vision: "Vision",
+  devices: "Devices",
+  account: "Account",
+  history: "History",
+  platform: "Platform",
+  advanced: "Advanced",
 };
 
 export type ShopConsoleQuickHandlers = {
@@ -133,10 +129,10 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
         </button>
         <button
           type="button"
-          onClick={() => go("audit")}
+          onClick={() => go("history")}
           className="min-h-[36px] rounded-xl border border-border px-3 text-[11px] font-black"
         >
-          Open Audit
+          Open History
         </button>
         <div className="relative">
           <button

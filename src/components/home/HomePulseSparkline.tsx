@@ -80,15 +80,21 @@ export function HomePulseSparkline({
             />
           ) : null}
           {line ? (
-            <polyline
-              className="home-pulse-spark__line"
-              points={line}
-              fill="none"
-              stroke="rgb(234, 88, 12)"
-              strokeWidth={stage ? 3 : 2.25}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <>
+              <polyline className="home-pulse-spark__echo" points={line} fill="none" stroke="rgb(251, 146, 60)" strokeWidth={stage ? 8 : 5} strokeLinecap="round" strokeLinejoin="round" />
+              <polyline
+                className="home-pulse-spark__line"
+                points={line}
+                fill="none"
+                stroke="rgb(234, 88, 12)"
+                strokeWidth={stage ? 3 : 2.25}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {coords.map((point, index) => (
+                <circle key={`${point.x}-${point.y}-${index}`} className="home-pulse-spark__point" cx={point.x} cy={point.y} r={stage ? 3.5 : 2.1} fill="rgb(255, 247, 237)" stroke="rgb(234, 88, 12)" strokeWidth="1.5" />
+              ))}
+            </>
           ) : null}
         </svg>
       </div>

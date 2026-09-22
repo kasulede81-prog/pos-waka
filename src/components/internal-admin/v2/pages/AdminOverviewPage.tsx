@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import { Megaphone } from "lucide-react";
 import type { Language } from "../../../../types";
 import { t } from "../../../../lib/i18n";

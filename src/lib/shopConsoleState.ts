@@ -1,15 +1,11 @@
 export const SHOP_CONSOLE_TABS = [
-  "overview",
-  "business",
-  "devices",
-  "subscriptions",
-  "activity",
-  "audit",
-  "security",
+  "summary",
   "support",
-  "developer",
-  "ai",
-  "vision",
+  "devices",
+  "account",
+  "history",
+  "platform",
+  "advanced",
 ] as const;
 
 export type ShopConsoleTab = (typeof SHOP_CONSOLE_TABS)[number];
@@ -22,22 +18,35 @@ export function isShopConsoleTab(value: string | null | undefined): value is Sho
 
 /** Legacy rescue hash anchors → unified console tabs */
 export const RESCUE_HASH_TO_TAB: Record<string, ShopConsoleTab> = {
-  health: "overview",
-  owner: "overview",
-  recovery: "security",
-  sync: "developer",
-  inventory: "developer",
+  health: "summary",
+  owner: "summary",
+  recovery: "account",
+  sync: "advanced",
+  inventory: "advanced",
   devices: "devices",
-  financial: "subscriptions",
-  audit: "audit",
-  import: "developer",
+  financial: "advanced",
+  audit: "history",
+  import: "advanced",
   actions: "support",
+};
+
+const LEGACY_TAB_MAP: Record<string, ShopConsoleTab> = {
+  overview: "summary",
+  business: "account",
+  subscriptions: "account",
+  activity: "history",
+  audit: "history",
+  security: "account",
+  developer: "advanced",
+  ai: "platform",
+  vision: "platform",
 };
 
 export function shopConsoleTabFromLocation(search: string, hash: string, shopId?: string): ShopConsoleTab {
   const q = new URLSearchParams(search);
   const tabParam = q.get("tab");
   if (isShopConsoleTab(tabParam)) return tabParam;
+  if (tabParam && LEGACY_TAB_MAP[tabParam]) return LEGACY_TAB_MAP[tabParam];
 
   const hashId = hash.replace(/^#/, "").trim();
   if (hashId && RESCUE_HASH_TO_TAB[hashId]) return RESCUE_HASH_TO_TAB[hashId];
@@ -46,7 +55,7 @@ export function shopConsoleTabFromLocation(search: string, hash: string, shopId?
     const stored = readShopConsoleTab(shopId);
     if (stored) return stored;
   }
-  return "overview";
+  return "summary";
 }
 
 function tabStorageKey(shopId: string): string {
