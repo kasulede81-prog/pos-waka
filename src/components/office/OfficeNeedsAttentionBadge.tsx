@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import { AlertTriangle } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";

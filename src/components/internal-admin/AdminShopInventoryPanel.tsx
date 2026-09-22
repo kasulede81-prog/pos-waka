@@ -1,4 +1,5 @@
 import type { AdminShopProductRow } from "../../lib/wakaInternalAdmin";
+import { EnterpriseSkeletonProductList } from "../enterprise/EnterpriseSkeleton";
 
 type Props = {
   products: AdminShopProductRow[];
@@ -18,7 +19,7 @@ export function AdminShopInventoryPanel({
   loading,
 }: Props) {
   if (loading) {
-    return <p className="text-sm font-semibold text-muted-foreground">Loading inventory…</p>;
+    return <EnterpriseSkeletonProductList count={4} />;
   }
 
   const onlyOnPhone = productCountSnapshot > productCountTable && productCountTable === 0;

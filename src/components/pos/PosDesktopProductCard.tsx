@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { Package, Star } from "lucide-react";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
 import { formatStockLabel } from "../../lib/sellingEngine";
@@ -36,7 +37,7 @@ export function PosDesktopProductCard({
   return (
     <article
       className={clsx(
-        "pos-ds-product-card relative flex min-h-[96px] flex-col overflow-hidden rounded-xl border bg-card text-left shadow-sm",
+        "pos-ds-product-card relative flex min-h-[132px] flex-col overflow-hidden rounded-lg border bg-card text-left shadow-sm",
         POS_CATALOG_TILE_TOUCH_CLASS,
         locked ? "border-border/80 opacity-55" : "border-border/90",
       )}
@@ -62,7 +63,7 @@ export function PosDesktopProductCard({
             onToggleFavorite(product.id);
           }}
         >
-          {favorite ? "★" : "☆"}
+          <Star className="size-4" fill={favorite ? "currentColor" : "none"} aria-hidden />
         </button>
       ) : null}
 
@@ -72,14 +73,14 @@ export function PosDesktopProductCard({
         disabled={locked}
         aria-label={`${sellLabel}: ${product.name}`}
         className={clsx(
-          "pos-sell-direct-card flex min-h-0 flex-1 cursor-pointer flex-col justify-center p-2.5 text-left",
+          "pos-sell-direct-card flex min-h-0 flex-1 cursor-pointer flex-col justify-between p-3 text-left",
           "transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out motion-reduce:transition-none",
           locked
             ? "cursor-not-allowed"
             : [
-                "hover:bg-teal-50/40",
-                "active:scale-[0.985] active:bg-teal-50/90",
-                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500",
+                 "hover:border-primary/50 hover:bg-accent",
+                 "active:scale-[0.985] active:bg-muted",
+                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
                 "motion-reduce:active:scale-100",
               ],
         )}
@@ -92,16 +93,17 @@ export function PosDesktopProductCard({
         >
           {product.name}
         </p>
-        <p className="pos-ds-product-price mt-1.5 text-xs font-black tabular-nums text-waka-800">
+        <p className="pos-ds-product-price mt-2 text-sm font-black tabular-nums text-primary">
           {formatProductPriceLabel(product)}
         </p>
         <span
           className={clsx(
-            "pos-ds-product-stock mt-1.5 inline-block max-w-full truncate rounded-md px-1.5 py-0.5 text-[10px] font-bold",
+            "pos-ds-product-stock mt-2 inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-1 text-[10px] font-bold",
             lowStock ? "bg-danger-muted text-danger" : "bg-success-muted text-success",
           )}
         >
-          {stockLabel}: {formatStockLabel(product)}
+          <Package className="size-3 shrink-0" aria-hidden />
+          {product.baseUnit} · {stockLabel}: {formatStockLabel(product)}
         </span>
       </button>
     </article>

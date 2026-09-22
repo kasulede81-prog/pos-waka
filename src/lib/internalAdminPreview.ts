@@ -63,7 +63,7 @@ export function internalAdminShopHref(shopId: string, previewMode: boolean): str
 }
 
 export function internalAdminShopRescueHref(shopId: string, previewMode: boolean, section?: string): string {
-  const tab: ShopConsoleTab = section && RESCUE_HASH_TO_TAB[section] ? RESCUE_HASH_TO_TAB[section] : "overview";
+  const tab: ShopConsoleTab = section && RESCUE_HASH_TO_TAB[section] ? RESCUE_HASH_TO_TAB[section] : "summary";
   return shopConsoleTabHref(shopId, tab, previewMode);
 }
 

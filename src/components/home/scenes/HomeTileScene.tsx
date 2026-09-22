@@ -50,7 +50,7 @@ export function HomeTileScene({
   }
 
   return (
-    <svg viewBox="0 0 88 58" className={clsx(frame)} data-home-scene={tileId} aria-hidden>
+    <svg viewBox="0 0 88 58" className={clsx(frame)} data-home-scene={tileId} data-home-scene-intensity={intensity} aria-hidden>
       <defs>
         <linearGradient id={`hs-metal-${uid}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#d6d3d1" />
@@ -72,8 +72,14 @@ export function HomeTileScene({
           <stop offset="0%" stopColor="#44403c" />
           <stop offset="100%" stopColor="#1c1917" />
         </linearGradient>
+        <radialGradient id={`hs-aura-${uid}`} cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stopColor="#fff7ed" stopOpacity="0.34" />
+          <stop offset="58%" stopColor="#fdba74" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#fdba74" stopOpacity="0" />
+        </radialGradient>
       </defs>
-      <ellipse cx="44" cy="54" rx="30" ry="2.8" fill="rgba(15,23,42,0.16)" />
+      <ellipse className="home-scene-aura" cx="44" cy="31" rx="38" ry="27" fill={`url(#hs-aura-${uid})`} />
+      <ellipse className="home-scene-ground" cx="44" cy="54" rx="30" ry="2.8" fill="rgba(15,23,42,0.16)" />
       {tileId === "inventory" ? <InventoryScene uid={uid} intensity={intensity} /> : null}
       {tileId === "cashPosition" ? <CashPositionScene uid={uid} intensity={intensity} /> : null}
       {tileId === "reports" ? <ReportsScene uid={uid} /> : null}
@@ -113,6 +119,7 @@ function InventoryScene({ uid, intensity }: { uid: string; intensity: HomeTileIn
       <rect x="8" y="6" width="72" height="46" rx="5" fill={`url(#hs-ink-${uid})`} />
       <rect x="10" y="8" width="68" height="40" rx="3.5" fill="#1c1917" />
       <ellipse cx="44" cy="16" rx="22" ry="6" fill="#fbbf24" opacity="0.08" />
+      <path className="home-scene-shelf-light" d="M13 10 H75" stroke="#fff7ed" strokeWidth="1.2" strokeLinecap="round" opacity="0.16" />
       {[0, 1, 2].map((row) => (
         <g key={row} className="home-scene-shelf">
           <rect x="14" y={20 + row * 11} width="60" height="2.2" rx="0.8" fill="#d6d3d1" />
@@ -153,6 +160,7 @@ function CashPositionScene({ uid, intensity }: { uid: string; intensity: HomeTil
     <g className="home-scene-cashPosition">
       <rect x="8" y="10" width="72" height="38" rx="10" fill={`url(#hs-teal-${uid})`} />
       <rect x="11" y="13" width="66" height="18" rx="6" fill="#042f2e" opacity="0.28" />
+      <path className="home-scene-cash-reflection" d="M17 16 H69" stroke="#ccfbf1" strokeWidth="2" strokeLinecap="round" opacity="0.14" />
       <g className="home-scene-flow">
         <path d="M16 24 C28 16, 40 34, 54 22 S74 18, 78 26" fill="none" stroke="#ecfdf5" strokeWidth="1.8" strokeLinecap="round" opacity="0.72" />
       </g>
@@ -186,6 +194,7 @@ function ReportsScene({ uid }: { uid: string }) {
       <rect className="home-scene-bar home-scene-bar-3" x="42" y="24" width="9" height="20" rx="1.4" fill="#f97316" />
       <rect className="home-scene-bar home-scene-bar-4" x="55" y="18" width="9" height="26" rx="1.4" fill="#ea580c" />
       <path className="home-scene-rpt-line" d="M16 32 L30 26 L44 30 L64 16" fill="none" stroke="#fed7aa" strokeWidth="2" strokeLinecap="round" />
+      <circle className="home-scene-rpt-signal" cx="64" cy="16" r="2.8" fill="#ffedd5" />
     </g>
   );
 }
@@ -198,6 +207,7 @@ function DebtsScene({ uid, intensity }: { uid: string; intensity: HomeTileIntens
       <circle className="home-scene-node home-scene-node-1" cx="22" cy="34" r="8" fill={`url(#hs-metal-${uid})`} />
       <circle className="home-scene-node home-scene-node-2" cx="40" cy="18" r="7" fill="#ddd6fe" />
       <circle className="home-scene-node home-scene-node-3" cx="66" cy="32" r="8" fill={due ? "#7c3aed" : `url(#hs-metal-${uid})`} />
+      <circle className="home-scene-link-signal" cx="40" cy="18" r="2" fill="#fde68a" opacity={due ? 0.9 : 0.35} />
       {due ? <circle className="home-scene-debt-mark" cx="66" cy="32" r="2.4" fill="#fde68a" /> : null}
     </g>
   );
@@ -215,6 +225,7 @@ function SalesHistoryScene({ uid, intensity }: { uid: string; intensity: HomeTil
         <rect x="29" y="18" width="26" height="1.8" fill="#d6d3d1" />
         <rect x="29" y="24" width="18" height="1.8" fill="#e7e5e4" />
         <rect x="29" y="30" width="22" height="1.8" fill="#e7e5e4" />
+        <circle className="home-scene-receipt-signal" cx="57" cy="35" r="2" fill="#fb923c" opacity="0.7" />
       </g>
       {busy ? (
         <g className="home-scene-receipt home-scene-receipt-3">
@@ -232,6 +243,7 @@ function BackOfficeScene({ uid }: { uid: string }) {
       <rect x="12" y="32" width="64" height="3" fill="#fde68a" opacity="0.18" />
       <rect className="home-scene-monitor" x="28" y="8" width="34" height="22" rx="2.4" fill={`url(#hs-ink-${uid})`} />
       <rect x="31" y="11" width="28" height="14" rx="1.2" fill="#99f6e4" opacity="0.55" />
+      <path className="home-scene-monitor-signal" d="M34 21 L39 18 L44 20 L49 15 L56 17" fill="none" stroke="#ecfdf5" strokeWidth="1.2" strokeLinecap="round" opacity="0.8" />
       <rect x="42" y="30" width="6" height="4" fill="#44403c" />
       <g className="home-scene-docs">
         <rect x="12" y="24" width="13" height="9" rx="1" fill="#fff" />
@@ -256,6 +268,10 @@ function ProfitScene({ uid, intensity }: { uid: string; intensity: HomeTileInten
         strokeWidth="2.2"
         strokeLinecap="round"
       />
+      <g className="home-scene-profit-coins">
+        <ellipse cx="68" cy="43" rx="6" ry="2" fill="#065f46" />
+        <ellipse cx="68" cy="40.5" rx="6" ry="2" fill="#fde68a" />
+      </g>
     </g>
   );
 }
@@ -264,7 +280,9 @@ function CommandCenterScene({ uid, intensity }: { uid: string; intensity: HomeTi
   const live = intensity === "high" || intensity === "normal";
   return (
     <g className="home-scene-commandCenter">
+      <ellipse className="home-scene-orbit" cx="44" cy="30" rx="31" ry="19" fill="none" stroke="#c7d2fe" strokeWidth="0.8" strokeDasharray="3 4" opacity="0.48" />
       <path className="home-scene-net" d="M44 16 L24 34 M44 16 L64 34 M24 34 L44 44 L64 34" fill="none" stroke="#a5b4fc" strokeWidth="1.4" />
+      <circle className="home-scene-data-packet" cx="34" cy="25" r="1.8" fill="#fde68a" />
       <circle className="home-scene-hub" cx="44" cy="16" r="5.5" fill={live ? `url(#hs-amber-${uid})` : `url(#hs-metal-${uid})`} />
       <circle className="home-scene-spoke home-scene-spoke-1" cx="24" cy="34" r="4.5" fill={`url(#hs-teal-${uid})`} />
       <circle className="home-scene-spoke home-scene-spoke-2" cx="64" cy="34" r="4.5" fill={`url(#hs-teal-${uid})`} />

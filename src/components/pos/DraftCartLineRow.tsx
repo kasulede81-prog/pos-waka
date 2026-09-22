@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Percent, Plus, Trash2 } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatDraftLineQty, formatDraftLineUnitPrice } from "../../lib/draftCart";
@@ -44,14 +44,14 @@ export function DraftCartLineRow({
 
   if (dock) {
     // Phase 33.1 — enterprise dock row: spaced meta, discount cue, always-visible remove.
-    const btnSize = sidebarCompact ? "h-9 w-9 min-h-[36px] min-w-[36px]" : "h-10 w-10 min-h-[40px] min-w-[40px]";
+    const btnSize = "h-11 w-11 min-h-[44px] min-w-[44px]";
     const iconSize = sidebarCompact ? "h-4 w-4" : "h-5 w-5";
     const discount = lineDiscountUgx(line);
     return (
       <div
         className={clsx(
           "pos-ds-cart-line border-b border-border last:border-0",
-          sidebarCompact ? "py-2" : "py-2.5",
+               sidebarCompact ? "py-2.5" : "py-3",
         )}
       >
         <div className="flex items-start gap-2">
@@ -108,7 +108,7 @@ export function DraftCartLineRow({
             aria-label={`${t(lang, "posQtyLabel")}: ${qtyLabel}`}
             className={clsx(
               "pos-ds-cart-line-qty flex flex-1 items-center justify-center rounded-lg border border-waka-300 bg-waka-50 font-black tabular-nums text-waka-950 active:bg-waka-100",
-              sidebarCompact ? "h-9 min-w-[2.5rem] px-1 text-sm" : "h-10 min-w-[3rem] px-1.5 text-base",
+               "h-11 min-w-[3rem] px-1.5 text-base",
             )}
           >
             {qtyLabel}
@@ -128,10 +128,10 @@ export function DraftCartLineRow({
               aria-label={t(lang, "discountBtn")}
               className={clsx(
                 "flex shrink-0 items-center justify-center rounded-lg border border-waka-200 bg-card font-black text-waka-900 active:bg-waka-50",
-                sidebarCompact ? "h-9 min-w-[2.25rem] px-1.5 text-[10px]" : "h-10 min-w-[2.5rem] px-2 text-xs",
+               "h-11 min-w-[2.75rem] px-2 text-xs",
               )}
             >
-              %
+              <Percent className="size-4" aria-hidden />
             </button>
           ) : null}
           <button
@@ -143,7 +143,7 @@ export function DraftCartLineRow({
               btnSize,
             )}
           >
-            ✕
+            <Trash2 className="size-4" aria-hidden />
           </button>
         </div>
       </div>

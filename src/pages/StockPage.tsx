@@ -6,7 +6,7 @@ import {
 import { actorCanSeeInventoryCostValue } from "../lib/inventoryFinancialVisibility";
 import { countInventoryStockStatus } from "../lib/inventoryWorkspaceStats";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "@/lib/routerCompat";
 import clsx from "clsx";
 import { useShallow } from "zustand/react/shallow";
 import type { Language, Product } from "../types";

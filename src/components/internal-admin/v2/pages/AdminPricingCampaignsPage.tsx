@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, Loader2, Percent, RefreshCw, Tag } from "lucide-react";
+import { Link } from "@/lib/routerCompat";
+import { ArrowLeft, Percent, RefreshCw, Tag } from "lucide-react";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
   CANONICAL_PLAN_PRICES,
@@ -25,6 +25,7 @@ import {
 } from "../../../../lib/pricingCampaignsAdmin";
 import { adminPermissions } from "../adminRoles";
 import { WakaSwitch } from "../../../enterprise/WakaSwitch";
+import { EnterpriseSkeletonList } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -241,11 +242,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading pricing campaigns…
-      </div>
-    );
+    return <EnterpriseSkeletonList variant="card" count={3} />;
   }
 
   return (

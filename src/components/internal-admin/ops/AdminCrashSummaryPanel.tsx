@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchCrashSummary, type CrashSummary } from "../../../lib/internalOpsHardening";
 import { internalAdminShopHref } from "../../../lib/internalAdminPreview";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 
 type Props = { previewMode?: boolean };
 

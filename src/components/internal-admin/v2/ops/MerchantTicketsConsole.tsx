@@ -30,6 +30,7 @@ import { MessageAttachments } from "../../../support/MessageAttachments";
 import { AdminLiveSessionPanel } from "./AdminLiveSessionPanel";
 import { whatsappUrlFromPhone } from "../../../../lib/wakaInternalAdmin";
 import type { Language } from "../../../../types";
+import { WakaSupportQueueSkeleton, WakaInlineLoading, WakaStatePanel } from "../../../enterprise/WakaLoading";
 
 type Props = {
   lang: Language;
@@ -223,12 +224,12 @@ export function MerchantTicketsConsole({ lang, canWorkTickets, previewMode }: Pr
           Preview mode — replies and status changes are disabled.
         </p>
       ) : null}
-      {error ? <p className="mt-3 text-xs font-bold text-rose-600">{error}</p> : null}
+      {error ? <WakaStatePanel className="mt-3 py-5" tone="error" title="Unable to load tickets" description={error} action={{ label: "Retry", onClick: () => void reload(filter) }} /> : null}
       {notice ? <p className="mt-3 text-xs font-bold text-rose-600">{notice}</p> : null}
 
       <div className="mt-3 space-y-2">
         {loading && tickets.length === 0 ? (
-          [1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />)
+          <WakaSupportQueueSkeleton />
         ) : tickets.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
             <MessageSquare className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden />
@@ -271,11 +272,7 @@ export function MerchantTicketsConsole({ lang, canWorkTickets, previewMode }: Pr
                 {expanded ? (
                   <div className="border-t border-border bg-card px-3 py-3">
                     {messagesLoading === tk.id ? (
-                      <div className="space-y-2">
-                        {[1, 2].map((i) => (
-                          <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
-                        ))}
-                      </div>
+                      <WakaSupportQueueSkeleton count={2} />
                     ) : (
                       <ul className="space-y-2">
                         {(messagesByTicket[tk.id] ?? []).map((m) => (
@@ -385,7 +382,7 @@ export function MerchantTicketsConsole({ lang, canWorkTickets, previewMode }: Pr
                             className="flex h-11 items-center gap-1.5 rounded-xl bg-gradient-to-br from-waka-500 to-orange-600 px-4 text-sm font-black text-white shadow-sm transition-transform active:scale-95 disabled:opacity-40"
                           >
                             <SendHorizonal className="h-4 w-4" aria-hidden />
-                            {busyId === tk.id ? "…" : "Send"}
+                            {busyId === tk.id ? <WakaInlineLoading label="Sending…" className="text-white" /> : "Send"}
                           </button>
                         </div>
                       </div>

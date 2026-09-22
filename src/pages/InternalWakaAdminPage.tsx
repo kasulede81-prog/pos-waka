@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "@/lib/routerCompat";
 import type { Language } from "../types";
 import { fetchWakaInternalAdminMe, type WakaInternalAdminRow } from "../lib/wakaInternalAdmin";
 import {
@@ -25,6 +25,7 @@ import { AdminReleaseManagementPage } from "../components/internal-admin/v2/page
 import { AdminPlatformSubscriptionSettingsPage } from "../components/internal-admin/v2/pages/AdminPlatformSubscriptionSettingsPage";
 import { AdminPosDisplayScalePage } from "../components/internal-admin/v2/pages/AdminPosDisplayScalePage";
 import { AdminRemoteSupportSettingsPage } from "../components/internal-admin/v2/pages/AdminRemoteSupportSettingsPage";
+import { AdminPlatformPage } from "../components/internal-admin/v2/pages/AdminPlatformPage";
 
 type Props = {
   lang: Language;
@@ -50,6 +51,7 @@ function sectionFromPath(pathname: string): AdminSectionId {
   if (pathname === "/internal/waka/releases") return "releases";
   if (pathname === "/internal/waka/display-scale") return "display_scale";
   if (pathname === "/internal/waka/remote-support") return "remote_support";
+  if (pathname === "/internal/waka/platform") return "platform";
   return "overview";
 }
 
@@ -82,7 +84,9 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   );
 
   let body: React.ReactNode;
-  if (section === "shops") {
+  if (section === "platform") {
+    body = <AdminPlatformPage adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "shops") {
     body = <AdminShopsPage lang={lang} adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "devices") {
     body = <AdminDevicesPage adminRow={shellAdmin} previewMode={previewMode} />;

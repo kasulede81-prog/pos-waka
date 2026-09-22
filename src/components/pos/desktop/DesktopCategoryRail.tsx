@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
+import { ArrowLeft, LayoutGrid } from "lucide-react";
 import { CATEGORY_FILTER_ALL } from "../../../lib/productCategories";
 import type { PosShelfCard } from "../../../lib/posShelfOrder";
 import { desktopCategoryShelvesForDisplay } from "../../../lib/desktopCategoryNav";
@@ -37,7 +38,7 @@ export function DesktopCategoryRail({
 
   return (
     <nav
-      className={clsx("desktop-pos-category-rail flex min-h-0 flex-col gap-1 overflow-y-auto overscroll-y-contain p-1.5", className)}
+      className={clsx("desktop-pos-category-rail flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-y-contain p-2", className)}
       aria-label={t(lang, "posSellLandingShelves")}
     >
       {showBack ? (
@@ -47,7 +48,8 @@ export function DesktopCategoryRail({
           className="w-full justify-start px-3 text-left"
           onClick={() => onBack?.()}
         >
-          ← {t(lang, "posSellCategoryHeading")}
+          <ArrowLeft className="size-4 shrink-0" aria-hidden />
+          {t(lang, "posSellCategoryHeading")}
         </DesktopPosButton>
       ) : null}
       {showAll ? (
@@ -58,6 +60,7 @@ export function DesktopCategoryRail({
           className="w-full justify-start px-3 text-left"
           onClick={() => onSelect(CATEGORY_FILTER_ALL)}
         >
+          <LayoutGrid className="size-4 shrink-0" aria-hidden />
           {t(lang, "posCategoryAll")}
         </DesktopPosButton>
       ) : null}

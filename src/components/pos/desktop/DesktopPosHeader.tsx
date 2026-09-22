@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { ArrowLeft, Clock, Languages } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import type { Language, ShiftRecord } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { formatShiftDuration } from "../../../lib/shiftEnforcement";

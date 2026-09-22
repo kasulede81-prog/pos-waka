@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import clsx from "clsx";
 import { Banknote, ChevronDown, Clock, ShoppingCart, User, Wallet } from "lucide-react";
 import type { Language, ShiftRecord } from "../../types";

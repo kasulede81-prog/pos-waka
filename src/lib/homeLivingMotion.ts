@@ -1,16 +1,5 @@
 import type { CashDrawerAuditEntry } from "../types";
 
-/** Ambient cycle lengths — compositor-only, 12–30s. */
-export const HOME_LIVING_AMBIENT_S = {
-  shell: 20,
-  drift: 26,
-  wash: 24,
-  hero: 16,
-  icon: 18,
-  drawerIdle: 16,
-  status: 3.6,
-} as const;
-
 export type HomeDrawerKick = {
   id: string;
   ok: boolean;

@@ -8,6 +8,7 @@ import { resolveHomeWorldSurface } from "../../lib/homeWorldSurface";
 import { HomeTileScene } from "./scenes/HomeTileScene";
 import { HomeLiveValue } from "./HomeLiveValue";
 import { HOME_MOBILE_TYPE } from "../../lib/homeMobileComposition";
+import { useHomeTileVisibility } from "../../hooks/useHomeTileVisibility";
 
 type Props = {
   lang: Language;
@@ -18,10 +19,11 @@ type Props = {
 
 /** Compact system-control list — not another 2×2 card grid. */
 export function MobileHomeAdminList({ lang, tiles, liveStats, onOpen }: Props) {
+  const visibility = useHomeTileVisibility();
   if (tiles.length === 0) return null;
 
   return (
-    <section className="home-mobile-admin" aria-label={t(lang, "homeModulesAdmin")}>
+    <section ref={visibility.setElement} className="home-mobile-admin" aria-label={t(lang, "homeModulesAdmin")}>
       <h2 className={`${HOME_MOBILE_TYPE.section} mb-2`}>{t(lang, "homeModulesAdmin")}</h2>
       <ul className="home-mobile-admin__list">
         {tiles.map((tile) => {

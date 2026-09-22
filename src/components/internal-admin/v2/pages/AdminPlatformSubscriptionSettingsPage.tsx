@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
   adminUpdatePlatformSubscriptionSettings,
@@ -10,6 +9,7 @@ import {
 import { ADMIN_PLAN_CODES, type AdminPlanCode } from "../../../../lib/subscriptionEngine";
 import { isSuperAdmin, normalizeAdminRole } from "../adminRoles";
 import { WakaSwitch } from "../../../enterprise/WakaSwitch";
+import { EnterpriseSkeletonForm } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -63,11 +63,7 @@ export function AdminPlatformSubscriptionSettingsPage({ adminRow, previewMode = 
   const reminderStr = draft.subscriptionReminderDays.join(", ");
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
-    );
+    return <EnterpriseSkeletonForm fields={6} />;
   }
 
   return (

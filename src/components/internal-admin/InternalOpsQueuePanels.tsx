@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import { Trash2 } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";

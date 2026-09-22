@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import type { Language } from "../../../../types";
 import { t } from "../../../../lib/i18n";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
@@ -7,6 +7,7 @@ import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
 import { PlanCardV2 } from "../primitives";
 import { InternalOpsQueuePanels } from "../../InternalOpsQueuePanels";
+import { EnterpriseSkeletonList } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   lang: Language;
@@ -43,11 +44,7 @@ export function AdminBillingPage({ lang, adminRow, previewMode }: Props) {
 
       <div className="space-y-3">
         {data.opsLoading && data.plans.length === 0 ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />
-            ))}
-          </div>
+          <EnterpriseSkeletonList variant="kpi" count={3} />
         ) : data.plans.length === 0 ? (
           <p className="rounded-2xl border border-border bg-card px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
             No billing plan metrics yet.

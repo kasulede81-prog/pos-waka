@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Upload } from "lucide-react";
 import { parsePilotDiagnosticsJson, type ParsedPilotDiagnostics } from "../../../lib/pilotDiagnosticsParse";
 import { internalAdminShopTabHref } from "../../../lib/internalAdminPreview";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 
 type Props = {
   previewMode?: boolean;
@@ -124,10 +124,10 @@ export function AdminDiagnosticsImportPanel({
           ) : null}
           {shopId ? (
             <Link
-              to={internalAdminShopTabHref(shopId, "developer", previewMode)}
+              to={internalAdminShopTabHref(shopId, "advanced", previewMode)}
               className="mt-2 inline-flex min-h-[40px] items-center rounded-xl bg-teal-700 px-4 text-xs font-black text-white"
             >
-              Open rescue console →
+              Open advanced workspace →
             </Link>
           ) : null}
         </dl>

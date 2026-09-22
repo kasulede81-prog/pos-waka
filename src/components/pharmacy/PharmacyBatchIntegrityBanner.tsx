@@ -3,7 +3,7 @@ import type { Language, Product } from "../../types";
 import { t } from "../../lib/i18n";
 import { computeBatchIntegrity } from "../../lib/pharmacyBatches";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 
 type Props = {
   lang: Language;

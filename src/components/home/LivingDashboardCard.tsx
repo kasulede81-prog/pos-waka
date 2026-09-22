@@ -1,4 +1,5 @@
-import type { CSSProperties, PointerEvent, Ref } from "react";
+import { memo, useCallback } from "react";
+import type { CSSProperties, PointerEvent } from "react";
 import clsx from "clsx";
 import { ChevronRight } from "lucide-react";
 import type { ResolvedHomeTile } from "../../lib/launcherTiles";
@@ -11,6 +12,8 @@ import { usePosStore } from "../../store/usePosStore";
 import { enterpriseMotion } from "../../lib/enterpriseMotion";
 import { resolveHomeWorldSurface } from "../../lib/homeWorldSurface";
 import { useHomeTileParallax } from "../../hooks/useHomeTileParallax";
+import { useHomeTileVisibility } from "../../hooks/useHomeTileVisibility";
+import { useHomeTileSpotlightActive, type HomeTileSpotlightStore } from "../../hooks/useHomeTileSpotlight";
 import { HomeTileArt } from "./tiles/HomeTileArt";
 import { HomeTileScene } from "./scenes/HomeTileScene";
 import { HomeCashDrawerScene } from "./HomeCashDrawerScene";
@@ -22,10 +25,10 @@ import { HOME_TYPE_SCALE } from "../../lib/homeComposition";
 type Props = {
   tile: ResolvedHomeTile;
   lang: Language;
-  spotlight: boolean;
+  spotlightStore: HomeTileSpotlightStore;
+  spotlightEligible: boolean;
   liveStat?: HomeTileLiveStat;
-  buttonRef?: Ref<HTMLButtonElement>;
-  onClick?: () => void;
+  onOpen: (to: string) => void;
   onPointerDown?: (e: PointerEvent<HTMLButtonElement>) => void;
   /** Phase 34.1 — calm enterprise cards by default; living = legacy gradient art. */
   appearance?: "enterprise" | "living";
@@ -46,13 +49,13 @@ type Props = {
  * Home module card — HOME REMIX V6.
  * Colored miniature scene first; KPI text remains the authority.
  */
-export function LivingDashboardCard({
+function LivingDashboardCardComponent({
   tile,
   lang,
-  spotlight,
+  spotlightStore,
+  spotlightEligible,
   liveStat,
-  buttonRef,
-  onClick,
+  onOpen,
   onPointerDown,
   appearance = "enterprise",
   density = "comfortable",
@@ -62,13 +65,20 @@ export function LivingDashboardCard({
   drawerKick = null,
   onDrawerKickSettled,
 }: Props) {
+  const spotlight = useHomeTileSpotlightActive(spotlightStore, tile.id, spotlightEligible);
   const theme = homeDashboardTheme(tile.id);
   const hapticsOn = usePosStore((s) => s.preferences.hapticsOn !== false);
   const pointer = useHomeTileParallax(pointerMotion && appearance === "enterprise");
+  const visibility = useHomeTileVisibility();
+
+  const setButton = useCallback((element: HTMLButtonElement | null) => {
+    pointer.setElement(element);
+    visibility.setElement(element);
+  }, [pointer.setElement, visibility.setElement]);
 
   const handleClick = () => {
     if (hapticsOn) hapticTap();
-    onClick?.();
+    onOpen(tile.to);
   };
 
   if (appearance === "enterprise") {
@@ -79,7 +89,7 @@ export function LivingDashboardCard({
     const showArt = !cash;
     return (
       <button
-        ref={buttonRef}
+        ref={setButton}
         type="button"
         data-launcher-key={tile.id}
         data-tile-intensity={liveStat?.intensity ?? "calm"}
@@ -90,7 +100,10 @@ export function LivingDashboardCard({
         onClick={handleClick}
         onPointerDown={onPointerDown}
         onPointerMove={pointer.onPointerMove}
+        onPointerEnter={pointer.onPointerEnter}
         onPointerLeave={pointer.onPointerLeave}
+        onFocus={visibility.onFocus}
+        onBlur={visibility.onBlur}
         style={pointer.cardStyle}
         className={clsx(
           "home-module-card home-module-card--living home-module-card--world group relative flex w-full touch-manipulation flex-col overflow-hidden rounded-2xl border text-left",
@@ -114,6 +127,7 @@ export function LivingDashboardCard({
       >
         <span className="home-module-card__spot" aria-hidden />
         <span className="home-module-card__atmosphere" aria-hidden />
+        {liveStat ? <span key={liveStat.value} className="home-module-card__event-light" aria-hidden /> : null}
         {showArt ? (
           <div
             className={clsx(
@@ -132,37 +146,38 @@ export function LivingDashboardCard({
         ) : null}
 
         <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
-          <div
-            className={clsx("home-tile-icon", staged ? "mb-2 w-full" : "mb-1.5")}
-            style={pointer.sceneStyle}
-          >
-            {cash ? (
-              <HomeCashDrawerScene
-                state={drawerState}
-                intensity={liveStat?.intensity}
-                className={
-                  staged
-                    ? "h-[4.75rem] w-full sm:h-[5.25rem]"
-                    : "h-12 w-[4.5rem] sm:h-[3.25rem] sm:w-[4.75rem]"
-                }
-                onOpenSettled={onDrawerKickSettled}
-              />
-            ) : staged ? (
-              <HomeTileScene
-                tileId={tile.id}
-                intensity={liveStat?.intensity}
-                density="stage"
-                drawerState={drawerState}
-                onDrawerKickSettled={onDrawerKickSettled}
-              />
-            ) : (
-              <HomeTileScene
-                tileId={tile.id}
-                intensity={liveStat?.intensity}
-                density="inline"
-                drawerState={drawerState}
-              />
-            )}
+          <div className={clsx("home-tile-parallax", staged ? "mb-2 w-full" : "mb-1.5")} style={pointer.sceneStyle}>
+            <div className="home-tile-interaction">
+              <div className="home-tile-icon">
+                {cash ? (
+                  <HomeCashDrawerScene
+                    state={drawerState}
+                    intensity={liveStat?.intensity}
+                    className={
+                      staged
+                        ? "h-[4.75rem] w-full sm:h-[5.25rem]"
+                        : "h-12 w-[4.5rem] sm:h-[3.25rem] sm:w-[4.75rem]"
+                    }
+                    onOpenSettled={onDrawerKickSettled}
+                  />
+                ) : staged ? (
+                  <HomeTileScene
+                    tileId={tile.id}
+                    intensity={liveStat?.intensity}
+                    density="stage"
+                    drawerState={drawerState}
+                    onDrawerKickSettled={onDrawerKickSettled}
+                  />
+                ) : (
+                  <HomeTileScene
+                    tileId={tile.id}
+                    intensity={liveStat?.intensity}
+                    density="inline"
+                    drawerState={drawerState}
+                  />
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="min-w-0 pr-5">
@@ -199,7 +214,6 @@ export function LivingDashboardCard({
 
   return (
     <button
-      ref={buttonRef}
       type="button"
       data-launcher-key={tile.id}
       data-tile-intensity={liveStat?.intensity ?? "calm"}
@@ -225,3 +239,5 @@ export function LivingDashboardCard({
     </button>
   );
 }
+
+export const LivingDashboardCard = memo(LivingDashboardCardComponent);

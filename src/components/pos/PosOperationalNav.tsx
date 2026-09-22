@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { actorHasPermission } from "../../lib/actorAuthorization";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "@/lib/routerCompat";
 import clsx from "clsx";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
 import type { Language } from "../../types";

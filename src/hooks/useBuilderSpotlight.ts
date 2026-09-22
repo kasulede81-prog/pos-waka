@@ -13,18 +13,13 @@ const SPOTLIGHT_ZONES = [
 
 export type BuilderSpotlightZone = (typeof SPOTLIGHT_ZONES)[number];
 
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 /** One scene zone animates at a time — reuses dashboard spotlight pattern. */
 export function useBuilderSpotlight(paused: boolean): BuilderSpotlightZone | null {
   const [active, setActive] = useState<BuilderSpotlightZone | null>(null);
   const indexRef = useRef(0);
 
   useEffect(() => {
-    if (paused || prefersReducedMotion()) {
+    if (paused) {
       setActive(null);
       return;
     }

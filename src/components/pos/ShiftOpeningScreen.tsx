@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { actorHasPermission, actorHasEffectivePermission } from "../../lib/actorAuthorization";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 

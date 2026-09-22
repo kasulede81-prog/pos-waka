@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "@/lib/routerCompat";
 import clsx from "clsx";
 import { Search, ShieldAlert } from "lucide-react";
 import type { OpsActivationRow } from "../../../../lib/businessActivation";
@@ -48,7 +48,7 @@ import { BottomSheet } from "../primitives";
 const STATUS_STYLES = {
   healthy: "bg-emerald-500 shadow-emerald-500/40",
   warning: "bg-amber-500 shadow-amber-500/40",
-  critical: "bg-rose-500 shadow-rose-500/40 animate-pulse",
+  critical: "bg-rose-500 shadow-rose-500/40 animate-pulse motion-reduce:animate-none",
 };
 
 export function SystemStatusCenter({ health }: { health: SystemHealthSnapshot }) {
@@ -489,6 +489,8 @@ export function GlobalSearchBar({
       >
         <Search className={clsx("h-4 w-4 shrink-0", compact ? "text-white/70" : "text-muted-foreground")} />
         <input
+           data-admin-global-search
+           aria-label="Search WAKA Operations"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);

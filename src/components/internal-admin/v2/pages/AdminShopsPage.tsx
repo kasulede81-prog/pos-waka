@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import type { Language } from "../../../../types";
 import { internalAdminShopHref, PREVIEW_RECENT_SHOPS } from "../../../../lib/internalAdminPreview";
 import {
@@ -15,6 +15,8 @@ import { computeShopHealth } from "../../../../lib/internalOpsIntelligence";
 import { adminPermissions } from "../adminRoles";
 import { MassActionBar, SupportTagsRow } from "../ops/OpsWidgets";
 import { EmptyState, ShopCard } from "../primitives";
+import { Search, Store, RotateCw } from "lucide-react";
+import { WakaCustomerListSkeleton, WakaInlineLoading } from "../../../enterprise/WakaLoading";
 
 const SHOPS_PAGE_SIZE = 25;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -198,7 +200,8 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
   return (
     <div className="space-y-4 pb-20">
       <div>
-        <h1 className="text-xl font-black text-foreground">Shops</h1>
+        <p className="text-[11px] font-black uppercase text-waka-500">Find customer</p>
+        <h1 className="mt-1 text-2xl font-black text-foreground">Customers</h1>
         <p className="text-sm text-muted-foreground">
           {filtered.length}
           {previewMode ? ` of ${PREVIEW_RECENT_SHOPS.length}` : hasMore ? "+" : ""} loaded ·{" "}
@@ -208,17 +211,21 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           Status, plan, and district filter loaded results only.
         </p>
         <p className="mt-1 text-xs font-semibold text-amber-900">
-          Open a shop → yellow <strong>Account recovery</strong> card to reset owner login or clear Shop Security PIN.
+          Search returns real matching shops. Open one Customer Workspace for support, devices, account recovery and history.
         </p>
       </div>
 
-      <input
-        type="search"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search name, shop number, owner…"
-        className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
-      />
+      <label className="relative block">
+        <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search customer, shop number, owner email or phone…"
+          aria-label="Find customer"
+          className="w-full rounded-lg border border-waka-500/50 bg-card py-4 pl-12 pr-4 text-base font-semibold outline-none focus:ring-2 focus:ring-ring"
+        />
+      </label>
 
       <div className="flex flex-wrap gap-2">
         {(["all", "active", "inactive"] as const).map((s) => (
@@ -291,15 +298,11 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
       ) : null}
 
       {listLoading && !filtered.length ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
-          ))}
-        </div>
+        <WakaCustomerListSkeleton />
       ) : searchError && !filtered.length ? (
-        <EmptyState>{emptyMessage}</EmptyState>
+        <EmptyState><RotateCw className="mx-auto mb-2 size-5" aria-hidden />{emptyMessage}</EmptyState>
       ) : filtered.length === 0 ? (
-        <EmptyState>{emptyMessage}</EmptyState>
+        <EmptyState><Store className="mx-auto mb-2 size-5" aria-hidden />{emptyMessage}</EmptyState>
       ) : (
         <ul className="space-y-3">
           {filtered.map((s) => {
@@ -343,7 +346,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           disabled={loadingMore}
           className="min-h-[44px] w-full rounded-2xl bg-card text-sm font-black text-waka-800 ring-1 ring-border disabled:opacity-60"
         >
-          {loadingMore ? "Loading…" : "Load more"}
+          {loadingMore ? <WakaInlineLoading label="Loading more…" className="justify-center" /> : "Load more"}
         </button>
       ) : null}
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
   adminShopDeviceSetActive,
@@ -14,6 +14,8 @@ import { AppVersionPanel, DeviceFleetCard } from "../ops/OpsWidgets";
 import { EmptyState } from "../primitives";
 import { AdminDeviceForensicsPanel } from "../../ops/AdminDeviceForensicsPanel";
 import { RemoteSupportConnectControl } from "../../../remote-support/RemoteSupportConnectControl";
+import { MonitorX } from "lucide-react";
+import { WakaSupportQueueSkeleton, WakaInlineLoading } from "../../../enterprise/WakaLoading";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -103,13 +105,9 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
       </div>
 
       {data.opsLoading && !list.length ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-2xl bg-muted" />
-          ))}
-        </div>
+        <WakaSupportQueueSkeleton />
       ) : list.length === 0 ? (
-        <EmptyState>No devices match.</EmptyState>
+        <EmptyState><MonitorX className="mx-auto mb-2 size-5" aria-hidden />No devices match.</EmptyState>
       ) : (
         <ul className="space-y-3">
           {list.map((d) => (
@@ -129,7 +127,7 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
                 canRemoteSupport={perms.canRemoteSupport}
                 previewMode={previewMode}
               />
-              {busyId === d.id ? <p className="text-center text-xs font-bold text-muted-foreground">Updating…</p> : null}
+              {busyId === d.id ? <WakaInlineLoading label="Updating device…" className="mt-2 flex justify-center text-xs" /> : null}
             </li>
           ))}
         </ul>

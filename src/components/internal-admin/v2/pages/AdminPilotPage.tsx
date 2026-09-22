@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import { KpiPulseCard } from "../primitives";
 import {
@@ -16,6 +16,7 @@ import { AdminCrashSummaryPanel } from "../../ops/AdminCrashSummaryPanel";
 import { AdminMigrationStatusPanel } from "../../ops/AdminMigrationStatusPanel";
 import { DeveloperSystemHealthPanel } from "../../../settings/DeveloperSystemHealthPanel";
 import { adminPermissions } from "../adminRoles";
+import { EnterpriseSkeletonKpiGrid } from "../../../enterprise/EnterpriseSkeleton";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -105,7 +106,7 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
       <AdminOperationalAlertsPanel previewMode={previewMode} />
 
       {loading && !metrics ? (
-        <p className="text-sm text-muted-foreground">Loading pilot metrics…</p>
+        <EnterpriseSkeletonKpiGrid count={6} />
       ) : metrics ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

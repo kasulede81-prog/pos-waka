@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { ModalSheet } from "./layout/ModalSheet";

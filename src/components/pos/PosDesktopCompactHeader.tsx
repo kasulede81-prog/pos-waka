@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import clsx from "clsx";
 import { ArrowLeft, CheckCircle2, Clock, Languages } from "lucide-react";
 import type { Language, ShiftRecord } from "../../types";

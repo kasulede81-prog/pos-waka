@@ -1,22 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
-import { ChevronDown } from "lucide-react";
+import { Activity, ChevronDown, CircleUserRound, Headphones, History, KeyRound, Loader2, MonitorSmartphone, RefreshCw, Settings2, ShieldAlert } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { enterpriseIconClass, ENTERPRISE_ICON_STROKE } from "../../../../lib/enterpriseIcons";
 import type { ShopConsoleTab } from "../../../../lib/shopConsoleState";
 import { SHOP_CONSOLE_TABS } from "../../../../lib/shopConsoleState";
 import type { ShopConsoleState } from "./useShopConsoleState";
 
 const TAB_LABELS: Record<ShopConsoleTab, string> = {
-  overview: "Overview",
-  business: "Business",
-  devices: "Devices",
-  subscriptions: "Subscriptions",
-  activity: "Activity",
-  audit: "Audit",
-  security: "Security",
+  summary: "Summary",
   support: "Support",
-  developer: "Developer",
-  ai: "AI",
-  vision: "Vision",
+  devices: "Devices",
+  account: "Account",
+  history: "History",
+  platform: "Platform",
+  advanced: "Advanced",
+};
+
+const TAB_ICONS: Record<ShopConsoleTab, LucideIcon> = {
+  summary: Activity,
+  support: Headphones,
+  devices: MonitorSmartphone,
+  account: CircleUserRound,
+  history: History,
+  platform: Settings2,
+  advanced: ShieldAlert,
 };
 
 export type ShopConsoleQuickHandlers = {
@@ -48,20 +56,24 @@ export function ShopConsoleTabBar({ activeTab, onTabChange }: Pick<Props, "activ
       aria-label="Shop console sections"
     >
       <div className="flex gap-1 overflow-x-auto py-2 [-webkit-overflow-scrolling:touch]">
-        {SHOP_CONSOLE_TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            data-tab={tab}
-            onClick={() => onTabChange(tab)}
-            className={clsx(
-              "shrink-0 rounded-xl px-3 py-2 text-xs font-black transition min-h-[40px]",
-              activeTab === tab ? "bg-waka-600 text-white shadow-sm" : "bg-card text-muted-foreground ring-1 ring-border",
-            )}
-          >
-            {TAB_LABELS[tab]}
-          </button>
-        ))}
+        {SHOP_CONSOLE_TABS.map((tab) => {
+          const Icon = TAB_ICONS[tab];
+          return (
+            <button
+              key={tab}
+              type="button"
+              data-tab={tab}
+              onClick={() => onTabChange(tab)}
+              className={clsx(
+                "inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-black transition",
+                activeTab === tab ? "bg-waka-600 text-white shadow-sm" : "bg-card text-muted-foreground ring-1 ring-border",
+              )}
+            >
+              <Icon className={enterpriseIconClass("sm")} strokeWidth={ENTERPRISE_ICON_STROKE} aria-hidden />
+              {TAB_LABELS[tab]}
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
@@ -87,9 +99,10 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
             type="button"
             disabled={busy}
             onClick={quickHandlers.onResetPassword}
-            className="min-h-[36px] rounded-xl bg-waka-600 px-3 text-[11px] font-black text-white disabled:opacity-40"
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-waka-600 px-3 text-[11px] font-black text-white disabled:opacity-40"
           >
-            Reset Password
+            {busy ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden /> : <KeyRound className="size-3.5" aria-hidden />}
+            {busy ? "Working…" : "Reset Password"}
           </button>
         ) : null}
         {canSupport ? (
@@ -97,9 +110,10 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
             type="button"
             disabled={busy}
             onClick={quickHandlers.onForceSync}
-            className="min-h-[36px] rounded-xl border border-border px-3 text-[11px] font-black disabled:opacity-40"
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border px-3 text-[11px] font-black disabled:opacity-40"
           >
-            Force Sync
+            <RefreshCw className={clsx("size-3.5", busy && "animate-spin motion-reduce:animate-none")} aria-hidden />
+            {busy ? "Syncing…" : "Force Sync"}
           </button>
         ) : null}
         {canSupport ? (
@@ -108,13 +122,14 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
             disabled={busy}
             onClick={quickHandlers.onSuspendOrReactivate}
             className={clsx(
-              "min-h-[36px] rounded-xl px-3 text-[11px] font-black disabled:opacity-40",
+              "inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 text-[11px] font-black disabled:opacity-40",
               detail.shop.is_active
                 ? "border border-rose-200 text-rose-800"
                 : "border border-emerald-300 text-emerald-900",
             )}
           >
-            {suspendLabel}
+            <ShieldAlert className="size-3.5" aria-hidden />
+            {busy ? "Updating…" : suspendLabel}
           </button>
         ) : null}
         <button
@@ -133,10 +148,10 @@ export function ShopConsoleQuickActions({ activeTab, onTabChange, ctx, onOpenAct
         </button>
         <button
           type="button"
-          onClick={() => go("audit")}
+          onClick={() => go("history")}
           className="min-h-[36px] rounded-xl border border-border px-3 text-[11px] font-black"
         >
-          Open Audit
+          Open History
         </button>
         <div className="relative">
           <button

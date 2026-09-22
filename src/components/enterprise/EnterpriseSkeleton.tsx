@@ -18,13 +18,13 @@ type Props = {
 };
 
 const VARIANT_CLASS: Record<Variant, string> = {
-  line: "h-4 w-full rounded-lg",
-  card: "h-28 w-full rounded-2xl",
-  "list-row": "h-[72px] w-full rounded-2xl",
-  kpi: "h-24 w-full rounded-2xl",
+  line: "h-4 w-full rounded-md",
+  card: "h-28 w-full rounded-lg",
+  "list-row": "h-[72px] w-full rounded-lg",
+  kpi: "h-24 w-full rounded-lg",
   "table-row": "h-11 w-full rounded-lg",
-  "form-field": "h-12 w-full rounded-xl",
-  avatar: "h-12 w-12 rounded-2xl",
+  "form-field": "h-12 w-full rounded-lg",
+  avatar: "h-12 w-12 rounded-lg",
   chip: "h-8 w-20 rounded-full",
 };
 

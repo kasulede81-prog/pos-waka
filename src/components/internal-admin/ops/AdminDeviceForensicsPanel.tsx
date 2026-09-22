@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { searchDevices, type DeviceSearchHit } from "../../../lib/internalOpsHardening";
 import { internalAdminShopHref } from "../../../lib/internalAdminPreview";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 
 type Props = { previewMode?: boolean };
 

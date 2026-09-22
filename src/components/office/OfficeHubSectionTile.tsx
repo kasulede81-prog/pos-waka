@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import clsx from "clsx";
 import type { CSSProperties, PointerEvent } from "react";
 import type { ResolvedOfficeHubSection } from "../../lib/officeHubSections";

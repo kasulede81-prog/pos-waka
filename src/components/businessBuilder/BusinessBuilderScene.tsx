@@ -212,6 +212,7 @@ export function BusinessBuilderScene({ className, lang = "en" }: Props) {
         {/* OPEN sign */}
         {scene.isOpen ? (
           <g transform="translate(48, 118)" className="builder-open-sign">
+            <rect className="builder-open-sign-glow" x="-3" y="-3" width="58" height="34" rx="7" fill="#ffffff" opacity="0" />
             <rect x="0" y="0" width="52" height="28" rx="4" fill="#15803d" stroke="#14532d" strokeWidth="2" />
             <text x="26" y="18" textAnchor="middle" fontSize="9" fontWeight="900" fill="#fff">
               OPEN
