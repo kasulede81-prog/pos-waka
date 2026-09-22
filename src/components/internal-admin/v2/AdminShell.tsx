@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, Navigate, useLocation, useNavigate } from "@/lib/routerCompat";
 import { ArrowLeft, Boxes, Headphones, LayoutDashboard, Settings2 } from "lucide-react";

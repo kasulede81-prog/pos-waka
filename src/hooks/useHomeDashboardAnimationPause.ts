@@ -18,7 +18,6 @@ let initialized = false;
 let paused = false;
 let manualPause = false;
 let lowBattery = false;
-let battery: BatteryManager | null = null;
 
 function resolvePaused(): boolean {
   if (typeof window === "undefined") return false;
@@ -48,7 +47,6 @@ function initialize() {
   const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryManager> };
   if (nav.getBattery) {
     void nav.getBattery().then((manager) => {
-      battery = manager;
       const syncBattery = () => {
         lowBattery = !manager.charging && manager.level < 0.2;
         publishPauseState();

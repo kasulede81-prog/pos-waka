@@ -6,7 +6,6 @@ import {
   whatsappUrlFromPhone,
 } from "../../../../../lib/wakaInternalAdmin";
 import { t } from "../../../../../lib/i18n";
-import { runShopConsoleRescueAction } from "../rescueRun";
 import type { ShopConsoleState } from "../useShopConsoleState";
 
 type Props = { ctx: ShopConsoleState };
