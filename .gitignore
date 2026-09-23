@@ -16,10 +16,17 @@ dist-ssr
 .env.staging.local
 .env.production.local
 supabase/functions/.env
+supabase/functions/.env.wallet-secrets
 !.env.example
 !.env.development.example
 !.env.staging.example
 !.env.production.example
+
+# Google Wallet / GCP service-account keys (never commit)
+docs/waka-uganda-*.json
+**/waka-uganda-*-*.json
+*service-account*.json
+*-firebase-adminsdk-*.json
 
 android/local.properties
 
