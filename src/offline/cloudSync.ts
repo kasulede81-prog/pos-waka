@@ -1090,37 +1090,14 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
   // header and the server rejected the sale with subtotal_mismatch.) Once a sale is completed on the server
   // this payload is never applied again (shop_push_sale_complete acknowledges without mutating).
   const activeLines = sale.lines.map(ensureSaleLineId);
-  return {
-    sale: {
-      id: sale.id,
-      customer_id: sale.customerId && isUuid(sale.customerId) ? sale.customerId : null,
-      payment_status: header.debtUgx > 0 ? "partial" : "paid",
-      subtotal_ugx: header.subtotalUgx,
-      tax_ugx: 0,
-      discount_ugx: header.discountTotalUgx,
-      total_ugx: header.totalUgx,
-      cash_amount_ugx: header.cashPaidUgx,
-      debt_amount_ugx: header.debtUgx,
-      issue_receipt: false,
-      created_by: ctx.userId,
-      sold_by_user_id: resolveSoldByAuthUserIdForPush(sale),
-      completed_at: sale.createdAt,
-      metadata: {
-        ...hospitalitySaleMetadata(sale),
-        receiptHeaderSnapshot: sale.receiptHeaderSnapshot ?? null,
-        receiptFooterSnapshot: sale.receiptFooterSnapshot ?? null,
-        receiptCustomerName: sale.receiptCustomerName ?? null,
-        receiptCustomerPhone: sale.receiptCustomerPhone ?? null,
-      },
-      created_at: sale.createdAt,
-      updated_at: sale.createdAt,
-    },
-    lines: activeLines.map((line, idx) => ({
+  const pushedLines = activeLines.map((line, idx) => {
+    const lineDiscount = line.discountUgx ?? Math.max(0, (line.originalLineTotalUgx ?? line.lineTotalUgx) - line.lineTotalUgx);
+    return {
       id: line.id,
       product_id: line.productId,
       quantity: line.quantity,
       unit_price_ugx: line.unitPriceUgx,
-      line_discount_ugx: line.discountUgx ?? Math.max(0, (line.originalLineTotalUgx ?? line.lineTotalUgx) - line.lineTotalUgx),
+      line_discount_ugx: lineDiscount,
       line_total_ugx: line.lineTotalUgx,
       line_input_mode: line.inputMode,
       money_amount_ugx: line.moneyAmountUgx ?? null,
@@ -1144,7 +1121,46 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
         // this sale can put a void/return back into the batch the units came from. See saleLineCloudCodec.
         ...pharmacyBatchProvenanceMetadata(line),
       },
-    })),
+    };
+  });
+
+  // validate_sale_push_financials sums every pushed line's OWN line_total_ugx into its "subtotal" and rejects
+  // the sale with 'subtotal_mismatch' unless sale.subtotal_ugx matches that sum exactly (+/-1). header.subtotalUgx
+  // is the pre-item-discount LIST subtotal (correct for receipts/reports, a different number) — pushing that here
+  // instead left every sale carrying an item-level discount (DiscountLineModal) rejected on first sync and stuck
+  // in the queue forever, since the rejection is deterministic and retrying never changes the outcome. The
+  // server's discount_ugx must then carry only the remaining cart-level share — the item-level share is already
+  // netted out of subtotalFromLinesUgx, so leaving it in would double it back out of the server's own total check.
+  const subtotalFromLinesUgx = pushedLines.reduce((a, l) => a + Math.max(0, Math.floor(l.line_total_ugx)), 0);
+  const lineDiscountFromLinesUgx = pushedLines.reduce((a, l) => a + Math.max(0, Math.floor(l.line_discount_ugx)), 0);
+  const cartDiscountUgx = Math.max(0, header.discountTotalUgx - lineDiscountFromLinesUgx);
+
+  return {
+    sale: {
+      id: sale.id,
+      customer_id: sale.customerId && isUuid(sale.customerId) ? sale.customerId : null,
+      payment_status: header.debtUgx > 0 ? "partial" : "paid",
+      subtotal_ugx: subtotalFromLinesUgx,
+      tax_ugx: 0,
+      discount_ugx: cartDiscountUgx,
+      total_ugx: header.totalUgx,
+      cash_amount_ugx: header.cashPaidUgx,
+      debt_amount_ugx: header.debtUgx,
+      issue_receipt: false,
+      created_by: ctx.userId,
+      sold_by_user_id: resolveSoldByAuthUserIdForPush(sale),
+      completed_at: sale.createdAt,
+      metadata: {
+        ...hospitalitySaleMetadata(sale),
+        receiptHeaderSnapshot: sale.receiptHeaderSnapshot ?? null,
+        receiptFooterSnapshot: sale.receiptFooterSnapshot ?? null,
+        receiptCustomerName: sale.receiptCustomerName ?? null,
+        receiptCustomerPhone: sale.receiptCustomerPhone ?? null,
+      },
+      created_at: sale.createdAt,
+      updated_at: sale.createdAt,
+    },
+    lines: pushedLines,
     payments:
       header.cashPaidUgx > 0
         ? [

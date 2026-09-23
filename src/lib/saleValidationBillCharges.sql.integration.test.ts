@@ -285,3 +285,86 @@ describe("the REAL client payload (finalizeDraftSale -> buildSalePushPayload) ag
     expect([none.serviceChargeUgx, none.tipUgx, none.taxUgx]).toEqual([null, null, null]);
   });
 });
+
+// ── item-level (DiscountLineModal) discount sync — a sale carrying one of these used to be rejected on its
+// first sync attempt as 'subtotal_mismatch' and stayed stuck in the queue forever, since the rejection was
+// deterministic and no retry could ever change the outcome. buildSalePushPayload pushed the pre-discount LIST
+// subtotal (correct for receipts/reports) as sale.subtotal_ugx while the lines it pushed alongside it already
+// carried their own, smaller, post-discount totals — the two never matched whenever a line had its own discount.
+describe("item-level discount: the real payload (applyDraftLineDiscount -> finalizeDraftSale -> buildSalePushPayload)", () => {
+  beforeEach(() => {
+    vi.spyOn(syncEngine, "enqueueSync").mockResolvedValue(undefined);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  function checkoutWithLineDiscount(discountAmountUgx: number, cartDiscountUgx = 0) {
+    usePosStore.setState({
+      _hydrated: true,
+      sessionActor: { userId: "owner:1", role: "owner", displayName: "Owner" },
+      products: [{ ...coke }],
+      customers: [],
+      sales: [],
+      stockMovements: [],
+      archivedStockMovements: [],
+      voidRecords: [],
+      returnRecords: [],
+      auditLogs: [],
+      draftLines: [],
+      draftCartDiscountUgx: 0,
+      activePendingSaleId: null,
+      draftInput: null,
+      draftPaymentMethod: "cash",
+    });
+    expect(openTestShift().ok).toBe(true);
+    usePosStore.setState({
+      draftLines: [{ id: "bbbbbbbb-0000-4000-8000-000000000002", productId: "coke", name: "Coke", inputMode: "quantity", quantity: 50, unitPriceUgx: 2_000, unitCostUgx: 1_200, lineTotalUgx: 100_000, estimatedProfitUgx: 0, updatedAt: "2026-09-19T08:00:00.000Z" }],
+    });
+    if (discountAmountUgx > 0) {
+      const discounted = st().applyDraftLineDiscount("coke", "amount", discountAmountUgx);
+      expect(discounted.ok).toBe(true);
+    }
+    if (cartDiscountUgx > 0) usePosStore.setState({ draftCartDiscountUgx: cartDiscountUgx });
+    const r = st().finalizeDraftSale({ debtUgx: 0, paymentMethod: "cash" } as never);
+    expect(r).toMatchObject({ ok: true });
+    return st().sales[0]!;
+  }
+
+  it("subtotal_ugx pushed nets out the item discount (not the list price), and the payload passes the validator", async () => {
+    const s = checkoutWithLineDiscount(10_000);
+    expect(s.subtotalUgx).toBe(100_000); // local Sale.subtotalUgx stays the LIST subtotal — receipts/reports are unaffected
+    expect(s.totalUgx).toBe(90_000);
+
+    const p = buildSalePushPayload(s, { shopId: "s", userId: "u" });
+    const pushedLineTotal = p.lines.reduce((a, l) => a + (l.line_total_ugx as number), 0);
+    expect(p.sale.subtotal_ugx).toBe(pushedLineTotal);
+    expect(p.sale.subtotal_ugx).toBe(90_000);
+    expect(p.sale.discount_ugx).toBe(0); // the whole discount is item-level; nothing left over at cart level
+    expect(p.sale.total_ugx).toBe(90_000);
+    expect(await verdict(newDb, p.sale as Sale, p.lines as Line[])).toEqual({ ok: true });
+  });
+
+  it("an item-level discount stacked with a cart-level discount also passes — discount_ugx carries only the cart share", async () => {
+    const s = checkoutWithLineDiscount(10_000, 5_000);
+    expect(s.totalUgx).toBe(85_000);
+
+    const p = buildSalePushPayload(s, { shopId: "s", userId: "u" });
+    expect(p.sale.subtotal_ugx).toBe(90_000);
+    expect(p.sale.discount_ugx).toBe(5_000);
+    expect(p.sale.total_ugx).toBe(85_000);
+    expect(await verdict(newDb, p.sale as Sale, p.lines as Line[])).toEqual({ ok: true });
+  });
+
+  it("without the fix, this same payload shape is exactly what the validator rejects as subtotal_mismatch", async () => {
+    // Reconstructs the pre-fix payload shape directly (list subtotal + combined discount) to prove the
+    // validator really does reject it — pinning down the failure mode this fix removes.
+    const s = checkoutWithLineDiscount(10_000);
+    const p = buildSalePushPayload(s, { shopId: "s", userId: "u" });
+    const preFixSale = { ...p.sale, subtotal_ugx: s.subtotalUgx, discount_ugx: s.discountTotalUgx } as Sale;
+    expect(await verdict(newDb, preFixSale, p.lines as Line[])).toEqual({
+      ok: false,
+      error: "subtotal_mismatch",
+      expected: 90_000,
+      actual: 100_000,
+    });
+  });
+});
