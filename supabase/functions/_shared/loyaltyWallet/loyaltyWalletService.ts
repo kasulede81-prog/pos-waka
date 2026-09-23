@@ -17,6 +17,13 @@ import {
   buildGoogleWalletSaveUrl,
   type GoogleIds,
 } from "./googleWalletPass.ts";
+import {
+  fetchGoogleWalletAccessToken,
+  patchGoogleLoyaltyObjectBalance,
+  upsertGoogleLoyaltyClass,
+  upsertGoogleLoyaltyObject,
+  type FetchLike,
+} from "./googleWalletRest.ts";
 import type {
   ApplePassSigner,
   GoogleWalletSigner,
@@ -71,6 +78,13 @@ export async function issueAppleWalletPass(
 export type GoogleWalletConfig = {
   ids: GoogleIds;
   origins: string[];
+  /**
+   * When true (default for live issuance), upsert class/object via the REST API
+   * before returning the Save URL so later balance PATCHes have a real object.
+   * JWT-only mode remains available for unit tests without network.
+   */
+  persistObjects?: boolean;
+  fetchImpl?: FetchLike;
 };
 
 export async function issueGoogleWalletSaveUrl(
@@ -85,6 +99,23 @@ export async function issueGoogleWalletSaveUrl(
   try {
     const loyaltyClass = buildGoogleLoyaltyClass(input, config.ids);
     const loyaltyObject = buildGoogleLoyaltyObject(input, config.ids);
+
+    if (config.persistObjects !== false) {
+      const token = await fetchGoogleWalletAccessToken(signer, nowSeconds, config.fetchImpl);
+      const classResult = await upsertGoogleLoyaltyClass(
+        token.accessToken,
+        loyaltyClass,
+        config.fetchImpl,
+      );
+      if (!classResult.ok) return { ok: false, error: "signing_failed" };
+      const objectResult = await upsertGoogleLoyaltyObject(
+        token.accessToken,
+        loyaltyObject,
+        config.fetchImpl,
+      );
+      if (!objectResult.ok) return { ok: false, error: "signing_failed" };
+    }
+
     const claims = buildGoogleSaveJwtClaims(
       signer,
       loyaltyClass,
@@ -96,5 +127,37 @@ export async function issueGoogleWalletSaveUrl(
     return { ok: true, pass: { provider: "google_wallet", saveUrl } };
   } catch {
     return { ok: false, error: "signing_failed" };
+  }
+}
+
+/**
+ * Push the authoritative loyalty balance to an existing Google Wallet object.
+ * Failures are returned — callers must never roll back sales/ledger because of this.
+ */
+export async function syncGoogleWalletObjectBalance(
+  ids: GoogleIds,
+  balancePoints: number,
+  signer: GoogleWalletSigner,
+  nowSeconds: number,
+  fetchImpl?: FetchLike,
+): Promise<{ ok: true } | { ok: false; error: string; status?: number }> {
+  if (!ids.issuerId.trim() || !ids.objectId.trim()) {
+    return { ok: false, error: "wallet_not_configured" };
+  }
+  if (!Number.isFinite(balancePoints) || balancePoints < 0) {
+    return { ok: false, error: "invalid_balance" };
+  }
+  try {
+    const token = await fetchGoogleWalletAccessToken(signer, nowSeconds, fetchImpl);
+    const result = await patchGoogleLoyaltyObjectBalance(
+      token.accessToken,
+      ids,
+      balancePoints,
+      fetchImpl,
+    );
+    if (!result.ok) return { ok: false, error: "wallet_sync_failed", status: result.status };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message ?? "wallet_sync_failed" };
   }
 }

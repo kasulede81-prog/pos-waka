@@ -23,6 +23,7 @@ import type { LoyaltyTransactionRow } from "../lib/loyalty/loyaltyMath";
 import { DEFAULT_LOYALTY_PROGRAM } from "../lib/loyalty/loyaltyMath";
 import { LoyaltyEnrollmentPanel } from "../components/loyalty/LoyaltyEnrollmentPanel";
 import { LoyaltyRewardsPanel } from "../components/loyalty/LoyaltyRewardsPanel";
+import { LoyaltyGoogleWalletButton } from "../components/loyalty/LoyaltyGoogleWalletButton";
 import {
   fetchLoyaltyRewards,
   isRewardEligible,
@@ -30,6 +31,7 @@ import {
   redeemLoyaltyReward,
   type LoyaltyReward,
 } from "../lib/loyalty/loyaltyRewards";
+import { requestGoogleWalletBalanceSync } from "../lib/loyalty/loyaltyGoogleWallet";
 
 const KIND_LABEL_KEY: Record<string, string> = {
   earned: "loyaltyKindEarned",
@@ -174,6 +176,7 @@ function CustomerDetail({
       setRedeemState(result.alreadyRedeemed ? { phase: "duplicate" } : { phase: "done", balance: result.balance });
       setPendingRedeem(null);
       onAdjusted();
+      void requestGoogleWalletBalanceSync(shopId, entry.accountId);
     } else {
       setRedeemState({ phase: "error", error: result.error, balance: result.balance, required: result.required });
     }
@@ -189,6 +192,7 @@ function CustomerDetail({
       setAdjustPoints("");
       setAdjustNote("");
       onAdjusted();
+      void requestGoogleWalletBalanceSync(shopId, entry.accountId);
     } else {
       setAdjustState("error");
     }
@@ -214,6 +218,13 @@ function CustomerDetail({
           </p>
         </div>
       </div>
+
+      <LoyaltyGoogleWalletButton
+        lang={lang}
+        shopId={shopId}
+        accountId={entry.accountId}
+        canManage={canManage}
+      />
 
       <div>
         <p className="text-sm font-black text-foreground">{t(lang, "loyaltyHistoryTitle")}</p>

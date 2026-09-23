@@ -116,6 +116,7 @@ describe("issueGoogleWalletSaveUrl", () => {
       {
         ids: { issuerId: "3388000000000000001", classId: "waka_loyalty", objectId: "acct-1" },
         origins: ["https://waka.example"],
+        persistObjects: false,
       },
       STUB_GOOGLE_SIGNER,
       1_700_000_000,

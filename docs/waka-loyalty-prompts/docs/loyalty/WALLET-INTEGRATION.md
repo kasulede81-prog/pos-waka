@@ -1,13 +1,47 @@
-# Wallet Integration — Architecture & Setup (Phase 06)
+# Wallet Integration — Architecture & Setup (Phase 06 / Phase 5 Google Wallet)
 
 ## Summary
 
-Loyalty passes for **Google Wallet** and **Apple Wallet** are implemented as a
-server-side issuance pipeline with all signing material kept in Supabase Edge
-Function secrets. The internal abstraction is fully implemented and unit-tested;
-**external platform credentials do not yet exist for WAKA**, so no live pass has
-been issued. The QR-code identification flow (Phase 05) remains the universal
-fallback and is untouched by this phase.
+Loyalty passes for **Google Wallet** (and Apple Wallet stubs) are a server-side
+issuance + balance-sync pipeline. Signing material stays in Supabase Edge
+Function secrets. The QR-code identification flow (Phase 05) remains the
+universal fallback.
+
+## Phase 5 status (honest)
+
+| Capability | Status |
+| --- | --- |
+| Save-to-Wallet JWT + deterministic object ids | **Implemented** |
+| Merchant UI “Add to Google Wallet” | **Implemented** (shows “not configured” without secrets) |
+| REST upsert class/object on issue | **Implemented** |
+| Ledger → outbox → PATCH balance | **Implemented** (migration + `loyalty-wallet-sync`) |
+| Live Google issuer credentials | **External blocker** — must be set via `supabase secrets` |
+| Production end-to-end on a real device | **Blocked** until issuer + HTTPS logo exist |
+
+## Secrets (never committed, never frontend)
+
+```
+GOOGLE_WALLET_ISSUER_ID=...
+GOOGLE_WALLET_SERVICE_ACCOUNT_JSON={...}
+WALLET_ALLOWED_ORIGINS=https://pos.waka.ug
+GOOGLE_WALLET_LOGO_URL=https://pos.waka.ug/waka-logo.png
+```
+
+See `supabase/functions/.env.example`.
+
+## Balance sync
+
+1. `loyalty_transactions` INSERT → `trg_loyalty_wallet_enqueue_sync` → `loyalty_wallet_sync_outbox`
+2. `loyalty-wallet-sync` edge drains pending rows (user JWT shop-scoped or service role)
+3. PATCH Google `loyaltyObject.loyaltyPoints.balance` from **authoritative** `loyalty_accounts.balance_points`
+4. Failures mark outbox `failed` and retry (max 8 attempts) — **never** roll back sales or ledger
+
+## Object identity
+
+- Class: `{issuerId}.waka_loyalty_{shopId}`
+- Object: `{issuerId}.acct_{loyaltyAccountId}`
+- Per-shop cards — Shop A and Shop B stay separate
+
 
 ## What was verified (external requirements)
 

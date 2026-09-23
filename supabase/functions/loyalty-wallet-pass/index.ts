@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createApplePkcs7Signer } from "../_shared/loyaltyWallet/applePkcs7Signer.ts";
-import { createEs256SignerFromPkcs8Pem } from "../_shared/loyaltyWallet/googleWalletPass.ts";
+import { loadGoogleWalletEnv } from "../_shared/loyaltyWallet/googleWalletEnv.ts";
+import { deterministicGoogleWalletIds } from "../_shared/loyaltyWallet/googleWalletRest.ts";
 import {
   issueAppleWalletPass,
   issueGoogleWalletSaveUrl,
@@ -10,22 +11,12 @@ import {
 import type { LoyaltyPassInput } from "../_shared/loyaltyWallet/walletPassTypes.ts";
 
 /**
- * Loyalty wallet pass issuance (Phase 06).
+ * Loyalty wallet pass issuance (Phase 06 / Phase 5 Google Wallet).
  *
  * POST { provider: "apple" | "google", shop_id, account_id }
- * Authorization: Bearer <user jwt> — the account/shop are read with the
- * USER context client so RLS (user_can_access_shop) is enforced by the
- * database before any pass is generated.
+ * GET  ?provider=google  → { ok, configured: boolean } (no secrets leaked)
  *
- * Secrets (set via `supabase secrets set`, NEVER committed):
- *   GOOGLE_WALLET_ISSUER_ID, GOOGLE_WALLET_SERVICE_ACCOUNT_JSON,
- *   WALLET_ALLOWED_ORIGINS,
- *   APPLE_PASS_TYPE_IDENTIFIER, APPLE_TEAM_ID,
- *   APPLE_PASS_CERTIFICATE_PEM, APPLE_WWDR_PEM, APPLE_PASS_PRIVATE_KEY_PEM
- *
- * Without those secrets the function fails closed with
- * `wallet_not_configured` — the QR fallback is unaffected. See
- * docs/waka-loyalty-prompts/docs/loyalty/WALLET-INTEGRATION.md.
+ * Authorization: Bearer <user jwt> — account/shop read with USER context (RLS).
  */
 
 const cors = {
@@ -56,6 +47,22 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "server_misconfigured" }, 500);
   }
 
+  // Status probe — safe for UI "Google Wallet not configured".
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    const provider = url.searchParams.get("provider") ?? "google";
+    if (provider === "google") {
+      const env = loadGoogleWalletEnv();
+      return json({
+        ok: true,
+        provider: "google_wallet",
+        configured: env.ok,
+        error: env.ok ? null : env.error,
+      });
+    }
+    return json({ ok: false, error: "provider_required" }, 400);
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return json({ ok: false, error: "unauthorized" }, 401);
@@ -76,7 +83,6 @@ Deno.serve(async (req) => {
   }
   if (!shopId || !accountId) return json({ ok: false, error: "shop_and_account_required" }, 400);
 
-  // User-context client: RLS policies decide what this member may see.
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -110,6 +116,63 @@ Deno.serve(async (req) => {
     .eq("shop_id", shopId)
     .maybeSingle();
 
+  if (provider === "google") {
+    const env = loadGoogleWalletEnv();
+    if (!env.ok) return json({ ok: false, error: env.error }, env.error === "wallet_not_configured" ? 409 : 500);
+
+    const passInput: LoyaltyPassInput = {
+      shopId,
+      shopName: String(shop.name ?? "Waka Shop"),
+      accountId: String(account.id),
+      customerName: String(customer.name ?? "Member"),
+      qrToken: String(account.qr_token),
+      qrPayload: `WAKA-LOYALTY:${account.qr_token}`,
+      balancePoints: Number(account.balance_points ?? 0),
+      programLabel: program?.enabled
+        ? `${program.earn_points_per_unit} pt per UGX ${Number(program.earn_unit_ugx).toLocaleString()} spent`
+        : "Loyalty member",
+      logoUrl: env.logoUrl,
+    };
+    const invalid = validatePassInput(passInput);
+    if (invalid) return json({ ok: false, error: invalid }, 400);
+
+    const ids = deterministicGoogleWalletIds(env.issuerId, shopId, accountId);
+    const result = await issueGoogleWalletSaveUrl(
+      passInput,
+      { ids, origins: env.origins, persistObjects: true },
+      env.signer,
+      Math.floor(Date.now() / 1000),
+    );
+    if (!result.ok) return json({ ok: false, error: result.error }, 502);
+    if (result.pass.provider !== "google_wallet") return json({ ok: false, error: "signing_failed" }, 502);
+
+    // Best-effort mark issued — service role; never fails the save URL response.
+    try {
+      const admin = createClient(supabaseUrl, serviceKey);
+      await admin
+        .from("loyalty_accounts")
+        .update({
+          google_wallet_object_id: `${ids.issuerId}.${ids.objectId}`,
+          google_wallet_issued_at: new Date().toISOString(),
+          google_wallet_synced_at: new Date().toISOString(),
+          google_wallet_sync_balance: passInput.balancePoints,
+        })
+        .eq("id", accountId)
+        .eq("shop_id", shopId);
+    } catch {
+      /* non-fatal */
+    }
+
+    return json({
+      ok: true,
+      provider: "google_wallet",
+      save_url: result.pass.saveUrl,
+      object_id: `${ids.issuerId}.${ids.objectId}`,
+      balance_points: passInput.balancePoints,
+    });
+  }
+
+  // Apple
   const passInput: LoyaltyPassInput = {
     shopId,
     shopName: String(shop.name ?? "Waka Shop"),
@@ -125,41 +188,6 @@ Deno.serve(async (req) => {
   const invalid = validatePassInput(passInput);
   if (invalid) return json({ ok: false, error: invalid }, 400);
 
-  if (provider === "google") {
-    const issuerId = Deno.env.get("GOOGLE_WALLET_ISSUER_ID") ?? "";
-    const serviceAccountJson = Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_JSON") ?? "";
-    if (!issuerId || !serviceAccountJson) {
-      return json({ ok: false, error: "wallet_not_configured" }, 409);
-    }
-    let serviceAccount: { client_email?: string; private_key?: string };
-    try {
-      serviceAccount = JSON.parse(serviceAccountJson);
-    } catch {
-      return json({ ok: false, error: "wallet_misconfigured" }, 500);
-    }
-    if (!serviceAccount.client_email || !serviceAccount.private_key) {
-      return json({ ok: false, error: "wallet_misconfigured" }, 500);
-    }
-    const signer = createEs256SignerFromPkcs8Pem(
-      serviceAccount.client_email,
-      serviceAccount.private_key,
-    );
-    const origins = (Deno.env.get("WALLET_ALLOWED_ORIGINS") ?? "")
-      .split(",")
-      .map((o) => o.trim())
-      .filter(Boolean);
-    const result = await issueGoogleWalletSaveUrl(
-      passInput,
-      { ids: { issuerId, classId: `waka_loyalty_${shopId}`, objectId: `acct_${accountId}` }, origins },
-      signer,
-      Math.floor(Date.now() / 1000),
-    );
-    if (!result.ok) return json({ ok: false, error: result.error }, 502);
-    if (result.pass.provider !== "google_wallet") return json({ ok: false, error: "signing_failed" }, 502);
-    return json({ ok: true, provider: "google_wallet", save_url: result.pass.saveUrl });
-  }
-
-  // Apple
   const passTypeIdentifier = Deno.env.get("APPLE_PASS_TYPE_IDENTIFIER") ?? "";
   const teamIdentifier = Deno.env.get("APPLE_TEAM_ID") ?? "";
   const certificatePem = Deno.env.get("APPLE_PASS_CERTIFICATE_PEM") ?? "";
