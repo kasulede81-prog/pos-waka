@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import type { MerchantNotificationRow } from "../../../lib/merchantSupportApi";
 import { notificationDeepLink } from "../../../lib/merchantSupportPresentation";
 import { formatSupportDateTime } from "./SupportCenterUi";
-import { notificationIcon } from "./SupportStatusBadge";
+import { NotificationTypeIcon } from "./SupportStatusBadge";
 
 /**
  * One notification row: title, short message, timestamp, unread state, type icon.
@@ -29,8 +29,8 @@ export function NotificationRow({
         unread ? "border-waka-200 bg-waka-50/70" : "border-border/80 bg-card",
       )}
     >
-      <span aria-hidden className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-lg">
-        {notificationIcon(notification.type)}
+      <span aria-hidden className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+        <NotificationTypeIcon type={notification.type} className="size-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">

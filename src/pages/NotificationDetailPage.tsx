@@ -15,7 +15,7 @@ import {
   SupportLoadingBlock,
   formatSupportDateTime,
 } from "../components/support/merchant/SupportCenterUi";
-import { notificationIcon, SupportStatusBadge } from "../components/support/merchant/SupportStatusBadge";
+import { NotificationTypeIcon, SupportStatusBadge } from "../components/support/merchant/SupportStatusBadge";
 import { KeyboardSafePage } from "../components/layout/KeyboardSafePage";
 
 /**
@@ -55,8 +55,8 @@ export function NotificationDetailPage({ lang }: { lang: Language }) {
         ) : (
           <article className="rounded-2xl border border-border/90 bg-card p-4 shadow-waka-sm">
             <div className="flex items-start gap-3">
-              <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-muted text-2xl">
-                {notificationIcon(notification.data.notification.type)}
+              <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                <NotificationTypeIcon type={notification.data.notification.type} className="size-6" />
               </span>
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-black text-foreground">

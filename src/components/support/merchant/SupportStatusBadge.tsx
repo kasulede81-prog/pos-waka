@@ -1,4 +1,17 @@
 import clsx from "clsx";
+import {
+  Bell,
+  CircleCheck,
+  Clock3,
+  FileArchive,
+  FileText,
+  LockKeyhole,
+  Megaphone,
+  Search,
+  TicketCheck,
+  WalletCards,
+  type LucideIcon,
+} from "lucide-react";
 import type { MerchantTicketStatus, MerchantNotificationType } from "../../../lib/merchantSupportApi";
 import type { MerchantVisibleCorrectionStatus } from "../../../lib/merchantSupportPresentation";
 
@@ -42,22 +55,23 @@ export function SupportStatusBadge({
   );
 }
 
-const NOTIFICATION_TYPE_ICONS: Record<MerchantNotificationType, string> = {
-  financial_issue_received: "💰",
-  financial_issue_under_review: "🔎",
-  financial_issue_resolved: "✅",
-  financial_issue_closed: "🗂️",
-  support_request_received: "🎫",
-  support_under_review: "🔎",
-  support_waiting_for_you: "⏰",
-  support_resolved: "✅",
-  support_closed: "🗂️",
-  account_security: "🔐",
-  system_announcement: "📢",
-  license_announcement: "📜",
-  service_announcement: "📣",
+const NOTIFICATION_TYPE_ICONS: Record<MerchantNotificationType, LucideIcon> = {
+  financial_issue_received: WalletCards,
+  financial_issue_under_review: Search,
+  financial_issue_resolved: CircleCheck,
+  financial_issue_closed: FileArchive,
+  support_request_received: TicketCheck,
+  support_under_review: Search,
+  support_waiting_for_you: Clock3,
+  support_resolved: CircleCheck,
+  support_closed: FileArchive,
+  account_security: LockKeyhole,
+  system_announcement: Megaphone,
+  license_announcement: FileText,
+  service_announcement: Megaphone,
 };
 
-export function notificationIcon(type: MerchantNotificationType): string {
-  return NOTIFICATION_TYPE_ICONS[type] ?? "🔔";
+export function NotificationTypeIcon({ type, className }: { type: MerchantNotificationType; className?: string }) {
+  const Icon = NOTIFICATION_TYPE_ICONS[type] ?? Bell;
+  return <Icon className={className ?? "size-5"} strokeWidth={1.8} aria-hidden />;
 }

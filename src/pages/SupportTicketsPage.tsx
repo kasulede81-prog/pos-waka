@@ -55,7 +55,9 @@ export function SupportTicketsPage({ lang }: { lang: Language }) {
   useSupportCenterRealtime(shopLoading ? null : shopId);
 
   const setTab = (next: "tickets" | "financial") => {
-    setSearchParams(next === "financial" ? { tab: "financial" } : {}, { replace: true });
+    const nextParams = new URLSearchParams();
+    if (next === "financial") nextParams.set("tab", "financial");
+    setSearchParams(nextParams, { replace: true });
   };
 
   return (
@@ -70,7 +72,7 @@ export function SupportTicketsPage({ lang }: { lang: Language }) {
           >
             <Link
               to="/support-center/new"
-              className="inline-flex min-h-[36px] items-center gap-1 rounded-xl bg-waka-600 px-3 py-1.5 text-xs font-black text-white shadow-sm active:scale-[0.99]"
+              className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-primary px-3 py-1.5 text-xs font-black text-primary-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] motion-reduce:active:scale-100"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
               {t(lang, "supportCenterReportProblem")}
@@ -90,8 +92,9 @@ export function SupportTicketsPage({ lang }: { lang: Language }) {
               key={tabItem.value}
               type="button"
               onClick={() => setTab(tabItem.value)}
+              aria-pressed={tab === tabItem.value}
               className={clsx(
-                "min-h-[40px] flex-1 rounded-2xl border px-3 text-xs font-black transition active:scale-[0.99]",
+                "min-h-[44px] flex-1 rounded-lg border px-3 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] motion-reduce:active:scale-100 motion-reduce:transition-none",
                 tab === tabItem.value
                   ? "border-waka-300 bg-waka-50 text-waka-800"
                   : "border-border bg-card text-muted-foreground",
@@ -109,14 +112,14 @@ export function SupportTicketsPage({ lang }: { lang: Language }) {
                 <button
                   key={s.value}
                   type="button"
-                  onClick={() =>
-                    setSearchParams(
-                      s.value === "all" ? {} : { status: s.value },
-                      { replace: true },
-                    )
-                  }
+                  onClick={() => {
+                    const nextParams = new URLSearchParams();
+                    if (s.value !== "all") nextParams.set("status", s.value);
+                    setSearchParams(nextParams, { replace: true });
+                  }}
+                  aria-pressed={activeStatus === s.value}
                   className={clsx(
-                    "whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-black transition active:scale-[0.99]",
+                    "min-h-[44px] whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] motion-reduce:active:scale-100 motion-reduce:transition-none",
                     activeStatus === s.value
                       ? "border-waka-400 bg-waka-100 text-waka-800"
                       : "border-border bg-card text-muted-foreground",

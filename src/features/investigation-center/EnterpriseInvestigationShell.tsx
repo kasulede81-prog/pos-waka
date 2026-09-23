@@ -618,19 +618,32 @@ export function EnterpriseInvestigationShell({ lang }: { lang: Language }) {
 
   return (
     <EnterprisePageContainer>
-      {renderSlot("header")}
-      {renderSlot("date-filter")}
-      {renderSlot("kpi-grid")}
-      {renderSlot("alerts")}
-      {renderSlot("status")}
-      {renderSlot("tabs")}
-      {renderSlot("search")}
-      {renderSlot("timeline-categories")}
-      {renderSlot("timeline")}
-      {renderSlot("reports")}
-      {renderSlot("compliance")}
-      {renderSlot("quick-actions")}
-      {renderSlot("footer")}
+      {/*
+        Presentation-only ordering: FIND (search) → FILTER (date, tabs, categories)
+        → UNDERSTAND (KPIs, attention, status) → EVIDENCE (timeline, reports).
+        Same slots, same data, same widgets — only the reading order changed.
+      */}
+      <div className="investigation-workspace mx-auto w-full min-w-0 max-w-[92rem] space-y-3">
+        {renderSlot("header")}
+        <section className="investigation-find space-y-2" aria-label={t(lang, "icSearchPlaceholder")}>
+          {renderSlot("search")}
+          {renderSlot("date-filter")}
+          {renderSlot("tabs")}
+          {renderSlot("timeline-categories")}
+        </section>
+        <section className="investigation-overview space-y-2">
+          {renderSlot("kpi-grid")}
+          {renderSlot("alerts")}
+          {renderSlot("status")}
+        </section>
+        <section className="investigation-evidence space-y-2">
+          {renderSlot("timeline")}
+          {renderSlot("reports")}
+          {renderSlot("compliance")}
+        </section>
+        {renderSlot("quick-actions")}
+        {renderSlot("footer")}
+      </div>
     </EnterprisePageContainer>
   );
 }

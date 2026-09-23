@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { MoreHorizontal, Printer } from "lucide-react";
+import { CheckCircle2, Clock3, CreditCard, MinusCircle, MoreHorizontal, Printer, XCircle } from "lucide-react";
 import clsx from "clsx";
 import type { Language, Sale } from "../../types";
 import { t } from "../../lib/i18n";
@@ -115,7 +115,10 @@ export function SalesHistoryDesktopTable({
         header: t(lang, "salesHistoryPaymentMethods"),
         width: "minmax(108px,0.9fr)",
         cell: (sale) => (
-          <span className={clsx(statusTokens.business.badge, "max-w-full truncate")}>{paymentLabel(lang, sale)}</span>
+          <span className={clsx(statusTokens.business.badge, "inline-flex max-w-full items-center gap-1")}>
+            <CreditCard className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="truncate">{paymentLabel(lang, sale)}</span>
+          </span>
         ),
       },
       {
@@ -133,12 +136,36 @@ export function SalesHistoryDesktopTable({
         width: "minmax(96px,0.9fr)",
         cell: (sale) => {
           const status = saleStatusOf(sale);
-          if (status === "pending") return <span className={statusTokens.warning.badge}>{t(lang, "salesHistoryStatusPending")}</span>;
-          if (isVoidedSale(sale) || isPreCompletionVoidedSale(sale)) {
-            return <span className={statusTokens.danger.badge}>{t(lang, "salesHistoryStatusVoided")}</span>;
+          if (status === "pending") {
+            return (
+              <span className={clsx(statusTokens.warning.badge, "inline-flex items-center gap-1")}>
+                <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                {t(lang, "salesHistoryStatusPending")}
+              </span>
+            );
           }
-          if (status === "cancelled") return <span className={statusTokens.draft.badge}>{t(lang, "salesHistoryStatusCancelled")}</span>;
-          return <span className={statusTokens.success.badge}>{t(lang, "salesHistoryStatusCompleted")}</span>;
+          if (isVoidedSale(sale) || isPreCompletionVoidedSale(sale)) {
+            return (
+              <span className={clsx(statusTokens.danger.badge, "inline-flex items-center gap-1")}>
+                <XCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                {t(lang, "salesHistoryStatusVoided")}
+              </span>
+            );
+          }
+          if (status === "cancelled") {
+            return (
+              <span className={clsx(statusTokens.draft.badge, "inline-flex items-center gap-1")}>
+                <MinusCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                {t(lang, "salesHistoryStatusCancelled")}
+              </span>
+            );
+          }
+          return (
+            <span className={clsx(statusTokens.success.badge, "inline-flex items-center gap-1")}>
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {t(lang, "salesHistoryStatusCompleted")}
+            </span>
+          );
         },
       },
     ],

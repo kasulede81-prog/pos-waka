@@ -24,6 +24,7 @@ import { ProfitStatGrid } from "../components/profit/ProfitStatGrid";
 import { ProfitTrendChart } from "../components/profit/ProfitTrendChart";
 import { ProfitShelfRanking } from "../components/profit/ProfitShelfRanking";
 import { ProfitProductCard } from "../components/profit/ProfitProductCard";
+import { ProfitProductTable } from "../components/profit/ProfitProductTable";
 import { ProfitLowMarginList } from "../components/profit/ProfitLowMarginList";
 import { ProfitSearchBar } from "../components/profit/ProfitSearchBar";
 import { ProfitQuickFilterChips } from "../components/profit/ProfitQuickFilterChips";
@@ -49,6 +50,7 @@ import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { buildProfitExportRows } from "../lib/analyticsReportExport";
 import { exportCsvFile } from "../lib/reportExportEngine";
 import { overlayPeriodFinancials, resolvePeriodReportAuthority } from "../lib/closedDayAuthority";
+import { sumCashExpensesInBounds } from "../lib/cashReconciliation";
 import { useDayClosesForAuthority } from "../hooks/useDayClosesForAuthority";
 import { printProfitReportPdf } from "../lib/profitReportDocument";
 import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
@@ -140,6 +142,11 @@ export function ProfitPage({
   );
 
   const { groups, total } = report;
+  const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const periodExpensesUgx = useMemo(
+    () => sumCashExpensesInBounds(cashExpenses, bounds),
+    [cashExpenses, bounds],
+  );
   const periodAuthority = resolvePeriodReportAuthority(dayCloses, bounds);
   const closedPeriod = periodAuthority !== "live";
   const overlaid = overlayPeriodFinancials({
@@ -444,6 +451,7 @@ export function ProfitPage({
             bestShelf={bestShelf}
             bestProduct={bestProduct}
             costIncomplete={costIncomplete}
+            expensesUgx={periodExpensesUgx}
           />
         </div>
       ) : null}
@@ -529,9 +537,14 @@ export function ProfitPage({
               {showProducts && displayProducts.length > 0 ? (
                 <section className="space-y-2">
                   <h3 className="px-0.5 text-xs font-black text-foreground">{t(lang, "profitTopProducts")}</h3>
-                  {displayProducts.map((p) => (
-                    <ProfitProductCard key={`${p.productId}-${p.name}`} lang={lang} product={p} onOpen={setDetailProduct} />
-                  ))}
+                  <div className="hidden md:block">
+                    <ProfitProductTable lang={lang} products={displayProducts} onOpen={setDetailProduct} />
+                  </div>
+                  <div className="space-y-2 md:hidden">
+                    {displayProducts.map((p) => (
+                      <ProfitProductCard key={`${p.productId}-${p.name}`} lang={lang} product={p} onOpen={setDetailProduct} />
+                    ))}
+                  </div>
                 </section>
               ) : null}
 

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import clsx from "clsx";
+import { Menu, X } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
@@ -36,13 +37,14 @@ const NAV = [
   { href: "/home#pricing", label: "Pricing" },
   { href: "/home#hardware", label: "Hardware" },
   { href: "/about", label: "About" },
+  { href: "/home#faq", label: "FAQ" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
 const FOOTER = {
   product: [
     { to: "/home#features", label: "Features" },
-    { to: "/pricing", label: "Pricing" },
+    { to: "/home#pricing", label: "Pricing" },
     { to: "/home#hardware", label: "Hardware" },
     { to: "/demo", label: "Demo" },
   ],
@@ -73,6 +75,15 @@ export function MarketingLayout({ lang, setLang, isAuthenticated, children }: Pr
 function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Props) {
   const location = useLocation();
   const onHome = location.pathname === "/home";
+  // Menu open state is keyed by pathname so navigation closes it during the
+  // same render — avoids a setState-in-effect cascade the mobile menu would
+  // otherwise trigger on every route change.
+  const [menuOpenAt, setMenuOpenAt] = useState<string | null>(null);
+  const menuOpen = menuOpenAt === location.pathname;
+  const setMenuOpen = (open: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof open === "function" ? open(menuOpen) : open;
+    setMenuOpenAt(next ? location.pathname : null);
+  };
 
   /** Release document scroll for marketing — overrides stale POS/auth shell locks. */
   useEffect(() => {
@@ -116,7 +127,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
                   className={clsx(
                     "rounded-full px-2.5 py-1 uppercase transition duration-300",
                     lang === code
-                      ? "bg-mkt-card text-waka- shadow-sm dark:text-waka-"
+                      ? "bg-mkt-card text-waka-600 shadow-sm dark:text-waka-400"
                       : "text-mkt-text-secondary hover:text-mkt-text",
                   )}
                 >
@@ -129,7 +140,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
               <>
                 <Link
                   to="/login"
-                  className="hidden rounded-full px-3 py-2 text-sm font-bold text-mkt-text-secondary transition duration-300 hover:bg-mkt-bg-secondary hover:text-waka- dark:hover:text-waka- sm:inline-flex"
+                  className="hidden rounded-full px-3 py-2 text-sm font-bold text-mkt-text-secondary transition duration-300 hover:bg-mkt-bg-secondary hover:text-waka-700 dark:hover:text-waka-400 sm:inline-flex"
                 >
                   {t(lang, "marketingCtaLogin")}
                 </Link>
@@ -148,8 +159,30 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
                 {t(lang, "activationContinueApp")}
               </Link>
             )}
+            <button
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-expanded={menuOpen}
+              aria-controls="public-mobile-nav"
+              aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-mkt-border bg-mkt-card text-mkt-text lg:hidden"
+            >
+              {menuOpen ? <X className="h-5 w-5" aria-hidden /> : <Menu className="h-5 w-5" aria-hidden />}
+            </button>
           </div>
         </div>
+        {menuOpen ? (
+          <nav id="public-mobile-nav" className="border-t border-mkt-border px-4 py-3 lg:hidden" aria-label="Mobile navigation">
+            <div className="mx-auto grid max-w-7xl gap-1 sm:grid-cols-2">
+              {NAV.map((item) => (
+                <Link key={item.label} to={item.href} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-bold text-mkt-text hover:bg-mkt-bg-secondary">
+                  {item.label}
+                </Link>
+              ))}
+              <Link to="/support" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-bold text-mkt-text hover:bg-mkt-bg-secondary">Support</Link>
+            </div>
+          </nav>
+        ) : null}
       </header>
 
       <main className={clsx("mx-auto max-w-7xl px-4 sm:px-6 lg:px-8", onHome ? "pb-0" : "py-10")}>{children}</main>
@@ -162,11 +195,11 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
               Offline-first point of sale for Ugandan shops, supermarkets, pharmacies, and restaurants.
             </p>
             <p className="mt-4 text-sm font-semibold text-mkt-text">
-              <a href={`tel:+${WAKA_SUPPORT_WHATSAPP_WA_ME}`} className="transition hover:text-waka- dark:hover:text-waka-">
+              <a href={`tel:+${WAKA_SUPPORT_WHATSAPP_WA_ME}`} className="transition hover:text-waka-700 dark:hover:text-waka-400">
                 +256 792 521 711
               </a>
               <br />
-              <a href={`mailto:${WAKA_SUPPORT_EMAIL}`} className="transition hover:text-waka- dark:hover:text-waka-">
+              <a href={`mailto:${WAKA_SUPPORT_EMAIL}`} className="transition hover:text-waka-700 dark:hover:text-waka-400">
                 {WAKA_SUPPORT_EMAIL}
               </a>
             </p>
@@ -174,7 +207,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
               href={wakaSupportWhatsAppUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex text-sm font-black text-waka- transition hover:text-waka- dark:text-waka- dark:hover:text-waka-"
+              className="mt-4 inline-flex text-sm font-black text-waka-600 transition hover:text-waka-700 dark:text-waka-400 dark:hover:text-waka-300"
             >
               WhatsApp support →
             </a>
@@ -192,7 +225,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
           <p className="text-xs text-mkt-text-secondary">© {new Date().getFullYear()} {WAKA_LEGAL_COMPANY_NAME}</p>
           <nav className="flex flex-wrap gap-4 text-xs font-bold text-mkt-text-secondary">
             {FOOTER.legal.map((l) => (
-              <Link key={l.to} to={l.to} className="transition hover:text-waka- dark:hover:text-waka-">
+              <Link key={l.to} to={l.to} className="transition hover:text-waka-700 dark:hover:text-waka-400">
                 {l.label}
               </Link>
             ))}
@@ -220,7 +253,7 @@ function FooterCol({
           <li key={`${title}-${l.to}`}>
             <Link
               to={l.to}
-              className="text-sm font-semibold text-mkt-text transition hover:text-waka- dark:hover:text-waka-"
+              className="text-sm font-semibold text-mkt-text transition hover:text-waka-700 dark:hover:text-waka-400"
             >
               {l.label}
             </Link>
