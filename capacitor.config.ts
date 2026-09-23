@@ -80,7 +80,12 @@ const config: CapacitorConfig = {
       resizeOnFullScreen: true,
     },
     SplashScreen: {
-      launchShowDuration: 2500,
+      // Native ceiling. The JS side (nativeSplash.ts) enforces a 600 ms minimum
+      // and hides as soon as the auth+bootstrap gate is ready — usually well
+      // before this cap. Lowering the native cap from 2500 → 1500 lets Android
+      // hand off to React faster on a warm boot without giving up the safety
+      // net (JS still schedules its own force-hide and safety timeout).
+      launchShowDuration: 1500,
       launchAutoHide: false,
       backgroundColor: "#fffaf5",
       androidSplashResourceName: "splash",

@@ -11,52 +11,52 @@ import { ActivationProvider } from "./context/ActivationContext";
 import { useAuth } from "./hooks/useAuth";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthRecoveryPage } from "./pages/AuthRecoveryPage";
-import { ResetPasswordPage } from "./pages/ResetPasswordPage";
-import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
 import { LoginPage } from "./pages/LoginPage";
-import { StaffAcceptPage } from "./pages/StaffAcceptPage";
-import { RegisterPage } from "./pages/RegisterPage";
-import { SettingsHubPage } from "./pages/SettingsHubPage";
-import { SettingsCashDrawerPage } from "./pages/SettingsCashDrawerPage";
-import { SettingsShopPage } from "./pages/SettingsShopPage";
-import { SettingsReceiptPage } from "./pages/SettingsReceiptPage";
-import { SettingsSellingPage } from "./pages/SettingsSellingPage";
-import { SettingsHomeMenuPage } from "./pages/SettingsHomeMenuPage";
-import { SettingsOfficeMenuPage } from "./pages/SettingsOfficeMenuPage";
-import { SettingsShelvesPage } from "./pages/SettingsShelvesPage";
-import { SettingsPinPage } from "./pages/SettingsPinPage";
-import { SettingsStaffSecurityPage } from "./pages/SettingsStaffSecurityPage";
-import { SettingsStaffRolesPage } from "./pages/SettingsStaffRolesPage";
-import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
-import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
-import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
-import { SettingsSystemHealthPage } from "./pages/SettingsSystemHealthPage";
-import { SettingsDiagnosticsPage } from "./pages/SettingsDiagnosticsPage";
-import { SettingsFinanceDiagnosticsPage } from "./pages/SettingsFinanceDiagnosticsPage";
-import { SettingsSubscriptionDiagnosticsPage } from "./pages/SettingsSubscriptionDiagnosticsPage";
-import { DeviceManagementPage } from "./pages/DeviceManagementPage";
-import { DevicePendingApprovalPage } from "./pages/DevicePendingApprovalPage";
+const StaffAcceptPage = lazy(() => import("./pages/StaffAcceptPage").then((m) => ({ default: m.StaffAcceptPage })));
+const RegisterPage = lazy(() => import("./pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
+const SettingsHubPage = lazy(() => import("./pages/SettingsHubPage").then((m) => ({ default: m.SettingsHubPage })));
+const SettingsCashDrawerPage = lazy(() => import("./pages/SettingsCashDrawerPage").then((m) => ({ default: m.SettingsCashDrawerPage })));
+const SettingsShopPage = lazy(() => import("./pages/SettingsShopPage").then((m) => ({ default: m.SettingsShopPage })));
+const SettingsReceiptPage = lazy(() => import("./pages/SettingsReceiptPage").then((m) => ({ default: m.SettingsReceiptPage })));
+const SettingsSellingPage = lazy(() => import("./pages/SettingsSellingPage").then((m) => ({ default: m.SettingsSellingPage })));
+const SettingsHomeMenuPage = lazy(() => import("./pages/SettingsHomeMenuPage").then((m) => ({ default: m.SettingsHomeMenuPage })));
+const SettingsOfficeMenuPage = lazy(() => import("./pages/SettingsOfficeMenuPage").then((m) => ({ default: m.SettingsOfficeMenuPage })));
+const SettingsShelvesPage = lazy(() => import("./pages/SettingsShelvesPage").then((m) => ({ default: m.SettingsShelvesPage })));
+const SettingsPinPage = lazy(() => import("./pages/SettingsPinPage").then((m) => ({ default: m.SettingsPinPage })));
+const SettingsStaffSecurityPage = lazy(() => import("./pages/SettingsStaffSecurityPage").then((m) => ({ default: m.SettingsStaffSecurityPage })));
+const SettingsStaffRolesPage = lazy(() => import("./pages/SettingsStaffRolesPage").then((m) => ({ default: m.SettingsStaffRolesPage })));
+const SettingsPasswordPage = lazy(() => import("./pages/SettingsPasswordPage").then((m) => ({ default: m.SettingsPasswordPage })));
+const SettingsNotificationsPage = lazy(() => import("./pages/SettingsNotificationsPage").then((m) => ({ default: m.SettingsNotificationsPage })));
+const SettingsDataRetentionPage = lazy(() => import("./pages/SettingsDataRetentionPage").then((m) => ({ default: m.SettingsDataRetentionPage })));
+const SettingsSystemHealthPage = lazy(() => import("./pages/SettingsSystemHealthPage").then((m) => ({ default: m.SettingsSystemHealthPage })));
+const SettingsDiagnosticsPage = lazy(() => import("./pages/SettingsDiagnosticsPage").then((m) => ({ default: m.SettingsDiagnosticsPage })));
+const SettingsFinanceDiagnosticsPage = lazy(() => import("./pages/SettingsFinanceDiagnosticsPage").then((m) => ({ default: m.SettingsFinanceDiagnosticsPage })));
+const SettingsSubscriptionDiagnosticsPage = lazy(() => import("./pages/SettingsSubscriptionDiagnosticsPage").then((m) => ({ default: m.SettingsSubscriptionDiagnosticsPage })));
+const DeviceManagementPage = lazy(() => import("./pages/DeviceManagementPage").then((m) => ({ default: m.DeviceManagementPage })));
+const DevicePendingApprovalPage = lazy(() => import("./pages/DevicePendingApprovalPage").then((m) => ({ default: m.DevicePendingApprovalPage })));
 import { DeviceAuthorityBridge } from "./components/device/DeviceAuthorityBridge";
-import { SyncConflictCenterPage } from "./pages/SyncConflictCenterPage";
-import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
-import { MenuBuilderPage } from "./pages/MenuBuilderPage";
-import { ArchiveDataPage } from "./pages/ArchiveDataPage";
-import { BackupSyncPage } from "./pages/BackupSyncPage";
-import { CashManagementPage } from "./pages/CashManagementPage";
-import { AccountPage } from "./pages/AccountPage";
-import { AccountDeletionPage } from "./pages/AccountDeletionPage";
+const SyncConflictCenterPage = lazy(() => import("./pages/SyncConflictCenterPage").then((m) => ({ default: m.SyncConflictCenterPage })));
+const SettingsPharmacyPage = lazy(() => import("./pages/SettingsPharmacyPage").then((m) => ({ default: m.SettingsPharmacyPage })));
+const MenuBuilderPage = lazy(() => import("./pages/MenuBuilderPage").then((m) => ({ default: m.MenuBuilderPage })));
+const ArchiveDataPage = lazy(() => import("./pages/ArchiveDataPage").then((m) => ({ default: m.ArchiveDataPage })));
+const BackupSyncPage = lazy(() => import("./pages/BackupSyncPage").then((m) => ({ default: m.BackupSyncPage })));
+const CashManagementPage = lazy(() => import("./pages/CashManagementPage").then((m) => ({ default: m.CashManagementPage })));
+const AccountPage = lazy(() => import("./pages/AccountPage").then((m) => ({ default: m.AccountPage })));
+const AccountDeletionPage = lazy(() => import("./pages/AccountDeletionPage").then((m) => ({ default: m.AccountDeletionPage })));
 import { OwnerProtectedRoute } from "./components/OwnerProtectedRoute";
-import { VerifyEmailPage } from "./pages/VerifyEmailPage";
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage").then((m) => ({ default: m.VerifyEmailPage })));
 import { MarketingHomePage } from "./pages/MarketingHomePage";
-import { AboutPage } from "./pages/public/AboutPage";
-import { PricingPage } from "./pages/public/PricingPage";
-import { ContactPage } from "./pages/public/ContactPage";
-import { FounderPage } from "./pages/public/FounderPage";
-import { CompanyPage } from "./pages/public/CompanyPage";
-import { SolutionPage } from "./pages/public/SolutionPage";
-import { VerifyAgentPage } from "./pages/public/VerifyAgentPage";
-import { DemoExperiencePage } from "./pages/DemoExperiencePage";
-import { BusinessActivationPage } from "./pages/BusinessActivationPage";
+const AboutPage = lazy(() => import("./pages/public/AboutPage").then((m) => ({ default: m.AboutPage })));
+const PricingPage = lazy(() => import("./pages/public/PricingPage").then((m) => ({ default: m.PricingPage })));
+const ContactPage = lazy(() => import("./pages/public/ContactPage").then((m) => ({ default: m.ContactPage })));
+const FounderPage = lazy(() => import("./pages/public/FounderPage").then((m) => ({ default: m.FounderPage })));
+const CompanyPage = lazy(() => import("./pages/public/CompanyPage").then((m) => ({ default: m.CompanyPage })));
+const SolutionPage = lazy(() => import("./pages/public/SolutionPage").then((m) => ({ default: m.SolutionPage })));
+const VerifyAgentPage = lazy(() => import("./pages/public/VerifyAgentPage").then((m) => ({ default: m.VerifyAgentPage })));
+const DemoExperiencePage = lazy(() => import("./pages/DemoExperiencePage").then((m) => ({ default: m.DemoExperiencePage })));
+const BusinessActivationPage = lazy(() => import("./pages/BusinessActivationPage").then((m) => ({ default: m.BusinessActivationPage })));
 import { PosDataProvider } from "./providers/PosDataProvider";
 import { NativeSplashGate } from "./components/NativeSplashGate";
 import { SyncStatusProvider } from "./hooks/useSyncStatus";
@@ -64,34 +64,34 @@ import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
 import { SensitiveActionAuthProvider } from "./context/SensitiveActionAuthContext";
 import { SensitiveActionGate } from "./components/security/SensitiveActionGate";
 import { SettingsChangeGate } from "./components/security/SettingsChangeGate";
-import { SettingsBiometricPage } from "./pages/SettingsBiometricPage";
-import { InventoryPurchasingPage } from "./pages/InventoryPurchasingPage";
+const SettingsBiometricPage = lazy(() => import("./pages/SettingsBiometricPage").then((m) => ({ default: m.SettingsBiometricPage })));
+const InventoryPurchasingPage = lazy(() => import("./pages/InventoryPurchasingPage").then((m) => ({ default: m.InventoryPurchasingPage })));
 import { InventoryPurchasingProtectedRoute } from "./components/InventoryPurchasingProtectedRoute";
 import { PharmacyProtectedRoute, PharmacyPosRedirect, PharmacyBusinessRoute } from "./components/pharmacy/PharmacyProtectedRoute";
 import { EnterpriseProtectedRoute } from "./components/enterprise/EnterpriseProtectedRoute";
 import { LegacyPurchaseDetailRedirect, LegacySupplierDetailRedirect } from "./components/inventory/LegacyInventoryRedirects";
-import { InventoryCountSessionsPage } from "./pages/InventoryCountSessionsPage";
-import { InventoryCountSessionPage } from "./pages/InventoryCountSessionPage";
-import { CloseDayPage } from "./pages/CloseDayPage";
-import { XReportPage } from "./pages/XReportPage";
-import { CashPositionPage } from "./pages/CashPositionPage";
-import { DayOpenPage } from "./pages/DayOpenPage";
-import { CashExpensesPage } from "./pages/CashExpensesPage";
-import { StaffAccessPage } from "./pages/StaffAccessPage";
-import { StaffCenterLayout } from "./pages/StaffCenterLayout";
-import { StaffCenterActivityPage } from "./pages/StaffCenterActivityPage";
-import { UpgradePage } from "./pages/UpgradePage";
-import { SupportPage } from "./pages/SupportPage";
-import { SupportCenterHomePage } from "./pages/SupportCenterHomePage";
-import { NotificationsListPage } from "./pages/NotificationsListPage";
-import { NotificationDetailPage } from "./pages/NotificationDetailPage";
-import { SupportTicketsPage } from "./pages/SupportTicketsPage";
-import { SupportTicketDetailPage } from "./pages/SupportTicketDetailPage";
-import { NewSupportTicketPage } from "./pages/NewSupportTicketPage";
-import { PilotSupportCenterPage } from "./pages/PilotSupportCenterPage";
-import { LegalPolicyPage } from "./pages/LegalPolicyPage";
+const InventoryCountSessionsPage = lazy(() => import("./pages/InventoryCountSessionsPage").then((m) => ({ default: m.InventoryCountSessionsPage })));
+const InventoryCountSessionPage = lazy(() => import("./pages/InventoryCountSessionPage").then((m) => ({ default: m.InventoryCountSessionPage })));
+const CloseDayPage = lazy(() => import("./pages/CloseDayPage").then((m) => ({ default: m.CloseDayPage })));
+const XReportPage = lazy(() => import("./pages/XReportPage").then((m) => ({ default: m.XReportPage })));
+const CashPositionPage = lazy(() => import("./pages/CashPositionPage").then((m) => ({ default: m.CashPositionPage })));
+const DayOpenPage = lazy(() => import("./pages/DayOpenPage").then((m) => ({ default: m.DayOpenPage })));
+const CashExpensesPage = lazy(() => import("./pages/CashExpensesPage").then((m) => ({ default: m.CashExpensesPage })));
+const StaffAccessPage = lazy(() => import("./pages/StaffAccessPage").then((m) => ({ default: m.StaffAccessPage })));
+const StaffCenterLayout = lazy(() => import("./pages/StaffCenterLayout").then((m) => ({ default: m.StaffCenterLayout })));
+const StaffCenterActivityPage = lazy(() => import("./pages/StaffCenterActivityPage").then((m) => ({ default: m.StaffCenterActivityPage })));
+const UpgradePage = lazy(() => import("./pages/UpgradePage").then((m) => ({ default: m.UpgradePage })));
+const SupportPage = lazy(() => import("./pages/SupportPage").then((m) => ({ default: m.SupportPage })));
+const SupportCenterHomePage = lazy(() => import("./pages/SupportCenterHomePage").then((m) => ({ default: m.SupportCenterHomePage })));
+const NotificationsListPage = lazy(() => import("./pages/NotificationsListPage").then((m) => ({ default: m.NotificationsListPage })));
+const NotificationDetailPage = lazy(() => import("./pages/NotificationDetailPage").then((m) => ({ default: m.NotificationDetailPage })));
+const SupportTicketsPage = lazy(() => import("./pages/SupportTicketsPage").then((m) => ({ default: m.SupportTicketsPage })));
+const SupportTicketDetailPage = lazy(() => import("./pages/SupportTicketDetailPage").then((m) => ({ default: m.SupportTicketDetailPage })));
+const NewSupportTicketPage = lazy(() => import("./pages/NewSupportTicketPage").then((m) => ({ default: m.NewSupportTicketPage })));
+const PilotSupportCenterPage = lazy(() => import("./pages/PilotSupportCenterPage").then((m) => ({ default: m.PilotSupportCenterPage })));
+const LegalPolicyPage = lazy(() => import("./pages/LegalPolicyPage").then((m) => ({ default: m.LegalPolicyPage })));
 import { InternalAdminOutlet } from "./components/routing/InternalAdminOutlet";
-import { ShopOnboardingPage } from "./pages/ShopOnboardingPage";
+const ShopOnboardingPage = lazy(() => import("./pages/ShopOnboardingPage").then((m) => ({ default: m.ShopOnboardingPage })));
 import { OnboardingRouteGate } from "./components/onboarding/OnboardingRouteGate";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { NativeMarketingGuard } from "./components/NativeMarketingGuard";
@@ -102,14 +102,14 @@ import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { DeviceActivationProvider } from "./context/DeviceActivationContext";
 import { DeviceActivationGateOutlet } from "./components/DeviceActivationGateOutlet";
 import { EmailVerificationGateOutlet } from "./components/EmailVerificationGateOutlet";
-import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
-import { DeviceActivatingPage } from "./pages/DeviceActivatingPage";
+const DeviceLimitReachedPage = lazy(() => import("./pages/DeviceLimitReachedPage").then((m) => ({ default: m.DeviceLimitReachedPage })));
+const DeviceActivatingPage = lazy(() => import("./pages/DeviceActivatingPage").then((m) => ({ default: m.DeviceActivatingPage })));
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
 import { StartupBootstrapGate } from "./components/startup/StartupBootstrapGate";
 import { ToastProvider } from "./context/ToastProvider";
 import { DisplayScaleProvider } from "./context/DisplayScaleProvider";
 import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
-import { SettingsAppearancePage } from "./pages/SettingsAppearancePage";
+const SettingsAppearancePage = lazy(() => import("./pages/SettingsAppearancePage").then((m) => ({ default: m.SettingsAppearancePage })));
 import { useUiLanguage } from "./hooks/useUiLanguage";
 
 const OwnerDashboardPage = lazy(() =>
@@ -269,6 +269,10 @@ function AppRoutes() {
       <StabilityDiagnosticsHost />
       <RouteSeoController />
       <NativeSplashGate authReady={!auth.initializing} waitForPos={auth.isAuthenticated} />
+      {/* Top-level Suspense — Android WebView catches every lazy route without
+          needing a per-route boundary. Inner Suspense wrappers (already present
+          for a subset of routes) still resolve first when their chunk lands. */}
+      <Suspense fallback={<LazyWait />}>
       <Routes>
         <Route element={<NativePublicGuard isAuthenticated={auth.isAuthenticated} />}>
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -1479,6 +1483,7 @@ function AppRoutes() {
 
         <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : unauthenticatedEntryPath()} replace />} />
       </Routes>
+      </Suspense>
     </StartupBootstrapGate>
     </ToastProvider>
   );
