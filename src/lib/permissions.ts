@@ -52,7 +52,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 24;
+const PERM_MATRIX_VERSION = 25;
 
 const ENTERPRISE_OWNER: Permission[] = [
   "enterprise.access",
@@ -110,6 +110,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "customers.view",
     "customers.debt",
     "loyalty.wallet_issue",
+    "loyalty.redeem",
     "day.close",
     ...DRAWER_OPEN_PERMS,
     "reports.view",
@@ -151,6 +152,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "customers.view",
     "customers.debt",
     "loyalty.wallet_issue",
+    "loyalty.redeem",
     "day.close",
     ...DRAWER_OPEN_PERMS,
     "reports.view",
@@ -183,6 +185,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "customers.view",
     "customers.debt",
     "loyalty.wallet_issue",
+    "loyalty.redeem",
     "pharmacy.access",
     "expenses.record",
     "shift.start",
@@ -222,6 +225,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "customers.view",
     "customers.debt",
     "loyalty.wallet_issue",
+    "loyalty.redeem",
     "day.close",
     ...DRAWER_OPEN_PERMS,
     "reports.view",

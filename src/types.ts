@@ -20,6 +20,8 @@ export type Permission =
   | "customers.debt"
   /** Issue / save Google Wallet loyalty cards for enrolled members (shop-scoped). */
   | "loyalty.wallet_issue"
+  /** Redeem loyalty rewards for enrolled members (shop-scoped; counter roles). */
+  | "loyalty.redeem"
   | "day.close"
   /** Record official shop drawer open for the day (owner/manager/supervisor). */
   | "day.open_drawer"

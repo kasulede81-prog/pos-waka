@@ -222,6 +222,166 @@ describe("loyalty_redeem_reward", () => {
     expect(result.error).toBe("forbidden");
   });
 
+  it("rejects waiter / stock_keeper shop members (forbidden)", async () => {
+    const waiterId = crypto.randomUUID();
+    const stockId = crypto.randomUUID();
+    await exec.exec(`
+      INSERT INTO auth.users (id, email) VALUES
+        ('${waiterId}', 'waiter-a@test.local'),
+        ('${stockId}', 'stock-a@test.local');
+      INSERT INTO public.shop_members (shop_id, user_id, role) VALUES
+        ('${f.shopAId}', '${waiterId}', 'waiter'),
+        ('${f.shopAId}', '${stockId}', 'stock_keeper');
+    `);
+
+    for (const userId of [waiterId, stockId]) {
+      const result = await asUser(exec, userId, async () => {
+        const { rows } = await exec.query(
+          `SELECT public.loyalty_redeem_reward($1, $2, $3, $4, null, null) AS result`,
+          [f.shopAId, accountA, reward10, crypto.randomUUID()],
+        );
+        return rpcJson(rows[0]);
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("forbidden");
+    }
+  });
+
+  it("rejects cross-shop reward id even for an authorized cashier", async () => {
+    // Reward belongs to shop B; account belongs to shop A.
+    const shopBReward = await asUser(exec, f.outsiderId, async () => {
+      const { rows } = await exec.query(
+        `INSERT INTO public.loyalty_rewards (shop_id, name, points_required, active)
+         VALUES ($1, 'Shop B reward', 1, true)
+         RETURNING id`,
+        [f.shopBId],
+      );
+      return rows[0].id as string;
+    });
+    const before = await balanceOf(accountA);
+    const result = await redeem(f.cashierAId, accountA, shopBReward, crypto.randomUUID());
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("reward_not_found");
+    expect(await balanceOf(accountA)).toBe(before);
+  });
+
+  it("rejects arbitrary account from another shop", async () => {
+    const shopBCustomer = crypto.randomUUID();
+    const shopBAccount = crypto.randomUUID();
+    await exec.exec(`
+      INSERT INTO public.customers (id, shop_id, name, phone_e164)
+      VALUES ('${shopBCustomer}', '${f.shopBId}', 'Customer B2', '+256700000088');
+      INSERT INTO public.loyalty_accounts (id, shop_id, customer_id, balance_points, lifetime_earned_points)
+      VALUES ('${shopBAccount}', '${f.shopBId}', '${shopBCustomer}', 50, 50);
+    `);
+    const result = await asUser(exec, f.cashierAId, async () => {
+      const { rows } = await exec.query(
+        `SELECT public.loyalty_redeem_reward($1, $2, $3, $4, null, null) AS result`,
+        [f.shopAId, shopBAccount, reward10, crypto.randomUUID()],
+      );
+      return rpcJson(rows[0]);
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("account_not_found");
+  });
+
+  it("locks the account row (FOR UPDATE) before the balance decision", async () => {
+    const { rows } = await exec.query<{ def: string }>(
+      `SELECT pg_get_functiondef('public.loyalty_redeem_reward(uuid,uuid,uuid,text,text,uuid)'::regprocedure) AS def`,
+    );
+    const def = rows[0]?.def ?? "";
+    expect(def.toLowerCase()).toContain("for update");
+    expect(def.toLowerCase()).toContain("user_can_redeem_loyalty");
+  });
+
+  it("authenticated clients cannot INSERT loyalty_redemptions directly", async () => {
+    await expect(
+      asUser(exec, f.cashierAId, async () => {
+        await exec.query(
+          `INSERT INTO public.loyalty_redemptions
+             (shop_id, account_id, reward_id, points_spent, idempotency_key)
+           VALUES ($1, $2, $3, 1, $4)`,
+          [f.shopAId, accountA, reward10, crypto.randomUUID()],
+        );
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("concurrent different-key redemptions cannot overdraw (10k vs 7k+7k)", async () => {
+    // Fresh high-balance account via large sale.
+    await insertCompletedSale(exec, f, { totalUgx: 10_000_000, customerId: f.customerAId });
+    const start = await balanceOf(accountA);
+    expect(start).toBeGreaterThanOrEqual(10_000);
+
+    // Spend down to exactly 10_000 for a clean assertion (adjust via ledger if needed).
+    // If start > 10000, redeem cheap rewards until near target is messy; instead create
+    // a dedicated customer+account with exact balance via promotional/manual path:
+    const raceCustomer = crypto.randomUUID();
+    const raceAccount = crypto.randomUUID();
+    await exec.exec(`
+      INSERT INTO public.customers (id, shop_id, name, phone_e164)
+      VALUES ('${raceCustomer}', '${f.shopAId}', 'Race Customer', '+256700000099');
+      INSERT INTO public.loyalty_accounts (id, shop_id, customer_id, balance_points, lifetime_earned_points)
+      VALUES ('${raceAccount}', '${f.shopAId}', '${raceCustomer}', 10000, 10000);
+    `);
+    const raceReward = (await createRewardAs(f.ownerAId, {
+      name: `Race-7k-${crypto.randomUUID().slice(0, 8)}`,
+      points: 7_000,
+    })) as string;
+
+    const keyA = crypto.randomUUID();
+    const keyB = crypto.randomUUID();
+
+    // Fire both as close as possible. PGlite serializes the connection, but
+    // FOR UPDATE + non-negative CHECK still yield exactly one winner.
+    const [a, b] = await Promise.all([
+      redeem(f.cashierAId, raceAccount, raceReward, keyA),
+      redeem(f.cashierAId, raceAccount, raceReward, keyB),
+    ]);
+
+    const outcomes = [a, b];
+    const wins = outcomes.filter((r) => r.ok === true && r.already_redeemed !== true);
+    const fails = outcomes.filter((r) => r.ok === false);
+    expect(wins).toHaveLength(1);
+    expect(fails).toHaveLength(1);
+    expect(fails[0].error).toBe("insufficient_points");
+
+    const finalBalance = await balanceOf(raceAccount);
+    expect(finalBalance).toBe(3_000);
+    expect(finalBalance).toBeGreaterThanOrEqual(0);
+
+    const { rows: redemptions } = await exec.query(
+      `SELECT count(*)::int AS n FROM public.loyalty_redemptions
+       WHERE account_id = $1 AND reward_id = $2 AND status = 'completed'`,
+      [raceAccount, raceReward],
+    );
+    expect(redemptions[0].n).toBe(1);
+  });
+
+  it("burst of oversubscribed redemptions never yields a negative balance", async () => {
+    const raceCustomer = crypto.randomUUID();
+    const raceAccount = crypto.randomUUID();
+    await exec.exec(`
+      INSERT INTO public.customers (id, shop_id, name, phone_e164)
+      VALUES ('${raceCustomer}', '${f.shopAId}', 'Burst Customer', '+256700000098');
+      INSERT INTO public.loyalty_accounts (id, shop_id, customer_id, balance_points, lifetime_earned_points)
+      VALUES ('${raceAccount}', '${f.shopAId}', '${raceCustomer}', 10000, 10000);
+    `);
+    const raceReward = (await createRewardAs(f.ownerAId, {
+      name: `Burst-4k-${crypto.randomUUID().slice(0, 8)}`,
+      points: 4_000,
+    })) as string;
+
+    const results = [];
+    for (let i = 0; i < 5; i++) {
+      results.push(await redeem(f.cashierAId, raceAccount, raceReward, crypto.randomUUID()));
+    }
+    const wins = results.filter((r) => r.ok === true && r.already_redeemed !== true).length;
+    expect(wins).toBe(2); // 4000+4000 from 10000
+    expect(await balanceOf(raceAccount)).toBe(2_000);
+    expect(await balanceOf(raceAccount)).toBeGreaterThanOrEqual(0);
+  });
+
   it("keeps the balance invariant: balance = earned - redeemed", async () => {
     const { rows } = await exec.query(
       `SELECT a.balance_points,

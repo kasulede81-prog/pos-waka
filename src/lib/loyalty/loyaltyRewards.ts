@@ -4,7 +4,9 @@
  * Rewards are merchant-defined catalog rows (RLS: managers write, any shop
  * member reads). Redemptions go through `loyalty_redeem_reward` — atomic,
  * idempotent (client generates one idempotency key per redemption intent),
- * and auditable via the immutable ledger. Points are NEVER modified here.
+ * and auditable via the immutable ledger. Authorization is enforced in the
+ * RPC (`user_can_redeem_loyalty`); the UI gates on `loyalty.redeem`.
+ * Points are NEVER modified here.
  */
 
 import { hasSupabaseConfig, supabase } from "../supabase";

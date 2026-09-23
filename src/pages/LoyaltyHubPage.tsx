@@ -176,6 +176,7 @@ function CustomerDetail({
   shopId,
   entry,
   canManage,
+  canRedeem,
   canIssueWallet,
   mode,
   onAdjusted,
@@ -184,6 +185,7 @@ function CustomerDetail({
   shopId: string;
   entry: LoyaltyAccountListEntry;
   canManage: boolean;
+  canRedeem: boolean;
   canIssueWallet: boolean;
   /** Full member tools vs card-focused view (QR + Wallet). */
   mode: "full" | "card";
@@ -317,7 +319,7 @@ function CustomerDetail({
             )}
           </div>
 
-          {canManage ? (
+          {canRedeem ? (
             <div className="rounded-2xl border border-border bg-card p-3">
               <p className="text-sm font-black text-foreground">{t(lang, "loyaltyRedeemTitle")}</p>
               {rewards.length === 0 ? (
@@ -461,6 +463,7 @@ function CustomerList({
   searchDone,
   expandedId,
   canManage,
+  canRedeem,
   canIssueWallet,
   mode,
   onSearchChange,
@@ -474,6 +477,7 @@ function CustomerList({
   searchDone: boolean;
   expandedId: string | null;
   canManage: boolean;
+  canRedeem: boolean;
   canIssueWallet: boolean;
   mode: "full" | "card";
   onSearchChange: (value: string) => void;
@@ -529,6 +533,7 @@ function CustomerList({
                   shopId={shopId}
                   entry={entry}
                   canManage={canManage}
+                  canRedeem={canRedeem}
                   canIssueWallet={canIssueWallet}
                   mode={mode}
                   onAdjusted={onAdjusted}
@@ -545,6 +550,7 @@ function CustomerList({
 export function LoyaltyHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const canManage = actorHasPermission(actor, "settings.shop");
+  const canRedeem = actorHasPermission(actor, "loyalty.redeem");
   const canIssueWallet = actorHasPermission(actor, "loyalty.wallet_issue");
   const [shopId, setShopId] = useState<string | null>(null);
   const [overview, setOverview] = useState<LoyaltyOverview | null>(null);
@@ -898,6 +904,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                 searchDone={searchDone}
                 expandedId={expandedId}
                 canManage={canManage}
+                canRedeem={canRedeem}
                 canIssueWallet={canIssueWallet}
                 mode="full"
                 onSearchChange={(value) => {
@@ -942,6 +949,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                 searchDone={searchDone}
                 expandedId={expandedId}
                 canManage={canManage}
+                canRedeem={canRedeem}
                 canIssueWallet={canIssueWallet}
                 mode="card"
                 onSearchChange={(value) => {
