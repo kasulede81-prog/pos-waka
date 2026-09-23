@@ -1039,7 +1039,24 @@ body {
   ) !important;
 }
 
-/** Remap common light utilities app-wide when `.dark` is on `<html>`. */
+/** ==========================================================================
+ * DARK-MODE UTILITY REMAP LAYER (standard setup)
+ *
+ * Light-first components use raw palette utilities (text-waka-900, bg-amber-50,
+ * border-rose-200, …) that never flip on their own. Instead of editing
+ * hundreds of components, we remap those utilities under `.dark` — the same
+ * philosophy as the Phase 17.9 stone/slate/gray semantic bridge in
+ * tailwind.config.ts, extended to every raw palette the app actually uses.
+ *
+ * Rules:
+ *  - light tinted washes (bg-*-50/100, solid bg-white) → dark tinted surfaces
+ *  - dark text shades (text-*-600..950) → light tinted text (keeps hue)
+ *  - light borders (border-*-100..300) → dark tinted borders
+ *  - brand action colors (waka-500/600 buttons, text-white) stay untouched
+ *  - explicit `dark:*` variants always win (higher specificity)
+ * ====================================================================== */
+
+/* --- semantic token remaps --- */
 .dark .bg-card {
   background-color: hsl(var(--card));
 }
@@ -1058,16 +1075,6 @@ body {
 }
 
 .dark .bg-muted,
-.dark .bg-muted {
-  background-color: hsl(var(--background));
-}
-
-.dark .bg-muted,
-.dark .bg-muted {
-  background-color: hsl(var(--muted));
-}
-
-.dark .bg-muted,
 .dark .bg-muted\/80 {
   background-color: hsl(var(--muted));
 }
@@ -1081,36 +1088,18 @@ body {
   --tw-ring-offset-color: hsl(var(--background));
 }
 
-.dark .hover\:bg-muted:hover,
 .dark .hover\:bg-muted:hover {
   background-color: hsl(var(--muted));
 }
 
-.dark .text-foreground,
-.dark .text-foreground,
-.dark .text-foreground,
 .dark .text-foreground {
   color: hsl(var(--foreground));
 }
 
-.dark .text-foreground,
-.dark .text-muted-foreground,
-.dark .text-foreground,
-.dark .text-muted-foreground {
-  color: hsl(var(--card-foreground));
-}
-
-.dark .text-muted-foreground,
-.dark .text-muted-foreground,
-.dark .text-muted-foreground,
-.dark .text-muted-foreground,
 .dark .text-muted-foreground {
   color: hsl(var(--muted-foreground));
 }
 
-.dark .border-border,
-.dark .border-border,
-.dark .border-border,
 .dark .border-border {
   border-color: hsl(var(--border));
 }
@@ -1118,6 +1107,181 @@ body {
 .dark .ring-border,
 .dark .ring-foreground\/5 {
   --tw-ring-color: hsl(var(--border));
+}
+
+/* --- solid white surfaces → card (opacity variants like bg-white/80 stay glassy) --- */
+.dark .bg-white {
+  background-color: hsl(var(--card));
+}
+
+/* --- tinted washes: light bg → dark tinted surface --- */
+.dark .bg-waka-50 {
+  background-color: #431407;
+}
+.dark .bg-waka-100 {
+  background-color: #7c2d12;
+}
+.dark .bg-amber-50 {
+  background-color: #451a03;
+}
+.dark .bg-amber-100 {
+  background-color: #78350f;
+}
+.dark .bg-rose-50 {
+  background-color: #4c0519;
+}
+.dark .bg-rose-100 {
+  background-color: #881337;
+}
+.dark .bg-emerald-50 {
+  background-color: #022c22;
+}
+.dark .bg-emerald-100 {
+  background-color: #064e3b;
+}
+.dark .bg-teal-50 {
+  background-color: #042f2e;
+}
+.dark .bg-teal-100 {
+  background-color: #134e4a;
+}
+.dark .bg-sky-50 {
+  background-color: #082f49;
+}
+.dark .bg-sky-100 {
+  background-color: #0c4a6e;
+}
+.dark .bg-violet-50 {
+  background-color: #2e1065;
+}
+.dark .bg-violet-100 {
+  background-color: #4c1d95;
+}
+.dark .bg-red-50 {
+  background-color: #450a0a;
+}
+.dark .bg-red-100 {
+  background-color: #7f1d1d;
+}
+
+/* --- wash hovers --- */
+.dark .hover\:bg-waka-50:hover {
+  background-color: #431407;
+}
+.dark .hover\:bg-waka-100:hover {
+  background-color: #7c2d12;
+}
+.dark .hover\:bg-teal-50:hover {
+  background-color: #042f2e;
+}
+
+/* --- dark text on washes → light tinted text (hue preserved) --- */
+.dark .text-waka-600 {
+  color: #fb923c;
+}
+.dark .text-waka-700 {
+  color: #fb923c;
+}
+.dark .text-waka-800 {
+  color: #fdba74;
+}
+.dark .text-waka-900 {
+  color: #fdba74;
+}
+.dark .text-waka-950 {
+  color: #fed7aa;
+}
+.dark .text-amber-700 {
+  color: #fbbf24;
+}
+.dark .text-amber-800 {
+  color: #fcd34d;
+}
+.dark .text-amber-900 {
+  color: #fde68a;
+}
+.dark .text-amber-950 {
+  color: #fef3c7;
+}
+.dark .text-rose-600 {
+  color: #fb7185;
+}
+.dark .text-rose-700 {
+  color: #fb7185;
+}
+.dark .text-rose-800 {
+  color: #fda4af;
+}
+.dark .text-rose-900 {
+  color: #fecdd3;
+}
+.dark .text-rose-950 {
+  color: #ffe4e6;
+}
+.dark .text-emerald-700 {
+  color: #34d399;
+}
+.dark .text-emerald-800 {
+  color: #6ee7b7;
+}
+.dark .text-emerald-900 {
+  color: #a7f3d0;
+}
+.dark .text-emerald-950 {
+  color: #d1fae5;
+}
+.dark .text-teal-700 {
+  color: #2dd4bf;
+}
+.dark .text-teal-800 {
+  color: #5eead4;
+}
+.dark .text-teal-900 {
+  color: #99f6e4;
+}
+.dark .text-sky-900 {
+  color: #bae6fd;
+}
+.dark .text-sky-950 {
+  color: #e0f2fe;
+}
+.dark .text-violet-900 {
+  color: #ddd6fe;
+}
+.dark .text-red-700 {
+  color: #f87171;
+}
+
+/* --- light borders → dark tinted borders --- */
+.dark .border-waka-100 {
+  border-color: #9a3412;
+}
+.dark .border-waka-200 {
+  border-color: #9a3412;
+}
+.dark .border-waka-300 {
+  border-color: #c2410c;
+}
+.dark .border-amber-200 {
+  border-color: #92400e;
+}
+.dark .border-amber-300 {
+  border-color: #b45309;
+}
+.dark .border-rose-200 {
+  border-color: #9f1239;
+}
+.dark .border-emerald-200 {
+  border-color: #065f46;
+}
+.dark .border-teal-200 {
+  border-color: #115e59;
+}
+.dark .border-sky-200 {
+  border-color: #075985;
+}
+.dark .border-violet-200 {
+  border-color: #5b21b6;
 }
 
 .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
