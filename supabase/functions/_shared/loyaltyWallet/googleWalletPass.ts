@@ -3,7 +3,7 @@
  *
  * Edge runtime copy: supabase/functions/_shared/loyaltyWallet/googleWalletPass.ts
  * Pure TypeScript + WebCrypto. JWT signing is injected via
- * `GoogleWalletSigner` (service account ES256 key = server-side secret).
+ * `GoogleWalletSigner` (Google Cloud service account RSA key → RS256).
  *
  * Produces the "Save to Google Wallet" URL flow: a signed JWT carrying the
  * LoyaltyClass + LoyaltyObject, exchanged at
@@ -122,7 +122,7 @@ export async function buildGoogleWalletSaveUrl(
   return `${GOOGLE_WALLET_SAVE_URL_BASE}${jwt}`;
 }
 
-// ---------- Default WebCrypto ES256 signer ----------
+// ---------- Default WebCrypto RS256 signer (Google Cloud SA keys are RSA) ----------
 
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = "";
@@ -142,17 +142,19 @@ function pemToDer(pem: string): Uint8Array {
 }
 
 /**
- * Creates an ES256 JWT signer from a PKCS#8 PEM private key (the format in a
- * Google service account JSON `private_key`). Usable in Deno and Node 19+.
+ * Creates an RS256 JWT signer from a PKCS#8 PEM private key (the format in a
+ * Google Cloud service account JSON `private_key`). Google Wallet OAuth
+ * assertions and Save JWTs both require RS256 — not ES256.
+ * Usable in Deno and Node 19+.
  */
-export function createEs256SignerFromPkcs8Pem(
+export function createRs256SignerFromPkcs8Pem(
   serviceAccountEmail: string,
   pkcs8Pem: string,
 ): GoogleWalletSigner {
   return {
     serviceAccountEmail,
     async signJwt(claims: Record<string, unknown>): Promise<string> {
-      const header = { alg: "ES256", typ: "JWT" };
+      const header = { alg: "RS256", typ: "JWT" };
       const headerSegment = base64UrlEncode(
         new TextEncoder().encode(JSON.stringify(header)),
       );
@@ -162,12 +164,12 @@ export function createEs256SignerFromPkcs8Pem(
       const key = await crypto.subtle.importKey(
         "pkcs8",
         pemToDer(pkcs8Pem) as BufferSource,
-        { name: "ECDSA", namedCurve: "P-256" },
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
         false,
         ["sign"],
       );
       const signature = await crypto.subtle.sign(
-        { name: "ECDSA", hash: "SHA-256" },
+        { name: "RSASSA-PKCS1-v1_5" },
         key,
         new TextEncoder().encode(`${headerSegment}.${payloadSegment}`) as BufferSource,
       );

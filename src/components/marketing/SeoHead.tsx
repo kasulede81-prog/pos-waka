@@ -15,6 +15,7 @@ import {
   WAKA_SLOGAN,
   WAKA_SUPPORT_EMAIL,
   marketingCanonical,
+  posCanonical,
   DEFAULT_OG_IMAGE,
   SEO_KEYWORDS,
 } from "../../config/company";
@@ -26,6 +27,16 @@ export type SeoProps = {
   image?: string;
   type?: "website" | "article" | "profile";
   noindex?: boolean;
+  /**
+   * When set, overrides the document Referrer-Policy meta (e.g. "no-referrer"
+   * on capability-URL pages so tokens are not sent to third parties).
+   */
+  referrerPolicy?: string;
+  /**
+   * Use pos.waka.ug as the canonical/og:url origin instead of the marketing site.
+   * Pass a token-free path (e.g. "/loyalty") for private customer pages.
+   */
+  usePosCanonical?: boolean;
   /** Include Organization + SoftwareApplication + Person JSON-LD */
   structuredData?: "home" | "page" | "founder" | "contact" | "legal";
 };
@@ -151,9 +162,11 @@ export function SeoHead({
   image = DEFAULT_OG_IMAGE,
   type = "website",
   noindex = false,
+  referrerPolicy,
+  usePosCanonical = false,
   structuredData = "page",
 }: SeoProps) {
-  const canonical = marketingCanonical(path);
+  const canonical = usePosCanonical ? posCanonical(path) : marketingCanonical(path);
   const fullTitle =
     title.includes("|") || title.includes(WAKA_MAIN_PRODUCT) ? title : `${title} | ${WAKA_MAIN_PRODUCT}`;
 
@@ -162,6 +175,7 @@ export function SeoHead({
     setMeta("description", description);
     setMeta("keywords", SEO_KEYWORDS);
     setMeta("robots", noindex ? "noindex, nofollow" : "index, follow");
+    if (referrerPolicy) setMeta("referrer", referrerPolicy);
     setCanonical(canonical);
 
     setMeta("og:title", fullTitle, "property");
@@ -186,7 +200,7 @@ export function SeoHead({
     if (structuredData === "home" || structuredData === "contact") {
       injectJsonLd("waka-schema-local", localBusinessSchema());
     }
-  }, [fullTitle, description, canonical, image, type, noindex, structuredData]);
+  }, [fullTitle, description, canonical, image, type, noindex, referrerPolicy, structuredData]);
 
   return null;
 }

@@ -25,6 +25,12 @@ export function isVerifyAgentPath(pathname: string): boolean {
   return p === "/verify-agent" || p.startsWith("/verify-agent/");
 }
 
+/** Customer-facing loyalty card — no merchant login (web). Token is opaque hex. */
+export function isPublicLoyaltyCardPath(pathname: string): boolean {
+  const p = pathname.split("?")[0] || "/";
+  return /^\/loyalty\/[a-f0-9]{64}$/i.test(p);
+}
+
 /** Paths where Supabase returns after email/OAuth — must render immediately (no startup gate). */
 export function isAuthHandoffPath(pathname: string): boolean {
   const p = pathname.split("?")[0] || "/";
@@ -38,6 +44,7 @@ export function isStartupPublicPath(pathname: string): boolean {
   if (NATIVE_PUBLIC_PATHS.has(p)) return true;
   if (isAuthHandoffPath(p)) return true;
   if (isVerifyAgentPath(p)) return true;
+  if (isPublicLoyaltyCardPath(p)) return true;
   return isNativeMarketingPath(p);
 }
 

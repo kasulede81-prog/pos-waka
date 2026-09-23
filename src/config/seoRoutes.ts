@@ -39,5 +39,6 @@ export function noIndexSeoTitle(pathname: string): string {
   if (p === "/auth/callback") return "Signing in";
   if (p === "/auth/recovery") return "Password recovery";
   if (p.startsWith("/internal/")) return "Waka POS Admin";
+  if (p.startsWith("/loyalty/")) return "WAKA Loyalty";
   return "Waka POS";
 }

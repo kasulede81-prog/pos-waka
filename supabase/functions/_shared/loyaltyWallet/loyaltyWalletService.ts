@@ -100,20 +100,55 @@ export async function issueGoogleWalletSaveUrl(
     const loyaltyClass = buildGoogleLoyaltyClass(input, config.ids);
     const loyaltyObject = buildGoogleLoyaltyObject(input, config.ids);
 
+    // REST upsert is best-effort. Google Save JWTs can create class/object on
+    // first save; hard-failing here blocked issuance when the Wallet API was
+    // disabled on the GCP project (accessNotConfigured) even though RS256 Save
+    // URLs remain valid.
     if (config.persistObjects !== false) {
-      const token = await fetchGoogleWalletAccessToken(signer, nowSeconds, config.fetchImpl);
-      const classResult = await upsertGoogleLoyaltyClass(
-        token.accessToken,
-        loyaltyClass,
-        config.fetchImpl,
-      );
-      if (!classResult.ok) return { ok: false, error: "signing_failed" };
-      const objectResult = await upsertGoogleLoyaltyObject(
-        token.accessToken,
-        loyaltyObject,
-        config.fetchImpl,
-      );
-      if (!objectResult.ok) return { ok: false, error: "signing_failed" };
+      try {
+        const token = await fetchGoogleWalletAccessToken(signer, nowSeconds, config.fetchImpl);
+        const classResult = await upsertGoogleLoyaltyClass(
+          token.accessToken,
+          loyaltyClass,
+          config.fetchImpl,
+        );
+        console.log(
+          JSON.stringify({
+            event: "google_wallet_class_upsert",
+            ok: classResult.ok,
+            status: classResult.status,
+            created: classResult.created,
+            google_status: classResult.googleStatus ?? null,
+            google_reason: classResult.googleReason ?? null,
+            google_message: classResult.googleMessage ?? null,
+          }),
+        );
+        if (classResult.ok) {
+          const objectResult = await upsertGoogleLoyaltyObject(
+            token.accessToken,
+            loyaltyObject,
+            config.fetchImpl,
+          );
+          console.log(
+            JSON.stringify({
+              event: "google_wallet_object_upsert",
+              ok: objectResult.ok,
+              status: objectResult.status,
+              created: objectResult.created,
+              google_status: objectResult.googleStatus ?? null,
+              google_reason: objectResult.googleReason ?? null,
+              google_message: objectResult.googleMessage ?? null,
+            }),
+          );
+        }
+      } catch (persistErr) {
+        console.log(
+          JSON.stringify({
+            event: "google_wallet_persist_skipped",
+            reason: persistErr instanceof Error ? persistErr.message.slice(0, 120) : "persist_error",
+          }),
+        );
+      }
     }
 
     const claims = buildGoogleSaveJwtClaims(

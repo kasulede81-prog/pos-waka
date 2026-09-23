@@ -36,14 +36,26 @@ describe("deterministic Google Wallet object identity", () => {
 });
 
 describe("Google Wallet REST upsert / patch", () => {
-  it("treats 409 on class insert as success (already exists)", async () => {
+  it("surfaces safe Google API reason on class insert failure", async () => {
     const fetchImpl: FetchLike = async () => ({
       ok: false,
-      status: 409,
-      text: async () => "exists",
+      status: 403,
+      text: async () =>
+        JSON.stringify({
+          error: {
+            code: 403,
+            status: "PERMISSION_DENIED",
+            message: "Google Wallet API has not been used in project before",
+            errors: [{ reason: "accessNotConfigured" }],
+          },
+        }),
     });
     const result = await upsertGoogleLoyaltyClass("token", { id: "3388.class" }, fetchImpl);
-    expect(result).toEqual({ ok: true, status: 409, created: false });
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(403);
+    expect(result.googleStatus).toBe("PERMISSION_DENIED");
+    expect(result.googleReason).toBe("accessNotConfigured");
+    expect(result.googleMessage).toContain("Google Wallet API");
   });
 
   it("on object 409, PUTs the full resource (re-issue safe)", async () => {

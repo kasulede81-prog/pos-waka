@@ -4,7 +4,7 @@ import {
   buildGoogleLoyaltyObject,
   buildGoogleSaveJwtClaims,
   buildGoogleWalletSaveUrl,
-  createEs256SignerFromPkcs8Pem,
+  createRs256SignerFromPkcs8Pem,
   GOOGLE_WALLET_SAVE_URL_BASE,
   googleClassId,
   googleObjectId,
@@ -12,9 +12,9 @@ import {
 import type { LoyaltyPassInput } from "../../../../supabase/functions/_shared/loyaltyWallet/walletPassTypes.ts";
 
 /**
- * Phase 06 — Google Wallet pass internals. The ES256 JWT signer is exercised
- * end-to-end with a WebCrypto-generated key (real signing, real verification)
- * — only the Google-issued service account is an external blocker.
+ * Phase 06 — Google Wallet pass internals. The RS256 JWT signer is exercised
+ * end-to-end with a WebCrypto-generated RSA key (real signing, real verification)
+ * — matching Google Cloud service account key type.
  */
 
 const INPUT: LoyaltyPassInput = {
@@ -99,7 +99,7 @@ describe("save JWT claims", () => {
   });
 });
 
-describe("createEs256SignerFromPkcs8Pem", () => {
+describe("createRs256SignerFromPkcs8Pem", () => {
   function pemEncode(label: string, der: Uint8Array): string {
     let binary = "";
     for (const b of der) binary += String.fromCharCode(b);
@@ -110,14 +110,19 @@ describe("createEs256SignerFromPkcs8Pem", () => {
 
   it("signs a JWT that verifies against the matching public key", async () => {
     const keyPair = await crypto.subtle.generateKey(
-      { name: "ECDSA", namedCurve: "P-256" },
+      {
+        name: "RSASSA-PKCS1-v1_5",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256",
+      },
       true,
       ["sign", "verify"],
     );
     const pkcs8 = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
     const spki = await crypto.subtle.exportKey("spki", keyPair.publicKey);
 
-    const signer = createEs256SignerFromPkcs8Pem(
+    const signer = createRs256SignerFromPkcs8Pem(
       "wallet@waka.iam.gserviceaccount.com",
       pemEncode("PRIVATE KEY", new Uint8Array(pkcs8)),
     );
@@ -135,6 +140,15 @@ describe("createEs256SignerFromPkcs8Pem", () => {
     expect(payloadSegment).toBeTruthy();
     expect(signatureSegment).toBeTruthy();
 
+    const headerJson = JSON.parse(
+      new TextDecoder().decode(
+        Uint8Array.from(atob(headerSegment.replace(/-/g, "+").replace(/_/g, "/")), (c) =>
+          c.charCodeAt(0),
+        ),
+      ),
+    ) as { alg: string };
+    expect(headerJson.alg).toBe("RS256");
+
     // Decode payload and confirm our claims survived the round trip.
     const payloadJson = JSON.parse(
       new TextDecoder().decode(
@@ -146,11 +160,11 @@ describe("createEs256SignerFromPkcs8Pem", () => {
     expect(payloadJson.aud).toBe("google");
     expect(payloadJson.typ).toBe("savetowallet");
 
-    // Verify ES256 signature over the signing input with the public key.
+    // Verify RS256 signature over the signing input with the public key.
     const publicKey = await crypto.subtle.importKey(
       "spki",
       new Uint8Array(spki) as BufferSource,
-      { name: "ECDSA", namedCurve: "P-256" },
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
       false,
       ["verify"],
     );
@@ -159,7 +173,7 @@ describe("createEs256SignerFromPkcs8Pem", () => {
       (c) => c.charCodeAt(0),
     );
     const valid = await crypto.subtle.verify(
-      { name: "ECDSA", hash: "SHA-256" },
+      { name: "RSASSA-PKCS1-v1_5" },
       publicKey,
       signature as BufferSource,
       new TextEncoder().encode(`${headerSegment}.${payloadSegment}`) as BufferSource,

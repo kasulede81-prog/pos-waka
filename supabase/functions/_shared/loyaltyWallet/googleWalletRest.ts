@@ -78,13 +78,40 @@ export async function fetchGoogleWalletAccessToken(
   };
 }
 
+export type WalletApiResult = {
+  ok: boolean;
+  status: number;
+  body: string;
+  /** Safe Google error.status / errors[].reason — never secrets. */
+  googleStatus?: string;
+  googleReason?: string;
+  googleMessage?: string;
+};
+
+function parseGoogleApiError(body: string): Pick<WalletApiResult, "googleStatus" | "googleReason" | "googleMessage"> {
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { status?: string; message?: string; errors?: Array<{ reason?: string }> };
+    };
+    const err = parsed.error;
+    if (!err) return {};
+    return {
+      googleStatus: err.status,
+      googleReason: err.errors?.map((e) => e.reason).filter(Boolean).join(",") || undefined,
+      googleMessage: typeof err.message === "string" ? err.message.slice(0, 300) : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 async function walletApi(
   accessToken: string,
   method: string,
   path: string,
   body: Record<string, unknown> | null,
   fetchImpl: FetchLike,
-): Promise<{ ok: boolean; status: number; body: string }> {
+): Promise<WalletApiResult> {
   const res = await fetchImpl(`${GOOGLE_WALLET_API_BASE}${path}`, {
     method,
     headers: {
@@ -93,7 +120,9 @@ async function walletApi(
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  return { ok: res.ok, status: res.status, body: await res.text() };
+  const text = await res.text();
+  const meta = res.ok ? {} : parseGoogleApiError(text);
+  return { ok: res.ok, status: res.status, body: text, ...meta };
 }
 
 /**
@@ -104,13 +133,22 @@ export async function upsertGoogleLoyaltyClass(
   accessToken: string,
   loyaltyClass: Record<string, unknown>,
   fetchImpl: FetchLike = fetch as FetchLike,
-): Promise<{ ok: boolean; status: number; created: boolean }> {
+): Promise<{ ok: boolean; status: number; created: boolean; googleStatus?: string; googleReason?: string; googleMessage?: string }> {
   const insert = await walletApi(accessToken, "POST", "/loyaltyClass", loyaltyClass, fetchImpl);
   if (insert.ok) return { ok: true, status: insert.status, created: true };
   if (insert.status === 409) return { ok: true, status: 409, created: false };
   // Retry as PUT update for recoverable conflicts / revisions.
   const id = String(loyaltyClass.id ?? "");
-  if (!id) return { ok: false, status: insert.status, created: false };
+  if (!id) {
+    return {
+      ok: false,
+      status: insert.status,
+      created: false,
+      googleStatus: insert.googleStatus,
+      googleReason: insert.googleReason,
+      googleMessage: insert.googleMessage,
+    };
+  }
   const update = await walletApi(
     accessToken,
     "PUT",
@@ -118,7 +156,14 @@ export async function upsertGoogleLoyaltyClass(
     loyaltyClass,
     fetchImpl,
   );
-  return { ok: update.ok, status: update.status, created: false };
+  return {
+    ok: update.ok,
+    status: update.status,
+    created: false,
+    googleStatus: update.googleStatus ?? insert.googleStatus,
+    googleReason: update.googleReason ?? insert.googleReason,
+    googleMessage: update.googleMessage ?? insert.googleMessage,
+  };
 }
 
 /**
@@ -129,10 +174,19 @@ export async function upsertGoogleLoyaltyObject(
   accessToken: string,
   loyaltyObject: Record<string, unknown>,
   fetchImpl: FetchLike = fetch as FetchLike,
-): Promise<{ ok: boolean; status: number; created: boolean }> {
+): Promise<{ ok: boolean; status: number; created: boolean; googleStatus?: string; googleReason?: string; googleMessage?: string }> {
   const insert = await walletApi(accessToken, "POST", "/loyaltyObject", loyaltyObject, fetchImpl);
   if (insert.ok) return { ok: true, status: insert.status, created: true };
-  if (insert.status !== 409) return { ok: false, status: insert.status, created: false };
+  if (insert.status !== 409) {
+    return {
+      ok: false,
+      status: insert.status,
+      created: false,
+      googleStatus: insert.googleStatus,
+      googleReason: insert.googleReason,
+      googleMessage: insert.googleMessage,
+    };
+  }
   const id = String(loyaltyObject.id ?? "");
   if (!id) return { ok: false, status: 409, created: false };
   const update = await walletApi(
@@ -142,7 +196,14 @@ export async function upsertGoogleLoyaltyObject(
     loyaltyObject,
     fetchImpl,
   );
-  return { ok: update.ok, status: update.status, created: false };
+  return {
+    ok: update.ok,
+    status: update.status,
+    created: false,
+    googleStatus: update.googleStatus,
+    googleReason: update.googleReason,
+    googleMessage: update.googleMessage,
+  };
 }
 
 /** Patch only the points balance — used by the ledger → wallet sync outbox. */

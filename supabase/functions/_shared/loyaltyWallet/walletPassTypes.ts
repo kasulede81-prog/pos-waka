@@ -43,8 +43,8 @@ export type ApplePassSigner = {
 };
 
 /**
- * Signs the JWT used for Google Wallet "Save to Wallet" URLs (ES256 with the
- * Google service account private key). Implementations return the compact
+ * Signs the JWT used for Google Wallet "Save to Wallet" URLs (RS256 with the
+ * Google Cloud service account private key). Implementations return the compact
  * JWS string.
  */
 export type GoogleWalletSigner = {

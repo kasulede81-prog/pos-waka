@@ -30,7 +30,7 @@ const EMPTY_INPUT: RewardInput = {
   active: true,
 };
 
-/** Merchant reward catalog management (Phase 08, managers only). */
+/** Merchant reward catalog management — simple name + points first; advanced collapsed. */
 export function LoyaltyRewardsPanel({
   lang,
   shopId,
@@ -44,6 +44,7 @@ export function LoyaltyRewardsPanel({
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<RewardInput>({ ...EMPTY_INPUT });
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const reload = useCallback(async () => {
     const rows = await fetchLoyaltyRewards(shopId);
@@ -64,6 +65,7 @@ export function LoyaltyRewardsPanel({
     if (result.ok) {
       setSaveState("done");
       setDraft({ ...EMPTY_INPUT });
+      setShowAdvanced(false);
       await reload();
       onChanged();
     } else {
@@ -81,6 +83,7 @@ export function LoyaltyRewardsPanel({
     <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <p className="text-base font-black text-foreground">{t(lang, "loyaltyRewardsTitle")}</p>
       <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyRewardsSub")}</p>
+      <p className="mt-2 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyRewardExampleHint")}</p>
 
       {loaded && rewards.length === 0 ? (
         <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyNoRewards")}</p>
@@ -91,15 +94,18 @@ export function LoyaltyRewardsPanel({
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-foreground">
                   {reward.name}
-                  <span className={clsx("ml-2 rounded-full px-2 py-0.5 text-[10px] font-black", reward.active ? "bg-success-muted text-success" : "bg-muted text-muted-foreground")}>
+                  <span
+                    className={clsx(
+                      "ml-2 rounded-full px-2 py-0.5 text-[10px] font-black",
+                      reward.active ? "bg-success-muted text-success" : "bg-muted text-muted-foreground",
+                    )}
+                  >
                     {reward.active ? t(lang, "loyaltyRewardActive") : t(lang, "loyaltyRewardInactive")}
                   </span>
                 </p>
                 <p className="text-xs font-medium text-muted-foreground">
-                  {reward.pointsRequired} {t(lang, "loyaltyPointsUnit")} · {t(lang, kindLabelKey(reward.rewardKind))}
-                  {reward.maxRedemptionsPerAccount != null
-                    ? ` · max ${reward.maxRedemptionsPerAccount}`
-                    : ""}
+                  {reward.pointsRequired} {t(lang, "loyaltyPointsUnit")}
+                  {reward.description ? ` · ${reward.description}` : ""}
                 </p>
               </div>
               <WakaSwitch
@@ -121,6 +127,7 @@ export function LoyaltyRewardsPanel({
             <input
               value={draft.name}
               onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+              placeholder={t(lang, "loyaltyRewardNamePlaceholder")}
               className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
             />
           </label>
@@ -134,46 +141,67 @@ export function LoyaltyRewardsPanel({
               className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
             />
           </label>
-          <label className="block text-sm font-bold text-foreground">
-            {t(lang, "loyaltyRewardKindLabel")}
-            <select
-              value={draft.rewardKind}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, rewardKind: e.target.value as RewardInput["rewardKind"] }))
-              }
-              className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
-            >
-              {KIND_OPTIONS.map((kind) => (
-                <option key={kind} value={kind}>
-                  {t(lang, kindLabelKey(kind))}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-bold text-foreground">
-            {t(lang, "loyaltyRewardLimitLabel")}
-            <input
-              type="number"
-              min={1}
-              value={draft.maxRedemptionsPerAccount ?? ""}
-              onChange={(e) =>
-                setDraft((d) => ({
-                  ...d,
-                  maxRedemptionsPerAccount: e.target.value === "" ? null : Number(e.target.value),
-                }))
-              }
-              className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
-            />
-          </label>
         </div>
-        <label className="mt-3 block text-sm font-bold text-foreground">
-          {t(lang, "loyaltyRewardDescriptionLabel")}
-          <input
-            value={draft.description}
-            onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-            className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
-          />
-        </label>
+
+        <div className="mt-3 rounded-xl border border-dashed border-border p-3">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 text-left"
+          >
+            <span className="text-sm font-black text-foreground">{t(lang, "loyaltyAdvancedSettings")}</span>
+            <span className="text-xs font-bold text-muted-foreground">
+              {showAdvanced ? t(lang, "loyaltyHideAdvanced") : t(lang, "loyaltyShowAdvanced")}
+            </span>
+          </button>
+          {showAdvanced ? (
+            <div className="mt-3 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">{t(lang, "loyaltyRewardHonestyNote")}</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-sm font-bold text-foreground">
+                  {t(lang, "loyaltyRewardKindLabel")}
+                  <select
+                    value={draft.rewardKind}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, rewardKind: e.target.value as RewardInput["rewardKind"] }))
+                    }
+                    className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+                  >
+                    {KIND_OPTIONS.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {t(lang, kindLabelKey(kind))}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-bold text-foreground">
+                  {t(lang, "loyaltyRewardLimitLabel")}
+                  <input
+                    type="number"
+                    min={1}
+                    value={draft.maxRedemptionsPerAccount ?? ""}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        maxRedemptionsPerAccount: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+                  />
+                </label>
+              </div>
+              <label className="block text-sm font-bold text-foreground">
+                {t(lang, "loyaltyRewardDescriptionLabel")}
+                <input
+                  value={draft.description}
+                  onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                  className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
+
         <div className="mt-3 flex items-center gap-3">
           <button
             type="button"

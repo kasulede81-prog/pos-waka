@@ -50,6 +50,56 @@ export type LoyaltyAccountListEntry = {
   enrolledAt: string;
 };
 
+/**
+ * Fetch the opaque membership QR token for an account (shop-scoped RLS).
+ * Used so merchants can re-show a customer's QR without re-enrolling.
+ * Does not change token generation — read-only.
+ */
+export async function fetchLoyaltyAccountQrToken(
+  shopId: string,
+  accountId: string,
+): Promise<string | null> {
+  if (!hasSupabaseConfig || !supabase || !shopId || !accountId) return null;
+  try {
+    const { data, error } = await supabase
+      .from("loyalty_accounts")
+      .select("qr_token")
+      .eq("shop_id", shopId)
+      .eq("id", accountId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const token = String((data as { qr_token?: string }).qr_token ?? "").trim();
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch opaque public_card_token for the customer loyalty page URL (shop-scoped RLS).
+ * Independent from qr_token. Merchants use this only to build the page link —
+ * the raw token must not be shown as technical UI.
+ */
+export async function fetchLoyaltyAccountPublicCardToken(
+  shopId: string,
+  accountId: string,
+): Promise<string | null> {
+  if (!hasSupabaseConfig || !supabase || !shopId || !accountId) return null;
+  try {
+    const { data, error } = await supabase
+      .from("loyalty_accounts")
+      .select("public_card_token")
+      .eq("shop_id", shopId)
+      .eq("id", accountId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const token = String((data as { public_card_token?: string }).public_card_token ?? "").trim();
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
 export type ProgramInput = {
   enabled: boolean;
   earnUnitUgx: number;

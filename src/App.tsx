@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -228,6 +228,9 @@ const ShopRescueConsolePage = lazy(() =>
 );
 const CustomersPage = lazy(() => import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage })));
 const LoyaltyHubPage = lazy(() => import("./pages/LoyaltyHubPage").then((m) => ({ default: m.LoyaltyHubPage })));
+const PublicLoyaltyCardPage = lazy(() =>
+  import("./pages/PublicLoyaltyCardPage").then((m) => ({ default: m.PublicLoyaltyCardPage })),
+);
 const ProfitPage = lazy(() => import("./pages/ProfitPage").then((m) => ({ default: m.ProfitPage })));
 const AskWakaPage = lazy(() => import("./pages/AskWakaPage").then((m) => ({ default: m.AskWakaPage })));
 const ReportsPage = lazy(() => import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
@@ -239,6 +242,11 @@ function LazyWait() {
   return (
     <div className="flex min-h-[40vh] items-center justify-center text-sm font-medium text-muted-foreground">Loading…</div>
   );
+}
+
+function PublicLoyaltyCardRoute() {
+  const { publicCardToken = "" } = useParams<{ publicCardToken: string }>();
+  return <PublicLoyaltyCardPage publicCardToken={publicCardToken} />;
 }
 
 function StabilityDiagnosticsHost() {
@@ -379,6 +387,11 @@ function AppRoutes() {
           element={<LegalPolicyPage kind="acceptable-use" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />}
         />
         <Route path="/verify-agent/:agentId" element={<VerifyAgentPage lang={lang} />} />
+
+        <Route
+          path="/loyalty/:publicCardToken"
+          element={<PublicLoyaltyCardRoute />}
+        />
 
         <Route element={<NativeMarketingGuard isAuthenticated={auth.isAuthenticated} />}>
           <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />

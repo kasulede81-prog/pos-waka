@@ -127,4 +127,46 @@ describe("issueGoogleWalletSaveUrl", () => {
     if (result.pass.provider !== "google_wallet") return;
     expect(result.pass.saveUrl.startsWith("https://pay.google.com/gp/v/save/")).toBe(true);
   });
+
+  it("still returns a Save URL when REST class upsert is denied (API not enabled)", async () => {
+    const fetchImpl = async (url: string, _init?: { method?: string; body?: string }) => {
+      if (url.includes("oauth2.googleapis.com")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ access_token: "ya29.test", expires_in: 3600 }),
+        };
+      }
+      // Simulate accessNotConfigured on Wallet Objects API
+      return {
+        ok: false,
+        status: 403,
+        text: async () =>
+          JSON.stringify({
+            error: {
+              code: 403,
+              status: "PERMISSION_DENIED",
+              message: "Google Wallet API has not been used in project before",
+              errors: [{ reason: "accessNotConfigured" }],
+            },
+          }),
+      };
+    };
+    const result = await issueGoogleWalletSaveUrl(
+      INPUT,
+      {
+        ids: { issuerId: "3388000000000000001", classId: "waka_loyalty", objectId: "acct-1" },
+        origins: ["https://waka.example"],
+        persistObjects: true,
+        fetchImpl,
+      },
+      STUB_GOOGLE_SIGNER,
+      1_700_000_000,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.pass.provider).toBe("google_wallet");
+    if (result.pass.provider !== "google_wallet") return;
+    expect(result.pass.saveUrl.startsWith("https://pay.google.com/gp/v/save/")).toBe(true);
+  });
 });

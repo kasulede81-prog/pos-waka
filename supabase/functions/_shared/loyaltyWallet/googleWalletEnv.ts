@@ -3,7 +3,8 @@
  * Secrets stay in Deno.env — never returned to clients.
  */
 
-import { createEs256SignerFromPkcs8Pem } from "./googleWalletPass.ts";
+import { createRs256SignerFromPkcs8Pem } from "./googleWalletPass.ts";
+import { googleWalletEnvLooksConfigured } from "./googleWalletConfiguredCheck.ts";
 import type { GoogleWalletSigner } from "./walletPassTypes.ts";
 
 export type GoogleWalletEnv =
@@ -16,6 +17,8 @@ export type GoogleWalletEnv =
     }
   | { ok: false; error: "wallet_not_configured" | "wallet_misconfigured" };
 
+export { googleWalletEnvLooksConfigured };
+
 function resolveLogoUrl(): string | undefined {
   const explicit = (Deno.env.get("GOOGLE_WALLET_LOGO_URL") ?? "").trim();
   if (explicit.startsWith("https://")) return explicit;
@@ -24,6 +27,19 @@ function resolveLogoUrl(): string | undefined {
   return undefined;
 }
 
+/**
+ * Cheap presence check for public card responses.
+ * Does NOT JSON-parse the service account or import/parse the PEM private key.
+ * Actual issuance must still call `loadGoogleWalletEnv()` which fully validates.
+ */
+export function isGoogleWalletConfigured(): boolean {
+  return googleWalletEnvLooksConfigured(
+    Deno.env.get("GOOGLE_WALLET_ISSUER_ID") ?? "",
+    Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_JSON") ?? "",
+  );
+}
+
+/** Full credential load for Wallet issuance only (parses SA JSON + builds RS256 signer). */
 export function loadGoogleWalletEnv(): GoogleWalletEnv {
   const issuerId = Deno.env.get("GOOGLE_WALLET_ISSUER_ID") ?? "";
   const serviceAccountJson = Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_JSON") ?? "";
@@ -47,12 +63,8 @@ export function loadGoogleWalletEnv(): GoogleWalletEnv {
   return {
     ok: true,
     issuerId: issuerId.trim(),
-    signer: createEs256SignerFromPkcs8Pem(serviceAccount.client_email, serviceAccount.private_key),
+    signer: createRs256SignerFromPkcs8Pem(serviceAccount.client_email, serviceAccount.private_key),
     origins,
     logoUrl: resolveLogoUrl(),
   };
-}
-
-export function isGoogleWalletConfigured(): boolean {
-  return loadGoogleWalletEnv().ok;
 }
