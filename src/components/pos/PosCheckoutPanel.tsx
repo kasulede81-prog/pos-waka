@@ -463,6 +463,10 @@ function PaymentBlock({
         </div>
       </div>
 
+      {/* Loyalty attaches to the SALE, not to a payment method — cash, ATM,
+          mobile money and credit all reach it from the same place. */}
+      {loyaltyBadge ? <div className={sidebarCompact ? "mt-1.5" : "mt-2"}>{loyaltyBadge}</div> : null}
+
       {paymentMethod === "credit" && dockMode && hideCreditDockPanel ? (
         <p className="mt-1.5 rounded-md bg-warning-muted px-2 py-1 text-[10px] font-semibold text-warning-foreground">
           {t(lang, "posDesktopCreditPanelHint")}
@@ -562,7 +566,6 @@ function PaymentBlock({
             {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
           </p>
           <div className="mt-2 space-y-2">
-            {loyaltyBadge}
             <div>
               <p className="text-[11px] font-semibold text-foreground">{t(lang, "paymentDebtNameLabel")}</p>
               <button
@@ -733,7 +736,6 @@ export function CreditCatalogDockPanel({
   onSaleCustomerName,
   onSaleCustomerPhone,
   useCustomKeypad = false,
-  loyaltyBadge,
 }: {
   lang: Language;
   cashInput: string;
@@ -751,8 +753,6 @@ export function CreditCatalogDockPanel({
   onSaleCustomerName: (name: string) => void;
   onSaleCustomerPhone: (phone: string) => void;
   useCustomKeypad?: boolean;
-  /** Loyalty preview badge rendered above the customer section (Phase 03). */
-  loyaltyBadge?: ReactNode;
 }) {
   return (
     <div className="space-y-4">
@@ -798,7 +798,6 @@ export function CreditCatalogDockPanel({
       ) : null}
       <div className="rounded-xl border border-border bg-muted p-4">
         <p className="text-sm font-black text-foreground">{t(lang, "paymentCreditCustomerDetails")}</p>
-        {loyaltyBadge}
         <div className="mt-3 space-y-3">
           <div>
             <p className="text-sm font-semibold text-foreground">{t(lang, "paymentDebtNameLabel")}</p>

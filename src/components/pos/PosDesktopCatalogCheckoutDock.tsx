@@ -117,6 +117,9 @@ export function PosDesktopCatalogCheckoutDock({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-2.5">
+        {/* Loyalty belongs to the sale, not the tender — shown for every method. */}
+        {loyaltyBadge ? <div className="mb-2 shrink-0">{loyaltyBadge}</div> : null}
+
         {isCredit ? (
           <div className="min-h-0 shrink-0 overflow-y-auto overscroll-y-contain">
             <CreditCatalogDockPanel
@@ -136,7 +139,6 @@ export function PosDesktopCatalogCheckoutDock({
               onSaleCustomerName={onSaleCustomerName}
               onSaleCustomerPhone={onSaleCustomerPhone}
               useCustomKeypad
-              loyaltyBadge={loyaltyBadge}
             />
           </div>
         ) : null}

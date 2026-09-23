@@ -156,14 +156,21 @@ describe("E2E journey — purchase & award", () => {
   });
 
   it("15-16. replaying the award (sync retry) cannot duplicate points", async () => {
-    const replay = await rpcAs(
-      f.cashierAId,
-      `SELECT public.loyalty_award_for_sale($1) AS result`,
-      [sale1Id],
+    // A retried sync re-enters through shop_push_sale_complete, i.e. the definer
+    // context — not a direct client RPC, which 20260922222138 now denies outright.
+    const replay = rpcJson(
+      (await exec.query(`SELECT public.loyalty_award_for_sale($1) AS result`, [sale1Id])).rows[0],
     );
     expect(replay.ok).toBe(true);
     expect(replay.awarded).toBe(false);
     expect(replay.reason).toBe("already_awarded");
+    expect(await balanceOf(accountA)).toBe(25);
+  });
+
+  it("15b. a cashier cannot reach the award primitive directly", async () => {
+    await expect(
+      rpcAs(f.cashierAId, `SELECT public.loyalty_award_for_sale($1) AS result`, [sale1Id]),
+    ).rejects.toThrow(/permission denied/i);
     expect(await balanceOf(accountA)).toBe(25);
   });
 });
@@ -192,11 +199,10 @@ describe("E2E journey — refund & void", () => {
     expect(reversal.reversal_of_id).toBe(earned.id);
     expect(Number(reversal.balance_after)).toBe(20);
 
-    // Replaying the reversal RPC is idempotent.
-    const again = await rpcAs(
-      f.cashierAId,
-      `SELECT public.loyalty_reverse_for_return($1) AS result`,
-      [returnId],
+    // Replaying the reversal from the definer context is idempotent.
+    const again = rpcJson(
+      (await exec.query(`SELECT public.loyalty_reverse_for_return($1) AS result`, [returnId]))
+        .rows[0],
     );
     expect(again.reversed).toBe(false);
     expect(again.reason).toBe("already_reversed");
@@ -212,12 +218,14 @@ describe("E2E journey — refund & void", () => {
     );
     expect(await balanceOf(accountA)).toBe(28);
 
-    const voided = await rpcAs(
-      f.ownerAId,
-      `SELECT public.loyalty_reverse_for_sale($1) AS result`,
-      [sale2Id],
+    // Production voids land as sale_voids rows; trg_loyalty_sale_voids does the
+    // reversal. The primitive itself is no longer client-callable (20260922222138).
+    await exec.query(
+      `INSERT INTO public.sale_voids (id, shop_id, sale_id, product_id, quantity, amount_ugx, created_by)
+       VALUES ($1, $2, $3, $4, 1, 8000, $5)`,
+      [crypto.randomUUID(), f.shopAId, sale2Id, f.productAId, f.ownerAId],
     );
-    expect(voided.reversed).toBe(true);
+
     expect(await balanceOf(accountA)).toBe(20);
   });
 });

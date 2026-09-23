@@ -14,6 +14,12 @@ type Options = {
   onProductScanned: (product: Product, code: string) => void;
   onNotFound?: (code: string) => void;
   setSearchQuery: (q: string) => void;
+  /**
+   * Loyalty membership codes (`WAKA-LOYALTY:<token>`) are claimed here before
+   * any product lookup. Return true to consume the scan; product scanning is
+   * otherwise completely unchanged.
+   */
+  onLoyaltyScanned?: (code: string) => boolean;
 };
 
 export function useSellBarcodeScanner({
@@ -22,6 +28,7 @@ export function useSellBarcodeScanner({
   onProductScanned,
   onNotFound,
   setSearchQuery,
+  onLoyaltyScanned,
 }: Options) {
   const [cameraScanOpen, setCameraScanOpen] = useState(false);
   const [cameraScanStatus, setCameraScanStatus] = useState("");
@@ -30,6 +37,9 @@ export function useSellBarcodeScanner({
 
   const resolveBarcode = useCallback(
     (code: string) => {
+      // A membership code is never a product. Claim it before the catalog
+      // lookup so it cannot land in the search box or be reported "not found".
+      if (onLoyaltyScanned?.(code)) return true;
       setSearchQuery(code);
       const exact = findProductByBarcode(products, code);
       if (exact) {
@@ -39,7 +49,7 @@ export function useSellBarcodeScanner({
       onNotFound?.(code);
       return false;
     },
-    [onNotFound, onProductScanned, products, setSearchQuery],
+    [onLoyaltyScanned, onNotFound, onProductScanned, products, setSearchQuery],
   );
 
   useEffect(() => {

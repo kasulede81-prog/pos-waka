@@ -5,14 +5,22 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Banknote, Keyboard, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import type { CartVoidMode } from "../lib/saleLifecycle";
 import { CartVoidConfirmDialog } from "../components/pos/CartVoidConfirmDialog";
 import { useCartAbandonVoid } from "../hooks/useCartAbandonVoid";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
 import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
-import { LoyaltyCheckoutBadge } from "../components/loyalty/LoyaltyCheckoutBadge";
+import {
+  PosLoyaltyAwardNote,
+  PosLoyaltyCustomerRow,
+} from "../components/pos/PosLoyaltyCustomerRow";
+import { useLoyaltyCheckoutAttach } from "../hooks/useLoyaltyCheckoutAttach";
+import { useLoyaltyCheckoutPreview } from "../hooks/useLoyaltyCheckoutPreview";
+import { isLoyaltyScan } from "../lib/loyalty/loyaltyScanRouting";
+import { awaitConfirmedAward } from "../lib/loyalty/loyaltyAward";
+import { resolveShopCtx } from "../offline/cloudSync";
 import { PosOperationalNav } from "../components/pos/PosOperationalNav";
 import { PosSellHeroCard } from "../components/pos/PosSellHeroCard";
 import { PosSellActionChip, PosSellActionChips } from "../components/pos/PosSellActionChips";
@@ -564,6 +572,101 @@ export function PosPage({ lang }: { lang: Language }) {
   const [cameraScanStatus, setCameraScanStatus] = useState("");
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  // ---- Loyalty at checkout (Phases 1–3) --------------------------------------
+  // Read-only preview owned here so the post-sale note can reuse the same
+  // program/account data the row shows. Points are never credited client-side.
+  const loyaltyPreview = useLoyaltyCheckoutPreview(saleCustomerId, draftPayable);
+  const [loyaltyAward, setLoyaltyAward] = useState<{
+    earnedPoints: number;
+    balancePoints: number | null;
+    confirmed: boolean;
+  } | null>(null);
+  const loyaltyAwardWatchRef = useRef<{ cancelled: boolean } | null>(null);
+
+  const loyaltyAttach = useLoyaltyCheckoutAttach({
+    onAttach: (member) => {
+      setDraftSaleCustomer({
+        customerId: member.customerId,
+        customerName: member.customerName,
+        customerPhone: member.customerPhone ?? "",
+      });
+      setToast(
+        tTemplate(lang, "loyaltyMemberAttachedToast", {
+          name: member.customerName,
+          points: member.balancePoints.toLocaleString(),
+        }),
+      );
+      window.setTimeout(() => setToast(null), 2600);
+    },
+  });
+  const { attachFromScan: loyaltyAttachFromScan, clearError: clearLoyaltyAttachError } =
+    loyaltyAttach;
+
+  /**
+   * Claim a scanned code as a loyalty membership before any product lookup.
+   * Synchronous by design: the scanner callbacks need an immediate yes/no, so
+   * the prefix decides and resolution continues in the background.
+   */
+  const claimLoyaltyScan = useCallback(
+    (code: string) => {
+      if (!isLoyaltyScan(code)) return false;
+      void loyaltyAttachFromScan(code);
+      return true;
+    },
+    [loyaltyAttachFromScan],
+  );
+
+  const detachLoyaltyCustomer = useCallback(() => {
+    clearLoyaltyAttachError();
+    setDraftSaleCustomer({ customerId: "", customerName: "", customerPhone: "" });
+  }, [clearLoyaltyAttachError, setDraftSaleCustomer]);
+
+  const openLoyaltyScan = useCallback(() => {
+    clearLoyaltyAttachError();
+    setCameraScanOpen(true);
+  }, [clearLoyaltyAttachError, setCameraScanOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (loyaltyAwardWatchRef.current) loyaltyAwardWatchRef.current.cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Post-sale award (Phase 3). The estimate shows at once; the confirmed figure
+   * replaces it only when the server's `earned` ledger row for THIS sale can be
+   * read back — which for an offline sale is after it syncs, and may be never
+   * in this session. The note stays explicitly "estimated" until then.
+   */
+  const startLoyaltyAwardWatch = useCallback(
+    (saleId: string | null, customerId: string, expectedPoints: number) => {
+      if (loyaltyAwardWatchRef.current) loyaltyAwardWatchRef.current.cancelled = true;
+      loyaltyAwardWatchRef.current = null;
+
+      if (!saleId || !customerId || expectedPoints <= 0) {
+        setLoyaltyAward(null);
+        return;
+      }
+
+      setLoyaltyAward({ earnedPoints: expectedPoints, balancePoints: null, confirmed: false });
+
+      const signal = { cancelled: false };
+      loyaltyAwardWatchRef.current = signal;
+      void (async () => {
+        const ctx = await resolveShopCtx();
+        if (!ctx?.shopId || signal.cancelled) return;
+        const confirmedAward = await awaitConfirmedAward(ctx.shopId, saleId, { signal });
+        if (!confirmedAward || signal.cancelled) return;
+        setLoyaltyAward({
+          earnedPoints: confirmedAward.earnedPoints,
+          balancePoints: confirmedAward.balancePoints,
+          confirmed: true,
+        });
+      })();
+    },
+    [],
+  );
+
   const browse = useSellProductBrowseEngine({
     lang,
     products,
@@ -902,6 +1005,9 @@ export function PosPage({ lang }: { lang: Language }) {
     if (!caps.hidWedge) return;
     void startBarcodeSession("hid", {
       onScan: (code) => {
+        // A membership code is never a product: claim it before the catalog
+        // lookup so it never reaches the search box or a "not found" toast.
+        if (claimLoyaltyScan(code)) return;
         setSearchQuery(code);
         const exact = findProductByBarcode(products, code);
         if (exact) {
@@ -916,7 +1022,7 @@ export function PosPage({ lang }: { lang: Language }) {
     return () => {
       void stopBarcodeSession();
     };
-  }, [products, handleBarcodeProduct, lang]);
+  }, [products, handleBarcodeProduct, lang, claimLoyaltyScan]);
 
   useEffect(() => {
     if (!cameraScanOpen) return;
@@ -924,6 +1030,12 @@ export function PosPage({ lang }: { lang: Language }) {
     void startBarcodeSession("camera", {
       videoElement: cameraVideoRef.current,
       onScan: (code) => {
+        if (claimLoyaltyScan(code)) {
+          setCameraScanStatus(t(lang, "loyaltyScanResolving"));
+          void stopBarcodeSession();
+          setCameraScanOpen(false);
+          return;
+        }
         setSearchQuery(code);
         setCameraScanStatus(`Scanned: ${code}`);
         const exact = findProductByBarcode(products, code);
@@ -943,11 +1055,12 @@ export function PosPage({ lang }: { lang: Language }) {
     return () => {
       void stopBarcodeSession();
     };
-  }, [cameraScanOpen, handleBarcodeProduct, lang, products]);
+  }, [cameraScanOpen, handleBarcodeProduct, lang, products, claimLoyaltyScan]);
 
   useEffect(() => {
     if (draftLines.length === 0) setSaleCheckoutMinimized(false);
   }, [draftLines.length]);
+
 
   useEffect(() => {
     const id = (location.state as { preferProductId?: string } | null)?.preferProductId;
@@ -1150,6 +1263,11 @@ export function PosPage({ lang }: { lang: Language }) {
       if (hapticsOn) void hapticSaleComplete();
       if (soundOn) playSaleSuccessTone();
 
+      // Loyalty: show the estimate immediately, then replace it with the
+      // server's own figure once the sale has synced and the ledger row exists.
+      // Never claim points are banked before the database has awarded them.
+      startLoyaltyAwardWatch(r.saleId ?? null, saleCustomerId, loyaltyPreview.expectedPoints);
+
       setCashInput("");
       setMobileMoneyInput("");
       setSaleCustomerId("");
@@ -1175,7 +1293,17 @@ export function PosPage({ lang }: { lang: Language }) {
         window.setTimeout(() => setToast(null), 1600);
       }
     },
-    [hapticsOn, soundOn, preferences.celebratedFirstSale, hospitalityMode, ht, lang],
+    [
+      hapticsOn,
+      soundOn,
+      preferences.celebratedFirstSale,
+      hospitalityMode,
+      ht,
+      lang,
+      startLoyaltyAwardWatch,
+      saleCustomerId,
+      loyaltyPreview.expectedPoints,
+    ],
   );
 
   const onControlledGateApproved = useCallback(() => {
@@ -1664,7 +1792,16 @@ export function PosPage({ lang }: { lang: Language }) {
     onFinishSale: finishSale,
     onAddCashNote: addCheckoutCashNote,
     loyaltyBadge: (
-      <LoyaltyCheckoutBadge lang={lang} customerId={saleCustomerId} totalUgx={draftPayable} />
+      <PosLoyaltyCustomerRow
+        lang={lang}
+        customerId={saleCustomerId}
+        customerName={saleCustomerName}
+        preview={loyaltyPreview}
+        attachState={loyaltyAttach.state}
+        onScan={openLoyaltyScan}
+        onDetach={detachLoyaltyCustomer}
+        canScan={detectBarcodeCapabilities().cameraScan}
+      />
     ),
   };
 
@@ -2265,7 +2402,16 @@ export function PosPage({ lang }: { lang: Language }) {
                 onSaleCustomerPhone={setSaleCustomerPhone}
                 onFinishSale={finishSale}
                 loyaltyBadge={
-                  <LoyaltyCheckoutBadge lang={lang} customerId={saleCustomerId} totalUgx={draftPayable} />
+                  <PosLoyaltyCustomerRow
+                    lang={lang}
+                    customerId={saleCustomerId}
+                    customerName={saleCustomerName}
+                    preview={loyaltyPreview}
+                    attachState={loyaltyAttach.state}
+                    onScan={openLoyaltyScan}
+                    onDetach={detachLoyaltyCustomer}
+                    canScan={detectBarcodeCapabilities().cameraScan}
+                  />
                 }
               />
             </div>
@@ -3076,6 +3222,18 @@ export function PosPage({ lang }: { lang: Language }) {
           {toast}
         </div>
       )}
+
+      {/* The note belongs to the sale that just closed; starting a new cart hides it. */}
+      {loyaltyAward && draftLines.length === 0 ? (
+        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+4.75rem)] left-1/2 z-[100] max-w-sm -translate-x-1/2 shadow-xl">
+          <PosLoyaltyAwardNote
+            lang={lang}
+            earnedPoints={loyaltyAward.earnedPoints}
+            balancePoints={loyaltyAward.balancePoints}
+            confirmed={loyaltyAward.confirmed}
+          />
+        </div>
+      ) : null}
 
       {firstSaleOpen ? (
         <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
