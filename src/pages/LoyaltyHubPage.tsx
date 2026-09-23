@@ -123,12 +123,14 @@ function CustomerDetail({
   shopId,
   entry,
   canManage,
+  canIssueWallet,
   onAdjusted,
 }: {
   lang: Language;
   shopId: string;
   entry: LoyaltyAccountListEntry;
   canManage: boolean;
+  canIssueWallet: boolean;
   onAdjusted: () => void;
 }) {
   const [history, setHistory] = useState<LoyaltyTransactionRow[] | null>(null);
@@ -223,7 +225,7 @@ function CustomerDetail({
         lang={lang}
         shopId={shopId}
         accountId={entry.accountId}
-        canManage={canManage}
+        canIssue={canIssueWallet}
       />
 
       <div>
@@ -358,7 +360,10 @@ function CustomerDetail({
 
 export function LoyaltyHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  /** Program / redeem / adjust — shop configuration operators. */
   const canManage = actorHasPermission(actor, "settings.shop");
+  /** Issue Google Wallet cards — loyalty membership operators (not shop settings). */
+  const canIssueWallet = actorHasPermission(actor, "loyalty.wallet_issue");
   const [shopId, setShopId] = useState<string | null>(null);
   const [overview, setOverview] = useState<LoyaltyOverview | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -607,6 +612,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                         shopId={shopId}
                         entry={entry}
                         canManage={canManage}
+                        canIssueWallet={canIssueWallet}
                         onAdjusted={() => {
                           void loadOverview(shopId);
                           void runSearch(shopId, search);

@@ -18,6 +18,8 @@ export type Permission =
   | "products.edit_presets"
   | "customers.view"
   | "customers.debt"
+  /** Issue / save Google Wallet loyalty cards for enrolled members (shop-scoped). */
+  | "loyalty.wallet_issue"
   | "day.close"
   /** Record official shop drawer open for the day (owner/manager/supervisor). */
   | "day.open_drawer"

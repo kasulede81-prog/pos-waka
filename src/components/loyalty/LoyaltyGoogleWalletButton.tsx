@@ -9,18 +9,19 @@ import {
 
 /**
  * Merchant action: Add loyalty member to Google Wallet (Phase 5).
+ * Gated by `loyalty.wallet_issue` — not general shop settings.
  * Shows a clear "not configured" state when secrets are missing — never a fake button.
  */
 export function LoyaltyGoogleWalletButton({
   lang,
   shopId,
   accountId,
-  canManage,
+  canIssue,
 }: {
   lang: Language;
   shopId: string;
   accountId: string;
-  canManage: boolean;
+  canIssue: boolean;
 }) {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,7 +40,7 @@ export function LoyaltyGoogleWalletButton({
     };
   }, []);
 
-  if (!canManage) return null;
+  if (!canIssue) return null;
 
   if (configured === null) {
     return (
