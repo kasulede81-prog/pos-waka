@@ -117,10 +117,10 @@ export async function lookupPublicLoyaltyCard(
         : String(designRow.welcome_message).trim().slice(0, 120);
     design = {
       logo_url: safeLogo(designRow.logo_url),
-      primary_color: safeHex(designRow.primary_color, "#f59e0b"),
+      primary_color: safeHex(designRow.primary_color, "#f97316"),
       accent_color: safeHex(designRow.accent_color, "#ea580c"),
-      background_color: safeHex(designRow.background_color, "#0c0a09"),
-      text_color: safeHex(designRow.text_color, "#fafaf9"),
+      background_color: safeHex(designRow.background_color, "#0b3a82"),
+      text_color: safeHex(designRow.text_color, "#ffffff"),
       program_name: programFromDesign,
       welcome_message: welcome,
       style: (STYLES.has(styleRaw) ? styleRaw : "classic") as

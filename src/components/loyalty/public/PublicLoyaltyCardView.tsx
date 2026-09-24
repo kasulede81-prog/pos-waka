@@ -1,6 +1,9 @@
 import type { CSSProperties } from "react";
 import type { PublicCardData, PublicCardReward } from "../../../lib/loyalty/loyaltyPublicCard";
-import type { LoyaltyCardDesign } from "../../../lib/loyalty/loyaltyCardDesign";
+import {
+  resolveLoyaltyPresentation,
+  type LoyaltyCardDesign,
+} from "../../../lib/loyalty/loyaltyCardDesign";
 import {
   buildRewardProgress,
   isRewardAffordable,
@@ -37,37 +40,37 @@ function RewardRow({
         layout === "cards" ? "h-full" : ""
       } ${
         available
-          ? "border-emerald-200/90 bg-gradient-to-br from-emerald-50 to-white"
-          : "border-stone-200/90 bg-white/95"
+          ? "border-orange-200/90 bg-gradient-to-br from-orange-50 to-white"
+          : "border-slate-200/90 bg-white"
       }`}
       style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
       aria-label={`${reward.name}, ${reward.points_required} points, ${available ? "available" : "need more points"}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="break-words text-[15px] font-black leading-snug text-stone-900">
+          <p className="break-words text-[15px] font-black leading-snug text-slate-900">
             {reward.name}
           </p>
           {reward.description ? (
-            <p className="mt-1 break-words text-xs font-medium leading-relaxed text-stone-500">
+            <p className="mt-1 break-words text-xs font-medium leading-relaxed text-slate-500">
               {reward.description}
             </p>
           ) : null}
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-sm font-black tabular-nums text-stone-900">{reward.points_required}</p>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">pts</p>
+          <p className="text-sm font-black tabular-nums text-slate-900">{reward.points_required}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-orange-600">pts</p>
         </div>
       </div>
       <p
         className={`mt-2.5 inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
-          available ? "bg-emerald-600/10 text-emerald-800" : "bg-stone-100 text-stone-500"
+          available ? "bg-orange-500/15 text-orange-800" : "bg-slate-100 text-slate-500"
         }`}
       >
         {available ? "Available" : "Need more points"}
       </p>
       {available ? (
-        <p className="mt-1.5 text-[11px] font-medium text-stone-500">
+        <p className="mt-1.5 text-[11px] font-medium text-slate-500">
           Ask the shop to redeem at checkout
         </p>
       ) : null}
@@ -83,8 +86,8 @@ function heroRadius(style: LoyaltyCardDesign["cardStyle"] | undefined): string {
 }
 
 /**
- * Premium mobile presentation for a loaded public loyalty card (B1).
- * Optional B2 `design` tokens — when omitted, B1 defaults remain.
+ * Premium mobile presentation for a loaded public loyalty card.
+ * Uses the same visual system as the B2 merchant live preview.
  * Display-only — no redemption.
  */
 export function PublicLoyaltyCardView({
@@ -98,36 +101,33 @@ export function PublicLoyaltyCardView({
   onSharePage,
   previewMode = false,
 }: Props) {
+  const theme = resolveLoyaltyPresentation(design);
   const progress = buildRewardProgress(card.balance_points, card.rewards);
   const showWallet = card.wallet_configured && card.account_active;
-  const programName =
-    design?.programDisplayName?.trim() || card.program_name;
-  const welcome = design?.welcomeMessage?.trim() || null;
-  const logoUrl = design?.logoUrl || null;
-  const rewardLayout = design?.rewardLayout ?? "list";
-  const cardStyle = design?.cardStyle;
+  const programName = theme.programDisplayName?.trim() || card.program_name;
+  const welcome = theme.welcomeMessage?.trim() || null;
+  const logoUrl = theme.logoUrl || null;
+  const rewardLayout = theme.rewardLayout;
+  const cardStyle = theme.cardStyle;
 
-  const cssVars: CSSProperties | undefined = design
-    ? ({
-        ["--loyalty-primary" as string]: design.primaryColor,
-        ["--loyalty-accent" as string]: design.accentColor,
-        ["--loyalty-bg" as string]: design.backgroundColor,
-        ["--loyalty-text" as string]: design.textColor,
-      } as CSSProperties)
-    : undefined;
-
-  const heroBg = design?.backgroundColor;
-  const heroText = design?.textColor;
-  const starColor = design?.primaryColor;
+  const cssVars = {
+    ["--loyalty-primary" as string]: theme.heroAccent,
+    ["--loyalty-accent" as string]: theme.heroSecondaryAccent,
+    ["--loyalty-bg" as string]: theme.backgroundColor,
+    ["--loyalty-text" as string]: theme.heroForeground,
+  } as CSSProperties;
 
   return (
     <div
       className="loyalty-public-enter mt-6 flex flex-1 flex-col gap-5"
       style={cssVars}
-      data-card-style={cardStyle ?? "classic"}
+      data-card-style={cardStyle}
     >
       <header className="text-center">
-        <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-800/70">
+        <p
+          className="text-[11px] font-bold uppercase tracking-[0.22em]"
+          style={{ color: theme.backgroundColor }}
+        >
           WAKA Loyalty
         </p>
         {logoUrl ? (
@@ -138,62 +138,40 @@ export function PublicLoyaltyCardView({
               width={64}
               height={64}
               referrerPolicy="no-referrer"
-              className="h-16 w-16 rounded-2xl object-contain bg-white/80 p-1 shadow-sm"
+              className="h-16 w-16 rounded-2xl object-contain bg-white p-1 shadow-sm ring-1 ring-slate-200/80"
             />
           </div>
         ) : null}
-        <h1 className="mt-2 break-words text-[1.65rem] font-black leading-tight tracking-tight text-stone-900">
+        <h1 className="mt-2 break-words text-[1.65rem] font-black leading-tight tracking-tight text-slate-900">
           {card.shop_name}
         </h1>
-        <p className="mt-1 break-words text-sm font-semibold text-stone-500">{programName}</p>
+        <p className="mt-1 break-words text-sm font-semibold text-slate-500">{programName}</p>
         {welcome ? (
-          <p className="mx-auto mt-2 max-w-sm break-words text-sm font-medium leading-relaxed text-stone-600">
+          <p className="mx-auto mt-2 max-w-sm break-words text-sm font-medium leading-relaxed text-slate-600">
             {welcome}
           </p>
         ) : null}
       </header>
 
       <article
-        className={`loyalty-public-hero relative overflow-hidden ${heroRadius(cardStyle)} px-5 pb-6 pt-6 shadow-[0_20px_50px_-24px_rgba(28,25,23,0.75)] ${
-          heroBg ? "" : "bg-stone-950 text-white"
-        }`}
-        style={
-          heroBg
-            ? { backgroundColor: heroBg, color: heroText ?? "#fafaf9" }
-            : undefined
-        }
+        className={`loyalty-public-hero relative overflow-hidden ${heroRadius(cardStyle)} px-5 pb-6 pt-6 shadow-[0_22px_50px_-22px_rgba(11,58,130,0.55)]`}
+        style={{ backgroundColor: theme.backgroundColor, color: theme.heroForeground }}
         aria-labelledby="loyalty-member-name"
       >
         <div
           className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full blur-3xl"
-          style={{ backgroundColor: starColor ? `${starColor}33` : undefined }}
+          style={{ backgroundColor: `${theme.heroAccent}40` }}
           aria-hidden="true"
         />
-        {!starColor ? (
-          <div
-            className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-amber-400/20 blur-3xl"
-            aria-hidden="true"
-          />
-        ) : null}
         <div
           className="pointer-events-none absolute -bottom-20 -left-8 h-40 w-40 rounded-full blur-3xl"
-          style={{
-            backgroundColor: design?.accentColor ? `${design.accentColor}26` : undefined,
-          }}
+          style={{ backgroundColor: `${theme.heroSecondaryAccent}30` }}
           aria-hidden="true"
         />
-        {!design?.accentColor ? (
-          <div
-            className="pointer-events-none absolute -bottom-20 -left-8 h-40 w-40 rounded-full bg-orange-500/15 blur-3xl"
-            aria-hidden="true"
-          />
-        ) : null}
 
         <div className="relative">
           <p
-            className={`text-[10px] font-bold uppercase tracking-[0.18em] ${
-              heroBg ? "opacity-70" : "text-stone-400"
-            }`}
+            className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75"
           >
             Member
           </p>
@@ -204,17 +182,21 @@ export function PublicLoyaltyCardView({
             {card.customer_name}
           </h2>
           {!card.account_active ? (
-            <p className="mt-2 inline-flex rounded-full bg-amber-400/20 px-2.5 py-1 text-[11px] font-bold text-amber-200">
+            <p
+              className="mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold"
+              style={{
+                backgroundColor: `${theme.heroAccent}33`,
+                color: theme.heroAccent,
+              }}
+            >
               Account inactive
             </p>
           ) : null}
 
           <div className="loyalty-public-points mt-7 text-center">
             <p
-              className={`text-[10px] font-bold uppercase tracking-[0.2em] ${
-                heroBg ? "opacity-80" : "text-amber-200/80"
-              }`}
-              style={starColor && heroBg ? { color: starColor } : undefined}
+              className="text-[10px] font-bold uppercase tracking-[0.2em]"
+              style={{ color: theme.heroAccent }}
             >
               Point balance
             </p>
@@ -223,8 +205,8 @@ export function PublicLoyaltyCardView({
               aria-label={`${card.balance_points} points`}
             >
               <span
-                className={`mb-2 text-2xl ${heroBg ? "" : "text-amber-300"}`}
-                style={starColor ? { color: starColor } : undefined}
+                className="mb-2 text-2xl"
+                style={{ color: theme.heroAccent }}
                 aria-hidden="true"
               >
                 ★
@@ -233,24 +215,25 @@ export function PublicLoyaltyCardView({
                 {card.balance_points}
               </span>
             </p>
-            <p
-              className={`mt-2 text-sm font-bold uppercase tracking-[0.28em] ${
-                heroBg ? "opacity-60" : "text-stone-400"
-              }`}
-            >
+            <p className="mt-2 text-sm font-bold uppercase tracking-[0.28em] opacity-70">
               Points
             </p>
           </div>
 
           {progress ? (
             <div
-              className={`mt-6 rounded-2xl px-4 py-3 text-center text-sm font-semibold leading-snug ${
+              className="mt-6 rounded-2xl px-4 py-3 text-center text-sm font-semibold leading-snug"
+              style={
                 progress.kind === "affordable"
-                  ? "bg-emerald-400/15 text-emerald-100"
-                  : heroBg
-                    ? "bg-white/10"
-                    : "bg-white/10 text-stone-200"
-              }`}
+                  ? {
+                      backgroundColor: `${theme.heroAccent}28`,
+                      color: theme.heroForeground,
+                    }
+                  : {
+                      backgroundColor: "rgba(255,255,255,0.12)",
+                      color: theme.heroForeground,
+                    }
+              }
               role="status"
             >
               {progress.message}
@@ -262,14 +245,14 @@ export function PublicLoyaltyCardView({
       <section aria-labelledby="loyalty-rewards-heading">
         <h2
           id="loyalty-rewards-heading"
-          className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500"
+          className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500"
         >
           Your rewards
         </h2>
         {card.rewards.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-stone-300/90 bg-white/60 px-4 py-6 text-center">
-            <p className="text-sm font-black text-stone-800">You&apos;re all set.</p>
-            <p className="mt-1 text-sm font-medium text-stone-500">
+          <div className="mt-3 rounded-2xl border border-dashed border-slate-300/90 bg-white px-4 py-6 text-center">
+            <p className="text-sm font-black text-slate-800">You&apos;re all set.</p>
+            <p className="mt-1 text-sm font-medium text-slate-500">
               Keep shopping to unlock rewards.
             </p>
           </div>
@@ -295,12 +278,12 @@ export function PublicLoyaltyCardView({
       </section>
 
       <section
-        className="loyalty-public-qr rounded-[1.75rem] border border-stone-200/90 bg-white px-4 py-6 shadow-[0_12px_40px_-28px_rgba(28,25,23,0.45)]"
+        className="loyalty-public-qr rounded-[1.75rem] border border-slate-200/90 bg-white px-4 py-6 shadow-[0_12px_40px_-28px_rgba(11,58,130,0.35)]"
         aria-labelledby="loyalty-checkout-heading"
       >
         <h2
           id="loyalty-checkout-heading"
-          className="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500"
+          className="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500"
         >
           Show at checkout
         </h2>
@@ -311,15 +294,15 @@ export function PublicLoyaltyCardView({
               width={260}
               height={260}
               alt="Loyalty membership QR code. Show this at checkout to collect your points."
-              className="aspect-square w-full max-w-[260px] rounded-2xl border border-stone-100 bg-white p-3"
+              className="aspect-square w-full max-w-[260px] rounded-2xl border border-slate-100 bg-white p-3"
             />
           ) : (
             <div
-              className="aspect-square w-full max-w-[260px] animate-pulse rounded-2xl bg-stone-100"
+              className="aspect-square w-full max-w-[260px] animate-pulse rounded-2xl bg-slate-100"
               aria-hidden="true"
             />
           )}
-          <p className="mt-4 max-w-[18rem] text-center text-sm font-medium leading-relaxed text-stone-600">
+          <p className="mt-4 max-w-[18rem] text-center text-sm font-medium leading-relaxed text-slate-600">
             Show this QR at checkout to collect your points.
           </p>
         </div>
@@ -341,7 +324,7 @@ export function PublicLoyaltyCardView({
           <button
             type="button"
             onClick={onSharePage}
-            className="min-h-12 w-full rounded-2xl border border-stone-300/90 bg-white/90 px-4 text-[15px] font-bold text-stone-800 shadow-sm transition active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-400"
+            className="min-h-12 w-full rounded-2xl border border-slate-300/90 bg-white px-4 text-[15px] font-bold text-slate-800 shadow-sm transition active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
           >
             Share my loyalty card
           </button>

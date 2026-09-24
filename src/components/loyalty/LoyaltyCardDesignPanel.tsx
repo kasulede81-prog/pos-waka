@@ -69,7 +69,7 @@ function ColorField({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="#f59e0b"
+          placeholder={DEFAULT_LOYALTY_CARD_DESIGN.primaryColor}
           spellCheck={false}
           className={clsx(
             "min-h-11 w-full rounded-xl border bg-background px-3 text-sm font-bold tabular-nums text-foreground",
@@ -354,8 +354,8 @@ export function LoyaltyCardDesignPanel({
         <p className="mb-2 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
           {t(lang, "loyaltyDesignPreviewTitle")}
         </p>
-        <div className="mx-auto w-full max-w-[360px] overflow-hidden rounded-[2rem] border-[10px] border-stone-900 bg-stone-900 shadow-2xl">
-          <div className="max-h-[70vh] overflow-y-auto bg-stone-50 px-1 pb-4">
+        <div className="mx-auto w-full max-w-[360px] overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-slate-900 shadow-2xl">
+          <div className="loyalty-public-shell max-h-[70vh] overflow-y-auto px-1 pb-4">
             <PublicLoyaltyCardView
               card={previewCard}
               design={previewDesign}

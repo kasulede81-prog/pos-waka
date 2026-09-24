@@ -88,6 +88,8 @@ describe("PublicLoyaltyCardView design presentation", () => {
     expect(html).toContain("Denis");
     expect(html).toContain("405");
     expect(html).toContain("Kampala Kiosk Loyalty");
+    expect(html).toContain("#0b3a82");
+    expect(html).toContain("#f97316");
     expect(html).not.toContain("dangerouslySetInnerHTML");
   });
 

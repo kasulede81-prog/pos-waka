@@ -3,6 +3,12 @@
  * DB/RPC remains the security authority; these validators are UX guards.
  */
 
+import {
+  WAKA_BRAND_BLUE,
+  WAKA_BRAND_ORANGE,
+  WAKA_BRAND_ORANGE_DARK,
+} from "../brandTokens";
+import { hexContrastRatio, readableOnHex } from "../homeTileAccent";
 import { hasSupabaseConfig, supabase } from "../supabase";
 
 export const LOYALTY_CARD_STYLES = ["classic", "modern", "minimal", "premium"] as const;
@@ -50,18 +56,92 @@ export type PublicCardDesignPayload = {
   reward_layout: LoyaltyRewardLayout;
 };
 
-/** B1-compatible product defaults — single source of truth. */
+/**
+ * Default WAKA loyalty visual theme (blue hero + orange accents + white text).
+ * Merchant customization still overrides these via loyalty_card_designs.
+ */
 export const DEFAULT_LOYALTY_CARD_DESIGN: LoyaltyCardDesign = {
   programDisplayName: "",
   logoUrl: null,
-  primaryColor: "#f59e0b",
-  accentColor: "#ea580c",
-  backgroundColor: "#0c0a09",
-  textColor: "#fafaf9",
+  /** Points, stars, progress highlights */
+  primaryColor: WAKA_BRAND_ORANGE,
+  /** Secondary accent / deeper orange */
+  accentColor: WAKA_BRAND_ORANGE_DARK,
+  /** Deep WAKA blue hero */
+  backgroundColor: WAKA_BRAND_BLUE,
+  /** Primary text on hero */
+  textColor: "#ffffff",
   welcomeMessage: null,
   cardStyle: "classic",
   rewardLayout: "list",
 };
+
+const WCAG_AA_NORMAL = 4.5;
+const WCAG_AA_LARGE = 3;
+
+/** Prefer merchant text when it meets AA; otherwise derive white/dark. */
+export function contrastSafeForeground(
+  backgroundHex: string,
+  preferredHex?: string | null,
+): string {
+  const bg = normalizeHexColor(backgroundHex) ?? DEFAULT_LOYALTY_CARD_DESIGN.backgroundColor;
+  const preferred = normalizeHexColor(preferredHex ?? null);
+  if (preferred && hexContrastRatio(bg, preferred) >= WCAG_AA_NORMAL) {
+    return preferred;
+  }
+  return readableOnHex(bg);
+}
+
+/** Keep accent readable on hero (large text / icons); fall back to brand orange or FG. */
+export function contrastSafeAccentOnBackground(
+  backgroundHex: string,
+  accentHex: string,
+  fallbackHex: string = DEFAULT_LOYALTY_CARD_DESIGN.primaryColor,
+): string {
+  const bg = normalizeHexColor(backgroundHex) ?? DEFAULT_LOYALTY_CARD_DESIGN.backgroundColor;
+  const accent = normalizeHexColor(accentHex);
+  if (accent && hexContrastRatio(bg, accent) >= WCAG_AA_LARGE) return accent;
+  const fallback = normalizeHexColor(fallbackHex);
+  if (fallback && hexContrastRatio(bg, fallback) >= WCAG_AA_LARGE) return fallback;
+  return readableOnHex(bg);
+}
+
+/** Presentation tokens for public card + merchant live preview (same visual system). */
+export type LoyaltyCardPresentation = LoyaltyCardDesign & {
+  heroForeground: string;
+  heroAccent: string;
+  heroSecondaryAccent: string;
+};
+
+export function resolveLoyaltyPresentation(
+  design: LoyaltyCardDesign | undefined | null,
+): LoyaltyCardPresentation {
+  const base = design ?? DEFAULT_LOYALTY_CARD_DESIGN;
+  const backgroundColor =
+    normalizeHexColor(base.backgroundColor) ?? DEFAULT_LOYALTY_CARD_DESIGN.backgroundColor;
+  const primaryColor =
+    normalizeHexColor(base.primaryColor) ?? DEFAULT_LOYALTY_CARD_DESIGN.primaryColor;
+  const accentColor =
+    normalizeHexColor(base.accentColor) ?? DEFAULT_LOYALTY_CARD_DESIGN.accentColor;
+  const textColor = normalizeHexColor(base.textColor) ?? DEFAULT_LOYALTY_CARD_DESIGN.textColor;
+  const heroForeground = contrastSafeForeground(backgroundColor, textColor);
+  const heroAccent = contrastSafeAccentOnBackground(backgroundColor, primaryColor);
+  const heroSecondaryAccent = contrastSafeAccentOnBackground(
+    backgroundColor,
+    accentColor,
+    primaryColor,
+  );
+  return {
+    ...base,
+    backgroundColor,
+    primaryColor,
+    accentColor,
+    textColor,
+    heroForeground,
+    heroAccent,
+    heroSecondaryAccent,
+  };
+}
 
 export const PROGRAM_NAME_MAX = 60;
 export const WELCOME_MESSAGE_MAX = 120;
