@@ -78,8 +78,12 @@ export function useLoyaltyCheckoutAttach({ onAttach }: Options) {
       });
       return true;
     }
-    if (result.status === "disabled") {
-      setState({ status: "error", errorKey: "loyaltyScanDisabled" });
+    if (result.status !== "active") {
+      setState({
+        status: "error",
+        errorKey:
+          result.status === "revoked" ? "loyaltyScanRevoked" : "loyaltyScanSuspended",
+      });
       return true;
     }
 

@@ -17,6 +17,7 @@ import {
   renewLoyaltyMembership,
   saveLoyaltyProgram,
   searchLoyaltyAccounts,
+  setLoyaltyAccountLifecycle,
   validateProgramInput,
   type LoyaltyAccountListEntry,
   type LoyaltyOverview,
@@ -202,6 +203,14 @@ function CustomerDetail({
   const [adjustState, setAdjustState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [showAdjust, setShowAdjust] = useState(false);
   const [renewState, setRenewState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [expiryMode, setExpiryMode] = useState<"never" | "fixed_date">(
+    entry.membershipExpiresOn ? "fixed_date" : "never",
+  );
+  const [expiryDate, setExpiryDate] = useState(entry.membershipExpiresOn ?? "");
+  const [showExpiryEditor, setShowExpiryEditor] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"suspend" | "revoke" | null>(null);
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
   const [pendingRedeem, setPendingRedeem] = useState<{ rewardId: string; key: string } | null>(null);
   const [redeemState, setRedeemState] = useState<
@@ -230,7 +239,60 @@ function CustomerDetail({
 
   useEffect(() => {
     setRenewState("idle");
-  }, [entry.accountId, entry.membershipActive]);
+    setShowExpiryEditor(false);
+    setConfirmAction(null);
+    setLifecycleError(null);
+    setExpiryMode(entry.membershipExpiresOn ? "fixed_date" : "never");
+    setExpiryDate(entry.membershipExpiresOn ?? "");
+  }, [entry.accountId, entry.membershipActive, entry.membershipExpiresOn, entry.status]);
+
+  const submitRenew = async () => {
+    setRenewState("saving");
+    const result = await renewLoyaltyMembership(shopId, entry.accountId, {});
+    if (result.ok) {
+      setRenewState("done");
+      onAdjusted();
+    } else {
+      setRenewState("error");
+    }
+  };
+
+  const submitExpiryChange = async () => {
+    setRenewState("saving");
+    setLifecycleError(null);
+    const result =
+      expiryMode === "never"
+        ? await renewLoyaltyMembership(shopId, entry.accountId, { mode: "never" })
+        : await renewLoyaltyMembership(shopId, entry.accountId, {
+            mode: "fixed_date",
+            fixedExpiresOn: expiryDate.trim() || null,
+          });
+    if (result.ok) {
+      setRenewState("done");
+      setShowExpiryEditor(false);
+      onAdjusted();
+    } else {
+      setRenewState("error");
+      setLifecycleError(result.error);
+    }
+  };
+
+  const runLifecycle = async (action: "suspend" | "reactivate" | "revoke") => {
+    setLifecycleBusy(true);
+    setLifecycleError(null);
+    const result = await setLoyaltyAccountLifecycle(shopId, entry.accountId, action);
+    setLifecycleBusy(false);
+    setConfirmAction(null);
+    if (result.ok) onAdjusted();
+    else setLifecycleError(result.error);
+  };
+
+  const statusLabel =
+    entry.status === "revoked"
+      ? t(lang, "loyaltyLifecycleRevoked")
+      : entry.status === "suspended"
+        ? t(lang, "loyaltyLifecycleSuspended")
+        : t(lang, "loyaltyLifecycleActive");
 
   const beginRedeem = (rewardId: string) => {
     setRedeemState({ phase: "idle" });
@@ -264,17 +326,6 @@ function CustomerDetail({
       void requestGoogleWalletBalanceSync(shopId, entry.accountId);
     } else {
       setAdjustState("error");
-    }
-  };
-
-  const submitRenew = async () => {
-    setRenewState("saving");
-    const result = await renewLoyaltyMembership(shopId, entry.accountId, {});
-    if (result.ok) {
-      setRenewState("done");
-      onAdjusted();
-    } else {
-      setRenewState("error");
     }
   };
 
@@ -318,23 +369,186 @@ function CustomerDetail({
         )}
       </div>
 
-      {!entry.membershipActive ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-3">
-          <p className="text-sm font-bold text-destructive">{t(lang, "loyaltyMembershipExpired")}</p>
-          {canManage ? (
-            <button
-              type="button"
-              onClick={() => void submitRenew()}
-              disabled={renewState === "saving"}
-              className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
-            >
-              {t(lang, "loyaltyMembershipRenew")}
-            </button>
+      {mode === "full" ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-card p-3">
+          <div>
+            <p className="text-sm font-black text-foreground">{t(lang, "loyaltyLifecycleTitle")}</p>
+            <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyLifecycleHint")}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="font-semibold text-muted-foreground">{t(lang, "loyaltyLifecycleStatus")}</p>
+              <p className="font-bold text-foreground">{statusLabel}</p>
+            </div>
+            <div>
+              <p className="font-semibold text-muted-foreground">{t(lang, "loyaltyMembershipDate")}</p>
+              <p className="font-bold text-foreground">
+                {entry.membershipExpiresOn
+                  ? formatDate(lang, entry.membershipExpiresOn)
+                  : t(lang, "loyaltyMembershipNever")}
+              </p>
+            </div>
+            {entry.status === "revoked" ? (
+              <>
+                <div>
+                  <p className="font-semibold text-muted-foreground">{t(lang, "loyaltyLifecycleRevokedOn")}</p>
+                  <p className="font-bold text-foreground">
+                    {entry.revokedAt ? formatDate(lang, entry.revokedAt) : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="font-semibold text-muted-foreground">{t(lang, "loyaltyLifecyclePurgesAfter")}</p>
+                  <p className="font-bold text-foreground">
+                    {entry.purgeAfter ? formatDate(lang, entry.purgeAfter) : "—"}
+                  </p>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          {entry.status !== "revoked" && entry.status === "active" && !entry.membershipActive ? (
+            <p className="text-sm font-bold text-destructive">{t(lang, "loyaltyMembershipExpired")}</p>
           ) : null}
+
+          {canManage && entry.status !== "revoked" ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowExpiryEditor((v) => !v)}
+                className="min-h-[40px] rounded-xl border-2 border-border bg-background px-3 text-xs font-black text-foreground"
+              >
+                {t(lang, "loyaltyLifecycleChangeExpiry")}
+              </button>
+              {entry.status === "active" ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmAction("suspend")}
+                  disabled={lifecycleBusy}
+                  className="min-h-[40px] rounded-xl border-2 border-border bg-background px-3 text-xs font-black text-foreground disabled:opacity-50"
+                >
+                  {t(lang, "loyaltyLifecycleSuspend")}
+                </button>
+              ) : null}
+              {entry.status === "suspended" ? (
+                <button
+                  type="button"
+                  onClick={() => void runLifecycle("reactivate")}
+                  disabled={lifecycleBusy}
+                  className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
+                >
+                  {t(lang, "loyaltyLifecycleReactivate")}
+                </button>
+              ) : null}
+              {entry.status === "active" || entry.status === "suspended" ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmAction("revoke")}
+                  disabled={lifecycleBusy}
+                  className="min-h-[40px] rounded-xl border-2 border-destructive/40 bg-destructive/5 px-3 text-xs font-black text-destructive disabled:opacity-50"
+                >
+                  {t(lang, "loyaltyLifecycleRevoke")}
+                </button>
+              ) : null}
+              {entry.status === "active" && !entry.membershipActive ? (
+                <button
+                  type="button"
+                  onClick={() => void submitRenew()}
+                  disabled={renewState === "saving"}
+                  className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
+                >
+                  {t(lang, "loyaltyMembershipRenew")}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {showExpiryEditor && canManage && entry.status !== "revoked" ? (
+            <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <input
+                  type="radio"
+                  checked={expiryMode === "never"}
+                  onChange={() => setExpiryMode("never")}
+                />
+                {t(lang, "loyaltyMembershipNever")}
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <input
+                  type="radio"
+                  checked={expiryMode === "fixed_date"}
+                  onChange={() => setExpiryMode("fixed_date")}
+                />
+                {t(lang, "loyaltyMembershipFixed")}
+              </label>
+              {expiryMode === "fixed_date" ? (
+                <input
+                  type="date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                  className="min-h-[40px] w-full rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold"
+                />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void submitExpiryChange()}
+                disabled={renewState === "saving" || (expiryMode === "fixed_date" && !expiryDate)}
+                className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
+              >
+                {t(lang, "loyaltyLifecycleSaveExpiry")}
+              </button>
+            </div>
+          ) : null}
+
+          {confirmAction === "suspend" ? (
+            <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-3">
+              <p className="text-sm font-semibold text-foreground">{t(lang, "loyaltyLifecycleSuspendConfirm")}</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void runLifecycle("suspend")}
+                  disabled={lifecycleBusy}
+                  className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
+                >
+                  {t(lang, "loyaltyLifecycleConfirm")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmAction(null)}
+                  className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black"
+                >
+                  {t(lang, "cancel")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {confirmAction === "revoke" ? (
+            <div className="space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-sm font-semibold text-foreground">{t(lang, "loyaltyLifecycleRevokeConfirm")}</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void runLifecycle("revoke")}
+                  disabled={lifecycleBusy}
+                  className="min-h-[40px] rounded-xl bg-destructive px-3 text-xs font-black text-white disabled:opacity-50"
+                >
+                  {t(lang, "loyaltyLifecycleConfirmRevoke")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmAction(null)}
+                  className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black"
+                >
+                  {t(lang, "cancel")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {renewState === "done" ? (
             <span className="text-sm font-bold text-success">{t(lang, "loyaltyMembershipRenewed")}</span>
           ) : null}
-          {renewState === "error" ? (
+          {lifecycleError || renewState === "error" ? (
             <span className="text-sm font-bold text-destructive">{t(lang, "loyaltySaveFailed")}</span>
           ) : null}
         </div>
@@ -569,10 +783,14 @@ function CustomerList({
                   <p className="text-xs font-medium text-muted-foreground">
                     {entry.customerPhone ?? ""}
                     {entry.customerPhone ? " · " : ""}
-                    {entry.status === "disabled"
-                      ? t(lang, "loyaltyCustomerStatusInactive")
-                      : t(lang, "loyaltyCustomerStatusActive")}
-                    {!entry.membershipActive ? ` · ${t(lang, "loyaltyMembershipExpired")}` : ""}
+                    {entry.status === "revoked"
+                      ? t(lang, "loyaltyLifecycleRevoked")
+                      : entry.status === "suspended"
+                        ? t(lang, "loyaltyLifecycleSuspended")
+                        : t(lang, "loyaltyCustomerStatusActive")}
+                    {entry.status === "active" && !entry.membershipActive
+                      ? ` · ${t(lang, "loyaltyMembershipExpired")}`
+                      : ""}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
@@ -584,7 +802,7 @@ function CustomerList({
                   </p>
                 </div>
               </button>
-              {!entry.membershipActive && canManage ? (
+              {!entry.membershipActive && canManage && entry.status === "active" ? (
                 <div className="mt-1 flex items-center gap-2 px-2 pb-1">
                   <button
                     type="button"

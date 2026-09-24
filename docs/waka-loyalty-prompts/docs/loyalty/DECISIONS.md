@@ -351,3 +351,38 @@ SELECT RLS for shop access. No direct client writes to the offers table.
 
 **Rejected:** Per-customer program clones (Model A / Option 3) — they fight
 the single-program UNIQUE, weaken reporting, and duplicate C1/C3 config.
+
+## Decision 027 — Customer Membership Lifecycle + Individual Expiry
+
+**Status:** Accepted (local implementation)
+
+Per-account lifecycle is **separate** from C1 program membership rules, C2
+reward expiry, C3 points expiry, and D026 offers.
+
+**Status values:** `loyalty_accounts.status` ∈ `active | suspended | revoked`
+(legacy `disabled` mapped to `suspended`).
+
+**Individual expiry:** Managers set per-account `membership_expires_at` via
+existing `loyalty_renew_membership` (`never` / `fixed_date` / `duration`) using
+C1 Kampala semantics. Does not rewrite ledger, balance, or tokens. Does not
+change program-level C1 settings.
+
+**Lifecycle RPC:** `loyalty_set_account_lifecycle(shop, account, action)` with
+`suspend | reactivate | revoke`, gated by `user_can_manage_shop`. Revoked
+accounts cannot be reactivated; re-enrollment waits until purge removes the
+row (then a new account + new tokens).
+
+**Revocation retention:** `revoked_at = now()`, `purge_after = revoked_at + 30 days`.
+No point burns, no fake ledger rows. Offers remain for audit until purge.
+
+**Purge:** `loyalty_purge_revoked_accounts` deletes only due `revoked` accounts
+(CASCADE to loyalty transactions/redemptions/lots/offers/wallet outbox). Never
+deletes customers/sales/payments. Daily `pg_cron` job when available;
+idempotent and skip-locked.
+
+**Public card:** Revoked → same `not_found` as unknown token. Suspended →
+inactive card (no active loyalty data / Wallet).
+
+**Wallet:** New issuance refused for non-active (and revoked). Marking existing
+Google passes inactive is a documented follow-up — not in this change; issuer
+config untouched.

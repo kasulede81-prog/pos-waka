@@ -14,6 +14,7 @@ import type {
   MembershipExpiryMode,
   PointsExpiryMode,
 } from "./loyaltyMath";
+import { normalizeLoyaltyAccountStatus } from "./loyaltyMath";
 
 const PROGRAM_CACHE_PREFIX = "waka-loyalty-program:";
 
@@ -34,7 +35,7 @@ type AccountRow = {
   id: string;
   shop_id: string;
   customer_id: string;
-  status: "active" | "disabled";
+  status: string;
   balance_points: number;
   lifetime_earned_points: number;
   lifetime_redeemed_points: number;
@@ -61,7 +62,7 @@ export function isMembershipActiveClient(
   membershipExpiresAt: string | null | undefined,
   nowMs: number = Date.now(),
 ): boolean {
-  if (status !== "active") return false;
+  if (normalizeLoyaltyAccountStatus(status) !== "active") return false;
   if (!membershipExpiresAt) return true;
   const t = Date.parse(membershipExpiresAt);
   if (!Number.isFinite(t)) return true;
@@ -97,7 +98,7 @@ export function mapAccountRow(row: AccountRow): LoyaltyAccountSnapshot {
     id: row.id,
     shopId: row.shop_id,
     customerId: row.customer_id,
-    status: row.status,
+    status: normalizeLoyaltyAccountStatus(row.status),
     balancePoints: Number(row.balance_points),
     lifetimeEarnedPoints: Number(row.lifetime_earned_points),
     lifetimeRedeemedPoints: Number(row.lifetime_redeemed_points),

@@ -89,11 +89,26 @@ Deno.serve(async (req) => {
 
   const { data: account, error: accountErr } = await userClient
     .from("loyalty_accounts")
-    .select("id, shop_id, customer_id, balance_points, qr_token")
+    .select("id, shop_id, customer_id, balance_points, qr_token, status, membership_expires_at")
     .eq("shop_id", shopId)
     .eq("id", accountId)
     .maybeSingle();
   if (accountErr || !account) return json({ ok: false, error: "account_not_found" }, 404);
+  const accountStatus = String((account as { status?: string }).status ?? "");
+  if (accountStatus === "revoked") {
+    return json({ ok: false, error: "account_revoked" }, 409);
+  }
+  if (accountStatus !== "active") {
+    return json({ ok: false, error: "account_inactive" }, 409);
+  }
+  const expiresRaw = (account as { membership_expires_at?: string | null }).membership_expires_at;
+  if (
+    expiresRaw != null &&
+    String(expiresRaw).trim() !== "" &&
+    Date.parse(String(expiresRaw)) <= Date.now()
+  ) {
+    return json({ ok: false, error: "membership_expired" }, 409);
+  }
 
   const { data: customer } = await userClient
     .from("customers")

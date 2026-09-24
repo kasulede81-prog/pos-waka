@@ -13,7 +13,15 @@ import {
   fetchLoyaltyProgramConfig,
   mapProgramRow,
 } from "./loyaltyClient";
-import type { LoyaltyProgramConfig, LoyaltyTransactionKind, LoyaltyTransactionRow, MembershipExpiryMode, PointsExpiryMode } from "./loyaltyMath";
+import type {
+  LoyaltyAccountStatus,
+  LoyaltyProgramConfig,
+  LoyaltyTransactionKind,
+  LoyaltyTransactionRow,
+  MembershipExpiryMode,
+  PointsExpiryMode,
+} from "./loyaltyMath";
+import { normalizeLoyaltyAccountStatus } from "./loyaltyMath";
 
 export type LoyaltyOverview = {
   program: LoyaltyProgramConfig | null;
@@ -43,7 +51,7 @@ export type LoyaltyAccountListEntry = {
   customerId: string;
   customerName: string;
   customerPhone: string | null;
-  status: "active" | "disabled";
+  status: LoyaltyAccountStatus;
   balancePoints: number;
   lifetimeEarnedPoints: number;
   lifetimeRedeemedPoints: number;
@@ -51,6 +59,8 @@ export type LoyaltyAccountListEntry = {
   membershipActive: boolean;
   membershipExpiresOn: string | null;
   membershipExpiresAt: string | null;
+  revokedAt: string | null;
+  purgeAfter: string | null;
 };
 
 /**
@@ -258,7 +268,7 @@ export async function searchLoyaltyAccounts(
       customerId: String(row.customer_id),
       customerName: String(row.customer_name ?? ""),
       customerPhone: (row.customer_phone as string | null) ?? null,
-      status: row.status === "disabled" ? "disabled" : "active",
+      status: normalizeLoyaltyAccountStatus(row.status),
       balancePoints: Number(row.balance_points ?? 0),
       lifetimeEarnedPoints: Number(row.lifetime_earned_points ?? 0),
       lifetimeRedeemedPoints: Number(row.lifetime_redeemed_points ?? 0),
@@ -268,6 +278,8 @@ export async function searchLoyaltyAccounts(
         row.membership_expires_on == null ? null : String(row.membership_expires_on).slice(0, 10),
       membershipExpiresAt:
         row.membership_expires_at == null ? null : String(row.membership_expires_at),
+      revokedAt: row.revoked_at == null ? null : String(row.revoked_at),
+      purgeAfter: row.purge_after == null ? null : String(row.purge_after),
     }));
   } catch {
     return [];
@@ -393,5 +405,60 @@ export async function renewLoyaltyMembership(
     };
   } catch {
     return { ok: false, error: "renew_failed" };
+  }
+}
+
+export type LifecycleAction = "suspend" | "reactivate" | "revoke";
+
+export type SetAccountLifecycleResult =
+  | {
+      ok: true;
+      accountId: string;
+      status: LoyaltyAccountStatus;
+      revokedAt: string | null;
+      purgeAfter: string | null;
+      balancePoints: number;
+      already?: boolean;
+    }
+  | { ok: false; error: string };
+
+/** Suspend / reactivate / revoke — manage-shop only; never mutates balance or tokens. */
+export async function setLoyaltyAccountLifecycle(
+  shopId: string,
+  accountId: string,
+  action: LifecycleAction,
+): Promise<SetAccountLifecycleResult> {
+  if (!hasSupabaseConfig || !supabase || !shopId || !accountId) {
+    return { ok: false, error: "loyalty_unavailable" };
+  }
+  try {
+    const { data, error } = await supabase.rpc("loyalty_set_account_lifecycle", {
+      p_shop_id: shopId,
+      p_account_id: accountId,
+      p_action: action,
+    });
+    if (error) return { ok: false, error: error.code ?? "lifecycle_failed" };
+    const result = (data ?? {}) as {
+      ok?: boolean;
+      error?: string;
+      account_id?: string;
+      status?: string;
+      revoked_at?: string | null;
+      purge_after?: string | null;
+      balance_points?: number;
+      already?: boolean;
+    };
+    if (!result.ok) return { ok: false, error: result.error ?? "lifecycle_rejected" };
+    return {
+      ok: true,
+      accountId: String(result.account_id ?? accountId),
+      status: normalizeLoyaltyAccountStatus(result.status),
+      revokedAt: result.revoked_at == null ? null : String(result.revoked_at),
+      purgeAfter: result.purge_after == null ? null : String(result.purge_after),
+      balancePoints: Number(result.balance_points ?? 0),
+      already: result.already === true,
+    };
+  } catch {
+    return { ok: false, error: "lifecycle_failed" };
   }
 }

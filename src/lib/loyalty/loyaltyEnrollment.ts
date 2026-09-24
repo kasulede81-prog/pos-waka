@@ -9,6 +9,7 @@
 import { hasSupabaseConfig, supabase } from "../supabase";
 import { normalizeUgPhoneE164 } from "../businessProfile";
 import { enrollLoyaltyCustomer } from "./loyaltyClient";
+import { normalizeLoyaltyAccountStatus, type LoyaltyAccountStatus } from "./loyaltyMath";
 
 /** Prefix stamped into membership QR payloads so scanners can tell loyalty
  * codes apart from product barcodes. */
@@ -107,7 +108,7 @@ export type TokenLookupResult =
       customerId: string;
       customerName: string;
       customerPhone: string | null;
-      status: "active" | "disabled";
+      status: LoyaltyAccountStatus;
       balancePoints: number;
       qrToken: string;
       membershipActive: boolean;
@@ -138,7 +139,7 @@ export async function lookupAccountByToken(
       customerId: String(result.customer_id),
       customerName: String(result.customer_name ?? ""),
       customerPhone: (result.customer_phone as string | null) ?? null,
-      status: result.status === "disabled" ? "disabled" : "active",
+      status: normalizeLoyaltyAccountStatus(result.status),
       balancePoints: Number(result.balance_points ?? 0),
       qrToken: String(result.qr_token ?? ""),
       membershipActive: result.membership_active !== false,

@@ -9,6 +9,15 @@
 
 export type MembershipExpiryMode = "never" | "fixed_date" | "duration";
 export type PointsExpiryMode = "never" | "rolling_months";
+export type LoyaltyAccountStatus = "active" | "suspended" | "revoked";
+
+/** Map DB/legacy values (`disabled`) onto Decision 027 lifecycle statuses. */
+export function normalizeLoyaltyAccountStatus(raw: unknown): LoyaltyAccountStatus {
+  const v = String(raw ?? "active").toLowerCase();
+  if (v === "suspended" || v === "disabled") return "suspended";
+  if (v === "revoked") return "revoked";
+  return "active";
+}
 
 export type LoyaltyProgramConfig = {
   enabled: boolean;
@@ -38,7 +47,7 @@ export type LoyaltyAccountSnapshot = {
   id: string;
   shopId: string;
   customerId: string;
-  status: "active" | "disabled";
+  status: LoyaltyAccountStatus;
   balancePoints: number;
   lifetimeEarnedPoints: number;
   lifetimeRedeemedPoints: number;

@@ -43,6 +43,10 @@ export async function lookupPublicLoyaltyCard(
 
   if (accountErr) return { ok: false, error: "unavailable" };
   if (!account) return { ok: false, error: "not_found" };
+  // Decision 027: revoked accounts must look like an inaccessible card (no leak).
+  if (String(account.status ?? "") === "revoked") {
+    return { ok: false, error: "not_found" };
+  }
 
   const shopId = String(account.shop_id);
   const customerId = String(account.customer_id);
@@ -220,6 +224,9 @@ export async function resolvePublicCardAccountForWallet(
 
   if (accountErr) return { ok: false, error: "unavailable" };
   if (!account) return { ok: false, error: "not_found" };
+  if (String(account.status ?? "") === "revoked") {
+    return { ok: false, error: "not_found" };
+  }
 
   const shopId = String(account.shop_id);
   const customerId = String(account.customer_id);

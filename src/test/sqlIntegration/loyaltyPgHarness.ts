@@ -19,6 +19,7 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260924104500_loyalty_reward_expiry.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924120000_loyalty_points_expiry.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924150000_loyalty_customer_offers.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260924160000_loyalty_customer_lifecycle.sql"),
 ];
 
 function readSql(path: string): string {
@@ -117,6 +118,8 @@ export function rpcJson(row: Record<string, unknown> | undefined): Record<string
     row?.loyalty_upsert_card_design ??
     row?.loyalty_reset_card_design ??
     row?.loyalty_renew_membership ??
+    row?.loyalty_set_account_lifecycle ??
+    row?.loyalty_purge_revoked_accounts ??
     row?.result;
   if (raw && typeof raw === "object") return raw as Record<string, unknown>;
   if (typeof raw === "string") return JSON.parse(raw) as Record<string, unknown>;
