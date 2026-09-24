@@ -24,6 +24,7 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260924001500_edge_rate_limit_buckets.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924170000_loyalty_public_self_enrollment.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924180000_loyalty_reward_assignments.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260924190000_loyalty_product_backed_rewards.sql"),
 ];
 
 function readSql(path: string): string {

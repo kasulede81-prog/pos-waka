@@ -5,9 +5,12 @@ import { t } from "../../lib/i18n";
 import {
   createLoyaltyReward,
   fetchLoyaltyRewards,
+  isProductBackedReward,
   isRewardUnexpiredClient,
+  searchShopProductsForReward,
   updateLoyaltyReward,
   validateRewardInput,
+  type LoyaltyProductSearchHit,
   type LoyaltyReward,
   type RewardInput,
 } from "../../lib/loyalty/loyaltyRewards";
@@ -27,6 +30,7 @@ const EMPTY_INPUT: RewardInput = {
   pointsRequired: 100,
   rewardKind: "custom",
   productId: null,
+  productQuantity: 1,
   maxRedemptionsPerAccount: null,
   active: true,
   expiresOn: null,
@@ -48,6 +52,10 @@ export function LoyaltyRewardsPanel({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [editingExpiryId, setEditingExpiryId] = useState<string | null>(null);
+  const [productQuery, setProductQuery] = useState("");
+  const [productHits, setProductHits] = useState<LoyaltyProductSearchHit[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<LoyaltyProductSearchHit | null>(null);
+  const [productSearching, setProductSearching] = useState(false);
 
   const reload = useCallback(async () => {
     const rows = await fetchLoyaltyRewards(shopId);
@@ -59,7 +67,47 @@ export function LoyaltyRewardsPanel({
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    const q = productQuery.trim();
+    if (q.length < 1) {
+      setProductHits([]);
+      return;
+    }
+    let cancelled = false;
+    setProductSearching(true);
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const hits = await searchShopProductsForReward(shopId, q);
+        if (cancelled) return;
+        setProductHits(hits);
+        setProductSearching(false);
+      })();
+    }, 220);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [productQuery, shopId]);
+
   const inputError = validateRewardInput(draft);
+
+  const selectProduct = (hit: LoyaltyProductSearchHit) => {
+    setSelectedProduct(hit);
+    setDraft((d) => ({
+      ...d,
+      productId: hit.id,
+      productQuantity: d.productQuantity > 0 ? d.productQuantity : 1,
+      rewardKind: "product",
+      name: d.name.trim() ? d.name : `Free ${hit.name}`,
+    }));
+    setProductQuery("");
+    setProductHits([]);
+  };
+
+  const clearProduct = () => {
+    setSelectedProduct(null);
+    setDraft((d) => ({ ...d, productId: null, productQuantity: 1 }));
+  };
 
   const submitCreate = async () => {
     if (inputError) return;
@@ -68,6 +116,8 @@ export function LoyaltyRewardsPanel({
     if (result.ok) {
       setSaveState("done");
       setDraft({ ...EMPTY_INPUT });
+      setSelectedProduct(null);
+      setProductQuery("");
       setShowAdvanced(false);
       await reload();
       onChanged();
@@ -128,6 +178,9 @@ export function LoyaltyRewardsPanel({
                     <p className="text-xs font-medium text-muted-foreground">
                       {reward.pointsRequired} {t(lang, "loyaltyPointsUnit")}
                       {reward.description ? ` · ${reward.description}` : ""}
+                      {isProductBackedReward(reward)
+                        ? ` · ${t(lang, "loyaltyRewardProductLinked")}`
+                        : ""}
                       {reward.expiresOn
                         ? ` · ${t(lang, "loyaltyRewardExpiresOn")}: ${reward.expiresOn}`
                         : ` · ${t(lang, "loyaltyRewardNeverExpires")}`}
@@ -219,6 +272,76 @@ export function LoyaltyRewardsPanel({
               className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
             />
           </label>
+        </div>
+
+        <div className="mt-3 space-y-2 rounded-xl border border-border bg-card/60 p-3">
+          <p className="text-sm font-black text-foreground">{t(lang, "loyaltyRewardProductToGive")}</p>
+          <p className="text-xs font-medium text-muted-foreground">{t(lang, "loyaltyRewardProductToGiveHint")}</p>
+          {selectedProduct ? (
+            <div className="flex items-start justify-between gap-2 rounded-xl border border-waka-200 bg-waka-50 px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-foreground">{selectedProduct.name}</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {selectedProduct.sku ? `SKU: ${selectedProduct.sku} · ` : ""}
+                  {t(lang, "loyaltyRewardProductStock")}: {selectedProduct.stockOnHand}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={clearProduct}
+                className="shrink-0 text-xs font-bold text-waka-700"
+              >
+                {t(lang, "loyaltyRewardProductClear")}
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                value={productQuery}
+                onChange={(e) => setProductQuery(e.target.value)}
+                placeholder={t(lang, "loyaltyRewardProductSearchPlaceholder")}
+                className="min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+                autoComplete="off"
+              />
+              {productSearching ? (
+                <p className="text-xs font-medium text-muted-foreground">{t(lang, "loyaltyScanResolving")}</p>
+              ) : null}
+              {productHits.length > 0 ? (
+                <ul className="max-h-48 overflow-y-auto rounded-xl border border-border bg-card">
+                  {productHits.map((hit) => (
+                    <li key={hit.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectProduct(hit)}
+                        className="flex w-full flex-col items-start gap-0.5 border-b border-border px-3 py-2 text-left last:border-b-0 hover:bg-muted/60"
+                      >
+                        <span className="text-sm font-black text-foreground">{hit.name}</span>
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {hit.sku ? `SKU: ${hit.sku} · ` : ""}
+                          {t(lang, "loyaltyRewardProductStock")}: {hit.stockOnHand}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          )}
+          {selectedProduct ? (
+            <label className="block text-sm font-bold text-foreground">
+              {t(lang, "loyaltyRewardProductQty")}
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={draft.productQuantity}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, productQuantity: Number(e.target.value) || 1 }))
+                }
+                className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+              />
+            </label>
+          ) : null}
         </div>
 
         <div className="mt-3 space-y-2 rounded-xl border border-border bg-card/60 p-3">

@@ -4,6 +4,7 @@ import { fetchLoyaltyAccount, fetchLoyaltyProgramConfig } from "../lib/loyalty/l
 import { computeEarnedPoints, type LoyaltyAccountSnapshot, type LoyaltyProgramConfig } from "../lib/loyalty/loyaltyMath";
 
 export type LoyaltyCheckoutPreview = {
+  shopId: string | null;
   /** Null when the program is missing/disabled or loyalty is unreachable. */
   program: LoyaltyProgramConfig | null;
   account: LoyaltyAccountSnapshot | null;
@@ -77,5 +78,5 @@ export function useLoyaltyCheckoutPreview(customerId: string, totalUgx: number):
     [program, customerId, totalUgx],
   );
 
-  return { program, account, expectedPoints, fromCache, loading };
+  return { shopId, program, account, expectedPoints, fromCache, loading };
 }

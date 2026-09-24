@@ -68,7 +68,14 @@ CREATE TABLE IF NOT EXISTS public.products (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id uuid NOT NULL REFERENCES public.shops (id) ON DELETE CASCADE,
   name text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  sku text,
+  cost_ugx bigint NOT NULL DEFAULT 0,
+  cost_price_per_unit_ugx bigint NOT NULL DEFAULT 0,
+  selling_price_per_unit_ugx bigint NOT NULL DEFAULT 0,
+  stock_on_hand numeric(18, 4) NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.customers (
@@ -94,10 +101,12 @@ CREATE TABLE IF NOT EXISTS public.sales (
   discount_ugx bigint NOT NULL DEFAULT 0,
   total_ugx bigint NOT NULL DEFAULT 0,
   currency text NOT NULL DEFAULT 'UGX',
+  cash_amount_ugx bigint NOT NULL DEFAULT 0,
   created_by uuid REFERENCES auth.users (id),
   completed_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE TABLE IF NOT EXISTS public.sale_line_items (
@@ -106,7 +115,9 @@ CREATE TABLE IF NOT EXISTS public.sale_line_items (
   product_id uuid NOT NULL REFERENCES public.products (id) ON DELETE RESTRICT,
   quantity numeric(18, 4) NOT NULL,
   unit_price_ugx bigint NOT NULL DEFAULT 0,
+  line_discount_ugx bigint NOT NULL DEFAULT 0,
   line_total_ugx bigint NOT NULL DEFAULT 0,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -149,12 +160,116 @@ CREATE TABLE IF NOT EXISTS public.sale_voids (
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
--- ---------- stub tables referenced by the admin reset functions ----------
+-- ---------- inventory (minimal stub of production sale-stock path) ----------
 CREATE TABLE IF NOT EXISTS public.inventory_movements (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id uuid PRIMARY KEY,
   shop_id uuid NOT NULL REFERENCES public.shops (id) ON DELETE CASCADE,
+  product_id uuid NOT NULL REFERENCES public.products (id) ON DELETE CASCADE,
+  quantity_delta numeric(18, 4) NOT NULL,
+  reason text NOT NULL DEFAULT 'sale',
+  reference_type text,
+  reference_id uuid,
+  note text,
+  created_by uuid REFERENCES auth.users (id),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE OR REPLACE FUNCTION public.inventory_movement_uuid (
+  p_shop_id uuid,
+  p_reference_type text,
+  p_reference_id uuid,
+  p_product_id uuid
+)
+RETURNS uuid
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT (
+    substr(md5(p_shop_id::text || '|' || coalesce(p_reference_type, '') || '|' || p_reference_id::text || '|' || p_product_id::text), 1, 8) || '-' ||
+    substr(md5(p_shop_id::text || '|' || coalesce(p_reference_type, '') || '|' || p_reference_id::text || '|' || p_product_id::text), 9, 4) || '-' ||
+    '4' || substr(md5(p_shop_id::text || '|' || coalesce(p_reference_type, '') || '|' || p_reference_id::text || '|' || p_product_id::text), 13, 3) || '-' ||
+    'a' || substr(md5(p_shop_id::text || '|' || coalesce(p_reference_type, '') || '|' || p_reference_id::text || '|' || p_product_id::text), 17, 3) || '-' ||
+    substr(md5(p_shop_id::text || '|' || coalesce(p_reference_type, '') || '|' || p_reference_id::text || '|' || p_product_id::text), 21, 12)
+  )::uuid;
+$$;
+
+-- Test double for the canonical inventory engine used by D030 product claims.
+CREATE OR REPLACE FUNCTION public.apply_sale_stock_movements (p_sale_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  r record;
+  v_shop uuid;
+  v_new numeric;
+  v_updated_at timestamptz;
+  v_movement_id uuid;
+  v_stocks jsonb := '[]'::jsonb;
+BEGIN
+  SELECT shop_id INTO STRICT v_shop FROM public.sales WHERE id = p_sale_id;
+
+  FOR r IN
+    SELECT sli.product_id, sum(sli.quantity) AS quantity
+    FROM public.sale_line_items sli
+    WHERE sli.sale_id = p_sale_id
+      AND sli.product_id IS NOT NULL
+    GROUP BY sli.product_id
+  LOOP
+    IF r.quantity <= 0 THEN
+      CONTINUE;
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM public.inventory_movements im
+      WHERE im.shop_id = v_shop
+        AND im.reference_type = 'sale'
+        AND im.reference_id = p_sale_id
+        AND im.product_id = r.product_id
+    ) THEN
+      SELECT p.stock_on_hand, p.updated_at
+      INTO v_new, v_updated_at
+      FROM public.products p
+      WHERE p.id = r.product_id AND p.shop_id = v_shop;
+
+      v_stocks := v_stocks || jsonb_build_array(
+        jsonb_build_object('product_id', r.product_id, 'stock_on_hand', v_new, 'updated_at', v_updated_at)
+      );
+      CONTINUE;
+    END IF;
+
+    v_movement_id := public.inventory_movement_uuid(v_shop, 'sale', p_sale_id, r.product_id);
+
+    UPDATE public.products p
+    SET stock_on_hand = p.stock_on_hand - r.quantity,
+        updated_at = now()
+    WHERE p.id = r.product_id
+      AND p.shop_id = v_shop
+    RETURNING p.stock_on_hand, p.updated_at INTO v_new, v_updated_at;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Product % not in this shop', r.product_id;
+    END IF;
+
+    INSERT INTO public.inventory_movements (
+      id, shop_id, product_id, quantity_delta, reason, reference_type, reference_id, created_by
+    )
+    VALUES (
+      v_movement_id, v_shop, r.product_id, -r.quantity, 'sale', 'sale', p_sale_id, auth.uid()
+    )
+    ON CONFLICT (id) DO NOTHING;
+
+    v_stocks := v_stocks || jsonb_build_array(
+      jsonb_build_object('product_id', r.product_id, 'stock_on_hand', v_new, 'updated_at', v_updated_at)
+    );
+  END LOOP;
+
+  RETURN jsonb_build_object('ok', true, 'stocks', v_stocks);
+END;
+$$;
 CREATE TABLE IF NOT EXISTS public.receipts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id uuid NOT NULL REFERENCES public.shops (id) ON DELETE CASCADE

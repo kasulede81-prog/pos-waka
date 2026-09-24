@@ -91,7 +91,9 @@ export async function lookupPublicLoyaltyCard(
 
   const { data: rewards } = await admin
     .from("loyalty_rewards")
-    .select("id, name, description, points_required, active, sort_order, expires_on, requires_offer_grant")
+    .select(
+      "id, name, description, points_required, active, sort_order, expires_on, requires_offer_grant, product_id, products(name)",
+    )
     .eq("shop_id", shopId)
     .eq("active", true)
     .order("sort_order", { ascending: true });
@@ -119,8 +121,20 @@ export async function lookupPublicLoyaltyCard(
   );
 
   function mapReward(r: Record<string, unknown>) {
+    // D030: prefer linked product display name; never expose product_id / stock / cost.
+    const nested = r.products as { name?: unknown } | { name?: unknown }[] | null | undefined;
+    const productNameRaw = Array.isArray(nested)
+      ? nested[0]?.name
+      : nested && typeof nested === "object"
+        ? nested.name
+        : null;
+    const productName =
+      productNameRaw == null || String(productNameRaw).trim() === ""
+        ? null
+        : String(productNameRaw).trim().slice(0, 120);
+    const rewardName = String(r.name ?? "").trim();
     return {
-      name: String(r.name ?? ""),
+      name: productName || rewardName,
       points_required: Math.max(0, Math.trunc(Number(r.points_required ?? 0))),
       description: r.description == null || String(r.description).trim() === ""
         ? null
