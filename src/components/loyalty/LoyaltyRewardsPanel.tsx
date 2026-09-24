@@ -5,6 +5,7 @@ import { t } from "../../lib/i18n";
 import {
   createLoyaltyReward,
   fetchLoyaltyRewards,
+  isRewardUnexpiredClient,
   updateLoyaltyReward,
   validateRewardInput,
   type LoyaltyReward,
@@ -28,6 +29,7 @@ const EMPTY_INPUT: RewardInput = {
   productId: null,
   maxRedemptionsPerAccount: null,
   active: true,
+  expiresOn: null,
 };
 
 /** Merchant reward catalog management — simple name + points first; advanced collapsed. */
@@ -45,6 +47,7 @@ export function LoyaltyRewardsPanel({
   const [draft, setDraft] = useState<RewardInput>({ ...EMPTY_INPUT });
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [editingExpiryId, setEditingExpiryId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const rows = await fetchLoyaltyRewards(shopId);
@@ -79,6 +82,14 @@ export function LoyaltyRewardsPanel({
     onChanged();
   };
 
+  const saveExpiry = async (reward: LoyaltyReward, expiresOn: string | null) => {
+    if (expiresOn != null && expiresOn !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(expiresOn)) return;
+    await updateLoyaltyReward(reward.id, { expiresOn });
+    setEditingExpiryId(null);
+    await reload();
+    onChanged();
+  };
+
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <p className="text-base font-black text-foreground">{t(lang, "loyaltyRewardsTitle")}</p>
@@ -89,33 +100,100 @@ export function LoyaltyRewardsPanel({
         <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyNoRewards")}</p>
       ) : (
         <ul className="mt-3 divide-y divide-border">
-          {rewards.map((reward) => (
-            <li key={reward.id} className="flex items-center justify-between gap-3 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-black text-foreground">
-                  {reward.name}
-                  <span
-                    className={clsx(
-                      "ml-2 rounded-full px-2 py-0.5 text-[10px] font-black",
-                      reward.active ? "bg-success-muted text-success" : "bg-muted text-muted-foreground",
-                    )}
+          {rewards.map((reward) => {
+            const expired = reward.active && !isRewardUnexpiredClient(reward.expiresOn);
+            return (
+              <li key={reward.id} className="py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-foreground">
+                      {reward.name}
+                      <span
+                        className={clsx(
+                          "ml-2 rounded-full px-2 py-0.5 text-[10px] font-black",
+                          !reward.active
+                            ? "bg-muted text-muted-foreground"
+                            : expired
+                              ? "bg-destructive/15 text-destructive"
+                              : "bg-success-muted text-success",
+                        )}
+                      >
+                        {!reward.active
+                          ? t(lang, "loyaltyRewardInactive")
+                          : expired
+                            ? t(lang, "loyaltyRewardExpired")
+                            : t(lang, "loyaltyRewardActive")}
+                      </span>
+                    </p>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {reward.pointsRequired} {t(lang, "loyaltyPointsUnit")}
+                      {reward.description ? ` · ${reward.description}` : ""}
+                      {reward.expiresOn
+                        ? ` · ${t(lang, "loyaltyRewardExpiresOn")}: ${reward.expiresOn}`
+                        : ` · ${t(lang, "loyaltyRewardNeverExpires")}`}
+                    </p>
+                  </div>
+                  <WakaSwitch
+                    checked={reward.active}
+                    onCheckedChange={() => void toggleActive(reward)}
+                    label={undefined}
+                    aria-label={reward.name}
+                  />
+                </div>
+                {editingExpiryId === reward.id ? (
+                  <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/40 p-3">
+                    <p className="text-xs font-black text-foreground">{t(lang, "loyaltyRewardExpiry")}</p>
+                    <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <input
+                        type="radio"
+                        name={`expiry-${reward.id}`}
+                        checked={reward.expiresOn == null}
+                        onChange={() => void saveExpiry(reward, null)}
+                      />
+                      {t(lang, "loyaltyRewardNeverExpires")}
+                    </label>
+                    <label className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+                      <input
+                        type="radio"
+                        name={`expiry-${reward.id}`}
+                        checked={reward.expiresOn != null}
+                        onChange={() => {
+                          if (reward.expiresOn == null) {
+                            void saveExpiry(reward, new Date().toISOString().slice(0, 10));
+                          }
+                        }}
+                      />
+                      {t(lang, "loyaltyRewardExpiresOn")}
+                      <input
+                        type="date"
+                        value={reward.expiresOn ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v) void saveExpiry(reward, v);
+                        }}
+                        className="min-h-[40px] rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setEditingExpiryId(null)}
+                      className="text-xs font-bold text-muted-foreground"
+                    >
+                      {t(lang, "loyaltyCancel")}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingExpiryId(reward.id)}
+                    className="mt-1.5 text-xs font-bold text-waka-700"
                   >
-                    {reward.active ? t(lang, "loyaltyRewardActive") : t(lang, "loyaltyRewardInactive")}
-                  </span>
-                </p>
-                <p className="text-xs font-medium text-muted-foreground">
-                  {reward.pointsRequired} {t(lang, "loyaltyPointsUnit")}
-                  {reward.description ? ` · ${reward.description}` : ""}
-                </p>
-              </div>
-              <WakaSwitch
-                checked={reward.active}
-                onCheckedChange={() => void toggleActive(reward)}
-                label={undefined}
-                aria-label={reward.name}
-              />
-            </li>
-          ))}
+                    {t(lang, "loyaltyRewardEditExpiry")}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -139,6 +217,42 @@ export function LoyaltyRewardsPanel({
               value={draft.pointsRequired}
               onChange={(e) => setDraft((d) => ({ ...d, pointsRequired: Number(e.target.value) }))}
               className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+            />
+          </label>
+        </div>
+
+        <div className="mt-3 space-y-2 rounded-xl border border-border bg-card/60 p-3">
+          <p className="text-sm font-black text-foreground">{t(lang, "loyaltyRewardExpiry")}</p>
+          <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <input
+              type="radio"
+              name="draftExpiryMode"
+              checked={draft.expiresOn == null}
+              onChange={() => setDraft((d) => ({ ...d, expiresOn: null }))}
+            />
+            {t(lang, "loyaltyRewardNeverExpires")}
+          </label>
+          <label className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+            <input
+              type="radio"
+              name="draftExpiryMode"
+              checked={draft.expiresOn != null}
+              onChange={() =>
+                setDraft((d) => ({
+                  ...d,
+                  expiresOn: d.expiresOn ?? new Date().toISOString().slice(0, 10),
+                }))
+              }
+            />
+            {t(lang, "loyaltyRewardExpiresOn")}
+            <input
+              type="date"
+              value={draft.expiresOn ?? ""}
+              disabled={draft.expiresOn == null}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, expiresOn: e.target.value || null }))
+              }
+              className="min-h-[40px] rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold disabled:opacity-40"
             />
           </label>
         </div>

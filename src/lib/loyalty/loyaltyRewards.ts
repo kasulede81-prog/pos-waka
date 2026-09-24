@@ -1,5 +1,5 @@
 /**
- * Loyalty rewards & redemption client (Phase 08).
+ * Loyalty rewards & redemption client (Phase 08 + C2 expiry).
  *
  * Rewards are merchant-defined catalog rows (RLS: managers write, any shop
  * member reads). Redemptions go through `loyalty_redeem_reward` — atomic,
@@ -21,6 +21,8 @@ export type LoyaltyReward = {
   maxRedemptionsPerAccount: number | null;
   active: boolean;
   sortOrder: number;
+  /** Inclusive Kampala end date YYYY-MM-DD, or null = never expires. */
+  expiresOn: string | null;
 };
 
 export type RewardInput = {
@@ -31,6 +33,8 @@ export type RewardInput = {
   productId: string | null;
   maxRedemptionsPerAccount: number | null;
   active: boolean;
+  /** null = never expires; YYYY-MM-DD when set. */
+  expiresOn: string | null;
 };
 
 type RewardRow = {
@@ -43,7 +47,13 @@ type RewardRow = {
   max_redemptions_per_account: number | null;
   active: boolean;
   sort_order: number;
+  expires_on?: string | null;
 };
+
+function mapExpiresOn(raw: unknown): string | null {
+  if (raw == null || String(raw).trim() === "") return null;
+  return String(raw).slice(0, 10);
+}
 
 function mapRewardRow(row: RewardRow): LoyaltyReward {
   return {
@@ -59,6 +69,7 @@ function mapRewardRow(row: RewardRow): LoyaltyReward {
       row.max_redemptions_per_account == null ? null : Number(row.max_redemptions_per_account),
     active: row.active,
     sortOrder: Number(row.sort_order ?? 0),
+    expiresOn: mapExpiresOn(row.expires_on),
   };
 }
 
@@ -72,16 +83,42 @@ export function validateRewardInput(input: RewardInput): string | null {
   ) {
     return "invalid_max_redemptions";
   }
+  if (input.expiresOn != null && input.expiresOn !== "") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.expiresOn.trim())) return "invalid_reward_expires_on";
+  }
   return null;
 }
 
-/** A customer can redeem a reward when it is active and the balance covers it. */
+/**
+ * Client-side mirror of Kampala inclusive end-of-day (display / Hub only).
+ * Server `now()` remains authoritative for redemption.
+ */
+export function isRewardUnexpiredClient(
+  expiresOn: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (expiresOn == null || String(expiresOn).trim() === "") return true;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(expiresOn).trim().slice(0, 10));
+  if (!m) return false;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  // Exclusive upper bound = next Kampala calendar day 00:00 (UTC+3, no DST).
+  const exclusiveUtcMs = Date.UTC(y, mo - 1, d + 1) - 3 * 60 * 60 * 1000;
+  return nowMs < exclusiveUtcMs;
+}
+
+/** A customer can redeem when active, unexpired, and balance covers cost. */
 export function isRewardEligible(reward: LoyaltyReward, balancePoints: number): boolean {
-  return reward.active && balancePoints >= reward.pointsRequired;
+  return (
+    reward.active &&
+    isRewardUnexpiredClient(reward.expiresOn) &&
+    balancePoints >= reward.pointsRequired
+  );
 }
 
 const REWARD_COLUMNS =
-  "id, name, description, points_required, reward_kind, product_id, max_redemptions_per_account, active, sort_order";
+  "id, name, description, points_required, reward_kind, product_id, max_redemptions_per_account, active, sort_order, expires_on";
 
 export async function fetchLoyaltyRewards(shopId: string): Promise<LoyaltyReward[]> {
   if (!hasSupabaseConfig || !supabase || !shopId) return [];
@@ -106,6 +143,8 @@ export async function createLoyaltyReward(shopId: string, input: RewardInput): P
   if (invalid) return { ok: false, error: invalid };
   if (!hasSupabaseConfig || !supabase || !shopId) return { ok: false, error: "loyalty_unavailable" };
   try {
+    const expiresOn =
+      input.expiresOn == null || input.expiresOn.trim() === "" ? null : input.expiresOn.trim().slice(0, 10);
     const { data, error } = await supabase
       .from("loyalty_rewards")
       .insert({
@@ -117,6 +156,7 @@ export async function createLoyaltyReward(shopId: string, input: RewardInput): P
         product_id: input.productId,
         max_redemptions_per_account: input.maxRedemptionsPerAccount,
         active: input.active,
+        expires_on: expiresOn,
       })
       .select("id")
       .single();
@@ -145,6 +185,14 @@ export async function updateLoyaltyReward(
           ? { max_redemptions_per_account: patch.maxRedemptionsPerAccount }
           : {}),
         ...(patch.active !== undefined ? { active: patch.active } : {}),
+        ...(patch.expiresOn !== undefined
+          ? {
+              expires_on:
+                patch.expiresOn == null || patch.expiresOn.trim() === ""
+                  ? null
+                  : patch.expiresOn.trim().slice(0, 10),
+            }
+          : {}),
       })
       .eq("id", rewardId)
       .select("id")

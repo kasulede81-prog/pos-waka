@@ -33,6 +33,7 @@ import { LoyaltyCardDesignPanel } from "../components/loyalty/LoyaltyCardDesignP
 import {
   fetchLoyaltyRewards,
   isRewardEligible,
+  isRewardUnexpiredClient,
   newRedemptionIdempotencyKey,
   redeemLoyaltyReward,
   type LoyaltyReward,
@@ -368,7 +369,7 @@ function CustomerDetail({
               ) : (
                 <ul className="mt-2 divide-y divide-border">
                   {rewards
-                    .filter((reward) => reward.active)
+                    .filter((reward) => reward.active && isRewardUnexpiredClient(reward.expiresOn))
                     .map((reward) => (
                       <li key={reward.id} className="flex items-center justify-between gap-3 py-2">
                         <div className="min-w-0">
@@ -432,7 +433,11 @@ function CustomerDetail({
                       })
                     : redeemState.error === "redemption_limit_reached"
                       ? t(lang, "loyaltyRedeemLimitReached")
-                      : t(lang, "loyaltyRedeemFailed")}
+                      : redeemState.error === "reward_expired"
+                        ? t(lang, "loyaltyRewardExpiredRedeem")
+                        : redeemState.error === "membership_expired"
+                          ? t(lang, "loyaltyMembershipExpiredRedeem")
+                          : t(lang, "loyaltyRedeemFailed")}
                 </p>
               ) : null}
             </div>

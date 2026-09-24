@@ -12,6 +12,18 @@ import {
 } from "./publicCardTypes.ts";
 import { isGoogleWalletConfigured } from "./googleWalletEnv.ts";
 
+/** C2: inclusive Kampala end date â€” mirrors loyalty_membership_expires_at_from_date. */
+function isRewardUnexpiredForPublic(expiresOn: unknown, nowMs: number = Date.now()): boolean {
+  if (expiresOn == null || String(expiresOn).trim() === "") return true;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(expiresOn).trim().slice(0, 10));
+  if (!m) return false;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const exclusiveUtcMs = Date.UTC(y, mo - 1, d + 1) - 3 * 60 * 60 * 1000;
+  return nowMs < exclusiveUtcMs;
+}
+
 export async function lookupPublicLoyaltyCard(
   supabaseUrl: string,
   serviceKey: string,
@@ -75,7 +87,7 @@ export async function lookupPublicLoyaltyCard(
 
   const { data: rewards } = await admin
     .from("loyalty_rewards")
-    .select("name, description, points_required, active, sort_order")
+    .select("name, description, points_required, active, sort_order, expires_on")
     .eq("shop_id", shopId)
     .eq("active", true)
     .order("sort_order", { ascending: true });
@@ -161,7 +173,9 @@ export async function lookupPublicLoyaltyCard(
     membership_expires_on: membershipExpiresOn,
     qr_payload: encodeLoyaltyQrPayload(qrToken),
     rewards: Array.isArray(rewards)
-      ? rewards.map((r) => ({
+      ? rewards
+          .filter((r) => isRewardUnexpiredForPublic((r as { expires_on?: unknown }).expires_on))
+          .map((r) => ({
           name: String(r.name ?? ""),
           points_required: Math.max(0, Math.trunc(Number(r.points_required ?? 0))),
           description: r.description == null || String(r.description).trim() === ""
@@ -187,7 +201,7 @@ export type ResolvedPublicAccount = {
   membershipActive: boolean;
 };
 
-/** Resolve account for Wallet issuance — same authority chain, no phone. */
+/** Resolve account for Wallet issuance ï¿½ same authority chain, no phone. */
 export async function resolvePublicCardAccountForWallet(
   supabaseUrl: string,
   serviceKey: string,

@@ -20,6 +20,7 @@ function baseInput(patch: Partial<RewardInput> = {}): RewardInput {
     productId: null,
     maxRedemptionsPerAccount: null,
     active: true,
+    expiresOn: null,
     ...patch,
   };
 }
@@ -35,6 +36,7 @@ function reward(patch: Partial<LoyaltyReward> = {}): LoyaltyReward {
     maxRedemptionsPerAccount: null,
     active: true,
     sortOrder: 0,
+    expiresOn: null,
     ...patch,
   };
 }
@@ -84,6 +86,10 @@ describe("isRewardEligible", () => {
 
   it("is not eligible when the reward is inactive", () => {
     expect(isRewardEligible(reward({ active: false }), 100)).toBe(false);
+  });
+
+  it("is not eligible when the reward is expired", () => {
+    expect(isRewardEligible(reward({ expiresOn: "2020-01-01" }), 100)).toBe(false);
   });
 });
 
