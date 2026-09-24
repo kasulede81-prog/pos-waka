@@ -48,7 +48,10 @@ export type PublicCardData = {
   membership_active: boolean;
   membership_expires_on: string | null;
   qr_payload: string;
+  /** Shop-wide rewards (requires_offer_grant=false). */
   rewards: PublicCardReward[];
+  /** Decision 029: customer-specific assigned rewards. */
+  your_rewards: PublicCardReward[];
   wallet_configured: boolean;
   design?: LoyaltyCardDesign;
 };
@@ -70,6 +73,8 @@ const FORBIDDEN_RESPONSE_KEYS = new Set([
   "private_key",
   "service_account",
   "save_url",
+  "assignment_id",
+  "reward_id",
 ]);
 
 /** Defense-in-depth: reject payloads that leak sensitive fields. */
@@ -125,6 +130,18 @@ export async function fetchPublicLoyaltyCard(token: string): Promise<FetchPublic
     }
 
     const rewardsRaw = Array.isArray(body.rewards) ? body.rewards : [];
+    const yourRewardsRaw = Array.isArray(body.your_rewards) ? body.your_rewards : [];
+    const mapReward = (r: unknown): PublicCardReward => {
+      const row = (r ?? {}) as Record<string, unknown>;
+      return {
+        name: String(row.name ?? ""),
+        points_required: Math.max(0, Math.trunc(Number(row.points_required ?? 0))),
+        description:
+          row.description == null || String(row.description).trim() === ""
+            ? null
+            : String(row.description),
+      };
+    };
     const shopName = String(body.shop_name ?? "Shop");
     const programName = String(body.program_name ?? "Loyalty");
     const designRaw =
@@ -148,17 +165,8 @@ export async function fetchPublicLoyaltyCard(token: string): Promise<FetchPublic
             ? null
             : String(body.membership_expires_on).slice(0, 10),
         qr_payload: String(body.qr_payload ?? ""),
-        rewards: rewardsRaw.map((r) => {
-          const row = (r ?? {}) as Record<string, unknown>;
-          return {
-            name: String(row.name ?? ""),
-            points_required: Math.max(0, Math.trunc(Number(row.points_required ?? 0))),
-            description:
-              row.description == null || String(row.description).trim() === ""
-                ? null
-                : String(row.description),
-          };
-        }),
+        rewards: rewardsRaw.map(mapReward),
+        your_rewards: yourRewardsRaw.map(mapReward),
         wallet_configured: Boolean(body.wallet_configured),
         ...(design ? { design } : {}),
       },

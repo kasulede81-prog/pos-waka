@@ -49,6 +49,7 @@ describe("WAKA loyalty default theme", () => {
     membership_expires_on: null,
       qr_payload: "WAKA-LOYALTY:preview",
       rewards: [],
+      your_rewards: [],
       wallet_configured: true,
     };
     const html = renderToStaticMarkup(

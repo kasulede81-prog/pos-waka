@@ -29,6 +29,7 @@ import { LoyaltyEnrollmentPanel } from "../components/loyalty/LoyaltyEnrollmentP
 import { LoyaltyMemberQr } from "../components/loyalty/LoyaltyMemberQr";
 import { LoyaltyRewardsPanel } from "../components/loyalty/LoyaltyRewardsPanel";
 import { LoyaltyCustomerOffersPanel } from "../components/loyalty/LoyaltyCustomerOffersPanel";
+import { LoyaltyCustomerRewardsPanel } from "../components/loyalty/LoyaltyCustomerRewardsPanel";
 import { LoyaltyGoogleWalletButton } from "../components/loyalty/LoyaltyGoogleWalletButton";
 import { LoyaltyCustomerPageShare } from "../components/loyalty/LoyaltyCustomerPageShare";
 import { LoyaltyCardDesignPanel } from "../components/loyalty/LoyaltyCardDesignPanel";
@@ -565,6 +566,15 @@ function CustomerDetail({
         accountId={entry.accountId}
         canIssue={canIssueWallet}
       />
+
+      {mode === "full" ? (
+        <LoyaltyCustomerRewardsPanel
+          lang={lang}
+          shopId={shopId}
+          accountId={entry.accountId}
+          canManage={canManage}
+        />
+      ) : null}
 
       {mode === "full" ? (
         <LoyaltyCustomerOffersPanel

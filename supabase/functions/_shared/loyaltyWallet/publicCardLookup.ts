@@ -91,10 +91,54 @@ export async function lookupPublicLoyaltyCard(
 
   const { data: rewards } = await admin
     .from("loyalty_rewards")
-    .select("name, description, points_required, active, sort_order, expires_on")
+    .select("id, name, description, points_required, active, sort_order, expires_on, requires_offer_grant")
     .eq("shop_id", shopId)
     .eq("active", true)
     .order("sort_order", { ascending: true });
+
+  const accountId = String(account.id);
+  const { data: assignmentRows } = await admin
+    .from("loyalty_reward_assignments")
+    .select("reward_id, status, expires_at")
+    .eq("shop_id", shopId)
+    .eq("account_id", accountId)
+    .eq("status", "active");
+
+  const nowMs = Date.now();
+  function assignmentUsable(row: { status?: unknown; expires_at?: unknown }): boolean {
+    if (String(row.status ?? "") !== "active") return false;
+    if (row.expires_at == null || String(row.expires_at).trim() === "") return true;
+    const exp = Date.parse(String(row.expires_at));
+    return Number.isFinite(exp) && nowMs < exp;
+  }
+
+  const assignedRewardIds = new Set(
+    (Array.isArray(assignmentRows) ? assignmentRows : [])
+      .filter((a) => assignmentUsable(a as { status?: unknown; expires_at?: unknown }))
+      .map((a) => String((a as { reward_id?: unknown }).reward_id ?? "")),
+  );
+
+  function mapReward(r: Record<string, unknown>) {
+    return {
+      name: String(r.name ?? ""),
+      points_required: Math.max(0, Math.trunc(Number(r.points_required ?? 0))),
+      description: r.description == null || String(r.description).trim() === ""
+        ? null
+        : String(r.description).slice(0, 200),
+    };
+  }
+
+  const allRewards = Array.isArray(rewards) ? rewards : [];
+  const yourRewards = allRewards
+    .filter((r) => assignedRewardIds.has(String((r as { id?: unknown }).id ?? "")))
+    .filter((r) => isRewardUnexpiredForPublic((r as { expires_on?: unknown }).expires_on, nowMs))
+    .map((r) => mapReward(r as Record<string, unknown>));
+
+  // Shop catalogue: only shop-wide rewards (not grant-only). Preserves D026 semantics.
+  const shopRewards = allRewards
+    .filter((r) => (r as { requires_offer_grant?: unknown }).requires_offer_grant !== true)
+    .filter((r) => isRewardUnexpiredForPublic((r as { expires_on?: unknown }).expires_on, nowMs))
+    .map((r) => mapReward(r as Record<string, unknown>));
 
   const { data: designRow } = await admin
     .from("loyalty_card_designs")
@@ -176,17 +220,8 @@ export async function lookupPublicLoyaltyCard(
     membership_active: membershipActive,
     membership_expires_on: membershipExpiresOn,
     qr_payload: encodeLoyaltyQrPayload(qrToken),
-    rewards: Array.isArray(rewards)
-      ? rewards
-          .filter((r) => isRewardUnexpiredForPublic((r as { expires_on?: unknown }).expires_on))
-          .map((r) => ({
-          name: String(r.name ?? ""),
-          points_required: Math.max(0, Math.trunc(Number(r.points_required ?? 0))),
-          description: r.description == null || String(r.description).trim() === ""
-            ? null
-            : String(r.description).slice(0, 200),
-        }))
-      : [],
+    rewards: shopRewards,
+    your_rewards: yourRewards,
     wallet_configured: isGoogleWalletConfigured(),
     ...(design ? { design } : {}),
   };

@@ -45,6 +45,8 @@ export type PublicCardSafePayload = {
   membership_expires_on: string | null;
   qr_payload: string;
   rewards: Array<{ name: string; points_required: number; description: string | null }>;
+  /** Decision 029: rewards assigned specifically to this customer. */
+  your_rewards?: Array<{ name: string; points_required: number; description: string | null }>;
   wallet_configured: boolean;
   design?: PublicCardSafeDesign;
 };
@@ -74,6 +76,8 @@ export function assertSafePublicCardJson(body: Record<string, unknown>): void {
     "qr_token",
     "public_card_token",
     "save_url",
+    "assignment_id",
+    "reward_id",
   ];
   for (const key of Object.keys(body)) {
     if (forbidden.includes(key.toLowerCase())) {

@@ -102,7 +102,10 @@ export function PublicLoyaltyCardView({
   previewMode = false,
 }: Props) {
   const theme = resolveLoyaltyPresentation(design);
-  const progress = buildRewardProgress(card.balance_points, card.rewards);
+  const yourRewards = card.your_rewards ?? [];
+  const shopRewards = card.rewards ?? [];
+  const progressPool = yourRewards.length > 0 ? [...yourRewards, ...shopRewards] : shopRewards;
+  const progress = buildRewardProgress(card.balance_points, progressPool);
   const showWallet =
     card.wallet_configured && card.account_active && card.membership_active !== false;
   const programName = theme.programDisplayName?.trim() || card.program_name;
@@ -257,14 +260,42 @@ export function PublicLoyaltyCardView({
         </div>
       </article>
 
+      {yourRewards.length > 0 ? (
+        <section aria-labelledby="loyalty-your-rewards-heading">
+          <h2
+            id="loyalty-your-rewards-heading"
+            className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500"
+          >
+            Your rewards
+          </h2>
+          <ul
+            className={`mt-3 list-none p-0 ${
+              rewardLayout === "cards"
+                ? "grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+                : "flex flex-col gap-2.5"
+            }`}
+          >
+            {yourRewards.map((reward, index) => (
+              <RewardRow
+                key={`y-${reward.name}-${reward.points_required}-${index}`}
+                reward={reward}
+                balancePoints={card.balance_points}
+                index={index}
+                layout={rewardLayout}
+              />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section aria-labelledby="loyalty-rewards-heading">
         <h2
           id="loyalty-rewards-heading"
           className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500"
         >
-          Your rewards
+          {yourRewards.length > 0 ? "Shop rewards" : "Your rewards"}
         </h2>
-        {card.rewards.length === 0 ? (
+        {shopRewards.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-slate-300/90 bg-white px-4 py-6 text-center">
             <p className="text-sm font-black text-slate-800">You&apos;re all set.</p>
             <p className="mt-1 text-sm font-medium text-slate-500">
@@ -279,7 +310,7 @@ export function PublicLoyaltyCardView({
                 : "flex flex-col gap-2.5"
             }`}
           >
-            {card.rewards.map((reward, index) => (
+            {shopRewards.map((reward, index) => (
               <RewardRow
                 key={`${reward.name}-${reward.points_required}-${index}`}
                 reward={reward}

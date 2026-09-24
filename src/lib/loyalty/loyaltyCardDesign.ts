@@ -426,5 +426,6 @@ export const PREVIEW_PUBLIC_CARD_FIXTURE = {
     { name: "Rice", points_required: 200, description: null },
     { name: "Soap", points_required: 300, description: null },
   ],
+  your_rewards: [],
   wallet_configured: true,
 } as const;

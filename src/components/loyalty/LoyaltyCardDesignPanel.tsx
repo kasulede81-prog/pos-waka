@@ -135,6 +135,7 @@ export function LoyaltyCardDesignPanel({
         previewDesign.programDisplayName ||
         `${shopName.trim() || "Demo Shop"} Loyalty`,
       rewards: [...PREVIEW_PUBLIC_CARD_FIXTURE.rewards],
+      your_rewards: [...PREVIEW_PUBLIC_CARD_FIXTURE.your_rewards],
     }),
     [previewDesign.programDisplayName, shopName],
   );

@@ -417,3 +417,25 @@ auto-attached. Success returns only `public_card_token` → redirect to `/c/...`
 **Rate limits:** Durable scopes `enroll_join` / `enroll_submit` (fail closed).
 
 **Merchant UI:** Loyalty → Cards → Customer registration QR (manage-shop).
+
+## Decision 029 — Customer-Specific Reward Assignments
+
+**Status:** Accepted (local implementation)
+
+Explicit table `loyalty_reward_assignments` (shop + account + reward), separate
+from D026 time-windowed offers. Assignments reference existing
+`loyalty_rewards` (no catalogue clones).
+
+**Eligibility:** Shop-wide rewards (`requires_offer_grant = false`) keep working
+unchanged. Grant-only rewards redeem when **either** an active D026
+`reward_grant` **or** an active unexpired D029 assignment applies
+(`loyalty_account_reward_granted`).
+
+**RPCs:** `loyalty_list_reward_assignments`, `loyalty_assign_reward`,
+`loyalty_revoke_reward_assignment` (manage-shop for mutations). Redeem is still
+`loyalty_redeem_reward` only.
+
+**Public card:** `your_rewards` = assigned (active + unexpired); `rewards` =
+shop-wide catalogue only (excludes grant-only). No assignment/reward IDs leaked.
+
+**Purge:** assignments CASCADE when D027 purge deletes the loyalty account.

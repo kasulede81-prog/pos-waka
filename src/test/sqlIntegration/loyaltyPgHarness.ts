@@ -23,6 +23,7 @@ const MIGRATIONS = [
   // Rate-limit table required by D028 scope extension (fail-closed durable buckets).
   join(process.cwd(), "supabase", "migrations", "20260924001500_edge_rate_limit_buckets.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924170000_loyalty_public_self_enrollment.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260924180000_loyalty_reward_assignments.sql"),
 ];
 
 function readSql(path: string): string {
@@ -91,6 +92,7 @@ const FORCE_RLS = `
   ALTER TABLE public.loyalty_point_lot_allocations FORCE ROW LEVEL SECURITY;
   ALTER TABLE public.loyalty_customer_offers FORCE ROW LEVEL SECURITY;
   ALTER TABLE public.loyalty_enrollment_links FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.loyalty_reward_assignments FORCE ROW LEVEL SECURITY;
 `;
 
 export async function asUser<T>(exec: SqlExec, userId: string, fn: () => Promise<T>): Promise<T> {
@@ -129,6 +131,9 @@ export function rpcJson(row: Record<string, unknown> | undefined): Record<string
     row?.loyalty_revoke_enrollment_link ??
     row?.loyalty_preview_enrollment_link ??
     row?.loyalty_enroll_by_enrollment_token ??
+    row?.loyalty_list_reward_assignments ??
+    row?.loyalty_assign_reward ??
+    row?.loyalty_revoke_reward_assignment ??
     row?.result;
   if (raw && typeof raw === "object") return raw as Record<string, unknown>;
   if (typeof raw === "string") return JSON.parse(raw) as Record<string, unknown>;

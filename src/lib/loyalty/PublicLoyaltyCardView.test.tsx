@@ -17,6 +17,7 @@ const baseCard = (over: Partial<PublicCardData> = {}): PublicCardData => ({
     { name: "1kg Sugar", points_required: 300, description: "1kg sugar bag" },
     { name: "Free soda", points_required: 500, description: null },
   ],
+  your_rewards: [],
   wallet_configured: true,
   ...over,
 });

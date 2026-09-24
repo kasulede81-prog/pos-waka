@@ -72,6 +72,7 @@ describe("PublicLoyaltyCardView design presentation", () => {
     membership_expires_on: null,
     qr_payload: "WAKA-LOYALTY:preview",
     rewards: [{ name: "Sugar", points_required: 100, description: null }],
+    your_rewards: [],
     wallet_configured: true,
   };
 
