@@ -171,6 +171,7 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
         {state.phase === "ready" ? (
           <PublicLoyaltyCardView
             card={state.card}
+            design={state.card.design}
             qrDataUrl={qrDataUrl}
             walletBusy={walletBusy}
             walletMessage={walletMessage}

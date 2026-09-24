@@ -23,10 +23,21 @@ describe("loyalty-public-card response contract", () => {
       qr_payload: encodeLoyaltyQrPayload("qr-token-1"),
       rewards: [{ name: "Free tea", points_required: 20, description: "Hot" }],
       wallet_configured: true,
+      design: {
+        logo_url: "https://cdn.example.com/logo.png",
+        primary_color: "#f59e0b",
+        accent_color: "#ea580c",
+        background_color: "#0c0a09",
+        text_color: "#fafaf9",
+        program_name: "Kampala Kiosk Loyalty",
+        welcome_message: "Welcome",
+        style: "classic" as const,
+        reward_layout: "list" as const,
+      },
     };
     expect(body.qr_payload).toBe("WAKA-LOYALTY:qr-token-1");
     expect(() => assertSafePublicCardJson(body)).not.toThrow();
-    expect(JSON.stringify(body)).not.toMatch(/phone|email|account_id|shop_id|customer_id/i);
+    expect(JSON.stringify(body)).not.toMatch(/phone|email|account_id|shop_id|customer_id|design_version|updated_at/i);
   });
 
   it("rejects client-supplied shop authority patterns in token validation", () => {

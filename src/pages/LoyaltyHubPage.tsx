@@ -28,6 +28,7 @@ import { LoyaltyMemberQr } from "../components/loyalty/LoyaltyMemberQr";
 import { LoyaltyRewardsPanel } from "../components/loyalty/LoyaltyRewardsPanel";
 import { LoyaltyGoogleWalletButton } from "../components/loyalty/LoyaltyGoogleWalletButton";
 import { LoyaltyCustomerPageShare } from "../components/loyalty/LoyaltyCustomerPageShare";
+import { LoyaltyCardDesignPanel } from "../components/loyalty/LoyaltyCardDesignPanel";
 import {
   fetchLoyaltyRewards,
   isRewardEligible,
@@ -36,8 +37,9 @@ import {
   type LoyaltyReward,
 } from "../lib/loyalty/loyaltyRewards";
 import { requestGoogleWalletBalanceSync } from "../lib/loyalty/loyaltyGoogleWallet";
+import { usePosStore } from "../store/usePosStore";
 
-type HubTab = "overview" | "earn" | "customers" | "rewards" | "cards";
+type HubTab = "overview" | "earn" | "customers" | "rewards" | "cards" | "design";
 
 const KIND_LABEL_KEY: Record<string, string> = {
   earned: "loyaltyKindEarned",
@@ -552,6 +554,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
   const canManage = actorHasPermission(actor, "settings.shop");
   const canRedeem = actorHasPermission(actor, "loyalty.redeem");
   const canIssueWallet = actorHasPermission(actor, "loyalty.wallet_issue");
+  const shopDisplayName = usePosStore((s) => s.preferences.shopDisplayName?.trim() || "Shop");
   const [shopId, setShopId] = useState<string | null>(null);
   const [overview, setOverview] = useState<LoyaltyOverview | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -654,6 +657,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
       { id: "customers", label: t(lang, "loyaltyTabCustomers") },
       { id: "rewards", label: t(lang, "loyaltyTabRewards") },
       { id: "cards", label: t(lang, "loyaltyTabCards") },
+      { id: "design", label: t(lang, "loyaltyTabDesign") },
     ],
     [lang],
   );
@@ -963,6 +967,16 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
               />
               <LoyaltyEnrollmentPanel lang={lang} shopId={shopId} onEnrollmentChanged={refreshLists} />
             </div>
+          ) : null}
+
+          {tab === "design" ? (
+            canManage && shopId ? (
+              <LoyaltyCardDesignPanel lang={lang} shopId={shopId} shopName={shopDisplayName} />
+            ) : (
+              <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
+                {t(lang, "loyaltyDesignOwnerOnly")}
+              </p>
+            )
           ) : null}
         </div>
       ) : null}

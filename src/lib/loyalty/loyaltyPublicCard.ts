@@ -7,6 +7,11 @@
 
 import { WAKA_POS_URL } from "../../config/company";
 import { hasSupabaseConfig } from "../supabase";
+import {
+  publicPayloadToDesign,
+  type LoyaltyCardDesign,
+  type PublicCardDesignPayload,
+} from "./loyaltyCardDesign";
 
 export const PUBLIC_CARD_TOKEN_RE = /^[a-f0-9]{64}$/i;
 
@@ -40,6 +45,7 @@ export type PublicCardData = {
   qr_payload: string;
   rewards: PublicCardReward[];
   wallet_configured: boolean;
+  design?: LoyaltyCardDesign;
 };
 
 export type FetchPublicCardResult =
@@ -114,12 +120,20 @@ export async function fetchPublicLoyaltyCard(token: string): Promise<FetchPublic
     }
 
     const rewardsRaw = Array.isArray(body.rewards) ? body.rewards : [];
+    const shopName = String(body.shop_name ?? "Shop");
+    const programName = String(body.program_name ?? "Loyalty");
+    const designRaw =
+      body.design && typeof body.design === "object"
+        ? (body.design as PublicCardDesignPayload)
+        : null;
+    const design = publicPayloadToDesign(designRaw, programName);
+
     return {
       ok: true,
       card: {
         customer_name: String(body.customer_name ?? "Member"),
-        shop_name: String(body.shop_name ?? "Shop"),
-        program_name: String(body.program_name ?? "Loyalty"),
+        shop_name: shopName,
+        program_name: design?.programDisplayName || programName,
         balance_points: Math.max(0, Math.trunc(Number(body.balance_points ?? 0))),
         account_active: Boolean(body.account_active),
         program_enabled: Boolean(body.program_enabled),
@@ -136,6 +150,7 @@ export async function fetchPublicLoyaltyCard(token: string): Promise<FetchPublic
           };
         }),
         wallet_configured: Boolean(body.wallet_configured),
+        ...(design ? { design } : {}),
       },
     };
   } catch {

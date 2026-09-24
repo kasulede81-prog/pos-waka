@@ -19,6 +19,18 @@ export type PublicCardAccountRow = {
   qr_token: string;
 };
 
+export type PublicCardSafeDesign = {
+  logo_url: string | null;
+  primary_color: string;
+  accent_color: string;
+  background_color: string;
+  text_color: string;
+  program_name: string;
+  welcome_message: string | null;
+  style: "classic" | "modern" | "minimal" | "premium";
+  reward_layout: "list" | "cards";
+};
+
 export type PublicCardSafePayload = {
   ok: true;
   customer_name: string;
@@ -30,6 +42,7 @@ export type PublicCardSafePayload = {
   qr_payload: string;
   rewards: Array<{ name: string; points_required: number; description: string | null }>;
   wallet_configured: boolean;
+  design?: PublicCardSafeDesign;
 };
 
 export type PublicCardLookupError = {

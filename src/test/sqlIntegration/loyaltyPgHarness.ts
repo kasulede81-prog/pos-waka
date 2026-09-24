@@ -14,6 +14,7 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260922222138_loyalty_engine_primitive_revoke.sql"),
   join(process.cwd(), "supabase", "migrations", "20260923233000_loyalty_public_card_token.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924010000_loyalty_redeem_auth_concurrency.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260924015233_loyalty_card_designs.sql"),
 ];
 
 function readSql(path: string): string {
@@ -78,6 +79,7 @@ const FORCE_RLS = `
   ALTER TABLE public.loyalty_transactions FORCE ROW LEVEL SECURITY;
   ALTER TABLE public.loyalty_rewards FORCE ROW LEVEL SECURITY;
   ALTER TABLE public.loyalty_redemptions FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.loyalty_card_designs FORCE ROW LEVEL SECURITY;
 `;
 
 export async function asUser<T>(exec: SqlExec, userId: string, fn: () => Promise<T>): Promise<T> {
@@ -106,6 +108,8 @@ export function rpcJson(row: Record<string, unknown> | undefined): Record<string
     row?.loyalty_search_accounts ??
     row?.loyalty_account_by_token ??
     row?.loyalty_redeem_reward ??
+    row?.loyalty_upsert_card_design ??
+    row?.loyalty_reset_card_design ??
     row?.result;
   if (raw && typeof raw === "object") return raw as Record<string, unknown>;
   if (typeof raw === "string") return JSON.parse(raw) as Record<string, unknown>;

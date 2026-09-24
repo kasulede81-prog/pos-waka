@@ -63,16 +63,80 @@ export async function lookupPublicLoyaltyCard(
     .eq("active", true)
     .order("sort_order", { ascending: true });
 
+  const { data: designRow } = await admin
+    .from("loyalty_card_designs")
+    .select(
+      "program_display_name, logo_url, primary_color, accent_color, background_color, text_color, welcome_message, card_style, reward_layout",
+    )
+    .eq("shop_id", shopId)
+    .maybeSingle();
+
   const shopName = String(shop.name ?? "Shop");
   const customerName = String(customer.name ?? "Member");
   const qrToken = String(account.qr_token ?? "");
   if (!qrToken) return { ok: false, error: "unavailable" };
 
+  const defaultProgramName = `${shopName} Loyalty`;
+  const HEX = /^#[0-9a-f]{6}$/;
+  const STYLES = new Set(["classic", "modern", "minimal", "premium"]);
+  const LAYOUTS = new Set(["list", "cards"]);
+
+  function safeHex(raw: unknown, fallback: string): string {
+    const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    return HEX.test(v) ? v : fallback;
+  }
+
+  function safeLogo(raw: unknown): string | null {
+    if (raw == null) return null;
+    const v = String(raw).trim();
+    if (!v || v.length > 2048) return null;
+    const lower = v.toLowerCase();
+    if (!lower.startsWith("https://")) return null;
+    if (lower.includes(".svg")) return null;
+    if (lower.startsWith("javascript:") || lower.startsWith("data:")) return null;
+    try {
+      const u = new URL(v);
+      if (u.protocol !== "https:" || u.username || u.password) return null;
+    } catch {
+      return null;
+    }
+    return v;
+  }
+
+  let design: PublicCardSafePayload["design"];
+  if (designRow) {
+    const styleRaw = String(designRow.card_style ?? "classic").toLowerCase();
+    const layoutRaw = String(designRow.reward_layout ?? "list").toLowerCase();
+    const programFromDesign =
+      designRow.program_display_name == null || String(designRow.program_display_name).trim() === ""
+        ? defaultProgramName
+        : String(designRow.program_display_name).trim().slice(0, 60);
+    const welcome =
+      designRow.welcome_message == null || String(designRow.welcome_message).trim() === ""
+        ? null
+        : String(designRow.welcome_message).trim().slice(0, 120);
+    design = {
+      logo_url: safeLogo(designRow.logo_url),
+      primary_color: safeHex(designRow.primary_color, "#f59e0b"),
+      accent_color: safeHex(designRow.accent_color, "#ea580c"),
+      background_color: safeHex(designRow.background_color, "#0c0a09"),
+      text_color: safeHex(designRow.text_color, "#fafaf9"),
+      program_name: programFromDesign,
+      welcome_message: welcome,
+      style: (STYLES.has(styleRaw) ? styleRaw : "classic") as
+        | "classic"
+        | "modern"
+        | "minimal"
+        | "premium",
+      reward_layout: (LAYOUTS.has(layoutRaw) ? layoutRaw : "list") as "list" | "cards",
+    };
+  }
+
   return {
     ok: true,
     customer_name: customerName,
     shop_name: shopName,
-    program_name: `${shopName} Loyalty`,
+    program_name: design?.program_name ?? defaultProgramName,
     balance_points: Math.max(0, Math.trunc(Number(account.balance_points ?? 0))),
     account_active: account.status === "active",
     program_enabled: Boolean(program?.enabled),
@@ -87,6 +151,7 @@ export async function lookupPublicLoyaltyCard(
         }))
       : [],
     wallet_configured: isGoogleWalletConfigured(),
+    ...(design ? { design } : {}),
   };
 }
 
