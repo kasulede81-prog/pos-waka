@@ -8,6 +8,18 @@ export const WAKA_SITE_URL = "https://waka.ug";
 /** Live POS web app — use for auth redirects, PWA scope, and app canonical URLs. */
 export const WAKA_POS_URL = "https://pos.waka.ug";
 
+/**
+ * Customer-facing loyalty card origin (B3).
+ * Override with VITE_LOYALTY_APP_URL (e.g. http://localhost:5173 in development).
+ */
+const loyaltyUrlFromEnv = String(import.meta.env.VITE_LOYALTY_APP_URL ?? "")
+  .trim()
+  .replace(/\/$/, "");
+export const WAKA_LOYALTY_URL =
+  loyaltyUrlFromEnv && /^https?:\/\//i.test(loyaltyUrlFromEnv)
+    ? loyaltyUrlFromEnv
+    : "https://loyalty.waka.ug";
+
 /** @deprecated Use WAKA_POS_URL for app; WAKA_SITE_URL for marketing canonicals. */
 export const CANONICAL_MARKETING_ORIGIN = WAKA_SITE_URL.replace(/\/$/, "");
 
@@ -128,6 +140,11 @@ export function marketingCanonical(path: string): string {
 
 export function posCanonical(path: string): string {
   return absoluteUrl(path, WAKA_POS_URL);
+}
+
+/** Token-free loyalty card canonical/og:url (never include public_card_token). */
+export function loyaltyCanonical(path: string): string {
+  return absoluteUrl(path, WAKA_LOYALTY_URL);
 }
 
 export function wakaSupportWhatsAppUrl(text = "Hello Waka Technologies, I need help with Waka POS."): string {

@@ -1,5 +1,24 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/loyalty/:token([a-fA-F0-9]{64})",
+      "has": [{ "type": "host", "value": "pos.waka.ug" }],
+      "destination": "https://loyalty.waka.ug/c/:token",
+      "permanent": true
+    },
+    {
+      "source": "/loyalty/:token([a-fA-F0-9]{64})/",
+      "has": [{ "type": "host", "value": "pos.waka.ug" }],
+      "destination": "https://loyalty.waka.ug/c/:token",
+      "permanent": true
+    },
+    {
+      "source": "/c/:token([a-fA-F0-9]{64})/",
+      "destination": "/c/:token",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/auth/v1/:match*",

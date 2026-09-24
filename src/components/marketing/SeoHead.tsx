@@ -14,6 +14,7 @@ import {
   WAKA_SITE_URL,
   WAKA_SLOGAN,
   WAKA_SUPPORT_EMAIL,
+  loyaltyCanonical,
   marketingCanonical,
   posCanonical,
   DEFAULT_OG_IMAGE,
@@ -37,6 +38,11 @@ export type SeoProps = {
    * Pass a token-free path (e.g. "/loyalty") for private customer pages.
    */
   usePosCanonical?: boolean;
+  /**
+   * Use loyalty.waka.ug as the canonical/og:url origin (B3 customer cards).
+   * Pass a token-free path (e.g. "/c") — never include public_card_token.
+   */
+  useLoyaltyCanonical?: boolean;
   /** Include Organization + SoftwareApplication + Person JSON-LD */
   structuredData?: "home" | "page" | "founder" | "contact" | "legal";
 };
@@ -164,9 +170,14 @@ export function SeoHead({
   noindex = false,
   referrerPolicy,
   usePosCanonical = false,
+  useLoyaltyCanonical = false,
   structuredData = "page",
 }: SeoProps) {
-  const canonical = usePosCanonical ? posCanonical(path) : marketingCanonical(path);
+  const canonical = useLoyaltyCanonical
+    ? loyaltyCanonical(path)
+    : usePosCanonical
+      ? posCanonical(path)
+      : marketingCanonical(path);
   const fullTitle =
     title.includes("|") || title.includes(WAKA_MAIN_PRODUCT) ? title : `${title} | ${WAKA_MAIN_PRODUCT}`;
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { openWalletSaveUrlWithoutReferrer } from "./loyaltyPublicWalletNavigate";
 import { isMarketingIndexablePath, noIndexSeoTitle } from "../../config/seoRoutes";
-import { posCanonical } from "../../config/company";
+import { loyaltyCanonical } from "../../config/company";
 
 const SAVE_URL = "https://pay.google.com/gp/v/save/test.jwt";
 const TOKEN = "d".repeat(64);
@@ -47,13 +47,15 @@ describe("openWalletSaveUrlWithoutReferrer (F2)", () => {
   });
 });
 
-describe("public loyalty SEO (W3)", () => {
-  it("keeps loyalty pages noindex and uses token-free pos canonical", () => {
-    const path = `/loyalty/${TOKEN}`;
-    expect(isMarketingIndexablePath(path)).toBe(false);
-    expect(noIndexSeoTitle(path)).toBe("WAKA Loyalty");
-    const canonical = posCanonical("/loyalty");
-    expect(canonical).toBe("https://pos.waka.ug/loyalty");
+describe("public loyalty SEO (B3)", () => {
+  it("keeps loyalty pages noindex and uses token-free loyalty canonical", () => {
+    for (const path of [`/c/${TOKEN}`, `/loyalty/${TOKEN}`]) {
+      expect(isMarketingIndexablePath(path)).toBe(false);
+      expect(noIndexSeoTitle(path)).toBe("WAKA Loyalty");
+    }
+    const canonical = loyaltyCanonical("/c");
+    expect(canonical).toBe("https://loyalty.waka.ug/c");
     expect(canonical).not.toContain(TOKEN);
+    expect(canonical).not.toMatch(/\/loyalty(\/|$)/);
   });
 });

@@ -71,11 +71,19 @@ describe("assertSafePublicCardJson", () => {
 });
 
 describe("customer loyalty page URL", () => {
-  it("builds pos.waka.ug/loyalty/<token> and not a Google Save URL", () => {
+  it("builds loyalty.waka.ug/c/<token> and not a Google Save URL", () => {
     const url = buildCustomerLoyaltyCardUrl(VALID_TOKEN);
-    expect(url).toBe(`https://pos.waka.ug/loyalty/${VALID_TOKEN}`);
+    expect(url).toBe(`https://loyalty.waka.ug/c/${VALID_TOKEN}`);
+    expect(url).not.toContain("pos.waka.ug");
+    expect(url).not.toContain("/loyalty/");
     expect(url).not.toContain("pay.google.com");
     expect(url).not.toContain("/save/");
+  });
+
+  it("honors explicit origin override (dev)", () => {
+    expect(buildCustomerLoyaltyCardUrl(VALID_TOKEN, "http://localhost:5173")).toBe(
+      `http://localhost:5173/c/${VALID_TOKEN}`,
+    );
   });
 
   it("share text uses page URL not Save URL", () => {

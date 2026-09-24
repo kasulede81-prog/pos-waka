@@ -392,6 +392,10 @@ function AppRoutes() {
           path="/loyalty/:publicCardToken"
           element={<PublicLoyaltyCardRoute />}
         />
+        <Route
+          path="/c/:publicCardToken"
+          element={<PublicLoyaltyCardRoute />}
+        />
 
         <Route element={<NativeMarketingGuard isAuthenticated={auth.isAuthenticated} />}>
           <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />

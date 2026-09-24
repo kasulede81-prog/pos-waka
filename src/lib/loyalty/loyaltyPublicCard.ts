@@ -5,7 +5,7 @@
  * Never sends shop_id / account_id. Never logs tokens or Save URLs.
  */
 
-import { WAKA_POS_URL } from "../../config/company";
+import { WAKA_LOYALTY_URL } from "../../config/company";
 import { hasSupabaseConfig } from "../supabase";
 import {
   publicPayloadToDesign,
@@ -19,14 +19,17 @@ export function isValidPublicCardTokenFormat(token: string): boolean {
   return PUBLIC_CARD_TOKEN_RE.test(token.trim());
 }
 
-/** Canonical customer loyalty page URL (not a Google Save URL). */
+/**
+ * Canonical customer loyalty page URL (not a Google Save URL).
+ * Production: https://loyalty.waka.ug/c/<public_card_token>
+ */
 export function buildCustomerLoyaltyCardUrl(
   publicCardToken: string,
-  origin: string = WAKA_POS_URL,
+  origin: string = WAKA_LOYALTY_URL,
 ): string {
   const token = publicCardToken.trim();
   const base = origin.replace(/\/$/, "");
-  return `${base}/loyalty/${encodeURIComponent(token)}`;
+  return `${base}/c/${encodeURIComponent(token)}`;
 }
 
 export type PublicCardReward = {

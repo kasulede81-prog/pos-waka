@@ -22,10 +22,10 @@ type LoadState =
 
 /**
  * Customer-facing loyalty card — no merchant login required.
- * Route: /loyalty/:publicCardToken
+ * Routes: /c/:publicCardToken (canonical) and /loyalty/:publicCardToken (legacy).
  *
- * B1: premium mobile presentation. Public API, QR payload, Wallet issue,
- * and security controls are unchanged.
+ * B1/B2 presentation. Public API, QR payload, Wallet issue, and security controls
+ * are unchanged. B3: share URLs use loyalty.waka.ug/c/<token>.
  */
 export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: string }) {
   const [state, setState] = useState<LoadState>({ phase: "loading" });
@@ -134,8 +134,8 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
       <SeoHead
         title="WAKA Loyalty"
         description="Your WAKA loyalty card"
-        path="/loyalty"
-        usePosCanonical
+        path="/c"
+        useLoyaltyCanonical
         noindex
         referrerPolicy="no-referrer"
       />

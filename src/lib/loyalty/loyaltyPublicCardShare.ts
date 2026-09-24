@@ -2,7 +2,7 @@
  * Merchant helpers for sharing the customer loyalty *page* link (Phase 3).
  *
  * This is NOT the Google Wallet Save URL.
- * URL shape: https://pos.waka.ug/loyalty/<public_card_token>
+ * URL shape: https://loyalty.waka.ug/c/<public_card_token>
  */
 
 import { buildCustomerLoyaltyCardUrl } from "./loyaltyPublicCard";

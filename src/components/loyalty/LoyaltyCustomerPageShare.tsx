@@ -11,7 +11,7 @@ import {
 
 /**
  * Merchant controls to copy/share the customer loyalty *page* URL
- * (https://pos.waka.ug/loyalty/<public_card_token>).
+ * (https://loyalty.waka.ug/c/<public_card_token>).
  * Does not expose the raw token in the UI. Distinct from Google Wallet Save URL.
  */
 export function LoyaltyCustomerPageShare({

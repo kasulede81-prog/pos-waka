@@ -23,7 +23,7 @@ universal fallback.
 ```
 GOOGLE_WALLET_ISSUER_ID=...
 GOOGLE_WALLET_SERVICE_ACCOUNT_JSON={...}
-WALLET_ALLOWED_ORIGINS=https://pos.waka.ug
+WALLET_ALLOWED_ORIGINS=https://pos.waka.ug,https://loyalty.waka.ug
 GOOGLE_WALLET_LOGO_URL=https://pos.waka.ug/waka-logo.png
 ```
 

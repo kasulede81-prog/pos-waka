@@ -13,8 +13,9 @@ export function RouteSeoController() {
   if (isMarketingIndexablePath(path)) return null;
 
   // Capability URLs: never put public_card_token into canonical / og:url.
-  const seoPath = path.startsWith("/loyalty/") ? "/loyalty" : path;
-  const isLoyaltyCard = path.startsWith("/loyalty/");
+  const isLoyaltyCard = path.startsWith("/loyalty/") || path.startsWith("/c/");
+  // B3 canonical is token-free https://loyalty.waka.ug/c
+  const seoPath = path.startsWith("/c/") || path.startsWith("/loyalty/") ? "/c" : path;
 
   return (
     <SeoHead
@@ -22,7 +23,7 @@ export function RouteSeoController() {
       description="Waka POS — point of sale and inventory management for Ugandan businesses."
       path={seoPath}
       noindex
-      usePosCanonical={isLoyaltyCard}
+      useLoyaltyCanonical={isLoyaltyCard}
       referrerPolicy={isLoyaltyCard ? "no-referrer" : undefined}
     />
   );
