@@ -20,6 +20,7 @@ import { useLoyaltyCheckoutAttach } from "../hooks/useLoyaltyCheckoutAttach";
 import { useLoyaltyCheckoutPreview } from "../hooks/useLoyaltyCheckoutPreview";
 import { isLoyaltyScan } from "../lib/loyalty/loyaltyScanRouting";
 import { awaitConfirmedAward } from "../lib/loyalty/loyaltyAward";
+import { requestGoogleWalletBalanceSync } from "../lib/loyalty/loyaltyGoogleWallet";
 import { resolveShopCtx } from "../offline/cloudSync";
 import { PosOperationalNav } from "../components/pos/PosOperationalNav";
 import { PosSellHeroCard } from "../components/pos/PosSellHeroCard";
@@ -643,7 +644,7 @@ export function PosPage({ lang }: { lang: Language }) {
    * in this session. The note stays explicitly "estimated" until then.
    */
   const startLoyaltyAwardWatch = useCallback(
-    (saleId: string | null, customerId: string, expectedPoints: number) => {
+    (saleId: string | null, customerId: string, expectedPoints: number, loyaltyAccountId: string | null) => {
       if (loyaltyAwardWatchRef.current) loyaltyAwardWatchRef.current.cancelled = true;
       loyaltyAwardWatchRef.current = null;
 
@@ -666,6 +667,16 @@ export function PosPage({ lang }: { lang: Language }) {
           balancePoints: confirmedAward.balancePoints,
           confirmed: true,
         });
+        // Push the newly-confirmed balance to the member's Google Wallet card
+        // (if any). The ledger insert already enqueued a sync row server-side;
+        // this just asks the drain to run now instead of waiting for someone
+        // to next open the wallet button. Best-effort/non-blocking by design —
+        // it never throws and must never affect the sale that already completed.
+        // Requires the loyalty_accounts.id (not the customers.id) — the outbox
+        // and the Google Wallet object id are both keyed on the account id.
+        if (loyaltyAccountId) {
+          void requestGoogleWalletBalanceSync(ctx.shopId, loyaltyAccountId);
+        }
       })();
     },
     [],
@@ -1270,7 +1281,12 @@ export function PosPage({ lang }: { lang: Language }) {
       // Loyalty: show the estimate immediately, then replace it with the
       // server's own figure once the sale has synced and the ledger row exists.
       // Never claim points are banked before the database has awarded them.
-      startLoyaltyAwardWatch(r.saleId ?? null, saleCustomerId, loyaltyPreview.expectedPoints);
+      startLoyaltyAwardWatch(
+        r.saleId ?? null,
+        saleCustomerId,
+        loyaltyPreview.expectedPoints,
+        loyaltyPreview.account?.id ?? null,
+      );
 
       setCashInput("");
       setMobileMoneyInput("");
@@ -1307,6 +1323,7 @@ export function PosPage({ lang }: { lang: Language }) {
       startLoyaltyAwardWatch,
       saleCustomerId,
       loyaltyPreview.expectedPoints,
+      loyaltyPreview.account?.id,
     ],
   );
 
