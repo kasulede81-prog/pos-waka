@@ -28,9 +28,16 @@ beforeAll(async () => {
     return rpcJson(rows[0]);
   });
   accountId = String(enrolled.account_id);
-  await exec.query(`UPDATE public.loyalty_accounts SET balance_points = 500 WHERE id = $1`, [
-    accountId,
-  ]);
+  await asUser(exec, f.ownerAId, async () => {
+    const adj = rpcJson(
+      (
+        await exec.query(`SELECT public.loyalty_adjust_points($1, 500, 'c2 fixture') AS result`, [
+          accountId,
+        ])
+      ).rows[0],
+    );
+    expect(adj.ok).toBe(true);
+  });
 }, 120_000);
 
 afterAll(async () => {
@@ -158,11 +165,10 @@ describe("C2 loyalty reward expiry", () => {
       expiresOn: "2019-01-01",
     });
 
-    // Active membership + active reward
-    await exec.query(
-      `UPDATE public.loyalty_accounts SET membership_expires_at = NULL, balance_points = 200 WHERE id = $1`,
-      [accountId],
-    );
+    // Active membership + active reward (ledger-backed balance from beforeAll adjust)
+    await exec.query(`UPDATE public.loyalty_accounts SET membership_expires_at = NULL WHERE id = $1`, [
+      accountId,
+    ]);
     expect((await redeem(activeReward, `c2-aa-${crypto.randomUUID()}`)).ok).toBe(true);
 
     // Active membership + expired reward

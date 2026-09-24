@@ -266,3 +266,46 @@ executed against real migration files in PGlite. Per-step suites from Phases
 authoritative "the system works as one" proof and must stay green. External
 dependencies (Wallet issuer/certs, NFC hardware) are excluded from the
 journey by design and tracked as documented blockers, not hidden failures.
+
+## Decision 025 — Points Expiry Is Rolling Earn-Lot FIFO (C3)
+
+**Status:** Accepted (C3)
+
+Points expiry is **not** an account-wide wipe and **not** membership/reward
+expiry. Configuration lives on `loyalty_programs`:
+
+- `points_expiry_mode`: `never` (default) | `rolling_months`
+- `points_expiry_months`: positive integer when rolling
+
+**Grandfathering:** Existing `earned` rows keep `expires_at = NULL` (never
+expire). Changing the merchant rule stamps **new** earns only and never
+rewrites historical `expires_at`.
+
+**Kampala:** New earn lots under rolling mode set
+`expires_at = loyalty_membership_expires_at_from_date(Kampala_start + months)`
+(reuse C1 helper; inclusive calendar day; exclusive timestamptz bound;
+server `now()`).
+
+**Immutable ledger:** Expiry appends `kind='expired'`, `cause='expiration'`,
+negative points. Historical rows are never updated/deleted. Balances move
+only via `trg_loyalty_tx_balance`.
+
+**FIFO (sole consumption policy):** Oldest credit lots (earned, then any
+positive promotional/adjusted credits) are consumed first for redemptions and
+expiries. Remaining capacity per lot =
+
+`credit_points + sum(reversals of that credit) − sum(FIFO allocations)`.
+
+Allocations are stored append-only in `loyalty_point_lot_allocations` so the
+system can answer which lot funded which redeem/expire without mutating
+ledger history. Pre-C3 redeems are backfilled into that table once at
+migration time (no new ledger rows).
+
+**Returns/voids:** `loyalty_outstanding_for_sale` uses lot remaining (respects
+expiry/redeem allocations). Already-expired or redeemed capacity cannot be
+reversed again. Decision 013 stands: finance commits even if loyalty reverse
+is a no-op / balance-floored.
+
+**Privileges:** `loyalty_expire_due_points` is SECURITY DEFINER and **not**
+granted to `anon`/`authenticated`; redeem (and trusted internal callers)
+invoke it under the account `FOR UPDATE` lock.

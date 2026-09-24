@@ -15,6 +15,8 @@ const program: LoyaltyProgramConfig = {
   membershipExpiryMode: "never",
   membershipFixedExpiresOn: null,
   membershipDurationMonths: null,
+  pointsExpiryMode: "never",
+  pointsExpiryMonths: null,
 };
 
 describe("computeEarnedPoints (mirror of loyalty_award_for_sale)", () => {

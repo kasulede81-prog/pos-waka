@@ -13,6 +13,8 @@ const BASE: ProgramInput = {
   membershipExpiryMode: "never",
   membershipFixedExpiresOn: null,
   membershipDurationMonths: null,
+  pointsExpiryMode: "never",
+  pointsExpiryMonths: null,
 };
 
 describe("C1 membership client helpers", () => {

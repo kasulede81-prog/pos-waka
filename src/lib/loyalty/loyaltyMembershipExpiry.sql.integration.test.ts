@@ -152,9 +152,19 @@ describe("C1 loyalty membership expiry", () => {
     await setProgram("never", null, null);
     const customerId = await newCustomer("Expired Earner");
     const enrolled = await enroll(f.ownerAId, f.shopAId, customerId);
+    await asUser(exec, f.ownerAId, async () => {
+      const adj = rpcJson(
+        (
+          await exec.query(`SELECT public.loyalty_adjust_points($1, 50, 'c1 award fixture') AS result`, [
+            enrolled.account_id,
+          ])
+        ).rows[0],
+      );
+      expect(adj.ok).toBe(true);
+    });
     await exec.query(
       `UPDATE public.loyalty_accounts
-       SET membership_expires_at = now() - interval '1 hour', balance_points = 50
+       SET membership_expires_at = now() - interval '1 hour'
        WHERE id = $1`,
       [enrolled.account_id],
     );
@@ -200,9 +210,19 @@ describe("C1 loyalty membership expiry", () => {
 
     const customerId = await newCustomer("Expired Redeemer");
     const enrolled = await enroll(f.ownerAId, f.shopAId, customerId);
+    await asUser(exec, f.ownerAId, async () => {
+      const adj = rpcJson(
+        (
+          await exec.query(`SELECT public.loyalty_adjust_points($1, 200, 'c1 redeem fixture') AS result`, [
+            enrolled.account_id,
+          ])
+        ).rows[0],
+      );
+      expect(adj.ok).toBe(true);
+    });
     await exec.query(
       `UPDATE public.loyalty_accounts
-       SET membership_expires_at = now() - interval '1 day', balance_points = 200
+       SET membership_expires_at = now() - interval '1 day'
        WHERE id = $1`,
       [enrolled.account_id],
     );
@@ -262,9 +282,19 @@ describe("C1 loyalty membership expiry", () => {
   it("renewal reactivates without changing balance, token, or ledger", async () => {
     const customerId = await newCustomer("Renew Me");
     const enrolled = await enroll(f.ownerAId, f.shopAId, customerId);
+    await asUser(exec, f.ownerAId, async () => {
+      const adj = rpcJson(
+        (
+          await exec.query(`SELECT public.loyalty_adjust_points($1, 77, 'c1 renew fixture') AS result`, [
+            enrolled.account_id,
+          ])
+        ).rows[0],
+      );
+      expect(adj.ok).toBe(true);
+    });
     await exec.query(
       `UPDATE public.loyalty_accounts
-       SET membership_expires_at = now() - interval '2 days', balance_points = 77
+       SET membership_expires_at = now() - interval '2 days'
        WHERE id = $1`,
       [enrolled.account_id],
     );

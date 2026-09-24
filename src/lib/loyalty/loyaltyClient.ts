@@ -12,6 +12,7 @@ import type {
   LoyaltyAccountSnapshot,
   LoyaltyProgramConfig,
   MembershipExpiryMode,
+  PointsExpiryMode,
 } from "./loyaltyMath";
 
 const PROGRAM_CACHE_PREFIX = "waka-loyalty-program:";
@@ -25,6 +26,8 @@ type ProgramRow = {
   membership_expiry_mode?: string | null;
   membership_fixed_expires_on?: string | null;
   membership_duration_months?: number | null;
+  points_expiry_mode?: string | null;
+  points_expiry_months?: number | null;
 };
 
 type AccountRow = {
@@ -43,6 +46,12 @@ type AccountRow = {
 function parseMembershipMode(raw: unknown): MembershipExpiryMode {
   const v = String(raw ?? "never").toLowerCase();
   if (v === "fixed_date" || v === "duration") return v;
+  return "never";
+}
+
+function parsePointsExpiryMode(raw: unknown): PointsExpiryMode {
+  const v = String(raw ?? "never").toLowerCase();
+  if (v === "rolling_months") return "rolling_months";
   return "never";
 }
 
@@ -73,6 +82,9 @@ export function mapProgramRow(row: ProgramRow): LoyaltyProgramConfig {
       row.membership_duration_months == null
         ? null
         : Math.trunc(Number(row.membership_duration_months)),
+    pointsExpiryMode: parsePointsExpiryMode(row.points_expiry_mode),
+    pointsExpiryMonths:
+      row.points_expiry_months == null ? null : Math.trunc(Number(row.points_expiry_months)),
   };
 }
 
@@ -144,7 +156,7 @@ export async function fetchLoyaltyProgramConfig(
     const { data, error } = await supabase
       .from("loyalty_programs")
       .select(
-        "enabled, earn_unit_ugx, earn_points_per_unit, min_eligible_spend_ugx, rule_kind, membership_expiry_mode, membership_fixed_expires_on, membership_duration_months",
+        "enabled, earn_unit_ugx, earn_points_per_unit, min_eligible_spend_ugx, rule_kind, membership_expiry_mode, membership_fixed_expires_on, membership_duration_months, points_expiry_mode, points_expiry_months",
       )
       .eq("shop_id", shopId)
       .maybeSingle();

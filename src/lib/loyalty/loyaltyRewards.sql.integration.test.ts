@@ -321,9 +321,19 @@ describe("loyalty_redeem_reward", () => {
     await exec.exec(`
       INSERT INTO public.customers (id, shop_id, name, phone_e164)
       VALUES ('${raceCustomer}', '${f.shopAId}', 'Race Customer', '+256700000099');
-      INSERT INTO public.loyalty_accounts (id, shop_id, customer_id, balance_points, lifetime_earned_points)
-      VALUES ('${raceAccount}', '${f.shopAId}', '${raceCustomer}', 10000, 10000);
+      INSERT INTO public.loyalty_accounts (id, shop_id, customer_id)
+      VALUES ('${raceAccount}', '${f.shopAId}', '${raceCustomer}');
     `);
+    await asUser(exec, f.ownerAId, async () => {
+      const adj = rpcJson(
+        (
+          await exec.query(`SELECT public.loyalty_adjust_points($1, 10000, 'race fixture') AS result`, [
+            raceAccount,
+          ])
+        ).rows[0],
+      );
+      expect(adj.ok).toBe(true);
+    });
     const raceReward = (await createRewardAs(f.ownerAId, {
       name: `Race-7k-${crypto.randomUUID().slice(0, 8)}`,
       points: 7_000,
@@ -364,9 +374,19 @@ describe("loyalty_redeem_reward", () => {
     await exec.exec(`
       INSERT INTO public.customers (id, shop_id, name, phone_e164)
       VALUES ('${raceCustomer}', '${f.shopAId}', 'Burst Customer', '+256700000098');
-      INSERT INTO public.loyalty_accounts (id, shop_id, customer_id, balance_points, lifetime_earned_points)
-      VALUES ('${raceAccount}', '${f.shopAId}', '${raceCustomer}', 10000, 10000);
+      INSERT INTO public.loyalty_accounts (id, shop_id, customer_id)
+      VALUES ('${raceAccount}', '${f.shopAId}', '${raceCustomer}');
     `);
+    await asUser(exec, f.ownerAId, async () => {
+      const adj = rpcJson(
+        (
+          await exec.query(`SELECT public.loyalty_adjust_points($1, 10000, 'burst fixture') AS result`, [
+            raceAccount,
+          ])
+        ).rows[0],
+      );
+      expect(adj.ok).toBe(true);
+    });
     const raceReward = (await createRewardAs(f.ownerAId, {
       name: `Burst-4k-${crypto.randomUUID().slice(0, 8)}`,
       points: 4_000,

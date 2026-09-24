@@ -8,6 +8,7 @@
  */
 
 export type MembershipExpiryMode = "never" | "fixed_date" | "duration";
+export type PointsExpiryMode = "never" | "rolling_months";
 
 export type LoyaltyProgramConfig = {
   enabled: boolean;
@@ -17,6 +18,8 @@ export type LoyaltyProgramConfig = {
   membershipExpiryMode: MembershipExpiryMode;
   membershipFixedExpiresOn: string | null;
   membershipDurationMonths: number | null;
+  pointsExpiryMode: PointsExpiryMode;
+  pointsExpiryMonths: number | null;
 };
 
 export const DEFAULT_LOYALTY_PROGRAM: LoyaltyProgramConfig = {
@@ -27,6 +30,8 @@ export const DEFAULT_LOYALTY_PROGRAM: LoyaltyProgramConfig = {
   membershipExpiryMode: "never",
   membershipFixedExpiresOn: null,
   membershipDurationMonths: null,
+  pointsExpiryMode: "never",
+  pointsExpiryMonths: null,
 };
 
 export type LoyaltyAccountSnapshot = {

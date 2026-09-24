@@ -17,6 +17,7 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260924015233_loyalty_card_designs.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924093000_loyalty_membership_expiry.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924104500_loyalty_reward_expiry.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260924120000_loyalty_points_expiry.sql"),
 ];
 
 function readSql(path: string): string {
@@ -82,6 +83,7 @@ const FORCE_RLS = `
   ALTER TABLE public.loyalty_rewards FORCE ROW LEVEL SECURITY;
   ALTER TABLE public.loyalty_redemptions FORCE ROW LEVEL SECURITY;
   ALTER TABLE public.loyalty_card_designs FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.loyalty_point_lot_allocations FORCE ROW LEVEL SECURITY;
 `;
 
 export async function asUser<T>(exec: SqlExec, userId: string, fn: () => Promise<T>): Promise<T> {

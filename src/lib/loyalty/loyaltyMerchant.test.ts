@@ -14,6 +14,8 @@ const VALID: ProgramInput = {
   membershipExpiryMode: "never",
   membershipFixedExpiresOn: null,
   membershipDurationMonths: null,
+  pointsExpiryMode: "never",
+  pointsExpiryMonths: null,
 };
 
 describe("validateProgramInput", () => {

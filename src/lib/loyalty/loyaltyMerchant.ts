@@ -13,7 +13,7 @@ import {
   fetchLoyaltyProgramConfig,
   mapProgramRow,
 } from "./loyaltyClient";
-import type { LoyaltyProgramConfig, LoyaltyTransactionKind, LoyaltyTransactionRow, MembershipExpiryMode } from "./loyaltyMath";
+import type { LoyaltyProgramConfig, LoyaltyTransactionKind, LoyaltyTransactionRow, MembershipExpiryMode, PointsExpiryMode } from "./loyaltyMath";
 
 export type LoyaltyOverview = {
   program: LoyaltyProgramConfig | null;
@@ -111,6 +111,8 @@ export type ProgramInput = {
   membershipExpiryMode: MembershipExpiryMode;
   membershipFixedExpiresOn: string | null;
   membershipDurationMonths: number | null;
+  pointsExpiryMode: PointsExpiryMode;
+  pointsExpiryMonths: number | null;
 };
 
 export type ProgramInputError =
@@ -119,7 +121,9 @@ export type ProgramInputError =
   | "invalid_min_spend"
   | "invalid_membership_mode"
   | "invalid_membership_fixed_date"
-  | "invalid_membership_duration";
+  | "invalid_membership_duration"
+  | "invalid_points_expiry_mode"
+  | "invalid_points_expiry_months";
 
 /**
  * Client-side guard mirroring the RPC validation so the UI can flag bad
@@ -142,6 +146,12 @@ export function validateProgramInput(input: ProgramInput): ProgramInputError | n
   if (mode === "duration") {
     const m = input.membershipDurationMonths;
     if (!Number.isInteger(m) || m == null || m <= 0) return "invalid_membership_duration";
+  }
+  const ptsMode = input.pointsExpiryMode ?? "never";
+  if (ptsMode !== "never" && ptsMode !== "rolling_months") return "invalid_points_expiry_mode";
+  if (ptsMode === "rolling_months") {
+    const m = input.pointsExpiryMonths;
+    if (!Number.isInteger(m) || m == null || m <= 0) return "invalid_points_expiry_months";
   }
   return null;
 }
@@ -213,6 +223,9 @@ export async function saveLoyaltyProgram(shopId: string, input: ProgramInput): P
         input.membershipExpiryMode === "duration"
           ? input.membershipDurationMonths
           : null,
+      p_points_expiry_mode: input.pointsExpiryMode ?? "never",
+      p_points_expiry_months:
+        input.pointsExpiryMode === "rolling_months" ? input.pointsExpiryMonths : null,
     });
     if (error) return { ok: false, error: error.code ?? "loyalty_program_save_failed" };
     const result = (data ?? {}) as { ok?: boolean; error?: string };

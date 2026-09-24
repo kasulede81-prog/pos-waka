@@ -643,6 +643,8 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
           membershipExpiryMode: next.program.membershipExpiryMode,
           membershipFixedExpiresOn: next.program.membershipFixedExpiresOn,
           membershipDurationMonths: next.program.membershipDurationMonths,
+          pointsExpiryMode: next.program.pointsExpiryMode,
+          pointsExpiryMonths: next.program.pointsExpiryMonths,
         });
         // Open Advanced when the shop already uses a non-simple rule.
         if (next.program.earnPointsPerUnit !== 1 || next.program.minEligibleSpendUgx > 0) {
@@ -700,6 +702,8 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
         membershipExpiryMode: draft.membershipExpiryMode,
         membershipFixedExpiresOn: draft.membershipFixedExpiresOn,
         membershipDurationMonths: draft.membershipDurationMonths,
+        pointsExpiryMode: draft.pointsExpiryMode,
+        pointsExpiryMonths: draft.pointsExpiryMonths,
       }),
     }));
   }, [
@@ -709,6 +713,8 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
     draft.membershipExpiryMode,
     draft.membershipFixedExpiresOn,
     draft.membershipDurationMonths,
+    draft.pointsExpiryMode,
+    draft.pointsExpiryMonths,
   ]);
 
   const submitSave = async () => {
@@ -949,6 +955,66 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                         </label>
                       </div>
                     ) : null}
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-border bg-muted/40 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      {t(lang, "loyaltyPointsExpiryTitle")}
+                    </p>
+                    <p className="mt-2 text-sm font-bold text-foreground">{t(lang, "loyaltyPointsExpiry")}</p>
+                    <div className="mt-3 space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <input
+                          type="radio"
+                          name="pointsExpiryMode"
+                          checked={draft.pointsExpiryMode === "never"}
+                          onChange={() =>
+                            setDraft((d) => ({
+                              ...d,
+                              pointsExpiryMode: "never",
+                              pointsExpiryMonths: null,
+                            }))
+                          }
+                          className="h-4 w-4 accent-waka-600"
+                        />
+                        {t(lang, "loyaltyPointsExpiryNever")}
+                      </label>
+                      <label className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+                        <input
+                          type="radio"
+                          name="pointsExpiryMode"
+                          checked={draft.pointsExpiryMode === "rolling_months"}
+                          onChange={() =>
+                            setDraft((d) => ({
+                              ...d,
+                              pointsExpiryMode: "rolling_months",
+                              pointsExpiryMonths: d.pointsExpiryMonths ?? 12,
+                            }))
+                          }
+                          className="h-4 w-4 accent-waka-600"
+                        />
+                        {t(lang, "loyaltyPointsExpiryAfter")}
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          disabled={draft.pointsExpiryMode !== "rolling_months"}
+                          value={draft.pointsExpiryMonths ?? ""}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              pointsExpiryMonths:
+                                e.target.value === "" ? null : Number(e.target.value),
+                            }))
+                          }
+                          className="min-h-[40px] w-20 rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold disabled:opacity-40"
+                        />
+                        {t(lang, "loyaltyPointsExpiryMonths")}
+                      </label>
+                    </div>
+                    <p className="mt-3 text-xs font-medium text-muted-foreground">
+                      {t(lang, "loyaltyPointsExpiryHint")}
+                    </p>
                   </div>
 
                   <div className="mt-4 rounded-2xl border border-border bg-muted/40 p-4">
