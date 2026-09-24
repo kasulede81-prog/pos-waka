@@ -65,6 +65,9 @@ verify_jwt = false
 [functions.loyalty-public-wallet-issue]
 verify_jwt = false
 
+[functions.loyalty-public-enroll]
+verify_jwt = false
+
 # Branded auth emails via Resend (auth-send-email edge function).
 [auth.hook.send_email]
 enabled = true

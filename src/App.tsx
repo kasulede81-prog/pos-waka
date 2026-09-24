@@ -231,6 +231,9 @@ const LoyaltyHubPage = lazy(() => import("./pages/LoyaltyHubPage").then((m) => (
 const PublicLoyaltyCardPage = lazy(() =>
   import("./pages/PublicLoyaltyCardPage").then((m) => ({ default: m.PublicLoyaltyCardPage })),
 );
+const PublicLoyaltyJoinPage = lazy(() =>
+  import("./pages/PublicLoyaltyJoinPage").then((m) => ({ default: m.PublicLoyaltyJoinPage })),
+);
 const ProfitPage = lazy(() => import("./pages/ProfitPage").then((m) => ({ default: m.ProfitPage })));
 const AskWakaPage = lazy(() => import("./pages/AskWakaPage").then((m) => ({ default: m.AskWakaPage })));
 const ReportsPage = lazy(() => import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })));
@@ -247,6 +250,10 @@ function LazyWait() {
 function PublicLoyaltyCardRoute() {
   const { publicCardToken = "" } = useParams<{ publicCardToken: string }>();
   return <PublicLoyaltyCardPage publicCardToken={publicCardToken} />;
+}
+
+function PublicLoyaltyJoinRoute() {
+  return <PublicLoyaltyJoinPage />;
 }
 
 function StabilityDiagnosticsHost() {
@@ -395,6 +402,10 @@ function AppRoutes() {
         <Route
           path="/c/:publicCardToken"
           element={<PublicLoyaltyCardRoute />}
+        />
+        <Route
+          path="/join/:enrollmentToken"
+          element={<PublicLoyaltyJoinRoute />}
         />
 
         <Route element={<NativeMarketingGuard isAuthenticated={auth.isAuthenticated} />}>

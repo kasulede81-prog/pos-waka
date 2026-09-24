@@ -9,7 +9,17 @@ import {
   CARD_READ_IP_WINDOW_MS,
   CARD_READ_TOKEN_LIMIT,
   CARD_READ_TOKEN_WINDOW_MS,
+  ENROLL_JOIN_IP_LIMIT,
+  ENROLL_JOIN_IP_WINDOW_MS,
+  ENROLL_JOIN_TOKEN_LIMIT,
+  ENROLL_JOIN_TOKEN_WINDOW_MS,
+  ENROLL_SUBMIT_IP_LIMIT,
+  ENROLL_SUBMIT_IP_WINDOW_MS,
+  ENROLL_SUBMIT_TOKEN_LIMIT,
+  ENROLL_SUBMIT_TOKEN_WINDOW_MS,
   RATE_SCOPE_CARD_READ,
+  RATE_SCOPE_ENROLL_JOIN,
+  RATE_SCOPE_ENROLL_SUBMIT,
   RATE_SCOPE_WALLET_ISSUE,
   WALLET_ISSUE_IP_LIMIT,
   WALLET_ISSUE_IP_WINDOW_MS,
@@ -117,5 +127,50 @@ export async function enforceWalletIssueRateLimit(
     ipWindowMs: WALLET_ISSUE_IP_WINDOW_MS,
     tokenLimit: WALLET_ISSUE_TOKEN_LIMIT,
     tokenWindowMs: WALLET_ISSUE_TOKEN_WINDOW_MS,
+  });
+}
+
+/** Preview join page — enroll_join scope. */
+export async function enforceEnrollJoinRateLimit(
+  req: Request,
+  supabaseUrl: string,
+  serviceKey: string,
+  enrollToken: string | null,
+): Promise<DurableRateLimitResult> {
+  const ipHash = await resolveIpHashForRateLimit(req);
+  const tokenHash =
+    enrollToken && enrollToken.trim()
+      ? await hashRateLimitKey(`enroll:${enrollToken.trim()}`)
+      : null;
+  return consumeDurableRateLimit(supabaseUrl, serviceKey, {
+    scope: RATE_SCOPE_ENROLL_JOIN,
+    ipHash,
+    tokenHash,
+    ipLimit: ENROLL_JOIN_IP_LIMIT,
+    ipWindowMs: ENROLL_JOIN_IP_WINDOW_MS,
+    tokenLimit: ENROLL_JOIN_TOKEN_LIMIT,
+    tokenWindowMs: ENROLL_JOIN_TOKEN_WINDOW_MS,
+  });
+}
+
+/** Submit enrollment — stricter enroll_submit scope; token hash required. */
+export async function enforceEnrollSubmitRateLimit(
+  req: Request,
+  supabaseUrl: string,
+  serviceKey: string,
+  enrollToken: string,
+): Promise<DurableRateLimitResult> {
+  const trimmed = enrollToken.trim();
+  if (!trimmed) return { ok: false, error: "unavailable" };
+  const ipHash = await resolveIpHashForRateLimit(req);
+  const tokenHash = await hashRateLimitKey(`enroll:${trimmed}`);
+  return consumeDurableRateLimit(supabaseUrl, serviceKey, {
+    scope: RATE_SCOPE_ENROLL_SUBMIT,
+    ipHash,
+    tokenHash,
+    ipLimit: ENROLL_SUBMIT_IP_LIMIT,
+    ipWindowMs: ENROLL_SUBMIT_IP_WINDOW_MS,
+    tokenLimit: ENROLL_SUBMIT_TOKEN_LIMIT,
+    tokenWindowMs: ENROLL_SUBMIT_TOKEN_WINDOW_MS,
   });
 }

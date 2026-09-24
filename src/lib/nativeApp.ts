@@ -33,6 +33,13 @@ export function isPublicLoyaltyCardPath(pathname: string): boolean {
   return /^\/(c|loyalty)\/[a-f0-9]{64}$/i.test(p);
 }
 
+/** Public self-enrollment join page — opaque enrollment token (not public_card_token). */
+export function isPublicLoyaltyJoinPath(pathname: string): boolean {
+  const raw = pathname.split("?")[0] || "/";
+  const p = raw.length > 1 ? raw.replace(/\/$/, "") : raw;
+  return /^\/join\/[a-f0-9]{64}$/i.test(p);
+}
+
 /** Paths where Supabase returns after email/OAuth — must render immediately (no startup gate). */
 export function isAuthHandoffPath(pathname: string): boolean {
   const p = pathname.split("?")[0] || "/";
@@ -47,6 +54,7 @@ export function isStartupPublicPath(pathname: string): boolean {
   if (isAuthHandoffPath(p)) return true;
   if (isVerifyAgentPath(p)) return true;
   if (isPublicLoyaltyCardPath(p)) return true;
+  if (isPublicLoyaltyJoinPath(p)) return true;
   return isNativeMarketingPath(p);
 }
 

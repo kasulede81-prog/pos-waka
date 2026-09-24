@@ -32,6 +32,7 @@ import { LoyaltyCustomerOffersPanel } from "../components/loyalty/LoyaltyCustome
 import { LoyaltyGoogleWalletButton } from "../components/loyalty/LoyaltyGoogleWalletButton";
 import { LoyaltyCustomerPageShare } from "../components/loyalty/LoyaltyCustomerPageShare";
 import { LoyaltyCardDesignPanel } from "../components/loyalty/LoyaltyCardDesignPanel";
+import { LoyaltyPublicEnrollmentPanel } from "../components/loyalty/LoyaltyPublicEnrollmentPanel";
 import {
   fetchLoyaltyRewards,
   isRewardEligible,
@@ -1391,6 +1392,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                   <li>{t(lang, "loyaltyCardsBulletPoints")}</li>
                 </ul>
               </article>
+              <LoyaltyPublicEnrollmentPanel lang={lang} shopId={shopId} canManage={canManage} />
               <CustomerList
                 lang={lang}
                 shopId={shopId}

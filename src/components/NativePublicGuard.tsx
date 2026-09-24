@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import {
   isNativeApp,
   isPublicLoyaltyCardPath,
+  isPublicLoyaltyJoinPath,
   isVerifyAgentPath,
   NATIVE_PUBLIC_PATHS,
   unauthenticatedEntryPath,
@@ -23,7 +24,7 @@ export function NativePublicGuard({ isAuthenticated }: Props) {
   }
 
   const path = pathname.split("?")[0] || "/";
-  if (NATIVE_PUBLIC_PATHS.has(path) || isVerifyAgentPath(path) || isPublicLoyaltyCardPath(path)) {
+  if (NATIVE_PUBLIC_PATHS.has(path) || isVerifyAgentPath(path) || isPublicLoyaltyCardPath(path) || isPublicLoyaltyJoinPath(path)) {
     return <Outlet />;
   }
 

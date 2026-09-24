@@ -5,8 +5,14 @@
 
 export const RATE_SCOPE_CARD_READ = "card_read" as const;
 export const RATE_SCOPE_WALLET_ISSUE = "wallet_issue" as const;
+export const RATE_SCOPE_ENROLL_JOIN = "enroll_join" as const;
+export const RATE_SCOPE_ENROLL_SUBMIT = "enroll_submit" as const;
 
-export type RateScope = typeof RATE_SCOPE_CARD_READ | typeof RATE_SCOPE_WALLET_ISSUE;
+export type RateScope =
+  | typeof RATE_SCOPE_CARD_READ
+  | typeof RATE_SCOPE_WALLET_ISSUE
+  | typeof RATE_SCOPE_ENROLL_JOIN
+  | typeof RATE_SCOPE_ENROLL_SUBMIT;
 
 /** Shared bucket key material when no trustworthy client IP can be established. */
 export const UNTRUSTED_IP_MATERIAL = "untrusted";
@@ -20,6 +26,16 @@ export const WALLET_ISSUE_IP_LIMIT = 10;
 export const WALLET_ISSUE_IP_WINDOW_MS = 60_000;
 export const WALLET_ISSUE_TOKEN_LIMIT = 5;
 export const WALLET_ISSUE_TOKEN_WINDOW_MS = 600_000; // 10 minutes
+
+export const ENROLL_JOIN_IP_LIMIT = 30;
+export const ENROLL_JOIN_IP_WINDOW_MS = 60_000;
+export const ENROLL_JOIN_TOKEN_LIMIT = 20;
+export const ENROLL_JOIN_TOKEN_WINDOW_MS = 60_000;
+
+export const ENROLL_SUBMIT_IP_LIMIT = 8;
+export const ENROLL_SUBMIT_IP_WINDOW_MS = 60_000;
+export const ENROLL_SUBMIT_TOKEN_LIMIT = 5;
+export const ENROLL_SUBMIT_TOKEN_WINDOW_MS = 600_000; // 10 minutes
 
 export type TrustedIpResult =
   | { trusted: true; ip: string }

@@ -386,3 +386,34 @@ inactive card (no active loyalty data / Wallet).
 **Wallet:** New issuance refused for non-active (and revoked). Marking existing
 Google passes inactive is a documented follow-up — not in this change; issuer
 config untouched.
+
+## Decision 028 — Public Customer Self-Enrollment
+
+**Status:** Accepted (local implementation)
+
+Public join uses a **shop enrollment link** (`loyalty_enrollment_links`), never
+`public_card_token` or `qr_token`.
+
+**Capability:** Opaque 64-hex `token` (same generator as public cards). At most
+one **active** link per shop. Regenerate revokes the previous token. Revoke
+disables new joins; existing members unchanged.
+
+**Public route:** `https://loyalty.waka.ug/join/<enrollment_token>`
+
+**Authority:** Edge `loyalty-public-enroll` (no JWT) → SECURITY DEFINER
+`loyalty_preview_enrollment_link` / `loyalty_enroll_by_enrollment_token`
+(service_role only). Client `shop_id` / `account_id` / points are ignored.
+
+**Fields:** name + Uganda `phone_e164` required; email optional; consent required.
+
+**Duplicates:** Same phone in shop with active/suspended account →
+`already_member` **without** card URL. Revoked → `account_revoked` (no
+reactivation). New membership only after purge frees `(shop_id, customer_id)`.
+
+**Tokens after enroll:** New `loyalty_accounts` row gets `qr_token` +
+`public_card_token` defaults; C1 stamp applies; balance stays 0; no D026 offers
+auto-attached. Success returns only `public_card_token` → redirect to `/c/...`.
+
+**Rate limits:** Durable scopes `enroll_join` / `enroll_submit` (fail closed).
+
+**Merchant UI:** Loyalty → Cards → Customer registration QR (manage-shop).

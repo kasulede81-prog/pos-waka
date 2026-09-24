@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
   shop_id uuid NOT NULL REFERENCES public.shops (id) ON DELETE CASCADE,
   name text NOT NULL,
   phone_e164 text,
+  email text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );

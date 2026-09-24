@@ -20,6 +20,9 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260924120000_loyalty_points_expiry.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924150000_loyalty_customer_offers.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924160000_loyalty_customer_lifecycle.sql"),
+  // Rate-limit table required by D028 scope extension (fail-closed durable buckets).
+  join(process.cwd(), "supabase", "migrations", "20260924001500_edge_rate_limit_buckets.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260924170000_loyalty_public_self_enrollment.sql"),
 ];
 
 function readSql(path: string): string {
@@ -87,6 +90,7 @@ const FORCE_RLS = `
   ALTER TABLE public.loyalty_card_designs FORCE ROW LEVEL SECURITY;
   ALTER TABLE public.loyalty_point_lot_allocations FORCE ROW LEVEL SECURITY;
   ALTER TABLE public.loyalty_customer_offers FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.loyalty_enrollment_links FORCE ROW LEVEL SECURITY;
 `;
 
 export async function asUser<T>(exec: SqlExec, userId: string, fn: () => Promise<T>): Promise<T> {
@@ -120,6 +124,11 @@ export function rpcJson(row: Record<string, unknown> | undefined): Record<string
     row?.loyalty_renew_membership ??
     row?.loyalty_set_account_lifecycle ??
     row?.loyalty_purge_revoked_accounts ??
+    row?.loyalty_get_enrollment_link ??
+    row?.loyalty_regenerate_enrollment_link ??
+    row?.loyalty_revoke_enrollment_link ??
+    row?.loyalty_preview_enrollment_link ??
+    row?.loyalty_enroll_by_enrollment_token ??
     row?.result;
   if (raw && typeof raw === "object") return raw as Record<string, unknown>;
   if (typeof raw === "string") return JSON.parse(raw) as Record<string, unknown>;
