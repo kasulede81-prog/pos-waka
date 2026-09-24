@@ -79,11 +79,22 @@ export type GoogleWalletConfig = {
   ids: GoogleIds;
   origins: string[];
   /**
-   * When true (default for live issuance), upsert class/object via the REST API
+   * When true (default for live issuance), upsert the LoyaltyObject via REST
    * before returning the Save URL so later balance PATCHes have a real object.
    * JWT-only mode remains available for unit tests without network.
    */
   persistObjects?: boolean;
+  /**
+   * When true, embed loyaltyClasses in the Save JWT (bootstrap / unpublished).
+   * Default false: production uses the published class
+   * `{issuerId}.waka_loyalty` and JWT carries objects only.
+   */
+  includeLoyaltyClassInJwt?: boolean;
+  /**
+   * When true (default), skip LoyaltyClass REST upsert — the published class
+   * must not be overwritten with reviewStatus UNDER_REVIEW.
+   */
+  skipClassUpsert?: boolean;
   fetchImpl?: FetchLike;
 };
 
@@ -96,51 +107,51 @@ export async function issueGoogleWalletSaveUrl(
   const invalid = validatePassInput(input);
   if (invalid) return { ok: false, error: "invalid_input" };
   if (!config.ids.issuerId.trim()) return { ok: false, error: "wallet_not_configured" };
+  if (!config.ids.classId.trim()) return { ok: false, error: "wallet_not_configured" };
   try {
     const loyaltyClass = buildGoogleLoyaltyClass(input, config.ids);
     const loyaltyObject = buildGoogleLoyaltyObject(input, config.ids);
 
-    // REST upsert is best-effort. Google Save JWTs can create class/object on
-    // first save; hard-failing here blocked issuance when the Wallet API was
-    // disabled on the GCP project (accessNotConfigured) even though RS256 Save
-    // URLs remain valid.
+    // REST object upsert is best-effort. Class upsert is skipped by default so we
+    // never overwrite the published ACTIVE `waka_loyalty` class.
     if (config.persistObjects !== false) {
       try {
         const token = await fetchGoogleWalletAccessToken(signer, nowSeconds, config.fetchImpl);
-        const classResult = await upsertGoogleLoyaltyClass(
-          token.accessToken,
-          loyaltyClass,
-          config.fetchImpl,
-        );
-        console.log(
-          JSON.stringify({
-            event: "google_wallet_class_upsert",
-            ok: classResult.ok,
-            status: classResult.status,
-            created: classResult.created,
-            google_status: classResult.googleStatus ?? null,
-            google_reason: classResult.googleReason ?? null,
-            google_message: classResult.googleMessage ?? null,
-          }),
-        );
-        if (classResult.ok) {
-          const objectResult = await upsertGoogleLoyaltyObject(
+        const skipClass = config.skipClassUpsert !== false;
+        if (!skipClass) {
+          const classResult = await upsertGoogleLoyaltyClass(
             token.accessToken,
-            loyaltyObject,
+            loyaltyClass,
             config.fetchImpl,
           );
           console.log(
             JSON.stringify({
-              event: "google_wallet_object_upsert",
-              ok: objectResult.ok,
-              status: objectResult.status,
-              created: objectResult.created,
-              google_status: objectResult.googleStatus ?? null,
-              google_reason: objectResult.googleReason ?? null,
-              google_message: objectResult.googleMessage ?? null,
+              event: "google_wallet_class_upsert",
+              ok: classResult.ok,
+              status: classResult.status,
+              created: classResult.created,
+              google_status: classResult.googleStatus ?? null,
+              google_reason: classResult.googleReason ?? null,
+              google_message: classResult.googleMessage ?? null,
             }),
           );
         }
+        const objectResult = await upsertGoogleLoyaltyObject(
+          token.accessToken,
+          loyaltyObject,
+          config.fetchImpl,
+        );
+        console.log(
+          JSON.stringify({
+            event: "google_wallet_object_upsert",
+            ok: objectResult.ok,
+            status: objectResult.status,
+            created: objectResult.created,
+            google_status: objectResult.googleStatus ?? null,
+            google_reason: objectResult.googleReason ?? null,
+            google_message: objectResult.googleMessage ?? null,
+          }),
+        );
       } catch (persistErr) {
         console.log(
           JSON.stringify({
@@ -157,6 +168,7 @@ export async function issueGoogleWalletSaveUrl(
       loyaltyObject,
       config.origins,
       nowSeconds,
+      { includeLoyaltyClass: config.includeLoyaltyClassInJwt === true },
     );
     const saveUrl = await buildGoogleWalletSaveUrl(signer, claims);
     return { ok: true, pass: { provider: "google_wallet", saveUrl } };

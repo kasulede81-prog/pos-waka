@@ -120,6 +120,7 @@ export function buildGoogleWalletObjectId(issuerId: string, accountId: string): 
   return `${issuerId}.acct_${accountId}`;
 }
 
-export function buildGoogleWalletClassId(issuerId: string, shopId: string): string {
-  return `${issuerId}.waka_loyalty_${shopId}`;
+/** Published class id — shared across shops: `{issuerId}.waka_loyalty`. */
+export function buildGoogleWalletClassId(issuerId: string, _shopId?: string): string {
+  return `${issuerId}.waka_loyalty`;
 }

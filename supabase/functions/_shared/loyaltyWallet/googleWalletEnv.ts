@@ -59,12 +59,17 @@ export function loadGoogleWalletEnv(): GoogleWalletEnv {
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean);
+  // Save JWTs require origins; fall back to the live WAKA surfaces when unset.
+  const resolvedOrigins =
+    origins.length > 0
+      ? origins
+      : ["https://pos.waka.ug", "https://loyalty.waka.ug"];
 
   return {
     ok: true,
     issuerId: issuerId.trim(),
     signer: createRs256SignerFromPkcs8Pem(serviceAccount.client_email, serviceAccount.private_key),
-    origins,
+    origins: resolvedOrigins,
     logoUrl: resolveLogoUrl(),
   };
 }

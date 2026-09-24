@@ -48,9 +48,10 @@ describe("Google pass payloads", () => {
     );
   });
 
-  it("builds a LoyaltyObject with balance, member, and QR barcode", () => {
+  it("builds a LoyaltyObject with balance, member, QR barcode, and ACTIVE state", () => {
     const obj = buildGoogleLoyaltyObject(INPUT, IDS);
     expect(obj.classId).toBe("3388000000000000001.waka_loyalty");
+    expect(obj.state).toBe("ACTIVE");
     const points = obj.loyaltyPoints as { balance: { int: number } };
     expect(points.balance.int).toBe(42);
     const barcode = obj.barcode as { type: string; value: string };
@@ -61,7 +62,7 @@ describe("Google pass payloads", () => {
 });
 
 describe("save JWT claims", () => {
-  it("sets google audience, savetowallet type, and one-hour expiry", () => {
+  it("sets google audience, savetowallet type, iat, and object-only payload by default", () => {
     const claims = buildGoogleSaveJwtClaims(
       { serviceAccountEmail: "wallet@waka.iam.gserviceaccount.com" },
       { id: "class" },
@@ -73,9 +74,23 @@ describe("save JWT claims", () => {
     expect(claims.aud).toBe("google");
     expect(claims.typ).toBe("savetowallet");
     expect(claims.iat).toBe(1_700_000_000);
-    expect(claims.exp).toBe(1_700_000_000 + 3600);
+    expect(claims).not.toHaveProperty("exp");
     expect(claims.origins).toEqual(["https://waka.example"]);
-    expect(claims.payload.loyaltyClasses).toHaveLength(1);
+    expect(claims.payload.loyaltyClasses).toBeUndefined();
+    expect(claims.payload.loyaltyObjects).toHaveLength(1);
+    expect(claims.payload.loyaltyObjects[0]).toEqual({ id: "object" });
+  });
+
+  it("optionally embeds loyaltyClasses for unpublished bootstrap", () => {
+    const claims = buildGoogleSaveJwtClaims(
+      { serviceAccountEmail: "wallet@waka.iam.gserviceaccount.com" },
+      { id: "class" },
+      { id: "object" },
+      ["https://pos.waka.ug"],
+      1_700_000_000,
+      { includeLoyaltyClass: true },
+    );
+    expect(claims.payload.loyaltyClasses).toEqual([{ id: "class" }]);
     expect(claims.payload.loyaltyObjects).toHaveLength(1);
   });
 

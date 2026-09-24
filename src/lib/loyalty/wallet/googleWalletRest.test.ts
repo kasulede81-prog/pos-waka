@@ -15,23 +15,31 @@ import {
 } from "../loyaltyGoogleWallet";
 
 describe("deterministic Google Wallet object identity", () => {
-  it("scopes class to shop and object to loyalty account", () => {
-    const ids = deterministicGoogleWalletIds("3388", "shop-aaa", "acct-bbb");
-    expect(ids.classId).toBe("waka_loyalty_shop-aaa");
+  it("uses published shared class and scopes object to loyalty account", () => {
+    const ids = deterministicGoogleWalletIds("338800000023208320", "shop-aaa", "acct-bbb");
+    expect(ids.classId).toBe("waka_loyalty");
     expect(ids.objectId).toBe("acct_acct-bbb");
     expect(googleWalletResourceIds(ids)).toEqual({
-      classResourceId: "3388.waka_loyalty_shop-aaa",
-      objectResourceId: "3388.acct_acct-bbb",
+      classResourceId: "338800000023208320.waka_loyalty",
+      objectResourceId: "338800000023208320.acct_acct-bbb",
     });
-    expect(buildGoogleWalletClassId("3388", "shop-aaa")).toBe("3388.waka_loyalty_shop-aaa");
-    expect(buildGoogleWalletObjectId("3388", "acct-bbb")).toBe("3388.acct_acct-bbb");
+    expect(buildGoogleWalletClassId("338800000023208320", "shop-aaa")).toBe(
+      "338800000023208320.waka_loyalty",
+    );
+    expect(buildGoogleWalletObjectId("338800000023208320", "acct-bbb")).toBe(
+      "338800000023208320.acct_acct-bbb",
+    );
   });
 
-  it("keeps Shop A and Shop B cards distinct for the same person concept", () => {
-    const a = deterministicGoogleWalletIds("3388", "shop-a", "acct-1");
-    const b = deterministicGoogleWalletIds("3388", "shop-b", "acct-2");
-    expect(googleWalletResourceIds(a).classResourceId).not.toBe(googleWalletResourceIds(b).classResourceId);
-    expect(googleWalletResourceIds(a).objectResourceId).not.toBe(googleWalletResourceIds(b).objectResourceId);
+  it("shares class across shops; objects stay distinct per account", () => {
+    const a = deterministicGoogleWalletIds("338800000023208320", "shop-a", "acct-1");
+    const b = deterministicGoogleWalletIds("338800000023208320", "shop-b", "acct-2");
+    expect(googleWalletResourceIds(a).classResourceId).toBe(
+      googleWalletResourceIds(b).classResourceId,
+    );
+    expect(googleWalletResourceIds(a).objectResourceId).not.toBe(
+      googleWalletResourceIds(b).objectResourceId,
+    );
   });
 });
 

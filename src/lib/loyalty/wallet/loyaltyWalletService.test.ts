@@ -128,7 +128,91 @@ describe("issueGoogleWalletSaveUrl", () => {
     expect(result.pass.saveUrl.startsWith("https://pay.google.com/gp/v/save/")).toBe(true);
   });
 
-  it("still returns a Save URL when REST class upsert is denied (API not enabled)", async () => {
+  it("production flow: object-only Save JWT against published waka_loyalty class", async () => {
+    const PROD_ISSUER = "338800000023208320";
+    let signedClaims: Record<string, unknown> | null = null;
+    const capturingSigner: GoogleWalletSigner = {
+      serviceAccountEmail: "wallet@waka.iam.gserviceaccount.com",
+      async signJwt(claims) {
+        signedClaims = claims;
+        return "h.p.s";
+      },
+    };
+    const classPosts: string[] = [];
+    const objectPosts: string[] = [];
+    const fetchImpl = async (url: string, init?: { method?: string; body?: string }) => {
+      if (url.includes("oauth2.googleapis.com")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ access_token: "ya29.test", expires_in: 3600 }),
+        };
+      }
+      if (url.includes("/loyaltyClass") && (init?.method === "POST" || init?.method === "PUT")) {
+        classPosts.push(url);
+      }
+      if (url.includes("/loyaltyObject") && (init?.method === "POST" || init?.method === "PUT")) {
+        objectPosts.push(url);
+        return { ok: true, status: 200, text: async () => "{}" };
+      }
+      return { ok: true, status: 200, text: async () => "{}" };
+    };
+
+    const result = await issueGoogleWalletSaveUrl(
+      INPUT,
+      {
+        ids: {
+          issuerId: PROD_ISSUER,
+          classId: "waka_loyalty",
+          objectId: `acct_${INPUT.accountId}`,
+        },
+        origins: ["https://pos.waka.ug", "https://loyalty.waka.ug"],
+        persistObjects: true,
+        // Defaults: skipClassUpsert=true, includeLoyaltyClassInJwt=false
+        fetchImpl,
+      },
+      capturingSigner,
+      1_700_000_000,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.pass.provider).toBe("google_wallet");
+    if (result.pass.provider !== "google_wallet") return;
+    expect(result.pass.saveUrl).toBe("https://pay.google.com/gp/v/save/h.p.s");
+
+    // Never overwrite the published ACTIVE class via REST.
+    expect(classPosts).toEqual([]);
+    expect(objectPosts.length).toBeGreaterThan(0);
+
+    expect(signedClaims).not.toBeNull();
+    const claims = signedClaims as unknown as {
+      iss: string;
+      aud: string;
+      typ: string;
+      iat: number;
+      exp?: number;
+      origins: string[];
+      payload: {
+        loyaltyClasses?: unknown[];
+        loyaltyObjects: Array<{ id: string; classId: string; state: string }>;
+      };
+    };
+    expect(claims.iss).toBe("wallet@waka.iam.gserviceaccount.com");
+    expect(claims.aud).toBe("google");
+    expect(claims.typ).toBe("savetowallet");
+    expect(claims.iat).toBe(1_700_000_000);
+    expect(claims.exp).toBeUndefined();
+    expect(claims.origins).toEqual(["https://pos.waka.ug", "https://loyalty.waka.ug"]);
+    expect(claims.payload.loyaltyClasses).toBeUndefined();
+    expect(claims.payload.loyaltyObjects).toHaveLength(1);
+    const obj = claims.payload.loyaltyObjects[0];
+    expect(obj.id).toBe(`${PROD_ISSUER}.acct_${INPUT.accountId}`);
+    expect(obj.classId).toBe(`${PROD_ISSUER}.waka_loyalty`);
+    expect(obj.state).toBe("ACTIVE");
+  });
+
+  it("still returns a Save URL when REST object upsert is denied (API not enabled)", async () => {
     const fetchImpl = async (url: string, _init?: { method?: string; body?: string }) => {
       if (url.includes("oauth2.googleapis.com")) {
         return {

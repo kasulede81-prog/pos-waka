@@ -49,7 +49,8 @@ export function buildGoogleLoyaltyObject(
   return {
     id: googleObjectId(ids),
     classId: googleClassId(ids),
-    state: "active",
+    // Uppercase ACTIVE per current State enum; lowercase `active` is deprecated.
+    state: "ACTIVE",
     loyaltyPoints: {
       label: "Points",
       balance: {
@@ -83,32 +84,52 @@ export type GoogleSaveJwtClaims = {
   aud: "google";
   typ: "savetowallet";
   iat: number;
-  exp: number;
   origins: string[];
   payload: {
-    loyaltyClasses: Record<string, unknown>[];
+    /** Omitted when the LoyaltyClass already exists (published) in Wallet Console. */
+    loyaltyClasses?: Record<string, unknown>[];
     loyaltyObjects: Record<string, unknown>[];
   };
 };
 
+export type BuildGoogleSaveJwtClaimsOptions = {
+  /**
+   * When false (default for the published `waka_loyalty` class), the JWT only
+   * carries loyaltyObjects and references the existing classId. Including a
+   * class with reviewStatus UNDER_REVIEW against an ACTIVE published class
+   * causes Google's Save page to fail with "Something went wrong".
+   */
+  includeLoyaltyClass?: boolean;
+};
+
+/**
+ * Build Save-to-Wallet JWT claims per Google Wallet Loyalty Card docs:
+ * iss, aud=google, typ=savetowallet, iat, origins, payload.
+ * Does not include `exp` — it is not part of Google's documented Save JWT.
+ */
 export function buildGoogleSaveJwtClaims(
   signer: Pick<GoogleWalletSigner, "serviceAccountEmail">,
   loyaltyClass: Record<string, unknown>,
   loyaltyObject: Record<string, unknown>,
   origins: string[],
   nowSeconds: number,
+  options: BuildGoogleSaveJwtClaimsOptions = {},
 ): GoogleSaveJwtClaims {
+  const includeClass = options.includeLoyaltyClass === true;
   return {
     iss: signer.serviceAccountEmail,
     aud: "google",
     typ: "savetowallet",
     iat: nowSeconds,
-    exp: nowSeconds + 3600,
     origins,
-    payload: {
-      loyaltyClasses: [loyaltyClass],
-      loyaltyObjects: [loyaltyObject],
-    },
+    payload: includeClass
+      ? {
+          loyaltyClasses: [loyaltyClass],
+          loyaltyObjects: [loyaltyObject],
+        }
+      : {
+          loyaltyObjects: [loyaltyObject],
+        },
   };
 }
 

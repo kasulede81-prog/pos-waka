@@ -229,14 +229,25 @@ export async function patchGoogleLoyaltyObjectBalance(
   return { ok: patch.ok, status: patch.status };
 }
 
+/** Published LoyaltyClass suffix in Google Wallet Console (issuerId.classSuffix). */
+export const GOOGLE_WALLET_PUBLISHED_CLASS_SUFFIX = "waka_loyalty";
+
+/**
+ * Deterministic IDs for Save URL + REST upsert.
+ *
+ * Class is the single published resource `{issuerId}.waka_loyalty` — not a
+ * per-shop class. Object remains per loyalty account: `{issuerId}.acct_{uuid}`.
+ */
 export function deterministicGoogleWalletIds(
   issuerId: string,
-  shopId: string,
+  _shopId: string,
   accountId: string,
+  classSuffix: string = GOOGLE_WALLET_PUBLISHED_CLASS_SUFFIX,
 ): GoogleIds {
+  const suffix = classSuffix.trim() || GOOGLE_WALLET_PUBLISHED_CLASS_SUFFIX;
   return {
-    issuerId,
-    classId: `waka_loyalty_${shopId}`,
+    issuerId: issuerId.trim(),
+    classId: suffix.includes(".") ? suffix.split(".").pop()! : suffix,
     objectId: `acct_${accountId}`,
   };
 }
