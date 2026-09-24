@@ -39,6 +39,10 @@ export type PublicCardSafePayload = {
   balance_points: number;
   account_active: boolean;
   program_enabled: boolean;
+  /** C1: derived membership status (never exposes private config). */
+  membership_active: boolean;
+  /** Inclusive Kampala calendar end date YYYY-MM-DD, or null if never expires. */
+  membership_expires_on: string | null;
   qr_payload: string;
   rewards: Array<{ name: string; points_required: number; description: string | null }>;
   wallet_configured: boolean;

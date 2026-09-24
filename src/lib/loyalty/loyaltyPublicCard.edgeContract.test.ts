@@ -20,6 +20,8 @@ describe("loyalty-public-card response contract", () => {
       balance_points: 42,
       account_active: true,
       program_enabled: true,
+    membership_active: true,
+    membership_expires_on: null,
       qr_payload: encodeLoyaltyQrPayload("qr-token-1"),
       rewards: [{ name: "Free tea", points_required: 20, description: "Hot" }],
       wallet_configured: true,

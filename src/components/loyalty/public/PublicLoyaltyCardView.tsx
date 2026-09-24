@@ -103,7 +103,8 @@ export function PublicLoyaltyCardView({
 }: Props) {
   const theme = resolveLoyaltyPresentation(design);
   const progress = buildRewardProgress(card.balance_points, card.rewards);
-  const showWallet = card.wallet_configured && card.account_active;
+  const showWallet =
+    card.wallet_configured && card.account_active && card.membership_active !== false;
   const programName = theme.programDisplayName?.trim() || card.program_name;
   const welcome = theme.welcomeMessage?.trim() || null;
   const logoUrl = theme.logoUrl || null;
@@ -190,6 +191,20 @@ export function PublicLoyaltyCardView({
               }}
             >
               Account inactive
+            </p>
+          ) : null}
+          {card.account_active && card.membership_active === false ? (
+            <p
+              className="mt-2 inline-flex rounded-full bg-amber-400/20 px-2.5 py-1 text-[11px] font-bold text-amber-100"
+              role="status"
+            >
+              Membership expired
+              {card.membership_expires_on ? ` · ${card.membership_expires_on}` : ""}
+            </p>
+          ) : null}
+          {card.account_active && card.membership_active !== false ? (
+            <p className="mt-2 inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-bold opacity-90">
+              Membership active
             </p>
           ) : null}
 

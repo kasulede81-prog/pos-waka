@@ -11,6 +11,9 @@ const VALID: ProgramInput = {
   earnUnitUgx: 1000,
   earnPointsPerUnit: 1,
   minEligibleSpendUgx: 0,
+  membershipExpiryMode: "never",
+  membershipFixedExpiresOn: null,
+  membershipDurationMonths: null,
 };
 
 describe("validateProgramInput", () => {

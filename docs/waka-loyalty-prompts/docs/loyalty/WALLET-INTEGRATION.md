@@ -36,11 +36,13 @@ See `supabase/functions/.env.example`.
 3. PATCH Google `loyaltyObject.loyaltyPoints.balance` from **authoritative** `loyalty_accounts.balance_points`
 4. Failures mark outbox `failed` and retry (max 8 attempts) — **never** roll back sales or ledger
 
-## Object identity
+## C1 follow-up — membership expiry on Wallet passes
 
-- Class: `{issuerId}.waka_loyalty_{shopId}`
-- Object: `{issuerId}.acct_{loyaltyAccountId}`
-- Per-shop cards — Shop A and Shop B stay separate
+Public Wallet **issue** refuses expired memberships (`membership_expired`).
+
+**Not in C1:** syncing Google Wallet `validTimeInterval` / object `state` when
+membership expires. That requires a deliberate pass-update design and must not
+change issuer, signing, QR payload, or object identity. Track as a future task.
 
 
 ## What was verified (external requirements)

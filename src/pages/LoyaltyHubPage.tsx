@@ -14,6 +14,7 @@ import {
   fetchAccountHistory,
   fetchLoyaltyAccountQrToken,
   fetchLoyaltyOverview,
+  renewLoyaltyMembership,
   saveLoyaltyProgram,
   searchLoyaltyAccounts,
   validateProgramInput,
@@ -21,7 +22,7 @@ import {
   type LoyaltyOverview,
   type ProgramInput,
 } from "../lib/loyalty/loyaltyMerchant";
-import type { LoyaltyTransactionRow } from "../lib/loyalty/loyaltyMath";
+import type { LoyaltyTransactionRow, MembershipExpiryMode } from "../lib/loyalty/loyaltyMath";
 import { computeEarnedPoints, DEFAULT_LOYALTY_PROGRAM } from "../lib/loyalty/loyaltyMath";
 import { LoyaltyEnrollmentPanel } from "../components/loyalty/LoyaltyEnrollmentPanel";
 import { LoyaltyMemberQr } from "../components/loyalty/LoyaltyMemberQr";
@@ -198,6 +199,7 @@ function CustomerDetail({
   const [adjustNote, setAdjustNote] = useState("");
   const [adjustState, setAdjustState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [showAdjust, setShowAdjust] = useState(false);
+  const [renewState, setRenewState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
   const [pendingRedeem, setPendingRedeem] = useState<{ rewardId: string; key: string } | null>(null);
   const [redeemState, setRedeemState] = useState<
@@ -223,6 +225,10 @@ function CustomerDetail({
       cancelled = true;
     };
   }, [shopId, entry.accountId, mode]);
+
+  useEffect(() => {
+    setRenewState("idle");
+  }, [entry.accountId, entry.membershipActive]);
 
   const beginRedeem = (rewardId: string) => {
     setRedeemState({ phase: "idle" });
@@ -256,6 +262,17 @@ function CustomerDetail({
       void requestGoogleWalletBalanceSync(shopId, entry.accountId);
     } else {
       setAdjustState("error");
+    }
+  };
+
+  const submitRenew = async () => {
+    setRenewState("saving");
+    const result = await renewLoyaltyMembership(shopId, entry.accountId, {});
+    if (result.ok) {
+      setRenewState("done");
+      onAdjusted();
+    } else {
+      setRenewState("error");
     }
   };
 
@@ -298,6 +315,28 @@ function CustomerDetail({
           </div>
         )}
       </div>
+
+      {!entry.membershipActive ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-3">
+          <p className="text-sm font-bold text-destructive">{t(lang, "loyaltyMembershipExpired")}</p>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() => void submitRenew()}
+              disabled={renewState === "saving"}
+              className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
+            >
+              {t(lang, "loyaltyMembershipRenew")}
+            </button>
+          ) : null}
+          {renewState === "done" ? (
+            <span className="text-sm font-bold text-success">{t(lang, "loyaltyMembershipRenewed")}</span>
+          ) : null}
+          {renewState === "error" ? (
+            <span className="text-sm font-bold text-destructive">{t(lang, "loyaltySaveFailed")}</span>
+          ) : null}
+        </div>
+      ) : null}
 
       <MemberQrBlock lang={lang} shopId={shopId} accountId={entry.accountId} />
 
@@ -518,6 +557,7 @@ function CustomerList({
                     {entry.status === "disabled"
                       ? t(lang, "loyaltyCustomerStatusInactive")
                       : t(lang, "loyaltyCustomerStatusActive")}
+                    {!entry.membershipActive ? ` · ${t(lang, "loyaltyMembershipExpired")}` : ""}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
@@ -529,6 +569,22 @@ function CustomerList({
                   </p>
                 </div>
               </button>
+              {!entry.membershipActive && canManage ? (
+                <div className="mt-1 flex items-center gap-2 px-2 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void (async () => {
+                        const result = await renewLoyaltyMembership(shopId, entry.accountId, {});
+                        if (result.ok) onAdjusted();
+                      })();
+                    }}
+                    className="min-h-[36px] rounded-xl border-2 border-waka-600 bg-card px-3 text-xs font-black text-waka-700"
+                  >
+                    {t(lang, "loyaltyMembershipRenew")}
+                  </button>
+                </div>
+              ) : null}
               {expandedId === entry.accountId ? (
                 <CustomerDetail
                   lang={lang}
@@ -579,6 +635,9 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
           earnUnitUgx: next.program.earnUnitUgx,
           earnPointsPerUnit: next.program.earnPointsPerUnit,
           minEligibleSpendUgx: next.program.minEligibleSpendUgx,
+          membershipExpiryMode: next.program.membershipExpiryMode,
+          membershipFixedExpiresOn: next.program.membershipFixedExpiresOn,
+          membershipDurationMonths: next.program.membershipDurationMonths,
         });
         // Open Advanced when the shop already uses a non-simple rule.
         if (next.program.earnPointsPerUnit !== 1 || next.program.minEligibleSpendUgx > 0) {
@@ -633,9 +692,19 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
         earnUnitUgx: draft.earnUnitUgx,
         earnPointsPerUnit: draft.earnPointsPerUnit,
         minEligibleSpendUgx: draft.minEligibleSpendUgx,
+        membershipExpiryMode: draft.membershipExpiryMode,
+        membershipFixedExpiresOn: draft.membershipFixedExpiresOn,
+        membershipDurationMonths: draft.membershipDurationMonths,
       }),
     }));
-  }, [draft.earnUnitUgx, draft.earnPointsPerUnit, draft.minEligibleSpendUgx]);
+  }, [
+    draft.earnUnitUgx,
+    draft.earnPointsPerUnit,
+    draft.minEligibleSpendUgx,
+    draft.membershipExpiryMode,
+    draft.membershipFixedExpiresOn,
+    draft.membershipDurationMonths,
+  ]);
 
   const submitSave = async () => {
     if (!shopId || inputError) return;
@@ -875,6 +944,84 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                         </label>
                       </div>
                     ) : null}
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-border bg-muted/40 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      {t(lang, "loyaltyMembershipTitle")}
+                    </p>
+                    <p className="mt-2 text-sm font-bold text-foreground">{t(lang, "loyaltyMembershipExpiry")}</p>
+                    <div className="mt-3 space-y-2">
+                      {(
+                        [
+                          { mode: "never" as MembershipExpiryMode, label: "loyaltyMembershipNever" },
+                          { mode: "fixed_date" as MembershipExpiryMode, label: "loyaltyMembershipFixed" },
+                          { mode: "duration" as MembershipExpiryMode, label: "loyaltyMembershipDuration" },
+                        ] as const
+                      ).map((opt) => (
+                        <label key={opt.mode} className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                          <input
+                            type="radio"
+                            name="membershipExpiryMode"
+                            checked={draft.membershipExpiryMode === opt.mode}
+                            onChange={() =>
+                              setDraft((d) => ({
+                                ...d,
+                                membershipExpiryMode: opt.mode,
+                                membershipFixedExpiresOn:
+                                  opt.mode === "fixed_date"
+                                    ? d.membershipFixedExpiresOn ?? new Date().toISOString().slice(0, 10)
+                                    : d.membershipFixedExpiresOn,
+                                membershipDurationMonths:
+                                  opt.mode === "duration"
+                                    ? d.membershipDurationMonths ?? 12
+                                    : d.membershipDurationMonths,
+                              }))
+                            }
+                            className="h-4 w-4 accent-waka-600"
+                          />
+                          {t(lang, opt.label)}
+                        </label>
+                      ))}
+                    </div>
+                    {draft.membershipExpiryMode === "fixed_date" ? (
+                      <label className="mt-3 block text-sm font-bold text-foreground">
+                        {t(lang, "loyaltyMembershipDate")}
+                        <input
+                          type="date"
+                          value={draft.membershipFixedExpiresOn ?? ""}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              membershipFixedExpiresOn: e.target.value || null,
+                            }))
+                          }
+                          className="mt-2 min-h-[48px] w-full max-w-[240px] rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+                        />
+                      </label>
+                    ) : null}
+                    {draft.membershipExpiryMode === "duration" ? (
+                      <label className="mt-3 block text-sm font-bold text-foreground">
+                        {t(lang, "loyaltyMembershipMonths")}
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={draft.membershipDurationMonths ?? ""}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              membershipDurationMonths:
+                                e.target.value === "" ? null : Number(e.target.value),
+                            }))
+                          }
+                          className="mt-2 min-h-[48px] w-full max-w-[160px] rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+                        />
+                      </label>
+                    ) : null}
+                    <p className="mt-3 text-xs font-medium text-muted-foreground">
+                      {t(lang, "loyaltyMembershipHint")}
+                    </p>
                   </div>
 
                   <div className="mt-4 flex items-center gap-3">

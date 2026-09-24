@@ -590,13 +590,17 @@ export function PosPage({ lang }: { lang: Language }) {
         customerName: member.customerName,
         customerPhone: member.customerPhone ?? "",
       });
-      setToast(
-        tTemplate(lang, "loyaltyMemberAttachedToast", {
-          name: member.customerName,
-          points: member.balancePoints.toLocaleString(),
-        }),
-      );
-      window.setTimeout(() => setToast(null), 2600);
+      if (!member.membershipActive) {
+        setToast(t(lang, "loyaltyMembershipExpiredPos"));
+      } else {
+        setToast(
+          tTemplate(lang, "loyaltyMemberAttachedToast", {
+            name: member.customerName,
+            points: member.balancePoints.toLocaleString(),
+          }),
+        );
+      }
+      window.setTimeout(() => setToast(null), 3200);
     },
   });
   const { attachFromScan: loyaltyAttachFromScan, clearError: clearLoyaltyAttachError } =

@@ -13,7 +13,7 @@ import {
   fetchLoyaltyProgramConfig,
   mapProgramRow,
 } from "./loyaltyClient";
-import type { LoyaltyProgramConfig, LoyaltyTransactionKind, LoyaltyTransactionRow } from "./loyaltyMath";
+import type { LoyaltyProgramConfig, LoyaltyTransactionKind, LoyaltyTransactionRow, MembershipExpiryMode } from "./loyaltyMath";
 
 export type LoyaltyOverview = {
   program: LoyaltyProgramConfig | null;
@@ -48,6 +48,9 @@ export type LoyaltyAccountListEntry = {
   lifetimeEarnedPoints: number;
   lifetimeRedeemedPoints: number;
   enrolledAt: string;
+  membershipActive: boolean;
+  membershipExpiresOn: string | null;
+  membershipExpiresAt: string | null;
 };
 
 /**
@@ -105,12 +108,18 @@ export type ProgramInput = {
   earnUnitUgx: number;
   earnPointsPerUnit: number;
   minEligibleSpendUgx: number;
+  membershipExpiryMode: MembershipExpiryMode;
+  membershipFixedExpiresOn: string | null;
+  membershipDurationMonths: number | null;
 };
 
 export type ProgramInputError =
   | "invalid_earn_unit"
   | "invalid_points_per_unit"
-  | "invalid_min_spend";
+  | "invalid_min_spend"
+  | "invalid_membership_mode"
+  | "invalid_membership_fixed_date"
+  | "invalid_membership_duration";
 
 /**
  * Client-side guard mirroring the RPC validation so the UI can flag bad
@@ -122,6 +131,18 @@ export function validateProgramInput(input: ProgramInput): ProgramInputError | n
     return "invalid_points_per_unit";
   if (!Number.isFinite(input.minEligibleSpendUgx) || input.minEligibleSpendUgx < 0)
     return "invalid_min_spend";
+  const mode = input.membershipExpiryMode ?? "never";
+  if (mode !== "never" && mode !== "fixed_date" && mode !== "duration") {
+    return "invalid_membership_mode";
+  }
+  if (mode === "fixed_date") {
+    const d = (input.membershipFixedExpiresOn ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return "invalid_membership_fixed_date";
+  }
+  if (mode === "duration") {
+    const m = input.membershipDurationMonths;
+    if (!Number.isInteger(m) || m == null || m <= 0) return "invalid_membership_duration";
+  }
   return null;
 }
 
@@ -183,6 +204,15 @@ export async function saveLoyaltyProgram(shopId: string, input: ProgramInput): P
       p_earn_unit_ugx: Math.floor(input.earnUnitUgx),
       p_earn_points_per_unit: input.earnPointsPerUnit,
       p_min_eligible_spend_ugx: Math.floor(input.minEligibleSpendUgx),
+      p_membership_expiry_mode: input.membershipExpiryMode ?? "never",
+      p_membership_fixed_expires_on:
+        input.membershipExpiryMode === "fixed_date"
+          ? (input.membershipFixedExpiresOn ?? null)
+          : null,
+      p_membership_duration_months:
+        input.membershipExpiryMode === "duration"
+          ? input.membershipDurationMonths
+          : null,
     });
     if (error) return { ok: false, error: error.code ?? "loyalty_program_save_failed" };
     const result = (data ?? {}) as { ok?: boolean; error?: string };
@@ -220,6 +250,11 @@ export async function searchLoyaltyAccounts(
       lifetimeEarnedPoints: Number(row.lifetime_earned_points ?? 0),
       lifetimeRedeemedPoints: Number(row.lifetime_redeemed_points ?? 0),
       enrolledAt: String(row.enrolled_at ?? ""),
+      membershipActive: row.membership_active !== false,
+      membershipExpiresOn:
+        row.membership_expires_on == null ? null : String(row.membership_expires_on).slice(0, 10),
+      membershipExpiresAt:
+        row.membership_expires_at == null ? null : String(row.membership_expires_at),
     }));
   } catch {
     return [];
@@ -287,5 +322,63 @@ export async function adjustLoyaltyPoints(
     return { ok: true };
   } catch {
     return { ok: false, error: "loyalty_adjust_failed" };
+  }
+}
+
+export type RenewMembershipInput = {
+  mode?: MembershipExpiryMode | null;
+  fixedExpiresOn?: string | null;
+  durationMonths?: number | null;
+};
+
+export type RenewMembershipResult =
+  | {
+      ok: true;
+      accountId: string;
+      membershipActive: boolean;
+      membershipExpiresOn: string | null;
+      balancePoints: number;
+    }
+  | { ok: false; error: string };
+
+/** Renew membership expiry only — never resets balance or tokens. */
+export async function renewLoyaltyMembership(
+  shopId: string,
+  accountId: string,
+  input: RenewMembershipInput = {},
+): Promise<RenewMembershipResult> {
+  if (!hasSupabaseConfig || !supabase || !shopId || !accountId) {
+    return { ok: false, error: "loyalty_unavailable" };
+  }
+  try {
+    const { data, error } = await supabase.rpc("loyalty_renew_membership", {
+      p_shop_id: shopId,
+      p_account_id: accountId,
+      p_mode: input.mode ?? null,
+      p_fixed_expires_on: input.fixedExpiresOn ?? null,
+      p_duration_months: input.durationMonths ?? null,
+    });
+    if (error) return { ok: false, error: error.code ?? "renew_failed" };
+    const result = (data ?? {}) as {
+      ok?: boolean;
+      error?: string;
+      account_id?: string;
+      membership_active?: boolean;
+      membership_expires_on?: string | null;
+      balance_points?: number;
+    };
+    if (!result.ok) return { ok: false, error: result.error ?? "renew_rejected" };
+    return {
+      ok: true,
+      accountId: String(result.account_id ?? accountId),
+      membershipActive: result.membership_active !== false,
+      membershipExpiresOn:
+        result.membership_expires_on == null
+          ? null
+          : String(result.membership_expires_on).slice(0, 10),
+      balancePoints: Number(result.balance_points ?? 0),
+    };
+  } catch {
+    return { ok: false, error: "renew_failed" };
   }
 }

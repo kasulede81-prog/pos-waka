@@ -418,6 +418,8 @@ export const PREVIEW_PUBLIC_CARD_FIXTURE = {
   balance_points: 405,
   account_active: true,
   program_enabled: true,
+  membership_active: true,
+  membership_expires_on: null,
   qr_payload: "WAKA-LOYALTY:preview-placeholder",
   rewards: [
     { name: "Sugar", points_required: 100, description: "1kg sugar" },

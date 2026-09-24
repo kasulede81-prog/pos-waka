@@ -13,6 +13,8 @@ export type AttachedLoyaltyMember = {
   customerName: string;
   customerPhone: string | null;
   balancePoints: number;
+  membershipActive: boolean;
+  membershipExpiresOn: string | null;
 };
 
 type Options = {
@@ -88,6 +90,8 @@ export function useLoyaltyCheckoutAttach({ onAttach }: Options) {
       customerName: result.customerName,
       customerPhone: result.customerPhone,
       balancePoints: result.balancePoints,
+      membershipActive: result.membershipActive,
+      membershipExpiresOn: result.membershipExpiresOn,
     });
     return true;
   }, []);

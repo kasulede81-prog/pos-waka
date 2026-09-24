@@ -68,6 +68,8 @@ describe("PublicLoyaltyCardView design presentation", () => {
     balance_points: 405,
     account_active: true,
     program_enabled: true,
+    membership_active: true,
+    membership_expires_on: null,
     qr_payload: "WAKA-LOYALTY:preview",
     rewards: [{ name: "Sugar", points_required: 100, description: null }],
     wallet_configured: true,

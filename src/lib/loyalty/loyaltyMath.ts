@@ -7,11 +7,16 @@
  * and offline estimates — they are never used to credit points.
  */
 
+export type MembershipExpiryMode = "never" | "fixed_date" | "duration";
+
 export type LoyaltyProgramConfig = {
   enabled: boolean;
   earnUnitUgx: number;
   earnPointsPerUnit: number;
   minEligibleSpendUgx: number;
+  membershipExpiryMode: MembershipExpiryMode;
+  membershipFixedExpiresOn: string | null;
+  membershipDurationMonths: number | null;
 };
 
 export const DEFAULT_LOYALTY_PROGRAM: LoyaltyProgramConfig = {
@@ -19,6 +24,9 @@ export const DEFAULT_LOYALTY_PROGRAM: LoyaltyProgramConfig = {
   earnUnitUgx: 1000,
   earnPointsPerUnit: 1,
   minEligibleSpendUgx: 0,
+  membershipExpiryMode: "never",
+  membershipFixedExpiresOn: null,
+  membershipDurationMonths: null,
 };
 
 export type LoyaltyAccountSnapshot = {
@@ -31,6 +39,9 @@ export type LoyaltyAccountSnapshot = {
   lifetimeRedeemedPoints: number;
   qrToken: string;
   enrolledAt: string;
+  membershipExpiresAt: string | null;
+  membershipActive: boolean;
+  membershipExpiresOn: string | null;
 };
 
 export type LoyaltyTransactionKind =

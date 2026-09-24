@@ -25,7 +25,7 @@ export async function lookupPublicLoyaltyCard(
 
   const { data: account, error: accountErr } = await admin
     .from("loyalty_accounts")
-    .select("id, shop_id, customer_id, status, balance_points, qr_token")
+    .select("id, shop_id, customer_id, status, balance_points, qr_token, membership_expires_at")
     .eq("public_card_token", token)
     .maybeSingle();
 
@@ -34,6 +34,23 @@ export async function lookupPublicLoyaltyCard(
 
   const shopId = String(account.shop_id);
   const customerId = String(account.customer_id);
+  const membershipExpiresAtRaw = account.membership_expires_at;
+  const membershipExpiresAt =
+    membershipExpiresAtRaw == null || String(membershipExpiresAtRaw).trim() === ""
+      ? null
+      : String(membershipExpiresAtRaw);
+  const membershipActive =
+    account.status === "active" &&
+    (membershipExpiresAt == null || Date.parse(membershipExpiresAt) > Date.now());
+  // Exclusive upper bound → last inclusive Kampala day (UTC+3, no DST).
+  let membershipExpiresOn: string | null = null;
+  if (membershipExpiresAt) {
+    const ms = Date.parse(membershipExpiresAt) - 24 * 60 * 60 * 1000;
+    if (Number.isFinite(ms)) {
+      const d = new Date(ms + 3 * 60 * 60 * 1000);
+      membershipExpiresOn = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    }
+  }
 
   const { data: customer, error: customerErr } = await admin
     .from("customers")
@@ -140,6 +157,8 @@ export async function lookupPublicLoyaltyCard(
     balance_points: Math.max(0, Math.trunc(Number(account.balance_points ?? 0))),
     account_active: account.status === "active",
     program_enabled: Boolean(program?.enabled),
+    membership_active: membershipActive,
+    membership_expires_on: membershipExpiresOn,
     qr_payload: encodeLoyaltyQrPayload(qrToken),
     rewards: Array.isArray(rewards)
       ? rewards.map((r) => ({
@@ -165,9 +184,10 @@ export type ResolvedPublicAccount = {
   qrToken: string;
   status: string;
   programEnabled: boolean;
+  membershipActive: boolean;
 };
 
-/** Resolve account for Wallet issuance — same authority chain, no phone. */
+/** Resolve account for Wallet issuance � same authority chain, no phone. */
 export async function resolvePublicCardAccountForWallet(
   supabaseUrl: string,
   serviceKey: string,
@@ -180,7 +200,7 @@ export async function resolvePublicCardAccountForWallet(
   const admin = createClient(supabaseUrl, serviceKey);
   const { data: account, error: accountErr } = await admin
     .from("loyalty_accounts")
-    .select("id, shop_id, customer_id, status, balance_points, qr_token")
+    .select("id, shop_id, customer_id, status, balance_points, qr_token, membership_expires_at")
     .eq("public_card_token", token)
     .maybeSingle();
 
@@ -189,6 +209,12 @@ export async function resolvePublicCardAccountForWallet(
 
   const shopId = String(account.shop_id);
   const customerId = String(account.customer_id);
+  const expiresRaw = account.membership_expires_at;
+  const membershipExpiresAt =
+    expiresRaw == null || String(expiresRaw).trim() === "" ? null : String(expiresRaw);
+  const membershipActive =
+    account.status === "active" &&
+    (membershipExpiresAt == null || Date.parse(membershipExpiresAt) > Date.now());
 
   const { data: customer } = await admin
     .from("customers")
@@ -222,6 +248,7 @@ export async function resolvePublicCardAccountForWallet(
       qrToken,
       status: String(account.status ?? "active"),
       programEnabled: Boolean(program?.enabled),
+      membershipActive,
     },
   };
 }

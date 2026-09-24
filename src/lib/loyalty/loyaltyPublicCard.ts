@@ -45,6 +45,8 @@ export type PublicCardData = {
   balance_points: number;
   account_active: boolean;
   program_enabled: boolean;
+  membership_active: boolean;
+  membership_expires_on: string | null;
   qr_payload: string;
   rewards: PublicCardReward[];
   wallet_configured: boolean;
@@ -140,6 +142,11 @@ export async function fetchPublicLoyaltyCard(token: string): Promise<FetchPublic
         balance_points: Math.max(0, Math.trunc(Number(body.balance_points ?? 0))),
         account_active: Boolean(body.account_active),
         program_enabled: Boolean(body.program_enabled),
+        membership_active: body.membership_active !== false,
+        membership_expires_on:
+          body.membership_expires_on == null || String(body.membership_expires_on).trim() === ""
+            ? null
+            : String(body.membership_expires_on).slice(0, 10),
         qr_payload: String(body.qr_payload ?? ""),
         rewards: rewardsRaw.map((r) => {
           const row = (r ?? {}) as Record<string, unknown>;

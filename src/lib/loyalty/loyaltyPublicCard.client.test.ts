@@ -49,6 +49,8 @@ describe("public card client helpers", () => {
               balance_points: 42,
               account_active: true,
               program_enabled: true,
+    membership_active: true,
+    membership_expires_on: null,
               qr_payload: "WAKA-LOYALTY:qr-abc",
               rewards: [{ name: "Free soda", points_required: 50, description: null }],
               wallet_configured: true,

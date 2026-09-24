@@ -110,6 +110,8 @@ export type TokenLookupResult =
       status: "active" | "disabled";
       balancePoints: number;
       qrToken: string;
+      membershipActive: boolean;
+      membershipExpiresOn: string | null;
     }
   | { ok: false; error: string };
 
@@ -139,6 +141,11 @@ export async function lookupAccountByToken(
       status: result.status === "disabled" ? "disabled" : "active",
       balancePoints: Number(result.balance_points ?? 0),
       qrToken: String(result.qr_token ?? ""),
+      membershipActive: result.membership_active !== false,
+      membershipExpiresOn:
+        result.membership_expires_on == null
+          ? null
+          : String(result.membership_expires_on).slice(0, 10),
     };
   } catch {
     return { ok: false, error: "loyalty_lookup_failed" };

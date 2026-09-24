@@ -76,8 +76,14 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: resolved.error }, status);
   }
 
-  if (resolved.account.status !== "active") {
-    return json({ ok: false, error: "account_inactive" }, 409);
+  if (resolved.account.status !== "active" || !resolved.account.membershipActive) {
+    return json(
+      {
+        ok: false,
+        error: resolved.account.status !== "active" ? "account_inactive" : "membership_expired",
+      },
+      409,
+    );
   }
 
   const env = loadGoogleWalletEnv();

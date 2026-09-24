@@ -8,7 +8,11 @@
  */
 
 import { hasSupabaseConfig, supabase } from "../supabase";
-import type { LoyaltyAccountSnapshot, LoyaltyProgramConfig } from "./loyaltyMath";
+import type {
+  LoyaltyAccountSnapshot,
+  LoyaltyProgramConfig,
+  MembershipExpiryMode,
+} from "./loyaltyMath";
 
 const PROGRAM_CACHE_PREFIX = "waka-loyalty-program:";
 
@@ -17,7 +21,10 @@ type ProgramRow = {
   earn_unit_ugx: number;
   earn_points_per_unit: number;
   min_eligible_spend_ugx: number;
-  rule_kind: string;
+  rule_kind?: string;
+  membership_expiry_mode?: string | null;
+  membership_fixed_expires_on?: string | null;
+  membership_duration_months?: number | null;
 };
 
 type AccountRow = {
@@ -30,7 +37,27 @@ type AccountRow = {
   lifetime_redeemed_points: number;
   qr_token: string;
   enrolled_at: string;
+  membership_expires_at?: string | null;
 };
+
+function parseMembershipMode(raw: unknown): MembershipExpiryMode {
+  const v = String(raw ?? "never").toLowerCase();
+  if (v === "fixed_date" || v === "duration") return v;
+  return "never";
+}
+
+/** Client-side mirror of RPC membership_active (display only — server is authoritative). */
+export function isMembershipActiveClient(
+  status: string,
+  membershipExpiresAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (status !== "active") return false;
+  if (!membershipExpiresAt) return true;
+  const t = Date.parse(membershipExpiresAt);
+  if (!Number.isFinite(t)) return true;
+  return nowMs < t;
+}
 
 export function mapProgramRow(row: ProgramRow): LoyaltyProgramConfig {
   return {
@@ -38,10 +65,22 @@ export function mapProgramRow(row: ProgramRow): LoyaltyProgramConfig {
     earnUnitUgx: Number(row.earn_unit_ugx),
     earnPointsPerUnit: Number(row.earn_points_per_unit),
     minEligibleSpendUgx: Number(row.min_eligible_spend_ugx),
+    membershipExpiryMode: parseMembershipMode(row.membership_expiry_mode),
+    membershipFixedExpiresOn: row.membership_fixed_expires_on
+      ? String(row.membership_fixed_expires_on).slice(0, 10)
+      : null,
+    membershipDurationMonths:
+      row.membership_duration_months == null
+        ? null
+        : Math.trunc(Number(row.membership_duration_months)),
   };
 }
 
 export function mapAccountRow(row: AccountRow): LoyaltyAccountSnapshot {
+  const membershipExpiresAt =
+    row.membership_expires_at == null || String(row.membership_expires_at).trim() === ""
+      ? null
+      : String(row.membership_expires_at);
   return {
     id: row.id,
     shopId: row.shop_id,
@@ -52,6 +91,9 @@ export function mapAccountRow(row: AccountRow): LoyaltyAccountSnapshot {
     lifetimeRedeemedPoints: Number(row.lifetime_redeemed_points),
     qrToken: row.qr_token,
     enrolledAt: row.enrolled_at,
+    membershipExpiresAt,
+    membershipActive: isMembershipActiveClient(row.status, membershipExpiresAt),
+    membershipExpiresOn: null,
   };
 }
 
@@ -101,7 +143,9 @@ export async function fetchLoyaltyProgramConfig(
   try {
     const { data, error } = await supabase
       .from("loyalty_programs")
-      .select("enabled, earn_unit_ugx, earn_points_per_unit, min_eligible_spend_ugx, rule_kind")
+      .select(
+        "enabled, earn_unit_ugx, earn_points_per_unit, min_eligible_spend_ugx, rule_kind, membership_expiry_mode, membership_fixed_expires_on, membership_duration_months",
+      )
       .eq("shop_id", shopId)
       .maybeSingle();
     if (error || !data) return { config: readCachedProgram(shopId), fromCache: true };
@@ -123,7 +167,7 @@ export async function fetchLoyaltyAccount(
     const { data, error } = await supabase
       .from("loyalty_accounts")
       .select(
-        "id, shop_id, customer_id, status, balance_points, lifetime_earned_points, lifetime_redeemed_points, qr_token, enrolled_at",
+        "id, shop_id, customer_id, status, balance_points, lifetime_earned_points, lifetime_redeemed_points, qr_token, enrolled_at, membership_expires_at",
       )
       .eq("shop_id", shopId)
       .eq("customer_id", customerId)

@@ -10,6 +10,8 @@ const baseCard = (over: Partial<PublicCardData> = {}): PublicCardData => ({
   balance_points: 405,
   account_active: true,
   program_enabled: true,
+    membership_active: true,
+    membership_expires_on: null,
   qr_payload: "WAKA-LOYALTY:qr-stable-token",
   rewards: [
     { name: "1kg Sugar", points_required: 300, description: "1kg sugar bag" },

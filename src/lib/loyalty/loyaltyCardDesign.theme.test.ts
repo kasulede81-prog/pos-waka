@@ -45,6 +45,8 @@ describe("WAKA loyalty default theme", () => {
       balance_points: 405,
       account_active: true,
       program_enabled: true,
+    membership_active: true,
+    membership_expires_on: null,
       qr_payload: "WAKA-LOYALTY:preview",
       rewards: [],
       wallet_configured: true,
