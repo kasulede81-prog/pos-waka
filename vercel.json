@@ -4,19 +4,19 @@
     {
       "source": "/loyalty/:token([a-fA-F0-9]{64})",
       "has": [{ "type": "host", "value": "pos.waka.ug" }],
-      "destination": "https://loyalty.waka.ug/c/:token",
-      "permanent": true
+      "destination": "https://loyalty.waka.ug/c/:token?",
+      "statusCode": 301
     },
     {
       "source": "/loyalty/:token([a-fA-F0-9]{64})/",
       "has": [{ "type": "host", "value": "pos.waka.ug" }],
-      "destination": "https://loyalty.waka.ug/c/:token",
-      "permanent": true
+      "destination": "https://loyalty.waka.ug/c/:token?",
+      "statusCode": 301
     },
     {
       "source": "/c/:token([a-fA-F0-9]{64})/",
-      "destination": "/c/:token",
-      "permanent": true
+      "destination": "/c/:token?",
+      "statusCode": 301
     }
   ],
   "rewrites": [

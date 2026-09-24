@@ -6,6 +6,7 @@ type VercelRedirect = {
   source: string;
   destination: string;
   permanent?: boolean;
+  statusCode?: number;
   has?: Array<{ type: string; value: string }>;
 };
 
@@ -18,11 +19,12 @@ describe("B3 vercel legacy loyalty redirect", () => {
     r.source.includes("/loyalty/:token"),
   );
 
-  it("defines host-scoped permanent redirects for pos.waka.ug only", () => {
+  it("defines host-scoped 301 redirects for pos.waka.ug only", () => {
     expect(legacy.length).toBeGreaterThanOrEqual(1);
     for (const rule of legacy) {
-      expect(rule.permanent).toBe(true);
-      expect(rule.destination).toBe("https://loyalty.waka.ug/c/:token");
+      expect(rule.statusCode).toBe(301);
+      // Trailing `?` forces Vercel to drop unexpected inbound query strings.
+      expect(rule.destination).toBe("https://loyalty.waka.ug/c/:token?");
       expect(rule.has).toEqual([{ type: "host", value: "pos.waka.ug" }]);
       // Token constrained to 64 hex — no open redirect / next= / redirect=
       expect(rule.source).toMatch(/:token\(\[a-fA-F0-9\]\{64\}\)/);
@@ -38,11 +40,10 @@ describe("B3 vercel legacy loyalty redirect", () => {
 
   it("does not accept user-controlled destinations", () => {
     for (const rule of vercel.redirects ?? []) {
-      expect(rule.destination.startsWith("https://loyalty.waka.ug/") || rule.destination.startsWith("/")).toBe(
-        true,
-      );
-      expect(rule.destination).not.toContain("?");
-      expect(rule.destination).not.toMatch(/\$\{|next|redirect/i);
+      const dest = rule.destination.replace(/\?$/, "");
+      expect(dest.startsWith("https://loyalty.waka.ug/") || dest.startsWith("/")).toBe(true);
+      expect(dest).not.toContain("?");
+      expect(dest).not.toMatch(/\$\{|next=|redirect=/i);
     }
   });
 });
