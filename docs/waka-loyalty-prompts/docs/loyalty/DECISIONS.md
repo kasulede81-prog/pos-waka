@@ -309,3 +309,45 @@ is a no-op / balance-floored.
 **Privileges:** `loyalty_expire_due_points` is SECURITY DEFINER and **not**
 granted to `anon`/`authenticated`; redeem (and trusted internal callers)
 invoke it under the account `FOR UPDATE` lock.
+
+## Decision 026 — Additive Customer Offers (Model B)
+
+**Status:** Accepted
+
+Customer-specific loyalty treatment is an **additive offer layer** on top of
+the shop’s single `loyalty_programs` row. There is **no**
+`loyalty_customer_programs` clone of the merchant program.
+
+**Table:** `loyalty_customer_offers` (shop_id + account_id, shop-isolated).
+Kinds: `earn_multiplier`, `earn_bonus_flat`, `reward_grant`, `status_badge`,
+`campaign` (non-recursive bundle of the first four).
+
+**Stacking:**
+- At most **one** effective earn multiplier: highest wins; ties break by
+  priority desc then offer id asc. Multipliers are never multiplied together.
+- Flat bonuses **sum**.
+- Badges and reward grants may coexist.
+- Default effective multiplier is **1** when no multiplier offer applies.
+
+**Composition:** `effective_points = floor(base_points × multiplier) + flat_bonuses`
+where `base_points` comes from the merchant spend rule. Client never submits
+points.
+
+**Lifecycle:** `active` | `paused` | `revoked`; `starts_at` inclusive,
+`ends_at` exclusive; null means open-ended. Revoked rows are retained for
+history.
+
+**Snapshot:** New earns append offer fields onto `rule_snapshot`
+(`base_points`, `effective_multiplier`, `flat_bonus_*`, `applicable_offers`,
+`effective_points`, …) without rewriting historical snapshots.
+
+**C1/C2/C3:** Unchanged engines. Membership gate runs **before** offer
+resolution. Grant-only rewards (`loyalty_rewards.requires_offer_grant`) need
+an applicable `reward_grant`; C2 expiry and C3 FIFO still apply. Offer points
+are ordinary earned lots.
+
+**Auth:** Manage via `user_can_manage_shop` RPCs; cashiers consume only;
+SELECT RLS for shop access. No direct client writes to the offers table.
+
+**Rejected:** Per-customer program clones (Model A / Option 3) — they fight
+the single-program UNIQUE, weaken reporting, and duplicate C1/C3 config.

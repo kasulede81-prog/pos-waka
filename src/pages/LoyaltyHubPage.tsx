@@ -27,6 +27,7 @@ import { computeEarnedPoints, DEFAULT_LOYALTY_PROGRAM } from "../lib/loyalty/loy
 import { LoyaltyEnrollmentPanel } from "../components/loyalty/LoyaltyEnrollmentPanel";
 import { LoyaltyMemberQr } from "../components/loyalty/LoyaltyMemberQr";
 import { LoyaltyRewardsPanel } from "../components/loyalty/LoyaltyRewardsPanel";
+import { LoyaltyCustomerOffersPanel } from "../components/loyalty/LoyaltyCustomerOffersPanel";
 import { LoyaltyGoogleWalletButton } from "../components/loyalty/LoyaltyGoogleWalletButton";
 import { LoyaltyCustomerPageShare } from "../components/loyalty/LoyaltyCustomerPageShare";
 import { LoyaltyCardDesignPanel } from "../components/loyalty/LoyaltyCardDesignPanel";
@@ -349,6 +350,15 @@ function CustomerDetail({
         accountId={entry.accountId}
         canIssue={canIssueWallet}
       />
+
+      {mode === "full" ? (
+        <LoyaltyCustomerOffersPanel
+          lang={lang}
+          shopId={shopId}
+          accountId={entry.accountId}
+          canManage={canManage}
+        />
+      ) : null}
 
       {mode === "full" ? (
         <>
