@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { X } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { t, tTemplate } from "../../lib/i18n";
 import { readUiLanguageCacheSync, loadPersistedUiLanguage } from "../../lib/uiLanguage";
@@ -19,6 +20,9 @@ export function AppReleaseUpdateProvider({ children }: Props) {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [fallbackOpened, setFallbackOpened] = useState(false);
+  // Signature of the failure the user has dismissed. A new/different failure has a
+  // new signature, so the banner reappears; the same one stays dismissed.
+  const [dismissedFailureSig, setDismissedFailureSig] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,13 +111,31 @@ export function AppReleaseUpdateProvider({ children }: Props) {
 
   const recoveryHint = actionError || state.lastActionError;
   const offerFallback = Boolean(state.lastDecision?.fallbackOnly || recoveryHint || fallbackOpened);
+  // Identifies this specific failure so a dismissal sticks to it but a later,
+  // different failure surfaces again.
+  const failureSig = `${state.phase}|${recoveryHint ?? ""}|${fallbackOpened ? "1" : "0"}`;
+  const dismissRecoveryBanner = useCallback(() => {
+    setDismissedFailureSig(failureSig);
+  }, [failureSig]);
   const recoveryBanner =
-    showAndroidOverlay && (state.phase === "update_failed" || recoveryHint) ? (
+    showAndroidOverlay &&
+    (state.phase === "update_failed" || recoveryHint) &&
+    failureSig !== dismissedFailureSig ? (
       <div className="fixed inset-x-0 bottom-0 z-[186] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <article className="mx-auto flex max-w-lg flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 shadow-lg">
-          <p className="text-sm font-bold text-rose-950">
-            {fallbackOpened ? t(lang, "updatePlayStoreOpenedBody") : t(lang, "updateFailedBody")}
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-bold text-rose-950">
+              {fallbackOpened ? t(lang, "updatePlayStoreOpenedBody") : t(lang, "updateFailedBody")}
+            </p>
+            <button
+              type="button"
+              onClick={dismissRecoveryBanner}
+              aria-label={t(lang, "updateDismiss")}
+              className="-mr-1 -mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-rose-700 hover:bg-rose-100"
+            >
+              <X aria-hidden className="h-5 w-5" />
+            </button>
+          </div>
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
