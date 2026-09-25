@@ -13,6 +13,7 @@ import {
   fetchLoyaltyProgramConfig,
   mapProgramRow,
 } from "./loyaltyClient";
+import { requestGoogleWalletBalanceSync } from "./loyaltyGoogleWallet";
 import type {
   LoyaltyAccountStatus,
   LoyaltyProgramConfig,
@@ -243,6 +244,10 @@ export async function saveLoyaltyProgram(shopId: string, input: ProgramInput): P
     clearCachedProgram(shopId);
     // Refresh the checkout-side cache with the freshly saved config.
     void fetchLoyaltyProgramConfig(shopId);
+    // The earn-rule change enqueued a re-sync for every issued card (DB trigger);
+    // nudge the drain now so cards refresh instantly instead of on the next cron
+    // tick. Best-effort/non-blocking — never affects the save result.
+    void requestGoogleWalletBalanceSync(shopId);
     return { ok: true };
   } catch {
     return { ok: false, error: "loyalty_program_save_failed" };
@@ -393,6 +398,9 @@ export async function renewLoyaltyMembership(
       balance_points?: number;
     };
     if (!result.ok) return { ok: false, error: result.error ?? "renew_rejected" };
+    // Membership expiry changed → the card's ACTIVE/INACTIVE state may change.
+    // The DB trigger enqueued a re-sync; nudge the drain for an instant refresh.
+    void requestGoogleWalletBalanceSync(shopId, accountId);
     return {
       ok: true,
       accountId: String(result.account_id ?? accountId),
@@ -449,6 +457,9 @@ export async function setLoyaltyAccountLifecycle(
       already?: boolean;
     };
     if (!result.ok) return { ok: false, error: result.error ?? "lifecycle_rejected" };
+    // Suspend / reactivate / revoke changes the card's ACTIVE/INACTIVE state.
+    // The DB trigger enqueued a re-sync; nudge the drain for an instant refresh.
+    void requestGoogleWalletBalanceSync(shopId, accountId);
     return {
       ok: true,
       accountId: String(result.account_id ?? accountId),
