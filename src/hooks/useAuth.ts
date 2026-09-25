@@ -622,6 +622,9 @@ export function useAuth() {
         () => supabase!.auth.refreshSession(),
         sessionRefreshCallbacksRef.current,
       );
+      // Real-time freshness: back online → pull fresh cloud data now, don't wait
+      // for a manual reload. Guarded/debounced/offline-safe inside.
+      scheduleBackgroundCloudSync({ pull: true });
     };
 
     window.addEventListener("waka:network-online", onReconnect);
@@ -635,6 +638,9 @@ export function useAuth() {
       if (document.visibilityState !== "visible") return;
       if (!session?.user && !readPersistedSupabaseSession()?.user) return;
       scheduleOwnerSessionRefresh();
+      // Real-time freshness: returning to the app pulls fresh cloud data (incremental)
+      // so the user no longer has to exit/reopen to see current data.
+      scheduleBackgroundCloudSync({ pull: true });
     };
 
     document.addEventListener("visibilitychange", onVisible);
@@ -650,6 +656,9 @@ export function useAuth() {
         if (!isActive) return;
         if (!session?.user && !readPersistedSupabaseSession()?.user) return;
         scheduleOwnerSessionRefresh();
+        // Real-time freshness: app brought to foreground → pull fresh cloud data
+        // (incremental) instead of waiting for an exit/reopen.
+        scheduleBackgroundCloudSync({ pull: true });
       }).then((handle) => {
         removeListener = () => void handle.remove();
       });
@@ -657,6 +666,15 @@ export function useAuth() {
 
     return () => removeListener?.();
   }, [scheduleOwnerSessionRefresh, session?.user?.id]);
+
+  // Real-time freshness on sign-in / session restore: once a signed-in user is
+  // present, pull fresh cloud data (incremental, debounced, offline-safe) so data
+  // is current right after login without needing to exit and reopen the app.
+  useEffect(() => {
+    if (!hasSupabaseConfig || !supabase) return;
+    if (!session?.user) return;
+    scheduleBackgroundCloudSync({ pull: true, delayMs: isNativeApp() ? 2_500 : 1_500 });
+  }, [session?.user?.id]);
 
   const signIn = useCallback(async (identifier: string, password: string) => {
     clearStaffAuth();

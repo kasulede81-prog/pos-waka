@@ -5431,6 +5431,13 @@ export async function syncShopWithCloud(opts?: {
 
 /** Fire-and-forget cloud sync after local hydrate (does not block UI). */
 let backgroundSyncTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Strongest sync intent requested within the current debounce window:
+ * 0 = push-only, 1 = default (throttled) pull, 2 = forced pull.
+ * A later, stronger request (e.g. a resume/login pull) is never suppressed by an
+ * already-scheduled push-only run — the window fires at the highest intent seen.
+ */
+let backgroundSyncLevel = 0;
 
 export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: number }): void {
   if (!hasSupabaseConfig) return;
@@ -5438,15 +5445,19 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
     void import("../lib/posPushScheduler").then(({ schedulePushPendingUploads }) => schedulePushPendingUploads());
     return;
   }
+  const level = opts?.pull === false ? 0 : opts?.pull === true ? 2 : 1;
+  if (level > backgroundSyncLevel) backgroundSyncLevel = level;
   if (backgroundSyncTimer != null) return;
   const delay = opts?.delayMs ?? 0;
   backgroundSyncTimer = globalThis.setTimeout(() => {
     backgroundSyncTimer = null;
-    if (opts?.pull === false) {
+    const runLevel = backgroundSyncLevel;
+    backgroundSyncLevel = 0;
+    if (runLevel === 0) {
       void pushShopPendingToCloud().catch((err) => recordBackgroundSyncFailure("background_push_failed", err));
       return;
     }
-    void syncShopWithCloud({ pull: opts?.pull }).catch((err) =>
+    void syncShopWithCloud({ pull: runLevel === 2 ? true : undefined }).catch((err) =>
       recordBackgroundSyncFailure("background_sync_failed", err),
     );
   }, delay);
@@ -5454,6 +5465,7 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
 
 /** Cancel a pending scheduled background sync (used by enterprise logout). */
 export function cancelBackgroundCloudSync(): void {
+  backgroundSyncLevel = 0;
   if (backgroundSyncTimer == null) return;
   globalThis.clearTimeout(backgroundSyncTimer);
   backgroundSyncTimer = null;
