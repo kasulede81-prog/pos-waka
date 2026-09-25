@@ -187,6 +187,10 @@ import {
   type SyncProcessResult,
 } from "../lib/saleAdjustmentSync";
 import { saleHeaderForCloudComplete } from "../lib/saleCloudCompleteFinancials";
+import {
+  clearSaleStockEnforcement,
+  saleEligibleForStockEnforcement,
+} from "../lib/onlineSaleEnforcement";
 import { evaluateSaleReturnCeilings } from "../lib/saleReturnCeilings";
 import { cloudReturnAlreadySynced, idSuffix, isUnrecoverableZeroHeaderReturn, recordBlockedReturnProbe } from "../lib/blockedReturnRecovery";
 
@@ -1138,6 +1142,10 @@ export function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
   return {
     sale: {
       id: sale.id,
+      // Audit fix #1: only sales rung up online against fresh stock ask the server
+      // to enforce availability atomically. Offline/queued sales omit it (false),
+      // so their sync stays permissive and offline-first behavior is preserved.
+      enforce_stock: saleEligibleForStockEnforcement(sale.id),
       customer_id: sale.customerId && isUuid(sale.customerId) ? sale.customerId : null,
       payment_status: header.debtUgx > 0 ? "partial" : "paid",
       subtotal_ugx: subtotalFromLinesUgx,
@@ -1543,6 +1551,8 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx, opts?: { deferAc
   // `deferAck`: the caller still has a follow-up upload (a void patch) to make before the sale counts as
   // acknowledged, so the sale stays `pendingSync` until that has succeeded.
   if (opts?.deferAck !== true) markSaleSyncState(sale.id, true, null);
+  // Synced successfully — drop the ephemeral oversell-enforcement flag (bounds memory).
+  clearSaleStockEnforcement(sale.id);
   return true;
 }
 

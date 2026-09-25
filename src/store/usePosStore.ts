@@ -341,6 +341,7 @@ import { emitInventoryStockChanges, type InventoryStockSyncMessage, type Invento
 import { mergeRemoteInventoryStock, validateDraftSaleStockBeforeFinalize } from "../lib/inventoryVersionProtection";
 import { assertCanFinalizeStockSale } from "../lib/primaryRegisterMode";
 import { isLocalStockFresh } from "../lib/stockFreshness";
+import { markSaleEligibleForStockEnforcement } from "../lib/onlineSaleEnforcement";
 import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } from "../lib/settingsAuthorization";
 import { planShelfRename } from "../lib/renameShelfCategory";
 import { planDeleteEmptyShelf } from "../lib/deleteEmptyShelf";
@@ -5650,6 +5651,14 @@ export const usePosStore = create<PosState>((set, get) => {
           ? "otc"
           : null,
     };
+
+    // Audit fix #1: this sale was rung up against authoritative stock (online +
+    // fresh local stock), so it is eligible for the server's atomic oversell
+    // guard. Offline / stale-stock sales are never marked, preserving offline-first
+    // sync (the server leaves enforce_stock off and stays permissive for them).
+    if (getDeviceOnline() && isLocalStockFresh()) {
+      markSaleEligibleForStockEnforcement(sale.id);
+    }
 
     if (customerId && debt > 0) {
       customers = customers.map((c) =>
