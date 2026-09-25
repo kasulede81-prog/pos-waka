@@ -18,6 +18,7 @@ export type ReportExportKind =
   | "customer_debt"
   | "customer_statement"
   | "cash_expenses"
+  | "pharmacy_compliance"
   | "other";
 
 type ReportDiagEvent = "export_start" | "export_done" | "export_fail" | "print_start" | "print_done" | "print_fail";

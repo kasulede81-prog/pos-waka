@@ -15,7 +15,9 @@ import {
   buildShiftSummaryRows,
   downloadShiftSummaryCsv,
   downloadShiftSummaryPdf,
+  printShiftSummary,
 } from "../lib/shiftReportExport";
+import { useToast } from "../context/ToastProvider";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import {
   canActorRecoverShifts,
@@ -36,6 +38,7 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const managerForceCloseOpenShift = usePosStore((s) => s.managerForceCloseOpenShift);
   const todayKey = dateKeyKampala(new Date());
+  const toast = useToast();
   const [recoveringShift, setRecoveringShift] = useState<ShiftRecord | null>(null);
   const formulaVersion = resolveCashDrawerFormulaVersion(preferences);
 
@@ -77,6 +80,17 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
         </WakaButton>
         <WakaButton type="button" variant="secondary" onClick={() => void downloadShiftSummaryPdf(lang, rows)}>
           {t(lang, "shiftReportExportPdf")}
+        </WakaButton>
+        <WakaButton
+          type="button"
+          variant="secondary"
+          onClick={() =>
+            void printShiftSummary(lang, rows).then((ok) => {
+              if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+            })
+          }
+        >
+          {t(lang, "receiptPrint")}
         </WakaButton>
       </div>
       <ResponsiveDataTable minWidthPx={960}>

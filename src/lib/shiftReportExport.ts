@@ -103,7 +103,12 @@ function csvToRows(csv: string): Array<Array<string | number>> {
   return csv.split("\n").map((line) => line.split(","));
 }
 
-export async function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummaryRow[]): Promise<boolean> {
+/**
+ * Print the shift summary — native shares the PDF, web/desktop opens the print dialog.
+ * (This has always been the behaviour behind `downloadShiftSummaryPdf`; it is exported
+ * under an honest name so the UI can offer an explicit Print action.)
+ */
+export async function printShiftSummary(lang: Language, rows: ShiftSummaryRow[]): Promise<boolean> {
   const { title, scopeHint } = shiftSummaryDocumentLabels(lang);
   const tableRows = rows
     .map((row) => {
@@ -180,6 +185,11 @@ export async function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummary
     title,
     shareDialogTitle: t(lang, "shiftReportExportPdf"),
   });
+}
+
+/** Kept for existing callers; delegates to `printShiftSummary`. */
+export async function downloadShiftSummaryPdf(lang: Language, rows: ShiftSummaryRow[]): Promise<boolean> {
+  return printShiftSummary(lang, rows);
 }
 
 function formatTs(iso: string): string {

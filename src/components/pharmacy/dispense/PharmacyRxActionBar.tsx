@@ -4,6 +4,7 @@ import { t } from "../../../lib/i18n";
 import { prescriptionStatusLabelKey } from "../../../lib/pharmacyPrescriptions";
 import { printPrescriptionSummary } from "../../../lib/pharmacyPrescriptionPrint";
 import type { ShopPreferences } from "../../../types";
+import { useToast } from "../../../context/ToastProvider";
 
 type Props = {
   lang: Language;
@@ -24,6 +25,7 @@ export function PharmacyRxActionBar({
   onBeginDispense,
   onRefill,
 }: Props) {
+  const toast = useToast();
   const canBegin = ["verified", "ready", "dispensing"].includes(rx.status);
   const needsVerify = rx.status === "draft" || rx.status === "waiting_verification";
 
@@ -43,7 +45,11 @@ export function PharmacyRxActionBar({
       ) : null}
       <ActionBtn
         label={t(lang, "pharmacyRxPrint")}
-        onClick={() => printPrescriptionSummary(lang, rx, preferences)}
+        onClick={() => {
+          void printPrescriptionSummary(lang, rx, preferences).then((ok) => {
+            if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+          });
+        }}
       />
       <ActionBtn label={t(lang, "pharmacyRxRefill")} onClick={onRefill} />
     </div>

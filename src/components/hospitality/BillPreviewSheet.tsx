@@ -6,6 +6,8 @@ import { billDraftFromSale, computeRestaurantBillTotals } from "../../lib/restau
 import { buildReceiptBrandingSnapshot } from "../../lib/receiptBranding";
 import { resolveStorePlanTier } from "../../lib/productPlanEnforcement";
 import { getStoreSubscriptionContext } from "../../lib/storeSubscriptionContext";
+import { printRestaurantBillPreview } from "../../lib/restaurantBillPreviewDocument";
+import { useToast } from "../../context/ToastProvider";
 
 type Props = {
   lang: Language;
@@ -32,12 +34,45 @@ export function BillPreviewSheet({
   preferences,
   onClose,
 }: Props) {
+  const toast = useToast();
   const billDraft = billDraftFromSale(pendingSale, preferences);
   const totals = computeRestaurantBillTotals({ lines, cartDiscountUgx, billDraft, prefs: preferences });
   const { snapshot, authMode } = getStoreSubscriptionContext();
   const tier = resolveStorePlanTier(snapshot, authMode);
   const branding = buildReceiptBrandingSnapshot(preferences, tier);
   const shopName = branding.header.lines?.[0]?.trim() || preferences.shopDisplayName?.trim() || "Waka POS";
+
+  /**
+   * Hand the guest a paper check before payment. Presentation only: it reads the
+   * numbers already on screen and settles nothing — no sale, no payment, no stock.
+   */
+  const printBill = () => {
+    void printRestaurantBillPreview({
+      lang,
+      shopName,
+      headerLine: branding.header.lines?.[1] ?? null,
+      tableLabel,
+      areaName: areaName ?? null,
+      guestCount: session.guestCount,
+      waiterLabel: session.waiterLabel ?? null,
+      lines: lines.map((line) => ({
+        id: line.id ?? line.productId,
+        name: line.name,
+        quantity: line.quantity,
+        lineTotalUgx: line.lineTotalUgx,
+      })),
+      listSubtotalUgx: totals.listSubtotalUgx,
+      discountUgx: totals.lineDiscountUgx + totals.cartDiscountUgx,
+      serviceChargeUgx: totals.serviceChargeUgx,
+      tipUgx: totals.tipUgx,
+      grandTotalUgx: totals.grandTotalUgx,
+      payments: billDraft.payments.map((p) => ({ id: p.id, method: p.method, amountUgx: p.amountUgx })),
+      remainingBalanceUgx: totals.remainingBalanceUgx,
+      footerNote: t(lang, "restaurantBillQrFuture"),
+    }).then((r) => {
+      if (!r.ok) toast.error(t(lang, "receiptPrintBlocked"));
+    });
+  };
 
   if (!open) return null;
 
@@ -128,6 +163,15 @@ export function BillPreviewSheet({
           </>
         ) : null}
         <p className="mt-4 text-center text-[10px] text-muted-foreground">{t(lang, "restaurantBillQrFuture")}</p>
+      </div>
+      <div className="mt-3 flex justify-center">
+        <button
+          type="button"
+          onClick={printBill}
+          className="min-h-[48px] rounded-2xl border-2 px-5 text-sm font-black touch-manipulation"
+        >
+          {t(lang, "receiptPrint")}
+        </button>
       </div>
     </ModalSheet>
   );

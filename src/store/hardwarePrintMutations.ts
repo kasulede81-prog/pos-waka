@@ -205,12 +205,16 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       void enqueueKitchenTickets(tickets, kind);
     },
 
+    /**
+     * Manual reprint. `autoPrintKitchen` controls *automatic* ticket firing only —
+     * a shop that fires chits by hand must still be able to reprint one. A manual
+     * reprint therefore needs only an existing ticket and a resolvable station
+     * printer; permission stays with the caller (runShopAction).
+     */
     reprintKitchenTicket: (ticketId: string) => {
       const state = get();
       const ticket = state.preferences.hospitalityFloor?.kitchenTickets?.find((t) => t.id === ticketId);
       if (!ticket) return { ok: false as const, errorKey: "invalid" };
-      const hw = resolveHospitalityHardware(state.preferences);
-      if (!hw.autoPrintKitchen) return { ok: false as const, errorKey: "kitchenPrintDisabled" };
       const printer = resolvePrinterForStation(
         state.preferences,
         state.preferences.hospitalityFloor,
@@ -460,10 +464,22 @@ export function createHardwarePrintStoreActions(deps: Deps) {
         }
       }
       const { printReceiptWithFallback } = await import("../lib/receiptPrint");
+      const { printReceiptFallback } = await import("../lib/receiptNativeFallback");
+      const { isNativePrintPlatform } = await import("../lib/nativePrintPlatform");
       const text = buildRestaurantReceiptLines(ctx).join("\n");
       const paper = state.preferences.receiptPaperSize ?? "80mm";
       const res = await printReceiptWithFallback(text, paper);
-      return { ok: res.ok, mode: res.mode, error: res.error };
+      if (res.ok) return { ok: true as const, mode: res.mode };
+      // Native WebViews have no print dialog, so a thermal-less Android tablet used to
+      // report a silent no-op here. Hand the receipt to the share sheet instead.
+      if (!isNativePrintPlatform()) return { ok: false as const, mode: res.mode, error: res.error };
+      const shared = await printReceiptFallback({
+        plainText: text,
+        paper,
+        title: receiptKind === "void" ? "Void receipt" : "Restaurant receipt",
+        filenameStem: `${receiptKind === "void" ? "void" : "restaurant"}-${saleId.slice(0, 8)}`,
+      });
+      return { ok: shared.ok, mode: shared.mode, error: shared.error };
     },
 
     openCashDrawerOnPayment: async (saleId: string) => {

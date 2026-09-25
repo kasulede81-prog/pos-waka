@@ -7,10 +7,13 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
+  buildPurchaseListRows,
   findPurchaseAudit,
   purchaseLineTotalUgx,
   purchaseQuantityReceivedForPurchase,
 } from "../lib/purchaseReporting";
+import { printPurchasesReport } from "../lib/purchaseExport";
+import { useToast } from "../context/ToastProvider";
 import { findPurchaseVoidAudit, isPurchaseVoided } from "../lib/purchaseCorrections";
 import { dateKeyKampala } from "../lib/datesUg";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
@@ -30,10 +33,12 @@ export function PurchaseDetailPage({
   const { purchaseId: routePurchaseId } = useParams<{ purchaseId: string }>();
   const purchaseId = purchaseIdProp ?? routePurchaseId;
   const actor = useSessionActor();
+  const toast = useToast();
   const canView = actorHasPermission(actor, "purchases.view");
   const canVoid = actorHasPermission(actor, "purchases.void");
 
   const purchases = usePosStore((s) => s.purchases);
+  const preferences = usePosStore((s) => s.preferences);
   const products = usePosStore((s) => s.products);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const auditLogs = usePosStore((s) => s.auditLogs);
@@ -79,6 +84,17 @@ export function PurchaseDetailPage({
     ? `/stock?tab=suppliers&supplierId=${encodeURIComponent(purchase.supplierId)}`
     : null;
 
+  /** Paper copy of a purchase the merchant entered — reuses the purchases report document. */
+  const printPurchase = () => {
+    const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+    const dayKey = dateKeyKampala(purchase.createdAt);
+    const [row] = buildPurchaseListRows([purchase], stockMovements);
+    if (!row) return;
+    void printPurchasesReport(lang, shopName, [row], dayKey).then((ok) => {
+      if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+    });
+  };
+
   const submitVoid = () => {
     setVoidError(null);
     const r = voidPurchase(purchase.id, voidReason);
@@ -104,6 +120,16 @@ export function PurchaseDetailPage({
           ← {t(lang, "purchasesTitle")}
         </button>
       ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={printPurchase}
+          className="min-h-[48px] rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+        >
+          {t(lang, "receiptPrint")}
+        </button>
+      </div>
 
       <section className="rounded-3xl border border-border bg-card p-5 shadow-waka-sm">
         <h2 className="text-sm font-black uppercase text-muted-foreground">{t(lang, "purchaseAuditMeta")}</h2>

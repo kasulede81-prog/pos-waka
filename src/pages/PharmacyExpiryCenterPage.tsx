@@ -18,7 +18,8 @@ import { AdjustmentMovementPreview } from "../components/inventory/adjustments/A
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { Pill } from "lucide-react";
-import { printHtmlDocument } from "../lib/documentPrint";
+import { printTextListDocument } from "../lib/nativePrintFallback";
+import { sanitizePdfStem } from "../lib/pdfLayout";
 import { pharmacyReceiveReplacementHref } from "../lib/pharmacyReceiveDeepLink";
 
 const BUCKETS = ["expired", "today", "d7", "d30", "d60", "d90"] as const;
@@ -180,11 +181,23 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
                     `<li>${row.productName} · ${row.batchNumber} · ${row.expiryDate} · ${row.quantity} · ${formatUgx(row.valueUgx)}</li>`,
                 )
                 .join("");
-              printHtmlDocument(
-                `<article><h1>${t(lang, "pharmacyExpiryCenterTitle")}</h1><h2>${t(lang, BUCKET_LABEL[activeBucket])}</h2><ul>${items || `<li>${t(lang, "pharmacyExpiryEmpty")}</li>`}</ul></article>`,
-                "a4",
-                t(lang, "pharmacyExpiryCenterTitle"),
-              );
+              const bucketLabel = t(lang, BUCKET_LABEL[activeBucket]);
+              void printTextListDocument({
+                pdfFilename: `${sanitizePdfStem(`waka-expiry-${activeBucket}`)}.pdf`,
+                title: t(lang, "pharmacyExpiryCenterTitle"),
+                subtitle: bucketLabel,
+                lines: rows.map(
+                  (row) =>
+                    `${row.productName} · ${row.batchNumber} · ${row.expiryDate} · ${row.quantity} · ${formatUgx(row.valueUgx)}`,
+                ),
+                htmlBody: `<article><h1>${t(lang, "pharmacyExpiryCenterTitle")}</h1><h2>${bucketLabel}</h2><ul>${items || `<li>${t(lang, "pharmacyExpiryEmpty")}</li>`}</ul></article>`,
+                paper: "a4",
+              }).then((ok) => {
+                if (!ok) {
+                  setToast(t(lang, "receiptPrintBlocked"));
+                  window.setTimeout(() => setToast(null), 2500);
+                }
+              });
             }}
             className="inline-flex min-h-[48px] items-center rounded-2xl border border-border bg-card px-4 text-sm font-black text-foreground touch-manipulation"
           >

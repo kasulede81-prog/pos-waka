@@ -23,6 +23,7 @@ import {
   type DestinationShopProductOption,
 } from "../lib/enterprise/stockTransferSync";
 import type { InventoryTransferAuditSnapshot } from "../lib/enterprise/inventoryTransferAudit";
+import { printTransferDeliveryNote } from "../lib/transferDeliveryNote";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { hasSupabaseConfig } from "../lib/supabase";
 
@@ -449,9 +450,40 @@ export function InventoryTransferPage({ lang }: Props) {
             );
           })}
           {selectedTransfer ? (
-            <button type="button" className="btn-primary min-h-[48px] px-4" disabled={busy} onClick={() => void receiveSelected()}>
-              {lang === "lg" ? "Funa (receive)" : "Receive"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-primary min-h-[48px] px-4" disabled={busy} onClick={() => void receiveSelected()}>
+                {lang === "lg" ? "Funa (receive)" : "Receive"}
+              </button>
+              <button
+                type="button"
+                className="min-h-[48px] rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+                disabled={busy}
+                onClick={() => {
+                  void printTransferDeliveryNote({
+                    lang,
+                    transferId: selectedTransfer.id,
+                    status: selectedTransfer.status,
+                    fromShopLabel: sourceShopLabel,
+                    toShopLabel:
+                      branches.find((b) => b.shop_id === selectedTransfer.toShopId)?.shop_name ||
+                      selectedTransfer.toShopId,
+                    shippedAt: selectedTransfer.shippedAt,
+                    createdAt: selectedTransfer.createdAt,
+                    reason: selectedTransfer.reason,
+                    lines: selectedTransfer.lines.map((line) => ({
+                      productName: line.productName,
+                      quantity: line.quantity,
+                      receivedQuantity: line.receivedQuantity,
+                      unitCostUgx: line.unitCostUgx,
+                    })),
+                  }).then((ok) => {
+                    if (!ok) setErr(t(lang, "receiptPrintBlocked"));
+                  });
+                }}
+              >
+                {t(lang, "receiptPrint")}
+              </button>
+            </div>
           ) : null}
         </section>
       </TransferOperationShell>

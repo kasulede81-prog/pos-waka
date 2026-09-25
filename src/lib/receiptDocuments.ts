@@ -10,6 +10,7 @@ import {
 import { printHtmlDocument } from "./documentPrint";
 import { isNativePrintPlatform } from "./nativePrintPlatform";
 import { sharePlainReceiptForPrint } from "./nativeReceiptPrint";
+import { printReceiptFallback } from "./receiptNativeFallback";
 import { dateKeyKampala } from "./datesUg";
 import { sanitizePdfStem } from "./pdfLayout";
 
@@ -132,6 +133,43 @@ function debtReceiptHtml(ctx: DebtPaymentReceiptContext): string {
   </article>`;
 }
 
+/** Plain-text mirrors of the HTML receipts above — used for the browser text print and the native share PDF. */
+function returnReceiptPlain(ctx: ReturnReceiptContext): string {
+  const r = ctx.returnRecord;
+  const when = new Date(r.createdAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" });
+  const lines = [
+    ctx.shopName,
+    "RETURN RECEIPT",
+    "",
+    `Receipt No: ${ctx.receiptNumber}`,
+    when,
+    `Cashier: ${ctx.cashier}`,
+  ];
+  if (ctx.customerName) lines.push(`Customer: ${ctx.customerName}`);
+  lines.push("", r.productName, `Qty: ${r.quantity}`, `Refund: UGX ${r.refundAmountUgx.toLocaleString()}`, `Reason: ${r.reason}`);
+  lines.push("", "Powered by Waka POS");
+  return lines.join("\n");
+}
+
+function debtReceiptPlain(ctx: DebtPaymentReceiptContext): string {
+  const when = new Date(ctx.payment.createdAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" });
+  const headerLines = ctx.headerLines?.length ? ctx.headerLines : [ctx.shopName];
+  const footerLines = [...(ctx.footerLines ?? []), ctx.footerPowered].filter(Boolean) as string[];
+  return [
+    ...headerLines,
+    "DEBT PAYMENT RECEIPT",
+    "",
+    `Receipt No: ${ctx.receiptNumber}`,
+    when,
+    `Cashier: ${ctx.cashier}`,
+    `Customer: ${ctx.customer.name?.trim() || "Not Recorded"}`,
+    "",
+    `Amount: UGX ${ctx.payment.amountUgx.toLocaleString()}`,
+    `Balance after: UGX ${ctx.balanceAfterUgx.toLocaleString()}`,
+    ...(footerLines.length ? ["", ...footerLines] : []),
+  ].join("\n");
+}
+
 export function receiptPdfFilename(kind: "sale" | "return" | "debt", id: string): string {
   const day = dateKeyKampala(new Date());
   return sanitizePdfStem(`waka-receipt-${kind}-${id.slice(0, 8)}-${day}`) + ".pdf";
@@ -211,14 +249,17 @@ export async function printReturnReceipt(ctx: ReturnReceiptContext): Promise<Sal
   }
 
   const paper = ctx.paper ?? "80mm";
-  if (!isNativePrintPlatform()) {
-    if (printHtmlDocument(returnReceiptHtml(ctx), paper, "Return receipt")) {
-      return { ok: true, mode: "html" };
-    }
-    return { ok: false, mode: "none" };
-  }
-  const { shareReturnReceiptPdf } = await import("./receiptPdfDocuments");
-  return { ok: await shareReturnReceiptPdf(ctx), mode: "share" };
+  return printReceiptFallback({
+    html: returnReceiptHtml(ctx),
+    plainText: returnReceiptPlain(ctx),
+    paper,
+    title: "Return receipt",
+    filenameStem: `return-${ctx.returnRecord.id?.slice(0, 8) ?? "receipt"}`,
+    sharePdf: async () => {
+      const { shareReturnReceiptPdf } = await import("./receiptPdfDocuments");
+      return shareReturnReceiptPdf(ctx);
+    },
+  });
 }
 
 export async function downloadReturnReceiptPdf(ctx: ReturnReceiptContext): Promise<boolean> {
@@ -244,14 +285,17 @@ export async function printDebtPaymentReceipt(ctx: DebtPaymentReceiptContext): P
   }
 
   const paper = ctx.paper ?? "80mm";
-  if (!isNativePrintPlatform()) {
-    if (printHtmlDocument(debtReceiptHtml(ctx), paper, "Debt payment receipt")) {
-      return { ok: true, mode: "html" };
-    }
-    return { ok: false, mode: "none" };
-  }
-  const { shareDebtPaymentReceiptPdf } = await import("./receiptPdfDocuments");
-  return { ok: await shareDebtPaymentReceiptPdf(ctx), mode: "share" };
+  return printReceiptFallback({
+    html: debtReceiptHtml(ctx),
+    plainText: debtReceiptPlain(ctx),
+    paper,
+    title: "Debt payment receipt",
+    filenameStem: `debt-${ctx.payment.id?.slice(0, 8) ?? "receipt"}`,
+    sharePdf: async () => {
+      const { shareDebtPaymentReceiptPdf } = await import("./receiptPdfDocuments");
+      return shareDebtPaymentReceiptPdf(ctx);
+    },
+  });
 }
 
 export async function downloadDebtPaymentReceiptPdf(ctx: DebtPaymentReceiptContext): Promise<boolean> {

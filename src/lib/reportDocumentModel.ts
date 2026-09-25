@@ -10,7 +10,8 @@ export type ReportDocumentKind =
   | "monthly"
   | "customer_debt"
   | "customer_statement"
-  | "cash_expenses";
+  | "cash_expenses"
+  | "pharmacy_compliance";
 
 export type ReportDocumentStatus = "closed_day" | "open_day" | "operational";
 

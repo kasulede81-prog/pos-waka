@@ -24,6 +24,7 @@ import { PHARMACY_PRESCRIPTIONS_ROUTE } from "../lib/pharmacyNav";
 import { formatUgx } from "../lib/formatUgx";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PharmacyAllergyWarningBanner } from "../components/pharmacy/patient/PharmacyAllergyWarningBanner";
+import { useToast } from "../context/ToastProvider";
 
 const DOC_KINDS: PharmacyPatientDocumentKind[] = [
   "prescription_scan",
@@ -46,6 +47,14 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
   const addDocument = usePosStore((s) => s.addPharmacyPatientDocumentPlaceholder);
   const addDoctor = usePosStore((s) => s.addPharmacyDoctor);
   const createRefill = usePosStore((s) => s.createPharmacyRefill);
+
+  // A failed print must be visible — these buttons used to no-op silently on Android.
+  const toast = useToast();
+  const printDoc = (run: () => Promise<boolean>) => {
+    void run().then((ok) => {
+      if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+    });
+  };
 
   const [noteText, setNoteText] = useState("");
   const [docLabel, setDocLabel] = useState("");
@@ -232,10 +241,10 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
             </dl>
           ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
-            <PrintBtn label={t(lang, "pharmacyPatientPrintSummary")} onClick={() => printPatientSummary(lang, patient, preferences)} />
-            <PrintBtn label={t(lang, "pharmacyPatientPrintHistory")} onClick={() => printPatientMedicationHistory(lang, patient, timeline, preferences)} />
-            <PrintBtn label={t(lang, "pharmacyPatientPrintRefillSchedule")} onClick={() => printRefillSchedule(lang, patient, profile, preferences)} />
-            <PrintBtn label={t(lang, "pharmacyPatientPrintCounseling")} onClick={() => printCounselingSummary(lang, patient, profile, preferences)} />
+            <PrintBtn label={t(lang, "pharmacyPatientPrintSummary")} onClick={() => printDoc(() => printPatientSummary(lang, patient, preferences))} />
+            <PrintBtn label={t(lang, "pharmacyPatientPrintHistory")} onClick={() => printDoc(() => printPatientMedicationHistory(lang, patient, timeline, preferences))} />
+            <PrintBtn label={t(lang, "pharmacyPatientPrintRefillSchedule")} onClick={() => printDoc(() => printRefillSchedule(lang, patient, profile, preferences))} />
+            <PrintBtn label={t(lang, "pharmacyPatientPrintCounseling")} onClick={() => printDoc(() => printCounselingSummary(lang, patient, profile, preferences))} />
           </div>
         </section>
       </div>

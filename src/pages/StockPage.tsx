@@ -132,7 +132,8 @@ import { resolveStockPageHidScan } from "../lib/stockPageHidScan";
 import { resolvePharmacyReceiveDeepLink, stripPharmacyReceiveQuery } from "../lib/pharmacyReceiveDeepLink";
 import { resolveInventoryWorkspaceView } from "../lib/inventoryWorkspaceTiles";
 import { getProductBatches } from "../lib/pharmacyBatches";
-import { printHtmlDocument } from "../lib/documentPrint";
+import { printTextListDocument } from "../lib/nativePrintFallback";
+import { sanitizePdfStem } from "../lib/pdfLayout";
 import { usePosViewportWidth } from "../hooks/usePosViewportWidth";
 import { isWakaMobile } from "../lib/responsiveBreakpoints";
 
@@ -882,6 +883,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         break;
       case "print": {
         const batches = getProductBatches(p);
+        const listLines = batches.map((b) => `${b.batchNumber} · ${b.expiryDate ?? "—"} · ${b.quantityRemaining}`);
         const lines =
           batches.length === 0
             ? `<p>—</p>`
@@ -891,11 +893,16 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                     `<li>${b.batchNumber} · ${b.expiryDate ?? "—"} · ${b.quantityRemaining}</li>`,
                 )
                 .join("")}</ul>`;
-        printHtmlDocument(
-          `<article><h1>${formatMedicineFullLabel(p)}</h1>${lines}</article>`,
-          "80mm",
-          t(lang, "pharmacyQuickPrintBatch"),
-        );
+        void printTextListDocument({
+          pdfFilename: `${sanitizePdfStem(`waka-batches-${p.id.slice(0, 8)}`)}.pdf`,
+          title: formatMedicineFullLabel(p),
+          subtitle: t(lang, "pharmacyQuickPrintBatch"),
+          lines: listLines,
+          htmlBody: `<article><h1>${formatMedicineFullLabel(p)}</h1>${lines}</article>`,
+          paper: "80mm",
+        }).then((ok) => {
+          if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+        });
         break;
       }
       default:

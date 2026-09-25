@@ -17,10 +17,13 @@ import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSave
 import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
 import { ReceiptLivePreview } from "../components/settings/ReceiptLivePreview";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
+import { printSampleReceipt } from "../lib/receiptSampleDocument";
+import { useToast } from "../context/ToastProvider";
 
 function ReceiptSettingsBody({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const savePreferences = usePreferencesPatch();
+  const toast = useToast();
   const { snapshot, authMode } = useSubscription();
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
 
@@ -68,6 +71,20 @@ function ReceiptSettingsBody({ lang }: { lang: Language }) {
   return (
     <>
       <ReceiptLivePreview lang={lang} preferences={preferences} planTier={planTier} />
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            void printSampleReceipt(lang, preferences, planTier).then((r) => {
+              if (!r.ok) toast.error(t(lang, "receiptPrintBlocked"));
+            })
+          }
+          className="min-h-[48px] rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+        >
+          {t(lang, "receiptPrint")}
+        </button>
+      </div>
 
       <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <h2 className="text-sm font-black text-foreground">{t(lang, "settingsReceiptHeaderSection")}</h2>
