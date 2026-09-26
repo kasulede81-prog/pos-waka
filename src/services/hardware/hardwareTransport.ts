@@ -69,7 +69,14 @@ export const WEB_BLUETOOTH_UNAVAILABLE_ERROR = "Bluetooth printing is not availa
 
 export const NETWORK_NEEDS_BRIDGE_ERROR = "Network printing is not available in this environment.";
 
-export const USB_NOT_SUPPORTED_ERROR = "USB thermal printing is not supported in this browser yet.";
+/**
+ * USB thermal printing has no browser transport in WAKA: the WebUSB device API is
+ * present in Chrome but nothing implements the ESC/POS job over it, so the transport
+ * is deliberately never "ready" rather than failing at print time. The message tells
+ * the operator what to do instead of implying a future fix.
+ */
+export const USB_NOT_SUPPORTED_ERROR =
+  "USB printing is not supported. Use a Bluetooth or network (LAN) printer instead, or print from the WAKA Android app.";
 
 export function detectHardwareEnvironment(): HardwareEnvironment {
   if (typeof window === "undefined") return "unknown";

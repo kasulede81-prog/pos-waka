@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { detectPrinterCapabilities, sendEscPosBytes, testPrint } from "./printerAdapter";
+import { USB_NOT_SUPPORTED_ERROR } from "./hardwareTransport";
 import type { PrinterProfile } from "../../types";
 
 describe("printerAdapter", () => {
@@ -48,6 +49,7 @@ describe("printerAdapter", () => {
     };
     const sent = await sendEscPosBytes(usb, new Uint8Array([1]));
     expect(sent.ok).toBe(false);
-    expect(sent.error).toBe("USB thermal printing is not supported in this browser yet.");
+    // Same actionable reason the UI shows — asserts the shared constant, not a copy.
+    expect(sent.error).toBe(USB_NOT_SUPPORTED_ERROR);
   });
 });

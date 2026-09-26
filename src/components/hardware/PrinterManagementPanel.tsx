@@ -5,12 +5,13 @@ import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { resolveHospitalityHardware } from "../../lib/hospitalityHardware";
 import { hospitalityUiActive } from "../../lib/hospitalityUx";
-import { stationLabel } from "../../lib/printerRegistry";
+import { resolveDefaultReceiptPrinter, stationLabel } from "../../lib/printerRegistry";
 import { RetailReceiptPrinterPanel } from "./RetailReceiptPrinterPanel";
 import { detectPrinterCapabilities, testNetworkPrinterConnection } from "../../services/hardware/printerAdapter";
 import {
   addPrinterConnectionTypes,
   defaultPrinterConnectionType,
+  USB_NOT_SUPPORTED_ERROR,
 } from "../../services/hardware/hardwareTransport";
 import { disconnectNativeBluetoothPrinter } from "../../lib/nativeBluetoothPrinter";
 import type { NativeBluetoothDeviceRow, NativeClassicDiagnostic } from "../../lib/nativeBluetoothPrinter";
@@ -62,6 +63,7 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const [bindForId, setBindForId] = useState<string | null>(null);
   const [classicDiagnostic, setClassicDiagnostic] = useState<NativeClassicDiagnostic | null>(null);
   const hospitality = hospitalityUiActive(preferences.businessType, preferences.hospitalityModeEnabled);
+  const drawerPrinter = resolveDefaultReceiptPrinter(preferences);
 
   useEffect(() => {
     void detectPrinterCapabilities().then((caps) => {
@@ -77,7 +79,9 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
   const addPrinter = () => {
     if (!name.trim()) return;
     if (connectionType === "usb" || connectionType === "builtin") {
-      setStatus("USB thermal printing is not supported in this browser yet.");
+      // Reachable only when editing a printer stored by an older build / another device —
+      // the Add-printer dropdown never offers USB.
+      setStatus(USB_NOT_SUPPORTED_ERROR);
       return;
     }
     if (connectionType === "bluetooth" && !pendingBt) {
@@ -295,6 +299,12 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
                           ? " · no device selected"
                           : ""}
                   </p>
+                  {/* A printer stored as USB/builtin (older build, or synced from another
+                      device) can never print here — say so on the row rather than letting
+                      it look configured and failing at the till. */}
+                  {p.connectionType === "usb" || p.connectionType === "builtin" ? (
+                    <p className="mt-1 text-xs font-bold text-amber-800">{USB_NOT_SUPPORTED_ERROR}</p>
+                  ) : null}
                   {p.lastError ? <p className="mt-1 text-xs font-bold text-red-700">{p.lastError}</p> : null}
                 </div>
                 <div className="flex gap-2">
@@ -501,13 +511,19 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
           >
             {t(lang, "hardwareRetryQueue")} ({hw.printQueue.length})
           </button>
+          {/* The drawer pulses through the receipt printer's ESC/POS, so say so up front
+              instead of failing only when the operator tries it. */}
           <button
             type="button"
-            className="rounded-2xl border-2 border-border px-4 py-2 text-sm font-black"
+            className="rounded-2xl border-2 border-border px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!drawerPrinter}
             onClick={() => void openCashDrawerManual().then((r) => setStatus(r.ok ? t(lang, "hardwareDrawerOpened") : (r.error ?? "")))}
           >
             {t(lang, "hardwareOpenDrawer")}
           </button>
+          {!drawerPrinter ? (
+            <p className="w-full text-xs font-bold text-amber-800">{t(lang, "hardwareDrawerNoPrinter")}</p>
+          ) : null}
           <a
             href="/customer-display"
             target="_blank"

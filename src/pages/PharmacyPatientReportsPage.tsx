@@ -7,6 +7,12 @@ import { isPharmacyMode } from "../lib/pharmacy";
 import { computePharmacyPatientReports } from "../lib/pharmacyPatientReports";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { printTextListDocument } from "../lib/nativePrintFallback";
+import { buildListDocumentHtml, buildListDocumentPdfBlob } from "../lib/listDocumentPdf";
+import { downloadPdfBlob } from "../lib/documentPrint";
+import { sanitizePdfStem } from "../lib/pdfLayout";
+import { dateKeyKampala } from "../lib/datesUg";
+import { useToast } from "../context/ToastProvider";
 
 export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
@@ -14,6 +20,7 @@ export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
   const prescriptions = usePosStore((s) => s.pharmacyPrescriptions);
   const doctors = usePosStore((s) => s.pharmacyDoctors);
   const sales = useDeferredReportingSales(false);
+  const toast = useToast();
 
   const pharmacy = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const report = useMemo(
@@ -23,6 +30,58 @@ export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
 
   if (!pharmacy) return null;
 
+  /**
+   * Report document built from the rows already displayed. Read-only: it reads the
+   * computed report and never touches patient records or pharmacy transactions.
+   */
+  const buildPatientReportDoc = () => ({
+    title: t(lang, "pharmacyPatientReportsTitle"),
+    subtitle: preferences.shopDisplayName?.trim() || undefined,
+    lines: [
+      t(lang, "pharmacyReportMostDispensed"),
+      ...report.mostDispensedPatients.map((r) => `${r.name}  —  ${r.dispenseCount}`),
+      "",
+      t(lang, "pharmacyReportRefillCompliance"),
+      ...report.refillCompliance.map((r) => `${r.name}  —  ${r.due} due · ${r.missed} missed`),
+      "",
+      t(lang, "pharmacyReportChronicPatients"),
+      ...report.chronicMedicinePatients.map((r) => `${r.name}  —  ${r.activeChronic}`),
+      "",
+      t(lang, "pharmacyReportDoctorReferrals"),
+      ...report.doctorReferrals.map((r) => `${r.doctorName}  —  ${r.rxCount}`),
+      "",
+      t(lang, "pharmacyReportPatientGrowth"),
+      ...report.patientGrowth.map((r) => `${r.month}  —  ${r.count}`),
+      "",
+      t(lang, "pharmacyReportAgeDistribution"),
+      ...report.ageDistribution.map((r) => `${r.bucket}  —  ${r.count}`),
+    ],
+  });
+
+  const printPatientReport = () => {
+    const doc = buildPatientReportDoc();
+    void printTextListDocument({
+      pdfFilename: `${sanitizePdfStem(`waka-pharmacy-patients-${dateKeyKampala(new Date())}`)}.pdf`,
+      title: doc.title,
+      subtitle: doc.subtitle,
+      lines: doc.lines,
+      htmlBody: buildListDocumentHtml(doc),
+      paper: "a4",
+    }).then((ok) => {
+      if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+    });
+  };
+
+  const downloadPatientReportPdf = () => {
+    const doc = buildPatientReportDoc();
+    void downloadPdfBlob(
+      `${sanitizePdfStem(`waka-pharmacy-patients-${dateKeyKampala(new Date())}`)}.pdf`,
+      buildListDocumentPdfBlob(doc),
+    ).then((ok) => {
+      if (!ok) toast.error(t(lang, "receiptPdfFailed"));
+    });
+  };
+
   return (
     <EnterprisePageContainer>
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -30,9 +89,25 @@ export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
           <h1 className="text-3xl font-black text-foreground">{t(lang, "pharmacyPatientReportsTitle")}</h1>
           <p className="mt-1 text-base font-medium text-muted-foreground">{t(lang, "pharmacyPatientReportsSub")}</p>
         </div>
-        <Link to="/pharmacy/patients" className="min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black">
-          {t(lang, "pharmacyTerm_patients")}
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={printPatientReport}
+            className="min-h-[44px] rounded-2xl bg-teal-600 px-4 text-sm font-black text-white touch-manipulation"
+          >
+            {t(lang, "receiptPrint")}
+          </button>
+          <button
+            type="button"
+            onClick={downloadPatientReportPdf}
+            className="min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+          >
+            {t(lang, "receiptDownload")}
+          </button>
+          <Link to="/pharmacy/patients" className="min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black">
+            {t(lang, "pharmacyTerm_patients")}
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

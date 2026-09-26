@@ -1,8 +1,7 @@
-import { jsPDF } from "jspdf";
 import type { ReceiptPaperSize } from "../types";
 import { printHtmlDocumentWithDesktop, sharePdfBlob } from "./documentPrint";
 import { isNativePrintPlatform } from "./nativeReceiptPrint";
-import { createPdfLayout, pdfGap, pdfLine } from "./pdfLayout";
+import { buildListDocumentPdfBlob } from "./listDocumentPdf";
 
 export type NativePrintFallbackOptions = {
   pdfFilename: string;
@@ -52,20 +51,12 @@ export async function printTextListDocument(options: {
 }): Promise<boolean> {
   return printDocumentNativeFallback({
     pdfFilename: options.pdfFilename,
-    buildPdfBlob: () => {
-      const doc = new jsPDF({ unit: "pt", format: "a4" });
-      const layout = createPdfLayout(doc);
-      pdfLine(layout, doc, options.title, { size: 14, bold: true });
-      if (options.subtitle) pdfLine(layout, doc, options.subtitle, { size: 11, bold: true });
-      pdfLine(layout, doc, new Date().toLocaleString("en-UG", { timeZone: "Africa/Kampala" }), { size: 9 });
-      pdfGap(layout, 8);
-      if (!options.lines.length) {
-        pdfLine(layout, doc, "—", { size: 9 });
-      } else {
-        for (const line of options.lines) pdfLine(layout, doc, line, { size: 9 });
-      }
-      return doc.output("blob");
-    },
+    buildPdfBlob: () =>
+      buildListDocumentPdfBlob({
+        title: options.title,
+        subtitle: options.subtitle,
+        lines: options.lines,
+      }),
     htmlBody: options.htmlBody,
     paper: options.paper ?? "a4",
     title: options.title,

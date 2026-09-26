@@ -118,6 +118,7 @@
     "src/lib/escPosBuilder.test.ts",
     "src/lib/nativePrintFallback.test.ts",
     "src/lib/printNativeSafety.test.ts",
+    "src/lib/printingPhase2.test.ts",
     "src/lib/restaurantReceiptPrint.test.ts",
     "src/services/hardware/printerAdapter.test.ts",
     "src/services/hardware/printerAdapter.nativeBluetooth.test.ts",

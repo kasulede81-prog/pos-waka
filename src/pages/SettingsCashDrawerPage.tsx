@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import type { CashDrawerFormulaVersion, Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -10,6 +10,7 @@ import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
+import { resolveDefaultReceiptPrinter } from "../lib/printerRegistry";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { EnterpriseSaveIndicator } from "../components/enterprise/EnterpriseSaveIndicator";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
@@ -83,6 +84,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
   };
 
   const saveStatus = saving ? "saving" : saved ? "saved" : dirty ? "dirty" : "idle";
+  const hasReceiptPrinter = resolveDefaultReceiptPrinter(preferences) != null;
 
   return (
     <BackOfficePageLayout
@@ -99,6 +101,18 @@ export function SettingsCashDrawerPage({ lang }: Props) {
       <div className="flex justify-end">
         <EnterpriseSaveIndicator lang={lang} mode="explicit" status={saveStatus} />
       </div>
+
+      {/* The drawer is pulsed through the receipt printer, so a missing printer blocks the
+          physical drawer even though these settings still save. Say so before the operator
+          discovers it at the till. */}
+      {!hasReceiptPrinter ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-black text-amber-950">{t(lang, "hardwareDrawerNoPrinter")}</p>
+          <Link to="/office/hardware" className="mt-1 inline-block text-sm font-bold text-amber-900 underline">
+            {t(lang, "hardwareSettingsTitle")}
+          </Link>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <p className="text-sm font-medium text-muted-foreground">{t(lang, "drawerToleranceScopeHint")}</p>

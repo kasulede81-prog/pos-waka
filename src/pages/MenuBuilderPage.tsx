@@ -12,6 +12,12 @@ import { aggregateDishSales, aggregateModifierPopularity, lowMarginMenuItems } f
 import { computeMenuItemMargin } from "../lib/recipeEngine";
 import { ProductMenuConfigFields } from "../components/hospitality/ProductMenuConfigFields";
 import { formatUgx } from "../lib/formatUgx";
+import { printTextListDocument } from "../lib/nativePrintFallback";
+import { buildListDocumentHtml } from "../lib/listDocumentPdf";
+import { buildMenuDocument } from "../lib/menuDocument";
+import { sanitizePdfStem } from "../lib/pdfLayout";
+import { dateKeyKampala } from "../lib/datesUg";
+import { useToast } from "../context/ToastProvider";
 
 export function MenuBuilderPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -22,6 +28,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
   const setPreferences = usePosStore((s) => s.setPreferences);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
+  const toast = useToast();
 
   // All hooks run before the guard returns below (Rules of Hooks): the permission /
   // business-type guards can flip between renders when an admin switches the shop mode.
@@ -52,9 +59,47 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
     return <Navigate to="/settings" replace />;
   }
 
+  /**
+   * Printable menu of the merchants' dishes as currently displayed (respects the section
+   * filter). Read-only presentation of existing product data — it creates no menu or
+   * inventory transaction.
+   */
+  const printMenu = () => {
+    const sections = preferences.hospitalityMenuSections ?? DEFAULT_MENU_SECTIONS;
+    const doc = buildMenuDocument({
+      lang,
+      preferences,
+      menuProducts,
+      activeSectionLabel: sections.find((s) => s.id === sectionFilter)?.label ?? t(lang, "menuAllSections"),
+      topDishes,
+      topModifiers,
+      lowMargin,
+    });
+    void printTextListDocument({
+      pdfFilename: `${sanitizePdfStem(`waka-menu-${dateKeyKampala(new Date())}`)}.pdf`,
+      title: doc.title,
+      subtitle: doc.subtitle,
+      lines: doc.lines,
+      htmlBody: buildListDocumentHtml(doc),
+      paper: "a4",
+    }).then((ok) => {
+      if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+    });
+  };
+
   return (
     <div className="space-y-5 pb-8">
       <SettingsPageHeader lang={lang} title={t(lang, "menuBuilderTitle")} subtitle={t(lang, "menuBuilderSub")} />
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={printMenu}
+          className="min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+        >
+          {t(lang, "receiptPrint")}
+        </button>
+      </div>
 
       <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <p className="text-sm font-black text-foreground">{t(lang, "menuSectionsTitle")}</p>

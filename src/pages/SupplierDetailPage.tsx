@@ -26,7 +26,7 @@ import {
 } from "../lib/purchaseReporting";
 import { supplierPaymentCreatedByLabel } from "../lib/purchaseCorrections";
 import { downloadSupplierStatementCsv, downloadSupplierStatementPdf, printSupplierStatementReport } from "../lib/purchaseExport";
-import { receiptPrintActionLabel } from "../lib/printActionLabels";
+import { statementPrintActionLabel } from "../lib/printActionLabels";
 import { dateKeyKampala } from "../lib/datesUg";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
 import { dateMatchesFilter, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
@@ -358,7 +358,7 @@ export function SupplierDetailPage({
         actions={
           <div className="flex flex-wrap gap-2">
             <WakaButton type="button" disabled={exportBusy || filteredStatement.length === 0} onClick={() => void runPrint()}>
-              {receiptPrintActionLabel(lang)}
+              {statementPrintActionLabel(lang)}
             </WakaButton>
             <WakaButton type="button" variant="secondary" disabled={exportBusy || filteredStatement.length === 0} onClick={() => void runExport("csv")}>
               {t(lang, "purchasesExportCsv")}

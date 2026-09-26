@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrinterProfile } from "../../types";
+import { USB_NOT_SUPPORTED_ERROR } from "./hardwareTransport";
 
 const isNativeBluetoothPrinterAvailable = vi.fn();
 const isNativeBluetoothPrinterPlatform = vi.fn();
@@ -199,6 +200,7 @@ describe("printerAdapter native Bluetooth", () => {
     const result = await sendEscPosBytes(usb, new Uint8Array([1]));
     expect(printEscPosNative).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
-    expect(result.error).toBe("USB thermal printing is not supported in this browser yet.");
+    // Same actionable reason the UI shows — asserts the shared constant, not a copy.
+    expect(result.error).toBe(USB_NOT_SUPPORTED_ERROR);
   });
 });

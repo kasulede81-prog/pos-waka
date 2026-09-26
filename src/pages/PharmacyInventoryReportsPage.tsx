@@ -23,6 +23,12 @@ import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
 import { formatUgx } from "../lib/formatUgx";
 import { enterpriseSpace } from "../lib/enterpriseSpacing";
 import { themeUi } from "../lib/themeTokens";
+import { printTextListDocument } from "../lib/nativePrintFallback";
+import { buildListDocumentHtml, buildListDocumentPdfBlob } from "../lib/listDocumentPdf";
+import { downloadPdfBlob } from "../lib/documentPrint";
+import { sanitizePdfStem } from "../lib/pdfLayout";
+import { dateKeyKampala } from "../lib/datesUg";
+import { useToast } from "../context/ToastProvider";
 import clsx from "clsx";
 
 type MedicineRow = { productId: string; name: string; valueUgx?: number; stockOnHand?: number };
@@ -40,6 +46,7 @@ export function PharmacyInventoryReportsPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const products = usePosStore((s) => s.products);
   const desktopTable = useWakaLayoutBand() === "desktop";
+  const toast = useToast();
 
   const { canProfit } = resolveProfitVisibility({
     role: authOperatorRole(actor),
@@ -100,6 +107,58 @@ export function PharmacyInventoryReportsPage({ lang }: { lang: Language }) {
 
   if (!pharmacy) return null;
 
+  /**
+   * Report document built from the figures already on screen. Uses the permission-aware
+   * `*Display` values, so printing never exposes a cost/margin the actor cannot see.
+   * Read-only: no pharmacy inventory calculation is recomputed or mutated.
+   */
+  const buildInventoryReportDoc = () => ({
+    title: t(lang, "pharmacyInventoryReports"),
+    subtitle: preferences.shopDisplayName?.trim() || undefined,
+    lines: [
+      `${t(lang, "pharmacyReportInventoryValue")}: ${inventoryValue.value}`,
+      `${t(lang, "pharmacyReportExpiryLoss")}: ${expiryLoss.value}`,
+      `${t(lang, "pharmacyReportNearExpiryValue")}: ${nearExpiryValue.value}`,
+      `${t(lang, "pharmacyReportBatchCount")}: ${report.batchCount}`,
+      `${t(lang, "pharmacyReportMedicineCount")}: ${report.medicineCount}`,
+      `${t(lang, "pharmacyReportControlled")}: ${report.controlledCount}`,
+      "",
+      t(lang, "pharmacyDashTopMedicines"),
+      ...report.topMedicines.map((m) =>
+        canProfit && m.valueUgx != null
+          ? `${m.name}  —  ${formatUgx(m.valueUgx)}`
+          : `${m.name}${canProfit ? "" : `  —  ${t(lang, "baProfitLockedTitle")}`}`,
+      ),
+      "",
+      t(lang, "pharmacyReportSlowMovers"),
+      ...report.slowMovers.map((m) => `${m.name}  —  ${m.stockOnHand ?? 0}`),
+    ],
+  });
+
+  const printInventoryReport = () => {
+    const doc = buildInventoryReportDoc();
+    void printTextListDocument({
+      pdfFilename: `${sanitizePdfStem(`waka-pharmacy-inventory-${dateKeyKampala(new Date())}`)}.pdf`,
+      title: doc.title,
+      subtitle: doc.subtitle,
+      lines: doc.lines,
+      htmlBody: buildListDocumentHtml(doc),
+      paper: "a4",
+    }).then((ok) => {
+      if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+    });
+  };
+
+  const downloadInventoryReportPdf = () => {
+    const doc = buildInventoryReportDoc();
+    void downloadPdfBlob(
+      `${sanitizePdfStem(`waka-pharmacy-inventory-${dateKeyKampala(new Date())}`)}.pdf`,
+      buildListDocumentPdfBlob(doc),
+    ).then((ok) => {
+      if (!ok) toast.error(t(lang, "receiptPdfFailed"));
+    });
+  };
+
   const tiles = [
     { labelKey: "pharmacyReportInventoryValue", value: inventoryValue.value, hint: inventoryValue.hint, icon: Package, tone: "highlight" as const },
     { labelKey: "pharmacyReportExpiryLoss", value: expiryLoss.value, hint: expiryLoss.hint, icon: AlertTriangle, tone: "warning" as const },
@@ -119,12 +178,28 @@ export function PharmacyInventoryReportsPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "ipPageTitle")}
         compact
       >
-        <Link
-          to="/pharmacy/expiry"
-          className={clsx(themeUi.btnPrimary, "inline-flex min-h-[44px] items-center px-4 text-sm")}
-        >
-          {t(lang, "pharmacyExpiryCenterTitle")}
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={printInventoryReport}
+            className={clsx(themeUi.btnPrimary, "inline-flex min-h-[44px] items-center px-4 text-sm")}
+          >
+            {t(lang, "receiptPrint")}
+          </button>
+          <button
+            type="button"
+            onClick={downloadInventoryReportPdf}
+            className="inline-flex min-h-[44px] items-center rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+          >
+            {t(lang, "receiptDownload")}
+          </button>
+          <Link
+            to="/pharmacy/expiry"
+            className="inline-flex min-h-[44px] items-center rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+          >
+            {t(lang, "pharmacyExpiryCenterTitle")}
+          </Link>
+        </div>
       </EnterprisePageHeader>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

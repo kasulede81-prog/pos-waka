@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, History, Plus } from "lucide-react";
+import { CheckCircle2, Download, History, Plus, Printer } from "lucide-react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
 import type { Language, InventoryCountSession } from "../../../types";
@@ -7,8 +7,10 @@ import type { InventoryCountVarianceReport } from "../../../lib/inventoryCount";
 import {
   downloadInventoryCountCsv,
   downloadInventoryCountPdf,
+  printInventoryCountVarianceReport,
 } from "../../../lib/inventoryCountExport";
 import { inventoryMovementsHref } from "../../../lib/inventoryWorkspaceTiles";
+import { useToast } from "../../../context/ToastProvider";
 import { WIZARD_BTN_FOOTER_BASE } from "./countTokens";
 
 type Props = {
@@ -21,6 +23,7 @@ type Props = {
 
 export function CountCompletionScreen({ lang, session, report, shopName, onStartNew }: Props) {
   const completedAt = session.appliedAt ? new Date(session.appliedAt).toLocaleString() : "—";
+  const toast = useToast();
 
   return (
     <section className="rounded-3xl border border-success/30 bg-success-muted/80 p-6 text-center shadow-sm">
@@ -95,6 +98,18 @@ export function CountCompletionScreen({ lang, session, report, shopName, onStart
         >
           <Download className="h-4 w-4" aria-hidden />
           {t(lang, "inventoryCountExportPdf")}
+        </button>
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-xl border border-success/30 bg-card px-3 py-2 text-xs font-black text-success"
+          onClick={() =>
+            void printInventoryCountVarianceReport(lang, session, shopName).then((ok) => {
+              if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+            })
+          }
+        >
+          <Printer className="h-4 w-4" aria-hidden />
+          {t(lang, "receiptPrint")}
         </button>
       </div>
     </section>

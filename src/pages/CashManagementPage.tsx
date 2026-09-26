@@ -36,6 +36,11 @@ import { listOpenShifts, listRecoverableOpenShifts } from "../lib/shiftRecoveryO
 import { shiftExpectedCash } from "../lib/saleAdjustments";
 import { ShiftCashAuditTimeline } from "../components/cash/ShiftCashAuditTimeline";
 import { statusTokens } from "../lib/statusTokens";
+import { printTextListDocument } from "../lib/nativePrintFallback";
+import { buildListDocumentHtml } from "../lib/listDocumentPdf";
+import { buildCashVarianceDocument } from "../lib/cashVarianceDocument";
+import { sanitizePdfStem } from "../lib/pdfLayout";
+import { useToast } from "../context/ToastProvider";
 import clsx from "clsx";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { getCachedComputation } from "../lib/computationResultCache";
@@ -65,6 +70,7 @@ function CashManagementHub({ lang }: Props) {
 
   const todayKey = dateKeyKampala(new Date());
   const drawer = useDrawerCashForToday();
+  const toast = useToast();
   const [showVarianceHistory, setShowVarianceHistory] = useState(false);
 
   const snapshot = useMemo(() => {
@@ -92,6 +98,28 @@ function CashManagementHub({ lang }: Props) {
     drawer.expectedDrawerCashUgx,
     todayKey,
   ]);
+
+  /**
+   * Print the drawer variance history exactly as displayed. Read-only: it renders the
+   * snapshot rows, so it can never open, close, or adjust the drawer.
+   */
+  const printVarianceHistory = () => {
+    const doc = buildCashVarianceDocument({
+      lang,
+      shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+      rows: snapshot.varianceHistory,
+    });
+    void printTextListDocument({
+      pdfFilename: `${sanitizePdfStem(`waka-cash-variance-${todayKey}`)}.pdf`,
+      title: doc.title,
+      subtitle: doc.subtitle,
+      lines: doc.lines,
+      htmlBody: buildListDocumentHtml(doc),
+      paper: "a4",
+    }).then((ok) => {
+      if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+    });
+  };
 
   const canOpen = actorHasPermission(actor, "day.open_drawer");
   const canClose = actorHasPermission(actor, "day.close");
@@ -332,9 +360,14 @@ function CashManagementHub({ lang }: Props) {
         <EnterpriseCard
           title={t(lang, "cashManagementVarianceHistory")}
           actions={
-            <WakaButton type="button" variant="ghost" onClick={() => setShowVarianceHistory((v) => !v)}>
-              {showVarianceHistory ? "−" : "+"}
-            </WakaButton>
+            <div className="flex items-center gap-2">
+              <WakaButton type="button" variant="secondary" onClick={printVarianceHistory}>
+                {t(lang, "receiptPrint")}
+              </WakaButton>
+              <WakaButton type="button" variant="ghost" onClick={() => setShowVarianceHistory((v) => !v)}>
+                {showVarianceHistory ? "−" : "+"}
+              </WakaButton>
+            </div>
           }
         >
           {showVarianceHistory ? (

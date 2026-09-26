@@ -8,6 +8,7 @@ import { printElectronWindow } from "../lib/documentPrint";
 import { canNativePrint } from "../platform";
 import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
 import { detectPrinterCapabilities } from "../services/hardware/printerAdapter";
+import { USB_NOT_SUPPORTED_ERROR } from "../services/hardware/hardwareTransport";
 import { PrinterManagementPanel } from "../components/hardware/PrinterManagementPanel";
 import { PrinterConnectionMatrix } from "../components/hardware/PrinterConnectionMatrix";
 import { ClassicSppDiagnosticPanel } from "../components/hardware/ClassicSppDiagnosticPanel";
@@ -49,7 +50,14 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
 
   const testPrint = () => {
     const configured = resolveConfiguredHardwareTestPrinter(preferences);
-    if (configured && (configured.connectionType === "bluetooth" || configured.connectionType === "network" || configured.connectionType === "usb")) {
+    // A USB/builtin printer has no browser transport, so never show "connecting…" —
+    // that would imply a test is running that can only fail.
+    if (configured && (configured.connectionType === "usb" || configured.connectionType === "builtin")) {
+      setClassicDiagnostic(null);
+      setPrintingStatus(`✕ ${USB_NOT_SUPPORTED_ERROR}`);
+      return;
+    }
+    if (configured && (configured.connectionType === "bluetooth" || configured.connectionType === "network")) {
       setPrintingStatus(t(lang, "hardwareTestConnecting"));
       setClassicDiagnostic(null);
       void usePosStore

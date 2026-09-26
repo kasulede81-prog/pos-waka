@@ -26,6 +26,8 @@ import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../lib/auditReceiptLog";
+import { pdfExportFeedback, receiptPrintFeedback } from "../lib/printFeedback";
+import { useToast } from "../context/ToastProvider";
 import { downloadSaleReceiptPdf, printSaleReceipt } from "../lib/receiptDocuments";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
 import { useSubscription } from "../context/SubscriptionContext";
@@ -101,6 +103,7 @@ function bestSellingProductName(sales: Sale[]): string | null {
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
+  const toast = useToast();
   const desktopTable = useWakaLayoutBand() === "desktop";
   const { runProtected } = useProtectedAction();
   const [desktopActionSale, setDesktopActionSale] = useState<Sale | null>(null);
@@ -236,7 +239,10 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     const ctx = receiptCtxFor(sale);
     void printSaleReceipt(ctx).then((result) => {
       if (result.ok) logReceiptReprintAudit(sale, ctx.receiptNumber);
-      else window.alert(result.mode === "thermal" ? (result.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));
+      const feedback = receiptPrintFeedback(lang, result);
+      if (!feedback.message) return;
+      if (feedback.kind === "error") toast.error(feedback.message);
+      else toast.success(feedback.message);
     });
   };
 
@@ -244,7 +250,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     const ctx = receiptCtxFor(sale);
     void downloadSaleReceiptPdf(ctx).then((ok) => {
       if (ok) logReceiptPdfExportAudit(sale, ctx.receiptNumber);
-      else window.alert(t(lang, "receiptPdfFailed"));
+      const feedback = pdfExportFeedback(lang, ok);
+      if (feedback.message) toast.error(feedback.message);
     });
   };
 

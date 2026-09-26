@@ -32,7 +32,19 @@ export function isValidSaleId(saleId: string | null | undefined): boolean {
   return true;
 }
 
-/** Android Chrome in a normal browser tab — not Capacitor, Electron, or WebView. */
+/**
+ * Android Chrome in a normal browser tab — not Capacitor, Electron, or WebView.
+ *
+ * PRINTING PHASE 2 (item 11) — deliberately still user-agent based.
+ *
+ * The web platform exposes no capability signal for "this browser can open an
+ * `intent://` or custom-scheme URL". `navigator.userAgentData` is not a feature test:
+ * it carries the same user-agent information in a different shape and is itself
+ * Chromium-only, so swapping to it would be the same heuristic with more code.
+ * Since the Android handoff it gates is disabled anyway (see
+ * `tryLaunchAndroidPrintHandoff`), this stays as-is rather than trading a working
+ * best-effort gate for an equivalent one.
+ */
 export function isAndroidChromeBrowser(userAgent?: string): boolean {
   if (typeof navigator === "undefined" && userAgent == null) return false;
   const ua = userAgent ?? navigator.userAgent ?? "";
@@ -96,6 +108,29 @@ export function buildAndroidPrintIntentUrl(opts: {
   return `intent://${WAKA_PRINT_HOST}/${WAKA_PRINT_PROTOCOL}?${query}#Intent;scheme=${WAKA_PRINT_SCHEME};package=${WAKA_ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
 }
 
+/**
+ * PRINTING PHASE 2 (item 10) — NOT WIRED TO ANY CALLER, ON PURPOSE.
+ *
+ * Finding: no safe Chrome-Android handoff exists from the web SPA.
+ *
+ * An Android `intent://` can only be fired by navigating the current document —
+ * there is no API to dispatch an Intent without a navigation. So this function
+ * necessarily unloads the SPA, which is what made it look like a logout and why it
+ * was disabled. The alternatives were each checked and rejected:
+ *   - hidden-iframe firing (what the Windows `wakapos://` path uses): Chrome refuses
+ *     to fire `intent://` from an iframe, so it silently does nothing.
+ *   - anchor with target="_blank": Chrome cannot open an unknown scheme in a new tab;
+ *     it degrades to an error page and can still lose the POS view.
+ *   - Web Share: the native app is not a registered Android share target, so it would
+ *     not appear in the sheet — adding one needs an Android manifest change.
+ *
+ * Current behaviour is therefore kept: web-Android falls back to the isolated browser
+ * print dialog, which works, and no Android intent is launched. Re-enabling this
+ * requires the native app to register a share/print target first.
+ *
+ * This export is retained only for its unit tests. Callers that already hold the sale
+ * in the browser (reprint / post-sale) must not use it.
+ */
 export function tryLaunchAndroidPrintHandoff(saleId: string, userAgent?: string): boolean {
   if (!canAttemptWebPrintHandoff(userAgent)) return false;
   if (typeof window === "undefined") return false;
@@ -104,9 +139,6 @@ export function tryLaunchAndroidPrintHandoff(saleId: string, userAgent?: string)
     fallbackUrl: window.location.href,
   });
   if (!intent) return false;
-  // Navigating this tab to intent:// unloads the web session. Callers that
-  // already have the sale in the browser (reprint / post-sale) must not use
-  // this — stay on HTML print instead.
   window.location.href = intent;
   return true;
 }

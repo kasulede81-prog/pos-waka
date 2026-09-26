@@ -24,6 +24,11 @@ import { CountCompletionScreen } from "../components/inventory/count/CountComple
 import { WIZARD_BTN_FOOTER_BASE } from "../components/inventory/count/countTokens";
 import { EnterprisePageHeader } from "../components/enterprise/EnterprisePageHeader";
 import { useWakaLayoutBand } from "../hooks/useWakaLayoutBand";
+import {
+  printInventoryCountSheet,
+  printInventoryCountVarianceReport,
+} from "../lib/inventoryCountExport";
+import { useToast } from "../context/ToastProvider";
 import clsx from "clsx";
 
 type Props = { lang: Language };
@@ -32,6 +37,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const actor = useSessionActor();
+  const toast = useToast();
   const desktopTable = useWakaLayoutBand() === "desktop";
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
@@ -136,7 +142,35 @@ export function InventoryCountSessionPage({ lang }: Props) {
         backLabel={t(lang, "stockCountNav")}
         backFallback="/stock/count"
         compact
-      />
+      >
+        {/* Both are read-only projections of the session — printing never changes a quantity. */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              void printInventoryCountSheet(lang, session, shopName).then((ok) => {
+                if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+              })
+            }
+            className="min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+          >
+            {t(lang, "inventoryCountTitle")}
+          </button>
+          {report ? (
+            <button
+              type="button"
+              onClick={() =>
+                void printInventoryCountVarianceReport(lang, session, shopName).then((ok) => {
+                  if (!ok) toast.error(t(lang, "receiptPrintBlocked"));
+                })
+              }
+              className="min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black touch-manipulation"
+            >
+              {t(lang, "inventoryCountVarianceReport")}
+            </button>
+          ) : null}
+        </div>
+      </EnterprisePageHeader>
 
       <InventoryCountShell
         lang={lang}

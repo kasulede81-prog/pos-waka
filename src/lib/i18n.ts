@@ -3294,6 +3294,8 @@ const en: Dict = {
   hardwareQueueProcessing: "Processing queued prints…",
   hardwareOpenDrawer: "Open drawer (manual)",
   hardwareDrawerOpened: "Drawer pulse sent.",
+  hardwareDrawerNoPrinter:
+    "No receipt printer is assigned, so the cash drawer cannot be opened. Assign a receipt printer first.",
   hardwareOpenCustomerDisplay: "Open customer display",
   hardwarePrintHistory: "Recent prints",
   kitchenChitBannerNew: "NEW ORDER",
@@ -5885,6 +5887,7 @@ const en: Dict = {
   supplierDetailTitle: "Supplier",
   supplierLastSupply: "Last supply",
   supplierStatementTitle: "Statement",
+  supplierStatementPrint: "Print statement",
   supplierStatementBalance: "Balance",
   supplierStatementPurchase: "Purchase",
   supplierStatementPayment: "Payment",
@@ -10789,6 +10792,8 @@ const lg: Dict = {
   hardwareQueueProcessing: "Okuprinta kulindirira…",
   hardwareOpenDrawer: "Ggulawo akati",
   hardwareDrawerOpened: "Akati kagguddwa.",
+  hardwareDrawerNoPrinter:
+    "Tewali printa ya risiti erondeddwa, kyetuva tusobola kuggulawo akati. Sooka olonde printa ya risiti.",
   hardwareOpenCustomerDisplay: "Ggulawo screen ya kasitoma",
   hardwarePrintHistory: "Ebiprintiddwa",
   kitchenChitBannerNew: "ORDER EMIPYA",
@@ -13205,6 +13210,7 @@ const lg: Dict = {
   supplierDetailTitle: "Omusuubuzi",
   supplierLastSupply: "Okugula okusembayo",
   supplierStatementTitle: "Ebyafaayo",
+  supplierStatementPrint: "Fulumya ebyafaayo",
   supplierStatementBalance: "Akalana",
   supplierStatementPurchase: "Okugula",
   supplierStatementPayment: "Okusasula",

@@ -169,7 +169,7 @@ import {
 } from "../lib/receiptPrint";
 import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../lib/auditReceiptLog";
 import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from "../lib/receiptDocuments";
-import { isNativePrintPlatform } from "../lib/nativeReceiptPrint";
+import { pdfExportFeedback, receiptPrintFeedback } from "../lib/printFeedback";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
 import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabels";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
@@ -2995,14 +2995,9 @@ export function PosPage({ lang }: { lang: Language }) {
                     auditLogs,
                   });
                   void printSaleReceipt(ctx).then((r) => {
-                    if (r.ok) {
-                      logReceiptReprintAudit(receiptSale, ctx.receiptNumber);
-                      if (r.mode === "thermal") setToast(t(lang, "receiptPrintThermalSent"));
-                      else if (r.mode === "handoff") setToast(t(lang, "receiptPrintHandoffOpening"));
-                      else if (r.mode === "share" || isNativePrintPlatform()) setToast(t(lang, "receiptPrintNativeOpened"));
-                    } else {
-                      window.alert(r.mode === "thermal" ? (r.error ?? t(lang, "receiptPrintThermalFailed")) : t(lang, "receiptPrintBlocked"));
-                    }
+                    if (r.ok) logReceiptReprintAudit(receiptSale, ctx.receiptNumber);
+                    const feedback = receiptPrintFeedback(lang, r);
+                    if (feedback.message) setToast(feedback.message);
                   });
                 }}
                 onDownloadPdf={() => {
@@ -3020,7 +3015,8 @@ export function PosPage({ lang }: { lang: Language }) {
                   });
                   void downloadSaleReceiptPdf(ctx).then((ok) => {
                     if (ok) logReceiptPdfExportAudit(receiptSale, ctx.receiptNumber);
-                    if (!ok) window.alert(t(lang, "receiptPdfFailed"));
+                    const feedback = pdfExportFeedback(lang, ok);
+                    if (feedback.message) setToast(feedback.message);
                   });
                 }}
                 onSharePdf={() => {
@@ -3037,7 +3033,8 @@ export function PosPage({ lang }: { lang: Language }) {
                     auditLogs,
                   });
                   void shareSaleReceiptPdf(ctx).then((ok) => {
-                    if (!ok) window.alert(t(lang, "receiptPdfFailed"));
+                    const feedback = pdfExportFeedback(lang, ok);
+                    if (feedback.message) setToast(feedback.message);
                   });
                 }}
               />

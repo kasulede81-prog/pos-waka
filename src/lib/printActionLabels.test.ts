@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { receiptPrintActionLabel } from "./printActionLabels";
+import { receiptPrintActionLabel, statementPrintActionLabel } from "./printActionLabels";
 
 describe("print action labels", () => {
   it("shows Print on web", () => {
@@ -12,5 +12,11 @@ describe("print action labels", () => {
 
   it("uses Luganda label", () => {
     expect(receiptPrintActionLabel("lg")).toBe("Fulumya");
+  });
+
+  it("labels a supplier statement as a statement, not a receipt", () => {
+    // Reusing the receipt label made merchant report buttons read as receipt buttons.
+    expect(statementPrintActionLabel("en")).toBe("Print statement");
+    expect(statementPrintActionLabel("lg")).not.toBe(receiptPrintActionLabel("lg"));
   });
 });

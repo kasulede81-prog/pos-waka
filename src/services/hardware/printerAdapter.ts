@@ -17,6 +17,7 @@ import {
   resolveBluetoothMode,
   selectPrinterTransport,
   summarizeCapabilityState,
+  USB_NOT_SUPPORTED_ERROR,
   type HardwareEnvironment,
   type HardwareTransportCapabilities,
 } from "./hardwareTransport";
@@ -56,10 +57,11 @@ function environmentToPlatform(environment: HardwareEnvironment): PrinterPlatfor
   return "web";
 }
 
+/** No browser ESC/POS-over-USB transport exists — fails with the same reason the UI shows. */
 async function transferUsb(_bytes: Uint8Array): Promise<{ ok: boolean; error?: string }> {
   return {
     ok: false,
-    error: "USB thermal printing is not supported in this browser yet.",
+    error: USB_NOT_SUPPORTED_ERROR,
   };
 }
 
