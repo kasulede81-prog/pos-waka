@@ -348,6 +348,60 @@ CREATE TABLE IF NOT EXISTS public.internal_ops_admin_audit (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- ---------- shop -> org resolver (production definition from 076) ----------
+CREATE OR REPLACE FUNCTION public.shop_org_id (p_shop_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT sh.organization_id FROM public.shops sh WHERE sh.id = p_shop_id;
+$$;
+
+-- ---------- add-on entitlements (production shape from 038) ----------
+-- WAKA Loyalty monetisation reuses this table rather than adding a second billing
+-- system, so the harness needs it in its production shape (including the original
+-- feature_code CHECK, which the Phase 1 migration deliberately widens).
+CREATE TABLE IF NOT EXISTS public.organization_feature_entitlements (
+  organization_id uuid NOT NULL REFERENCES public.organizations (id) ON DELETE CASCADE,
+  feature_code text NOT NULL CHECK (feature_code IN ('ai_stock_assistant')),
+  status text NOT NULL DEFAULT 'none'
+    CHECK (status IN ('none', 'pending', 'trial', 'active', 'rejected')),
+  trial_ends_at timestamptz,
+  approved_at timestamptz,
+  approved_by uuid REFERENCES auth.users (id) ON DELETE SET NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (organization_id, feature_code)
+);
+
+-- Test-only: mirror the production backfill in
+-- 20260926090000_loyalty_membership_entitlements.sql, which grants every existing
+-- organization the 'loyalty' entitlement on the default tier so merchants already
+-- running Loyalty are not cut off. The harness creates organizations in fixtures
+-- (after migrations), so it needs the same grant applied on creation.
+-- Tests that exercise the gate simply downgrade or delete this row.
+CREATE OR REPLACE FUNCTION public.test_seed_loyalty_entitlement ()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.organization_feature_entitlements (organization_id, feature_code, status, metadata)
+  VALUES (NEW.id, 'loyalty', 'active', '{"seed": "test_bootstrap"}'::jsonb)
+  ON CONFLICT (organization_id, feature_code) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_test_seed_loyalty_entitlement ON public.organizations;
+CREATE TRIGGER trg_test_seed_loyalty_entitlement
+  AFTER INSERT ON public.organizations
+  FOR EACH ROW EXECUTE FUNCTION public.test_seed_loyalty_entitlement ();
+
 -- ---------- permission helpers (production definitions from 007) ----------
 CREATE TABLE IF NOT EXISTS public.organization_members (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
