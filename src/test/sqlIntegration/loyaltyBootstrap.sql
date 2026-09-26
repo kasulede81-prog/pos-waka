@@ -12,6 +12,11 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     CREATE ROLE anon;
   END IF;
+  -- Supabase-platform role. Some loyalty migrations grant to it unguarded
+  -- (e.g. the wallet sync outbox), so the harness must provide it.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role;
+  END IF;
 END $$;
 
 CREATE TABLE IF NOT EXISTS auth.users (

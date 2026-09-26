@@ -63,6 +63,9 @@ kitchen_tickets|shops|shop_id|cN
 kitchen_tickets|table_sessions|table_session_id|cN
 loyalty_accounts|customers|customer_id|cN
 loyalty_accounts|shops|shop_id|cN
+loyalty_enrollment_requests|customers|customer_id|nn
+loyalty_enrollment_requests|loyalty_accounts|approved_loyalty_account_id|nn
+loyalty_enrollment_requests|shops|shop_id|cN
 loyalty_programs|shops|shop_id|cN
 loyalty_redemptions|loyalty_accounts|account_id|cN
 loyalty_redemptions|loyalty_rewards|reward_id|rN

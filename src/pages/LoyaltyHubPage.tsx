@@ -34,6 +34,7 @@ import { LoyaltyGoogleWalletButton } from "../components/loyalty/LoyaltyGoogleWa
 import { LoyaltyCustomerPageShare } from "../components/loyalty/LoyaltyCustomerPageShare";
 import { LoyaltyCardDesignPanel } from "../components/loyalty/LoyaltyCardDesignPanel";
 import { LoyaltyPublicEnrollmentPanel } from "../components/loyalty/LoyaltyPublicEnrollmentPanel";
+import { LoyaltyEnrollmentRequestsPanel } from "../components/loyalty/LoyaltyEnrollmentRequestsPanel";
 import {
   fetchLoyaltyRewards,
   isRewardEligible,
@@ -45,7 +46,7 @@ import {
 import { requestGoogleWalletBalanceSync } from "../lib/loyalty/loyaltyGoogleWallet";
 import { usePosStore } from "../store/usePosStore";
 
-type HubTab = "overview" | "earn" | "customers" | "rewards" | "cards" | "design";
+type HubTab = "overview" | "earn" | "requests" | "customers" | "rewards" | "cards" | "design";
 
 const KIND_LABEL_KEY: Record<string, string> = {
   earned: "loyaltyKindEarned",
@@ -973,6 +974,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
     () => [
       { id: "overview", label: t(lang, "loyaltyTabOverview") },
       { id: "earn", label: t(lang, "loyaltyTabHowPoints") },
+      { id: "requests", label: t(lang, "loyaltyTabRequests") },
       { id: "customers", label: t(lang, "loyaltyTabCustomers") },
       { id: "rewards", label: t(lang, "loyaltyTabRewards") },
       { id: "cards", label: t(lang, "loyaltyTabCards") },
@@ -1353,6 +1355,10 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                 </>
               )}
             </article>
+          ) : null}
+
+          {tab === "requests" && shopId ? (
+            <LoyaltyEnrollmentRequestsPanel lang={lang} shopId={shopId} canManage={canManage} />
           ) : null}
 
           {tab === "customers" && shopId ? (

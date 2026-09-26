@@ -7,13 +7,17 @@ import {
 } from "../_shared/loyaltyWallet/publicCardDurableRateLimit.ts";
 
 /**
- * Public loyalty self-enrollment (Decision 028).
+ * Public loyalty self-enrollment (Decision 028; Phase 2 = request + approval).
  *
  * GET  ?token=<enrollment_token>  → branding preview (no PII)
- * POST { token, name, phone, email?, consent } → enroll
+ * POST { token, name, phone, email?, consent } → create a PENDING enrollment request
  *
  * Authority: enrollment token → shop. Client shop_id ignored.
- * Never returns qr_token / account_id / shop_id.
+ * Never returns qr_token / account_id / shop_id / card token.
+ *
+ * Phase 2 changed POST: it no longer enrolls. It queues a request that a merchant must
+ * approve before any loyalty_accounts row exists, so a public caller can never hold a
+ * membership (or a card) without a merchant decision.
  */
 
 const cors = {
@@ -133,7 +137,9 @@ Deno.serve(async (req) => {
     const phone = normalizeUgPhone(String(body.phone ?? ""));
     if (!phone) return json({ ok: false, error: "invalid_phone" }, 400);
 
-    const { data, error } = await admin.rpc("loyalty_enroll_by_enrollment_token", {
+    // Phase 2: public self-enrollment is a REQUEST. It never returns a card token and
+    // never creates a membership — only a merchant approval does that.
+    const { data, error } = await admin.rpc("loyalty_request_enrollment", {
       p_token: token,
       p_name: String(body.name ?? ""),
       p_phone_e164: phone,
@@ -145,28 +151,22 @@ Deno.serve(async (req) => {
     if (!result || result.ok !== true) {
       const err = String(result?.error ?? "unavailable");
       const status =
-        err === "already_member" || err === "account_revoked"
+        err === "account_revoked"
           ? 409
-          : err === "unavailable" || err === "not_found"
-            ? err === "unavailable"
-              ? 410
-              : 404
-            : err === "consent_required" ||
-                err === "invalid_name" ||
-                err === "invalid_phone" ||
-                err === "invalid_email" ||
-                err === "token_invalid"
-              ? 400
+          : err === "unavailable"
+            ? 410
+            : err === "not_found"
+              ? 404
               : 400;
       return json({ ok: false, error: err }, status);
     }
 
+    // `pending` (new or already queued) and `already_member` are both safe, card-free
+    // outcomes. Deliberately no qr_token / account_id / shop_id / card token.
     return json({
       ok: true,
-      public_card_token: String(result.public_card_token ?? ""),
-      membership_active: result.membership_active !== false,
-      membership_expires_on:
-        result.membership_expires_on == null ? null : String(result.membership_expires_on),
+      status: result.status === "already_member" ? "already_member" : "pending",
+      already_requested: result.already_requested === true,
     });
   }
 

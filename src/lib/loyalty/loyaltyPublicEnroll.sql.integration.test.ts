@@ -1,5 +1,9 @@
 /**
- * Decision 028 — public self-enrollment SQL integration.
+ * Decision 028 enrollment links + Phase 2 public enrollment REQUESTS.
+ *
+ * Phase 2 replaced immediate public enrollment with a pending request that only a
+ * merchant approval turns into a membership, so the enrollment assertions below are
+ * about the request queue.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -115,8 +119,33 @@ describe("Decision 028 enrollment links", () => {
   });
 });
 
-describe("Decision 028 public enroll", () => {
-  it("creates customer + loyalty account with zero points and public_card_token", async () => {
+describe("Decision 028 public enroll — Phase 2: requests, not memberships", () => {
+  /** Create a customer + active membership directly (the state approval would produce). */
+  async function seedMemberWithPhone(shopId: string, phone: string, name: string): Promise<string> {
+    const custId = crypto.randomUUID();
+    await exec.query(
+      `INSERT INTO public.customers (id, shop_id, name, phone_e164) VALUES ($1,$2,$3,$4)`,
+      [custId, shopId, name, phone],
+    );
+    const acctId = crypto.randomUUID();
+    await exec.query(
+      `INSERT INTO public.loyalty_accounts (id, shop_id, customer_id) VALUES ($1,$2,$3)`,
+      [acctId, shopId, custId],
+    );
+    return acctId;
+  }
+
+  async function requestRows(shopId: string, phone: string) {
+    return (
+      await exec.query<{ status: string; customer_id: string | null }>(
+        `SELECT status, customer_id FROM public.loyalty_enrollment_requests
+          WHERE shop_id = $1 AND phone_e164 = $2 ORDER BY requested_at`,
+        [shopId, phone],
+      )
+    ).rows;
+  }
+
+  it("creates a PENDING request with no account, no customer, no card and no QR", async () => {
     const phone = "+256700111001";
     const result = (
       await exec.query<{ r: Record<string, unknown> }>(
@@ -125,96 +154,78 @@ describe("Decision 028 public enroll", () => {
       )
     ).rows[0]!.r;
     expect(result.ok).toBe(true);
-    expect(String(result.public_card_token)).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.status).toBe("pending");
+    // The old contract returned a live card token; a pending requester must not get one.
+    expect(result.public_card_token).toBeUndefined();
     expect(result).not.toHaveProperty("qr_token");
     expect(result).not.toHaveProperty("account_id");
     expect(result).not.toHaveProperty("shop_id");
 
-    const acct = await exec.query<{ balance: number; status: string; src: string | null }>(
-      `SELECT a.balance_points::int AS balance, a.status,
-              a.metadata -> 'enrollment' ->> 'source' AS src
-       FROM public.loyalty_accounts a
-       JOIN public.customers c ON c.id = a.customer_id
+    const rows = await requestRows(f.shopAId, phone);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("pending");
+
+    // No membership and no customer were created by the public call.
+    const accts = await exec.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM public.loyalty_accounts a
+        JOIN public.customers c ON c.id = a.customer_id
        WHERE a.shop_id = $1 AND c.phone_e164 = $2`,
       [f.shopAId, phone],
     );
-    expect(acct.rows[0]?.balance).toBe(0);
-    expect(acct.rows[0]?.status).toBe("active");
-    expect(acct.rows[0]?.src).toBe("public_enrollment_link");
+    expect(accts.rows[0]!.n).toBe(0);
+    const custs = await exec.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM public.customers WHERE shop_id = $1 AND phone_e164 = $2`,
+      [f.shopAId, phone],
+    );
+    expect(custs.rows[0]!.n).toBe(0);
   });
 
-  it("duplicate phone returns already_member without card URL", async () => {
+  it("duplicate submission is idempotent — still one pending request", async () => {
     const phone = "+256700111001";
     const result = (
       await exec.query<{ r: Record<string, unknown> }>(
-        `SELECT public.loyalty_enroll_by_enrollment_token($1,'Ada',$2,null,true) AS r`,
+        `SELECT public.loyalty_enroll_by_enrollment_token($1,'Ada Again',$2,null,true) AS r`,
         [token, phone],
       )
     ).rows[0]!.r;
-    expect(result.ok).toBe(false);
-    expect(result.error).toBe("already_member");
-    expect(result.public_card_token).toBeUndefined();
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe("pending");
+    expect(result.already_requested).toBe(true);
+    expect(await requestRows(f.shopAId, phone)).toHaveLength(1);
   });
 
-  it("suspended account returns already_member and stays suspended", async () => {
+  it("active or suspended member already enrolled → already_member, no request", async () => {
     const phone = "+256700111010";
-    const first = (
-      await exec.query<{ r: Record<string, unknown> }>(
-        `SELECT public.loyalty_enroll_by_enrollment_token($1,'Sam',$2,null,true) AS r`,
-        [token, phone],
-      )
-    ).rows[0]!.r;
-    expect(first.ok).toBe(true);
-    const acctId = (
-      await exec.query<{ id: string }>(
-        `SELECT a.id FROM public.loyalty_accounts a
-         JOIN public.customers c ON c.id = a.customer_id
-         WHERE a.shop_id = $1 AND c.phone_e164 = $2`,
-        [f.shopAId, phone],
-      )
-    ).rows[0]!.id;
+    const acctId = await seedMemberWithPhone(f.shopAId, phone, "Sam");
     await asUser(exec, f.ownerAId, async () => {
       await exec.query(`SELECT public.loyalty_set_account_lifecycle($1,$2,'suspend')`, [
         f.shopAId,
         acctId,
       ]);
     });
+
     const again = (
       await exec.query<{ r: Record<string, unknown> }>(
         `SELECT public.loyalty_enroll_by_enrollment_token($1,'Sam',$2,null,true) AS r`,
         [token, phone],
       )
     ).rows[0]!.r;
-    expect(again.error).toBe("already_member");
+    expect(again.ok).toBe(true);
+    expect(again.status).toBe("already_member");
     expect(again.public_card_token).toBeUndefined();
+    // Suspension is preserved and nothing was queued.
+    expect(await requestRows(f.shopAId, phone)).toHaveLength(0);
     const status = (
-      await exec.query<{ status: string }>(
-        `SELECT status FROM public.loyalty_accounts WHERE id = $1`,
-        [acctId],
-      )
+      await exec.query<{ status: string }>(`SELECT status FROM public.loyalty_accounts WHERE id = $1`, [
+        acctId,
+      ])
     ).rows[0]!.status;
     expect(status).toBe("suspended");
   });
 
-  it("revoked account is not reactivated", async () => {
+  it("revoked account is not reactivated and cannot queue", async () => {
     const phone = "+256700111002";
-    const first = (
-      await exec.query<{ r: Record<string, unknown> }>(
-        `SELECT public.loyalty_enroll_by_enrollment_token($1,'Ben',$2,null,true) AS r`,
-        [token, phone],
-      )
-    ).rows[0]!.r;
-    expect(first.ok).toBe(true);
-
-    const acctId = (
-      await exec.query<{ id: string }>(
-        `SELECT a.id FROM public.loyalty_accounts a
-         JOIN public.customers c ON c.id = a.customer_id
-         WHERE a.shop_id = $1 AND c.phone_e164 = $2`,
-        [f.shopAId, phone],
-      )
-    ).rows[0]!.id;
-
+    const acctId = await seedMemberWithPhone(f.shopAId, phone, "Ben");
     await asUser(exec, f.ownerAId, async () => {
       await exec.query(`SELECT public.loyalty_set_account_lifecycle($1,$2,'revoke')`, [
         f.shopAId,
@@ -229,17 +240,17 @@ describe("Decision 028 public enroll", () => {
       )
     ).rows[0]!.r;
     expect(again.error).toBe("account_revoked");
+    expect(await requestRows(f.shopAId, phone)).toHaveLength(0);
 
     const status = (
-      await exec.query<{ status: string }>(
-        `SELECT status FROM public.loyalty_accounts WHERE id = $1`,
-        [acctId],
-      )
+      await exec.query<{ status: string }>(`SELECT status FROM public.loyalty_accounts WHERE id = $1`, [
+        acctId,
+      ])
     ).rows[0]!.status;
     expect(status).toBe("revoked");
   });
 
-  it("cross-shop: token of A cannot enroll into B", async () => {
+  it("cross-shop: a request made with shop A's token lands in shop A, never B", async () => {
     await enableProgram(exec, f.shopBId, { earnUnitUgx: 1000, earnPointsPerUnit: 1 });
     // Outsider owns shop B
     const bLink = await asUser(exec, f.outsiderId, async () =>
@@ -255,25 +266,13 @@ describe("Decision 028 public enroll", () => {
     expect(bLink.ok).toBe(true);
 
     const phone = "+256700111003";
-    await exec.query(
-      `SELECT public.loyalty_enroll_by_enrollment_token($1,'Cara',$2,null,true)`,
-      [token, phone],
-    );
+    await exec.query(`SELECT public.loyalty_enroll_by_enrollment_token($1,'Cara',$2,null,true)`, [
+      token,
+      phone,
+    ]);
 
-    const inA = await exec.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM public.loyalty_accounts a
-       JOIN public.customers c ON c.id = a.customer_id
-       WHERE a.shop_id = $1 AND c.phone_e164 = $2`,
-      [f.shopAId, phone],
-    );
-    const inB = await exec.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM public.loyalty_accounts a
-       JOIN public.customers c ON c.id = a.customer_id
-       WHERE a.shop_id = $1 AND c.phone_e164 = $2`,
-      [f.shopBId, phone],
-    );
-    expect(inA.rows[0]!.n).toBe(1);
-    expect(inB.rows[0]!.n).toBe(0);
+    expect(await requestRows(f.shopAId, phone)).toHaveLength(1);
+    expect(await requestRows(f.shopBId, phone)).toHaveLength(0);
   });
 
   it("regenerate invalidates previous token", async () => {

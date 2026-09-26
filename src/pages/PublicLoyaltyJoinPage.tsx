@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { t } from "../lib/i18n";
 import { useUiLanguage } from "../hooks/useUiLanguage";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
@@ -11,13 +11,15 @@ import {
 } from "../lib/loyalty/loyaltyPublicEnroll";
 
 /**
- * Public self-enrollment page: /join/:enrollmentToken
+ * Public enrollment REQUEST page: /join/:enrollmentToken
  * Completely separate from /c/:publicCardToken.
+ *
+ * Phase 2: submitting no longer enrolls. It queues a request the merchant must approve,
+ * so this page deliberately never navigates to a card — there is no card until approval.
  */
 export function PublicLoyaltyJoinPage() {
   const { lang } = useUiLanguage();
   const { enrollmentToken = "" } = useParams();
-  const navigate = useNavigate();
   const token = enrollmentToken.trim();
 
   const [preview, setPreview] = useState<EnrollmentPreview | null>(null);
@@ -28,6 +30,7 @@ export function PublicLoyaltyJoinPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [alreadyMember, setAlreadyMember] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,11 +69,15 @@ export function PublicLoyaltyJoinPage() {
     });
     setBusy(false);
     if (!result.ok) {
-      if (result.error === "already_member") setAlreadyMember(true);
       setError(result.error);
       return;
     }
-    navigate(`/c/${result.publicCardToken}`, { replace: true });
+    if (result.status === "already_member") {
+      setAlreadyMember(true);
+      return;
+    }
+    // Pending: the merchant decides. No card, no navigation.
+    setRequestSent(true);
   };
 
   if (!preview) {
@@ -127,6 +134,13 @@ export function PublicLoyaltyJoinPage() {
               {t(lang, "loyaltyJoinAlreadyMemberHint")}
             </p>
           </div>
+        ) : requestSent ? (
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+            <p className="text-sm font-black text-emerald-950">{t(lang, "loyaltyJoinRequestSent")}</p>
+            <p className="mt-1 text-xs font-medium text-emerald-900">
+              {t(lang, "loyaltyJoinRequestSentHint")}
+            </p>
+          </div>
         ) : (
           <form
             className="mt-6 space-y-3"
@@ -175,7 +189,10 @@ export function PublicLoyaltyJoinPage() {
               />
               <span>{t(lang, "loyaltyJoinConsent")}</span>
             </label>
-            {error && error !== "already_member" ? (
+            <p className="text-xs font-medium text-muted-foreground">
+              {t(lang, "loyaltyJoinApprovalNote")}
+            </p>
+            {error ? (
               <p className="text-sm font-bold text-destructive">
                 {error === "account_revoked"
                   ? t(lang, "loyaltyJoinRevoked")
@@ -193,7 +210,7 @@ export function PublicLoyaltyJoinPage() {
               disabled={busy}
               className="min-h-[48px] w-full rounded-xl bg-waka-600 text-sm font-black text-white disabled:opacity-50"
             >
-              {busy ? t(lang, "loyaltyLoading") : t(lang, "loyaltyJoinSubmit")}
+              {busy ? t(lang, "loyaltyLoading") : t(lang, "loyaltyJoinSubmitRequest")}
             </button>
           </form>
         )}

@@ -71,13 +71,14 @@ export async function fetchEnrollmentPreview(token: string): Promise<EnrollmentP
   }
 }
 
+/**
+ * Phase 2: submitting is a REQUEST, not an enrollment. The possible success outcomes are
+ * a queued request awaiting merchant approval, or "you are already a member". Neither
+ * carries a card — a card only exists after a merchant approves.
+ */
 export type PublicEnrollResult =
-  | {
-      ok: true;
-      publicCardToken: string;
-      membershipActive: boolean;
-      membershipExpiresOn: string | null;
-    }
+  | { ok: true; status: "pending"; alreadyRequested: boolean }
+  | { ok: true; status: "already_member" }
   | { ok: false; error: string; retryAfterSeconds?: number };
 
 export async function submitPublicEnrollment(input: {
@@ -120,17 +121,8 @@ export async function submitPublicEnrollment(input: {
     if (!res.ok || body.ok !== true) {
       return { ok: false, error: String(body.error ?? "unavailable") };
     }
-    const card = String(body.public_card_token ?? "").trim();
-    if (!isValidPublicCardTokenFormat(card)) {
-      return { ok: false, error: "unavailable" };
-    }
-    return {
-      ok: true,
-      publicCardToken: card,
-      membershipActive: body.membership_active !== false,
-      membershipExpiresOn:
-        body.membership_expires_on == null ? null : String(body.membership_expires_on).slice(0, 10),
-    };
+    if (body.status === "already_member") return { ok: true, status: "already_member" };
+    return { ok: true, status: "pending", alreadyRequested: body.already_requested === true };
   } catch {
     return { ok: false, error: "unavailable" };
   }

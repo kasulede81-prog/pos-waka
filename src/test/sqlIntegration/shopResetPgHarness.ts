@@ -130,6 +130,14 @@ function bootstrapSql(edges: FkEdge[]): string {
 
 const COLLECT_FNS = join(MIGRATIONS_DIR, "112_certified_hard_delete.sql");
 
+/**
+ * Migrations that come after the reset plan and re-register a table into it. Kept in
+ * production apply order so the harness's plan matches what a deployment would run.
+ */
+const POST_PLAN_MIGRATIONS = [
+  join(MIGRATIONS_DIR, "20260926092000_loyalty_enrollment_requests_reset_plan.sql"),
+];
+
 export async function createShopResetHarness(opts: { applyNewMigration?: boolean } = {}): Promise<SqlExec> {
   const db = new PGlite();
   const exec: SqlExec = {
@@ -149,6 +157,8 @@ export async function createShopResetHarness(opts: { applyNewMigration?: boolean
   await exec.exec(extractFunction(COLLECT_FNS, "hard_delete_collect_org_user_ids"));
   await exec.exec(extractFunction(COLLECT_FNS, "hard_delete_collect_org_shop_ids"));
   if (opts.applyNewMigration !== false) await exec.exec(readMigrationText(NEW_MIGRATION));
+  // Later migrations that extend the plan, applied in production order.
+  for (const file of POST_PLAN_MIGRATIONS) await exec.exec(readMigrationText(file));
   return exec;
 }
 

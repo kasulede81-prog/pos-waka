@@ -25,8 +25,21 @@ describe("Decision 028 public enroll helpers", () => {
       "utf8",
     );
     expect(src).toMatch(/void body\.shop_id/);
-    expect(src).toMatch(/loyalty_enroll_by_enrollment_token/);
+    // Phase 2: the public POST queues a REQUEST; it must not reach the enroll RPC.
+    expect(src).toMatch(/loyalty_request_enrollment/);
+    expect(src).not.toMatch(/loyalty_enroll_by_enrollment_token/);
     expect(src).toMatch(/enforceEnrollSubmitRateLimit/);
+  });
+
+  it("the edge response never carries a card token for a pending request", () => {
+    const src = readFileSync(
+      join(process.cwd(), "supabase/functions/loyalty-public-enroll/index.ts"),
+      "utf8",
+    );
+    // A card token would appear as a response KEY; the header comment's prose mention
+    // of the guarantee is fine and stays.
+    expect(src).not.toMatch(/public_card_token:/);
+    expect(src).toMatch(/status: result\.status === "already_member" \? "already_member" : "pending"/);
   });
 
   it("migration keeps enrollment token separate from public_card_token", () => {

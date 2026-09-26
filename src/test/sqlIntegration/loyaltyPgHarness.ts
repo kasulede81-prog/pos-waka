@@ -12,6 +12,8 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260918100000_loyalty_enrollment_identity.sql"),
   join(process.cwd(), "supabase", "migrations", "20260918110000_loyalty_rewards.sql"),
   join(process.cwd(), "supabase", "migrations", "20260922222138_loyalty_engine_primitive_revoke.sql"),
+  // Wallet outbox + google_wallet_* columns, so Wallet-safety assertions are real.
+  join(process.cwd(), "supabase", "migrations", "20260923120000_loyalty_google_wallet_sync.sql"),
   join(process.cwd(), "supabase", "migrations", "20260923233000_loyalty_public_card_token.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924010000_loyalty_redeem_auth_concurrency.sql"),
   join(process.cwd(), "supabase", "migrations", "20260924015233_loyalty_card_designs.sql"),
@@ -27,6 +29,8 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260924190000_loyalty_product_backed_rewards.sql"),
   // Phase 1 — loyalty add-on entitlement + server-side member allowance.
   join(process.cwd(), "supabase", "migrations", "20260926090000_loyalty_membership_entitlements.sql"),
+  // Phase 2 — public enrollment requests + merchant approval.
+  join(process.cwd(), "supabase", "migrations", "20260926091000_loyalty_enrollment_requests.sql"),
 ];
 
 function readSql(path: string): string {
