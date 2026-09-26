@@ -27,11 +27,14 @@ export function LoyaltyGoogleWalletButton({
   shopId,
   accountId,
   canIssue,
+  memberStatus = "active",
 }: {
   lang: Language;
   shopId: string;
   accountId: string;
   canIssue: boolean;
+  /** Lifecycle state of the member being shown. A non-active member has no usable pass. */
+  memberStatus?: "active" | "suspended" | "revoked";
 }) {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +62,23 @@ export function LoyaltyGoogleWalletButton({
   }, [shopId, accountId]);
 
   if (!canIssue) return null;
+
+  // A suspended or revoked member has no usable card, so the issuing controls would be
+  // misleading. The server refuses issuance for them too (account_inactive); this just
+  // stops the UI implying otherwise. The existing pass is not modified here — Wallet
+  // issuance and sync are unchanged.
+  if (memberStatus !== "active") {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-3 py-3">
+        <p className="text-sm font-black text-foreground">{t(lang, "loyaltyGoogleWalletTitle")}</p>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">
+          {memberStatus === "revoked"
+            ? t(lang, "loyaltyWalletMemberRevoked")
+            : t(lang, "loyaltyWalletMemberSuspended")}
+        </p>
+      </div>
+    );
+  }
 
   if (configured === null) {
     return (

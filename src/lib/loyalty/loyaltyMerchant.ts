@@ -254,15 +254,24 @@ export async function saveLoyaltyProgram(shopId: string, input: ProgramInput): P
   }
 }
 
+/**
+ * Member status filter, applied by the SERVER before its LIMIT — never by filtering a
+ * returned page in the browser, which would misrepresent a capped result set.
+ * 'expired' is the architecture's computed state (status active, membership not active).
+ */
+export type LoyaltyMemberStatusFilter = "all" | "active" | "suspended" | "revoked" | "expired";
+
 export async function searchLoyaltyAccounts(
   shopId: string,
   query: string,
+  status: LoyaltyMemberStatusFilter = "all",
 ): Promise<LoyaltyAccountListEntry[]> {
   if (!hasSupabaseConfig || !supabase || !shopId) return [];
   try {
     const { data, error } = await supabase.rpc("loyalty_search_accounts", {
       p_shop_id: shopId,
       p_query: query.trim() || null,
+      p_status: status,
       p_limit: 50,
     });
     if (error) return [];

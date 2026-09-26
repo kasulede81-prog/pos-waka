@@ -31,6 +31,12 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260926090000_loyalty_membership_entitlements.sql"),
   // Phase 2 — public enrollment requests + merchant approval.
   join(process.cwd(), "supabase", "migrations", "20260926091000_loyalty_enrollment_requests.sql"),
+  // Phase 3 — lifecycle (reactivate/renew) respects the member allowance.
+  join(process.cwd(), "supabase", "migrations", "20260926093000_loyalty_member_lifecycle_allowance.sql"),
+  // Phase 4 — public enrollment abuse protection + member status filtering.
+  join(process.cwd(), "supabase", "migrations", "20260926094000_loyalty_enrollment_abuse_protection.sql"),
+  // Phase 5 — Google Wallet follows the membership lifecycle.
+  join(process.cwd(), "supabase", "migrations", "20260926095000_loyalty_wallet_lifecycle_sync.sql"),
 ];
 
 function readSql(path: string): string {

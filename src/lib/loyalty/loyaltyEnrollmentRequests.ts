@@ -8,8 +8,11 @@
  */
 
 import { hasSupabaseConfig, supabase } from "../supabase";
+import { mapLoyaltyUsage, type LoyaltyUsage } from "./loyaltyUsage";
 
-export type EnrollmentRequestStatus = "pending" | "approved" | "rejected";
+export type { LoyaltyUsage };
+
+export type EnrollmentRequestStatus = "pending" | "approved" | "rejected" | "expired";
 
 export type EnrollmentRequestRow = {
   id: string;
@@ -22,17 +25,6 @@ export type EnrollmentRequestRow = {
   rejectionReason: string | null;
   approvedLoyaltyAccountId: string | null;
   matchedCustomerId: string | null;
-};
-
-export type LoyaltyUsage = {
-  loyaltyEnabled: boolean;
-  entitlementStatus: string;
-  tierCode: string | null;
-  tierName: string | null;
-  memberLimit: number;
-  activeMembers: number;
-  remaining: number;
-  atLimit: boolean;
 };
 
 export type EnrollmentRequestsResult =
@@ -51,22 +43,7 @@ export type ReviewEnrollmentResult =
   | { ok: false; error: string; memberLimit?: number; activeCount?: number };
 
 function normalizeStatus(value: unknown): EnrollmentRequestStatus {
-  return value === "approved" || value === "rejected" ? value : "pending";
-}
-
-function mapUsage(raw: unknown): LoyaltyUsage | null {
-  if (!raw || typeof raw !== "object") return null;
-  const u = raw as Record<string, unknown>;
-  return {
-    loyaltyEnabled: u.loyalty_enabled === true,
-    entitlementStatus: String(u.entitlement_status ?? "none"),
-    tierCode: u.tier_code == null ? null : String(u.tier_code),
-    tierName: u.tier_name == null ? null : String(u.tier_name),
-    memberLimit: Number(u.member_limit ?? 0),
-    activeMembers: Number(u.active_members ?? 0),
-    remaining: Number(u.remaining ?? 0),
-    atLimit: u.at_limit === true,
-  };
+  return value === "approved" || value === "rejected" || value === "expired" ? value : "pending";
 }
 
 function mapRequests(raw: unknown): EnrollmentRequestRow[] {
@@ -104,7 +81,7 @@ export async function listEnrollmentRequests(
     if (error) return { ok: false, error: error.code ?? "loyalty_requests_failed" };
     const result = (data ?? {}) as Record<string, unknown>;
     if (result.ok !== true) return { ok: false, error: String(result.error ?? "forbidden") };
-    return { ok: true, requests: mapRequests(result.requests), usage: mapUsage(result.usage) };
+    return { ok: true, requests: mapRequests(result.requests), usage: mapLoyaltyUsage(result.usage) };
   } catch {
     return { ok: false, error: "loyalty_requests_failed" };
   }

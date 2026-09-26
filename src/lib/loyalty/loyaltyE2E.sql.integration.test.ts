@@ -286,7 +286,7 @@ describe("E2E journey — multi-tenant isolation", () => {
     // No shop A customers in shop B's directory.
     const dir = await rpcAs(
       f.outsiderId,
-      `SELECT public.loyalty_search_accounts($1, '', 50) AS result`,
+      `SELECT public.loyalty_search_accounts($1, '', null, 50) AS result`,
       [f.shopBId],
     );
     expect(dir.ok).toBe(true);

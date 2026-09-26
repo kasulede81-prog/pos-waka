@@ -20,9 +20,11 @@ import {
 import {
   fetchGoogleWalletAccessToken,
   patchGoogleLoyaltyObjectBalance,
+  patchGoogleLoyaltyObjectState,
   upsertGoogleLoyaltyClass,
   upsertGoogleLoyaltyObject,
   type FetchLike,
+  type GoogleWalletObjectState,
 } from "./googleWalletRest.ts";
 import type {
   ApplePassSigner,
@@ -202,6 +204,34 @@ export async function syncGoogleWalletObjectBalance(
       balancePoints,
       fetchImpl,
     );
+    if (!result.ok) return { ok: false, error: "wallet_sync_failed", status: result.status };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message ?? "wallet_sync_failed" };
+  }
+}
+
+/**
+ * Push the authoritative MEMBERSHIP state to an existing Google Wallet object.
+ *
+ * Lifecycle counterpart to `syncGoogleWalletObjectBalance`: it patches only `state`,
+ * so the pass keeps its points, barcode/QR identity, account name, program and design.
+ * Failures are returned, never thrown — the membership change has already committed and
+ * must not be rolled back because Google was unavailable.
+ */
+export async function syncGoogleWalletObjectState(
+  ids: GoogleIds,
+  state: GoogleWalletObjectState,
+  signer: GoogleWalletSigner,
+  nowSeconds: number,
+  fetchImpl?: FetchLike,
+): Promise<{ ok: true } | { ok: false; error: string; status?: number }> {
+  if (!ids.issuerId.trim() || !ids.objectId.trim()) {
+    return { ok: false, error: "wallet_not_configured" };
+  }
+  try {
+    const token = await fetchGoogleWalletAccessToken(signer, nowSeconds, fetchImpl);
+    const result = await patchGoogleLoyaltyObjectState(token.accessToken, ids, state, fetchImpl);
     if (!result.ok) return { ok: false, error: "wallet_sync_failed", status: result.status };
     return { ok: true };
   } catch (err) {

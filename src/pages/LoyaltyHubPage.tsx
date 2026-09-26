@@ -44,7 +44,18 @@ import {
   type LoyaltyReward,
 } from "../lib/loyalty/loyaltyRewards";
 import { requestGoogleWalletBalanceSync } from "../lib/loyalty/loyaltyGoogleWallet";
+import { fetchLoyaltyUsage, type LoyaltyUsage } from "../lib/loyalty/loyaltyUsage";
+import { loyaltyErrorKey } from "../lib/loyalty/loyaltyErrorMessages";
+import type { LoyaltyMemberStatusFilter } from "../lib/loyalty/loyaltyMerchant";
 import { usePosStore } from "../store/usePosStore";
+
+const MEMBER_STATUS_FILTERS: LoyaltyMemberStatusFilter[] = [
+  "all",
+  "active",
+  "suspended",
+  "revoked",
+  "expired",
+];
 
 type HubTab = "overview" | "earn" | "requests" | "customers" | "rewards" | "cards" | "design";
 
@@ -206,6 +217,7 @@ function CustomerDetail({
   const [adjustState, setAdjustState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [showAdjust, setShowAdjust] = useState(false);
   const [renewState, setRenewState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [renewError, setRenewError] = useState<string | null>(null);
   const [expiryMode, setExpiryMode] = useState<"never" | "fixed_date">(
     entry.membershipExpiresOn ? "fixed_date" : "never",
   );
@@ -251,11 +263,15 @@ function CustomerDetail({
 
   const submitRenew = async () => {
     setRenewState("saving");
+    setRenewError(null);
     const result = await renewLoyaltyMembership(shopId, entry.accountId, {});
     if (result.ok) {
       setRenewState("done");
       onAdjusted();
     } else {
+      // Renewing an expired member restores an active member, so the server may refuse
+      // it at the allowance. Keep the code and translate it at render time.
+      setRenewError(result.error);
       setRenewState("error");
     }
   };
@@ -551,8 +567,16 @@ function CustomerDetail({
           {renewState === "done" ? (
             <span className="text-sm font-bold text-success">{t(lang, "loyaltyMembershipRenewed")}</span>
           ) : null}
-          {lifecycleError || renewState === "error" ? (
-            <span className="text-sm font-bold text-destructive">{t(lang, "loyaltySaveFailed")}</span>
+          {/* Translated, never the raw RPC code — and specific enough to act on. */}
+          {lifecycleError ? (
+            <span className="text-sm font-bold text-destructive">
+              {t(lang, loyaltyErrorKey(lifecycleError))}
+            </span>
+          ) : null}
+          {renewState === "error" ? (
+            <span className="text-sm font-bold text-destructive">
+              {t(lang, loyaltyErrorKey(renewError))}
+            </span>
           ) : null}
         </div>
       ) : null}
@@ -566,6 +590,7 @@ function CustomerDetail({
         shopId={shopId}
         accountId={entry.accountId}
         canIssue={canIssueWallet}
+        memberStatus={entry.status}
       />
 
       {mode === "full" ? (
@@ -748,6 +773,8 @@ function CustomerList({
   canRedeem,
   canIssueWallet,
   mode,
+  statusFilter,
+  onStatusFilterChange,
   onSearchChange,
   onToggle,
   onAdjusted,
@@ -762,6 +789,8 @@ function CustomerList({
   canRedeem: boolean;
   canIssueWallet: boolean;
   mode: "full" | "card";
+  statusFilter: LoyaltyMemberStatusFilter;
+  onStatusFilterChange: (value: LoyaltyMemberStatusFilter) => void;
   onSearchChange: (value: string) => void;
   onToggle: (accountId: string) => void;
   onAdjusted: () => void;
@@ -777,6 +806,21 @@ function CustomerList({
         placeholder={t(lang, "loyaltySearchPlaceholder")}
         className="mt-3 min-h-[48px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
       />
+      <div className="mt-3 flex flex-wrap gap-2">
+        {MEMBER_STATUS_FILTERS.map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => onStatusFilterChange(f)}
+            className={clsx(
+              "min-h-[36px] rounded-xl px-3 text-xs font-black",
+              statusFilter === f ? "bg-waka-600 text-white" : "bg-muted text-foreground",
+            )}
+          >
+            {t(lang, `loyaltyMemberFilter_${f}`)}
+          </button>
+        ))}
+      </div>
       {searchDone && accounts.length === 0 ? (
         <p className="mt-3 text-sm font-medium text-muted-foreground">
           {search.trim() ? t(lang, "loyaltyNoMembersFound") : t(lang, "loyaltyNoMembers")}
@@ -858,10 +902,12 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
   const shopDisplayName = usePosStore((s) => s.preferences.shopDisplayName?.trim() || "Shop");
   const [shopId, setShopId] = useState<string | null>(null);
   const [overview, setOverview] = useState<LoyaltyOverview | null>(null);
+  const [usage, setUsage] = useState<LoyaltyUsage | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [draft, setDraft] = useState<ProgramInput>({ ...DEFAULT_LOYALTY_PROGRAM });
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<LoyaltyMemberStatusFilter>("all");
   const [accounts, setAccounts] = useState<LoyaltyAccountListEntry[]>([]);
   const [searchDone, setSearchDone] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -896,6 +942,11 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
     }
   }, []);
 
+  /** Entitlement + usage come from the server's single authoritative call. */
+  const loadUsage = useCallback(async (id: string) => {
+    setUsage(await fetchLoyaltyUsage(id));
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -903,28 +954,35 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
       if (cancelled) return;
       const id = ctx?.shopId ?? null;
       setShopId(id);
-      if (id) await loadOverview(id);
-      else setLoadState("error");
+      if (id) {
+        await loadOverview(id);
+        await loadUsage(id);
+      } else setLoadState("error");
     })();
     return () => {
       cancelled = true;
     };
-  }, [loadOverview]);
+  }, [loadOverview, loadUsage]);
 
-  const runSearch = useCallback(async (id: string, query: string) => {
-    const seq = ++searchSeq.current;
-    const rows = await searchLoyaltyAccounts(id, query);
-    if (seq !== searchSeq.current) return;
-    setAccounts(rows);
-    setSearchDone(true);
-  }, []);
+  const runSearch = useCallback(
+    async (id: string, query: string, status: LoyaltyMemberStatusFilter) => {
+      const seq = ++searchSeq.current;
+      // The status filter is applied by the SERVER before its LIMIT; filtering here
+      // would silently misrepresent a capped page.
+      const rows = await searchLoyaltyAccounts(id, query, status);
+      if (seq !== searchSeq.current) return;
+      setAccounts(rows);
+      setSearchDone(true);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!shopId || loadState !== "ready") return;
     if (tab !== "customers" && tab !== "cards") return;
-    const handle = window.setTimeout(() => void runSearch(shopId, search), 250);
+    const handle = window.setTimeout(() => void runSearch(shopId, search, statusFilter), 250);
     return () => window.clearTimeout(handle);
-  }, [shopId, search, loadState, runSearch, tab]);
+  }, [shopId, search, statusFilter, loadState, runSearch, tab]);
 
   const programEnabled = overview?.program?.enabled ?? false;
   const programConfigured = overview?.program != null;
@@ -964,7 +1022,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
     if (result.ok) {
       setSaveState("done");
       await loadOverview(shopId);
-      void runSearch(shopId, search);
+      void runSearch(shopId, search, statusFilter);
     } else {
       setSaveState("error");
     }
@@ -986,7 +1044,8 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
   const refreshLists = () => {
     if (!shopId) return;
     void loadOverview(shopId);
-    void runSearch(shopId, search);
+    void loadUsage(shopId);
+    void runSearch(shopId, search, statusFilter);
   };
 
   return (
@@ -1092,6 +1151,86 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                   />
                   <StatCard label={t(lang, "loyaltyPointsIssuedStat")} value={String(overview.pointsIssued)} />
                 </div>
+
+                <p className="mt-4 text-sm font-medium text-muted-foreground">
+                  {overview.program
+                    ? t(lang, "loyaltyEarnRuleSummary")
+                        .replace("{unit}", String(overview.program.earnUnitUgx))
+                        .replace("{points}", String(overview.program.earnPointsPerUnit))
+                    : t(lang, "loyaltyProgramNotSetup")}
+                </p>
+              </article>
+
+              {/* Allowance + usage, straight from the server's authoritative call. */}
+              <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-base font-black text-foreground">
+                    {t(lang, "loyaltyAllowanceTitle")}
+                  </p>
+                  <span
+                    className={clsx(
+                      "rounded-full px-3 py-1 text-xs font-black",
+                      usage?.loyaltyEnabled
+                        ? "bg-success-muted text-success"
+                        : "bg-warning-muted text-warning-foreground",
+                    )}
+                  >
+                    {usage?.loyaltyEnabled
+                      ? t(lang, "loyaltyAllowanceActive")
+                      : t(lang, "loyaltyAllowanceInactive")}
+                  </span>
+                </div>
+
+                {usage?.loyaltyEnabled ? (
+                  <>
+                    {usage.tierName || usage.tierCode ? (
+                      <p className="mt-2 text-sm font-black text-foreground">
+                        {usage.tierName ?? usage.tierCode}
+                      </p>
+                    ) : null}
+
+                    <p className="mt-3 text-lg font-black text-foreground">
+                      {t(lang, "loyaltyAllowanceUsage")
+                        .replace("{used}", usage.activeMembers.toLocaleString())
+                        .replace("{limit}", usage.memberLimit.toLocaleString())}
+                    </p>
+
+                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={clsx(
+                          "h-full rounded-full",
+                          usage.atLimit ? "bg-destructive" : "bg-waka-600",
+                        )}
+                        style={{ width: `${Math.min(100, Math.max(0, usage.usagePercent))}%` }}
+                      />
+                    </div>
+
+                    <p
+                      className={clsx(
+                        "mt-2 text-sm font-bold",
+                        usage.atLimit ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      {usage.atLimit
+                        ? t(lang, "loyaltyMemberLimitReached")
+                        : t(lang, "loyaltyMembersRemaining").replace(
+                            "{count}",
+                            usage.remaining.toLocaleString(),
+                          )}
+                    </p>
+
+                    <p className="mt-3 text-sm font-semibold text-foreground">
+                      {t(lang, "loyaltyPendingRequestsCount").replace(
+                        "{count}",
+                        String(usage.pendingRequests),
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">
+                    {t(lang, "loyaltyAllowanceInactiveHint")}
+                  </p>
+                )}
               </article>
             </div>
           ) : null}
@@ -1358,7 +1497,19 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
           ) : null}
 
           {tab === "requests" && shopId ? (
-            <LoyaltyEnrollmentRequestsPanel lang={lang} shopId={shopId} canManage={canManage} />
+            <LoyaltyEnrollmentRequestsPanel
+              lang={lang}
+              shopId={shopId}
+              canManage={canManage}
+              onChanged={refreshLists}
+              onOpenMember={(customerId) => {
+                if (!customerId) return;
+                setTab("customers");
+                setStatusFilter("all");
+                setSearch("");
+                setExpandedId(customerId);
+              }}
+            />
           ) : null}
 
           {tab === "customers" && shopId ? (
@@ -1369,6 +1520,8 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                 accounts={accounts}
                 search={search}
                 searchDone={searchDone}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
                 expandedId={expandedId}
                 canManage={canManage}
                 canRedeem={canRedeem}
@@ -1415,6 +1568,8 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                 accounts={accounts}
                 search={search}
                 searchDone={searchDone}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
                 expandedId={expandedId}
                 canManage={canManage}
                 canRedeem={canRedeem}

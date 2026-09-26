@@ -353,6 +353,16 @@ CREATE TABLE IF NOT EXISTS public.internal_ops_admin_audit (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- ---------- platform settings (production shape from 092) ----------
+-- Phase 4 reads enrollment thresholds from here (key 'loyalty_enrollment_settings') and
+-- falls back to its own defaults when the row is absent, which is the normal case.
+CREATE TABLE IF NOT EXISTS public.platform_settings (
+  key text PRIMARY KEY,
+  value jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  updated_by uuid
+);
+
 -- ---------- shop -> org resolver (production definition from 076) ----------
 CREATE OR REPLACE FUNCTION public.shop_org_id (p_shop_id uuid)
 RETURNS uuid

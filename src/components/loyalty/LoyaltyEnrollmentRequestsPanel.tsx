@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useToast } from "../../context/ToastProvider";
+import { loyaltyErrorKey } from "../../lib/loyalty/loyaltyErrorMessages";
 import {
   listEnrollmentRequests,
   reviewEnrollmentRequest,
@@ -15,12 +16,20 @@ type Props = {
   shopId: string;
   /** Approval/rejection requires settings.shop — the RPC re-checks it server-side too. */
   canManage: boolean;
+  /**
+   * Fired after a request is settled, so the hub can refresh the Overview, the usage
+   * counter and the member list from the server rather than guessing at the delta.
+   */
+  onChanged?: () => void;
+  /** Open the member an approved request produced, in the Customers tab. */
+  onOpenMember?: (customerId: string | null) => void;
 };
 
 const FILTERS: Array<{ id: EnrollmentRequestStatus | "all"; labelKey: string }> = [
   { id: "pending", labelKey: "loyaltyRequestsFilterPending" },
   { id: "approved", labelKey: "loyaltyRequestsFilterApproved" },
   { id: "rejected", labelKey: "loyaltyRequestsFilterRejected" },
+  { id: "expired", labelKey: "loyaltyRequestsFilterExpired" },
   { id: "all", labelKey: "loyaltyRequestsFilterAll" },
 ];
 
@@ -31,7 +40,13 @@ const FILTERS: Array<{ id: EnrollmentRequestStatus | "all"; labelKey: string }> 
  * the outcome. A refusal at the member allowance is reported as such and the request
  * stays pending, so the merchant can free a slot or upgrade and retry.
  */
-export function LoyaltyEnrollmentRequestsPanel({ lang, shopId, canManage }: Props) {
+export function LoyaltyEnrollmentRequestsPanel({
+  lang,
+  shopId,
+  canManage,
+  onChanged,
+  onOpenMember,
+}: Props) {
   const toast = useToast();
   const [filter, setFilter] = useState<EnrollmentRequestStatus | "all">("pending");
   const [requests, setRequests] = useState<EnrollmentRequestRow[]>([]);
@@ -69,15 +84,10 @@ export function LoyaltyEnrollmentRequestsPanel({ lang, shopId, canManage }: Prop
     setBusyId(null);
 
     if (!result.ok) {
-      // Never imply success: say exactly what blocked it.
-      toast.error(
-        result.error === "loyalty_member_limit_reached"
-          ? t(lang, "loyaltyRequestsLimitReached")
-          : result.error === "loyalty_not_enabled"
-            ? t(lang, "loyaltyRequestsNotEnabled")
-            : t(lang, "loyaltyRequestsReviewFailed"),
-      );
+      // Never imply success, and never show the raw RPC code: say what blocked it.
+      toast.error(t(lang, loyaltyErrorKey(result.error)));
       await load();
+      onChanged?.();
       return;
     }
     toast.success(
@@ -85,7 +95,10 @@ export function LoyaltyEnrollmentRequestsPanel({ lang, shopId, canManage }: Prop
     );
     setRejectingId(null);
     setRejectReason("");
+    // Refresh the queue AND the hub: an approval changes the member count and the
+    // allowance, and the request must disappear from pending immediately.
     await load();
+    onChanged?.();
   };
 
   return (
@@ -102,6 +115,11 @@ export function LoyaltyEnrollmentRequestsPanel({ lang, shopId, canManage }: Prop
                   .replace("{used}", String(usage.activeMembers))
                   .replace("{limit}", String(usage.memberLimit))
               : t(lang, "loyaltyRequestsNotEnabled")}
+          </p>
+        ) : null}
+        {usage?.loyaltyEnabled && usage.pendingQueueFull ? (
+          <p className="mt-2 rounded-xl border border-warning/40 bg-warning-muted px-3 py-2 text-xs font-bold text-warning-foreground">
+            {t(lang, "loyaltyRequestsQueueFull").replace("{limit}", String(usage.pendingQueueLimit))}
           </p>
         ) : null}
         <div className="mt-3 flex flex-wrap gap-2">
@@ -150,6 +168,18 @@ export function LoyaltyEnrollmentRequestsPanel({ lang, shopId, canManage }: Prop
               ) : null}
               {row.rejectionReason ? (
                 <p className="mt-1 text-xs font-semibold text-rose-800">{row.rejectionReason}</p>
+              ) : null}
+              {/* An approved request points at the member it produced; the member itself
+                  lives in the Loyalty customers list, not here. */}
+              {row.status === "approved" && row.approvedLoyaltyAccountId ? (
+                <button
+                  type="button"
+                  onClick={onOpenMember ? () => onOpenMember(row.matchedCustomerId) : undefined}
+                  disabled={!onOpenMember || !row.matchedCustomerId}
+                  className="mt-2 text-xs font-black text-waka-700 underline disabled:no-underline disabled:opacity-60"
+                >
+                  {t(lang, "loyaltyRequestsViewMember")}
+                </button>
               ) : null}
 
               {canManage && row.status === "pending" ? (

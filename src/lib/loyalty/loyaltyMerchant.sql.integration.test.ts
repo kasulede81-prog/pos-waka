@@ -160,7 +160,7 @@ describe("loyalty_search_accounts", () => {
   it("finds members by name fragment", async () => {
     const result = await asUser(exec, f.ownerAId, async () => {
       const { rows } = await exec.query(
-        `SELECT public.loyalty_search_accounts($1, 'Custom', 50) AS result`,
+        `SELECT public.loyalty_search_accounts($1, 'Custom', null, 50) AS result`,
         [f.shopAId],
       );
       return rpcJson(rows[0]);
@@ -176,7 +176,7 @@ describe("loyalty_search_accounts", () => {
   it("finds members by phone fragment and returns everything on empty query", async () => {
     const byPhone = await asUser(exec, f.ownerAId, async () => {
       const { rows } = await exec.query(
-        `SELECT public.loyalty_search_accounts($1, '700000001', 50) AS result`,
+        `SELECT public.loyalty_search_accounts($1, '700000001', null, 50) AS result`,
         [f.shopAId],
       );
       return rpcJson(rows[0]);
@@ -185,7 +185,7 @@ describe("loyalty_search_accounts", () => {
 
     const all = await asUser(exec, f.ownerAId, async () => {
       const { rows } = await exec.query(
-        `SELECT public.loyalty_search_accounts($1, NULL, 50) AS result`,
+        `SELECT public.loyalty_search_accounts($1, NULL, null, 50) AS result`,
         [f.shopAId],
       );
       return rpcJson(rows[0]);
@@ -196,7 +196,7 @@ describe("loyalty_search_accounts", () => {
   it("does not leak members across shops", async () => {
     const outsiderSearch = await asUser(exec, f.outsiderId, async () => {
       const { rows } = await exec.query(
-        `SELECT public.loyalty_search_accounts($1, NULL, 50) AS result`,
+        `SELECT public.loyalty_search_accounts($1, NULL, null, 50) AS result`,
         [f.shopAId],
       );
       return rpcJson(rows[0]);
@@ -208,7 +208,7 @@ describe("loyalty_search_accounts", () => {
   it("returns an empty list for a shop with no members", async () => {
     const result = await asUser(exec, f.outsiderId, async () => {
       const { rows } = await exec.query(
-        `SELECT public.loyalty_search_accounts($1, NULL, 50) AS result`,
+        `SELECT public.loyalty_search_accounts($1, NULL, null, 50) AS result`,
         [f.shopBId],
       );
       return rpcJson(rows[0]);

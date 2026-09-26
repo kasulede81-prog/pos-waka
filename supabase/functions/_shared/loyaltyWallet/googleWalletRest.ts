@@ -229,6 +229,37 @@ export async function patchGoogleLoyaltyObjectBalance(
   return { ok: patch.ok, status: patch.status };
 }
 
+/**
+ * Wallet object states this integration uses. Uppercase per the current Google State
+ * enum (`buildGoogleLoyaltyObject` already emits "ACTIVE"; lowercase is deprecated).
+ * Only these three are ever sent — nothing invented.
+ */
+export type GoogleWalletObjectState = "ACTIVE" | "INACTIVE" | "EXPIRED";
+
+/**
+ * Patch ONLY the object state — the lifecycle counterpart to the balance patch.
+ *
+ * Sends a single `state` field so points, barcode/QR identity, account name, program
+ * info and design are all untouched. Used when a membership is suspended, revoked,
+ * expires, or is restored by reactivation/renewal.
+ */
+export async function patchGoogleLoyaltyObjectState(
+  accessToken: string,
+  ids: GoogleIds,
+  state: GoogleWalletObjectState,
+  fetchImpl: FetchLike = fetch as FetchLike,
+): Promise<{ ok: boolean; status: number }> {
+  const resourceId = googleObjectId(ids);
+  const patch = await walletApi(
+    accessToken,
+    "PATCH",
+    `/loyaltyObject/${encodeURIComponent(resourceId)}`,
+    { state },
+    fetchImpl,
+  );
+  return { ok: patch.ok, status: patch.status };
+}
+
 /** Published LoyaltyClass suffix in Google Wallet Console (issuerId.classSuffix). */
 export const GOOGLE_WALLET_PUBLISHED_CLASS_SUFFIX = "waka_loyalty";
 

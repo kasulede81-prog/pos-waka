@@ -2,7 +2,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loadGoogleWalletEnv } from "../_shared/loyaltyWallet/googleWalletEnv.ts";
 import { deterministicGoogleWalletIds } from "../_shared/loyaltyWallet/googleWalletRest.ts";
-import { syncGoogleWalletObjectBalance } from "../_shared/loyaltyWallet/loyaltyWalletService.ts";
+import {
+  syncGoogleWalletObjectBalance,
+  syncGoogleWalletObjectState,
+} from "../_shared/loyaltyWallet/loyaltyWalletService.ts";
+import type { GoogleWalletObjectState } from "../_shared/loyaltyWallet/googleWalletRest.ts";
 
 /**
  * Drain loyalty_wallet_sync_outbox → Google Wallet object PATCH.
@@ -11,6 +15,11 @@ import { syncGoogleWalletObjectBalance } from "../_shared/loyaltyWallet/loyaltyW
  * Authorization: Bearer <user jwt> (shop-scoped) OR service role key.
  *
  * Wallet failures never affect sales or ledger rows — they only update outbox status.
+ *
+ * Two kinds of work share this queue:
+ *   balance   — ledger-driven points PATCH (the sale path; unchanged).
+ *   lifecycle — membership-state PATCH, enqueued by the suspend/reactivate/revoke and
+ *               renew RPCs when the effective membership state changes.
  */
 
 const cors = {
@@ -31,7 +40,16 @@ type OutboxRow = {
   account_id: string;
   balance_points: number;
   attempts: number;
+  /** 'balance' = ledger-driven points patch (sale path). 'lifecycle' = membership state. */
+  sync_kind: string;
 };
+
+const WALLET_STATES: GoogleWalletObjectState[] = ["ACTIVE", "INACTIVE", "EXPIRED"];
+
+function asWalletState(raw: unknown): GoogleWalletObjectState {
+  const v = String(raw ?? "").toUpperCase();
+  return (WALLET_STATES as string[]).includes(v) ? (v as GoogleWalletObjectState) : "INACTIVE";
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -77,7 +95,7 @@ Deno.serve(async (req) => {
 
   let query = admin
     .from("loyalty_wallet_sync_outbox")
-    .select("id, shop_id, account_id, balance_points, attempts")
+    .select("id, shop_id, account_id, balance_points, attempts, sync_kind")
     .in("status", ["pending", "failed"])
     .lt("attempts", 8)
     .order("created_at", { ascending: true })
@@ -103,7 +121,7 @@ Deno.serve(async (req) => {
     // Always re-read authoritative balance — never trust a stale queued value alone.
     const { data: account } = await admin
       .from("loyalty_accounts")
-      .select("id, shop_id, balance_points, google_wallet_object_id")
+      .select("id, shop_id, balance_points, google_wallet_object_id, google_wallet_sync_state")
       .eq("id", row.account_id)
       .maybeSingle();
 
@@ -137,7 +155,32 @@ Deno.serve(async (req) => {
 
     const balance = Math.max(0, Number(account.balance_points ?? row.balance_points ?? 0));
     const ids = deterministicGoogleWalletIds(env.issuerId, String(account.shop_id), String(account.id));
-    const result = await syncGoogleWalletObjectBalance(ids, balance, env.signer, now);
+
+    // The membership state is always taken from the AUTHORITATIVE database definition
+    // (loyalty_wallet_state_for_account, which uses membership-active), never from the
+    // queued row — so a lazily-expired membership is corrected on whichever sync runs
+    // next, without needing a scheduler.
+    const { data: desiredRaw } = await admin.rpc("loyalty_wallet_state_for_account", {
+      p_account_id: account.id,
+    });
+    const desired = asWalletState(desiredRaw);
+    const lastState = (account as { google_wallet_sync_state?: string | null })
+      .google_wallet_sync_state;
+    const stateDrifted = lastState !== desired;
+
+    const isLifecycle = row.sync_kind === "lifecycle";
+
+    // A balance row keeps the existing minimal points PATCH (and only corrects a drifted
+    // state). A lifecycle row patches ONLY state, leaving points untouched.
+    const balanceResult = isLifecycle
+      ? ({ ok: true } as const)
+      : await syncGoogleWalletObjectBalance(ids, balance, env.signer, now);
+    const stateResult =
+      isLifecycle || stateDrifted
+        ? await syncGoogleWalletObjectState(ids, desired, env.signer, now)
+        : ({ ok: true } as const);
+
+    const result = balanceResult.ok ? stateResult : balanceResult;
 
     if (result.ok) {
       synced += 1;
@@ -155,7 +198,8 @@ Deno.serve(async (req) => {
         .from("loyalty_accounts")
         .update({
           google_wallet_synced_at: new Date().toISOString(),
-          google_wallet_sync_balance: balance,
+          ...(isLifecycle ? {} : { google_wallet_sync_balance: balance }),
+          ...(isLifecycle || stateDrifted ? { google_wallet_sync_state: desired } : {}),
         })
         .eq("id", account.id);
     } else {
