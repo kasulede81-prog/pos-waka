@@ -17,7 +17,7 @@ import {
   type AdminNavGroupId,
 } from "../../../lib/adminNavState";
 import { themeUi } from "../../../lib/themeTokens";
-import { canManageAi, normalizeAdminRole } from "./adminRoles";
+import { canManageAi, canManageLoyalty, normalizeAdminRole } from "./adminRoles";
 
 function useLockUnderlyingAppScroll(active: boolean) {
   useEffect(() => {
@@ -50,6 +50,7 @@ export type AdminSectionId =
   | "business_types"
   | "growth_campaign"
   | "ai_settings"
+  | "loyalty"
   | "subscription_settings"
   | "releases"
   | "display_scale"
@@ -62,6 +63,7 @@ type TabDef = {
   label: string;
   superOnly?: boolean;
   aiAdmin?: boolean;
+  loyaltyAdmin?: boolean;
 };
 
 type NavGroup = {
@@ -96,6 +98,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Platform",
     tabs: [
       { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI", aiAdmin: true },
+      { id: "loyalty", path: "/internal/waka/loyalty", label: "Loyalty", loyaltyAdmin: true },
       { id: "subscription_settings", path: "/internal/waka/subscription-settings", label: "Subscriptions", superOnly: true },
       { id: "releases", path: "/internal/waka/releases", label: "Releases", superOnly: true },
       { id: "business_types", path: "/internal/waka/business-types", label: "Business Types", superOnly: true },
@@ -130,10 +133,14 @@ type Props = {
   children: ReactNode;
 };
 
-function filterTabs(tabs: TabDef[], opts: { isSuper: boolean; canManageAi: boolean }): TabDef[] {
+function filterTabs(
+  tabs: TabDef[],
+  opts: { isSuper: boolean; canManageAi: boolean; canManageLoyalty: boolean },
+): TabDef[] {
   return tabs.filter((tab) => {
     if (tab.superOnly && !opts.isSuper) return false;
     if (tab.aiAdmin && !opts.canManageAi) return false;
+    if (tab.loyaltyAdmin && !opts.canManageLoyalty) return false;
     return true;
   });
 }
@@ -146,15 +153,16 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
 
   const isSuper = adminRow?.role === "super_admin";
   const manageAi = canManageAi(normalizeAdminRole(adminRow?.role)) || previewMode;
+  const manageLoyalty = canManageLoyalty(normalizeAdminRole(adminRow?.role)) || previewMode;
   const tabTo = (path: string) => (previewMode ? internalAdminPreviewHref(path) : path);
 
   const visibleGroups = useMemo(
     () =>
       NAV_GROUPS.map((g) => ({
         ...g,
-        tabs: filterTabs(g.tabs, { isSuper, canManageAi: manageAi }),
+        tabs: filterTabs(g.tabs, { isSuper, canManageAi: manageAi, canManageLoyalty: manageLoyalty }),
       })).filter((g) => g.tabs.length > 0),
-    [isSuper, manageAi],
+    [isSuper, manageAi, manageLoyalty],
   );
 
   const [expandedGroups, setExpandedGroups] = useState(readAdminNavGroupsExpanded);

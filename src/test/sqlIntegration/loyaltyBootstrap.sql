@@ -349,6 +349,10 @@ CREATE TABLE IF NOT EXISTS public.internal_ops_admin_audit (
   actor uuid,
   action text NOT NULL,
   target_shop_id uuid,
+  -- Production shape (030_onboarding_bootstrap_subscription_requests.sql:73-81) includes
+  -- target_org_id; the Phase 6A loyalty admin RPCs audit against an ORGANIZATION, so the
+  -- harness must carry it too.
+  target_org_id uuid,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -480,6 +484,26 @@ AS $$
       AND sm.role IN ('owner', 'manager', 'cashier', 'supervisor')
   )
   OR public.user_can_manage_shop(p_shop);
+$$;
+
+-- Test double for the canonical internal-staff predicate (053_internal_admin_auth_user_lookup):
+-- any internal role present stands in for an internal_admins row.
+CREATE OR REPLACE FUNCTION public.is_waka_internal_staff ()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.shop_members sm
+    WHERE sm.user_id = auth.uid ()
+      AND sm.role IN (
+        'super_admin', 'operations_admin', 'support_admin',
+        'subscriptions_admin', 'finance_admin', 'field_agent'
+      )
+  );
 $$;
 
 CREATE OR REPLACE FUNCTION public.is_waka_internal_role (p_roles text[])

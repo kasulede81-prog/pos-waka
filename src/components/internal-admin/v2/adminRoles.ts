@@ -76,6 +76,15 @@ export function canManageAi(role: string): boolean {
   return role === "super_admin" || role === "operations_admin";
 }
 
+/**
+ * Loyalty control plane (Phase 6A/6B). Mirrors the server allowlist in
+ * is_waka_internal_role(['super_admin','operations_admin']) so the nav matches what the
+ * database will actually authorize — the server remains the authority either way.
+ */
+export function canManageLoyalty(role: string): boolean {
+  return role === "super_admin" || role === "operations_admin";
+}
+
 /** Admin reset of shop AI onboarding templates (RPC includes support_admin). */
 export function canManageShopAiSetup(role: string): boolean {
   return canManageAi(role) || role === "support_admin";

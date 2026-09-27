@@ -37,13 +37,42 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260926094000_loyalty_enrollment_abuse_protection.sql"),
   // Phase 5 — Google Wallet follows the membership lifecycle.
   join(process.cwd(), "supabase", "migrations", "20260926095000_loyalty_wallet_lifecycle_sync.sql"),
+  // Phase 6A — internal-admin control plane + privilege hardening.
+  join(process.cwd(), "supabase", "migrations", "20260926096000_loyalty_admin_control_plane.sql"),
+  // Phase 6B — read-only internal-admin dashboard queries.
+  join(process.cwd(), "supabase", "migrations", "20260926097000_loyalty_admin_dashboard_reads.sql"),
+  // Phase 6D — Loyalty audit events cannot be forged/edited/erased from the browser.
+  join(process.cwd(), "supabase", "migrations", "20260926098000_loyalty_admin_audit_integrity.sql"),
 ];
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
 }
 
-export async function createLoyaltySqlHarness(): Promise<SqlExec> {
+/**
+ * Opt-in production privilege posture, applied after the bootstrap and BEFORE the migrations,
+ * exactly where it sits in the real chain:
+ *   - 010_grants.sql: blanket DML on every table (and future tables) to `authenticated`;
+ *   - 030: RLS on internal_ops_admin_audit with the shared `FOR ALL` internal-staff policy.
+ * Without it, a "permission denied" can mean "never granted" rather than "revoked by the
+ * migration", so privilege tests that must prove a revoke use this mode.
+ */
+const PRODUCTION_GRANTS = `
+  GRANT USAGE ON SCHEMA public TO authenticated;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO authenticated;
+
+  ALTER TABLE public.internal_ops_admin_audit ENABLE ROW LEVEL SECURITY;
+  DROP POLICY IF EXISTS internal_ops_admin_audit_staff ON public.internal_ops_admin_audit;
+  CREATE POLICY internal_ops_admin_audit_staff
+    ON public.internal_ops_admin_audit FOR ALL
+    USING (public.is_waka_internal_staff ())
+    WITH CHECK (public.is_waka_internal_staff ());
+`;
+
+export async function createLoyaltySqlHarness(opts: { productionGrants?: boolean } = {}): Promise<SqlExec> {
   const url = process.env.TEST_DATABASE_URL?.trim();
 
   if (url) {
@@ -65,6 +94,7 @@ export async function createLoyaltySqlHarness(): Promise<SqlExec> {
       },
     };
     await exec.exec(readSql(BOOTSTRAP));
+    if (opts.productionGrants) await exec.exec(PRODUCTION_GRANTS);
     for (const migration of MIGRATIONS) await exec.exec(readSql(migration));
     await exec.exec(FORCE_RLS);
     return exec;
@@ -87,6 +117,7 @@ export async function createLoyaltySqlHarness(): Promise<SqlExec> {
     },
   };
   await exec.exec(readSql(BOOTSTRAP));
+  if (opts.productionGrants) await exec.exec(PRODUCTION_GRANTS);
   for (const migration of MIGRATIONS) await exec.exec(readSql(migration));
   await exec.exec(FORCE_RLS);
   return exec;

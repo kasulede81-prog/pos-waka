@@ -477,6 +477,7 @@ function AppRoutes() {
                     path="internal/waka/ai-settings"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
+                  <Route path="internal/waka/loyalty" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
                   <Route
                     path="internal/waka/subscription-settings"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
