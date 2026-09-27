@@ -4,7 +4,7 @@
  * finalizeDraftSale records total = (subtotal - discount) + serviceCharge + tip + exclusive tax, and pushes the
  * three charges in sale.metadata (serviceChargeUgx / tipUgx / taxUgx). The old validator required
  * total = subtotal - discount, so a hospitality bill with any of them was rejected before a single row was
- * written ('sale_total_mismatch'). Migration 20260919130000 replaces ONLY that function.
+ * written ('sale_total_mismatch'). Migration 20260919092128 replaces ONLY that function.
  *
  * Real SQL: the OLD validator is created from migration 120, the NEW one by applying the new migration on top
  * of it (exactly what production will do). The same inputs are run through both.
@@ -20,7 +20,7 @@ import { openTestShift } from "../test/shiftTestSetup";
 import { buildSalePushPayload } from "../offline/cloudSync";
 
 const dir = join(process.cwd(), "supabase", "migrations");
-const NEW_MIGRATION = "20260919130000_sale_validation_bill_charges.sql";
+const NEW_MIGRATION = "20260919092128_sale_validation_bill_charges.sql";
 const SHOP = "00000000-0000-4000-8000-000000000000";
 
 function oldValidatorSql(): string {

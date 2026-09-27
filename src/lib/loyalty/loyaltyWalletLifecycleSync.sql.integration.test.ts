@@ -168,7 +168,7 @@ describe("lifecycle changes enqueue Wallet work", () => {
     const afterSuspend = await outbox(accountId);
     expect(afterSuspend).toHaveLength(1);
     expect(afterSuspend[0]!.sync_kind).toBe("lifecycle");
-    expect(afterSuspend[0]!.reason).toBe("lifecycle_suspend");
+    expect(afterSuspend[0]!.reason).toBe("account_state");
     expect(afterSuspend[0]!.status).toBe("pending");
     expect(await desiredState(accountId)).toBe("INACTIVE");
 
@@ -178,7 +178,7 @@ describe("lifecycle changes enqueue Wallet work", () => {
     await lifecycle(shop, accountId, "revoke");
     const afterRevoke = await outbox(accountId);
     expect(afterRevoke).toHaveLength(3);
-    expect(afterRevoke[2]!.reason).toBe("lifecycle_revoke");
+    expect(afterRevoke[2]!.reason).toBe("account_state");
     expect(await desiredState(accountId)).toBe("INACTIVE");
   });
 
@@ -188,7 +188,7 @@ describe("lifecycle changes enqueue Wallet work", () => {
     await lifecycle(shop, accountId, "suspend");
     await lifecycle(shop, accountId, "reactivate");
     const rows = await outbox(accountId);
-    expect(rows.map((r) => r.reason)).toEqual(["lifecycle_suspend", "lifecycle_reactivate"]);
+    expect(rows.map((r) => r.reason)).toEqual(["account_state", "account_state"]);
     expect(await desiredState(accountId)).toBe("ACTIVE");
   });
 
@@ -200,7 +200,7 @@ describe("lifecycle changes enqueue Wallet work", () => {
     // The newest queued work is the one that determines the final Wallet state.
     const rows = await outbox(accountId);
     const last = rows[rows.length - 1]!;
-    expect(last.reason).toBe("lifecycle_reactivate");
+    expect(last.reason).toBe("account_state");
     expect(await desiredState(accountId)).toBe("ACTIVE");
   });
 
@@ -222,7 +222,7 @@ describe("lifecycle changes enqueue Wallet work", () => {
     expect(r.ok).toBe(true);
     const rows = await outbox(accountId);
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.reason).toBe("lifecycle_renewed");
+    expect(rows[0]!.reason).toBe("account_state");
     expect(await desiredState(accountId)).toBe("ACTIVE");
   });
 
@@ -314,17 +314,26 @@ describe("idempotency", () => {
     expect(await outbox(accountId)).toHaveLength(1);
   });
 
-  it("the enqueue helper is idempotent within a transaction and per transition", async () => {
-    const shop = await newShop("Enqueue Idempotency Shop");
-    const { accountId } = await seedMember(shop, "Helper", { wallet: true });
-    const { rows } = await exec.query<{ a: boolean; b: boolean }>(
-      `SELECT public.loyalty_wallet_enqueue_lifecycle($1,$2,'x') AS a,
-              public.loyalty_wallet_enqueue_lifecycle($1,$2,'x') AS b`,
-      [shop, accountId],
+  it("a change that does not move the EFFECTIVE state queues nothing", async () => {
+    const shop = await newShop("Effective State Shop");
+    const { accountId } = await seedMember(shop, "Effective", { wallet: true });
+    expect(await outbox(accountId)).toHaveLength(0);
+
+    // membership_expires_at moves, but the member stays ACTIVE either way, so the
+    // desired Wallet state is ACTIVE -> ACTIVE. Trigger B must not queue a redundant
+    // PATCH for this.
+    await exec.query(
+      `UPDATE public.loyalty_accounts
+          SET membership_expires_at = now() + interval '365 days'
+        WHERE id = $1`,
+      [accountId],
     );
-    // Same transaction, same source_ref: the second insert is a no-op by unique index.
-    expect(rows[0].a).toBe(true);
-    expect(rows[0].b).toBe(false);
+    expect(await desiredState(accountId)).toBe("ACTIVE");
+    expect(await outbox(accountId)).toHaveLength(0);
+
+    // A change that DOES move it (ACTIVE -> INACTIVE) queues exactly one row.
+    await lifecycle(shop, accountId, "suspend");
+    expect(await desiredState(accountId)).toBe("INACTIVE");
     expect(await outbox(accountId)).toHaveLength(1);
   });
 
@@ -398,10 +407,11 @@ describe("the lifecycle patch preserves everything else", () => {
     await lifecycle(shop, accountId, "suspend");
     await lifecycle(shop, accountId, "revoke");
 
-    // Work is queued, but nothing mints an object: the worker skips accounts with no
-    // google_wallet_object_id and marks the row done as `not_issued`.
+    // Trigger B's google_wallet_object_id guard means an account that was never issued
+    // a pass queues NOTHING at all — the lifecycle cannot create Wallet work for a card
+    // that does not exist.
     const rows = await outbox(accountId);
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows).toHaveLength(0);
     const { rows: acct } = await exec.query<{ obj: string | null; issued: string | null }>(
       `SELECT google_wallet_object_id AS obj, google_wallet_issued_at AS issued
          FROM public.loyalty_accounts WHERE id = $1`,
@@ -469,17 +479,15 @@ describe("security", () => {
     ).rejects.toThrow(/permission denied/i);
   });
 
-  it("the enqueue helper is not client-callable", async () => {
-    const shop = await newShop("Enqueue Security Shop");
-    const { accountId } = await seedMember(shop, "Helper Guard", { wallet: true });
+  it("the membership-state trigger function cannot be called directly", async () => {
+    // There is no enqueue helper to lock down any more: the only producer is Trigger B's
+    // function, which returns `trigger` and therefore cannot be invoked as a plain
+    // function by any role, including a shop owner.
     await expect(
       asUser(exec, f.ownerAId, async () => {
-        await exec.query(`SELECT public.loyalty_wallet_enqueue_lifecycle($1,$2,'x')`, [
-          shop,
-          accountId,
-        ]);
+        await exec.query(`SELECT public.loyalty_wallet_enqueue_on_account_state_change()`);
       }),
-    ).rejects.toThrow(/permission denied/i);
+    ).rejects.toThrow(/trigger/i);
   });
 
   it("only a manage-shop role can drive the lifecycle that queues Wallet work", async () => {

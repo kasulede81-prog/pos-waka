@@ -167,7 +167,7 @@ describe("isShopResetVerified", () => {
 describe("reset coverage stays in lockstep with the server-side plan", () => {
   it("SHOP_RESET_COUNT_KEYS equals the tables of shop_reset_business_plan() in deletion order", () => {
     const sql = readFileSync(
-      join(process.cwd(), "supabase", "migrations", "20260920100000_shop_reset_fk_ordered_plan.sql"),
+      join(process.cwd(), "supabase", "migrations", "20260919235331_shop_reset_fk_ordered_plan.sql"),
       "utf8",
     );
     const planBlock = sql.slice(

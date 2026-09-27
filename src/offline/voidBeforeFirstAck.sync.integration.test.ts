@@ -111,10 +111,10 @@ async function newServer(): Promise<PGlite> {
     create unique index inventory_movements_sale_void_product_unique on public.inventory_movements (shop_id, reference_type, reference_id, product_id) where reference_type = 'sale_void' and reference_id is not null;
     create unique index inventory_movements_sale_recipe_unique on public.inventory_movements (shop_id, reference_type, reference_id, product_id) where reference_type = 'recipe' and reference_id is not null;
   `);
-  const R5 = "20260919110000_made_to_order_ingredient_stock.sql";
+  const R5 = "20260919054154_made_to_order_ingredient_stock.sql";
   for (const [file, name] of [
     ["172_sale_void_stock_durable_idempotency.sql", "_apply_durable_stock_delta"],
-    ["20260919100000_sale_void_bounded_reversal_guard.sql", "shop_apply_sale_void_stock"],
+    ["20260919054011_sale_void_bounded_reversal_guard.sql", "shop_apply_sale_void_stock"],
     [R5, "_wk_try_uuid"],
     [R5, "_wk_recipe_provenance_struct"],
     [R5, "recipe_line_provenance"],
@@ -123,7 +123,7 @@ async function newServer(): Promise<PGlite> {
     [R5, "_wk_recipe_credit"],
     [R5, "apply_sale_stock_movements"],
     [R5, "shop_apply_sale_void_line_stock"],
-    ["20260919130000_sale_validation_bill_charges.sql", "validate_sale_push_financials"],
+    ["20260919092128_sale_validation_bill_charges.sql", "validate_sale_push_financials"],
     ["170_sale_complete_already_completed_fence.sql", "shop_push_sale_complete"],
     ["129_hospitality_restaurant_billing_sync.sql", "shop_patch_hospitality_sale_metadata"],
     ["20260916025318_sale_line_void_state_sync.sql", "shop_sync_sale_line_void_state"],

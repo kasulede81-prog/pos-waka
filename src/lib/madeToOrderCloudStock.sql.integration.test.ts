@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 
 /**
- * Migration 20260919110000 — made-to-order recipe stock on the cloud.
+ * Migration 20260919054154 — made-to-order recipe stock on the cloud.
  * Runs the ORIGINAL functions (083 / 181 / 179) to prove the mismatch, then the new migration.
  * Real SQL, real PL/pgSQL; only the surrounding platform (auth, roles, unrelated tables) is stubbed.
  */
@@ -137,11 +137,11 @@ describe("original functions (083 / 181 / 179) — the cloud does not know made-
   });
 });
 
-describe("migration 20260919110000 — sale application", () => {
+describe("migration 20260919054154 — sale application", () => {
   let db: PGlite;
   beforeAll(async () => {
     db = await baseDb();
-    await db.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await db.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
   }, 60_000);
   afterAll(async () => db.close());
 
@@ -241,7 +241,7 @@ describe("migration 20260919110000 — sale application", () => {
     await addLine(legacyDb, S, 260, BURGER, 2, [{ productId: BEEF, quantity: 2 }, { productId: BUN, quantity: 2 }]);
     await apply(legacyDb, S);
     expect(await stock(legacyDb, BURGER)).toBe(-2);
-    await legacyDb.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await legacyDb.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     await apply(legacyDb, S); // any re-run after the migration
     expect(await stock(legacyDb, BEEF)).toBe(100); // no ingredient deduction on top of the dish deduction
     expect(await stock(legacyDb, BURGER)).toBe(-2);
@@ -250,11 +250,11 @@ describe("migration 20260919110000 — sale application", () => {
   }, 60_000);
 });
 
-describe("migration 20260919110000 — void of one sale line", () => {
+describe("migration 20260919054154 — void of one sale line", () => {
   let db: PGlite;
   beforeAll(async () => {
     db = await baseDb();
-    await db.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await db.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     // sale: burger x4 (recipe), coke x2 (retail)
     await addLine(db, SALE, 300, BURGER, 4, [{ productId: BEEF, quantity: 4 }, { productId: BUN, quantity: 4 }]);
     await addLine(db, SALE, 301, COKE, 2);
@@ -334,11 +334,11 @@ describe("migration 20260919110000 — void of one sale line", () => {
   });
 });
 
-describe("migration 20260919110000 — returns and same-product / different-variant lines", () => {
+describe("migration 20260919054154 — returns and same-product / different-variant lines", () => {
   let db: PGlite;
   beforeAll(async () => {
     db = await baseDb();
-    await db.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await db.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     // ONE sale, ONE product, TWO lines with different recipes and quantities:
     //   line 500: burger x3 (base: beef + bun);   line 501: burger x2 large (beef + cheese)
     await addLine(db, SALE, 500, BURGER, 3, [{ productId: BEEF, quantity: 3 }, { productId: BUN, quantity: 3 }]);
@@ -393,7 +393,7 @@ describe("migration 20260919110000 — returns and same-product / different-vari
 
   it("a return replay (same return id applied again) credits nothing", async () => {
     const dbR = await baseDb();
-    await dbR.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await dbR.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     await addLine(dbR, SALE, 510, BURGER, 2, [{ productId: BEEF, quantity: 2 }]);
     await apply(dbR);
     await addReturn(dbR, { id: 610, line: 510, product: BURGER, qty: 1 });
@@ -406,7 +406,7 @@ describe("migration 20260919110000 — returns and same-product / different-vari
 
   it("an unsellable return reason (damaged) restocks nothing", async () => {
     const dbD = await baseDb();
-    await dbD.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await dbD.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     await addLine(dbD, SALE, 520, BURGER, 2, [{ productId: BEEF, quantity: 2 }]);
     await apply(dbD);
     await addReturn(dbD, { id: 620, line: 520, product: BURGER, qty: 1, reason: "damaged" });
@@ -416,7 +416,7 @@ describe("migration 20260919110000 — returns and same-product / different-vari
 
   it("a legacy return with no line id resolves to the product's ONLY line, and is refused when two recipe lines make it ambiguous", async () => {
     const dbL = await baseDb();
-    await dbL.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await dbL.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     await addLine(dbL, SALE, 530, BURGER, 2, [{ productId: BEEF, quantity: 2 }]);
     await apply(dbL);
     await addReturn(dbL, { id: 630, product: BURGER, qty: 1 }); // unambiguous → infers line 530
@@ -429,7 +429,7 @@ describe("migration 20260919110000 — returns and same-product / different-vari
 
   it("a legacy return of a RETAIL line is unchanged: the returned product is credited", async () => {
     const dbC = await baseDb();
-    await dbC.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await dbC.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     await addLine(dbC, SALE, 540, COKE, 3);
     await apply(dbC);
     await addReturn(dbC, { id: 640, product: COKE, qty: 1 });
@@ -438,10 +438,10 @@ describe("migration 20260919110000 — returns and same-product / different-vari
   }, 60_000);
 });
 
-describe("migration 20260919110000 — fractional recipes never drift", () => {
+describe("migration 20260919054154 — fractional recipes never drift", () => {
   it("three single-unit returns sum to exactly the recorded consumption", async () => {
     const db = await baseDb();
-    await db.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await db.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     await addLine(db, SALE, 550, BURGER, 3, [{ productId: BEEF, quantity: 0.9999 }]);
     await apply(db);
     expect(await stock(db, BEEF)).toBeCloseTo(99.0001, 4);
@@ -456,8 +456,8 @@ describe("migration 20260919110000 — fractional recipes never drift", () => {
 describe("coexistence with the (separate) bounded-void-guard migration", () => {
   it("applied in either order, the retail path is bounded by the guard and the recipe path still works", async () => {
     const db = await baseDb();
-    await db.exec(readFileSync(join(dir, "20260919100000_sale_void_bounded_reversal_guard.sql"), "utf8"));
-    await db.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
+    await db.exec(readFileSync(join(dir, "20260919054011_sale_void_bounded_reversal_guard.sql"), "utf8"));
+    await db.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
     await addLine(db, SALE, 800, BURGER, 2, [{ productId: BEEF, quantity: 2 }]);
     await addLine(db, SALE, 801, COKE, 2);
     await apply(db);
@@ -472,8 +472,8 @@ describe("coexistence with the (separate) bounded-void-guard migration", () => {
 
     // and the other order: the new migration first, the guard second (the guard replaces only the old RPC)
     const db2 = await baseDb();
-    await db2.exec(readFileSync(join(dir, "20260919110000_made_to_order_ingredient_stock.sql"), "utf8"));
-    await db2.exec(readFileSync(join(dir, "20260919100000_sale_void_bounded_reversal_guard.sql"), "utf8"));
+    await db2.exec(readFileSync(join(dir, "20260919054154_made_to_order_ingredient_stock.sql"), "utf8"));
+    await db2.exec(readFileSync(join(dir, "20260919054011_sale_void_bounded_reversal_guard.sql"), "utf8"));
     await addLine(db2, SALE, 810, BURGER, 2, [{ productId: BEEF, quantity: 2 }]);
     await apply(db2);
     expect((await voidLine(db2, { voidId: 910, line: 810, qty: 2 })).ok).toBe(true);

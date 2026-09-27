@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 
 /**
- * Migration 20260919120000 — pin the search_path of four pure helper functions.
+ * Migration 20260919080941 — pin the search_path of four pure helper functions.
  * Real SQL: the four functions are created exactly as their migrations define them, evaluated over a
  * battery of inputs, hardened, and evaluated again — the answers must be identical.
  */
@@ -20,10 +20,10 @@ function extractFn(file: string, name: string): string {
 }
 
 const FUNCTIONS: Array<[string, string]> = [
-  ["20260919090000_hospitality_floor_tombstone_guard.sql", "hospitality_status_rank"],
-  ["20260919110000_made_to_order_ingredient_stock.sql", "_wk_try_uuid"],
-  ["20260919110000_made_to_order_ingredient_stock.sql", "_wk_recipe_provenance_struct"],
-  ["20260919110000_made_to_order_ingredient_stock.sql", "_wk_recipe_credit"],
+  ["20260919053914_hospitality_floor_tombstone_guard.sql", "hospitality_status_rank"],
+  ["20260919054154_made_to_order_ingredient_stock.sql", "_wk_try_uuid"],
+  ["20260919054154_made_to_order_ingredient_stock.sql", "_wk_recipe_provenance_struct"],
+  ["20260919054154_made_to_order_ingredient_stock.sql", "_wk_recipe_credit"],
 ];
 
 const BATTERY = `
@@ -55,7 +55,7 @@ const config = async (db: PGlite) =>
     )
   ).rows;
 
-describe("migration 20260919120000 — helper search_path", () => {
+describe("migration 20260919080941 — helper search_path", () => {
   let db: PGlite;
   let before: unknown;
   beforeAll(async () => {
@@ -72,7 +72,7 @@ describe("migration 20260919120000 — helper search_path", () => {
   });
 
   it("the migration pins pg_catalog on each, and touches nothing else", async () => {
-    await db.exec(readFileSync(join(dir, "20260919120000_hospitality_helper_search_path.sql"), "utf8"));
+    await db.exec(readFileSync(join(dir, "20260919080941_hospitality_helper_search_path.sql"), "utf8"));
     for (const r of await config(db)) expect(r.cfg).toEqual(["search_path=pg_catalog"]);
     const volatility = await db.query<{ proname: string; provolatile: string; prosecdef: boolean }>(
       `select proname, provolatile, prosecdef from pg_proc where proname in ('hospitality_status_rank','_wk_try_uuid','_wk_recipe_credit','_wk_recipe_provenance_struct') order by 1`,
@@ -94,7 +94,7 @@ describe("migration 20260919120000 — helper search_path", () => {
   });
 
   it("is idempotent: running it again changes nothing", async () => {
-    await db.exec(readFileSync(join(dir, "20260919120000_hospitality_helper_search_path.sql"), "utf8"));
+    await db.exec(readFileSync(join(dir, "20260919080941_hospitality_helper_search_path.sql"), "utf8"));
     for (const r of await config(db)) expect(r.cfg).toEqual(["search_path=pg_catalog"]);
     expect((await db.query<{ r: unknown }>(BATTERY)).rows[0]!.r).toEqual(before);
   });

@@ -9,7 +9,7 @@ import { supabase } from "./supabase";
 
 /**
  * Every table the server-side reset plan deletes (public.shop_reset_business_plan(), migration
- * 20260920100000). Order = deletion order. A unit test keeps this list identical to the SQL plan.
+ * 20260919235331). Order = deletion order. A unit test keeps this list identical to the SQL plan.
  */
 export const SHOP_RESET_COUNT_KEYS = [
   "loyalty_redemptions",

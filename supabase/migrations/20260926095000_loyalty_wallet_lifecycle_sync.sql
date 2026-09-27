@@ -44,6 +44,82 @@ alter table public.loyalty_accounts
 comment on column public.loyalty_accounts.google_wallet_sync_state is
   'Last membership state pushed to the Wallet object (ACTIVE/INACTIVE/EXPIRED).';
 
+-- The column default is 'balance' because the column arrives on an outbox whose
+-- historical producers are all ledger-driven. That default is correct for Trigger A
+-- (loyalty_transactions) but WRONG for the membership-state trigger, whose rows must
+-- be state patches. Classify those explicitly rather than inheriting the default.
+--
+-- 20260925070409_loyalty_wallet_enqueue_on_account_state_change is already applied in
+-- production and stays the ONE producer of membership-state rows. It is redefined here
+-- for two reasons: to state sync_kind explicitly, and to gate on the EFFECTIVE state.
+--
+-- Production's condition fires on any status / membership_expires_at change. That is
+-- coarser than what the outbox should carry: renewing an already-active member moves
+-- membership_expires_at but leaves the card's desired state at ACTIVE, so it queued a
+-- redundant PATCH. The redefined body adds one predicate — enqueue only when
+-- loyalty_wallet_desired_state() actually differs across the update — while keeping the
+-- google_wallet_object_id guard, the source_ref shape, ON CONFLICT DO NOTHING and the
+-- exception swallowing exactly as production has them. No second producer is added.
+update public.loyalty_wallet_sync_outbox
+set sync_kind = 'lifecycle'
+where reason = 'account_state' and sync_kind is distinct from 'lifecycle';
+
+create or replace function public.loyalty_wallet_enqueue_on_account_state_change()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+begin
+  if new.google_wallet_object_id is null then
+    return new;
+  end if;
+
+  if (new.status is distinct from old.status)
+     or (new.membership_expires_at is distinct from old.membership_expires_at)
+  then
+    -- Enqueue only when the EFFECTIVE desired state actually moved. Both sides are
+    -- evaluated at the same now(), so this compares like with like: a renewal that
+    -- leaves the member active is ACTIVE -> ACTIVE and queues nothing, while
+    -- suspend / revoke / reactivate and a lapsed-membership renewal all differ.
+    if public.loyalty_wallet_desired_state (old.status, old.membership_expires_at, now ())
+       is not distinct from
+       public.loyalty_wallet_desired_state (new.status, new.membership_expires_at, now ())
+    then
+      return new;
+    end if;
+
+    insert into public.loyalty_wallet_sync_outbox (
+      shop_id, account_id, balance_points, reason, source_ref, sync_kind
+    )
+    values (
+      new.shop_id,
+      new.id,
+      greatest(0, coalesce(new.balance_points, 0)),
+      'account_state',
+      'acctstate:' || new.id::text || ':'
+        || coalesce(new.status, 'null') || ':'
+        || coalesce(new.membership_expires_at::text, 'none'),
+      'lifecycle'
+    )
+    on conflict (source_ref) do nothing;
+  end if;
+
+  return new;
+exception
+  when others then
+    return new;
+end;
+$function$;
+
+-- Trigger B itself is left exactly as production created it: same name, same table,
+-- same AFTER UPDATE firing, same function. Only the function body above changed.
+drop trigger if exists trg_loyalty_wallet_enqueue_on_account_state on public.loyalty_accounts;
+create trigger trg_loyalty_wallet_enqueue_on_account_state
+after update on public.loyalty_accounts
+for each row
+execute function public.loyalty_wallet_enqueue_on_account_state_change();
+
 -- ============================================================================
 -- 2) The single membership-state -> Wallet-state mapping
 -- ============================================================================
@@ -99,77 +175,30 @@ end;
 $gr$;
 
 -- ============================================================================
--- 3) Lifecycle enqueue (idempotent, transaction-stable, no Google call)
+-- 3) NO second producer
 -- ============================================================================
-
-create or replace function public.loyalty_wallet_enqueue_lifecycle (
-  p_shop_id uuid,
-  p_account_id uuid,
-  p_reason text
-)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $fn$
-declare
-  v_balance integer;
-  v_n integer;
-begin
-  if p_shop_id is null or p_account_id is null then
-    return false;
-  end if;
-
-  -- The outbox requires a balance; carry the authoritative one unchanged. A lifecycle
-  -- row never patches points, it only needs a value to satisfy the column.
-  select greatest (0, coalesce (a.balance_points, 0))
-    into v_balance
-  from public.loyalty_accounts a
-  where a.id = p_account_id and a.shop_id = p_shop_id;
-  if not found then
-    return false;
-  end if;
-
-  insert into public.loyalty_wallet_sync_outbox (
-    shop_id, account_id, balance_points, reason, source_ref, sync_kind
-  )
-  values (
-    p_shop_id,
-    p_account_id,
-    v_balance,
-    coalesce (nullif (btrim (coalesce (p_reason, '')), ''), 'lifecycle'),
-    -- now() is transaction-stable, so two enqueues inside one transaction collapse via
-    -- the unique source_ref, while two separate transitions stay distinct and the last
-    -- one wins. That is what makes suspend -> reactivate converge to ACTIVE.
-    'lifecycle:' || p_account_id::text || ':' || now ()::text,
-    'lifecycle'
-  )
-  on conflict (source_ref) do nothing;
-
-  get diagnostics v_n = row_count;
-  return v_n > 0;
-end;
-$fn$;
-
-do $gl$
-begin
-  execute 'revoke all on function public.loyalty_wallet_enqueue_lifecycle (uuid, uuid, text) from public';
-  if exists (select 1 from pg_roles where rolname = 'anon') then
-    execute 'revoke all on function public.loyalty_wallet_enqueue_lifecycle (uuid, uuid, text) from anon';
-  end if;
-  if exists (select 1 from pg_roles where rolname = 'authenticated') then
-    execute 'revoke all on function public.loyalty_wallet_enqueue_lifecycle (uuid, uuid, text) from authenticated';
-  end if;
-end;
-$gl$;
+-- This migration deliberately adds NO enqueue helper. Production already has exactly
+-- one producer per event, and both are left in place:
+--
+--   Trigger A  trg_loyalty_wallet_enqueue_sync                    (loyalty_transactions)
+--   Trigger B  trg_loyalty_wallet_enqueue_on_account_state         (loyalty_accounts)
+--   Trigger C  trg_loyalty_wallet_enqueue_on_program_change        (loyalty_programs)
+--
+-- An earlier draft of this migration also had loyalty_set_account_lifecycle and
+-- loyalty_renew_membership call a loyalty_wallet_enqueue_lifecycle() helper. That
+-- would have produced TWO outbox rows for one lifecycle change — Trigger B fires on
+-- the same UPDATE, and the two source_ref prefixes ('acctstate:' vs 'lifecycle:')
+-- cannot collapse under ON CONFLICT — and therefore two Google Wallet PATCH calls.
+-- The helper is gone and neither RPC enqueues.
 
 -- ============================================================================
 -- 4) Lifecycle RPCs enqueue after a successful, effective state change
 -- ============================================================================
 -- Both bodies are reproduced from 20260926093000_loyalty_member_lifecycle_allowance.sql
--- with exactly three additions each: the `v_state_before` declaration, its capture from
--- the pre-change row, and the enqueue block. Every allowance check, the audit write, the
--- token/balance invariant and the response shapes are unchanged.
+-- UNCHANGED. They are restated here only so this migration is self-contained; the
+-- redefinition is a provable no-op against the live 20260926093000 versions. Every
+-- allowance check, the audit write, the token/balance invariant and the response shapes
+-- are identical, and neither function enqueues anything.
 
 create or replace function public.loyalty_set_account_lifecycle (
   p_shop_id uuid,
@@ -190,7 +219,6 @@ declare
   v_purge timestamptz;
   v_ent record;
   v_active integer;
-  v_state_before text;
 begin
   if not public.user_can_manage_shop (p_shop_id) then
     return jsonb_build_object('ok', false, 'error', 'forbidden');
@@ -209,7 +237,6 @@ begin
 
   v_token := v_account.public_card_token;
   v_balance := v_account.balance_points;
-  v_state_before := public.loyalty_wallet_state_for_account (v_account.id);
 
   if v_action = 'suspend' then
     if v_account.status = 'revoked' then
@@ -308,13 +335,9 @@ begin
       )
   where id = v_account.id and shop_id = p_shop_id;
 
-  -- Phase 5: Wallet state follows the authoritative membership state. Enqueued only
-  -- after the change has actually committed inside this transaction, and only when the
-  -- EFFECTIVE state changed — so a refused operation and an idempotent no-op (both of
-  -- which return earlier) never queue Wallet work. Asynchronous: no Google call here.
-  if public.loyalty_wallet_state_for_account (v_account.id) is distinct from v_state_before then
-    perform public.loyalty_wallet_enqueue_lifecycle (p_shop_id, v_account.id, 'lifecycle_' || v_action);
-  end if;
+  -- The Wallet pass is NOT queued here. Trigger B
+  -- (trg_loyalty_wallet_enqueue_on_account_state) fires on this same UPDATE and is the
+  -- one authority for membership-state rows, so enqueuing here would duplicate it.
 
   select * into v_account from public.loyalty_accounts where id = p_account_id;
 
@@ -366,7 +389,6 @@ declare
   v_balance integer;
   v_ent record;
   v_active integer;
-  v_state_before text;
 begin
   if not public.user_can_manage_shop (p_shop_id) then
     return jsonb_build_object('ok', false, 'error', 'forbidden');
@@ -385,7 +407,6 @@ begin
 
   v_token := v_account.public_card_token;
   v_balance := v_account.balance_points;
-  v_state_before := public.loyalty_wallet_state_for_account (v_account.id);
 
   if p_mode is null or btrim(p_mode) = '' then
     select * into v_program from public.loyalty_programs where shop_id = p_shop_id;
@@ -445,12 +466,9 @@ begin
     raise exception 'loyalty_renew_membership mutated token or balance';
   end if;
 
-  -- Phase 5: a renewal that restores an active membership must reach the Wallet pass.
-  -- Renewing an already-active member changes no effective state and queues nothing; a
-  -- renewal refused by the allowance gate returns before this point.
-  if public.loyalty_wallet_state_for_account (v_account.id) is distinct from v_state_before then
-    perform public.loyalty_wallet_enqueue_lifecycle (p_shop_id, v_account.id, 'lifecycle_renewed');
-  end if;
+  -- The Wallet pass is NOT queued here. Trigger B
+  -- (trg_loyalty_wallet_enqueue_on_account_state) is the one authority for
+  -- membership-state rows; a renewal that changes membership_expires_at fires it.
 
   return jsonb_build_object(
     'ok', true,

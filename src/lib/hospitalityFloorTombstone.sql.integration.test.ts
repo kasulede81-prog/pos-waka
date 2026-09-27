@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 
 /**
- * Migration 20260919090000 — server-side tombstone protection for the floor layout.
+ * Migration 20260919053914 — server-side tombstone protection for the floor layout.
  * Runs the ORIGINAL function (migration 128) to prove the defects, then the whole new migration.
  */
 
@@ -21,7 +21,7 @@ function extractOriginalFunction(): string {
   const start = src.indexOf("create or replace function public.shop_push_hospitality_floor");
   return src.slice(start, src.indexOf("$$;", start) + 3);
 }
-const newMigration = () => readFileSync(join(dir, "20260919090000_hospitality_floor_tombstone_guard.sql"), "utf8");
+const newMigration = () => readFileSync(join(dir, "20260919053914_hospitality_floor_tombstone_guard.sql"), "utf8");
 
 async function freshDb(functionSql: string): Promise<PGlite> {
   const db = new PGlite();
@@ -120,7 +120,7 @@ describe("original function (128) — documents the defects", () => {
   });
 });
 
-describe("migration 20260919090000 — tombstones are terminal on the server", () => {
+describe("migration 20260919053914 — tombstones are terminal on the server", () => {
   let db: PGlite;
   beforeAll(async () => {
     db = await freshDb(newMigration());
@@ -220,7 +220,7 @@ describe("original function (128) — reservations/waitlist are timestamp-only",
   });
 });
 
-describe("migration 20260919090000 — reservations/waitlist only move forward", () => {
+describe("migration 20260919053914 — reservations/waitlist only move forward", () => {
   let db: PGlite;
   beforeAll(async () => {
     db = await freshDb(newMigration());

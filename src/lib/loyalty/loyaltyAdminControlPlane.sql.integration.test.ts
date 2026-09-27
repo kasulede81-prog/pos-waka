@@ -675,8 +675,17 @@ describe("regression: the merchant surface is unchanged", () => {
 
     // lifecycle: suspend -> reactivate
     const { rows: acct } = await exec.query<{ id: string }>(
-      `SELECT id FROM public.loyalty_accounts WHERE shop_id = $1 LIMIT 1`,
+      `SELECT id FROM public.loyalty_accounts WHERE shop_id = $1 ORDER BY id LIMIT 1`,
       [shop],
+    );
+    // Give this account an issued Wallet object. Trigger B is the ONE producer of
+    // membership-state rows and is guarded on google_wallet_object_id, so without this
+    // an account state change correctly enqueues nothing. Setting it here does not fire
+    // the trigger: neither status nor membership_expires_at changes.
+    await exec.query(
+      `UPDATE public.loyalty_accounts SET google_wallet_object_id = 'waka_loyalty.acct_regress'
+        WHERE id = $1`,
+      [acct[0].id],
     );
     const suspended = await asUser(exec, f.ownerAId, async () => {
       const { rows } = await exec.query(
@@ -695,13 +704,27 @@ describe("regression: the merchant surface is unchanged", () => {
     });
     expect(reactivated.ok).toBe(true);
 
-    // wallet lifecycle sync was enqueued by the lifecycle change, as in Phase 5
-    const { rows: outbox } = await exec.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM public.loyalty_wallet_sync_outbox
-        WHERE account_id = $1 AND sync_kind = 'lifecycle'`,
+    // Trigger B (trg_loyalty_wallet_enqueue_on_account_state) is the single producer of
+    // membership-state rows: the two transitions above are two distinct source_refs, so
+    // exactly two rows — both classified 'lifecycle', never the 'balance' default.
+    const { rows: outbox } = await exec.query<{ n: number; kinds: string | null }>(
+      `SELECT count(*)::int AS n, string_agg(DISTINCT sync_kind, ',') AS kinds
+         FROM public.loyalty_wallet_sync_outbox
+        WHERE account_id = $1`,
       [acct[0].id],
     );
     expect(Number(outbox[0].n)).toBe(2);
+    expect(outbox[0].kinds).toBe("lifecycle");
+
+    // The other seeded member has no Wallet object, so its (untouched) state enqueues
+    // nothing — the guard, not an accident of ordering.
+    const { rows: others } = await exec.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM public.loyalty_wallet_sync_outbox o
+        JOIN public.loyalty_accounts a ON a.id = o.account_id
+       WHERE a.shop_id = $1 AND o.account_id <> $2`,
+      [shop, acct[0].id],
+    );
+    expect(Number(others[0].n)).toBe(0);
   });
 
   it("sale points and balance sync still work", async () => {

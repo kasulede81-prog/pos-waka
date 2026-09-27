@@ -21,7 +21,7 @@ export type SqlExec = {
 
 const ROOT = process.cwd();
 export const MIGRATIONS_DIR = join(ROOT, "supabase", "migrations");
-export const NEW_MIGRATION = join(MIGRATIONS_DIR, "20260920100000_shop_reset_fk_ordered_plan.sql");
+export const NEW_MIGRATION = join(MIGRATIONS_DIR, "20260919235331_shop_reset_fk_ordered_plan.sql");
 export const TOPOLOGY_FILE = join(ROOT, "src", "test", "sqlIntegration", "shopResetTopology.txt");
 
 export type FkEdge = { child: string; parent: string; column: string; action: "c" | "r" | "a" | "n"; notNull: boolean };

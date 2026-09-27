@@ -634,3 +634,76 @@ describe("existing protections are intact", () => {
     expect(Number(tx[0].points)).toBeGreaterThan(0);
   });
 });
+
+/**
+ * Regression: 20260926094000 used to locate the status CHECK with a pattern match on
+ * pg_get_constraintdef (`ilike '%status%' and ilike '%pending%'`), which ALSO matches
+ * loyalty_enrollment_requests_review_shape. With no ORDER BY, `select ... into` picked an
+ * arbitrary row: on Postgres 17.6 it chose review_shape, dropped that instead, and the
+ * re-add then collided with the surviving status check (SQLSTATE 42710) — the migration
+ * failed outright. PGlite happened to return the other row, so every suite passed while
+ * production could not apply it. The guard now matches by exact name, so these assertions
+ * pin the outcome that the pattern match only reached by luck.
+ */
+describe("regression: widening the status CHECK leaves review_shape intact (094000)", () => {
+  async function constraints(): Promise<Record<string, string>> {
+    const { rows } = await exec.query<{ conname: string; def: string }>(
+      `SELECT conname, pg_get_constraintdef (oid) AS def
+         FROM pg_constraint
+        WHERE conrelid = 'public.loyalty_enrollment_requests'::regclass
+          AND conname IN ('loyalty_enrollment_requests_status_check',
+                          'loyalty_enrollment_requests_review_shape')`,
+    );
+    return Object.fromEntries(rows.map((r) => [r.conname, r.def]));
+  }
+
+  it("keeps BOTH constraints, widened to admit expired", async () => {
+    const c = await constraints();
+
+    // The bug dropped review_shape and lost the status check. Both must survive.
+    expect(Object.keys(c).sort()).toEqual([
+      "loyalty_enrollment_requests_review_shape",
+      "loyalty_enrollment_requests_status_check",
+    ]);
+
+    // status CHECK widened to admit 'expired', with the pre-existing values kept.
+    for (const s of ["pending", "approved", "rejected", "expired"]) {
+      expect(c.loyalty_enrollment_requests_status_check, s).toContain(s);
+    }
+
+    // review_shape must be 094000's re-shaped version. The 091000 original has only
+    // three branches and never mentions 'expired', so this also proves the constraint
+    // was replaced rather than left stale.
+    expect(c.loyalty_enrollment_requests_review_shape).toContain("expired");
+  });
+
+  it("accepts a system-settled expired row and still rejects an unknown status", async () => {
+    const shop = await newShop("Status Constraint Shop");
+
+    // 'expired' is system-settled: reviewed_at set, no reviewer, no account.
+    await exec.query(
+      `INSERT INTO public.loyalty_enrollment_requests (shop_id, phone_e164, name, status, reviewed_at)
+       VALUES ($1, '+256700900001', 'Expired Tester', 'expired', now())`,
+      [shop.shopId],
+    );
+    const { rows } = await exec.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM public.loyalty_enrollment_requests
+        WHERE shop_id = $1 AND status = 'expired'`,
+      [shop.shopId],
+    );
+    expect(Number(rows[0]!.n)).toBe(1);
+
+    // A status outside the widened set is still refused.
+    let rejected = false;
+    try {
+      await exec.query(
+        `INSERT INTO public.loyalty_enrollment_requests (shop_id, phone_e164, name, status)
+         VALUES ($1, '+256700900002', 'Bogus Status', 'bogus')`,
+        [shop.shopId],
+      );
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
+  });
+});

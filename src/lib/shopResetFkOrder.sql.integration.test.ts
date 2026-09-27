@@ -1,7 +1,7 @@
 /**
  * Shop business-data reset + certified hard delete — FK ordering, coverage, verification, authorization.
  *
- * Real migration bodies (20260920100000_shop_reset_fk_ordered_plan.sql) run against a PGlite schema rebuilt from the
+ * Real migration bodies (20260919235331_shop_reset_fk_ordered_plan.sql) run against a PGlite schema rebuilt from the
  * REAL production foreign-key graph (src/test/sqlIntegration/shopResetTopology.txt). Every table gets a seeded row so
  * every RESTRICT / NO ACTION / SET NULL edge is exercised.
  *

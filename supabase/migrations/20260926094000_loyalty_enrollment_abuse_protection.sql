@@ -94,25 +94,18 @@ $gk$;
 -- 2) Request state machine: 'expired' + explicit transitions
 -- ============================================================================
 
-do $sc$
-declare
-  v_con text;
-begin
-  -- Widen the status CHECK to admit 'expired'.
-  select c.conname into v_con
-  from pg_constraint c
-  join pg_class t on t.oid = c.conrelid
-  join pg_namespace n on n.oid = t.relnamespace
-  where n.nspname = 'public'
-    and t.relname = 'loyalty_enrollment_requests'
-    and c.contype = 'c'
-    and pg_get_constraintdef (c.oid) ilike '%status%'
-    and pg_get_constraintdef (c.oid) ilike '%pending%';
-  if v_con is not null then
-    execute format ('alter table public.loyalty_enrollment_requests drop constraint %I', v_con);
-  end if;
-end;
-$sc$;
+-- Widen the status CHECK to admit 'expired'.
+--
+-- Addressed by NAME, never by pattern. The previous guard matched on
+-- `pg_get_constraintdef ilike '%status%' and ilike '%pending%'`, which ALSO matches
+-- loyalty_enrollment_requests_review_shape (its definition mentions both 'status' and
+-- 'pending'). With no ORDER BY, `select ... into v_con` picked an arbitrary row: on
+-- Postgres 17.6 it selected review_shape, dropped that instead, and the re-add below
+-- then collided with the still-present status check, failing the whole migration
+-- (SQLSTATE 42710). PGlite happened to return the other row, which is why every test
+-- suite passed while production failed. The match is now exact.
+alter table public.loyalty_enrollment_requests
+  drop constraint if exists loyalty_enrollment_requests_status_check;
 
 alter table public.loyalty_enrollment_requests
   add constraint loyalty_enrollment_requests_status_check

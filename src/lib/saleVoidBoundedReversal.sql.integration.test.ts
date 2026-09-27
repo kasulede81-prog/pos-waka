@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 
 /**
- * Migration 20260919100000 — bounded reversal guard for shop_apply_sale_void_stock.
+ * Migration 20260919054011 — bounded reversal guard for shop_apply_sale_void_stock.
  * Runs the ORIGINAL function (179) to prove the defects, then the new one.
  *
  * Dry-run to run on production BEFORE applying (read-only; lists (sale, product) pairs whose recorded
@@ -104,10 +104,10 @@ describe("original function (179) — trusts the client for everything but the v
   });
 });
 
-describe("migration 20260919100000 — a new void is bounded by what the sale sold", () => {
+describe("migration 20260919054011 — a new void is bounded by what the sale sold", () => {
   let db: PGlite;
   beforeAll(async () => {
-    db = await freshDb(readFileSync(join(dir, "20260919100000_sale_void_bounded_reversal_guard.sql"), "utf8"));
+    db = await freshDb(readFileSync(join(dir, "20260919054011_sale_void_bounded_reversal_guard.sql"), "utf8"));
   }, 60_000);
   afterAll(async () => db.close());
 
