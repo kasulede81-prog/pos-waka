@@ -22,12 +22,23 @@ export type LoyaltyPassInput = {
   /** Full barcode payload (e.g. "WAKA-LOYALTY:<qrToken>"). */
   qrPayload: string;
   balancePoints: number;
+  /**
+   * Premium card banner shown on the Google Wallet pass. STATIC brand artwork only — never
+   * member data. Sized/behave per Google's heroImage field.
+   */
+  heroImageUrl?: string;
   backgroundColor?: string;
   foregroundColor?: string;
   labelColor?: string;
   /** Hosted https asset required by both platforms. */
   logoUrl?: string;
 };
+
+/**
+ * Public path of the premium Wallet hero, relative to the app origin. Lives here (a
+ * Deno-free module) so both the edge runtime and app-side tests can share it.
+ */
+export const WALLET_HERO_ASSET_PATH = "brand/waka-loyalty-wallet-hero.png";
 
 /**
  * Signs the manifest for an Apple wallet pass bundle. Implementations must

@@ -18,6 +18,13 @@ export type GoogleIds = {
   objectId: string;
 };
 
+/**
+ * Premium card navy — the same surface as the web loyalty card (WAKA_BRAND_NAVY).
+ * Duplicated rather than imported: this module ships to the Deno edge runtime and must stay
+ * dependency-free.
+ */
+export const WAKA_WALLET_NAVY = "#0b1a2e";
+
 export function googleClassId(ids: Pick<GoogleIds, "issuerId" | "classId">): string {
   return `${ids.issuerId}.${ids.classId}`;
 }
@@ -51,6 +58,16 @@ export function buildGoogleLoyaltyObject(
     classId: googleClassId(ids),
     // Uppercase ACTIVE per current State enum; lowercase `active` is deprecated.
     state: "ACTIVE",
+    // Object-level background override. This is one of only two visual levers that actually
+    // reach a live pass: the LoyaltyClass is never upserted (skipClassUpsert defaults true, so
+    // the published class is managed in the Google Wallet Console), which makes every
+    // buildGoogleLoyaltyClass field inert in production. Google renders a fixed template — no
+    // custom HTML/CSS — so the hero below plus this colour are as close to the premium card
+    // surface as the platform allows.
+    hexBackgroundColor: normalizeHexColor(input.backgroundColor ?? WAKA_WALLET_NAVY),
+    // Premium card banner. STATIC WAKA artwork on purpose: member id, name, points, expiry, CVC
+    // and the QR stay native dynamic fields drawn by Google's template over this image.
+    heroImage: input.heroImageUrl ? { sourceUri: { uri: input.heroImageUrl } } : undefined,
     loyaltyPoints: {
       label: "Points",
       balance: {

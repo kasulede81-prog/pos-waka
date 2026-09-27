@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WAKA Loyalty — Google Wallet hero artwork (source).
+
+  Rasterised to waka-loyalty-wallet-hero.png by scripts/build-wallet-hero.mjs.
+  Google Wallet renders a fixed template over this banner, so it carries the STATIC brand
+  identity only. Never bake in member data — member id, name, points, expiry, CVC and the QR
+  are all dynamic Wallet fields and must stay out of this artwork.
+
+  Original WAKA design. No card-network branding.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1032" height="336" viewBox="0 0 1032 336">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#14294a"/>
+      <stop offset="42%" stop-color="#0b1a2e"/>
+      <stop offset="100%" stop-color="#050d18"/>
+    </linearGradient>
+    <radialGradient id="glowOrange" cx="10%" cy="-6%" r="78%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.34"/>
+      <stop offset="62%" stop-color="#f97316" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowRed" cx="104%" cy="30%" r="72%">
+      <stop offset="0%" stop-color="#e2401c" stop-opacity="0.30"/>
+      <stop offset="66%" stop-color="#e2401c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7ebbc"/>
+      <stop offset="30%" stop-color="#d4af37"/>
+      <stop offset="62%" stop-color="#9c7a24"/>
+      <stop offset="100%" stop-color="#eed88f"/>
+    </linearGradient>
+    <linearGradient id="waveRed" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e2401c" stop-opacity="0"/>
+      <stop offset="26%" stop-color="#e2401c" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0.22"/>
+    </linearGradient>
+    <linearGradient id="waveAmber" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0"/>
+      <stop offset="42%" stop-color="#f97316" stop-opacity="0.62"/>
+      <stop offset="100%" stop-color="#d4af37" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="waveDeep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1d3f6e" stop-opacity="0"/>
+      <stop offset="40%" stop-color="#1d3f6e" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#0b1a2e" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.46"/>
+    </linearGradient>
+  </defs>
+
+  <!-- premium navy surface -->
+  <rect width="1032" height="336" fill="url(#bg)"/>
+  <rect width="1032" height="336" fill="url(#glowOrange)"/>
+  <rect width="1032" height="336" fill="url(#glowRed)"/>
+
+  <!-- fine diagonal texture for a printed-card feel -->
+  <g stroke="#ffffff" stroke-width="1" opacity="0.035">
+    <path d="M-120 336 L120 0 M-60 336 L180 0 M0 336 L240 0 M60 336 L300 0 M120 336 L360 0
+             M180 336 L420 0 M240 336 L480 0 M300 336 L540 0 M360 336 L600 0 M420 336 L660 0
+             M480 336 L720 0 M540 336 L780 0 M600 336 L840 0 M660 336 L900 0 M720 336 L960 0
+             M780 336 L1020 0 M840 336 L1080 0 M900 336 L1140 0 M960 336 L1200 0"/>
+  </g>
+
+  <!-- curved premium waves -->
+  <path d="M0 236 C210 168 396 292 626 226 C812 174 928 206 1032 180 L1032 336 L0 336 Z"
+        fill="url(#waveDeep)"/>
+  <path d="M0 258 C226 190 402 306 640 240 C820 190 938 220 1032 196 L1032 336 L0 336 Z"
+        fill="url(#waveRed)" opacity="0.55"/>
+  <path d="M0 288 C248 228 430 320 668 262 C842 220 950 248 1032 226 L1032 336 L0 336 Z"
+        fill="url(#waveAmber)" opacity="0.46"/>
+
+  <!-- thin gold card edge -->
+  <rect x="0.75" y="0.75" width="1030.5" height="334.5" rx="7"
+        fill="none" stroke="url(#gold)" stroke-width="1.5" opacity="0.72"/>
+
+  <!-- readability scrim for Google's overlay -->
+  <rect y="188" width="1032" height="148" fill="url(#scrim)"/>
+
+  <!-- metallic EMV-style chip -->
+  <g transform="translate(74,206)">
+    <rect width="88" height="66" rx="11" fill="url(#gold)"/>
+    <rect x="0.6" y="0.6" width="86.8" height="64.8" rx="10.4"
+          fill="none" stroke="#7d611c" stroke-width="1" opacity="0.55"/>
+    <g stroke="#7d611c" stroke-width="1.6" opacity="0.62" fill="none">
+      <path d="M0 22 H88 M0 44 H88 M30 0 V66 M58 0 V66"/>
+      <rect x="30" y="22" width="28" height="22" rx="4"/>
+    </g>
+  </g>
+
+  <!-- brand lockup: W mark is composited on top by the build script -->
+  <text x="178" y="126" font-family="Arial, Helvetica, sans-serif" font-size="47"
+        font-weight="bold" fill="#fffaf5" letter-spacing="0.5">WAKA LOYALTY</text>
+  <text x="181" y="158" font-family="Arial, Helvetica, sans-serif" font-size="13"
+        font-weight="bold" fill="#f97316" letter-spacing="6.6">SHOP &#183; EARN &#183; REDEEM</text>
+
+  <!-- gold accent rule -->
+  <rect x="181" y="176" width="150" height="3" rx="1.5" fill="url(#gold)" opacity="0.9"/>
+</svg>

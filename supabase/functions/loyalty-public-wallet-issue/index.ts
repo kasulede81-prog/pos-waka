@@ -104,6 +104,7 @@ Deno.serve(async (req) => {
     qrPayload: encodeLoyaltyQrPayload(resolved.account.qrToken),
     balancePoints: resolved.account.balancePoints,
     logoUrl: env.logoUrl,
+    heroImageUrl: env.heroImageUrl,
   };
   const invalid = validatePassInput(passInput);
   if (invalid) return json({ ok: false, error: "unavailable" }, 500);

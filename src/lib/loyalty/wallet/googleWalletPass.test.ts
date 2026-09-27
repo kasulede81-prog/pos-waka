@@ -195,3 +195,94 @@ describe("createRs256SignerFromPkcs8Pem", () => {
     expect(valid).toBe(true);
   });
 });
+
+/**
+ * Premium WAKA card presentation. The LoyaltyClass is never upserted in production
+ * (`skipClassUpsert` defaults true — the published class is managed in the Google Wallet
+ * Console), so everything visual that must reach a live pass has to live on the OBJECT.
+ * Google renders a fixed template and supports no custom HTML/CSS, so the hero image plus the
+ * background colour are the whole surface area available.
+ */
+describe("premium WAKA Wallet card presentation", () => {
+  const HERO = "https://pos.waka.ug/brand/waka-loyalty-wallet-hero.png";
+
+  const heroOf = (o: Record<string, unknown>) =>
+    (o.heroImage as { sourceUri: { uri: string } } | undefined)?.sourceUri.uri;
+
+  it("attaches the hero image to the OBJECT, not the class", () => {
+    const obj = buildGoogleLoyaltyObject({ ...INPUT, heroImageUrl: HERO }, IDS);
+    expect(heroOf(obj)).toBe(HERO);
+
+    const cls = buildGoogleLoyaltyClass({ ...INPUT, heroImageUrl: HERO }, IDS);
+    expect(cls.heroImage).toBeUndefined();
+  });
+
+  it("only ever uses an https hero URL", () => {
+    expect(heroOf(buildGoogleLoyaltyObject({ ...INPUT, heroImageUrl: HERO }, IDS))).toMatch(
+      /^https:\/\//,
+    );
+  });
+
+  it("omits the hero entirely when no URL is configured, rather than emitting a broken one", () => {
+    const obj = buildGoogleLoyaltyObject({ ...INPUT }, IDS);
+    expect(obj.heroImage).toBeUndefined();
+  });
+
+  it("defaults the object background to WAKA navy", () => {
+    const obj = buildGoogleLoyaltyObject({ ...INPUT, backgroundColor: undefined }, IDS);
+    expect(obj.hexBackgroundColor).toBe("#0b1a2e");
+  });
+
+  it("preserves object identity, points and barcode", () => {
+    const obj = buildGoogleLoyaltyObject({ ...INPUT, heroImageUrl: HERO }, IDS);
+    expect(obj.id).toBe("3388000000000000001.acct-1");
+    expect(obj.classId).toBe("3388000000000000001.waka_loyalty");
+    expect(obj.accountName).toBe("Mama Brian");
+    expect(obj.loyaltyPoints).toMatchObject({ label: "Points", balance: { int: 42 } });
+    expect(obj.barcode).toMatchObject({ type: "QR_CODE", value: "WAKA-LOYALTY:tok123opaque" });
+  });
+
+  it("carries NO earn-rule or reward-rate text anywhere", () => {
+    const json = JSON.stringify(buildGoogleLoyaltyObject({ ...INPUT, heroImageUrl: HERO }, IDS));
+    for (const banned of ["Earns", "earn_rule", "PT /", "SPENT", "per UGX", "pointsPerUnit"]) {
+      expect(json, banned).not.toContain(banned);
+    }
+    expect(json).not.toContain("textModulesData");
+  });
+
+  it("never bakes member data into the hero URL", () => {
+    const obj = buildGoogleLoyaltyObject({ ...INPUT, heroImageUrl: HERO }, IDS);
+    const uri = heroOf(obj) ?? "";
+    expect(uri).not.toContain("acct-1");
+    expect(uri).not.toContain("tok123opaque");
+    expect(uri).not.toContain("Mama Brian");
+  });
+});
+
+/**
+ * The hero URL is derived from a path constant, so nothing at runtime would notice if the
+ * artwork were renamed, deleted or rebuilt at the wrong size — Google would simply fail to
+ * fetch it and the pass would fall back to a plain background. This ties the two together.
+ */
+describe("premium hero asset matches the constant the URL is built from", () => {
+  it("exists in public/ and is a 1032x336 PNG", async () => {
+    const { readFileSync, existsSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const sharp = (await import("sharp")).default;
+    // Imported from the Deno-free types module: googleWalletEnv.ts uses Deno.env and must stay
+    // out of the app tsconfig graph.
+    const { WALLET_HERO_ASSET_PATH } = await import(
+      "../../../../supabase/functions/_shared/loyaltyWallet/walletPassTypes.ts"
+    );
+
+    expect(WALLET_HERO_ASSET_PATH).toBe("brand/waka-loyalty-wallet-hero.png");
+
+    const abs = join(process.cwd(), "public", WALLET_HERO_ASSET_PATH);
+    expect(existsSync(abs), abs).toBe(true);
+
+    const meta = await sharp(readFileSync(abs)).metadata();
+    expect(meta.format).toBe("png");
+    expect(meta.width).toBe(1032);
+    expect(meta.height).toBe(336);
+  });
+});

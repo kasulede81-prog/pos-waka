@@ -1,11 +1,23 @@
 /**
+ * Premium card banner. Served from the app's own `public/` directory — the same origin the
+ * logo already uses — so it needs no extra hosting. Overridable for staging.
+ */
+function resolveHeroUrl(): string | undefined {
+  const explicit = (Deno.env.get("GOOGLE_WALLET_HERO_URL") ?? "").trim();
+  if (explicit.startsWith("https://")) return explicit;
+  const appUrl = (Deno.env.get("WALLET_PUBLIC_APP_URL") ?? Deno.env.get("VITE_APP_URL") ?? "").trim().replace(/\/$/, "");
+  if (appUrl.startsWith("https://")) return `${appUrl}/${WALLET_HERO_ASSET_PATH}`;
+  return undefined;
+}
+
+/**
  * Shared Google Wallet credential bootstrap for edge functions.
  * Secrets stay in Deno.env — never returned to clients.
  */
 
 import { createRs256SignerFromPkcs8Pem } from "./googleWalletPass.ts";
 import { googleWalletEnvLooksConfigured } from "./googleWalletConfiguredCheck.ts";
-import type { GoogleWalletSigner } from "./walletPassTypes.ts";
+import { WALLET_HERO_ASSET_PATH, type GoogleWalletSigner } from "./walletPassTypes.ts";
 
 export type GoogleWalletEnv =
   | {
@@ -14,6 +26,8 @@ export type GoogleWalletEnv =
       signer: GoogleWalletSigner;
       origins: string[];
       logoUrl: string | undefined;
+      /** Premium card banner for the LoyaltyObject. Static brand artwork only. */
+      heroImageUrl: string | undefined;
     }
   | { ok: false; error: "wallet_not_configured" | "wallet_misconfigured" };
 
@@ -71,5 +85,6 @@ export function loadGoogleWalletEnv(): GoogleWalletEnv {
     signer: createRs256SignerFromPkcs8Pem(serviceAccount.client_email, serviceAccount.private_key),
     origins: resolvedOrigins,
     logoUrl: resolveLogoUrl(),
+    heroImageUrl: resolveHeroUrl(),
   };
 }

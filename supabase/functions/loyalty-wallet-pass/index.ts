@@ -141,6 +141,7 @@ Deno.serve(async (req) => {
       qrPayload: `WAKA-LOYALTY:${account.qr_token}`,
       balancePoints: Number(account.balance_points ?? 0),
       logoUrl: env.logoUrl,
+      heroImageUrl: env.heroImageUrl,
     };
     const invalid = validatePassInput(passInput);
     if (invalid) return json({ ok: false, error: invalid }, 400);
