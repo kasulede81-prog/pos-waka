@@ -22,7 +22,6 @@ const INPUT: LoyaltyPassInput = {
   qrToken: "tok123opaque",
   qrPayload: "WAKA-LOYALTY:tok123opaque",
   balancePoints: 42,
-  programLabel: "1 pt per UGX 1,000 spent",
   backgroundColor: "#facc15",
 };
 

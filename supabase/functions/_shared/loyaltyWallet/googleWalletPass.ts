@@ -64,13 +64,9 @@ export function buildGoogleLoyaltyObject(
       value: input.qrPayload,
       alternateText: input.qrToken.slice(0, 16),
     },
-    textModulesData: [
-      {
-        header: "Earns",
-        body: input.programLabel,
-        id: "earn_rule",
-      },
-    ],
+    // The earn rule used to ride here as a textModulesData row ("Earns: 1 pt per UGX 1,000
+    // spent"). It is deliberately gone: the pass carries the balance in loyaltyPoints above,
+    // and the earn rule now belongs to the WAKA Loyalty dashboard rather than the pass.
   };
 }
 

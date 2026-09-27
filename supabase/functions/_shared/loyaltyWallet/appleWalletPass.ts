@@ -52,7 +52,8 @@ export function buildApplePassJson(
       ],
       secondaryFields: [
         { key: "member", label: "Member", value: input.customerName },
-        { key: "rule", label: "Earns", value: input.programLabel },
+        // The "Earns" field that used to sit here was removed with the Google textModulesData
+        // row — same earn rule, same decision. Balance is already on the pass.
       ],
       backFields: [
         {

@@ -26,7 +26,6 @@ const baseInput = (over: Partial<LoyaltyPassInput> = {}): LoyaltyPassInput => ({
   qrToken: "opaqueTokenOnly",
   qrPayload: "WAKA-LOYALTY:opaqueTokenOnly",
   balancePoints: 120,
-  programLabel: "1 pt / 1000",
   ...over,
 });
 

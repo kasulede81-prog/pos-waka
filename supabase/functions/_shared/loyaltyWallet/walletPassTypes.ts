@@ -22,8 +22,6 @@ export type LoyaltyPassInput = {
   /** Full barcode payload (e.g. "WAKA-LOYALTY:<qrToken>"). */
   qrPayload: string;
   balancePoints: number;
-  /** Human earning rule, e.g. "1 pt per UGX 1,000 spent". */
-  programLabel: string;
   backgroundColor?: string;
   foregroundColor?: string;
   labelColor?: string;

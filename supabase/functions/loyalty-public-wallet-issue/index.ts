@@ -92,11 +92,8 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
-  const { data: program } = await admin
-    .from("loyalty_programs")
-    .select("enabled, earn_unit_ugx, earn_points_per_unit")
-    .eq("shop_id", resolved.account.shopId)
-    .maybeSingle();
+  // No loyalty_programs read: the pass's "Earns" line was removed, so there is nothing left
+  // to compose from the program.
 
   const passInput: LoyaltyPassInput = {
     shopId: resolved.account.shopId,
@@ -106,9 +103,6 @@ Deno.serve(async (req) => {
     qrToken: resolved.account.qrToken,
     qrPayload: encodeLoyaltyQrPayload(resolved.account.qrToken),
     balancePoints: resolved.account.balancePoints,
-    programLabel: program?.enabled
-      ? `${program.earn_points_per_unit} pt per UGX ${Number(program.earn_unit_ugx).toLocaleString()} spent`
-      : "Loyalty member",
     logoUrl: env.logoUrl,
   };
   const invalid = validatePassInput(passInput);

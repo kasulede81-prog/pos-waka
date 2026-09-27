@@ -125,11 +125,8 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (!shop) return json({ ok: false, error: "shop_not_found" }, 404);
 
-  const { data: program } = await userClient
-    .from("loyalty_programs")
-    .select("enabled, earn_unit_ugx, earn_points_per_unit")
-    .eq("shop_id", shopId)
-    .maybeSingle();
+  // No loyalty_programs read: the pass used to compose an "Earns" line from it, and that row
+  // is gone (see googleWalletPass.ts / appleWalletPass.ts).
 
   if (provider === "google") {
     const env = loadGoogleWalletEnv();
@@ -143,9 +140,6 @@ Deno.serve(async (req) => {
       qrToken: String(account.qr_token),
       qrPayload: `WAKA-LOYALTY:${account.qr_token}`,
       balancePoints: Number(account.balance_points ?? 0),
-      programLabel: program?.enabled
-        ? `${program.earn_points_per_unit} pt per UGX ${Number(program.earn_unit_ugx).toLocaleString()} spent`
-        : "Loyalty member",
       logoUrl: env.logoUrl,
     };
     const invalid = validatePassInput(passInput);
@@ -196,9 +190,6 @@ Deno.serve(async (req) => {
     qrToken: String(account.qr_token),
     qrPayload: `WAKA-LOYALTY:${account.qr_token}`,
     balancePoints: Number(account.balance_points ?? 0),
-    programLabel: program?.enabled
-      ? `${program.earn_points_per_unit} pt per UGX ${Number(program.earn_unit_ugx).toLocaleString()} spent`
-      : "Loyalty member",
   };
   const invalid = validatePassInput(passInput);
   if (invalid) return json({ ok: false, error: invalid }, 400);
