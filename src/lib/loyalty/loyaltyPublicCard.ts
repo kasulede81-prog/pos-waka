@@ -40,6 +40,14 @@ export type PublicCardReward = {
 
 export type PublicCardData = {
   customer_name: string;
+  /**
+   * Card-format identity derived server-side ("26D4 33F0 2BED 4ABE"). Optional so the card
+   * degrades gracefully against an older deployed Edge Function that predates it — the real
+   * account UUID is never sent to the browser.
+   */
+  member_number?: string;
+  /** Decorative 3-digit membership-card field. VISUAL ONLY — not a secret or credential. */
+  member_cvc?: string;
   shop_name: string;
   program_name: string;
   balance_points: number;
@@ -154,6 +162,16 @@ export async function fetchPublicLoyaltyCard(token: string): Promise<FetchPublic
       ok: true,
       card: {
         customer_name: String(body.customer_name ?? "Member"),
+        // Server-derived card identity. Absent against an older Edge Function, in which case
+        // the card shows an em dash rather than inventing a value.
+        member_number:
+          body.member_number == null || String(body.member_number).trim() === ""
+            ? undefined
+            : String(body.member_number).trim(),
+        member_cvc:
+          body.member_cvc == null || String(body.member_cvc).trim() === ""
+            ? undefined
+            : String(body.member_cvc).trim(),
         shop_name: shopName,
         program_name: design?.programDisplayName || programName,
         balance_points: Math.max(0, Math.trunc(Number(body.balance_points ?? 0))),

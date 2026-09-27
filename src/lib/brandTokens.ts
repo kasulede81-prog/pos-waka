@@ -14,6 +14,8 @@ export const WAKA_BRAND_ORANGE = "#f97316" as const;
 export const WAKA_BRAND_ORANGE_DARK = "#ea580c" as const;
 /** Deep WAKA blue — loyalty card hero / brand signal */
 export const WAKA_BRAND_BLUE = "#0b3a82" as const;
+/** Premium card navy — default surface for the physical-style loyalty card */
+export const WAKA_BRAND_NAVY = "#0b1a2e" as const;
 /** Cream app icon background */
 export const WAKA_BRAND_CREAM = "#fffaf5" as const;
 /** Warm auth / marketing wash */

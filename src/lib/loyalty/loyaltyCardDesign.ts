@@ -4,7 +4,7 @@
  */
 
 import {
-  WAKA_BRAND_BLUE,
+  WAKA_BRAND_NAVY,
   WAKA_BRAND_ORANGE,
   WAKA_BRAND_ORANGE_DARK,
 } from "../brandTokens";
@@ -67,12 +67,17 @@ export const DEFAULT_LOYALTY_CARD_DESIGN: LoyaltyCardDesign = {
   primaryColor: WAKA_BRAND_ORANGE,
   /** Secondary accent / deeper orange */
   accentColor: WAKA_BRAND_ORANGE_DARK,
-  /** Deep WAKA blue hero */
-  backgroundColor: WAKA_BRAND_BLUE,
+  /** Premium card navy — the physical-card surface */
+  backgroundColor: WAKA_BRAND_NAVY,
   /** Primary text on hero */
   textColor: "#ffffff",
   welcomeMessage: null,
-  cardStyle: "classic",
+  /**
+   * "premium" is the physical-card layout. Shops WITH a saved loyalty_card_designs row keep
+   * whatever card_style they stored (historically "classic"), so this default only reaches
+   * shops that never opened the design editor — no saved design is migrated or overwritten.
+   */
+  cardStyle: "premium",
   rewardLayout: "list",
 };
 
@@ -413,6 +418,9 @@ export async function resetLoyaltyCardDesign(shopId: string): Promise<DesignRese
 /** Fixture card for merchant live preview (no network, no real tokens). */
 export const PREVIEW_PUBLIC_CARD_FIXTURE = {
   customer_name: "Denis",
+  /** Illustrative only — the real value is derived server-side from the account UUID. */
+  member_number: "26D4 33F0 2BED 4ABE",
+  member_cvc: "251",
   shop_name: "Demo Shop",
   program_name: "Demo Shop Loyalty",
   balance_points: 405,

@@ -34,6 +34,17 @@ export type PublicCardSafeDesign = {
 export type PublicCardSafePayload = {
   ok: true;
   customer_name: string;
+  /**
+   * Card-format identity, derived server-side from SHA-256(loyalty_accounts.id) — never the
+   * UUID itself, which stays on the forbidden-key list below. Stable per member, not
+   * reversible to the account id, and not a credential.
+   */
+  member_number: string;
+  /**
+   * Decorative 3-digit membership-card field, from the same digest. VISUAL ONLY — never
+   * authentication, authorisation, payment security, or a secret.
+   */
+  member_cvc: string;
   shop_name: string;
   program_name: string;
   balance_points: number;

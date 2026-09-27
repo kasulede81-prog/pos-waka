@@ -12,8 +12,8 @@ import {
 import type { PublicCardData } from "./loyaltyPublicCard";
 
 describe("WAKA loyalty default theme", () => {
-  it("defaults to blue hero + orange accents + white text", () => {
-    expect(DEFAULT_LOYALTY_CARD_DESIGN.backgroundColor).toBe("#0b3a82");
+  it("defaults to premium navy + orange accents + white text", () => {
+    expect(DEFAULT_LOYALTY_CARD_DESIGN.backgroundColor).toBe("#0b1a2e");
     expect(DEFAULT_LOYALTY_CARD_DESIGN.primaryColor).toBe("#f97316");
     expect(DEFAULT_LOYALTY_CARD_DESIGN.accentColor).toBe("#ea580c");
     expect(DEFAULT_LOYALTY_CARD_DESIGN.textColor).toBe("#ffffff");
@@ -32,14 +32,18 @@ describe("WAKA loyalty default theme", () => {
 
   it("resolveLoyaltyPresentation always yields a full theme", () => {
     const theme = resolveLoyaltyPresentation(undefined);
-    expect(theme.backgroundColor).toBe("#0b3a82");
+    expect(theme.backgroundColor).toBe("#0b1a2e");
     expect(theme.heroForeground).toBe("#ffffff");
     expect(theme.heroAccent).toBe("#f97316");
+    // The default style is the physical-card layout; a saved shop design keeps its own.
+    expect(theme.cardStyle).toBe("premium");
   });
 
   it("applies default WAKA theme when design is omitted", () => {
     const card: PublicCardData = {
       customer_name: "Denis",
+      member_number: "26D4 33F0 2BED 4ABE",
+      member_cvc: "251",
       shop_name: "Kampala Kiosk",
       program_name: "Kampala Kiosk Loyalty",
       balance_points: 405,
@@ -63,9 +67,15 @@ describe("WAKA loyalty default theme", () => {
         onSharePage: () => undefined,
       }),
     );
-    expect(html).toContain("#0b3a82");
+    expect(html).toContain("#0b1a2e");
     expect(html).toContain("#f97316");
     expect(html).toContain("Denis");
+    // Premium card surfaces the derived identity, the real balance, and no earn rule.
+    expect(html).toContain("26D4 33F0 2BED 4ABE");
+    expect(html).toContain("251");
+    expect(html).toContain("405");
+    expect(html).not.toContain("account_id");
+    expect(html).not.toContain("per UGX");
   });
 
   it("preserves merchant custom colors when contrast is safe", () => {

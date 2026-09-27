@@ -8,6 +8,7 @@ import {
   buildRewardProgress,
   isRewardAffordable,
 } from "../../../lib/loyalty/loyaltyPublicCardProgress";
+import { WakaLoyaltyCard } from "../WakaLoyaltyCard";
 
 type Props = {
   card: PublicCardData;
@@ -157,6 +158,55 @@ export function PublicLoyaltyCardView({
         ) : null}
       </header>
 
+      {cardStyle === "premium" ? (
+        /* Premium physical-card layout. Shops WITHOUT a saved loyalty_card_designs row resolve to
+           this style (see DEFAULT_LOYALTY_CARD_DESIGN); shops with a saved row keep whatever
+           card_style they stored, which is why the legacy hero below is untouched. */
+        <div className="flex flex-col gap-3">
+          <WakaLoyaltyCard
+            shopName={card.shop_name}
+            memberName={card.customer_name}
+            memberNumber={card.member_number}
+            memberCvc={card.member_cvc}
+            expiresOn={card.membership_expires_on}
+            balancePoints={card.balance_points}
+            theme={theme}
+            qrDataUrl={qrDataUrl}
+            programName={programName}
+          />
+          {/* Account state and reward progress sit OUTSIDE the card so the redesign loses no
+              information — the reference card has no room for them. */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {!card.account_active ? (
+              <p className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                Account inactive
+              </p>
+            ) : null}
+            {card.account_active && card.membership_active === false ? (
+              <p
+                className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800"
+                role="status"
+              >
+                Membership expired
+                {card.membership_expires_on ? ` · ${card.membership_expires_on}` : ""}
+              </p>
+            ) : null}
+            {card.account_active && card.membership_active !== false ? (
+              <p className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                Membership active
+              </p>
+            ) : null}
+          </div>
+          {progress ? (
+            <div
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold leading-snug text-slate-700"
+              role="status"
+            >
+              {progress.message}
+            </div>
+          ) : null}
+        </div>
+      ) : (
       <article
         className={`loyalty-public-hero relative overflow-hidden ${heroRadius(cardStyle)} px-5 pb-6 pt-6 shadow-[0_22px_50px_-22px_rgba(11,58,130,0.55)]`}
         style={{ backgroundColor: theme.backgroundColor, color: theme.heroForeground }}
@@ -259,6 +309,7 @@ export function PublicLoyaltyCardView({
           ) : null}
         </div>
       </article>
+      )}
 
       {yourRewards.length > 0 ? (
         <section aria-labelledby="loyalty-your-rewards-heading">
@@ -323,6 +374,7 @@ export function PublicLoyaltyCardView({
         )}
       </section>
 
+      {cardStyle === "premium" ? null : (
       <section
         className="loyalty-public-qr rounded-[1.75rem] border border-slate-200/90 bg-white px-4 py-6 shadow-[0_12px_40px_-28px_rgba(11,58,130,0.35)]"
         aria-labelledby="loyalty-checkout-heading"
@@ -353,6 +405,7 @@ export function PublicLoyaltyCardView({
           </p>
         </div>
       </section>
+      )}
 
       {!previewMode ? (
         <section className="flex flex-col gap-2.5" aria-label="Card actions">

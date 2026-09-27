@@ -24,6 +24,31 @@ function isRewardUnexpiredForPublic(expiresOn: unknown, nowMs: number = Date.now
   return nowMs < exclusiveUtcMs;
 }
 
+/**
+ * Card-format member identity, derived from the account UUID.
+ *
+ * The real `account_id` sits on the public-card forbidden-key list (`assertSafePublicCardJson`)
+ * because /c/:token is unauthenticated, so it must never reach the browser. This publishes a
+ * ONE-WAY derivation instead: the first 16 hex characters of SHA-256(account_id), grouped like a
+ * card number ("26D4 33F0 2BED 4ABE"). Stable per member, not reversible to the UUID, not a
+ * credential.
+ *
+ * The 3-digit value is a DECORATIVE membership-card field only — never authentication,
+ * authorisation, payment security, or a secret.
+ */
+export async function deriveLoyaltyMemberNumber(accountId: string): Promise<{
+  member_number: string;
+  member_cvc: string;
+}> {
+  const bytes = new TextEncoder().encode(String(accountId ?? ""));
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const hex = Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+  const body = hex.slice(0, 16).toUpperCase();
+  const member_number = (body.match(/.{1,4}/g) ?? []).join(" ");
+  const member_cvc = String(parseInt(hex.slice(-8), 16) % 1000).padStart(3, "0");
+  return { member_number, member_cvc };
+}
+
 export async function lookupPublicLoyaltyCard(
   supabaseUrl: string,
   serviceKey: string,
@@ -223,9 +248,13 @@ export async function lookupPublicLoyaltyCard(
     };
   }
 
+  const { member_number, member_cvc } = await deriveLoyaltyMemberNumber(account.id);
+
   return {
     ok: true,
     customer_name: customerName,
+    member_number,
+    member_cvc,
     shop_name: shopName,
     program_name: design?.program_name ?? defaultProgramName,
     balance_points: Math.max(0, Math.trunc(Number(account.balance_points ?? 0))),
