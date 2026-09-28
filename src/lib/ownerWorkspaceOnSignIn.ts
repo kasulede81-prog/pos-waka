@@ -4,7 +4,13 @@ import { normalizeUgPhoneE164 } from "./businessProfile";
 import { resolvePrimaryOrganizationForUser } from "./fetchShopSubscription";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "./staffInviteOnboarding";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
-import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "./workspaceBootstrapCache";
+import {
+  isMemberWorkspace,
+  isWorkspaceBootstrapped,
+  markMemberWorkspace,
+  markWorkspaceBootstrapped,
+} from "./workspaceBootstrapCache";
+import { resolveAccountIdentity } from "./memberIdentity";
 import { logStartupPhase } from "./startupDiagnostics";
 import { supabase } from "./supabase";
 
@@ -16,6 +22,10 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
   if (!supabase || !session.user) return;
   const uid = session.user.id;
   if (isWorkspaceBootstrapped(uid)) return;
+  // A member is never a bootstrapped owner, so this is not an "already done" short-circuit — it
+  // is a refusal to bootstrap. Checked before the invite gate so a member who later receives a
+  // staff invite still goes through the invite path below rather than being pinned here.
+  if (isMemberWorkspace(uid)) return;
 
   try {
     await supabase.auth.refreshSession();
@@ -29,6 +39,23 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
     logStartupPhase("workspace_ready", { userId: uid, via: "staff_invite_accepted" });
     const { hydrateStaffAuthWorkspace } = await import("./staffAuthHydrate");
     await hydrateStaffAuthWorkspace(uid);
+    return;
+  }
+
+  // Phase 1 — this path BYPASSES ensureWorkspaceForSession entirely (it is reached straight from
+  // AuthCallbackPage after email confirmation), so a member gated only in useAuth.ts would still
+  // receive an organization, shop, trial subscription and owner role here. Gate it independently.
+  const accountIdentity = await resolveAccountIdentity({
+    userId: uid,
+    metadata: session.user.user_metadata as Record<string, unknown> | undefined,
+  });
+  if (accountIdentity.kind === "member") {
+    markMemberWorkspace(uid);
+    logStartupPhase("workspace_ready", { userId: uid, via: "loyalty_member" });
+    return;
+  }
+  if (accountIdentity.kind === "unknown") {
+    logStartupPhase("identity_unclassified", { userId: uid, via: "callback_no_merchant_intent" });
     return;
   }
 

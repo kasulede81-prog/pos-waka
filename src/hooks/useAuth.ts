@@ -29,7 +29,12 @@ import { assertAccountSwitchAllowed, isOrganizationDeletedError, ORGANIZATION_DE
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { clearActiveShopOnSignOut } from "../lib/activeShopSwitch";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
-import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
+import {
+  isWorkspaceBootstrapped,
+  markMemberWorkspace,
+  markWorkspaceBootstrapped,
+} from "../lib/workspaceBootstrapCache";
+import { resetMemberIdentityCache, resolveAccountIdentity } from "../lib/memberIdentity";
 import { cachePendingRegistrationProfile } from "../lib/registrationProfileCache";
 import { ensureReferralAttributionForSession } from "../lib/referralAgents";
 import { storePendingReferralCode } from "../lib/pendingReferral";
@@ -207,6 +212,38 @@ export function useAuth() {
 
         if (inviteGate.accepted) {
           await finishStaffAuthWorkspace("staff_invite_accepted");
+          return;
+        }
+
+        // Phase 1 — classify BEFORE any repair or bootstrap. This is the single most important
+        // gate in the member work: everything below eventually reaches
+        // `repairOwnerWorkspaceIfNeeded` / `bootstrapOwnerWorkspace`, which are NOT owner-scoped
+        // (they upsert profiles.role='owner' and organization_members.role='owner'
+        // unconditionally). A loyalty member reaching them becomes a shop owner.
+        //
+        // `unknown` is deliberate and is not a no-op: an authenticated session that is neither a
+        // tenant, nor invite-pending, nor an explicit merchant signup gets NO tenancy. That is the
+        // one intentional behaviour change in Phase 1.
+        const accountIdentity = await resolveAccountIdentity({
+          userId: uid,
+          metadata: next.user?.user_metadata as Record<string, unknown> | undefined,
+        });
+
+        if (accountIdentity.kind === "member") {
+          markMemberWorkspace(uid);
+          markWorkspaceEnsured(uid);
+          await tryApplyPendingReferral(next);
+          logStartupPhase("workspace_ready", { userId: uid, via: "loyalty_member" });
+          return;
+        }
+
+        if (accountIdentity.kind === "unknown") {
+          markWorkspaceEnsured(uid);
+          logStartupPhase("identity_unclassified", {
+            userId: uid,
+            via: "no_tenancy_no_merchant_intent",
+            reason: accountIdentity.reason,
+          });
           return;
         }
 
@@ -996,6 +1033,10 @@ export function useAuth() {
     explicitSignOutRef.current = true;
     cancelSessionRefreshRetry();
     resetSessionConnectionState();
+    // Drop the cached identity classification: the next session for this user may differ (an
+    // invite accepted, a membership granted), and acting on a stale answer would route them to
+    // the wrong surface or deny a bootstrap they are now entitled to.
+    resetMemberIdentityCache();
     setSession(null);
     setStaffSession(null);
     setLocalEmail(null);

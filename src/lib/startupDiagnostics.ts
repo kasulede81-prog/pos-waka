@@ -297,7 +297,10 @@ export type StartupPhaseId =
   | "dashboard_ready"
   | "staff_auth_hydrate"
   | "staff_invite_accepted"
-  | "staff_invite_pending_skip_owner_bootstrap";
+  | "staff_invite_pending_skip_owner_bootstrap"
+  // Phase 1 — a session that is neither a tenant, nor invite-pending, nor an explicit merchant
+  // signup. It is deliberately NOT bootstrapped into a tenancy.
+  | "identity_unclassified";
 
 /** Structured startup phase log for diagnosing registration / boot failures. */
 export function logStartupPhase(phase: StartupPhaseId, detail?: Record<string, unknown>): void {

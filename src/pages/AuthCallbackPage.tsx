@@ -13,6 +13,8 @@ import {
 } from "../lib/firstTimeOwnerDevice";
 import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
+import { resolveAccountIdentity } from "../lib/memberIdentity";
+import { markMemberWorkspace } from "../lib/workspaceBootstrapCache";
 import { resetCloudRecoverySessionForRetry } from "../lib/cloudRecoverySession";
 import { logStartupPhase } from "../lib/startupDiagnostics";
 import { supabase } from "../lib/supabase";
@@ -110,15 +112,34 @@ export function AuthCallbackPage() {
 
         const inviteGate = await resolveStaffInviteBeforeOwnerBootstrap(session);
 
+        // Phase 1 — classify here as well. This page bootstraps INDEPENDENTLY of
+        // ensureWorkspaceForSession (it calls ensureOwnerWorkspaceIfNeeded directly), so a member
+        // gated only inside useAuth would still receive a shop the moment they confirm their
+        // email. `memberOnly` covers both the member and the unclassified case: neither may be
+        // provisioned a tenancy.
+        const accountIdentity = await resolveAccountIdentity({
+          userId: session.user.id,
+          metadata: session.user.user_metadata as Record<string, unknown> | undefined,
+        });
+        const memberOnly = accountIdentity.kind !== "merchant";
+        // `unknown` and `member` both skip provisioning, but they are different people: a member
+        // goes to their member home, an unclassified session gets the choice page.
+        const landing = accountIdentity.kind === "member" ? "/member" : "/welcome";
+        if (accountIdentity.kind === "member") markMemberWorkspace(session.user.id);
+
         try {
-          if (!inviteGate.skipOwnerBootstrap) {
+          if (!inviteGate.skipOwnerBootstrap && !memberOnly) {
             await bootTraceAsync("BOOT-008", "bootstrap_owner_workspace", () =>
               withTimeout(ensureOwnerWorkspaceIfNeeded(session), 12_000, undefined),
             );
           }
           logStartupPhase("workspace_ready", {
             userId: session.user.id,
-            via: inviteGate.skipOwnerBootstrap ? "staff_invite_gate" : "owner_bootstrap",
+            via: inviteGate.skipOwnerBootstrap
+              ? "staff_invite_gate"
+              : memberOnly
+                ? "loyalty_member"
+                : "owner_bootstrap",
           });
         } catch (e) {
           authDevLog("error", "Auth callback workspace bootstrap deferred", e);
@@ -129,7 +150,7 @@ export function AuthCallbackPage() {
           });
         }
 
-        if (!inviteGate.skipOwnerBootstrap) {
+        if (!inviteGate.skipOwnerBootstrap && !memberOnly) {
           markFirstTimeOwnerOnDevice(session.user.id);
         }
 
@@ -137,7 +158,9 @@ export function AuthCallbackPage() {
           ? inviteGate.accepted
             ? "/"
             : "/staff/accept"
-          : postCallbackDestination(session.user.id);
+          : memberOnly
+            ? landing
+            : postCallbackDestination(session.user.id);
         resetCloudRecoverySessionForRetry();
         logStartupPhase("onboarding_required", {
           userId: session.user.id,

@@ -21,7 +21,10 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS auth.users (
   id uuid PRIMARY KEY,
-  email text
+  email text,
+  -- Production auth.users carries this; waka_account_identity() derives merchant_intent and
+  -- member_intent from it, so the harness must model it or those branches are untestable.
+  raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE OR REPLACE FUNCTION auth.uid ()
@@ -521,3 +524,34 @@ AS $$
     WHERE sm.user_id = auth.uid() AND sm.role = ANY (p_roles)
   );
 $$;
+
+-- Test double for the canonical pending-staff-invite predicate (161_staff_invitation_system):
+-- waka_account_identity() reports it as one of its classification flags. The harness has no
+-- staff_invitations table, so this stands in as "never pending" — which is the correct answer for
+-- every fixture here and keeps the flag meaningful (always false) rather than absent.
+CREATE OR REPLACE FUNCTION public.shop_has_pending_staff_invite_for_me ()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT false;
+$$;
+
+-- ---------- Phase 1 member identity: harness fidelity for the classifier ----------
+-- waka_account_identity() reports profile_exists and loyalty_member_dashboard() reads shops for
+-- display. Neither table existed in the harness at the granularity those functions need, so they
+-- are modelled here rather than the functions being weakened to suit the tests.
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
+  full_name text,
+  email text,
+  business_name text,
+  phone_e164 text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS business_type text;
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS district text;

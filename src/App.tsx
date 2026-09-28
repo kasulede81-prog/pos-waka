@@ -4,6 +4,7 @@ import { isElectronDesktop } from "./lib/electronDesktop";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { BusinessProfileRequiredRoute } from "./components/BusinessProfileRequiredRoute";
+import { KnownIdentityGate } from "./components/routing/KnownIdentityGate";
 import { RoleProtectedRoute } from "./components/RoleProtectedRoute";
 import { MarketingAgentProtectedRoute } from "./components/MarketingAgentProtectedRoute";
 import { ActivationGateOutlet } from "./components/ActivationGateOutlet";
@@ -228,6 +229,9 @@ const ShopRescueConsolePage = lazy(() =>
 );
 const CustomersPage = lazy(() => import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage })));
 const LoyaltyHubPage = lazy(() => import("./pages/LoyaltyHubPage").then((m) => ({ default: m.LoyaltyHubPage })));
+// Phase 1 — member identity. Authenticated, but deliberately NOT a merchant surface.
+const MemberHomePage = lazy(() => import("./pages/member/MemberHomePage").then((m) => ({ default: m.MemberHomePage })));
+const WelcomePage = lazy(() => import("./pages/member/WelcomePage").then((m) => ({ default: m.WelcomePage })));
 const PublicLoyaltyCardPage = lazy(() =>
   import("./pages/PublicLoyaltyCardPage").then((m) => ({ default: m.PublicLoyaltyCardPage })),
 );
@@ -422,6 +426,20 @@ function AppRoutes() {
         </Route>
 
         <Route element={<ProtectedRoute initializing={auth.initializing} isAuthenticated={auth.isAuthenticated} />}>
+          {/* Phase 1 — member branch. Mounted as a SIBLING of the merchant branch below, not a
+              child: inside ProtectedRoute (so authentication is required) but outside
+              BusinessProfileRequiredRoute, ActivationGateOutlet, the device and email gates,
+              PosDataProvider, OnboardingRouteGate and AppShell. None of those may apply to a
+              loyalty member — they all assume a shop, and a member has none. Verified:
+              pathAllowedBeforeBusinessProfileComplete() returns false for /member, so nesting it
+              below would bounce members to /settings?onboard=1. */}
+          <Route path="member" element={<MemberHomePage />} />
+          {/* Landing for an authenticated session that is neither a tenant, nor invite-pending,
+              nor a merchant signup. Sibling of the gate below so it is never bounced back. */}
+          <Route path="welcome" element={<WelcomePage />} />
+          {/* Routes a known session to its surface. `unknown` is sent to /welcome rather than
+              being provisioned a shop; `member` to /member. Merchants pass straight through. */}
+          <Route element={<KnownIdentityGate />}>
           <Route element={<BusinessProfileRequiredRoute authMode={auth.mode} userId={auth.user?.id} />}>
             <Route
               element={
@@ -1508,6 +1526,7 @@ function AppRoutes() {
             </Route>
           </Route>
         </Route>
+          </Route>
         </Route>
 
         <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : unauthenticatedEntryPath()} replace />} />

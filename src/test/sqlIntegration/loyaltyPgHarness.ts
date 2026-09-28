@@ -46,6 +46,10 @@ const MIGRATIONS = [
   // Phase 0 (Member Dashboard) — grant-layer hardening + over-exposed RPC revokes.
   join(process.cwd(), "supabase", "migrations", "20260928090000_loyalty_phase0_grant_hardening.sql"),
   join(process.cwd(), "supabase", "migrations", "20260928091000_loyalty_phase0_rpc_execute_revoke.sql"),
+  // Phase 1 (Member Dashboard) — member identity, projection, claim queue.
+  join(process.cwd(), "supabase", "migrations", "20260928100000_loyalty_member_identity.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260928101000_loyalty_member_projection.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260928102000_loyalty_member_grant_revoke.sql"),
 ];
 
 function readSql(path: string): string {
