@@ -50,6 +50,8 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260928100000_loyalty_member_identity.sql"),
   join(process.cwd(), "supabase", "migrations", "20260928101000_loyalty_member_projection.sql"),
   join(process.cwd(), "supabase", "migrations", "20260928102000_loyalty_member_grant_revoke.sql"),
+  // Phase 2A — create the member link on enrollment approval (multi-shop membership).
+  join(process.cwd(), "supabase", "migrations", "20260928110000_loyalty_multishop_member_link.sql"),
 ];
 
 function readSql(path: string): string {
