@@ -13,7 +13,7 @@ import {
 } from "../lib/firstTimeOwnerDevice";
 import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
-import { resolveAccountIdentity } from "../lib/memberIdentity";
+import { memberIntentFromMetadata, resolveAccountIdentity } from "../lib/memberIdentity";
 import { markMemberWorkspace } from "../lib/workspaceBootstrapCache";
 import { resetCloudRecoverySessionForRetry } from "../lib/cloudRecoverySession";
 import { logStartupPhase } from "../lib/startupDiagnostics";
@@ -124,7 +124,18 @@ export function AuthCallbackPage() {
         const memberOnly = accountIdentity.kind !== "merchant";
         // `unknown` and `member` both skip provisioning, but they are different people: a member
         // goes to their member home, an unclassified session gets the choice page.
-        const landing = accountIdentity.kind === "member" ? "/member" : "/welcome";
+        //
+        // Phase 2B — a member-intent signup that has not registered yet also lands on /member.
+        // At that point it classifies as `unknown` (member intent without a `loyalty_members` row),
+        // so it would otherwise be sent to /welcome and have to find its own way back. Only the
+        // DESTINATION changes here: `memberOnly` above is untouched, so the bootstrap is still
+        // skipped exactly as before, and a real merchant never reaches this line at all because a
+        // tenancy classifies as `merchant` and takes the `postCallbackDestination` branch.
+        const landing =
+          accountIdentity.kind === "member" ||
+          memberIntentFromMetadata(session.user.user_metadata as Record<string, unknown> | undefined)
+            ? "/member"
+            : "/welcome";
         if (accountIdentity.kind === "member") markMemberWorkspace(session.user.id);
 
         try {

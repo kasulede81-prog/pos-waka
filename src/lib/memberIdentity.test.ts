@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  blocksOwnerBootstrap,
   merchantIntentFromMetadata,
   memberIntentFromMetadata,
   resolveFromIdentity,
@@ -92,5 +93,64 @@ describe("classification precedence", () => {
     const r = resolveFromIdentity(ident({ isShopMember: true, isMember: true, memberIntent: true }), true);
     expect(r.identity?.isShopMember).toBe(true);
     expect(r.identity?.isMember).toBe(true);
+  });
+});
+
+/**
+ * Phase 2B — the states the member registration flow actually moves between.
+ *
+ * `becomeLoyaltyMember` writes member intent and then invalidates the cache, so the classifier sees
+ * exactly these shapes on the next resolve. Getting one of them wrong is what sends a new member to
+ * the wrong surface, so they are pinned here rather than left to the SQL suite (which cannot see
+ * metadata at all).
+ */
+describe("Phase 2B: registration states", () => {
+  it("member intent WITHOUT a member row is unknown — intent alone never makes a member", () => {
+    // This is the state a member-intent signup sits in until they complete registration, and the
+    // state an abandoned registration is left in. It must provision nothing and land on /welcome.
+    const r = resolveFromIdentity(ident({ memberIntent: true, isMember: false }), false);
+    expect(r).toMatchObject({ kind: "unknown", reason: "unclassified" });
+  });
+
+  it("member intent WITH a member row is a member — the state registration produces", () => {
+    const r = resolveFromIdentity(ident({ memberIntent: true, isMember: true, memberId: "m1" }), false);
+    expect(r).toMatchObject({ kind: "member", memberId: "m1" });
+  });
+
+  it("a merchant who joins loyalty keeps the merchant path", () => {
+    // Phase 2B writes account_kind='member' for everyone who registers, merchants included. The
+    // tenancy check runs first, so a real merchant is never displaced by their own loyalty row.
+    const r = resolveFromIdentity(
+      ident({ isShopMember: true, shopId: "s1", isMember: true, memberIntent: true }),
+      false,
+    );
+    expect(r).toMatchObject({ kind: "merchant", reason: "existing_tenancy" });
+  });
+
+  it("an abandoned-merchant signup that joins loyalty becomes a member", () => {
+    // Merchant metadata, no tenancy, plus a member row: member intent outranks merchant intent.
+    const r = resolveFromIdentity(
+      ident({ merchantIntent: true, isMember: true, memberIntent: true }),
+      true,
+    );
+    expect(r.kind).toBe("member");
+  });
+});
+
+describe("Phase 2B: blocksOwnerBootstrap is the last line of defence", () => {
+  it("permits the owner bootstrap for a merchant and NOTHING else", () => {
+    expect(blocksOwnerBootstrap({ kind: "merchant", reason: "existing_tenancy", identity: null })).toBe(false);
+    expect(blocksOwnerBootstrap({ kind: "member", memberId: "m1", identity: ident({ isMember: true }) })).toBe(true);
+    expect(blocksOwnerBootstrap({ kind: "unknown", reason: "unclassified", identity: null })).toBe(true);
+  });
+
+  it("blocks a member and an unclassified session even when a tenancy is absent", () => {
+    // The bug Phase 1 removed was an authenticated stranger being silently made a shop owner, so
+    // the refusal must be the default rather than something the caller opts into.
+    const member = resolveFromIdentity(ident({ memberIntent: true, isMember: true }), false);
+    const unknown = resolveFromIdentity(ident(), false);
+    const merchant = resolveFromIdentity(ident({ merchantIntent: true }), false);
+    expect([blocksOwnerBootstrap(member), blocksOwnerBootstrap(unknown)]).toEqual([true, true]);
+    expect(blocksOwnerBootstrap(merchant)).toBe(false);
   });
 });

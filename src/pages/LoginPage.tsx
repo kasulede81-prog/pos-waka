@@ -261,6 +261,21 @@ export function LoginPage({
               </Link>
               <p className="px-1 text-xs font-medium text-muted-foreground">{t(lang, "loginRegisterShopHint")}</p>
             </div>
+
+            {/* Phase 2B — the public route into customer Loyalty signup. Deliberately a plain
+                text line rather than a second card, so the merchant "create a new shop" action
+                stays the primary choice on this page while a customer can still find their way
+                in without knowing the URL. */}
+            <p className="px-1 text-center text-xs font-medium text-muted-foreground">
+              {t(lang, "loginMemberSignupHint")}{" "}
+              <Link
+                to="/member/register"
+                className="font-bold text-waka-700 hover:text-waka-800"
+                data-testid="login-member-register"
+              >
+                {t(lang, "loginMemberSignupCta")}
+              </Link>
+            </p>
           </div>
         ) : null}
 

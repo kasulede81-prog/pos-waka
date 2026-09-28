@@ -232,6 +232,11 @@ const LoyaltyHubPage = lazy(() => import("./pages/LoyaltyHubPage").then((m) => (
 // Phase 1 — member identity. Authenticated, but deliberately NOT a merchant surface.
 const MemberHomePage = lazy(() => import("./pages/member/MemberHomePage").then((m) => ({ default: m.MemberHomePage })));
 const WelcomePage = lazy(() => import("./pages/member/WelcomePage").then((m) => ({ default: m.WelcomePage })));
+// Phase 2B — PUBLIC member signup. Must stay in the public branch: requiring a login to reach
+// member registration would be circular, and the merchant /register writes merchant intent.
+const MemberRegisterPage = lazy(() =>
+  import("./pages/member/MemberRegisterPage").then((m) => ({ default: m.MemberRegisterPage })),
+);
 const PublicLoyaltyCardPage = lazy(() =>
   import("./pages/PublicLoyaltyCardPage").then((m) => ({ default: m.PublicLoyaltyCardPage })),
 );
@@ -337,6 +342,17 @@ function AppRoutes() {
                 signUpQuick={auth.signUpQuick}
                 onGoogleSignIn={auth.signInWithGoogle}
               />
+            </RouteErrorBoundary>
+          }
+        />
+
+        {/* Phase 2B — public customer Loyalty signup. A sibling of /register in the PUBLIC
+            branch, so it is never trapped behind ProtectedRoute. */}
+        <Route
+          path="/member/register"
+          element={
+            <RouteErrorBoundary scope="MemberRegistration">
+              <MemberRegisterPage />
             </RouteErrorBoundary>
           }
         />
