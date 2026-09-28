@@ -43,6 +43,9 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260926097000_loyalty_admin_dashboard_reads.sql"),
   // Phase 6D — Loyalty audit events cannot be forged/edited/erased from the browser.
   join(process.cwd(), "supabase", "migrations", "20260926098000_loyalty_admin_audit_integrity.sql"),
+  // Phase 0 (Member Dashboard) — grant-layer hardening + over-exposed RPC revokes.
+  join(process.cwd(), "supabase", "migrations", "20260928090000_loyalty_phase0_grant_hardening.sql"),
+  join(process.cwd(), "supabase", "migrations", "20260928091000_loyalty_phase0_rpc_execute_revoke.sql"),
 ];
 
 function readSql(path: string): string {
@@ -60,6 +63,10 @@ function readSql(path: string): string {
 const PRODUCTION_GRANTS = `
   GRANT USAGE ON SCHEMA public TO authenticated;
   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+  -- Supabase's baseline also carries these, and production shows them on every loyalty table
+  -- (010_grants.sql does NOT grant them, so they come from the platform defaults). Modelling
+  -- them is what makes the Phase 0 TRUNCATE revokes testable rather than vacuous.
+  GRANT TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public TO authenticated;
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO authenticated;
