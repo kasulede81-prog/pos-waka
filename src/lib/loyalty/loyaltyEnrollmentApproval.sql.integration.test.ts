@@ -509,10 +509,17 @@ describe("clients cannot write membership or request state directly", () => {
   });
 
   it("no INSERT/UPDATE policy exists on the request table", async () => {
-    const { rows } = await exec.query<{ cmd: string }>(
-      `SELECT cmd FROM pg_policies
+    const { rows } = await exec.query<{ cmd: string; policyname: string }>(
+      `SELECT cmd, policyname FROM pg_policies
         WHERE schemaname = 'public' AND tablename = 'loyalty_enrollment_requests'`,
     );
-    expect(rows.map((r) => r.cmd)).toEqual(["SELECT"]);
+    // The property is that NO WRITE POLICY exists — not that exactly one policy does. Phase 2D
+    // added a second SELECT policy so a member can read their own request (and so Realtime can
+    // deliver it); that is additive visibility, and this assertion is stated as the invariant it
+    // was always meant to be so a future read policy does not trip it.
+    expect(rows.length, "at least the merchant select policy must exist").toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.cmd, `${row.policyname} must not permit a write`).toBe("SELECT");
+    }
   });
 });

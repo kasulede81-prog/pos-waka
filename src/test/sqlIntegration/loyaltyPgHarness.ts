@@ -66,6 +66,8 @@ export const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260928122000_loyalty_program_code_admin_merchant.sql"),
   // Phase 2C — authenticated member join by WPL code (adds a path; the anonymous one is unchanged).
   join(process.cwd(), "supabase", "migrations", "20260929120000_loyalty_member_join_by_code.sql"),
+  // Phase 2D — a member can read the status of their OWN enrollment requests (+ realtime visibility).
+  join(process.cwd(), "supabase", "migrations", "20260929160000_loyalty_member_enrollment_status.sql"),
 ];
 
 function readSql(path: string): string {

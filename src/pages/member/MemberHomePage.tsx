@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { WakaPosLogo } from "../../components/brand/WakaLogo";
 import { fetchMemberDashboard, type MemberDashboard } from "../../lib/memberDashboard";
 import { LoyaltyCodeEntryForm } from "../../components/loyalty/LoyaltyCodeEntryForm";
+import { useMemberEnrollmentStatus } from "../../hooks/useMemberEnrollmentStatus";
 
 /**
  * Phase 1 placeholder — identity and status ONLY.
@@ -44,6 +45,35 @@ export function MemberHomePage() {
     };
   }, [load]);
 
+  const isMember = state.kind === "ready";
+
+  /**
+   * Phase 2D — the member's own enrollment requests, kept current by Realtime.
+   *
+   * Only enabled for an actual member: a non-member has no requests, and `/member` is also reached
+   * by people who have not joined anything yet.
+   */
+  const { state: enrollment, refresh: refreshEnrollment } = useMemberEnrollmentStatus(isMember);
+
+  /**
+   * An approval creates a `loyalty_member_links` row, and the DASHBOARD is what reports links — not
+   * the enrollment status. So when the status turns "approved" this re-reads the authoritative
+   * member state and waits for the link to actually appear before showing the dashboard. The
+   * realtime event told us something changed; only this read says what is true.
+   */
+  const hasLinkedAccounts = state.kind === "ready" && state.data.counts.linkedAccounts > 0;
+  useEffect(() => {
+    if (enrollment.kind !== "approved" || hasLinkedAccounts) return;
+    let cancelled = false;
+    void refreshEnrollment();
+    void load().then((next) => {
+      if (!cancelled) setState(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enrollment.kind, hasLinkedAccounts, load, refreshEnrollment]);
+
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-10">
       <header className="flex flex-col items-center gap-3 text-center">
@@ -69,6 +99,42 @@ export function MemberHomePage() {
           <p className="text-sm font-bold text-foreground">We could not load your member account.</p>
           <p className="mt-2 text-xs text-muted-foreground">Nothing was changed.</p>
         </div>
+      ) : !hasLinkedAccounts && enrollment.kind === "pending" ? (
+        /* The member has joined but the merchant has not reviewed them yet. Without this the page
+           showed an empty account and the customer reasonably concluded the join had failed. */
+        <section
+          className="rounded-2xl border border-border bg-card p-5 text-center"
+          data-testid="member-enrollment-pending"
+        >
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-amber-600" aria-hidden />
+          </div>
+          <p className="mt-3 text-base font-black text-foreground">Waiting for merchant approval</p>
+          <p className="mt-1 text-sm font-semibold text-foreground">{enrollment.request.shopName}</p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Your request has been sent. This updates on its own — you do not need to refresh.
+          </p>
+          {enrollment.request.requestedAt ? (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Submitted {new Date(enrollment.request.requestedAt).toLocaleString()}
+            </p>
+          ) : null}
+        </section>
+      ) : !hasLinkedAccounts && enrollment.kind === "rejected" ? (
+        /* The request was not approved. The history is kept server-side; the customer is offered
+           the code step again rather than being left at a dead end. */
+        <section className="flex flex-col gap-4" data-testid="member-enrollment-rejected">
+          <div className="rounded-2xl border border-border bg-card p-5 text-center">
+            <p className="text-base font-black text-foreground">Request not approved</p>
+            <p className="mt-1 text-sm font-semibold text-foreground">{enrollment.request.shopName}</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              That shop did not approve your request. You can try another WAKA Loyalty code.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <LoyaltyCodeEntryForm />
+          </div>
+        </section>
       ) : (
         <div className="flex flex-col gap-4">
           <section className="rounded-2xl border border-border bg-card p-5">
