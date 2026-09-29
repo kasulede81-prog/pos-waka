@@ -143,10 +143,24 @@ describe("the WPL code is re-resolved and gated server-side", () => {
   });
 
   it("requires the member to have a phone — the merchant has to be able to reconcile them", async () => {
+    // Phase 2F — a phone-less member can no longer be PRODUCED by registration: the RPC refuses
+    // with `phone_required` and writes no row. Asserted first, because it is what makes the rest of
+    // this test a statement about rows that already existed rather than about ones created here.
+    const created = crypto.randomUUID();
+    await exec.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'nophone-create@test.local')`, [created]);
+    const refused = await asUser(exec, created, async () =>
+      exec.query(`SELECT public.loyalty_member_register('No Phone', null) AS result`),
+    );
+    expect(rpcJson(refused.rows[0])).toMatchObject({ ok: false, error: "phone_required" });
+
+    // A phone-less member that ALREADY exists — a row written before the rule, or by another
+    // writer — still cannot join. This is the guard that protects the merchant's reconciliation,
+    // and it is unchanged.
     const userId = crypto.randomUUID();
     await exec.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'nophone@test.local')`, [userId]);
-    await asUser(exec, userId, async () =>
-      exec.query(`SELECT public.loyalty_member_register('No Phone', null) AS result`),
+    await exec.query(
+      `INSERT INTO public.loyalty_members (auth_user_id, display_name, phone_e164) VALUES ($1, 'No Phone', null)`,
+      [userId],
     );
     expect(await join(userId, codeA)).toMatchObject({ ok: false, error: "member_phone_required" });
   });

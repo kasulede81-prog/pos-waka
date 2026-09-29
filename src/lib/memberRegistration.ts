@@ -101,6 +101,12 @@ export function memberRegistrationErrorText(error: string): string {
   switch (error) {
     case "invalid_phone":
       return "Enter a valid Ugandan phone number, for example 0772 123 456.";
+    // The server refuses to CREATE a member without a phone (Phase 2F). The client blocks this
+    // before the RPC on every path that collects a phone, so reaching here means the value was
+    // dropped somewhere between the form and the call — the member still needs to be told what to
+    // do, not shown a generic failure.
+    case "phone_required":
+      return "Enter your phone number — WAKA Loyalty needs it to link your card to a shop.";
     case "invalid_name":
       return "Enter your name (1–120 characters).";
     case "not_authenticated":

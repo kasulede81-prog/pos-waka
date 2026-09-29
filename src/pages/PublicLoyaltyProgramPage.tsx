@@ -152,13 +152,34 @@ export function PublicLoyaltyProgramPage({ isAuthenticated, onGoogleLogin }: Pro
 
   /** A signed-in person with no member row yet: build the profile, then join in one step. */
   const createProfileThenJoin = async () => {
-    setJoinBusy(true);
     setJoinError(null);
-    const created = await becomeLoyaltyMember({ displayName: profileName, phone: profilePhone });
+
+    // EXPLICIT validation, not the form's `required` attribute.
+    //
+    // `required` is satisfied by a single space, and it says nothing about whether the value is a
+    // usable phone at all. The phone is not a formatting preference here: it is what Phase 2A
+    // matches a shop's loyalty account against, and the server refuses to create a member without
+    // one. Checking here turns that into a field-level message instead of a round trip that fails.
+    if (profileName.trim().length < 2) {
+      setJoinError(t(lang, "loyaltyJoinName"));
+      return;
+    }
+    const phoneE164 = normalizeUgPhoneE164(profilePhone);
+    if (!phoneE164) {
+      setJoinError(t(lang, "loyaltyJoinInvalidPhone"));
+      return;
+    }
+
+    setJoinBusy(true);
+    const created = await becomeLoyaltyMember({ displayName: profileName, phone: phoneE164 });
     if (!created.ok) {
       setJoinBusy(false);
       setJoinError(
-        created.error === "invalid_phone"
+        // `phone_required` is the server's Phase 2F refusal to create a phone-less member. The
+        // validation above makes it unreachable from this form, but the RPC is the authority — a
+        // future path that forgets the check should still land on the phone field, not on a
+        // generic failure.
+        created.error === "invalid_phone" || created.error === "phone_required"
           ? t(lang, "loyaltyJoinInvalidPhone")
           : created.error === "invalid_name"
             ? t(lang, "loyaltyJoinName")

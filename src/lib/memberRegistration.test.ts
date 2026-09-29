@@ -182,8 +182,25 @@ describe("memberRegistrationErrorText", () => {
   });
 
   it("never leaks a raw error code to the member", () => {
-    for (const code of ["invalid_phone", "invalid_name", "not_authenticated", "offline", "unavailable", "weird"]) {
-      expect(memberRegistrationErrorText(code)).not.toContain(code);
+    for (const code of [
+      "invalid_phone",
+      "invalid_name",
+      "not_authenticated",
+      "offline",
+      "unavailable",
+      // Phase 2F — the RPC's refusal to create a phone-less member must reach the member as
+      // guidance too, not as a code.
+      "phone_required",
+      "weird",
+    ]) {
+      expect(memberRegistrationErrorText(code), code).not.toContain(code);
     }
+  });
+
+  it("explains the phone-required refusal as an instruction, not a dead end", () => {
+    expect(memberRegistrationErrorText("phone_required")).toMatch(/phone/i);
+    // Specifically distinct from the unparseable-phone message: the fix is to enter one, not to
+    // correct a typo.
+    expect(memberRegistrationErrorText("phone_required")).not.toBe(memberRegistrationErrorText("invalid_phone"));
   });
 });

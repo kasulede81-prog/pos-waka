@@ -436,6 +436,39 @@ export function useAuth() {
   const ensureWorkspaceRef = useRef(ensureWorkspaceForSession);
   ensureWorkspaceRef.current = ensureWorkspaceForSession;
 
+  /**
+   * The one sequence EVERY successful Supabase sign-in must run, whichever way the identity was
+   * proved: email + password, the Google popup (web), or Google in the system browser (native).
+   *
+   * WHY THIS IS SHARED RATHER THAN REPEATED. The email path always did this and the Google path
+   * never did — it returned straight from `signInWithIdToken` and left all of it to the
+   * `onAuthStateChange` listener. That listener has paths where it deliberately does not act:
+   * it returns before `setSession` when the account-key guard cannot switch, and it skips the
+   * bootstrap on `TOKEN_REFRESHED`. A session that is authenticated at Supabase but has had no
+   * session applied and no workspace resolved is still `isAuthenticated === false` and still sits
+   * on /login — which is what an existing merchant hit: they are precisely the case where a
+   * session and an account key already exist, and their tenancy is the thing the bootstrap is
+   * supposed to resolve.
+   *
+   * NOTHING IS LOOSENED HERE. This applies the session and calls the same gated
+   * `ensureWorkspaceForSession` every other path calls, so the identity authority
+   * (`waka_account_identity()` via `resolveAccountIdentity`) still decides everything: a member
+   * provisions nothing, an unclassified session provisions nothing, and an existing merchant
+   * resolves their EXISTING tenancy rather than being sent back through merchant intent. No
+   * organization, shop or membership is created by anything in this function.
+   */
+  const completeSupabaseSignIn = useCallback((signedIn: Session): Promise<void> => {
+    applyAccountSwitchSync(
+      computeAccountKey({ mode: "supabase", userId: signedIn.user.id, email: signedIn.user.email }),
+    );
+    applySignupProfileToLocalStore(signedIn);
+    setSession(signedIn);
+    // A session exists, so authentication is settled: never leave the startup gate waiting on
+    // `initializing` after a sign-in that has already completed at Supabase.
+    setInitializing(false);
+    return ensureWorkspaceRef.current(signedIn);
+  }, []);
+
   const sessionRefreshCallbacksRef = useRef({
     onSessionUpdated: (_next: Session) => {},
     onSessionRevoked: () => {},
@@ -737,12 +770,7 @@ export function useAuth() {
       if (!signedIn?.user) {
         throw new Error("Sign-in did not complete. Please try again.");
       }
-      applyAccountSwitchSync(
-        computeAccountKey({ mode: "supabase", userId: signedIn.user.id, email: signedIn.user.email }),
-      );
-      applySignupProfileToLocalStore(signedIn);
-      setSession(signedIn);
-      void ensureWorkspaceRef.current(signedIn).catch((e) => {
+      void completeSupabaseSignIn(signedIn).catch((e) => {
         console.error("[waka-auth] bootstrap after email sign-in failed", e);
       });
       appendPilotEvent("login", "Email sign-in", { mode: "supabase" });
@@ -752,7 +780,7 @@ export function useAuth() {
     localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify({ email: trimmed }));
     applyAccountSwitchSync(computeAccountKey({ mode: "local", email: trimmed }));
     setLocalEmail(trimmed);
-  }, []);
+  }, [completeSupabaseSignIn]);
 
   const signInWithGoogle = useCallback(async (opts?: { referralCode?: string }) => {
     const ref = opts?.referralCode?.trim().toUpperCase();
@@ -775,11 +803,15 @@ export function useAuth() {
       if (!data.session) {
         throw new Error("Sign-in did not complete. Please try again.");
       }
+      // Same completion as every other Supabase sign-in. This used to run the guarded bootstrap
+      // ONLY when a referral code happened to be present, so a merchant arriving through the
+      // system browser depended on the auth listener for their workspace exactly as the web path
+      // did.
+      void completeSupabaseSignIn(data.session).catch((e) => {
+        console.error("[waka-auth] bootstrap after Google native sign-in failed", e);
+      });
       if (ref && ref.length >= 3) {
         await supabase.auth.updateUser({ data: { referral_code: ref } }).catch(() => undefined);
-        void ensureWorkspaceRef.current(data.session).catch((e) => {
-          console.error("[waka-auth] referral after Google native sign-in failed", e);
-        });
       }
       void hydrateAccountFromCloud({ forcePull: true });
       return;
@@ -802,17 +834,22 @@ export function useAuth() {
       reportAuthIssue("google_oauth_failed", { status: error.status ?? 0 });
       throw new Error(formatAuthError(error));
     }
+    const { data: sessData } = await supabase.auth.getSession();
+    const signedIn = sessData.session;
+    if (!signedIn?.user) {
+      throw new Error("Sign-in did not complete. Please try again.");
+    }
+    // Apply the session and resolve the workspace HERE, through the same shared step the
+    // email/password `signIn` uses — for the reasons documented on `completeSupabaseSignIn`.
+    void completeSupabaseSignIn(signedIn).catch((e) => {
+      console.error("[waka-auth] bootstrap after Google sign-in failed", e);
+    });
+
     if (ref && ref.length >= 3) {
       await supabase.auth.updateUser({ data: { referral_code: ref } }).catch(() => undefined);
-      const { data: sess } = await supabase.auth.getSession();
-      if (sess.session) {
-        void ensureWorkspaceRef.current(sess.session).catch((e) => {
-          console.error("[waka-auth] referral after Google sign-in failed", e);
-        });
-      }
     }
     void hydrateAccountFromCloud();
-  }, []);
+  }, [completeSupabaseSignIn]);
 
   const signUp = useCallback(
     async (

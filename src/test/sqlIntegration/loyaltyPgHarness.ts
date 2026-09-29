@@ -68,6 +68,8 @@ export const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260929120000_loyalty_member_join_by_code.sql"),
   // Phase 2D — a member can read the status of their OWN enrollment requests (+ realtime visibility).
   join(process.cwd(), "supabase", "migrations", "20260929160000_loyalty_member_enrollment_status.sql"),
+  // Phase 2F — a NEW loyalty member must supply a phone (the RPC previously accepted NULL).
+  join(process.cwd(), "supabase", "migrations", "20260929180000_loyalty_member_register_requires_phone.sql"),
 ];
 
 function readSql(path: string): string {
