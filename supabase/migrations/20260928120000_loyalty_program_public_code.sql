@@ -143,21 +143,8 @@ create unique index if not exists loyalty_programs_public_code_key
   on public.loyalty_programs (public_code)
   where public_code is not null;
 
-do $chk$
-begin
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'loyalty_programs_public_code_shape_chk'
-      and conrelid = 'public.loyalty_programs'::regclass
-  ) then
-    -- 4-digit issuance year + MINIMUM 3 sequence digits, so WPL20261000 is valid rather than a
-    -- constraint violation: 1000+ extends the code instead of breaking it.
-    alter table public.loyalty_programs
-      add constraint loyalty_programs_public_code_shape_chk
-      check (public.is_waka_loyalty_program_code (public_code));
-  end if;
-end;
-$chk$;
+-- The public_code shape CHECK is deliberately NOT added here. It is added in section 10, AFTER the
+-- backfill has given every existing row a code. See that section for why the order is load-bearing.
 
 -- ============================================================================
 -- 5) Assignment on insert
@@ -186,12 +173,25 @@ create trigger trg_loyalty_programs_public_code
 -- ============================================================================
 -- 6) Immutability
 -- ============================================================================
+-- "Immutable" means immutable ONCE ASSIGNED, and the `old.public_code is not null` guard is what
+-- expresses that. Without it the trigger also blocks the NULL -> code transition — which is not a
+-- change but the one-time ASSIGNMENT, and is exactly what section 7's backfill performs. Guarding
+-- on `is not null` lets that through while still refusing every real change:
+--
+--   NULL -> WPL2026001   allowed   (the assignment: backfill, or a first write)
+--   WPL2026001 -> same   allowed   (not a change; ordinary programme saves rewrite the row)
+--   WPL2026001 -> other  REFUSED
+--   WPL2026001 -> NULL   REFUSED   (so the column can never be cleared and re-issued)
+--
+-- This was the second defect the production attempt was hiding: it failed earlier, on the CHECK, so
+-- the backfill never ran and this never surfaced. Only a test that seeds rows BEFORE the migration
+-- finds it — see `loyaltyProgramCodeBackfill.sql.integration.test.ts`.
 create or replace function public.trg_loyalty_programs_public_code_immutable ()
 returns trigger
 language plpgsql
 as $$
 begin
-  if new.public_code is distinct from old.public_code then
+  if old.public_code is not null and new.public_code is distinct from old.public_code then
     raise exception 'loyalty_programs.public_code is immutable (% -> %)',
       old.public_code, new.public_code;
   end if;
@@ -259,7 +259,43 @@ end;
 $nn$;
 
 -- ============================================================================
--- 10) Privileges
+-- 10) The shape constraint — added LAST, and that ordering is load-bearing
+-- ============================================================================
+-- This MUST run after the backfill (section 7) and after `set not null` (section 9), never before.
+--
+-- A PostgreSQL CHECK rejects a row whose expression evaluates to FALSE. `is_waka_loyalty_program_code`
+-- returns false — not NULL — for a NULL input, because it coalesces to '' first. So adding this
+-- constraint while pre-existing rows still hold a NULL public_code fails the whole migration with
+-- SQLSTATE 23514:
+--
+--   ERROR: check constraint "loyalty_programs_public_code_shape_chk" of relation
+--          "loyalty_programs" is violated by some row
+--
+-- That is exactly what happened on the first production attempt; it is not a theoretical hazard.
+-- On a database whose loyalty_programs table happens to be EMPTY the constraint validates fine,
+-- which is why an empty-database test cannot catch this and a seeded one is required
+-- (`loyaltyProgramCodeBackfill.sql.integration.test.ts` seeds rows BEFORE this file is applied).
+--
+-- The constraint stays STRICT: no NULL allowance, no NOT VALID. By this point every row holds a
+-- valid code, so strictness costs nothing and the invariant is enforced for all future writes.
+do $chk$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'loyalty_programs_public_code_shape_chk'
+      and conrelid = 'public.loyalty_programs'::regclass
+  ) then
+    -- 4-digit issuance year + MINIMUM 3 sequence digits, so WPL20261000 is valid rather than a
+    -- constraint violation: 1000+ extends the code instead of breaking it.
+    alter table public.loyalty_programs
+      add constraint loyalty_programs_public_code_shape_chk
+      check (public.is_waka_loyalty_program_code (public_code));
+  end if;
+end;
+$chk$;
+
+-- ============================================================================
+-- 11) Privileges
 -- ============================================================================
 -- `authenticated` already holds NO insert/update/delete on loyalty_programs (revoked by
 -- 20260926096000 and never re-granted), so no client role can write this column at all: every

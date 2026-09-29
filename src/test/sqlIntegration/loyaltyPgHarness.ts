@@ -6,7 +6,13 @@ import type { SqlExec } from "./transferEnginePgHarness";
 export type { SqlExec };
 
 const BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "loyaltyBootstrap.sql");
-const MIGRATIONS = [
+/**
+ * Exported so a test can build a database at an INTERMEDIATE point in the chain — apply everything
+ * up to (but not including) a given migration, seed the shape a real deployment already has, and
+ * only then apply it. That is the only way to reproduce a migration against a table that already
+ * holds rows, which is the one thing an empty-database harness can never exercise.
+ */
+export const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260918024500_loyalty_data_foundation.sql"),
   join(process.cwd(), "supabase", "migrations", "20260918090000_loyalty_merchant_ui.sql"),
   join(process.cwd(), "supabase", "migrations", "20260918100000_loyalty_enrollment_identity.sql"),
