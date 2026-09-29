@@ -1,51 +1,44 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Navigate } from "react-router-dom";
 import { WakaPosLogo } from "../../components/brand/WakaLogo";
-import { signUpLoyaltyMember } from "../../lib/memberSignup";
-import { isLoyaltySurface, posOrigin } from "../../lib/productHost";
+import { LoyaltyCodeEntryForm } from "../../components/loyalty/LoyaltyCodeEntryForm";
+import { fetchMemberDashboard } from "../../lib/memberDashboard";
+import { posOrigin } from "../../lib/productHost";
 
 /**
- * Phase 2B — the public entry point for someone who is not a WAKA user yet.
+ * Phase 2C — "Join WAKA Loyalty": the merchant code step.
  *
- * PUBLIC BY DESIGN. It sits outside `ProtectedRoute`, because requiring a login to reach member
- * signup would be circular — before this page the only signup surface was the merchant
- * `/register`, which writes merchant metadata and bootstraps an owner workspace, so a person who
- * only wanted a loyalty card had no way in.
+ * PUBLIC BY DESIGN, and it still is: a person who is not a WAKA user at all can open this page,
+ * type the code from the poster in the shop, and be carried into the join. Requiring a login to
+ * reach loyalty signup would be circular.
  *
- * This page collects the AUTH account only. Name and phone are captured afterwards, at `/member`,
- * by the member registration form — so identity data has exactly one home, and a half-finished
- * signup never leaves a stray member row behind.
+ * THIS PAGE CREATES NOTHING — no account, no member, no membership, no session. That is a change
+ * from Phase 2B, which used this route to create an auth account and then relied on `/member` to
+ * create the member row. Both halves of that are gone: a member is now created only by the
+ * explicit join on `/j/<code>`, with the merchant's programme as the required context.
  *
- * Styling follows the member surface's existing convention (see `WelcomePage`/`MemberHomePage`),
- * which is plain English and the shared `waka-input` / `waka-btn-primary` classes.
+ * The code is not a password or a credential. It is a public merchant identifier, and naming it
+ * grants nothing — the destination page re-resolves it server-side before anything happens.
  */
 export function MemberRegisterPage() {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Signed-in people who already belong to a programme go straight to their dashboard rather than
+  // being asked for a code they do not need. A non-member, or a visitor with no session, sees the
+  // code step. `not_a_member`/`not_authenticated` are the only failures that mean "not a member";
+  // anything else (offline) falls back to showing the form, which creates nothing either way.
+  const [alreadyMember, setAlreadyMember] = useState(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const r = await fetchMemberDashboard();
+      if (!cancelled && r.ok) setAlreadyMember(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    const result = await signUpLoyaltyMember({ email, password });
-    if (!result.ok) {
-      setError(result.error);
-      setBusy(false);
-      return;
-    }
-
-    if (result.needsEmailVerification) {
-      navigate("/verify-email", { replace: true, state: { email: email.trim().toLowerCase() } });
-      return;
-    }
-    // Already signed in — the member registration form is the next step, not the merchant wizard.
-    navigate("/member", { replace: true });
-  }
+  if (alreadyMember) return <Navigate to="/member" replace />;
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-5 py-10">
@@ -53,63 +46,16 @@ export function MemberRegisterPage() {
         <WakaPosLogo size="md" className="h-14" />
         <h1 className="text-2xl font-black tracking-tight text-foreground">Join WAKA Loyalty</h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Create an account to collect points at the shops you already visit and keep your loyalty
-          cards in one place.
+          Collect points at the shops you already visit and keep your loyalty cards in one place.
         </p>
       </header>
 
-      <form className="flex flex-col gap-3" onSubmit={submit}>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Email
-          </span>
-          <input
-            className="waka-input"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-            inputMode="email"
-            required
-            disabled={busy}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Password
-          </span>
-          <input
-            className="waka-input"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 8 characters"
-            autoComplete="new-password"
-            minLength={8}
-            required
-            disabled={busy}
-          />
-        </label>
-
-        {error ? (
-          <p
-            role="alert"
-            className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive"
-          >
-            {error}
-          </p>
-        ) : null}
-
-        <button type="submit" disabled={busy} className="waka-btn-primary mt-1 w-full">
-          {busy ? "Creating your account…" : "Create my Loyalty account"}
-        </button>
-      </form>
+      <section className="rounded-2xl border border-border/80 bg-card p-5" data-testid="member-register-code-entry">
+        <LoyaltyCodeEntryForm />
+      </section>
 
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
-        This creates a customer Loyalty account only. It does not create a shop or a business
-        account.
+        This creates nothing on its own. You will see the shop, then choose how to sign in.
       </p>
 
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
@@ -119,19 +65,13 @@ export function MemberRegisterPage() {
         </Link>
       </p>
 
+      {/* Cross-surface link. Absolute on purpose: this page is only ever rendered on
+          loyalty.waka.ug, where a relative `/register` is not part of the customer app. */}
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
         Want to run a shop instead?{" "}
-        {/* Merchant signup is a POS route. On the loyalty host it is not part of the customer app
-            and would be redirected away, so the cross-surface link is absolute there. */}
-        {isLoyaltySurface() ? (
-          <a href={`${posOrigin()}/register`} className="waka-link">
-            Set up a business
-          </a>
-        ) : (
-          <Link to="/register" className="waka-link">
-            Set up a business
-          </Link>
-        )}
+        <a href={`${posOrigin()}/register`} className="waka-link">
+          Set up a business
+        </a>
       </p>
     </div>
   );

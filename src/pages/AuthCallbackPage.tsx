@@ -15,6 +15,7 @@ import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
 import { memberIntentFromMetadata, resolveAccountIdentity } from "../lib/memberIdentity";
 import { isLoyaltySurface } from "../lib/productHost";
+import { consumePendingProgramPath } from "../lib/pendingLoyaltyProgram";
 import { markMemberWorkspace } from "../lib/workspaceBootstrapCache";
 import { resetCloudRecoverySessionForRetry } from "../lib/cloudRecoverySession";
 import { logStartupPhase } from "../lib/startupDiagnostics";
@@ -140,10 +141,26 @@ export function AuthCallbackPage() {
         // This changes the DESTINATION only. `memberOnly` above is untouched, so a loyalty-host
         // session still provisions nothing — reaching /member is not membership, and the member row
         // is only ever created by the explicit registration form.
-        const landing =
-          accountIdentity.kind === "member" ||
-          memberIntentFromMetadata(session.user.user_metadata as Record<string, unknown> | undefined) ||
-          isLoyaltySurface()
+        // Phase 2C — a customer who opened /j/WPL2026001 and then signed in with Google left that
+        // page for the account chooser. `consumePendingProgramPath()` hands back where they were,
+        // and consuming it here (one shot) means it cannot influence a later sign-in.
+        //
+        // ONLY THE CODE IS RESTORED. The destination is a plain /j/<code> URL, which re-renders and
+        // re-resolves everything server-side; no shop, account, member or organization id is read
+        // from storage, and none is ever written there. Gated on the loyalty surface so a POS
+        // session can never consume a customer join.
+        //
+        // Deliberately consulted BEFORE the member/`unknown` landing: a pending join is a more
+        // specific destination than "somewhere in the customer app", and for a brand-new Google
+        // user it is the difference between joining the merchant they scanned and landing on a
+        // registration form with no context.
+        const pendingJoinPath = isLoyaltySurface() ? consumePendingProgramPath() : null;
+
+        const landing = pendingJoinPath
+          ? pendingJoinPath
+          : accountIdentity.kind === "member" ||
+              memberIntentFromMetadata(session.user.user_metadata as Record<string, unknown> | undefined) ||
+              isLoyaltySurface()
             ? "/member"
             : "/welcome";
         if (accountIdentity.kind === "member") markMemberWorkspace(session.user.id);
@@ -175,13 +192,19 @@ export function AuthCallbackPage() {
           markFirstTimeOwnerOnDevice(session.user.id);
         }
 
-        const nextPath = inviteGate.skipOwnerBootstrap
-          ? inviteGate.accepted
-            ? "/"
-            : "/staff/accept"
-          : memberOnly
-            ? landing
-            : postCallbackDestination(session.user.id);
+        // A pending Loyalty join wins over every other destination, because it is the most
+        // specific thing we know about why this person signed in — but it changes the DESTINATION
+        // only. `memberOnly` and `inviteGate` have already decided, above, whether a tenancy may be
+        // provisioned, and that decision is untouched by anything here.
+        const nextPath = pendingJoinPath
+          ? pendingJoinPath
+          : inviteGate.skipOwnerBootstrap
+            ? inviteGate.accepted
+              ? "/"
+              : "/staff/accept"
+            : memberOnly
+              ? landing
+              : postCallbackDestination(session.user.id);
         resetCloudRecoverySessionForRetry();
         logStartupPhase("onboarding_required", {
           userId: session.user.id,

@@ -281,9 +281,6 @@ function PublicLoyaltyJoinRoute() {
   return <PublicLoyaltyJoinPage />;
 }
 
-function PublicLoyaltyProgramRoute() {
-  return <PublicLoyaltyProgramPage />;
-}
 
 function StabilityDiagnosticsHost() {
   const { pathname } = useLocation();
@@ -467,10 +464,18 @@ function AppRoutes() {
           element={<PublicLoyaltyJoinRoute />}
         />
         {/* WPL — public merchant program page. The QR (`buildProgramJoinUrl`) opens exactly this
-            URL, so a scan and a typed code resolve through one path. */}
+            URL, so a scan and a typed code resolve through one path.
+            Phase 2C: it needs the signed-in state and the Google handler, so it is inlined here
+            rather than wrapped at module level — those come from `auth`, which only exists inside
+            AppRoutes. */}
         <Route
           path="/j/:programCode"
-          element={<PublicLoyaltyProgramRoute />}
+          element={
+            <PublicLoyaltyProgramPage
+              isAuthenticated={auth.isAuthenticated}
+              onGoogleLogin={auth.signInWithGoogle}
+            />
+          }
         />
 
         <Route element={<NativeMarketingGuard isAuthenticated={auth.isAuthenticated} />}>

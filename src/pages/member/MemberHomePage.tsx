@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { WakaPosLogo } from "../../components/brand/WakaLogo";
 import { fetchMemberDashboard, type MemberDashboard } from "../../lib/memberDashboard";
-import { becomeLoyaltyMember, memberRegistrationErrorText } from "../../lib/memberRegistration";
+import { LoyaltyCodeEntryForm } from "../../components/loyalty/LoyaltyCodeEntryForm";
 
 /**
  * Phase 1 placeholder — identity and status ONLY.
@@ -13,6 +13,16 @@ import { becomeLoyaltyMember, memberRegistrationErrorText } from "../../lib/memb
  * architecture before it has been reviewed, and the projection already returns them for Phase 2.
  *
  * When it says "N linked accounts", that is a scoping check, not a balance display.
+ *
+ * PHASE 2C — THIS PAGE NO LONGER CREATES MEMBERS. A signed-in person with no `loyalty_members` row
+ * used to be offered a name/phone registration form right here, which produced a WAKA Loyalty
+ * identity belonging to no merchant: no programme, no card, no points, and no way to become
+ * useful without enrolling somewhere anyway. The merchant's programme is the context that makes a
+ * membership mean something, so it is now required FIRST — this page shows the code-entry step and
+ * sends the person to `/j/<code>`, where the join actually happens.
+ *
+ * Existing members are unaffected: they reach the dashboard exactly as before, and are never asked
+ * to register again.
  */
 export function MemberHomePage() {
   const [state, setState] = useState<
@@ -45,12 +55,15 @@ export function MemberHomePage() {
       {state.kind === "loading" ? (
         <p className="text-center text-sm text-muted-foreground">Loading your account…</p>
       ) : state.kind === "error" && state.error === "not_a_member" ? (
-        <MemberRegistrationForm
-          onRegistered={async () => {
-            setState({ kind: "loading" });
-            setState(await load());
-          }}
-        />
+        /* Not a member yet. Deliberately NOT a registration form — see the note at the top of the
+           file. Nothing here creates a `loyalty_members` row; the code leads to the join, and the
+           join is the only place a member is created. */
+        <section className="rounded-2xl border border-border bg-card p-5" data-testid="member-not-a-member">
+          <LoyaltyCodeEntryForm
+            title="Join WAKA Loyalty"
+            subtitle="Enter a merchant's Loyalty code to get started."
+          />
+        </section>
       ) : state.kind === "error" ? (
         <div className="rounded-2xl border border-border bg-card p-5 text-center">
           <p className="text-sm font-bold text-foreground">We could not load your member account.</p>
@@ -93,96 +106,6 @@ export function MemberHomePage() {
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * The one action this page offers a session that is not yet a member.
- *
- * Registration is explicit and never automatic: reaching `/member` alone changes nothing, and a
- * merchant or customer who merely has a phone on file does not become a member by existing. The
- * phone is required because Phase 2A links a shop's loyalty account to this identity by matching
- * it, and it is normalised through the shared helper before it ever reaches the RPC.
- */
-function MemberRegistrationForm({ onRegistered }: { onRegistered: () => void | Promise<void> }) {
-  const [displayName, setDisplayName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-    const result = await becomeLoyaltyMember({ displayName, phone });
-    if (result.ok) {
-      await onRegistered();
-      return;
-    }
-    setError(memberRegistrationErrorText(result.error));
-    setSubmitting(false);
-  }
-
-  return (
-    <section className="rounded-2xl border border-border bg-card p-5">
-      <h2 className="text-base font-black text-foreground">Join WAKA Loyalty</h2>
-      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-        Create your Loyalty account to collect points at the shops you already visit and keep your
-        cards in one place.
-      </p>
-
-      <form className="mt-4 flex flex-col gap-3" onSubmit={submit}>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Your name
-          </span>
-          <input
-            className="waka-input"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="e.g. John Ssemakula"
-            autoComplete="name"
-            maxLength={120}
-            required
-            disabled={submitting}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Phone number
-          </span>
-          <input
-            className="waka-input tabular-nums"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="0772 123 456"
-            inputMode="tel"
-            autoComplete="tel"
-            required
-            disabled={submitting}
-          />
-          <span className="text-[11px] leading-relaxed text-muted-foreground">
-            Use the same number you gave at the shop, so your cards can be matched to you.
-          </span>
-        </label>
-
-        {error ? (
-          <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive">
-            {error}
-          </p>
-        ) : null}
-
-        <button type="submit" disabled={submitting} className="waka-btn-primary mt-1 w-full">
-          {submitting ? "Creating your account…" : "Join WAKA Loyalty"}
-        </button>
-      </form>
-
-      <p className="mt-3 text-center text-[11px] leading-relaxed text-muted-foreground">
-        This creates a Loyalty membership only. It does not create a shop or a business account.
-      </p>
-    </section>
   );
 }
 
