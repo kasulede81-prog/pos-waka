@@ -5,8 +5,32 @@
 
 import { Capacitor } from "@capacitor/core";
 import { WAKA_POS_URL } from "../config/company";
+import { loyaltyOrigin, productOriginForHostname } from "./productHost";
 
 export const CANONICAL_APP_URL = WAKA_POS_URL.replace(/\/$/, "");
+
+/**
+ * The origin a browser session must return to after email confirmation or OAuth.
+ *
+ * A known product host wins, so the redirect returns to the SAME product surface the user started
+ * on: loyalty.waka.ug → loyalty.waka.ug, pos.waka.ug → pos.waka.ug. That return host is what
+ * carries product intent through an OAuth round trip — see `productHost.ts`. Every other host
+ * (localhost, LAN, Vercel preview, a future custom domain) keeps the previous `VITE_APP_URL` /
+ * canonical behaviour exactly as it was.
+ */
+function productRedirectOrigin(): string | null {
+  if (typeof window === "undefined") return null;
+  return productOriginForHostname(window.location.hostname);
+}
+
+/**
+ * The PUBLIC origin for links that leave the browser — confirmation and recovery emails.
+ * Never `https://localhost`: those links are opened by mail clients, outside the Capacitor
+ * WebView. Falls back to the canonical POS URL when the host is not a product surface.
+ */
+function publicProductOrigin(): string {
+  return productRedirectOrigin() ?? CANONICAL_APP_URL;
+}
 
 const AUTH_CALLBACK_PATH = "/auth/callback";
 /** Branded password reset landing (Supabase `redirectTo` for recovery emails). */
@@ -63,8 +87,14 @@ export function enforceHttpsOrigin(origin: string): string {
 export function authRedirectOrigin(): string {
   if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
     // Bundled app: https://localhost. Live reload: http://<LAN-IP>:5173 — do not force https.
+    // The Android/iOS shell is a POS surface and is deliberately NOT host-routed: it has no
+    // loyalty surface, so it keeps returning to https://localhost/auth/callback unchanged.
     return enforceHttpsOrigin(window.location.origin);
   }
+
+  // A known product host owns its own redirect, before any env default can pull it back to POS.
+  const productOrigin = productRedirectOrigin();
+  if (productOrigin) return enforceHttpsOrigin(productOrigin);
 
   const fromEnv = import.meta.env.VITE_APP_URL?.trim().replace(/\/$/, "");
 
@@ -102,7 +132,9 @@ export function getAuthCallbackUrl(): string {
  * Never use https://localhost in emails — it fails outside the Capacitor WebView.
  */
 export function getAuthEmailCallbackUrl(): string {
-  return `${CANONICAL_APP_URL}${AUTH_CALLBACK_PATH}`;
+  // Host-aware: a member who signed up on loyalty.waka.ug is confirmed back to loyalty.waka.ug.
+  // Both origins must be listed in Supabase Auth → Redirect URLs.
+  return `${publicProductOrigin()}${AUTH_CALLBACK_PATH}`;
 }
 
 export function getAuthRecoveryUrl(): string {
@@ -111,7 +143,7 @@ export function getAuthRecoveryUrl(): string {
 
 /** Password-reset emails must use the public site URL (same as email confirmation). */
 export function getAuthEmailRecoveryUrl(): string {
-  return `${CANONICAL_APP_URL}${AUTH_RECOVERY_PATH}`;
+  return `${publicProductOrigin()}${AUTH_RECOVERY_PATH}`;
 }
 
 export function getSupabaseProjectRef(): string | null {
@@ -127,7 +159,8 @@ export function getSupabaseProjectRef(): string | null {
 }
 
 export function getGoogleOAuthJavaScriptOrigins(): string[] {
-  const origins = new Set<string>([CANONICAL_APP_URL, "https://waka.ug"]);
+  // Both product surfaces run the same GIS popup flow, so both must be JavaScript origins.
+  const origins = new Set<string>([CANONICAL_APP_URL, loyaltyOrigin(), "https://waka.ug"]);
   if (import.meta.env.DEV) {
     origins.add("http://localhost:5173");
   }
@@ -138,10 +171,16 @@ export function getGoogleOAuthJavaScriptOrigins(): string[] {
 
 /** Redirect URLs to allow in Supabase Auth (documentation helper). */
 export function getSupabaseAuthRedirectUrls(): string[] {
+  const loyalty = loyaltyOrigin();
   return [
     `${CANONICAL_APP_URL}/auth/callback`,
     `${CANONICAL_APP_URL}${AUTH_RECOVERY_PATH}`,
     `${CANONICAL_APP_URL}${AUTH_RECOVERY_LEGACY_PATH}`,
+    // Phase 2C — the customer surface returns to its own origin. Required in Supabase before
+    // loyalty.waka.ug sign-in can complete; POS and native flows are unaffected.
+    `${loyalty}/auth/callback`,
+    `${loyalty}${AUTH_RECOVERY_PATH}`,
+    `${loyalty}${AUTH_RECOVERY_LEGACY_PATH}`,
     "https://waka.ug/auth/callback",
     `https://waka.ug${AUTH_RECOVERY_PATH}`,
     `https://waka.ug${AUTH_RECOVERY_LEGACY_PATH}`,

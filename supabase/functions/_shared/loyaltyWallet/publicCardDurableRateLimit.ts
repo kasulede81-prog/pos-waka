@@ -17,9 +17,14 @@ import {
   ENROLL_SUBMIT_IP_WINDOW_MS,
   ENROLL_SUBMIT_TOKEN_LIMIT,
   ENROLL_SUBMIT_TOKEN_WINDOW_MS,
+  PROGRAM_LOOKUP_CODE_LIMIT,
+  PROGRAM_LOOKUP_CODE_WINDOW_MS,
+  PROGRAM_LOOKUP_IP_LIMIT,
+  PROGRAM_LOOKUP_IP_WINDOW_MS,
   RATE_SCOPE_CARD_READ,
   RATE_SCOPE_ENROLL_JOIN,
   RATE_SCOPE_ENROLL_SUBMIT,
+  RATE_SCOPE_PROGRAM_LOOKUP,
   RATE_SCOPE_WALLET_ISSUE,
   WALLET_ISSUE_IP_LIMIT,
   WALLET_ISSUE_IP_WINDOW_MS,
@@ -150,6 +155,34 @@ export async function enforceEnrollJoinRateLimit(
     ipWindowMs: ENROLL_JOIN_IP_WINDOW_MS,
     tokenLimit: ENROLL_JOIN_TOKEN_LIMIT,
     tokenWindowMs: ENROLL_JOIN_TOKEN_WINDOW_MS,
+  });
+}
+
+/**
+ * Public WPL program-code lookup — the tightest scope, because the code is guessable.
+ *
+ * The hash key includes a `code:` prefix so a program lookup can never share a bucket with the
+ * card or enrollment scopes.
+ */
+export async function enforceProgramLookupRateLimit(
+  req: Request,
+  supabaseUrl: string,
+  serviceKey: string,
+  programCode: string | null,
+): Promise<DurableRateLimitResult> {
+  const ipHash = await resolveIpHashForRateLimit(req);
+  const tokenHash =
+    programCode && programCode.trim()
+      ? await hashRateLimitKey(`code:${programCode.trim().toUpperCase()}`)
+      : null;
+  return consumeDurableRateLimit(supabaseUrl, serviceKey, {
+    scope: RATE_SCOPE_PROGRAM_LOOKUP,
+    ipHash,
+    tokenHash,
+    ipLimit: PROGRAM_LOOKUP_IP_LIMIT,
+    ipWindowMs: PROGRAM_LOOKUP_IP_WINDOW_MS,
+    tokenLimit: PROGRAM_LOOKUP_CODE_LIMIT,
+    tokenWindowMs: PROGRAM_LOOKUP_CODE_WINDOW_MS,
   });
 }
 

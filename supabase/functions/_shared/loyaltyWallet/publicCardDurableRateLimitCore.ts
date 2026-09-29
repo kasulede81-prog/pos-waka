@@ -7,12 +7,15 @@ export const RATE_SCOPE_CARD_READ = "card_read" as const;
 export const RATE_SCOPE_WALLET_ISSUE = "wallet_issue" as const;
 export const RATE_SCOPE_ENROLL_JOIN = "enroll_join" as const;
 export const RATE_SCOPE_ENROLL_SUBMIT = "enroll_submit" as const;
+/** Public WAKA Loyalty Program code lookup (WPL2026001). */
+export const RATE_SCOPE_PROGRAM_LOOKUP = "program_lookup" as const;
 
 export type RateScope =
   | typeof RATE_SCOPE_CARD_READ
   | typeof RATE_SCOPE_WALLET_ISSUE
   | typeof RATE_SCOPE_ENROLL_JOIN
-  | typeof RATE_SCOPE_ENROLL_SUBMIT;
+  | typeof RATE_SCOPE_ENROLL_SUBMIT
+  | typeof RATE_SCOPE_PROGRAM_LOOKUP;
 
 /** Shared bucket key material when no trustworthy client IP can be established. */
 export const UNTRUSTED_IP_MATERIAL = "untrusted";
@@ -36,6 +39,19 @@ export const ENROLL_SUBMIT_IP_LIMIT = 8;
 export const ENROLL_SUBMIT_IP_WINDOW_MS = 60_000;
 export const ENROLL_SUBMIT_TOKEN_LIMIT = 5;
 export const ENROLL_SUBMIT_TOKEN_WINDOW_MS = 600_000; // 10 minutes
+
+/**
+ * Program-code lookup. TIGHTER than every other public scope on purpose.
+ *
+ * A code is short and therefore GUESSABLE — `WPL2026###` is 999 possibilities, where a card or
+ * enrollment token is 2^256. The IP limit is what keeps a single client from walking the space and
+ * turning the endpoint into a merchant directory; the per-code limit stops one code being hammered.
+ * A real customer types one code, so the ceiling is far above any honest use.
+ */
+export const PROGRAM_LOOKUP_IP_LIMIT = 15;
+export const PROGRAM_LOOKUP_IP_WINDOW_MS = 60_000;
+export const PROGRAM_LOOKUP_CODE_LIMIT = 10;
+export const PROGRAM_LOOKUP_CODE_WINDOW_MS = 60_000;
 
 export type TrustedIpResult =
   | { trusted: true; ip: string }

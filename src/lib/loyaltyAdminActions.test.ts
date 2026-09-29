@@ -182,6 +182,7 @@ describe("impact helper for the confirmation screens", () => {
     shopNumber: null,
     organizationId: "o",
     organizationName: "O",
+    publicCode: "WPL2026001",
     loyaltyEnabled: true,
     entitlementStatus: "active",
     tierCode: "gold",

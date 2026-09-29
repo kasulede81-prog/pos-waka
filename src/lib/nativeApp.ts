@@ -40,6 +40,20 @@ export function isPublicLoyaltyJoinPath(pathname: string): boolean {
   return /^\/join\/[a-f0-9]{64}$/i.test(p);
 }
 
+/**
+ * Public merchant Loyalty Program page — `/j/WPL2026001`.
+ *
+ * The QR a merchant displays encodes this URL, so scanning and typing reach one page. The pattern
+ * is written out here rather than imported from the loyalty client, because `productHost` and the
+ * native guards sit UNDER `supabase.ts` in the import graph and importing the client back would
+ * close a cycle (`supabase → authConfig → productHost → client → supabase`).
+ */
+export function isPublicLoyaltyProgramPath(pathname: string): boolean {
+  const raw = pathname.split("?")[0] || "/";
+  const p = raw.length > 1 ? raw.replace(/\/$/, "") : raw;
+  return /^\/j\/WPL[0-9]{4}[0-9]{3,9}$/i.test(p);
+}
+
 /** Paths where Supabase returns after email/OAuth — must render immediately (no startup gate). */
 export function isAuthHandoffPath(pathname: string): boolean {
   const p = pathname.split("?")[0] || "/";

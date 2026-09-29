@@ -98,7 +98,9 @@ import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { NativeMarketingGuard } from "./components/NativeMarketingGuard";
 import { RouteSeoController } from "./components/marketing/RouteSeoController";
 import { NativePublicGuard } from "./components/NativePublicGuard";
+import { LoyaltySurfaceBoundary } from "./components/routing/LoyaltySurfaceBoundary";
 import { unauthenticatedEntryPath } from "./lib/nativeApp";
+import { isLoyaltySurface } from "./lib/productHost";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { DeviceActivationProvider } from "./context/DeviceActivationContext";
 import { DeviceActivationGateOutlet } from "./components/DeviceActivationGateOutlet";
@@ -237,11 +239,19 @@ const WelcomePage = lazy(() => import("./pages/member/WelcomePage").then((m) => 
 const MemberRegisterPage = lazy(() =>
   import("./pages/member/MemberRegisterPage").then((m) => ({ default: m.MemberRegisterPage })),
 );
+// Phase 2C — customer sign-in on loyalty.waka.ug. Only ever rendered on that host.
+const LoyaltyLoginPage = lazy(() =>
+  import("./pages/member/LoyaltyLoginPage").then((m) => ({ default: m.LoyaltyLoginPage })),
+);
 const PublicLoyaltyCardPage = lazy(() =>
   import("./pages/PublicLoyaltyCardPage").then((m) => ({ default: m.PublicLoyaltyCardPage })),
 );
 const PublicLoyaltyJoinPage = lazy(() =>
   import("./pages/PublicLoyaltyJoinPage").then((m) => ({ default: m.PublicLoyaltyJoinPage })),
+);
+// WPL — the merchant program QR target (/j/WPL2026001). Scanning and typing use this one route.
+const PublicLoyaltyProgramPage = lazy(() =>
+  import("./pages/PublicLoyaltyProgramPage").then((m) => ({ default: m.PublicLoyaltyProgramPage })),
 );
 const ProfitPage = lazy(() => import("./pages/ProfitPage").then((m) => ({ default: m.ProfitPage })));
 const AskWakaPage = lazy(() => import("./pages/AskWakaPage").then((m) => ({ default: m.AskWakaPage })));
@@ -263,6 +273,10 @@ function PublicLoyaltyCardRoute() {
 
 function PublicLoyaltyJoinRoute() {
   return <PublicLoyaltyJoinPage />;
+}
+
+function PublicLoyaltyProgramRoute() {
+  return <PublicLoyaltyProgramPage />;
 }
 
 function StabilityDiagnosticsHost() {
@@ -297,6 +311,10 @@ function AppRoutes() {
           needing a per-route boundary. Inner Suspense wrappers (already present
           for a subset of routes) still resolve first when their chunk lands. */}
       <Suspense fallback={<LazyWait />}>
+      {/* Phase 2C — on loyalty.waka.ug this renders only the customer surface and redirects every
+          merchant path to /member. On every other host (pos.waka.ug, localhost, the Android shell)
+          it renders the route tree below exactly as it always has. */}
+      <LoyaltySurfaceBoundary>
       <Routes>
         <Route element={<NativePublicGuard isAuthenticated={auth.isAuthenticated} />}>
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -315,19 +333,34 @@ function AppRoutes() {
         <Route
           path="/login"
           element={
-            <LoginPage
-              lang={lang}
-              setLang={setLang}
-              initializing={auth.initializing}
-              isAuthenticated={auth.isAuthenticated}
-              onLogin={auth.signIn}
-              onGoogleLogin={auth.signInWithGoogle}
-              onStaffLogin={auth.signInStaff}
-              listStaffShops={auth.listStaffShops}
-              rememberedStaffDevice={auth.rememberedStaffDevice}
-              onClearRememberedStaff={auth.clearRememberedStaff}
-              mode={auth.mode}
-            />
+            // Phase 2C — same route, two products. On the loyalty host a customer gets the
+            // customer sign-in; everywhere else the merchant POS login is byte-for-byte unchanged
+            // (same component, same props, same handlers).
+            isLoyaltySurface() ? (
+              <LoyaltyLoginPage
+                lang={lang}
+                setLang={setLang}
+                initializing={auth.initializing}
+                isAuthenticated={auth.isAuthenticated}
+                onLogin={auth.signIn}
+                onGoogleLogin={auth.signInWithGoogle}
+                mode={auth.mode}
+              />
+            ) : (
+              <LoginPage
+                lang={lang}
+                setLang={setLang}
+                initializing={auth.initializing}
+                isAuthenticated={auth.isAuthenticated}
+                onLogin={auth.signIn}
+                onGoogleLogin={auth.signInWithGoogle}
+                onStaffLogin={auth.signInStaff}
+                listStaffShops={auth.listStaffShops}
+                rememberedStaffDevice={auth.rememberedStaffDevice}
+                onClearRememberedStaff={auth.clearRememberedStaff}
+                mode={auth.mode}
+              />
+            )
           }
         />
 
@@ -426,6 +459,12 @@ function AppRoutes() {
         <Route
           path="/join/:enrollmentToken"
           element={<PublicLoyaltyJoinRoute />}
+        />
+        {/* WPL — public merchant program page. The QR (`buildProgramJoinUrl`) opens exactly this
+            URL, so a scan and a typed code resolve through one path. */}
+        <Route
+          path="/j/:programCode"
+          element={<PublicLoyaltyProgramRoute />}
         />
 
         <Route element={<NativeMarketingGuard isAuthenticated={auth.isAuthenticated} />}>
@@ -1547,6 +1586,7 @@ function AppRoutes() {
 
         <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : unauthenticatedEntryPath()} replace />} />
       </Routes>
+      </LoyaltySurfaceBoundary>
       </Suspense>
     </StartupBootstrapGate>
     </ToastProvider>

@@ -3,6 +3,7 @@ import {
   isNativeApp,
   isPublicLoyaltyCardPath,
   isPublicLoyaltyJoinPath,
+  isPublicLoyaltyProgramPath,
   isVerifyAgentPath,
   NATIVE_PUBLIC_PATHS,
   unauthenticatedEntryPath,
@@ -24,7 +25,13 @@ export function NativePublicGuard({ isAuthenticated }: Props) {
   }
 
   const path = pathname.split("?")[0] || "/";
-  if (NATIVE_PUBLIC_PATHS.has(path) || isVerifyAgentPath(path) || isPublicLoyaltyCardPath(path) || isPublicLoyaltyJoinPath(path)) {
+  if (
+    NATIVE_PUBLIC_PATHS.has(path) ||
+    isVerifyAgentPath(path) ||
+    isPublicLoyaltyCardPath(path) ||
+    isPublicLoyaltyJoinPath(path) ||
+    isPublicLoyaltyProgramPath(path)
+  ) {
     return <Outlet />;
   }
 

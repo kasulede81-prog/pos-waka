@@ -33,6 +33,7 @@ import { LoyaltyCustomerRewardsPanel } from "../components/loyalty/LoyaltyCustom
 import { LoyaltyGoogleWalletButton } from "../components/loyalty/LoyaltyGoogleWalletButton";
 import { LoyaltyCustomerPageShare } from "../components/loyalty/LoyaltyCustomerPageShare";
 import { LoyaltyCardDesignPanel } from "../components/loyalty/LoyaltyCardDesignPanel";
+import { LoyaltyProgramCodePanel } from "../components/loyalty/LoyaltyProgramCodePanel";
 import { LoyaltyPublicEnrollmentPanel } from "../components/loyalty/LoyaltyPublicEnrollmentPanel";
 import { LoyaltyEnrollmentRequestsPanel } from "../components/loyalty/LoyaltyEnrollmentRequestsPanel";
 import {
@@ -1561,6 +1562,8 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                   <li>{t(lang, "loyaltyCardsBulletPoints")}</li>
                 </ul>
               </article>
+              {/* Permanent public program code (WPL2026001) — read-only, issued server-side. */}
+              <LoyaltyProgramCodePanel lang={lang} shopId={shopId} />
               <LoyaltyPublicEnrollmentPanel lang={lang} shopId={shopId} canManage={canManage} />
               <CustomerList
                 lang={lang}

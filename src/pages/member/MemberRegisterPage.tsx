@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { WakaPosLogo } from "../../components/brand/WakaLogo";
 import { signUpLoyaltyMember } from "../../lib/memberSignup";
+import { isLoyaltySurface, posOrigin } from "../../lib/productHost";
 
 /**
  * Phase 2B — the public entry point for someone who is not a WAKA user yet.
@@ -120,9 +121,17 @@ export function MemberRegisterPage() {
 
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
         Want to run a shop instead?{" "}
-        <Link to="/register" className="waka-link">
-          Set up a business
-        </Link>
+        {/* Merchant signup is a POS route. On the loyalty host it is not part of the customer app
+            and would be redirected away, so the cross-surface link is absolute there. */}
+        {isLoyaltySurface() ? (
+          <a href={`${posOrigin()}/register`} className="waka-link">
+            Set up a business
+          </a>
+        ) : (
+          <Link to="/register" className="waka-link">
+            Set up a business
+          </Link>
+        )}
       </p>
     </div>
   );

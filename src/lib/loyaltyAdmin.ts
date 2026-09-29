@@ -44,6 +44,12 @@ export type LoyaltyAdminShopState = {
   shopNumber: string | null;
   organizationId: string;
   organizationName: string;
+  /**
+   * The shop's permanent public WPL code (WPL2026001), or null when the shop has never switched
+   * Loyalty on and so has no program row yet. Projected onto the row by the RPC itself — see the
+   * note on `fetchLoyaltyAdminShopStates`.
+   */
+  publicCode: string | null;
   loyaltyEnabled: boolean;
   entitlementStatus: string;
   tierCode: string | null;
@@ -143,6 +149,17 @@ export async function fetchLoyaltyAdminPlans(): Promise<LoyaltyAdminResult<Loyal
   });
 }
 
+/**
+ * The admin shop list, with each shop's WPL code on the row.
+ *
+ * `query` matches shop name, organization name, shop number OR WPL code — the code match happens
+ * server-side, so the caller never has to resolve a code to a shop and then re-filter a list it
+ * already fetched.
+ *
+ * The code is projected by this RPC rather than joined in the browser from
+ * `fetchLoyaltyAdminPrograms`, because that read is capped and ordered newest-first: past the cap
+ * the oldest merchants — the ones whose codes matter most — would silently render blank.
+ */
 export async function fetchLoyaltyAdminShopStates(
   query: string,
   filter: LoyaltyAdminShopFilter,
@@ -162,6 +179,7 @@ export async function fetchLoyaltyAdminShopStates(
           shopNumber: str(s.shop_number),
           organizationId: String(s.organization_id ?? ""),
           organizationName: String(s.organization_name ?? ""),
+          publicCode: str(s.public_code),
           loyaltyEnabled: s.loyalty_enabled === true,
           entitlementStatus: String(s.entitlement_status ?? "none"),
           tierCode: str(s.tier_code),
@@ -216,4 +234,69 @@ export async function fetchLoyaltyAdminShopDetail(
       usagePercent: num(usage.usage_percent),
     };
   });
+}
+
+/**
+ * WPL — the permanent public Loyalty Program code (WPL2026001).
+ *
+ * Read-only by construction: these are lookups. The code is issued once, server-side, by a trigger
+ * on insert; it is immutable, it is never recycled, and no RPC anywhere accepts it as a write
+ * input. `public_code` is therefore always displayed, never edited.
+ *
+ * Both RPCs are granted to `authenticated` but gated INSIDE by `is_waka_internal_role`, the same
+ * shape as every other `internal_ops_loyalty_*` call above — so a merchant calling them directly
+ * gets `forbidden`, and the audit trail is the existing one.
+ */
+export type LoyaltyAdminProgram = {
+  publicCode: string;
+  shopId: string;
+  shopName: string;
+  shopNumber: string | null;
+  organizationId: string;
+  organizationName: string;
+  programDisplayName: string | null;
+  enabled: boolean;
+  createdAt: string;
+  membersTotal: number;
+  membersActive: number;
+};
+
+function mapAdminProgram(p: Record<string, unknown>): LoyaltyAdminProgram {
+  return {
+    publicCode: String(p.public_code ?? ""),
+    shopId: String(p.shop_id ?? ""),
+    shopName: String(p.shop_name ?? ""),
+    shopNumber: str(p.shop_number),
+    organizationId: String(p.organization_id ?? ""),
+    organizationName: String(p.organization_name ?? ""),
+    programDisplayName: str(p.program_display_name),
+    enabled: p.enabled === true,
+    createdAt: String(p.created_at ?? ""),
+    membersTotal: num(p.members_total),
+    membersActive: num(p.members_active),
+  };
+}
+
+/** List/search programs by WPL code, shop name, shop number or organization name. */
+export async function fetchLoyaltyAdminPrograms(
+  search: string,
+  limit = 100,
+): Promise<LoyaltyAdminResult<LoyaltyAdminProgram[]>> {
+  return callRpc(
+    "internal_ops_loyalty_programs",
+    { p_search: search.trim() || null, p_limit: limit },
+    (raw) => {
+      const list = Array.isArray(raw.programs) ? (raw.programs as Record<string, unknown>[]) : [];
+      return list.map(mapAdminProgram);
+    },
+  );
+}
+
+/** Resolve exactly one program by its public code. */
+export async function fetchLoyaltyAdminProgramByCode(
+  publicCode: string,
+): Promise<LoyaltyAdminResult<LoyaltyAdminProgram>> {
+  return callRpc("internal_ops_loyalty_program_by_code", { p_code: publicCode.trim() }, (raw) =>
+    mapAdminProgram((raw.program ?? {}) as Record<string, unknown>),
+  );
 }

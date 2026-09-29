@@ -14,6 +14,7 @@ import {
 import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
 import { memberIntentFromMetadata, resolveAccountIdentity } from "../lib/memberIdentity";
+import { isLoyaltySurface } from "../lib/productHost";
 import { markMemberWorkspace } from "../lib/workspaceBootstrapCache";
 import { resetCloudRecoverySessionForRetry } from "../lib/cloudRecoverySession";
 import { logStartupPhase } from "../lib/startupDiagnostics";
@@ -131,9 +132,18 @@ export function AuthCallbackPage() {
         // DESTINATION changes here: `memberOnly` above is untouched, so the bootstrap is still
         // skipped exactly as before, and a real merchant never reaches this line at all because a
         // tenancy classifies as `merchant` and takes the `postCallbackDestination` branch.
+        // Phase 2C — on loyalty.waka.ug a brand-new session has NO metadata to read (a Google
+        // identity carries none of ours), so intent comes from the host it returned to. It is sent
+        // to the member surface, where the existing registration form completes it; the merchant
+        // /welcome chooser is a POS surface and is not part of the customer app.
+        //
+        // This changes the DESTINATION only. `memberOnly` above is untouched, so a loyalty-host
+        // session still provisions nothing — reaching /member is not membership, and the member row
+        // is only ever created by the explicit registration form.
         const landing =
           accountIdentity.kind === "member" ||
-          memberIntentFromMetadata(session.user.user_metadata as Record<string, unknown> | undefined)
+          memberIntentFromMetadata(session.user.user_metadata as Record<string, unknown> | undefined) ||
+          isLoyaltySurface()
             ? "/member"
             : "/welcome";
         if (accountIdentity.kind === "member") markMemberWorkspace(session.user.id);

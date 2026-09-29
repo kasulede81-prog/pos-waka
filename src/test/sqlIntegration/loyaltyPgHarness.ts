@@ -52,6 +52,12 @@ const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260928102000_loyalty_member_grant_revoke.sql"),
   // Phase 2A — create the member link on enrollment approval (multi-shop membership).
   join(process.cwd(), "supabase", "migrations", "20260928110000_loyalty_multishop_member_link.sql"),
+  // WPL — permanent public Loyalty Program code (WPL2026001) on loyalty_programs.
+  join(process.cwd(), "supabase", "migrations", "20260928120000_loyalty_program_public_code.sql"),
+  // WPL — public code resolution + code-based enrollment (shares the token path's core).
+  join(process.cwd(), "supabase", "migrations", "20260928121000_loyalty_program_code_resolution.sql"),
+  // WPL — merchant overview + internal admin lookup/search.
+  join(process.cwd(), "supabase", "migrations", "20260928122000_loyalty_program_code_admin_merchant.sql"),
 ];
 
 function readSql(path: string): string {

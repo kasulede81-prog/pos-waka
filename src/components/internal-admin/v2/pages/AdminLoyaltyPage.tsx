@@ -131,6 +131,7 @@ export function AdminLoyaltyPage({ adminRow, previewMode = false }: Props) {
     void load();
   }, [previewMode, load]);
 
+  /** One call, one source: the RPC matches names, shop numbers and WPL codes server-side. */
   const refreshShops = useCallback(async (q: string, f: LoyaltyAdminShopFilter) => {
     const r = await fetchLoyaltyAdminShopStates(q, f);
     setShops(r.ok ? r.data : []);
@@ -441,7 +442,7 @@ export function AdminLoyaltyPage({ adminRow, previewMode = false }: Props) {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search shop or organization…"
+              placeholder="Search shop, organization or WPL code…"
               className="min-h-[42px] w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm font-semibold"
             />
           </label>
@@ -460,11 +461,12 @@ export function AdminLoyaltyPage({ adminRow, previewMode = false }: Props) {
         </div>
 
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead>
               <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="py-2 pr-3 font-black">Shop</th>
                 <th className="py-2 pr-3 font-black">Organization</th>
+                <th className="py-2 pr-3 font-black">WPL code</th>
                 <th className="py-2 pr-3 font-black">Loyalty</th>
                 <th className="py-2 pr-3 font-black">Tier</th>
                 <th className="py-2 pr-3 font-black">Members</th>
@@ -484,6 +486,17 @@ export function AdminLoyaltyPage({ adminRow, previewMode = false }: Props) {
                     {s.shopNumber ? <span className="ml-2 text-[11px] text-muted-foreground">{s.shopNumber}</span> : null}
                   </td>
                   <td className="py-2 pr-3 text-muted-foreground">{s.organizationName}</td>
+                  {/* The permanent public WPL code. It is a public identifier, not a secret —
+                      and it is deliberately shown INSTEAD of any internal id. */}
+                  <td className="py-2 pr-3">
+                    {s.publicCode ? (
+                      <span className="font-mono text-xs font-black tracking-wider text-foreground">
+                        {s.publicCode}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="py-2 pr-3">
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
@@ -516,7 +529,7 @@ export function AdminLoyaltyPage({ adminRow, previewMode = false }: Props) {
               ))}
               {shops.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-4 text-sm font-semibold text-muted-foreground">
+                  <td colSpan={8} className="py-4 text-sm font-semibold text-muted-foreground">
                     No shops match this search.
                   </td>
                 </tr>

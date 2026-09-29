@@ -26,6 +26,14 @@ import { normalizeLoyaltyAccountStatus } from "./loyaltyMath";
 
 export type LoyaltyOverview = {
   program: LoyaltyProgramConfig | null;
+  /**
+   * The merchant's permanent public WAKA Loyalty Program code (WPL2026001), and the customer path
+   * it resolves to. READ-ONLY: it is issued once server-side and no RPC accepts it as a write
+   * input. Kept beside `program` rather than inside `LoyaltyProgramConfig`, because that type is
+   * shared with the POS checkout maths and the cached program — the code has no business there.
+   */
+  publicCode: string | null;
+  joinPath: string | null;
   programUpdatedAt: string | null;
   membersTotal: number;
   membersActive: number;
@@ -187,6 +195,14 @@ export async function fetchLoyaltyOverview(shopId: string): Promise<LoyaltyOverv
       program: result.program
         ? mapProgramRow(result.program as Parameters<typeof mapProgramRow>[0])
         : null,
+      publicCode:
+        typeof result.program?.public_code === "string" && result.program.public_code.trim()
+          ? result.program.public_code.trim()
+          : null,
+      joinPath:
+        typeof result.program?.join_path === "string" && result.program.join_path.trim()
+          ? result.program.join_path.trim()
+          : null,
       programUpdatedAt: (result.program?.updated_at as string | undefined) ?? null,
       membersTotal: Number(result.members_total ?? 0),
       membersActive: Number(result.members_active ?? 0),
