@@ -25,8 +25,12 @@ export function WelcomePage() {
       </header>
 
       <div className="flex flex-col gap-3">
+        {/* Phase 2C — goes to the intent step, NOT /register. /register forwards an authenticated
+            session to /onboarding, which the identity gate bounces straight back here, so this link
+            used to be a loop for anyone without merchant metadata (e.g. a Google signup). */}
         <Link
-          to="/register"
+          to="/start-business"
+          data-testid="welcome-start-business"
           className="flex flex-col gap-1 rounded-2xl border border-border bg-card p-5 transition-colors hover:border-waka-400"
         >
           <span className="text-base font-black text-foreground">Set up a business</span>

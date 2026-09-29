@@ -6,6 +6,33 @@ import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
 import { usePosStore } from "../store/usePosStore";
 import { clearPendingRegistrationProfile } from "./registrationProfileCache";
 import { getActiveShopId, isValidShopId } from "../offline/shopScope";
+import { blocksOwnerBootstrap, resolveAccountIdentity } from "./memberIdentity";
+
+/**
+ * Phase 2C — the identity/bootstrap authority's veto, for the two callers below that create a
+ * tenancy outside `ensureWorkspaceForSession`.
+ *
+ * Both used to call `bootstrapOwnerWorkspace` unconditionally when the caller had no shop. That is
+ * a second way into the exact failure Phase 1 removed: `waka_account_identity()` is the authority
+ * on who may be given a workspace, and neither site consulted it — a WAKA Loyalty member, or any
+ * session the classifier calls `unknown`, could have been provisioned a shop from a settings form
+ * or an onboarding save.
+ *
+ * `force: true` re-reads rather than trusting the per-user cache, because this is the moment the
+ * answer decides whether a tenancy is created.
+ *
+ * MERCHANT INTENT IS NOT MERCHANT AUTHORIZATION: this only asks the classifier. A session that
+ * declared intent resolves `merchant` and passes; a member or an unclassified one is refused here
+ * exactly as it would be inside `ensureWorkspaceForSession`.
+ */
+async function mayCreateOwnerWorkspace(user: { id: string; user_metadata?: unknown }): Promise<boolean> {
+  const resolution = await resolveAccountIdentity({
+    userId: user.id,
+    metadata: (user.user_metadata ?? {}) as Record<string, unknown>,
+    force: true,
+  });
+  return !blocksOwnerBootstrap(resolution);
+}
 
 export type SaveOwnerBundleArgs = {
   shopName: string;
@@ -58,6 +85,12 @@ export async function saveOwnerBusinessProfileBundleRpc(
         args.longitude != null &&
         !Number.isNaN(args.latitude) &&
         !Number.isNaN(args.longitude);
+      // Refuse rather than provision when the identity authority does not call this session a
+      // merchant. The onboarding wizard is reached only through the intent step, which is what
+      // makes this session `merchant`; anything else has no business being given a workspace.
+      if (!(await mayCreateOwnerWorkspace(authData.user))) {
+        return { ok: false, message: "not_authorized_for_workspace" };
+      }
       await bootstrapOwnerWorkspace(authData.user, {
         organizationName: args.shopName.trim(),
         shopDisplayName: args.shopName.trim(),
@@ -365,6 +398,10 @@ export async function saveBusinessProfileToCloud(input: BusinessProfileInput, al
       input.longitude != null &&
       !Number.isNaN(input.latitude) &&
       !Number.isNaN(input.longitude);
+    // Same veto as the settings-form path: the classifier decides, not the caller.
+    if (!(await mayCreateOwnerWorkspace(user))) {
+      throw new Error("not_authorized_for_workspace");
+    }
     await bootstrapOwnerWorkspace(user, {
       organizationName: input.shopName.trim(),
       shopDisplayName: input.shopName.trim(),

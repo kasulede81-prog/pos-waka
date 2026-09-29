@@ -234,6 +234,12 @@ const LoyaltyHubPage = lazy(() => import("./pages/LoyaltyHubPage").then((m) => (
 // Phase 1 — member identity. Authenticated, but deliberately NOT a merchant surface.
 const MemberHomePage = lazy(() => import("./pages/member/MemberHomePage").then((m) => ({ default: m.MemberHomePage })));
 const WelcomePage = lazy(() => import("./pages/member/WelcomePage").then((m) => ({ default: m.WelcomePage })));
+// Phase 2C — explicit merchant intent. Public to any AUTHENTICATED session (it sits inside
+// ProtectedRoute but outside KnownIdentityGate), because a brand-new Google user classifies as
+// `unknown` until they declare it here.
+const StartBusinessPage = lazy(() =>
+  import("./pages/StartBusinessPage").then((m) => ({ default: m.StartBusinessPage })),
+);
 // Phase 2B — PUBLIC member signup. Must stay in the public branch: requiring a login to reach
 // member registration would be circular, and the merchant /register writes merchant intent.
 const MemberRegisterPage = lazy(() =>
@@ -492,6 +498,12 @@ function AppRoutes() {
           {/* Landing for an authenticated session that is neither a tenant, nor invite-pending,
               nor a merchant signup. Sibling of the gate below so it is never bounced back. */}
           <Route path="welcome" element={<WelcomePage />} />
+          {/* Phase 2C — explicit merchant intent. MUST stay OUTSIDE KnownIdentityGate: its whole
+              purpose is to be reachable by a session the classifier still calls `unknown`, which a
+              gate that admits only `merchant` can never allow. Declaring intent there writes
+              metadata only (nothing is provisioned); the gate then admits the session to
+              /onboarding and the existing guarded bootstrap does the rest. */}
+          <Route path="start-business" element={<StartBusinessPage />} />
           {/* Routes a known session to its surface. `unknown` is sent to /welcome rather than
               being provisioned a shop; `member` to /member. Merchants pass straight through. */}
           <Route element={<KnownIdentityGate />}>
