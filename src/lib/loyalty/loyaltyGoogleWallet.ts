@@ -1,8 +1,15 @@
 /**
- * Merchant-facing Google Wallet loyalty issuance + sync (Phase 5).
+ * Google Wallet loyalty issuance + sync (Phase 5).
  *
  * Credentials never leave the edge function. The client only receives a
  * Save-to-Wallet URL or a clean "not configured" status.
+ *
+ * TWO CALLERS, ONE ISSUANCE. `issueGoogleWalletPass` is the merchant counter action (it names
+ * the shop AND the account, and the server checks the caller against shop RLS).
+ * `issueMemberGoogleWalletPass` is the member's own "Add to Google Wallet": it names the shop
+ * and nothing else, and the server resolves the account from the member's session. Both reach
+ * the same Edge Function, the same issuer, the same published class and therefore the same
+ * Google Wallet object — the Save URL format is not duplicated anywhere.
  */
 
 import { hasSupabaseConfig, supabase } from "../supabase";
@@ -77,14 +84,7 @@ export async function issueGoogleWalletPass(
     account_id: accountId,
   });
   if (!result.ok) {
-    const msg = result.message.toLowerCase();
-    if (msg.includes("wallet_not_configured")) return { ok: false, error: "wallet_not_configured" };
-    if (msg.includes("wallet_misconfigured")) return { ok: false, error: "wallet_misconfigured" };
-    if (msg.includes("account_not_found")) return { ok: false, error: "account_not_found" };
-    if (msg.includes("shop_not_found")) return { ok: false, error: "shop_not_found" };
-    if (msg.includes("unauthorized")) return { ok: false, error: "unauthorized" };
-    if (result.errorCode === "network") return { ok: false, error: "network" };
-    return { ok: false, error: result.message || "unavailable" };
+    return { ok: false, error: normalizeWalletIssueError(result.message, result.errorCode) };
   }
   const data = result.data;
   if (data.ok && data.save_url) {
@@ -92,6 +92,84 @@ export async function issueGoogleWalletPass(
       ok: true,
       saveUrl: data.save_url,
       objectId: String(data.object_id ?? ""),
+      balancePoints: Number(data.balance_points ?? 0),
+    };
+  }
+  return { ok: false, error: String(data.error ?? "signing_failed") };
+}
+
+/**
+ * Server error → the code the UI branches on. Ordered: the two `*_not_found` codes are
+ * matched before the bare `not_found` that would otherwise swallow them.
+ */
+function normalizeWalletIssueError(message: string, errorCode?: string): string {
+  const msg = String(message ?? "").toLowerCase();
+  if (msg.includes("wallet_not_configured")) return "wallet_not_configured";
+  if (msg.includes("wallet_misconfigured")) return "wallet_misconfigured";
+  if (msg.includes("account_not_found")) return "account_not_found";
+  if (msg.includes("shop_not_found")) return "shop_not_found";
+  if (msg.includes("account_revoked")) return "account_revoked";
+  if (msg.includes("account_inactive")) return "account_inactive";
+  if (msg.includes("membership_expired")) return "membership_expired";
+  if (msg.includes("not_a_member")) return "not_a_member";
+  if (msg.includes("not_found")) return "not_found";
+  if (msg.includes("unauthorized")) return "unauthorized";
+  if (errorCode === "network") return "network";
+  return message || "unavailable";
+}
+
+export type GoogleWalletMemberIssueResult =
+  | { ok: true; saveUrl: string; balancePoints: number }
+  | {
+      ok: false;
+      error:
+        | "shop_required"
+        | "wallet_not_configured"
+        | "wallet_misconfigured"
+        | "not_a_member"
+        | "not_found"
+        | "account_revoked"
+        | "account_inactive"
+        | "membership_expired"
+        | "unauthorized"
+        | "signing_failed"
+        | "unavailable"
+        | "network"
+        | string;
+    };
+
+/**
+ * The signed-in MEMBER's own Wallet card at one shop.
+ *
+ * Sends a shop and NOTHING ELSE — no account id, no card token, no member id. The server
+ * resolves the account from the member's own session (`auth.uid()` → their active link at that
+ * shop → that account), so this call has nothing in it that could point at another member's
+ * card or another shop's account, and the browser never has to know an account id.
+ *
+ * The Save URL that comes back is the SAME issuance the merchant's "Send customer their card"
+ * produces — same edge function, same issuer, same published class, same Google Wallet object.
+ */
+export async function issueMemberGoogleWalletPass(
+  shopId: string,
+): Promise<GoogleWalletMemberIssueResult> {
+  if (!shopId.trim()) return { ok: false, error: "shop_required" };
+  const result = await invokeSupabaseEdgeFunction<{
+    ok?: boolean;
+    save_url?: string;
+    balance_points?: number;
+    error?: string;
+  }>("loyalty-wallet-pass", {
+    provider: "google",
+    shop_id: shopId,
+  });
+  if (!result.ok) {
+    return { ok: false, error: normalizeWalletIssueError(result.message, result.errorCode) };
+  }
+  const data = result.data;
+  if (data.ok && data.save_url) {
+    return {
+      ok: true,
+      saveUrl: data.save_url,
       balancePoints: Number(data.balance_points ?? 0),
     };
   }

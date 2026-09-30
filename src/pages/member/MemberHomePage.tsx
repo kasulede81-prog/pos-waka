@@ -12,7 +12,9 @@ import {
   type MemberReward,
 } from "../../lib/memberDashboard";
 import { LoyaltyCodeEntryForm } from "../../components/loyalty/LoyaltyCodeEntryForm";
+import { MemberGoogleWalletButton } from "../../components/loyalty/MemberGoogleWalletButton";
 import { useMemberEnrollmentStatus } from "../../hooks/useMemberEnrollmentStatus";
+import { useAuth } from "../../hooks/useAuth";
 
 /**
  * The authenticated WAKA Loyalty member home.
@@ -36,6 +38,14 @@ import { useMemberEnrollmentStatus } from "../../hooks/useMemberEnrollmentStatus
  * `qr_token` — both are credentials, and the public card token IS the public card URL. This page
  * therefore cannot link to a public card and does not try: it reports only whether one has been
  * issued. The public-card Edge Function is deliberately NOT called from here.
+ *
+ * "ADD TO GOOGLE WALLET" IS THE ONE WALLET AFFORDANCE, and it does not need a token. It sends
+ * the merchant's shop id to the existing `loyalty-wallet-pass` Edge Function with NO account id;
+ * the server resolves the member's own account from their session (`auth.uid()` → their active
+ * link at that shop) and issues the SAME pass the merchant's own "Send customer their card"
+ * issues — same issuer, same published class, same object id, so a card the shop already sent is
+ * the same Google Wallet card rather than a duplicate. No `public_card_token` and no `qr_token`
+ * is read, returned or stored anywhere on this page.
  *
  * PHASE 2C — THIS PAGE NO LONGER CREATES MEMBERS. A signed-in person with no `loyalty_members` row
  * used to be offered a name/phone registration form right here, which produced a WAKA Loyalty
@@ -397,6 +407,8 @@ function MerchantCard({ account, prominent }: { account: MemberLinkedAccount; pr
   const expiry = formatDay(account.membershipExpiresAt);
   const enrolled = formatDay(account.enrolledAt);
   const expired = isExpired(account.membershipExpiresAt);
+  /** The same condition the server enforces before it will issue a pass. */
+  const usable = statusTone(account.accountStatus) === "positive" && !expired;
 
   return (
     <article
@@ -459,6 +471,17 @@ function MerchantCard({ account, prominent }: { account: MemberLinkedAccount; pr
       <p className="mt-3 text-[11px] font-bold text-muted-foreground">
         {account.hasPublicCard ? "Digital card ready" : "Digital card not issued yet"}
       </p>
+
+      {/*
+        Add to Google Wallet — THIS merchant's card, for THIS member.
+        It issues the same pass the shop's own "Send customer their card" issues (same Edge
+        Function, same issuer, same object id), so a card the shop already sent is the same
+        Google Wallet card, not a second one. The request carries the shop and nothing else;
+        the server resolves the account from the member's session.
+        Offered only while the card can actually be used — a suspended, revoked or expired
+        account has no pass to add, and the server refuses it anyway.
+      */}
+      {usable ? <MemberGoogleWalletButton shopId={account.shopId} shopName={account.shopName} /> : null}
     </article>
   );
 }
@@ -693,6 +716,17 @@ export function MemberDashboardView({
 }
 
 export function MemberHomePage() {
+  const { user, signOut } = useAuth();
+  /** The member's own identity card: collapsed by default so the dashboard leads. */
+  const [accountOpen, setAccountOpen] = useState(false);
+  const displayName = String(
+    (user?.user_metadata as { full_name?: string; name?: string } | undefined)?.full_name ??
+      (user?.user_metadata as { name?: string } | undefined)?.name ??
+      "",
+  ).trim();
+  /** Display only — the identity classification authority is untouched by this. */
+  const signedInWithGoogle =
+    String((user?.app_metadata as { provider?: string } | undefined)?.provider ?? "") === "google";
   const [state, setState] = useState<
     { kind: "loading" } | { kind: "ready"; data: MemberDashboard } | { kind: "error"; error: string }
   >({ kind: "loading" });
@@ -829,6 +863,71 @@ export function MemberHomePage() {
         <h1 className="text-2xl font-black tracking-tight text-foreground">WAKA Loyalty</h1>
         <p className="text-sm font-medium text-muted-foreground">Your member account</p>
       </header>
+
+      {/*
+        Account — the member's own identity and a way out.
+        Before this, a signed-in customer had NO way to sign out anywhere in the member app:
+        every logout entry point belonged to the merchant surface. This uses the SAME
+        `useAuth().signOut` the rest of WAKA uses (the single local-first logout, which also
+        drops the cached identity classification so the next session re-resolves). No second
+        authentication system, and nothing here reaches a merchant surface.
+      */}
+      {user ? (
+        <section className="rounded-2xl border border-border bg-card" data-testid="member-account">
+          <button
+            type="button"
+            onClick={() => setAccountOpen((open) => !open)}
+            aria-expanded={accountOpen}
+            data-testid="member-account-toggle"
+            className="flex min-h-[52px] w-full items-center justify-between gap-3 px-4 text-left"
+          >
+            <span className="min-w-0">
+              <span className="block text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                Account
+              </span>
+              <span className="block truncate text-sm font-black text-foreground">
+                {displayName || user.email}
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-black text-muted-foreground">
+              {accountOpen ? "Hide" : "Show"}
+            </span>
+          </button>
+
+          {accountOpen ? (
+            <dl className="flex flex-col gap-2 border-t border-border px-4 py-4 text-sm">
+              {displayName ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Name</dt>
+                  <dd className="truncate font-semibold text-foreground">{displayName}</dd>
+                </div>
+              ) : null}
+              {user.email ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Email</dt>
+                  <dd className="truncate font-semibold text-foreground">{user.email}</dd>
+                </div>
+              ) : null}
+              {signedInWithGoogle ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Sign-in</dt>
+                  <dd className="font-semibold text-foreground">Google</dd>
+                </div>
+              ) : null}
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  data-testid="member-sign-out"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-border px-4 text-sm font-black text-foreground active:scale-[0.99]"
+                >
+                  Sign out
+                </button>
+              </div>
+            </dl>
+          ) : null}
+        </section>
+      ) : null}
 
       {state.kind === "loading" ? (
         /* Skeleton rather than a bare line of text: the shape of the account is already known, so

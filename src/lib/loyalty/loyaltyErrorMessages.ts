@@ -39,3 +39,23 @@ export function loyaltyErrorKey(code: string | null | undefined): string {
   const c = (code ?? "").trim();
   return KEYS[c] ?? "loyaltyErrGeneric";
 }
+
+/**
+ * The same idea, for the MEMBER's own "Add to Google Wallet".
+ *
+ * Deliberately not folded into `loyaltyErrorKey`: its fallback is `loyaltyErrGeneric`, which is
+ * merchant-facing copy ("ask an administrator", "the shop…"), and the codes below arrive from a
+ * different chain — `loyalty-wallet-pass` answering a member rather than an RPC answering staff.
+ * A customer must be told what THEY can do, and the three cases that matter here are "the card is
+ * not active", "there is no card here for you" and "it did not work, try again".
+ */
+export function memberWalletErrorKey(code: string | null | undefined): string {
+  const c = (code ?? "").trim();
+  if (c === "account_revoked" || c === "account_inactive" || c === "membership_expired") {
+    return "loyaltyWalletMemberInactive";
+  }
+  if (c === "not_found" || c === "not_a_member" || c === "account_not_found" || c === "shop_not_found") {
+    return "loyaltyWalletMemberNoCard";
+  }
+  return "loyaltyWalletMemberFailed";
+}

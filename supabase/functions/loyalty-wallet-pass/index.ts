@@ -13,10 +13,30 @@ import type { LoyaltyPassInput } from "../_shared/loyaltyWallet/walletPassTypes.
 /**
  * Loyalty wallet pass issuance (Phase 06 / Phase 5 Google Wallet).
  *
- * POST { provider: "apple" | "google", shop_id, account_id }
+ * POST { provider: "apple" | "google", shop_id, account_id }   — SHOP STAFF
+ * POST { provider: "apple" | "google", shop_id }               — LOYALTY MEMBER (self)
  * GET  ?provider=google  → { ok, configured: boolean } (no secrets leaked)
  *
- * Authorization: Bearer <user jwt> — account/shop read with USER context (RLS).
+ * ONE PASS, ONE ISSUER, ONE CLASS. Both callers end at the same
+ * `issueGoogleWalletSaveUrl(...)` with the same deterministic object id
+ * (`{issuerId}.acct_{accountId}`), so a card a merchant issues and a card a member adds
+ * are the same Google Wallet object. This function decides only WHO may ask, never what
+ * the pass is.
+ *
+ * The two authority chains are mutually exclusive and are selected by whether `account_id`
+ * is present — not by a client-supplied flag, so a caller can never ask for a mixture:
+ *
+ *   account_id present → STAFF. `loyalty_accounts` is read with the CALLER'S JWT and the
+ *     RLS policy `loyalty_accounts_select` (`user_can_access_shop`) is the authority. A
+ *     loyalty member has no `shop_members` row, so this chain refuses them outright.
+ *
+ *   account_id absent  → MEMBER. No account id is read from the request at all:
+ *     `auth.uid()` → `loyalty_member_wallet_account()` → the member's OWN active link at
+ *     that shop → that account. Nothing the client sends can widen it, and the rows are
+ *     then loaded with the service key because a member cannot satisfy shop RLS by design.
+ *
+ * The Wallet environment (issuer, service account, class) is identical for both. There is
+ * no member-specific credential and no second issuance path.
  */
 
 const cors = {
@@ -81,17 +101,52 @@ Deno.serve(async (req) => {
   if (provider !== "apple" && provider !== "google") {
     return json({ ok: false, error: "provider_required" }, 400);
   }
-  if (!shopId || !accountId) return json({ ok: false, error: "shop_and_account_required" }, 400);
+  if (!shopId) return json({ ok: false, error: "shop_and_account_required" }, 400);
 
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
+  const admin = createClient(supabaseUrl, serviceKey);
 
-  const { data: account, error: accountErr } = await userClient
+  // Which account this request may touch, and which client is allowed to read the rows.
+  // Staff keep the caller-JWT read they have always had; the member chain is switched to the
+  // service key ONLY after the member-authorised function has named the account.
+  let accountIdToIssue = accountId;
+  let readClient = userClient;
+
+  if (!accountId) {
+    // MEMBER CHAIN. `loyalty_member_wallet_account` takes a shop and resolves the account from
+    // auth.uid() alone, so the client has no account id to forge and no way to reach another
+    // member's card. It is called with the member's JWT — never the service key — because
+    // auth.uid() is the whole point of it.
+    const { data, error } = await userClient.rpc("loyalty_member_wallet_account", {
+      p_shop_id: shopId,
+    });
+    if (error) return json({ ok: false, error: "unauthorized" }, 403);
+    const resolved = (data ?? {}) as { ok?: boolean; error?: string; account_id?: string };
+    if (resolved.ok !== true || !resolved.account_id) {
+      const code = String(resolved.error ?? "not_found");
+      const status =
+        code === "not_authenticated"
+          ? 401
+          : code === "not_a_member"
+            ? 403
+            : code === "not_found"
+              ? 404
+              : 409;
+      return json({ ok: false, error: code }, status);
+    }
+    accountIdToIssue = String(resolved.account_id);
+    // Scoped to exactly the (account, shop) pair that call authorised. A member cannot satisfy
+    // `user_can_access_shop`, so this read cannot be done with their own JWT.
+    readClient = admin;
+  }
+
+  const { data: account, error: accountErr } = await readClient
     .from("loyalty_accounts")
     .select("id, shop_id, customer_id, balance_points, qr_token, status, membership_expires_at")
     .eq("shop_id", shopId)
-    .eq("id", accountId)
+    .eq("id", accountIdToIssue)
     .maybeSingle();
   if (accountErr || !account) return json({ ok: false, error: "account_not_found" }, 404);
   const accountStatus = String((account as { status?: string }).status ?? "");
@@ -110,7 +165,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "membership_expired" }, 409);
   }
 
-  const { data: customer } = await userClient
+  const { data: customer } = await readClient
     .from("customers")
     .select("id, name")
     .eq("shop_id", shopId)
@@ -118,7 +173,7 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (!customer) return json({ ok: false, error: "customer_not_found" }, 404);
 
-  const { data: shop } = await userClient
+  const { data: shop } = await readClient
     .from("shops")
     .select("id, name")
     .eq("id", shopId)
@@ -146,7 +201,7 @@ Deno.serve(async (req) => {
     const invalid = validatePassInput(passInput);
     if (invalid) return json({ ok: false, error: invalid }, 400);
 
-    const ids = deterministicGoogleWalletIds(env.issuerId, shopId, accountId);
+    const ids = deterministicGoogleWalletIds(env.issuerId, shopId, accountIdToIssue);
     const result = await issueGoogleWalletSaveUrl(
       passInput,
       { ids, origins: env.origins, persistObjects: true },
@@ -158,7 +213,6 @@ Deno.serve(async (req) => {
 
     // Best-effort mark issued — service role; never fails the save URL response.
     try {
-      const admin = createClient(supabaseUrl, serviceKey);
       await admin
         .from("loyalty_accounts")
         .update({
@@ -167,17 +221,20 @@ Deno.serve(async (req) => {
           google_wallet_synced_at: new Date().toISOString(),
           google_wallet_sync_balance: passInput.balancePoints,
         })
-        .eq("id", accountId)
+        .eq("id", accountIdToIssue)
         .eq("shop_id", shopId);
     } catch {
       /* non-fatal */
     }
 
+    // `object_id` embeds the raw account uuid, so it is returned to STAFF only — the member's
+    // browser gets the Save URL and its own balance, and no account identifier it does not
+    // already have. Nothing in either client reads it.
     return json({
       ok: true,
       provider: "google_wallet",
       save_url: result.pass.saveUrl,
-      object_id: `${ids.issuerId}.${ids.objectId}`,
+      ...(accountId ? { object_id: `${ids.issuerId}.${ids.objectId}` } : {}),
       balance_points: passInput.balancePoints,
     });
   }
