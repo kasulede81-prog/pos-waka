@@ -5,7 +5,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { MemberDashboardView, MemberHomePage } from "../../pages/member/MemberHomePage";
-import type { MemberDashboard, MemberLinkedAccount } from "../memberDashboard";
+import type {
+  MemberActivityItem,
+  MemberDashboard,
+  MemberLinkedAccount,
+  MemberPromotion,
+  MemberReward,
+} from "../memberDashboard";
 
 /**
  * The authenticated member dashboard.
@@ -314,6 +320,268 @@ describe("SECURITY: nothing internal or bearer-like reaches the screen", () => {
   });
 });
 
+describe("the activity section", () => {
+  function activityItem(over: Partial<MemberActivityItem> = {}): MemberActivityItem {
+    return {
+      id: "tx-1",
+      kind: "earned",
+      cause: "sale",
+      points: 100,
+      balanceAfter: 100,
+      createdAt: "2026-09-30T09:00:00.000Z",
+      shopId: SHOP_ID,
+      shopName: "Kampala Kiosk",
+      saleTotalUgx: 100_000,
+      rewardName: null,
+      rewardPointsRequired: null,
+      ...over,
+    };
+  }
+
+  const withActivity = (items: MemberActivityItem[], over: Partial<MemberDashboard> = {}, more = false) =>
+    renderToStaticMarkup(
+      createElement(MemoryRouter, null, (() =>
+        createElement(MemberDashboardView, {
+          dashboard: dashboard(over),
+          activity: items,
+          activityState: "ready" as const,
+          activityHasMore: more,
+          onLoadMoreActivity: () => {},
+        }))()),
+    );
+
+  it("reads a purchase as the member's own sale value", () => {
+    const html = withActivity([activityItem()]);
+    expect(html).toContain("Purchase — UGX 100,000");
+    expect(html).toContain("+100");
+    expect(html).toContain('data-testid="member-activity"');
+  });
+
+  it("names the reward a redemption was spent on, and shows the deduction", () => {
+    const html = withActivity([
+      activityItem({ kind: "redeemed", cause: "redemption", points: -500, rewardName: "Free Coke", rewardPointsRequired: 500, saleTotalUgx: null }),
+    ]);
+    expect(html).toContain("Reward redeemed — Free Coke");
+    expect(html).toContain("−500");
+  });
+
+  it("labels returns, voids, expiries and adjustments distinctly", () => {
+    const html = withActivity([
+      activityItem({ id: "a", kind: "reversed", cause: "return", points: -25, saleTotalUgx: null }),
+      activityItem({ id: "b", kind: "reversed", cause: "void", points: -30, saleTotalUgx: null }),
+      activityItem({ id: "c", kind: "expired", cause: "expiration", points: -5, saleTotalUgx: null }),
+      activityItem({ id: "d", kind: "adjusted", cause: "manual_adjustment", points: 3, saleTotalUgx: null }),
+    ]);
+    expect(html).toContain("Return — points reversed");
+    expect(html).toContain("Sale voided — points reversed");
+    expect(html).toContain("Points expired");
+    expect(html).toContain("Adjustment");
+  });
+
+  it("keeps the merchant on every row for a multi-merchant member", () => {
+    const twoMerchants = [
+      account({ linkId: "l1", shopId: "s1", shopName: "Kampala Kiosk" }),
+      account({ linkId: "l2", shopId: "s2", shopName: "Entebbe Pharmacy" }),
+    ];
+    const html = withActivity([activityItem({ shopName: "Kampala Kiosk" })], { accounts: twoMerchants });
+    expect(html).toContain("Kampala Kiosk ·");
+  });
+
+  it("does not repeat a single merchant's name on every row", () => {
+    const html = withActivity([activityItem({ shopName: "Kampala Kiosk" })]);
+    const list = html.slice(html.indexOf('data-testid="member-activity-list"'));
+    // The shop is already named on the card above; the row carries the date alone.
+    expect(list).not.toContain("Kampala Kiosk ·");
+  });
+
+  it("offers earlier activity only when more exists", () => {
+    expect(withActivity([activityItem()])).not.toContain('data-testid="member-activity-more"');
+    expect(withActivity([activityItem()], {}, true)).toContain('data-testid="member-activity-more"');
+  });
+
+  it("has a loading, an empty and an error state", () => {
+    const shell = (props: Record<string, unknown>) =>
+      renderToStaticMarkup(
+        createElement(MemoryRouter, null, createElement(MemberDashboardView, { dashboard: dashboard(), ...props })),
+      );
+
+    const loading = shell({ activityState: "loading" });
+    expect(loading).toContain('data-testid="member-activity"');
+    expect(loading).toContain('aria-busy="true"');
+
+    const empty = shell({ activity: [], activityState: "ready" });
+    expect(empty).toContain("No points activity yet");
+
+    const failed = shell({ activity: [], activityState: "error" });
+    expect(failed).toContain("could not load your points history");
+    // The balances above the section are untouched by an activity failure.
+    expect(failed).toContain("ugualy");
+  });
+
+  it("renders no internal identifiers or tokens", () => {
+    const html = withActivity([activityItem({ id: "99999999-1111-2222-3333-444444444444" })]);
+    // The row id travels for pagination but is not displayed.
+    expect(html).not.toContain("99999999-1111-2222-3333-444444444444");
+    expect(html).not.toContain("public_card_token");
+    expect(html).not.toContain("qr_token");
+  });
+
+  it("no longer tells the member that activity is missing", () => {
+    const html = withActivity([activityItem()]);
+    expect(html).not.toContain("Activity and rewards");
+    expect(html).not.toContain("arrives in the next phase");
+    // Real rows, not a promise about a later phase.
+    expect(html).toContain("Purchase — UGX 100,000");
+  });
+});
+
+describe("the rewards section", () => {
+  function reward(over: Partial<MemberReward> = {}): MemberReward {
+    return {
+      id: "reward-1",
+      shopId: SHOP_ID,
+      shopName: "Kampala Kiosk",
+      name: "Free Coke",
+      description: "One 500ml Coke",
+      rewardKind: "product",
+      benefitKind: "none",
+      benefitAmountUgx: null,
+      benefitPercent: null,
+      pointsRequired: 100,
+      balancePoints: 250,
+      pointsNeeded: 0,
+      personal: false,
+      grantedUntil: null,
+      expiresOn: null,
+      active: true,
+      maxRedemptionsPerAccount: null,
+      timesRedeemed: 0,
+      redemptionsRemaining: null,
+      state: "available",
+      ...over,
+    };
+  }
+
+  const withRewards = (
+    rewards: MemberReward[],
+    over: Partial<MemberDashboard> = {},
+    state: "loading" | "ready" | "error" = "ready",
+  ) =>
+    renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(MemberDashboardView, {
+          dashboard: dashboard(over),
+          rewards,
+          rewardsState: state,
+        }),
+      ),
+    );
+
+  it("shows what the reward costs and that it is ready", () => {
+    const html = withRewards([reward()]);
+    expect(html).toContain('data-testid="member-rewards"');
+    expect(html).toContain("Free Coke");
+    expect(html).toContain("Ready to redeem");
+    expect(html).toContain('data-reward-state="available"');
+    // The points cost is shown as a number, not just implied.
+    expect(html).toContain("100");
+  });
+
+  it("shows the shortfall and the member's own balance when they cannot afford it", () => {
+    const html = withRewards([
+      reward({ pointsRequired: 500, balancePoints: 120, pointsNeeded: 380, state: "insufficient_points" }),
+    ]);
+    expect(html).toContain("380 more points needed");
+    expect(html).toContain("You have 120 of 500 points here");
+    expect(html).toContain('data-reward-state="insufficient_points"');
+  });
+
+  it("labels an expired reward as expired, not as available", () => {
+    const html = withRewards([reward({ state: "expired", expiresOn: "2026-01-05" })]);
+    expect(html).toContain("Expired");
+    expect(html).toContain("2026");
+    expect(html).not.toContain("Ready to redeem");
+  });
+
+  it("labels a retired reward as no longer offered", () => {
+    const html = withRewards([reward({ state: "inactive", active: false })]);
+    expect(html).toContain("No longer offered");
+    expect(html).not.toContain("Ready to redeem");
+  });
+
+  it("marks a personal reward and when the grant lapses", () => {
+    const html = withRewards([reward({ personal: true, grantedUntil: "2099-05-01T00:00:00.000Z" })]);
+    expect(html).toContain("Just for you");
+    expect(html).toContain("Yours until");
+    expect(html).toContain("2099");
+  });
+
+  it("shows a redemption limit that has already been used up", () => {
+    const html = withRewards([
+      reward({ state: "limit_reached", maxRedemptionsPerAccount: 1, timesRedeemed: 1, redemptionsRemaining: 0 }),
+    ]);
+    expect(html).toContain("Already redeemed the maximum");
+    expect(html).toContain("Redeemed 1×");
+  });
+
+  it("names the merchant on every reward for a multi-merchant member", () => {
+    const twoMerchants = [
+      account({ linkId: "l1", shopId: "s1", shopName: "Kampala Kiosk" }),
+      account({ linkId: "l2", shopId: "s2", shopName: "Entebbe Pharmacy" }),
+    ];
+    const html = withRewards(
+      [reward({ shopName: "Kampala Kiosk" }), reward({ id: "r2", shopName: "Entebbe Pharmacy" })],
+      { accounts: twoMerchants },
+    );
+    expect(html).toContain("Kampala Kiosk");
+    expect(html).toContain("Entebbe Pharmacy");
+  });
+
+  it("does not repeat a single merchant's name onto every reward", () => {
+    const html = withRewards([reward({ shopName: "Kampala Kiosk" })]);
+    const section = html.slice(html.indexOf('data-testid="member-rewards"'));
+    expect(section).not.toContain(">Kampala Kiosk<");
+  });
+
+  it("offers no redeem control — redemption is the shop's, not the browser's", () => {
+    const html = withRewards([reward()]);
+    const section = html.slice(html.indexOf('data-testid="member-rewards"'));
+    expect(section).not.toMatch(/<button/);
+    expect(section).toContain("redeemed by the shop at checkout");
+  });
+
+  it("has a loading, an empty and an error state", () => {
+    const loading = withRewards([], {}, "loading");
+    expect(loading).toContain('data-testid="member-rewards"');
+    expect(loading).toContain('aria-busy="true"');
+
+    const empty = withRewards([], {}, "ready");
+    expect(empty).toContain('data-testid="member-rewards-empty"');
+
+    const failed = withRewards([], {}, "error");
+    expect(failed).toContain("could not load your rewards");
+    // A rewards failure must not blank the balances above it.
+    expect(failed).toContain("ugualy");
+  });
+
+  it("says nothing is ready yet when every reward is out of reach", () => {
+    const html = withRewards([reward({ state: "insufficient_points", pointsNeeded: 50 })]);
+    expect(html).toContain('data-testid="member-rewards-none-eligible"');
+    // …and says nothing when something IS ready.
+    expect(withRewards([reward()])).not.toContain('data-testid="member-rewards-none-eligible"');
+  });
+
+  it("renders no token and no internal reward id", () => {
+    const html = withRewards([reward({ id: "99999999-1111-2222-3333-444444444444" })]);
+    const section = html.slice(html.indexOf('data-testid="member-rewards"'));
+    expect(section).not.toContain("99999999-1111-2222-3333-444444444444");
+    expect(section).not.toContain("public_card_token");
+    expect(section).not.toContain("qr_token");
+  });
+});
+
 describe("no linked merchants", () => {
   it("offers the WAKA Loyalty code step instead of an empty dashboard", () => {
     const html = render(
@@ -389,14 +657,100 @@ describe("loading and error states", () => {
 });
 
 describe("activity and rewards are not faked", () => {
-  it("labels them as coming next rather than showing invented data", () => {
+  it("shows an honest empty state instead of a placeholder, now that both sections are real", () => {
+    // Activity (Phase A) and Rewards (Phase B) both ship, so there is no longer anything to
+    // announce as "coming next" — and the page must not carry a stale promise about it.
     const html = render(dashboard());
-    expect(html).toContain('data-testid="member-coming-next"');
-    expect(html).toContain("Coming next");
-    expect(html).toContain("Activity and rewards");
-    // Future tense, because it is not available yet — and no reward or transaction row is rendered.
-    expect(html).toContain("will appear here");
-    const next = html.slice(html.indexOf('data-testid="member-coming-next"'));
-    expect(next).not.toMatch(/points_required|transaction|redeemed at|claim now/i);
+    expect(html).not.toContain('data-testid="member-coming-next"');
+    expect(html).not.toContain("Coming next");
+    expect(html).not.toContain("arrives in the next phase");
+    // With nothing to show, each section says so plainly rather than inventing content.
+    expect(html).toContain('data-testid="member-rewards-empty"');
+    expect(html).toContain("No rewards are available to you yet");
+    // And nothing is claimed to be redeemable from this page.
+    expect(html).not.toMatch(/claim now|redeem now/i);
+  });
+});
+
+describe("the promotions section", () => {
+  function promotion(over: Partial<MemberPromotion> = {}): MemberPromotion {
+    return {
+      shopId: SHOP_ID,
+      shopName: "Kampala Kiosk",
+      title: "Spend UGX 50,000",
+      kind: "spend_bonus",
+      bonusPoints: 100,
+      multiplier: null,
+      grantedRewardCount: null,
+      thresholdUgx: 50_000,
+      qualifyingSpendUgx: 30_000,
+      remainingUgx: 20_000,
+      endsAt: "2026-11-30T00:00:00.000Z",
+      rewarded: false,
+      ...over,
+    };
+  }
+
+  const withPromotions = (promotions: MemberPromotion[]) =>
+    renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(MemberDashboardView, { dashboard: dashboard(), promotions }),
+      ),
+    );
+
+  it("shows the threshold, the progress and the remainder", () => {
+    const html = withPromotions([promotion()]);
+    expect(html).toContain('data-testid="member-promotions"');
+    expect(html).toContain("Spend UGX 50,000");
+    expect(html).toContain("UGX 30,000 / UGX 50,000");
+    expect(html).toContain("20,000 remaining");
+    expect(html).toContain("60%");
+    expect(html).toContain("+100 pts");
+    expect(html).toContain("Kampala Kiosk");
+  });
+
+  it("shows the expiry", () => {
+    expect(withPromotions([promotion()])).toMatch(/Ends 30 Nov 2026/);
+  });
+
+  it("marks a promotion that has been earned", () => {
+    const html = withPromotions([promotion({ rewarded: true })]);
+    expect(html).toContain('data-testid="member-promotion-earned"');
+    expect(html).toContain("Earned");
+    // An earned promotion shows the win, not a bar the member can no longer move.
+    expect(html).not.toContain("20,000 remaining");
+  });
+
+  it("shows a multiplier promotion without a spend bar", () => {
+    const html = withPromotions([
+      promotion({ kind: "earn_multiplier", bonusPoints: null, multiplier: 2, thresholdUgx: null, qualifyingSpendUgx: null, remainingUgx: null }),
+    ]);
+    expect(html).toContain("2× pts");
+    // No spend progress row — the title is fixture text, so the assertion targets the
+    // progress line itself ("UGX a / UGX b · n remaining").
+    expect(html).not.toContain("remaining");
+    expect(html).not.toContain("/ UGX");
+  });
+
+  it("renders nothing at all when there are no promotions", () => {
+    const html = withPromotions([]);
+    expect(html).not.toContain('data-testid="member-promotions"');
+  });
+
+  it("renders only what the server said — it decides no eligibility itself", () => {
+    // A promotion the server did NOT mark rewarded must never render as earned, whatever its
+    // numbers look like. The frontend has no opinion about thresholds.
+    const html = withPromotions([promotion({ qualifyingSpendUgx: 999_999, remainingUgx: 0, rewarded: false })]);
+    expect(html).not.toContain('data-testid="member-promotion-earned"');
+  });
+
+  it("exposes no internal identifiers", () => {
+    const html = withPromotions([promotion()]);
+    const section = html.slice(html.indexOf('data-testid="member-promotions"'));
+    expect(section).not.toContain(SHOP_ID);
+    expect(section).not.toContain("qr_token");
+    expect(section).not.toContain("public_card_token");
   });
 });

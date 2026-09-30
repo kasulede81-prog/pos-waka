@@ -22,6 +22,9 @@ function baseInput(patch: Partial<RewardInput> = {}): RewardInput {
     maxRedemptionsPerAccount: null,
     active: true,
     expiresOn: null,
+    benefitKind: "none",
+    benefitAmountUgx: null,
+    benefitPercent: null,
     ...patch,
   };
 }
@@ -96,6 +99,9 @@ describe("D030 product-backed rewards client", () => {
       active: true,
       sortOrder: 0,
       expiresOn: null,
+      benefitKind: "none",
+      benefitAmountUgx: null,
+      benefitPercent: null,
     };
     expect(isProductBackedReward(r)).toBe(true);
     expect(isProductBackedReward({ ...r, productId: null })).toBe(false);

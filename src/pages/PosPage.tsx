@@ -20,6 +20,12 @@ import { useLoyaltyCheckoutAttach } from "../hooks/useLoyaltyCheckoutAttach";
 import { useLoyaltyCheckoutPreview } from "../hooks/useLoyaltyCheckoutPreview";
 import { isLoyaltyScan } from "../lib/loyalty/loyaltyScanRouting";
 import { awaitConfirmedAward } from "../lib/loyalty/loyaltyAward";
+import {
+  applyLoyaltyRedemptionToSale,
+  newRedemptionIdempotencyKey,
+  redeemLoyaltyReward,
+} from "../lib/loyalty/loyaltyRewards";
+import type { PendingLoyaltyBenefit } from "../lib/loyalty/loyaltyCheckoutBenefit";
 import { requestGoogleWalletBalanceSync } from "../lib/loyalty/loyaltyGoogleWallet";
 import { resolveShopCtx } from "../offline/cloudSync";
 import { PosOperationalNav } from "../components/pos/PosOperationalNav";
@@ -583,6 +589,73 @@ export function PosPage({ lang }: { lang: Language }) {
     confirmed: boolean;
   } | null>(null);
   const loyaltyAwardWatchRef = useRef<{ cancelled: boolean } | null>(null);
+
+  /**
+   * Phase E — the monetary reward the cashier has put on this cart.
+   *
+   * THIS IS A PREVIEW, NOT A CONSUMPTION. Selecting a reward writes the cart discount so the
+   * cashier and customer can see the total; NO POINTS ARE SPENT until the sale has been
+   * finalized and has an id. Abandoning the cart, cancelling payment or clearing the cart
+   * therefore costs the customer nothing — there is no reservation state to leak.
+   *
+   * Only the page owns it, so closing the till or refreshing the app simply drops it.
+   */
+  const [pendingLoyaltyBenefit, setPendingLoyaltyBenefit] = useState<PendingLoyaltyBenefit | null>(null);
+  const [benefitOutcome, setBenefitOutcome] = useState<"applied" | "failed" | null>(null);
+
+  /** Remove the preview: clears the cart discount the benefit put there. */
+  const clearLoyaltyBenefit = useCallback(() => {
+    setPendingLoyaltyBenefit((prev) => {
+      if (prev) setDraftCartDiscount(0);
+      return null;
+    });
+    setBenefitOutcome(null);
+  }, [setDraftCartDiscount]);
+
+  /** Put a reward's PREVIEW amount on the cart through the existing discount channel. */
+  const applyLoyaltyBenefitPreview = useCallback(
+    (benefit: PendingLoyaltyBenefit) => {
+      // The existing governance decides whether this shop allows it: `setDraftCartDiscount`
+      // returns ok:false with a reason rather than silently accepting.
+      const r = setDraftCartDiscount(benefit.previewAmountUgx);
+      if (!r.ok) {
+        setBenefitOutcome(null);
+        setPendingLoyaltyBenefit(null);
+        setLoyaltyBenefitError(r.errorKey ?? "discount_rejected");
+        return;
+      }
+      setLoyaltyBenefitError(null);
+      setBenefitOutcome(null);
+      setPendingLoyaltyBenefit(benefit);
+    },
+    [setDraftCartDiscount],
+  );
+  const [loyaltyBenefitError, setLoyaltyBenefitError] = useState<string | null>(null);
+
+  /**
+   * A reward belongs to the customer who earned it. Attaching, switching or removing the
+   * customer drops the preview, so one customer's reward can never ride another's sale.
+   */
+  const benefitCustomerRef = useRef<string>("");
+  useEffect(() => {
+    if (benefitCustomerRef.current === saleCustomerId) return;
+    benefitCustomerRef.current = saleCustomerId;
+    setPendingLoyaltyBenefit((prev) => {
+      if (prev) setDraftCartDiscount(0);
+      return null;
+    });
+    setBenefitOutcome(null);
+  }, [saleCustomerId, setDraftCartDiscount]);
+
+  /**
+   * Keep the preview honest as the cart changes. The store clamps the amount to the cart, so
+   * a shrinking cart can only ever reduce the discount — never produce a negative total. The
+   * authoritative figure is still the server's, at application time.
+   */
+  useEffect(() => {
+    if (!pendingLoyaltyBenefit) return;
+    setDraftCartDiscount(pendingLoyaltyBenefit.previewAmountUgx);
+  }, [checkoutTotals.lineSubtotalUgx, pendingLoyaltyBenefit, setDraftCartDiscount]);
 
   const loyaltyAttach = useLoyaltyCheckoutAttach({
     onAttach: (member) => {
@@ -1288,6 +1361,50 @@ export function PosPage({ lang }: { lang: Language }) {
         loyaltyPreview.account?.id ?? null,
       );
 
+      // Phase E — NOW the points are spent. The sale exists and has an id, so the redemption
+      // and its link to this sale can be created authoritatively. Deliberately after the sale
+      // succeeds: a failed or abandoned checkout costs the customer nothing.
+      //
+      // The sale is NOT undone if this fails. The points were not spent either, so the
+      // customer simply keeps their reward and the cashier is told plainly that it was not
+      // applied (see benefitOutcome). Nothing is silently lost, and the redemption can be
+      // retried from the loyalty hub or by re-adding the reward.
+      const benefitForThisSale = pendingLoyaltyBenefit;
+      if (benefitForThisSale && r.saleId && loyaltyPreview.account?.id) {
+        setPendingLoyaltyBenefit(null);
+        setBenefitOutcome(null);
+        void (async () => {
+          try {
+            const redeemed = await redeemLoyaltyReward(
+              benefitForThisSale.shopId,
+              benefitForThisSale.accountId,
+              benefitForThisSale.rewardId,
+              newRedemptionIdempotencyKey(),
+            );
+            if (!redeemed.ok) {
+              setBenefitOutcome("failed");
+              setLoyaltyBenefitError(redeemed.error);
+              return;
+            }
+            const applied = await applyLoyaltyRedemptionToSale(
+              benefitForThisSale.shopId,
+              redeemed.redemptionId,
+              r.saleId!,
+            );
+            if (!applied.ok) {
+              setBenefitOutcome("failed");
+              setLoyaltyBenefitError(applied.error);
+              return;
+            }
+            setBenefitOutcome("applied");
+            setLoyaltyBenefitError(null);
+          } catch {
+            setBenefitOutcome("failed");
+            setLoyaltyBenefitError("unavailable");
+          }
+        })();
+      }
+
       setCashInput("");
       setMobileMoneyInput("");
       setSaleCustomerId("");
@@ -1822,6 +1939,14 @@ export function PosPage({ lang }: { lang: Language }) {
         onScan={openLoyaltyScan}
         onDetach={detachLoyaltyCustomer}
         canScan={detectBarcodeCapabilities().cameraScan}
+        cartSubtotalUgx={checkoutTotals.lineSubtotalUgx}
+        onApplyBenefit={applyLoyaltyBenefitPreview}
+        appliedBenefit={
+          pendingLoyaltyBenefit
+            ? { rewardName: pendingLoyaltyBenefit.rewardName, amountUgx: pendingLoyaltyBenefit.previewAmountUgx }
+            : null
+        }
+        onClearBenefit={clearLoyaltyBenefit}
       />
     ),
   };
@@ -2432,6 +2557,14 @@ export function PosPage({ lang }: { lang: Language }) {
                     onScan={openLoyaltyScan}
                     onDetach={detachLoyaltyCustomer}
                     canScan={detectBarcodeCapabilities().cameraScan}
+                    cartSubtotalUgx={checkoutTotals.lineSubtotalUgx}
+                    onApplyBenefit={applyLoyaltyBenefitPreview}
+                    appliedBenefit={
+                      pendingLoyaltyBenefit
+                        ? { rewardName: pendingLoyaltyBenefit.rewardName, amountUgx: pendingLoyaltyBenefit.previewAmountUgx }
+                        : null
+                    }
+                    onClearBenefit={clearLoyaltyBenefit}
                   />
                 }
               />
@@ -3250,6 +3383,28 @@ export function PosPage({ lang }: { lang: Language }) {
             balancePoints={loyaltyAward.balancePoints}
             confirmed={loyaltyAward.confirmed}
           />
+        </div>
+      ) : null}
+
+      {/* Phase E — the loyalty reward's fate, stated plainly. A failure is SHOWN, never
+          swallowed: the points were not spent, and the cashier must know the discount the
+          customer received was not recorded against their reward. */}
+      {benefitOutcome && draftLines.length === 0 ? (
+        <div
+          className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+8.5rem)] left-1/2 z-[100] max-w-sm -translate-x-1/2 rounded-xl border border-border bg-card px-3 py-2 shadow-xl"
+          data-testid="loyalty-benefit-outcome"
+          role="status"
+        >
+          <p
+            className={`text-[11px] font-black ${
+              benefitOutcome === "applied" ? "text-emerald-700" : "text-danger"
+            }`}
+          >
+            {t(lang, benefitOutcome === "applied" ? "loyaltyCheckoutBenefitApplied" : "loyaltyCheckoutBenefitFailed")}
+          </p>
+          {loyaltyBenefitError ? (
+            <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">{loyaltyBenefitError}</p>
+          ) : null}
         </div>
       ) : null}
 

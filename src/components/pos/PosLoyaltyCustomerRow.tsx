@@ -12,6 +12,12 @@ import {
   type LoyaltyReward,
 } from "../../lib/loyalty/loyaltyRewards";
 import type { Language } from "../../types";
+import {
+  benefitLabel,
+  isMonetaryReward,
+  previewBenefitAmountUgx,
+  type PendingLoyaltyBenefit,
+} from "../../lib/loyalty/loyaltyCheckoutBenefit";
 
 type Props = {
   lang: Language;
@@ -26,6 +32,16 @@ type Props = {
   onDetach: () => void;
   /** Camera scanning unavailable on this device — hide the scan action. */
   canScan: boolean;
+  /**
+   * Phase E — the cart's eligible amount, so a monetary reward can be previewed against it.
+   * Omitted (or 0) means the reward list shows no monetary section.
+   */
+  cartSubtotalUgx?: number;
+  /** Phase E — hand a selected monetary reward up to the page, which owns the cart discount. */
+  onApplyBenefit?: (benefit: PendingLoyaltyBenefit) => void;
+  /** Phase E — the benefit currently applied to this cart, if any. */
+  appliedBenefit?: { rewardName: string; amountUgx: number } | null;
+  onClearBenefit?: () => void;
 };
 
 type ClaimPhase =
@@ -50,6 +66,10 @@ export function PosLoyaltyCustomerRow({
   onScan,
   onDetach,
   canScan,
+  cartSubtotalUgx,
+  onApplyBenefit,
+  appliedBenefit,
+  onClearBenefit,
 }: Props) {
   const { shopId, program, account, expectedPoints, fromCache } = preview;
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
@@ -65,7 +85,7 @@ export function PosLoyaltyCustomerRow({
     void (async () => {
       const rows = await fetchLoyaltyRewards(shopId);
       if (cancelled) return;
-      setRewards(rows.filter((r) => isProductBackedReward(r)));
+      setRewards(rows);
     })();
     return () => {
       cancelled = true;
@@ -76,7 +96,23 @@ export function PosLoyaltyCustomerRow({
     if (!account) return [];
     const balance =
       claim.phase === "done" ? claim.balance : account.balancePoints;
-    return rewards.filter((r) => isRewardEligible(r, balance));
+    return rewards.filter((r) => isProductBackedReward(r)).filter((r) => isRewardEligible(r, balance));
+  }, [rewards, account, claim]);
+
+  /**
+   * Phase E — monetary rewards this cart could use.
+   *
+   * ONLY AFFORDABLE ONES ARE OFFERED, and the cart must have something to discount. The
+   * amount shown is a PREVIEW: the server derives the final figure from the redemption's
+   * snapshot at application time, so nothing here can increase what the customer receives.
+   */
+  const eligibleMonetaryRewards = useMemo(() => {
+    if (!account || !cartSubtotalUgx || cartSubtotalUgx <= 0) return [];
+    return rewards
+      .filter((r) => isMonetaryReward(r) && !isProductBackedReward(r))
+      .filter((r) => isRewardEligible(r, account.balancePoints))
+      .map((r) => ({ reward: r, previewUgx: previewBenefitAmountUgx(r, cartSubtotalUgx) }))
+      .filter((x) => x.previewUgx > 0);
   }, [rewards, account, claim]);
 
   const claimReward = useCallback(
@@ -98,7 +134,7 @@ export function PosLoyaltyCustomerRow({
         setClaim({ phase: "done", rewardId: reward.id, balance: result.balance });
         // Refresh list / balance via parent preview hook by bumping local list after claim.
         const rows = await fetchLoyaltyRewards(shopId);
-        setRewards(rows.filter((r) => isProductBackedReward(r)));
+        setRewards(rows);
       } else {
         setClaim({ phase: "error", rewardId: reward.id, error: result.error });
       }
@@ -176,6 +212,59 @@ export function PosLoyaltyCustomerRow({
         <p className="mt-1 rounded bg-danger-muted px-1.5 py-0.5 text-[10px] font-bold text-danger">
           {t(lang, error)}
         </p>
+      ) : null}
+
+      {/* Phase E — monetary rewards. Applying one only PREVIEWS the discount on the cart;
+          the points are consumed and the benefit recorded after the sale exists. */}
+      {customerId && account && eligibleMonetaryRewards.length > 0 ? (
+        <div className="mt-1.5 space-y-1 border-t border-amber-200/80 pt-1.5">
+          <p className="text-[10px] font-black uppercase tracking-wide text-amber-800">
+            {t(lang, "loyaltyCheckoutBenefitTitle")}
+          </p>
+          {appliedBenefit ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-amber-900">
+                {appliedBenefit.rewardName} · −UGX {appliedBenefit.amountUgx.toLocaleString("en-US")}
+              </span>
+              <button
+                type="button"
+                onClick={onClearBenefit}
+                className="min-h-[28px] rounded-md border border-amber-400 bg-white px-2 py-0.5 text-[10px] font-black text-amber-900"
+              >
+                {t(lang, "loyaltyCheckoutBenefitRemove")}
+              </button>
+            </div>
+          ) : (
+            eligibleMonetaryRewards.map(({ reward, previewUgx }) => (
+              <div key={reward.id} className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-amber-900">
+                  {reward.name}
+                  <span className="ml-1 text-amber-800/80">
+                    {reward.pointsRequired} {t(lang, "loyaltyPointsUnit")} ·{" "}
+                    {benefitLabel(reward) ?? ""}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onApplyBenefit?.({
+                      shopId,
+                      accountId: account.id,
+                      rewardId: reward.id,
+                      rewardName: reward.name,
+                      pointsRequired: reward.pointsRequired,
+                      benefitKind: reward.benefitKind as PendingLoyaltyBenefit["benefitKind"],
+                      previewAmountUgx: previewUgx,
+                    } as PendingLoyaltyBenefit)
+                  }
+                  className="min-h-[28px] rounded-md border border-amber-400 bg-white px-2 py-0.5 text-[10px] font-black text-amber-900"
+                >
+                  {t(lang, "loyaltyCheckoutBenefitApply")}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       ) : null}
 
       {customerId && account && eligibleProductRewards.length > 0 ? (

@@ -22,6 +22,9 @@ function baseInput(patch: Partial<RewardInput> = {}): RewardInput {
     maxRedemptionsPerAccount: null,
     active: true,
     expiresOn: null,
+    benefitKind: "none",
+    benefitAmountUgx: null,
+    benefitPercent: null,
     ...patch,
   };
 }
@@ -39,6 +42,9 @@ function reward(patch: Partial<LoyaltyReward> = {}): LoyaltyReward {
     active: true,
     sortOrder: 0,
     expiresOn: null,
+    benefitKind: "none",
+    benefitAmountUgx: null,
+    benefitPercent: null,
     ...patch,
   };
 }

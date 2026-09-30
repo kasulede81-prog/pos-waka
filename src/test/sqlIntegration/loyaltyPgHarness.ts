@@ -70,6 +70,25 @@ export const MIGRATIONS = [
   join(process.cwd(), "supabase", "migrations", "20260929160000_loyalty_member_enrollment_status.sql"),
   // Phase 2F — a NEW loyalty member must supply a phone (the RPC previously accepted NULL).
   join(process.cwd(), "supabase", "migrations", "20260929180000_loyalty_member_register_requires_phone.sql"),
+  // Loyalty Phase 0 — integrity pass: proportional return reversal, ledger append-only
+  // guard, balance-invariant checker, and the award-failure record + retry queue.
+  join(process.cwd(), "supabase", "migrations", "20260930090000_loyalty_integrity_pass.sql"),
+  // Loyalty Phase A — the member-scoped activity projection (auth.uid() only, no identity params).
+  join(process.cwd(), "supabase", "migrations", "20260930120000_loyalty_member_activity.sql"),
+  // Loyalty Phase B — the member-scoped rewards read model (auth.uid() only, no identity params).
+  join(process.cwd(), "supabase", "migrations", "20260930150000_loyalty_member_rewards.sql"),
+  // Loyalty Phase C — merchant-side Customer 360 (shop-scoped read model over sales + loyalty).
+  join(process.cwd(), "supabase", "migrations", "20260930180000_loyalty_customer_360.sql"),
+  // Loyalty Phase D — merchant-side redemption reversal (append-only credit, one per redemption).
+  join(process.cwd(), "supabase", "migrations", "20260930210000_loyalty_redemption_reversal.sql"),
+  // Loyalty Phase E — reward benefits (fixed UGX / percentage discount snapshots + application).
+  join(process.cwd(), "supabase", "migrations", "20260930230000_loyalty_reward_benefits.sql"),
+  // Loyalty Phase F — reward lifecycle: guarded removal of a reward that has no history.
+  join(process.cwd(), "supabase", "migrations", "20260930250000_loyalty_reward_lifecycle.sql"),
+  // Loyalty Phase G — customer visibility of running promotions (read-only member projection).
+  join(process.cwd(), "supabase", "migrations", "20260930270000_loyalty_member_promotions.sql"),
+  // Loyalty Phase G — spend-triggered promotions (threshold awards + member progress).
+  join(process.cwd(), "supabase", "migrations", "20260930290000_loyalty_spend_promotions.sql"),
 ];
 
 function readSql(path: string): string {
@@ -174,6 +193,24 @@ export async function asUser<T>(exec: SqlExec, userId: string, fn: () => Promise
   await exec.exec("BEGIN");
   await exec.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [userId]);
   await exec.exec("SET LOCAL ROLE authenticated");
+  try {
+    const result = await fn();
+    await exec.exec("COMMIT");
+    return result;
+  } catch (err) {
+    await exec.exec("ROLLBACK");
+    throw err;
+  }
+}
+
+/**
+ * Run `fn` as the `anon` role, so a public path is exercised as a real anonymous
+ * client rather than merely as "somebody with no JWT". Two suites had grown their own
+ * copy of this; it lives here now.
+ */
+export async function asAnon<T>(exec: SqlExec, fn: () => Promise<T>): Promise<T> {
+  await exec.exec("BEGIN");
+  await exec.exec("SET LOCAL ROLE anon");
   try {
     const result = await fn();
     await exec.exec("COMMIT");

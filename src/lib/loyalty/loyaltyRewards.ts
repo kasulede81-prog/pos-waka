@@ -24,8 +24,28 @@ export type LoyaltyReward = {
   active: boolean;
   sortOrder: number;
   /** Inclusive Kampala end date YYYY-MM-DD, or null = never expires. */
+  /**
+   * What the reward is worth at the counter. `none` is every pre-Phase-E reward;
+   * a discount benefit reduces a WAKA sale via sales.discount_ugx. It is NOT stored value
+   * and WAKA never owes the customer money.
+   */
+  benefitKind: RewardBenefitKind;
+  /** Integer UGX when benefitKind is fixed_discount. */
+  benefitAmountUgx: number | null;
+  /** Percentage 0–100 when benefitKind is percentage_discount. */
+  benefitPercent: number | null;
   expiresOn: string | null;
 };
+
+/**
+ * What a reward is worth at the counter.
+ *
+ * `none` — the reward grants a product or nothing monetary (every pre-Phase-E reward).
+ * `fixed_discount` / `percentage_discount` — the redemption is worth a discount against a
+ * WAKA sale. The value is a SNAPSHOT taken at redemption; re-pricing a reward never
+ * rewrites what an old redemption was worth.
+ */
+export type RewardBenefitKind = "none" | "fixed_discount" | "percentage_discount";
 
 export type RewardInput = {
   name: string;
@@ -37,6 +57,9 @@ export type RewardInput = {
   maxRedemptionsPerAccount: number | null;
   active: boolean;
   /** null = never expires; YYYY-MM-DD when set. */
+  benefitKind?: RewardBenefitKind;
+  benefitAmountUgx?: number | null;
+  benefitPercent?: number | null;
   expiresOn: string | null;
 };
 
@@ -52,6 +75,9 @@ type RewardRow = {
   active: boolean;
   sort_order: number;
   expires_on?: string | null;
+  benefit_kind?: string | null;
+  benefit_amount_ugx?: number | null;
+  benefit_percent?: number | null;
 };
 
 function mapExpiresOn(raw: unknown): string | null {
@@ -81,6 +107,11 @@ function mapRewardRow(row: RewardRow): LoyaltyReward {
     active: row.active,
     sortOrder: Number(row.sort_order ?? 0),
     expiresOn: mapExpiresOn(row.expires_on),
+    benefitKind: (["none", "fixed_discount", "percentage_discount"].includes(String(row.benefit_kind))
+      ? row.benefit_kind
+      : "none") as RewardBenefitKind,
+    benefitAmountUgx: row.benefit_amount_ugx == null ? null : Number(row.benefit_amount_ugx),
+    benefitPercent: row.benefit_percent == null ? null : Number(row.benefit_percent),
   };
 }
 
@@ -101,6 +132,33 @@ export function validateRewardInput(input: RewardInput): string | null {
   }
   if (input.expiresOn != null && input.expiresOn !== "") {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.expiresOn.trim())) return "invalid_reward_expires_on";
+  }
+
+  // Phase E — benefit validation. UX only: the database enforces the same rules with CHECK
+  // constraints, so a client that skips this cannot create a negative discount, a >100%
+  // reward, or a benefit whose kind and value disagree.
+  const benefitKind = input.benefitKind ?? "none";
+  if (benefitKind === "fixed_discount") {
+    if (
+      input.benefitAmountUgx == null ||
+      !Number.isInteger(input.benefitAmountUgx) ||
+      input.benefitAmountUgx <= 0
+    ) {
+      return "invalid_benefit_amount";
+    }
+    // A discount reward is not a product reward — the database refuses both at once, and
+    // catching it here keeps the message understandable.
+    if (input.productId != null && input.productId.trim() !== "") {
+      return "benefit_conflicts_with_product";
+    }
+  } else if (benefitKind === "percentage_discount") {
+    const pct = input.benefitPercent;
+    if (pct == null || !Number.isFinite(pct) || pct <= 0 || pct > 100) {
+      return "invalid_benefit_percent";
+    }
+    if (input.productId != null && input.productId.trim() !== "") {
+      return "benefit_conflicts_with_product";
+    }
   }
   return null;
 }
@@ -139,7 +197,7 @@ export function isRewardEligible(reward: LoyaltyReward, balancePoints: number): 
 }
 
 const REWARD_COLUMNS =
-  "id, name, description, points_required, reward_kind, product_id, product_quantity, max_redemptions_per_account, active, sort_order, expires_on";
+  "id, name, description, points_required, reward_kind, product_id, product_quantity, max_redemptions_per_account, active, sort_order, expires_on, benefit_kind, benefit_amount_ugx, benefit_percent";
 
 export type LoyaltyProductSearchHit = {
   id: string;
@@ -249,6 +307,11 @@ export async function createLoyaltyReward(shopId: string, input: RewardInput): P
         max_redemptions_per_account: input.maxRedemptionsPerAccount,
         active: input.active,
         expires_on: expiresOn,
+        // Phase E — the benefit. Kind `none` with both values null is the pre-Phase-E shape,
+        // which the CHECK constraint requires to stay consistent.
+        benefit_kind: input.productId ? "none" : (input.benefitKind ?? "none"),
+        benefit_amount_ugx: input.productId ? null : (input.benefitAmountUgx ?? null),
+        benefit_percent: input.productId ? null : (input.benefitPercent ?? null),
       })
       .select("id")
       .single();
@@ -289,6 +352,15 @@ export async function updateLoyaltyReward(
                 patch.expiresOn == null || patch.expiresOn.trim() === ""
                   ? null
                   : patch.expiresOn.trim().slice(0, 10),
+            }
+          : {}),
+        // Phase E — the benefit travels as a triple so the kind can never disagree with the
+        // value it carries (the database CHECK enforces the same shape).
+        ...(patch.benefitKind !== undefined
+          ? {
+              benefit_kind: patch.benefitKind,
+              benefit_amount_ugx: patch.benefitKind === "fixed_discount" ? (patch.benefitAmountUgx ?? null) : null,
+              benefit_percent: patch.benefitKind === "percentage_discount" ? (patch.benefitPercent ?? null) : null,
             }
           : {}),
       })
@@ -371,4 +443,134 @@ export async function redeemLoyaltyReward(
 /** New idempotency key for a fresh redemption intent. */
 export function newRedemptionIdempotencyKey(): string {
   return crypto.randomUUID();
+}
+
+export type DeleteRewardResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Remove a reward — permitted only while it has NO history (Phase F).
+ *
+ * The server refuses with `reward_has_history` when any redemption, assignment or offer
+ * depends on the reward; the merchant then WITHDRAWS it (`active = false`) instead, which
+ * hides it from members while every historical row keeps working. A client-side check cannot
+ * decide this, and does not try to.
+ */
+export async function deleteUnusedLoyaltyReward(
+  shopId: string,
+  rewardId: string,
+): Promise<DeleteRewardResult> {
+  if (!hasSupabaseConfig || !supabase || !shopId || !rewardId) {
+    return { ok: false, error: "loyalty_unavailable" };
+  }
+  try {
+    const { data, error } = await supabase.rpc("loyalty_delete_unused_reward", {
+      p_shop_id: shopId,
+      p_reward_id: rewardId,
+    });
+    if (error) return { ok: false, error: error.code ?? "reward_delete_failed" };
+    const result = (data ?? {}) as Record<string, unknown>;
+    if (result.ok !== true) return { ok: false, error: String(result.error ?? "reward_delete_failed") };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "reward_delete_failed" };
+  }
+}
+
+export type ApplyRedemptionToSaleResult =
+  | {
+      ok: true;
+      /** The discount the SERVER derived from the redemption snapshot. */
+      appliedAmountUgx: number;
+      /** What the reward was nominally worth; higher than applied means the sale clamped it. */
+      requestedUgx: number;
+      clamped: boolean;
+      saleId: string;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Record that a redemption's monetary benefit was the discount carried by one sale (Phase E).
+ *
+ * THE CLIENT PROPOSES NO MONEY. It names a redemption and a sale; the server derives the
+ * benefit from the redemption's own snapshot and clamps it to the discount that sale
+ * actually records. There is deliberately no `amount` parameter — nothing here can ask WAKA
+ * for a bigger discount than the sale gave away.
+ *
+ * One redemption applies once: a repeat is refused by the server, and the recorded
+ * application is immutable afterwards.
+ */
+export async function applyLoyaltyRedemptionToSale(
+  shopId: string,
+  redemptionId: string,
+  saleId: string,
+): Promise<ApplyRedemptionToSaleResult> {
+  if (!hasSupabaseConfig || !supabase || !shopId || !redemptionId || !saleId) {
+    return { ok: false, error: "loyalty_unavailable" };
+  }
+  try {
+    const { data, error } = await supabase.rpc("loyalty_apply_redemption_to_sale", {
+      p_shop_id: shopId,
+      p_redemption_id: redemptionId,
+      p_sale_id: saleId,
+    });
+    if (error) return { ok: false, error: error.code ?? "apply_failed" };
+    const result = (data ?? {}) as Record<string, unknown>;
+    if (result.ok !== true) return { ok: false, error: String(result.error ?? "apply_rejected") };
+    return {
+      ok: true,
+      appliedAmountUgx: Number(result.applied_amount_ugx ?? 0),
+      requestedUgx: Number(result.requested_ugx ?? 0),
+      clamped: result.clamped === true,
+      saleId: String(result.sale_id ?? saleId),
+    };
+  } catch {
+    return { ok: false, error: "apply_failed" };
+  }
+}
+
+export type ReverseRedemptionResult =
+  | { ok: true; pointsRestored: number; balance: number; transactionId: string }
+  | { ok: false; error: string };
+
+/**
+ * Reverse a redemption (Phase D) — MERCHANT-side, and the only way points are returned.
+ *
+ * ONE server-authoritative call. The ledger row, the account balance and the redemption's
+ * status all move inside `loyalty_reverse_redemption`, in one transaction; there is no
+ * sequence of browser calls that could half-undo a redemption, and therefore no
+ * client-side balance correction anywhere in the app.
+ *
+ * The amount credited is the redemption's own historical `points_spent`, decided by the
+ * server. The client cannot propose an amount, and nothing here reads today's reward price.
+ *
+ * No idempotency key is needed: the server refuses a second reversal of the same
+ * redemption, enforced by a unique index rather than by a status check that two concurrent
+ * callers could both pass.
+ */
+export async function reverseLoyaltyRedemption(
+  shopId: string,
+  redemptionId: string,
+  note?: string,
+): Promise<ReverseRedemptionResult> {
+  if (!hasSupabaseConfig || !supabase || !shopId || !redemptionId) {
+    return { ok: false, error: "loyalty_unavailable" };
+  }
+  try {
+    const { data, error } = await supabase.rpc("loyalty_reverse_redemption", {
+      p_shop_id: shopId,
+      p_redemption_id: redemptionId,
+      p_note: note ?? null,
+    });
+    if (error) return { ok: false, error: error.code ?? "reverse_failed" };
+    const result = (data ?? {}) as Record<string, unknown>;
+    if (result.ok !== true) return { ok: false, error: String(result.error ?? "reverse_rejected") };
+    return {
+      ok: true,
+      pointsRestored: Number(result.points_restored ?? 0),
+      balance: Number(result.balance_points ?? 0),
+      transactionId: String(result.transaction_id ?? ""),
+    };
+  } catch {
+    return { ok: false, error: "reverse_failed" };
+  }
 }

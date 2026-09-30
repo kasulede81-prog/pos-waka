@@ -33,6 +33,11 @@ import { LoyaltyCustomerRewardsPanel } from "../components/loyalty/LoyaltyCustom
 import { LoyaltyGoogleWalletButton } from "../components/loyalty/LoyaltyGoogleWalletButton";
 import { LoyaltyCustomerPageShare } from "../components/loyalty/LoyaltyCustomerPageShare";
 import { LoyaltyCardDesignPanel } from "../components/loyalty/LoyaltyCardDesignPanel";
+import { LoyaltySpendPromotionsPanel } from "../components/loyalty/LoyaltySpendPromotionsPanel";
+import {
+  LoyaltyCustomer360Panel,
+  LoyaltyCustomerLookup,
+} from "../components/loyalty/LoyaltyCustomer360Panel";
 import { LoyaltyProgramCodePanel } from "../components/loyalty/LoyaltyProgramCodePanel";
 import { LoyaltyPublicEnrollmentPanel } from "../components/loyalty/LoyaltyPublicEnrollmentPanel";
 import { LoyaltyEnrollmentRequestsPanel } from "../components/loyalty/LoyaltyEnrollmentRequestsPanel";
@@ -823,9 +828,20 @@ function CustomerList({
         ))}
       </div>
       {searchDone && accounts.length === 0 ? (
-        <p className="mt-3 text-sm font-medium text-muted-foreground">
-          {search.trim() ? t(lang, "loyaltyNoMembersFound") : t(lang, "loyaltyNoMembers")}
-        </p>
+        <>
+          <p className="mt-3 text-sm font-medium text-muted-foreground">
+            {search.trim() ? t(lang, "loyaltyNoMembersFound") : t(lang, "loyaltyNoMembers")}
+          </p>
+          {/* Phase C — the member search only finds loyalty customers. A customer with
+              purchases and no loyalty card is still somebody the merchant must be able to
+              look up, so the same Customer 360 is reachable from here. Additive: it only
+              appears where the member search found nothing. */}
+          {search.trim() ? (
+            <div className="mt-4 border-t border-border pt-4">
+              <LoyaltyCustomerLookup lang={lang} shopId={shopId} />
+            </div>
+          ) : null}
+        </>
       ) : (
         <ul className="mt-3 divide-y divide-border">
           {accounts.map((entry) => (
@@ -876,16 +892,27 @@ function CustomerList({
                 </div>
               ) : null}
               {expandedId === entry.accountId ? (
-                <CustomerDetail
-                  lang={lang}
-                  shopId={shopId}
-                  entry={entry}
-                  canManage={canManage}
-                  canRedeem={canRedeem}
-                  canIssueWallet={canIssueWallet}
-                  mode={mode}
-                  onAdjusted={onAdjusted}
-                />
+                <>
+                  <CustomerDetail
+                    lang={lang}
+                    shopId={shopId}
+                    entry={entry}
+                    canManage={canManage}
+                    canRedeem={canRedeem}
+                    canIssueWallet={canIssueWallet}
+                    mode={mode}
+                    onAdjusted={onAdjusted}
+                  />
+                  {/* Phase C — the customer's relationship with THIS shop: what they have
+                      spent, what came back, and what they have redeemed. Read-only, and
+                      scoped to this shop by the server. */}
+                  <LoyaltyCustomer360Panel
+                    lang={lang}
+                    shopId={shopId}
+                    customerId={entry.customerId}
+                    canReverse={canRedeem}
+                  />
+                </>
               ) : null}
             </li>
           ))}
@@ -1543,7 +1570,15 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
 
           {tab === "rewards" ? (
             canManage && shopId ? (
-              <LoyaltyRewardsPanel lang={lang} shopId={shopId} onChanged={refreshLists} />
+              <>
+                <LoyaltyRewardsPanel lang={lang} shopId={shopId} onChanged={refreshLists} />
+                {/* Phase G — spend-threshold promotions. Same tab, same authorization, same
+                    lifecycle vocabulary as rewards: this is an extension of the merchant's
+                    loyalty management, not a second system. */}
+                <div className="mt-6">
+                  <LoyaltySpendPromotionsPanel lang={lang} shopId={shopId} canManage={canManage} />
+                </div>
+              </>
             ) : (
               <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
                 {t(lang, "loyaltyRewardsOwnerOnly")}

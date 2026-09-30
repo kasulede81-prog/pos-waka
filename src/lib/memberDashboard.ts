@@ -50,6 +50,117 @@ export type MemberDashboard = {
   };
 };
 
+/**
+ * One row of the member's own points activity (Phase A).
+ *
+ * `id` is the ledger row's id and travels only because keyset pagination needs a
+ * tie-breaker — timestamps can collide, and OFFSET would duplicate and skip rows on a
+ * ledger that keeps growing. It authorises nothing: no read path in the schema takes a
+ * transaction id.
+ */
+export type MemberActivityItem = {
+  id: string;
+  /** earned | redeemed | reversed | expired | adjusted | promotional */
+  kind: string;
+  /** sale | return | void | redemption | expiration | manual_adjustment | promotion | enrollment */
+  cause: string;
+  points: number;
+  balanceAfter: number | null;
+  createdAt: string;
+  shopId: string;
+  shopName: string;
+  /** The member's own purchase total, joined from the authoritative `sales` row. */
+  saleTotalUgx: number | null;
+  rewardName: string | null;
+  rewardPointsRequired: number | null;
+};
+
+export type MemberActivityPage = {
+  items: MemberActivityItem[];
+  hasMore: boolean;
+  /** Keyset cursor for the next page (exclusive); null when the history is exhausted. */
+  nextBefore: string | null;
+  nextBeforeId: string | null;
+};
+
+/**
+ * A reward as the member may see it (Phase B).
+ *
+ * `state` is computed by the SERVER and only rendered here. The client never decides
+ * whether a reward is redeemable — the same canonical helpers the redemption path uses
+ * (`loyalty_account_reward_granted`, `loyalty_reward_unexpired`) decide it, and the same
+ * redemption-limit predicate. `balancePoints` is that merchant's authoritative account
+ * balance, not a figure derived from this list.
+ *
+ * There is no monetary value field because the schema has none yet.
+ */
+export type MemberReward = {
+  id: string;
+  shopId: string;
+  shopName: string;
+  name: string;
+  description: string;
+  /** product | voucher | custom — as stored. */
+  rewardKind: string;
+  /**
+   * What the reward is worth: none | fixed_discount | percentage_discount.
+   *
+   * A discount benefit is applied to a WAKA sale at the counter. It is NOT stored value and
+   * nothing converts points to money — the member is told what their points buy, not given
+   * a balance.
+   */
+  benefitKind: string;
+  /** Integer UGX when benefitKind is fixed_discount. */
+  benefitAmountUgx: number | null;
+  /** 0–100 when benefitKind is percentage_discount. */
+  benefitPercent: number | null;
+  pointsRequired: number;
+  balancePoints: number;
+  pointsNeeded: number;
+  /** True when the reward was granted to this member specifically (D029/D026). */
+  personal: boolean;
+  /** When a personal grant lapses, if it is time-limited. */
+  grantedUntil: string | null;
+  expiresOn: string | null;
+  active: boolean;
+  maxRedemptionsPerAccount: number | null;
+  timesRedeemed: number;
+  redemptionsRemaining: number | null;
+  /** available | insufficient_points | limit_reached | expired | inactive */
+  state: string;
+};
+
+export type MemberRewardsPage = {
+  rewards: MemberReward[];
+  /** True when the list was cut short by the page bound. */
+  truncated: boolean;
+};
+
+/**
+ * A promotion running for this member (Phase G).
+ *
+ * A DISPLAY OF THE SERVER'S PROJECTION, never a computation. `qualifyingSpendUgx`,
+ * `remainingUgx` and `rewarded` are all decided server-side from authoritative sales; the
+ * progress bar renders those numbers and nothing here decides eligibility.
+ */
+export type MemberPromotion = {
+  shopId: string;
+  shopName: string;
+  title: string;
+  /** earn_bonus_flat | earn_multiplier | reward_grant | spend_bonus */
+  kind: string;
+  bonusPoints: number | null;
+  multiplier: number | null;
+  grantedRewardCount: number | null;
+  /** Spend-threshold promotions only. */
+  thresholdUgx: number | null;
+  qualifyingSpendUgx: number | null;
+  remainingUgx: number | null;
+  endsAt: string | null;
+  /** True once the server has actually awarded it. */
+  rewarded: boolean;
+};
+
 export type MemberResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 function num(v: unknown, fallback = 0): number {
@@ -76,6 +187,117 @@ async function callRpc<T>(
   } catch {
     return { ok: false, error: "unavailable" };
   }
+}
+
+/**
+ * The member's own points activity, newest first.
+ *
+ * No member/account/shop parameter exists to pass — the server resolves the caller from
+ * `auth.uid()` alone, so this can only ever return the signed-in member's own rows. The
+ * only arguments are a page size and the previous page's cursor.
+ */
+export async function fetchMemberActivity(
+  cursor?: { before: string | null; beforeId: string | null },
+  limit = 20,
+): Promise<MemberResult<MemberActivityPage>> {
+  return callRpc(
+    "loyalty_member_activity",
+    { p_limit: limit, p_before: cursor?.before ?? null, p_before_id: cursor?.beforeId ?? null },
+    (raw) => {
+      const list = Array.isArray(raw.items) ? (raw.items as Record<string, unknown>[]) : [];
+      const items: MemberActivityItem[] = list.map((entry) => {
+        const shop = (entry.shop ?? {}) as Record<string, unknown>;
+        return {
+          id: String(entry.id ?? ""),
+          kind: String(entry.kind ?? ""),
+          cause: String(entry.cause ?? ""),
+          points: num(entry.points),
+          balanceAfter: entry.balance_after == null ? null : num(entry.balance_after),
+          createdAt: String(entry.created_at ?? ""),
+          shopId: String(shop.id ?? ""),
+          shopName: String(shop.name ?? ""),
+          saleTotalUgx: entry.sale_total_ugx == null ? null : num(entry.sale_total_ugx),
+          rewardName: str(entry.reward_name),
+          rewardPointsRequired:
+            entry.reward_points_required == null ? null : num(entry.reward_points_required),
+        };
+      });
+      return {
+        items,
+        hasMore: raw.has_more === true,
+        nextBefore: str(raw.next_before),
+        nextBeforeId: str(raw.next_before_id),
+      };
+    },
+  );
+}
+
+/**
+ * The rewards this member may have, across every merchant they are linked to.
+ *
+ * No member/account/shop argument exists to pass — the server resolves the caller from
+ * `auth.uid()` alone. Read-only: redemption is merchant-driven today, so there is
+ * deliberately nothing here that spends points.
+ */
+export async function fetchMemberRewards(limit = 100): Promise<MemberResult<MemberRewardsPage>> {
+  return callRpc("loyalty_member_rewards", { p_limit: limit }, (raw) => {
+    const list = Array.isArray(raw.rewards) ? (raw.rewards as Record<string, unknown>[]) : [];
+    const rewards: MemberReward[] = list.map((entry) => {
+      const shop = (entry.shop ?? {}) as Record<string, unknown>;
+      return {
+        id: String(entry.id ?? ""),
+        shopId: String(shop.id ?? ""),
+        shopName: String(shop.name ?? ""),
+        name: String(entry.name ?? ""),
+        description: str(entry.description) ?? "",
+        rewardKind: String(entry.reward_kind ?? "custom"),
+        benefitKind: String(entry.benefit_kind ?? "none"),
+        benefitAmountUgx: entry.benefit_amount_ugx == null ? null : num(entry.benefit_amount_ugx),
+        benefitPercent: entry.benefit_percent == null ? null : num(entry.benefit_percent),
+        pointsRequired: num(entry.points_required),
+        balancePoints: num(entry.balance_points),
+        pointsNeeded: num(entry.points_needed),
+        personal: entry.personal === true,
+        grantedUntil: str(entry.granted_until),
+        expiresOn: str(entry.expires_on),
+        active: entry.active !== false,
+        maxRedemptionsPerAccount:
+          entry.max_redemptions_per_account == null ? null : num(entry.max_redemptions_per_account),
+        timesRedeemed: num(entry.times_redeemed),
+        redemptionsRemaining:
+          entry.redemptions_remaining == null ? null : num(entry.redemptions_remaining),
+        state: String(entry.state ?? "unavailable"),
+      };
+    });
+    return { rewards, truncated: raw.truncated === true };
+  });
+}
+
+/**
+ * The promotions running for this member. Read-only, resolved from `auth.uid()` with no
+ * identity parameters — the same shape as the other member projections.
+ */
+export async function fetchMemberPromotions(): Promise<MemberResult<MemberPromotion[]>> {
+  return callRpc("loyalty_member_promotions", {}, (raw) => {
+    const list = Array.isArray(raw.promotions) ? (raw.promotions as Record<string, unknown>[]) : [];
+    return list.map((entry) => {
+      const shop = (entry.shop ?? {}) as Record<string, unknown>;
+      return {
+        shopId: String(shop.id ?? ""),
+        shopName: String(shop.name ?? ""),
+        title: String(entry.title ?? ""),
+        kind: String(entry.kind ?? ""),
+        bonusPoints: entry.bonus_points == null ? null : num(entry.bonus_points),
+        multiplier: entry.multiplier == null ? null : num(entry.multiplier),
+        grantedRewardCount: entry.granted_reward_count == null ? null : num(entry.granted_reward_count),
+        thresholdUgx: entry.threshold_ugx == null ? null : num(entry.threshold_ugx),
+        qualifyingSpendUgx: entry.qualifying_spend_ugx == null ? null : num(entry.qualifying_spend_ugx),
+        remainingUgx: entry.remaining_ugx == null ? null : num(entry.remaining_ugx),
+        endsAt: str(entry.ends_at),
+        rewarded: entry.rewarded === true,
+      };
+    });
+  });
 }
 
 export async function fetchMemberDashboard(): Promise<MemberResult<MemberDashboard>> {

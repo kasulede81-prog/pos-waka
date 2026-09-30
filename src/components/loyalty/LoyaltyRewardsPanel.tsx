@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { benefitLabel } from "../../lib/loyalty/loyaltyCheckoutBenefit";
+import { deleteUnusedLoyaltyReward } from "../../lib/loyalty/loyaltyRewards";
 import {
   createLoyaltyReward,
   fetchLoyaltyRewards,
@@ -34,6 +36,9 @@ const EMPTY_INPUT: RewardInput = {
   maxRedemptionsPerAccount: null,
   active: true,
   expiresOn: null,
+  benefitKind: "none",
+  benefitAmountUgx: null,
+  benefitPercent: null,
 };
 
 /** Merchant reward catalog management — simple name + points first; advanced collapsed. */
@@ -49,6 +54,9 @@ export function LoyaltyRewardsPanel({
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<RewardInput>({ ...EMPTY_INPUT });
+  /** Phase F — which reward is awaiting a removal confirmation, and why one was refused. */
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<{ id: string; error: string } | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [editingExpiryId, setEditingExpiryId] = useState<string | null>(null);
@@ -126,8 +134,26 @@ export function LoyaltyRewardsPanel({
     }
   };
 
+  /** Withdraw (`active = false`) or restore. Reversible, and history is untouched. */
   const toggleActive = async (reward: LoyaltyReward) => {
     await updateLoyaltyReward(reward.id, { active: !reward.active });
+    await reload();
+    onChanged();
+  };
+
+  /**
+   * Remove a reward — only ever one with no history. The SERVER is the judge: it refuses
+   * anything a redemption, an assignment or an offer depends on, and the merchant is told to
+   * withdraw it instead. Nothing here can destroy a historical record.
+   */
+  const removeReward = async (reward: LoyaltyReward) => {
+    setPendingRemoveId(null);
+    const r = await deleteUnusedLoyaltyReward(shopId, reward.id);
+    if (!r.ok) {
+      setRemoveError({ id: reward.id, error: r.error });
+      return;
+    }
+    setRemoveError(null);
     await reload();
     onChanged();
   };
@@ -186,13 +212,59 @@ export function LoyaltyRewardsPanel({
                         : ` · ${t(lang, "loyaltyRewardNeverExpires")}`}
                     </p>
                   </div>
-                  <WakaSwitch
-                    checked={reward.active}
-                    onCheckedChange={() => void toggleActive(reward)}
-                    label={undefined}
-                    aria-label={reward.name}
-                  />
+                  <div className="flex shrink-0 items-center gap-2">
+                    <WakaSwitch
+                      checked={reward.active}
+                      onCheckedChange={() => void toggleActive(reward)}
+                      label={undefined}
+                      aria-label={reward.name}
+                    />
+                    {/* Phase F — removing a reward is only possible while it has no history.
+                        The server decides; this button only asks. A withdrawal is the
+                        reversible alternative and is offered in its place. */}
+                    {pendingRemoveId === reward.id ? (
+                      <span className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void removeReward(reward)}
+                          data-testid={`reward-remove-confirm-${reward.id}`}
+                          className="min-h-[32px] rounded-lg bg-danger px-2 text-[10px] font-black text-white"
+                        >
+                          {t(lang, "loyaltyRewardRemoveConfirm")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingRemoveId(null);
+                            setRemoveError(null);
+                          }}
+                          className="min-h-[32px] rounded-lg border border-border px-2 text-[10px] font-black text-foreground"
+                        >
+                          {t(lang, "cancel")}
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingRemoveId(reward.id);
+                          setRemoveError(null);
+                        }}
+                        data-testid={`reward-remove-${reward.id}`}
+                        className="min-h-[32px] rounded-lg border border-border px-2 text-[10px] font-black text-muted-foreground"
+                      >
+                        {t(lang, "loyaltyRewardRemoveAction")}
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {removeError?.id === reward.id ? (
+                  <p className="mt-1 text-[10px] font-bold text-danger" data-testid="reward-remove-error">
+                    {removeError.error === "reward_has_history"
+                      ? t(lang, "loyaltyRewardRemoveHasHistory")
+                      : t(lang, "loyaltyRewardRemoveFailed")}
+                  </p>
+                ) : null}
                 {editingExpiryId === reward.id ? (
                   <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/40 p-3">
                     <p className="text-xs font-black text-foreground">{t(lang, "loyaltyRewardExpiry")}</p>
@@ -272,6 +344,96 @@ export function LoyaltyRewardsPanel({
               className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
             />
           </label>
+        </div>
+
+        {/* Phase E — what the reward is worth at the counter. A discount benefit reduces a
+            WAKA sale; it is not stored value and WAKA never owes the customer money. The
+            database enforces the same rules, so an invalid combination is refused there
+            whatever this form does. */}
+        <div className="mt-3 space-y-2 rounded-xl border border-border bg-card/60 p-3">
+          <p className="text-sm font-black text-foreground">{t(lang, "loyaltyRewardBenefitTitle")}</p>
+          <p className="text-xs font-medium text-muted-foreground">{t(lang, "loyaltyRewardBenefitHint")}</p>
+          <div className="flex flex-wrap gap-2">
+            {(["none", "fixed_discount", "percentage_discount"] as const).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    benefitKind: kind,
+                    // Only the chosen kind keeps a value — the database refuses a kind whose
+                    // value disagrees with it, and a product reward cannot carry one at all.
+                    benefitAmountUgx: kind === "fixed_discount" ? (d.benefitAmountUgx ?? null) : null,
+                    benefitPercent: kind === "percentage_discount" ? (d.benefitPercent ?? null) : null,
+                    ...(kind === "none" ? {} : { productId: null }),
+                  }))
+                }
+                data-testid={`reward-benefit-${kind}`}
+                className={clsx(
+                  "min-h-[36px] rounded-xl px-3 text-xs font-black",
+                  (draft.benefitKind ?? "none") === kind ? "bg-waka-600 text-white" : "bg-muted text-foreground",
+                )}
+              >
+                {t(lang, `loyaltyRewardBenefit_${kind}`)}
+              </button>
+            ))}
+          </div>
+
+          {(draft.benefitKind ?? "none") === "fixed_discount" ? (
+            <label className="block text-sm font-bold text-foreground">
+              {t(lang, "loyaltyRewardBenefitAmount")}
+              <input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={draft.benefitAmountUgx ?? ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    benefitAmountUgx: e.target.value === "" ? null : Math.floor(Number(e.target.value)),
+                  }))
+                }
+                data-testid="reward-benefit-amount"
+                className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+              />
+            </label>
+          ) : null}
+
+          {(draft.benefitKind ?? "none") === "percentage_discount" ? (
+            <label className="block text-sm font-bold text-foreground">
+              {t(lang, "loyaltyRewardBenefitPercent")}
+              <input
+                type="number"
+                min={0.01}
+                max={100}
+                step={0.01}
+                inputMode="decimal"
+                value={draft.benefitPercent ?? ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    benefitPercent: e.target.value === "" ? null : Number(e.target.value),
+                  }))
+                }
+                data-testid="reward-benefit-percent"
+                className="mt-1.5 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+              />
+            </label>
+          ) : null}
+
+          {/* The merchant sees exactly how the reward will read to a cashier. */}
+          {(draft.benefitKind ?? "none") !== "none" ? (
+            <p className="text-xs font-black text-waka-700" data-testid="reward-benefit-preview">
+              {draft.pointsRequired} {t(lang, "loyaltyPointsUnit")} →{" "}
+              {benefitLabel({
+                benefitKind: draft.benefitKind ?? "none",
+                benefitAmountUgx: draft.benefitAmountUgx ?? null,
+                benefitPercent: draft.benefitPercent ?? null,
+              }) ?? t(lang, "loyaltyRewardBenefitIncomplete")}
+            </p>
+          ) : null}
         </div>
 
         <div className="mt-3 space-y-2 rounded-xl border border-border bg-card/60 p-3">
