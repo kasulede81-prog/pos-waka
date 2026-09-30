@@ -26,6 +26,7 @@ const USE_AUTH = readFileSync(resolve(ROOT, "src/hooks/useAuth.ts"), "utf8");
 const MERGE = readFileSync(resolve(ROOT, "src/lib/saleFinancialMerge.ts"), "utf8");
 const AUTH_CALLBACK = readFileSync(resolve(ROOT, "src/pages/AuthCallbackPage.tsx"), "utf8");
 const OWNER_BOOTSTRAP = readFileSync(resolve(ROOT, "src/lib/ownerWorkspaceOnSignIn.ts"), "utf8");
+const OWNER_PROVISIONING = readFileSync(resolve(ROOT, "src/lib/ownerProvisioning.ts"), "utf8");
 const CONFIG = readFileSync(resolve(ROOT, "supabase/config.toml"), "utf8");
 
 describe("STAFF-V2 Phase 5 invitation system", () => {
@@ -54,11 +55,21 @@ describe("STAFF-V2 Phase 5 invitation system", () => {
   });
 
   it("Auth callback accepts or skips before owner bootstrap", () => {
+    // THE ORDER IS THE INVARIANT: the invite is resolved first, and the guarded bootstrap runs
+    // only afterwards, gated on the invite's answer. An invitee must never be handed a brand-new
+    // empty shop as its owner.
     const acceptIdx = AUTH_CALLBACK.lastIndexOf("resolveStaffInviteBeforeOwnerBootstrap(session)");
-    const bootstrapIdx = AUTH_CALLBACK.lastIndexOf("ensureOwnerWorkspaceIfNeeded(session)");
+    const bootstrapIdx = AUTH_CALLBACK.lastIndexOf("provisionOwnerWorkspace(session)");
     expect(acceptIdx).toBeGreaterThan(0);
     expect(bootstrapIdx).toBeGreaterThan(acceptIdx);
-    expect(AUTH_CALLBACK).toMatch(/if \(!inviteGate\.skipOwnerBootstrap\)/);
+    // The bootstrap itself now lives behind `provisionOwnerWorkspace` (so its outcome can be
+    // reported and retried), so the call it must still make is asserted there.
+    expect(OWNER_PROVISIONING).toMatch(/ensureOwnerWorkspaceIfNeeded\(session\)/);
+    // And it still runs only when the invite gate says so — the condition is exactly this, with
+    // nothing added to it.
+    expect(AUTH_CALLBACK).toMatch(
+      /if \(!inviteGate\.skipOwnerBootstrap && !memberOnly\) \{\s*\n\s*(?:const \w+ = )?await bootTraceAsync/,
+    );
     expect(OWNER_BOOTSTRAP).toMatch(/resolveStaffInviteBeforeOwnerBootstrap/);
     expect(OWNER_BOOTSTRAP).toMatch(/staff_invite_pending/);
     expect(USE_AUTH).toMatch(/resolveStaffInviteBeforeOwnerBootstrap/);

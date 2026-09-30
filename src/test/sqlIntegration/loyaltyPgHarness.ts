@@ -92,6 +92,9 @@ export const MIGRATIONS = [
   // Member-scoped Wallet authority: auth.uid() -> member -> active link -> account (the pass
   // itself is still issued by the existing loyalty-wallet-pass Edge Function).
   join(process.cwd(), "supabase", "migrations", "20260930310000_loyalty_member_wallet_issue.sql"),
+  // Merchant registration hardening: per-user advisory lock on the bootstrap RPCs, fail-closed
+  // owner_onboarding_status(), and the anon EXECUTE revokes.
+  join(process.cwd(), "supabase", "migrations", "20260930320000_merchant_registration_hardening.sql"),
 ];
 
 function readSql(path: string): string {

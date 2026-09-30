@@ -10,7 +10,12 @@ import { registrationUnlocks } from "../lib/businessBuilder/businessSceneState";
 import { t, tTemplate } from "../lib/i18n";
 import { formatAuthError } from "../lib/authConfig";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
-import { hasSupabaseConfig } from "../lib/supabase";
+import { hasSupabaseConfig, supabase } from "../lib/supabase";
+import { resolveAccountIdentity } from "../lib/memberIdentity";
+import {
+  authenticatedVisitorDestination,
+  visitorKindFromIdentity,
+} from "../lib/merchantRegistration";
 import type { SignUpResult } from "../hooks/useAuth";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { storePendingReferralCode } from "../lib/pendingReferral";
@@ -181,9 +186,47 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
     storePendingReferralCode(code);
   }, [searchParams]);
 
+  /**
+   * An already-authenticated visitor must not be dropped into the new-owner wizard.
+   *
+   * /register is linked from marketing pages, so the people who arrive here while signed in are
+   * mostly NOT new owners: they are existing merchants following a "Get started" link, or
+   * customers who are WAKA Loyalty members. Sending them all to /onboarding offered the wizard to
+   * people who cannot complete it, and the server then refused the save — the merchant saw a
+   * machine code for a shop they never asked to create.
+   *
+   * So the SERVER is asked who this session is, and each answer goes where it belongs:
+   *   merchant -> their own workspace (the POS decides where they resume)
+   *   member   -> the member surface
+   *   unknown  -> the chooser, where "create a business" is an explicit decision
+   */
   useEffect(() => {
     if (!isAuthenticated || busy || submitLockRef.current) return;
-    navigate("/onboarding", { replace: true });
+    let cancelled = false;
+    void (async () => {
+      let target = "/welcome";
+      try {
+        if (supabase) {
+          const { data } = await supabase.auth.getUser();
+          const user = data?.user;
+          if (user) {
+            const identity = await resolveAccountIdentity({
+              userId: user.id,
+              metadata: user.user_metadata as Record<string, unknown> | undefined,
+            });
+            target = authenticatedVisitorDestination(visitorKindFromIdentity(identity.kind));
+          }
+        }
+      } catch {
+        // Classifier unreachable: the chooser is the safe landing. It grants nothing, and the
+        // guarded bootstrap still decides server-side whether a workspace may be created.
+        target = "/welcome";
+      }
+      if (!cancelled) navigate(target, { replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [busy, isAuthenticated, navigate]);
 
   const validateReferralField = useCallback(

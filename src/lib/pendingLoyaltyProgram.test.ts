@@ -174,8 +174,18 @@ describe("the callback honours a pending join only on the loyalty host", () => {
 
   it("a pending join overrides the destination but never the bootstrap decision", () => {
     const src = readFileSync(join(process.cwd(), "src/pages/AuthCallbackPage.tsx"), "utf8");
-    // The bootstrap gate itself must remain untouched by the pending path.
+    // The bootstrap gate itself must remain untouched by the pending path. The condition must be
+    // exactly this expression — no extra conjunct — and the provisioning call must be the FIRST
+    // statement inside it.
     expect(src).toMatch(/const memberOnly = accountIdentity\.kind !== "merchant";/);
-    expect(src).toMatch(/if \(!inviteGate\.skipOwnerBootstrap && !memberOnly\) \{\s*\n\s*await bootTraceAsync/);
+    // `(?:const \w+ = )?` tolerates the outcome being captured for the failure screen. It does
+    // not weaken the assertion: the gate is still followed immediately by the bootstrap, and the
+    // condition is still required to be exactly `!inviteGate.skipOwnerBootstrap && !memberOnly`.
+    expect(src).toMatch(
+      /if \(!inviteGate\.skipOwnerBootstrap && !memberOnly\) \{\s*\n\s*(?:const \w+ = )?await bootTraceAsync/,
+    );
+    // And the pending-join path is never part of that condition.
+    expect(src).toMatch(/if \(!inviteGate\.skipOwnerBootstrap && !memberOnly\) \{/);
+    expect(src).not.toMatch(/if \([^)]*pendingJoinPath[^)]*&&[^)]*!memberOnly/);
   });
 });

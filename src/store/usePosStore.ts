@@ -57,7 +57,6 @@ import { normalizeProductHospitalityRouting } from "../lib/productHospitalityRou
 import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
 import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { readPendingRegistrationProfileForUser } from "../lib/registrationProfileCache";
-import { isWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
 import { normalizeInventoryCountSession } from "../lib/inventoryCount";
@@ -10617,7 +10616,18 @@ function preferencesForAccountBootstrap(key: string): ShopPreferences {
 
   if (existing.shopCurrency) preferences.shopCurrency = existing.shopCurrency;
 
-  if (userId && (isWorkspaceBootstrapped(userId) || readCachedOwnerOnboardingComplete(userId) === true)) {
+  // A WORKSPACE EXISTING IS NOT ONBOARDING BEING FINISHED.
+  //
+  // `isWorkspaceBootstrapped(userId)` only means an organization and a shop were created for this
+  // user — which happens at sign-in, BEFORE the wizard has asked for a business type, a district
+  // or a phone. Treating it as "wizard done" wrote a local completion flag for merchants who had
+  // not completed anything, and every gate that trusts local state (OnboardingRouteGate) then
+  // sent them to the POS with a shop that was never configured. That is how shops end up with no
+  // district and no phone.
+  //
+  // The remaining signal is the SERVER's answer, cached only to avoid a re-render flash; the
+  // routes still verify it against `owner_onboarding_status()` before acting on it.
+  if (userId && readCachedOwnerOnboardingComplete(userId) === true) {
     preferences.onboardingDone = true;
     preferences.onboardingWizardDone = true;
     preferences.schemaVersion = 2;

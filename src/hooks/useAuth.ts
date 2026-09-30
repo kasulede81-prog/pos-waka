@@ -38,6 +38,7 @@ import { resetMemberIdentityCache, resolveAccountIdentity } from "../lib/memberI
 import { cachePendingRegistrationProfile } from "../lib/registrationProfileCache";
 import { ensureReferralAttributionForSession } from "../lib/referralAgents";
 import { storePendingReferralCode } from "../lib/pendingReferral";
+import { buildMerchantSignupMetadata } from "../lib/merchantRegistration";
 import {
   cancelSessionRefreshRetry,
   logAuthSessionEvent,
@@ -856,7 +857,16 @@ export function useAuth() {
       email: string,
       password: string,
       businessName: string,
-      businessType: BusinessType,
+      /**
+       * The business type, when the person has actually chosen one.
+       *
+       * NULL IS A REAL ANSWER. `/register` does not ask for a business type — the onboarding
+       * wizard does — so claiming one here wrote `kiosk_duka` into the account of every pharmacy,
+       * bar and hotel that signed up, and the shop was created with it before anyone was asked.
+       * Passing null leaves the claim out entirely; the wizard's save writes the type the
+       * merchant picked, and the server's own default covers the window in between.
+       */
+      businessType: BusinessType | null,
       profile?: SignUpProfileMeta,
     ): Promise<SignUpResult> => {
     if (!hasSupabaseConfig || !supabase) {
@@ -869,29 +879,22 @@ export function useAuth() {
     const emailRedirectTo = getAuthEmailCallbackUrl();
     const orgLabel = (profile?.organizationName ?? businessName).trim();
     const shopLabel = (profile?.shopDisplayName ?? businessName).trim();
-    const meta: Record<string, unknown> = {
-      business_name: orgLabel,
-      organization_name: orgLabel,
-      shop_display_name: shopLabel,
-      business_type: businessType,
-      pos_role: "owner",
-    };
-    if (profile?.fullName?.trim()) meta.full_name = profile.fullName.trim();
     const normalizedPhone = profile?.phone ? normalizeUgPhoneE164(profile.phone) : null;
-    if (normalizedPhone) meta.phone_e164 = normalizedPhone;
-    if (profile?.districtId?.trim()) meta.district_id = profile.districtId.trim();
-    if (profile?.gpsSkipped) meta.gps_skipped = true;
-    const dc = profile?.defaultCurrency?.trim().toUpperCase();
-    if (dc && dc.length === 3) meta.default_currency = dc;
-    if (profile?.latitude != null && profile?.longitude != null && !Number.isNaN(profile.latitude) && !Number.isNaN(profile.longitude)) {
-      meta.latitude = profile.latitude;
-      meta.longitude = profile.longitude;
-    }
-    const refCode = profile?.referralCode?.trim().toUpperCase();
-    if (refCode && refCode.length >= 3) {
-      meta.referral_code = refCode;
-      storePendingReferralCode(refCode);
-    }
+    const meta = buildMerchantSignupMetadata({
+      organizationName: orgLabel,
+      shopDisplayName: shopLabel,
+      businessType,
+      fullName: profile?.fullName,
+      phoneE164: normalizedPhone,
+      districtId: profile?.districtId,
+      gpsSkipped: profile?.gpsSkipped,
+      defaultCurrency: profile?.defaultCurrency,
+      latitude: profile?.latitude,
+      longitude: profile?.longitude,
+      referralCode: profile?.referralCode,
+    });
+    const refCode = String(meta.referral_code ?? "");
+    if (refCode) storePendingReferralCode(refCode);
 
     const finishSignUpSession = async (active: Session): Promise<SignUpResult> => {
       applyAccountSwitchSync(
@@ -999,7 +1002,8 @@ export function useAuth() {
       if (!phoneNorm) {
         throw new Error("Enter a valid Uganda mobile number for your shop.");
       }
-      return signUp(loginEmail, input.password, input.shopName.trim(), "kiosk_duka", {
+      // No business type yet: the wizard asks, and its save writes the answer.
+      return signUp(loginEmail, input.password, input.shopName.trim(), null, {
         fullName: input.ownerName.trim(),
         phone: phoneNorm,
         districtId: input.districtId,

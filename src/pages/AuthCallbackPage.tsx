@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
+import type { Session } from "@supabase/supabase-js";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { EnterpriseSpinner } from "../components/enterprise/EnterpriseSpinner";
 import { authDevLog } from "../lib/authConfig";
@@ -7,11 +8,12 @@ import { publishAuthSessionFromCallback } from "../lib/authSessionBridge";
 import { bootTrace, bootTraceAsync } from "../lib/bootTrace";
 import { hardSignOutToLogin } from "../lib/authRecovery";
 import { bootstrapAuthCallbackSession } from "../lib/authCallbackSession";
+import { markFirstTimeOwnerOnDevice } from "../lib/firstTimeOwnerDevice";
 import {
-  markFirstTimeOwnerOnDevice,
-  resolvePostAuthDestination,
-} from "../lib/firstTimeOwnerDevice";
-import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
+  destinationFor,
+  PROVISION_FAILED_MESSAGE,
+  provisionOwnerWorkspace,
+} from "../lib/ownerProvisioning";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
 import { memberIntentFromMetadata, resolveAccountIdentity } from "../lib/memberIdentity";
 import { isLoyaltySurface } from "../lib/productHost";
@@ -21,16 +23,12 @@ import { resetCloudRecoverySessionForRetry } from "../lib/cloudRecoverySession";
 import { logStartupPhase } from "../lib/startupDiagnostics";
 import { supabase } from "../lib/supabase";
 import { tryOpenInstalledAppFromBrowserCallback } from "../lib/nativeAuthDeepLink";
-import { withTimeout } from "../lib/promiseTimeout";
 import { WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
 
-type CallbackState = "loading" | "success" | "error";
+type CallbackState = "loading" | "success" | "error" | "provisioning_failed";
 
 const CALLBACK_RUN_TIMEOUT_MS = 20_000;
 
-function postCallbackDestination(userId: string): string {
-  return resolvePostAuthDestination(userId);
-}
 
 /**
  * OAuth / email confirmation return URL.
@@ -41,8 +39,22 @@ export function AuthCallbackPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [destination, setDestination] = useState("/onboarding");
   const [signingOut, setSigningOut] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const handled = useRef(false);
   const finishedRef = useRef(false);
+  /**
+   * Everything a retry needs, captured when the first attempt ran. The bootstrap is idempotent,
+   * so retrying is safe: a second call finds the first call's organization and shop and changes
+   * nothing, which is exactly why this may be offered as a plain "try again".
+   */
+  const retryContextRef = useRef<{
+    session: Session;
+    pendingJoinPath: string | null;
+    landing: string;
+    memberOnly: boolean;
+    skipOwnerBootstrap: boolean;
+    inviteAccepted: boolean;
+  } | null>(null);
 
   useEffect(() => {
     tryOpenInstalledAppFromBrowserCallback();
@@ -165,46 +177,65 @@ export function AuthCallbackPage() {
             : "/welcome";
         if (accountIdentity.kind === "member") markMemberWorkspace(session.user.id);
 
-        try {
-          if (!inviteGate.skipOwnerBootstrap && !memberOnly) {
-            await bootTraceAsync("BOOT-008", "bootstrap_owner_workspace", () =>
-              withTimeout(ensureOwnerWorkspaceIfNeeded(session), 12_000, undefined),
-            );
-          }
-          logStartupPhase("workspace_ready", {
-            userId: session.user.id,
-            via: inviteGate.skipOwnerBootstrap
-              ? "staff_invite_gate"
-              : memberOnly
-                ? "loyalty_member"
-                : "owner_bootstrap",
-          });
-        } catch (e) {
-          authDevLog("error", "Auth callback workspace bootstrap deferred", e);
-          logStartupPhase("workspace_ready", {
-            userId: session.user.id,
-            deferred: true,
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
+        // Captured BEFORE the gate below, so that the gate's body still begins with the
+        // bootstrap itself: the condition that decides whether a workspace is provisioned must
+        // stay exactly `!inviteGate.skipOwnerBootstrap && !memberOnly`, with nothing added to it
+        // — including anything from the pending-join path. The retry only ever reads this, and
+        // a session that skips provisioning never reaches the screen that offers it.
+        retryContextRef.current = {
+          session,
+          pendingJoinPath,
+          landing,
+          memberOnly,
+          skipOwnerBootstrap: inviteGate.skipOwnerBootstrap,
+          inviteAccepted: inviteGate.accepted,
+        };
 
+        // Provisioning is a PRECONDITION, not a best effort. A merchant whose workspace could
+        // not be created must not be walked into the app with a shop that does not exist — the
+        // failure is shown, with a retry, and nothing is marked as done.
         if (!inviteGate.skipOwnerBootstrap && !memberOnly) {
+          const outcome = await bootTraceAsync("BOOT-008", "bootstrap_owner_workspace", () =>
+            provisionOwnerWorkspace(session),
+          );
+          if (!outcome.ok) {
+            authDevLog("error", "Auth callback workspace bootstrap failed", outcome.message);
+            logStartupPhase("workspace_ready", {
+              userId: session.user.id,
+              deferred: false,
+              failed: true,
+            });
+            if (!cancelled) {
+              finishedRef.current = true;
+              setErrorMessage(outcome.message);
+              setState("provisioning_failed");
+            }
+            return;
+          }
           markFirstTimeOwnerOnDevice(session.user.id);
         }
+
+        logStartupPhase("workspace_ready", {
+          userId: session.user.id,
+          via: inviteGate.skipOwnerBootstrap
+            ? "staff_invite_gate"
+            : memberOnly
+              ? "loyalty_member"
+              : "owner_bootstrap",
+        });
 
         // A pending Loyalty join wins over every other destination, because it is the most
         // specific thing we know about why this person signed in — but it changes the DESTINATION
         // only. `memberOnly` and `inviteGate` have already decided, above, whether a tenancy may be
         // provisioned, and that decision is untouched by anything here.
-        const nextPath = pendingJoinPath
-          ? pendingJoinPath
-          : inviteGate.skipOwnerBootstrap
-            ? inviteGate.accepted
-              ? "/"
-              : "/staff/accept"
-            : memberOnly
-              ? landing
-              : postCallbackDestination(session.user.id);
+        const nextPath = await destinationFor({
+          userId: session.user.id,
+          pendingJoinPath,
+          skipOwnerBootstrap: inviteGate.skipOwnerBootstrap,
+          inviteAccepted: inviteGate.accepted,
+          memberOnly,
+          landing,
+        });
         resetCloudRecoverySessionForRetry();
         logStartupPhase("onboarding_required", {
           userId: session.user.id,
@@ -250,6 +281,43 @@ export function AuthCallbackPage() {
     void hardSignOutToLogin();
   };
 
+  /**
+   * Retry the provisioning that failed. The session is already established, so this does not
+   * re-run the OAuth exchange — it re-runs the one idempotent step that did not finish, and only
+   * navigates once that step has actually succeeded.
+   */
+  const handleRetryProvisioning = () => {
+    const ctx = retryContextRef.current;
+    if (!ctx) {
+      handleBackToLogin();
+      return;
+    }
+    setRetrying(true);
+    setErrorMessage(null);
+    void (async () => {
+      const outcome = await provisionOwnerWorkspace(ctx.session);
+      if (!outcome.ok) {
+        setRetrying(false);
+        setErrorMessage(outcome.message);
+        return;
+      }
+      markFirstTimeOwnerOnDevice(ctx.session.user.id);
+      const nextPath = await destinationFor({
+        userId: ctx.session.user.id,
+        pendingJoinPath: ctx.pendingJoinPath,
+        skipOwnerBootstrap: ctx.skipOwnerBootstrap,
+        inviteAccepted: ctx.inviteAccepted,
+        memberOnly: ctx.memberOnly,
+        landing: ctx.landing,
+      });
+      logStartupPhase("workspace_ready", { userId: ctx.session.user.id, via: "callback_retry" });
+      resetCloudRecoverySessionForRetry();
+      setRetrying(false);
+      setDestination(nextPath);
+      setState("success");
+    })();
+  };
+
   if (state === "success") return <Navigate to={destination} replace />;
 
   return (
@@ -263,6 +331,33 @@ export function AuthCallbackPage() {
           <EnterpriseSpinner size="lg" label="Finishing sign-in" />
           <p className="text-sm font-semibold text-muted-foreground">Finishing sign-in…</p>
           <p className="max-w-xs text-xs text-muted-foreground">Please wait while we secure your session.</p>
+        </div>
+      ) : null}
+
+      {state === "provisioning_failed" ? (
+        <div className="mt-8 max-w-sm rounded-2xl border border-amber-200 bg-card p-5 text-center shadow-sm">
+          <p className="text-sm font-bold text-foreground">Your shop is not set up yet</p>
+          <p className="mt-2 text-sm text-muted-foreground">{errorMessage ?? PROVISION_FAILED_MESSAGE}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Your account is safe and nothing was created twice. Trying again continues from where
+            it stopped.
+          </p>
+          <button
+            type="button"
+            disabled={retrying}
+            onClick={handleRetryProvisioning}
+            className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-70"
+          >
+            {retrying ? "Setting up your shop…" : "Try again"}
+          </button>
+          <button
+            type="button"
+            disabled={signingOut}
+            onClick={handleBackToLogin}
+            className="mt-2 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-border px-5 text-sm font-black text-foreground disabled:opacity-70"
+          >
+            {signingOut ? "Signing out…" : "Back to sign in"}
+          </button>
         </div>
       ) : null}
 

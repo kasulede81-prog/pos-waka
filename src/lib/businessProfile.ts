@@ -144,31 +144,85 @@ export type PrimaryShopLocationSnapshot = {
   longitude: number | null;
 };
 
-/** User-facing message for save_owner_business_profile_bundle errors. */
+/**
+ * User-facing message for save_owner_business_profile_bundle errors.
+ *
+ * EVERY code the server can return has a sentence here, and an unrecognised one gets a generic
+ * sentence rather than being echoed. A merchant must never be shown `not_authorized_for_workspace`
+ * or `profiles_phone_e164` — those are a database's words, not an instruction anyone can act on.
+ * The raw value still reaches monitoring through the caller's `captureAppException`, so nothing
+ * is lost for diagnosis; it just does not reach the person trying to open their shop.
+ */
 export function messageForProfileSaveError(codeOrMessage: string, lang: Language = "en"): string {
-  const raw = codeOrMessage.toLowerCase();
+  // Defensive: this runs INSIDE a catch block, so throwing here would replace the real failure
+  // with a confusing one of its own.
+  const raw = String(codeOrMessage ?? "").toLowerCase();
+  const lg = lang === "lg";
   if (raw.includes("phone_in_use") || raw.includes("profiles_phone_e164")) {
-    return lang === "lg"
+    return lg
       ? "Ennamba eno esangiddwa ku akawunti endala. Kebera oba wewandiise oba tuukirira support."
       : "This phone number is already on another Waka account. Check the number or contact support.";
   }
   if (raw.includes("profile_locked")) {
-    return lang === "lg"
+    return lg
       ? "Ebikwata ku dduuka tebikyusibwa. Tuukirira Waka support okukyusa."
       : "Shop details are locked. Contact Waka support to request changes.";
   }
   if (raw.includes("district_required")) {
-    return lang === "lg" ? "Londa ssaza." : "Choose a district before saving.";
+    return lg ? "Londa ssaza." : "Choose a district before saving.";
   }
   if (raw.includes("invalid_phone")) {
-    return lang === "lg" ? "Ennamba ya Uganda si ntuufu." : "Enter a valid Uganda mobile number.";
+    return lg ? "Ennamba ya Uganda si ntuufu." : "Enter a valid Uganda mobile number.";
   }
   if (raw.includes("shop_already_has_owner")) {
-    return lang === "lg"
+    return lg
       ? "Tewali kyongerwako — dduuka lino lirina nannyini waakyo."
       : "Could not save — your shop owner account is already set up.";
   }
-  return codeOrMessage;
+  if (raw.includes("invalid_business_type")) {
+    return lg
+      ? "Ekika ky'ebizineesi tekitikkirizibwa. Londa ekika ekirala."
+      : "That business type is not supported. Choose another one.";
+  }
+  // The session is authenticated but is not this workspace's owner — most often a Loyalty member,
+  // or someone who reached the owner wizard without ever declaring merchant intent.
+  if (raw.includes("not_authorized") || raw.includes("forbidden")) {
+    return lg
+      ? "Akawunti eno teri mu kukola bizineesi. Ddayo oyingire ng'omukyala wa dduuka oba tuukirira support."
+      : "This account is not set up to run a shop. Sign in with your shop owner account, or contact support.";
+  }
+  // Google (and any OAuth) identity whose email the server has not accepted yet.
+  if (raw.includes("email_not_verified") || raw.includes("email_verified")) {
+    return lg
+      ? "Tukakasa email yo. Ddayo oyingire, oba kkakasa email yo olyoke oddemu."
+      : "We could not confirm your email yet. Verify your email, then try again.";
+  }
+  // No shop exists for this session YET: the workspace has not been provisioned. This is the
+  // "provisioning was interrupted" case, so the message points at the action that fixes it.
+  if (raw.includes("no_shop")) {
+    return lg
+      ? "Tewannabawo dduuka ku akawunti eno. Ddayo oyingire olyoke oddemu — tujja kukola dduuka lyo."
+      : "Your shop has not been created yet. Sign out, sign in again, then finish this step.";
+  }
+  if (raw.includes("not_authenticated") || raw.includes("unauthorized") || raw.includes("jwt")) {
+    return lg
+      ? "Sessi yo egudde. Ddayo oyingire olyoke oddemu."
+      : "Your session has expired. Sign in again to finish setting up.";
+  }
+  if (raw.includes("offline") || raw.includes("network") || raw.includes("failed to fetch")) {
+    return lg
+      ? "Tetusobodde kutuuka ku mukutu. Kebera internet yo olyoke oddemu."
+      : "We could not reach Waka. Check your connection and try again.";
+  }
+  if (raw.includes("save_failed") || raw.includes("unavailable") || raw.includes("timeout")) {
+    return lg
+      ? "Tetunasobodde kutereka bikwata ku dduuka lyo. Gezaako nate."
+      : "We could not save your shop details. Please try again.";
+  }
+  // Unknown code: say something true and actionable, and do not echo the machine's word for it.
+  return lg
+    ? "Tetunasobodde kutereka bikwata ku dduuka lyo. Gezaako nate, oba tuukirira support."
+    : "We could not save your shop details. Please try again, or contact support.";
 }
 
 /** After cloud profile save: sync auth email, cache onboarding complete, update local prefs. */
