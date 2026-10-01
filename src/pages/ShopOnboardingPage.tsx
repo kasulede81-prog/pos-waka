@@ -5,7 +5,7 @@ import type { BusinessType, Language, ShopSellingStyle } from "../types";
 import { BusinessBuilderShell } from "../components/businessBuilder/BusinessBuilderShell";
 import { BuilderBusinessTypeArt } from "../components/businessBuilder/BuilderBusinessTypeArt";
 import { BuilderSellingStyleArt } from "../components/businessBuilder/BuilderSellingStyleArt";
-import { BuilderCard, BuilderPrimaryButton } from "../components/businessBuilder/BuilderField";
+import { BuilderCard, BuilderField, BuilderPrimaryButton } from "../components/businessBuilder/BuilderField";
 import { BuilderGrandOpening } from "../components/businessBuilder/BuilderGrandOpening";
 import { useBusinessBuilder } from "../context/BusinessBuilderContext";
 import { onboardingUnlocks } from "../lib/businessBuilder/businessSceneState";
@@ -31,6 +31,10 @@ import { getDevicePosition, DeviceLocationRequestError } from "../lib/deviceLoca
 import { inferProductGuess } from "../lib/pharmacyUx";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 import { normalizeUgPhoneE164, loadRegistrationProfileFromAuth, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
+import {
+  onboardingContactProblem,
+  resolveOnboardingPhone as resolveOnboardingPhoneValue,
+} from "../lib/onboardingContact";
 import { useSubscription } from "../context/SubscriptionContext";
 import { supabase } from "../lib/supabase";
 import { useBusinessTypeVisibility } from "../hooks/useBusinessTypeVisibility";
@@ -42,9 +46,6 @@ import {
 type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () => Promise<void> };
 
 type Step = "welcome" | "business" | "hospitality_style" | "selling" | "location" | "products";
-
-const fieldClass =
-  "mt-1.5 w-full min-h-[48px] rounded-2xl border border-border px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
 
 function funnelStepFor(step: Step): BuilderFunnelStep {
   if (step === "welcome" || step === "business" || step === "hospitality_style") return "business";
@@ -104,7 +105,21 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const [gpsSkipped, setGpsSkipped] = useState(true);
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
   const [districtId, setDistrictId] = useState("");
+  /**
+   * The number this account arrived with (signup metadata or the cloud shop row). It is a SEED,
+   * never edited: it still answers "did this merchant give us contact details at signup?", which
+   * is what decides whether the district is shown read-only.
+   */
   const [phoneFallback, setPhoneFallback] = useState("");
+  /** What is in the visible field right now. Seeded from `phoneFallback`, then owned by the merchant. */
+  const [phoneInput, setPhoneInput] = useState("");
+  /**
+   * Field-level validation. The step validates a phone number and a district, so the failure has
+   * to appear beside the control it is about — a merchant must never be told "enter a valid
+   * number" and have to hunt for the field, or worse, find that there is none.
+   */
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [districtError, setDistrictError] = useState<string | null>(null);
   const [productTally, setProductTally] = useState(0);
   const [showGrandOpening, setShowGrandOpening] = useState(false);
 
@@ -155,7 +170,10 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             setDistrictId(profile.districtId);
             setRegistrationDistrictId(profile.districtId);
           }
-          if (profile.phoneE164) setPhoneFallback(profile.phoneE164);
+          if (profile.phoneE164) {
+            setPhoneFallback(profile.phoneE164);
+            setPhoneInput((prev) => prev || profile.phoneE164 || "");
+          }
           if (profile.shopDisplayName) {
             setStep("business");
             setSkippedWelcome(true);
@@ -169,7 +187,10 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
 
   useEffect(() => {
     const fromPrefs = preferences.shopPhoneE164?.trim() ?? "";
-    if (fromPrefs && !phoneFallback) setPhoneFallback(fromPrefs);
+    if (!fromPrefs) return;
+    if (!phoneFallback) setPhoneFallback(fromPrefs);
+    // Prefill the visible field, but never overwrite a number the merchant has already typed.
+    setPhoneInput((prev) => prev || fromPrefs);
   }, [preferences.shopPhoneE164, phoneFallback]);
 
   useEffect(() => {
@@ -257,20 +278,18 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   ]);
 
   const resolveOnboardingPhone = async (): Promise<string | null> => {
-    const candidates = [
-      phoneFallback,
-      preferences.shopPhoneE164 ?? "",
-    ];
+    let fromAuthMetadata = "";
     if (supabase) {
       const { data } = await supabase.auth.getUser();
       const meta = data.user?.user_metadata as Record<string, unknown> | undefined;
-      candidates.push(String(meta?.phone_e164 ?? meta?.phone ?? ""));
+      fromAuthMetadata = String(meta?.phone_e164 ?? meta?.phone ?? "");
     }
-    for (const raw of candidates) {
-      const ph = normalizeUgPhoneE164(raw);
-      if (ph) return ph;
-    }
-    return null;
+    return resolveOnboardingPhoneValue({
+      typed: phoneInput,
+      seeded: phoneFallback,
+      fromLocalPrefs: preferences.shopPhoneE164 ?? "",
+      fromAuthMetadata,
+    });
   };
 
   const advanceAfterLocation = async () => {
@@ -281,16 +300,21 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const finishCore = async (opts: { gpsSkipped: boolean; lat?: number; lng?: number }) => {
     setBusy(true);
     setErr(null);
+    setPhoneError(null);
+    setDistrictError(null);
     try {
       const ph = await resolveOnboardingPhone();
-      const requiresCloudPhone = authMode !== "local";
-      if (requiresCloudPhone && !ph) {
-        setErr(t(lang, "registerPhoneInvalid"));
-        setBusy(false);
-        return false;
-      }
-      if (!districtId) {
-        setErr(t(lang, "businessProfileDistrictRequired"));
+      // In local mode there is no cloud contract to satisfy and no server to refuse the save, so
+      // the contact details are not required of the merchant either.
+      const problem =
+        authMode === "local"
+          ? null
+          : onboardingContactProblem({ phoneE164: ph, phoneRaw: phoneInput, districtId });
+      if (problem) {
+        // Beside the field it is about, never in the step's general error slot — a merchant must
+        // never be told "enter a valid number" and have to hunt for the control that wants it.
+        if (problem.field === "phone") setPhoneError(t(lang, problem.messageKey));
+        else setDistrictError(t(lang, problem.messageKey));
         setBusy(false);
         return false;
       }
@@ -572,27 +596,54 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             <p className="text-sm font-medium text-muted-foreground">
               {contactFromSignup ? t(lang, "onboardLocGpsOnlySub") : t(lang, "onboardLocSub")}
             </p>
+            {/*
+              THE PHONE FIELD IS REQUIRED AND WAS NEVER COLLECTED HERE. `save_owner_business_profile_bundle`
+              refuses any save whose phone is not a valid Uganda mobile in +256 form, and this step
+              used to enforce that rule while rendering no input to satisfy it. A Google sign-up
+              carries no phone in its metadata, so the merchant was told to enter a valid number on a
+              screen that had nowhere to type one — with "Skip for now" as the only way forward, which
+              ran the same check and failed the same way. Same field, same rules, same place as
+              `/register` already asks for it.
+            */}
+            <BuilderField
+              label={`${t(lang, "registerPhoneLabel")} *`}
+              value={phoneInput}
+              onChange={(e) => {
+                setPhoneInput(e.target.value);
+                setPhoneError(null);
+              }}
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="07XXXXXXXX"
+              required
+              complete={Boolean(normalizeUgPhoneE164(phoneInput))}
+              error={phoneError}
+            />
             {contactFromSignup && districtLabel ? (
               <p className="rounded-xl bg-muted px-3 py-2 text-sm font-semibold text-foreground">
                 {t(lang, "registerDistrictLabel")}: {districtLabel}
               </p>
             ) : (
-              <>
-                <label className="block text-sm font-bold text-foreground">{t(lang, "registerDistrictLabel")}</label>
-                <select
-                  value={districtId}
-                  onChange={(e) => setDistrictId(e.target.value)}
-                  className={fieldClass}
-                  required
-                >
-                  <option value="">—</option>
-                  {districts.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </>
+              <BuilderField
+                as="select"
+                label={`${t(lang, "registerDistrictLabel")} *`}
+                value={districtId}
+                onChange={(e) => {
+                  setDistrictId(e.target.value);
+                  setDistrictError(null);
+                }}
+                required
+                complete={Boolean(districtId)}
+                error={districtError}
+              >
+                <option value="">—</option>
+                {districts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </BuilderField>
             )}
             {err ? <p className="text-sm font-medium text-red-600">{err}</p> : null}
             {!gpsSkipped && lat != null ? (
@@ -603,6 +654,16 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             <BuilderPrimaryButton type="button" disabled={busy} onClick={() => void captureLocation()}>
               {t(lang, "onboardLocUse")}
             </BuilderPrimaryButton>
+            {/*
+              GPS IS THE ONLY OPTIONAL THING HERE, AND THIS BUTTON SAYS SO. It used to read
+              "Skip for now", which promised an exit the step then refused: the district and the
+              mobile number are required by `save_owner_business_profile_bundle`, so "skip" was
+              rejected by the same validation it appeared to bypass, and the merchant was left
+              believing the whole profile step could be waved through.
+              It clears the GPS pin and nothing else, then takes the SAME validated path as
+              "Continue" below — `advanceAfterLocation` → `finishCore`. There is no exit from this
+              step that does not check the required fields.
+            */}
             <button
               type="button"
               className="min-h-[48px] w-full rounded-2xl border-2 border-border bg-card text-base font-black text-foreground"
@@ -614,7 +675,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                 void advanceAfterLocation();
               }}
             >
-              {t(lang, "onboardLocSkip")}
+              {t(lang, "onboardLocContinueWithoutGps")}
             </button>
             {!gpsSkipped && lat != null ? (
               <BuilderPrimaryButton type="button" disabled={busy} onClick={() => void advanceAfterLocation()}>

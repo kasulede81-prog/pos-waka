@@ -187,10 +187,17 @@ const en: Dict = {
   onboardSell_mixedHint: "Big packs and small pieces — Waka tracks both",
   onboardSellMixedNote: "Great — we'll help with crates, sacks, and piece sales.",
   onboardLocTitle: "Add your shop location?",
-  onboardLocSub: "Optional — helps field support find you.",
+  onboardLocSub:
+    "Your district and mobile number are needed to finish setting up your shop. GPS is optional.",
   onboardLocGpsOnlySub: "Your district and mobile number are already saved. GPS is optional.",
   onboardLocUse: "Use my location",
-  onboardLocSkip: "Skip for now",
+  /**
+   * NOT "Skip for now". GPS is the only optional thing on this step — the district and the mobile
+   * number are required by the save contract — so a button that reads as "skip" promises an exit
+   * the validation then refuses. This one names exactly what is being skipped.
+   */
+  onboardLocContinueWithoutGps: "Continue without GPS",
+  onboardLocPhoneRequired: "Enter your mobile number so we can reach you about this shop.",
   onboardStaffTitle: "Add workers now?",
   onboardStaffSub: "You can add workers later under Back office.",
   onboardStaffSkip: "Skip for now",
