@@ -24,6 +24,7 @@ import {
   authMembershipRole,
 } from "../../lib/sessionActor";
 import { resolveTerminalIdentityView } from "../../lib/terminalIdentity";
+import { displayWakaName } from "../../lib/nameReview";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { SessionHydrationProvider } from "../../context/SessionHydrationContext";
 
@@ -238,8 +239,13 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   }, [actor]);
 
   const jwtOperatorName = useMemo(() => {
-    const meta = user?.user_metadata as Record<string, string> | undefined;
-    return meta?.full_name?.trim() || user?.email?.trim() || email?.trim() || null;
+    // The confirmed WAKA name is the authority; the provider's suggestion is only the fallback for
+    // someone who has not confirmed one. Reading `full_name` alone let a Google rename change the
+    // operator's name here without any WAKA write. No extra request — `user` is already loaded.
+    return displayWakaName(
+      user?.user_metadata as Record<string, unknown> | undefined,
+      user?.email?.trim() || email?.trim(),
+    );
   }, [user, email]);
 
   const terminalIdentity = useMemo(

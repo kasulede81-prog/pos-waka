@@ -508,7 +508,7 @@ function AppRoutes() {
               gate that admits only `merchant` can never allow. Declaring intent there writes
               metadata only (nothing is provisioned); the gate then admits the session to
               /onboarding and the existing guarded bootstrap does the rest. */}
-          <Route path="start-business" element={<StartBusinessPage />} />
+          <Route path="start-business" element={<StartBusinessPage lang={lang} />} />
           {/* Routes a known session to its surface. `unknown` is sent to /welcome rather than
               being provisioned a shop; `member` to /member. Merchants pass straight through. */}
           <Route element={<KnownIdentityGate />}>

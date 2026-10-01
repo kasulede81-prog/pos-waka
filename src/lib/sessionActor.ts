@@ -2,6 +2,7 @@ import { hasSupabaseConfig } from "./supabase";
 import type { Permission, ShopPreferences, UserRole } from "../types";
 import { canUseDevRoleSimulator, resolveAuthRole } from "./permissions";
 import { resolveStaffPermissions } from "./enterpriseRoles";
+import { displayWakaName } from "./nameReview";
 import type { User } from "@supabase/supabase-js";
 
 export type SessionActor = {
@@ -191,11 +192,17 @@ export function resolveSessionActor(params: {
     params.user?.id ?? (params.email ? `local:${params.email.trim().toLowerCase()}` : "local:anonymous");
   const userId = activeStaff ? `staff:${activeStaff.id}` : baseUserId;
 
+  // DISPLAY AUTHORITY. The confirmed WAKA name wins; the provider's suggestion is only a fallback
+  // for someone who has not confirmed one. Reading `user_metadata.full_name` directly — as this
+  // did — meant a rename at Google changed the name shown throughout WAKA with no WAKA write at
+  // all. `displayWakaName` reads the confirmed pair first, and needs no network call: the metadata
+  // is already on the session this function is handed.
   const displayName =
     activeStaff?.name ||
-    (params.user?.user_metadata as Record<string, string> | undefined)?.full_name?.trim() ||
-    params.user?.email ||
-    params.email ||
+    displayWakaName(
+      params.user?.user_metadata as Record<string, unknown> | undefined,
+      params.user?.email ?? params.email,
+    ) ||
     undefined;
 
   return {

@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import type { BusinessType } from "../types";
 import { normalizeUgPhoneE164 } from "./businessProfile";
+import { provisionableWakaName } from "./nameReview";
 import { resolvePrimaryOrganizationForUser } from "./fetchShopSubscription";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "./staffInviteOnboarding";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
@@ -89,7 +90,10 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
     String(meta?.shop_name ?? "").trim() ||
     orgFromMeta;
   const businessType = (String(meta?.business_type ?? "kiosk_duka") || "kiosk_duka") as BusinessType;
-  const fullName = String(meta?.full_name ?? "").trim();
+  // A name only if the person CONFIRMED one. `meta.full_name` is a value Google owns and can change
+  // on any later sign-in, and the bootstrap's upsert lets any non-empty incoming name win — so
+  // passing it here is how a merchant's chosen WAKA name gets silently replaced.
+  const fullName = provisionableWakaName(meta) ?? "";
   const phoneRaw = String(meta?.phone_e164 ?? meta?.phone ?? "").trim();
   const phoneE164 = normalizeUgPhoneE164(phoneRaw) ?? undefined;
   const districtId =

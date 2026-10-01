@@ -7,6 +7,7 @@ import { usePosStore } from "../store/usePosStore";
 import { clearPendingRegistrationProfile } from "./registrationProfileCache";
 import { getActiveShopId, isValidShopId } from "../offline/shopScope";
 import { blocksOwnerBootstrap, resolveAccountIdentity } from "./memberIdentity";
+import { normalizeNamePart, provisionableWakaName } from "./nameReview";
 
 /**
  * Phase 2C — the identity/bootstrap authority's veto, for the two callers below that create a
@@ -77,9 +78,11 @@ export async function saveOwnerBusinessProfileBundleRpc(
     const { data: authData } = await sb.auth.getUser();
     if (authData?.user) {
       const meta = (authData.user.user_metadata ?? {}) as Record<string, unknown>;
-      const fullName =
-        String(meta.full_name ?? meta.name ?? "")
-          .trim() || authData.user.email?.split("@")[0] || "Owner";
+      // Confirmed WAKA name only. This path self-heals a missing workspace, and it used to seed the
+      // profile with Google's name (or the e-mail prefix, or the literal "Owner") — none of which
+      // is a name the person chose. When nothing is confirmed we pass nothing, and the wizard's
+      // name review has already written the profile by the time a merchant reaches it.
+      const fullName = provisionableWakaName(meta);
       const hasGps =
         args.latitude != null &&
         args.longitude != null &&
@@ -548,12 +551,19 @@ export async function saveBusinessProfileToCloud(input: BusinessProfileInput, al
     }
   }
 
-  const profilePatch = {
+  /**
+   * NAME INTEGRITY. This used to be `full_name: input.ownerName?.trim() || null` in an upsert, so
+   * any caller that simply did not pass an owner name — `BusinessTypeOnboarding` is one — wrote
+   * NULL over whatever name the profile already held. An omitted name means "nothing to say about
+   * the name", never "erase it", so the key is left out entirely and the stored value stands.
+   */
+  const profilePatch: Record<string, unknown> = {
     id: user.id,
-    full_name: input.ownerName?.trim() || null,
     business_name: input.shopName.trim() || null,
     phone_e164: safePhone,
   };
+  const ownerName = normalizeNamePart(input.ownerName);
+  if (ownerName) profilePatch.full_name = ownerName;
   const { error: profileErr } = await supabase.from("profiles").upsert(profilePatch);
   if (profileErr) throw profileErr;
 }

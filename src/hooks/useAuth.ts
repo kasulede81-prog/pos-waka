@@ -17,6 +17,7 @@ import { appendPilotEvent } from "../lib/pilotEventLog";
 import { setCrashReportingUser } from "../lib/crashReporting";
 import type { BusinessType, UserRole } from "../types";
 import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
+import { provisionableWakaName } from "../lib/nameReview";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
 import { hydrateStaffAuthWorkspace, isNonOwnerShopMemberRole } from "../lib/staffAuthHydrate";
 import { fetchShopMemberRoleForUser } from "../lib/shopMemberRole";
@@ -361,7 +362,10 @@ export function useAuth() {
             String(meta?.shop_name ?? "").trim() ||
             orgFromMeta;
           const businessType = (String(meta?.business_type ?? "kiosk_duka") || "kiosk_duka") as BusinessType;
-          const fullName = String(meta?.full_name ?? "").trim();
+          // Confirmed WAKA name only — never the raw provider value. See `nameReview`. The bootstrap
+          // upsert replaces any existing name with a non-empty incoming one, so a Google name passed
+          // here would overwrite the name its owner had already confirmed.
+          const fullName = provisionableWakaName(meta) ?? "";
           const phoneRaw = String(meta?.phone_e164 ?? meta?.phone ?? "").trim();
           const phoneE164 = normalizeUgPhoneE164(phoneRaw) ?? undefined;
           const districtId =

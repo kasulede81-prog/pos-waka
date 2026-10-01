@@ -92,7 +92,24 @@ export function buildMerchantSignupMetadata(
     pos_role: "owner",
   };
   if (input.businessType) meta.business_type = input.businessType;
-  if (input.fullName?.trim()) meta.full_name = input.fullName.trim();
+  if (input.fullName?.trim()) {
+    meta.full_name = input.fullName.trim();
+    /**
+     * `/register` asks for the person's name in a field they fill in themselves, so a name written
+     * here is ALREADY the person's own choice — the same thing the Google review step exists to
+     * obtain. Marking it confirmed there means the email/password flow keeps its current behaviour
+     * exactly (no new screen, no re-asking) while still giving every merchant path a confirmed name
+     * for the provisioning RPCs to carry into `profiles.full_name`.
+     *
+     * Both keys are written, exactly as `confirmWakaName` writes them for the Google path.
+     * `waka_full_name` is the copy a provider can never touch: `full_name` is needed too, because
+     * every existing reader still looks at it, but it is the former that `nameReview` treats as
+     * authoritative. Writing only the marker would leave nothing confirmed to read, and the
+     * bootstrap would then provision this merchant with no name at all.
+     */
+    meta.waka_full_name = input.fullName.trim();
+    meta.waka_name_confirmed_at = new Date().toISOString();
+  }
   if (input.phoneE164) meta.phone_e164 = input.phoneE164;
   if (input.districtId?.trim()) meta.district_id = input.districtId.trim();
   if (input.gpsSkipped) meta.gps_skipped = true;

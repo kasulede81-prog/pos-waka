@@ -1,6 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace, type BootstrapArgs } from "./workspaceBootstrap";
+import { provisionableWakaName } from "./nameReview";
 
 export type WorkspaceHealth = {
   ok: boolean;
@@ -39,7 +40,10 @@ export async function repairOwnerWorkspaceIfNeeded(
   const { data, error } = await supabase.rpc("repair_owner_workspace", {
     p_org_name: orgName,
     p_business_type: String(meta.business_type ?? "kiosk_duka"),
-    p_full_name: String(meta.full_name ?? "").trim() || null,
+    // Confirmed WAKA name only. The repair path runs on every login whose workspace is not healthy,
+    // and it reaches the same bootstrap upsert where a non-empty incoming name wins — so passing
+    // Google's current name here is precisely how a merchant's chosen name gets replaced.
+    p_full_name: provisionableWakaName(meta) ?? null,
     p_email: user.email?.trim().toLowerCase() ?? null,
   });
 
@@ -54,7 +58,7 @@ export async function repairOwnerWorkspaceIfNeeded(
         organizationName: orgName,
         shopDisplayName: String(meta.shop_display_name ?? orgName).trim() || orgName,
         businessType: (String(meta.business_type ?? "kiosk_duka") || "kiosk_duka") as BootstrapArgs["businessType"],
-        fullName: String(meta.full_name ?? "").trim() || undefined,
+        fullName: provisionableWakaName(meta),
       });
     } catch (e) {
       console.error("[waka-auth] repair fallback bootstrap failed", e);

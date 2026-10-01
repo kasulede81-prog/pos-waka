@@ -23,6 +23,7 @@ import {
 import { fetchDistricts, type DistrictRow } from "../../lib/shopDistricts";
 import { DeviceLocationRequestError, getDevicePosition } from "../../lib/deviceLocation";
 import { SHOP_CURRENCY } from "../../lib/shopCurrency";
+import { displayWakaName } from "../../lib/nameReview";
 
 type Props = {
   lang: Language;
@@ -84,9 +85,14 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
     return e.includes("@") && !e.endsWith("@login.waka.ug") ? e : "";
   });
 
+  // The confirmed WAKA name, then the provider's suggestion, then the e-mail prefix. Used for
+  // display and for the local-mode save only — the cloud path writes `profiles.full_name` through
+  // the bundle RPC, which fills it only when empty.
   const ownerDisplayName =
-    String((user?.user_metadata as Record<string, unknown> | undefined)?.full_name ?? "").trim() ||
-    (email ? email.split("@")[0] : "");
+    displayWakaName(
+      user?.user_metadata as Record<string, unknown> | undefined,
+      email ? email.split("@")[0] : null,
+    ) ?? "";
 
   const supportWhatsApp = wakaSupportWhatsAppUrl(
     "Hello Waka, I need to update my shop business profile (name, phone, or location).",

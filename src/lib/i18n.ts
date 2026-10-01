@@ -198,6 +198,17 @@ const en: Dict = {
    */
   onboardLocContinueWithoutGps: "Continue without GPS",
   onboardLocPhoneRequired: "Enter your mobile number so we can reach you about this shop.",
+  // The Google name review. Google's name is a SUGGESTION; this step is where the person makes it
+  // their own. The copy says so, because "confirm" is the whole point of the screen.
+  nameReviewTitle: "Let's confirm your name",
+  nameReviewSub: "This is the name that will appear on your WAKA account.",
+  nameReviewFromGoogleHint: "We filled this in from your Google account. Change anything you like.",
+  nameReviewFirstNameLabel: "First name",
+  nameReviewLastNameLabel: "Last name",
+  nameReviewFirstNameRequired: "Enter your first name.",
+  nameReviewLastNameRequired: "Enter your last name.",
+  nameReviewFirstNameTooLong: "That first name is too long.",
+  nameReviewLastNameTooLong: "That last name is too long.",
   onboardStaffTitle: "Add workers now?",
   onboardStaffSub: "You can add workers later under Back office.",
   onboardStaffSkip: "Skip for now",
