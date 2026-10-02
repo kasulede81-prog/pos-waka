@@ -3,7 +3,7 @@ import { publicAssetUrl } from "../../lib/publicAssetUrl";
 import type { LoyaltyCardPresentation } from "../../lib/loyalty/loyaltyCardDesign";
 
 /**
- * WAKA Loyalty membership card — the physical/PVC presentation.
+ * DKASU Loyalty membership card — the physical/PVC presentation.
  *
  * This is a LOYALTY card, not a payment instrument. It deliberately borrows the *proportions* of a
  * bank card (fixed 1.586:1 aspect, card-number grouping, a VALID THRU date and a 3-digit field)
@@ -37,7 +37,7 @@ type Props = {
   balancePoints: number;
   /** Resolved via `resolveLoyaltyPresentation(design)` — merchant theming flows through here. */
   theme: LoyaltyCardPresentation;
-  /** Data URL of the REAL loyalty QR (`WAKA-LOYALTY:<qr_token>`). */
+  /** Data URL of the REAL loyalty QR (`DKASU-LOYALTY:<qr_token>`). */
   qrDataUrl?: string | null;
   /** Optional merchant program name; shown small in the footer when present. */
   programName?: string | null;

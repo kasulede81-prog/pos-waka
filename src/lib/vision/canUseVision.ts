@@ -11,7 +11,7 @@ import {
 
 export type VisionAuthMode = "cloud" | "local_bypass";
 
-/** UI / route status derived from WAKA subscription + Admin kill-switch. */
+/** UI / route status derived from DKASU subscription + Admin kill-switch. */
 export type VisionAccessStatus =
   | "included"
   | "trial"
@@ -23,16 +23,16 @@ export type VisionAccessStatus =
   | "no_permission";
 
 export type VisionAccess = {
-  /** Vision software available (paid/trial WAKA, not admin-disabled). */
+  /** Vision software available (paid/trial DKASU, not admin-disabled). */
   enabled: boolean;
   status: VisionAccessStatus;
-  /** WAKA plan driving capacity. */
+  /** DKASU plan driving capacity. */
   planCode: SubscriptionPlanCode;
   /** Human label for Settings / Admin. */
   planLabel: string;
-  /** Included with the WAKA subscription (not a separate SKU). */
+  /** Included with the DKASU subscription (not a separate SKU). */
   includedWithSubscription: boolean;
-  /** Active WAKA trial (Vision follows the same trial). */
+  /** Active DKASU trial (Vision follows the same trial). */
   onWakaTrial: boolean;
   trialDaysRemaining: number | null;
   /** Paid or trial subscription currently active. */
@@ -199,7 +199,7 @@ export function resolveVisionAccess(input: {
     });
   }
 
-  // Paid / trial WAKA → full core Vision; capacity only differs by plan / Admin override.
+  // Paid / trial DKASU → full core Vision; capacity only differs by plan / Admin override.
   return base({
     enabled: true,
     status: onWakaTrial ? "trial" : "included",
@@ -251,7 +251,7 @@ export function wouldExceedVisionDvrLimit(
   return currentCount + adding > access.maxDvrs;
 }
 
-/** @deprecated Use resolveVisionAccess with WAKA subscription snapshot. */
+/** @deprecated Use resolveVisionAccess with DKASU subscription snapshot. */
 export function canUseVisionFromSettings(
   settings: ShopVisionSettings | null | undefined,
   opts?: { shopId?: string | null; authMode?: VisionAuthMode; hasSettingsView?: boolean },

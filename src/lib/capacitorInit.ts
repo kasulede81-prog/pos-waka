@@ -9,7 +9,7 @@ import { registerNativePrintDeepLinkHandler } from "./webPrintHandoff";
  */
 export async function initCapacitorShell(): Promise<void> {
   if (!Capacitor.isNativePlatform()) {
-    // WAKA-04: the rest of this shell is native-only, but web/Electron still
+    // DKASU-04: the rest of this shell is native-only, but web/Electron still
     // need online tracking so reconnect can flip `getDeviceOnline()`.
     await initDeviceOnlineTracking();
     return;

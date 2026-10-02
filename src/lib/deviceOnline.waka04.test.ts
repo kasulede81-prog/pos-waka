@@ -1,5 +1,5 @@
 /**
- * WAKA-04 — web/Electron reconnect must update `deviceOnline` and fire the
+ * DKASU-04 — web/Electron reconnect must update `deviceOnline` and fire the
  * same events the sync / recovery paths already listen for.
  *
  * The default Node environment has no `window`. This file installs a minimal

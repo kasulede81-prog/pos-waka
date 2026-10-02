@@ -1,5 +1,5 @@
 /**
- * PHASE 0A — WAKA-05 remaining hole: bootstrap / full-sync cursors.
+ * PHASE 0A — DKASU-05 remaining hole: bootstrap / full-sync cursors.
  *
  * Incremental pullers already settle via `serverCheckpoint`. Full pull still
  * called `markBootstrapSyncComplete()` with no argument, which defaulted to

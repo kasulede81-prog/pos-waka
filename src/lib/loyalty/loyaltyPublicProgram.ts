@@ -1,5 +1,5 @@
 /**
- * Public WAKA Loyalty Program code client (WPL2026001).
+ * Public DKASU Loyalty Program code client (WPL2026001).
  *
  * Uses the `loyalty-public-program` Edge Function — the same public architecture as
  * `loyalty-public-enroll` and `loyalty-public-card`. There is deliberately NO direct

@@ -1,4 +1,4 @@
-# Waka POS — Pilot Deployment Checklist
+# DKASU POS — Pilot Deployment Checklist
 
 Use this checklist before and during a pilot rollout (5–20 shops).
 

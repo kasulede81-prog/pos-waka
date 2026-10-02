@@ -1,7 +1,7 @@
 /**
  * Where a scanned code goes (Phase 2).
  *
- * One rule, one place: a WAKA membership code is never a product. Every scan
+ * One rule, one place: a DKASU membership code is never a product. Every scan
  * entry point — the HID wedge, the camera, and later NFC — routes through this
  * so the precedence can never drift between them.
  */
@@ -16,7 +16,7 @@ export type ScannedCodeRoute =
   | { kind: "product"; code: string };
 
 export function routeScannedCode(code: string): ScannedCodeRoute {
-  // Member card first: a `WAKA-LOYALTY:` payload is never anything else.
+  // Member card first: a `DKASU-LOYALTY:` payload is never anything else.
   const token = decodeLoyaltyQrPayload(code);
   if (token) return { kind: "loyalty", token };
   // Then the merchant's program QR, which is a URL containing the code.

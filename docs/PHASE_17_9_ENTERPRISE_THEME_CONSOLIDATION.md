@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Phase 17.9 establishes a **single semantic design system** for Waka POS. Light and Dark mode share one CSS-variable source of truth. **530+ source files** were migrated via automated codemod plus targeted manual passes. Enterprise primitives, status badges, toasts, and production charts consume semantic tokens. **Tailwind `stone`/`slate`/`gray` palettes are remapped to CSS variables** so any remaining legacy class names still render correctly in both themes.
+Phase 17.9 establishes a **single semantic design system** for DKASU POS. Light and Dark mode share one CSS-variable source of truth. **530+ source files** were migrated via automated codemod plus targeted manual passes. Enterprise primitives, status badges, toasts, and production charts consume semantic tokens. **Tailwind `stone`/`slate`/`gray` palettes are remapped to CSS variables** so any remaining legacy class names still render correctly in both themes.
 
 **No product behavior, workflows, APIs, or layouts were changed.** Waka orange/cream branding is preserved via `--primary`, `--business`, and `--waka-*` brand primitives.
 

@@ -354,7 +354,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     () => ({
       lang,
       dateKey: reportDayKey,
-      shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+      shopName: preferences.shopDisplayName?.trim() || "DKASU POS",
       sales,
       products,
       returnRecords,
@@ -456,7 +456,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     if (showDailyExport) {
       ok = await printDailyReportPdf(dailyPdfInput);
     } else {
-      const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+      const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
       const model: ReportDocumentModel = {
         kind: "daily",
         lang,

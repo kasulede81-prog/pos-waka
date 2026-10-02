@@ -1,5 +1,5 @@
 /**
- * Confirming a WAKA name — the one write that turns a person's choice into their WAKA identity.
+ * Confirming a DKASU name — the one write that turns a person's choice into their DKASU identity.
  *
  * WHY THIS IS NOT IN `merchantIntent`. That module carries a documented and tested invariant: it
  * writes metadata and creates nothing — no profile, no organization, no shop, no RPC. Confirmation
@@ -29,7 +29,7 @@ export type ConfirmWakaNameResult =
   | { ok: false; error: "not_authenticated" | "invalid_name" | "offline" | "unavailable" };
 
 /**
- * Persist `fullName` as this person's confirmed WAKA name.
+ * Persist `fullName` as this person's confirmed DKASU name.
  *
  * Idempotent: confirming the same name twice writes the same values. Re-confirming a different name
  * is allowed — it is the person's own decision — and the marker is refreshed with it.
@@ -105,7 +105,7 @@ export async function confirmWakaName(input: { fullName: string }): Promise<Conf
   }
 }
 
-/** Has this account already confirmed a WAKA name? Reads the durable marker pair. */
+/** Has this account already confirmed a DKASU name? Reads the durable marker pair. */
 export function hasConfirmedWakaName(
   metadata: Record<string, unknown> | null | undefined,
 ): boolean {

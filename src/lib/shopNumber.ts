@@ -1,10 +1,10 @@
-/** Waka public shop number label (e.g. A001). */
+/** DKASU public shop number label (e.g. A001). */
 export function formatWakaShopNumber(shopNumber: string | null | undefined): string | null {
   const n = String(shopNumber ?? "").trim().toUpperCase();
   return n || null;
 }
 
-/** Load the signed-in owner's Waka shop number (A001, …) from Supabase. */
+/** Load the signed-in owner's DKASU shop number (A001, …) from Supabase. */
 export async function fetchMyShopNumber(): Promise<string | null> {
   const { hasSupabaseConfig, supabase } = await import("./supabase");
   if (!hasSupabaseConfig || !supabase) return null;

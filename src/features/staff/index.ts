@@ -1,5 +1,5 @@
 /**
- * WAKA Staff feature boundary (Phase 2).
+ * DKASU Staff feature boundary (Phase 2).
  *
  * Stable import surface — re-exports only. Prefer:
  *   import { … } from "../features/staff"

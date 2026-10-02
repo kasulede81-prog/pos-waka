@@ -92,7 +92,7 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
   const businessType = (String(meta?.business_type ?? "kiosk_duka") || "kiosk_duka") as BusinessType;
   // A name only if the person CONFIRMED one. `meta.full_name` is a value Google owns and can change
   // on any later sign-in, and the bootstrap's upsert lets any non-empty incoming name win — so
-  // passing it here is how a merchant's chosen WAKA name gets silently replaced.
+  // passing it here is how a merchant's chosen DKASU name gets silently replaced.
   const fullName = provisionableWakaName(meta) ?? "";
   const phoneRaw = String(meta?.phone_e164 ?? meta?.phone ?? "").trim();
   const phoneE164 = normalizeUgPhoneE164(phoneRaw) ?? undefined;

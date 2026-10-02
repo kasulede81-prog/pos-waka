@@ -150,7 +150,7 @@ describe("pharmacyPrescriptions", () => {
 });
 
 /**
- * WAKA POS — Pharmacy Correction Phase 1: partial-dispensing status derivation.
+ * DKASU POS — Pharmacy Correction Phase 1: partial-dispensing status derivation.
  *
  * INCIDENT: quantityDispensed was updated with Math.max(prior, thisVisit)
  * instead of accumulating, and the prescription was unconditionally stamped

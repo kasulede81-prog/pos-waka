@@ -24,7 +24,7 @@ type Props = {
   isAuthenticated: boolean;
 };
 
-/** Waka POS marketing home — 2026 premium landing page. */
+/** DKASU POS marketing home — 2026 premium landing page. */
 export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>

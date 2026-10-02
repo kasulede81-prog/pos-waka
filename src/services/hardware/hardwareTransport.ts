@@ -31,7 +31,7 @@ export type PrinterTransportKind =
   | "android-network";
 
 export type TransportSlot = {
-  /** WAKA has an implementation for this environment. */
+  /** DKASU has an implementation for this environment. */
   supported: boolean;
   /** The current runtime exposes the API (not the same as a working printer). */
   available: boolean;
@@ -70,7 +70,7 @@ export const WEB_BLUETOOTH_UNAVAILABLE_ERROR = "Bluetooth printing is not availa
 export const NETWORK_NEEDS_BRIDGE_ERROR = "Network printing is not available in this environment.";
 
 /**
- * USB thermal printing has no browser transport in WAKA: the WebUSB device API is
+ * USB thermal printing has no browser transport in DKASU: the WebUSB device API is
  * present in Chrome but nothing implements the ESC/POS job over it, so the transport
  * is deliberately never "ready" rather than failing at print time. The message tells
  * the operator what to do instead of implying a future fix.

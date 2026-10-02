@@ -1,11 +1,16 @@
 /**
- * Auth redirect configuration for Waka POS (Supabase + Google OAuth).
- * Production app URL: https://pos.waka.ug
+ * Auth redirect configuration for DKASU POS (Supabase + Google OAuth).
+ * Production app URL: https://pos.dkasu.com (WAKA origin 308s here and stays allowlisted).
  */
 
 import { Capacitor } from "@capacitor/core";
-import { WAKA_POS_URL } from "../config/company";
-import { loyaltyOrigin, productOriginForHostname } from "./productHost";
+import { DKASU_SITE_URL, WAKA_POS_URL } from "../config/company";
+import {
+  LOYALTY_PRODUCT_HOST,
+  POS_PRODUCT_HOST,
+  loyaltyOrigin,
+  productOriginForHostname,
+} from "./productHost";
 
 export const CANONICAL_APP_URL = WAKA_POS_URL.replace(/\/$/, "");
 
@@ -13,10 +18,11 @@ export const CANONICAL_APP_URL = WAKA_POS_URL.replace(/\/$/, "");
  * The origin a browser session must return to after email confirmation or OAuth.
  *
  * A known product host wins, so the redirect returns to the SAME product surface the user started
- * on: loyalty.waka.ug → loyalty.waka.ug, pos.waka.ug → pos.waka.ug. That return host is what
- * carries product intent through an OAuth round trip — see `productHost.ts`. Every other host
- * (localhost, LAN, Vercel preview, a future custom domain) keeps the previous `VITE_APP_URL` /
- * canonical behaviour exactly as it was.
+ * on: a loyalty host → loyalty.dkasu.com, a POS host → pos.dkasu.com (both WAKA generations still
+ * classify, and their return goes to the DKASU origin since the 2026-10-02 auth migration). That
+ * return origin is what carries product intent through an OAuth round trip — see `productHost.ts`.
+ * Every other host (localhost, LAN, Vercel preview, a future custom domain) keeps the previous
+ * `VITE_APP_URL` / canonical behaviour exactly as it was.
  */
 function productRedirectOrigin(): string | null {
   if (typeof window === "undefined") return null;
@@ -127,6 +133,35 @@ export function getAuthCallbackUrl(): string {
 }
 
 /**
+ * The scheme the Android/iOS shells register for OAuth return (`AndroidManifest.xml` intent-filter,
+ * `wakapos://callback`), and the URL the native Google flow now hands to Supabase as `redirect_to`.
+ *
+ * WHY A CUSTOM SCHEME AND NOT `https://localhost/auth/callback`. The https form is only ever
+ * delivered to the app if Android claims it, and every https filter in the manifest is
+ * `autoVerify="false"` with no `assetlinks.json` served anywhere — an unverified App Link, which
+ * Chrome does not auto-open. `localhost` on a phone is also the phone itself, where nothing
+ * listens. A custom scheme needs no verification: the OS routes it to the app by definition.
+ *
+ * It is already understood end to end — the manifest filter exists, and
+ * `normalizeAuthDeepLinkToAppPath` already maps `wakapos://callback` → `/auth/callback`.
+ *
+ * REQUIRES `wakapos://callback` in Supabase Auth → URL Configuration → Redirect URLs. Without it
+ * Supabase refuses the `redirect_to` and falls back to the Site URL, which the app cannot receive.
+ */
+export const NATIVE_OAUTH_REDIRECT_URL = "wakapos://callback";
+
+/**
+ * `redirect_to` for the NATIVE Google flow only.
+ *
+ * Deliberately separate from `getAuthCallbackUrl()`: that one still serves email confirmation,
+ * password recovery and localhost development, and changing it would move those too. Web Google
+ * never touches this — it uses the GIS popup and `signInWithIdToken`.
+ */
+export function getNativeGoogleOAuthRedirectUrl(): string {
+  return NATIVE_OAUTH_REDIRECT_URL;
+}
+
+/**
  * Email confirmation / resend links must use the public HTTPS URL so Gmail and mobile
  * mail clients can open them (and Android App Links can return to the native app).
  * Never use https://localhost in emails — it fails outside the Capacitor WebView.
@@ -160,7 +195,16 @@ export function getSupabaseProjectRef(): string | null {
 
 export function getGoogleOAuthJavaScriptOrigins(): string[] {
   // Both product surfaces run the same GIS popup flow, so both must be JavaScript origins.
-  const origins = new Set<string>([CANONICAL_APP_URL, loyaltyOrigin(), "https://waka.ug"]);
+  const origins = new Set<string>([
+    CANONICAL_APP_URL,
+    loyaltyOrigin(),
+    DKASU_SITE_URL,
+    // Legacy WAKA origins stay configured in Google Cloud for the migration window; removing them
+    // would break sign-in for anyone still on an old host or an open tab.
+    `https://${POS_PRODUCT_HOST}`,
+    `https://${LOYALTY_PRODUCT_HOST}`,
+    "https://waka.ug",
+  ]);
   if (import.meta.env.DEV) {
     origins.add("http://localhost:5173");
   }
@@ -177,13 +221,26 @@ export function getSupabaseAuthRedirectUrls(): string[] {
     `${CANONICAL_APP_URL}${AUTH_RECOVERY_PATH}`,
     `${CANONICAL_APP_URL}${AUTH_RECOVERY_LEGACY_PATH}`,
     // Phase 2C — the customer surface returns to its own origin. Required in Supabase before
-    // loyalty.waka.ug sign-in can complete; POS and native flows are unaffected.
+    // loyalty sign-in can complete; POS and native flows are unaffected.
     `${loyalty}/auth/callback`,
     `${loyalty}${AUTH_RECOVERY_PATH}`,
     `${loyalty}${AUTH_RECOVERY_LEGACY_PATH}`,
+    // Legacy WAKA origins — KEPT deliberately during the migration window: confirmation and
+    // recovery emails already sent still point here, and these hosts 308 to DKASU. Do not prune
+    // them from the Supabase allowlist until no live email can reference them.
+    `https://${POS_PRODUCT_HOST}/auth/callback`,
+    `https://${POS_PRODUCT_HOST}${AUTH_RECOVERY_PATH}`,
+    `https://${POS_PRODUCT_HOST}${AUTH_RECOVERY_LEGACY_PATH}`,
+    `https://${LOYALTY_PRODUCT_HOST}/auth/callback`,
+    `https://${LOYALTY_PRODUCT_HOST}${AUTH_RECOVERY_PATH}`,
+    `https://${LOYALTY_PRODUCT_HOST}${AUTH_RECOVERY_LEGACY_PATH}`,
     "https://waka.ug/auth/callback",
     `https://waka.ug${AUTH_RECOVERY_PATH}`,
     `https://waka.ug${AUTH_RECOVERY_LEGACY_PATH}`,
+    // The native shell's OAuth return. Required, not optional: with it missing the app's Google
+    // flow breaks, because Supabase refuses the custom-scheme `redirect_to` and sends the browser
+    // to the Site URL instead.
+    NATIVE_OAUTH_REDIRECT_URL,
     "https://localhost/auth/callback",
     `https://localhost${AUTH_RECOVERY_PATH}`,
     `https://localhost${AUTH_RECOVERY_LEGACY_PATH}`,

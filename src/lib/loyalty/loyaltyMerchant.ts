@@ -27,7 +27,7 @@ import { normalizeLoyaltyAccountStatus } from "./loyaltyMath";
 export type LoyaltyOverview = {
   program: LoyaltyProgramConfig | null;
   /**
-   * The merchant's permanent public WAKA Loyalty Program code (WPL2026001), and the customer path
+   * The merchant's permanent public DKASU Loyalty Program code (WPL2026001), and the customer path
    * it resolves to. READ-ONLY: it is issued once server-side and no RPC accepts it as a write
    * input. Kept beside `program` rather than inside `LoyaltyProgramConfig`, because that type is
    * shared with the POS checkout maths and the cached program — the code has no business there.

@@ -1,4 +1,4 @@
-# WAKA POS — Product Import Contract
+# DKASU POS — Product Import Contract
 
 **Phase:** 2 — Normalized rows + review + two CSV templates (no OCR)  
 **Date:** 2026-08-29  

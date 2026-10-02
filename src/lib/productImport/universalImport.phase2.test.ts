@@ -195,7 +195,7 @@ describe("Expanded header aliases (additive, Phase 3)", () => {
     expect(csvImportFieldFromHeader("Qty per Pack")).toBe("packSize");
     expect(csvImportFieldFromHeader("Purchase Price per Pack")).toBe("costPerPack");
 
-    // And every existing WAKA-template header still resolves (Phase 3 is additive).
+    // And every existing DKASU-template header still resolves (Phase 3 is additive).
     for (const h of officialCsvImportHeadersNoPack()) expect(csvImportFieldFromHeader(h)).not.toBeNull();
     for (const h of officialCsvImportHeadersWithPack()) expect(csvImportFieldFromHeader(h)).not.toBeNull();
   });
@@ -233,7 +233,7 @@ describe("No-pack real-world header regression (IMPORT-NOPACK-FIX-01)", () => {
   it("1 — 'Cost price per unit' resolves to costPrice (the exact header that previously failed)", () => {
     expect(csvImportFieldFromHeader("Cost price per unit")).toBe("costPrice");
     expect(csvImportFieldFromHeader("Selling price per unit")).toBe("sellingPrice");
-    // Every existing WAKA-template header must still resolve (additive change only).
+    // Every existing DKASU-template header must still resolve (additive change only).
     for (const h of officialCsvImportHeadersNoPack()) expect(csvImportFieldFromHeader(h)).not.toBeNull();
     for (const h of officialCsvImportHeadersWithPack()) expect(csvImportFieldFromHeader(h)).not.toBeNull();
   });

@@ -29,6 +29,21 @@ export const POS_PRODUCT_HOST = "pos.waka.ug";
 export const LOYALTY_PRODUCT_HOST = "loyalty.waka.ug";
 
 /**
+ * DKASU production hosts.
+ *
+ * BOTH GENERATIONS ARE RECOGNISED during the migration, and that is a correctness fix rather than
+ * a rename. Host matching was an equality check against the two WAKA constants, so on the new
+ * domains every check failed: `loyalty.dkasu.com` did not classify as a loyalty host and fell
+ * through to the `merchant` default, which would have left the customer surface inert on its own
+ * production domain.
+ */
+export const DKASU_POS_PRODUCT_HOST = "pos.dkasu.com";
+export const DKASU_LOYALTY_PRODUCT_HOST = "loyalty.dkasu.com";
+
+const POS_HOSTS: ReadonlySet<string> = new Set([POS_PRODUCT_HOST, DKASU_POS_PRODUCT_HOST]);
+const LOYALTY_HOSTS: ReadonlySet<string> = new Set([LOYALTY_PRODUCT_HOST, DKASU_LOYALTY_PRODUCT_HOST]);
+
+/**
  * Where a loyalty-host session goes when it asks for something that is not part of the customer
  * app. `/member` renders the member home, or the registration form for a session that is not a
  * member yet, and it is behind `ProtectedRoute` — so a signed-out visitor lands on `/login`.
@@ -49,11 +64,11 @@ function currentHostname(): string {
 }
 
 export function isPosHost(hostname: string = currentHostname()): boolean {
-  return normalizeHostname(hostname) === POS_PRODUCT_HOST;
+  return POS_HOSTS.has(normalizeHostname(hostname));
 }
 
 export function isLoyaltyHost(hostname: string = currentHostname()): boolean {
-  return normalizeHostname(hostname) === LOYALTY_PRODUCT_HOST;
+  return LOYALTY_HOSTS.has(normalizeHostname(hostname));
 }
 
 /**

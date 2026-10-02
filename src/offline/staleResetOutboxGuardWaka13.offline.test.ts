@@ -17,7 +17,7 @@
  *
  * This file runs the REAL `flushSyncQueueInner` against REAL IndexedDB
  * (fake-indexeddb). Only `src/lib/supabase` is faked, per the established
- * WAKA offline-test convention (see `cloudSyncMergeWaka01.offline.test.ts`,
+ * DKASU offline-test convention (see `cloudSyncMergeWaka01.offline.test.ts`,
  * `syncQueueQuarantineWaka11.offline.test.ts`).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";

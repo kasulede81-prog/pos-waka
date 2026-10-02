@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-07  
 **Mode:** Stabilization only (no new business features)  
-**Verdict:** **Release-certifiable** for commercial Waka POS with documented exceptions
+**Verdict:** **Release-certifiable** for commercial DKASU POS with documented exceptions
 
 ---
 

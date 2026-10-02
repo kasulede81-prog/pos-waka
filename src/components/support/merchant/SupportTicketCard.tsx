@@ -12,7 +12,7 @@ import { formatSupportDateTime } from "./SupportCenterUi";
 import { t } from "../../../lib/i18n";
 
 /**
- * Merchant support ticket card: human-friendly reference (WAKA-1048), subject,
+ * Merchant support ticket card: human-friendly reference (DKASU-1048), subject,
  * category, status badge, created/updated timestamps, unread-reply indicator.
  */
 export function SupportTicketCard({

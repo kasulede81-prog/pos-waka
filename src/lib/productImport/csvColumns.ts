@@ -1,5 +1,5 @@
 /**
- * Official WAKA Product Import Template headers (user-facing, not DB names).
+ * Official DKASU Product Import Template headers (user-facing, not DB names).
  * Two wizard-parity templates — identified by exact header field sets.
  */
 

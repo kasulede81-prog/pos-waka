@@ -191,7 +191,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
    *
    * /register is linked from marketing pages, so the people who arrive here while signed in are
    * mostly NOT new owners: they are existing merchants following a "Get started" link, or
-   * customers who are WAKA Loyalty members. Sending them all to /onboarding offered the wizard to
+   * customers who are DKASU Loyalty members. Sending them all to /onboarding offered the wizard to
    * people who cannot complete it, and the server then refused the save — the merchant saw a
    * machine code for a shop they never asked to create.
    *

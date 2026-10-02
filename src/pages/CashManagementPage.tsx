@@ -106,7 +106,7 @@ function CashManagementHub({ lang }: Props) {
   const printVarianceHistory = () => {
     const doc = buildCashVarianceDocument({
       lang,
-      shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+      shopName: preferences.shopDisplayName?.trim() || "DKASU POS",
       rows: snapshot.varianceHistory,
     });
     void printTextListDocument({

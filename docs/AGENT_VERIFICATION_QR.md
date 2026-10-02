@@ -1,4 +1,4 @@
-# WAKA POS — Agent Verification QR System
+# DKASU POS — Agent Verification QR System
 
 Public verification for marketing agents. Shop owners scan a QR on an agent’s ID card and confirm the person is a registered, active Waka agent.
 
@@ -34,7 +34,7 @@ Migration: [`supabase/migrations/070_agent_verification_qr.sql`](../supabase/mig
 | Field | Notes |
 |-------|--------|
 | `referral_code` | e.g. `WAKA-A8F7` |
-| `agent_name` | Display name or `"Waka Agent"` |
+| `agent_name` | Display name or `"DKASU Agent"` |
 | `status` | `active` \| `suspended` \| `expired` |
 | `is_active` | `true` only when status is `active` |
 | `issued_at` | `created_at` |
@@ -60,7 +60,7 @@ Apply in Supabase SQL editor after deploy.
 
 Mobile-first card layout:
 
-- Waka POS header + logo
+- DKASU POS header + logo
 - Green “Verified Waka agent” banner when active
 - Red **“Agent Not Active”** banner when suspended or expired
 - Agent name, ID, status badge, issue/expiry dates

@@ -3,7 +3,7 @@
 **Date:** 2026-08-13  
 **Prerequisite:** SYNC-1.0 CONDITIONAL GO (6.2/10)  
 **Mode:** Scoped implementation — no POS/auth/RLS/checkout redesign  
-**Production target:** WAKA POS Web + Android + iOS / Capacitor
+**Production target:** DKASU POS Web + Android + iOS / Capacitor
 
 Device round-trip times were **not measured**. Claims below are architectural (request count / concurrency), not stopwatch results.
 

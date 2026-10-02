@@ -192,9 +192,9 @@ export function resolveSessionActor(params: {
     params.user?.id ?? (params.email ? `local:${params.email.trim().toLowerCase()}` : "local:anonymous");
   const userId = activeStaff ? `staff:${activeStaff.id}` : baseUserId;
 
-  // DISPLAY AUTHORITY. The confirmed WAKA name wins; the provider's suggestion is only a fallback
+  // DISPLAY AUTHORITY. The confirmed DKASU name wins; the provider's suggestion is only a fallback
   // for someone who has not confirmed one. Reading `user_metadata.full_name` directly — as this
-  // did — meant a rename at Google changed the name shown throughout WAKA with no WAKA write at
+  // did — meant a rename at Google changed the name shown throughout DKASU with no DKASU write at
   // all. `displayWakaName` reads the confirmed pair first, and needs no network call: the metadata
   // is already on the session this function is handed.
   const displayName =

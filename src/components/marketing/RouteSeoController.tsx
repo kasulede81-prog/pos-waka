@@ -26,10 +26,15 @@ export function RouteSeoController() {
   return (
     <SeoHead
       title={noIndexSeoTitle(path)}
-      description="Waka POS — point of sale and inventory management for Ugandan businesses."
+      description="DKASU POS — point of sale and inventory management for Ugandan businesses."
       path={seoPath}
       noindex
+      // A loyalty page canonicalises to the loyalty origin; every other route is an APP route and
+      // belongs on the POS origin. Without this they inherited the marketing origin, so an app
+      // route like `/pos` advertised a canonical on the company site — a page that does not exist
+      // there.
       useLoyaltyCanonical={isLoyaltyCard || isLoyaltyJoin}
+      usePosCanonical={!isLoyaltyCard && !isLoyaltyJoin}
       referrerPolicy={isLoyaltyCard || isLoyaltyJoin ? "no-referrer" : undefined}
     />
   );

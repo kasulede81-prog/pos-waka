@@ -612,7 +612,7 @@ export type BatchIntegrityResult = {
 /**
  * Compare sum(batch remaining) with stockOnHand — never auto-repairs.
  *
- * Responsibility boundary (WAKA POS pharmacy architecture): `stockOnHand`
+ * Responsibility boundary (DKASU POS pharmacy architecture): `stockOnHand`
  * on the core `Product` is the single authoritative quantity — it is what
  * every stock check, the sale-COGS engine, and inventory valuation read.
  * The batch sub-ledger (`Product.pharmacyPackaging.batches[]`) exists only

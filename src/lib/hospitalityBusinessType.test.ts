@@ -183,7 +183,7 @@ describe("hospitality business type consolidation", () => {
     expect(product(DRINK_ID).stockOnHand).toBe(47);
   });
 
-  // 8 — Combined food + drink = exactly ONE WAKA Sale.
+  // 8 — Combined food + drink = exactly ONE DKASU Sale.
   it("8: combined food + drink checkout creates exactly ONE sale", () => {
     usePosStore.getState().completeBusinessOnboarding("hospitality", "restaurant_bar");
     expect(usePosStore.getState().prepareMenuBatch({ productId: DISH_ID, portions: 20, batchId: "b1" }).ok).toBe(true);

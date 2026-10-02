@@ -27,7 +27,7 @@ const PLANS: PricingPlan[] = [
   {
     code: "free",
     name: "Free",
-    blurb: "Perfect for trying Waka POS and running a very small shop.",
+    blurb: "Perfect for trying DKASU POS and running a very small shop.",
     features: [
       "Sales & Checkout",
       "Inventory Management",
@@ -142,8 +142,8 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
-        title="Waka POS Pricing — Complete Business Control for Every Shop"
-        description="Waka POS pricing for shops in Uganda. Free plan to start. Starter, Business, and Waka Plus plans with sales, inventory, cash control, staff accountability, and cloud sync."
+        title="DKASU POS Pricing — Complete Business Control for Every Shop"
+        description="DKASU POS pricing for shops in Uganda. Free plan to start. Starter, Business, and Waka Plus plans with sales, inventory, cash control, staff accountability, and cloud sync."
         path="/pricing"
         structuredData="home"
       />
@@ -151,7 +151,7 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
       <article className="space-y-10">
         <header className="space-y-4">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">Pricing</p>
-          <h1 className="text-4xl font-black leading-tight text-foreground sm:text-5xl">Waka POS Pricing</h1>
+          <h1 className="text-4xl font-black leading-tight text-foreground sm:text-5xl">DKASU POS Pricing</h1>
           <p className="text-2xl font-black text-waka-800">Complete Business Control for Every Shop</p>
           <p className="max-w-3xl text-base font-medium leading-relaxed text-muted-foreground">
             Sales · Inventory · Staff · Cash Control · Suppliers · Debt Tracking · Reports · Cloud Sync · Business
@@ -228,7 +228,7 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
         </div>
 
         <section className="rounded-3xl border border-border bg-card p-6 shadow-waka-sm sm:p-8">
-          <h2 className="text-xl font-black text-foreground">Why Businesses Choose Waka POS</h2>
+          <h2 className="text-xl font-black text-foreground">Why Businesses Choose DKASU POS</h2>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {WHY_CHOOSE.map((item) => (
               <li key={item} className="flex gap-2 text-sm font-semibold text-muted-foreground">
@@ -242,7 +242,7 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
         <section className="rounded-3xl border border-waka-200 bg-gradient-to-br from-waka-600 to-waka-500 p-8 text-white shadow-waka-sm">
           <h2 className="text-3xl font-black leading-tight">Run your entire business from one app.</h2>
           <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-waka-50">
-            Manage sales, inventory, cash, staff, suppliers, debts, reports, audits, and cloud backups with Waka POS.
+            Manage sales, inventory, cash, staff, suppliers, debts, reports, audits, and cloud backups with DKASU POS.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link

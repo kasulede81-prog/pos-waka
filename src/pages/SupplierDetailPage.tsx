@@ -64,7 +64,7 @@ export function SupplierDetailPage({
   const purchases = usePosStore((s) => s.purchases);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const preferences = usePosStore((s) => s.preferences);
-  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
 
   const [exportHint, setExportHint] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);

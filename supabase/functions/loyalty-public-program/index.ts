@@ -6,7 +6,7 @@ import {
 } from "../_shared/loyaltyWallet/publicCardDurableRateLimit.ts";
 
 /**
- * Public WAKA Loyalty Program code lookup and join (WPL2026001).
+ * Public DKASU Loyalty Program code lookup and join (WPL2026001).
  *
  * GET  ?code=WPL2026001                            → merchant identity preview (no ids, no PII)
  * POST { code, name, phone, email?, consent }      → create a PENDING enrollment request

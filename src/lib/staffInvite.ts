@@ -187,7 +187,7 @@ export async function revokeStaffInvitation(invitationId: string): Promise<boole
 export function staffAcceptReturnPath(raw: string | null | undefined): string | null {
   if (!raw) return null;
   try {
-    const url = new URL(raw, "https://pos.waka.ug");
+    const url = new URL(raw, "https://pos.dkasu.com");
     if (url.pathname === "/staff/accept") {
       return `${url.pathname}${url.search}`;
     }

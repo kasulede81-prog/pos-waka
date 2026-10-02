@@ -2,7 +2,7 @@
 
 **Mode:** Read-only forensic audit (**NO code changes, NO CSS changes, NO theme changes, NO refactoring, NO dependency updates**)  
 **Date:** 2026-07-29  
-**Scope:** Global WAKA POS theme architecture — Light Mode, Dark Mode, semantic tokens, component adoption, accessibility, theme switching  
+**Scope:** Global DKASU POS theme architecture — Light Mode, Dark Mode, semantic tokens, component adoption, accessibility, theme switching  
 **Related prior work:** Phase 17.9 (semantic surfaces), Phase 22.2/22.6 (typography + design-system enforcement), Phase 27–28 (module UX — inherit this system)  
 **Next phase:** Focused Phase 29.1 implementation against P0/P1 roadmap below  
 
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-WAKA POS has a **real enterprise theme architecture**: early bootstrap, a single `AppThemeProvider`, HSL CSS variables on `:root` / `.dark`, Tailwind semantic colors, `themeUi` / `statusTokens` / `enterpriseType`, and a design-system scanner. That foundation is stronger than most mid-stage SaaS apps.
+DKASU POS has a **real enterprise theme architecture**: early bootstrap, a single `AppThemeProvider`, HSL CSS variables on `:root` / `.dark`, Tailwind semantic colors, `themeUi` / `statusTokens` / `enterpriseType`, and a design-system scanner. That foundation is stronger than most mid-stage SaaS apps.
 
 It is **not yet certified for full-day retail use** in both themes because:
 

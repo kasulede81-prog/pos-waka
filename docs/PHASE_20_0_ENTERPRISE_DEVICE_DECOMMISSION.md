@@ -6,7 +6,7 @@
 
 ## Objective
 
-Remove the Primary Device / Secondary Device architecture from Waka POS and replace it with a single **Approved Device** authority model. Every approved owner device has equal capability. This phase is architectural cleanup only — no redesign of device management UI, subscription limits, authentication, sync, or Internal Admin workflows beyond removing primary concepts.
+Remove the Primary Device / Secondary Device architecture from DKASU POS and replace it with a single **Approved Device** authority model. Every approved owner device has equal capability. This phase is architectural cleanup only — no redesign of device management UI, subscription limits, authentication, sync, or Internal Admin workflows beyond removing primary concepts.
 
 ---
 

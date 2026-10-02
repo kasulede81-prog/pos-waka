@@ -226,4 +226,4 @@ New/updated tests:
 | **17.4** | Payments & Subscription Automation (Flutterwave, MTN MoMo, Stripe, Airtel Money, daily expiry, trial switch) |
 | **17.5** | Final Enterprise Production Certification (target ≥9/10) |
 
-Waka POS is now positioned for enterprise deployments and payment integration without further structural refactoring of command centers or registries.
+DKASU POS is now positioned for enterprise deployments and payment integration without further structural refactoring of command centers or registries.

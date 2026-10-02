@@ -31,7 +31,7 @@ export function onboardingGateDecision(status: { complete: boolean } | null | un
  * Where an authenticated visitor to `/register` belongs.
  *
  * `/register` is linked from the marketing pages, so most people who reach it while signed in are
- * not new owners at all — they are existing merchants following a link, or WAKA Loyalty members.
+ * not new owners at all — they are existing merchants following a link, or DKASU Loyalty members.
  * Only `unknown` (a session that is neither) is offered the merchant decision.
  */
 export function authenticatedVisitorDestination(

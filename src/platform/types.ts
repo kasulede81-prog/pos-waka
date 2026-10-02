@@ -1,5 +1,5 @@
 /**
- * WAKA platform + capability boundary (Desktop Phase 2).
+ * DKASU platform + capability boundary (Desktop Phase 2).
  *
  * Shared React code should ask what this runtime can do,
  * instead of scattering Capacitor / Electron / userAgent checks.

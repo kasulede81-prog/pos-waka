@@ -1,4 +1,4 @@
-# Waka POS Hospitality — Phase 7.2 Certification
+# DKASU POS Hospitality — Phase 7.2 Certification
 
 ## Production readiness score: **88%**
 

@@ -123,7 +123,7 @@ export function MarketingShowcaseSection() {
     <section className="py-16 sm:py-20">
       <Reveal className="text-center">
         <p className={mktEyebrow}>Product</p>
-        <h2 className={clsx("mt-2 text-3xl font-black sm:text-4xl", mktHeading)}>See Waka POS in action</h2>
+        <h2 className={clsx("mt-2 text-3xl font-black sm:text-4xl", mktHeading)}>See DKASU POS in action</h2>
         <p className={clsx("mx-auto mt-3 max-w-2xl text-base font-medium", mktSubtext)}>
           Desktop command center, fast sell screen, rich reports, and inventory — on the devices you already use.
         </p>
@@ -296,13 +296,13 @@ export function MarketingComparisonSection() {
     <section className={clsx("rounded-[2rem] border px-4 py-16 sm:px-8", mktSectionMuted, "border-mkt-border")}>
       <Reveal className="text-center">
         <p className={mktEyebrow}>Why Waka</p>
-        <h2 className={clsx("mt-2 text-3xl font-black", mktHeading)}>Why businesses choose Waka POS</h2>
+        <h2 className={clsx("mt-2 text-3xl font-black", mktHeading)}>Why businesses choose DKASU POS</h2>
       </Reveal>
       <div className={clsx(mktCard, "mt-10 overflow-hidden rounded-2xl")}>
         <div className="grid grid-cols-3 bg-mkt-bg-secondary text-xs font-black uppercase tracking-wide text-mkt-text-secondary sm:text-sm">
           <div className="p-4">Topic</div>
           <div className="border-l border-mkt-border p-4">Traditional</div>
-          <div className="border-l border-mkt-border p-4 text-waka-600 dark:text-waka-400">With Waka POS</div>
+          <div className="border-l border-mkt-border p-4 text-waka-600 dark:text-waka-400">With DKASU POS</div>
         </div>
         {MARKETING_COMPARISON_ROWS.map((row) => (
           <div key={row.topic} className="grid grid-cols-3 border-t border-mkt-border text-sm">
@@ -389,7 +389,7 @@ export function MarketingFinalCtaSection() {
       <Reveal>
         <h2 className="text-3xl font-black leading-tight sm:text-4xl">Ready to grow your business?</h2>
         <p className="mt-3 max-w-xl text-base font-medium text-waka-100">
-          Join Ugandan shops using Waka POS for sales, stock, debts, and daily reports — online or offline.
+          Join Ugandan shops using DKASU POS for sales, stock, debts, and daily reports — online or offline.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link to="/register" className="inline-flex min-h-[48px] items-center rounded-2xl bg-white px-6 py-3 text-sm font-black text-waka-600 transition hover:bg-waka-700">
@@ -399,7 +399,7 @@ export function MarketingFinalCtaSection() {
             Contact Sales
           </Link>
           <a
-            href={wakaSupportWhatsAppUrl("Hello Waka, I want to learn about Waka POS.")}
+            href={wakaSupportWhatsAppUrl("Hello Waka, I want to learn about DKASU POS.")}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-white/40 px-6 py-3 text-sm font-black text-white transition hover:bg-white/10"

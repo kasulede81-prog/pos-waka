@@ -24,7 +24,7 @@ export type ReceiptBranding = {
 
 const DEFAULT_FOOTER = "Thank you for shopping with us";
 const DEFAULT_RETURN_POLICY = "Returns accepted with receipt within 24 hours.";
-const POWERED_BY = "Powered by Waka POS";
+const POWERED_BY = "Powered by DKASU POS";
 export const RECEIPT_FOOTER_SLOT_COUNT = 4;
 
 /** Footer slots as stored in settings (preserves spaces; does not trim). */
@@ -120,7 +120,7 @@ export function resolveReceiptHeaderConfig(preferences: ShopPreferences): Receip
     };
   }
   return {
-    businessName: preferences.shopDisplayName?.trim() || "Waka POS",
+    businessName: preferences.shopDisplayName?.trim() || "DKASU POS",
     address: preferences.shopAddressLine?.trim() ?? "",
     phone: preferences.shopPhoneE164?.trim() ?? "",
     email: "",

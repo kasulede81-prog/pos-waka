@@ -15,7 +15,7 @@ import { normalizeNamePart, provisionableWakaName } from "./nameReview";
  *
  * Both used to call `bootstrapOwnerWorkspace` unconditionally when the caller had no shop. That is
  * a second way into the exact failure Phase 1 removed: `waka_account_identity()` is the authority
- * on who may be given a workspace, and neither site consulted it — a WAKA Loyalty member, or any
+ * on who may be given a workspace, and neither site consulted it — a DKASU Loyalty member, or any
  * session the classifier calls `unknown`, could have been provisioned a shop from a settings form
  * or an onboarding save.
  *
@@ -78,7 +78,7 @@ export async function saveOwnerBusinessProfileBundleRpc(
     const { data: authData } = await sb.auth.getUser();
     if (authData?.user) {
       const meta = (authData.user.user_metadata ?? {}) as Record<string, unknown>;
-      // Confirmed WAKA name only. This path self-heals a missing workspace, and it used to seed the
+      // Confirmed DKASU name only. This path self-heals a missing workspace, and it used to seed the
       // profile with Google's name (or the e-mail prefix, or the literal "Owner") — none of which
       // is a name the person chose. When nothing is confirmed we pass nothing, and the wizard's
       // name review has already written the profile by the time a merchant reaches it.

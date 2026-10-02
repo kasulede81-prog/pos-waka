@@ -6,7 +6,7 @@ import pg from "pg";
 import { asUser, rpcJson, type SqlExec } from "../test/sqlIntegration/transferEnginePgHarness";
 
 /**
- * P1 defect regression test — WAKA POS financial transaction laboratory,
+ * P1 defect regression test — DKASU POS financial transaction laboratory,
  * Phase 3 (non-divisible pack cost).
  *
  * ROOT CAUSE: packCostUnitsDepleted (the FIFO pack-slot allocation counter)

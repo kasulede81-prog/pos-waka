@@ -106,7 +106,7 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   if (repair.allowReturnRecovery) {
     clearBlockedReturnRecoveryAttempts();
   }
-  // WAKA-06: never process/ACK entity ops while persisted state is still
+  // DKASU-06: never process/ACK entity ops while persisted state is still
   // hydrating. A RAM miss during this window is not proof the row is gone.
   if (!usePosStore.getState()._hydrated) {
     const remaining = (await readSyncQueue()).length;
@@ -144,7 +144,7 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   // than the reset moment — silently dropping a legitimate, never-replayed
   // transaction. Only fetched in this same rare (queue-has-guarded-kinds AND
   // a signal is outstanding) path, via the existing `fetchShopServerNow`
-  // primitive already used for this identical class of problem (WAKA-05).
+  // primitive already used for this identical class of problem (DKASU-05).
   // Falls back to the original uncorrected comparison if the server-time
   // fetch itself fails — never blocks the flush on this.
   let clockSkewMs = 0;

@@ -79,7 +79,7 @@ export function reportSyncIssue(code: string, meta?: MonitoringPayload["meta"]):
 /**
  * R6 — record a swallowed sync/data failure without changing control flow.
  * Does not become user-facing unless `code` is already in USER_FACING_SYNC_CODES
- * (WAKA-12 health / toasts stay on the existing four codes).
+ * (DKASU-12 health / toasts stay on the existing four codes).
  */
 export function reportSwallowedSyncFailure(
   code: string,

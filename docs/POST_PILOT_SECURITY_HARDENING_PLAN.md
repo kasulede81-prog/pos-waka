@@ -1,4 +1,4 @@
-# Waka POS — Post-Pilot Security Hardening Plan
+# DKASU POS — Post-Pilot Security Hardening Plan
 
 **Date:** 2026-05-28  
 **Status:** For review — **no implementation in this deliverable**  

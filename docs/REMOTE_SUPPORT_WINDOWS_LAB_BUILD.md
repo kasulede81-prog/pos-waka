@@ -1,4 +1,4 @@
-# WAKA POS — Windows Desktop Lab Build (RS-4C artifact)
+# DKASU POS — Windows Desktop Lab Build (RS-4C artifact)
 
 **Date:** 2026-08-15  
 **Status:** Lab portable EXE produced on macOS. **Not production.**  
@@ -45,9 +45,9 @@ NSIS output name: `WAKA-POS-Setup-${version}.exe`. Installer architecture was no
 | electron-builder target | **portable** |
 | Electron | 37.10.3 (packaged) |
 | App version | 1.0.12 |
-| Product name | WAKA POS |
+| Product name | DKASU POS |
 
-This Mac host can produce the Windows x64 artifact. It cannot execute `WAKA POS.exe`. Windows launch was **not** verified here.
+This Mac host can produce the Windows x64 artifact. It cannot execute `DKASU POS.exe`. Windows launch was **not** verified here.
 
 ---
 
@@ -68,7 +68,7 @@ Stamped build directory from this run:
 
 ```text
 release/win-build-20260815T151038/WAKA-POS-Portable-1.0.12.exe
-release/win-build-20260815T151038/win-unpacked/WAKA POS.exe
+release/win-build-20260815T151038/win-unpacked/DKASU POS.exe
 ```
 
 `win-unpacked/` is the unpacked Electron tree used to build the portable EXE. Copy the **portable** file to the lab laptop.
@@ -115,7 +115,7 @@ Expected:
 
 - Native mode is `off`
 - Support Agent does not spawn a process
-- Task Manager must not show `rustdesk.exe` merely because WAKA POS opened
+- Task Manager must not show `rustdesk.exe` merely because DKASU POS opened
 - Opening a shop, logging in, or sending a device heartbeat must not start RustDesk
 
 Transport starts only after **all** of:
@@ -132,7 +132,7 @@ This Mac build step did **not** run that Windows check.
 
 React must not control these values. Do not put them in Vite env files. Do not put credentials in the EXE.
 
-Set them on the Windows process that launches WAKA POS.
+Set them on the Windows process that launches DKASU POS.
 
 ### Required for lab launch
 

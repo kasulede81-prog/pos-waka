@@ -53,7 +53,7 @@ export function useEndOfDayCloseSession(lang: Language) {
   const allSales = usePosStore((s) => s.sales);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const staffAccounts = usePosStore((s) => s.preferences.staffAccounts ?? []);
-  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
   const recordDayClose = usePosStore((s) => s.recordDayClose);
   const reopenBusinessDay = usePosStore((s) => s.reopenBusinessDay);
 

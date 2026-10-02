@@ -1,5 +1,5 @@
 /**
- * Minimal LLM chat provider abstraction for Ask WAKA.
+ * Minimal LLM chat provider abstraction for Ask DKASU.
  * DeepSeek (default) + Ollama/Qwen adapter. Tool layer does not depend on a specific provider.
  */
 

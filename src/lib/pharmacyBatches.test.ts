@@ -105,7 +105,7 @@ describe("pharmacyBatches", () => {
 });
 
 /**
- * WAKA POS — Pharmacy Correction Phase 1: batch quantity integrity (item H/I).
+ * DKASU POS — Pharmacy Correction Phase 1: batch quantity integrity (item H/I).
  *
  * `stockOnHand` on the core Product is the single authoritative quantity —
  * the batch sub-ledger is operational visibility layered on top and "should"
@@ -231,7 +231,7 @@ describe("reconcileBatchQuantitiesToStock — safe reconciliation path (item 5)"
 });
 
 /**
- * WAKA POS — Pharmacy Correction Phase 1: batch cost boundary (item J).
+ * DKASU POS — Pharmacy Correction Phase 1: batch cost boundary (item J).
  *
  * A batch's own unitCostUgx (captured at receive time for inventory-value
  * and write-off-loss reporting) must never be consulted by the sale-COGS
@@ -264,7 +264,7 @@ describe("batch cost never creates a second COGS ledger (item J)", () => {
 });
 
 /**
- * WAKA POS — Pharmacy Phase 2: FEFO/expiry hardening.
+ * DKASU POS — Pharmacy Phase 2: FEFO/expiry hardening.
  *
  * DEFECT FIXED: sortBatchesFefo/allocateFefo used to include
  * status === "expired" batches in the DEFAULT (automatic) pool. Since an
@@ -376,7 +376,7 @@ describe("FEFO/expiry hardening — item B/C/E (Phase 2)", () => {
 });
 
 /**
- * WAKA POS — Pharmacy Phase 2: unbatched/legacy stock (item I).
+ * DKASU POS — Pharmacy Phase 2: unbatched/legacy stock (item I).
  *
  * A product with NO batches at all (batches.length === 0) must be treated
  * as explicitly out-of-scope for batch-quantity comparison — never a false

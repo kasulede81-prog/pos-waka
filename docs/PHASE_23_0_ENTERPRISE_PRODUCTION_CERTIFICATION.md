@@ -9,11 +9,11 @@
 
 ## Executive Summary
 
-WAKA POS has completed a multi-year enterprise hardening arc (Phases 14–22.5) covering authentication, device authority, offline sync, staff platform, inventory scale, cash/shift integrity, vertical modules, internal admin, subscriptions, updates, and enterprise design consolidation.
+DKASU POS has completed a multi-year enterprise hardening arc (Phases 14–22.5) covering authentication, device authority, offline sync, staff platform, inventory scale, cash/shift integrity, vertical modules, internal admin, subscriptions, updates, and enterprise design consolidation.
 
 **Final verdict: 🟡 Conditionally Certified for Production**
 
-WAKA POS is **ready for production deployment of retail, hospitality, and pharmacy core workflows** for single-shop and multi-device operators. It is **not yet certified** for full Enterprise HQ rollout (cross-branch transfers, enterprise purchasing console) or live payment-provider checkout without accepting documented limitations.
+DKASU POS is **ready for production deployment of retail, hospitality, and pharmacy core workflows** for single-shop and multi-device operators. It is **not yet certified** for full Enterprise HQ rollout (cross-branch transfers, enterprise purchasing console) or live payment-provider checkout without accepting documented limitations.
 
 | Dimension | Result |
 |-----------|--------|
@@ -493,7 +493,7 @@ Confirmed Phase 22.5 adoption via `npm run design-system:check` (2026-07-12):
 
 Qualitative benchmark vs major POS platforms (2026):
 
-| Dimension | WAKA POS | Shopify POS | Square | Lightspeed | Toast | Oracle MICROS |
+| Dimension | DKASU POS | Shopify POS | Square | Lightspeed | Toast | Oracle MICROS |
 |-----------|----------|-------------|--------|------------|-------|---------------|
 | **Offline-first depth** | ★★★★★ | ★★★☆☆ | ★★★★☆ | ★★★☆☆ | ★★★☆☆ | ★★★☆☆ |
 | **Multi-device authority** | ★★★★★ | ★★★★☆ | ★★★★☆ | ★★★★☆ | ★★★★☆ | ★★★★★ |
@@ -506,7 +506,7 @@ Qualitative benchmark vs major POS platforms (2026):
 | **Payment integration maturity** | ★★☆☆☆ | ★★★★★ | ★★★★★ | ★★★★☆ | ★★★★★ | ★★★★★ |
 | **Certification test depth** | ★★★★★ | N/A | N/A | N/A | N/A | N/A |
 
-**WAKA POS differentiation:** Offline-first architecture, Uganda-market focus, pharmacy/hospitality vertical depth, internal admin/recovery tooling, and extensive automated certification suite exceed typical SMB POS products. Gaps vs enterprise incumbents: multi-branch transfers, live billing integration, and E2E QA automation.
+**DKASU POS differentiation:** Offline-first architecture, Uganda-market focus, pharmacy/hospitality vertical depth, internal admin/recovery tooling, and extensive automated certification suite exceed typical SMB POS products. Gaps vs enterprise incumbents: multi-branch transfers, live billing integration, and E2E QA automation.
 
 ---
 
@@ -683,7 +683,7 @@ npm run design-system:check → exit 0 (Phase 22.5 adoption summary printed)
 
 ## Conclusion
 
-After Phases 14.0 through 22.5, WAKA POS presents as an **enterprise-grade offline-first POS** with exceptional depth in staff/device authority, recovery tooling, vertical modules, and automated certification — compared favorably to Shopify/Square/Toast for offline and Uganda-market fit, with gaps in multi-branch HQ features and payment integration.
+After Phases 14.0 through 22.5, DKASU POS presents as an **enterprise-grade offline-first POS** with exceptional depth in staff/device authority, recovery tooling, vertical modules, and automated certification — compared favorably to Shopify/Square/Toast for offline and Uganda-market fit, with gaps in multi-branch HQ features and payment integration.
 
 **The platform is conditionally certified for production deployment** of core retail, hospitality, and pharmacy workflows. No open **P0 runtime blockers** were identified in this audit. Remaining work is **scope completion** (enterprise transfers/purchasing), **operational QA** (E2E automation), and **incremental polish** (Phase 22.6+, design-system mechanical adoption).
 

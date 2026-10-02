@@ -1,4 +1,4 @@
-# WAKA POS — EFRIS Official URA Contract Intake
+# DKASU POS — EFRIS Official URA Contract Intake
 
 **Date:** 2026-08-28 (updated same day)  
 **Phase:** 2A — Official URA contract intake  
@@ -413,7 +413,7 @@ WAKA must not claim to be an accredited EFRIS integrator.
 The handbook supports optional use (volunteer non-VAT / non-designated) and S2S as one channel. It does **not** require WAKA to force EFRIS onto every shop.
 
 ```text
-WAKA POS
+DKASU POS
     │
     ├── EFRIS OFF
     │      └── Normal POS

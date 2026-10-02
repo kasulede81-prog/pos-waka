@@ -9,7 +9,7 @@ import {
 } from "../../test/sqlIntegration/loyaltyPgHarness";
 
 /**
- * WAKA Loyalty monetisation — Phase 1 entitlement + member allowance.
+ * DKASU Loyalty monetisation — Phase 1 entitlement + member allowance.
  *
  * The allowance is enforced server-side in ONE place that covers every creation
  * path found in the forensic audit: the BEFORE INSERT guard on loyalty_accounts.

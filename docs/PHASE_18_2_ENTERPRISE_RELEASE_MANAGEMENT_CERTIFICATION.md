@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-Waka POS has a **mature, Android-centric release management stack**: Internal Admin publishes policy to Supabase, Android clients auto-fetch on launch and resume, compare against Google Play In-App Updates, and show unified overlays via `AppReleaseUpdateProvider`. There is **no separate “notify users” button** in admin today — publishing *is* the notification trigger for policy, subject to client refresh timing and Play binary availability.
+DKASU POS has a **mature, Android-centric release management stack**: Internal Admin publishes policy to Supabase, Android clients auto-fetch on launch and resume, compare against Google Play In-App Updates, and show unified overlays via `AppReleaseUpdateProvider`. There is **no separate “notify users” button** in admin today — publishing *is* the notification trigger for policy, subject to client refresh timing and Play binary availability.
 
 The gap between “manual notification model” and “fully automatic enterprise lifecycle” is **not** primarily missing admin buttons. It is:
 
@@ -23,7 +23,7 @@ The gap between “manual notification model” and “fully automatic enterpris
 
 **Answer to the certification question:**
 
-> Can Waka POS safely switch from a manual update notification model to a fully automatic publish-driven enterprise update system **without changing Release Management architecture**?
+> Can DKASU POS safely switch from a manual update notification model to a fully automatic publish-driven enterprise update system **without changing Release Management architecture**?
 
 **Android (Google Play): YES, with Phase 18.3 UX/engine hardening** — the architecture already supports publish → policy → client auto-check. Phase 18.3 should add faster propagation (polling/realtime), centralized version resolution, and optional admin “Resend” as recovery — not a redesign.
 
@@ -208,7 +208,7 @@ AppReleaseUpdateProvider.refresh()
 
 # PART 4 — Manual Update Flow Audit
 
-## 4.1 What “manual” means in Waka POS today
+## 4.1 What “manual” means in DKASU POS today
 
 | Manual path | Exists? | Purpose |
 |-------------|---------|---------|

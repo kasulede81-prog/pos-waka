@@ -1,5 +1,5 @@
 /**
- * WAKA Remote Support control-plane types (RS-1).
+ * DKASU Remote Support control-plane types (RS-1).
  *
  * IDENTITY (shop_devices) ≠ AUTHORIZATION (these records) ≠ TRANSPORT (later).
  * No remote-desktop credential is represented here. grant_jti is a future

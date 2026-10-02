@@ -1,5 +1,5 @@
 /**
- * PHASE 0A — WAKA-06 executable regressions for the full RAM-miss class.
+ * PHASE 0A — DKASU-06 executable regressions for the full RAM-miss class.
  *
  * The debt-payment / customer-lookup cases live in
  * `syncQueueRamMissWaka06.offline.test.ts`. This file covers every other

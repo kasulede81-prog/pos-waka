@@ -6,7 +6,7 @@
 
 ## Objective
 
-Complete Waka POS’s provider-independent billing platform so future payment integrations (Flutterwave, Stripe, MTN MoMo, Airtel Money) only need to call `subscriptionEngine.onPaymentSuccess(...)` after verification.
+Complete DKASU POS’s provider-independent billing platform so future payment integrations (Flutterwave, Stripe, MTN MoMo, Airtel Money) only need to call `subscriptionEngine.onPaymentSuccess(...)` after verification.
 
 ## Architecture
 

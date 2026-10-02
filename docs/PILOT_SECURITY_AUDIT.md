@@ -1,4 +1,4 @@
-# Waka POS — Focused production security audit (pilot readiness)
+# DKASU POS — Focused production security audit (pilot readiness)
 
 **Date:** 2026-05-28  
 **Scope:** Critical and High production risks for pilot shops with real data and paying customers.  
@@ -9,7 +9,7 @@
 
 ## Executive answer
 
-**Is Waka POS safe enough for a pilot with real paying customers?**
+**Is DKASU POS safe enough for a pilot with real paying customers?**
 
 **Conditionally yes** for a **small, controlled pilot** where:
 

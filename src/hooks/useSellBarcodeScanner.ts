@@ -15,7 +15,7 @@ type Options = {
   onNotFound?: (code: string) => void;
   setSearchQuery: (q: string) => void;
   /**
-   * Loyalty membership codes (`WAKA-LOYALTY:<token>`) are claimed here before
+   * Loyalty membership codes (`DKASU-LOYALTY:<token>`) are claimed here before
    * any product lookup. Return true to consume the scan; product scanning is
    * otherwise completely unchanged.
    */

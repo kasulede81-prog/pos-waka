@@ -251,7 +251,7 @@ describe("7. the existing bootstrap and profile-save flows still work", () => {
 
     expect((await save(a, "Phone A", "+256781000002")).rows[0]!.result.ok).toBe(true);
     // B may not take A's number. The client turns this into "This phone number is already on
-    // another Waka account" — never the raw code.
+    // another DKASU account" — never the raw code.
     const clash = await save(b, "Phone B", "+256781000002");
     expect(clash.rows[0]!.result).toMatchObject({ ok: false, error: "phone_in_use" });
 

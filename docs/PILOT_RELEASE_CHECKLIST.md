@@ -1,4 +1,4 @@
-# Waka POS — Pilot Release Checklist
+# DKASU POS — Pilot Release Checklist
 
 Use before shipping build to first 5–10 pilot shops. Complements `docs/PILOT_DEPLOYMENT.md` (updated for migrations 070–078).
 

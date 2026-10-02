@@ -35,7 +35,7 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
   const products = usePosStore((s) => s.products);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const preferences = usePosStore((s) => s.preferences);
-  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
 
   const [filter, setFilter] = useState<DateFilterValue>({ kind: "preset", preset: "this_month" });
   const [searchQ, setSearchQ] = useState("");

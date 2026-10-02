@@ -8,7 +8,7 @@ import {
  * Uses shop_devices semantics — does not invent a second registry.
  *
  * `trusted` is NOT authorization.
- * `suspicious_flag` is informational (no existing hard-block in WAKA).
+ * `suspicious_flag` is informational (no existing hard-block in DKASU).
  */
 export type RemoteSupportEligibilityDevice = {
   id?: string;

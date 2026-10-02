@@ -1,6 +1,6 @@
 /**
  * R6 — swallowed sync/data failures must still hit monitoring, without becoming
- * extra user-facing toasts (WAKA-12 keeps the existing four USER_FACING codes).
+ * extra user-facing toasts (DKASU-12 keeps the existing four USER_FACING codes).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ignoreReportedSyncFailure, reportSwallowedSyncFailure, reportSyncIssue } from "./monitoring";

@@ -5,10 +5,10 @@ import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
 import "@fontsource/dm-sans/700.css";
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
-import "@fontsource/roboto/900.css";
+// Roboto (the unused `font-admin` family) was dropped from startup: it is never
+// rendered — DM Sans is the bundled UI font and `font-admin` is used nowhere, so
+// Roboto only sat as a distant CSS fallback. Removing its 4 weight files trims the
+// startup font payload with no visual change. See tailwind `admin` family fallback.
 import "./index.css";
 import { AppRootErrorBoundary } from "./components/AppRootErrorBoundary";
 import App from "./App";

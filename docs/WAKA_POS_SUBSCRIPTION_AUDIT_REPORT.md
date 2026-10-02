@@ -1,4 +1,4 @@
-# Waka POS — Complete Feature Audit & VIP Plan Redesign (Planning)
+# DKASU POS — Complete Feature Audit & VIP Plan Redesign (Planning)
 
 **Date:** 2026-05-28  
 **Scope:** Codebase audit + subscription strategy recommendations  
@@ -8,7 +8,7 @@
 
 ## Executive summary
 
-Waka POS is a **feature-rich, offline-first retail POS** with cloud sync, role-based access, and a four-tier SaaS catalog (`free`, `starter`, `business`, `waka_plus`). **VIP** in product language maps to **Waka Plus** (`waka_plus`). There is **no `enterprise` plan** in code today.
+DKASU POS is a **feature-rich, offline-first retail POS** with cloud sync, role-based access, and a four-tier SaaS catalog (`free`, `starter`, `business`, `waka_plus`). **VIP** in product language maps to **Waka Plus** (`waka_plus`). There is **no `enterprise` plan** in code today.
 
 **Critical findings:**
 
@@ -198,7 +198,7 @@ Legend:
 | Upgrade page | Compare plans, limits | Live | `/upgrade` `UpgradePage.tsx` | — | All |
 | Subscription requests | Owner requests plan change | Live | `subscription_requests` + internal approve | — | Supabase |
 | Org billing offers | Custom annual pricing | Live | `org_billing_offers`, `039` | — | Per org |
-| Admin VIP control | Set plan + days | Live | `admin_shop_set_subscription_plan` | Internal | Waka admin |
+| Admin VIP control | Set plan + days | Live | `admin_shop_set_subscription_plan` | Internal | DKASU admin |
 | Renewal countdown | VIP/Business days left | Live | `getPaidPlanRenewalCountdown` | business/waka_plus active | Paid |
 | MoMo / Airtel pay | In-app payment | **Planned** | i18n “coming soon” | — | Support activation |
 | Legacy plans | small_shop, wholesale, supermarket | **Hidden** | `009_seed` | — | DB only; app maps unknown → starter |

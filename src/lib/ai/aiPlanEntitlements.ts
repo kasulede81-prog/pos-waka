@@ -1,5 +1,5 @@
 /**
- * AI plan request caps. WAKA billing codes map onto these keys.
+ * AI plan request caps. DKASU billing codes map onto these keys.
  * Enforced in check_ai_feature_allowed as a shop monthly ceiling (null = unlimited).
  */
 import type { SubscriptionPlanCode } from "../subscriptionEntitlements";

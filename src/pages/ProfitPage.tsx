@@ -99,7 +99,7 @@ export function ProfitPage({
   const salesHistoryHydration = usePosStore((s) => s.salesHistoryHydration);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const preferences = usePosStore((s) => s.preferences);
-  const shopName = usePosStore((s) => s.preferences.shopDisplayName?.trim() || "Waka POS");
+  const shopName = usePosStore((s) => s.preferences.shopDisplayName?.trim() || "DKASU POS");
   const [searchQuery, setSearchQuery] = useState("");
   const [quickFilter, setQuickFilter] = useState<ProfitQuickFilter>("all");
   const [detailProduct, setDetailProduct] = useState<ProfitProductView | null>(null);

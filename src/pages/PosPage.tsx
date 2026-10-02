@@ -856,7 +856,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const receiptDisplay = useMemo(() => {
     if (!receiptSale) return null;
     const branding = brandingFromSale(receiptSale, shopPreferences, receiptPlanTier);
-    const shopName = (preferences.shopDisplayName ?? "").trim() || "Waka POS";
+    const shopName = (preferences.shopDisplayName ?? "").trim() || "DKASU POS";
     const receiptNumber = buildReceiptNumberForSale(receiptSale, sales);
     const cust = receiptSale.customerId ? customers.find((c) => c.id === receiptSale.customerId) : null;
     return buildReceiptDisplayData({

@@ -2588,7 +2588,7 @@ export type ShopPreferences = {
   officeHubTileOrder?: string[];
   /** Back office hub section colors and visibility. */
   officeHubTileLayout?: Record<string, LauncherTileConfig>;
-  /** Waka public shop ID (A001, …) cached after first online load. */
+  /** DKASU public shop ID (A001, …) cached after first online load. */
   wakaShopId?: string | null;
   /** Thermal / AirPrint receipt width (Settings → Receipts). */
   receiptPaperSize?: ReceiptPaperSize;
@@ -2604,7 +2604,7 @@ export type ShopPreferences = {
   receiptFooterLines?: string[] | null;
   /** Field visibility on receipts (defaults all on). */
   receiptDisplayOptions?: ReceiptDisplayOptions | null;
-  /** When false on premium plans, hide “Powered by Waka POS”. Free/Starter always show. */
+  /** When false on premium plans, hide “Powered by DKASU POS”. Free/Starter always show. */
   receiptShowPoweredByWaka?: boolean;
   /**
    * Archive sales, receipts, and activity after this window (never auto-delete).
@@ -2747,7 +2747,7 @@ export type SyncOperation = {
   lastError?: string | null;
   /** Kampala date_key for a parked closed-business-date rejection. */
   closedDateKey?: string | null;
-  /** WAKA-11 — ISO time the op entered dead-letter. Durable; never ACK'd. */
+  /** DKASU-11 — ISO time the op entered dead-letter. Durable; never ACK'd. */
   quarantinedAt?: string | null;
 };
 

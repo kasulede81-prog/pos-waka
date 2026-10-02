@@ -176,7 +176,7 @@ export function avgDailyUnitsFromIndex(
  * instead of O(all sales) for receipt numbers and “sold today” badges.
  *
  * When `receiptTerminal` is set, `nextReceiptSeq` is the next sequence for that
- * till only (WAKA-10). `todaySales` / `unitsByProduct` stay shop-wide.
+ * till only (DKASU-10). `todaySales` / `unitsByProduct` stay shop-wide.
  */
 export function scanTodaySalesHead(
   sales: Sale[],

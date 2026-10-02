@@ -1,5 +1,5 @@
 /**
- * WAKA-10 — device-qualified receipt identity.
+ * DKASU-10 — device-qualified receipt identity.
  *
  * `receiptSeq` stays a per-terminal local counter (offline-safe). Displayed
  * and persisted identity is `(Kampala day, receiptTerminal, receiptSeq)` so
@@ -59,7 +59,7 @@ export function formatPersistedReceiptIdentity(input: ReceiptIdentityFields): st
 
 /**
  * Customer/debt UI: qualified identity when a till code exists; legacy `#014`
- * when only `receiptSeq` was stamped (pre-WAKA-10 rows).
+ * when only `receiptSeq` was stamped (pre-DKASU-10 rows).
  */
 export function formatReceiptIdentityForUi(input: ReceiptIdentityFields): string | null {
   const seq = parseReceiptSeq(input.receiptSeq);

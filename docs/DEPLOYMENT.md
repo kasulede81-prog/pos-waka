@@ -1,4 +1,4 @@
-# Waka POS — production deployment
+# DKASU POS — production deployment
 
 This guide covers **Vercel** hosting, **Supabase** cloud, **multi-environment** env files, **PWA**, **Android**, and **offline-first** safety checks.
 
@@ -52,7 +52,9 @@ Copy examples:
 1. Create a **production** project (separate from dev/staging recommended).
 2. Run SQL migrations from `supabase/migrations/` in order (CLI: `supabase db push` or paste in SQL editor).
 3. **Auth → URL configuration**
-   - **Site URL:** `https://pos.waka.ug` (must match `VITE_APP_URL`).
+   - **Site URL:** `https://pos.dkasu.com` (must match `VITE_APP_URL`). Keep the legacy
+     `https://pos.waka.ug` and `https://loyalty.waka.ug` entries in the Redirect URLs during the
+     migration — they 308 to DKASU and old emails still point there.
    - **Google OAuth branding:** see [GOOGLE_OAUTH_BRANDING.md](./GOOGLE_OAUTH_BRANDING.md) (custom auth domain + consent screen).
    - **Redirect URLs** (add every surface you use), for example:
      - `http://localhost:5173/**`

@@ -1,7 +1,7 @@
 /**
- * PHASE 0A — WAKA-05 executable regression tests for the pull cursors.
+ * PHASE 0A — DKASU-05 executable regression tests for the pull cursors.
  *
- * AUDIT FINDING (WAKA-05, P0) — FIXED:
+ * AUDIT FINDING (DKASU-05, P0) — FIXED:
  *   Every incremental puller settled its cursor with
  *     `checkpointAt > since ? checkpointAt : new Date().toISOString()`
  *   so a page that returned zero rows advanced the persisted cursor to the
@@ -16,7 +16,7 @@
  * The sales cursor has its own file (`cloudSyncSalesCursorWaka05.offline.test.ts`).
  * This file covers the remaining cursors, the multi-page keyset progression, and
  * the debt-payment cursor that feeds ledger-authoritative customer reconciliation
- * — the R1 / §J sequencing constraint the audit attaches to WAKA-01.
+ * — the R1 / §J sequencing constraint the audit attaches to DKASU-01.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -111,7 +111,7 @@ function debtPaymentRow(scope: OfflineScope, id: string, createdAt: string) {
     customer_id: CUSTOMER_ID,
     amount_ugx: 10_000,
     created_at: createdAt,
-    // WAKA-05: business-date value, deliberately NOT the cursor column.
+    // DKASU-05: business-date value, deliberately NOT the cursor column.
     client_created_at: "2026-01-01T00:00:00.000Z",
     metadata: {},
   };
@@ -313,11 +313,11 @@ describe("WAKA-05 — pull cursors are server-derived", () => {
 /**
  * §J SEQUENCING CONSTRAINT / R1.
  *
- * "Do not ship WAKA-01 alone. Restoring the merge re-enables the
+ * "Do not ship DKASU-01 alone. Restoring the merge re-enables the
  *  ledger-authoritative customer recompute on devices that may be missing debt
- *  payments because of WAKA-05."
+ *  payments because of DKASU-05."
  *
- * WAKA-01 is fixed, so `mergeCustomerFromCloudPull(..., {ledgerAuthoritative})`
+ * DKASU-01 is fixed, so `mergeCustomerFromCloudPull(..., {ledgerAuthoritative})`
  * now actually runs. These tests prove the debt-payment cursor that feeds it can
  * no longer skip a payment, which is what made the recompute dangerous.
  */

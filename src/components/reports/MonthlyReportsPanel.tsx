@@ -60,7 +60,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
     () =>
       buildMonthlyBusinessReport({
         monthKey,
-        shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+        shopName: preferences.shopDisplayName?.trim() || "DKASU POS",
         sales,
         returnRecords,
         products,

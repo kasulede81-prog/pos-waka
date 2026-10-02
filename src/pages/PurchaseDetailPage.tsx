@@ -86,7 +86,7 @@ export function PurchaseDetailPage({
 
   /** Paper copy of a purchase the merchant entered — reuses the purchases report document. */
   const printPurchase = () => {
-    const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+    const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
     const dayKey = dateKeyKampala(purchase.createdAt);
     const [row] = buildPurchaseListRows([purchase], stockMovements);
     if (!row) return;

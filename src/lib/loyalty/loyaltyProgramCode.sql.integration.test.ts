@@ -12,7 +12,7 @@ import {
 } from "../../test/sqlIntegration/loyaltyPgHarness";
 
 /**
- * WPL — the permanent public WAKA Loyalty Program code.
+ * WPL — the permanent public DKASU Loyalty Program code.
  *
  * A code is a PUBLIC IDENTIFIER, not a credential: `WPL` + issuance year + a sequence that is
  * zero-padded to a MINIMUM of three digits. It says WHICH merchant; it authorises nothing. The
@@ -544,7 +544,7 @@ describe("one member can belong to several programs", async () => {
     expect(links.rows.length).toBe(2);
     expect(new Set(links.rows.map((r) => r.shop_id))).toEqual(new Set([f.shopAId, f.shopBId]));
 
-    // Still exactly ONE WAKA member identity — never one per shop.
+    // Still exactly ONE DKASU member identity — never one per shop.
     const members = await exec.query(
       `SELECT count(*)::int AS n FROM public.loyalty_members WHERE auth_user_id = $1`,
       [memberUserId],

@@ -323,7 +323,7 @@ export function AuthCallbackPage() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-waka-50 via-card to-muted px-4 py-10">
       <WakaPosLogo size="lg" className="mx-auto" />
-      <p className="mt-4 text-lg font-black text-foreground">Waka POS</p>
+      <p className="mt-4 text-lg font-black text-foreground">DKASU POS</p>
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{WAKA_LEGAL_COMPANY_NAME}</p>
 
       {state === "loading" ? (

@@ -54,7 +54,7 @@ export class AppRootErrorBoundary extends Component<Props, State> {
             textAlign: "center",
           }}
         >
-          <p style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0 }}>Waka POS could not load</p>
+          <p style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0 }}>DKASU POS could not load</p>
           <p style={{ marginTop: 12, fontSize: "0.9rem", color: "#57534e", maxWidth: 340 }}>
             Try refreshing the page. If this keeps happening, reset app data for <strong>{host}</strong> or open a
             private tab.

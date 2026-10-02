@@ -110,7 +110,7 @@ export function useShopSupportRealtime(shopId: string | null, onEvent: () => voi
 }
 
 /**
- * Internal WAKA console: any new/updated ticket anywhere (RLS keeps this
+ * Internal DKASU console: any new/updated ticket anywhere (RLS keeps this
  * internal-only) nudges the queue; the expanded ticket gets its own channel for
  * messages and status.
  */

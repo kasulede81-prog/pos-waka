@@ -10,7 +10,7 @@ import { t } from "../i18n";
  *
  * TWO THINGS ARE PINNED. First, the button is not offered before it is known that Wallet is
  * configured — a customer must never be shown a control that is going to fail, and a customer
- * must never be shown the merchant-facing "ask WAKA support to set issuer credentials" message,
+ * must never be shown the merchant-facing "ask DKASU support to set issuer credentials" message,
  * which describes the shop's infrastructure rather than anything the member can act on.
  *
  * Second, every refusal the server can return is mapped to a sentence the member can act on, and

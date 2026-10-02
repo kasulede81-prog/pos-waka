@@ -9558,7 +9558,7 @@ export const usePosStore = create<PosState>((set, get) => {
       void get().openCashDrawerOnPayment(saleId);
       if (resolveHospitalityHardware(state.preferences).customerDisplayEnabled) {
         publishCustomerDisplay({
-          shopName: state.preferences.shopDisplayName?.trim() || "Waka POS",
+          shopName: state.preferences.shopDisplayName?.trim() || "DKASU POS",
           tableLabel,
           lines: [],
           subtotalUgx: 0,

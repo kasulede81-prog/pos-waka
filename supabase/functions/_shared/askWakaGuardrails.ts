@@ -1,5 +1,5 @@
 /**
- * Ask WAKA quality / trust guardrails (testable client mirror).
+ * Ask DKASU quality / trust guardrails (testable client mirror).
  * Edge copy: supabase/functions/_shared/askWakaGuardrails.ts
  *
  * Structured flow: classify → required tools → successful tool result → final answer.

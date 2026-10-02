@@ -9,9 +9,9 @@ import {
 } from "../../lib/loyalty/loyaltyPublicProgram";
 
 /**
- * Phase 2C — the WAKA Loyalty entry point: "enter your merchant's code".
+ * Phase 2C — the DKASU Loyalty entry point: "enter your merchant's code".
  *
- * WHY THIS REPLACES A REGISTRATION FORM. A WAKA Loyalty member only means something in relation to
+ * WHY THIS REPLACES A REGISTRATION FORM. A DKASU Loyalty member only means something in relation to
  * a merchant's programme — the points, the card and the membership all belong to a shop. Creating
  * a `loyalty_members` row with no programme attached produced an identity with nothing to show and
  * no way to become useful, so the product no longer does it. The merchant's code is the required

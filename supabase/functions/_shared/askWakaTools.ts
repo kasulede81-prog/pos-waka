@@ -1,5 +1,5 @@
 /**
- * Ask WAKA allowlisted READ-ONLY tools.
+ * Ask DKASU allowlisted READ-ONLY tools.
  * Shop scope is bound from authenticated server context — never from the model.
  *
  * Verified: existing deepseekClient.ts does NOT use function calling.

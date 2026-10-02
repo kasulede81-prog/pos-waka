@@ -7,7 +7,7 @@ export const RATE_SCOPE_CARD_READ = "card_read" as const;
 export const RATE_SCOPE_WALLET_ISSUE = "wallet_issue" as const;
 export const RATE_SCOPE_ENROLL_JOIN = "enroll_join" as const;
 export const RATE_SCOPE_ENROLL_SUBMIT = "enroll_submit" as const;
-/** Public WAKA Loyalty Program code lookup (WPL2026001). */
+/** Public DKASU Loyalty Program code lookup (WPL2026001). */
 export const RATE_SCOPE_PROGRAM_LOOKUP = "program_lookup" as const;
 
 export type RateScope =

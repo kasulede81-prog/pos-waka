@@ -1,6 +1,6 @@
 /**
  * Marketing website content — pricing and plan details align with
- * subscriptionPricing.ts and public PricingPage. Hardware prices from Waka POS brochure.
+ * subscriptionPricing.ts and public PricingPage. Hardware prices from DKASU POS brochure.
  */
 import type { PaidPlanCode } from "../lib/subscriptionPricing";
 import { CANONICAL_PLAN_PRICES, computePlanDisplayPrice } from "../lib/subscriptionPricing";
@@ -57,7 +57,7 @@ export const MARKETING_PLANS: MarketingPlan[] = [
     name: "Free",
     monthlyUgx: 0,
     annualUgx: 0,
-    blurb: "Perfect for trying Waka POS and running a very small shop.",
+    blurb: "Perfect for trying DKASU POS and running a very small shop.",
     features: [
       "Sales & Checkout",
       "Inventory Management",
@@ -211,7 +211,7 @@ export const MARKETING_TESTIMONIALS = [
   {
     name: "Sarah N.",
     business: "Mini market · Kampala",
-    quote: "We moved from notebooks to Waka POS in one week. Stock and debts are finally clear.",
+    quote: "We moved from notebooks to DKASU POS in one week. Stock and debts are finally clear.",
     rating: 5,
   },
   {
@@ -242,12 +242,12 @@ export const MARKETING_TESTIMONIALS = [
 
 export const MARKETING_FAQ = [
   {
-    q: "Does Waka POS work offline?",
-    a: "Yes. Waka POS is offline-first. You can record sales, adjust stock, and manage debts without internet. Data syncs when you are back online.",
+    q: "Does DKASU POS work offline?",
+    a: "Yes. DKASU POS is offline-first. You can record sales, adjust stock, and manage debts without internet. Data syncs when you are back online.",
   },
   {
     q: "How does cloud sync work?",
-    a: "When your device has internet, Waka POS uploads pending sales and downloads updates securely. You can also back up and restore from the cloud.",
+    a: "When your device has internet, DKASU POS uploads pending sales and downloads updates securely. You can also back up and restore from the cloud.",
   },
   {
     q: "Do you help with installation?",

@@ -69,7 +69,7 @@ Counts are occurrence totals in `src/` (`.ts` / `.tsx` / `.css`), excluding `lov
 | Area | Count | Notes |
 |---|---:|---|
 | other (staff, EOD, upgrade, sync, investigation, hardware, …) | 649 | Diffuse; many card titles + chips |
-| internal_admin | 344 | Oversight UI; Roboto `font-admin` — out of WAKA POS VL-2.1 |
+| internal_admin | 344 | Oversight UI; Roboto `font-admin` — out of DKASU POS VL-2.1 |
 | **pos** | **228** | Checkout 28, PosPage 26, cart lines 14, product cards, shelf |
 | pharmacy | 176 | Ops dashboard 27, patient profile 21 |
 | settings | 135 | Forms, diagnostics, Cloud Trust |
@@ -234,7 +234,7 @@ Where importance is real but extra-black is the default shout:
 - Home tile **liveStat values** (`text-sm font-black tabular-nums`) — owner scan vs competing with tile title. Prefer title 700 + value 700 tabular first; don’t send value to 500.
 - Cash position section values — financial, but many headings are also black; split heading vs number in a later VL-2.x.
 - Hospitality bill sheet / production tickets — operational, treat like POS until a dedicated pass.
-- Internal admin / marketing — **out of WAKA POS VL-2.1**.
+- Internal admin / marketing — **out of DKASU POS VL-2.1**.
 
 ---
 

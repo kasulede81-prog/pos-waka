@@ -1,4 +1,4 @@
-# WAKA POS — P0-A Sync Health Implementation Source of Truth
+# DKASU POS — P0-A Sync Health Implementation Source of Truth
 
 **Status:** Authoritative implementation brief  
 **Scope:** P0-A only — Make sync health real  
@@ -274,7 +274,7 @@ When implementation decisions conflict with assumptions, use this priority:
 1. Current repository behavior and schema verification.
 2. Requirements and constraints in this document.
 3. Claude audit evidence that produced this document.
-4. Existing WAKA POS architecture and established patterns.
+4. Existing DKASU POS architecture and established patterns.
 
 Never invent missing semantics.
 

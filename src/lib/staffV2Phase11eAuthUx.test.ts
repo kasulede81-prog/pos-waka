@@ -17,7 +17,7 @@ const SYNTHETIC_TOKEN = "phase11e.test.token.not-real";
 
 describe("STAFF-V2 Phase 11e authentication UX clarification", () => {
   it("U1 — neutral login framing for owners and invited staff", () => {
-    expect(t("en", "loginWelcomeSub")).toBe("Sign in to your WAKA POS workspace");
+    expect(t("en", "loginWelcomeSub")).toBe("Sign in to your DKASU POS workspace");
     expect(t("en", "loginWelcomeSub").toLowerCase()).not.toContain("owner access");
     expect(t("en", "loginOwnerHint").toLowerCase()).toContain("invited staff");
     expect(t("en", "loginOwnerHint").toLowerCase()).toContain("email");

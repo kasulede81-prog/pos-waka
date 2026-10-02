@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 
 /**
- * Internal WAKA admin: reset a shop's business/test data.
+ * Internal DKASU admin: reset a shop's business/test data.
  * Server-side authorization, dependency-safe deletion, and audit logging all
  * live in the single Postgres RPC `admin_reset_shop_business_data` — this file
  * is a thin client wrapper, not a second implementation of the reset logic.

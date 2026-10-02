@@ -7,7 +7,7 @@ import {
 
 /**
  * Phase 05 — Membership QR payload encoding. The QR carries ONLY the opaque
- * `qr_token` behind a `WAKA-LOYALTY:` prefix so POS scanners can tell loyalty
+ * `qr_token` behind a `DKASU-LOYALTY:` prefix so POS scanners can tell loyalty
  * codes apart from product barcodes; no personal data is embedded.
  */
 

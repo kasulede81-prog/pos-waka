@@ -66,7 +66,7 @@ export type FakeSupabaseOptions = {
    *
    * OFF by default so existing tests keep "the server returns exactly the rows
    * I configured". Turn it ON for tables where the test's point is that the
-   * client sent a status/shop filter and the server honoured it (WAKA-09).
+   * client sent a status/shop filter and the server honoured it (DKASU-09).
    */
   columnFilterTables?: string[];
   /**

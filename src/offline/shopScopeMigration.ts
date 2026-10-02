@@ -2,7 +2,7 @@
  * MB-1 — one-time migration of legacy account-only IndexedDB rows to shop-scoped namespace.
  * Never assigns legacy data to an uncertain shop.
  *
- * WAKA-08: legacy KV rows are moved (copy then delete) and claimed once per account.
+ * DKASU-08: legacy KV rows are moved (copy then delete) and claimed once per account.
  * A second shop must not inherit the first shop's leftover unscoped snapshot.
  */
 

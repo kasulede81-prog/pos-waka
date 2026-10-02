@@ -1,4 +1,4 @@
-# WAKA POS Loyalty — Architecture Decisions
+# DKASU POS Loyalty — Architecture Decisions
 
 This file records important decisions made during implementation.
 

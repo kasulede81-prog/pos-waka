@@ -3,7 +3,7 @@ import { useActivation, pathAllowedWhenActivationLocked } from "../context/Activ
 
 /**
  * When the shop is not commercially activated, only marketing/support/demo/activate paths pass through.
- * Internal Waka staff bypass via ActivationProvider.
+ * Internal DKASU staff bypass via ActivationProvider.
  */
 export function ActivationGateOutlet() {
   const location = useLocation();

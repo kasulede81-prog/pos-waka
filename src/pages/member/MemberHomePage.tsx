@@ -17,7 +17,7 @@ import { useMemberEnrollmentStatus } from "../../hooks/useMemberEnrollmentStatus
 import { useAuth } from "../../hooks/useAuth";
 
 /**
- * The authenticated WAKA Loyalty member home.
+ * The authenticated DKASU Loyalty member home.
  *
  * ONE DATA SOURCE. Everything here comes from `fetchMemberDashboard()` — the
  * `loyalty_member_dashboard()` projection. That function takes NO parameters and resolves the member
@@ -48,7 +48,7 @@ import { useAuth } from "../../hooks/useAuth";
  * is read, returned or stored anywhere on this page.
  *
  * PHASE 2C — THIS PAGE NO LONGER CREATES MEMBERS. A signed-in person with no `loyalty_members` row
- * used to be offered a name/phone registration form right here, which produced a WAKA Loyalty
+ * used to be offered a name/phone registration form right here, which produced a DKASU Loyalty
  * identity belonging to no merchant: no programme, no card, no points, and no way to become useful
  * without enrolling somewhere anyway. The merchant's programme is the context that makes a
  * membership mean something, so it is now required FIRST — this page shows the code-entry step and

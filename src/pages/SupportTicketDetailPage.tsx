@@ -40,7 +40,7 @@ import { KeyboardSafePage } from "../components/layout/KeyboardSafePage";
 
 /**
  * Support conversation: reference, subject, category, status, timestamps, the
- * merchant/WAKA message thread (now with image/PDF/voice-note attachments), and
+ * merchant/DKASU message thread (now with image/PDF/voice-note attachments), and
  * a reply composer while the ticket is replyable. Phase 2.5: the conversation is
  * realtime — both sides see new messages, status changes and notifications
  * without refreshing. Closed tickets stay fully immutable server-side (the UI

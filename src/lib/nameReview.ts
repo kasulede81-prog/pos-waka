@@ -1,9 +1,9 @@
 /**
- * The WAKA name — what a person is called INSIDE WAKA — as distinct from what Google says they are
+ * The DKASU name — what a person is called INSIDE DKASU — as distinct from what Google says they are
  * called.
  *
  * WHY THIS IS ITS OWN MODULE. Google's name is a suggestion from an external identity provider.
- * WAKA's name is a thing the person chose. The codebase used to treat them as the same string:
+ * DKASU's name is a thing the person chose. The codebase used to treat them as the same string:
  * `user_metadata.full_name` was read straight into `profiles.full_name` at provisioning, and the
  * UI displayed it directly. Two consequences, both verified against the live RPCs:
  *
@@ -11,12 +11,12 @@
  *     (`bootstrap_owner_workspace`'s upsert is `coalesce(nullif(trim(p_full_name),''), existing)`,
  *     so any non-empty incoming name wins);
  *   * because the UI read the provider-owned field, a rename at Google changed the displayed name
- *     with no WAKA write at all.
+ *     with no DKASU write at all.
  *
  * THE MARKER AND THE VALUE ARE OURS. `waka_full_name` and `waka_name_confirmed_at` are keys Google
  * (and the auth server's provider sync) will never write. That is the whole point: whether or not
  * Supabase refreshes `full_name`/`name`/`given_name` from the provider on a later sign-in, the
- * confirmed WAKA name cannot be touched by it. This module is the single reader of that pair, so
+ * confirmed DKASU name cannot be touched by it. This module is the single reader of that pair, so
  * every consumer agrees on what "confirmed" means.
  *
  * NOT A SECURITY BOUNDARY. Metadata is client-writable, and `profiles.full_name` is writable by
@@ -24,7 +24,7 @@
  * them. `profiles.full_name` remains the canonical value.
  */
 
-/** Our own metadata key holding the confirmed WAKA name. Never written by a provider. */
+/** Our own metadata key holding the confirmed DKASU name. Never written by a provider. */
 export const WAKA_FULL_NAME_KEY = "waka_full_name";
 /** When the person confirmed it. Its presence is what makes `WAKA_FULL_NAME_KEY` authoritative. */
 export const WAKA_NAME_CONFIRMED_AT_KEY = "waka_name_confirmed_at";
@@ -66,7 +66,7 @@ export function suggestNameParts(providerName: string | null | undefined): NameP
   return { firstName: tokens[0]!, lastName: tokens.slice(1).join(" ") };
 }
 
-/** Compose the canonical WAKA name from its parts. */
+/** Compose the canonical DKASU name from its parts. */
 export function composeFullName(firstName: string, lastName: string): string {
   return normalizeNamePart([normalizeNamePart(firstName), normalizeNamePart(lastName)].filter(Boolean).join(" "));
 }
@@ -96,7 +96,7 @@ export function namePartsProblem(input: { firstName: string; lastName: string })
 }
 
 /**
- * The confirmed WAKA name, or `null` when this session has none.
+ * The confirmed DKASU name, or `null` when this session has none.
  *
  * BOTH keys must be present and non-empty. A marker without a value means we cannot say what was
  * confirmed, and the safe reading of that is "not confirmed" — which re-runs the review rather than
@@ -156,12 +156,12 @@ export function reviewPrefill(metadata: Record<string, unknown> | null | undefin
 }
 
 /**
- * Does THIS session have to review its name before it can be given a WAKA identity?
+ * Does THIS session have to review its name before it can be given a DKASU identity?
  *
  * A loyalty member is never asked: membership has its own `display_name` and its own registration
  * form, and the member surface must not acquire a merchant step.
  *
- * Anyone who already has a tenancy is never asked either. They have a WAKA identity by
+ * Anyone who already has a tenancy is never asked either. They have a DKASU identity by
  * construction, and re-asking a working merchant to re-confirm their name on the strength of
  * metadata alone would be exactly the repeated prompt this must not do.
  */
@@ -190,7 +190,7 @@ export function provisionableWakaName(
 }
 
 /**
- * The name to DISPLAY for this session. Prefers the confirmed WAKA name, then falls back to the
+ * The name to DISPLAY for this session. Prefers the confirmed DKASU name, then falls back to the
  * provider's suggestion — a display fallback is harmless for someone who has not confirmed yet, and
  * is never written back anywhere.
  */

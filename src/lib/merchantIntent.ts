@@ -58,7 +58,7 @@ export async function declareMerchantIntent(input: {
     const user = data?.user;
     if (!user) return { ok: false, error: "not_authenticated" };
 
-    // Merge rather than replace: a merchant who is also a WAKA Loyalty member must keep
+    // Merge rather than replace: a merchant who is also a DKASU Loyalty member must keep
     // `account_kind`, and a returning merchant must keep every other key they already carry.
     const current = (user.user_metadata ?? {}) as Record<string, unknown>;
     const next: Record<string, unknown> = {

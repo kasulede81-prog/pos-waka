@@ -1,4 +1,4 @@
-# Waka POS — Cloud Authority Audit
+# DKASU POS — Cloud Authority Audit
 
 Classification for zero-data-loss recovery. **A** = recoverable on a new device via cloud pull/snapshot without backup import. **B** = cloud stored but incomplete incremental recovery. **C** = snapshot or local disk required.
 

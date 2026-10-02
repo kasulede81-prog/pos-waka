@@ -604,7 +604,7 @@ Then: persist/reconnect, 58mm default for portable rolls, error copy, optional B
 | Web Bluetooth BLE | 2/10 | Chooser exists; no session; hardcoded GATT; empty vs Classic. |
 | Capacitor Android thermal | **1/10** | No plugin, no permissions, capability false. |
 | Capacitor iOS thermal | **1/10** | No Bluetooth surface. |
-| **This “Mobile Printer” on WAKA POS** | **2/10** | Bytes exist; radio does not. |
+| **This “Mobile Printer” on DKASU POS** | **2/10** | Bytes exist; radio does not. |
 
 **Overall certification:** **NOT PRODUCTION-READY** for Bluetooth portable thermals on Android/Capacitor.
 

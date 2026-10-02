@@ -127,7 +127,7 @@ describe("the hazard that makes provider isolation mandatory", () => {
     await bootstrap(uid, "Hazard Shop", "John Smith");
     expect(await profileName(uid)).toBe("John Smith");
 
-    // The merchant changes their WAKA name.
+    // The merchant changes their DKASU name.
     await exec.query(`UPDATE public.profiles SET full_name = 'Jonathan Smith' WHERE id = $1`, [uid]);
     expect(await profileName(uid)).toBe("Jonathan Smith");
 

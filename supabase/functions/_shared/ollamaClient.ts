@@ -1,5 +1,5 @@
 /**
- * Ollama HTTP chat provider for Ask WAKA (Qwen and compatible models).
+ * Ollama HTTP chat provider for Ask DKASU (Qwen and compatible models).
  *
  * ASK-4.1 hardening:
  * - NEVER expose `thinking` / `reasoning` to callers

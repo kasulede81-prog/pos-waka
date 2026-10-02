@@ -16,7 +16,7 @@ Phase 22.3 rolls out the enterprise design system to **high-traffic daily-use su
 
 ## Objective
 
-Make **~80% of what users see every day** use enterprise primitives — typography, headers, cards, tables, buttons, badges — so WAKA POS feels like one professionally designed product.
+Make **~80% of what users see every day** use enterprise primitives — typography, headers, cards, tables, buttons, badges — so DKASU POS feels like one professionally designed product.
 
 **Not in scope:** business logic, auth, sync, permissions, database, RPCs.
 

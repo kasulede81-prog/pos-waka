@@ -1,4 +1,4 @@
-# WAKA POS — Product Entry Audit
+# DKASU POS — Product Entry Audit
 
 **Date:** 2026-08-28  
 **Scope:** Inspection only. No code changes, migrations, CSV import, or OCR/AI implementation.  

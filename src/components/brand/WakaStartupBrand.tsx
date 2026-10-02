@@ -7,7 +7,7 @@ type Props = {
   compact?: boolean;
 };
 
-/** Centered Waka POS brand block for splash, startup, and recovery screens. */
+/** Centered DKASU POS brand block for splash, startup, and recovery screens. */
 export function WakaStartupBrand({ className, compact = false }: Props) {
   return (
     <div className={clsx("flex flex-col items-center justify-center text-center", className)}>

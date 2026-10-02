@@ -2,7 +2,7 @@
 
 **Mode:** Read-only forensic audit (**NO code changes, NO CSS changes, NO SQL, NO migrations, NO dependency updates**)  
 **Date:** 2026-08-03  
-**Scope:** Global WAKA POS visual language — typography, spacing, surfaces, cards, buttons, dashboards, landing, brand identity, premium feel  
+**Scope:** Global DKASU POS visual language — typography, spacing, surfaces, cards, buttons, dashboards, landing, brand identity, premium feel  
 **Related prior work:**  
 - Phase 22.1–22.6 (design system baseline, enforcement, adoption, polish)  
 - Phase 29.0/29.1 **Theme System** (`PHASE_29_0_ENTERPRISE_THEME_SYSTEM_LIGHT_DARK_MODE_CERTIFICATION.md`) — color tokens, Light/Dark contrast, status AA (do **not** re-litigate here)  
@@ -27,7 +27,7 @@ If the three videos are provided later, a short **addendum** can map each extrac
 
 ## Executive Summary
 
-WAKA POS already owns a **real enterprise design spine**: six typography roles, `themeUi` surfaces, `WakaButton` / `EnterpriseCard` / `EnterpriseKpiCard`, motion helpers, and a live design-system scanner. Phase 29.1 theme work improved color contrast and dark elevation.
+DKASU POS already owns a **real enterprise design spine**: six typography roles, `themeUi` surfaces, `WakaButton` / `EnterpriseCard` / `EnterpriseKpiCard`, motion helpers, and a live design-system scanner. Phase 29.1 theme work improved color contrast and dark elevation.
 
 It is **not yet certified as a unified premium visual language** because:
 

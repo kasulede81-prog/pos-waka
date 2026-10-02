@@ -130,7 +130,7 @@ export async function considerEfrisEnqueue(
     try {
       await deps.invokeSubmitStub(shopId, input.saleId);
     } catch {
-      /* stub failure must not affect the WAKA sale */
+      /* stub failure must not affect the DKASU sale */
     }
 
     return {

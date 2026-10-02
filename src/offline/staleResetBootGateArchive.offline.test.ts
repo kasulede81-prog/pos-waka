@@ -1,5 +1,5 @@
 /**
- * Admin-reset safety net — the BOOT GATE path (WAKA-14).
+ * Admin-reset safety net — the BOOT GATE path (DKASU-14).
  *
  * Confirmed production ordering (shop 1a110d2e, five devices, all `recoveryReason: "app_boot_gate"`): the boot gate
  * pulls and ACKNOWLEDGES the reset signal BEFORE the outbox flush runs. From then on the flush guard
@@ -9,7 +9,7 @@
  * had deleted.
  *
  * Runs the REAL applyAdminForceFullResync + REAL flushSyncQueueInner + REAL IndexedDB (fake-indexeddb); only
- * src/lib/supabase is faked (established WAKA offline-test convention).
+ * src/lib/supabase is faked (established DKASU offline-test convention).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Sale, SyncOperation } from "../types";

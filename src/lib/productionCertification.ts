@@ -450,7 +450,7 @@ export async function buildProductionCertificationReport(input?: {
 
 export function formatProductionCertificationMarkdown(report: ProductionCertificationReport): string {
   const lines: string[] = [
-    "# Waka POS Production Certification Report",
+    "# DKASU POS Production Certification Report",
     "",
     `**Verdict:** ${report.verdict}`,
     `**Checked at:** ${report.checkedAt}`,

@@ -32,7 +32,7 @@
  *
  * This file runs the REAL `pullCloudAndMergeIntoStore` against REAL
  * IndexedDB (fake-indexeddb). Only `src/lib/supabase` is faked, per the
- * established WAKA offline-test convention.
+ * established DKASU offline-test convention.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Customer, Sale } from "../types";

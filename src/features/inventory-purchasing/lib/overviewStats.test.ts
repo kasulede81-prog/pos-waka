@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatShortUgx } from "./overviewStats";
 
 /**
- * WAKA POS — Inventory Overview "Stock value" display audit.
+ * DKASU POS — Inventory Overview "Stock value" display audit.
  *
  * `formatShortUgx` here is the exact function `InventoryHealthSnapshot.tsx`
  * imports and calls on `stats.inventoryValueUgx` to render the Inventory

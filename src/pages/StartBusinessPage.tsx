@@ -30,7 +30,7 @@ type Props = { lang: Language };
  * the email signup always has: metadata only. It creates nothing. The workspace is still created by
  * the existing guarded bootstrap, once the person has actually completed the onboarding wizard.
  *
- * NAME REVIEW (added). Google's name is a suggestion from an external identity provider; WAKA's
+ * NAME REVIEW (added). Google's name is a suggestion from an external identity provider; DKASU's
  * name is a thing the person chose, and the two used to be the same string — a provider rename on a
  * later login could replace a name the merchant had already picked. So a FIRST-TIME merchant is
  * asked to confirm their name here, before their first tenancy exists. The declaration is written
@@ -51,7 +51,7 @@ export function StartBusinessPage({ lang }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * A registered WAKA Loyalty member already has a product surface; sending them into merchant
+   * A registered DKASU Loyalty member already has a product surface; sending them into merchant
    * onboarding would offer them a second, unrelated one.
    *
    * THIS IS NOT AN AUTHORIZATION CHECK. It only decides which screen a member is shown — it grants
@@ -96,7 +96,7 @@ export function StartBusinessPage({ lang }: Props) {
         if (cancelled) return;
         setMetadata((meta ?? null) as Record<string, unknown> | null);
         setIdentityKind(resolution.kind);
-        // A tenancy is an existing WAKA identity; that person is never asked to re-confirm. The
+        // A tenancy is an existing DKASU identity; that person is never asked to re-confirm. The
         // `member` variant carries no `reason` (membership is decided by the member row), and a
         // member is redirected below regardless — so only merchant/unknown are read here.
         const reason = resolution.kind === "member" ? null : resolution.reason;

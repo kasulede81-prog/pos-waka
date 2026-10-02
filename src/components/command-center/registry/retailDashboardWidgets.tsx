@@ -57,7 +57,7 @@ function ToolbarWidget({ ctx }: DashboardWidgetProps) {
       onSearchToggle={() => ctx.setSearchOpen?.(!(ctx.searchOpen ?? false))}
       searchQuery={ctx.searchQuery ?? ""}
       onSearchChange={(q) => ctx.setSearchQuery?.(q)}
-      shopName={ctx.shopName ?? "Waka POS"}
+      shopName={ctx.shopName ?? "DKASU POS"}
     />
   );
 }

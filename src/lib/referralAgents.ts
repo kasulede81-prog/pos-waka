@@ -56,7 +56,7 @@ export type AgentUserCandidate = {
   district: string | null;
 };
 
-/** Referral codes are always shown and stored in ALL CAPS (e.g. WAKA-A1B2). */
+/** Referral codes are always shown and stored in ALL CAPS (e.g. DKASU-A1B2). */
 export function normalizeReferralCode(code: string): string {
   return code.trim().toUpperCase();
 }

@@ -35,7 +35,7 @@ function drawBrandMark(doc: jsPDF, x: number, y: number): void {
   doc.setTextColor(17, 17, 17);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.text("WAKA POS", x + HEADER_MARK + 8, y + 16);
+  doc.text("DKASU POS", x + HEADER_MARK + 8, y + 16);
 }
 
 function drawHeader(doc: jsPDF, model: ReportDocumentModel, pageW: number): number {

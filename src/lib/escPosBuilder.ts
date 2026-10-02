@@ -168,7 +168,7 @@ export class EscPosBuilder {
 
 export function buildTestEscPos(width: EscPosPaperWidth, lines: string[]): Uint8Array {
   const b = new EscPosBuilder(width);
-  b.align("center").doubleSize(true).textLine("WAKA POS").doubleSize(false);
+  b.align("center").doubleSize(true).textLine("DKASU POS").doubleSize(false);
   b.align("left").rule();
   b.textLines(lines);
   b.rule().finalize();

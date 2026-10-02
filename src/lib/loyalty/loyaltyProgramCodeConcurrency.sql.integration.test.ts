@@ -42,7 +42,7 @@ import { createLoyaltySqlHarness, type SqlExec } from "../../test/sqlIntegration
 const TEST_DB_URL = process.env.TEST_DATABASE_URL?.trim();
 const SKIP = !TEST_DB_URL;
 
-/** WAKA's production Supabase project ref, as pinned in supabase/config.toml and vercel.json. */
+/** DKASU's production Supabase project ref, as pinned in supabase/config.toml and vercel.json. */
 const PRODUCTION_PROJECT_REF = "ljaedextsenbkxzzgxcg";
 
 /**

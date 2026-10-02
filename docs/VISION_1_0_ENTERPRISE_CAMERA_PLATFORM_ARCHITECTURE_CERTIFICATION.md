@@ -3,7 +3,7 @@
 **Mode:** Read-only enterprise architecture audit (**NO implementation, NO SDK integration, NO UI development, NO migrations**)  
 **Date:** 2026-08-04  
 **Codename:** WAKA Vision  
-**Scope:** Universal camera platform architecture that integrates with WAKA POS while remaining usable as a standalone camera manager  
+**Scope:** Universal camera platform architecture that integrates with DKASU POS while remaining usable as a standalone camera manager  
 **Current codebase status:** No ONVIF / RTSP / WebRTC / VMS stack exists. Device `getUserMedia` is used only for barcode scanning and product photos.  
 
 **Core design question:**
@@ -76,7 +76,7 @@ WAKA Vision must be built as a **separate camera platform** with a hard boundary
                  │
       Browser / Desktop / Mobile
                  │
-         WAKA POS Event Bus
+         DKASU POS Event Bus
          (AuditLogEntry + entities)
                  │
       Timeline / Investigation /
@@ -919,7 +919,7 @@ Analog Cameras (sensors)
   → DVR (CCTV brain + recording + HDD)
     → Vision Edge Agent (LAN boundary)
       → WAKA Vision (manage / monitor / assign)
-        → WAKA POS (future event links)
+        → DKASU POS (future event links)
 
 SECONDARY
 IP Cameras → NVR → Vision
@@ -959,7 +959,7 @@ Installer packages (informational only):
                                          [WAKA Vision]
                                               │
                                               ▼
-                                           [WAKA POS]
+                                           [DKASU POS]
 ```
 
 ## Regression summary

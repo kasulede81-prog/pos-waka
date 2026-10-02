@@ -1,13 +1,13 @@
 /**
- * PHASE 0A — WAKA-11 / WAKA-12 executable regressions.
+ * PHASE 0A — DKASU-11 / DKASU-12 executable regressions.
  *
- * AUDIT FINDING (WAKA-11, P1) — FIXED:
+ * AUDIT FINDING (DKASU-11, P1) — FIXED:
  *   After `attempts` reached 100, flush skipped the re-append (`if (op.attempts < 100)`).
  *   The durable row stayed, `lastAttemptAt` froze, `shouldRetrySyncOp` stayed true past
  *   the backoff cap, and every later flush retried the same unprocessable op forever.
  *   Ops with no resolvable shop id took the same infinite-retry path via `"retry"`.
  *
- * AUDIT FINDING (WAKA-12, P1) — FIXED:
+ * AUDIT FINDING (DKASU-12, P1) — FIXED:
  *   `pullEntitySafe` recorded `entityErrors` and returned undefined, but the pull still
  *   returned true. `useSyncStatus` discarded that result (`void pulled;`) and wrote
  *   `lastSuccessAt` whenever the in-memory push counts were zero — so the indicator

@@ -33,7 +33,7 @@ if (!clientId) {
 2. Copy the "Client ID" (ends with .apps.googleusercontent.com)
 3. Add to Vercel → Project → Settings → Environment Variables → Production:
      VITE_GOOGLE_OAUTH_CLIENT_ID = <paste Client ID>
-   Also set: VITE_APP_URL = https://pos.waka.ug
+   Also set: VITE_APP_URL = https://pos.dkasu.com
 4. Redeploy (Deployments → Redeploy)
 
 Local: paste the same Client ID into .env as VITE_GOOGLE_OAUTH_CLIENT_ID=

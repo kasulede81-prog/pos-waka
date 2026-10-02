@@ -6,7 +6,7 @@ import { wakaSupportWhatsAppUrl } from "../../config/wakaSupport";
 
 type Props = { lang: Language };
 
-/** Collapsible Waka help — shop settings only (keeps home/stock lists uncluttered). */
+/** Collapsible DKASU help — shop settings only (keeps home/stock lists uncluttered). */
 export function SupportQuickStrip({ lang }: Props) {
   return (
     <details className="group rounded-2xl border border-waka-200/90 bg-gradient-to-br from-waka-50 to-card shadow-sm">

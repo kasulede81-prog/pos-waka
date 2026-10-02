@@ -1,7 +1,7 @@
 /**
  * Google Sign-In via Google Identity Services (GIS) — popup UX only.
  *
- * Flow: custom Waka button → GIS popup → ID token in JS callback → Supabase signInWithIdToken.
+ * Flow: custom DKASU button → GIS popup → ID token in JS callback → Supabase signInWithIdToken.
  * Does NOT use signInWithOAuth, redirectTo, or *.supabase.co/auth/v1/callback.
  *
  * Google Cloud (Web client):

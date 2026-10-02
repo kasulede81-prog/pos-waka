@@ -1,4 +1,4 @@
-# WAKA POS — CSV Product Import
+# DKASU POS — CSV Product Import
 
 **Phase:** 2 — Two wizard-parity templates  
 **Date:** 2026-08-29  

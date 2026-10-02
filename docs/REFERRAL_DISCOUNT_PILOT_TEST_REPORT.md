@@ -1,4 +1,4 @@
-# Waka POS — Referral & Discount Pilot Test Report
+# DKASU POS — Referral & Discount Pilot Test Report
 
 **Date:** 2026-05-28  
 **Scope:** Agent referral tracking, registration referral code, cart-level discount, discount labeling.

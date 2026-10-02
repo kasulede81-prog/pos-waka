@@ -1,4 +1,4 @@
-# WAKA POS — Typography & Visual Language Forensic Audit
+# DKASU POS — Typography & Visual Language Forensic Audit
 
 **Date:** 2026-08-19  
 **Mode:** FORENSIC AUDIT ONLY — no source, CSS, Tailwind, font, component, POS, checkout, sync, auth, or database changes.  
@@ -301,7 +301,7 @@ Same as B unless the new face is **metric-compatible** with DM Sans (unverified)
 
 # PART 6 — TYPOGRAPHY SYSTEM PROPOSAL
 
-Conceptual only. Based on WAKA POS (touch, UGX, Home density, Sell), **not** a marketing site.
+Conceptual only. Based on DKASU POS (touch, UGX, Home density, Sell), **not** a marketing site.
 
 Do not enlarge Home tiles, POS product cards, or keypad type in VL-1.
 
@@ -660,7 +660,7 @@ Allowed in VL-1 **if implemented later:** `src/main.tsx` font imports + this doc
 Copy-paste for the first controlled phase (**do not run as part of this audit**):
 
 ```
-# WAKA POS — VL-1 TYPOGRAPHY FOUNDATION (IMPLEMENTATION)
+# DKASU POS — VL-1 TYPOGRAPHY FOUNDATION (IMPLEMENTATION)
 
 MODE: small, reversible, testable. Shared-system only.
 

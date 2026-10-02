@@ -1,6 +1,6 @@
 # Android 15 Edge-to-Edge Audit
 
-**Project:** WAKA POS Android (`ug.waka.pos`)  
+**Project:** DKASU POS Android (`ug.waka.pos`)  
 **Date:** 19 August 2026  
 **Target / compile SDK:** 36 (Android 16)  
 **Min SDK:** 24  

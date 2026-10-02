@@ -646,7 +646,7 @@ describe("Phase 2A: cross-member isolation", () => {
 describe("Phase 2A: merchant enrollment is not gated on membership", () => {
   it("the direct counter enrollment still works with no member row involved", async () => {
     // loyalty_enroll_customer is the POS counter path. Phase 2A does not touch it, and it must
-    // not start requiring a registered WAKA member — a merchant enrolls walk-in customers.
+    // not start requiring a registered DKASU member — a merchant enrolls walk-in customers.
     const before = await accountsAt(f.shopAId);
 
     const enrolled = await asUser(exec, f.ownerAId, async () => {

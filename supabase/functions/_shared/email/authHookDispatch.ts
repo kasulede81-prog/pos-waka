@@ -59,16 +59,16 @@ function shopName(user: AuthHookUser): string | null {
 function genericAuthSubject(action: string): string {
   switch (action) {
     case "invite":
-      return "You've been invited to Waka POS";
+      return "You've been invited to DKASU POS";
     case "magiclink":
-      return "Your Waka POS sign-in link";
+      return "Your DKASU POS sign-in link";
     case "email_change":
     case "email":
-      return "Confirm your new Waka POS email";
+      return "Confirm your new DKASU POS email";
     case "reauthentication":
-      return "Your Waka POS verification code";
+      return "Your DKASU POS verification code";
     default:
-      return "Waka POS account notification";
+      return "DKASU POS account notification";
   }
 }
 
@@ -172,10 +172,10 @@ export async function dispatchAuthHookEmail(
       const current = await sendOne(
         user.email,
         "email_change_current",
-        "Confirm email change on your Waka POS account",
+        "Confirm email change on your DKASU POS account",
         renderGenericAuthHtml(
           "Confirm this email change",
-          `<p style="margin:0 0 12px;">Use the button below to confirm an email change request on your Waka POS account.</p>`,
+          `<p style="margin:0 0 12px;">Use the button below to confirm an email change request on your DKASU POS account.</p>`,
           { label: "Confirm change", href: currentUrl },
         ),
         undefined,
@@ -191,7 +191,7 @@ export async function dispatchAuthHookEmail(
       genericAuthSubject(action),
       renderGenericAuthHtml(
         "Confirm your new email",
-        `<p style="margin:0 0 12px;">Confirm <strong>${newAddress}</strong> as the email for your Waka POS account.</p>`,
+        `<p style="margin:0 0 12px;">Confirm <strong>${newAddress}</strong> as the email for your DKASU POS account.</p>`,
         { label: "Confirm new email", href: newUrl },
       ),
       undefined,
@@ -209,7 +209,7 @@ export async function dispatchAuthHookEmail(
         `<p style="margin:0 0 12px;">Enter this code to continue:</p>
          <p style="margin:0;font-size:28px;font-weight:800;letter-spacing:0.2em;color:#16a34a;">${emailData.token}</p>`,
       ),
-      `Your Waka POS verification code: ${emailData.token}`,
+      `Your DKASU POS verification code: ${emailData.token}`,
       { email_action_type: action },
     );
   }
@@ -243,7 +243,7 @@ export async function dispatchAuthHookEmail(
       subject,
       renderGenericAuthHtml(
         subject,
-        `<p style="margin:0;">This is a security notification for your Waka POS account. If you did not make this change, contact support@waka.ug immediately.</p>`,
+        `<p style="margin:0;">This is a security notification for your DKASU POS account. If you did not make this change, contact support@waka.ug immediately.</p>`,
       ),
       undefined,
       { email_action_type: action },

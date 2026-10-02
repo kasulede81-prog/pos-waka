@@ -1,4 +1,4 @@
-# WAKA POS — RS-4D Lab Setup Preparation
+# DKASU POS — RS-4D Lab Setup Preparation
 
 **Date:** 2026-08-20  
 **Status:** Preparation only. Default transport remains **off**. Production transport is **not** enabled.  

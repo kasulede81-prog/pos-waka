@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-Phase 20.0 successfully decommissioned Primary Device **enforcement** from active production paths. Waka POS now operates on a single **Approved Device** authority model: any owner device that is **approved** and **operational** (`status = active`) has equal management authority.
+Phase 20.0 successfully decommissioned Primary Device **enforcement** from active production paths. DKASU POS now operates on a single **Approved Device** authority model: any owner device that is **approved** and **operational** (`status = active`) has equal management authority.
 
 | Question | Certification Answer |
 |----------|---------------------|
@@ -463,13 +463,13 @@ Phase 17.6 audit describes pre-20.0 split-brain — **historical reference only*
 | Backup and sync operational | ✅ |
 | No production workflow depends on Primary Device | ✅ |
 | Remaining references are migration/rollback compatibility only | ✅ With noted exceptions (register mode, org primary shop) |
-| Waka POS Device Management enterprise-certified | ✅ **Conditional pass** |
+| DKASU POS Device Management enterprise-certified | ✅ **Conditional pass** |
 
 ---
 
 ## Certification Verdict
 
-**Waka POS Device Management is certified for enterprise production** under the Approved Device architecture, subject to:
+**DKASU POS Device Management is certified for enterprise production** under the Approved Device architecture, subject to:
 
 1. Application of Supabase migrations **136** and **138** to all environments before release.
 2. Acknowledgment of documented technical debt (legacy columns and compatibility echoes) scheduled for a future schema cleanup phase.

@@ -1,6 +1,6 @@
-/** Waka transactional email defaults (override via Supabase Edge secrets). */
+/** DKASU transactional email defaults (override via Supabase Edge secrets). */
 
-export const WAKA_DEFAULT_EMAIL_FROM = "Waka POS <noreply@waka.ug>";
+export const WAKA_DEFAULT_EMAIL_FROM = "DKASU POS <noreply@waka.ug>";
 export const WAKA_DEFAULT_EMAIL_REPLY_TO = "support@waka.ug";
 
 export const WAKA_EMAIL_BRAND = {

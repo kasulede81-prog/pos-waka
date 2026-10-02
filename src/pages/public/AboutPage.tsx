@@ -9,7 +9,7 @@ import {
   WAKA_OFFICE_CITY,
   WAKA_OFFICE_COUNTRY,
   WAKA_OFFICE_STREET,
-  WAKA_POS_URL,
+  DKASU_POS_URL,
   WAKA_SUPPORT_EMAILS,
 } from "../../config/company";
 
@@ -116,8 +116,8 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
-        title="About Waka POS — Built in Uganda for African Business"
-        description="Waka POS is an all-in-one business management platform for shops, supermarkets, pharmacies, restaurants, and growing businesses across Africa. Founded by Kasule Denis in Uganda."
+        title="About DKASU POS — Built in Uganda for African Business"
+        description="DKASU POS is an all-in-one business management platform for shops, supermarkets, pharmacies, restaurants, and growing businesses across Africa. Founded by Kasule Denis in Uganda."
         path="/about"
         structuredData="home"
       />
@@ -184,7 +184,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
         <section className="rounded-3xl border border-border bg-card p-6 shadow-waka-sm sm:p-8">
           <h2 className="text-xl font-black text-foreground">{WAKA_LEGAL_COMPANY_NAME}</h2>
           <p className="mt-3 text-sm font-medium leading-relaxed text-muted-foreground">
-            Waka POS is operated by {WAKA_LEGAL_COMPANY_NAME}, a Ugandan technology company building business software
+            DKASU POS is operated by {WAKA_LEGAL_COMPANY_NAME}, a Ugandan technology company building business software
             for Africa.
           </p>
 
@@ -204,8 +204,8 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
             <div>
               <h3 className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">Website</h3>
               <p className="mt-2 text-sm font-semibold text-waka-800">
-                <a href={WAKA_POS_URL} className="hover:underline">
-                  pos.waka.ug
+                <a href={DKASU_POS_URL} className="hover:underline">
+                  pos.dkasu.com
                 </a>
               </p>
             </div>

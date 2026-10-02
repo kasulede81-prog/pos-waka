@@ -1,4 +1,4 @@
-# WAKA POS — macOS Development Environment Certification
+# DKASU POS — macOS Development Environment Certification
 
 **Date:** 2026-07-29  
 **Host:** MacBook Pro (Apple Silicon / M1), macOS 26.5.1 (Build 25F80)  
@@ -9,12 +9,12 @@
 
 ## Executive verdict
 
-**CERTIFIED with notes** for daily WAKA POS Android development on this MacBook.
+**CERTIFIED with notes** for daily DKASU POS Android development on this MacBook.
 
 | Criterion | Status |
 |---|---|
 | Android emulator boots | ✅ `emulator-5554 device` |
-| WAKA POS builds without errors | ✅ `npm run build` + `./gradlew assembleDebug` |
+| DKASU POS builds without errors | ✅ `npm run build` + `./gradlew assembleDebug` |
 | App launches on emulator | ✅ Login screen (“Welcome back!”) |
 | Live reload / Vite HMR | ✅ `http://10.0.2.2:5173` — `[vite] connected` |
 | Android Studio debugging available | ✅ Studio 2026.1 opened on `android/` |
@@ -148,7 +148,7 @@ adb shell getprop sys.boot_completed   # expect: 1
 ## Flutter status
 
 Flutter **3.44.7** / Dart **3.12.2** are installed and healthy.  
-WAKA POS Android shipping path is **Capacitor**, not Flutter — Flutter is available but unused for this certification.
+DKASU POS Android shipping path is **Capacitor**, not Flutter — Flutter is available but unused for this certification.
 
 ---
 
@@ -180,7 +180,7 @@ WAKA POS Android shipping path is **Capacitor**, not Flutter — Flutter is avai
 
 Evidence screenshots (local):
 
-- `docs/waka-emulator-launch.png` — home screen with WAKA POS icon  
+- `docs/waka-emulator-launch.png` — home screen with DKASU POS icon  
 - `docs/waka-emulator-app.png` — login screen  
 - `docs/waka-emulator-livereload.png` / `docs/waka-emulator-hmr.png` — live-reload session
 
@@ -246,7 +246,7 @@ adb shell am start -n ug.waka.pos/.MainActivity
    Log: `Keyboard.setResizeMode` → `UNIMPLEMENTED` on Android — pre-existing Capacitor plugin limitation; does not block login/POS.
 
 5. **pnpm / yarn**  
-   Not installed; not required for WAKA POS npm scripts.
+   Not installed; not required for DKASU POS npm scripts.
 
 6. **Production vs live-reload APK**  
    After `android:dev`, re-run a normal `npm run build && npx cap sync android` (or `npm run android`) before shipping/store builds so `server.url` is not left pointing at Vite.
@@ -258,11 +258,11 @@ adb shell am start -n ug.waka.pos/.MainActivity
 | Success criterion | Evidence |
 |---|---|
 | Android emulator boots successfully | `emulator-5554 device`, boot_completed=1 |
-| WAKA POS builds without errors | Vite production build + Gradle `assembleDebug` SUCCESS |
-| WAKA POS launches inside the emulator | Login UI screenshot / MainActivity resumed |
+| DKASU POS builds without errors | Vite production build + Gradle `assembleDebug` SUCCESS |
+| DKASU POS launches inside the emulator | Login UI screenshot / MainActivity resumed |
 | Live reload is working | Capacitor loads `10.0.2.2:5173`; `[vite] connected`; HMR events |
 | Android Studio debugging is available | Studio 2026.1 opened on project |
-| MacBook ready for daily WAKA POS Android development | PATH/SDK/AVD/scripts certified above |
+| MacBook ready for daily DKASU POS Android development | PATH/SDK/AVD/scripts certified above |
 
 ---
 

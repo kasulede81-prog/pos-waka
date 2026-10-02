@@ -2,7 +2,7 @@
 
 **Mode:** Read-only forensic audit (**NO code changes, NO CSS changes, NO SQL, NO migrations, NO dependency updates**)  
 **Date:** 2026-08-03  
-**Scope:** Desktop productivity across WAKA POS — tables vs cards, widescreen utilization, bulk/keyboard workflows, large-dataset readiness  
+**Scope:** Desktop productivity across DKASU POS — tables vs cards, widescreen utilization, bulk/keyboard workflows, large-dataset readiness  
 **Related prior work:**  
 - Phase 22.x — design system / `EnterpriseResponsiveTable` introduction  
 - Phase 27.x–28.x — POS desktop sell density (`PosDesktop*`, wide checkout)  

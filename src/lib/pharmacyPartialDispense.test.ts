@@ -5,7 +5,7 @@ import { openTestShift } from "../test/shiftTestSetup";
 import { appendBatchToProduct, computeBatchIntegrity, createBatchOnReceive, getProductBatches } from "./pharmacyBatches";
 
 /**
- * WAKA POS — Pharmacy Correction Phase 1: partial prescription dispensing.
+ * DKASU POS — Pharmacy Correction Phase 1: partial prescription dispensing.
  *
  * Exercises the REAL usePosStore.finalizeDraftSale action end to end (not a
  * reimplementation) to prove:
@@ -263,7 +263,7 @@ describe("Pharmacy Correction Phase 1 — partial prescription dispensing (real 
 });
 
 /**
- * WAKA POS — Pharmacy Phase 2: multi-batch dispensing, write-off, void/return
+ * DKASU POS — Pharmacy Phase 2: multi-batch dispensing, write-off, void/return
  * batch restoration, and offline structure — all through the REAL store
  * actions (finalizeDraftSale, writeOffExpiredStock, voidSaleLine).
  *
@@ -415,7 +415,7 @@ describe("Pharmacy Phase 2 — multi-batch dispensing, write-off, void/return, o
     expect(batches.find((b) => b.batchNumber === "B")!.quantityRemaining).toBe(23);
     expect(product.stockOnHand).toBe(23); // 38 - 15, core truth, independent of batch split
 
-    // J/K — exactly one WAKA Sale, through finalizeDraftSale, financially whole.
+    // J/K — exactly one DKASU Sale, through finalizeDraftSale, financially whole.
     const sales = usePosStore.getState().sales;
     expect(sales).toHaveLength(1);
     expect(sales[0]!.lines).toHaveLength(1);

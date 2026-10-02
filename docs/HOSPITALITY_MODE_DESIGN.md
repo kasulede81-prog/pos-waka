@@ -1,16 +1,16 @@
-# WAKA POS — Restaurant & Bar Mode (Hospitality Mode)
+# DKASU POS — Restaurant & Bar Mode (Hospitality Mode)
 
 **Audience:** Ugandan restaurants, bars, pork joints, lounges, hotels, cafes, guest houses, fast food  
-**Goal:** Full table-service workflow — open table → order many times → settle later — without losing Waka POS simplicity  
+**Goal:** Full table-service workflow — open table → order many times → settle later — without losing DKASU POS simplicity  
 **Foundation:** Builds on [PENDING_SALES_DESIGN.md](./PENDING_SALES_DESIGN.md) (`sales.status = 'draft'`) and existing offline-first IndexedDB + Supabase sync
 
 ---
 
 ## Executive summary
 
-Retail Waka POS: **Customer → cart → pay → done.**
+Retail DKASU POS: **Customer → cart → pay → done.**
 
-Hospitality Waka POS: **Customer sits → table opens → orders accumulate → kitchen/bar prints → settle → table free.**
+Hospitality DKASU POS: **Customer sits → table opens → orders accumulate → kitchen/bar prints → settle → table free.**
 
 When a shop selects **Restaurant**, **Bar**, **Restaurant & Bar**, or **Hotel**, the app enters **Hospitality Mode**:
 
@@ -1004,4 +1004,4 @@ Hospitality Mode **does not replace** Pending Sales — takeaway and retail coun
 
 ---
 
-*Document version: 1.0 · May 2026 · Waka POS Hospitality Mode*
+*Document version: 1.0 · May 2026 · DKASU POS Hospitality Mode*

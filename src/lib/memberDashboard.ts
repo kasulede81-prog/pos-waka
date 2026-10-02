@@ -105,7 +105,7 @@ export type MemberReward = {
   /**
    * What the reward is worth: none | fixed_discount | percentage_discount.
    *
-   * A discount benefit is applied to a WAKA sale at the counter. It is NOT stored value and
+   * A discount benefit is applied to a DKASU sale at the counter. It is NOT stored value and
    * nothing converts points to money — the member is told what their points buy, not given
    * a balance.
    */

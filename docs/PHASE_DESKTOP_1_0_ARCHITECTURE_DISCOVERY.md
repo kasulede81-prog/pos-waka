@@ -1,17 +1,17 @@
-# WAKA POS DESKTOP ARCHITECTURE — PHASE 1
+# DKASU POS DESKTOP ARCHITECTURE — PHASE 1
 
 **Date:** 2026-08-16  
 **Status:** READ-ONLY architecture discovery (no code, migrations, or deploys)  
-**Goal:** Make Windows Desktop a first-class WAKA POS platform while leaving Web and Mobile untouched.
+**Goal:** Make Windows Desktop a first-class DKASU POS platform while leaving Web and Mobile untouched.
 
 ---
 
 ## 1. Current Architecture
 
-WAKA POS is already a **single React/Vite application** with three shells:
+DKASU POS is already a **single React/Vite application** with three shells:
 
 ```text
-                    WAKA POS (shared React + lib)
+                    DKASU POS (shared React + lib)
                            │
           ┌────────────────┼────────────────┐
           │                │                │

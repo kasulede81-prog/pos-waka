@@ -1,4 +1,4 @@
-# Waka POS — Pilot Playbook
+# DKASU POS — Pilot Playbook
 
 Operational guide for onboarding 5–10 real pilot shops. No new features during pilot — focus on evidence collection.
 

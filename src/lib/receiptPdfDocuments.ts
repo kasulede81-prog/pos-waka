@@ -206,7 +206,7 @@ export async function buildReturnReceiptPdfBlob(ctx: ReturnReceiptContext): Prom
   if (r.note?.trim()) pdfLine(layout, doc, `Note: ${r.note.trim()}`);
   if (ctx.sale) pdfLine(layout, doc, `Original sale: #${ctx.sale.id.slice(0, 8)}`, { size: 9 });
   pdfGap(layout, 6);
-  pdfLine(layout, doc, "Powered by Waka POS", { size: 8 });
+  pdfLine(layout, doc, "Powered by DKASU POS", { size: 8 });
   return doc.output("blob");
 }
 

@@ -2,7 +2,7 @@
  * HOME V8 — Premium POS operating console tokens.
  * Presentation only. Does not change sale, cash, or shop authorities.
  *
- * Remix of Statify / POS console / dark-bento canvas patterns, in WAKA color.
+ * Remix of Statify / POS console / dark-bento canvas patterns, in DKASU color.
  * 12-column desktop track. Shared 12px gutter. Shop scene is atmosphere, not a column.
  *
  *   Console     12  — 7 | 5       (today + CTA stack | supporting KPIs)

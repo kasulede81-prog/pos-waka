@@ -176,7 +176,7 @@ describe("C/D. no provisioning path reads the provider's name", () => {
 });
 
 /**
- * DISPLAY AUTHORITY. The name shown throughout WAKA must be the confirmed one, and must need no
+ * DISPLAY AUTHORITY. The name shown throughout DKASU must be the confirmed one, and must need no
  * extra request — the session already carries its metadata.
  */
 describe("D. display paths read the confirmed name first", () => {

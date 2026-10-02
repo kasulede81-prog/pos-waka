@@ -1,4 +1,4 @@
-# WAKA POS — iOS Capacitor Audit
+# DKASU POS — iOS Capacitor Audit
 
 **Date:** 2026-07-24  
 **App ID / Bundle ID:** `ug.waka.pos`  

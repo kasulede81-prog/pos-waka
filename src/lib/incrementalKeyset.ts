@@ -1,9 +1,9 @@
 /**
- * WAKA-07 — composite (time, id) keyset for incremental cloud pulls.
+ * DKASU-07 — composite (time, id) keyset for incremental cloud pulls.
  *
  * A timestamp-only `.gt(updated_at, cursor)` stalls when a full page shares one
  * `updated_at` (Postgres `now()` is transaction-start time). The in-memory page
- * cursor carries the last row's id; the persisted WAKA-05 checkpoint remains
+ * cursor carries the last row's id; the persisted DKASU-05 checkpoint remains
  * the newest server timestamp observed.
  */
 

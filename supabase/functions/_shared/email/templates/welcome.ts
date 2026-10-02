@@ -7,7 +7,7 @@ export type WelcomeEmailTemplateInput = {
 };
 
 export function welcomeEmailSubject(): string {
-  return "Welcome to Waka POS";
+  return "Welcome to DKASU POS";
 }
 
 export function renderWelcomeEmailHtml(input: WelcomeEmailTemplateInput): string {
@@ -17,15 +17,15 @@ export function renderWelcomeEmailHtml(input: WelcomeEmailTemplateInput): string
     : `<p style="margin:0 0 12px;">Your account is ready. Start adding products, recording sales, and inviting staff from the app.</p>`;
 
   return wrapEmailLayout({
-    preheader: "Your Waka POS account is ready — simple sales and stock for your shop.",
-    title: "Welcome to Waka POS",
+    preheader: "Your DKASU POS account is ready — simple sales and stock for your shop.",
+    title: "Welcome to DKASU POS",
     bodyHtml: `
       <p style="margin:0 0 12px;">Hi ${name},</p>
-      <p style="margin:0 0 12px;">Welcome aboard! Waka POS helps shops across Uganda manage sales, stock, and daily reports — even when the network is slow.</p>
+      <p style="margin:0 0 12px;">Welcome aboard! DKASU POS helps shops across Uganda manage sales, stock, and daily reports — even when the network is slow.</p>
       ${shopLine}
       <p style="margin:0;">Open the app anytime to continue setup or jump straight to the POS.</p>
     `,
-    cta: { label: "Open Waka POS", href: WAKA_EMAIL_BRAND.posUrl },
+    cta: { label: "Open DKASU POS", href: WAKA_EMAIL_BRAND.posUrl },
     footerNote: `Need help? Reply to this email or contact us at support@waka.ug.`,
   });
 }
@@ -33,16 +33,16 @@ export function renderWelcomeEmailHtml(input: WelcomeEmailTemplateInput): string
 export function welcomeEmailPlainText(input: WelcomeEmailTemplateInput): string {
   const name = input.recipientName?.trim() || "there";
   const shop = input.shopName?.trim();
-  return `Welcome to Waka POS
+  return `Welcome to DKASU POS
 
 Hi ${name},
 
-Your Waka POS account is ready${shop ? ` for ${shop}` : ""}.
+Your DKASU POS account is ready${shop ? ` for ${shop}` : ""}.
 
 Open the app: ${WAKA_EMAIL_BRAND.posUrl}
 
 Need help? Contact support@waka.ug
 
-— Waka POS / WAKA MARKETPLACE LIMITED
+— DKASU POS / WAKA MARKETPLACE LIMITED
 https://waka.ug`;
 }

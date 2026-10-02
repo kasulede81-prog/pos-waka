@@ -1,7 +1,7 @@
 /**
- * PHASE 0A — WAKA-05 executable regression test: the incremental sales cursor.
+ * PHASE 0A — DKASU-05 executable regression test: the incremental sales cursor.
  *
- * AUDIT FINDING (WAKA-05, P0) — FIXED:
+ * AUDIT FINDING (DKASU-05, P0) — FIXED:
  *   `pullSalesIncremental` returned
  *     `checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString()`
  *   so a pull that fetched an EMPTY page (the ordinary steady state) advanced

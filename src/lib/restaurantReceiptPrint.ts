@@ -126,7 +126,7 @@ export function buildRestaurantReceiptLines(
     showSplitSummary: true,
     showQrPlaceholder: false,
   };
-  const shop = ctx.prefs.shopDisplayName?.trim() || "Waka POS";
+  const shop = ctx.prefs.shopDisplayName?.trim() || "DKASU POS";
   const draft = billDraftFromSale(ctx.sale, ctx.prefs);
   const split =
     ctx.splitId != null ? draft.splits.find((s) => s.id === ctx.splitId) ?? null : null;
@@ -275,7 +275,7 @@ export function splitRemainingUgx(split: BillSplitLine): number {
 export function buildRestaurantReceiptEscPos(ctx: RestaurantReceiptContext, paperWidth: "58mm" | "80mm" = "80mm"): Uint8Array {
   const textLines = buildRestaurantReceiptLines(ctx, paperWidth);
   const b = new EscPosBuilder(paperWidth);
-  b.align("center").doubleSize(true).wrapped(textLines[0] ?? "WAKA POS").doubleSize(false);
+  b.align("center").doubleSize(true).wrapped(textLines[0] ?? "DKASU POS").doubleSize(false);
   b.align("left");
   for (const line of textLines.slice(1)) {
     if (line === "—") b.rule();

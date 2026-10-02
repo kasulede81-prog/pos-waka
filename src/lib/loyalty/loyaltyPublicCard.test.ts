@@ -71,9 +71,11 @@ describe("assertSafePublicCardJson", () => {
 });
 
 describe("customer loyalty page URL", () => {
-  it("builds loyalty.waka.ug/c/<token> and not a Google Save URL", () => {
+  it("builds loyalty.dkasu.com/c/<token> and not a Google Save URL", () => {
+    // DKASU origin since the 2026-10-02 auth migration; old loyalty.waka.ug links 308 here.
     const url = buildCustomerLoyaltyCardUrl(VALID_TOKEN);
-    expect(url).toBe(`https://loyalty.waka.ug/c/${VALID_TOKEN}`);
+    expect(url).toBe(`https://loyalty.dkasu.com/c/${VALID_TOKEN}`);
+    expect(url).not.toContain("pos.dkasu.com");
     expect(url).not.toContain("pos.waka.ug");
     expect(url).not.toContain("/loyalty/");
     expect(url).not.toContain("pay.google.com");

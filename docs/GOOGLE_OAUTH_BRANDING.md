@@ -1,11 +1,11 @@
-# Google Sign-In — Waka POS
+# Google Sign-In — DKASU POS
 
 ## Two flows (web vs Android)
 
 | | **Website** (`pos.waka.ug`) | **Android app** (Capacitor) |
 |---|---------------------------|---------------------------|
 | How it signs in | Google popup (GIS) → `signInWithIdToken` | System browser → **Supabase OAuth** → back to app |
-| Google screen branding | Waka POS / waka.ug (your consent screen) | Same consent screen once redirect URIs are fixed |
+| Google screen branding | DKASU POS / waka.ug (your consent screen) | Same consent screen once redirect URIs are fixed |
 | **Authorized JavaScript origins** | Required (`pos.waka.ug`, etc.) | Optional (`https://localhost`) |
 | **Authorized redirect URIs** | Not used for GIS | **Required** — Supabase callback (see below) |
 
@@ -21,11 +21,11 @@ Use one **OAuth 2.0 Client ID → Web application** (the one in Supabase and `VI
 
 ### OAuth consent screen (Branding)
 
-You already have this — it is why the web login shows **Waka POS** / **waka.ug**:
+You already have this — it is why the web login shows **DKASU POS** / **waka.ug**:
 
 | Field | Your setup |
 |-------|------------|
-| App name | Waka POS |
+| App name | DKASU POS |
 | Home | `https://pos.waka.ug` or `https://waka.ug` |
 | Privacy / Terms | `https://pos.waka.ug/privacy`, `/terms` |
 | Authorized domains | `waka.ug`, etc. |
@@ -123,7 +123,7 @@ http://localhost:5173/auth/recovery
 ## Environment
 
 ```env
-VITE_APP_URL=https://pos.waka.ug
+VITE_APP_URL=https://pos.dkasu.com
 VITE_GOOGLE_OAUTH_CLIENT_ID=1069323619932-....apps.googleusercontent.com
 VITE_SUPABASE_URL=https://ljaedextsenbkxzzgxcg.supabase.co
 VITE_SUPABASE_ANON_KEY=...

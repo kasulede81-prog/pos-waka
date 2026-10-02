@@ -1,4 +1,4 @@
-# Waka POS — Cost Conversion Report (Audit)
+# DKASU POS — Cost Conversion Report (Audit)
 
 Read-only audit of how pack/buying prices become per-base-unit cost (`costPricePerUnitUgx`).  
 **No code changes in this sprint** — this document defines paths for a future single standard.

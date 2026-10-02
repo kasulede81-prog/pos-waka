@@ -14,7 +14,7 @@ import { AudioRecorderButton } from "./AudioRecorderButton";
 
 /**
  * Shared attachment staging strip for the merchant composer and the internal
- * WAKA console: paperclip file picker, microphone recorder, pending chips with
+ * DKASU console: paperclip file picker, microphone recorder, pending chips with
  * name/size/remove. Nothing is uploaded until the message is sent.
  */
 export function AttachmentComposer({

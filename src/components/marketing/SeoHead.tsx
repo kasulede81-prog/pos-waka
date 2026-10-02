@@ -19,6 +19,7 @@ import {
   posCanonical,
   DEFAULT_OG_IMAGE,
   SEO_KEYWORDS,
+  DKASU_POS_URL,
 } from "../../config/company";
 
 export type SeoProps = {
@@ -85,7 +86,8 @@ function organizationSchema() {
     legalName: WAKA_LEGAL_COMPANY_NAME,
     slogan: WAKA_SLOGAN,
     url: WAKA_SITE_URL,
-    logo: marketingCanonical("/waka-logo.png"),
+    /** Square brand icon (the supplied DKASU tile), not the legacy WAKA wordmark file. */
+    logo: marketingCanonical("/icons/icon-512.png"),
     email: WAKA_SUPPORT_EMAIL,
     foundingDate: "2023",
     founder: { "@type": "Person", name: FOUNDER_NAME },
@@ -108,7 +110,7 @@ function softwareSchema() {
     operatingSystem: "Web, Android",
     offers: { "@type": "Offer", price: "0", priceCurrency: "UGX" },
     description: WAKA_PRODUCT_DESCRIPTION,
-    url: "https://pos.waka.ug",
+    url: DKASU_POS_URL,
     provider: { "@type": "Organization", name: WAKA_BRAND_NAME },
     author: { "@type": "Person", name: FOUNDER_NAME },
   };

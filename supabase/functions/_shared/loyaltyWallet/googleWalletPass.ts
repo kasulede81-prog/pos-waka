@@ -65,7 +65,7 @@ export function buildGoogleLoyaltyObject(
     // custom HTML/CSS — so the hero below plus this colour are as close to the premium card
     // surface as the platform allows.
     hexBackgroundColor: normalizeHexColor(input.backgroundColor ?? WAKA_WALLET_NAVY),
-    // Premium card banner. STATIC WAKA artwork on purpose: member id, name, points, expiry, CVC
+    // Premium card banner. STATIC DKASU artwork on purpose: member id, name, points, expiry, CVC
     // and the QR stay native dynamic fields drawn by Google's template over this image.
     heroImage: input.heroImageUrl ? { sourceUri: { uri: input.heroImageUrl } } : undefined,
     loyaltyPoints: {
@@ -83,7 +83,7 @@ export function buildGoogleLoyaltyObject(
     },
     // The earn rule used to ride here as a textModulesData row ("Earns: 1 pt per UGX 1,000
     // spent"). It is deliberately gone: the pass carries the balance in loyaltyPoints above,
-    // and the earn rule now belongs to the WAKA Loyalty dashboard rather than the pass.
+    // and the earn rule now belongs to the DKASU Loyalty dashboard rather than the pass.
   };
 }
 

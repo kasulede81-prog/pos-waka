@@ -92,7 +92,7 @@ Do not read this as a production go-ahead.
 | hbbs / hbbr release notes | 1.1.16 (2026-07-20) | [GitHub release](https://github.com/rustdesk/rustdesk-server/releases/tag/1.1.16) |
 | Client (Windows portable) | Intended test: **1.4.9** | **UNTESTED** — not installed |
 | RustDesk Server Pro | Not licensed / not installed | **UNTESTED** |
-| WAKA POS on the Windows VM | No test WAKA build on a Windows VM | **UNTESTED** |
+| DKASU POS on the Windows VM | No test WAKA build on a Windows VM | **UNTESTED** |
 
 Release 1.1.16 notes (**DOC**): offline-peer overflow fix; mio 0.8.11; **unauthenticated UDP punch-hole reflection/amplification fix**. Pin **≥ 1.1.16** if WAKA later self-hosts.
 

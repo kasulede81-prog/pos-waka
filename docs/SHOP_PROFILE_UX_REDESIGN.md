@@ -31,7 +31,7 @@
 
 **Body (top → bottom)**
 
-1. **Protected banner** (only when profile complete) — sky blue info box + **Message Waka Support** button  
+1. **Protected banner** (only when profile complete) — sky blue info box + **Message DKASU Support** button  
 2. **Recovery email** (onboarding only, unchanged logic)  
 3. **Shop name** — first content section  
 4. **Phone number** — short hint under label  
@@ -88,7 +88,7 @@
 |--------|--------|
 | Shop info | Business profile |
 | Name, phone, location | Your shop name, phone, and location |
-| Shop details are locked after registration… | Your business information is protected… contact Waka Support |
+| Shop details are locked after registration… | Your business information is protected… contact DKASU Support |
 | Your Waka shop ID (large card) | Need help? · Shop ID: A001 · Copy |
 | Your area | Location |
 | Shop address / location | Street or landmark (optional) |

@@ -48,7 +48,7 @@ describe("code format", () => {
 describe("QR and manual entry resolve to the SAME program", () => {
   it("round-trips the QR payload back to the code", () => {
     const url = buildProgramJoinUrl(CODE);
-    expect(url).toBe("https://loyalty.waka.ug/j/WPL2026001");
+    expect(url).toBe("https://loyalty.dkasu.com/j/WPL2026001");
     // The property that matters: whatever the QR encodes, scanning yields the same code.
     expect(parseProgramCodeFromUrl(url)).toBe(CODE);
   });

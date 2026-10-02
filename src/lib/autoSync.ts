@@ -4,7 +4,7 @@ import { isBlockedBusinessSyncError, sanitizeStoredSyncError } from "./saleAdjus
 
 export const SYNC_BACKOFF_BASE_MS = 2_000;
 export const SYNC_BACKOFF_CAP_MS = 300_000;
-/** WAKA-11 — after this many failed attempts the row is quarantined, not retried forever. */
+/** DKASU-11 — after this many failed attempts the row is quarantined, not retried forever. */
 export const SYNC_QUARANTINE_AFTER_ATTEMPTS = 100;
 export const QUARANTINED_MAX_ATTEMPTS_ERROR = "quarantined_max_attempts";
 export const QUARANTINED_NO_SHOP_ERROR = "quarantined_no_shop";

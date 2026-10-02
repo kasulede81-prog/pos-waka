@@ -1,7 +1,7 @@
 /**
- * PHASE 0A — WAKA-08 executable regression tests: multi-shop local isolation.
+ * PHASE 0A — DKASU-08 executable regression tests: multi-shop local isolation.
  *
- * AUDIT FINDING (WAKA-08, P1) — FIXED:
+ * AUDIT FINDING (DKASU-08, P1) — FIXED:
  *   `migrateLegacyPersistenceToShop` copied legacy account KV rows
  *   (`sb:<uid>::…`) into the first shop's namespace and left the originals in
  *   place. The claim flag was per shop, so the second shop on the same device
@@ -401,7 +401,7 @@ describe("WAKA-08 — multi-shop IndexedDB / queue / snapshot isolation", () => 
       products: [],
       sales: [],
     });
-    // Keep whatever bootstrap hydrated (would be Shop A data if WAKA-08 still leaked).
+    // Keep whatever bootstrap hydrated (would be Shop A data if DKASU-08 still leaked).
     // Seed a Shop B customer only when B is actually empty so the pull takes the
     // normal merge path instead of cloud-recovery restore.
     await setStore({

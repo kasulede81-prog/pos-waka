@@ -24,7 +24,7 @@ import { openWalletSaveUrlWithoutReferrer } from "../../lib/loyalty/loyaltyPubli
  * is the session. Nothing here reveals merchant configuration or credentials.
  *
  * WHEN WALLET IS NOT CONFIGURED, NOTHING IS RENDERED. An unconfigured issuer is the merchant's
- * infrastructure state, not the customer's, and the merchant-facing copy for it ("ask WAKA
+ * infrastructure state, not the customer's, and the merchant-facing copy for it ("ask DKASU
  * support…") would be meaningless and alarming on a customer's phone.
  */
 export function MemberGoogleWalletButton({

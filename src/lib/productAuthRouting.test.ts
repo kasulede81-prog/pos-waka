@@ -99,43 +99,47 @@ afterEach(() => {
 // 1. Host-aware callback URLs
 // ---------------------------------------------------------------------------
 
-describe("callback URLs preserve the product origin", () => {
-  it("pos.waka.ug returns to pos.waka.ug", () => {
-    withHost("pos.waka.ug");
-    expect(authConfig.authRedirectOrigin()).toBe("https://pos.waka.ug");
-    expect(authConfig.getAuthCallbackUrl()).toBe("https://pos.waka.ug/auth/callback");
-    expect(authConfig.getAuthEmailCallbackUrl()).toBe("https://pos.waka.ug/auth/callback");
-    expect(authConfig.getAuthRecoveryUrl()).toBe("https://pos.waka.ug/reset-password");
+describe("callback URLs preserve the product surface, on DKASU origins since the migration", () => {
+  it("a POS host returns to the DKASU POS origin — both host generations classify", () => {
+    for (const host of ["pos.waka.ug", "pos.dkasu.com"]) {
+      withHost(host);
+      expect(authConfig.authRedirectOrigin(), host).toBe("https://pos.dkasu.com");
+      expect(authConfig.getAuthCallbackUrl(), host).toBe("https://pos.dkasu.com/auth/callback");
+      expect(authConfig.getAuthEmailCallbackUrl(), host).toBe("https://pos.dkasu.com/auth/callback");
+      expect(authConfig.getAuthRecoveryUrl(), host).toBe("https://pos.dkasu.com/reset-password");
+    }
   });
 
-  it("loyalty.waka.ug returns to loyalty.waka.ug — the return host IS the intent", () => {
-    withHost("loyalty.waka.ug");
-    expect(authConfig.authRedirectOrigin()).toBe("https://loyalty.waka.ug");
-    expect(authConfig.getAuthCallbackUrl()).toBe("https://loyalty.waka.ug/auth/callback");
-    expect(authConfig.getAuthEmailCallbackUrl()).toBe("https://loyalty.waka.ug/auth/callback");
-    expect(authConfig.getAuthRecoveryUrl()).toBe("https://loyalty.waka.ug/reset-password");
-    expect(authConfig.getAuthEmailRecoveryUrl()).toBe("https://loyalty.waka.ug/reset-password");
+  it("a loyalty host returns to the DKASU loyalty origin — the return origin IS the intent", () => {
+    for (const host of ["loyalty.waka.ug", "loyalty.dkasu.com"]) {
+      withHost(host);
+      expect(authConfig.authRedirectOrigin(), host).toBe("https://loyalty.dkasu.com");
+      expect(authConfig.getAuthCallbackUrl(), host).toBe("https://loyalty.dkasu.com/auth/callback");
+      expect(authConfig.getAuthEmailCallbackUrl(), host).toBe("https://loyalty.dkasu.com/auth/callback");
+      expect(authConfig.getAuthRecoveryUrl(), host).toBe("https://loyalty.dkasu.com/reset-password");
+      expect(authConfig.getAuthEmailRecoveryUrl(), host).toBe("https://loyalty.dkasu.com/reset-password");
+    }
   });
 
   it("the two products never redirect into each other", () => {
-    withHost("loyalty.waka.ug");
+    withHost("loyalty.dkasu.com");
     const loyaltyCallback = authConfig.getAuthCallbackUrl();
-    withHost("pos.waka.ug");
+    withHost("pos.dkasu.com");
     const posCallback = authConfig.getAuthCallbackUrl();
 
     expect(loyaltyCallback).not.toBe(posCallback);
-    expect(loyaltyCallback).not.toContain("pos.waka.ug");
-    expect(posCallback).not.toContain("loyalty.waka.ug");
+    expect(loyaltyCallback).not.toContain("pos.dkasu.com");
+    expect(posCallback).not.toContain("loyalty.dkasu.com");
   });
 
   it("keeps the pre-existing behaviour on a host that is neither product", () => {
     // localhost, LAN, a Vercel preview: unchanged, and emails still go to the public POS origin.
     withHost("localhost", "http://localhost:5173");
-    expect(authConfig.getAuthEmailCallbackUrl()).toBe("https://pos.waka.ug/auth/callback");
-    expect(authConfig.getAuthEmailRecoveryUrl()).toBe("https://pos.waka.ug/reset-password");
+    expect(authConfig.getAuthEmailCallbackUrl()).toBe("https://pos.dkasu.com/auth/callback");
+    expect(authConfig.getAuthEmailRecoveryUrl()).toBe("https://pos.dkasu.com/reset-password");
 
     withHost("pos-waka-git-main-team.vercel.app");
-    expect(authConfig.getAuthEmailCallbackUrl()).toBe("https://pos.waka.ug/auth/callback");
+    expect(authConfig.getAuthEmailCallbackUrl()).toBe("https://pos.dkasu.com/auth/callback");
   });
 
   it("never puts https://localhost in an email link", () => {
@@ -160,18 +164,21 @@ describe("the Android shell is untouched by host routing", () => {
   it("email links from the native shell still use the public POS origin", () => {
     capacitor.native = true;
     withHost("localhost", "https://localhost");
-    expect(authConfig.getAuthEmailCallbackUrl()).toBe("https://pos.waka.ug/auth/callback");
+    expect(authConfig.getAuthEmailCallbackUrl()).toBe("https://pos.dkasu.com/auth/callback");
   });
 });
 
-describe("the redirect allowlist documents both surfaces", () => {
-  it("lists the loyalty callback, recovery and reset URLs alongside the POS ones", () => {
+describe("the redirect allowlist documents both surfaces and both host generations", () => {
+  it("lists the DKASU callbacks and the legacy WAKA ones", () => {
     const urls = authConfig.getSupabaseAuthRedirectUrls();
     for (const required of [
+      "https://pos.dkasu.com/auth/callback",
+      "https://pos.dkasu.com/reset-password",
+      "https://loyalty.dkasu.com/auth/callback",
+      "https://loyalty.dkasu.com/reset-password",
+      // Kept for the migration window — old emails and bookmarks still land on these hosts.
       "https://pos.waka.ug/auth/callback",
-      "https://pos.waka.ug/reset-password",
       "https://loyalty.waka.ug/auth/callback",
-      "https://loyalty.waka.ug/reset-password",
       "https://localhost/auth/callback",
       "http://localhost:5173/auth/callback",
     ]) {
@@ -179,9 +186,17 @@ describe("the redirect allowlist documents both surfaces", () => {
     }
   });
 
-  it("lists the loyalty origin as a Google JavaScript origin", () => {
-    expect(authConfig.getGoogleOAuthJavaScriptOrigins()).toContain("https://loyalty.waka.ug");
-    expect(authConfig.getGoogleOAuthJavaScriptOrigins()).toContain("https://pos.waka.ug");
+  it("lists the DKASU origins and the legacy WAKA ones as Google JavaScript origins", () => {
+    const origins = authConfig.getGoogleOAuthJavaScriptOrigins();
+    for (const required of [
+      "https://pos.dkasu.com",
+      "https://loyalty.dkasu.com",
+      "https://dkasu.com",
+      "https://pos.waka.ug",
+      "https://loyalty.waka.ug",
+    ]) {
+      expect(origins, required).toContain(required);
+    }
   });
 });
 

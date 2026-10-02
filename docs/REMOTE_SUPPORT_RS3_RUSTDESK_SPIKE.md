@@ -49,7 +49,7 @@ RustDesk
        ↓
 permanent access
        ↓
-WAKA POS
+DKASU POS
 ```
 
 ---
@@ -142,7 +142,7 @@ device licensing
                  WAKA grant
                        │
                        ▼
-                WAKA POS Electron
+                DKASU POS Electron
                        │
                  authorized only
                        ▼
@@ -175,7 +175,7 @@ This spike did **not** stand up hbbs/hbbr or a Windows client.
 | RustDesk version to test | Client **1.4.9** (latest stable as of 2026-07-06) |
 | Network | Isolated lab / throwaway VPS only. **Do not** open ports on WAKA production. |
 | UAC | **UNTESTED** — lab must have UAC enabled (real POS default) |
-| Interactive session | **UNTESTED** — cashier logged in, WAKA POS running |
+| Interactive session | **UNTESTED** — cashier logged in, DKASU POS running |
 
 Do **not** use a customer POS or any machine with shop data.
 
@@ -310,7 +310,7 @@ Safer documented levers (still **UNTESTED**):
 
 **INFERENCE:** Even without a permanent password, if the client is running and a current one-time password is visible/guessable, someone who knows the ID can try to connect. WAKA must not leave the transport listening after End.
 
-Reboot test (**UNTESTED**, mandatory before RS-4): after reboot, with WAKA POS started and **no** approved session, technician connect must fail.
+Reboot test (**UNTESTED**, mandatory before RS-4): after reboot, with DKASU POS started and **no** approved session, technician connect must fail.
 
 ---
 
@@ -524,7 +524,7 @@ Possible future layout (RS-4+, not now):
 
 ```text
 WAKA-POS-Setup.exe
-      ├── WAKA POS
+      ├── DKASU POS
       └── WAKA Remote Support Agent  →  starts/stops RustDesk transport
 ```
 

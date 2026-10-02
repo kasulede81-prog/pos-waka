@@ -1,4 +1,4 @@
-# WAKA POS — Final Add Product Wizard ↔ CSV Contract Audit
+# DKASU POS — Final Add Product Wizard ↔ CSV Contract Audit
 
 **Mode:** Inspection only — no product/CSV engine code changes in this phase  
 **Date:** 2026-08-29  

@@ -85,7 +85,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
     return e.includes("@") && !e.endsWith("@login.waka.ug") ? e : "";
   });
 
-  // The confirmed WAKA name, then the provider's suggestion, then the e-mail prefix. Used for
+  // The confirmed DKASU name, then the provider's suggestion, then the e-mail prefix. Used for
   // display and for the local-mode save only — the cloud path writes `profiles.full_name` through
   // the bundle RPC, which fills it only when empty.
   const ownerDisplayName =

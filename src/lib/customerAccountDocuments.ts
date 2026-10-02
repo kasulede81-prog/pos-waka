@@ -125,7 +125,7 @@ function shopFields(input: {
   shopPhone?: string | null;
 }): Pick<ReportDocumentModel, "shopName" | "shopAddress" | "shopPhone"> {
   return {
-    shopName: input.shopName.trim() || "Waka POS",
+    shopName: input.shopName.trim() || "DKASU POS",
     shopAddress: input.shopAddress?.trim() || null,
     shopPhone: input.shopPhone?.trim() || null,
   };

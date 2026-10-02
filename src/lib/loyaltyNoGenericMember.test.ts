@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { buildProgramJoinPath, isValidProgramCodeFormat } from "./loyalty/loyaltyPublicProgram";
 
 /**
- * Phase 2C — a WAKA Loyalty member cannot be created without a merchant programme.
+ * Phase 2C — a DKASU Loyalty member cannot be created without a merchant programme.
  *
  * WHY THIS FILE EXISTS. `/member` and `/member/register` used to be able to produce a
  * `loyalty_members` row on their own. That identity belonged to no shop: no programme, no card, no

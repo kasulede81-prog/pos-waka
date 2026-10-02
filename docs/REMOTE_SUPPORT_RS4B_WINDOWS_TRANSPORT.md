@@ -230,7 +230,7 @@ Do this on disposable machines only. Not production POS.
 1. Windows laptop `RS3-WINDOWS-TEST` with no customer data.
 2. Isolated `hbbs`/`hbbr` **≥ 1.1.16** (not public RustDesk). Record the public key.
 3. Place portable `rustdesk.exe` 1.4.9 in an absolute lab directory, e.g. `C:\WAKA\remote-support-lab\rustdesk.exe`.
-4. Start WAKA POS Electron with:
+4. Start DKASU POS Electron with:
 
 ```text
 WAKA_REMOTE_SUPPORT_TRANSPORT=lab

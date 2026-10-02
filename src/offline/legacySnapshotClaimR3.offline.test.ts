@@ -13,7 +13,7 @@
  * WHAT THIS FILE DOES:
  *   Real `localDb` against fake-indexeddb. Seeds unscoped `snapshot` /
  *   `last_good_snapshot` keys (pre-account-namespacing), then claims them.
- *   Distinct from WAKA-08, which moves `sb:<uid>::snapshot` into a shop
+ *   Distinct from DKASU-08, which moves `sb:<uid>::snapshot` into a shop
  *   namespace.
  */
 

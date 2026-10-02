@@ -85,7 +85,7 @@ describe("ASK-INTEL-1 source router — knowledge-lane detection (unchanged)", (
  * offerPosTools===false the way they did pre-ASK-4A.1: that assertion was
  * testing the exact defect this phase exists to remove. What they still
  * correctly assert is the KNOWLEDGE lane (PROJECT/CODE/HISTORY), which is
- * untouched and remains keyword-based — that lane governs WAKA-knowledge
+ * untouched and remains keyword-based — that lane governs DKASU-knowledge
  * retrieval only, never POS tool availability.
  */
 describe("ASK-4A.1: POS tool eligibility is safety-based, not topic/phrase-based", () => {

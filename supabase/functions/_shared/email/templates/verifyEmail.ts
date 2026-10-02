@@ -6,7 +6,7 @@ export type VerifyEmailTemplateInput = {
 };
 
 export function verifyEmailSubject(): string {
-  return "Confirm your Waka POS email";
+  return "Confirm your DKASU POS email";
 }
 
 export function renderVerifyEmailHtml(input: VerifyEmailTemplateInput): string {
@@ -15,26 +15,26 @@ export function renderVerifyEmailHtml(input: VerifyEmailTemplateInput): string {
     : "Hi there,";
 
   return wrapEmailLayout({
-    preheader: "Confirm your email to finish setting up Waka POS.",
+    preheader: "Confirm your email to finish setting up DKASU POS.",
     title: "Verify your email",
     bodyHtml: `
       <p style="margin:0 0 12px;">${greeting}</p>
-      <p style="margin:0 0 12px;">Thanks for creating a Waka POS account. Confirm your email address to unlock cloud sync, staff access, and subscriptions.</p>
+      <p style="margin:0 0 12px;">Thanks for creating a DKASU POS account. Confirm your email address to unlock cloud sync, staff access, and subscriptions.</p>
       <p style="margin:0;">This link expires in about one hour and can only be used once.</p>
     `,
     cta: { label: "Confirm email", href: input.confirmationUrl },
-    footerNote: "If you did not create a Waka POS account, you can safely ignore this email.",
+    footerNote: "If you did not create a DKASU POS account, you can safely ignore this email.",
   });
 }
 
 export function verifyEmailPlainText(input: VerifyEmailTemplateInput): string {
-  return `Confirm your Waka POS email
+  return `Confirm your DKASU POS email
 
 Open this link to verify your address (expires in about one hour):
 ${input.confirmationUrl}
 
-If you did not create a Waka POS account, ignore this email.
+If you did not create a DKASU POS account, ignore this email.
 
-— Waka POS / WAKA MARKETPLACE LIMITED
+— DKASU POS / WAKA MARKETPLACE LIMITED
 https://waka.ug`;
 }

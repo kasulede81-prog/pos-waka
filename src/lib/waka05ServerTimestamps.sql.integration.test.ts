@@ -1,5 +1,5 @@
 /**
- * WAKA-05 — real SQL (migration 182): the debt-payment cursor column is stamped
+ * DKASU-05 — real SQL (migration 182): the debt-payment cursor column is stamped
  * by the server, and the client's clock is preserved separately.
  *
  * `customer_debt_payments.created_at` is the incremental pull cursor
@@ -86,7 +86,7 @@ describe("WAKA-05 — server-authoritative sync timestamps (migration 182)", () 
   });
 
   /**
-   * THE WAKA-05 WRITE-SIDE REGRESSION.
+   * THE DKASU-05 WRITE-SIDE REGRESSION.
    *
    * A terminal whose clock is an hour slow. Before migration 182 the row landed
    * with created_at one hour in the past, behind every other device's cursor.

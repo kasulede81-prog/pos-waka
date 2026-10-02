@@ -197,7 +197,7 @@ describe("createRs256SignerFromPkcs8Pem", () => {
 });
 
 /**
- * Premium WAKA card presentation. The LoyaltyClass is never upserted in production
+ * Premium DKASU card presentation. The LoyaltyClass is never upserted in production
  * (`skipClassUpsert` defaults true — the published class is managed in the Google Wallet
  * Console), so everything visual that must reach a live pass has to live on the OBJECT.
  * Google renders a fixed template and supports no custom HTML/CSS, so the hero image plus the

@@ -1,8 +1,8 @@
-# Waka POS — Production Monitoring Setup
+# DKASU POS — Production Monitoring Setup
 
 ## Overview
 
-Waka POS sends production errors through two optional channels:
+DKASU POS sends production errors through two optional channels:
 
 1. **Sentry** (`@sentry/react`) — crashes, unhandled rejections, sync/auth events with user/shop context
 2. **Custom ingest** (`VITE_MONITORING_INGEST_URL`) — lightweight JSON events from `reportMonitoringEvent()`

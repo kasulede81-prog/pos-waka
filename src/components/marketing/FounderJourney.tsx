@@ -14,12 +14,12 @@ type JourneyBlock = {
 const FULL_JOURNEY: JourneyBlock[] = [
   { title: "Earlier businesses", body: FOUNDER_JOURNEY_BUSINESS },
   { title: "Qatar, 2021", body: FOUNDER_JOURNEY_QATAR },
-  { title: "Why Waka POS", body: FOUNDER_WHY_WAKA },
+  { title: "Why DKASU POS", body: FOUNDER_WHY_WAKA },
 ];
 
 const CONDENSED_JOURNEY: JourneyBlock[] = [
   { title: "Background", body: FOUNDER_JOURNEY_BUSINESS },
-  { title: "Why we built Waka POS", body: FOUNDER_WHY_WAKA },
+  { title: "Why we built DKASU POS", body: FOUNDER_WHY_WAKA },
 ];
 
 type Props = {

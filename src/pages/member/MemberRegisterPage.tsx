@@ -6,9 +6,9 @@ import { fetchMemberDashboard } from "../../lib/memberDashboard";
 import { posOrigin } from "../../lib/productHost";
 
 /**
- * Phase 2C — "Join WAKA Loyalty": the merchant code step.
+ * Phase 2C — "Join DKASU Loyalty": the merchant code step.
  *
- * PUBLIC BY DESIGN, and it still is: a person who is not a WAKA user at all can open this page,
+ * PUBLIC BY DESIGN, and it still is: a person who is not a DKASU user at all can open this page,
  * type the code from the poster in the shop, and be carried into the join. Requiring a login to
  * reach loyalty signup would be circular.
  *

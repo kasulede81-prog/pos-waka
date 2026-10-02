@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-11  
 **Mode:** READ-ONLY forensic audit (no source code modified)  
-**Production target:** WAKA POS — Web + Android + iOS/Capacitor  
+**Production target:** DKASU POS — Web + Android + iOS/Capacitor  
 
 ---
 
@@ -87,7 +87,7 @@ Post-login landing is **`/` (HomePage)**, not `/pos` or `/office` by default.
 
 | Area | Assessment | Score |
 |------|------------|------:|
-| Branding | `WakaPosLogo` in header + small symbol in card; cream wash + orange blobs | 6.5 |
+| Branding | `DKASU POSLogo` in header + small symbol in card; cream wash + orange blobs | 6.5 |
 | Logo hierarchy | Header logo competes with in-card symbol; brand not hero-level | 6.0 |
 | Typography | Bold welcome; readable; generic “Welcome back!” | 6.5 |
 | Spacing / hierarchy | Dense card; many equal-weight secondary actions | 6.0 |

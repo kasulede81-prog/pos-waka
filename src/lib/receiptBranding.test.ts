@@ -230,7 +230,7 @@ describe("debt receipt text", () => {
 
 describe("premium powered-by toggle", () => {
   it("free plan always shows powered by", () => {
-    expect(resolveFooterPowered(prefs({ receiptShowPoweredByWaka: false }), "free")).toBe("Powered by Waka POS");
+    expect(resolveFooterPowered(prefs({ receiptShowPoweredByWaka: false }), "free")).toBe("Powered by DKASU POS");
   });
 
   it("business plan may hide powered by", () => {

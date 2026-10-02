@@ -103,7 +103,7 @@ export function hasShopAiSettingsRow(settings: ShopAiSettings | null | undefined
 
 /**
  * AI-AUTH-1: missing shop_ai_settings or ai_enabled !== true is deny (fail-closed).
- * Ask WAKA still requires ask_waka=true on the authorized shop row.
+ * Ask DKASU still requires ask_waka=true on the authorized shop row.
  */
 export function isAskWakaPilotShopReady(settings: ShopAiSettings | null | undefined): boolean {
   return hasShopAiSettingsRow(settings) && settings.ai_enabled === true && settings.ask_waka === true;

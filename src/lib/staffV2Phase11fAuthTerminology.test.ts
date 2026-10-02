@@ -13,7 +13,7 @@ const APP_SHELL = readFileSync(resolve(ROOT, "src/components/layout/AppShell.tsx
 describe("STAFF-V2 Phase 11f authentication terminology", () => {
   it("U1 — login page frames email/password as account login, not PIN", () => {
     expect(t("en", "loginOwnerHint").toLowerCase()).toContain("email and password");
-    expect(t("en", "loginWelcomeSub").toLowerCase()).toContain("waka pos workspace");
+    expect(t("en", "loginWelcomeSub").toLowerCase()).toContain("dkasu pos workspace");
     expect(t("en", "loginStaffPinHint").toLowerCase()).toContain("not your account login");
     expect(LOGIN).toMatch(/loginOwnerHint/);
     expect(LOGIN).toMatch(/loginStaffPinHint/);

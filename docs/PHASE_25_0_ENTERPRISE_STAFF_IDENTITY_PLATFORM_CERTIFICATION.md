@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The WAKA POS Staff Platform is **architecturally intended to be cloud-authoritative** (`shop_pos_staff`, versioned delta distribution in migration `125_staff_version_distribution.sql`) but **operates as a hybrid identity system in practice**. Staff data flows through **three competing local layers** — Supabase cloud, encrypted IndexedDB `staffCache`, and `preferences.staffAccounts` in the shop snapshot — with **different merge rules, different consumers, and asymmetric propagation paths**.
+The DKASU POS Staff Platform is **architecturally intended to be cloud-authoritative** (`shop_pos_staff`, versioned delta distribution in migration `125_staff_version_distribution.sql`) but **operates as a hybrid identity system in practice**. Staff data flows through **three competing local layers** — Supabase cloud, encrypted IndexedDB `staffCache`, and `preferences.staffAccounts` in the shop snapshot — with **different merge rules, different consumers, and asymmetric propagation paths**.
 
 This explains the observed symptoms:
 

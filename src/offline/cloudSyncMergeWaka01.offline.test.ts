@@ -1,7 +1,7 @@
 /**
- * PHASE 0A — WAKA-01 executable regression test.
+ * PHASE 0A — DKASU-01 executable regression test.
  *
- * AUDIT FINDING (WAKA-01, P0) — FIXED:
+ * AUDIT FINDING (DKASU-01, P0) — FIXED:
  *   `pullCloudAndMergeIntoStore` passed `sales` into the customer merge callback
  *   while `const sales` was still in the temporal dead zone (declared ~40 lines
  *   below the call site). The callback runs synchronously inside the awaited
@@ -28,7 +28,7 @@
  *   The only thing faked is `src/lib/supabase` — the network boundary, i.e. a
  *   stand-in for the remote server, not for any application code.
  *
- * STATUS: WAKA-01 is fixed. Every test below is expected to PASS. If the
+ * STATUS: DKASU-01 is fixed. Every test below is expected to PASS. If the
  * temporal-dead-zone regression is ever reintroduced, the "merges an updated
  * customer" and "does not discard the rest of the cloud payload" tests fail
  * with `ReferenceError: Cannot access 'sales' before initialization`.
@@ -160,7 +160,7 @@ describe("WAKA-01 — pullCloudAndMergeIntoStore merges a customer that already 
    * `mergeById` never invokes the `pick` callback — and the temporal-dead-zone
    * read on line 4441 is therefore never evaluated.
    *
-   * This test passing is what proves the failures below are WAKA-01 and not a
+   * This test passing is what proves the failures below are DKASU-01 and not a
    * broken harness, a missing session, or an aborted pull.
    */
   it("CONTROL — merges a cloud customer when local ids do not intersect", async () => {
@@ -208,7 +208,7 @@ describe("WAKA-01 — pullCloudAndMergeIntoStore merges a customer that already 
   });
 
   /**
-   * REGRESSION TEST FOR WAKA-01.
+   * REGRESSION TEST FOR DKASU-01.
    *
    * The only difference from the control above: the local store already holds
    * the same customer id, which is the ordinary steady state of any device

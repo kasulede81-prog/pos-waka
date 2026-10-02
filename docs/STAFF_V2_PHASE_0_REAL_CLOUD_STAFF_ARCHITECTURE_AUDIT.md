@@ -421,7 +421,7 @@ Cloud writes on a shared terminal **must** stay authenticated as a real `shop_me
 
 ## 10. Backward compatibility
 
-Live WAKA POS currently has **zero** `shop_pos_staff` rows (runtime observation from authorized Phase 3 testing). The product still has the full PIN create path; other environments / future rows must migrate safely.
+Live DKASU POS currently has **zero** `shop_pos_staff` rows (runtime observation from authorized Phase 3 testing). The product still has the full PIN create path; other environments / future rows must migrate safely.
 
 ```
 Legacy PIN staff (user_id NULL)

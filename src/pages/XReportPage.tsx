@@ -27,7 +27,7 @@ export function XReportPage({ lang }: { lang: Language }) {
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   const todayKey = dateKeyKampala(new Date());
-  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
 
   const snapshot = useMemo(
     () =>

@@ -26,7 +26,7 @@ export type SyncHealthMeta = {
   lastOnlineAt: string | null;
   /** Queue health for owner diagnostics. */
   queueHealth: "healthy" | "degraded" | "backing_off" | "blocked" | "quarantined";
-  /** WAKA-12 — last pull entity failures. Empty when the last pull was complete. */
+  /** DKASU-12 — last pull entity failures. Empty when the last pull was complete. */
   entityPullErrors?: Record<string, string>;
   /** POS push-only upload diagnostics (no cloud pull). */
   posPushAttempts?: number;
@@ -115,7 +115,7 @@ export function writeSyncHealthMeta(partial: Partial<SyncHealthMeta>): SyncHealt
 }
 
 /**
- * WAKA-12 — one place that decides whether a cycle may claim full health.
+ * DKASU-12 — one place that decides whether a cycle may claim full health.
  * A successful push must not clear a failed pull, and an empty in-memory view
  * must not claim healthy while durable queue rows remain.
  */
@@ -348,7 +348,7 @@ export function publishShopSyncHealthAfterPushCycle(input: {
 }
 
 /**
- * R6 — fire-and-forget sync/push threw before WAKA-12's cycle health writer ran.
+ * R6 — fire-and-forget sync/push threw before DKASU-12's cycle health writer ran.
  * Keep lastIssueCode distinct from a clean success without adding a new UI event.
  */
 export function recordBackgroundSyncFailure(code: string, err?: unknown): SyncHealthMeta {

@@ -30,7 +30,7 @@ let f: LoyaltyFixture;
 let codeA = "";
 let codeB = "";
 
-/** A WAKA member: auth user + loyalty_members row, exactly what registration produces. */
+/** A DKASU member: auth user + loyalty_members row, exactly what registration produces. */
 async function makeMember(phone: string, name = "Member"): Promise<{ userId: string; memberId: string }> {
   const userId = crypto.randomUUID();
   await exec.query(`INSERT INTO auth.users (id, email) VALUES ($1, $2)`, [
@@ -328,7 +328,7 @@ describe("merchant approval links the AUTHENTICATED member", () => {
     const second = await join(m.userId, codeB);
     expect(second).toMatchObject({ ok: true, status: "pending" });
 
-    // Still exactly ONE WAKA member identity.
+    // Still exactly ONE DKASU member identity.
     const members = await exec.query(
       `SELECT count(*)::int AS n FROM public.loyalty_members WHERE auth_user_id = $1`,
       [m.userId],

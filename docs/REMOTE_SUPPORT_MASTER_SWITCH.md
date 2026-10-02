@@ -1,4 +1,4 @@
-# WAKA POS — Remote Support Master Switch (RS-FREEZE-1)
+# DKASU POS — Remote Support Master Switch (RS-FREEZE-1)
 
 ## Purpose
 

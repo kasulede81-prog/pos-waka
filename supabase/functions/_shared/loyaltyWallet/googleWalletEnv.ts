@@ -17,6 +17,7 @@ function resolveHeroUrl(): string | undefined {
 
 import { createRs256SignerFromPkcs8Pem } from "./googleWalletPass.ts";
 import { googleWalletEnvLooksConfigured } from "./googleWalletConfiguredCheck.ts";
+import { resolveWalletAllowedOrigins } from "./walletAllowedOrigins.ts";
 import { WALLET_HERO_ASSET_PATH, type GoogleWalletSigner } from "./walletPassTypes.ts";
 
 export type GoogleWalletEnv =
@@ -69,15 +70,9 @@ export function loadGoogleWalletEnv(): GoogleWalletEnv {
   if (!serviceAccount.client_email || !serviceAccount.private_key) {
     return { ok: false, error: "wallet_misconfigured" };
   }
-  const origins = (Deno.env.get("WALLET_ALLOWED_ORIGINS") ?? "")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
-  // Save JWTs require origins; fall back to the live WAKA surfaces when unset.
-  const resolvedOrigins =
-    origins.length > 0
-      ? origins
-      : ["https://pos.waka.ug", "https://loyalty.waka.ug"];
+  // Save JWTs require origins. The deployed secret wins; unset falls back to the live DKASU
+  // surfaces with the legacy WAKA origins retained (see walletAllowedOrigins.ts).
+  const resolvedOrigins = resolveWalletAllowedOrigins(Deno.env.get("WALLET_ALLOWED_ORIGINS"));
 
   return {
     ok: true,

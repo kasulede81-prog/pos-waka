@@ -1,9 +1,9 @@
 /**
- * WAKA-05 — one server clock for bootstrap / full-sync checkpoint seeding.
+ * DKASU-05 — one server clock for bootstrap / full-sync checkpoint seeding.
  *
  * Incremental cursors are compared with `.gt(updated_at|created_at, cursor)`
  * against values the server stamped. Seeding those cursors from `Date.now()`
- * after a full pull recreates the original WAKA-05 skip: a fast client writes
+ * after a full pull recreates the original DKASU-05 skip: a fast client writes
  * every cursor into the server's future and then never sees rows stamped in
  * the gap.
  */

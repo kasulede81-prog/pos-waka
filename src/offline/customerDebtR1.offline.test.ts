@@ -3,7 +3,7 @@
  *
  * AUDIT (R1, P0): `mergeCustomerFromCloudPull` with `ledgerAuthoritative`
  * recomputes `sum(sale.debtUgx) − sum(local payments)` and writes that back
- * with `version+1`. After WAKA-01 the merge actually runs. WAKA-05 fixed the
+ * with `version+1`. After DKASU-01 the merge actually runs. DKASU-05 fixed the
  * named missed-payment cursor, but `ledgerAuthoritative` was still true whenever
  * `lastDebtPaymentsSyncAt != null`.
  *

@@ -6,7 +6,7 @@ import { fetchLoyaltyOverview } from "../../lib/loyalty/loyaltyMerchant";
 import { buildProgramJoinUrl } from "../../lib/loyalty/loyaltyPublicProgram";
 
 /**
- * The merchant's permanent WAKA Loyalty Code (WPL2026001) and its QR.
+ * The merchant's permanent DKASU Loyalty Code (WPL2026001) and its QR.
  *
  * READ-ONLY on purpose. The code is issued once, server-side, by a trigger on insert; it is
  * immutable, it is never recycled, and no RPC accepts it as an input. There is therefore nothing

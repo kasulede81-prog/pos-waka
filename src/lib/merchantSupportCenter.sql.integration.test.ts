@@ -255,7 +255,7 @@ describe("MERCHANT-SUPPORT Notifications & Support Center (migration 20260917003
     const replied = await asUser(exec, ownerAId, () => replyTicket(exec, ticketAId, "I checked the cable, still nothing."));
     expect(replied.ok).toBe(true);
 
-    // WAKA support replies internally and moves the ticket to waiting_for_merchant.
+    // DKASU support replies internally and moves the ticket to waiting_for_merchant.
     await asRoleUser(exec, supportAdminId, async () => {
       await exec.query(
         `INSERT INTO public.merchant_support_messages (ticket_id, author_user_id, author_kind, body)

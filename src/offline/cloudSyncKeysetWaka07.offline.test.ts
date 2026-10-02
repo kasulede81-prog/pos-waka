@@ -1,14 +1,14 @@
 /**
- * PHASE 0A — WAKA-07 executable regression: composite (time, id) keyset.
+ * PHASE 0A — DKASU-07 executable regression: composite (time, id) keyset.
  *
- * AUDIT FINDING (WAKA-07, P1):
+ * AUDIT FINDING (DKASU-07, P1):
  *   Incremental pullers used `.gt(updated_at, cursor).order(updated_at).limit(500)`.
  *   A 500-row page of rows sharing one `updated_at` made `checkpointAt == cursor`,
  *   so the next page was identical. After 40 wasted trips the timestamp was
  *   persisted and every remaining row at that timestamp was skipped forever.
  *
  *   The fix pages with (updated_at, id) — or (created_at, id) for debt payments —
- *   and carries the last row's id between pages. The persisted WAKA-05 checkpoint
+ *   and carries the last row's id between pages. The persisted DKASU-05 checkpoint
  *   is still the newest server timestamp observed.
  */
 

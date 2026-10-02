@@ -1,4 +1,4 @@
-# WAKA POS — EFRIS Phase 1: Internal Plumbing
+# DKASU POS — EFRIS Phase 1: Internal Plumbing
 
 **Date:** 2026-08-28  
 **Status:** Internal plumbing only. **Not** EFRIS-compliant. **Not** URA-approved. **Not** production-ready for fiscal submission.

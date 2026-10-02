@@ -57,7 +57,7 @@ async function fetchGoogleOAuthLocationFromAuthorize(authorizeUrl: string): Prom
  * Resolve the URL to open in the system browser for native Google OAuth.
  *
  * Opens Google's URL exactly as Supabase generated it (redirect_uri stays on *.supabase.co).
- * Do not rewrite redirect_uri to pos.waka.ug — that breaks `exchangeCodeForSession` ("Unable to exchange external code").
+ * Do not rewrite redirect_uri to the branded host — that breaks `exchangeCodeForSession` ("Unable to exchange external code").
  */
 export async function resolveNativeGoogleOAuthBrowserUrl(authorizeUrl: string): Promise<string> {
   const brandedAuthorize = rewriteNativeOAuthAuthorizeUrl(authorizeUrl);
@@ -69,7 +69,8 @@ export async function resolveNativeGoogleOAuthBrowserUrl(authorizeUrl: string): 
 }
 
 /**
- * Route native authorize through `pos.waka.ug` (Vercel `/auth/v1` proxy) before resolving Google URL.
+ * Route native authorize through the branded POS host (`WAKA_POS_URL` — Vercel `/auth/v1` proxy)
+ * before resolving the Google URL.
  */
 export function rewriteNativeOAuthAuthorizeUrl(providerUrl: string): string {
   const supabaseRaw = import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/$/, "");

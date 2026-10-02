@@ -26,7 +26,7 @@ Production was not used.
 | `npm run package:windows` | electron-builder **portable** x64 → `release/win-build-*` then `release/windows-build` |
 | `npm run installer:windows` | electron-builder **NSIS** x64 |
 
-`package.json` `build.files` includes `dist/**/*` and `electron/**/*`. Main is `electron/main.cjs`. This Mac cannot run the resulting `WAKA POS.exe`.
+`package.json` `build.files` includes `dist/**/*` and `electron/**/*`. Main is `electron/main.cjs`. This Mac cannot run the resulting `DKASU POS.exe`.
 
 ### 2. How `WAKA_REMOTE_SUPPORT_TRANSPORT=lab` is injected
 
@@ -145,7 +145,7 @@ Operator actions (human + this checklist), isolated only:
 2. Isolated Linux/Docker `hbbs`/`hbbr` **≥ 1.1.16**, ports 21115–21117 on the lab host only, public key recorded. **No** `rustdesk.com`.
 3. Portable `rustdesk.exe` **1.4.9** in e.g. `C:\WAKA\remote-support-lab\`.
 4. Staging WAKA build on the laptop (`wdirxwvbgsfzbdurmkbf`), throwaway shop, two enrolled Windows devices (A and B).
-5. Launch WAKA POS with:
+5. Launch DKASU POS with:
 
 ```text
 WAKA_REMOTE_SUPPORT_TRANSPORT=lab

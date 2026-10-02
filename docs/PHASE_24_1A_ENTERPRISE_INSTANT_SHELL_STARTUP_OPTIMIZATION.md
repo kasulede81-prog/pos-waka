@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Phase 24.1A transforms WAKA POS startup into an **essentials-first architecture**. The AppShell becomes interactive after critical IndexedDB hydration (products, customers, preferences, cached today KPIs) while sales tail, back-office buckets, cloud recovery, and sync-adjacent work run in a **prioritized background scheduler**.
+Phase 24.1A transforms DKASU POS startup into an **essentials-first architecture**. The AppShell becomes interactive after critical IndexedDB hydration (products, customers, preferences, cached today KPIs) while sales tail, back-office buckets, cloud recovery, and sync-adjacent work run in a **prioritized background scheduler**.
 
 **Target perceived startup score: 8.8+ / 10** (Phase 24.1B will address sync latency).
 

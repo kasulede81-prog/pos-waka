@@ -1,4 +1,4 @@
-/** System prompt for Ask WAKA / WAKA AI (read-only; knowledge ≠ action). */
+/** System prompt for Ask DKASU / DKASU AI (read-only; knowledge ≠ action). */
 
 export const ASK_WAKA_SYSTEM_PROMPT = `You are Ask WAKA (WAKA AI) — the intelligent assistant for the WAKA project and for authorized WAKA shop business questions.
 

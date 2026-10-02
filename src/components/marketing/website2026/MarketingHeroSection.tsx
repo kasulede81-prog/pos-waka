@@ -26,7 +26,7 @@ export function MarketingHeroSection({ isAuthenticated }: Props) {
 
       <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
         <Reveal>
-          <p className={mktEyebrow}>Waka POS · Uganda</p>
+          <p className={mktEyebrow}>DKASU POS · Uganda</p>
           <h1 className={`mt-4 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.35rem] ${mktHeading}`}>
             Run Your Business <span className="text-waka-600 dark:text-waka-400">Smarter.</span>
           </h1>
@@ -84,7 +84,7 @@ function DeviceShowcase() {
             <span className="h-2 w-2 rounded-full bg-rose-500" />
             <span className="h-2 w-2 rounded-full bg-amber-400" />
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="ml-2 text-[10px] font-bold text-stone-500">Waka POS · Sell</span>
+            <span className="ml-2 text-[10px] font-bold text-stone-500">DKASU POS · Sell</span>
           </div>
           <div className="grid grid-cols-4 gap-1.5 p-2">
             {["Rice", "Sugar", "Soap", "Soda", "Bread", "Oil", "Eggs", "Milk"].map((p) => (

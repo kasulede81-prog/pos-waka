@@ -1,4 +1,4 @@
-# Waka POS — Cash Expenses (Cash Withdrawals)
+# DKASU POS — Cash Expenses (Cash Withdrawals)
 
 **Date:** 2026-05-28  
 **Status:** Specification + schema migration (`069_cash_expenses.sql`). UI/sync implementation follows this doc.  

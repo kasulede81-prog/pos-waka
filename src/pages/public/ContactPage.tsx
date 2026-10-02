@@ -24,7 +24,7 @@ export function ContactPage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
-        title="Contact Waka POS — Kampala, Uganda"
+        title="Contact DKASU POS — Kampala, Uganda"
         description={`Contact ${WAKA_BRAND_NAME} for ${WAKA_MAIN_PRODUCT} support, sales, and office visits in Kampala, Uganda.`}
         path="/contact"
         structuredData="contact"
@@ -51,7 +51,7 @@ export function ContactPage({ lang, setLang, isAuthenticated }: Props) {
             WhatsApp support
           </a>
           <a
-            href={wakaSupportMailtoUrl("Waka POS enquiry")}
+            href={wakaSupportMailtoUrl("DKASU POS enquiry")}
             className="flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border-2 border-waka-200 bg-waka-50 px-4 py-4 text-lg font-black text-waka-950"
           >
             <Mail className="h-6 w-6 text-waka-700" aria-hidden />

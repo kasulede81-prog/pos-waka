@@ -40,7 +40,7 @@ export function BillPreviewSheet({
   const { snapshot, authMode } = getStoreSubscriptionContext();
   const tier = resolveStorePlanTier(snapshot, authMode);
   const branding = buildReceiptBrandingSnapshot(preferences, tier);
-  const shopName = branding.header.lines?.[0]?.trim() || preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = branding.header.lines?.[0]?.trim() || preferences.shopDisplayName?.trim() || "DKASU POS";
 
   /**
    * Hand the guest a paper check before payment. Presentation only: it reads the

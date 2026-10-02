@@ -94,7 +94,7 @@ function parseSources(raw: unknown): AskWakaSourceRecord[] {
 }
 
 /**
- * Ask WAKA via Edge Function (JWT + server tools). Client never runs SQL/tools.
+ * Ask DKASU via Edge Function (JWT + server tools). Client never runs SQL/tools.
  */
 export async function askWaka(params: {
   message: string;

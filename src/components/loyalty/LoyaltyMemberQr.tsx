@@ -5,7 +5,7 @@ import { encodeLoyaltyQrPayload } from "../../lib/loyalty/loyaltyEnrollment";
 /**
  * Membership QR for a loyalty account (Phase 05).
  *
- * The rendered payload is `WAKA-LOYALTY:<qr_token>` — an opaque token only.
+ * The rendered payload is `DKASU-LOYALTY:<qr_token>` — an opaque token only.
  * No name, phone, or balance ever enters the QR; scanning it only lets a
  * shop member resolve the account via `loyalty_account_by_token`.
  */

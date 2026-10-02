@@ -134,7 +134,7 @@ export function useReplySupportTicket(shopId: string | null, ticketId: string | 
   });
 }
 
-/** Marks all WAKA messages of a ticket read once the merchant opens the conversation. */
+/** Marks all DKASU messages of a ticket read once the merchant opens the conversation. */
 export function useMarkTicketMessagesRead(shopId: string | null, ticketId: string | null) {
   const qc = useQueryClient();
   return useMutation({

@@ -30,7 +30,7 @@ const SYMBOL_ROWS = [
   [";", ":", "'", '"', ",", ".", "/", "?", "~"],
 ] as const;
 
-/** Application-level WAKA on-screen keyboard for Electron desktop touch entry. */
+/** Application-level DKASU on-screen keyboard for Electron desktop touch entry. */
 export const DesktopOnScreenKeyboard = memo(function DesktopOnScreenKeyboard({
   lang,
   visible,

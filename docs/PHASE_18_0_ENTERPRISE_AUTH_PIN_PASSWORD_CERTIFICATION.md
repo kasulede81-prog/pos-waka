@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Waka POS treats authentication seriously at the **security layer** (Argon2id hashing, progressive lockout, device authority, audit logging, native biometrics) but presents **multiple incompatible PIN and password experiences** across POS, back office, hospitality, pharmacy, and settings.
+DKASU POS treats authentication seriously at the **security layer** (Argon2id hashing, progressive lockout, device authority, audit logging, native biometrics) but presents **multiple incompatible PIN and password experiences** across POS, back office, hospitality, pharmacy, and settings.
 
 Users today must learn **different digit lengths (4 vs 6 vs 8)**, **different submit patterns (Lock icon vs Submit vs action button vs browser prompt)**, and **different error/lockout behaviors** depending on surface. This fails the Phase 18.0 banking-grade consistency bar.
 

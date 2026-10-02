@@ -23,9 +23,14 @@ universal fallback.
 ```
 GOOGLE_WALLET_ISSUER_ID=...
 GOOGLE_WALLET_SERVICE_ACCOUNT_JSON={...}
-WALLET_ALLOWED_ORIGINS=https://pos.waka.ug,https://loyalty.waka.ug
+WALLET_ALLOWED_ORIGINS=https://pos.dkasu.com,https://loyalty.dkasu.com,https://pos.waka.ug,https://loyalty.waka.ug
 GOOGLE_WALLET_LOGO_URL=https://pos.waka.ug/waka-logo.png
 ```
+
+DKASU origins are the live production surfaces since the 2026-10-02 auth migration; the WAKA
+origins stay listed during the migration window (they 308 to DKASU, and an open old tab must still
+be able to save a pass). Unset, the code falls back to the same four — see
+`supabase/functions/_shared/loyaltyWallet/walletAllowedOrigins.ts`.
 
 See `supabase/functions/.env.example`.
 

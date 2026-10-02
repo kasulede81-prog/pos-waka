@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-WAKA POS consolidates inventory into a **single hub** (`/stock`, pharmacy twin `/pharmacy/inventory`) with a solid local-first data spine and a deliberate mobile view engine (**compact ≤767 → card 768–1023 → table ≥1024**). Core loops — add product, restock/receive, adjust, search — are **reachable** on mobile and use enterprise sheets (`ModalSheet` with visual-viewport keyboard handling).
+DKASU POS consolidates inventory into a **single hub** (`/stock`, pharmacy twin `/pharmacy/inventory`) with a solid local-first data spine and a deliberate mobile view engine (**compact ≤767 → card 768–1023 → table ≥1024**). Core loops — add product, restock/receive, adjust, search — are **reachable** on mobile and use enterprise sheets (`ModalSheet` with visual-viewport keyboard handling).
 
 The module is **not yet enterprise-certified for mobile POS inventory** because:
 

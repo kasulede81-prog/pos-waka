@@ -1,4 +1,4 @@
-# WAKA POS — Release distribution (not in Git)
+# DKASU POS — Release distribution (not in Git)
 
 The Git repository contains **source code only**. Installers, Electron unpack trees, and other binary release artifacts must **never** be committed.
 
@@ -56,7 +56,7 @@ npm run installer:windows
 
 Output (ignored by Git): `release/windows-build/WAKA-POS-Setup-<version>.exe` (copied after each build). Builds use a fresh `release/win-build-*` folder to avoid `app.asar` file-lock errors.
 
-**If build fails with “cannot access app.asar”:** quit any running **WAKA POS** desktop app, close Explorer windows inside `release/`, then run `npm run installer:windows` again. Add `release/` to Windows Defender exclusions if locks persist without the app running.
+**If build fails with “cannot access app.asar”:** quit any running **DKASU POS** desktop app, close Explorer windows inside `release/`, then run `npm run installer:windows` again. Add `release/` to Windows Defender exclusions if locks persist without the app running.
 
 ---
 

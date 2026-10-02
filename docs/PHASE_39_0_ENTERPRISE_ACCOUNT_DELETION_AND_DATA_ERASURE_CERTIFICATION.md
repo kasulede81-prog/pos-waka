@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-11  
 **Mode:** READ-ONLY forensic audit (no source / migration / data changes)  
-**Production target:** WAKA POS — Web + Android + iOS/Capacitor  
+**Production target:** DKASU POS — Web + Android + iOS/Capacitor  
 **Shipped code reference:** `main` at audit time (includes certified hard-delete path)
 
 ---
@@ -77,7 +77,7 @@ Source: `AccountDeletionPage.tsx` + `i18n` keys `accountDeletion*`.
 | Topic | What UI says today |
 |-------|--------------------|
 | Title | “Delete account permanently” |
-| Subtitle | “Remove your **shop**, all business data, and login from Waka cloud.” |
+| Subtitle | “Remove your **shop**, all business data, and login from DKASU cloud.” |
 | Irreversible | “permanent and cannot be undone” |
 | Lists | Sales/receipts; products/stock; customers/debts/suppliers; cloud backups/sync; login; devices disconnected |
 | Re-register | Same email can register again after completion |

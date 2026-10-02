@@ -6,7 +6,7 @@ import pg from "pg";
 import { asUser, rpcJson, type SqlExec } from "../test/sqlIntegration/transferEnginePgHarness";
 
 /**
- * P1 defect regression test — WAKA POS financial transaction laboratory,
+ * P1 defect regression test — DKASU POS financial transaction laboratory,
  * Phase 7 (void).
  *
  * ROOT CAUSE: voiding a sale line sets `voided: true` correctly in local

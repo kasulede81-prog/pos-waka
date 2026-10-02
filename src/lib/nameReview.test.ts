@@ -17,14 +17,14 @@ import {
 } from "./nameReview";
 
 /**
- * The rule that separates a provider's suggestion from a person's own WAKA name.
+ * The rule that separates a provider's suggestion from a person's own DKASU name.
  *
  * The bug this file exists for: `user_metadata.full_name` — a value Google owns — was written
  * straight into `profiles.full_name` and displayed as the person's identity. A later login could
  * therefore replace a name the merchant had already chosen. Verified against the live RPC:
  * a non-empty incoming name always wins the bootstrap upsert.
  *
- * The marker pair these tests exercise is deliberately WAKA-owned, so that behaviour of the auth
+ * The marker pair these tests exercise is deliberately DKASU-owned, so that behaviour of the auth
  * server (which may or may not refresh provider claims on a later sign-in — that was never
  * empirically established) cannot reach a confirmed name either way.
  */
@@ -200,7 +200,7 @@ describe("who is asked to review", () => {
   });
 
   it("F. an existing merchant with a tenancy is not asked even without a marker", () => {
-    // Their WAKA identity exists by construction; re-asking on metadata alone is the repeated
+    // Their DKASU identity exists by construction; re-asking on metadata alone is the repeated
     // prompt this must not do.
     expect(needsNameReview({ kind: "merchant", hasTenancy: true, metadata: GOOGLE_FIRST_TIME })).toBe(false);
   });

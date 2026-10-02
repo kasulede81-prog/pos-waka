@@ -1,5 +1,5 @@
 /**
- * WAKA-10 — receipt identity is device-qualified, stamped at mint, never rewritten.
+ * DKASU-10 — receipt identity is device-qualified, stamped at mint, never rewritten.
  *
  * AUDIT: two terminals in one shop each complete a sale on the same Kampala day
  * before syncing. `scanTodaySalesHead(...).nextReceiptSeq` used only local

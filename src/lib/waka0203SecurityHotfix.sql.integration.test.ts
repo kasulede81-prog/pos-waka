@@ -1,5 +1,5 @@
 /**
- * WAKA-02 / WAKA-03 / R8 — privilege and RLS checks against real PostgreSQL
+ * DKASU-02 / DKASU-03 / R8 — privilege and RLS checks against real PostgreSQL
  * catalog state (PGLite). Role switching, not source-text assertions.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

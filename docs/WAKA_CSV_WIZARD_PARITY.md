@@ -1,4 +1,4 @@
-# WAKA POS — CSV ↔ Add Product Wizard Parity
+# DKASU POS — CSV ↔ Add Product Wizard Parity
 
 **Phase:** 2 — Two official product CSV templates  
 **Date:** 2026-08-29  

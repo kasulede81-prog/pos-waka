@@ -3,7 +3,7 @@
  * shop_id alone is never sufficient.
  * Inbox visibility is per-device: Device B must not see Device A's request.
  *
- * Fingerprint is a WAKA localStorage identity, not hardware authentication.
+ * Fingerprint is a DKASU localStorage identity, not hardware authentication.
  */
 
 import { isRemoteSupportEligible, type RemoteSupportEligibilityDevice } from "./eligibility";

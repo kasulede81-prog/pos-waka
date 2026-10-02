@@ -1,5 +1,5 @@
 /**
- * ASK-INTEL-1 deterministic WAKA knowledge retrieval.
+ * ASK-INTEL-1 deterministic DKASU knowledge retrieval.
  * Operates over a generated read-only artifact. No filesystem, SQL, or Git at request time.
  */
 
@@ -8,7 +8,7 @@ import type { WakaRelationship, WakaSymbolRecord } from "./askWakaCodeIntel.ts";
 import { formatClientSafeCitation, toClientSafeSources } from "./askWakaCodeIntel.ts";
 
 export const ASK_WAKA_KNOWLEDGE_NOT_FOUND =
-  "I couldn't find that in the indexed WAKA project knowledge.";
+  "I couldn't find that in the indexed DKASU project knowledge.";
 
 export const ASK_WAKA_KNOWLEDGE_LIMITS = {
   topKDocs: 6,

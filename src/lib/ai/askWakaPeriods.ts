@@ -1,5 +1,5 @@
 /**
- * Ask WAKA calendar periods in the POS business timezone.
+ * Ask DKASU calendar periods in the POS business timezone.
  * Monday-start weeks, matching `weekStartKeyKampala` / Africa/Kampala.
  *
  * Existing reporting RPCs remain authoritative for totals.

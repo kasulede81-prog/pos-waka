@@ -61,7 +61,7 @@ export function buildMenuDocument(input: MenuDocumentInput): MenuDocument {
 
   return {
     title: t(lang, "menuBuilderTitle"),
-    subtitle: `${input.preferences.shopDisplayName?.trim() || "Waka POS"} · ${input.activeSectionLabel}`,
+    subtitle: `${input.preferences.shopDisplayName?.trim() || "DKASU POS"} · ${input.activeSectionLabel}`,
     lines: lines.length ? lines : ["—"],
   };
 }

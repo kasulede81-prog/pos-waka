@@ -2,7 +2,7 @@
  * Loyalty NFC identification adapter (Phase 07).
  *
  * Merchant device reads an NDEF tag/card carrying the membership payload
- * (`WAKA-LOYALTY:<qr_token>`) and resolves it through the same
+ * (`DKASU-LOYALTY:<qr_token>`) and resolves it through the same
  * `loyalty_account_by_token` path as QR scanning. NFC is IDENTIFICATION
  * ONLY: the raw payload is never trusted for points — awarding still comes
  * from the completed-sale trigger server-side.
@@ -77,7 +77,7 @@ function recordBytes(record: NdefLikeRecord): Uint8Array | null {
 
 /**
  * Extracts a loyalty token from NDEF records. Accepts text and URL records
- * whose content is a `WAKA-LOYALTY:` payload. Anything else returns null —
+ * whose content is a `DKASU-LOYALTY:` payload. Anything else returns null —
  * product stickers, empty tags, and foreign payloads are ignored.
  */
 export function extractLoyaltyTokenFromNdefRecords(records: NdefLikeRecord[]): string | null {

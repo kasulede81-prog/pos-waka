@@ -1,7 +1,7 @@
 /**
- * PHASE 0A — WAKA-06 executable regression test: queued-work loss on a RAM miss.
+ * PHASE 0A — DKASU-06 executable regression test: queued-work loss on a RAM miss.
  *
- * AUDIT FINDING (WAKA-06, P0) — FIXED:
+ * AUDIT FINDING (DKASU-06, P0) — FIXED:
  *   `pushDebtPaymentToCloud` resolved the queued debt payment ONLY from the
  *   hydrated in-memory store:
  *
@@ -154,7 +154,7 @@ describe("WAKA-06 — flush must not acknowledge a queue op whose row is missing
   });
 
   /**
-   * REGRESSION TEST FOR WAKA-06 — hydrated/RAM payment row present.
+   * REGRESSION TEST FOR DKASU-06 — hydrated/RAM payment row present.
    *
    * The payment IS in RAM, but the customer has not hydrated yet. Before the
    * fix the customer lookup (`if (!customer …) return true`) acknowledged the
@@ -175,7 +175,7 @@ describe("WAKA-06 — flush must not acknowledge a queue op whose row is missing
   });
 
   /**
-   * REGRESSION TEST FOR WAKA-06.
+   * REGRESSION TEST FOR DKASU-06.
    *
    * The row is absent from RAM but present in the persisted entity store — the
    * exact state of a device that queued the payment, restarted, and began a
@@ -202,7 +202,7 @@ describe("WAKA-06 — flush must not acknowledge a queue op whose row is missing
   });
 
   /**
-   * REGRESSION TEST FOR WAKA-06 — the queued-work-loss case proper.
+   * REGRESSION TEST FOR DKASU-06 — the queued-work-loss case proper.
    *
    * The op is in IndexedDB but its row is in NEITHER RAM nor the persisted
    * entity store. That is not evidence the work was done, so the flush must

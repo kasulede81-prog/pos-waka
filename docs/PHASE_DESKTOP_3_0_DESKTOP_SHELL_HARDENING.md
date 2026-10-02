@@ -1,4 +1,4 @@
-# WAKA POS DESKTOP — PHASE 3
+# DKASU POS DESKTOP — PHASE 3
 # DESKTOP SHELL HARDENING
 
 **Date:** 2026-08-16  
@@ -54,7 +54,7 @@ Out of scope: ESC/POS, cash drawer, RustDesk packaging, RS-5, migrations, offlin
 ## Behavior notes
 
 ### Single instance
-One WAKA POS instance per Windows user session. Second launch focuses/restores the existing window.
+One DKASU POS instance per Windows user session. Second launch focuses/restores the existing window.
 
 ### Navigation
 In-window navigation allowed only for packaged `dist/index.html` and `electron/shell/recovery.html`.  

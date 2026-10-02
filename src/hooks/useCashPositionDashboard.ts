@@ -30,7 +30,7 @@ export function useCashPositionDashboard(lang: Language, filter: DateFilterValue
   const formulaVersion = usePosStore((s) => resolveCashDrawerFormulaVersion(s.preferences));
   const preferences = usePosStore((s) => s.preferences);
   const todayKey = dateKeyKampala(new Date());
-  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
   const generalLabel = t(lang, "uncategorized");
   const shopId = getActiveShopId();
 

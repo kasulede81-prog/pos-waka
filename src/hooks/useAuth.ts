@@ -362,7 +362,7 @@ export function useAuth() {
             String(meta?.shop_name ?? "").trim() ||
             orgFromMeta;
           const businessType = (String(meta?.business_type ?? "kiosk_duka") || "kiosk_duka") as BusinessType;
-          // Confirmed WAKA name only — never the raw provider value. See `nameReview`. The bootstrap
+          // Confirmed DKASU name only — never the raw provider value. See `nameReview`. The bootstrap
           // upsert replaces any existing name with a non-empty incoming one, so a Google name passed
           // here would overwrite the name its owner had already confirmed.
           const fullName = provisionableWakaName(meta) ?? "";

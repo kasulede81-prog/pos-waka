@@ -97,7 +97,7 @@ export function buildCashExpenseListDocument(input: CashExpenseListDocumentInput
   return {
     kind: "cash_expenses",
     lang: input.lang,
-    shopName: input.shopName.trim() || "Waka POS",
+    shopName: input.shopName.trim() || "DKASU POS",
     shopAddress: input.shopAddress?.trim() || null,
     shopPhone: input.shopPhone?.trim() || null,
     title: t(input.lang, "cashExpensesTitle"),

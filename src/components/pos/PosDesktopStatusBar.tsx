@@ -34,7 +34,7 @@ export function PosDesktopStatusBar({ lang, identity, terminalLabel }: Props) {
       className="pos-desktop-status-bar flex h-7 shrink-0 items-center justify-between gap-2 border-t border-border/90 bg-muted/90 px-3 text-[10px] font-semibold text-muted-foreground"
       role="contentinfo"
     >
-      <span className="truncate">Waka POS · {t(lang, "posDesktopStatusDesktop")}</span>
+      <span className="truncate">DKASU POS · {t(lang, "posDesktopStatusDesktop")}</span>
       <TerminalIdentityStrip lang={lang} identity={identity} terminalLabel={terminalLabel} className="hidden min-w-0 sm:flex" />
       <span className="hidden truncate sm:inline">
         {isOnline ? t(lang, "posDesktopStatusOnline") : t(lang, "posDesktopStatusOffline")}

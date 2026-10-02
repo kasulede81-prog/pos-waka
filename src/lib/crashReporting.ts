@@ -37,17 +37,27 @@ export function initCrashReporting(): void {
   const dsn = import.meta.env.VITE_SENTRY_DSN?.trim();
   if (!dsn || initialized) return;
 
+  // Perf: on native (low-end Android), do NOT load Session Replay or browser
+  // performance tracing at startup — Replay instruments and buffers the DOM, a
+  // real CPU/memory tax on weak devices. Crash/error reporting stays fully on
+  // (Sentry's default integrations still capture exceptions). On web we keep
+  // Replay/tracing but attach them AFTER first interactive so they never sit on
+  // the critical boot path.
+  const isNative = Capacitor.isNativePlatform();
+  const isProd = sentryEnvironment() === "production";
+
   Sentry.init({
     dsn,
     environment: sentryEnvironment(),
     release: appRelease(),
-    integrations: [
-      Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
-    ],
-    tracesSampleRate: sentryEnvironment() === "production" ? 0.1 : 1.0,
+    // Start lean — default integrations capture errors on every platform. Heavy
+    // web-only integrations are added later (see below).
+    integrations: [],
+    tracesSampleRate: isNative ? 0 : isProd ? 0.1 : 1.0,
     replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: sentryEnvironment() === "production" ? 0.25 : 0,
+    // Replay on error stays enabled on web (armed here so the deferred integration
+    // can record); disabled entirely on native.
+    replaysOnErrorSampleRate: isNative ? 0 : isProd ? 0.25 : 0,
     beforeSend(event) {
       if (import.meta.env.DEV && !import.meta.env.VITE_SENTRY_DEBUG) {
         return null;
@@ -56,8 +66,25 @@ export function initCrashReporting(): void {
     },
   });
 
-  Sentry.setTag("platform", Capacitor.isNativePlatform() ? Capacitor.getPlatform() : "web");
+  Sentry.setTag("platform", isNative ? Capacitor.getPlatform() : "web");
   initialized = true;
+
+  // Web only: attach performance tracing + on-error Session Replay after the app
+  // is interactive, so they never block or slow the first render.
+  if (!isNative) {
+    const attachHeavyIntegrations = () => {
+      try {
+        Sentry.addIntegration(Sentry.browserTracingIntegration());
+        Sentry.addIntegration(Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }));
+      } catch {
+        /* integration unavailable — error reporting already active, ignore */
+      }
+    };
+    const ric = (globalThis as { requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => void })
+      .requestIdleCallback;
+    if (typeof ric === "function") ric(attachHeavyIntegrations, { timeout: 5_000 });
+    else setTimeout(attachHeavyIntegrations, 3_000);
+  }
 }
 
 export function setCrashReportingUser(ctx: CrashContext): void {

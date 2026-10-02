@@ -1,7 +1,7 @@
 /**
- * PHASE 0A — WAKA-09 executable regressions.
+ * PHASE 0A — DKASU-09 executable regressions.
  *
- * AUDIT FINDING (WAKA-09, P1) — FIXED:
+ * AUDIT FINDING (DKASU-09, P1) — FIXED:
  *   `pullSalesFull` collected live sales with `.in("status", ["completed","draft"])`
  *   and then queried `.eq("status", "voided")` for tombstones. The
  *   `sales_status_check` constraint only allows

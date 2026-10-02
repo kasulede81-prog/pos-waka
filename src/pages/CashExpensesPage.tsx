@@ -149,7 +149,7 @@ export function CashExpensesPage({ lang }: Props) {
           onClick={() =>
             void printCashExpenseList({
               lang,
-              shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+              shopName: preferences.shopDisplayName?.trim() || "DKASU POS",
               shopAddress: preferences.shopAddressLine,
               shopPhone: preferences.shopPhoneE164,
               dayKey: todayKey,

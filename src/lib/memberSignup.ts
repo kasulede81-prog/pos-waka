@@ -1,5 +1,5 @@
 /**
- * Public WAKA Loyalty member signup (Phase 2B).
+ * Public DKASU Loyalty member signup (Phase 2B).
  *
  * The member counterpart to the merchant `signUp` in `useAuth.ts`, and deliberately a separate
  * function rather than a mode of it. The merchant path writes `pos_role`/`business_name`/

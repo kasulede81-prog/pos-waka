@@ -9,7 +9,7 @@ function jwtOperatorDisplayName(
   user: { user_metadata?: Record<string, unknown>; email?: string | null } | null,
 ): string | null {
   if (!user) return null;
-  // The confirmed WAKA name first; Google's suggestion only for someone who has not confirmed one.
+  // The confirmed DKASU name first; Google's suggestion only for someone who has not confirmed one.
   // No network call — the metadata is already on this session.
   return displayWakaName(user.user_metadata as Record<string, unknown> | undefined, user.email);
 }

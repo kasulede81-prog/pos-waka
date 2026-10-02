@@ -9,7 +9,7 @@ The link must stay as Supabase’s `{{ .ConfirmationURL }}` — it verifies the 
 ## Subject
 
 ```
-Reset your Waka POS password
+Reset your DKASU POS password
 ```
 
 ---
@@ -17,9 +17,9 @@ Reset your Waka POS password
 ## Body (HTML)
 
 ```html
-<h2 style="font-family: system-ui, sans-serif; color: #1c1917;">Waka POS</h2>
+<h2 style="font-family: system-ui, sans-serif; color: #1c1917;">DKASU POS</h2>
 <p style="font-family: system-ui, sans-serif; color: #44403c; font-size: 15px;">
-  You asked to reset the password for your shop account. Tap the button below to choose a new password on Waka POS.
+  You asked to reset the password for your shop account. Tap the button below to choose a new password on DKASU POS.
 </p>
 <p style="font-family: system-ui, sans-serif;">
   <a
@@ -42,14 +42,14 @@ Reset your Waka POS password
 Supabase may offer a separate plain template; if so:
 
 ```
-Reset your Waka POS password
+Reset your DKASU POS password
 
 Open this link to set a new password (expires in about one hour):
 {{ .ConfirmationURL }}
 
 If you did not request this, ignore this email.
 
-— Waka POS / WAKA MARKETPLACE LIMITED
+— DKASU POS / WAKA MARKETPLACE LIMITED
 ```
 
 ---

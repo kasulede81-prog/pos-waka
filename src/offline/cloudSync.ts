@@ -536,7 +536,7 @@ function customerToRow(c: Customer, shopId: string) {
       phone: c.phone ?? "",
       wakaClient: true,
     },
-    // WAKA-05: inert since migration 182 — `trg_customers_updated` now fires on
+    // DKASU-05: inert since migration 182 — `trg_customers_updated` now fires on
     // INSERT as well as UPDATE, so the server stamps `customers.updated_at` (the
     // customers pull cursor) and this client value never lands. Kept so the
     // upsert payload shape is unchanged for older deployments.
@@ -954,7 +954,7 @@ export async function pushAuditLogToCloud(entry: AuditLogEntry, ctx: ShopCtx): P
 }
 
 /**
- * WAKA-06 — resolve a queued debt payment from the hydrated in-memory store,
+ * DKASU-06 — resolve a queued debt payment from the hydrated in-memory store,
  * then fall back to the persisted entity store on disk. A queue op enqueued
  * before the store finished hydrating (or after RAM was trimmed) still has its
  * row safely on disk; the flush must not treat "absent from RAM" as done.
@@ -968,7 +968,7 @@ async function resolveDebtPaymentForSync(paymentId: string): Promise<DebtPayment
 }
 
 /**
- * WAKA-06 — RAM first, then the persisted entity bucket. Missing from both
+ * DKASU-06 — RAM first, then the persisted entity bucket. Missing from both
  * is "not yet known", never "done". Callers must `return false` (retry).
  */
 async function resolveEntityFromRamOrDisk<T>(
@@ -994,7 +994,7 @@ async function resolveShiftForSync(shiftId: string): Promise<ShiftRecord | null>
 export async function pushDebtPaymentToCloud(paymentId: string, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(paymentId)) return false;
 
-  // WAKA-06: the persisted queue/entity store is the source of truth. A payment
+  // DKASU-06: the persisted queue/entity store is the source of truth. A payment
   // that is merely missing from the not-yet-hydrated RAM store must retry
   // (return false), never be acknowledged and deleted from the queue.
   const payment = await resolveDebtPaymentForSync(paymentId);
@@ -2968,7 +2968,7 @@ export type CloudPullResult = {
   stats: CloudPullStats;
   checkpoints?: CloudPullCheckpoints;
   /**
-   * WAKA-05: Postgres `now()` taken once immediately before a full/bootstrap
+   * DKASU-05: Postgres `now()` taken once immediately before a full/bootstrap
    * pull. Seed every entity cursor from this — never from the client clock.
    */
   bootstrapServerNow?: string;
@@ -2997,7 +2997,7 @@ export function wasLastSalesPullTruncated(): boolean {
   return lastSalesPullTruncated;
 }
 
-// WAKA-05: `created_at` is server-stamped (the cursor); `client_created_at`
+// DKASU-05: `created_at` is server-stamped (the cursor); `client_created_at`
 // carries the cashier's clock for business-date purposes (migration 182).
 const CUSTOMER_DEBT_PAYMENTS_SELECT =
   "id, shop_id, customer_id, amount_ugx, created_at, client_created_at, metadata";
@@ -3026,7 +3026,7 @@ function maxRowUpdatedAt(rows: Record<string, unknown>[], since: string): string
 }
 
 /**
- * WAKA-05 — the only legal way to settle a pull cursor.
+ * DKASU-05 — the only legal way to settle a pull cursor.
  *
  * `observed` must be a timestamp the SERVER stamped on a row (via
  * `maxRowUpdatedAt` / `maxIsoTimestamp` / an RPC page checkpoint). The cursor
@@ -3162,7 +3162,7 @@ async function pullSalesIncremental(
   if (!truncated) {
     lastSalesPullTruncated = false;
   }
-  // WAKA-05: the sales cursor must only ever move to a timestamp the server
+  // DKASU-05: the sales cursor must only ever move to a timestamp the server
   // actually stamped on a row. `checkpointAt` starts at `since` and is only
   // advanced by `maxRowUpdatedAt` over real `updated_at` values, so an empty
   // page leaves it at `since` (no advance) and a non-empty page moves it to a
@@ -3219,7 +3219,7 @@ async function pullProductsFull(
     if (isUuid(id)) deletedIds.push(id);
   }
 
-  // WAKA-05: settle on the newest `updated_at` this pull actually saw, never on
+  // DKASU-05: settle on the newest `updated_at` this pull actually saw, never on
   // the local clock. The deactivated-rows query selects `id` only, so a product
   // deactivated after the newest active row leaves the checkpoint slightly
   // behind — which costs one re-fetch on the next incremental pull and can
@@ -3868,7 +3868,7 @@ async function pullDebtPaymentsFull(
     pageSizeHint: INCREMENTAL_DEBT_PAYMENTS_LIMIT,
     pullPage: (cursor) => pullDebtPaymentsPage(ctx, cursor),
   });
-  // WAKA-05: a full pull settles its cursor on the newest `created_at` the
+  // DKASU-05: a full pull settles its cursor on the newest `created_at` the
   // server actually returned, not on the local clock.
   return { debtPayments: result.rows, bytes: result.bytes, checkpointAt: result.checkpointAt };
 }
@@ -3949,7 +3949,7 @@ export async function pullShopDataFromCloud(opts?: {
       ? "full"
       : "incremental";
 
-  // WAKA-05: one server clock, taken before the full download so rows written
+  // DKASU-05: one server clock, taken before the full download so rows written
   // during the pull stay ahead of the cursor and are picked up incrementally.
   const bootstrapServerNow = mode === "full" ? await fetchShopServerNow() : null;
 
@@ -4185,7 +4185,7 @@ export async function pullShopDataFromCloud(opts?: {
                 products: full.products,
                 deletedIds: full.deletedIds,
                 bytes: full.bytes,
-                // WAKA-05: server-derived, not `Date.now()`.
+                // DKASU-05: server-derived, not `Date.now()`.
                 checkpointAt: serverCheckpoint(sinceProducts, full.checkpointAt),
               };
             }
@@ -4638,7 +4638,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     recordCheckpointDuration(performance.now() - checkpointStarted);
   });
   if (!cloud) return failMerge("cloud_pull_failed");
-  // WAKA-09 — a recovery/full pull that failed to download sales must not be
+  // DKASU-09 — a recovery/full pull that failed to download sales must not be
   // treated as a successful hydration. The void-tombstone query lives on this
   // path; claiming success here left local copies of voided sales in place.
   if (opts?.cloudRecovery && cloud.stats.entityErrors?.sales) {
@@ -4925,7 +4925,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   // per-customer subset.
   const ledgerAuthoritative = salesAuthoritative && !cloud.stats.entityErrors?.debt_payments;
 
-  // WAKA-01: `sales` (and the return/void records it absorbs) must be declared
+  // DKASU-01: `sales` (and the return/void records it absorbs) must be declared
   // before the customer merge, which reads it to reconcile debt balances. The
   // declaration previously sat ~40 lines below this call, so every steady-state
   // pull whose local + cloud customer ids intersected hit the temporal dead

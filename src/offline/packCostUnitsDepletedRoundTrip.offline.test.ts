@@ -11,7 +11,7 @@
  *
  * These tests run the REAL `pushProductCatalogToCloud` and
  * `pullCloudAndMergeIntoStore` against the REAL `localDb`/`usePosStore`,
- * per the existing WAKA-01 harness convention — only the network boundary
+ * per the existing DKASU-01 harness convention — only the network boundary
  * (`src/lib/supabase`) is faked — to prove a fractional depletion value
  * survives local persistence → cloud push → cloud pull → reconstruction,
  * end to end, through the actual production code path (not a re-implemented

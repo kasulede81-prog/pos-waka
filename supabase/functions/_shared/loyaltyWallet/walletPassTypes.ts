@@ -19,7 +19,7 @@ export type LoyaltyPassInput = {
   customerName: string;
   /** Opaque membership token; becomes the pass barcode payload. */
   qrToken: string;
-  /** Full barcode payload (e.g. "WAKA-LOYALTY:<qrToken>"). */
+  /** Full barcode payload (e.g. "DKASU-LOYALTY:<qrToken>"). */
   qrPayload: string;
   balancePoints: number;
   /**

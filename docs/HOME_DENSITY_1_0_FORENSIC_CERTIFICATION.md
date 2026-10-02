@@ -2,7 +2,7 @@
 
 Date: 2026-08-19  
 Mode: **FORENSIC AUDIT ONLY** (no source, CSS, Settings, resolver, sync, checkout, POS, reports, auth, or database changes)  
-Repository: WAKA POS  
+Repository: DKASU POS  
 Related: Phase 34.0 Home certification, Phase 34.1 enterprise Home, SETTINGS-DISPLAY-1.1 / 1.3
 
 **Physical-device verification was not performed in this session.** Viewport tables below are derived from Tailwind classes and component structure. Rows marked **inferred** are arithmetic from those classes. Rows marked **device** require iPhone Safari / Android Chrome / Capacitor WebView confirmation.

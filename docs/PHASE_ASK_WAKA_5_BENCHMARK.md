@@ -32,7 +32,7 @@ DeepSeek is clearly stronger for production-shaped Ask WAKA today: **~6.4s** ave
 Qwen3:4b on this M1 is **usable for development**, not for owner-facing production as a sole provider: **~49s** average latency, **0% first-turn native tool success** (almost always needs ASK-3 force-exec), intermittent wrong/empty finals (expenses, staff), occasional wrong currency symbol (₦), and heavy memory pressure on 8 GB.
 
 **Weighted overall (0–5):** DeepSeek **4.9** · Qwen3:4b **4.1**  
-**Verdict for WAKA POS Ask WAKA on M1 Qwen3:4b:** **usable** (dev/harness), **insufficient** as sole production brain.
+**Verdict for DKASU POS Ask WAKA on M1 Qwen3:4b:** **usable** (dev/harness), **insufficient** as sole production brain.
 
 ---
 
@@ -248,7 +248,7 @@ Re-run ASK-5 against candidate hardware/model before purchase.
 
 ---
 
-## Final classification — Qwen3:4b on M1 for WAKA POS Ask WAKA
+## Final classification — Qwen3:4b on M1 for DKASU POS Ask WAKA
 
 **usable** — for development, harnesses, and protocol hardening.
 

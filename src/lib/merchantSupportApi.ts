@@ -379,7 +379,7 @@ export async function getSupportUnreadCounts(shopId: string): Promise<{
     .eq("shop_id", shopId)
     .eq("status", "waiting_for_merchant");
 
-  // Tickets with at least one unread WAKA reply — embedded filter counted
+  // Tickets with at least one unread DKASU reply — embedded filter counted
   // server-side by PostgREST (RLS applies to the embedded messages too).
   const unreadRepliesRes = await supabase
     .from("merchant_support_tickets")

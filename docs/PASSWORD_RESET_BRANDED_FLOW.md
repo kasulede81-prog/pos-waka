@@ -1,4 +1,4 @@
-# Waka POS — Branded password reset flow
+# DKASU POS — Branded password reset flow
 
 **Status:** Implementation ready for review — **do not deploy** until Supabase dashboard + email template checks are done.
 
@@ -61,7 +61,7 @@ Keep `/auth/recovery` until old reset emails expire (~24h OTP lifetime).
 **Authentication → Email Templates → Reset password**
 
 - Confirm the link target uses your app host (driven by `redirectTo` from the client).
-- Customize copy/logo to Waka POS; the **link destination** must remain Supabase’s verify URL that redirects to your `redirectTo`.
+- Customize copy/logo to DKASU POS; the **link destination** must remain Supabase’s verify URL that redirects to your `redirectTo`.
 - Ready-to-paste HTML: [supabase-email-templates/reset-password.md](./supabase-email-templates/reset-password.md)
 
 ### Android / Capacitor
@@ -95,7 +95,7 @@ Keep `/auth/recovery` until old reset emails expire (~24h OTP lifetime).
 
 | Variable / function | Value |
 |---------------------|--------|
-| `VITE_APP_URL` (production build) | `https://pos.waka.ug` |
+| `VITE_APP_URL` (production build) | `https://pos.dkasu.com` (legacy `pos.waka.ug` still allowlisted) |
 | `authRedirectOrigin()` | `VITE_APP_URL` in prod, else dev origin |
 | `getAuthRecoveryUrl()` | `{origin}/reset-password` |
 | `getAuthCallbackUrl()` | `{origin}/auth/callback` (signup / OAuth only) |
@@ -134,9 +134,9 @@ Forgot Password (/forgot-password)
 
 ### Supabase / env
 
-- [ ] Site URL = `https://pos.waka.ug`
+- [ ] Site URL = `https://pos.dkasu.com`
 - [ ] Redirect URLs include `/reset-password` and legacy `/auth/recovery`
-- [ ] Production build uses `VITE_APP_URL=https://pos.waka.ug`
+- [ ] Production build uses `VITE_APP_URL=https://pos.dkasu.com`
 - [ ] Email provider enabled; send test reset to a real inbox
 
 ### Web (Chrome)

@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-WAKA POS is **functionally enterprise-grade** (Phases 14–22.6) but **does not yet consistently feel instant** compared to Shopify POS, Square POS, Lightspeed, or Toast POS. The gap is not a single bug — it is the **accumulated cost of layered startup gates, a monolithic in-memory store, timer-gated synchronization, and coarse React subscriptions** on high-traffic surfaces.
+DKASU POS is **functionally enterprise-grade** (Phases 14–22.6) but **does not yet consistently feel instant** compared to Shopify POS, Square POS, Lightspeed, or Toast POS. The gap is not a single bug — it is the **accumulated cost of layered startup gates, a monolithic in-memory store, timer-gated synchronization, and coarse React subscriptions** on high-traffic surfaces.
 
 **Two distinct problem domains were audited separately:**
 
@@ -22,7 +22,7 @@ They interact (e.g. cloud merge triggers store `setState` → dashboard rerender
 
 **Verdict: 🟡 Conditionally Certified for Performance at Scale**
 
-WAKA POS meets **documented certification thresholds** for 20k products and 100k sales in isolated benchmarks, but **real-world perceived responsiveness** on Android — especially startup, dashboard KPI stability, and sync latency — falls short of tier-1 POS competitors.
+DKASU POS meets **documented certification thresholds** for 20k products and 100k sales in isolated benchmarks, but **real-world perceived responsiveness** on Android — especially startup, dashboard KPI stability, and sync latency — falls short of tier-1 POS competitors.
 
 **Overall Enterprise Performance Readiness: 7.4 / 10**
 
@@ -370,7 +370,7 @@ Full sync → syncShopWithCloud [mutex]
 
 ### Scale assessment
 
-WAKA POS is **certified for mid-market single-shop scale** (≤20k SKUs, ≤100k sales history for reporting). **Enterprise catalog sizes** (50k–100k SKUs) are **unverified**.
+DKASU POS is **certified for mid-market single-shop scale** (≤20k SKUs, ≤100k sales history for reporting). **Enterprise catalog sizes** (50k–100k SKUs) are **unverified**.
 
 **Large dataset score: 7.5 / 10**
 
@@ -530,7 +530,7 @@ Phase 22.6 motion system:
 
 Qualitative vs tier-1 POS (2026 expectations):
 
-| Dimension | Shopify POS | Square | Lightspeed | Toast | WAKA POS |
+| Dimension | Shopify POS | Square | Lightspeed | Toast | DKASU POS |
 |-----------|-------------|--------|------------|-------|----------|
 | Cold start to sell | ~1–2 s | ~1–2 s | ~2–3 s | ~2–3 s | **3–8+ s** (gates + disk + optional recovery) |
 | Dashboard KPI stability | Stable on load | Stable | Stable | Stable | **Climbs** as sales pages load |

@@ -1,4 +1,4 @@
-# WAKA POS — EFRIS Phase 0: Architecture Audit & Integration Boundary
+# DKASU POS — EFRIS Phase 0: Architecture Audit & Integration Boundary
 
 **Date:** 2026-08-28  
 **Mode:** ARCHITECTURE ONLY — no URA API, no migrations, no production coupling  
@@ -6,7 +6,7 @@
 
 **Follow-on:** Phase 1 plumbing is documented in `docs/WAKA_EFRIS_PHASE_1_IMPLEMENTATION.md` (still no URA API). Contract intake: `docs/WAKA_EFRIS_URA_CONTRACT.md`.
 
-**Objective:** Add EFRIS to WAKA without turning EFRIS into a dependency of WAKA POS. A shop with EFRIS disabled, disconnected, or not applicable must keep using WAKA normally.
+**Objective:** Add EFRIS to WAKA without turning EFRIS into a dependency of DKASU POS. A shop with EFRIS disabled, disconnected, or not applicable must keep using WAKA normally.
 
 ---
 
@@ -323,7 +323,7 @@ Keep these free of URA types, endpoints, and “sale incomplete until EFRIS”:
 - Subscription / billing (`subscriptions`, plan entitlements) — do not force EFRIS as a plan feature unless product later decides; even then it must stay opt-in per shop
 - Signup / onboarding (`completeShopOnboardingWizard`, auth pages) — **no EFRIS credentials required to create a WAKA account**
 
-Core rule: **WAKA POS business logic must not import a URA client.**
+Core rule: **DKASU POS business logic must not import a URA client.**
 
 ---
 

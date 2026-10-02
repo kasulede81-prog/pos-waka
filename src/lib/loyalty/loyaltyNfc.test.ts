@@ -8,7 +8,7 @@ import {
 
 /**
  * Phase 07 — NFC identification internals: capability detection, NDEF
- * payload extraction, and the security rule that only `WAKA-LOYALTY:`
+ * payload extraction, and the security rule that only `DKASU-LOYALTY:`
  * payloads resolve (raw NFC bytes are never trusted for anything else).
  */
 
@@ -92,7 +92,7 @@ describe("extractLoyaltyTokenFromNdefRecords", () => {
 
   it("never returns a raw token for non-prefixed payloads (forgery guard)", () => {
     // Even a string that IS the bare token must not resolve: NFC payloads
-    // must carry the WAKA-LOYALTY prefix to be considered.
+    // must carry the DKASU-LOYALTY prefix to be considered.
     expect(extractLoyaltyTokenFromNdefRecords([textRecord("secret-token-value")])).toBeNull();
   });
 });

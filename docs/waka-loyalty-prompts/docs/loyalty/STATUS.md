@@ -1,8 +1,8 @@
-# WAKA POS Loyalty Implementation Status
+# DKASU POS Loyalty Implementation Status
 
 ## Project
 
-WAKA POS Loyalty System
+DKASU POS Loyalty System
 
 ## Current Phase
 

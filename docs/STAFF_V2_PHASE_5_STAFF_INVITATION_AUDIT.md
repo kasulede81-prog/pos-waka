@@ -48,7 +48,7 @@ Do not implement until this design is approved.
 | Shop invitation table | **Absent** | No `shop_staff_invitations` / `shop_invitations` in migrations |
 | `inviteUserByEmail` / `admin.invite` / `generateLink` | **Absent** in `src/` and functions | Product never calls Auth Admin invite |
 | `auth-send-email` + Resend | **Present** | Auth Send Email Hook only |
-| `dispatchAuthHookEmail` `invite` | **Present** | Subject “You've been invited to Waka POS”; CTA “Accept invitation” → Auth `/auth/v1/verify` |
+| `dispatchAuthHookEmail` `invite` | **Present** | Subject “You've been invited to DKASU POS”; CTA “Accept invitation” → Auth `/auth/v1/verify` |
 | `buildAuthConfirmationUrl` | **Present** | Auth verify URL. No `shop_id` |
 | `authCallbackSession.ts` | **Present** | Completes OTP types including `"invite"` / `"magiclink"` |
 | `AuthCallbackPage` | **Present, owner-shaped** | After session: `ensureOwnerWorkspaceIfNeeded` then `markFirstTimeOwnerOnDevice` |
@@ -301,7 +301,7 @@ Use a throwaway shop. Do not invite onto existing tenant shops in live testing.
 2. **161** (name may vary): table + indexes + comments + RPCs + grants. Optional: revoke `shop_members` INSERT from `authenticated`.
 3. **Edge Function** `staff-invite` (Resend). Do not put service role in the Vite app.
 4. **Client (separate PR if needed):** owner invite UI; accept page; AuthCallback guard **before** `ensureOwnerWorkspaceIfNeeded`.
-5. Verify I1–I16 on WAKA POS test/throwaway shop.
+5. Verify I1–I16 on DKASU POS test/throwaway shop.
 6. **STOP.** No Phase 6 (`signInStaff` rewrite) until approval.
 
 Do not modify 158–160. Do not apply 151–157.

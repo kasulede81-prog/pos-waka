@@ -68,7 +68,7 @@ export function buildSaleReceiptContext(params: {
   const { lang, sale, allSales, preferences, products, actor, customerName, customerPhone, customerBalanceUgx, planTier } =
     params;
   const branding = brandingFromSale(sale, preferences, planTier ?? "waka_plus");
-  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
   const cashier = soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName, {
     shifts: preferences.shifts,
     auditLogs: params.auditLogs,

@@ -56,7 +56,7 @@ export function validateReceiveLinesInput(
   return { ok: true };
 }
 
-/** Destination WAC after transfer receipt — canonical WAKA formula. */
+/** Destination WAC after transfer receipt — canonical DKASU formula. */
 export function destinationWacAfterTransferReceive(
   existingQty: number,
   existingWac: number,

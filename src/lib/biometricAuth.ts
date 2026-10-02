@@ -1,6 +1,6 @@
 /**
  * Native biometric / device credential auth via OS APIs only.
- * No biometric data is stored by Waka POS.
+ * No biometric data is stored by DKASU POS.
  */
 
 import { Capacitor } from "@capacitor/core";
@@ -49,7 +49,7 @@ export async function promptNativeBiometric(reason: string): Promise<NativeBiome
       cancelTitle: "Cancel",
       allowDeviceCredential: true,
       iosFallbackTitle: "Use PIN",
-      androidTitle: "Waka POS",
+      androidTitle: "DKASU POS",
       androidSubtitle: reason,
     });
     return { ok: true };

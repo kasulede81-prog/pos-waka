@@ -1,4 +1,4 @@
-# WAKA POS — EFRIS Field Mapping, Data Gaps, and Phase 1 Boundary
+# DKASU POS — EFRIS Field Mapping, Data Gaps, and Phase 1 Boundary
 
 **Date:** 2026-08-28 (updated same day)  
 **Phase:** 2A — Official URA contract intake  
@@ -32,7 +32,7 @@ Status values:
 The FY2026–2027 handbook supports optional EFRIS (volunteer use for non-VAT / non-designated taxpayers) and lists System-to-System as the POS/ERP channel. It does **not** require every WAKA shop to enable EFRIS.
 
 ```text
-WAKA POS
+DKASU POS
     │
     ├── EFRIS OFF
     │      └── Normal POS

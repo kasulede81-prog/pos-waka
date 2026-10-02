@@ -10,4 +10,4 @@ Disallow: /forgot-password
 Disallow: /reset-password
 Disallow: /verify-email
 
-Sitemap: https://waka.ug/sitemap.xml
+Sitemap: https://dkasu.com/sitemap.xml

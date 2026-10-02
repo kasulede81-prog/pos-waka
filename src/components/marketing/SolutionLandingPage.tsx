@@ -55,9 +55,9 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
         ))}
 
         <section className="rounded-3xl border border-waka-500 bg-gradient-to-br from-waka-600/80 to-white p-6 sm:p-8">
-          <h2 className="text-2xl font-black text-stone-950">Waka POS features for {content.eyebrow.toLowerCase()}</h2>
+          <h2 className="text-2xl font-black text-stone-950">DKASU POS features for {content.eyebrow.toLowerCase()}</h2>
           <p className="mt-2 text-sm font-medium text-stone-600">
-            Real tools from the Waka POS app — not a generic feature list.
+            Real tools from the DKASU POS app — not a generic feature list.
           </p>
           <ul className="mt-6 grid gap-4 sm:grid-cols-2">
             {content.features.map((feature) => (
@@ -82,7 +82,7 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
         </section>
 
         <section className="rounded-3xl border border-stone-100 bg-stone-950 p-6 text-white sm:p-8">
-          <h2 className="text-xl font-black">Try Waka POS on your business</h2>
+          <h2 className="text-xl font-black">Try DKASU POS on your business</h2>
           <p className="mt-2 text-sm font-medium text-stone-300">
             Open the interactive demo or create a free account — setup takes minutes on the phone you already use.
           </p>
@@ -109,9 +109,9 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
         </section>
 
         <section className="rounded-3xl border border-waka-500 bg-white p-6 shadow-waka-sm">
-          <h2 className="text-lg font-black text-stone-950">More Waka POS solutions in Uganda</h2>
+          <h2 className="text-lg font-black text-stone-950">More DKASU POS solutions in Uganda</h2>
           <p className="mt-2 text-sm font-medium text-stone-600">
-            Explore how Waka POS fits other business types across Uganda.
+            Explore how DKASU POS fits other business types across Uganda.
           </p>
           <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
             {related.map((link) => (
@@ -123,7 +123,7 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
             ))}
             <li>
               <Link to="/home" className="text-sm font-black text-stone-600 underline-offset-4 hover:underline">
-                Waka POS home
+                DKASU POS home
               </Link>
             </li>
           </ul>

@@ -70,7 +70,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const deviceHealth = useOwnerDeviceHealth();
   const acknowledgeOwnerAlert = usePosStore((s) => s.acknowledgeOwnerAlert);
   const preferences = usePosStore((s) => s.preferences);
-  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
   const {
     filter,
     setFilter,

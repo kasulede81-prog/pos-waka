@@ -12,7 +12,7 @@
  * These tests run the REAL `pullCloudAndMergeIntoStore` against the REAL
  * `localDb`/`entityStore` (fake-indexeddb) and the REAL `usePosStore`. Only
  * the network boundary (`src/lib/supabase`) is faked, per the existing
- * WAKA-01 harness convention (`cloudSyncMergeWaka01.offline.test.ts`).
+ * DKASU-01 harness convention (`cloudSyncMergeWaka01.offline.test.ts`).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Product } from "../types";

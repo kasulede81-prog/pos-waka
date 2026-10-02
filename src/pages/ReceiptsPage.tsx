@@ -636,7 +636,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             const cust = sale?.customerId ? customers.find((c) => c.id === sale.customerId) : null;
             setReturnReceiptCtx(
               buildReturnReceiptContext({
-                shopName: shopLabel || "Waka POS",
+                shopName: shopLabel || "DKASU POS",
                 returnRecord: r.returnRecord,
                 sale,
                 cashier: sale ? soldByLabel(sale) : actor.displayName?.trim() || t(lang, "role_owner"),

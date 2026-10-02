@@ -26,8 +26,8 @@ export type LoyaltyReward = {
   /** Inclusive Kampala end date YYYY-MM-DD, or null = never expires. */
   /**
    * What the reward is worth at the counter. `none` is every pre-Phase-E reward;
-   * a discount benefit reduces a WAKA sale via sales.discount_ugx. It is NOT stored value
-   * and WAKA never owes the customer money.
+   * a discount benefit reduces a DKASU sale via sales.discount_ugx. It is NOT stored value
+   * and DKASU never owes the customer money.
    */
   benefitKind: RewardBenefitKind;
   /** Integer UGX when benefitKind is fixed_discount. */
@@ -42,7 +42,7 @@ export type LoyaltyReward = {
  *
  * `none` — the reward grants a product or nothing monetary (every pre-Phase-E reward).
  * `fixed_discount` / `percentage_discount` — the redemption is worth a discount against a
- * WAKA sale. The value is a SNAPSHOT taken at redemption; re-pricing a reward never
+ * DKASU sale. The value is a SNAPSHOT taken at redemption; re-pricing a reward never
  * rewrites what an old redemption was worth.
  */
 export type RewardBenefitKind = "none" | "fixed_discount" | "percentage_discount";
@@ -163,7 +163,7 @@ export function validateRewardInput(input: RewardInput): string | null {
   return null;
 }
 
-/** True when the reward is backed by a canonical WAKA product. */
+/** True when the reward is backed by a canonical DKASU product. */
 export function isProductBackedReward(reward: Pick<LoyaltyReward, "productId">): boolean {
   return reward.productId != null && String(reward.productId).trim() !== "";
 }
@@ -493,7 +493,7 @@ export type ApplyRedemptionToSaleResult =
  *
  * THE CLIENT PROPOSES NO MONEY. It names a redemption and a sale; the server derives the
  * benefit from the redemption's own snapshot and clamps it to the discount that sale
- * actually records. There is deliberately no `amount` parameter — nothing here can ask WAKA
+ * actually records. There is deliberately no `amount` parameter — nothing here can ask DKASU
  * for a bigger discount than the sale gave away.
  *
  * One redemption applies once: a repeat is refused by the server, and the recorded

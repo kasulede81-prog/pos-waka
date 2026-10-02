@@ -250,7 +250,7 @@ export function buildReceiptDisplayData(params: {
     paymentMethodLabel: inferPaymentMethodLabel(sale),
     footerLines: resolvedFooter.length ? resolvedFooter : [footerThanks?.trim() || "Thank you for shopping with us"],
     footerThanks: footerThanks?.trim() || resolvedFooter[0] || "Thank you for shopping with us",
-    footerPowered: footerPowered?.trim() ? footerPowered.trim() : footerPowered === null ? null : "Powered by Waka POS",
+    footerPowered: footerPowered?.trim() ? footerPowered.trim() : footerPowered === null ? null : "Powered by DKASU POS",
     returnPolicy: returnPolicy?.trim() || null,
     displayOptions: opts,
     customerName: saleCustomerName,

@@ -8,6 +8,7 @@
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
 import { WAKA_POS_URL } from "../config/company";
+import { DKASU_POS_PRODUCT_HOST, POS_PRODUCT_HOST } from "./productHost";
 import { isElectronDesktop } from "./electronDesktop";
 import { authOperatorRole } from "./sessionActor";
 import { filterSalesForHomeScope, resolveVisibleHomeMetrics } from "./homeVisibility";
@@ -65,6 +66,20 @@ export function canAttemptWebPrintHandoff(userAgent?: string): boolean {
   return isAndroidChromeBrowser(userAgent);
 }
 
+/**
+ * POS hosts whose https origin may serve as a print-handoff return URL.
+ *
+ * BOTH GENERATIONS ARE ACCEPTED during the WAKA → DKASU migration. `POS_PRODUCT_HOST` is pinned
+ * explicitly rather than left to the `WAKA_POS_URL` derivation: since the auth origin moved to
+ * DKASU (2026-10-02), that derivation yields `pos.dkasu.com` — without this entry the legacy host
+ * would silently drop out and a WAKA print return URL would be rejected mid-migration.
+ */
+const TRUSTED_PRINT_RETURN_HOSTS: ReadonlySet<string> = new Set([
+  POS_PRODUCT_HOST,
+  new URL(WAKA_POS_URL).hostname.toLowerCase(),
+  DKASU_POS_PRODUCT_HOST,
+]);
+
 export function isValidWakaReturnUrl(raw: string | null | undefined): boolean {
   const value = raw?.trim() ?? "";
   if (!value) return false;
@@ -75,8 +90,7 @@ export function isValidWakaReturnUrl(raw: string | null | undefined): boolean {
     return false;
   }
   if (parsed.protocol !== "https:") return false;
-  const allowed = new URL(WAKA_POS_URL).hostname.toLowerCase();
-  return parsed.hostname.toLowerCase() === allowed;
+  return TRUSTED_PRINT_RETURN_HOSTS.has(parsed.hostname.toLowerCase());
 }
 
 export function parsePrintDeepLink(url: string | null | undefined): PrintDeepLink | null {
@@ -181,7 +195,7 @@ export function buildDesktopPrintProtocolUrl(saleId: string): string | null {
 
 /**
  * Fire wakapos://print/v1 without navigating the SPA away.
- * Does not detect whether WAKA Desktop is installed — caller keeps HTML fallback when this returns false.
+ * Does not detect whether DKASU Desktop is installed — caller keeps HTML fallback when this returns false.
  */
 export function tryLaunchDesktopPrintHandoff(
   saleId: string,

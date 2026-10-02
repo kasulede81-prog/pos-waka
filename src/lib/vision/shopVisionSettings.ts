@@ -5,11 +5,11 @@ export type VisionLicenseTier = "none" | "starter" | "business" | "enterprise";
 
 export type ShopVisionSettings = {
   shop_id: string;
-  /** @deprecated Ignored for enablement — use admin_disabled + WAKA subscription. */
+  /** @deprecated Ignored for enablement — use admin_disabled + DKASU subscription. */
   vision_enabled: boolean;
   /** Support kill-switch: when true, Vision is off even with a paid plan. */
   admin_disabled: boolean;
-  /** @deprecated Ignored — capacity comes from WAKA plan (+ optional overrides). */
+  /** @deprecated Ignored — capacity comes from DKASU plan (+ optional overrides). */
   license_tier: VisionLicenseTier;
   /** Null = use plan default capacity. */
   max_dvrs: number | null;
@@ -22,7 +22,7 @@ export type ShopVisionSettings = {
   /** Future premium add-ons (not part of core Vision). */
   feature_remote_access: boolean;
   feature_ai_analytics: boolean;
-  /** @deprecated Vision trial follows WAKA trial — ignored. */
+  /** @deprecated Vision trial follows DKASU trial — ignored. */
   trial_enabled: boolean;
   trial_expires_at: string | null;
   installer_label: string | null;
@@ -46,7 +46,7 @@ export const DEFAULT_SHOP_VISION_SETTINGS: Omit<ShopVisionSettings, "shop_id"> =
   installer_label: null,
 };
 
-/** Capacity included with each WAKA subscription plan. */
+/** Capacity included with each DKASU subscription plan. */
 export const VISION_CAPACITY_BY_WAKA_PLAN: Record<
   SubscriptionPlanCode,
   { max_dvrs: number | null; max_cameras: number | null }
@@ -89,7 +89,7 @@ export function parseShopVisionSettings(raw: unknown, shopIdFallback = ""): Shop
   return {
     shop_id: shopId,
     vision_enabled: obj.vision_enabled !== false,
-    // Enablement follows WAKA subscription; this is only a support kill-switch.
+    // Enablement follows DKASU subscription; this is only a support kill-switch.
     admin_disabled: obj.admin_disabled === true,
     license_tier,
     max_dvrs: numOrNull("max_dvrs"),

@@ -12,8 +12,10 @@ const pkg = JSON.parse(
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const isElectronDist = process.env.ELECTRON === "1";
-  const appName = env.VITE_APP_NAME?.trim() || "Waka POS";
-  const shortName = env.VITE_APP_SHORT_NAME?.trim() || "WakaPOS";
+  // PWA / install branding. `VITE_APP_NAME` is set in env, so the DEPLOYED value follows that file;
+  // these defaults are what a build with no env gets (DKASU since the rebrand).
+  const appName = env.VITE_APP_NAME?.trim() || "DKASU POS";
+  const shortName = env.VITE_APP_SHORT_NAME?.trim() || "DKASU";
   const googleClientId = env.VITE_GOOGLE_OAUTH_CLIENT_ID?.trim() ?? "";
 
   if (mode === "production" && !googleClientId) {

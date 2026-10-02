@@ -1,4 +1,4 @@
-/** Internal EFRIS submission states (WAKA-owned). Not URA API enums. */
+/** Internal EFRIS submission states (DKASU-owned). Not URA API enums. */
 export const EFRIS_STATES = [
   "NOT_REQUIRED",
   "PENDING",

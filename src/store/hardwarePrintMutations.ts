@@ -135,7 +135,7 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       if (!printer) continue;
       if (!canDeliverEscPosWithoutChooser(printer, caps.transports)) continue;
       const chitOpts = {
-        shopName: state.preferences.shopDisplayName?.trim() || "Waka POS",
+        shopName: state.preferences.shopDisplayName?.trim() || "DKASU POS",
         businessDate: dateKeyKampala(ticket.firedAt),
       };
       const bytes = buildKitchenChitEscPos(ticket, printLang(), printer.paperWidth, kind, chitOpts);
@@ -186,7 +186,7 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       prefs: state.preferences,
     });
     publishCustomerDisplay({
-      shopName: state.preferences.shopDisplayName?.trim() || "Waka POS",
+      shopName: state.preferences.shopDisplayName?.trim() || "DKASU POS",
       tableLabel,
       lines,
       subtotalUgx: totals.subtotalAfterDiscountUgx,
@@ -315,7 +315,7 @@ export function createHardwarePrintStoreActions(deps: Deps) {
       const printer = resolveHospitalityHardware(state.preferences).printers.find((p) => p.id === printerId);
       if (!printer) return Promise.resolve({ ok: false as const, error: "Printer not found." });
       const lines = [
-        state.preferences.shopDisplayName?.trim() || "Waka POS",
+        state.preferences.shopDisplayName?.trim() || "DKASU POS",
         "Test print",
         new Date().toLocaleString("en-UG"),
       ];

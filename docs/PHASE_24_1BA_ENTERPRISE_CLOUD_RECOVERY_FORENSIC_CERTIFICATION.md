@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-WAKA POS has a **sophisticated, fail-closed cloud recovery architecture** with snapshot acceleration, paginated full pull, multi-layer validation, cloud trust certification, and integrity diagnostics. It exceeds many mid-market POS systems in **diagnostic depth and data integrity rigor**.
+DKASU POS has a **sophisticated, fail-closed cloud recovery architecture** with snapshot acceleration, paginated full pull, multi-layer validation, cloud trust certification, and integrity diagnostics. It exceeds many mid-market POS systems in **diagnostic depth and data integrity rigor**.
 
 However, it **does not yet behave like a tier-1 enterprise POS recovery engine** in three critical ways:
 
@@ -517,7 +517,7 @@ Windows/Web share the same PWA/Electron WebView behavior — no separate native 
 
 ## Deliverable 13 — Enterprise Comparison
 
-| Capability | WAKA POS | Shopify POS | Square | Toast | Lightspeed | Oracle MICROS |
+| Capability | DKASU POS | Shopify POS | Square | Toast | Lightspeed | Oracle MICROS |
 |------------|----------|-------------|--------|-------|------------|---------------|
 | Blocks login until catalog | Overlay until certified | Partial catalog → sell | Partial → sell | Station register ASAP | Catalog sync background | Terminal bootstrap minimal |
 | Second device restore | Full pull + certify | Cloud catalog first | Incremental | Cloud-first | Cloud sync | Enterprise provisioning |

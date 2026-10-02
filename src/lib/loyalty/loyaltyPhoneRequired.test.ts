@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeUgPhoneE164 } from "../businessProfile";
 
 /**
- * BUG 2 — the phone number is MANDATORY for a new WAKA Loyalty member.
+ * BUG 2 — the phone number is MANDATORY for a new DKASU Loyalty member.
  *
  * WHERE THE HOLE WAS. Two of them, and only one was on the client:
  *

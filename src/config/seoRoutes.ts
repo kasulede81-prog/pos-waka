@@ -29,16 +29,16 @@ export function isMarketingIndexablePath(pathname: string): boolean {
 
 export function noIndexSeoTitle(pathname: string): string {
   const p = normalizePathname(pathname);
-  if (p.startsWith("/verify-agent/")) return "Verify Waka Agent";
-  if (p === "/login") return "Sign in to Waka POS";
-  if (p === "/register") return "Create a Waka POS account";
-  if (p === "/demo") return "Waka POS Demo";
-  if (p === "/forgot-password") return "Reset Waka POS password";
+  if (p.startsWith("/verify-agent/")) return "Verify DKASU Agent";
+  if (p === "/login") return "Sign in to DKASU POS";
+  if (p === "/register") return "Create a DKASU POS account";
+  if (p === "/demo") return "DKASU POS Demo";
+  if (p === "/forgot-password") return "Reset DKASU POS password";
   if (p === "/reset-password") return "Set new password";
   if (p === "/verify-email") return "Verify your email";
   if (p === "/auth/callback") return "Signing in";
   if (p === "/auth/recovery") return "Password recovery";
-  if (p.startsWith("/internal/")) return "Waka POS Admin";
-  if (p.startsWith("/loyalty/") || p.startsWith("/c/")) return "WAKA Loyalty";
-  return "Waka POS";
+  if (p.startsWith("/internal/")) return "DKASU POS Admin";
+  if (p.startsWith("/loyalty/") || p.startsWith("/c/")) return "DKASU Loyalty";
+  return "DKASU POS";
 }

@@ -107,7 +107,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const [payCustomer, setPayCustomer] = useState<Customer | null>(null);
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
 
-  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const shopName = preferences.shopDisplayName?.trim() || "DKASU POS";
   const { snapshot, authMode } = useSubscription();
   const receiptPlanTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const todayKey = dateKeyKampala(new Date());

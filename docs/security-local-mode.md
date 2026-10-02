@@ -1,6 +1,6 @@
-# Waka POS — Local Mode Security Model
+# DKASU POS — Local Mode Security Model
 
-This document describes how **local (offline-first) authentication** affects roles, subscription entitlements, and data access in Waka POS. It is the authoritative threat model for single-owner vs shared-device deployments.
+This document describes how **local (offline-first) authentication** affects roles, subscription entitlements, and data access in DKASU POS. It is the authoritative threat model for single-owner vs shared-device deployments.
 
 ## What “local mode” means
 
@@ -55,7 +55,7 @@ When Supabase is configured but the device is temporarily offline:
 
 ## Data access assumptions
 
-Waka POS is a **client-authoritative offline-first** application:
+DKASU POS is a **client-authoritative offline-first** application:
 
 1. **Route guards** and **store permission checks** prevent accidental or casual misuse through the UI.
 2. **They do not** prevent a determined user with console access from calling store methods (mitigated in P0 security sprints via store-layer checks).

@@ -8,7 +8,7 @@
 
 ## Objective
 
-Transform WAKA POS synchronization from a timer-first model into an **event-driven, near real-time** engine while preserving offline-first guarantees. This phase changes **sync orchestration only** — no business logic, schema, or UI workflow changes.
+Transform DKASU POS synchronization from a timer-first model into an **event-driven, near real-time** engine while preserving offline-first guarantees. This phase changes **sync orchestration only** — no business logic, schema, or UI workflow changes.
 
 **Target:** Perceived sync responsiveness **6.5 → 9.3–9.5 / 10** on healthy networks (~0.5–1 s cross-device sale visibility).
 

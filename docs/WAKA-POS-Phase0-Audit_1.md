@@ -1,4 +1,4 @@
-# WAKA POS — Phase 0 Forensic Audit (read-only)
+# DKASU POS — Phase 0 Forensic Audit (read-only)
 
 - **Repo:** kasulede81-prog/pos-waka
 - **HEAD:** `6b6ed11` (2026-09-08)
@@ -780,7 +780,7 @@ Structure and data sources only — per-card behaviour deferred to the systemati
 Twelve launcher tiles plus a dashboard region are defined in `lib/launcherTiles.ts`:
 `sell · inventory · debts · shop · cash · cashPosition · commandCenter · salesHistory · reports · profit · investigation · settings · dashboard`
 
-Around them sit ~28 home components — executive KPI strip, business-health section, live status rail, pulse sparkline, cash-drawer scene, reports preview, Ask Waka shortcut, status chips, subscription banner, and a separate mobile cockpit.
+Around them sit ~28 home components — executive KPI strip, business-health section, live status rail, pulse sparkline, cash-drawer scene, reports preview, Ask DKASU shortcut, status chips, subscription banner, and a separate mobile cockpit.
 
 | Surface | Data source | Local / remote | Refresh | Offline |
 |---|---|---|---|---|

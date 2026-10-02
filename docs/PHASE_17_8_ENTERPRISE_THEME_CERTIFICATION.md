@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Waka POS has a **unified theme runtime** (`AppThemeProvider`, class-based dark mode, CSS-variable core palette, pre-paint bootstrap) but **most production surfaces still paint with hardcoded `stone-*` and `bg-white` utilities** rather than semantic tokens. Dark mode works today largely through a **global CSS remap bridge** in `index.css` — a migration aid, not a design system.
+DKASU POS has a **unified theme runtime** (`AppThemeProvider`, class-based dark mode, CSS-variable core palette, pre-paint bootstrap) but **most production surfaces still paint with hardcoded `stone-*` and `bg-white` utilities** rather than semantic tokens. Dark mode works today largely through a **global CSS remap bridge** in `index.css` — a migration aid, not a design system.
 
 **Highest-impact gaps:**
 

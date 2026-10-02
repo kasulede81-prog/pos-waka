@@ -8,7 +8,7 @@
 
 ## Objective
 
-Introduce a single **Inventory View Engine** so Waka POS inventory adapts automatically between **Card**, **Compact**, and **Enterprise Table** views while preserving all existing business logic (stock, purchases, pharmacy, permissions, sync).
+Introduce a single **Inventory View Engine** so DKASU POS inventory adapts automatically between **Card**, **Compact**, and **Enterprise Table** views while preserving all existing business logic (stock, purchases, pharmacy, permissions, sync).
 
 This phase is **UI architecture only**. No inventory calculations, RPCs, IndexedDB schema, or Supabase changes.
 

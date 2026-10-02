@@ -1,4 +1,4 @@
-# Waka POS — Subscription Plan Redesign (Implementation Proposal)
+# DKASU POS — Subscription Plan Redesign (Implementation Proposal)
 
 **Status:** Implemented in app (May 2026). Apply migration `066_subscription_plan_repackaging.sql` in Supabase before release.  
 **Scope:** Reorganize plans, copy, limits, and upgrade messaging only (no new product features)  
@@ -15,7 +15,7 @@
 | **Yearly savings** | — | **Save UGX 50,000** | **Save UGX 98,000** | **Save UGX 198,000** |
 | *(vs 12× monthly)* | | 300k → 250k | 588k → 490k | 1,188k → 990k |
 | **Target** | Testing, kiosks, very small shops | Boutiques, salons, mini shops, grocery | Busy shops, pharmacies, supermarkets with staff | Wholesalers, larger businesses |
-| **Tagline** | Perfect for trying Waka POS and running a very small shop. | For business owners who run the shop themselves. | Manage staff, monitor sales, and grow your business. | Higher limits and priority support for larger operations. |
+| **Tagline** | Perfect for trying DKASU POS and running a very small shop. | For business owners who run the shop themselves. | Manage staff, monitor sales, and grow your business. | Higher limits and priority support for larger operations. |
 
 ### Features (only what exists today)
 

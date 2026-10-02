@@ -158,7 +158,7 @@ export function BusinessBuilderScene({ className, lang = "en" }: Props) {
               {truncate(signText, 22)}
             </text>
             <text x="200" y="100" textAnchor="middle" fontSize="7" fontWeight="600" fill="#fb923c">
-              Powered by Waka POS
+              Powered by DKASU POS
             </text>
           </g>
         ) : null}

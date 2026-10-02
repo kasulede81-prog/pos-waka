@@ -1,4 +1,4 @@
-# WAKA POS — CSV Import UI Visibility Audit
+# DKASU POS — CSV Import UI Visibility Audit
 
 **Date:** 2026-08-29  
 **Scope:** Inspection only. No code was changed.  

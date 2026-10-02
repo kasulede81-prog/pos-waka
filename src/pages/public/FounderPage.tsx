@@ -84,7 +84,7 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
         <p className="text-center text-xs font-medium text-muted-foreground">
           {WAKA_PRODUCT_DESCRIPTION}{" "}
           <Link to="/about" className="font-bold text-waka-800 underline">
-            About Waka POS
+            About DKASU POS
           </Link>
         </p>
       </article>

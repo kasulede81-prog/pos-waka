@@ -1,4 +1,4 @@
-# WAKA POS — Inventory receiving & supplier unpaid balance
+# DKASU POS — Inventory receiving & supplier unpaid balance
 
 **Mode:** Forensic audit only  
 **Date:** 2026-08-20  

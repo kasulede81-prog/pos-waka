@@ -1,5 +1,5 @@
 /**
- * WAKA Vision types — registry (V1.1) + live streaming sessions (V1.2).
+ * DKASU Vision types — registry (V1.1) + live streaming sessions (V1.2).
  * No playback timeline / AI / POS event coupling in these phases.
  */
 

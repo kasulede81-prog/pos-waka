@@ -7,7 +7,7 @@
 
 ## Objective
 
-Transform Waka POS Inventory from a product list into an **enterprise inventory management workspace** focused on large-catalog merchant productivity — without changing inventory business logic, stock calculations, purchases, pharmacy workflows, permissions, or sync.
+Transform DKASU POS Inventory from a product list into an **enterprise inventory management workspace** focused on large-catalog merchant productivity — without changing inventory business logic, stock calculations, purchases, pharmacy workflows, permissions, or sync.
 
 ---
 

@@ -1,7 +1,7 @@
 /**
- * PHASE 0A — WAKA-10 executable regressions.
+ * PHASE 0A — DKASU-10 executable regressions.
  *
- * AUDIT FINDING (WAKA-10, P1) — FIXED:
+ * AUDIT FINDING (DKASU-10, P1) — FIXED:
  *   Receipt numbers were `scanTodaySalesHead(state.sales).nextReceiptSeq` —
  *   max local `receiptSeq` plus one. Two tills in one shop that each completed
  *   a sale on the same Kampala day before syncing minted the same number

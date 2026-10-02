@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Phase 17.3 certifies Waka POS for large-business workloads by reducing initial bundle weight, lazy-loading heavy modules, optimizing POS product search at enterprise catalog scale, and adding explicit scalability certification tests. Main entry chunk size dropped **~34%** while all existing behavior remains unchanged.
+Phase 17.3 certifies DKASU POS for large-business workloads by reducing initial bundle weight, lazy-loading heavy modules, optimizing POS product search at enterprise catalog scale, and adding explicit scalability certification tests. Main entry chunk size dropped **~34%** while all existing behavior remains unchanged.
 
 ---
 
@@ -210,4 +210,4 @@ npm test        # ✓ 1531 passed | 4 skipped (287 files)
 | **17.4** | Payment & Subscription Automation (Flutterwave, MTN MoMo, Airtel Money, Stripe, daily expiry, trial switch) |
 | **17.5** | Final Enterprise Production Certification (E2E, load testing, payment certification, ≥9/10 readiness) |
 
-Waka POS is now structurally complete (17.2) and performance-certified for enterprise-scale local datasets (17.3), ready for payment automation without further architectural refactoring.
+DKASU POS is now structurally complete (17.2) and performance-certified for enterprise-scale local datasets (17.3), ready for payment automation without further architectural refactoring.

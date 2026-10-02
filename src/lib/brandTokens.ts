@@ -1,8 +1,8 @@
 /**
- * Waka brand design tokens — single source of truth for the application UI.
+ * DKASU brand design tokens — single source of truth for the application UI.
  * Visual values match `resources/brand/README.md` and `tailwind.config.ts` (waka scale).
  *
- * Note: The product brand is WAKA (Waka POS / waka.ug). Use themeUi / wakaUi from
+ * Note: The product brand is DKASU (DKASU POS / waka.ug). Use themeUi / wakaUi from
  * themeTokens.ts instead of ad-hoc orange-*, slate-*, or one-off hex values in app screens.
  */
 
@@ -12,7 +12,7 @@ export { themeUi, wakaUi, type ThemeUiKey } from "./themeTokens";
 export const WAKA_BRAND_ORANGE = "#f97316" as const;
 /** Tailwind waka-600 — pressed / hover primary */
 export const WAKA_BRAND_ORANGE_DARK = "#ea580c" as const;
-/** Deep WAKA blue — loyalty card hero / brand signal */
+/** Deep DKASU blue — loyalty card hero / brand signal */
 export const WAKA_BRAND_BLUE = "#0b3a82" as const;
 /** Premium card navy — default surface for the physical-style loyalty card */
 export const WAKA_BRAND_NAVY = "#0b1a2e" as const;

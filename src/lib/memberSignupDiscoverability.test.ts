@@ -86,8 +86,8 @@ describe("Phase 2B: the destination route is public", () => {
 
 describe("Phase 2B: the new strings are actually translated", () => {
   it("defines both keys in English", () => {
-    expect(t("en", "loginMemberSignupHint")).toBe("New to WAKA Loyalty?");
-    expect(t("en", "loginMemberSignupCta")).toBe("Join WAKA Loyalty");
+    expect(t("en", "loginMemberSignupHint")).toBe("New to DKASU Loyalty?");
+    expect(t("en", "loginMemberSignupCta")).toBe("Join DKASU Loyalty");
   });
 
   it("defines both keys in Luganda rather than falling back to English", () => {

@@ -1,7 +1,7 @@
 /**
  * Loyalty enrollment + QR identity (Phase 05).
  *
- * Merchant-mediated enrollment: pick an existing WAKA customer, record
+ * Merchant-mediated enrollment: pick an existing DKASU customer, record
  * consent, enroll via the security-definer RPC. QR identification resolves
  * an opaque `qr_token` (never personal data) back to the account.
  */

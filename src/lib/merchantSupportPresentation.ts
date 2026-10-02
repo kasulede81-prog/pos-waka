@@ -14,7 +14,7 @@ import type { Language } from "../types";
  * stays authoritative; this layer only relabels), and notification deep links.
  */
 
-/** WAKA-1048 — never a raw UUID. */
+/** DKASU-1048 — never a raw UUID. */
 export function formatTicketReference(ticketNumber: number): string {
   return `WAKA-${String(Math.max(0, Math.trunc(ticketNumber))).padStart(4, "0")}`;
 }

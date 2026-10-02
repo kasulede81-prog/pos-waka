@@ -52,7 +52,7 @@ const CARDINALITY_WORDS = [
 
 const PRICE_WORDS = ["price", "cost"];
 
-/** Bare, otherwise-unqualified terms that are inherently ambiguous even though WAKA maps them. */
+/** Bare, otherwise-unqualified terms that are inherently ambiguous even though DKASU maps them. */
 const GENERIC_EXACT: Partial<Record<CsvImportField, string>> = {
   sellingPrice: "price",
   costPrice: "cost",

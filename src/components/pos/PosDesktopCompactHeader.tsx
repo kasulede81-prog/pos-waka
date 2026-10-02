@@ -113,7 +113,7 @@ export function PosDesktopCompactHeader({
 
       <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
       <div className="hidden min-w-0 sm:block">
-        <p className="truncate text-sm font-black text-foreground">Waka POS</p>
+        <p className="truncate text-sm font-black text-foreground">DKASU POS</p>
         <p className="pos-desktop-header-metric-label truncate text-[10px] font-bold text-waka-700">{t(lang, sellLabelKey)}</p>
       </div>
 

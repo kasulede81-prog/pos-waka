@@ -1,10 +1,10 @@
-# WAKA POS — iOS Setup Guide
+# DKASU POS — iOS Setup Guide
 
 Native iOS shell for the same Vite web app in `dist/`. **Do not run `npx cap init`** — this repo already uses `capacitor.config.ts`.
 
 | Setting | Value |
 |---------|--------|
-| App name | Waka POS |
+| App name | DKASU POS |
 | Bundle ID | `ug.waka.pos` |
 | Web bundle | `dist/` (`webDir`) |
 | Min iOS | 15.0 |

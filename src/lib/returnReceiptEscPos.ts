@@ -72,7 +72,7 @@ export function buildReturnReceiptEscPos(
   }
 
   b.align("center");
-  b.wrapped("Powered by Waka POS");
+  b.wrapped("Powered by DKASU POS");
   b.align("left");
 
   b.finalize();

@@ -25,7 +25,7 @@ type Props = { lang: Language };
 
 function issueBody(diagnostics: PilotDiagnosticsExport, note: string): string {
   const lines = [
-    "Waka POS — help request",
+    "DKASU POS — help request",
     `App version: ${diagnostics.appVersion}`,
     `Shop number: ${diagnostics.shopId ?? "unknown"}`,
     `Phone ID: ${diagnostics.deviceId}`,
@@ -155,7 +155,7 @@ export function PilotSupportCenterPage({ lang }: Props) {
   const reportViaEmail = async () => {
     const ticket = await fileTicket();
     await copyAll();
-    const subject = `Waka POS pilot · ${diagnostics?.shopId ?? "shop"} · v${diagnostics?.appVersion ?? ""}`;
+    const subject = `DKASU POS pilot · ${diagnostics?.shopId ?? "shop"} · v${diagnostics?.appVersion ?? ""}`;
     const body = issueBody(diagnostics!, issueNote);
     window.location.href = wakaSupportMailtoUrl(subject, body);
     setSentHint(

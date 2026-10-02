@@ -48,7 +48,7 @@ These remain role-based by design — labels or business rules, not permission a
 | `resolveEnterpriseRoleLabel` | HR / enterprise display mapping |
 | `canTogglePosUiMode` | Legacy UI mode toggle tied to role label |
 | `managerFloatVerify.OVERRIDE_ROLES` | PIN override eligibility (verified separately via staff PIN + permissions) |
-| Internal Waka admin roles | Separate admin product, not shop staff permissions |
+| Internal DKASU admin roles | Separate admin product, not shop staff permissions |
 
 ---
 

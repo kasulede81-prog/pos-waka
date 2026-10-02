@@ -1,5 +1,5 @@
 /**
- * ASK-INTEL-1 deterministic WAKA knowledge retrieval.
+ * ASK-INTEL-1 deterministic DKASU knowledge retrieval.
  * Operates over a generated read-only artifact. No filesystem, SQL, or Git at request time.
  */
 

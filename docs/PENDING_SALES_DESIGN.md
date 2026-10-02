@@ -1,4 +1,4 @@
-# WAKA POS — Pending Sales (Hold Cart) System
+# DKASU POS — Pending Sales (Hold Cart) System
 
 **Feature name (UI):** **Pending Sales**  
 **Internal code / DB:** `sales.status = 'draft'` (already exists — UI never says “draft”)  
@@ -9,7 +9,7 @@
 
 ## Executive summary
 
-Today Waka POS assumes one customer → one cart → pay → done. Real shops hold carts while customers fetch money, order more at a table, or wait in line.
+Today DKASU POS assumes one customer → one cart → pay → done. Real shops hold carts while customers fetch money, order more at a table, or wait in line.
 
 **Pending Sales** lets staff **save the current cart**, serve someone else, then **resume and complete** (or cancel) later.
 
@@ -510,4 +510,4 @@ Default TTL: **7 days**. Cancelled rows remain in audit/archive optional; hidden
 | Server reports | `061_shop_server_reporting.sql` | Already completed-only |
 | Transactional sync | `063_shop_push_sale_transactional.sql` | Always finalizes to completed |
 
-This feature closes the gap between **how Ugandan shops operate** and **how Waka POS records sales**.
+This feature closes the gap between **how Ugandan shops operate** and **how DKASU POS records sales**.

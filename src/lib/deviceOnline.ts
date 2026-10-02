@@ -46,6 +46,6 @@ export async function initDeviceOnlineTracking(): Promise<void> {
     return;
   }
 
-  // WAKA-04: web / PWA / Electron must mutate the same flag the sync flush gates on.
+  // DKASU-04: web / PWA / Electron must mutate the same flag the sync flush gates on.
   registerWebOnlineTracking();
 }

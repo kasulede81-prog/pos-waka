@@ -1,4 +1,4 @@
-# Waka POS
+# DKASU POS
 
 Offline-first point of sale for Uganda shops: fast kiosk selling, owner back office, local IndexedDB storage, optional Supabase sync.
 

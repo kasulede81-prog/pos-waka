@@ -731,7 +731,7 @@ Capacitor Filesystem uses `Directory.Cache` — no external storage permission n
 
 ## PART 17 — Enterprise Comparison
 
-| Capability | WAKA POS (current) | Shopify Analytics | Square Dashboard | Lightspeed Reports | Toast Reporting |
+| Capability | DKASU POS (current) | Shopify Analytics | Square Dashboard | Lightspeed Reports | Toast Reporting |
 |------------|-------------------|-------------------|------------------|--------------------|-----------------|
 | **Dashboard KPIs** | ✅ Local, fast | ✅ Cloud, real-time | ✅ Cloud | ✅ Cloud | ✅ Cloud |
 | **Date range filters** | ✅ Presets + custom | ✅ | ✅ | ✅ | ✅ |
@@ -752,8 +752,8 @@ Capacitor Filesystem uses `Directory.Cache` — no external storage permission n
 | **Permissions** | ✅ Role-based | ✅ | ✅ | ✅ | ✅ |
 | **Large dataset** | ⚠️ 100k certified | ✅ Cloud-scale | ✅ | ✅ | ✅ |
 
-**WAKA POS advantages:** Offline-first (full BI without network), Investigation Center audit trail, local data sovereignty.  
-**WAKA POS gaps:** Export/print on mobile, mislabeled actions, no real Excel, no interactive charts, taxes stub, no deep drill-down.
+**DKASU POS advantages:** Offline-first (full BI without network), Investigation Center audit trail, local data sovereignty.  
+**DKASU POS gaps:** Export/print on mobile, mislabeled actions, no real Excel, no interactive charts, taxes stub, no deep drill-down.
 
 ---
 
@@ -819,7 +819,7 @@ After Phase 26.1:
 - [ ] Purchases/expenses respect date range filter
 - [ ] Build and all tests pass with no business logic changes
 
-**Target outcome:** Increase BI layer reliability from **5.4 → 9.0+ / 10**, delivering export/print/calculation behavior comparable to leading enterprise POS analytics platforms while preserving WAKA POS's offline-first advantage.
+**Target outcome:** Increase BI layer reliability from **5.4 → 9.0+ / 10**, delivering export/print/calculation behavior comparable to leading enterprise POS analytics platforms while preserving DKASU POS's offline-first advantage.
 
 ---
 

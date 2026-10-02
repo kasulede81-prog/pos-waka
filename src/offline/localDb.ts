@@ -317,7 +317,7 @@ export async function writeSnapshot(
     ...data,
     updatedAt: new Date().toISOString(),
   };
-  // WAKA-09 — never install an incomplete/corrupt payload as the active snapshot.
+  // DKASU-09 — never install an incomplete/corrupt payload as the active snapshot.
   if (!isSnapshotShape(next)) return;
   const mainKey = scopedKey(LEGACY_SNAPSHOT_KEY);
   const fbKey = scopedKey(LEGACY_LAST_GOOD_KEY);

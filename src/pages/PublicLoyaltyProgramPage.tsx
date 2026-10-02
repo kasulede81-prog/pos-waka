@@ -19,7 +19,7 @@ import {
 import { storePendingProgramCode } from "../lib/pendingLoyaltyProgram";
 
 /**
- * Public program page: /j/:programCode — "Have a WAKA Loyalty Code?"
+ * Public program page: /j/:programCode — "Have a DKASU Loyalty Code?"
  *
  * Two enrollment paths live here, deliberately side by side and clearly separated:
  *

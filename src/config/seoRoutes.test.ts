@@ -20,8 +20,8 @@ describe("seoRoutes", () => {
   });
 
   it("returns route-specific noindex titles", () => {
-    expect(noIndexSeoTitle("/login")).toBe("Sign in to Waka POS");
-    expect(noIndexSeoTitle("/verify-agent/WAKA-A1")).toBe("Verify Waka Agent");
-    expect(noIndexSeoTitle("/internal/waka/shops")).toBe("Waka POS Admin");
+    expect(noIndexSeoTitle("/login")).toBe("Sign in to DKASU POS");
+    expect(noIndexSeoTitle("/verify-agent/WAKA-A1")).toBe("Verify DKASU Agent");
+    expect(noIndexSeoTitle("/internal/waka/shops")).toBe("DKASU POS Admin");
   });
 });

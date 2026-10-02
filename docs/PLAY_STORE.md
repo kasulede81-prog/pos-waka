@@ -1,6 +1,6 @@
-# Waka POS — Google Play Store listing (copy-paste)
+# DKASU POS — Google Play Store listing (copy-paste)
 
-Use this document when filling in [Google Play Console](https://play.google.com/console) for **Waka POS**.
+Use this document when filling in [Google Play Console](https://play.google.com/console) for **DKASU POS**.
 
 | Technical | Value |
 |-----------|--------|
@@ -23,7 +23,7 @@ Bump `versionCode` and `versionName` in `android/app/build.gradle` before every 
 
 ### App name
 ```
-Waka POS
+DKASU POS
 ```
 
 ### Short description (max 80 characters)
@@ -34,9 +34,9 @@ Simple POS for Ugandan shops — sales, stock, receipts, staff, works offline.
 
 ### Full description (max 4000 characters)
 ```
-Waka POS is a simple point-of-sale app built for shops, dukas, supermarkets, pharmacies, salons, and restaurants in Uganda. Run daily sales, track stock, print or share receipts, and see how your business is doing — without complicated systems or expensive hardware.
+DKASU POS is a simple point-of-sale app built for shops, dukas, supermarkets, pharmacies, salons, and restaurants in Uganda. Run daily sales, track stock, print or share receipts, and see how your business is doing — without complicated systems or expensive hardware.
 
-WHY WAKA POS
+WHY DKASU POS
 • Made for Ugandan businesses — prices in UGX, practical workflows
 • Fast checkout designed for busy counters
 • Works offline — keep selling when internet is slow; sync when you are back online
@@ -73,7 +73,7 @@ WHO IT IS FOR
 Shop owners and staff who want a reliable POS on Android phones and tablets — from kiosk and duka to growing retail outlets.
 
 ABOUT WAKA
-Waka POS is a product of WAKA MARKETPLACE LIMITED, a Ugandan technology company focused on practical tools for everyday business.
+DKASU POS is a product of WAKA MARKETPLACE LIMITED, a Ugandan technology company focused on practical tools for everyday business.
 
 SUPPORT
 Email: support@waka.ug
@@ -97,7 +97,7 @@ Terms: https://pos.waka.ug/terms
 | Asset | Spec | File in repo |
 |-------|------|----------------|
 | App icon | 512×512 PNG (32-bit, max 1024 KB) | `resources/brand/icon-1024-cream.png` |
-| Feature graphic | 1024×500 JPG or PNG | Create in Canva: cream background, W logo, “Waka POS”, tagline |
+| Feature graphic | 1024×500 JPG or PNG | Create in Canva: cream background, W logo, “DKASU POS”, tagline |
 | Phone screenshots | Min 2, max 8; 16:9 or 9:16 | Capture: Login, POS sell, Dashboard, Stock or Receipts |
 
 Suggested screenshot captions (optional in Play):
@@ -112,7 +112,7 @@ Suggested screenshot captions (optional in Play):
 
 ### First production release (version 1.0.0)
 ```
-Welcome to Waka POS on Android.
+Welcome to DKASU POS on Android.
 
 • Sell products and print or share receipts
 • Track stock and customers
@@ -129,7 +129,7 @@ We are a Uganda-first product from WAKA MARKETPLACE LIMITED. Questions: support@
 • Improved offline sync reliability
 • Bug fixes and stability improvements
 
-Thank you for using Waka POS. Support: support@waka.ug
+Thank you for using DKASU POS. Support: support@waka.ug
 ```
 
 ---
@@ -142,7 +142,7 @@ Select: **All or some functionality is restricted** (login required).
 
 ### Instructions for reviewers (paste into Play Console)
 ```
-Waka POS requires a shop owner account to use the main app.
+DKASU POS requires a shop owner account to use the main app.
 
 HOW TO SIGN IN
 1. Open the app.
@@ -192,7 +192,7 @@ Answer based on your live app. Adjust if you change features.
 
 ---
 
-### Data types to declare (typical for Waka POS)
+### Data types to declare (typical for DKASU POS)
 
 #### Personal info
 | Type | Collected | Shared | Purpose | Optional? |
@@ -307,10 +307,10 @@ Never lose `waka-release.jks` and passwords. Back them up offline.
 
 ## 9. Pre-launch checklist
 
-- [ ] `.env.production.local` has production Supabase + `VITE_APP_URL=https://pos.waka.ug`
+- [ ] `.env.production.local` has production Supabase + `VITE_APP_URL=https://pos.dkasu.com`
 - [ ] `npm run cap:bundle:release` succeeds; `app-release.aab` opens without errors
-- [ ] Supabase redirect URLs include `https://pos.waka.ug/auth/callback` and `https://localhost/auth/callback`
-- [ ] Privacy policy live at https://pos.waka.ug/privacy
+- [ ] Supabase redirect URLs include `https://pos.dkasu.com/auth/callback` (legacy `https://pos.waka.ug/auth/callback` stays allowlisted) and `https://localhost/auth/callback`
+- [ ] Privacy policy live at https://pos.dkasu.com/privacy
 - [ ] Review test account created and tested on release build
 - [ ] `versionCode` incremented vs any previous upload
 - [ ] Internal testing track installed on a real device
@@ -331,7 +331,7 @@ Never lose `waka-release.jks` and passwords. Back them up offline.
 ## 11. Support blurb (Play “About the developer” if shown)
 
 ```
-WAKA MARKETPLACE LIMITED builds practical technology for everyday business in Uganda. Waka POS helps shops manage sales, stock, and daily operations on Android. Support: support@waka.ug | https://pos.waka.ug
+WAKA MARKETPLACE LIMITED builds practical technology for everyday business in Uganda. DKASU POS helps shops manage sales, stock, and daily operations on Android. Support: support@waka.ug | https://pos.waka.ug
 ```
 
 ---

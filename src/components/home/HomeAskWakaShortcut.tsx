@@ -15,7 +15,7 @@ type Props = {
 };
 
 /**
- * Home money-card shortcut into Ask WAKA.
+ * Home money-card shortcut into Ask DKASU.
  * Same feature + reports.view gates as the office card. Hidden when unavailable.
  */
 export function HomeAskWakaShortcut({ lang, density = "comfortable" }: Props) {

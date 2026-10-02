@@ -68,7 +68,7 @@ const BUSINESS_PLUS: ReadonlySet<Permission> = new Set([
   "enterprise.audit",
 ]);
 
-/** Permissions that need Waka Plus (reserved). */
+/** Permissions that need DKASU Plus (reserved). */
 const WAKA_PLUS_ONLY: ReadonlySet<Permission> = new Set([
   "enterprise.branches",
   "enterprise.transfers",
@@ -109,7 +109,7 @@ export function tierMeetsMinimum(tier: SubscriptionPlanCode, minimum: Subscripti
   return TIER_RANK[tier] >= TIER_RANK[minimum];
 }
 
-/** True when org has Starter, Business, or Waka Plus (including trial period on those plans, or an active promotional grant). */
+/** True when org has Starter, Business, or DKASU Plus (including trial period on those plans, or an active promotional grant). */
 export function hasCommercialSubscription(snapshot: SubscriptionSnapshot): boolean {
   if (snapshot.kind === "local_full") return true;
   const effective = resolveEffectiveSubscription(snapshot);
@@ -132,7 +132,7 @@ export function canUseBackupRestore(
 const MS_DAY = 86400000;
 const MS_HOUR = 3600000;
 
-/** Paid commercial plans (Starter, Business, Waka Plus). */
+/** Paid commercial plans (Starter, Business, DKASU Plus). */
 export function hasActivePaidSubscription(row: RemoteSubscriptionRow, _nowMs: number = Date.now()): boolean {
   const st = (row.status ?? "").trim().toLowerCase();
   if (st !== "active") return false;

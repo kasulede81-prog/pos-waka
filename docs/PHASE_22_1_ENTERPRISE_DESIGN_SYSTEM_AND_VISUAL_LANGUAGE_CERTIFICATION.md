@@ -11,11 +11,11 @@
 
 ### Certification verdict
 
-**Does WAKA POS look and feel like an enterprise product designed by a professional design team?**
+**Does DKASU POS look and feel like an enterprise product designed by a professional design team?**
 
 **Partially — not yet certified.**
 
-WAKA POS has a **credible enterprise design foundation** (semantic color tokens, status system, theme bundles, dark mode runtime, POS display-scale subsystem, documented Phase 17.9 architecture). That foundation compares favorably to early-stage Shopify POS or Toast internal tooling **at the token layer**.
+DKASU POS has a **credible enterprise design foundation** (semantic color tokens, status system, theme bundles, dark mode runtime, POS display-scale subsystem, documented Phase 17.9 architecture). That foundation compares favorably to early-stage Shopify POS or Toast internal tooling **at the token layer**.
 
 However, **visual execution is inconsistent across modules**. POS touch UI, back-office settings, internal admin v2, auth, marketing, and hospitality/pharmacy verticals each evolved parallel class-string conventions. Shared primitives (`WakaButton`, `WakaCard`, `EnterpriseResponsiveTable`) exist but are adopted in **~3 files each**, while hundreds of screens use inline Tailwind.
 
@@ -342,7 +342,7 @@ Three named components + inline variants from 8px to 12px for the same pill shap
 ## Icon family
 
 - **Primary:** Lucide React (~200+ files)
-- **Brand:** `WakaSymbolIcon` / `WakaPosLogo` (`WakaLogo.tsx`)
+- **Brand:** `WakaSymbolIcon` / `DKASU POSLogo` (`WakaLogo.tsx`)
 - **OAuth:** Inline Google SVG
 
 ## Size tiers (no shared map)
@@ -691,7 +691,7 @@ Use this checklist to re-run certification after implementation:
 
 ## Conclusion
 
-WAKA POS is **past the “default Tailwind app” stage** and has **invested correctly in semantic tokens and enterprise theme architecture (Phase 17.9)**. That investment is necessary but **not sufficient** for enterprise visual certification.
+DKASU POS is **past the “default Tailwind app” stage** and has **invested correctly in semantic tokens and enterprise theme architecture (Phase 17.9)**. That investment is necessary but **not sufficient** for enterprise visual certification.
 
 The gap between WAKA and Shopify POS / Square / Stripe Dashboard is not primarily color or dark mode — it is **enforcement**: one typography scale, one button spec per context, one dialog, one table strategy, one navigation language, and primitives used everywhere instead of copied utility strings.
 

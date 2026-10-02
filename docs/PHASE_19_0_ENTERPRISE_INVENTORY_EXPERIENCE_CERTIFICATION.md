@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-Waka POS inventory is architecturally **unified at the hub level** (`InventoryPurchasingPage` + embedded `StockPage`) but **fragmented at the product-list layer**. Two virtualized primitives exist (`VirtualizedProductGrid` for sell, `VirtualizedStockProductList` for inventory), yet **15+ independent listing implementations** remain across POS, pharmacy dispense, hospitality table order, purchases, counts, profit, and admin.
+DKASU POS inventory is architecturally **unified at the hub level** (`InventoryPurchasingPage` + embedded `StockPage`) but **fragmented at the product-list layer**. Two virtualized primitives exist (`VirtualizedProductGrid` for sell, `VirtualizedStockProductList` for inventory), yet **15+ independent listing implementations** remain across POS, pharmacy dispense, hospitality table order, purchases, counts, profit, and admin.
 
 **Performance is bifurcated:**
 
@@ -549,7 +549,7 @@ Production comment in tests: POS search target **~100 ms**; CI allows 220 ms.
 
 Comparison against common POS/inventory UX patterns (qualitative — not live app testing).
 
-| Criterion | Square | Shopify POS | Lightspeed | Loyverse | Odoo | **Waka POS** |
+| Criterion | Square | Shopify POS | Lightspeed | Loyverse | Odoo | **DKASU POS** |
 |-----------|--------|-------------|------------|----------|------|--------------|
 | Information density (inventory) | Table + mobile list | Grid sell; list inventory | Table-heavy | Compact list | Full table | **Low (cards only)** |
 | Navigation (large catalog) | Search + categories | Search + collections | Search + filters | Search + groups | Search + facets | **Search + shelves** ✅ |

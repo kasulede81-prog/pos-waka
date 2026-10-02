@@ -57,7 +57,7 @@ export type PublicCardDesignPayload = {
 };
 
 /**
- * Default WAKA loyalty visual theme (blue hero + orange accents + white text).
+ * Default DKASU loyalty visual theme (blue hero + orange accents + white text).
  * Merchant customization still overrides these via loyalty_card_designs.
  */
 export const DEFAULT_LOYALTY_CARD_DESIGN: LoyaltyCardDesign = {

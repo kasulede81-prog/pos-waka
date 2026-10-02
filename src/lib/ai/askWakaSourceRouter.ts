@@ -63,7 +63,7 @@ function looksLivePosMetric(text: string): boolean {
     // Open-ended business-assistant phrasing (ASK-4A) — a genuine business
     // question about the shop's own performance, not a project/code/history
     // or pure general-knowledge question. Deliberately phrase-specific
-    // rather than a broad heuristic, to avoid reclassifying "What is WAKA?"
+    // rather than a broad heuristic, to avoid reclassifying "What is DKASU?"
     // / "How does X work?" / general-knowledge questions as live-POS.
     "how is my shop",
     "how is my business",
@@ -314,7 +314,7 @@ export function routeAskWakaSources(message: string): AskWakaSourceRoute {
   // classification (write/SQL requests return early with offerPosTools=false in
   // their own branch, above) — every other legitimate request gets the full
   // allowlisted tool set and the MODEL decides whether to call anything. `lanes`
-  // above still drives WAKA-knowledge retrieval only; it is not a positive gate
+  // above still drives DKASU-knowledge retrieval only; it is not a positive gate
   // for tool availability, and no phrase list controls this value.
   const offerPosTools = true;
   const requirePosTools = posClassification.kind === "quantitative";

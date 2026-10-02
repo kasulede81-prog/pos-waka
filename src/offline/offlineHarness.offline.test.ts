@@ -87,7 +87,7 @@ describe("PHASE 0A harness — real IndexedDB is reachable from tests", () => {
   it("PROOF 2 — a queue flush reads an actual operation off disk and acts on it", async () => {
     await appendSyncOperation(op({ id: "op-flush", attempts: 0 }));
 
-    // WAKA-06: the default store is not hydrated. The flush must retain the
+    // DKASU-06: the default store is not hydrated. The flush must retain the
     // op without incrementing attempts.
     const beforeHydration = await flushSyncQueueInner();
     expect(beforeHydration.remaining).toBe(1);

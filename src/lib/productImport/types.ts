@@ -15,7 +15,7 @@ export type ProductImportPackMode = "none" | "packed";
 /**
  * Shared import row. Maps onto `bulkQuickAddProducts` fields that the
  * retail create engine actually consumes. Extra columns (tax, images, SKU)
- * are omitted because WAKA generate/skips them on create.
+ * are omitted because DKASU generate/skips them on create.
  *
  * For packed rows, `stockQty` is always sell units after wizard conversion
  * (`openingPacks × conversionRate`). `buyingPackCostUgx` is cost per pack;

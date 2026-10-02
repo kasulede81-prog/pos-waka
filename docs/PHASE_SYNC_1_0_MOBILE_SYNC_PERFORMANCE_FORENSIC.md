@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-13  
 **Mode:** READ-ONLY forensic audit — **no source, migration, deploy, or data changes**  
-**Production target:** WAKA POS Web + Android + iOS / Capacitor  
+**Production target:** DKASU POS Web + Android + iOS / Capacitor  
 **Central question:** Why did sync feel slower after recent updates, and is it still automatic, incremental, and reliable?
 
 Live round-trip timings on a cashier device were **not measured**. Latency claims below are from code structure, not stopwatch evidence.

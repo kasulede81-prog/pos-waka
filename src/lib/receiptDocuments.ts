@@ -147,7 +147,7 @@ function returnReceiptPlain(ctx: ReturnReceiptContext): string {
   ];
   if (ctx.customerName) lines.push(`Customer: ${ctx.customerName}`);
   lines.push("", r.productName, `Qty: ${r.quantity}`, `Refund: UGX ${r.refundAmountUgx.toLocaleString()}`, `Reason: ${r.reason}`);
-  lines.push("", "Powered by Waka POS");
+  lines.push("", "Powered by DKASU POS");
   return lines.join("\n");
 }
 
@@ -209,7 +209,7 @@ export async function printSaleReceipt(ctx: SaleReceiptContext): Promise<SalePri
         return { ok: true, mode: "handoff" };
       }
     }
-    if (printHtmlDocument(html, paper, "Waka receipt")) return { ok: true, mode: "html" };
+    if (printHtmlDocument(html, paper, "DKASU receipt")) return { ok: true, mode: "html" };
     const plain = saleReceiptPlain(ctx);
     if (printReceiptText(plain, paper)) return { ok: true, mode: "html" };
     return { ok: false, mode: "none" };

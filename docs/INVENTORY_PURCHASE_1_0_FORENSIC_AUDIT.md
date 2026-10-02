@@ -41,7 +41,7 @@ DEPLOYMENT: NONE
 
 # Current Capability
 
-**Today in WAKA POS, a shop owner can record unpaid supplier stock by opening Stock → Receive stock (or New purchase), choosing a named supplier (not Town / market), entering the products and costs, putting what was paid in Paid today (or leaving it empty), and saving. The unpaid remainder is stored on that supplier as owed. Later they record payment under Stock → Payments (or the supplier page).**
+**Today in DKASU POS, a shop owner can record unpaid supplier stock by opening Stock → Receive stock (or New purchase), choosing a named supplier (not Town / market), entering the products and costs, putting what was paid in Paid today (or leaving it empty), and saving. The unpaid remainder is stored on that supplier as owed. Later they record payment under Stock → Payments (or the supplier page).**
 
 They **cannot** record that unpaid balance via **Adjust stock**, product **Restock**, or **Town / market**.
 

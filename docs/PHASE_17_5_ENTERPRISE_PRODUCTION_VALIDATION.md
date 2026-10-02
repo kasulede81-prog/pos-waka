@@ -9,7 +9,7 @@
 
 ## Executive summary
 
-Waka POS was audited as if purchased from an external vendor: **assume nothing works until verified**. This phase validated routes, guard stacks, certification suites, placeholders, and regression status after Phases 16.3–17.4.
+DKASU POS was audited as if purchased from an external vendor: **assume nothing works until verified**. This phase validated routes, guard stacks, certification suites, placeholders, and regression status after Phases 16.3–17.4.
 
 | Dimension | Status |
 |-----------|--------|
@@ -358,7 +358,7 @@ Scores: **1–10** (10 = production-ready for stated scope)
 - Pharmacy vertical (prescriptions, compliance, expiry)
 - Backup, cloud sync, multi-device, offline recovery
 - Subscription lifecycle (admin + account; no live payments)
-- Internal Waka admin operations
+- Internal DKASU admin operations
 
 ### Not certified (documented blockers)
 
@@ -407,4 +407,4 @@ Per Phase 17.4 and product roadmap:
 
 ---
 
-*Phase 17.5 complete. Waka POS is **Release Candidate** for retail/hospitality/pharmacy core. Enterprise multi-branch workflows and payments remain future phases with documented placeholders and zero silent failures in certification suites (excluding 1 flaky perf threshold and 4 skipped recovery integration tests).*
+*Phase 17.5 complete. DKASU POS is **Release Candidate** for retail/hospitality/pharmacy core. Enterprise multi-branch workflows and payments remain future phases with documented placeholders and zero silent failures in certification suites (excluding 1 flaky perf threshold and 4 skipped recovery integration tests).*

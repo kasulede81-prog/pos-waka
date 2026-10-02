@@ -1,4 +1,4 @@
-# WAKA POS — Existing Bulk Product Creation Pipeline Audit
+# DKASU POS — Existing Bulk Product Creation Pipeline Audit
 
 **Date:** 2026-08-29  
 **Scope:** Inspection only. No code, CSV, OCR, or AI feature work.  

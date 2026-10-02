@@ -1,4 +1,4 @@
-# Waka POS — Android (Capacitor)
+# DKASU POS — Android (Capacitor)
 
 Native shell for the same web app in `dist/`. **Do not run `npx cap init`** — this project already uses `capacitor.config.ts`.
 
@@ -22,7 +22,7 @@ Rebuild after code changes: `npm run android`.
 
 | Setting | Value |
 |---------|--------|
-| App name | Waka POS |
+| App name | DKASU POS |
 | App ID (Play Console) | `ug.waka.pos` |
 | Web bundle | `dist/` (from `npm run build`) |
 | Min SDK | 24 |
@@ -50,7 +50,7 @@ Copy `.env.production.example` → `.env.production.local` and set:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
-- `VITE_APP_URL=https://pos.waka.ug`
+- `VITE_APP_URL=https://pos.dkasu.com` (DKASU origin since the 2026-10-02 auth migration)
 
 Supabase URL, anon key, and app URL are **baked into** `dist/` at build time.
 

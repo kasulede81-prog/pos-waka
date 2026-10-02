@@ -1,5 +1,5 @@
 /**
- * Ask WAKA tool allowlist + argument validation (client mirror for tests).
+ * Ask DKASU tool allowlist + argument validation (client mirror for tests).
  * Edge runtime copy: supabase/functions/_shared/askWakaTools.ts
  *
  * Security: no SQL, no shop_id from the model, no write tools.
@@ -296,7 +296,7 @@ export function validateAskWakaToolCall(
 }
 
 /**
- * Resolve shop context for Ask WAKA.
+ * Resolve shop context for Ask DKASU.
  * preferredShopId is a hint only; must be independently verified as accessible.
  * Reporting RPCs use the user's primary shop — preferred must match primary when provided.
  */

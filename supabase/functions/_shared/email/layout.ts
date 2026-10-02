@@ -17,7 +17,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** Shared responsive Waka email shell for all transactional templates. */
+/** Shared responsive DKASU email shell for all transactional templates. */
 export function wrapEmailLayout(content: EmailLayoutContent): string {
   const b = WAKA_EMAIL_BRAND;
   const preheader = content.preheader
@@ -55,7 +55,7 @@ export function wrapEmailLayout(content: EmailLayoutContent): string {
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:${b.backgroundColor};border:1px solid ${b.borderColor};border-radius:16px;overflow:hidden;">
           <tr>
             <td style="padding:32px 28px 20px;text-align:center;background:linear-gradient(180deg,#f0fdf4 0%,#ffffff 100%);">
-              <img src="${b.logoUrl}" width="120" height="auto" alt="Waka POS" style="display:block;margin:0 auto;max-width:120px;height:auto;border:0;" />
+              <img src="${b.logoUrl}" width="120" height="auto" alt="DKASU POS" style="display:block;margin:0 auto;max-width:120px;height:auto;border:0;" />
             </td>
           </tr>
           <tr>

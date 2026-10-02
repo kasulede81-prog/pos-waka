@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  DKASU_LOYALTY_PRODUCT_HOST,
+  DKASU_POS_PRODUCT_HOST,
   getProductAuthIntent,
   isLoyaltyHost,
   isLoyaltySurface,
@@ -130,9 +132,13 @@ describe("VITE_PRODUCT_INTENT is a dev-only override that cannot touch productio
 });
 
 describe("productOriginForHostname", () => {
-  it("returns the canonical public origin per product", () => {
-    expect(productOriginForHostname(POS_PRODUCT_HOST)).toBe("https://pos.waka.ug");
-    expect(productOriginForHostname(LOYALTY_PRODUCT_HOST)).toBe("https://loyalty.waka.ug");
+  it("returns the canonical public origin per product — DKASU since the auth migration", () => {
+    // Both host generations classify to the same product AND the same canonical origin: a session
+    // that starts on a WAKA host performs its auth round trip on the DKASU origin.
+    expect(productOriginForHostname(POS_PRODUCT_HOST)).toBe("https://pos.dkasu.com");
+    expect(productOriginForHostname(DKASU_POS_PRODUCT_HOST)).toBe("https://pos.dkasu.com");
+    expect(productOriginForHostname(LOYALTY_PRODUCT_HOST)).toBe("https://loyalty.dkasu.com");
+    expect(productOriginForHostname(DKASU_LOYALTY_PRODUCT_HOST)).toBe("https://loyalty.dkasu.com");
   });
 
   it("returns null for anything else rather than guessing an origin", () => {

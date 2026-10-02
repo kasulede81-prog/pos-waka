@@ -46,7 +46,7 @@ export const SAMPLE_SALE = {
 export function sampleReceiptDisplay(lang: Language, preferences: ShopPreferences, planTier: SubscriptionPlanCode) {
   const branding = resolveReceiptBranding(preferences, planTier);
   return buildReceiptDisplayData({
-    shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+    shopName: preferences.shopDisplayName?.trim() || "DKASU POS",
     shopAddress: preferences.shopAddressLine ?? null,
     shopPhone: preferences.shopPhoneE164 ?? null,
     cashier: t(lang, "role_owner"),

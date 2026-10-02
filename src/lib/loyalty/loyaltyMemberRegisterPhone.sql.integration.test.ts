@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asUser, createLoyaltySqlHarness, rpcJson, type SqlExec } from "../../test/sqlIntegration/loyaltyPgHarness";
 
 /**
- * Phase 2F — a NEW WAKA Loyalty member must have a phone number.
+ * Phase 2F — a NEW DKASU Loyalty member must have a phone number.
  *
  * THE DEFECT. `loyalty_member_register`'s format check only ran when the phone was NON-NULL:
  *

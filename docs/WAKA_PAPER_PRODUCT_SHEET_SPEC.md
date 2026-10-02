@@ -1,4 +1,4 @@
-# WAKA POS — Paper Product Sheet & OCR Design
+# DKASU POS — Paper Product Sheet & OCR Design
 
 **Phase:** 3A — Design only (no OCR, camera, AI, migrations, or product-engine changes)  
 **Date:** 2026-08-29  
