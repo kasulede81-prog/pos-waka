@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
-import { t, tTemplate } from "../../lib/i18n";
+import { App } from "@capacitor/app";
+import { t } from "../../lib/i18n";
 import { readUiLanguageCacheSync, loadPersistedUiLanguage } from "../../lib/uiLanguage";
 import type { Language } from "../../types";
 import { EnterpriseUpdateEngine } from "../../lib/updateEngine/EnterpriseUpdateEngine";
@@ -9,20 +9,31 @@ import { EnterpriseSpinner } from "../enterprise/EnterpriseSpinner";
 import { shouldShowOverlay } from "../../lib/updateEngine/UpdateNotifications";
 import { useUpdateOverlayReady } from "../../lib/updateEngine/UpdateInteractiveGate";
 import { useUpdateEngine, useUpdateEngineInit } from "../../lib/updateEngine/useUpdateEngine";
+import { UpdateFullScreen, UPDATE_LAYER, type UpdateScreenVariant } from "./UpdateFullScreen";
 
 type Props = { children: ReactNode };
 
+/**
+ * PRESENTATION/CONTROLLER for the update engine — it holds no update logic of its own.
+ *
+ * Every surface maps onto an engine phase and every action calls straight back into
+ * `EnterpriseUpdateEngine` (`startFlexibleUpdate` / `startImmediateUpdate` / `skipUpdate` /
+ * `openPlayStoreFallback`). Dismissal persistence, Play Core, the Play Store fallback ladder and the
+ * policy/dismissal keys all stay in the engine.
+ *
+ * Layering: one full-screen surface (`UPDATE_LAYER.fullScreen`, z-210) for anything that needs the
+ * merchant's attention (available / mandatory / failed / post-install notes), and one bottom banner
+ * layer (`UPDATE_LAYER.banner`, z-205) for the passive downloading/ready states. The old ad-hoc
+ * z-180/185/186/190/200 ladder is gone.
+ */
 export function AppReleaseUpdateProvider({ children }: Props) {
-  // Engine evaluation starts immediately — it does NOT wait behind startup. Overlay timing is gated separately.
   useUpdateEngineInit();
   const state = useUpdateEngine();
   const [lang, setLang] = useState<Language>(() => readUiLanguageCacheSync() ?? "en");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [fallbackOpened, setFallbackOpened] = useState(false);
-  // Signature of the failure the user has dismissed. A new/different failure has a
-  // new signature, so the banner reappears; the same one stays dismissed.
-  const [dismissedFailureSig, setDismissedFailureSig] = useState<string | null>(null);
+  const [openingStore, setOpeningStore] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,27 +46,28 @@ export function AppReleaseUpdateProvider({ children }: Props) {
   }, []);
 
   const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
-  /**
-   * ANDROID-UPDATE-P1: overlay is delayed until the app is interactive AND no
-   * startup / recovery / activation surface is mounted. The engine itself is
-   * already running — this is display-only (T8).
-   */
+  /** Display-only gate: the engine already runs; the surface waits for an interactive app. */
   const overlayReady = useUpdateOverlayReady(isAndroid);
   const policy = state.policy;
-  const playOverlayPhase =
-    shouldShowOverlay(state.phase) || state.phase === "update_failed";
-  const showAndroidOverlay =
-    isAndroid &&
-    overlayReady &&
-    playOverlayPhase &&
-    state.phase !== "pwa_update";
 
-  const versionLabel =
-    policy?.versionNumber
-      ? `v${policy.versionNumber}`
-      : state.playAvailableVersionCode > 0
-        ? `#${state.playAvailableVersionCode}`
-        : "";
+  const variant: UpdateScreenVariant | null =
+    state.phase === "force_block"
+      ? "mandatory"
+      : state.phase === "flexible_prompt"
+        ? "flexible"
+        : state.phase === "update_failed"
+          ? "failure"
+          : state.phase === "whats_new"
+            ? "info"
+            : null;
+
+  // The engine's own policy decides whether a phase deserves a surface; the UI only maps it.
+  const phaseDeservesSurface = shouldShowOverlay(state.phase) || state.phase === "update_failed";
+  const surfaceOpen =
+    isAndroid && overlayReady && variant !== null && phaseDeservesSurface && state.phase !== "pwa_update";
+
+  const versionLabel = policy?.versionNumber || null;
+  const versionCodeLabel = state.playAvailableVersionCode > 0 ? `#${state.playAvailableVersionCode}` : null;
 
   const handleRetry = useCallback(() => {
     setActionError(null);
@@ -65,11 +77,13 @@ export function AppReleaseUpdateProvider({ children }: Props) {
 
   const handleOpenPlayStore = useCallback(async () => {
     setBusy(true);
+    setOpeningStore(true);
     try {
       const result = await EnterpriseUpdateEngine.openPlayStoreFallback();
       setFallbackOpened(result.opened);
       setActionError(result.opened ? null : result.error);
     } finally {
+      setOpeningStore(false);
       setBusy(false);
     }
   }, []);
@@ -109,191 +123,104 @@ export function AppReleaseUpdateProvider({ children }: Props) {
     }
   }, []);
 
+  const handleCancel = useCallback(() => {
+    // Preserves the engine's version/release-keyed dismissal — no second dismissal mechanism.
+    void EnterpriseUpdateEngine.skipUpdate();
+  }, []);
+
+  const handleContinue = useCallback(() => {
+    void EnterpriseUpdateEngine.dismissWhatsNew();
+  }, []);
+
   const recoveryHint = actionError || state.lastActionError;
   const offerFallback = Boolean(state.lastDecision?.fallbackOnly || recoveryHint || fallbackOpened);
-  // Identifies this specific failure so a dismissal sticks to it but a later,
-  // different failure surfaces again.
-  const failureSig = `${state.phase}|${recoveryHint ?? ""}|${fallbackOpened ? "1" : "0"}`;
-  const dismissRecoveryBanner = useCallback(() => {
-    setDismissedFailureSig(failureSig);
-  }, [failureSig]);
-  const recoveryBanner =
-    showAndroidOverlay &&
-    (state.phase === "update_failed" || recoveryHint) &&
-    failureSig !== dismissedFailureSig ? (
-      <div className="fixed inset-x-0 bottom-0 z-[186] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <article className="mx-auto flex max-w-lg flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 shadow-lg">
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-sm font-bold text-rose-950">
-              {fallbackOpened ? t(lang, "updatePlayStoreOpenedBody") : t(lang, "updateFailedBody")}
-            </p>
-            <button
-              type="button"
-              onClick={dismissRecoveryBanner}
-              aria-label={t(lang, "updateDismiss")}
-              className="-mr-1 -mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-rose-700 hover:bg-rose-100"
-            >
-              <X aria-hidden className="h-5 w-5" />
-            </button>
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="min-h-[40px] shrink-0 rounded-xl border border-rose-300 px-4 text-sm font-black text-rose-900"
-            >
-              {t(lang, "updateRetry")}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleOpenPlayStore()}
-              className="min-h-[40px] shrink-0 rounded-xl bg-rose-700 px-4 text-sm font-black text-white disabled:opacity-50"
-            >
-              {t(lang, "updateOpenPlayStore")}
-            </button>
-          </div>
-        </article>
-      </div>
-    ) : null;
+
+  /**
+   * ANDROID BACK. Registered ONLY while a surface is open and removed with it, so the app never
+   * carries a permanent global back listener.
+   *  - flexible → exactly Cancel (`skipUpdate()`), dismissal key included
+   *  - mandatory / info / failure → swallowed: Back must not walk behind a blocking update
+   */
+  useEffect(() => {
+    if (!isAndroid || !surfaceOpen || variant === null) return;
+    let handle: { remove: () => void } | undefined;
+    let disposed = false;
+    void App.addListener("backButton", () => {
+      if (variant === "flexible") {
+        void EnterpriseUpdateEngine.skipUpdate();
+      }
+      // Every other variant swallows the press on purpose.
+    }).then((h) => {
+      if (disposed) void h.remove();
+      else handle = h;
+    });
+    return () => {
+      disposed = true;
+      void handle?.remove();
+    };
+  }, [isAndroid, surfaceOpen, variant]);
 
   return (
     <>
       {children}
 
-      {showAndroidOverlay && state.phase === "force_block" ? (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-foreground/90 p-4">
-          <article className="w-full max-w-md rounded-3xl border border-stone-700 bg-foreground p-6 text-background shadow-2xl">
-            <h2 className="text-xl font-black">{t(lang, "updateRequiredTitle")}</h2>
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              {t(lang, "updateRequiredBody")}
-              {policy?.minimumSupportedVersion ? (
-                <span className="mt-1 block">
-                  {tTemplate(lang, "updateMinimumVersion", { version: policy.minimumSupportedVersion })}
-                </span>
-              ) : null}
+      {surfaceOpen && variant ? (
+        <UpdateFullScreen
+          variant={variant}
+          lang={lang}
+          versionLabel={versionLabel}
+          versionCodeLabel={versionCodeLabel}
+          releaseName={policy?.releaseName || null}
+          notesHtml={policy?.publicNotesHtml ?? null}
+          showNotes={policy ? policy.showWhatsNew !== false : false}
+          busy={busy}
+          openingStore={openingStore}
+          errorMessage={recoveryHint}
+          fallbackOffered={offerFallback}
+          onCancel={variant === "flexible" ? handleCancel : undefined}
+          onRetry={handleRetry}
+          onOpenPlayStore={handleOpenPlayStore}
+          onContinue={handleContinue}
+          onUpdate={variant === "mandatory" ? handleImmediateStart : handleFlexibleStart}
+        />
+      ) : null}
+
+      {isAndroid && overlayReady && state.phase === "flexible_downloading" ? (
+        <div
+          className={`fixed inset-x-0 bottom-0 ${UPDATE_LAYER.banner} p-4 pb-[max(1rem,env(safe-area-inset-bottom))]`}
+        >
+          <article className="mx-auto flex max-w-xl items-center gap-3 rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 shadow-lg dark:border-waka-900">
+            <EnterpriseSpinner
+              size="sm"
+              label={t(lang, "updateDownloadingTitle")}
+              className="shrink-0 text-waka-700 dark:text-waka-300"
+            />
+            <p className="text-sm font-bold text-waka-950 dark:text-waka-100">
+              {t(lang, "updateDownloadingBody")}
             </p>
-            {recoveryHint ? (
-              <p className="mt-3 text-sm font-semibold text-rose-200">{t(lang, "updatePlayCoreFailedBody")}</p>
-            ) : null}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleImmediateStart()}
-              className="mt-5 min-h-[48px] w-full rounded-2xl bg-waka-500 text-sm font-black text-white disabled:opacity-50"
-            >
-              {t(lang, "updateNow")}
-            </button>
-            {offerFallback ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void handleOpenPlayStore()}
-                className="mt-2 min-h-[48px] w-full rounded-2xl border border-stone-500 text-sm font-bold text-background disabled:opacity-50"
-              >
-                {t(lang, "updateOpenPlayStore")}
-              </button>
-            ) : null}
           </article>
         </div>
       ) : null}
 
-      {showAndroidOverlay && state.phase === "flexible_prompt" ? (
-        <div className="fixed inset-0 z-[190] flex items-end justify-center bg-foreground/50 p-4 sm:items-center">
-          <article className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
-            <h2 className="text-lg font-black text-foreground">{t(lang, "updateAvailableTitle")}</h2>
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              {versionLabel
-                ? tTemplate(lang, "updateAvailableBodyVersioned", { version: versionLabel })
-                : t(lang, "updateAvailableBody")}
+      {isAndroid && overlayReady && state.phase === "flexible_ready" ? (
+        <div
+          className={`fixed inset-x-0 bottom-0 ${UPDATE_LAYER.banner} p-4 pb-[max(1rem,env(safe-area-inset-bottom))]`}
+        >
+          <article className="mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg dark:border-emerald-900">
+            <p className="text-sm font-bold text-emerald-950 dark:text-emerald-100">
+              {t(lang, "updateReadyTitle")}
             </p>
-            {recoveryHint ? (
-              <p className="mt-3 text-sm font-semibold text-rose-700">{t(lang, "updatePlayCoreFailedBody")}</p>
-            ) : null}
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void EnterpriseUpdateEngine.skipUpdate()}
-                className="min-h-[48px] rounded-2xl border border-border text-sm font-bold text-muted-foreground"
-              >
-                {t(lang, "updateLater")}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void handleFlexibleStart()}
-                className="min-h-[48px] rounded-2xl bg-waka-600 text-sm font-black text-white disabled:opacity-50"
-              >
-                {t(lang, "updateNow")}
-              </button>
-            </div>
-            {offerFallback ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void handleOpenPlayStore()}
-                className="mt-2 min-h-[40px] w-full rounded-2xl text-sm font-bold text-muted-foreground disabled:opacity-50"
-              >
-                {t(lang, "updateOpenPlayStore")}
-              </button>
-            ) : null}
-          </article>
-        </div>
-      ) : null}
-
-      {showAndroidOverlay && state.phase === "flexible_downloading" ? (
-        <div className="fixed inset-x-0 bottom-0 z-[185] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <article className="mx-auto flex max-w-lg items-center gap-3 rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 shadow-lg">
-            <EnterpriseSpinner size="sm" label={t(lang, "updateDownloadingBody")} className="text-waka-600 shrink-0" />
-            <p className="text-sm font-bold text-waka-950">{t(lang, "updateDownloadingBody")}</p>
-          </article>
-        </div>
-      ) : null}
-
-      {showAndroidOverlay && state.phase === "flexible_ready" ? (
-        <div className="fixed inset-x-0 bottom-0 z-[185] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <article className="mx-auto flex max-w-lg items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg">
-            <p className="text-sm font-bold text-emerald-950">{t(lang, "updateReadyTitle")}</p>
             <button
               type="button"
               disabled={busy}
               onClick={() => void handleComplete()}
-              className="min-h-[40px] shrink-0 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white"
+              className="min-h-[44px] shrink-0 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white disabled:opacity-60"
             >
               {t(lang, "updateRestart")}
             </button>
           </article>
         </div>
       ) : null}
-
-      {showAndroidOverlay && policy && state.phase === "whats_new" ? (
-        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-foreground/60 p-4">
-          <article className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-2xl">
-            <h2 className="text-xl font-black text-foreground">{t(lang, "updateWhatsNewTitle")}</h2>
-            {policy.versionNumber ? (
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                {tTemplate(lang, "updateWhatsNewVersion", { version: policy.versionNumber })}
-              </p>
-            ) : null}
-            <div
-              className="prose prose-sm mt-4 max-w-none text-foreground"
-              dangerouslySetInnerHTML={{
-                __html: policy.publicNotesHtml || `<p>${t(lang, "updateWhatsNewFallback")}</p>`,
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => void EnterpriseUpdateEngine.dismissWhatsNew()}
-              className="mt-6 min-h-[48px] w-full rounded-2xl bg-foreground text-sm font-black text-background"
-            >
-              {t(lang, "updateContinue")}
-            </button>
-          </article>
-        </div>
-      ) : null}
-
-      {showAndroidOverlay && state.phase === "update_failed" ? recoveryBanner : null}
     </>
   );
 }
