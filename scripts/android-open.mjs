@@ -45,10 +45,11 @@ if (!hasProductionEnv()) {
 const skipBuild = process.env.SKIP_ANDROID_BUILD === "1" || process.env.SKIP_ANDROID_BUILD === "true";
 const skipBrand = process.env.SKIP_BRAND_ASSETS === "1" || process.env.SKIP_BRAND_ASSETS === "true";
 
-if (!skipBrand && existsSync(resolve(root, "resources/w-symbol-source.png"))) {
-  console.log("🎨 Refreshing app icons & splash from brand source…\n");
+if (!skipBrand && existsSync(resolve(root, "public/brand/dkasu/icon-tile-transparent.png"))) {
+  console.log("🎨 Refreshing app icons & splash from DKASU brand source…\n");
   run("npm run brand:assets");
   run("npx capacitor-assets generate --assetPath resources --android --pwa");
+  run("node scripts/finalize-android-branding.mjs");
 }
 
 if (!skipBuild && !distIsFresh()) {

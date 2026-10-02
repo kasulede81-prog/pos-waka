@@ -151,14 +151,33 @@ Edit `android/app/build.gradle`:
 
 ## App icon & splash artwork
 
-Official W cart mark: `resources/w-symbol-source.png`. Regenerate all exports:
+Source of truth is the supplied DKASU artwork in `public/brand/dkasu/`. The
+generator samples and composites it — the logo is never redrawn.
 
 ```bash
-npm run brand:assets   # resources/brand/* + logo.png + splash.png + public icons
-npm run cap:assets     # Android mipmaps + PWA (includes brand:assets)
+npm run brand:assets   # DKASU masters + resources/brand/* + public icons
+npm run cap:assets     # brand + Android/iOS/PWA assets, then Android finalisation
 ```
 
-Play Store icon: `resources/brand/icon-1024-cream.png` (1024×1024).
+`brand:assets` writes the `resources/` masters in custom mode
+(`icon-only` / `icon-foreground` / `icon-background` / `splash` / `splash-dark`).
+Do not add `resources/logo.png` or `resources/icon.png` — either one puts
+`@capacitor/assets` into Easy Mode and it will synthesise a flat icon instead.
+
+`cap:assets` ends with `scripts/finalize-android-branding.mjs`, which corrects
+three things `@capacitor/assets` gets wrong for Android and then runs a guard
+that fails the build if WAKA artwork is ever reintroduced:
+
+1. its adaptive-icon template wraps both layers in `<inset 16.7%>`, which stops
+   the background from being full-bleed;
+2. it shrinks legacy launcher icons by 8px per size (22% of a 36px ldpi icon);
+3. for explicit `icon-foreground` / `icon-background` inputs it sizes the layers
+   from the 48dp legacy table instead of the 108dp adaptive table.
+
+It also emits `mipmap-<density>/splash_icon.png`, the DKASU tile used by the
+Android 12+ system splash.
+
+Play Store icon: `resources/brand/icon-1024.png` (1024×1024).
 
 ---
 

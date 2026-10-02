@@ -4,7 +4,7 @@
  * Usage: npm run ios  |  npm run cap:open:ios
  */
 import { execSync } from "node:child_process";
-import { existsSync, copyFileSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,8 +13,6 @@ const envLocal = resolve(root, ".env.production.local");
 const envProd = resolve(root, ".env.production");
 const distIndex = resolve(root, "dist/index.html");
 const iosDir = resolve(root, "ios");
-const logoPng = resolve(root, "resources/logo.png");
-const iconPng = resolve(root, "resources/icon.png");
 
 function run(cmd) {
   execSync(cmd, { stdio: "inherit", cwd: root, env: process.env, shell: true });
@@ -52,18 +50,14 @@ if (!existsSync(iosDir)) {
   process.exit(1);
 }
 
-if (existsSync(logoPng)) {
-  copyFileSync(logoPng, iconPng);
-}
-
 const skipBuild = process.env.SKIP_IOS_BUILD === "1" || process.env.SKIP_IOS_BUILD === "true";
 const skipBrand = process.env.SKIP_BRAND_ASSETS === "1" || process.env.SKIP_BRAND_ASSETS === "true";
 
-if (!skipBrand && existsSync(resolve(root, "resources/w-symbol-source.png"))) {
-  console.log("🎨 Refreshing app icons & splash from brand source…\n");
+if (!skipBrand && existsSync(resolve(root, "public/brand/dkasu/icon-tile-transparent.png"))) {
+  console.log("🎨 Refreshing app icons & splash from DKASU brand source…\n");
   run("npm run brand:assets");
-  if (existsSync(logoPng)) copyFileSync(logoPng, iconPng);
   run("npx capacitor-assets generate --assetPath resources --ios --android --pwa");
+  run("node scripts/finalize-android-branding.mjs");
 }
 
 if (!skipBuild && !distIsFresh()) {

@@ -1,266 +1,444 @@
 #!/usr/bin/env node
 /**
- * Generate Waka POS app icon, splash, and brand exports from resources/w-symbol-source.png.
+ * Generate DKASU POS app icon, splash, and brand exports.
+ *
+ * Source of truth is the supplied DKASU artwork in `public/brand/dkasu/`
+ * (derived from `dkasu-brand-assets/logo-1..4`). The DKASU logo is never
+ * redrawn here — it is sampled, cropped, and composited only. The one
+ * derived value is the app-icon tile gradient, which is measured from
+ * `icon-tile-transparent.png` on every run so it stays tied to the artwork.
+ *
+ * Writes the Capacitor asset masters consumed by `npm run cap:assets`:
+ *   resources/icon-only.png       legacy launcher icon + iOS app icon (opaque)
+ *   resources/icon-foreground.png Android adaptive foreground (white mark, no bg)
+ *   resources/icon-background.png Android adaptive background (full-bleed)
+ *   resources/splash.png          light splash master
+ *   resources/splash-dark.png     dark splash master
+ *
  * Run: npm run brand:assets
  */
 import sharp from "sharp";
-import { mkdirSync, writeFileSync, copyFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const srcPath = resolve(root, "resources/w-symbol-source.png");
+const dkasuDir = resolve(root, "public/brand/dkasu");
 const outDir = resolve(root, "resources/brand");
 
+const TILE = resolve(dkasuDir, "icon-tile-transparent.png");
+const LOCKUP_LIGHT = resolve(dkasuDir, "logo-horizontal-on-light-transparent.png");
+const LOCKUP_DARK = resolve(dkasuDir, "logo-horizontal-on-dark-transparent.png");
+
+/** DKASU surfaces, matched to the supplied artwork backgrounds. */
 const CREAM = "#fffaf5";
+const CHARCOAL = "#1c1917";
 const WHITE = "#ffffff";
-const DARK = "#0c0a09";
-const DARK_CHARCOAL = "#1c1917";
-const ORANGE = "#f97316";
-const SLOGAN = "100% Local. Affordable for Every Business.";
 
-/** Symbol occupies this fraction of the canvas (rest = padding). Tuned for adaptive icon safe zone. */
-const ICON_SYMBOL_SCALE = 0.58;
-const SPLASH_SYMBOL_SCALE = 0.22;
+/**
+ * Fraction of the canvas the mark occupies.
+ * Android adaptive foreground art must sit inside the central 66dp of the
+ * 108dp layer, i.e. 66/108 = 0.611. Legacy/iOS icons can carry a slightly
+ * larger mark, matching the supplied tile (625/945 = 0.661).
+ */
+const ADAPTIVE_MARK_SCALE = 0.611;
+const LEGACY_MARK_SCALE = 0.661;
+const LOCKUP_SPLASH_SCALE = 0.5;
 
-mkdirSync(outDir, { recursive: true });
+const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 
-if (!existsSync(srcPath)) {
-  console.error("Missing resources/w-symbol-source.png");
-  process.exit(1);
+for (const [label, path] of [
+  ["icon-tile-transparent.png", TILE],
+  ["logo-horizontal-on-light-transparent.png", LOCKUP_LIGHT],
+  ["logo-horizontal-on-dark-transparent.png", LOCKUP_DARK],
+]) {
+  if (!existsSync(path)) {
+    console.error(`Missing DKASU source artwork: public/brand/dkasu/${label}`);
+    process.exit(1);
+  }
 }
 
-/** Trim near-white margins; keep orange symbol only area tight. */
-async function loadSymbol() {
-  return sharp(srcPath).trim({ threshold: 12 }).png().toBuffer();
+/** Raw RGBA read helper — all pixel maths below works on this shape. */
+async function readRgba(path) {
+  const { data, info } = await sharp(path)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return { data, width: info.width, height: info.height };
 }
 
-async function symbolMeta(buf) {
-  return sharp(buf).metadata();
+/**
+ * Measure the tile's diagonal gradient so the adaptive background can be
+ * rendered full-bleed. Two points are sampled along the tile diagonal, walking
+ * inward from the requested position until enough orange body is found — the
+ * tile's rounded corners and the mark both fall outside the body, so a fixed
+ * position is not safe. The returned geometry is where the samples were
+ * actually taken, so the SVG gradient needs no extrapolation.
+ */
+async function measureTileGradient() {
+  const { data, width, height } = await readRgba(TILE);
+
+  const sampleAt = (t) => {
+    const x = Math.round(t * (width - 1));
+    const y = Math.round(t * (height - 1));
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let n = 0;
+    for (let dy = -6; dy <= 6; dy++) {
+      for (let dx = -6; dx <= 6; dx++) {
+        const X = x + dx;
+        const Y = y + dy;
+        if (X < 0 || Y < 0 || X >= width || Y >= height) continue;
+        const i = (Y * width + X) * 4;
+        const [pr, pg, pb, pa] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
+        // Orange body only: opaque and clearly not the white mark.
+        if (pa > 245 && Math.min(pr, pg, pb) <= 170) {
+          r += pr;
+          g += pg;
+          b += pb;
+          n++;
+        }
+      }
+    }
+    return n > 0 ? { r: r / n, g: g / n, b: b / n, n } : null;
+  };
+
+  const find = (from, step) => {
+    for (let t = from; t > 0.02 && t < 0.98; t += step) {
+      const s = sampleAt(t);
+      if (s && s.n >= 60) {
+        return { t, color: `rgb(${Math.round(s.r)},${Math.round(s.g)},${Math.round(s.b)})` };
+      }
+    }
+    throw new Error("Could not sample the DKASU tile gradient — is the artwork intact?");
+  };
+
+  const a = find(0.1, 0.01);
+  const b = find(0.9, -0.01);
+  return { t0: a.t, start: a.color, t1: b.t, end: b.color };
 }
 
-async function placeSymbol(symbolBuf, size, bg, scale, opts = {}) {
-  const meta = await sharp(symbolBuf).metadata();
-  const maxSide = Math.round(size * scale);
-  const resized = await sharp(symbolBuf)
-    .resize(maxSide, maxSide, { fit: "inside", withoutEnlargement: false })
-    .png()
-    .toBuffer();
-  const rMeta = await sharp(resized).metadata();
-  const left = Math.round((size - rMeta.width) / 2);
-  const top = Math.round((size - rMeta.height) / 2);
+/**
+ * Linear gradient across the full square canvas. Stops are placed exactly
+ * where they were measured on the tile, so the ramp is the artwork's own;
+ * beyond the stops SVG pads, which fills the corners full-bleed.
+ */
+function gradientSvg(size, { t0, t1, start, end }) {
+  const p0 = Math.round(t0 * size);
+  const p1 = Math.round(t1 * size);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  <defs>
+    <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="${p0}" y1="${p0}" x2="${p1}" y2="${p1}">
+      <stop offset="0%" stop-color="${start}"/>
+      <stop offset="100%" stop-color="${end}"/>
+    </linearGradient>
+  </defs>
+  <rect width="${size}" height="${size}" fill="url(#g)"/>
+</svg>`;
+}
 
-  const layers = [{ input: resized, left, top }];
-  if (opts.glow) {
-    const glow = await sharp(resized).blur(8).modulate({ brightness: 1.1 }).png().toBuffer();
-    layers.unshift({ input: glow, left, top: top + 2, blend: "over" });
+/**
+ * Extract the white DKASU mark from the supplied tile as white-on-transparent.
+ * Alpha ramps between the tile's own extremes: its lightest amber body colour
+ * bottoms out around min-channel 80, the mark is 255. Starting the ramp at 110
+ * keeps the amber body and its corner antialiasing fully transparent while
+ * preserving the mark's soft edges.
+ */
+async function extractMark() {
+  const { data, width, height } = await readRgba(TILE);
+  const out = Buffer.alloc(width * height * 4);
+  const LO = 110;
+  const HI = 205;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const a = data[i + 3];
+      const mn = Math.min(data[i], data[i + 1], data[i + 2]);
+      const ramp = Math.max(0, Math.min(1, (mn - LO) / (HI - LO)));
+      const alpha = Math.round(a * ramp);
+      const o = i;
+      out[o] = 255;
+      out[o + 1] = 255;
+      out[o + 2] = 255;
+      out[o + 3] = alpha;
+      if (alpha > 8) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
   }
 
-  return sharp({
-    create: { width: size, height: size, channels: 4, background: bg },
-  }).composite(layers);
-}
+  if (maxX < 0) throw new Error("Could not isolate the DKASU mark from icon-tile-transparent.png");
 
-async function writeIcon(symbolBuf, size, bg, scale, dest) {
-  await (await placeSymbol(symbolBuf, size, bg, scale)).png().toFile(dest);
-}
-
-async function splashPortrait(symbolBuf, { width, height, bg, dark }) {
-  const symbolW = Math.round(width * SPLASH_SYMBOL_SCALE);
-  const resized = await sharp(symbolBuf)
-    .resize(symbolW, symbolW, { fit: "inside" })
+  const markBuf = await sharp(out, { raw: { width, height, channels: 4 } })
+    .extract({ left: minX, top: minY, width: maxX - minX + 1, height: maxY - minY + 1 })
     .png()
     .toBuffer();
-  const rMeta = await sharp(resized).metadata();
-  const symLeft = Math.round((width - rMeta.width) / 2);
-  const symTop = Math.round(height * 0.28);
 
-  const titleColor = dark ? WHITE : DARK;
-  const subColor = dark ? "#a8a29e" : "#78716c";
+  const meta = await sharp(markBuf).metadata();
+  return { buffer: markBuf, width: meta.width, height: meta.height };
+}
 
-  const svg = `
-<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100%" height="100%" fill="${bg}"/>
-  <text x="50%" y="${symTop + rMeta.height + Math.round(height * 0.06)}"
-    text-anchor="middle" font-family="system-ui,Segoe UI,Roboto,sans-serif"
-    font-size="${Math.round(width * 0.078)}" font-weight="800" fill="${titleColor}" letter-spacing="-0.02em">Waka POS</text>
-  <text x="50%" y="${symTop + rMeta.height + Math.round(height * 0.11)}"
-    text-anchor="middle" font-family="system-ui,Segoe UI,Roboto,sans-serif"
-    font-size="${Math.round(width * 0.032)}" font-weight="600" fill="${subColor}">${SLOGAN}</text>
-</svg>`;
+/** Scale the mark to `scale` of a square canvas and centre it. */
+async function placeMark(mark, size, scale) {
+  const targetW = Math.round(size * scale);
+  const resized = await sharp(mark.buffer)
+    .resize(targetW, Math.round((mark.height / mark.width) * targetW), { fit: "inside" })
+    .png()
+    .toBuffer();
+  const meta = await sharp(resized).metadata();
+  return {
+    input: resized,
+    left: Math.round((size - meta.width) / 2),
+    top: Math.round((size - meta.height) / 2),
+  };
+}
 
-  return sharp(Buffer.from(svg))
-    .composite([{ input: resized, left: symLeft, top: symTop }])
+/** Opaque branded square: full-bleed gradient + centred white mark. */
+async function brandedSquare(size, gradient, mark, scale) {
+  return sharp(Buffer.from(gradientSvg(size, gradient)))
+    .composite([await placeMark(mark, size, scale)])
     .png();
 }
 
-/** Google Play feature graphic (1024×500). */
-async function generateFeatureGraphic(symbolBuf) {
-  const W = 1024;
-  const H = 500;
-  const logoSize = 172;
-  const logo = await sharp(symbolBuf).resize(logoSize, logoSize, { fit: "inside" }).png().toBuffer();
-  const logoMeta = await sharp(logo).metadata();
-  const logoTop = Math.round((H - (logoMeta.height ?? logoSize)) / 2) - 16;
-
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0.85">
-      <stop offset="0%" stop-color="#fffaf5"/>
-      <stop offset="50%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#fff7ed"/>
-    </linearGradient>
-  </defs>
-  <rect width="${W}" height="${H}" fill="url(#bg)"/>
-  <rect width="${W}" height="5" fill="#f97316"/>
-  <ellipse cx="900" cy="100" rx="220" ry="150" fill="#ffedd5" opacity="0.55"/>
-  <text x="252" y="112" font-family="Segoe UI, system-ui, Roboto, Arial, sans-serif" font-size="12" font-weight="700" fill="#ea580c" letter-spacing="2.5">TECH FOR NEXT GENERATION</text>
-  <text x="252" y="186" font-family="Segoe UI, system-ui, Roboto, Arial, sans-serif" font-size="44" font-weight="800" fill="#0c0a09">Simple POS for shops</text>
-  <text x="252" y="240" font-family="Segoe UI, system-ui, Roboto, Arial, sans-serif" font-size="44" font-weight="800" fill="#0c0a09">in Uganda</text>
-  <text x="252" y="288" font-family="Segoe UI, system-ui, Roboto, Arial, sans-serif" font-size="17" font-weight="500" fill="#57534e">Sales · Stock · Receipts · Works offline</text>
-  <text x="252" y="338" font-family="Segoe UI, system-ui, Roboto, Arial, sans-serif" font-size="26" font-weight="800" fill="#f97316">Waka POS</text>
-  <rect x="692" y="70" width="280" height="360" rx="22" fill="#ffffff" stroke="#fed7aa" stroke-width="2"/>
-  <text x="832" y="104" text-anchor="middle" font-family="Segoe UI, system-ui, Roboto, Arial, sans-serif" font-size="13" font-weight="700" fill="#78716c">Product preview</text>
-  <rect x="720" y="122" width="224" height="128" rx="14" fill="#f5f5f4"/>
-  <rect x="720" y="268" width="150" height="11" rx="5" fill="#e7e5e4"/>
-  <rect x="720" y="290" width="190" height="11" rx="5" fill="#e7e5e4"/>
-  <rect x="720" y="312" width="110" height="11" rx="5" fill="#e7e5e4"/>
-  <rect x="720" y="358" width="224" height="52" rx="14" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
-  <text x="832" y="390" text-anchor="middle" font-family="Segoe UI, system-ui, Roboto, Arial, sans-serif" font-size="17" font-weight="800" fill="#ea580c">Free to start</text>
-</svg>`;
-
-  const base = await sharp(Buffer.from(svg)).png().toBuffer();
-  const outPath = resolve(outDir, "feature-graphic-1024x500.png");
-  await sharp(base)
-    .composite([{ input: logo, left: 52, top: logoTop }])
-    .png()
-    .toFile(outPath);
-  return outPath;
+/** White-on-transparent mark scaled into the adaptive safe zone. */
+async function adaptiveForeground(size, mark, scale) {
+  return sharp({ create: { width: size, height: size, channels: 4, background: TRANSPARENT } })
+    .composite([await placeMark(mark, size, scale)])
+    .png();
 }
 
-async function monoSymbol(symbolBuf, color) {
-  const { width, height } = await sharp(symbolBuf).metadata();
-  const alpha = await sharp(symbolBuf).ensureAlpha().extractChannel(3).toBuffer();
-  const fill = await sharp({
-    create: { width, height, channels: 3, background: color },
-  })
+/** Recolour the supplied tile to a single flat colour, keeping its alpha. */
+async function monoFromTile(color) {
+  const { data, width, height } = await readRgba(TILE);
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+  const out = Buffer.alloc(width * height * 4);
+  for (let i = 0; i < data.length; i += 4) {
+    out[i] = r;
+    out[i + 1] = g;
+    out[i + 2] = b;
+    out[i + 3] = data[i + 3];
+  }
+  return sharp(out, { raw: { width, height, channels: 4 } }).png().toBuffer();
+}
+
+/** Compose a splash master: solid background + centred DKASU lockup. */
+async function splashMaster(lockupPath, background, size) {
+  const lockupW = Math.round(size * LOCKUP_SPLASH_SCALE);
+  const resized = await sharp(lockupPath)
+    .resize(lockupW, null, { fit: "inside" })
     .png()
     .toBuffer();
-  return sharp(fill).joinChannel(alpha).png().toBuffer();
+  const meta = await sharp(resized).metadata();
+  return sharp({ create: { width: size, height: size, channels: 4, background } })
+    .composite([
+      {
+        input: resized,
+        left: Math.round((size - meta.width) / 2),
+        top: Math.round((size - meta.height) / 2),
+      },
+    ])
+    .png();
 }
 
 async function main() {
-  console.log("Generating Waka brand assets…\n");
-  const symbol = await loadSymbol();
-  const symbolB64 = symbol.toString("base64");
+  console.log("Generating DKASU brand assets…\n");
 
-  // —— App icons ——
-  await writeIcon(symbol, 1024, CREAM, ICON_SYMBOL_SCALE, resolve(outDir, "icon-1024-cream.png"));
-  await writeIcon(symbol, 512, CREAM, ICON_SYMBOL_SCALE, resolve(outDir, "icon-512-cream.png"));
-  await writeIcon(symbol, 1024, WHITE, ICON_SYMBOL_SCALE, resolve(outDir, "icon-1024-white.png"));
-  await writeIcon(symbol, 1024, { r: 0, g: 0, b: 0, alpha: 0 }, ICON_SYMBOL_SCALE, resolve(outDir, "icon-1024-transparent.png"));
+  mkdirSync(outDir, { recursive: true });
+  mkdirSync(resolve(root, "public/icons"), { recursive: true });
 
-  await writeIcon(symbol, 1024, { r: 0, g: 0, b: 0, alpha: 0 }, ICON_SYMBOL_SCALE * 0.92, resolve(outDir, "icon-adaptive-foreground.png"));
-  await sharp({
-    create: { width: 1024, height: 1024, channels: 3, background: CREAM },
-  })
+  const gradient = await measureTileGradient();
+  const mark = await extractMark();
+  console.log(`  tile gradient: ${gradient.start} → ${gradient.end}`);
+  console.log(`  mark extents:  ${mark.width}×${mark.height}\n`);
+
+  // —— Capacitor masters (consumed by npm run cap:assets) ——
+  // Custom-mode names only: icon-only/icon-foreground/icon-background/splash.
+  // No logo.png or icon.png, so @capacitor/assets stays out of "Easy Mode"
+  // and cannot synthesise icons from a single flat logo + background colour.
+  await (
+    await brandedSquare(1024, gradient, mark, LEGACY_MARK_SCALE)
+  ).toFile(resolve(root, "resources/icon-only.png"));
+
+  await (
+    await adaptiveForeground(1024, mark, ADAPTIVE_MARK_SCALE)
+  ).toFile(resolve(root, "resources/icon-foreground.png"));
+
+  await sharp(Buffer.from(gradientSvg(1024, gradient)))
+    .flatten({ background: CREAM })
+    .png()
+    .toFile(resolve(root, "resources/icon-background.png"));
+
+  await (
+    await splashMaster(LOCKUP_LIGHT, CREAM, 2732)
+  ).toFile(resolve(root, "resources/splash.png"));
+
+  await (
+    await splashMaster(LOCKUP_DARK, CHARCOAL, 2732)
+  ).toFile(resolve(root, "resources/splash-dark.png"));
+
+  // Retire the WAKA-era masters so the generator can never read them again.
+  for (const stale of ["logo.png", "icon.png", "w-symbol-source.png"]) {
+    const p = resolve(root, "resources", stale);
+    if (existsSync(p)) {
+      rmSync(p);
+      console.log(`  removed stale WAKA master: resources/${stale}`);
+    }
+  }
+
+  // —— Brand export library ——
+  await (
+    await brandedSquare(1024, gradient, mark, LEGACY_MARK_SCALE)
+  ).toFile(resolve(outDir, "icon-1024.png"));
+  await (
+    await brandedSquare(512, gradient, mark, LEGACY_MARK_SCALE)
+  ).toFile(resolve(outDir, "icon-512.png"));
+  await (
+    await adaptiveForeground(1024, mark, LEGACY_MARK_SCALE)
+  ).toFile(resolve(outDir, "icon-1024-transparent.png"));
+  await (
+    await adaptiveForeground(1024, mark, ADAPTIVE_MARK_SCALE)
+  ).toFile(resolve(outDir, "icon-adaptive-foreground.png"));
+
+  await sharp(Buffer.from(gradientSvg(1024, gradient)))
     .png()
     .toFile(resolve(outDir, "icon-adaptive-background.png"));
 
-  copyFileSync(resolve(outDir, "icon-1024-cream.png"), resolve(root, "resources/logo.png"));
+  await sharp(LOCKUP_LIGHT)
+    .flatten({ background: CREAM })
+    .png()
+    .toFile(resolve(outDir, "logo-horizontal-on-light.png"));
+  await sharp(LOCKUP_DARK)
+    .flatten({ background: CHARCOAL })
+    .png()
+    .toFile(resolve(outDir, "logo-horizontal-on-dark.png"));
 
-  const featurePath = await generateFeatureGraphic(symbol);
-  console.log("✓", featurePath);
+  // —— Splash exports ——
+  await (
+    await splashMaster(LOCKUP_LIGHT, CREAM, 1080)
+  ).toFile(resolve(outDir, "splash-light.png"));
+  await (
+    await splashMaster(LOCKUP_DARK, CHARCOAL, 1080)
+  ).toFile(resolve(outDir, "splash-dark.png"));
 
-  // —— Splash ——
-  const splashLightBuf = await splashPortrait(symbol, {
-    width: 1080,
-    height: 1920,
-    bg: CREAM,
-    dark: false,
-  }).then((img) => img.toBuffer());
+  // —— Monochrome: the mark, flat — for print and constrained surfaces ——
+  const blackTile = await monoFromTile("#000000");
+  const whiteTile = await monoFromTile(WHITE);
+  await sharp(blackTile)
+    .flatten({ background: WHITE })
+    .png()
+    .toFile(resolve(outDir, "icon-mono-black-on-white.png"));
+  await sharp(whiteTile)
+    .flatten({ background: CHARCOAL })
+    .png()
+    .toFile(resolve(outDir, "icon-mono-white-on-dark.png"));
+  await sharp(blackTile).png().toFile(resolve(outDir, "icon-mono-black-transparent.png"));
+  await sharp(whiteTile).png().toFile(resolve(outDir, "icon-mono-white-transparent.png"));
 
-  await sharp(splashLightBuf).toFile(resolve(outDir, "splash-light-portrait.png"));
-
-  await splashPortrait(symbol, {
-    width: 1080,
-    height: 1920,
-    bg: WHITE,
-    dark: false,
-  }).then((img) => img.toFile(resolve(outDir, "splash-light-white.png")));
-
-  await splashPortrait(symbol, {
-    width: 1080,
-    height: 1920,
-    bg: DARK_CHARCOAL,
-    dark: true,
-  }).then((img) => img.toFile(resolve(outDir, "splash-dark-portrait.png")));
-
-  await sharp(splashLightBuf)
-    .resize(2732, 2732, { fit: "cover", position: "centre" })
-    .toFile(resolve(outDir, "splash-capacitor-master.png"));
-  copyFileSync(resolve(outDir, "splash-capacitor-master.png"), resolve(root, "resources/splash.png"));
-
-  // —— Monochrome ——
-  const blackSym = await monoSymbol(symbol, "#000000");
-  const whiteSym = await monoSymbol(symbol, "#ffffff");
-  await writeIcon(blackSym, 1024, WHITE, ICON_SYMBOL_SCALE, resolve(outDir, "icon-mono-black-on-white.png"));
-  await writeIcon(whiteSym, 1024, DARK, ICON_SYMBOL_SCALE, resolve(outDir, "icon-mono-white-on-dark.png"));
-  await writeIcon(blackSym, 512, { r: 0, g: 0, b: 0, alpha: 0 }, 0.85, resolve(outDir, "icon-mono-black-transparent.png"));
-  await writeIcon(whiteSym, 512, { r: 0, g: 0, b: 0, alpha: 0 }, 0.85, resolve(outDir, "icon-mono-white-transparent.png"));
-
-  // —— Small / sidebar / favicon ——
+  // —— Small sizes ——
+  // Two variants per size, matching the shape this library had before the
+  // DKASU migration: brand (transparent corners) and light-surface (on cream).
+  // This script owns the directory outright, so it is rebuilt from scratch —
+  // a variant that is no longer generated cannot linger as a stale file.
+  const sizesDir = resolve(outDir, "sizes");
+  rmSync(sizesDir, { recursive: true, force: true });
+  mkdirSync(sizesDir, { recursive: true });
   const smallSizes = [16, 24, 32, 48, 64, 96, 128, 192, 256];
-  mkdirSync(resolve(outDir, "sizes"), { recursive: true });
   for (const s of smallSizes) {
-    await writeIcon(symbol, s, { r: 0, g: 0, b: 0, alpha: 0 }, 0.88, resolve(outDir, `sizes/w-icon-${s}.png`));
-    await writeIcon(symbol, s, CREAM, 0.82, resolve(outDir, `sizes/w-icon-${s}-cream.png`));
+    await (
+      await brandedSquare(s, gradient, mark, LEGACY_MARK_SCALE)
+    ).toFile(resolve(sizesDir, `d-icon-${s}.png`));
+    await (
+      await brandedSquare(s, gradient, mark, LEGACY_MARK_SCALE)
+    )
+      .flatten({ background: CREAM })
+      .png()
+      .toFile(resolve(sizesDir, `d-icon-${s}-cream.png`));
   }
 
-  // —— SVG exports ——
-  const svgSymbol = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" role="img" aria-label="Waka">
-  <title>Waka</title>
-  <image width="512" height="512" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,${symbolB64}"/>
-</svg>`;
-  writeFileSync(resolve(outDir, "w-symbol.svg"), svgSymbol);
+  // Retire WAKA-era exports so no stale branding lingers in the brand library.
+  for (const stale of [
+    "icon-1024-cream.png",
+    "icon-1024-cream.svg",
+    "icon-1024-white.png",
+    "icon-512-cream.png",
+    "splash-light-portrait.png",
+    "splash-light-white.png",
+    "splash-dark-portrait.png",
+    "splash-capacitor-master.png",
+    "splash-light.svg",
+    "w-symbol.svg",
+  ]) {
+    const p = resolve(outDir, stale);
+    if (existsSync(p)) rmSync(p);
+  }
+  // `sizes/` needs no entry here — it is rebuilt from scratch above, which
+  // also clears the WAKA-era `sizes/w-icon-*` exports.
 
-  const svgIconCream = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024" role="img" aria-label="Waka POS">
-  <rect width="1024" height="1024" fill="${CREAM}"/>
-  <image x="215" y="215" width="594" height="594" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,${symbolB64}"/>
-</svg>`;
-  writeFileSync(resolve(outDir, "icon-1024-cream.svg"), svgIconCream);
+  // —— Web / public copies (same filenames, DKASU artwork) ——
+  await (
+    await brandedSquare(1024, gradient, mark, LEGACY_MARK_SCALE)
+  ).png().toFile(resolve(root, "public/waka-logo.png"));
 
-  const svgSplash = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1080 1920" role="img" aria-label="Waka POS splash">
-  <rect width="1080" height="1920" fill="${CREAM}"/>
-  <image x="421" y="422" width="238" height="238" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,${symbolB64}"/>
-  <text x="540" y="780" text-anchor="middle" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="84" font-weight="800" fill="${DARK}">Waka POS</text>
-  <text x="540" y="840" text-anchor="middle" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="34" font-weight="600" fill="#78716c">${SLOGAN}</text>
-</svg>`;
-  writeFileSync(resolve(outDir, "splash-light.svg"), svgSplash);
+  // PWA / favicon set. `manifest.webmanifest` and `index.html` reference these
+  // by name, so every size must be rewritten — a stale one is shipped branding.
+  const webIcons = resolve(root, "public/icons");
+  for (const size of [48, 72, 96, 128, 256]) {
+    await (await brandedSquare(size, gradient, mark, LEGACY_MARK_SCALE))
+      .webp({ quality: 92 })
+      .toFile(resolve(webIcons, `icon-${size}.webp`));
+  }
+  for (const size of [192, 512]) {
+    await (await brandedSquare(size, gradient, mark, LEGACY_MARK_SCALE))
+      .webp({ quality: 92 })
+      .toFile(resolve(webIcons, `icon-${size}.webp`));
+    await (
+      await brandedSquare(size, gradient, mark, LEGACY_MARK_SCALE)
+    ).png().toFile(resolve(webIcons, `icon-${size}.png`));
+  }
+  await (
+    await brandedSquare(512, gradient, mark, LEGACY_MARK_SCALE)
+  ).png().toFile(resolve(webIcons, "icon-512-playstore.png"));
 
-  // —— Web / public copies ——
-  copyFileSync(resolve(outDir, "icon-1024-cream.png"), resolve(root, "public/waka-logo.png"));
-  await sharp(resolve(outDir, "icon-512-cream.png")).png().toFile(resolve(root, "public/icons/icon-512-playstore.png"));
-  await (await placeSymbol(symbol, 512, CREAM, 0.72)).webp({ quality: 92 }).toFile(resolve(root, "public/icons/icon-512.webp"));
-  await (await placeSymbol(symbol, 192, CREAM, 0.72)).webp({ quality: 92 }).toFile(resolve(root, "public/icons/icon-192.webp"));
-  await (await placeSymbol(symbol, 32, CREAM, 0.78)).png().toFile(resolve(root, "public/favicon-32.png"));
+  // Maskable icons are cropped to a circle by the launcher, so the mark is
+  // pulled in to 50% to stay inside the safe zone.
+  await (
+    await brandedSquare(512, gradient, mark, 0.5)
+  ).png().toFile(resolve(webIcons, "icon-maskable-512.png"));
 
-  const faviconSvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64" role="img" aria-label="Waka POS">
-  <rect width="64" height="64" rx="14" fill="${CREAM}"/>
-  <image x="8" y="8" width="48" height="48" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,${symbolB64}"/>
-</svg>`;
-  writeFileSync(resolve(root, "public/favicon.svg"), faviconSvg);
+  // iOS home-screen icon must be opaque — no alpha channel.
+  await (
+    await brandedSquare(180, gradient, mark, LEGACY_MARK_SCALE)
+  ).flatten({ background: CREAM }).png().toFile(resolve(webIcons, "apple-touch-icon.png"));
+
+  await (
+    await brandedSquare(32, gradient, mark, LEGACY_MARK_SCALE)
+  ).png().toFile(resolve(root, "public/favicon-32.png"));
+
+  const tileB64 = (await sharp(TILE).resize(64, 64).png().toBuffer()).toString("base64");
+  writeFileSync(
+    resolve(root, "public/favicon.svg"),
+    `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64" role="img" aria-label="DKASU">
+  <image width="64" height="64" preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,${tileB64}"/>
+</svg>
+`,
+  );
 
   writeFileSync(
     resolve(outDir, "README.md"),
-    `# Waka POS brand assets
+    `# DKASU POS brand assets
 
-Generated from \`resources/w-symbol-source.png\` (official W cart mark). Do not redesign the symbol — regenerate with:
+Generated from the supplied DKASU artwork in \`public/brand/dkasu/\` — the logo is
+sampled and composited, never redrawn. Regenerate with:
 
 \`\`\`bash
 npm run brand:assets
@@ -270,42 +448,40 @@ npm run cap:assets
 ## App icon
 | File | Use |
 |------|-----|
-| \`icon-1024-cream.png\` | Play Store, master icon (cream \`${CREAM}\`) |
-| \`icon-1024-white.png\` | White background variant |
-| \`icon-1024-transparent.png\` | Symbol + padding, transparent |
-| \`icon-adaptive-foreground.png\` | Android adaptive foreground |
-| \`icon-adaptive-background.png\` | Android adaptive background |
-| \`icon-1024-cream.svg\` | Vector wrapper (embedded symbol) |
-| \`w-symbol.svg\` | Symbol only |
+| \`icon-1024.png\` | Master app icon (full-bleed tile gradient + white mark) |
+| \`icon-512.png\` | Play Store icon |
+| \`icon-1024-transparent.png\` | Mark only, transparent |
+| \`icon-adaptive-foreground.png\` | Android adaptive foreground (mark in 66dp safe zone) |
+| \`icon-adaptive-background.png\` | Android adaptive background (full-bleed gradient) |
 
 ## Splash
 | File | Use |
 |------|-----|
-| \`splash-light-portrait.png\` | Light splash 1080×1920 |
-| \`splash-light-white.png\` | White background splash |
-| \`splash-dark-portrait.png\` | Dark mode splash |
-| \`splash-capacitor-master.png\` | Capacitor \`resources/splash.png\` source |
-| \`splash-light.svg\` | Light splash vector |
+| \`splash-light.png\` | Light splash |
+| \`splash-dark.png\` | Dark splash |
+| \`logo-horizontal-on-light.png\` | Flattened light lockup |
+| \`logo-horizontal-on-dark.png\` | Flattened dark lockup |
 
 ## Monochrome
 | File | Use |
 |------|-----|
 | \`icon-mono-black-on-white.png\` | Print / light UI |
 | \`icon-mono-white-on-dark.png\` | Dark UI |
-| \`icon-mono-black-transparent.png\` | Black symbol only |
-| \`icon-mono-white-transparent.png\` | White symbol only |
+| \`icon-mono-black-transparent.png\` | Black tile, transparent |
+| \`icon-mono-white-transparent.png\` | White tile, transparent |
 
 ## Small sizes
-\`sizes/w-icon-*.png\` — sidebar, notifications, favicon (16–256px).
+\`sizes/d-icon-*.png\` — 16–256px, brand and light-surface (on cream).
 
-Brand orange: \`${ORANGE}\` · Cream: \`${CREAM}\`
+Tile gradient (measured from the artwork): \`${gradient.start}\` → \`${gradient.end}\` · Cream: \`${CREAM}\`
 `,
   );
 
+  console.log("✓ resources/icon-only.png, icon-foreground.png, icon-background.png");
+  console.log("✓ resources/splash.png, splash-dark.png");
   console.log("✓ resources/brand/ — all exports");
-  console.log("✓ resources/logo.png + splash.png updated");
   console.log("✓ public/waka-logo.png, favicon.svg, PWA icons updated");
-  console.log("\nNext: npm run cap:assets && npm run cap:build\n");
+  console.log("\nNext: npm run cap:assets\n");
 }
 
 main().catch((e) => {

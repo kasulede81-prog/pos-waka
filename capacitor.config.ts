@@ -39,7 +39,7 @@ if (liveReload && !lanIPv4() && !explicitDevServer) {
 
 const config: CapacitorConfig = {
   appId: "ug.waka.pos",
-  appName: "Waka POS",
+  appName: "DKASU POS",
   webDir: "dist",
   android: {
     allowMixedContent: false,
