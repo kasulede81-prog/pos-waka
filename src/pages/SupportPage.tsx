@@ -51,7 +51,7 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
             href={wakaSupportWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl bg-[#25D366] px-4 py-4 text-center text-lg font-black text-white shadow-md active:scale-[0.99]"
+            className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl bg-[#25D366] px-4 py-4 text-center text-lg font-black text-[#05301b] shadow-md active:scale-[0.99]"
           >
             <MessageCircle className="h-7 w-7" strokeWidth={2.25} aria-hidden />
             {t(lang, "supportWhatsAppCta")}
@@ -70,7 +70,7 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
         <p className="mt-6 rounded-2xl bg-muted px-4 py-3 text-sm font-medium text-muted-foreground">{t(lang, "supportHoursNote")}</p>
 
         <div className="mt-8">
-          <p className="text-sm font-black uppercase tracking-wide text-waka-800/90">{t(lang, "supportTopicsTitle")}</p>
+          <p className="text-sm font-black uppercase tracking-wide text-waka-800/90 dark:text-waka-300">{t(lang, "supportTopicsTitle")}</p>
           <ul className="mt-3 space-y-2">
             {TOPIC_KEYS.map((key) => (
               <li
@@ -105,11 +105,11 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
 
         <div className="mt-8 flex flex-col gap-2 border-t border-border pt-6">
           {isAuthenticated ? (
-            <Link to="/" className="text-center text-sm font-bold text-waka-800 underline">
+            <Link to="/" className="text-center text-sm font-bold text-waka-800 underline dark:text-waka-300">
               ← {t(lang, "upgradeBack")}
             </Link>
           ) : (
-            <Link to={brandHref} className="text-center text-sm font-bold text-waka-800 underline">
+            <Link to={brandHref} className="text-center text-sm font-bold text-waka-800 underline dark:text-waka-300">
               ← {brandHref === "/home" ? "Home" : t(lang, "marketingCtaLogin")}
             </Link>
           )}

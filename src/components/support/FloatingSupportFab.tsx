@@ -43,7 +43,7 @@ export function FloatingSupportFab({ lang }: Props) {
             href={wakaSupportWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-base font-black text-white shadow-md"
+            className="mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-base font-black text-[#05301b] shadow-md"
             onClick={() => setOpen(false)}
           >
             <MessageCircle className="h-5 w-5" strokeWidth={2.25} />

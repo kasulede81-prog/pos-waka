@@ -79,8 +79,11 @@ function DeviceShowcase() {
   return (
     <div className="relative mx-auto aspect-[4/3] max-h-[520px] w-full">
       <FloatCard delay={0} className={clsx(mktDeviceFrame, "absolute left-[4%] top-[8%] w-[58%] shadow-2xl")}>
-        <div className="overflow-hidden rounded-xl bg-stone-950 ring-1 ring-mkt-border/50">
-          <div className="flex items-center gap-1.5 border-b border-stone-800 px-3 py-2">
+        {/* Device mockup — fixed dark artwork, not a themed surface. The `stone-*` greys are bridged
+            to `--foreground`/`--border`, which invert in dark mode; these dark: overrides keep the
+            mock dark in both themes so its light-on-dark labels stay readable. */}
+        <div className="overflow-hidden rounded-xl bg-stone-950 ring-1 ring-mkt-border/50 dark:bg-neutral-950">
+          <div className="flex items-center gap-1.5 border-b border-stone-800 px-3 py-2 dark:border-neutral-800">
             <span className="h-2 w-2 rounded-full bg-rose-500" />
             <span className="h-2 w-2 rounded-full bg-amber-400" />
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -88,9 +91,9 @@ function DeviceShowcase() {
           </div>
           <div className="grid grid-cols-4 gap-1.5 p-2">
             {["Rice", "Sugar", "Soap", "Soda", "Bread", "Oil", "Eggs", "Milk"].map((p) => (
-              <div key={p} className="rounded-lg bg-stone-800/80 p-2 text-center">
+              <div key={p} className="rounded-lg bg-stone-800/80 p-2 text-center dark:bg-neutral-800/80">
                 <div className="mx-auto mb-1 h-6 w-6 rounded-md bg-waka-600/30" />
-                <p className="truncate text-[9px] font-bold text-stone-200">{p}</p>
+                <p className="truncate text-[9px] font-bold text-stone-200 dark:text-neutral-200">{p}</p>
               </div>
             ))}
           </div>
@@ -99,7 +102,7 @@ function DeviceShowcase() {
 
       <FloatCard
         delay={1.2}
-        className="absolute right-[2%] top-[18%] w-[34%] rounded-[1.4rem] border-[3px] border-stone-900 bg-stone-900 p-1.5 shadow-xl ring-1 ring-waka-500/20 dark:ring-waka-500/40"
+        className="absolute right-[2%] top-[18%] w-[34%] rounded-[1.4rem] border-[3px] border-stone-900 bg-stone-900 p-1.5 shadow-xl ring-1 ring-waka-500/20 dark:border-neutral-900 dark:bg-neutral-900 dark:ring-waka-500/40"
       >
         <div className="overflow-hidden rounded-[1rem] bg-white">
           <div className="bg-waka-600 px-2 py-2 text-center text-[9px] font-black text-white">Today · UGX 842K</div>

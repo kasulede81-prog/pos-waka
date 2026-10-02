@@ -63,7 +63,8 @@ export function DemoExperiencePage({ lang, isAuthenticated = false }: Props) {
 
   return wrap(
     <div className="relative min-h-dvh bg-gradient-to-b from-waka-50/80 to-muted pb-nav-safe">
-      <div className={clsx("sticky top-0 z-[60] border-b border-waka-200 bg-waka-600 px-4 py-3 text-white shadow-md")}>
+      {/* waka-700: white 12px text on waka-600 is 3.56:1 — below AA for this size. */}
+      <div className={clsx("sticky top-0 z-[60] border-b border-waka-200 bg-waka-700 px-4 py-3 text-white shadow-md")}>
         <div className="mx-auto flex max-w-xl flex-wrap items-center justify-between gap-2">
           <p className="max-w-[min(100%,20rem)] text-xs font-black uppercase tracking-wide">{t(lang, "activationDemoBanner")}</p>
           <Link

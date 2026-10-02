@@ -237,7 +237,7 @@ export function PilotSupportCenterPage({ lang }: Props) {
         <button
           type="button"
           onClick={() => void reportViaWhatsApp()}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#25D366] text-sm font-black text-white"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#25D366] text-sm font-black text-[#05301b]"
         >
           <MessageCircle className="h-5 w-5" aria-hidden />
           {t(lang, "pilotSupportReportWhatsApp")}

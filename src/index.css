@@ -633,10 +633,28 @@ body {
   animation: waka-shimmer 1.2s ease-in-out infinite;
 }
 
+/**
+ * Dark skeletons. The light ramp is a near-white bar — invisible on the dark surfaces. This runs
+ * the shimmer between the elevated surface and the border tone instead: clearly visible against
+ * `--background` (6%) and `--card` (13%), never glaring, and it inherits `background-size` and the
+ * animation from the rule above (`background-image` only, so the shimmer geometry is untouched).
+ */
+.dark .waka-skeleton-bar {
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--surface-elevated)) 0%,
+    hsl(var(--border)) 45%,
+    hsl(var(--surface-elevated)) 90%
+  );
+}
+
 @media (prefers-reduced-motion: reduce) {
   .waka-skeleton-bar {
     animation: none;
     background: #e7e5e4;
+  }
+  .dark .waka-skeleton-bar {
+    background: hsl(var(--surface-elevated));
   }
   .startup-progress-indeterminate {
     animation: none;
@@ -775,7 +793,10 @@ body {
   }
 
   .waka-btn-primary {
-    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-600 px-4 py-2.5 text-sm font-bold text-white shadow-waka-sm transition-waka active:bg-waka-700 disabled:cursor-not-allowed disabled:opacity-50;
+    /* waka-700 (#c2410c) instead of waka-600: white on waka-600 is 3.56:1 (fails AA for the
+       small bold label this button carries); on waka-700 it is 5.18:1. Same brand ramp, one
+       step darker — the brand hue is unchanged. Matches the .waka-btn-primary hover/active step. */
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-700 px-4 py-2.5 text-sm font-bold text-white shadow-waka-sm transition-waka active:bg-waka-800 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .waka-btn-secondary {
@@ -1162,6 +1183,143 @@ body {
 }
 .dark .bg-red-100 {
   background-color: #7f1d1d;
+}
+
+/* --- ALPHA VARIANTS of the washes and white surfaces above --------------------------------
+ * Tailwind alpha utilities compile to their OWN class token (`bg-amber-50/80`), so the
+ * exact-class remaps above never match them: the surface stayed light while `text-*-900` was
+ * remapped to a light tint — i.e. light text on a light surface.
+ *
+ * Each rule swaps only the BASE colour for its dark counterpart from the block above and keeps
+ * the authored alpha, so washes stay translucent and the hierarchy (/30 subtle → /95 strong)
+ * survives. `:where()` holds specificity at (0,1,0), so an explicit `dark:*` variant on a
+ * component still wins over these.
+ *
+ * Listed per alpha rather than by a `[class*=…/]` wildcard on purpose: `bg-white/5`–`/25` are
+ * intentional glass on fixed dark heroes and must NOT be pulled to a dark base. When a new
+ * alpha is introduced, add its line here (or use a semantic token, e.g. `bg-card/70`). */
+.dark :where([class*="bg-amber-50/30"]) {
+  background-color: rgb(69 26 3 / 0.30);
+}
+.dark :where([class*="bg-amber-50/40"]) {
+  background-color: rgb(69 26 3 / 0.40);
+}
+.dark :where([class*="bg-amber-50/80"]) {
+  background-color: rgb(69 26 3 / 0.80);
+}
+.dark :where([class*="bg-amber-50/90"]) {
+  background-color: rgb(69 26 3 / 0.90);
+}
+.dark :where([class*="bg-emerald-50/40"]) {
+  background-color: rgb(2 44 34 / 0.40);
+}
+.dark :where([class*="bg-emerald-50/50"]) {
+  background-color: rgb(2 44 34 / 0.50);
+}
+.dark :where([class*="bg-emerald-50/60"]) {
+  background-color: rgb(2 44 34 / 0.60);
+}
+.dark :where([class*="bg-emerald-50/70"]) {
+  background-color: rgb(2 44 34 / 0.70);
+}
+.dark :where([class*="bg-emerald-50/80"]) {
+  background-color: rgb(2 44 34 / 0.80);
+}
+.dark :where([class*="bg-red-50/80"]) {
+  background-color: rgb(69 10 10 / 0.80);
+}
+.dark :where([class*="bg-rose-50/50"]) {
+  background-color: rgb(76 5 25 / 0.50);
+}
+.dark :where([class*="bg-rose-50/60"]) {
+  background-color: rgb(76 5 25 / 0.60);
+}
+.dark :where([class*="bg-rose-50/80"]) {
+  background-color: rgb(76 5 25 / 0.80);
+}
+.dark :where([class*="bg-rose-50/95"]) {
+  background-color: rgb(76 5 25 / 0.95);
+}
+.dark :where([class*="bg-sky-50/70"]) {
+  background-color: rgb(8 47 73 / 0.70);
+}
+.dark :where([class*="bg-sky-50/80"]) {
+  background-color: rgb(8 47 73 / 0.80);
+}
+.dark :where([class*="bg-sky-50/90"]) {
+  background-color: rgb(8 47 73 / 0.90);
+}
+.dark :where([class*="bg-teal-100/60"]) {
+  background-color: rgb(19 78 74 / 0.60);
+}
+.dark :where([class*="bg-teal-50/30"]) {
+  background-color: rgb(4 47 46 / 0.30);
+}
+.dark :where([class*="bg-teal-50/50"]) {
+  background-color: rgb(4 47 46 / 0.50);
+}
+.dark :where([class*="bg-teal-50/60"]) {
+  background-color: rgb(4 47 46 / 0.60);
+}
+.dark :where([class*="bg-teal-50/80"]) {
+  background-color: rgb(4 47 46 / 0.80);
+}
+.dark :where([class*="bg-teal-50/90"]) {
+  background-color: rgb(4 47 46 / 0.90);
+}
+.dark :where([class*="bg-violet-50/40"]) {
+  background-color: rgb(46 16 101 / 0.40);
+}
+.dark :where([class*="bg-violet-50/50"]) {
+  background-color: rgb(46 16 101 / 0.50);
+}
+.dark :where([class*="bg-violet-50/60"]) {
+  background-color: rgb(46 16 101 / 0.60);
+}
+.dark :where([class*="bg-violet-50/80"]) {
+  background-color: rgb(46 16 101 / 0.80);
+}
+.dark :where([class*="bg-waka-100/50"]) {
+  background-color: rgb(124 45 18 / 0.50);
+}
+.dark :where([class*="bg-waka-50/30"]) {
+  background-color: rgb(67 20 7 / 0.30);
+}
+.dark :where([class*="bg-waka-50/40"]) {
+  background-color: rgb(67 20 7 / 0.40);
+}
+.dark :where([class*="bg-waka-50/50"]) {
+  background-color: rgb(67 20 7 / 0.50);
+}
+.dark :where([class*="bg-waka-50/60"]) {
+  background-color: rgb(67 20 7 / 0.60);
+}
+.dark :where([class*="bg-waka-50/70"]) {
+  background-color: rgb(67 20 7 / 0.70);
+}
+.dark :where([class*="bg-waka-50/80"]) {
+  background-color: rgb(67 20 7 / 0.80);
+}
+.dark :where([class*="bg-waka-50/90"]) {
+  background-color: rgb(67 20 7 / 0.90);
+}
+.dark :where([class*="bg-white/40"]) {
+  background-color: hsl(var(--card) / 0.40);
+}
+.dark :where([class*="bg-white/60"]) {
+  background-color: hsl(var(--card) / 0.60);
+}
+.dark :where([class*="bg-white/70"]) {
+  background-color: hsl(var(--card) / 0.70);
+}
+.dark :where([class*="bg-white/80"]) {
+  background-color: hsl(var(--card) / 0.80);
+}
+.dark :where([class*="bg-white/90"]) {
+  background-color: hsl(var(--card) / 0.90);
+}
+.dark :where([class*="bg-white/98"]) {
+  background-color: hsl(var(--card) / 0.98);
 }
 
 /* --- wash hovers --- */
@@ -4785,3 +4943,90 @@ html[data-home-anim-paused] .inventory-date-chip {
   }
 }
 
+
+/** ==========================================================================
+ * BATCH D — DARK COUNTERPARTS FOR HAND-WRITTEN COMPONENT WASHES
+ *
+ * The remap layer further up only reaches Tailwind UTILITIES. These component styles are written
+ * by hand in this file, so nothing ever flipped them: in dark mode they kept painting light cream
+ * / pale washes onto dark surfaces. Each rule below mirrors its light counterpart using the same
+ * dark values the utility remap already uses (#431407 = waka-50, #451a03 = amber-50, #4c0519 =
+ * rose-50, #022c22 = emerald-50, #042f2e = teal-50) and keeps every text/background pair readable.
+ * Light mode is untouched — these are all `.dark`-scoped, placed last so they beat the light rules.
+ */
+.dark .home-living-pulse__chip {
+  background: color-mix(in srgb, #431407 55%, rgba(124, 45, 18, 0.7));
+  box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.18);
+}
+
+.dark .home-ask-waka-shortcut:hover {
+  color: #fed7aa;
+  background: linear-gradient(180deg, #431407 0%, #9a3412 100%);
+}
+
+.dark .home-mobile-status__chip--cash {
+  background: color-mix(in srgb, #0f766e 22%, #042f2e);
+  color: #5eead4;
+}
+
+.dark .home-mobile-admin__row {
+  background: color-mix(in srgb, #431407 28%, #1c1917);
+}
+
+/* The three metric-icon tiles are declared AFTER `.dark .inventory-ops-icon`, so at equal
+   specificity they won and stayed pale in dark mode. */
+.dark .inventory-ops-metric--warning .inventory-ops-icon {
+  background: #451a03;
+  color: #fdba74;
+}
+
+.dark .inventory-ops-metric--danger .inventory-ops-icon {
+  background: #4c0519;
+  color: #fca5a5;
+}
+
+.dark .inventory-ops-metric--ok .inventory-ops-icon {
+  background: #022c22;
+  color: #86efac;
+}
+
+.dark .inventory-nav-link:hover {
+  background: color-mix(in srgb, #431407 55%, transparent);
+}
+
+.dark .inventory-workspace .enterprise-data-table__row:hover,
+.dark .sales-history-workspace .enterprise-data-table__row:hover {
+  background-color: color-mix(in srgb, #431407 45%, transparent);
+}
+
+.dark .inventory-workspace .inventory-row--low {
+  background-color: color-mix(in srgb, #451a03 50%, transparent);
+}
+
+/** ==========================================================================
+ * FINAL PHASE — BRAND-ORANGE SURFACES, DARK MODE ONLY
+ *
+ * White on waka-600 (#ea580c) is 3.56:1 — below AA for the small bold labels these surfaces
+ * carry (buttons, chips, the app top bar). On waka-700 (#c2410c) it is 5.18:1.
+ *
+ * DARK MODE ONLY, on purpose: light mode keeps the exact brand orange the design was built
+ * with. These step the SURFACE down one ramp step in dark mode — the hue is unchanged and the
+ * brand is untouched; only the shade moves. Low-alpha decorative tints (/30, /15, /10) carry no
+ * text and are deliberately left alone. `.waka-btn-primary` is already waka-700 in both themes.
+ */
+.dark :where(.bg-waka-600) {
+  background-color: #c2410c;
+}
+
+.dark :where([class*="bg-waka-600/95"]) {
+  background-color: rgb(194 65 12 / 0.95);
+}
+
+.dark :where([class*="bg-waka-600/90"]) {
+  background-color: rgb(194 65 12 / 0.9);
+}
+
+/* The "New sale" CTA paints its own gradient (waka-400 → 600 → 700) — step it in dark mode too. */
+.dark .home-new-sale-cta {
+  background: linear-gradient(180deg, #ea580c 0%, #c2410c 58%, #9a3412 100%);
+}

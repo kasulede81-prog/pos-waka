@@ -54,7 +54,7 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
           </section>
         ))}
 
-        <section className="rounded-3xl border border-waka-500 bg-gradient-to-br from-waka-600/80 to-white p-6 sm:p-8">
+        <section className="rounded-3xl border border-waka-500 bg-gradient-to-br from-waka-600/80 to-white dark:to-card p-6 sm:p-8">
           <h2 className="text-2xl font-black text-stone-950">DKASU POS features for {content.eyebrow.toLowerCase()}</h2>
           <p className="mt-2 text-sm font-medium text-stone-600">
             Real tools from the DKASU POS app — not a generic feature list.
@@ -81,9 +81,12 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
           </dl>
         </section>
 
-        <section className="rounded-3xl border border-stone-100 bg-stone-950 p-6 text-white sm:p-8">
+        {/* Deliberately dark CTA band. `stone-950` is bridged to `--foreground` in tailwind.config,
+            which is near-WHITE in dark mode — the surface flipped light while `text-white` children
+            stayed white (1.09:1). The dark: override keeps this a fixed dark surface in both themes. */}
+        <section className="rounded-3xl border border-stone-100 bg-stone-950 p-6 text-white dark:border-neutral-800 dark:bg-neutral-950 sm:p-8">
           <h2 className="text-xl font-black">Try DKASU POS on your business</h2>
-          <p className="mt-2 text-sm font-medium text-stone-300">
+          <p className="mt-2 text-sm font-medium text-stone-300 dark:text-neutral-300">
             Open the interactive demo or create a free account — setup takes minutes on the phone you already use.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">

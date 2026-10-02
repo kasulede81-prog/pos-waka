@@ -49,18 +49,18 @@ export class AppRootErrorBoundary extends Component<Props, State> {
             justifyContent: "center",
             padding: "24px",
             fontFamily: "system-ui, sans-serif",
-            background: "#fffaf5",
-            color: "#1c1917",
+            background: "hsl(var(--background))",
+            color: "hsl(var(--foreground))",
             textAlign: "center",
           }}
         >
           <p style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0 }}>DKASU POS could not load</p>
-          <p style={{ marginTop: 12, fontSize: "0.9rem", color: "#57534e", maxWidth: 340 }}>
+          <p style={{ marginTop: 12, fontSize: "0.9rem", color: "hsl(var(--muted-foreground))", maxWidth: 340 }}>
             Try refreshing the page. If this keeps happening, reset app data for <strong>{host}</strong> or open a
             private tab.
           </p>
           {detail ? (
-            <p style={{ marginTop: 10, fontSize: "0.75rem", color: "#a8a29e", maxWidth: 340, wordBreak: "break-word" }}>
+            <p style={{ marginTop: 10, fontSize: "0.75rem", color: "hsl(var(--muted-foreground))", maxWidth: 340, wordBreak: "break-word" }}>
               {detail}
             </p>
           ) : null}
@@ -73,7 +73,7 @@ export class AppRootErrorBoundary extends Component<Props, State> {
                 padding: "12px 24px",
                 borderRadius: 12,
                 border: "none",
-                background: "#ea580c",
+                background: "#c2410c",
                 color: "#fff",
                 fontWeight: 700,
                 fontSize: "1rem",
@@ -89,9 +89,9 @@ export class AppRootErrorBoundary extends Component<Props, State> {
                 minHeight: 48,
                 padding: "12px 24px",
                 borderRadius: 12,
-                border: "1px solid #d6d3d1",
-                background: "#fff",
-                color: "#44403c",
+                border: "1px solid hsl(var(--border))",
+                background: "hsl(var(--card))",
+                color: "hsl(var(--card-foreground))",
                 fontWeight: 700,
                 fontSize: "0.95rem",
               }}

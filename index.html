@@ -15,24 +15,58 @@
         margin: 0;
         background: #fffaf5;
       }
+      /**
+       * PRE-BOOT DARK BACKGROUND. `#fffaf5` is the light cream; without this the <html> element
+       * kept it in dark mode (body was overridden by index.css, html never was), which showed as
+       * a cream band around the app and a cream flash on overscroll / route transitions.
+       * The value mirrors `--background` in the dark token block of src/index.css (24 10% 6%).
+       * It only applies once the boot script below puts `.dark` / `.marketing-theme-dark` on <html>.
+       */
+      html.dark,
+      html.dark body,
+      html.marketing-theme-dark,
+      html.marketing-theme-dark body {
+        background: hsl(24 10% 6%);
+      }
+      /** The pre-React splash is inline-styled, so it needs !important to follow the theme. */
+      html.dark #waka-html-boot,
+      html.marketing-theme-dark #waka-html-boot {
+        background: hsl(24 10% 6%) !important;
+        color: #f5f2ef !important;
+      }
     </style>
     <meta name="color-scheme" content="light dark" />
     <script>
+      /**
+       * PRE-BOOT THEME. Runs before the bundle so the splash and the document background are
+       * already correct — no light flash for a dark-mode user.
+       *
+       * Mirrors `bootstrapAppThemeClass()` in src/lib/appTheme.ts: same keys (current first, the
+       * legacy marketing key as a fallback), same classes (BOTH `.dark` and
+       * `.marketing-theme-dark`, which is what the dark CSS is written against), same
+       * theme-color values. It used to run on marketing paths only and read the legacy key only,
+       * so app routes booted light; the app re-applies the identical state once it mounts.
+       */
       (function () {
-        var k = "waka-marketing-theme";
-        var paths = ["/home", "/pricing", "/about", "/contact", "/founder", "/company", "/support", "/demo", "/terms", "/privacy", "/solutions"];
-        var path = location.pathname;
-        var isMarketing = paths.some(function (p) {
-          return path === p || path.indexOf(p + "/") === 0;
-        });
-        if (!isMarketing) return;
-        var raw = localStorage.getItem(k);
-        var pref = raw === "light" || raw === "dark" || raw === "system" ? raw : null;
-        var dark = pref === "dark" || (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-        document.documentElement.classList.toggle("marketing-theme-dark", dark);
-        document.documentElement.style.colorScheme = dark ? "dark" : "light";
-        var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", dark ? "#0B0F19" : "#fffaf5");
+        try {
+          var keys = ["waka-app-theme", "waka-marketing-theme"];
+          var pref = null;
+          for (var i = 0; i < keys.length && !pref; i++) {
+            var raw = localStorage.getItem(keys[i]);
+            if (raw === "light" || raw === "dark" || raw === "system") pref = raw;
+          }
+          var dark =
+            pref === "dark" ||
+            (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var root = document.documentElement;
+          root.classList.toggle("dark", dark);
+          root.classList.toggle("marketing-theme-dark", dark);
+          root.style.colorScheme = dark ? "dark" : "light";
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", dark ? "#0B0F19" : "#fffaf5");
+        } catch (e) {
+          /* storage unavailable — the app's own bootstrap still applies the theme */
+        }
       })();
     </script>
     <meta name="application-name" content="DKASU POS" />

@@ -45,7 +45,7 @@ export function ContactPage({ lang, setLang, isAuthenticated }: Props) {
             href={wakaSupportWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-4 text-lg font-black text-white shadow-md"
+            className="flex min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-4 text-lg font-black text-[#05301b] shadow-md"
           >
             <MessageCircle className="h-6 w-6" aria-hidden />
             WhatsApp support

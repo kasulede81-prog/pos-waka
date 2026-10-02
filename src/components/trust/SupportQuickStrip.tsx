@@ -30,7 +30,7 @@ export function SupportQuickStrip({ lang }: Props) {
             href={wakaSupportWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 text-sm font-black text-white shadow-sm"
+            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 text-sm font-black text-[#05301b] shadow-sm"
           >
             <MessageCircle className="h-5 w-5" aria-hidden />
             {t(lang, "supportWhatsAppCta")}

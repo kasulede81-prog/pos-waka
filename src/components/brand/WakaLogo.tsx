@@ -1,18 +1,35 @@
 import type { ImgHTMLAttributes } from "react";
 import clsx from "clsx";
+import { useAppTheme } from "../../context/AppThemeProvider";
 import { publicAssetUrl } from "../../lib/publicAssetUrl";
 
 /**
  * DKASU lockup, derived from the supplied artwork (cropped and background-keyed — never redrawn).
  *
- * The `on-light` variant is the DEFAULT because every in-app surface that renders this logo sits on
- * a light/cream background (`#fffaf5` splash, auth cards, builder shell). The supplied on-dark
- * lockup lives at `brand/dkasu/logo-horizontal-on-dark.png` for dark contexts.
+ * THE LOCKUP IS THEME-AWARE. The `on-light` (black) artwork is the light-mode default because the
+ * in-app surfaces that render it sit on a light/cream background (`#fffaf5` splash, auth cards,
+ * builder shell). In DARK MODE that artwork disappears against the dark background, so the official
+ * white transparent lockup is used instead.
+ *
+ * The choice comes from the app's real theme state (`useAppTheme().resolved`) — the same state the
+ * theme toggle drives — NOT from a `prefers-color-scheme` media query, so the logo swaps the
+ * instant the in-app toggle flips.
+ *
+ * Both files are used exactly as supplied: never recoloured, redrawn, cropped or distorted. Each
+ * keeps its own intrinsic aspect ratio under the shared height classes.
  */
 const LOGO_SRC = publicAssetUrl("brand/dkasu/logo-horizontal-on-light-transparent.png");
-/** Real aspect of the lockup, so the reserved box matches and layout does not shift. */
+/**
+ * The SAME horizontal lockup in white (symbol + wordmark + tagline, transparent), tightly cropped
+ * from the supplied `DKASU_White_Logo_Transparent.png` master — only the colour differs from the
+ * light lockup, never the layout or proportions.
+ */
+const LOGO_SRC_DARK = publicAssetUrl("brand/dkasu/logo-horizontal-on-dark-transparent.png");
+/** Real aspect of each lockup, so the reserved box matches and layout does not shift. */
 const LOGO_W = 834;
 const LOGO_H = 258;
+const LOGO_DARK_W = 835;
+const LOGO_DARK_H = 262;
 
 type LogoProps = ImgHTMLAttributes<HTMLImageElement> & {
   /** Tailwind height class, e.g. `h-12` */
@@ -47,13 +64,17 @@ export function WakaPosLogo({
   alt = "DKASU POS",
   ...rest
 }: LogoProps) {
-  const src = variant === "symbol" ? SYMBOL_BY_SIZE[size] : LOGO_SRC;
+  const { resolved } = useAppTheme();
+  const isSymbol = variant === "symbol";
+  const isDark = resolved === "dark";
+  // The compact W mark keeps its cream tile in both themes; only the full lockup swaps.
+  const src = isSymbol ? SYMBOL_BY_SIZE[size] : isDark ? LOGO_SRC_DARK : LOGO_SRC;
   return (
     <img
       src={src}
       alt={alt}
-      width={variant === "symbol" ? 512 : LOGO_W}
-      height={variant === "symbol" ? 512 : LOGO_H}
+      width={isSymbol ? 512 : isDark ? LOGO_DARK_W : LOGO_W}
+      height={isSymbol ? 512 : isDark ? LOGO_DARK_H : LOGO_H}
       decoding="async"
       className={clsx("w-auto max-w-full object-contain object-center", SIZE_CLASS[size], className)}
       {...rest}

@@ -46,7 +46,7 @@ export function CashPositionQuickActions({
   ] as const;
 
   return (
-    <div className="sticky top-0 z-20 -mx-1 border-b border-border/80 bg-[#f8f6f3]/95 px-1 py-2 backdrop-blur-md">
+    <div className="sticky top-0 z-20 -mx-1 border-b border-border/80 bg-background/95 px-1 py-2 backdrop-blur-md">
       <div className="flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
         {actions.map(({ id, label, icon: Icon, onClick }) => (
           <button

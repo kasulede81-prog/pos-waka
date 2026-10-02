@@ -251,7 +251,7 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
       </header>
 
       {published ? (
-        <article className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-card p-4 shadow-sm">
+        <article className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-card dark:from-emerald-950 p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Live on devices</p>

@@ -389,7 +389,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       <div
         className={clsx(
           "app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden text-foreground transition-colors duration-300",
-          isLauncherHome ? "bg-gradient-to-b from-waka-500 via-waka-50 to-card" : "bg-muted",
+          isLauncherHome ? "bg-gradient-to-b from-waka-500 via-waka-50 to-card dark:via-waka-950" : "bg-muted",
           onSellScreen && "app-shell--sell-focus",
           fullDesktopSell && "app-shell--pos-enterprise",
           isLauncherHome && "app-shell--launcher",
@@ -429,7 +429,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             isLauncherHome
               ? "border-waka-700/30 bg-waka-600/95 text-white supports-[backdrop-filter]:bg-waka-600/90"
               : sellMobileChrome
-                ? "border-border/80 bg-gradient-to-b from-waka-50/90 via-card to-card supports-[backdrop-filter]:from-waka-50/80"
+                ? "border-border/80 bg-gradient-to-b from-waka-50/90 via-card to-card dark:from-waka-950/90 supports-[backdrop-filter]:from-waka-50/80 supports-[backdrop-filter]:dark:from-waka-950/80"
                 : "border-border/90 bg-card/95 supports-[backdrop-filter]:bg-card/90",
           )}
         >

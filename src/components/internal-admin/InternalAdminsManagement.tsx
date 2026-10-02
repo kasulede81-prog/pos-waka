@@ -216,7 +216,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
         </p>
       ) : null}
       {!lovableUi ? (
-      <header className="rounded-3xl border border-waka-100 bg-gradient-to-br from-white via-waka-50/40 to-card p-6 shadow-[0_20px_60px_rgb(251_146_60/0.10)]">
+      <header className="rounded-3xl border border-waka-100 bg-gradient-to-br from-white via-waka-50/40 to-card dark:from-card dark:via-waka-950/40 p-6 shadow-[0_20px_60px_rgb(251_146_60/0.10)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-waka-900 ring-1 ring-waka-200/60">

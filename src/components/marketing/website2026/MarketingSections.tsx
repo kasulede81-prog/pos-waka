@@ -243,7 +243,7 @@ export function MarketingPricingSection() {
               )}
             >
               {plan.popular ? (
-                <span className="mb-2 inline-flex w-fit rounded-full bg-waka-600 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+                <span className="mb-2 inline-flex w-fit rounded-full bg-waka-700 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
                   Most Popular
                 </span>
               ) : null}
