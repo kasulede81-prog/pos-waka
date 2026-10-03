@@ -4,8 +4,26 @@ project_id = "ljaedextsenbkxzzgxcg"
 
 [auth]
 enabled = true
-site_url = "https://pos.waka.ug"
+# DKASU is the canonical production host; the WAKA origins 308-redirect here and
+# stay allowlisted. Additive only — nothing was removed, so any link already in
+# flight against a legacy host keeps working.
+#
+# NOTE: this file configures LOCAL development (`supabase start`) and is not
+# authoritative for the hosted project. The live Auth URL configuration lives in
+# the Supabase dashboard and must be verified there — see docs/ANDROID.md and the
+# Phase 8 report for the exact list. `wakapos://callback` in particular has no
+# local meaning and MUST be registered in the dashboard for native Google sign-in.
+site_url = "https://pos.dkasu.com"
 additional_redirect_urls = [
+  "https://pos.dkasu.com",
+  "https://pos.dkasu.com/auth/callback",
+  "https://pos.dkasu.com/auth/recovery",
+  "https://pos.dkasu.com/reset-password",
+  "https://dkasu.com/auth/callback",
+  "https://dkasu.com/auth/recovery",
+  "https://dkasu.com/reset-password",
+  "https://loyalty.dkasu.com/auth/callback",
+  "https://loyalty.dkasu.com/auth/recovery",
   "https://pos.waka.ug",
   "https://pos.waka.ug/auth/callback",
   "https://pos.waka.ug/auth/recovery",

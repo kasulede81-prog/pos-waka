@@ -43,13 +43,21 @@ describe("STAFF-V2 Phase 11f authentication terminology", () => {
     expect(LOGIN).toMatch(/loginRegisterShopHint/);
   });
 
-  it("U5 — invite page explains email/password account vs shared-terminal PIN", () => {
+  /**
+   * Phase 5 switched invitation acceptance to Google. The distinction this test
+   * guards — cloud identity versus the shared-terminal PIN — still matters, so it
+   * is asserted against the Google-first copy instead of the removed
+   * email/password wording.
+   */
+  it("U5 — invite page distinguishes Google cloud identity from shared-terminal PIN", () => {
     expect(STAFF_ACCEPT).toMatch(/staffInviteAcceptSub/);
-    expect(STAFF_ACCEPT).toMatch(/staffInviteFutureLoginNote/);
-    expect(t("en", "staffInviteAcceptSub").toLowerCase()).toMatch(/account|sign in/);
-    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toContain("email and password");
-    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toContain("pin");
-    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toContain("shared terminal");
+    expect(STAFF_ACCEPT).toMatch(/staffInviteGooglePinNote/);
+    expect(t("en", "staffInviteAcceptSub").toLowerCase()).toContain("google");
+    expect(t("en", "staffInviteGooglePinNote").toLowerCase()).toContain("pin");
+    expect(t("en", "staffInviteGooglePinNote").toLowerCase()).toContain("shared terminal");
+    // The password model is gone from this page.
+    expect(t("en", "staffInviteGooglePinNote").toLowerCase()).not.toContain("email and password");
+    expect(STAFF_ACCEPT).not.toMatch(/type="password"/);
   });
 
   it("seller-switch menus use choose seller, not switch user", () => {

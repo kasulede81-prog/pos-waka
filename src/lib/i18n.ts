@@ -353,7 +353,6 @@ const en: Dict = {
   staffInviteTitle: "Invite with email",
   staffInviteSub: "They sign in with their own DKASU account. PIN stays for shared terminals.",
   staffInviteEmailPh: "staff@email.com",
-  staffInvitePasswordPh: "Password",
   staffInviteSend: "Send invite",
   staffInviteSent: "Invite sent. They will get an email with a one-time link.",
   staffInviteWorking: "Working…",
@@ -361,11 +360,19 @@ const en: Dict = {
   staffInviteNewProfile: "Create a new cloud staff profile",
   staffInviteRevoke: "Revoke",
   staffInviteAcceptTitle: "Join this shop",
-  staffInviteAcceptSub: "Create your DKASU POS account or sign in.",
-  staffInviteLoginHelp: "Already have a DKASU POS account? Sign in with your email and password.",
-  staffInviteSignupHelp: "New to DKASU POS? Create your account and choose a password to join this shop.",
-  staffInviteFutureLoginNote:
-    "After joining this shop, use this email and password for future access. The PIN is only used when selling on a shared terminal.",
+  staffInviteAcceptSub: "Continue with Google to join this shop.",
+  staffInviteGooglePinNote:
+    "Use this Google account for cloud access. The PIN stays for selling on a shared terminal.",
+  staffInviteGoogleHelp:
+    "Your invitation is tied to your email address. Continue with the Google account that received it.",
+  staffInviteContinueWithGoogle: "Continue with Google",
+  staffInviteGoogleRequired:
+    "This invitation can only be accepted with Google. Continue with the Google account that received it.",
+  staffInviteWrongAccountTitle: "Wrong Google account",
+  staffInviteWrongAccountBody:
+    "This invitation was sent to a different email address. Sign out and continue with the account that received it.",
+  staffInviteSignedInAs: "Signed in as",
+  staffInviteSwitchAccount: "Sign out and switch account",
   staffInviteAccepting: "Joining your shop…",
   staffInviteAcceptFailed: "Could not accept this invitation.",
   staffInviteMissingToken: "This invitation link is missing or invalid.",
@@ -373,9 +380,6 @@ const en: Dict = {
   staffInviteExpired: "This invitation has expired. Ask the owner to send a new one.",
   staffInviteUsed: "This invitation is no longer valid.",
   staffInviteVerifyEmail: "Check your email and confirm the account, then open the invite link again.",
-  staffInviteSignIn: "Sign in",
-  staffInviteCreateAccount: "Create account",
-  staffInviteUseFullLogin: "Use the full sign-in page",
   staffUpgradeTitle: "Upgrade to cloud staff",
   staffUpgradeSub:
     "Invite this PIN worker to create a Waka account. Their PIN, role, and history stay the same.",

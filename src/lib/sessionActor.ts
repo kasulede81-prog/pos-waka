@@ -1,6 +1,6 @@
 import { hasSupabaseConfig } from "./supabase";
 import type { Permission, ShopPreferences, UserRole } from "../types";
-import { canUseDevRoleSimulator, resolveAuthRole } from "./permissions";
+import { canUseDevRoleSimulator, permissionsForRole, resolveAuthRole } from "./permissions";
 import { resolveStaffPermissions } from "./enterpriseRoles";
 import { displayWakaName } from "./nameReview";
 import type { User } from "@supabase/supabase-js";
@@ -188,6 +188,36 @@ export function resolveSessionActor(params: {
     ? resolveStaffPermissions(activeStaff, params.preferences.customStaffRoles)
     : undefined;
 
+  // Auth staff: the person's own POS staff profile (linked by shop_pos_staff.user_id
+  // → linkedAuthUserId) can carry a fine-grained configuration. Before this, an
+  // Auth staff session ignored it entirely and took the full default set for
+  // shop_members.role, so a staff member the owner had RESTRICTED regained the
+  // unrestricted set simply by signing in with Google instead of the terminal PIN.
+  //
+  // Two deliberate limits:
+  //   * only an EXPLICIT configuration applies — a custom role, or a non-empty
+  //     permission list. A staff row with neither leaves the membership role's set
+  //     exactly as it was, so nothing changes for the common case.
+  //   * the result is intersected with the membership role's own set, so this can
+  //     only ever NARROW what the membership grants. A custom role can never lift
+  //     an Auth staff member above shop_members.role, which remains the cloud
+  //     authority that RLS enforces.
+  const linkedAuthId = normalizeLinkedAuthUserId(params.user?.id);
+  const linkedStaff = linkedAuthId
+    ? (params.preferences.staffAccounts ?? []).find(
+        (s) => normalizeLinkedAuthUserId(s.linkedAuthUserId) === linkedAuthId,
+      )
+    : undefined;
+  const hasExplicitStaffOverrides = Boolean(
+    linkedStaff && (linkedStaff.customRoleId || (linkedStaff.permissions?.length ?? 0) > 0),
+  );
+  const linkedStaffPermissions =
+    !activeStaff && linkedStaff && hasExplicitStaffOverrides
+      ? resolveStaffPermissions(linkedStaff, params.preferences.customStaffRoles).filter((permission) =>
+          permissionsForRole(role).includes(permission),
+        )
+      : undefined;
+
   const baseUserId =
     params.user?.id ?? (params.email ? `local:${params.email.trim().toLowerCase()}` : "local:anonymous");
   const userId = activeStaff ? `staff:${activeStaff.id}` : baseUserId;
@@ -209,7 +239,7 @@ export function resolveSessionActor(params: {
     userId,
     role,
     displayName,
-    permissions: staffPermissions,
+    permissions: staffPermissions ?? linkedStaffPermissions,
     roleTemplateId: activeStaff?.roleTemplateId,
     customRoleId: activeStaff?.customRoleId,
     customRoleName,

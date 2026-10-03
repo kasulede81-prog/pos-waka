@@ -99,14 +99,27 @@ describe("STAFF-V2 Phase 11e authentication UX clarification", () => {
     expect(APP).toMatch(/path="\/register"[\s\S]*RegisterPage/);
   });
 
-  it("StaffAccept copy clarifies existing vs new account and future email login", () => {
-    expect(STAFF_ACCEPT).toMatch(/staffInviteLoginHelp/);
-    expect(STAFF_ACCEPT).toMatch(/staffInviteSignupHelp/);
-    expect(STAFF_ACCEPT).toMatch(/staffInviteFutureLoginNote/);
-    expect(t("en", "staffInviteLoginHelp").toLowerCase()).toContain("already have");
-    expect(t("en", "staffInviteSignupHelp").toLowerCase()).toContain("create your account");
-    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toContain("email and password");
-    expect(t("en", "staffInviteFutureLoginNote").toLowerCase()).toMatch(/shared terminal|pin/);
+  /**
+   * Phase 5 made staff invitation acceptance Google-first. This contract was
+   * previously "clarifies existing vs new account and future email login" — it
+   * asserted the password/sign-up copy that acceptance no longer offers. It now
+   * asserts the opposite: no password path exists on /staff/accept, and Google is
+   * the only way in. The V3 state-machine markers are unchanged.
+   */
+  it("StaffAccept is Google-first and offers no password path", () => {
+    expect(STAFF_ACCEPT).toMatch(/staffInviteContinueWithGoogle/);
+    expect(STAFF_ACCEPT).toMatch(/staffInviteGoogleRequired|staffInviteGoogleHelp/);
+    expect(t("en", "staffInviteContinueWithGoogle").toLowerCase()).toContain("google");
+    // The shared-terminal PIN distinction survives the switch to Google.
+    expect(t("en", "staffInviteGooglePinNote").toLowerCase()).toMatch(/shared terminal|pin/);
+
+    // No password or sign-up acceptance path remains.
+    expect(STAFF_ACCEPT).not.toMatch(/type="password"/);
+    expect(STAFF_ACCEPT).not.toMatch(/signUp/);
+    expect(STAFF_ACCEPT).not.toMatch(/staffInviteCreateAccount/);
+    expect(STAFF_ACCEPT).not.toMatch(/staffInviteSignIn/);
+    expect(STAFF_ACCEPT).not.toMatch(/staffInviteUseFullLogin/);
+
     // V3 state machine markers must remain.
     expect(STAFF_ACCEPT).toMatch(/shouldStartStaffInviteAccept/);
     expect(STAFF_ACCEPT).toMatch(/createStaffInviteAcceptAttemptController/);

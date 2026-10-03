@@ -21,7 +21,17 @@ export function normalizeUserRole(raw: unknown): UserRole | null {
   if (typeof raw !== "string") return null;
   const n = raw.trim().toLowerCase().replace(/[\s-]+/g, "_");
   if (!n) return null;
-  if (n === "viewer") return "stock_keeper"; // legacy DB shop_members label
+  // 'viewer' is a legacy, read-only DB membership label with no client counterpart
+  // (003: "viewer (read)"; 013: "legacy viewer (read-heavy)"). It previously folded
+  // onto 'stock_keeper', which carries inventory WRITE permissions — stock.adjust,
+  // stock.count, products.add, shelves.customize, purchases.record. A role the
+  // database calls read-only must not receive writes, so it now resolves to the
+  // documented least-privilege role instead of a write-capable one.
+  //
+  // No UI path can create a 'viewer' membership: membershipRoleForPosRole() and
+  // STAFF_INVITE_POS_ROLES never emit it, so this only affects legacy rows and
+  // direct RPC/DB writes.
+  if (n === "viewer") return FAIL_CLOSED_ROLE;
   if (n === "store_keeper" || n === "storekeeper") return "stock_keeper";
   if (n === "manage" || n === "management" || n === "mngr" || n === "shop_manager") return "manager";
   return isUserRole(n) ? n : null;

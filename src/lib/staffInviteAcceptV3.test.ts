@@ -28,6 +28,7 @@ describe("STAFF invite acceptance V3 — self-cancel + single-flight", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     clearStaffInviteToken();
   });
 
@@ -228,9 +229,30 @@ describe("STAFF invite acceptance V3 — self-cancel + single-flight", () => {
     expect(staffAcceptReturnPath(next)).toBe("/staff/accept?token=abc.token");
   });
 
-  it("V3-N same-browser signup keeps token in sessionStorage", () => {
-    persistStaffInviteToken("signup-token");
-    expect(peekStaffInviteToken()).toBe("signup-token");
+  /**
+   * Phase 5 made invitation acceptance Google-first, so this no longer describes a
+   * sign-up path — acceptance offers no password route at all. What it still
+   * guards is real: the token must survive in sessionStorage, because that is what
+   * carries it across a reload or the redirect callback while the Google handshake
+   * completes. Phase 5 kept that storage deliberately and only scrubs the URL.
+   *
+   * The helpers swallow storage errors, so the environment is stubbed rather than
+   * assumed: vitest runs `environment: "node"`, which has no sessionStorage, and
+   * without the stub this assertion could never have observed anything.
+   */
+  it("V3-N the invite token survives in sessionStorage across the auth handoff", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("sessionStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, String(v)),
+      removeItem: (k: string) => void store.delete(k),
+    });
+
+    persistStaffInviteToken("google-first-token");
+    expect(peekStaffInviteToken()).toBe("google-first-token");
+
+    clearStaffInviteToken();
+    expect(peekStaffInviteToken()).toBeNull();
   });
 
   it("V3-O missing token is explicit (page source + helper)", () => {

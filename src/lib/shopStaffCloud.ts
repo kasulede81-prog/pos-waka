@@ -86,6 +86,38 @@ function deviceFingerprintArg(): string {
   return getOrCreateDeviceId();
 }
 
+/**
+ * `shop_pos_staff_list` no longer returns credential hashes (Phase 3, H3 — it is
+ * gated by user_can_access_shop, so it was handing every member every colleague's
+ * PIN and password hash).
+ *
+ * An absent hash from this read therefore means "not supplied here", not "this
+ * staff member has no credential". The offline terminal still needs the local
+ * hashes to verify PINs, so they are carried across rather than wiped. Genuine
+ * credential changes — including clearing one — arrive through the
+ * device-scoped `shop_pos_staff_download` path, which does return hashes.
+ */
+async function preserveLocalCredentials(rows: StaffAccount[]): Promise<StaffAccount[]> {
+  if (rows.length === 0) return rows;
+  try {
+    const { usePosStore } = await import("../store/usePosStore");
+    const local = usePosStore.getState().preferences.staffAccounts ?? [];
+    if (local.length === 0) return rows;
+    const byId = new Map(local.map((s) => [s.id, s]));
+    return rows.map((row) => {
+      const mine = byId.get(row.id);
+      if (!mine) return row;
+      return {
+        ...row,
+        pinHash: row.pinHash ?? mine.pinHash ?? null,
+        passwordHash: row.passwordHash ?? mine.passwordHash ?? null,
+      };
+    });
+  } catch {
+    return rows;
+  }
+}
+
 export async function pullShopStaffFromCloud(): Promise<StaffAccount[] | null> {
   if (!supabase) return null;
   const ctx = await resolveShopCtx();
@@ -96,7 +128,7 @@ export async function pullShopStaffFromCloud(): Promise<StaffAccount[] | null> {
     return null;
   }
   const rows = (Array.isArray(data) ? data : []) as CloudStaffRow[];
-  return rows.map(cloudRowToStaff);
+  return preserveLocalCredentials(rows.map(cloudRowToStaff));
 }
 
 export async function pushStaffToCloud(staff: StaffAccount): Promise<boolean> {

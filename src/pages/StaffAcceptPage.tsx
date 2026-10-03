@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
-import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { EnterpriseSpinner } from "../components/enterprise/EnterpriseSpinner";
-import { getAuthEmailCallbackUrl } from "../lib/authConfig";
+import { requestGoogleIdTokenWithNonce } from "../lib/googleIdentity";
 import { reportAuthIssue } from "../lib/monitoring";
 import {
   acceptStaffInviteToken,
   clearStaffInviteToken,
   persistStaffInviteToken,
-  staffAcceptLoginHref,
 } from "../lib/staffInvite";
 import {
   createStaffInviteAcceptAttemptController,
@@ -31,21 +29,34 @@ type Props = {
 
 type Phase = "ready" | "accepting" | "success" | "need_verify" | "error";
 
-export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }: Props) {
+/**
+ * Staff invitation acceptance — Google-first.
+ *
+ * Acceptance requires a Google identity whose email matches the invitation, so
+ * this page deliberately offers no password path: no sign-in form, no sign-up,
+ * no "use another email". The authoritative comparison happens server-side in
+ * shop_accept_staff_invite(); everything here is presentation. Email/password
+ * authentication elsewhere in DKASU is untouched.
+ */
+export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) {
   const [params] = useSearchParams();
   const tokenFromUrl = (params.get("token") ?? "").trim();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [phase, setPhase] = useState<Phase>("ready");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [wrongAccount, setWrongAccount] = useState<string | null>(null);
   const attemptRef = useRef(createStaffInviteAcceptAttemptController());
   const langRef = useRef(lang);
   langRef.current = lang;
 
   useEffect(() => {
     if (tokenFromUrl) persistStaffInviteToken(tokenFromUrl);
+    // Drop the token from the visible URL once it has been captured. It stays in
+    // sessionStorage (needed for reloads and the redirect callback), so scrubbing
+    // the address bar does not lose it. Never logged either way.
+    if (typeof window !== "undefined" && tokenFromUrl && window.location.search) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, [tokenFromUrl]);
 
   const token =
@@ -128,60 +139,67 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
           reportAuthIssue("invite_timeout", {});
         }
         reportAuthIssue("invite_error", {});
+        // A wrong-account attempt is rejected server-side. Surface who is signed
+        // in so the user can switch accounts; no invitation details are revealed
+        // beyond what the invitation email itself already contains.
+        if (result.error === "email_mismatch") {
+          void supabase?.auth
+            .getUser()
+            .then(({ data }) => setWrongAccount(data.user?.email ?? null))
+            .catch(() => setWrongAccount(null));
+        }
         setPhase("error");
         setMessage(acceptErrorMessage(langRef.current, result.error));
       });
     })();
   }, [initializing, isAuthenticated, token]);
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  /**
+   * Google-first sign-in. The ID token is bound to a per-attempt nonce that
+   * Supabase verifies, so a replayed or substituted token is rejected. On success
+   * the auto-accept effect above runs (it watches isAuthenticated), so acceptance
+   * logic is not duplicated here.
+   */
+  const signInWithGoogle = async () => {
     if (busy || !supabase) return;
     setBusy(true);
     setMessage(null);
+    setWrongAccount(null);
     try {
       persistStaffInviteToken(token);
-      if (mode === "login") {
-        await onLogin(email.trim().toLowerCase(), password);
-        return;
-      }
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          emailRedirectTo: getAuthEmailCallbackUrl(),
-          data: { staff_invite: true, invite_type: "staff" },
-        },
+      const { idToken, nonce } = await requestGoogleIdTokenWithNonce();
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: idToken,
+        nonce,
       });
       if (error) {
-        setMessage(error.message);
+        reportAuthIssue("invite_google_signin_error", {});
+        setMessage(t(lang, "staffInviteAcceptFailed"));
         return;
       }
-      if (data.session) {
-        setPhase("accepting");
-        const accepted = await runStaffInviteAcceptFlow({
-          token,
-          acceptInviteToken: acceptStaffInviteToken,
-          getAuthUserId: async () => data.session?.user?.id ?? null,
-          hydrateStaffWorkspace: hydrateStaffAuthWorkspace,
-          clearStoredInviteToken: clearStaffInviteToken,
-        });
-        if (accepted.ok) {
-          attemptRef.current.markSettled(token);
-          setPhase("success");
-          return;
-        }
-        attemptRef.current.markSettled(token);
-        setPhase("error");
-        setMessage(acceptErrorMessage(lang, accepted.error));
-        return;
-      }
-      // Same-browser: token remains in sessionStorage; AuthCallback returns to /staff/accept.
-      setPhase("need_verify");
+      reportAuthIssue("invite_google_signin_ok", {});
+      setPhase("accepting");
     } catch (err) {
+      reportAuthIssue("invite_google_signin_error", {});
       setMessage(err instanceof Error ? err.message : t(lang, "staffInviteAcceptFailed"));
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Sign the wrong account out so the invitation can be retried with the right one. */
+  const switchAccount = async () => {
+    if (!supabase) return;
+    setBusy(true);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setBusy(false);
+      setWrongAccount(null);
+      setMessage(null);
+      setPhase("ready");
+      attemptRef.current = createStaffInviteAcceptAttemptController();
     }
   };
 
@@ -200,71 +218,59 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
         <p className="mt-1 text-sm text-muted-foreground">{t(lang, "staffInviteAcceptSub")}</p>
 
         {!token ? (
-          <p className="mt-4 text-sm font-semibold text-red-700">{t(lang, "staffInviteMissingToken")}</p>
+          <p role="alert" className="mt-4 text-sm font-semibold text-red-700">
+            {t(lang, "staffInviteMissingToken")}
+          </p>
         ) : initializing || phase === "accepting" ? (
-          <div className="mt-6 flex flex-col items-center gap-3">
+          <div className="mt-6 flex flex-col items-center gap-3" role="status" aria-live="polite">
             <EnterpriseSpinner size="lg" label={t(lang, "staffInviteAccepting")} />
             <p className="text-sm font-semibold text-muted-foreground">{t(lang, "staffInviteAccepting")}</p>
           </div>
         ) : phase === "need_verify" ? (
-          <p className="mt-4 text-sm font-semibold text-foreground">{t(lang, "staffInviteVerifyEmail")}</p>
-        ) : isAuthenticated ? (
-          <p className="mt-4 text-sm font-semibold text-red-700">{message ?? t(lang, "staffInviteAcceptFailed")}</p>
-        ) : (
-          <form className="mt-4 space-y-3" onSubmit={(e) => void submit(e)}>
-            <div className="flex rounded-xl bg-muted p-1">
-              <button
-                type="button"
-                className={`min-h-[40px] flex-1 rounded-lg text-sm font-black ${mode === "login" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
-                onClick={() => setMode("login")}
-              >
-                {t(lang, "staffInviteSignIn")}
-              </button>
-              <button
-                type="button"
-                className={`min-h-[40px] flex-1 rounded-lg text-sm font-black ${mode === "signup" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
-                onClick={() => setMode("signup")}
-              >
-                {t(lang, "staffInviteCreateAccount")}
-              </button>
-            </div>
-            <p className="text-xs font-medium text-muted-foreground">
-              {mode === "login" ? t(lang, "staffInviteLoginHelp") : t(lang, "staffInviteSignupHelp")}
+          <p role="status" className="mt-4 text-sm font-semibold text-foreground">
+            {t(lang, "staffInviteVerifyEmail")}
+          </p>
+        ) : wrongAccount ? (
+          <div className="mt-4 space-y-3" role="alert">
+            <p className="text-sm font-black text-amber-700">{t(lang, "staffInviteWrongAccountTitle")}</p>
+            <p className="text-sm text-muted-foreground">{t(lang, "staffInviteWrongAccountBody")}</p>
+            <p className="rounded-xl bg-muted px-3 py-2 text-xs font-semibold text-foreground">
+              {t(lang, "staffInviteSignedInAs")}: {wrongAccount}
             </p>
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t(lang, "staffInviteEmailPh")}
-              className="w-full min-h-[48px] rounded-xl border border-border bg-card px-3 text-sm font-semibold"
-            />
-            <input
-              type="password"
-              required
-              minLength={8}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t(lang, "staffInvitePasswordPh")}
-              className="w-full min-h-[48px] rounded-xl border border-border bg-card px-3 text-sm font-semibold"
-            />
-            <p className="text-xs font-medium text-muted-foreground">{t(lang, "staffInviteFutureLoginNote")}</p>
-            {message ? <p className="text-sm font-semibold text-red-700">{message}</p> : null}
             <button
-              type="submit"
+              type="button"
               disabled={busy}
-              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-70"
+              aria-busy={busy}
+              onClick={() => void switchAccount()}
+              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-border bg-card px-5 text-sm font-black text-foreground disabled:opacity-70"
             >
-              {busy ? t(lang, "staffInviteWorking") : mode === "login" ? t(lang, "staffInviteSignIn") : t(lang, "staffInviteCreateAccount")}
+              {busy ? t(lang, "staffInviteWorking") : t(lang, "staffInviteSwitchAccount")}
             </button>
-            <p className="text-center text-xs text-muted-foreground">
-              <Link to={staffAcceptLoginHref(token)} className="font-semibold text-waka-700">
-                {t(lang, "staffInviteUseFullLogin")}
-              </Link>
-            </p>
-          </form>
+          </div>
+        ) : isAuthenticated ? (
+          <p role="alert" className="mt-4 text-sm font-semibold text-red-700">
+            {message ?? t(lang, "staffInviteAcceptFailed")}
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            <p className="text-xs font-medium text-muted-foreground">{t(lang, "staffInviteGoogleHelp")}</p>
+            <button
+              type="button"
+              disabled={busy}
+              aria-busy={busy}
+              onClick={() => void signInWithGoogle()}
+              className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-5 text-sm font-black text-foreground disabled:opacity-70"
+            >
+              <span aria-hidden="true" className="text-base font-black text-[#4285F4]">G</span>
+              {busy ? t(lang, "staffInviteWorking") : t(lang, "staffInviteContinueWithGoogle")}
+            </button>
+            <p className="text-xs font-medium text-muted-foreground">{t(lang, "staffInviteGooglePinNote")}</p>
+            {message ? (
+              <p role="alert" className="text-sm font-semibold text-red-700">
+                {message}
+              </p>
+            ) : null}
+          </div>
         )}
       </div>
     </div>
@@ -274,6 +280,7 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing, onLogin }
 export function acceptErrorMessage(lang: Language, error: string): string {
   const code = error.trim().toLowerCase();
   if (code === "email_mismatch") return t(lang, "staffInviteEmailMismatch");
+  if (code === "google_identity_required") return t(lang, "staffInviteGoogleRequired");
   if (code === "expired") return t(lang, "staffInviteExpired");
   if (code === "revoked" || code === "already_accepted" || code === "already_member") {
     return t(lang, "staffInviteUsed");

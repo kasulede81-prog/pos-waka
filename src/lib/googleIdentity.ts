@@ -98,6 +98,24 @@ function handleCredentialResponse(response: GoogleCredentialResponse): void {
   reject(new Error("Google sign-in was cancelled."));
 }
 
+/**
+ * GIS initialisation config. `nonce` is optional and only supplied by the staff
+ * invitation path (see requestGoogleIdTokenWithNonce); every other caller gets
+ * the unchanged, nonce-free configuration.
+ */
+function gisInitConfig(clientId: string, nonce?: string): Record<string, unknown> {
+  return {
+    client_id: clientId,
+    callback: handleCredentialResponse,
+    ux_mode: "popup",
+    auto_select: false,
+    cancel_on_tap_outside: true,
+    context: "signin",
+    itp_support: true,
+    ...(nonce ? { nonce } : {}),
+  };
+}
+
 function ensureGoogleIdentityInitialized(clientId: string): GoogleIdApi {
   const googleId = window.google?.accounts?.id;
   if (!googleId) {
@@ -105,15 +123,7 @@ function ensureGoogleIdentityInitialized(clientId: string): GoogleIdApi {
   }
 
   if (initializedClientId !== clientId) {
-    googleId.initialize({
-      client_id: clientId,
-      callback: handleCredentialResponse,
-      ux_mode: "popup",
-      auto_select: false,
-      cancel_on_tap_outside: true,
-      context: "signin",
-      itp_support: true,
-    });
+    googleId.initialize(gisInitConfig(clientId));
     try {
       googleId.disableAutoSelect();
     } catch {
@@ -152,6 +162,67 @@ export async function requestGoogleIdToken(clientId?: string): Promise<string> {
   }
 
   const googleId = ensureGoogleIdentityInitialized(resolvedClientId);
+  return openGooglePopup(googleId);
+}
+
+/** Cryptographically random hex nonce, bound to a single Google sign-in attempt. */
+export function createGoogleAuthNonce(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Like requestGoogleIdToken, but binds the returned ID token to a fresh nonce.
+ * Google embeds the nonce in the token; Supabase verifies it when the raw value
+ * is passed to signInWithIdToken. A replayed or substituted token then fails.
+ *
+ * Scoped to the staff invitation flow. It re-initialises GIS with the nonce for
+ * the duration of the attempt and, in `finally`, drops the cached initialisation
+ * so the next call re-initialises WITHOUT a nonce. That keeps every other Google
+ * entry point (merchant/admin sign-in) on exactly the configuration it used
+ * before — the shared state is restored even if the attempt throws.
+ *
+ * The nonce is never logged and never persisted.
+ */
+export async function requestGoogleIdTokenWithNonce(
+  clientId?: string,
+): Promise<{ idToken: string; nonce: string }> {
+  const resolvedClientId = clientId ?? requireGoogleOAuthClientId();
+  await loadGoogleScript();
+
+  if (pendingSignIn) {
+    throw new Error("Google sign-in is already in progress.");
+  }
+
+  const googleId = window.google?.accounts?.id;
+  if (!googleId) {
+    throw new Error("Google Sign-In is not available on this device.");
+  }
+
+  const nonce = createGoogleAuthNonce();
+  googleId.initialize(gisInitConfig(resolvedClientId, nonce));
+  try {
+    googleId.disableAutoSelect();
+  } catch {
+    /* ignore */
+  }
+  // Force the shared path to re-initialise on its next call.
+  initializedClientId = null;
+
+  try {
+    const idToken = await openGooglePopup(googleId);
+    return { idToken, nonce };
+  } finally {
+    try {
+      ensureGoogleIdentityInitialized(resolvedClientId);
+    } catch {
+      /* ignore — the shared path will initialise on demand anyway */
+    }
+  }
+}
+
+async function openGooglePopup(googleId: GoogleIdApi): Promise<string> {
   const host = getButtonHost();
   host.replaceChildren();
 
