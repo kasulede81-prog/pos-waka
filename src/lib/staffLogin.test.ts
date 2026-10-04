@@ -60,6 +60,7 @@ import {
   listAccessibleStaffShops,
   markStaffLoginIntent,
   selectStaffShop,
+  STAFF_SHOP_SWITCH_TIMEOUT_MS,
   toStaffShopOptions,
 } from "./staffLogin";
 
@@ -204,6 +205,53 @@ describe("selectStaffShop — the server stays authoritative", () => {
   it("treats 'already on this shop' as success", async () => {
     switchActiveShop.mockResolvedValue({ ok: false, error: "same_shop" });
     await expect(selectStaffShop("shop-a")).resolves.toEqual({ ok: true });
+  });
+});
+
+/**
+ * The shop switch awaits an RPC, IndexedDB, a persistence migration, a second RPC and the POS
+ * bootstrap. None of them rejects when a device merely stops making progress — they simply never
+ * settle. Unbounded, that pinned the caller's spinner forever and left the picker a dead screen.
+ */
+describe("selectStaffShop is bounded — a hung switch can never lock the UI", () => {
+  it("resolves to 'timeout' when the switch never settles, instead of hanging forever", async () => {
+    vi.useFakeTimers();
+    try {
+      switchActiveShop.mockImplementation(() => new Promise(() => undefined)); // never settles
+
+      const pending = selectStaffShop("shop-a");
+      await vi.advanceTimersByTimeAsync(STAFF_SHOP_SWITCH_TIMEOUT_MS + 50);
+
+      await expect(pending).resolves.toEqual({ ok: false, error: "timeout" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never reports success on a timeout — a hung switch must not read as ok", async () => {
+    vi.useFakeTimers();
+    try {
+      switchActiveShop.mockImplementation(() => new Promise(() => undefined));
+      const pending = selectStaffShop("shop-a");
+      await vi.advanceTimersByTimeAsync(STAFF_SHOP_SWITCH_TIMEOUT_MS + 50);
+      const result = await pending;
+      expect(result.ok).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still returns the server's refusal promptly — the bound does not mask a real answer", async () => {
+    switchActiveShop.mockResolvedValue({ ok: false, error: "not_member" });
+    await expect(selectStaffShop("shop-someone-else")).resolves.toEqual({
+      ok: false,
+      error: "not_member",
+    });
+  });
+
+  it("exposes the bound it enforces", () => {
+    expect(STAFF_SHOP_SWITCH_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(STAFF_SHOP_SWITCH_TIMEOUT_MS).toBeLessThanOrEqual(30_000);
   });
 });
 

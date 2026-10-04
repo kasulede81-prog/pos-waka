@@ -70,14 +70,14 @@ export function StaffShopGate(props: Props) {
             {props.error}
           </p>
         ) : null}
+        {/* NEVER disabled — see the note on the picker's sign-out below. */}
         <button
           type="button"
-          disabled={props.busy}
-          aria-busy={props.busy}
           onClick={props.onSignOut}
           className={`${actionClass} border border-border bg-card text-foreground`}
+          data-testid="staff-gate-signout"
         >
-          {props.busy ? t(lang, "staffInviteWorking") : t(lang, "loginStaffSignOut")}
+          {t(lang, "loginStaffSignOut")}
         </button>
       </div>
     );
@@ -128,17 +128,30 @@ export function StaffShopGate(props: Props) {
         })}
       </ul>
 
+      {/* An explicit working state, so an in-flight selection is never a silently inert screen. */}
+      {props.busy ? (
+        <p role="status" aria-live="polite" className="text-center text-xs font-semibold text-muted-foreground">
+          {t(lang, "loginStaffChooseShopWorking")}
+        </p>
+      ) : null}
+
       {props.error ? (
         <p role="alert" className="text-sm font-semibold text-red-700">
           {props.error}
         </p>
       ) : null}
 
+      {/*
+        THE ESCAPE HATCH — deliberately never `disabled`.
+        Every other control here may be inert while something is in flight; this one may not, or a
+        stuck flag leaves the person on a screen with no way off it. Double-taps are absorbed by the
+        callback's own latch, which is independent of `busy` for exactly this reason.
+      */}
       <button
         type="button"
-        disabled={props.busy}
         onClick={props.onSignOut}
-        className="inline-flex min-h-[44px] w-full items-center justify-center text-xs font-bold text-muted-foreground underline disabled:opacity-60"
+        className="inline-flex min-h-[44px] w-full items-center justify-center text-xs font-bold text-muted-foreground underline"
+        data-testid="staff-gate-signout"
       >
         {t(lang, "loginStaffSignOut")}
       </button>

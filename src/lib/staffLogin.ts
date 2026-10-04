@@ -20,8 +20,9 @@
  * for a Google sign-in.
  */
 
-import { switchActiveShop } from "./activeShopSwitch";
+import { switchActiveShop, type ActiveShopSwitchResult } from "./activeShopSwitch";
 import { listUserShops, type UserShopRow } from "./primaryShop";
+import { withTimeout } from "./promiseTimeout";
 import { hydrateStaffAuthWorkspace } from "./staffAuthHydrate";
 import { supabase } from "./supabase";
 
@@ -122,16 +123,32 @@ export async function listAccessibleStaffShops(): Promise<StaffShopOption[]> {
 
 export type StaffShopSelectResult =
   | { ok: true }
-  | { ok: false; error: "invalid_shop" | "not_member" | "unavailable" };
+  | { ok: false; error: "invalid_shop" | "not_member" | "unavailable" | "timeout" };
+
+/**
+ * How long a shop switch may take before the UI is told it failed.
+ *
+ * Every await inside the switch is unbounded by nature — an RPC over a stalled mobile connection,
+ * an IndexedDB transaction on a wedged origin, the persistence migration, the POS bootstrap. None
+ * of them rejects when the device merely stops making progress, they just never settle. Without
+ * this ceiling the caller's spinner is pinned forever and the picker becomes a dead screen the
+ * person cannot leave. 10s is well beyond a healthy switch on 3G and far short of "stuck".
+ */
+export const STAFF_SHOP_SWITCH_TIMEOUT_MS = 10_000;
+
+/** Sentinel so a timeout is distinguishable from a real result, and never mistaken for success. */
+const SWITCH_TIMED_OUT = { ok: false, error: "timeout" } as const;
 
 /** Fresh cloud pull for the shop partition that was just attached. Best effort, like the invite flow. */
 async function hydrateSelectedShop(): Promise<void> {
   const client = supabase;
   if (!client) return;
   try {
-    const { data } = await client.auth.getUser();
-    const userId = data.user?.id;
-    if (userId) await hydrateStaffAuthWorkspace(userId);
+    const response = await withTimeout(client.auth.getUser(), STAFF_SHOP_SWITCH_TIMEOUT_MS, null);
+    const userId = response?.data?.user?.id;
+    if (userId) {
+      await withTimeout(hydrateStaffAuthWorkspace(userId), STAFF_SHOP_SWITCH_TIMEOUT_MS, undefined);
+    }
   } catch {
     /* the POS still opens from the local partition; the background sync will catch up */
   }
@@ -153,7 +170,13 @@ export async function selectStaffShop(shopId: string): Promise<StaffShopSelectRe
   if (!id) return { ok: false, error: "invalid_shop" };
 
   try {
-    const switched = await switchActiveShop(id, { updatePrimary: true });
+    const switched = await withTimeout<ActiveShopSwitchResult | typeof SWITCH_TIMED_OUT>(
+      switchActiveShop(id, { updatePrimary: true }),
+      STAFF_SHOP_SWITCH_TIMEOUT_MS,
+      SWITCH_TIMED_OUT,
+    );
+    // The sentinel is checked by identity: a timeout must never be read as a successful switch.
+    if (switched === SWITCH_TIMED_OUT) return { ok: false, error: "timeout" };
     if (!switched.ok && switched.error !== "same_shop") {
       return { ok: false, error: switched.error === "invalid_shop" ? "invalid_shop" : "not_member" };
     }

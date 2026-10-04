@@ -79,7 +79,8 @@
     "build:windows": "npm run build:electron && npm run windows:icon",
     "package:windows": "npm run build:windows && node scripts/run-windows-installer.mjs portable",
     "installer:windows": "npm run build:windows && node scripts/run-windows-installer.mjs nsis",
-    "windows:icon": "node scripts/generate-windows-icon.mjs"
+    "windows:icon": "node scripts/generate-windows-icon.mjs",
+    "verify:staff-picker": "node scripts/verify-staff-picker.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail, UserPlus, Users } from "lucide-react";
@@ -24,6 +24,8 @@ import {
   selectStaffShop,
   type StaffShopOption,
 } from "../lib/staffLogin";
+import { withTimeout } from "../lib/promiseTimeout";
+import { reportAuthIssue } from "../lib/monitoring";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../lib/staffOfflineAuth";
 
 type Props = {
@@ -58,6 +60,21 @@ const fieldClass =
  */
 type StaffPhase = "idle" | "resolving" | "choose" | "none" | "enter";
 
+/**
+ * Outer ceiling for one shop selection, set just above the library's own (10s) so
+ * `selectStaffShop`'s timeout normally wins and this one is a backstop for anything that hangs
+ * outside it.
+ *
+ * WRITTEN AS A LITERAL ON PURPOSE. This was briefly `STAFF_SHOP_SWITCH_TIMEOUT_MS + 2_000`, which
+ * evaluates an imported binding at MODULE-INIT time — and in a module graph this large that turns
+ * an import cycle into a temporal-dead-zone `ReferenceError` at startup, which kills every handler
+ * on the page while leaving the DOM painted. A local constant cannot depend on evaluation order.
+ * The relationship is asserted in tests instead.
+ */
+const SELECT_SHOP_TIMEOUT_MS = 12_000;
+/** Identity-compared sentinel: a timeout must be distinguishable from a real result. */
+const TIMED_OUT = { ok: false, error: "timeout" } as const;
+
 export function LoginPage({
   lang,
   setLang,
@@ -89,6 +106,19 @@ export function LoginPage({
   const [staffChoice, setStaffChoice] = useState<string | null>(null);
   const [staffBusy, setStaffBusy] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
+
+  /**
+   * Which staff attempt owns the busy flag.
+   *
+   * `staffBusy` is cleared from `finally` blocks, and a `finally` from an ABANDONED attempt can
+   * still run after a newer one has started — clearing a flag that now belongs to somebody else,
+   * or (the bug this fixes) never clearing at all because the promise it is waiting on never
+   * settles. Every attempt takes a number here and only the attempt that still owns the number may
+   * write the flag. A monotonically increasing counter cannot be confused by reordering.
+   */
+  const staffAttemptRef = useRef(0);
+  /** Sign-out's own latch — deliberately NOT `staffBusy`, which may be stuck for other reasons. */
+  const signOutRunningRef = useRef(false);
 
   const showGoogle = mode === "supabase" && hasSupabaseConfig && isGoogleAuthUiAvailable();
   /** Safe staff-accept return path (pathname + search). Never renders the raw token. */
@@ -122,6 +152,18 @@ export function LoginPage({
     void (async () => {
       const choice = chooseStaffShop(await listAccessibleStaffShops());
       if (cancelled) return;
+
+      /**
+       * THE INVARIANT. `staffPhase === "choose"` (and `"none"`) means the gate now owns the screen,
+       * so nothing that belonged to the Google attempt may still be holding it. The busy flag is
+       * cleared FIRST, in the same batch as the phase change, so the picker can never render
+       * disabled — a GIS popup that never answers must not be able to trap the person on a dead
+       * screen. `staffAttemptRef` is advanced so the abandoned attempt's `finally` cannot later
+       * write the flag again.
+       */
+      staffAttemptRef.current += 1;
+      setStaffBusy(false);
+
       if (choice.kind === "none") {
         setStaffPhase("none");
         return;
@@ -139,6 +181,77 @@ export function LoginPage({
       cancelled = true;
     };
   }, [staffPhase, isAuthenticated, staffInviteNext]);
+
+  /**
+   * ============================ DECLARED BEFORE THE EARLY RETURN ============================
+   * These two MUST be initialised on every render, because the staff gate below returns EARLY and
+   * its buttons close over them. They used to be declared after that return, which put the bindings
+   * in the temporal dead zone for exactly the render that needed them: every tap threw
+   * `ReferenceError: Cannot access '<minified>' before initialization` from inside `onSelect`, and
+   * the picker — shop rows AND sign-out — was completely inert while looking perfectly normal.
+   *
+   * `const` bindings are not hoisted. A handler referenced by a branch that returns before the
+   * declaration is a live grenade, so anything the gate can call lives above it.
+   * =========================================================================================
+   */
+
+  /**
+   * Attach the chosen shop. `selectStaffShop` re-checks membership; a refusal stops here.
+   *
+   * Bounded by the library's own ceiling (`STAFF_SHOP_SWITCH_TIMEOUT_MS`), and bounded again here
+   * by `withTimeout`, because a switch that never settles must still produce a terminal result —
+   * otherwise the picker stays disabled forever with no way back. A timeout is shown as a retryable
+   * error and changes NOTHING about the session; both shops stay selectable.
+   */
+  const selectShop = async (shopId: string) => {
+    if (staffBusy) return;
+    const attempt = ++staffAttemptRef.current;
+    setStaffChoice(shopId);
+    setStaffError(null);
+    setStaffBusy(true);
+    try {
+      const result = await withTimeout(
+        selectStaffShop(shopId),
+        SELECT_SHOP_TIMEOUT_MS,
+        TIMED_OUT,
+      );
+      if (staffAttemptRef.current !== attempt) return;
+      if (!result.ok) {
+        reportAuthIssue("staff_shop_select_failed", {
+          errorCode: result.error,
+          timedOut: result === TIMED_OUT,
+        });
+        setStaffChoice(null);
+        setStaffError(
+          result === TIMED_OUT ? t(lang, "staffShopSelectTimeout") : t(lang, "loginStaffNoAccessBody"),
+        );
+        return; // The picker stays put and both shops remain selectable — no redirect, no onboarding.
+      }
+      clearStaffLoginIntent();
+      setStaffPhase("enter");
+    } finally {
+      if (staffAttemptRef.current === attempt) setStaffBusy(false);
+    }
+  };
+
+  /**
+   * Leave the staff gate entirely — sign the Google account out and start again.
+   *
+   * THE ESCAPE HATCH, so it must never depend on `staffBusy`. It was previously both gated on that
+   * flag and rendered disabled by it, which meant a stuck flag removed the only way off the screen.
+   * It latches on its own instead, and deliberately does not touch `staffBusy` at all — sign-out
+   * hard-navigates, so there is no state left to restore.
+   */
+  const signOutStaff = async () => {
+    if (signOutRunningRef.current) return;
+    signOutRunningRef.current = true;
+    clearStaffLoginIntent();
+    try {
+      await hardSignOutToLogin();
+    } finally {
+      signOutRunningRef.current = false;
+    }
+  };
 
   /**
    * The staff gate owns the screen between sign-in and the POS. It comes BEFORE the authenticated
@@ -224,6 +337,7 @@ export function LoginPage({
    */
   const staffGoogleSubmit = async () => {
     if (staffBusy || googleBusy) return;
+    const attempt = ++staffAttemptRef.current;
     setStaffError(null);
     setError(null);
     markStaffLoginIntent();
@@ -232,43 +346,14 @@ export function LoginPage({
     try {
       await onGoogleLogin();
     } catch (err) {
+      // Only the attempt that still owns the flag may write it: the gate may already have advanced
+      // and handed this screen to a session that arrived another way.
+      if (staffAttemptRef.current !== attempt) return;
       clearStaffLoginIntent();
       setStaffPhase("idle");
       setStaffError(formatAuthError(err));
     } finally {
-      setStaffBusy(false);
-    }
-  };
-
-  /** Attach the chosen shop. `selectStaffShop` re-checks membership; a refusal stops here. */
-  const selectShop = async (shopId: string) => {
-    if (staffBusy) return;
-    setStaffChoice(shopId);
-    setStaffError(null);
-    setStaffBusy(true);
-    try {
-      const result = await selectStaffShop(shopId);
-      if (!result.ok) {
-        setStaffChoice(null);
-        setStaffError(t(lang, "loginStaffNoAccessBody"));
-        return;
-      }
-      clearStaffLoginIntent();
-      setStaffPhase("enter");
-    } finally {
-      setStaffBusy(false);
-    }
-  };
-
-  /** Leave the staff gate entirely — sign the Google account out and start again. */
-  const signOutStaff = async () => {
-    if (staffBusy) return;
-    setStaffBusy(true);
-    clearStaffLoginIntent();
-    try {
-      await hardSignOutToLogin();
-    } finally {
-      setStaffBusy(false);
+      if (staffAttemptRef.current === attempt) setStaffBusy(false);
     }
   };
 

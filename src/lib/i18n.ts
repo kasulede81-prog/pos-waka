@@ -121,6 +121,7 @@ const en: Dict = {
   loginStaffChooseShopSub:
     "Your Google account is linked to more than one shop. Choose the one you are working in.",
   loginStaffChooseShopWorking: "Opening…",
+  staffShopSelectTimeout: "That shop is taking too long to open. Check your connection and try again.",
   loginStaffSignOut: "Sign out and try another account",
   loginRegisterShopHint: "For business owners starting a new DKASU POS workspace.",
   registerQuickTitle: "Open your shop",
