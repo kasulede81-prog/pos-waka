@@ -124,6 +124,16 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             highlight
           />
         ) : null}
+        {/* Loyalty is day-to-day customer work (lookup, enroll, cards) — not an insight report. */}
+        {access.can("customers.view") ? (
+          <OfficeNavCard
+            to="/office/loyalty"
+            title={t(lang, "loyaltyHubTitle")}
+            subtitle={t(lang, "loyaltyHubSub")}
+            Icon={Gift}
+            highlight
+          />
+        ) : null}
         {access.can("customers.view") && highlightPharmacyPatients ? (
           <OfficeNavCard
             to="/customers"
@@ -216,14 +226,6 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             title={t(lang, "receipts")}
             subtitle={t(lang, "officeCardReceiptsSub")}
             Icon={Receipt}
-          />
-        ) : null}
-        {access.can("customers.view") ? (
-          <OfficeNavCard
-            to="/office/loyalty"
-            title={t(lang, "loyaltyHubTitle")}
-            subtitle={t(lang, "loyaltyHubSub")}
-            Icon={Gift}
           />
         ) : null}
         {askWakaGate.enabled && access.can("reports.view") ? (

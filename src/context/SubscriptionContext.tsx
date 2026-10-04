@@ -77,6 +77,31 @@ export function SubscriptionProvider({
     setStoreSubscriptionContext({ snapshot, authMode });
   }, [snapshot, authMode]);
 
+  /**
+   * Whose answer is this? Shop switches issue overlapping reads — A then B, or A→B→A in quick
+   * succession — and a slower earlier request must never land on top of a newer one. Only the
+   * newest request may write the snapshot.
+   */
+  const requestSeqRef = useRef(0);
+
+  const reload = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const seq = ++requestSeqRef.current;
+      const next = await (async () => {
+        if (!user?.id) return null;
+        try {
+          return await fetchSubscriptionSnapshotForUser(user.id);
+        } catch {
+          return { kind: "unavailable" } as const;
+        }
+      })();
+      if (seq !== requestSeqRef.current) return; // superseded — drop it
+      if (next) setSnapshot(next);
+      else void load(opts);
+    },
+    [load, user?.id],
+  );
+
   useEffect(() => {
     const on = () => {
       void load({ silent: true });
@@ -84,6 +109,20 @@ export function SubscriptionProvider({
     window.addEventListener("waka:subscription-updated", on);
     return () => window.removeEventListener("waka:subscription-updated", on);
   }, [load]);
+
+  /**
+   * A SHOP SWITCH CHANGES THE ANSWER. The plan belongs to the shop being operated, so switching
+   * shop must re-resolve — without this, a cashier who moved between two shops kept the first
+   * shop's plan for the rest of the session. `switchActiveShop` dispatches this after it has
+   * attached the new partition, so the re-read sees the new active shop.
+   */
+  useEffect(() => {
+    const onShopChanged = () => {
+      void reload({ silent: true });
+    };
+    window.addEventListener("waka:active-shop-changed", onShopChanged);
+    return () => window.removeEventListener("waka:active-shop-changed", onShopChanged);
+  }, [reload]);
 
   const value = useMemo(
     () => ({

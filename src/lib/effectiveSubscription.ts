@@ -149,6 +149,29 @@ function resolveBaseSubscription(
     };
   }
 
+  /**
+   * UNKNOWN IS NOT FREE. A failed lookup must never be presented as the free tier, because the
+   * only people who ever see it are those we could not read a plan for — and the ones we cannot
+   * read are disproportionately exactly the paying shops whose staff read through a policy that
+   * does not cover them. Resolving to the FULL entitlement set is deliberate: this mirrors
+   * `local_full`, the existing "we cannot ask the server right now" state, so a transient failure
+   * can never DOWNGRADE a paying shop. The server remains the enforcement authority for anything
+   * that actually matters.
+   */
+  if (snapshot.kind === "unavailable") {
+    return {
+      planCode: "waka_plus",
+      status: "active",
+      isTrial: false,
+      isPaid: true,
+      isExpired: false,
+      trialEndsAt: null,
+      expiresAt: null,
+      startsAt: null,
+      billingCycle: null,
+    };
+  }
+
   if (snapshot.kind === "none") {
     return {
       planCode: "free",

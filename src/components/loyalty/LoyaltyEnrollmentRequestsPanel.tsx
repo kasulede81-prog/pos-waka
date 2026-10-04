@@ -21,8 +21,8 @@ type Props = {
    * counter and the member list from the server rather than guessing at the delta.
    */
   onChanged?: () => void;
-  /** Open the member an approved request produced, in the Customers tab. */
-  onOpenMember?: (customerId: string | null) => void;
+  /** Open the member an approved request produced, in the Members section (keyed by loyalty account id). */
+  onOpenMember?: (loyaltyAccountId: string | null) => void;
 };
 
 const FILTERS: Array<{ id: EnrollmentRequestStatus | "all"; labelKey: string }> = [
@@ -170,12 +170,12 @@ export function LoyaltyEnrollmentRequestsPanel({
                 <p className="mt-1 text-xs font-semibold text-rose-800">{row.rejectionReason}</p>
               ) : null}
               {/* An approved request points at the member it produced; the member itself
-                  lives in the Loyalty customers list, not here. */}
+                  lives in the Members list (expanded by loyalty account id). */}
               {row.status === "approved" && row.approvedLoyaltyAccountId ? (
                 <button
                   type="button"
-                  onClick={onOpenMember ? () => onOpenMember(row.matchedCustomerId) : undefined}
-                  disabled={!onOpenMember || !row.matchedCustomerId}
+                  onClick={onOpenMember ? () => onOpenMember(row.approvedLoyaltyAccountId) : undefined}
+                  disabled={!onOpenMember || !row.approvedLoyaltyAccountId}
                   className="mt-2 text-xs font-black text-waka-700 underline disabled:no-underline disabled:opacity-60"
                 >
                   {t(lang, "loyaltyRequestsViewMember")}

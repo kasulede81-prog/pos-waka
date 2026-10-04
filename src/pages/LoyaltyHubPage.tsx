@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useSessionActor } from "../context/SessionActorContext";
 import { resolveShopCtx } from "../offline/cloudSync";
-import { PageHeader } from "../components/layout/PageHeader";
-import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
-import { HorizontalTabBar } from "../components/shared/HorizontalTabBar";
+import { LoyaltyShell } from "../components/loyalty/LoyaltyShell";
+import {
+  loyaltySectionPath,
+  resolveLoyaltySection,
+  type LoyaltySectionId,
+} from "../lib/loyalty/loyaltyNav";
 import {
   adjustLoyaltyPoints,
   fetchAccountHistory,
@@ -63,7 +67,7 @@ const MEMBER_STATUS_FILTERS: LoyaltyMemberStatusFilter[] = [
   "expired",
 ];
 
-type HubTab = "overview" | "earn" | "requests" | "customers" | "rewards" | "cards" | "design";
+type HubTab = LoyaltySectionId;
 
 const KIND_LABEL_KEY: Record<string, string> = {
   earned: "loyaltyKindEarned",
@@ -939,8 +943,10 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
   const [accounts, setAccounts] = useState<LoyaltyAccountListEntry[]>([]);
   const [searchDone, setSearchDone] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<HubTab>("overview");
   const [showEarnAdvanced, setShowEarnAdvanced] = useState(false);
+  const navigate = useNavigate();
+  const routeParams = useParams<{ section?: string }>();
+  const tab: HubTab = resolveLoyaltySection(routeParams.section);
   const searchSeq = useRef(0);
 
   const loadOverview = useCallback(async (id: string) => {
@@ -1005,9 +1011,18 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
     [],
   );
 
+  // Canonical path for the active section (also maps legacy tab ids like `customers`).
+  useEffect(() => {
+    const canonical = loyaltySectionPath(tab);
+    const current = routeParams.section;
+    if (current !== tab) {
+      navigate(canonical, { replace: true });
+    }
+  }, [tab, routeParams.section, navigate]);
+
   useEffect(() => {
     if (!shopId || loadState !== "ready") return;
-    if (tab !== "customers" && tab !== "cards") return;
+    if (tab !== "members") return;
     const handle = window.setTimeout(() => void runSearch(shopId, search, statusFilter), 250);
     return () => window.clearTimeout(handle);
   }, [shopId, search, statusFilter, loadState, runSearch, tab]);
@@ -1056,19 +1071,6 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
     }
   };
 
-  const tabs = useMemo(
-    () => [
-      { id: "overview", label: t(lang, "loyaltyTabOverview") },
-      { id: "earn", label: t(lang, "loyaltyTabHowPoints") },
-      { id: "requests", label: t(lang, "loyaltyTabRequests") },
-      { id: "customers", label: t(lang, "loyaltyTabCustomers") },
-      { id: "rewards", label: t(lang, "loyaltyTabRewards") },
-      { id: "cards", label: t(lang, "loyaltyTabCards") },
-      { id: "design", label: t(lang, "loyaltyTabDesign") },
-    ],
-    [lang],
-  );
-
   const refreshLists = () => {
     if (!shopId) return;
     void loadOverview(shopId);
@@ -1077,17 +1079,12 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <BackOfficePageLayout
-      header={
-        <PageHeader
-          lang={lang}
-          title={t(lang, "loyaltyHubTitle")}
-          subtitle={t(lang, "loyaltyHubSub")}
-          backFallback="/office"
-          backLabel={t(lang, "officeHubTitle")}
-          compact
-        />
-      }
+    <LoyaltyShell
+      lang={lang}
+      canManage={canManage}
+      onSectionChange={() => {
+        setExpandedId(null);
+      }}
     >
       {loadState === "loading" ? (
         <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
@@ -1103,16 +1100,6 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
 
       {loadState === "ready" && overview ? (
         <div className="space-y-4">
-          <HorizontalTabBar
-            tabs={tabs}
-            activeId={tab}
-            onChange={(id) => {
-              setTab(id as HubTab);
-              setExpandedId(null);
-            }}
-            ariaLabel={t(lang, "loyaltyHubTitle")}
-          />
-
           {tab === "overview" ? (
             <div className="space-y-4">
               <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -1263,7 +1250,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
             </div>
           ) : null}
 
-          {tab === "earn" ? (
+          {tab === "settings" ? (
             <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <p className="text-base font-black text-foreground">{t(lang, "loyaltyEarnRuleTitle")}</p>
               <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyEarnRuleSub")}</p>
@@ -1524,23 +1511,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
             </article>
           ) : null}
 
-          {tab === "requests" && shopId ? (
-            <LoyaltyEnrollmentRequestsPanel
-              lang={lang}
-              shopId={shopId}
-              canManage={canManage}
-              onChanged={refreshLists}
-              onOpenMember={(customerId) => {
-                if (!customerId) return;
-                setTab("customers");
-                setStatusFilter("all");
-                setSearch("");
-                setExpandedId(customerId);
-              }}
-            />
-          ) : null}
-
-          {tab === "customers" && shopId ? (
+          {tab === "members" && shopId ? (
             <div className="space-y-4">
               <CustomerList
                 lang={lang}
@@ -1586,6 +1557,78 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
             )
           ) : null}
 
+          {tab === "activity" ? (
+            <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <p className="text-base font-black text-foreground">{t(lang, "loyaltyActivityTitle")}</p>
+              <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyActivitySub")}</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <StatCard
+                  label={t(lang, "loyaltyPointsIssuedStat")}
+                  value={String(overview.pointsIssued)}
+                  tone="accent"
+                />
+                <StatCard
+                  label={t(lang, "loyaltyActivityPointsRedeemed")}
+                  value={String(overview.pointsRedeemed)}
+                />
+                <StatCard
+                  label={t(lang, "loyaltyActivityPointsReversed")}
+                  value={String(overview.pointsReversed)}
+                />
+              </div>
+              <div className="mt-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  {t(lang, "loyaltyActivityRecentTitle")}
+                </p>
+                <div className="mt-2">
+                  {overview.recentActivity.length === 0 ? (
+                    <p className="py-3 text-sm font-medium text-muted-foreground">
+                      {t(lang, "loyaltyActivityEmpty")}
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {overview.recentActivity.map((row) => (
+                        <li key={row.id} className="flex items-center justify-between gap-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-foreground">
+                              {row.customerName}
+                              <span className="font-medium text-muted-foreground">
+                                {" · "}
+                                {kindLabel(lang, row.kind)}
+                              </span>
+                              {row.note ? (
+                                <span className="font-medium text-muted-foreground"> — {row.note}</span>
+                              ) : null}
+                            </p>
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {formatDateTime(lang, row.createdAt)}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p
+                              className={clsx(
+                                "text-sm font-black",
+                                row.points > 0 ? "text-success" : "text-destructive",
+                              )}
+                            >
+                              {row.points > 0 ? "+" : ""}
+                              {row.points} {t(lang, "loyaltyPointsUnit")}
+                            </p>
+                            {row.balanceAfter != null ? (
+                              <p className="text-xs font-medium text-muted-foreground">
+                                {t(lang, "loyaltyPointsBalanceLabel")}: {row.balanceAfter}
+                              </p>
+                            ) : null}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </article>
+          ) : null}
+
           {tab === "cards" && shopId ? (
             <div className="space-y-4">
               <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -1600,43 +1643,33 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
               {/* Permanent public program code (WPL2026001) — read-only, issued server-side. */}
               <LoyaltyProgramCodePanel lang={lang} shopId={shopId} />
               <LoyaltyPublicEnrollmentPanel lang={lang} shopId={shopId} canManage={canManage} />
-              <CustomerList
-                lang={lang}
-                shopId={shopId}
-                accounts={accounts}
-                search={search}
-                searchDone={searchDone}
-                statusFilter={statusFilter}
-                onStatusFilterChange={setStatusFilter}
-                expandedId={expandedId}
-                canManage={canManage}
-                canRedeem={canRedeem}
-                canIssueWallet={canIssueWallet}
-                mode="card"
-                onSearchChange={(value) => {
-                  setSearch(value);
-                  setSearchDone(false);
-                }}
-                onToggle={(accountId) =>
-                  setExpandedId((id) => (id === accountId ? null : accountId))
-                }
-                onAdjusted={refreshLists}
-              />
-              <LoyaltyEnrollmentPanel lang={lang} shopId={shopId} onEnrollmentChanged={refreshLists} />
+              {/* Join queue lives with the join artifacts (poster code + invite link). */}
+              {canManage ? (
+                <LoyaltyEnrollmentRequestsPanel
+                  lang={lang}
+                  shopId={shopId}
+                  canManage={canManage}
+                  onChanged={refreshLists}
+                  onOpenMember={(loyaltyAccountId) => {
+                    if (!loyaltyAccountId) return;
+                    setStatusFilter("all");
+                    setSearch("");
+                    setExpandedId(loyaltyAccountId);
+                    navigate(loyaltySectionPath("members"));
+                  }}
+                />
+              ) : null}
+              {canManage ? (
+                <LoyaltyCardDesignPanel lang={lang} shopId={shopId} shopName={shopDisplayName} />
+              ) : (
+                <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
+                  {t(lang, "loyaltyDesignOwnerOnly")}
+                </p>
+              )}
             </div>
-          ) : null}
-
-          {tab === "design" ? (
-            canManage && shopId ? (
-              <LoyaltyCardDesignPanel lang={lang} shopId={shopId} shopName={shopDisplayName} />
-            ) : (
-              <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
-                {t(lang, "loyaltyDesignOwnerOnly")}
-              </p>
-            )
           ) : null}
         </div>
       ) : null}
-    </BackOfficePageLayout>
+    </LoyaltyShell>
   );
 }

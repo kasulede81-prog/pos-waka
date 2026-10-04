@@ -1,3 +1,4 @@
+import { getActiveShopId } from "../offline/shopScope";
 import { fetchProfilePrimaryShopId } from "./primaryShop";
 import { supabase } from "./supabase";
 import type { PromotionalGrantRow, RemoteSubscriptionRow, SubscriptionSnapshot } from "./subscriptionEntitlements";
@@ -76,11 +77,104 @@ export async function fetchActivePromotionalGrant(organizationId: string): Promi
 }
 
 /**
+ * The subscription of a SHOP the caller can operate, read through the server.
+ *
+ * WHY THIS EXISTS. Resolving the plan from the caller's own organization is correct for an owner
+ * and wrong for everyone else: an invited cashier holds no `organization_members` row for the shop
+ * they work in, so `subscriptions_select` refuses them, the query returns zero rows, and the client
+ * read that as "no subscription" → Free. The cashier operates the shop; the shop's plan is what
+ * they inherit, and this asks for it by SHOP so the server can derive the organization itself.
+ *
+ * Returns `null` when the call could not be made or was refused — never `none`. A refusal and an
+ * absence must not be the same value, or the bug returns.
+ */
+async function fetchShopScopedSubscriptionSnapshot(
+  shopId: string,
+): Promise<{ snapshot: SubscriptionSnapshot; organizationId: string | null } | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.rpc("shop_get_effective_subscription", { p_shop_id: shopId });
+    if (error) return null;
+    const payload = (data ?? {}) as {
+      ok?: boolean;
+      found?: boolean;
+      subscription?: Record<string, unknown> | null;
+    };
+    if (payload.ok !== true) return null;
+
+    const organizationId =
+      typeof payload.subscription?.organization_id === "string" ? payload.subscription.organization_id : null;
+
+    if (payload.found !== true || !payload.subscription) {
+      // A REAL answer: the caller may access this shop and it has no subscription.
+      return { snapshot: { kind: "none" }, organizationId };
+    }
+
+    const sub = payload.subscription;
+    const features = (sub.features ?? null) as Record<string, unknown> | null;
+    const devicesRaw = features?.devices;
+    const tier = normalizePlanCode(typeof sub.plan_code === "string" ? sub.plan_code : "");
+    const maxDevicesFromFeatures =
+      typeof devicesRaw === "number" && Number.isFinite(devicesRaw) && devicesRaw > 0
+        ? Math.floor(devicesRaw)
+        : null;
+
+    // Shaped exactly like the owner path's row, so nothing downstream can tell the two apart.
+    const row: RemoteSubscriptionRow = {
+      id: String(sub.id ?? ""),
+      organization_id: String(sub.organization_id ?? ""),
+      shop_id: (sub.shop_id as string | null) ?? null,
+      status: String(sub.status ?? ""),
+      trial_ends_at: (sub.trial_ends_at as string | null) ?? null,
+      current_period_start: (sub.current_period_start as string | null) ?? null,
+      current_period_end: (sub.current_period_end as string | null) ?? null,
+      plan_code: String(sub.plan_code ?? ""),
+      max_pos_users: (sub.max_pos_users as number | null) ?? null,
+      max_shops: (sub.max_shops as number | null) ?? null,
+      max_devices: maxDevicesFromFeatures ?? maxDevicesHintForTier(tier),
+    };
+    return { snapshot: { kind: "remote", row }, organizationId };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Full snapshot for the signed-in user: real subscription row + any active
  * promotional grant. Effective resolution via resolveEffectiveSubscription (Phase 16.4).
+ *
+ * RESOLUTION ORDER, and why:
+ *   1. THE ACTIVE SHOP. This is the operational context — the shop the terminal is actually on —
+ *      and it is the only one that is correct for staff. The server authorises it with the same
+ *      `user_can_access_shop` predicate that governs shop access, so this is not a new privilege.
+ *   2. Otherwise the caller's own organization (the original path). It stays as the fallback so an
+ *      OWNER is untouched, and so a merchant with no active shop yet still resolves their plan.
+ *
+ * A failed shop-scoped read does NOT silently fall through to the owner path's `none`: it reports
+ * `unavailable`, because falling through is precisely the shape of the original bug.
  */
 export async function fetchSubscriptionSnapshotForUser(userId: string): Promise<SubscriptionSnapshot> {
   if (!supabase) return { kind: "none" };
+
+  const activeShopId = getActiveShopId();
+  if (activeShopId) {
+    const scoped = await fetchShopScopedSubscriptionSnapshot(activeShopId);
+    if (scoped) {
+      const grant = scoped.organizationId
+        ? await fetchActivePromotionalGrant(scoped.organizationId)
+        : null;
+      if (scoped.snapshot.kind === "remote") {
+        return { kind: "remote", row: scoped.snapshot.row, promotionalGrant: grant };
+      }
+      if (scoped.snapshot.kind === "none") {
+        return { kind: "none", promotionalGrant: grant };
+      }
+      return { kind: "unavailable", promotionalGrant: grant };
+    }
+    // Could not read this shop's plan. Do not drop to `none` — that is what showed Free.
+    return { kind: "unavailable" };
+  }
+
   const orgShop = await resolvePrimaryOrganizationForUser(userId);
   if (!orgShop) return { kind: "none" };
 

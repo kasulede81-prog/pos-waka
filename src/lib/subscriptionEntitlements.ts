@@ -44,7 +44,16 @@ export type PromotionalGrantRow = {
 export type SubscriptionSnapshot =
   | { kind: "local_full" }
   | { kind: "none"; promotionalGrant?: PromotionalGrantRow | null }
-  | { kind: "remote"; row: RemoteSubscriptionRow; promotionalGrant?: PromotionalGrantRow | null };
+  | { kind: "remote"; row: RemoteSubscriptionRow; promotionalGrant?: PromotionalGrantRow | null }
+  /**
+   * THE LOOKUP FAILED — as opposed to succeeded-and-found-nothing (`none`).
+   *
+   * The two used to be the same value, which is how a cashier whose subscription read was refused
+   * by RLS was shown "Free plan" for a shop on a paid plan: a refusal and an absence arrived
+   * identically as zero rows. `none` stays the honest answer for a shop that genuinely has no
+   * subscription; this one means we do not know.
+   */
+  | { kind: "unavailable"; promotionalGrant?: PromotionalGrantRow | null };
 
 const TIER_RANK: Record<SubscriptionPlanCode, number> = {
   free: 0,

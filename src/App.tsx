@@ -662,6 +662,16 @@ function AppRoutes() {
               }
             />
             <Route
+              path="office/loyalty/:section"
+              element={
+                <RoleProtectedRoute permission="customers.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <LoyaltyHubPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="office/profit"
               element={
                 <RoleProtectedRoute permission="reports.profit">
