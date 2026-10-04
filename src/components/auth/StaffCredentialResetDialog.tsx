@@ -3,7 +3,6 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { ModalSheet } from "../layout/ModalSheet";
 import { EnterprisePinPad } from "./EnterprisePinPad";
-import { EnterprisePasswordField } from "./EnterprisePasswordField";
 import { EnterpriseFeedbackBanner } from "../enterprise/EnterpriseFeedbackBanner";
 import { Body } from "../enterprise/EnterpriseTypography";
 import { WakaButton } from "../ui/wakaPrimitives";
@@ -77,63 +76,16 @@ export function StaffPinResetDialog({ lang, open, staffName, onClose, onConfirm 
   );
 }
 
-type StaffPasswordResetProps = {
-  lang: Language;
-  open: boolean;
-  staffName: string;
-  onClose: () => void;
-  onConfirm: (password: string) => void;
-};
-
-export function StaffPasswordResetDialog({ lang, open, staffName, onClose, onConfirm }: StaffPasswordResetProps) {
-  const [password, setPassword] = useState("");
-
-  return (
-    <ModalSheet
-      open={open}
-      onClose={onClose}
-      align="center"
-      zIndexClass="z-[100]"
-      title={t(lang, "staffResetPassword")}
-      footer={
-        <div className="space-y-2">
-          <WakaButton
-            type="submit"
-            form="staff-password-reset-form"
-            className="w-full"
-            disabled={!password.trim()}
-          >
-            {t(lang, "save")}
-          </WakaButton>
-          <WakaButton type="button" variant="secondary" className="w-full" onClick={onClose}>
-            {t(lang, "cancel")}
-          </WakaButton>
-        </div>
-      }
-    >
-      <Body className="text-muted-foreground">
-        {staffName} — {t(lang, "staffPasswordResetPrompt")}
-      </Body>
-      <form
-        id="staff-password-reset-form"
-        className="mt-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!password.trim()) return;
-          onConfirm(password);
-          setPassword("");
-          onClose();
-        }}
-      >
-        <EnterprisePasswordField
-          lang={lang}
-          label={t(lang, "password")}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="new-password"
-          minLength={1}
-        />
-      </form>
-    </ModalSheet>
-  );
-}
+/**
+ * `StaffPasswordResetDialog` was DELETED here.
+ *
+ * It had no callers anywhere in the product (Phase 5 audited every import, barrel and test), and
+ * it existed only to issue a credential the architecture no longer has: online sign-in is the
+ * person's own Google account, and the offline credential is the PIN, which `StaffPinResetDialog`
+ * above already manages.
+ *
+ * Only the UI is gone. `StaffAccount.passwordHash`, `shop_pos_staff.password_hash`, the cloud
+ * sync, `resetStaffSecret`'s password branch and the offline verifier that accepts a password all
+ * remain — existing staff who sign in with one on a shared terminal are unaffected. There is
+ * simply no longer a way to be issued a NEW one.
+ */

@@ -25,7 +25,6 @@ export function StaffRecoveryCredentialSetup({
   onComplete,
 }: Props) {
   const [pin, setPin] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pinResetSignal, setPinResetSignal] = useState(0);
@@ -44,7 +43,6 @@ export function StaffRecoveryCredentialSetup({
         shopId,
         staffId,
         pin,
-        password: password.trim() || undefined,
       });
       if (!result.ok) {
         setError(t(lang, result.errorKey as never));
@@ -100,17 +98,17 @@ export function StaffRecoveryCredentialSetup({
         }}
       />
 
-      <label className="mt-4 block text-sm font-bold text-foreground">
-        {t(lang, "staffCredentialRecoverySetupPassword")}
-        <input
-          type="password"
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-border px-4 font-semibold"
-          placeholder={t(lang, "staffCredentialRecoveryPasswordOptional")}
-        />
-      </label>
+      {/* NO PASSWORD FIELD. The dialog already requires a PIN before it can be submitted, and the
+          PIN is the only credential this architecture issues for offline selling. The optional
+          "New password" that used to sit here was a leftover of the four-credential model, and it
+          was never load-bearing: `completeStaffCredentialRecovery` accepts a PIN alone.
+
+          The backend keeps its `password?` parameter and `staffOfflineAuth` still verifies an
+          existing `passwordHash`, so legacy staff who sign in with a password on a shared terminal
+          are unaffected — they simply have no way to be issued a NEW one. */}
+      <p className="mt-4 rounded-xl bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
+        {t(lang, "staffCredentialRecoveryPinNotLogin")}
+      </p>
 
       {error ? (
         <p className="mt-3 rounded-xl border border-danger/30 bg-danger-muted px-3 py-2 text-sm font-bold text-danger-foreground">

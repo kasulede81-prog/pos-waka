@@ -4,9 +4,14 @@ export const WAKA_DEFAULT_EMAIL_FROM = "DKASU POS <noreply@waka.ug>";
 export const WAKA_DEFAULT_EMAIL_REPLY_TO = "support@waka.ug";
 
 export const WAKA_EMAIL_BRAND = {
-  logoUrl: "https://pos.waka.ug/waka-logo.png",
-  siteUrl: "https://waka.ug",
-  posUrl: "https://pos.waka.ug",
+  // DKASU hosts since the 2026-10-02 auth migration. The legacy WAKA hosts still 308 here and stay
+  // allowlisted on Supabase and Google, but nothing user-facing should send people through a
+  // redirect any more — least of all a staff invitation, whose whole job is one tap to accept.
+  // `posUrl` is read ONLY by the staff invitation (staffInviteEmail.ts) to build the accept link;
+  // `logoUrl` is the shared shell, and the same asset is served from both hosts.
+  logoUrl: "https://pos.dkasu.com/waka-logo.png",
+  siteUrl: "https://dkasu.com",
+  posUrl: "https://pos.dkasu.com",
   companyName: "WAKA MARKETPLACE LIMITED",
   /** Primary CTA / accent for email buttons (brand green). */
   primaryColor: "#16a34a",

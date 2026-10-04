@@ -27,12 +27,13 @@ export function renderStaffInviteEmail(input: {
     preheader: `Join ${shop} as ${role}.`,
     title: "Join your shop on DKASU POS",
     bodyHtml: `<p style="margin:0 0 12px;">You were invited to work at <strong>${escapeHtml(shop)}</strong> as <strong>${escapeHtml(role)}</strong>.</p>
-<p style="margin:0;">Create or sign in with this email, then accept the invitation. The link expires in 7 days and can only be used once.</p>`,
+<p style="margin:0;">Open the link and continue with Google, using <strong>this email address</strong>. The link expires in 7 days and can only be used once.</p>`,
     cta: { label: "Accept invitation", href: input.acceptUrl },
     footerNote: "If you were not expecting this invite, you can ignore this email.",
   });
   const text = [
     `You were invited to work at ${shop} as ${input.roleLabel}.`,
+    "Open the link and continue with Google, using the Google account for this email address.",
     `Accept: ${input.acceptUrl}`,
     "This link expires in 7 days and can only be used once.",
   ].join("\n");

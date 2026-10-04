@@ -73,6 +73,34 @@ export function clearStaffInviteToken(): void {
   }
 }
 
+/**
+ * The in-app route the native OAuth round trip lands on.
+ *
+ * `normalizeAuthDeepLinkToAppPath` maps `wakapos://callback?code=…` to this path and the WebView
+ * navigates there, so it — not `/staff/accept` — is where a native Google sign-in comes back.
+ */
+export const NATIVE_OAUTH_RETURN_PATH = "/auth/callback";
+
+/**
+ * Is this the native shell's OAuth return route?
+ *
+ * The native staff-invitation sign-in leaves the WebView for the system browser and comes back
+ * through `wakapos://callback`. Without this check the workspace bootstrap would consume the
+ * invitation on `/auth/callback` — accepting it, clearing the stored token and routing to the POS —
+ * before the app could hand control back to `/staff/accept`, which is the page that owns
+ * acceptance (single-flight RPC, wrong-account switching, per-code error messages).
+ *
+ * Scoped to the NATIVE platform on purpose: on web this path keeps its previous behaviour exactly,
+ * where accepting the invitation during the callback is the designed outcome.
+ */
+export function isNativeOAuthReturnPath(
+  pathname: string | null | undefined,
+  isNativePlatform: boolean,
+): boolean {
+  const path = (pathname ?? "").split("?")[0] || "";
+  return isNativePlatform && path === NATIVE_OAUTH_RETURN_PATH;
+}
+
 export type StaffInviteAcceptResult =
   | { ok: true; shopId: string; membershipRole: string; staffId: string | null; linkedExisting: boolean }
   | { ok: false; error: string };

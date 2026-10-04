@@ -6,7 +6,7 @@ import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
 import { usePosStore } from "../store/usePosStore";
 import { clearPendingRegistrationProfile } from "./registrationProfileCache";
 import { getActiveShopId, isValidShopId } from "../offline/shopScope";
-import { blocksOwnerBootstrap, resolveAccountIdentity } from "./memberIdentity";
+import { blocksOwnerWorkspaceProvisioning, resolveAccountIdentity } from "./memberIdentity";
 import { normalizeNamePart, provisionableWakaName } from "./nameReview";
 
 /**
@@ -32,7 +32,12 @@ async function mayCreateOwnerWorkspace(user: { id: string; user_metadata?: unkno
     metadata: (user.user_metadata ?? {}) as Record<string, unknown>,
     force: true,
   });
-  return !blocksOwnerBootstrap(resolution);
+  // Both callers reach this only after the shop was found to be absent — the save RPC answered
+  // `no_shop`, or `getPrimaryShopForUser()` returned nothing — so nothing was readable, which is
+  // the half of the answer the classifier cannot supply on its own. Without it a disabled or
+  // deleted staff member could be handed a new workspace from a settings save rather than from
+  // sign-in, which is the same defect by a different door (F-04).
+  return !blocksOwnerWorkspaceProvisioning(resolution, false);
 }
 
 export type SaveOwnerBundleArgs = {

@@ -15,6 +15,8 @@ import {
   provisionOwnerWorkspace,
 } from "../lib/ownerProvisioning";
 import { resolveStaffInviteBeforeOwnerBootstrap } from "../lib/staffInviteOnboarding";
+import { peekStaffInviteToken } from "../lib/staffInvite";
+import { hasStaffLoginIntent } from "../lib/staffLogin";
 import { memberIntentFromMetadata, resolveAccountIdentity } from "../lib/memberIdentity";
 import { isLoyaltySurface } from "../lib/productHost";
 import { consumePendingProgramPath } from "../lib/pendingLoyaltyProgram";
@@ -123,6 +125,30 @@ export function AuthCallbackPage() {
           userId: session.user.id,
           emailConfirmed: Boolean(session.user.email_confirmed_at),
         });
+
+        // Phase 2 — a staff Google sign-in on the native shell leaves the WebView and comes back
+        // through the deep link as a FULL PAGE RELOAD, so this page runs before LoginPage and
+        // cannot tell a staff sign-in from a merchant one on its own: the marker the staff button
+        // wrote is the only evidence. A staff sign-in must not be sent down the owner destination,
+        // so hand control back to /login, which owns the staff gate — shop resolution, the picker
+        // and the no-access message. The marker is deliberately left in place for the gate to seed
+        // from; it clears itself once the gate settles.
+        //
+        // Checked AFTER the invitation case: a pending invitation token means the invitation flow
+        // owns this return (Phase 1), and that must not be diverted into the ordinary staff gate.
+        if (hasStaffLoginIntent() && !peekStaffInviteToken()) {
+          logStartupPhase("workspace_ready", { userId: session.user.id, via: "staff_login_intent" });
+          bootTrace("BOOT-010", "navigate", "SUCCESS", {
+            destination: "/login",
+            via: "staff_login_intent",
+          });
+          if (!cancelled) {
+            finishedRef.current = true;
+            setDestination("/login");
+            setState("success");
+          }
+          return;
+        }
 
         const inviteGate = await resolveStaffInviteBeforeOwnerBootstrap(session);
 

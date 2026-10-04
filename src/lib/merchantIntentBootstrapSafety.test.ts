@@ -368,7 +368,12 @@ describe("H. the businessProfile bootstrap callers obey the identity authority",
     expect(guards.length).toBe(3);
     // and the authority is actually consulted, not reimplemented
     expect(src).toMatch(/resolveAccountIdentity\(/);
-    expect(src).toMatch(/blocksOwnerBootstrap\(/);
+    // Phase 3 (F-04): the guard is now the STRONGER of the two authorities in the same module —
+    // `blocksOwnerWorkspaceProvisioning`, which adds the fail-closed rule for an identity that holds
+    // a shop membership no client can read (a disabled or deleted staff record). The property this
+    // test protects is unchanged: the module consults the identity authority rather than deciding
+    // for itself. `blocksOwnerBootstrap` is still exported and still tested in memberIdentity.test.ts.
+    expect(src).toMatch(/blocksOwnerWorkspaceProvisioning\(/);
   });
 });
 

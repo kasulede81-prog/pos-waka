@@ -35,7 +35,11 @@ import {
   markMemberWorkspace,
   markWorkspaceBootstrapped,
 } from "../lib/workspaceBootstrapCache";
-import { resetMemberIdentityCache, resolveAccountIdentity } from "../lib/memberIdentity";
+import {
+  blocksOwnerWorkspaceProvisioning,
+  resetMemberIdentityCache,
+  resolveAccountIdentity,
+} from "../lib/memberIdentity";
 import { cachePendingRegistrationProfile } from "../lib/registrationProfileCache";
 import { ensureReferralAttributionForSession } from "../lib/referralAgents";
 import { storePendingReferralCode } from "../lib/pendingReferral";
@@ -265,6 +269,20 @@ export function useAuth() {
           markWorkspaceEnsured(uid);
           await tryApplyPendingReferral(next);
           logStartupPhase("workspace_ready", { userId: uid, via: "staff_invite_pending" });
+          return;
+        } else if (blocksOwnerWorkspaceProvisioning(accountIdentity, false)) {
+          // F-04 — the classifier reports a shop membership and none was readable, so that
+          // membership is not active: `user_can_access_shop()` denies a non-owner whose
+          // shop_pos_staff row is inactive or soft-deleted, which is why the lookup above came back
+          // empty. Refuse HERE, before `alreadyEnsured` and before the block below — both of which
+          // run `repairOwnerWorkspaceIfNeeded` / `bootstrapOwnerWorkspace`, neither of which is
+          // identity-scoped, and which would otherwise hand this identity a brand new shop.
+          markWorkspaceEnsured(uid);
+          await tryApplyPendingReferral(next);
+          logStartupPhase("workspace_ready", {
+            userId: uid,
+            via: "existing_staff_no_active_access",
+          });
           return;
         }
 

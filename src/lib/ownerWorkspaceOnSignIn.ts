@@ -11,7 +11,7 @@ import {
   markMemberWorkspace,
   markWorkspaceBootstrapped,
 } from "./workspaceBootstrapCache";
-import { resolveAccountIdentity } from "./memberIdentity";
+import { blocksOwnerWorkspaceProvisioning, resolveAccountIdentity } from "./memberIdentity";
 import { logStartupPhase } from "./startupDiagnostics";
 import { supabase } from "./supabase";
 
@@ -75,6 +75,15 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
 
   if (inviteGate.skipOwnerBootstrap) {
     logStartupPhase("workspace_ready", { userId: uid, via: "staff_invite_pending" });
+    return;
+  }
+
+  // F-04 — this is the AuthCallbackPage path, which runs on the native deep-link return and while
+  // `ensureWorkspaceForSession` is skipped entirely. Same rule, same reason: the classifier reports
+  // a shop membership and nothing was readable, so the membership is not active. Refuse before the
+  // bootstrap below, which is not identity-scoped and would create a shop for this identity.
+  if (blocksOwnerWorkspaceProvisioning(accountIdentity, false)) {
+    logStartupPhase("workspace_ready", { userId: uid, via: "existing_staff_no_active_access" });
     return;
   }
 

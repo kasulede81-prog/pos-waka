@@ -171,3 +171,35 @@ export async function resolveAccountIdentity(opts: {
 export function blocksOwnerBootstrap(resolution: IdentityResolution): boolean {
   return resolution.kind !== "merchant";
 }
+
+/**
+ * True when this session must NOT be provisioned an owner workspace.
+ *
+ * F-04, AND IT FAILS CLOSED. `blocksOwnerBootstrap` answers only "is the classifier's verdict
+ * anything but merchant" — and a disabled staff member's verdict IS merchant, because
+ * `waka_account_identity()` is SECURITY DEFINER: it reads `shop_members` directly and still reports
+ * `is_shop_member: true` for a row that RLS will not let the client read. That row is unreadable
+ * precisely because `user_can_access_shop()` denies a non-owner whose `shop_pos_staff` record is
+ * inactive or soft-deleted. So the verdict alone cannot tell the two apart.
+ *
+ * Treating "no readable shop" as "needs a shop" is what turned a disabled cashier into the owner of
+ * a brand new workspace. The other half of the answer is whether anything was actually readable: an
+ * identity the classifier reports as holding a shop membership, for which no shop could be read,
+ * has a membership that is not active — never a reason to create a second, unrelated business.
+ *
+ * AN OWNER IS NEVER CAUGHT HERE. `user_can_access_shop()` admits `role = 'owner'` unconditionally,
+ * so an owner's membership is always readable and the caller has already returned before asking.
+ * Reaching this with `is_shop_member` true therefore means "not an owner" or "membership not
+ * active" — provisioning is wrong either way.
+ *
+ * A brand-new identity, and a merchant whose workspace genuinely needs repair, report no shop
+ * membership and are unaffected.
+ */
+export function blocksOwnerWorkspaceProvisioning(
+  resolution: IdentityResolution,
+  hasReadableShop: boolean,
+): boolean {
+  if (hasReadableShop) return false;
+  if (blocksOwnerBootstrap(resolution)) return true;
+  return resolution.identity?.isShopMember === true;
+}

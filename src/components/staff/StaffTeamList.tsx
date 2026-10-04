@@ -7,12 +7,8 @@ import { staffInitials } from "../../lib/staffRoleCatalog";
 import { findRoleTemplate, isCustomRoleAssignable, roleTemplatesForBusinessType } from "../../lib/enterpriseRoles";
 import { isStaffLoginLocked } from "../../lib/staffSecret";
 import { getDeviceOnline } from "../../lib/deviceOnline";
-import {
-  isLegacyPinStaffUpgradeable,
-  staffHasPendingUpgradeInvite,
-  type StaffInvitationRow,
-} from "../../lib/staffInvite";
-import { normalizeLinkedAuthUserId } from "../../lib/sessionActor";
+import { isLegacyPinStaffUpgradeable, type StaffInvitationRow } from "../../lib/staffInvite";
+import { staffAccessState } from "../../lib/staffAccessState";
 import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 import { StaffDesktopTable } from "./StaffDesktopTable";
 import { useWakaLayoutBand } from "../../hooks/useWakaLayoutBand";
@@ -28,7 +24,6 @@ type Props = {
   onUpdateRoleTemplate: (id: string, roleTemplateId: string, role: UserRole) => void;
   onAssignCustomRole: (id: string, customRoleId: string) => void;
   onResetPin: (id: string) => void;
-  onResetPassword: (id: string) => void;
   onUnlock: (id: string) => void;
   onForceLogout: (id: string) => void;
   onDelete: (id: string) => void;
@@ -63,12 +58,15 @@ function formatWhen(iso: string | null | undefined, lang: Language): string {
   return new Date(ms).toLocaleString();
 }
 
+/**
+ * When the OFFLINE credential last changed — the PIN, and only the PIN.
+ *
+ * This used to take the later of the PIN and the password, which mixed a device credential with a
+ * credential the product no longer issues. A staff member whose only recorded change is an old
+ * password now reads "Never", which is the honest answer to "when was their PIN last set".
+ */
 function lastSecretChange(staff: StaffAccount): string | null {
-  const pin = staff.pinChangedAt ? Date.parse(staff.pinChangedAt) : 0;
-  const pass = staff.passwordChangedAt ? Date.parse(staff.passwordChangedAt) : 0;
-  if (!pin && !pass) return null;
-  if (pin >= pass) return staff.pinChangedAt ?? null;
-  return staff.passwordChangedAt ?? null;
+  return staff.pinChangedAt ?? null;
 }
 
 export function StaffTeamList({
@@ -82,7 +80,6 @@ export function StaffTeamList({
   onUpdateRoleTemplate,
   onAssignCustomRole,
   onResetPin,
-  onResetPassword,
   onUnlock,
   onForceLogout,
   onDelete,
@@ -174,6 +171,11 @@ export function StaffTeamList({
             const open = manageId === s.id;
             const locked = isStaffLoginLocked(s);
             const isActiveSession = activeStaffId === s.id;
+            const { googleLinked, invitePending: upgradePending, pinConfigured } = staffAccessState(
+              s,
+              pendingInvites,
+              pendingUpgradeStaffIds,
+            );
             const selectedTemplateId =
               s.customRoleId
                 ? `custom:${s.customRoleId}`
@@ -206,20 +208,51 @@ export function StaffTeamList({
                         {t(lang, "staffSecurityLocked")}
                       </span>
                     ) : null}
-                    {normalizeLinkedAuthUserId(s.linkedAuthUserId) ? (
+                    {googleLinked ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-black uppercase text-sky-900">
                         <Cloud className="h-3 w-3" />
-                        {t(lang, "staffUpgradeCloudLinked")}
+                        {t(lang, "staffGoogleLinked")}
                       </span>
-                    ) : pendingUpgradeStaffIds.includes(s.id) || staffHasPendingUpgradeInvite(s, pendingInvites) ? (
+                    ) : upgradePending ? (
                       <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black uppercase text-violet-900">
                         {t(lang, "staffUpgradePending")}
                       </span>
                     ) : (
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-black uppercase text-muted-foreground">
-                        {t(lang, "staffUpgradeLegacyPin")}
+                        {t(lang, "staffGoogleNotLinked")}
                       </span>
                     )}
+                  </div>
+                </div>
+
+                {/* TWO KINDS OF ACCESS, NAMED. Online is the person's Google account; offline is a
+                    device credential for a shared terminal. They were previously mixed together
+                    with a password and a username under one "PIN only / Cloud linked" badge, which
+                    read as competing accounts for the same person. */}
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-border px-3 py-3">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                      {t(lang, "staffOnlineAccessTitle")}
+                    </p>
+                    <p className="mt-1 text-sm font-black text-foreground">
+                      {googleLinked
+                        ? t(lang, "staffGoogleLinked")
+                        : upgradePending
+                          ? t(lang, "staffUpgradePending")
+                          : t(lang, "staffGoogleNotLinked")}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-muted-foreground">
+                      {googleLinked ? t(lang, "staffOnlineAccessSub") : t(lang, "staffGoogleNotLinkedHint")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border px-3 py-3">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                      {t(lang, "staffOfflineAccessTitle")}
+                    </p>
+                    <p className="mt-1 text-sm font-black text-foreground">
+                      {pinConfigured ? t(lang, "staffPinConfigured") : t(lang, "staffPinNotConfigured")}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "staffPinOfflineNote")}</p>
                   </div>
                 </div>
 
@@ -308,11 +341,12 @@ export function StaffTeamList({
                         </optgroup>
                       ) : null}
                     </select>
+                    {/* PIN only. "Reset password" was removed with the password concept: the offline
+                        credential is the PIN, and an online staff member signs in with Google. Any
+                        password hash already stored is left untouched — it is simply no longer part
+                        of the product. */}
                     <button type="button" className="rounded-xl border-2 border-border px-3 py-2 text-sm font-bold" onClick={() => onResetPin(s.id)}>
-                      {t(lang, "staffResetPin")}
-                    </button>
-                    <button type="button" className="rounded-xl border-2 border-border px-3 py-2 text-sm font-bold" onClick={() => onResetPassword(s.id)}>
-                      {t(lang, "staffResetPassword")}
+                      {pinConfigured ? t(lang, "staffResetPin") : t(lang, "staffPinSet")}
                     </button>
                     {canUpgradeToCloud && onUpgradeToCloud && isLegacyPinStaffUpgradeable(s) ? (
                       <button

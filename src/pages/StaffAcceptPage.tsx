@@ -3,6 +3,10 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { EnterpriseSpinner } from "../components/enterprise/EnterpriseSpinner";
 import { requestGoogleIdTokenWithNonce } from "../lib/googleIdentity";
+import { signInForStaffInvite } from "../lib/staffInviteGoogleAuth";
+import { signInWithGoogleNative } from "../lib/nativeGoogleAuth";
+import { isNativeApp } from "../lib/nativeApp";
+import { authDevLog } from "../lib/authConfig";
 import { reportAuthIssue } from "../lib/monitoring";
 import {
   acceptStaffInviteToken,
@@ -155,34 +159,76 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
   }, [initializing, isAuthenticated, token]);
 
   /**
-   * Google-first sign-in. The ID token is bound to a per-attempt nonce that
-   * Supabase verifies, so a replayed or substituted token is rejected. On success
-   * the auto-accept effect above runs (it watches isAuthenticated), so acceptance
-   * logic is not duplicated here.
+   * Google-first sign-in. On success the auto-accept effect above runs (it watches
+   * isAuthenticated), so acceptance logic is not duplicated here.
+   *
+   * PLATFORM SPLIT — `signInForStaffInvite` picks between the two implementations that already
+   * exist, and neither is reimplemented here:
+   *
+   *   WEB    GIS popup → `signInWithIdToken` with the RAW nonce. The ID token is bound to a
+   *          per-attempt nonce Supabase verifies, so a replayed or substituted token is rejected.
+   *          Supabase hashes the nonce it receives and compares that to the claim in the token,
+   *          and Google was given that hash — never pass the hashed form here.
+   *   NATIVE Supabase OAuth in the system browser, returning through `wakapos://callback` — the
+   *          same implementation merchant sign-in uses. The GIS popup is not used in the
+   *          Capacitor WebView, where it does not work reliably.
    */
   const signInWithGoogle = async () => {
     if (busy || !supabase) return;
     setBusy(true);
     setMessage(null);
     setWrongAccount(null);
+    const client = supabase;
+    const platform = isNativeApp() ? "native" : "web";
     try {
+      // Persisted BEFORE the round trip: on native the WebView leaves for the system browser and
+      // returns through the deep link, so this is what carries the invitation across.
       persistStaffInviteToken(token);
-      const { idToken, nonce } = await requestGoogleIdTokenWithNonce();
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: "google",
-        token: idToken,
-        nonce,
+
+      const via = await signInForStaffInvite({
+        isNativePlatform: isNativeApp,
+        signInWithNativeGoogle: signInWithGoogleNative,
+        signInWithWebGoogle: async () => {
+          const { idToken, nonce } = await requestGoogleIdTokenWithNonce();
+          const { error } = await client.auth.signInWithIdToken({
+            provider: "google",
+            token: idToken,
+            nonce,
+          });
+          if (error) throw error;
+        },
       });
-      if (error) {
-        reportAuthIssue("invite_google_signin_error", {});
-        setMessage(t(lang, "staffInviteAcceptFailed"));
-        return;
+
+      if (via === "native") {
+        // On the happy path the deep-link return reloads the WebView into /auth/callback, which
+        // hands control back to this page with the stored token — so reaching this line means the
+        // flow finished without that reload. Require a session before continuing either way.
+        const { data } = await client.auth.getSession();
+        if (!data.session) throw new Error(t(lang, "staffInviteAcceptFailed"));
       }
-      reportAuthIssue("invite_google_signin_ok", {});
+
+      reportAuthIssue("invite_google_signin_ok", { platform: via });
       setPhase("accepting");
     } catch (err) {
-      reportAuthIssue("invite_google_signin_error", {});
-      setMessage(err instanceof Error ? err.message : t(lang, "staffInviteAcceptFailed"));
+      // Developer diagnostics. The provider's own code/status/message is the only thing that
+      // identifies WHICH gate rejected the token (`invalid nonce` for a nonce mismatch, and so
+      // on); an empty report made every failure indistinguishable. Console only — never the UI,
+      // never the monitoring payload. No invitation token, ID token, access token or nonce is
+      // logged, because none of them is passed here.
+      const code = (err as { code?: unknown } | null)?.code;
+      const status = (err as { status?: unknown } | null)?.status;
+      authDevLog("error", "staff invite Google sign-in failed", {
+        platform,
+        code: typeof code === "string" ? code : undefined,
+        status: typeof status === "number" ? status : undefined,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      reportAuthIssue("invite_google_signin_error", {
+        platform,
+        errorCode: typeof code === "string" ? code : "unknown",
+        status: typeof status === "number" ? status : 0,
+      });
+      setMessage(staffInviteGoogleErrorMessage(lang, err));
     } finally {
       setBusy(false);
     }
@@ -275,6 +321,24 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
       </div>
     </div>
   );
+}
+
+/**
+ * User-facing wording for a failed Google sign-in on this page.
+ *
+ * A provider rejection carries GoTrue's own wording — "Nonces mismatch", "invalid nonce" — which
+ * is diagnostic, not something a cashier can act on, so it is replaced with the page's generic
+ * message. Errors this page raises itself already read as plain English ("Google sign-in was
+ * cancelled.") and are shown as they are. The provider's real code and message still reach the
+ * console and the monitoring payload, where they are useful.
+ */
+export function staffInviteGoogleErrorMessage(lang: Language, err: unknown): string {
+  const providerCode = (err as { code?: unknown } | null)?.code;
+  if (typeof providerCode === "string" && providerCode) {
+    return t(lang, "staffInviteAcceptFailed");
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return t(lang, "staffInviteAcceptFailed");
 }
 
 export function acceptErrorMessage(lang: Language, error: string): string {

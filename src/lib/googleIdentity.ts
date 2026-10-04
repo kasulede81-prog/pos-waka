@@ -102,6 +102,13 @@ function handleCredentialResponse(response: GoogleCredentialResponse): void {
  * GIS initialisation config. `nonce` is optional and only supplied by the staff
  * invitation path (see requestGoogleIdTokenWithNonce); every other caller gets
  * the unchanged, nonce-free configuration.
+ *
+ * `nonce` here is the value Google embeds verbatim in the ID token's `nonce`
+ * claim, so it MUST be the SHA-256 HEX of the raw nonce — never the raw value.
+ * Supabase Auth hashes what it is given and compares that to the claim, so
+ * handing Google the raw value makes the two sides unmatchable. See
+ * `createGoogleNoncePair` for the contract and `runNonceBoundGooglePopup` for
+ * the only path that supplies it.
  */
 function gisInitConfig(clientId: string, nonce?: string): Record<string, unknown> {
   return {
@@ -173,9 +180,88 @@ export function createGoogleAuthNonce(): string {
 }
 
 /**
+ * Lowercase-hex SHA-256 of `value`.
+ *
+ * This is the transformation Supabase Auth itself applies to the nonce passed to
+ * `signInWithIdToken` before comparing it to the `nonce` claim in the ID token:
+ * GoTrue computes `fmt.Sprintf("%x", sha256.Sum256([]byte(nonce)))` and requires
+ * it to equal the claim. Google embeds the nonce verbatim, so the value given to
+ * Google must already be this hash.
+ *
+ * `crypto.subtle` is only exposed in a secure context, which every real surface
+ * is (https://pos.dkasu.com, https://localhost in the Capacitor WebView). A LAN
+ * dev origin over plain http is the one case that is not — it gets a clear error
+ * rather than a silent `undefined` TypeError.
+ */
+export async function sha256Hex(value: string): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    throw new Error("Google sign-in requires a secure context (https or localhost).");
+  }
+  const digest = await subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * The two forms one Google sign-in attempt needs, generated together so they can
+ * never be confused:
+ *
+ *   rawNonce  → Supabase `signInWithIdToken({ provider: "google", token, nonce })`
+ *   gisNonce  → `google.accounts.id.initialize({ …, nonce: gisNonce })`
+ *
+ * Generated fresh per attempt and never persisted, logged, or stored.
+ */
+export async function createGoogleNoncePair(): Promise<{ rawNonce: string; gisNonce: string }> {
+  const rawNonce = createGoogleAuthNonce();
+  const gisNonce = await sha256Hex(rawNonce);
+  return { rawNonce, gisNonce };
+}
+
+/**
+ * One nonce-bound GIS popup sign-in, with the GIS surface injected so the nonce
+ * contract can be asserted directly in tests (no DOM, no network).
+ *
+ * The split is the whole point and is not negotiable:
+ *   - Google is initialised with `sha256(rawNonce)` — the value it will embed.
+ *   - The caller receives back the RAW nonce, which is the only value Supabase
+ *     will accept alongside the token.
+ *
+ * Returns the ID token and the raw nonce; it does not call Supabase itself.
+ */
+export async function runNonceBoundGooglePopup(deps: {
+  clientId: string;
+  googleId: Pick<GoogleIdApi, "initialize" | "disableAutoSelect">;
+  openPopup: () => Promise<string>;
+}): Promise<{ idToken: string; nonce: string }> {
+  const { rawNonce, gisNonce } = await createGoogleNoncePair();
+
+  deps.googleId.initialize(gisInitConfig(deps.clientId, gisNonce));
+  try {
+    deps.googleId.disableAutoSelect();
+  } catch {
+    /* ignore */
+  }
+
+  const idToken = await deps.openPopup();
+  return { idToken, nonce: rawNonce };
+}
+
+/**
  * Like requestGoogleIdToken, but binds the returned ID token to a fresh nonce.
- * Google embeds the nonce in the token; Supabase verifies it when the raw value
- * is passed to signInWithIdToken. A replayed or substituted token then fails.
+ * A replayed or substituted token then fails.
+ *
+ * THE NONCE CONTRACT. Supabase Auth hashes the nonce it is given (SHA-256,
+ * lowercase hex) and compares that to the `nonce` claim inside the ID token.
+ * Google embeds whatever value it was initialised with, verbatim. So the two
+ * sides receive DIFFERENT forms of the same nonce:
+ *
+ *   rawNonce                       → supabase.auth.signInWithIdToken({ nonce })
+ *   sha256Hex(rawNonce)            → google.accounts.id.initialize({ nonce })
+ *
+ * Passing the raw value to both — which this function used to do — cannot match
+ * under any circumstances: either the hashes differ ("Nonces mismatch"), or, if
+ * Google embedded nothing, the grant is rejected because a nonce was supplied
+ * for a token that carries none. `runNonceBoundGooglePopup` owns the split.
  *
  * Scoped to the staff invitation flow. It re-initialises GIS with the nonce for
  * the duration of the attempt and, in `finally`, drops the cached initialisation
@@ -183,7 +269,7 @@ export function createGoogleAuthNonce(): string {
  * entry point (merchant/admin sign-in) on exactly the configuration it used
  * before — the shared state is restored even if the attempt throws.
  *
- * The nonce is never logged and never persisted.
+ * Neither nonce form is ever logged or persisted.
  */
 export async function requestGoogleIdTokenWithNonce(
   clientId?: string,
@@ -200,19 +286,15 @@ export async function requestGoogleIdTokenWithNonce(
     throw new Error("Google Sign-In is not available on this device.");
   }
 
-  const nonce = createGoogleAuthNonce();
-  googleId.initialize(gisInitConfig(resolvedClientId, nonce));
-  try {
-    googleId.disableAutoSelect();
-  } catch {
-    /* ignore */
-  }
   // Force the shared path to re-initialise on its next call.
   initializedClientId = null;
 
   try {
-    const idToken = await openGooglePopup(googleId);
-    return { idToken, nonce };
+    return await runNonceBoundGooglePopup({
+      clientId: resolvedClientId,
+      googleId,
+      openPopup: () => openGooglePopup(googleId),
+    });
   } finally {
     try {
       ensureGoogleIdentityInitialized(resolvedClientId);

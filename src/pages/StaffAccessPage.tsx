@@ -24,7 +24,7 @@ import { StaffCreateWizard } from "../components/staff/StaffCreateWizard";
 import { StaffCloudInviteCard } from "../components/staff/StaffCloudInviteCard";
 import { StaffLegacyUpgradeDialog } from "../components/staff/StaffLegacyUpgradeDialog";
 import { StaffTeamList } from "../components/staff/StaffTeamList";
-import { StaffPinResetDialog, StaffPasswordResetDialog } from "../components/auth/StaffCredentialResetDialog";
+import { StaffPinResetDialog } from "../components/auth/StaffCredentialResetDialog";
 import { DeviceApprovedGate } from "../components/device/DeviceApprovedGate";
 import type { StaffCreateRole } from "../lib/staffRoleCatalog";
 import { listStaffInvitations, type StaffInvitationRow } from "../lib/staffInvite";
@@ -50,7 +50,6 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
 
   const [creating, setCreating] = useState(false);
   const [resetPinStaffId, setResetPinStaffId] = useState<string | null>(null);
-  const [resetPasswordStaffId, setResetPasswordStaffId] = useState<string | null>(null);
   const [staffHydrating, setStaffHydrating] = useState(false);
   const [upgradeStaff, setUpgradeStaff] = useState<StaffAccount | null>(null);
   const [pendingInvites, setPendingInvites] = useState<StaffInvitationRow[]>([]);
@@ -149,14 +148,15 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
             if (maxStaff > 0 && staff.length >= maxStaff) {
               return { ok: false, error: tTemplate(lang, "staffLimitPlan", { max: String(maxStaff) }) };
             }
+            // Only what the modern model requires: a name, a role, and the offline PIN. Online
+            // access is granted separately by invitation, so no password and no username are
+            // created here — or asked for anywhere in this flow.
             const res = await addStaffAccount({
               name: input.name,
               role: input.role as StaffCreateRole,
               roleTemplateId: input.roleTemplateId,
               pin: input.pin,
               phone: input.phone,
-              password: input.password,
-              username: input.username,
             });
             if (!res.ok) {
               const errKey = res.errorKey ?? "staffCreateFail";
@@ -226,7 +226,6 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
           updateStaffAccount(id, { role: custom.inheritsFrom, customRoleId, roleTemplateId: null });
         }}
         onResetPin={(id) => setResetPinStaffId(id)}
-        onResetPassword={(id) => setResetPasswordStaffId(id)}
         onUnlock={(id) => {
           void unlockStaffAccount(id);
         }}
@@ -290,17 +289,6 @@ export function StaffAccessPage({ lang, embedded = false }: { lang: Language; em
         onConfirm={(pin) => {
           if (resetPinStaffId) {
             resetStaffSecret(resetPinStaffId, { pin, password: null });
-          }
-        }}
-      />
-      <StaffPasswordResetDialog
-        lang={lang}
-        open={resetPasswordStaffId != null}
-        staffName={staff.find((s) => s.id === resetPasswordStaffId)?.name ?? ""}
-        onClose={() => setResetPasswordStaffId(null)}
-        onConfirm={(password) => {
-          if (resetPasswordStaffId) {
-            resetStaffSecret(resetPasswordStaffId, { password });
           }
         }}
       />

@@ -14,7 +14,6 @@ import clsx from "clsx";
 import type { BusinessType, Language, UserRole } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { EnterprisePinPad } from "../auth/EnterprisePinPad";
-import { EnterprisePasswordField } from "../auth/EnterprisePasswordField";
 import {
   WIZARD_STEPS,
   generateStaffPin,
@@ -46,10 +45,9 @@ type Props = {
     name: string;
     role: StaffCreateRole;
     roleTemplateId: string;
+    /** Offline / shared-terminal credential — never an online login. */
     pin: string;
     phone?: string;
-    password?: string;
-    username?: string;
   }) => Promise<{ ok: boolean; error?: string }>;
   onDone: () => void;
   staffCanRecordCashExpenses: boolean;
@@ -84,8 +82,6 @@ export function StaffCreateWizard({
   const [autoPin, setAutoPin] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advPhone, setAdvPhone] = useState("");
-  const [advPassword, setAdvPassword] = useState("");
-  const [advUsername, setAdvUsername] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedStaffResult | null>(null);
@@ -134,8 +130,6 @@ export function StaffCreateWizard({
       roleTemplateId,
       pin: finalPin,
       phone: advancedOpen && advPhone.trim() ? advPhone.trim() : undefined,
-      password: advancedOpen && advPassword.trim() ? advPassword.trim() : undefined,
-      username: advancedOpen && advUsername.trim() ? advUsername.trim() : undefined,
     });
     setBusy(false);
     if (!res.ok) {
@@ -197,6 +191,13 @@ export function StaffCreateWizard({
           </div>
           <p className="mt-3 text-center text-sm font-medium text-muted-foreground">{t(lang, "staffWizardSharePinHint")}</p>
         </article>
+
+        {/* The second half of the two-step flow, stated where the owner has just finished the
+            first. Without it, "staff created" reads as "staff finished", and the Google invitation
+            — the part that actually gives them online access — never gets sent. */}
+        <p className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-center text-sm font-semibold text-sky-900">
+          {t(lang, "staffSuccessInviteHint")}
+        </p>
 
         <div className="grid gap-2 sm:grid-cols-2">
           <button
@@ -307,8 +308,16 @@ export function StaffCreateWizard({
             </div>
           </div>
 
-          <div>
-            <span className="text-sm font-bold text-muted-foreground">{t(lang, "staffPinLabel")}</span>
+          {/* OFFLINE / SHARED TERMINAL. The PIN is a device credential, so it is presented as its
+              own thing rather than as the staff member's way in — online access is their Google
+              account, which the Team page grants by invitation. */}
+          <div className="rounded-2xl border border-border bg-muted/40 p-4">
+            <h2 className="text-sm font-black uppercase tracking-wide text-foreground">
+              {t(lang, "staffOfflineAccessTitle")}
+            </h2>
+            <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "staffOfflineAccessSub")}</p>
+
+            <span className="mt-4 block text-sm font-bold text-muted-foreground">{t(lang, "staffPinLabel")}</span>
             {autoPin ? (
               <p className="mt-1.5 flex min-h-[52px] items-center justify-center rounded-2xl border-2 border-border bg-muted font-mono text-2xl tracking-[0.35em] text-muted-foreground">
                 {pin}
@@ -361,6 +370,11 @@ export function StaffCreateWizard({
             />
           </div>
 
+          {/* Advanced settings used to also collect a staff password and a "Custom login ID". Both
+              belonged to the superseded model, where a staff member signed in with credentials the
+              owner invented. Online sign-in is now the person's own Google account, and the PIN
+              above is a device credential — so neither is asked for, here or anywhere else in the
+              new-staff flow. The stored columns are untouched and existing records keep working. */}
           <details
             className="rounded-2xl border border-border bg-muted/80"
             open={advancedOpen}
@@ -371,21 +385,6 @@ export function StaffCreateWizard({
             </summary>
             <div className="space-y-3 border-t border-border px-4 pb-4 pt-3">
               <input value={advPhone} onChange={(e) => setAdvPhone(e.target.value)} placeholder={t(lang, "staffAdvancedPhone")} className={fieldClass} inputMode="tel" />
-              <EnterprisePasswordField
-                lang={lang}
-                value={advPassword}
-                onChange={(e) => setAdvPassword(e.target.value)}
-                placeholder={t(lang, "staffPasswordPh")}
-                autoComplete="new-password"
-                minLength={1}
-                wrapperClassName="block"
-              />
-              <input
-                value={advUsername}
-                onChange={(e) => setAdvUsername(e.target.value.replace(/\s+/g, "").toLowerCase())}
-                placeholder={t(lang, "staffAdvancedUsername")}
-                className={fieldClass}
-              />
             </div>
           </details>
 
