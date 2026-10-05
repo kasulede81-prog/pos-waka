@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { declareMerchantIntent } from "../lib/merchantIntent";
+import { NameReviewFields } from "../components/auth/NameReviewFields";
 import { confirmWakaName } from "../lib/wakaName";
 import {
   composeFullName,
@@ -202,62 +203,18 @@ export function StartBusinessPage({ lang }: Props) {
         a native tooltip. The same handler already validates the shop name.
       */}
       <form className="flex flex-col gap-3" onSubmit={submit} noValidate>
+        {/* The fields themselves now live in `NameReviewFields` so the staff invitation renders the
+            exact same step rather than a second copy of it. Decision (`needsNameReview`) and write
+            (`confirmWakaName`) are unchanged, below and in `wakaName.ts`. */}
         {reviewing ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs font-medium text-muted-foreground">
-              {t(lang, "nameReviewFromGoogleHint")}
-            </p>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-                {t(lang, "nameReviewFirstNameLabel")} *
-              </span>
-              <input
-                className="waka-input"
-                value={parts.firstName}
-                onChange={(e) => {
-                  setParts((p) => ({ ...p, firstName: e.target.value }));
-                  setPartError(null);
-                }}
-                autoComplete="given-name"
-                maxLength={120}
-                required
-                disabled={busy}
-                aria-invalid={partError?.field === "firstName" || undefined}
-                data-testid="name-review-first-name"
-              />
-              {partError?.field === "firstName" ? (
-                <span role="alert" className="text-xs font-semibold text-destructive">
-                  {partError.message}
-                </span>
-              ) : null}
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-                {t(lang, "nameReviewLastNameLabel")} *
-              </span>
-              <input
-                className="waka-input"
-                value={parts.lastName}
-                onChange={(e) => {
-                  setParts((p) => ({ ...p, lastName: e.target.value }));
-                  setPartError(null);
-                }}
-                autoComplete="family-name"
-                maxLength={120}
-                required
-                disabled={busy}
-                aria-invalid={partError?.field === "lastName" || undefined}
-                data-testid="name-review-last-name"
-              />
-              {partError?.field === "lastName" ? (
-                <span role="alert" className="text-xs font-semibold text-destructive">
-                  {partError.message}
-                </span>
-              ) : null}
-            </label>
-          </div>
+          <NameReviewFields
+            lang={lang}
+            parts={parts}
+            onPartsChange={setParts}
+            error={partError}
+            onClearError={() => setPartError(null)}
+            disabled={busy}
+          />
         ) : null}
 
         <label className="flex flex-col gap-1">

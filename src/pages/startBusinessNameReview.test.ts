@@ -27,6 +27,20 @@ function page(): string {
   return src(PAGE);
 }
 
+/**
+ * THE FIELDS MOVED, THE INVARIANTS DID NOT.
+ *
+ * The two name inputs used to be written inline here. They now live in
+ * `src/components/auth/NameReviewFields.tsx` so the staff invitation renders the SAME step rather
+ * than a second copy of it. Every property below is still asserted — against the file the markup
+ * actually lives in now — plus one new one: that this page RENDERS that shared component, so the
+ * merchant review cannot silently stop using it.
+ */
+const FIELDS = "src/components/auth/NameReviewFields.tsx";
+function fields(): string {
+  return src(FIELDS);
+}
+
 describe("the review is shown to the right people", () => {
   it("H. it is decided by needsNameReview, which excludes members and existing tenants", () => {
     const source = page();
@@ -61,14 +75,29 @@ describe("the review is shown to the right people", () => {
 
 describe("A/B. the fields the person reviews", () => {
   it("renders first and last name, both required, both editable", () => {
-    const source = page();
+    const source = fields();
     expect(source).toContain('data-testid="name-review-first-name"');
     expect(source).toContain('data-testid="name-review-last-name"');
     expect(source).toContain("nameReviewFirstNameLabel");
     expect(source).toContain("nameReviewLastNameLabel");
-    // Required on both, and no `readOnly`/`disabled` on either.
-    expect(source.match(/\brequired\b/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    /**
+     * Required on both, and no `readOnly` on either.
+     *
+     * This counted `>= 3` while the fields were inline, because the merchant page also marks its
+     * shop-name input required and the count was really "at least the two name fields, plus that
+     * one". In the extracted component the correct number is exactly TWO — one per name input —
+     * which is both tighter and the property the assertion was always about.
+     *
+     * `disabled` is not forbidden outright: the component takes it as a PROP so a field is inert
+     * while the form is submitting. What must never appear is a hard-coded `disabled`, which would
+     * make the name permanently uneditable.
+     */
+    expect(source.match(/\brequired\b/g)?.length ?? 0).toBe(2);
     expect(source).not.toContain("readOnly");
+    // Both inputs bind `disabled` to the prop — never a bare boolean attribute, which would make
+    // the field permanently uneditable.
+    expect(source.match(/disabled=\{/g)?.length ?? 0).toBe(2);
+    expect(source).not.toMatch(/\bdisabled\s*(\/>|>)/);
   });
 
   it("pre-fills from reviewPrefill — the provider's suggestion, never invented", () => {
@@ -79,15 +108,23 @@ describe("A/B. the fields the person reviews", () => {
   it("says what the name is for, and that it came from Google", () => {
     expect(page()).toContain("nameReviewTitle");
     expect(page()).toContain("nameReviewSub");
-    expect(page()).toContain("nameReviewFromGoogleHint");
+    expect(fields()).toContain("nameReviewFromGoogleHint");
   });
 
   it("validates both parts and shows the message beside the field it is about", () => {
     const source = page();
     expect(source).toContain("namePartsProblem(parts)");
     expect(source).toMatch(/setPartError\(\{\s*field: problem\.field/);
-    expect(source).toContain('partError?.field === "firstName"');
-    expect(source).toContain('partError?.field === "lastName"');
+    // The per-field message placement lives with the fields, in the shared component.
+    expect(fields()).toContain('error?.field === "firstName"');
+    expect(fields()).toContain('error?.field === "lastName"');
+  });
+
+  it("renders the shared component, so the merchant review cannot drift from the staff one", () => {
+    expect(page()).toContain("<NameReviewFields");
+    expect(page()).toContain('from "../components/auth/NameReviewFields"');
+    // And the page no longer carries a second copy of the inputs.
+    expect(page()).not.toContain('data-testid="name-review-first-name"');
   });
 
   it("the optional owner-name field is only offered when there is no review", () => {

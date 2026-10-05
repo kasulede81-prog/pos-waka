@@ -275,8 +275,29 @@ describe("STAFF invite acceptance V3 — self-cancel + single-flight", () => {
     expect(controller.tryBegin("other")).toBeNull();
   });
 
-  it("StaffAcceptPage no longer lists phase in accept effect deps", () => {
-    expect(STAFF_ACCEPT).toMatch(/\[initializing, isAuthenticated, token\]/);
+  it("the accept effect may re-run on phase changes, but never cancels or duplicates in flight", () => {
+    /**
+     * `phase` IS in the deps again — deliberately, and for a new reason: the first-time-Google name
+     * step parks the page on `phase === "name"` and acceptance must resume when it leaves. What the
+     * original assertion protected was never "phase must not appear" but "a phase change must not
+     * cancel or duplicate an in-flight attempt", and that is held by the single-flight controller,
+     * not by the dependency list:
+     *
+     *   * the effect returns early while `phase === "name"`, before any RPC;
+     *   * `shouldStartStaffInviteAccept` refuses while `controller.isInFlight()`;
+     *   * the attempt is completed through `controller.complete(attemptId, …)`, which is a no-op
+     *     for any attempt id that is no longer the current one.
+     *
+     * The behaviour itself is exercised for real by V3-F/G above ("phase ready→accepting must not
+     * cancel in-flight attempt"), which passes unchanged.
+     */
+    expect(STAFF_ACCEPT).toMatch(/\[initializing, isAuthenticated, token, awaitingName\]/);
+    const effectStart = STAFF_ACCEPT.lastIndexOf("const controller = attemptRef.current;");
+    const effect = STAFF_ACCEPT.slice(effectStart, STAFF_ACCEPT.indexOf("}, [initializing, isAuthenticated, token, awaitingName]"));
+    expect(effect.indexOf("if (awaitingName) return;")).toBeGreaterThan(-1);
+    expect(effect).toContain("shouldStartStaffInviteAccept");
+    // The narrow flag, NOT `phase` — see the note above.
+    expect(effect).not.toMatch(/\bphase\b/);
     expect(STAFF_ACCEPT).not.toMatch(/phase === "accepting"\) return/);
     expect(STAFF_ACCEPT).toMatch(/createStaffInviteAcceptAttemptController/);
     expect(STAFF_ACCEPT).toMatch(/controller\.complete\(/);

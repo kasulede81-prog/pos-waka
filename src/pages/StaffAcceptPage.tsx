@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { EnterpriseSpinner } from "../components/enterprise/EnterpriseSpinner";
+import { NameReviewFields } from "../components/auth/NameReviewFields";
 import { requestGoogleIdTokenWithNonce } from "../lib/googleIdentity";
+import { composeFullName, namePartsProblem, needsNameReview, reviewPrefill, type NameParts } from "../lib/nameReview";
+import { confirmWakaName } from "../lib/wakaName";
 import { signInForStaffInvite } from "../lib/staffInviteGoogleAuth";
 import { signInWithGoogleNative } from "../lib/nativeGoogleAuth";
 import { isNativeApp } from "../lib/nativeApp";
@@ -31,7 +34,7 @@ type Props = {
   onLogin: (email: string, password: string) => Promise<void>;
 };
 
-type Phase = "ready" | "accepting" | "success" | "need_verify" | "error";
+type Phase = "ready" | "name" | "accepting" | "success" | "need_verify" | "error";
 
 /**
  * Staff invitation acceptance — Google-first.
@@ -49,6 +52,19 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [wrongAccount, setWrongAccount] = useState<string | null>(null);
+  /**
+   * A first-time Google user is naming themselves, so acceptance must wait.
+   *
+   * DELIBERATELY NOT `phase`. The accept effect must re-run when this releases, but `phase` changes
+   * on transitions the effect has no business reacting to — `ready → accepting` happens *inside* an
+   * in-flight attempt, and putting `phase` in the dependency list would re-run the effect while its
+   * own attempt is running. This flag moves exactly twice: set before the attempt exists, cleared to
+   * let it start. That is the whole dependency.
+   */
+  const [awaitingName, setAwaitingName] = useState(false);
+  /** The merchant name step's own state, identical in shape to `StartBusinessPage`'s. */
+  const [parts, setParts] = useState<NameParts>({ firstName: "", lastName: "" });
+  const [partError, setPartError] = useState<{ field: "firstName" | "lastName"; message: string } | null>(null);
   const attemptRef = useRef(createStaffInviteAcceptAttemptController());
   const langRef = useRef(lang);
   langRef.current = lang;
@@ -83,6 +99,16 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
 
   useEffect(() => {
     const controller = attemptRef.current;
+    /**
+     * A FIRST-TIME Google user names themselves BEFORE the invitation is accepted.
+     *
+     * This is the merchant flow's own step, reused rather than reimplemented: `needsNameReview`
+     * decides, `confirmWakaName` writes `waka_full_name` — a key Google never touches — so the
+     * Google profile name can never become the DKASU staff name by default. It runs here, ahead of
+     * acceptance, because acceptance is what creates the staff/membership rows and the name should
+     * be settled before it. The invitation token is untouched either way.
+     */
+    if (awaitingName) return;
     if (
       !shouldStartStaffInviteAccept({
         initializing,
@@ -156,7 +182,7 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
         setMessage(acceptErrorMessage(langRef.current, result.error));
       });
     })();
-  }, [initializing, isAuthenticated, token]);
+  }, [initializing, isAuthenticated, token, awaitingName]);
 
   /**
    * Google-first sign-in. On success the auto-accept effect above runs (it watches
@@ -208,6 +234,29 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
       }
 
       reportAuthIssue("invite_google_signin_ok", { platform: via });
+
+      /**
+       * FIRST-TIME GOOGLE USER → their own name, from the merchant flow.
+       *
+       * `needsNameReview` is the SAME decision the merchant signup makes: it is true only when this
+       * account has never CONFIRMED a DKASU name (`waka_full_name`), which is also why an existing
+       * DKASU user — merchant or previously-invited staff — skips straight through. `hasTenancy` is
+       * false here because acceptance is what creates the membership; that is exactly the point at
+       * which the merchant flow considers someone un-provisioned.
+       *
+       * `reviewPrefill` seeds the fields from Google as a SUGGESTION the person can overwrite; the
+       * suggested value is never written unless they submit it.
+       */
+      const { data: userData } = await client.auth.getUser();
+      const metadata = (userData.user?.user_metadata ?? null) as Record<string, unknown> | null;
+      if (needsNameReview({ kind: "merchant", hasTenancy: false, metadata })) {
+        setParts(reviewPrefill(metadata));
+        setPartError(null);
+        setAwaitingName(true);
+        setPhase("name");
+        return;
+      }
+
       setPhase("accepting");
     } catch (err) {
       // Developer diagnostics. The provider's own code/status/message is the only thing that
@@ -234,6 +283,37 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
     }
   };
 
+  /**
+   * Save the chosen DKASU name, then hand back to the acceptance effect.
+   *
+   * Validation and persistence are the merchant flow's own (`namePartsProblem`, `composeFullName`,
+   * `confirmWakaName`) — the same three calls `StartBusinessPage` makes. Setting the phase back to
+   * `"ready"` is what re-arms the accept effect above; the invitation is untouched until then.
+   */
+  const submitName = async () => {
+    if (busy || !supabase) return;
+    const problem = namePartsProblem(parts);
+    if (problem) {
+      setPartError({ field: problem.field, message: t(lang, problem.messageKey) });
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const confirmed = await confirmWakaName({ fullName: composeFullName(parts.firstName, parts.lastName) });
+      if (!confirmed.ok) {
+        setMessage(t(lang, "staffInviteAcceptFailed"));
+        return;
+      }
+      setPartError(null);
+      // Releasing this is what re-arms the accept effect; the phase only drives the UI.
+      setAwaitingName(false);
+      setPhase("ready");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /** Sign the wrong account out so the invitation can be retried with the right one. */
   const switchAccount = async () => {
     if (!supabase) return;
@@ -244,6 +324,8 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
       setBusy(false);
       setWrongAccount(null);
       setMessage(null);
+      setAwaitingName(false);
+      setPartError(null);
       setPhase("ready");
       attemptRef.current = createStaffInviteAcceptAttemptController();
     }
@@ -271,6 +353,36 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
           <div className="mt-6 flex flex-col items-center gap-3" role="status" aria-live="polite">
             <EnterpriseSpinner size="lg" label={t(lang, "staffInviteAccepting")} />
             <p className="text-sm font-semibold text-muted-foreground">{t(lang, "staffInviteAccepting")}</p>
+          </div>
+        ) : phase === "name" ? (
+          /* The merchant name step, rendered by the merchant's own component. The Google email is
+             deliberately not shown as an editable field — it is the verified identity. */
+          <div className="mt-4 space-y-4" data-testid="staff-invite-name-step">
+            <div>
+              <h2 className="text-base font-black text-foreground">{t(lang, "nameReviewTitle")}</h2>
+            </div>
+            <NameReviewFields
+              lang={lang}
+              parts={parts}
+              onPartsChange={setParts}
+              error={partError}
+              onClearError={() => setPartError(null)}
+              disabled={busy}
+            />
+            {message ? (
+              <p role="alert" className="text-sm font-semibold text-red-700">
+                {message}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={busy}
+              aria-busy={busy}
+              onClick={() => void submitName()}
+              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-70"
+            >
+              {busy ? t(lang, "staffInviteWorking") : t(lang, "save")}
+            </button>
           </div>
         ) : phase === "need_verify" ? (
           <p role="status" className="mt-4 text-sm font-semibold text-foreground">
