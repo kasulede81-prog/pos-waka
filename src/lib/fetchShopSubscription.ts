@@ -183,7 +183,44 @@ export async function fetchSubscriptionSnapshotForUser(userId: string): Promise<
     fetchActivePromotionalGrant(orgShop.organizationId),
   ]);
   if (row) return { kind: "remote", row, promotionalGrant: grant };
-  return { kind: "none", promotionalGrant: grant };
+
+  /**
+   * A NULL HERE IS NOT NECESSARILY "NO SUBSCRIPTION" — and that is the whole bug.
+   *
+   * `fetchRemoteSubscriptionForUser` returns null both when the organization genuinely has no
+   * subscription AND when `subscriptions_select` refuses the caller. The second case is every
+   * invited staff member: they hold a `shop_members` row and no `organization_members` row, and the
+   * policy is written against the latter. Reading the refusal as an absence is what showed a
+   * cashier "Free plan" for a shop on a paid plan.
+   *
+   * Only an owner/admin of that organization can be certain the absence is real; anyone else gets
+   * `unavailable`, which never downgrades. That is deliberately conservative — it can only ever
+   * decline to claim Free, never claim a plan that is not there.
+   */
+  const isOrgAuthority = await callerManagesOrganization(orgShop.organizationId);
+  if (isOrgAuthority) return { kind: "none", promotionalGrant: grant };
+  return { kind: "unavailable", promotionalGrant: grant };
+}
+
+/**
+ * True when the signed-in caller provably manages this organization (owner/admin), and so is
+ * entitled to read its subscriptions directly. Anything else — a cashier, an unreadable row, an
+ * error — is false, and the caller then reports `unavailable` rather than a downgrade.
+ */
+async function callerManagesOrganization(organizationId: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { data, error } = await supabase
+      .from("organization_members")
+      .select("role")
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (error || !data) return false;
+    const role = String((data as { role?: string }).role ?? "");
+    return role === "owner" || role === "admin";
+  } catch {
+    return false;
+  }
 }
 
 /**

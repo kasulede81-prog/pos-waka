@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { fetchSubscriptionSnapshotForUser } from "../lib/fetchShopSubscription";
+import { onActiveShopIdChange } from "../offline/shopScope";
 import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
 import { setStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 
@@ -32,10 +33,17 @@ export function SubscriptionProvider({
   authMode: "supabase" | "local";
   children: ReactNode;
 }) {
+  /**
+   * THE PLAN IS NOT KNOWN UNTIL THE SHOP IS. This used to start at `{ kind: "none" }`, which
+   * resolves to the free tier — so the very first render of every load asserted Free before
+   * anything had been asked. `loading` masked part of it, but any consumer reading the tier
+   * outside that window saw Free. `unavailable` is the honest starting state: we have not looked
+   * yet, and "we have not looked" must never be spelled "free" (see the note on the type).
+   */
   const [snapshot, setSnapshot] = useState<SubscriptionSnapshot>(
-    authMode === "local" ? { kind: "local_full" } : { kind: "none" },
+    authMode === "local" ? { kind: "local_full" } : { kind: "unavailable" },
   );
-  /** True until the first remote subscription fetch settles (avoids tier gates on stale { kind: "none" }). */
+  /** True until the first remote subscription fetch settles (avoids tier gates on a stale snapshot). */
   const [loading, setLoading] = useState(() => authMode === "supabase" && Boolean(user?.id));
   const loadedOnceRef = useRef(false);
 
@@ -46,13 +54,14 @@ export function SubscriptionProvider({
       loadedOnceRef.current = true;
       return;
     }
+    // Signed out: there is no plan to have, and nothing to downgrade. A real, known answer.
     if (!user?.id) {
       setSnapshot({ kind: "none" });
       setLoading(false);
       return;
     }
     if (!isSupabaseEmailVerified(user)) {
-      setSnapshot({ kind: "none" });
+      setSnapshot({ kind: "unavailable" });
       setLoading(false);
       loadedOnceRef.current = true;
       return;
@@ -63,7 +72,9 @@ export function SubscriptionProvider({
       setSnapshot(next);
       loadedOnceRef.current = true;
     } catch {
-      setSnapshot({ kind: "none" });
+      // A THROWN READ IS NOT A FREE PLAN. This used to write `none`, which is why a transient
+      // failure could present a paying shop as Free.
+      setSnapshot({ kind: "unavailable" });
     } finally {
       setLoading(false);
     }
@@ -111,17 +122,22 @@ export function SubscriptionProvider({
   }, [load]);
 
   /**
-   * A SHOP SWITCH CHANGES THE ANSWER. The plan belongs to the shop being operated, so switching
-   * shop must re-resolve — without this, a cashier who moved between two shops kept the first
-   * shop's plan for the rest of the session. `switchActiveShop` dispatches this after it has
-   * attached the new partition, so the re-read sees the new active shop.
+   * THE ACTIVE SHOP *IS* THE SIGNAL — not the DOM event that sometimes accompanies it.
+   *
+   * This listened for `waka:active-shop-changed`, which `switchActiveShop` dispatches and boot does
+   * NOT. Boot activates the shop through `activateKnownShop()` → `setActiveShopId()`, so a page
+   * load set the active shop *after* the first resolve and never told this context — and because
+   * the earlier read had already happened with no shop, the cashier stayed on the wrong tier for
+   * the rest of the session. `onActiveShopIdChange` is the state mechanism itself: it fires on boot
+   * activation, on a user switch, and on sign-out (null), which is exactly the set of moments the
+   * answer can change.
    */
   useEffect(() => {
-    const onShopChanged = () => {
+    return onActiveShopIdChange((next, prev) => {
+      // null → null, or a change we already know about, is not a reason to re-read.
+      if (next === prev) return;
       void reload({ silent: true });
-    };
-    window.addEventListener("waka:active-shop-changed", onShopChanged);
-    return () => window.removeEventListener("waka:active-shop-changed", onShopChanged);
+    });
   }, [reload]);
 
   const value = useMemo(

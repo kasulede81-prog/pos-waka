@@ -67,6 +67,16 @@ const USER_FACING_SYNC_CODES = new Set([
   "debt_payment_rpc_failed",
   "cash_expense_push_failed",
   "sync_flush_error",
+  /**
+   * A sale that could not be ROUTED is not a sale that is merely waiting.
+   *
+   * These two mean the sync never even started for want of a shop, and `quarantined_no_shop` in
+   * particular is a dead end that used to be completely silent — it surfaced to the operator as an
+   * ordinary "Pending sync" counter, indistinguishable from a healthy queue draining normally.
+   * They are codes only; no backend message, id or payload is exposed.
+   */
+  "sync_shop_context_not_ready",
+  "sync_quarantined_no_shop",
 ]);
 
 export function reportSyncIssue(code: string, meta?: MonitoringPayload["meta"]): void {

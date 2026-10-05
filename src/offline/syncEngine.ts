@@ -1,6 +1,6 @@
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
-import type { SyncOperation } from "../types";
+import type { SyncOperation, SyncOperationKind } from "../types";
 import { computeSyncBackoffMs, markSyncOpFailed, markSyncOpQuarantined, shouldRetrySyncOp, isQuarantinedSyncOp, SYNC_QUARANTINE_AFTER_ATTEMPTS, QUARANTINED_MAX_ATTEMPTS_ERROR, QUARANTINED_NO_SHOP_ERROR, clearSyncOpQuarantine } from "../lib/autoSync";
 import {
   isBlockedBusinessSyncError,
@@ -33,8 +33,33 @@ import {
 
 export { isCreatedBeforeStaleResetCutoff };
 
+/**
+ * Operations that carry a SALE's money and therefore may never be queued without a shop.
+ *
+ * A queue row with no shop cannot be routed: `inferShopIdFromQueueRow` returns null for it at every
+ * tick, and the only outcome is `quarantined_no_shop` — a permanent, silent dead end for a real
+ * sale. That is exactly what happened when a cashier rang up sales while the active shop had not
+ * yet been initialised (`getActiveShopId()` is in-memory and starts null on every load).
+ *
+ * Refusing to enqueue is safe because sales are ALSO swept independently: `pushAllPendingToCloud`
+ * pushes every store sale flagged `pendingSync` using `resolveShopCtx()`, which resolves the shop
+ * again at push time. So the sale is not lost — it simply waits for a shop context that can route
+ * it, instead of being written into a queue row that never can.
+ */
+const SHOP_REQUIRED_SYNC_KINDS: ReadonlySet<SyncOperationKind> = new Set<SyncOperationKind>([
+  "pending_sales",
+  "sale",
+]);
+
 export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attempts?: number }): Promise<void> {
   const shopId = op.shopId ?? getActiveShopId() ?? undefined;
+
+  if (!shopId && SHOP_REQUIRED_SYNC_KINDS.has(op.kind)) {
+    // Shop context not ready. Say so out loud rather than writing an unroutable row.
+    reportSyncIssue("sync_shop_context_not_ready", { kind: op.kind, opId: op.id });
+    return;
+  }
+
   const full: SyncOperation = {
     ...op,
     shopId,
