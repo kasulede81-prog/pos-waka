@@ -9,6 +9,7 @@ import {
   type EnrollmentLinkState,
 } from "../../lib/loyalty/loyaltyEnrollmentLink";
 import { buildLoyaltyJoinUrl } from "../../lib/loyalty/loyaltyPublicEnroll";
+import { WakaButton } from "../ui/wakaPrimitives";
 
 export function LoyaltyPublicEnrollmentPanel({
   lang,
@@ -101,7 +102,7 @@ export function LoyaltyPublicEnrollmentPanel({
   if (!canManage) {
     return (
       <article className="rounded-2xl border border-border bg-card p-4">
-        <p className="text-sm font-black text-foreground">{t(lang, "loyaltyJoinMerchantTitle")}</p>
+        <h2 className="text-sm font-black text-foreground">{t(lang, "loyaltyJoinMerchantTitle")}</h2>
         <p className="mt-1 text-xs font-medium text-muted-foreground">
           {t(lang, "loyaltyJoinMerchantNeedManage")}
         </p>
@@ -111,7 +112,7 @@ export function LoyaltyPublicEnrollmentPanel({
 
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-base font-black text-foreground">{t(lang, "loyaltyJoinMerchantTitle")}</p>
+      <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyJoinMerchantTitle")}</h2>
       <p className="mt-1 text-sm font-medium text-muted-foreground">
         {t(lang, "loyaltyJoinMerchantSub")}
       </p>
@@ -126,14 +127,14 @@ export function LoyaltyPublicEnrollmentPanel({
             <button
               type="button"
               onClick={() => void onCopy()}
-              className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black"
+              className="min-h-[44px] rounded-xl border-2 border-border px-3 text-xs font-black"
             >
               {copied ? t(lang, "loyaltyJoinMerchantCopied") : t(lang, "loyaltyJoinMerchantCopy")}
             </button>
             <button
               type="button"
               onClick={onPrint}
-              className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black"
+              className="min-h-[44px] rounded-xl border-2 border-border px-3 text-xs font-black"
             >
               {t(lang, "loyaltyJoinMerchantPrint")}
             </button>
@@ -141,7 +142,7 @@ export function LoyaltyPublicEnrollmentPanel({
               type="button"
               onClick={() => void onGenerate()}
               disabled={busy}
-              className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black disabled:opacity-50"
+              className="min-h-[44px] rounded-xl border-2 border-border px-3 text-xs font-black disabled:opacity-50"
             >
               {t(lang, "loyaltyJoinMerchantRegenerate")}
             </button>
@@ -149,7 +150,7 @@ export function LoyaltyPublicEnrollmentPanel({
               type="button"
               onClick={() => void onRevoke()}
               disabled={busy}
-              className="min-h-[40px] rounded-xl border-2 border-destructive/40 px-3 text-xs font-black text-destructive disabled:opacity-50"
+              className="min-h-[44px] rounded-xl border-2 border-destructive/40 px-3 text-xs font-black text-destructive disabled:opacity-50"
             >
               {t(lang, "loyaltyJoinMerchantRevoke")}
             </button>
@@ -157,14 +158,9 @@ export function LoyaltyPublicEnrollmentPanel({
         </div>
       ) : (
         <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => void onGenerate()}
-            disabled={busy}
-            className="min-h-[44px] rounded-xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-50"
-          >
+          <WakaButton type="button" onClick={() => void onGenerate()} disabled={busy}>
             {t(lang, "loyaltyJoinMerchantGenerate")}
-          </button>
+          </WakaButton>
         </div>
       )}
 

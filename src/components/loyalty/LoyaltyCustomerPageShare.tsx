@@ -82,7 +82,7 @@ export function LoyaltyCustomerPageShare({
 
   return (
     <div className="rounded-2xl border border-border bg-card px-3 py-3">
-      <p className="text-sm font-black text-foreground">{t(lang, "loyaltyCustomerPageTitle")}</p>
+      <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyCustomerPageTitle")}</h3>
       <p className="mt-0.5 text-xs font-medium text-muted-foreground">
         {t(lang, "loyaltyCustomerPageHint")}
       </p>

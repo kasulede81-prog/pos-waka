@@ -4,6 +4,7 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { fetchLoyaltyOverview } from "../../lib/loyalty/loyaltyMerchant";
 import { buildProgramJoinUrl } from "../../lib/loyalty/loyaltyPublicProgram";
+import { EnterpriseSkeletonList } from "../enterprise/EnterpriseSkeleton";
 
 /**
  * The merchant's permanent DKASU Loyalty Code (WPL2026001) and its QR.
@@ -21,29 +22,49 @@ import { buildProgramJoinUrl } from "../../lib/loyalty/loyaltyPublicProgram";
  * public identifier). Different lifetimes, different failure modes — keeping them apart stops one
  * being mistaken for the other.
  */
-export function LoyaltyProgramCodePanel({ lang, shopId }: { lang: Language; shopId: string }) {
+export function LoyaltyProgramCodePanel({
+  lang,
+  shopId,
+  hubPublicCode,
+}: {
+  lang: Language;
+  shopId: string;
+  /** Phase 2 P11 — pass the hub's already-loaded publicCode instead of refetching the overview. */
+  hubPublicCode?: string | null;
+}) {
   const [publicCode, setPublicCode] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(hubPublicCode === undefined);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const overview = await fetchLoyaltyOverview(shopId);
-    const code = overview?.publicCode ?? null;
-    setPublicCode(code);
+  const buildQr = useCallback(async (code: string | null) => {
     if (code) {
       const dataUrl = await QRCode.toDataURL(buildProgramJoinUrl(code), { margin: 1, width: 280 });
       setQrDataUrl(dataUrl);
     } else {
       setQrDataUrl(null);
     }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const overview = await fetchLoyaltyOverview(shopId);
+    const code = overview?.publicCode ?? null;
+    setPublicCode(code);
+    await buildQr(code);
     setLoading(false);
-  }, [shopId]);
+  }, [shopId, buildQr]);
 
   useEffect(() => {
+    // Reuse the hub's overview when it was passed (P11); otherwise fetch our own.
+    if (hubPublicCode !== undefined) {
+      setLoading(false);
+      setPublicCode(hubPublicCode);
+      void buildQr(hubPublicCode);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [hubPublicCode, refresh, buildQr]);
 
   const onCopy = async () => {
     if (!publicCode) return;
@@ -77,7 +98,7 @@ export function LoyaltyProgramCodePanel({ lang, shopId }: { lang: Language; shop
   if (loading) {
     return (
       <article className="rounded-2xl border border-border bg-card p-4">
-        <p className="text-sm font-medium text-muted-foreground">{t(lang, "loyaltyLoading")}</p>
+        <EnterpriseSkeletonList count={2} />
       </article>
     );
   }
@@ -87,7 +108,7 @@ export function LoyaltyProgramCodePanel({ lang, shopId }: { lang: Language; shop
     // saved their loyalty settings.
     return (
       <article className="rounded-2xl border border-border bg-card p-4">
-        <p className="text-base font-black text-foreground">{t(lang, "loyaltyProgramCodeLabel")}</p>
+        <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyProgramCodeLabel")}</h2>
         <p className="mt-1 text-xs font-medium text-muted-foreground">
           {t(lang, "loyaltyJoinMerchantNeedManage")}
         </p>
@@ -97,7 +118,7 @@ export function LoyaltyProgramCodePanel({ lang, shopId }: { lang: Language; shop
 
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-base font-black text-foreground">{t(lang, "loyaltyProgramCodeLabel")}</p>
+      <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyProgramCodeLabel")}</h2>
       <p className="mt-1 text-sm font-medium text-muted-foreground">
         {t(lang, "loyaltyProgramCodeSub")}
       </p>
@@ -119,14 +140,14 @@ export function LoyaltyProgramCodePanel({ lang, shopId }: { lang: Language; shop
           <button
             type="button"
             onClick={() => void onCopy()}
-            className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black"
+            className="min-h-[44px] rounded-xl border-2 border-border px-3 text-xs font-black"
           >
             {copied ? t(lang, "loyaltyJoinMerchantCopied") : t(lang, "loyaltyJoinMerchantCopy")}
           </button>
           <button
             type="button"
             onClick={onPrint}
-            className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black"
+            className="min-h-[44px] rounded-xl border-2 border-border px-3 text-xs font-black"
           >
             {t(lang, "loyaltyJoinMerchantPrint")}
           </button>

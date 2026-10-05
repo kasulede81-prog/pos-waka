@@ -196,7 +196,7 @@ export function LoyaltyCardDesignPanel({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
       <div className="space-y-4">
         <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-base font-black text-foreground">{t(lang, "loyaltyDesignBrandTitle")}</p>
+          <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyDesignBrandTitle")}</h2>
           <p className="mt-1 text-xs font-medium text-muted-foreground">
             {t(lang, "loyaltyDesignBrandSub")}
           </p>
@@ -239,7 +239,7 @@ export function LoyaltyCardDesignPanel({
         </article>
 
         <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-base font-black text-foreground">{t(lang, "loyaltyDesignColorsTitle")}</p>
+          <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyDesignColorsTitle")}</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <ColorField
               label={t(lang, "loyaltyDesignPrimary")}
@@ -265,7 +265,7 @@ export function LoyaltyCardDesignPanel({
         </article>
 
         <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-base font-black text-foreground">{t(lang, "loyaltyDesignWelcomeTitle")}</p>
+          <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyDesignWelcomeTitle")}</h2>
           <textarea
             value={draft.welcomeMessage}
             maxLength={WELCOME_MESSAGE_MAX}

@@ -70,7 +70,7 @@ export function LoyaltyGoogleWalletButton({
   if (memberStatus !== "active") {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-3 py-3">
-        <p className="text-sm font-black text-foreground">{t(lang, "loyaltyGoogleWalletTitle")}</p>
+        <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyGoogleWalletTitle")}</h3>
         <p className="mt-1 text-xs font-medium text-muted-foreground">
           {memberStatus === "revoked"
             ? t(lang, "loyaltyWalletMemberRevoked")
@@ -89,7 +89,7 @@ export function LoyaltyGoogleWalletButton({
   if (!configured) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-3 py-3">
-        <p className="text-sm font-black text-foreground">{t(lang, "loyaltyGoogleWalletTitle")}</p>
+        <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyGoogleWalletTitle")}</h3>
         <p className="mt-1 text-xs font-medium text-muted-foreground">
           {t(lang, "loyaltyGoogleWalletNotConfigured")}
         </p>
@@ -173,7 +173,7 @@ export function LoyaltyGoogleWalletButton({
 
   return (
     <div className="rounded-2xl border border-border bg-card px-3 py-3">
-      <p className="text-sm font-black text-foreground">{t(lang, "loyaltyGoogleWalletTitle")}</p>
+      <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyGoogleWalletTitle")}</h3>
       <p className="mt-0.5 text-xs font-medium text-muted-foreground">
         {t(lang, "loyaltyGoogleWalletHintVsPage")}
       </p>
@@ -223,7 +223,7 @@ export function LoyaltyGoogleWalletButton({
           <button
             type="button"
             onClick={onOpenHere}
-            className="min-h-[40px] w-full rounded-xl px-3 text-xs font-bold text-muted-foreground underline-offset-2 hover:underline"
+            className="min-h-[44px] w-full rounded-xl px-3 text-xs font-bold text-muted-foreground underline-offset-2 hover:underline"
           >
             {t(lang, "loyaltyGoogleWalletOpenHere")}
           </button>
@@ -231,7 +231,7 @@ export function LoyaltyGoogleWalletButton({
             type="button"
             disabled={busy}
             onClick={() => void onCreateCard()}
-            className="min-h-[40px] w-full rounded-xl border border-dashed border-border px-3 text-xs font-bold text-muted-foreground disabled:opacity-50"
+            className="min-h-[44px] w-full rounded-xl border border-dashed border-border px-3 text-xs font-bold text-muted-foreground disabled:opacity-50"
           >
             {busy ? t(lang, "loyaltyGoogleWalletCreating") : t(lang, "loyaltyGoogleWalletCreateAgain")}
           </button>

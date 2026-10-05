@@ -54,6 +54,8 @@ export const swOverrides: Record<string, string> = {
   loyaltySaveFailed: "Kuhifadhi kumeshindwa — angalia muunganisho",
   loyaltyCustomersTitle: "Wateja",
   loyaltySearchPlaceholder: "Tafuta kwa jina au simu",
+  loyaltyMembersSearchLabel: "Tafuta wanachama kwa jina au simu",
+  loyaltyEnrollSearchLabel: "Tafuta wateja wa duka ili kuwasajili",
   loyaltyNoMembers: "Hakuna wateja wa uaminifu bado. Waongeze hapa chini.",
   loyaltyNoMembersFound: "Hakuna mteja anayelingana na utafutaji",
   loyaltyPointsBalanceLabel: "Salio la pointi",
@@ -87,6 +89,9 @@ export const swOverrides: Record<string, string> = {
   loyaltyAdjustNotePlaceholder: "Sababu ya urekebishaji",
   loyaltyAdjustApply: "Thibitisha urekebishaji",
   loyaltyAdjustForbidden: "Ni mameneja tu wanaoweza kurekebisha pointi",
+  loyaltyAdjustInvalidPoints: "Weka namba kamili ya pointi, kama 10 au -50",
+  loyaltyAdjustPointsLabel: "Pointi za kurekebisha",
+  loyaltyAdjustNoteRequired: "Ongeza sababu ya urekebishaji huu",
   loyaltyRecentActivityTitle: "Shughuli za hivi karibuni",
   loyaltyKindEarned: "Zimepatikana",
   loyaltyKindRedeemed: "Zimetumika",
@@ -96,6 +101,7 @@ export const swOverrides: Record<string, string> = {
   loyaltyKindPromotional: "Za matangazo",
   loyaltyLoading: "Uaminifu unapakuliwa…",
   loyaltyUnavailable: "Taarifa za uaminifu hazipatikani sasa. Angalia muunganisho.",
+  loyaltyRetry: "Jaribu tena",
   loyaltyNotEnabledHint: "Washa programu ili kuanza kutoa pointi kwenye mauzo.",
   loyaltyCardsTitle: "Kadi ya mteja",
   loyaltyCardsSub: "Chagua mteja kuona kadi yake na kuituma kwenye simu yake.",
@@ -109,6 +115,7 @@ export const swOverrides: Record<string, string> = {
   loyaltyConsentLabel: "Mteja amekubali masharti ya programu ya uaminifu",
   loyaltyConsentRequired: "Idhini ya mteja inahitajika kabla ya kujiandikisha.",
   loyaltyEnrollAction: "Jiandikishe mteja",
+  loyaltyEnrollCta: "Sajili mwanachama mpya",
   loyaltyEnrollSuccess: "Mteja amejiandikisha — mueonyeshe QR huu",
   loyaltyAlreadyEnrolledState: "Amejiandikisha tayari — QR wa uanachama",
   loyaltyEnrollFailed: "Usajili umeshindwa — angalia muunganisho",
@@ -171,6 +178,10 @@ export const swOverrides: Record<string, string> = {
   loyaltyRedeemAction: "Badilishia",
   loyaltyRedeemConfirm: "Thibitisha — tumia pointi {points}?",
   loyaltyRedeemDone: "Imebadilishwa. Salio jipya: {balance} pointi",
+  loyaltyRedeemConfirmTitle: "Badilishia zawadi?",
+  loyaltyRedeemConfirmBalance: "Salio la pointi: {balance}",
+  loyaltyRedeemConfirmBalanceAfter: "Salio baada ya kubadilisha: {balance}",
+  loyaltyRewardNeedsPoints: "Inahitaji pointi {needed} zaidi — salio {balance}",
   loyaltyRedeemAlready: "Imebadilishwa tayari — nakala imezuiwa",
   loyaltyInsufficientPoints: "Pointi hazitoshi ({balance} kati ya {required})",
   loyaltyRedeemLimitReached: "Kikomo cha kubadilishia kimefikiwa",
@@ -363,4 +374,297 @@ export const swOverrides: Record<string, string> = {
   marketingCtaLogin: "Ingia",
   marketingCtaSignup: "Fungua akaunti",
   marketingCtaDemo: "Jaribu Demo",
+
+  // ------------------------------------------------------------------
+  // Loyalty Phase 2 — Batch 4 completion (shared keys used by Loyalty UI)
+  // ------------------------------------------------------------------
+  confirm: "Thibitisha",
+  edit: "Hariri",
+  search: "Tafuta",
+  officeHubTitle: "Ofisi ya nyuma",
+  pendingSalesCancel: "Ghairi",
+  notifyPermissionDenied: "Huna ruhusa ya kufanya kitendo hiki.",
+
+  // Allowance / usage (overview)
+  loyaltyAllowanceActive: "Uanachama hai",
+  loyaltyAllowanceInactive: "Uanachama hauko hai",
+  loyaltyAllowanceInactiveHint:
+    "WAKA Loyalty haijawashwa katika duka hili, hivyo uanachama mpya haikubaliwi.",
+  loyaltyAllowanceTitle: "Kikomo cha wanachama",
+  loyaltyAllowanceUsage: "{used} / {limit} wanachama hai",
+
+  // Customer 360 (member detail)
+  loyaltyCustomer360Activity: "Shughuli za hivi karibuni",
+  loyaltyCustomer360Average: "Wastani wa ununuzi",
+  loyaltyCustomer360CustomerSince: "Mteja tangu",
+  loyaltyCustomer360Derived: "wastani uliokotishwa",
+  loyaltyCustomer360Earned: "Imepatikana",
+  loyaltyCustomer360Error: "Imeshindwa kupakia wasifu wa mteja huyu.",
+  loyaltyCustomer360Expires: "Kuisha",
+  loyaltyCustomer360Forbidden: "Huna ufikiaji wa mteja huyu.",
+  loyaltyCustomer360Gross: "kabla ya marejesho",
+  loyaltyCustomer360LastPurchase: "Ununuzi wa mwisho",
+  loyaltyCustomer360LookupEmpty: "Hakuna wateja wanaolingana.",
+  loyaltyCustomer360LookupPlaceholder: "Pata mteja yeyote kwa jina au simu",
+  loyaltyCustomer360Loyalty: "Uaminifu",
+  loyaltyCustomer360MemberSince: "Mwanachama tangu",
+  loyaltyCustomer360NetSpend: "Alitumika nawe",
+  loyaltyCustomer360NoActivity: "Bado hakuna ununuzi wala shughuli za uanachama.",
+  loyaltyCustomer360NoCard: "hakuna kadi ya uanachama",
+  loyaltyCustomer360NoLoyalty: "Bado hakuna akaunti ya uanachama katika duka hili.",
+  loyaltyCustomer360NoRewards: "Bado hakuna zawadi zinazopatikana kwa mteja huyu.",
+  loyaltyCustomer360NotFound: "Mteja huyu hayupo katika duka hili.",
+  loyaltyCustomer360Personal: "Binafsi",
+  loyaltyCustomer360Points: "Pointi",
+  loyaltyCustomer360Purchase: "Ununuzi",
+  loyaltyCustomer360Purchases: "Manunuzi",
+  loyaltyCustomer360ReadyNow: "tayari sasa",
+  loyaltyCustomer360Redeemed: "Imebadilishwa",
+  loyaltyCustomer360RedeemedReward: "Imebadilishwa",
+  loyaltyCustomer360RedemptionReversed: "Imeghairiwa",
+  loyaltyCustomer360Redemptions: "ubadilishaji",
+  loyaltyCustomer360Refunded: "imarudishwa",
+  loyaltyCustomer360Retry: "Jaribu tena",
+  loyaltyCustomer360ReverseAction: "Ghairi",
+  loyaltyCustomer360ReverseConfirm: "Ghairi ubadilishaji huu",
+  loyaltyCustomer360Rewards: "Zawadi",
+  loyaltyCustomer360Search: "Tafuta",
+  loyaltyCustomer360Spending: "Matumizi",
+  loyaltyCustomer360Voided: "imeghairiwa",
+
+  // Customer rewards (member detail)
+  loyaltyCustomerRewardsAssign: "+ Panga zawadi",
+  loyaltyCustomerRewardsConfirm: "Panga",
+  loyaltyCustomerRewardsEmpty: "Hakuna zawadi zilizopangwa bado.",
+  loyaltyCustomerRewardsExpires: "Kipindi cha kupanga kinaisha",
+  loyaltyCustomerRewardsPick: "Zawadi",
+  loyaltyCustomerRewardsRemove: "Ondoa",
+  loyaltyCustomerRewardsStatusActive: "Hai",
+  loyaltyCustomerRewardsStatusUnavailable: "Haipatikani",
+  loyaltyCustomerRewardsSub: "Zawadi zilizopangwa kwa mteja huyu pekee.",
+  loyaltyCustomerRewardsTitle: "Zawadi za mteja",
+
+  // Card design (cards section)
+  loyaltyDesignAccent: "Rangi ya lafudhi",
+  loyaltyDesignBackground: "Mandhari ya nyuma",
+  loyaltyDesignBrandSub: "Jinsi kadi yako ya uanachama inavyowasilisha duka.",
+  loyaltyDesignBrandTitle: "Utambulisho",
+  loyaltyDesignColorsTitle: "Rangi",
+  loyaltyDesignLogoHint: "Tumia URL ya picha ya HTTPS. SVG hairuhusiwi.",
+  loyaltyDesignLogoInvalid: "Nembo lazima iwe URL ya picha ya HTTPS (si SVG).",
+  loyaltyDesignLogoUrl: "URL ya nembo",
+  loyaltyDesignOwnerOnly: "Mmiliki wa duka pekee anaweza kubadilisha muundo wa kadi.",
+  loyaltyDesignPreviewHint:
+    "Onyesho la majaribio linatumia data ya mfano. Hakuna kinachohifadhiwa hadi ubonyeze Hifadhi.",
+  loyaltyDesignPreviewTitle: "Onyesho la moja kwa moja",
+  loyaltyDesignPrimary: "Rangi kuu",
+  loyaltyDesignProgramName: "Jina la programu",
+  loyaltyDesignReset: "Rudisha msingi",
+  loyaltyDesignResetConfirm: "Rudisha muundo wa kadi ya uanachama wa duka hili kuwa wa kawaida?",
+  loyaltyDesignResetDone: "Muundo umerudishwa",
+  loyaltyDesignRewardLayoutTitle: "Muundo wa zawadi",
+  loyaltyDesignSave: "Hifadhi muundo",
+  loyaltyDesignSaveFailed: "Imeshindwa kuhifadhi muundo.",
+  loyaltyDesignStyleTitle: "Mtindo wa kadi",
+  loyaltyDesignText: "Maandishi",
+  loyaltyDesignWelcomePlaceholder: "Ukaribufupi wa wanachama (hiari)",
+  loyaltyDesignWelcomeTitle: "Ujumbe wa karibu",
+
+  loyaltyEarnRuleSummary:
+    "Kanuni ya kupata: pointi {points} kwa kila UGX {unit} inayotumika.",
+
+  // Error codes (loyaltyErrorKey mapping — never leak raw RPC codes)
+  loyaltyErrAccountNotFound: "Mteja huyu hapatikani katika duka hili.",
+  loyaltyErrAccountRevoked: "Uanachama huu umefutwa na hauwezi kutumika tena.",
+  loyaltyErrAccountSuspended: "Mteja huyu amesimamishwa.",
+  loyaltyErrAlreadyMember: "Mteja huyu tayari ni mwanachama.",
+  loyaltyErrAlreadyReviewed: "Ombi hili tayari limepitiwa.",
+  loyaltyErrCooldown:
+    "Namba hii tayari ina ombi jipya la duka hili. Tafadhali jaribu tena baada ya siku chache.",
+  loyaltyErrCustomerNotInShop: "Mteja huyu hana uhusiano na duka hili.",
+  loyaltyErrInvalidAction: "Kitendo hiki hakiungwi mkono.",
+  loyaltyErrInvalidReason: "Sababu hii ni ndefu mno.",
+  loyaltyErrInvalidStatus: "Uanachama huu haupo katika hali inayoruhusu kitendo hiki.",
+  loyaltyErrLimitReached:
+    "Kikomo cha wanachama kimetimizwa, hivyo kitendo hiki hakikuatelezwa. Ondoa mwanachama mmoja kisha jaribu tena.",
+  loyaltyErrMembershipExpired: "Uanachama huu umepita.",
+  loyaltyErrNotEnabled: "DKASU Loyalty haijawashwa katika duka hili.",
+  loyaltyErrOffline: "Unaonekana nje ya mtandao. Jaribu tena unapoungana.",
+  loyaltyErrProgramNotFound: "Weka programu yako ya uanachama kwanza.",
+  loyaltyErrQueueFull:
+    "Duka hili limefikia kikomo cha ombi zinazosubiri. Tafadhali jaribu tena baadaye.",
+  loyaltyErrRequestNotFound: "Ombi hili halipatikani.",
+  loyaltyErrGeneric: "Kitendo hiki hakikamilika. Tafadhali jaribu tena.",
+
+  // Public enrollment link / program code (cards section)
+  loyaltyJoinMerchantCopied: "Imenakiliwa",
+  loyaltyJoinMerchantCopy: "Nakili kiungo",
+  loyaltyJoinMerchantGenerate: "Tengeneza QR ya kujiandikisha",
+  loyaltyJoinMerchantNeedManage:
+    "Wasimamizi pekee ndio wanaweza kutengeneza QR ya kujiandikisha hadharani.",
+  loyaltyJoinMerchantPrint: "Chapisha",
+  loyaltyJoinMerchantPrintSub: "Piga QR kujiunga",
+  loyaltyJoinMerchantPrintTitle: "JIUNGE NA PROGRAMU YETU YA UANACHAMA",
+  loyaltyJoinMerchantRegenerate: "Tengeneza QR upya",
+  loyaltyJoinMerchantRegistrations: "Usajili kupitia QR",
+  loyaltyJoinMerchantRevoke: "Zima QR",
+  loyaltyJoinMerchantRevokeConfirm:
+    "Zima QR hii ya kujiandikisha? Wanachama waliohapo hutoendelea kuwa wanachama. Uchanganuzi mpya utasimama hadi utakapotengeneza QR mpya.",
+  loyaltyJoinMerchantSub:
+    "Kwa usajili uliokaguliwa au uliokaribishwa. Kiungo hiki kinaweza kutengenezwa upya au kufutwa wakati wowote. Kwa usajili wa kawaida wa duka, tumia Usajili wa Mteja badala yake.",
+  loyaltyJoinMerchantTitle: "Kiungo cha kujiandikisha mara moja",
+  loyaltyJoinNotFound: "Kiungo hiki cha kujiunganisha hakitumiki.",
+
+  // Membership lifecycle (member detail)
+  loyaltyLifecycleActive: "HAI",
+  loyaltyLifecycleChangeExpiry: "Badilisha tarehe ya kuisha",
+  loyaltyLifecycleConfirm: "Thibitisha",
+  loyaltyLifecycleConfirmRevoke: "Futa uanachama",
+  loyaltyLifecycleHint:
+    "Tarehe ya kuisha ya uanachama ni tofauti na ya zawadi, pointi, na ofa.",
+  loyaltyLifecyclePurgesAfter: "Kitafutwa baada ya",
+  loyaltyLifecycleReactivate: "Washa upya",
+  loyaltyLifecycleRevoke: "Futa uanachama",
+  loyaltyLifecycleRevokeConfirm:
+    "Kufuta uanachama huu kusimama mara moja. Rekodi ya mteja, mauzo yake, historia ya malipo, na ufuatiliaji HAVIFUTWI. Akaunti ya uanachama na taarifa zake (pointi, zawadi, ofa) zinafutwa baada ya siku 30.",
+  loyaltyLifecycleRevoked: "IMEFUTWA",
+  loyaltyLifecycleRevokedOn: "Kufutwa tarehe",
+  loyaltyLifecycleSaveExpiry: "Hifadhi tarehe ya kuisha",
+  loyaltyLifecycleStatus: "Uanachama",
+  loyaltyLifecycleSuspend: "Simamisha",
+  loyaltyLifecycleSuspendConfirm:
+    "Simamisha uanachama huu? Mteja hawezi kupata wala kubadilisha pointi hadi atakapowashwa upya.",
+  loyaltyLifecycleSuspended: "IMESIMAMISHWA",
+  loyaltyLifecycleTitle: "Uanachama na hali yake",
+
+  // Member allowance copy
+  loyaltyMemberLimitReached: "Kikomo cha wanachama kimefikiwa.",
+  loyaltyMembersRemaining: "Nafasi {count} za wanachama zimebaki",
+
+  // Membership (member detail + settings)
+  loyaltyMembershipDate: "Kuisha tarehe",
+  loyaltyMembershipExpired: "Uanachama umepita",
+  loyaltyMembershipExpiredRedeem:
+    "Uanachama umepita — onyesha upya kabla ya kubadilisha",
+  loyaltyMembershipExpiry: "Muda wa uanachama",
+  loyaltyMembershipFixed: "Tarehe maalum ya kuisha",
+  loyaltyMembershipHint:
+    "Huamua muda uanachama wa mteja utakaoendelea. Hii haiondoi pointi zake.",
+  loyaltyMembershipMonths: "Miezi",
+  loyaltyMembershipNever: "Haishi",
+  loyaltyMembershipRenew: "Sasisha",
+  loyaltyMembershipRenewed: "Uanachama umesasishwa",
+  loyaltyMembershipTitle: "Uanachama wa uaminifu",
+
+  // Customer offers (member detail)
+  loyaltyOffersCreate: "Tengeneza ofa",
+  loyaltyOffersEffectiveMult: "Kizidishio halisi",
+  loyaltyOffersEmpty: "Hakuna ofa bado.",
+  loyaltyOffersFlatBonus: "Zawadi iliyopimwa",
+  loyaltyOffersInactiveWindow: "nje ya kipindi",
+  loyaltyOffersPause: "Simamisha",
+  loyaltyOffersPriority: "Kipaumbele",
+  loyaltyOffersResume: "Washa upya",
+  loyaltyOffersRevoke: "Futa",
+  loyaltyOffersSave: "Hifadhi ofa",
+  loyaltyOffersSub:
+    "Viungo vya ziada, kizidishio, zawadi za ziada, na uombaji wa zawadi juu ya programu ya duka.",
+  loyaltyOffersTitle: "Ofa za wateja",
+  loyaltyOffersTitleField: "Kichwa cha ofa",
+
+  loyaltyPendingRequestsCount: "Ombi zinazosubiri: {count}",
+
+  // Points expiry (settings)
+  loyaltyPointsExpiry: "Pointi zinazoisha",
+  loyaltyPointsExpiryAfter: "Baada ya",
+  loyaltyPointsExpiryHint:
+    "Huathiri pointi mpya tu. Pointi zilizopo hazibadiliki. Zile za zamani hutumika kwanza.",
+  loyaltyPointsExpiryMonths: "miezi",
+  loyaltyPointsExpiryNever: "Hazishi",
+  loyaltyPointsExpiryTitle: "Pointi",
+
+  // Program code / registration (cards section)
+  loyaltyProgramCodeLabel: "Usajili wa Mteja",
+  loyaltyProgramCodeSub:
+    "Piga QR kujiunga na Uanachama. Chapisha, onyesha au shiriki — wateja wachanganuzi QR hii au waandike msimbo, wajisajili wenyewe. Hiki ndicho msimbo wako wa kudumu.",
+  loyaltyProgramEnterCode: "Una Msimbo wa DKASU Loyalty?",
+  loyaltyProgramFind: "Tafuta duka",
+
+  // Enrollment requests queue (cards section)
+  loyaltyRequestsApprove: "Idhinisha",
+  loyaltyRequestsApproved: "Ombi limeidhinishwa — uanachama umetengenezwa.",
+  loyaltyRequestsEmpty: "Hakuna ombi za kuonyesha.",
+  loyaltyRequestsNotEnabled: "DKASU Loyalty haijawashwa katika duka hili.",
+  loyaltyRequestsQueueFull:
+    "Foleni yako ya ombi zinazosubiri imejaa ({limit}). Idhinisha au kataa baadhi ili zipate nafasi.",
+  loyaltyRequestsReject: "Kataa",
+  loyaltyRequestsRejectReason: "Sababu (hiari)",
+  loyaltyRequestsRejected: "Ombi imekataliwa.",
+  loyaltyRequestsRequested: "Imeombwa",
+  loyaltyRequestsReviewed: "Imepitiwa",
+  loyaltyRequestsSub: "Wateja waliochanganua QR yako na wanasubiri idhinisho.",
+  loyaltyRequestsTitle: "Ombi za kujiandikisha",
+  loyaltyRequestsUsage: "Wanachama hai {used} kati ya {limit}",
+  loyaltyRequestsViewMember: "Onesha mwanachama",
+
+  // Rewards (rewards tab + redeem card)
+  loyaltyRewardBenefitAmount: "Kiasi cha kukatwa (UGX)",
+  loyaltyRewardBenefitHint:
+    "Punguzo hupunguza mauzo ya DKASU katika kaunta. Si pesa, wala mkopo, wala thamani iliyohifadhiwa.",
+  loyaltyRewardBenefitIncomplete: "weka thamani",
+  loyaltyRewardBenefitPercent: "Asilimia ya kukatwa (%)",
+  loyaltyRewardBenefitTitle: "Thamani ya zawadi hii",
+  loyaltyRewardEditExpiry: "Badilisha tarehe ya kuisha",
+  loyaltyRewardExpired: "Imeisha",
+  loyaltyRewardExpiredRedeem: "Zawadi hii imeisha",
+  loyaltyRewardExpiresOn: "Kuisha tarehe",
+  loyaltyRewardExpiry: "Muda wa zawadi",
+  loyaltyRewardNeverExpires: "Haishi",
+  loyaltyRewardProductClear: "Ondoa",
+  loyaltyRewardProductLinked: "Imeunganishwa na bidhaa",
+  loyaltyRewardProductQty: "Idadi",
+  loyaltyRewardProductSearchPlaceholder: "Tafuta bidhaa…",
+  loyaltyRewardProductStock: "Stoo",
+  loyaltyRewardProductToGive: "Bidhaa ya kutoa",
+  loyaltyRewardProductToGiveHint:
+    "Hiari. Tafuta bidhaa za duka lako — stoo hupunguzwa inapochukuliwa kwenye malipo.",
+  loyaltyRewardRemoveAction: "Ondoa",
+  loyaltyRewardRemoveConfirm: "Futa kabisa",
+  loyaltyRewardRemoveFailed: "Imeshindwa kuondoa zawadi hii.",
+  loyaltyRewardRemoveHasHistory:
+    "Zawadi hii ina historia, hivyo haifutwi. Zima badala yake — ubadilishaji uliopita utaendelea kufanya kazi.",
+
+  loyaltyScanResolving: "Inasoma uanachama…",
+
+  // Spend promotions (rewards tab)
+  loyaltySpendPromoEditTitle: "Hariri matangazo",
+  loyaltySpendPromoFieldEnds: "Kumalizia",
+  loyaltySpendPromoFieldMaxAwards: "Kikimo cha zawadi",
+  loyaltySpendPromoFieldPoints: "Pointi za ziada",
+  loyaltySpendPromoFieldStarts: "Kuanza",
+  loyaltySpendPromoFieldStatus: "Hali",
+  loyaltySpendPromoFieldThreshold: "Kikomo cha matumizi (UGX)",
+  loyaltySpendPromoFieldTitle: "Kichwa",
+  loyaltySpendPromoNewTitle: "Tangazo jipya",
+  loyaltySpendPromoNone: "Hakuna matangazo ya matumizi bado.",
+  loyaltySpendPromoSaveFailed: "Imeshindwa kuhifadhi tangazo hili.",
+  loyaltySpendPromoShopWide: "Wateja wote",
+  loyaltySpendPromoStatusActive: "Hai",
+  loyaltySpendPromoStatusPaused: "Imesimamishwa",
+  loyaltySpendPromoStatusRevoked: "Imefutwa",
+  loyaltySpendPromoTargetPlaceholder: "Tafuta mteja wa uanachama",
+  loyaltySpendPromoTargeted: "Mteja mmoja",
+
+  // Member Google Wallet (member surface, reachable from merchant flows)
+  loyaltyWalletMemberAdd: "Ongeza kwenye Google Wallet",
+  loyaltyWalletMemberCreating: "Inatengeneza kadi yako…",
+  loyaltyWalletMemberHint:
+    "Ongeza kadi yako kwenye Google Wallet ili iwe kwenye simu yako unapotumia kasupe.",
+  loyaltyWalletMemberOpenFailed:
+    "Kadi yako imetengenezwa, lakini Google Wallet haikuweza kufunguliwa. Jaribu tena.",
+  loyaltyWalletMemberOpened: "Inafungua Google Wallet…",
+  loyaltyWalletMemberRevoked:
+    "Uanachama huu umefutwa. Toa uanachama mpya kabla ya kutoa kadi ya uanachama.",
+  loyaltyWalletMemberSuspended:
+    "Mteja huyu amesimamishwa. Kadi yake ya uanachama haiwezi kutumika hadi uanachama utakapowashwa upya.",
 };

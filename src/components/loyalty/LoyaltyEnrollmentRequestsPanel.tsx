@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useToast } from "../../context/ToastProvider";
+import { EnterpriseSkeletonList } from "../enterprise/EnterpriseSkeleton";
+import { WakaButton } from "../ui/wakaPrimitives";
 import { loyaltyErrorKey } from "../../lib/loyalty/loyaltyErrorMessages";
 import {
   listEnrollmentRequests,
@@ -23,6 +25,8 @@ type Props = {
   onChanged?: () => void;
   /** Open the member an approved request produced, in the Members section (keyed by loyalty account id). */
   onOpenMember?: (loyaltyAccountId: string | null) => void;
+  /** Phase 2 P11 — hub-provided allowance/usage, preferred over the RPC-embedded copy. */
+  usage?: LoyaltyUsage | null;
 };
 
 const FILTERS: Array<{ id: EnrollmentRequestStatus | "all"; labelKey: string }> = [
@@ -46,11 +50,12 @@ export function LoyaltyEnrollmentRequestsPanel({
   canManage,
   onChanged,
   onOpenMember,
+  usage: usageFromHub,
 }: Props) {
   const toast = useToast();
   const [filter, setFilter] = useState<EnrollmentRequestStatus | "all">("pending");
   const [requests, setRequests] = useState<EnrollmentRequestRow[]>([]);
-  const [usage, setUsage] = useState<LoyaltyUsage | null>(null);
+  const [fetchedUsage, setFetchedUsage] = useState<LoyaltyUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -62,16 +67,20 @@ export function LoyaltyEnrollmentRequestsPanel({
     setLoading(false);
     if (!result.ok) {
       setRequests([]);
-      setUsage(null);
+      setFetchedUsage(null);
       return;
     }
     setRequests(result.requests);
-    setUsage(result.usage);
+    setFetchedUsage(result.usage);
   }, [shopId, filter]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Phase 2 P11 — the hub's allowance/usage read wins when provided, so one screen
+  // never shows two copies of the same counter. Falls back to the RPC-embedded value.
+  const usage = usageFromHub !== undefined ? usageFromHub : fetchedUsage;
 
   const decide = async (row: EnrollmentRequestRow, action: "approve" | "reject", reason?: string) => {
     setBusyId(row.id);
@@ -104,7 +113,7 @@ export function LoyaltyEnrollmentRequestsPanel({
   return (
     <section className="space-y-4">
       <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-sm font-black text-foreground">{t(lang, "loyaltyRequestsTitle")}</p>
+        <h2 className="text-sm font-black text-foreground">{t(lang, "loyaltyRequestsTitle")}</h2>
         <p className="mt-1 text-xs font-medium text-muted-foreground">
           {t(lang, "loyaltyRequestsSub")}
         </p>
@@ -128,7 +137,8 @@ export function LoyaltyEnrollmentRequestsPanel({
               key={f.id}
               type="button"
               onClick={() => setFilter(f.id)}
-              className={`min-h-[36px] rounded-xl px-3 text-xs font-black ${
+              aria-pressed={filter === f.id}
+              className={`min-h-[44px] rounded-xl px-3 text-xs font-black ${
                 filter === f.id ? "bg-waka-600 text-white" : "bg-muted text-foreground"
               }`}
             >
@@ -139,7 +149,7 @@ export function LoyaltyEnrollmentRequestsPanel({
       </article>
 
       {loading ? (
-        <p className="text-sm font-medium text-muted-foreground">{t(lang, "loyaltyLoading")}</p>
+        <EnterpriseSkeletonList count={3} />
       ) : requests.length === 0 ? (
         <p className="rounded-2xl border border-border bg-card p-4 text-sm font-medium text-muted-foreground">
           {t(lang, "loyaltyRequestsEmpty")}
@@ -192,47 +202,48 @@ export function LoyaltyEnrollmentRequestsPanel({
                       className="min-h-[44px] w-full rounded-xl border-2 border-border bg-background px-3 text-sm font-semibold"
                     />
                     <div className="flex gap-2">
-                      <button
+                      <WakaButton
                         type="button"
+                        variant="secondary"
                         onClick={() => {
                           setRejectingId(null);
                           setRejectReason("");
                         }}
-                        className="min-h-[44px] flex-1 rounded-xl border border-border bg-card text-sm font-bold text-muted-foreground"
+                        className="flex-1"
                       >
                         {t(lang, "pendingSalesCancel")}
-                      </button>
-                      <button
+                      </WakaButton>
+                      <WakaButton
                         type="button"
+                        variant="danger"
                         disabled={busyId === row.id}
                         onClick={() => void decide(row, "reject", rejectReason)}
-                        className="min-h-[44px] flex-1 rounded-xl bg-rose-700 text-sm font-black text-white disabled:opacity-50"
+                        className="flex-1"
                       >
                         {t(lang, "loyaltyRequestsReject")}
-                      </button>
+                      </WakaButton>
                     </div>
                   </div>
                 ) : (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
+                    <WakaButton
                       type="button"
                       disabled={busyId === row.id}
                       onClick={() => void decide(row, "approve")}
-                      className="min-h-[44px] rounded-xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-50"
                     >
                       {t(lang, "loyaltyRequestsApprove")}
-                    </button>
-                    <button
+                    </WakaButton>
+                    <WakaButton
                       type="button"
+                      variant="secondary"
                       disabled={busyId === row.id}
                       onClick={() => {
                         setRejectingId(row.id);
                         setRejectReason("");
                       }}
-                      className="min-h-[44px] rounded-xl border-2 border-border px-4 text-sm font-black disabled:opacity-50"
                     >
                       {t(lang, "loyaltyRequestsReject")}
-                    </button>
+                    </WakaButton>
                   </div>
                 )
               ) : null}

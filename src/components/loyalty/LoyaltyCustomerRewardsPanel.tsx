@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { fetchLoyaltyRewards, type LoyaltyReward } from "../../lib/loyalty/loyaltyRewards";
+import { loyaltyErrorKey } from "../../lib/loyalty/loyaltyErrorMessages";
+import { WakaButton } from "../ui/wakaPrimitives";
 import {
   assignLoyaltyReward,
   listRewardAssignments,
@@ -77,12 +79,12 @@ export function LoyaltyCustomerRewardsPanel({
   return (
     <div className="rounded-2xl border border-border bg-card p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-black text-foreground">{t(lang, "loyaltyCustomerRewardsTitle")}</p>
+        <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyCustomerRewardsTitle")}</h3>
         {canManage ? (
           <button
             type="button"
             onClick={() => setShowAssign((v) => !v)}
-            className="min-h-[36px] rounded-xl border-2 border-waka-600 bg-card px-3 text-xs font-black text-waka-700"
+            className="min-h-[44px] rounded-xl border-2 border-waka-600 bg-card px-3 text-xs font-black text-waka-700"
           >
             {t(lang, "loyaltyCustomerRewardsAssign")}
           </button>
@@ -99,7 +101,7 @@ export function LoyaltyCustomerRewardsPanel({
             <select
               value={rewardId}
               onChange={(e) => setRewardId(e.target.value)}
-              className="mt-1 min-h-[40px] w-full rounded-xl border-2 border-border bg-card px-3 text-sm font-semibold"
+              className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 text-sm font-semibold"
             >
               {rewards.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -108,18 +110,16 @@ export function LoyaltyCustomerRewardsPanel({
               ))}
             </select>
           </label>
-          <button
-            type="button"
-            disabled={busy || !rewardId}
-            onClick={() => void onAssign()}
-            className="min-h-[40px] rounded-xl bg-waka-600 px-4 text-xs font-black text-white disabled:opacity-50"
-          >
+          <WakaButton type="button" disabled={busy || !rewardId} onClick={() => void onAssign()}>
             {busy ? t(lang, "loyaltyLoading") : t(lang, "loyaltyCustomerRewardsConfirm")}
-          </button>
+          </WakaButton>
         </div>
       ) : null}
 
-      {error ? <p className="mt-2 text-xs font-bold text-destructive">{error}</p> : null}
+      {/* Never render the raw RPC code — map it through the shared error keys. */}
+      {error ? (
+        <p className="mt-2 text-xs font-bold text-destructive">{t(lang, loyaltyErrorKey(error))}</p>
+      ) : null}
 
       {active.length === 0 ? (
         <p className="mt-3 text-xs font-medium text-muted-foreground">
@@ -152,7 +152,7 @@ export function LoyaltyCustomerRewardsPanel({
                     type="button"
                     disabled={busy}
                     onClick={() => void onRevoke(a.id)}
-                    className="min-h-[36px] shrink-0 rounded-xl border-2 border-border px-3 text-xs font-black text-foreground disabled:opacity-50"
+                    className="min-h-[44px] shrink-0 rounded-xl border-2 border-border px-3 text-xs font-black text-foreground disabled:opacity-50"
                   >
                     {t(lang, "loyaltyCustomerRewardsRemove")}
                   </button>

@@ -7,6 +7,20 @@ import { actorHasPermission } from "../lib/actorAuthorization";
 import { useSessionActor } from "../context/SessionActorContext";
 import { resolveShopCtx } from "../offline/cloudSync";
 import { WakaSwitch } from "../components/enterprise/WakaSwitch";
+import { WakaButton, WakaInput } from "../components/ui/wakaPrimitives";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
+import { EnterpriseErrorState } from "../components/enterprise/EnterpriseErrorState";
+import {
+  EnterpriseSkeleton,
+  EnterpriseSkeletonList,
+} from "../components/enterprise/EnterpriseSkeleton";
+import { UserSearch } from "lucide-react";
+import { ConfirmationDialog } from "../components/layout/ConfirmationDialog";
+import {
+  balanceAfterRedeem,
+  pointsStillNeeded,
+  redeemErrorMessage,
+} from "../lib/loyalty/loyaltyRedeemConfirm";
 import { LoyaltyShell } from "../components/loyalty/LoyaltyShell";
 import {
   loyaltySectionPath,
@@ -186,11 +200,13 @@ function MemberQrBlock({
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3">
-      <p className="text-sm font-black text-foreground">{t(lang, "loyaltyMemberQrTitle")}</p>
+      <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyMemberQrTitle")}</h3>
       <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyMemberQrHint")}</p>
       <div className="mt-3 flex justify-center">
         {loadState === "loading" ? (
-          <p className="py-6 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyLoading")}</p>
+          <div className="w-[180px]">
+            <EnterpriseSkeleton variant="card" />
+          </div>
         ) : null}
         {loadState === "error" ? (
           <p className="py-4 text-center text-sm font-medium text-destructive">{t(lang, "loyaltyMemberQrUnavailable")}</p>
@@ -225,6 +241,10 @@ function CustomerDetail({
   const [adjustPoints, setAdjustPoints] = useState("");
   const [adjustNote, setAdjustNote] = useState("");
   const [adjustState, setAdjustState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  /** Client-side validation messages — an i18n KEY, translated at render time. */
+  const [adjustValidation, setAdjustValidation] = useState<string | null>(null);
+  /** Raw RPC error code from the last failed adjustment — mapped through loyaltyErrorKey. */
+  const [adjustError, setAdjustError] = useState<string | null>(null);
   const [showAdjust, setShowAdjust] = useState(false);
   const [renewState, setRenewState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [renewError, setRenewError] = useState<string | null>(null);
@@ -236,7 +256,8 @@ function CustomerDetail({
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<"suspend" | "revoke" | null>(null);
-  const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
+  // null = still fetching — distinguishes "loading" from a genuinely empty catalog.
+  const [rewards, setRewards] = useState<LoyaltyReward[] | null>(null);
   const [pendingRedeem, setPendingRedeem] = useState<{ rewardId: string; key: string } | null>(null);
   const [redeemState, setRedeemState] = useState<
     | { phase: "idle" }
@@ -328,6 +349,21 @@ function CustomerDetail({
     setPendingRedeem({ rewardId, key: newRedemptionIdempotencyKey() });
   };
 
+  /**
+   * Dismissing the confirmation dialog NEVER calls the RPC. The idempotency intent
+   * (pendingRedeem) survives a failure so a retry reuses the same key; the failure
+   * message stays visible on the card via its role="status" region.
+   */
+  const cancelRedeem = () => {
+    if (redeemState.phase === "busy") return;
+    setPendingRedeem(null);
+  };
+
+  /** The reward this confirmation intent is for — display data for the dialog only. */
+  const pendingReward = pendingRedeem
+    ? (rewards ?? []).find((r) => r.id === pendingRedeem.rewardId) ?? null
+    : null;
+
   const confirmRedeem = async () => {
     if (!pendingRedeem) return;
     setRedeemState({ phase: "busy" });
@@ -344,7 +380,17 @@ function CustomerDetail({
 
   const submitAdjust = async () => {
     const points = Number(adjustPoints);
-    if (!Number.isInteger(points) || points === 0 || !adjustNote.trim()) return;
+    // Validation failures are reported inline instead of silently returning.
+    if (!Number.isInteger(points) || points === 0) {
+      setAdjustValidation("loyaltyAdjustInvalidPoints");
+      return;
+    }
+    if (!adjustNote.trim()) {
+      setAdjustValidation("loyaltyAdjustNoteRequired");
+      return;
+    }
+    setAdjustValidation(null);
+    setAdjustError(null);
     setAdjustState("saving");
     const result = await adjustLoyaltyPoints(entry.accountId, points, adjustNote);
     if (result.ok) {
@@ -355,13 +401,14 @@ function CustomerDetail({
       void requestGoogleWalletBalanceSync(shopId, entry.accountId);
     } else {
       setAdjustState("error");
+      setAdjustError(result.error);
     }
   };
 
   return (
     <div className="mt-3 space-y-4 rounded-2xl border border-border bg-muted/50 p-4">
       <div>
-        <p className="text-sm font-black text-foreground">{t(lang, "loyaltyCustomerCardSectionTitle")}</p>
+        <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyCustomerCardSectionTitle")}</h3>
         <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyCustomerCardSectionSub")}</p>
         {mode === "full" ? (
           <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
@@ -401,7 +448,7 @@ function CustomerDetail({
       {mode === "full" ? (
         <div className="space-y-3 rounded-2xl border border-border bg-card p-3">
           <div>
-            <p className="text-sm font-black text-foreground">{t(lang, "loyaltyLifecycleTitle")}</p>
+            <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyLifecycleTitle")}</h3>
             <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyLifecycleHint")}</p>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -441,52 +488,46 @@ function CustomerDetail({
 
           {canManage && entry.status !== "revoked" ? (
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setShowExpiryEditor((v) => !v)}
-                className="min-h-[40px] rounded-xl border-2 border-border bg-background px-3 text-xs font-black text-foreground"
-              >
+              <WakaButton type="button" variant="secondary" onClick={() => setShowExpiryEditor((v) => !v)}>
                 {t(lang, "loyaltyLifecycleChangeExpiry")}
-              </button>
+              </WakaButton>
               {entry.status === "active" ? (
-                <button
+                <WakaButton
                   type="button"
+                  variant="secondary"
                   onClick={() => setConfirmAction("suspend")}
                   disabled={lifecycleBusy}
-                  className="min-h-[40px] rounded-xl border-2 border-border bg-background px-3 text-xs font-black text-foreground disabled:opacity-50"
                 >
                   {t(lang, "loyaltyLifecycleSuspend")}
-                </button>
+                </WakaButton>
               ) : null}
               {entry.status === "suspended" ? (
-                <button
+                <WakaButton
                   type="button"
                   onClick={() => void runLifecycle("reactivate")}
                   disabled={lifecycleBusy}
-                  className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
                 >
                   {t(lang, "loyaltyLifecycleReactivate")}
-                </button>
+                </WakaButton>
               ) : null}
               {entry.status === "active" || entry.status === "suspended" ? (
-                <button
+                <WakaButton
                   type="button"
+                  variant="danger"
                   onClick={() => setConfirmAction("revoke")}
                   disabled={lifecycleBusy}
-                  className="min-h-[40px] rounded-xl border-2 border-destructive/40 bg-destructive/5 px-3 text-xs font-black text-destructive disabled:opacity-50"
                 >
                   {t(lang, "loyaltyLifecycleRevoke")}
-                </button>
+                </WakaButton>
               ) : null}
               {entry.status === "active" && !entry.membershipActive ? (
-                <button
+                <WakaButton
                   type="button"
                   onClick={() => void submitRenew()}
                   disabled={renewState === "saving"}
-                  className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
                 >
                   {t(lang, "loyaltyMembershipRenew")}
-                </button>
+                </WakaButton>
               ) : null}
             </div>
           ) : null}
@@ -512,19 +553,19 @@ function CustomerDetail({
               {expiryMode === "fixed_date" ? (
                 <input
                   type="date"
+                  aria-label={t(lang, "loyaltyMembershipFixed")}
                   value={expiryDate}
                   onChange={(e) => setExpiryDate(e.target.value)}
-                  className="min-h-[40px] w-full rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold"
+                  className="min-h-[44px] w-full rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold"
                 />
               ) : null}
-              <button
+              <WakaButton
                 type="button"
                 onClick={() => void submitExpiryChange()}
                 disabled={renewState === "saving" || (expiryMode === "fixed_date" && !expiryDate)}
-                className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
               >
                 {t(lang, "loyaltyLifecycleSaveExpiry")}
-              </button>
+              </WakaButton>
             </div>
           ) : null}
 
@@ -532,21 +573,12 @@ function CustomerDetail({
             <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-3">
               <p className="text-sm font-semibold text-foreground">{t(lang, "loyaltyLifecycleSuspendConfirm")}</p>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void runLifecycle("suspend")}
-                  disabled={lifecycleBusy}
-                  className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
-                >
+                <WakaButton type="button" onClick={() => void runLifecycle("suspend")} disabled={lifecycleBusy}>
                   {t(lang, "loyaltyLifecycleConfirm")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmAction(null)}
-                  className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black"
-                >
+                </WakaButton>
+                <WakaButton type="button" variant="secondary" onClick={() => setConfirmAction(null)}>
                   {t(lang, "cancel")}
-                </button>
+                </WakaButton>
               </div>
             </div>
           ) : null}
@@ -555,39 +587,33 @@ function CustomerDetail({
             <div className="space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
               <p className="text-sm font-semibold text-foreground">{t(lang, "loyaltyLifecycleRevokeConfirm")}</p>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void runLifecycle("revoke")}
-                  disabled={lifecycleBusy}
-                  className="min-h-[40px] rounded-xl bg-destructive px-3 text-xs font-black text-white disabled:opacity-50"
-                >
+                <WakaButton type="button" variant="danger" onClick={() => void runLifecycle("revoke")} disabled={lifecycleBusy}>
                   {t(lang, "loyaltyLifecycleConfirmRevoke")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmAction(null)}
-                  className="min-h-[40px] rounded-xl border-2 border-border px-3 text-xs font-black"
-                >
+                </WakaButton>
+                <WakaButton type="button" variant="secondary" onClick={() => setConfirmAction(null)}>
                   {t(lang, "cancel")}
-                </button>
+                </WakaButton>
               </div>
             </div>
           ) : null}
 
-          {renewState === "done" ? (
-            <span className="text-sm font-bold text-success">{t(lang, "loyaltyMembershipRenewed")}</span>
-          ) : null}
-          {/* Translated, never the raw RPC code — and specific enough to act on. */}
-          {lifecycleError ? (
-            <span className="text-sm font-bold text-destructive">
-              {t(lang, loyaltyErrorKey(lifecycleError))}
-            </span>
-          ) : null}
-          {renewState === "error" ? (
-            <span className="text-sm font-bold text-destructive">
-              {t(lang, loyaltyErrorKey(renewError))}
-            </span>
-          ) : null}
+          {/* Persistent live region: renew + lifecycle outcomes (P4). */}
+          <div role="status">
+            {renewState === "done" ? (
+              <span className="text-sm font-bold text-success">{t(lang, "loyaltyMembershipRenewed")}</span>
+            ) : null}
+            {/* Translated, never the raw RPC code — and specific enough to act on. */}
+            {lifecycleError ? (
+              <span className="text-sm font-bold text-destructive">
+                {t(lang, loyaltyErrorKey(lifecycleError))}
+              </span>
+            ) : null}
+            {renewState === "error" ? (
+              <span className="text-sm font-bold text-destructive">
+                {t(lang, loyaltyErrorKey(renewError))}
+              </span>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -624,9 +650,11 @@ function CustomerDetail({
       {mode === "full" ? (
         <>
           <div>
-            <p className="text-sm font-black text-foreground">{t(lang, "loyaltyHistoryTitle")}</p>
+            <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyHistoryTitle")}</h3>
             {history === null ? (
-              <p className="py-3 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyLoading")}</p>
+              <div className="py-1">
+                <EnterpriseSkeletonList count={3} />
+              </div>
             ) : (
               <HistoryList lang={lang} rows={history} />
             )}
@@ -634,59 +662,53 @@ function CustomerDetail({
 
           {canRedeem ? (
             <div className="rounded-2xl border border-border bg-card p-3">
-              <p className="text-sm font-black text-foreground">{t(lang, "loyaltyRedeemTitle")}</p>
-              {rewards.length === 0 ? (
+              <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyRedeemTitle")}</h3>
+              {rewards === null ? (
+                <div className="mt-2">
+                  <EnterpriseSkeletonList count={2} />
+                </div>
+              ) : rewards.length === 0 ? (
                 <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyNoRewards")}</p>
               ) : (
                 <ul className="mt-2 divide-y divide-border">
                   {rewards
                     .filter((reward) => reward.active && isRewardUnexpiredClient(reward.expiresOn))
-                    .map((reward) => (
-                      <li key={reward.id} className="flex items-center justify-between gap-3 py-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-foreground">{reward.name}</p>
-                          <p className="text-xs font-medium text-muted-foreground">
-                            {tTemplate(lang, "loyaltyRewardCost", { points: reward.pointsRequired })}
-                            {reward.description ? ` · ${reward.description}` : ""}
-                          </p>
-                        </div>
-                        {pendingRedeem?.rewardId === reward.id ? (
-                          <div className="flex shrink-0 items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void confirmRedeem()}
-                              disabled={redeemState.phase === "busy"}
-                              className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
-                            >
-                              {redeemState.phase === "busy"
-                                ? t(lang, "loyaltyLoading")
-                                : tTemplate(lang, "loyaltyRedeemConfirm", { points: reward.pointsRequired })}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPendingRedeem(null);
-                                setRedeemState({ phase: "idle" });
-                              }}
-                              className="min-h-[40px] rounded-xl border-2 border-border bg-card px-3 text-xs font-black text-foreground"
-                            >
-                              {t(lang, "loyaltyCancel")}
-                            </button>
+                    .map((reward) => {
+                      const eligible = isRewardEligible(reward, entry.balancePoints);
+                      return (
+                        <li key={reward.id} className="flex items-center justify-between gap-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-foreground">{reward.name}</p>
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {tTemplate(lang, "loyaltyRewardCost", { points: reward.pointsRequired })}
+                              {reward.description ? ` · ${reward.description}` : ""}
+                            </p>
+                            {/* P6 — a disabled Redeem button must say why. */}
+                            {!eligible ? (
+                              <p className="mt-0.5 text-xs font-bold text-warning-foreground">
+                                {tTemplate(lang, "loyaltyRewardNeedsPoints", {
+                                  needed: pointsStillNeeded(reward.pointsRequired, entry.balancePoints),
+                                  balance: entry.balancePoints,
+                                })}
+                              </p>
+                            ) : null}
                           </div>
-                        ) : (
-                          <button
+                          <WakaButton
                             type="button"
+                            variant="secondary"
                             onClick={() => beginRedeem(reward.id)}
-                            disabled={!isRewardEligible(reward, entry.balancePoints)}
-                            className="min-h-[40px] shrink-0 rounded-xl border-2 border-waka-600 bg-card px-3 text-xs font-black text-waka-700 disabled:opacity-40"
+                            disabled={!eligible}
+                            className="shrink-0"
                           >
                             {t(lang, "loyaltyRedeemAction")}
-                          </button>
-                        )}
-                      </li>
-                    ))}
+                          </WakaButton>
+                        </li>
+                      );
+                    })}
                 </ul>
               )}
+              {/* Persistent live region: polite announcements for redeem outcomes. */}
+              <div role="status">
               {redeemState.phase === "done" ? (
                 <p className="mt-2 text-sm font-bold text-success">
                   {tTemplate(lang, "loyaltyRedeemDone", { balance: redeemState.balance })}
@@ -697,20 +719,15 @@ function CustomerDetail({
               ) : null}
               {redeemState.phase === "error" ? (
                 <p className="mt-2 text-sm font-bold text-destructive">
-                  {redeemState.error === "insufficient_points"
-                    ? tTemplate(lang, "loyaltyInsufficientPoints", {
-                        balance: redeemState.balance ?? entry.balancePoints,
-                        required: redeemState.required ?? 0,
-                      })
-                    : redeemState.error === "redemption_limit_reached"
-                      ? t(lang, "loyaltyRedeemLimitReached")
-                      : redeemState.error === "reward_expired"
-                        ? t(lang, "loyaltyRewardExpiredRedeem")
-                        : redeemState.error === "membership_expired"
-                          ? t(lang, "loyaltyMembershipExpiredRedeem")
-                          : t(lang, "loyaltyRedeemFailed")}
+                  {redeemErrorMessage(
+                    lang,
+                    redeemState.error,
+                    redeemState.balance ?? entry.balancePoints,
+                    redeemState.required,
+                  )}
                 </p>
               ) : null}
+              </div>
             </div>
           ) : null}
 
@@ -732,35 +749,49 @@ function CustomerDetail({
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <input
                       type="number"
+                      aria-label={t(lang, "loyaltyAdjustPointsLabel")}
                       value={adjustPoints}
-                      onChange={(e) => setAdjustPoints(e.target.value)}
+                      onChange={(e) => {
+                        setAdjustPoints(e.target.value);
+                        setAdjustValidation(null);
+                      }}
                       placeholder="+10 / -50"
                       className="min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
                     />
                     <input
+                      aria-label={t(lang, "loyaltyAdjustNotePlaceholder")}
                       value={adjustNote}
-                      onChange={(e) => setAdjustNote(e.target.value)}
+                      onChange={(e) => {
+                        setAdjustNote(e.target.value);
+                        setAdjustValidation(null);
+                      }}
                       placeholder={t(lang, "loyaltyAdjustNotePlaceholder")}
                       className="min-h-[44px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
                     />
                   </div>
                   <div className="mt-3 flex items-center gap-3">
-                    <button
+                    <WakaButton
                       type="button"
                       onClick={() => void submitAdjust()}
                       disabled={adjustState === "saving"}
-                      className="min-h-[44px] rounded-xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-50"
                     >
                       {t(lang, "loyaltyAdjustApply")}
-                    </button>
-                    {adjustState === "done" ? (
-                      <span className="text-sm font-bold text-success">{t(lang, "loyaltySaved")}</span>
-                    ) : null}
-                    {adjustState === "error" ? (
-                      <span className="text-sm font-bold text-destructive">
-                        {t(lang, "loyaltyAdjustForbidden")}
-                      </span>
-                    ) : null}
+                    </WakaButton>
+                    <div role="status">
+                      {adjustValidation ? (
+                        <span className="text-sm font-bold text-warning-foreground">
+                          {t(lang, adjustValidation)}
+                        </span>
+                      ) : null}
+                      {adjustState === "done" ? (
+                        <span className="text-sm font-bold text-success">{t(lang, "loyaltySaved")}</span>
+                      ) : null}
+                      {adjustState === "error" ? (
+                        <span className="text-sm font-bold text-destructive">
+                          {t(lang, loyaltyErrorKey(adjustError))}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -768,6 +799,37 @@ function CustomerDetail({
           ) : null}
         </>
       ) : null}
+
+      {/* P3 — confirmation dialog. Open ⇔ a redemption intent exists; confirming runs
+          the untouched confirmRedeem() (same idempotency key), cancel/close never
+          reaches the RPC. */}
+      <ConfirmationDialog
+        lang={lang}
+        open={pendingRedeem != null}
+        onClose={cancelRedeem}
+        title={t(lang, "loyaltyRedeemConfirmTitle")}
+        onConfirm={() => void confirmRedeem()}
+        confirmDisabled={redeemState.phase === "busy"}
+        confirmBusy={redeemState.phase === "busy"}
+      >
+        {pendingReward ? (
+          <div className="space-y-1.5">
+            <p className="font-black text-foreground">{pendingReward.name}</p>
+            <p>{tTemplate(lang, "loyaltyRedeemConfirm", { points: pendingReward.pointsRequired })}</p>
+            <p>{tTemplate(lang, "loyaltyRedeemConfirmBalance", { balance: entry.balancePoints })}</p>
+            <p>
+              {tTemplate(lang, "loyaltyRedeemConfirmBalanceAfter", {
+                balance: balanceAfterRedeem(entry.balancePoints, pendingReward.pointsRequired),
+              })}
+            </p>
+            {redeemState.phase === "error" ? (
+              <p className="font-bold text-destructive">
+                {redeemErrorMessage(lang, redeemState.error, redeemState.balance, redeemState.required)}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </ConfirmationDialog>
     </div>
   );
 }
@@ -805,25 +867,62 @@ function CustomerList({
   onToggle: (accountId: string) => void;
   onAdjusted: () => void;
 }) {
+  // P4 — the list-row renew used to fail silently; track busy + outcome per row.
+  const [renewBusyId, setRenewBusyId] = useState<string | null>(null);
+  const [renewFeedback, setRenewFeedback] = useState<
+    { accountId: string; ok: boolean; error?: string } | null
+  >(null);
+
+  const runListRenew = async (accountId: string) => {
+    setRenewBusyId(accountId);
+    setRenewFeedback(null);
+    const result = await renewLoyaltyMembership(shopId, accountId, {});
+    setRenewBusyId(null);
+    if (result.ok) {
+      setRenewFeedback({ accountId, ok: true });
+      onAdjusted();
+    } else {
+      setRenewFeedback({ accountId, ok: false, error: result.error });
+    }
+  };
+
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-base font-black text-foreground">
-        {mode === "card" ? t(lang, "loyaltyCardsPickCustomer") : t(lang, "loyaltyCustomersTitle")}
-      </p>
-      <input
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-black text-foreground">
+          {mode === "card" ? t(lang, "loyaltyCardsPickCustomer") : t(lang, "loyaltyCustomersTitle")}
+        </h2>
+        {/* P12 — jump from the list to the enrollment panel below it. */}
+        {mode === "full" ? (
+          <WakaButton
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              const el = document.getElementById("loyalty-enroll");
+              el?.scrollIntoView({ behavior: "smooth", block: "start" });
+              el?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+            }}
+          >
+            {t(lang, "loyaltyEnrollCta")}
+          </WakaButton>
+        ) : null}
+      </div>
+      <WakaInput
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
+        aria-label={t(lang, "loyaltyMembersSearchLabel")}
         placeholder={t(lang, "loyaltySearchPlaceholder")}
-        className="mt-3 min-h-[48px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+        className="mt-3"
       />
       <div className="mt-3 flex flex-wrap gap-2">
         {MEMBER_STATUS_FILTERS.map((f) => (
           <button
             key={f}
             type="button"
+            aria-pressed={statusFilter === f}
             onClick={() => onStatusFilterChange(f)}
             className={clsx(
-              "min-h-[36px] rounded-xl px-3 text-xs font-black",
+              "min-h-[44px] rounded-xl px-3 text-xs font-black",
               statusFilter === f ? "bg-waka-600 text-white" : "bg-muted text-foreground",
             )}
           >
@@ -831,11 +930,21 @@ function CustomerList({
           </button>
         ))}
       </div>
-      {searchDone && accounts.length === 0 ? (
+      {!searchDone && accounts.length === 0 ? (
+        /* First search still in flight — defined loading instead of an empty list. */
+        <div className="mt-3">
+          <EnterpriseSkeletonList count={3} />
+        </div>
+      ) : searchDone && accounts.length === 0 ? (
         <>
-          <p className="mt-3 text-sm font-medium text-muted-foreground">
-            {search.trim() ? t(lang, "loyaltyNoMembersFound") : t(lang, "loyaltyNoMembers")}
-          </p>
+          <div className="mt-3">
+            <EnterpriseEmptyState
+              icon={UserSearch}
+              title={
+                search.trim() ? t(lang, "loyaltyNoMembersFound") : t(lang, "loyaltyNoMembers")
+              }
+            />
+          </div>
           {/* Phase C — the member search only finds loyalty customers. A customer with
               purchases and no loyalty card is still somebody the merchant must be able to
               look up, so the same Customer 360 is reachable from here. Additive: it only
@@ -880,19 +989,31 @@ function CustomerList({
                 </div>
               </button>
               {!entry.membershipActive && canManage && entry.status === "active" ? (
-                <div className="mt-1 flex items-center gap-2 px-2 pb-1">
-                  <button
+                <div className="mt-1 px-2 pb-1">
+                  <WakaButton
                     type="button"
-                    onClick={() => {
-                      void (async () => {
-                        const result = await renewLoyaltyMembership(shopId, entry.accountId, {});
-                        if (result.ok) onAdjusted();
-                      })();
-                    }}
-                    className="min-h-[36px] rounded-xl border-2 border-waka-600 bg-card px-3 text-xs font-black text-waka-700"
+                    variant="secondary"
+                    onClick={() => void runListRenew(entry.accountId)}
+                    disabled={renewBusyId === entry.accountId}
                   >
-                    {t(lang, "loyaltyMembershipRenew")}
-                  </button>
+                    {renewBusyId === entry.accountId
+                      ? t(lang, "loyaltyLoading")
+                      : t(lang, "loyaltyMembershipRenew")}
+                  </WakaButton>
+                  {/* Persistent live region: success or the mapped failure (P4). */}
+                  <div role="status">
+                    {renewFeedback?.accountId === entry.accountId ? (
+                      renewFeedback.ok ? (
+                        <p className="mt-1 text-xs font-bold text-success">
+                          {t(lang, "loyaltyMembershipRenewed")}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs font-bold text-destructive">
+                          {t(lang, loyaltyErrorKey(renewFeedback.error))}
+                        </p>
+                      )
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
               {expandedId === entry.accountId ? (
@@ -981,22 +1102,29 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
     setUsage(await fetchLoyaltyUsage(id));
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const ctx = await resolveShopCtx();
-      if (cancelled) return;
-      const id = ctx?.shopId ?? null;
-      setShopId(id);
-      if (id) {
-        await loadOverview(id);
-        await loadUsage(id);
-      } else setLoadState("error");
-    })();
-    return () => {
-      cancelled = true;
-    };
+  /**
+   * One load path for mount AND Retry: resolve the shop, then run the same overview +
+   * usage operations. Recovery therefore never needs a full page refresh. The previous
+   * per-effect `cancelled` flag only guarded setState-after-unmount, which React 18
+   * ignores; the operations themselves are unchanged. Mount starts in the "loading"
+   * initial state, and Retry flips back to "loading" in its event handler, so this
+   * callback itself never sets state synchronously inside an effect.
+   */
+  const loadHub = useCallback(async () => {
+    const ctx = await resolveShopCtx();
+    const id = ctx?.shopId ?? null;
+    setShopId(id);
+    if (id) {
+      await loadOverview(id);
+      await loadUsage(id);
+    } else setLoadState("error");
   }, [loadOverview, loadUsage]);
+
+  useEffect(() => {
+    void (async () => {
+      await loadHub();
+    })();
+  }, [loadHub]);
 
   const runSearch = useCallback(
     async (id: string, query: string, status: LoyaltyMemberStatusFilter) => {
@@ -1087,15 +1215,22 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
       }}
     >
       {loadState === "loading" ? (
-        <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm font-bold text-muted-foreground">
-          {t(lang, "loyaltyLoading")}
-        </p>
+        <div className="space-y-4" aria-busy="true">
+          <EnterpriseSkeleton variant="kpi" />
+          <EnterpriseSkeleton variant="card" />
+          <EnterpriseSkeleton variant="card" />
+        </div>
       ) : null}
 
       {loadState === "error" ? (
-        <p className="rounded-2xl bg-warning-muted px-4 py-6 text-center text-sm font-bold text-warning-foreground">
-          {t(lang, "loyaltyUnavailable")}
-        </p>
+        <EnterpriseErrorState
+          title={t(lang, "loyaltyUnavailable")}
+          retryLabel={t(lang, "loyaltyRetry")}
+          onRetry={() => {
+            setLoadState("loading");
+            void loadHub();
+          }}
+        />
       ) : null}
 
       {loadState === "ready" && overview ? (
@@ -1104,7 +1239,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
             <div className="space-y-4">
               <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-base font-black text-foreground">{t(lang, "loyaltyProgramStatusTitle")}</p>
+                  <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyProgramStatusTitle")}</h2>
                   <span
                     className={clsx(
                       "rounded-full px-3 py-1 text-xs font-black",
@@ -1134,20 +1269,21 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                       label={t(lang, "loyaltyEnabledLabel")}
                     />
                     <div className="mt-3 flex items-center gap-3">
-                      <button
+                      <WakaButton
                         type="button"
                         onClick={() => void submitSave()}
                         disabled={saveState === "saving" || inputError != null}
-                        className="min-h-[44px] rounded-xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-50"
                       >
                         {t(lang, "loyaltySave")}
-                      </button>
-                      {saveState === "done" ? (
-                        <span className="text-sm font-bold text-success">{t(lang, "loyaltySaved")}</span>
-                      ) : null}
-                      {saveState === "error" ? (
-                        <span className="text-sm font-bold text-destructive">{t(lang, "loyaltySaveFailed")}</span>
-                      ) : null}
+                      </WakaButton>
+                      <div role="status">
+                        {saveState === "done" ? (
+                          <span className="text-sm font-bold text-success">{t(lang, "loyaltySaved")}</span>
+                        ) : null}
+                        {saveState === "error" ? (
+                          <span className="text-sm font-bold text-destructive">{t(lang, "loyaltySaveFailed")}</span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 ) : null}
@@ -1179,9 +1315,9 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
               {/* Allowance + usage, straight from the server's authoritative call. */}
               <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-base font-black text-foreground">
+                  <h2 className="text-base font-black text-foreground">
                     {t(lang, "loyaltyAllowanceTitle")}
-                  </p>
+                  </h2>
                   <span
                     className={clsx(
                       "rounded-full px-3 py-1 text-xs font-black",
@@ -1252,7 +1388,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
 
           {tab === "settings" ? (
             <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <p className="text-base font-black text-foreground">{t(lang, "loyaltyEarnRuleTitle")}</p>
+              <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyEarnRuleTitle")}</h2>
               <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyEarnRuleSub")}</p>
 
               {!canManage ? (
@@ -1402,7 +1538,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                                 e.target.value === "" ? null : Number(e.target.value),
                             }))
                           }
-                          className="min-h-[40px] w-20 rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold disabled:opacity-40"
+                          className="min-h-[44px] w-20 rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold disabled:opacity-40"
                         />
                         {t(lang, "loyaltyPointsExpiryMonths")}
                       </label>
@@ -1491,20 +1627,22 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                   </div>
 
                   <div className="mt-4 flex items-center gap-3">
-                    <button
+                    <WakaButton
                       type="button"
                       onClick={() => void submitSave()}
                       disabled={saveState === "saving" || inputError != null}
-                      className="min-h-[48px] rounded-2xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-50"
+                      className="rounded-2xl"
                     >
                       {t(lang, "loyaltySave")}
-                    </button>
-                    {saveState === "done" ? (
-                      <span className="text-sm font-bold text-success">{t(lang, "loyaltySaved")}</span>
-                    ) : null}
-                    {saveState === "error" ? (
-                      <span className="text-sm font-bold text-destructive">{t(lang, "loyaltySaveFailed")}</span>
-                    ) : null}
+                    </WakaButton>
+                    <div role="status">
+                      {saveState === "done" ? (
+                        <span className="text-sm font-bold text-success">{t(lang, "loyaltySaved")}</span>
+                      ) : null}
+                      {saveState === "error" ? (
+                        <span className="text-sm font-bold text-destructive">{t(lang, "loyaltySaveFailed")}</span>
+                      ) : null}
+                    </div>
                   </div>
                 </>
               )}
@@ -1559,7 +1697,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
 
           {tab === "activity" ? (
             <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <p className="text-base font-black text-foreground">{t(lang, "loyaltyActivityTitle")}</p>
+              <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyActivityTitle")}</h2>
               <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyActivitySub")}</p>
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <StatCard
@@ -1632,7 +1770,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
           {tab === "cards" && shopId ? (
             <div className="space-y-4">
               <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-                <p className="text-base font-black text-foreground">{t(lang, "loyaltyCardsTitle")}</p>
+                <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyCardsTitle")}</h2>
                 <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyCardsSub")}</p>
                 <ul className="mt-3 list-disc space-y-1 pl-5 text-sm font-medium text-foreground">
                   <li>{t(lang, "loyaltyCardsBulletQr")}</li>
@@ -1641,7 +1779,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                 </ul>
               </article>
               {/* Permanent public program code (WPL2026001) — read-only, issued server-side. */}
-              <LoyaltyProgramCodePanel lang={lang} shopId={shopId} />
+              <LoyaltyProgramCodePanel lang={lang} shopId={shopId} hubPublicCode={overview.publicCode} />
               <LoyaltyPublicEnrollmentPanel lang={lang} shopId={shopId} canManage={canManage} />
               {/* Join queue lives with the join artifacts (poster code + invite link). */}
               {canManage ? (
@@ -1649,6 +1787,7 @@ export function LoyaltyHubPage({ lang }: { lang: Language }) {
                   lang={lang}
                   shopId={shopId}
                   canManage={canManage}
+                  usage={usage}
                   onChanged={refreshLists}
                   onOpenMember={(loyaltyAccountId) => {
                     if (!loyaltyAccountId) return;

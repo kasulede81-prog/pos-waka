@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../../lib/i18n";
+import { loyaltyErrorKey } from "../../lib/loyalty/loyaltyErrorMessages";
 import type { Language } from "../../types";
 import {
   createCustomerLoyaltyOffer,
@@ -10,6 +11,7 @@ import {
   type LoyaltyOfferKind,
 } from "../../lib/loyalty/loyaltyCustomerOffers";
 import { fetchLoyaltyRewards, type LoyaltyReward } from "../../lib/loyalty/loyaltyRewards";
+import { WakaButton } from "../ui/wakaPrimitives";
 
 type Props = {
   lang: Language;
@@ -127,7 +129,7 @@ export function LoyaltyCustomerOffersPanel({ lang, shopId, accountId, canManage 
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3">
-      <p className="text-sm font-black text-foreground">{t(lang, "loyaltyOffersTitle")}</p>
+      <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyOffersTitle")}</h3>
       <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyOffersSub")}</p>
 
       {preview ? (
@@ -266,15 +268,13 @@ export function LoyaltyCustomerOffersPanel({ lang, shopId, accountId, canManage 
               ))}
             </select>
           ) : null}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void onCreate()}
-            className="min-h-[40px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
-          >
+          <WakaButton type="button" disabled={busy} onClick={() => void onCreate()}>
             {t(lang, "loyaltyOffersSave")}
-          </button>
-          {error ? <p className="text-xs font-bold text-destructive">{error}</p> : null}
+          </WakaButton>
+          {/* Never render the raw RPC/validation code — map it through the shared error keys. */}
+          {error ? (
+            <p className="text-xs font-bold text-destructive">{t(lang, loyaltyErrorKey(error))}</p>
+          ) : null}
         </div>
       ) : null}
     </div>

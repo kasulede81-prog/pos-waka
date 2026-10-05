@@ -1,5 +1,6 @@
 import type { Language } from "../types";
 import { swOverrides } from "./i18n/swOverrides";
+import { lgOverrides } from "./i18n/lgOverrides";
 
 type Dict = Record<string, string>;
 
@@ -6574,6 +6575,8 @@ const en: Dict = {
   loyaltyCustomer360LookupEmpty: "No customers match.",
   loyaltyCustomer360NoCard: "no loyalty card",
   loyaltySearchPlaceholder: "Search by name or phone",
+  loyaltyMembersSearchLabel: "Search members by name or phone",
+  loyaltyEnrollSearchLabel: "Search shop customers to enroll",
   loyaltyNoMembers: "No loyalty customers yet. Add a customer below.",
   loyaltyNoMembersFound: "No customers match your search",
   loyaltyPointsBalanceLabel: "Points balance",
@@ -6650,6 +6653,9 @@ const en: Dict = {
   loyaltyAdjustNotePlaceholder: "Reason for adjustment",
   loyaltyAdjustApply: "Apply adjustment",
   loyaltyAdjustForbidden: "Only shop managers can adjust points",
+  loyaltyAdjustInvalidPoints: "Enter a whole number of points, such as 10 or -50",
+  loyaltyAdjustPointsLabel: "Points to adjust",
+  loyaltyAdjustNoteRequired: "Add a reason for this adjustment",
   loyaltyRecentActivityTitle: "Recent activity",
   loyaltyKindEarned: "Earned",
   loyaltyKindRedeemed: "Redeemed",
@@ -6659,12 +6665,14 @@ const en: Dict = {
   loyaltyKindPromotional: "Promotional",
   loyaltyLoading: "Loading loyalty…",
   loyaltyUnavailable: "Loyalty data is unavailable right now. Check your connection.",
+  loyaltyRetry: "Try again",
   loyaltyNotEnabledHint: "Turn the program ON to start giving points on sales.",
   loyaltyAddCustomerTitle: "Add loyalty customer",
   loyaltyAddCustomerSub: "Enroll an existing customer, then show them their membership QR.",
   loyaltyConsentLabel: "Customer consented to the loyalty program terms",
   loyaltyConsentRequired: "Customer consent is required before enrollment.",
   loyaltyEnrollAction: "Enroll customer",
+  loyaltyEnrollCta: "Enroll new member",
   loyaltyEnrollSuccess: "Customer enrolled — show them this QR",
   loyaltyAlreadyEnrolledState: "Already enrolled — membership QR",
   loyaltyEnrollFailed: "Enrollment failed — check your connection",
@@ -6737,6 +6745,10 @@ const en: Dict = {
   loyaltyRedeemAction: "Redeem",
   loyaltyRedeemConfirm: "Confirm — spend {points} pts?",
   loyaltyRedeemDone: "Redeemed. New balance: {balance} pts",
+  loyaltyRedeemConfirmTitle: "Redeem reward?",
+  loyaltyRedeemConfirmBalance: "Points balance: {balance}",
+  loyaltyRedeemConfirmBalanceAfter: "Balance after redeeming: {balance}",
+  loyaltyRewardNeedsPoints: "Needs {needed} more points — balance {balance}",
   loyaltyRedeemAlready: "Already redeemed — duplicate blocked",
   loyaltyInsufficientPoints: "Not enough points ({balance} of {required})",
   loyaltyRedeemLimitReached: "Redemption limit reached for this reward",
@@ -8715,7 +8727,7 @@ const en: Dict = {
   posHelpFailed: "Could not send the support request. Please try again.",
 };
 
-const lg: Dict = {
+const lgBase: Dict = {
   appName: "DKASU POS",
   brandTagline: "Tech for next generation",
   brandShortTag: "Eddukanyizibwa eri dduuka ddala mu Uganda",
@@ -14084,6 +14096,8 @@ const lg: Dict = {
   loyaltyCustomer360LookupEmpty: "Tewali muguzi akwatagana na kino.",
   loyaltyCustomer360NoCard: "tali na kaadi",
   loyaltySearchPlaceholder: "Noonya erinnya oba ssimu",
+  loyaltyMembersSearchLabel: "Noonyonnya abaguzi erinnya oba ssimu",
+  loyaltyEnrollSearchLabel: "Noonya abaguzi b'olupapula lwonna okubayingiza",
   loyaltyNoMembers: "Tewali baguzi ba kwagala. Yongeramu wansi.",
   loyaltyNoMembersFound: "Tewali muguzi akwatagana na kino",
   loyaltyPointsBalanceLabel: "Obuganzi bw'ebipimo",
@@ -14106,6 +14120,9 @@ const lg: Dict = {
   loyaltyAdjustNotePlaceholder: "Ensonga lwaki okyusizza",
   loyaltyAdjustApply: "Kakasa enkyukakyuka",
   loyaltyAdjustForbidden: "Abakulu b'aduuka bekka basobola okukyusa bipimo",
+  loyaltyAdjustInvalidPoints: "Andika bipimo ebitonotono, bwe kiri 10 oba -50",
+  loyaltyAdjustPointsLabel: "Bipimo by'okukyusa",
+  loyaltyAdjustNoteRequired: "Teeka ensonga lwaki okyusizza kwino",
   loyaltyRecentActivityTitle: "Ebikolwa ebibippya",
   loyaltyKindEarned: "Byafuniddwa",
   loyaltyKindRedeemed: "Byakozesebwa",
@@ -14115,6 +14132,7 @@ const lg: Dict = {
   loyaltyKindPromotional: "Bya promotion",
   loyaltyLoading: "Okwagala kujja…",
   loyaltyUnavailable: "Amawulire g'okwagala tegaliwo kakati. Kebera omukutu.",
+  loyaltyRetry: "Gezaako nate",
   loyaltyNotEnabledHint: "Zza pulogulaamu ERIYO okutandika okuwa bipimo ku migule.",
   loyaltyCardsTitle: "Akaadi y'omuguzi",
   loyaltyCardsSub: "Londa omuguzi okulaba akaadi ye n'okugimuweereza ku ssimu ye.",
@@ -14128,6 +14146,7 @@ const lg: Dict = {
   loyaltyConsentLabel: "Omuguzi akkanye ku mateeka g'okwagala",
   loyaltyConsentRequired: "Okukkanya kw'omuguzi kwetaagisa nga tonamuyingiza.",
   loyaltyEnrollAction: "Yingiza omuguzi",
+  loyaltyEnrollCta: "Yingiza mupya",
   loyaltyEnrollSuccess: "Omuguzi ayingiziddwa — mulage QR eno",
   loyaltyAlreadyEnrolledState: "Yayingiziddwa dda — QR y'obwananyini",
   loyaltyEnrollFailed: "Okuyingiza kuganye — kebera omukutu",
@@ -14234,6 +14253,10 @@ const lg: Dict = {
   loyaltyRedeemAction: "Kyuusa",
   loyaltyRedeemConfirm: "Kakasa — oyoze {points} bipimo?",
   loyaltyRedeemDone: "Kyakiddwa. Omulamwa ogupya: {balance} bipimo",
+  loyaltyRedeemConfirmTitle: "Okyuse ebyereeta?",
+  loyaltyRedeemConfirmBalance: "Obuganzi bw'ebipimo: {balance}",
+  loyaltyRedeemConfirmBalanceAfter: "Obuganzi olw'okukyusa: {balance}",
+  loyaltyRewardNeedsPoints: "Byetaaga bipimo {needed} by'okulagaana — obuganzi {balance}",
   loyaltyRedeemAlready: "Kyakiddwa dda — ebyokubiri bizibiddwa",
   loyaltyInsufficientPoints: "Bipimo tebimala ({balance} ku {required})",
   loyaltyRedeemLimitReached: "Omuguzi akoze ekkumi lino egikulu",
@@ -15870,6 +15893,9 @@ const lg: Dict = {
   logoutFromSettings: "Vvaamu ku sisitemu eno",
   loadingAuth: "Tukunga…",
 };
+
+/** Luganda = base dictionary + Phase 2 Batch 4 overrides (mirrors the sw layering). */
+const lg: Dict = { ...lgBase, ...lgOverrides };
 
 const sw: Dict = { ...en, ...swOverrides };
 

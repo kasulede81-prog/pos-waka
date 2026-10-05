@@ -8,6 +8,7 @@ import {
   type ShopCustomerSummary,
 } from "../../lib/loyalty/loyaltyCustomer360";
 import { reverseLoyaltyRedemption } from "../../lib/loyalty/loyaltyRewards";
+import { WakaButton } from "../ui/wakaPrimitives";
 
 /**
  * Customer 360 — the merchant's view of one customer's relationship with THEIR shop.
@@ -118,7 +119,7 @@ export function LoyaltyCustomer360Panel({
         <button
           type="button"
           onClick={() => void load().then(setState)}
-          className="mt-2 min-h-[36px] rounded-xl border border-border px-3 text-xs font-black text-foreground"
+          className="mt-2 min-h-[44px] rounded-xl border border-border px-3 text-xs font-black text-foreground"
         >
           {t(lang, "loyaltyCustomer360Retry")}
         </button>
@@ -402,15 +403,14 @@ export function LoyaltyCustomerLookup({ lang, shopId }: { lang: Language; shopId
           data-testid="customer-lookup-input"
           className="min-h-[44px] flex-1 rounded-xl border-2 border-border bg-card px-3 text-sm font-semibold"
         />
-        <button
+        <WakaButton
           type="button"
           onClick={() => void run()}
           disabled={busy}
           data-testid="customer-lookup-submit"
-          className="min-h-[44px] rounded-xl bg-waka-600 px-4 text-xs font-black text-white disabled:opacity-60"
         >
           {t(lang, "loyaltyCustomer360Search")}
-        </button>
+        </WakaButton>
       </div>
 
       {error ? (

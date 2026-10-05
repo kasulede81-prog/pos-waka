@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { t } from "../../lib/i18n";
 import type { Language } from "../../types";
 import { searchLoyaltyAccounts } from "../../lib/loyalty/loyaltyMerchant";
+import { WakaButton } from "../ui/wakaPrimitives";
 import {
   createSpendPromotion,
   fetchSpendPromotions,
@@ -139,7 +140,7 @@ export function LoyaltySpendPromotionsPanel({
                     type="button"
                     onClick={() => startEdit(p)}
                     data-testid={`spend-promotion-edit-${p.id}`}
-                    className="min-h-[32px] rounded-lg border border-border px-2 text-[10px] font-black text-foreground"
+                    className="min-h-[44px] rounded-lg border border-border px-2 text-[10px] font-black text-foreground"
                   >
                     {t(lang, "edit")}
                   </button>
@@ -148,7 +149,7 @@ export function LoyaltySpendPromotionsPanel({
                     <button
                       type="button"
                       onClick={() => void updateSpendPromotion(p.id, { status: "paused" }).then(reload)}
-                      className="min-h-[32px] rounded-lg border border-border px-2 text-[10px] font-black text-muted-foreground"
+                      className="min-h-[44px] rounded-lg border border-border px-2 text-[10px] font-black text-muted-foreground"
                     >
                       {t(lang, "loyaltySpendPromoStatusPaused")}
                     </button>
@@ -156,7 +157,7 @@ export function LoyaltySpendPromotionsPanel({
                     <button
                       type="button"
                       onClick={() => void updateSpendPromotion(p.id, { status: "active" }).then(reload)}
-                      className="min-h-[32px] rounded-lg border border-waka-600 px-2 text-[10px] font-black text-waka-700"
+                      className="min-h-[44px] rounded-lg border border-waka-600 px-2 text-[10px] font-black text-waka-700"
                     >
                       {t(lang, "loyaltySpendPromoStatusActive")}
                     </button>
@@ -165,7 +166,7 @@ export function LoyaltySpendPromotionsPanel({
                     <button
                       type="button"
                       onClick={() => void updateSpendPromotion(p.id, { status: "revoked" }).then(reload)}
-                      className="min-h-[32px] rounded-lg border border-border px-2 text-[10px] font-black text-muted-foreground"
+                      className="min-h-[44px] rounded-lg border border-border px-2 text-[10px] font-black text-muted-foreground"
                     >
                       {t(lang, "loyaltySpendPromoStatusRevoked")}
                     </button>
@@ -179,9 +180,9 @@ export function LoyaltySpendPromotionsPanel({
 
       {canManage ? (
         <div className="space-y-3 rounded-xl border border-border bg-card/60 p-3">
-          <p className="text-sm font-black text-foreground">
+          <h3 className="text-sm font-black text-foreground">
             {editingId ? t(lang, "loyaltySpendPromoEditTitle") : t(lang, "loyaltySpendPromoNewTitle")}
-          </p>
+          </h3>
 
           <label className="block text-sm font-bold text-foreground">
             {t(lang, "loyaltySpendPromoFieldTitle")}
@@ -261,8 +262,9 @@ export function LoyaltySpendPromotionsPanel({
                 setTargetName(null);
               }}
               data-testid="spend-promo-shop-wide"
+              aria-pressed={draft.accountId === null}
               className={clsx(
-                "min-h-[36px] rounded-xl px-3 text-xs font-black",
+                "min-h-[44px] rounded-xl px-3 text-xs font-black",
                 draft.accountId === null ? "bg-waka-600 text-white" : "bg-muted text-foreground",
               )}
             >
@@ -334,15 +336,14 @@ export function LoyaltySpendPromotionsPanel({
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <button
+            <WakaButton
               type="button"
               disabled={busy}
               onClick={() => void save()}
               data-testid="spend-promo-save"
-              className="min-h-[44px] rounded-xl bg-waka-600 px-4 text-xs font-black text-white disabled:opacity-60"
             >
               {t(lang, "save")}
-            </button>
+            </WakaButton>
             {editingId ? (
               <button
                 type="button"

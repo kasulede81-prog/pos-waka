@@ -15,6 +15,7 @@ import {
   stopNfcSession,
 } from "../../services/hardware/nfcAdapter";
 import { LoyaltyMemberQr } from "./LoyaltyMemberQr";
+import { WakaButton, WakaInput } from "../ui/wakaPrimitives";
 
 type EnrollState =
   | { phase: "idle" }
@@ -125,18 +126,19 @@ export function LoyaltyEnrollmentPanel({
   const canEnroll = selected != null && consent && enrollState.phase !== "enrolling";
 
   return (
-    <div className="space-y-4">
+    <div id="loyalty-enroll" className="space-y-4">
       <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-base font-black text-foreground">{t(lang, "loyaltyAddCustomerTitle")}</p>
+        <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyAddCustomerTitle")}</h2>
         <p className="mt-1 text-sm font-medium text-muted-foreground">
           {t(lang, "loyaltyAddCustomerSub")}
         </p>
 
-        <input
+        <WakaInput
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          aria-label={t(lang, "loyaltyEnrollSearchLabel")}
           placeholder={t(lang, "loyaltySearchPlaceholder")}
-          className="mt-3 min-h-[48px] w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-base font-semibold"
+          className="mt-3"
         />
         {options.length > 0 ? (
           <ul className="mt-2 divide-y divide-border rounded-xl border border-border">
@@ -189,41 +191,45 @@ export function LoyaltyEnrollmentPanel({
                 {t(lang, "loyaltyConsentRequired")}
               </p>
             ) : null}
-            <button
+            <WakaButton
               type="button"
               onClick={() => void submitEnroll()}
               disabled={!canEnroll}
-              className="min-h-[48px] rounded-2xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-50"
+              className="rounded-2xl"
             >
               {t(lang, "loyaltyEnrollAction")}
-            </button>
+            </WakaButton>
           </div>
         ) : null}
 
-        {enrollState.phase === "enrolling" ? (
-          <p className="mt-3 text-sm font-bold text-muted-foreground">{t(lang, "loyaltyLoading")}</p>
-        ) : null}
-        {enrollState.phase === "error" ? (
-          <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-bold text-destructive">
-            {enrollState.error === "consent_required"
-              ? t(lang, "loyaltyConsentRequired")
-              : t(lang, "loyaltyEnrollFailed")}
-          </p>
-        ) : null}
-        {enrollState.phase === "done" ? (
-          <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
-            <p className="text-center text-sm font-black text-foreground">
-              {enrollState.alreadyEnrolled
-                ? t(lang, "loyaltyAlreadyEnrolledState")
-                : t(lang, "loyaltyEnrollSuccess")}
+        {/* Persistent live region: the phases are mutually exclusive, so exactly one
+            block (or none, while idle) sits inside this always-mounted container. */}
+        <div role="status">
+          {enrollState.phase === "enrolling" ? (
+            <p className="mt-3 text-sm font-bold text-muted-foreground">{t(lang, "loyaltyLoading")}</p>
+          ) : null}
+          {enrollState.phase === "error" ? (
+            <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-bold text-destructive">
+              {enrollState.error === "consent_required"
+                ? t(lang, "loyaltyConsentRequired")
+                : t(lang, "loyaltyEnrollFailed")}
             </p>
-            <LoyaltyMemberQr qrToken={enrollState.qrToken} />
-          </div>
-        ) : null}
+          ) : null}
+          {enrollState.phase === "done" ? (
+            <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
+              <p className="text-center text-sm font-black text-foreground">
+                {enrollState.alreadyEnrolled
+                  ? t(lang, "loyaltyAlreadyEnrolledState")
+                  : t(lang, "loyaltyEnrollSuccess")}
+              </p>
+              <LoyaltyMemberQr qrToken={enrollState.qrToken} />
+            </div>
+          ) : null}
+        </div>
       </article>
 
       <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-base font-black text-foreground">{t(lang, "loyaltyScanQrTitle")}</p>
+        <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyScanQrTitle")}</h2>
         <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyScanQrSub")}</p>
         {scanner.cameraScanOpen ? (
           <div className="mt-3 space-y-3">
@@ -236,41 +242,29 @@ export function LoyaltyEnrollmentPanel({
             {scanner.cameraScanStatus ? (
               <p className="text-sm font-medium text-muted-foreground">{scanner.cameraScanStatus}</p>
             ) : null}
-            <button
-              type="button"
-              onClick={scanner.closeCameraScan}
-              className="min-h-[44px] rounded-xl border-2 border-border px-4 text-sm font-black text-foreground"
-            >
+            <WakaButton type="button" variant="secondary" onClick={scanner.closeCameraScan}>
               {t(lang, "loyaltyScanClose")}
-            </button>
+            </WakaButton>
           </div>
         ) : (
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button
+            <WakaButton
               type="button"
               onClick={scanner.openCameraScan}
               disabled={!scanner.caps.cameraScan}
-              className="min-h-[48px] rounded-2xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-50"
+              className="rounded-2xl"
             >
               {t(lang, "loyaltyScanQrAction")}
-            </button>
+            </WakaButton>
             {nfcCaps.nfc ? (
               nfcActive ? (
-                <button
-                  type="button"
-                  onClick={() => void stopNfcTap()}
-                  className="min-h-[48px] rounded-xl border-2 border-border px-4 text-sm font-black text-foreground"
-                >
+                <WakaButton type="button" variant="secondary" onClick={() => void stopNfcTap()}>
                   {t(lang, "loyaltyNfcStop")}
-                </button>
+                </WakaButton>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => void startNfcTap()}
-                  className="min-h-[48px] rounded-2xl border-2 border-waka-600 px-5 text-sm font-black text-waka-700"
-                >
+                <WakaButton type="button" variant="secondary" onClick={() => void startNfcTap()} className="rounded-2xl">
                   {t(lang, "loyaltyNfcTapAction")}
-                </button>
+                </WakaButton>
               )
             ) : (
               <p className="text-xs font-semibold text-muted-foreground">{t(lang, "loyaltyNfcUnsupported")}</p>

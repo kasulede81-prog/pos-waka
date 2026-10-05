@@ -17,6 +17,10 @@ import {
   type RewardInput,
 } from "../../lib/loyalty/loyaltyRewards";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
+import { WakaButton } from "../ui/wakaPrimitives";
+import { EnterpriseEmptyState } from "../enterprise/EnterpriseEmptyState";
+import { EnterpriseSkeletonList } from "../enterprise/EnterpriseSkeleton";
+import { Gift } from "lucide-react";
 
 const KIND_OPTIONS: LoyaltyReward["rewardKind"][] = ["custom", "product", "voucher"];
 
@@ -168,12 +172,18 @@ export function LoyaltyRewardsPanel({
 
   return (
     <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-base font-black text-foreground">{t(lang, "loyaltyRewardsTitle")}</p>
+      <h2 className="text-base font-black text-foreground">{t(lang, "loyaltyRewardsTitle")}</h2>
       <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyRewardsSub")}</p>
       <p className="mt-2 text-xs font-medium text-muted-foreground">{t(lang, "loyaltyRewardExampleHint")}</p>
 
-      {loaded && rewards.length === 0 ? (
-        <p className="mt-3 text-sm font-medium text-muted-foreground">{t(lang, "loyaltyNoRewards")}</p>
+      {!loaded ? (
+        <div className="mt-3">
+          <EnterpriseSkeletonList count={3} />
+        </div>
+      ) : rewards.length === 0 ? (
+        <div className="mt-3">
+          <EnterpriseEmptyState icon={Gift} title={t(lang, "loyaltyNoRewards")} />
+        </div>
       ) : (
         <ul className="mt-3 divide-y divide-border">
           {rewards.map((reward) => {
@@ -228,7 +238,7 @@ export function LoyaltyRewardsPanel({
                           type="button"
                           onClick={() => void removeReward(reward)}
                           data-testid={`reward-remove-confirm-${reward.id}`}
-                          className="min-h-[32px] rounded-lg bg-danger px-2 text-[10px] font-black text-white"
+                          className="min-h-[44px] rounded-lg bg-danger px-2 text-[10px] font-black text-white"
                         >
                           {t(lang, "loyaltyRewardRemoveConfirm")}
                         </button>
@@ -238,7 +248,7 @@ export function LoyaltyRewardsPanel({
                             setPendingRemoveId(null);
                             setRemoveError(null);
                           }}
-                          className="min-h-[32px] rounded-lg border border-border px-2 text-[10px] font-black text-foreground"
+                          className="min-h-[44px] rounded-lg border border-border px-2 text-[10px] font-black text-foreground"
                         >
                           {t(lang, "cancel")}
                         </button>
@@ -251,7 +261,7 @@ export function LoyaltyRewardsPanel({
                           setRemoveError(null);
                         }}
                         data-testid={`reward-remove-${reward.id}`}
-                        className="min-h-[32px] rounded-lg border border-border px-2 text-[10px] font-black text-muted-foreground"
+                        className="min-h-[44px] rounded-lg border border-border px-2 text-[10px] font-black text-muted-foreground"
                       >
                         {t(lang, "loyaltyRewardRemoveAction")}
                       </button>
@@ -296,7 +306,7 @@ export function LoyaltyRewardsPanel({
                           const v = e.target.value;
                           if (v) void saveExpiry(reward, v);
                         }}
-                        className="min-h-[40px] rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold"
+                        className="min-h-[44px] rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold"
                       />
                     </label>
                     <button
@@ -323,7 +333,7 @@ export function LoyaltyRewardsPanel({
       )}
 
       <div className="mt-4 rounded-2xl border border-border bg-muted/50 p-3">
-        <p className="text-sm font-black text-foreground">{t(lang, "loyaltyAddReward")}</p>
+        <h3 className="text-sm font-black text-foreground">{t(lang, "loyaltyAddReward")}</h3>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block text-sm font-bold text-foreground">
             {t(lang, "loyaltyRewardNameLabel")}
@@ -370,8 +380,9 @@ export function LoyaltyRewardsPanel({
                   }))
                 }
                 data-testid={`reward-benefit-${kind}`}
+                aria-pressed={(draft.benefitKind ?? "none") === kind}
                 className={clsx(
-                  "min-h-[36px] rounded-xl px-3 text-xs font-black",
+                  "min-h-[44px] rounded-xl px-3 text-xs font-black",
                   (draft.benefitKind ?? "none") === kind ? "bg-waka-600 text-white" : "bg-muted text-foreground",
                 )}
               >
@@ -537,7 +548,7 @@ export function LoyaltyRewardsPanel({
               onChange={(e) =>
                 setDraft((d) => ({ ...d, expiresOn: e.target.value || null }))
               }
-              className="min-h-[40px] rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold disabled:opacity-40"
+              className="min-h-[44px] rounded-lg border-2 border-border bg-card px-2 text-sm font-semibold disabled:opacity-40"
             />
           </label>
         </div>
@@ -602,14 +613,13 @@ export function LoyaltyRewardsPanel({
         </div>
 
         <div className="mt-3 flex items-center gap-3">
-          <button
+          <WakaButton
             type="button"
             onClick={() => void submitCreate()}
             disabled={saveState === "saving" || inputError != null}
-            className="min-h-[44px] rounded-xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-50"
           >
             {t(lang, "loyaltyRewardCreate")}
-          </button>
+          </WakaButton>
           {saveState === "done" ? (
             <span className="text-sm font-bold text-success">{t(lang, "loyaltyRewardCreated")}</span>
           ) : null}
