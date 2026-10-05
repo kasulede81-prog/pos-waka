@@ -10,6 +10,12 @@ import {
 
 import { getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 
+import {
+  getActiveShopState,
+  isShopContextUnresolved,
+  setActiveShopState,
+} from "../offline/shopScope";
+
 import { initInventorySyncChannel } from "../lib/inventorySyncChannel";
 
 import { forceHideNativeSplash, hideNativeSplashWhenReady, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "../lib/nativeSplash";
@@ -17,7 +23,11 @@ import { forceHideNativeSplash, hideNativeSplashWhenReady, scheduleSplashMaxDura
 import { hasSupabaseConfig } from "../lib/supabase";
 
 import { isLocalShopDataEmpty } from "../lib/cloudSnapshotSync";
-import { initializeActiveShopForAccount } from "../lib/initializeActiveShop";
+import {
+  initializeActiveShopForAccount,
+  resolveShopContextForBoot,
+  SHOP_INIT_RETRY_DELAYS_MS,
+} from "../lib/initializeActiveShop";
 import {
   logOnboardingRequired,
   shouldRunCloudRecoveryForAccount,
@@ -96,6 +106,38 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
   const [stalled, setStalled] = useState(false);
   const [startupStep, setStartupStep] = useState<StartupStepId>(() => "local_disk");
   const bootGenRef = useRef(0);
+  /** The single pending shop-retry timer, and the resolver that releases its wait. */
+  const shopRetryTimerRef = useRef<number | null>(null);
+  const shopRetryReleaseRef = useRef<(() => void) | null>(null);
+
+  /**
+   * Cancel a pending shop retry AND release the loop waiting on it, so a superseded boot cannot
+   * keep a timer armed — nor sit on an unresolved promise for the rest of the session.
+   */
+  const clearShopRetry = useCallback(() => {
+    if (shopRetryTimerRef.current !== null) {
+      window.clearTimeout(shopRetryTimerRef.current);
+      shopRetryTimerRef.current = null;
+    }
+    const release = shopRetryReleaseRef.current;
+    shopRetryReleaseRef.current = null;
+    release?.();
+  }, []);
+
+  /** One bounded, cancellable wait between shop-resolution attempts. */
+  const waitForShopRetry = useCallback(
+    (ms: number) =>
+      new Promise<void>((resolve) => {
+        const settle = () => {
+          shopRetryTimerRef.current = null;
+          shopRetryReleaseRef.current = null;
+          resolve();
+        };
+        shopRetryReleaseRef.current = settle;
+        shopRetryTimerRef.current = window.setTimeout(settle, ms);
+      }),
+    [],
+  );
 
   useEffect(() => {
     scheduleSplashMaxDuration();
@@ -226,6 +268,9 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       const userId = userIdFromAccountKey(accountKey);
 
       if (!accountKey) {
+        // No account: the shop lifecycle has nothing to resolve. Recorded explicitly so a later
+        // reader of the state never mistakes "signed out" for "resolution still in flight".
+        setActiveShopState("signed-out");
         finishReady("no_account", userId);
         return;
       }
@@ -243,7 +288,51 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
         setActiveAccountKey(accountKey);
       }
 
-      await initializeActiveShopForAccount(userId);
+      /**
+       * SHOP CONTEXT GATE — the load-bearing check of this file.
+       *
+       * A shop-dependent POS must not become interactive while the account's shop context is
+       * merely unresolved: every local read and write is namespace-relative, so with no shop the
+       * POS silently operates in the shopless legacy partition, and only a refresh recovers it.
+       * That is precisely the "sometimes it misbehaves, then refreshing fixes it" symptom.
+       *
+       * This is NOT `if (!getActiveShopId()) return;`. A null id is equally the correct value for a
+       * confirmed no-shop account (legitimate onboarding) and for a signed-out one, and blocking
+       * those would break both. Only the explicit `initializing` state — the one that means "we do
+       * not know yet" — stops the boot.
+       *
+       * A failed attempt is retried on a bounded schedule before we get here; if it is still
+       * unresolved at this point the POS stays in startup, and the existing stall escape actions
+       * (retry / sign out) remain available rather than a half-working POS.
+       */
+      const shopBoot = await resolveShopContextForBoot(
+        {
+          // The generation is handed DOWN into the resolution rather than checked after it: this
+          // function mutates the active shop, the lifecycle state and the persisted last shop at
+          // several awaits, and the `bootGenRef` check below only runs once it has returned. An
+          // attempt that has been superseded must not be able to publish any of them.
+          initialize: (userId) => initializeActiveShopForAccount(userId, { isCurrent: () => bootGenRef.current === gen }),
+          getState: getActiveShopState,
+          getAccountKey: getActiveAccountKey,
+          isCurrent: () => bootGenRef.current === gen,
+          wait: waitForShopRetry,
+        },
+        { userId, accountKey },
+      );
+
+      if (bootGenRef.current !== gen) return;
+
+      if (shopBoot.state === "initializing") {
+        bootTrace("BOOT-013", "initialize_active_shop", "FAILED", {
+          via: "shop_context_unresolved",
+          attempts: shopBoot.attempts,
+          maxAttempts: SHOP_INIT_RETRY_DELAYS_MS.length + 1,
+        });
+        // Deliberately no finishReady(): the retry schedule is exhausted and the stall escape
+        // actions are the honest way out. Background hydration is not scheduled either — it would
+        // hydrate the shopless namespace and a later shop activation would have to undo it.
+        return;
+      }
 
       if (isStoreReadyForAccount(accountKey)) {
         const stage = usePosStore.getState().hydrationStage;
@@ -301,7 +390,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
 
       scheduleBackgroundHydration(gen, userId);
     },
-    [accountKey, finishReady, scheduleBackgroundHydration],
+    [accountKey, finishReady, scheduleBackgroundHydration, waitForShopRetry],
   );
 
   useEffect(() => {
@@ -319,13 +408,32 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     void runBoot(gen);
     return () => {
       bootGenRef.current += 1;
+      // Releases a retry that is mid-wait and disarms its timer, so switching account (or
+      // unmounting) can never leave a previous account's retry armed against the new one.
+      clearShopRetry();
       resetStartupScheduler();
     };
-  }, [accountKey, runBoot]);
+  }, [accountKey, runBoot, clearShopRetry]);
 
   useEffect(() => {
     if (bootPhase === "ready" || !accountKey) return;
     const id = window.setTimeout(() => {
+      /**
+       * The escape exists so a slow boot cannot pin the app on a splash screen forever — but it
+       * must not manufacture an interactive POS out of an unresolved shop context. Escaping while
+       * the shop is still unknown is what made a slow boot indistinguishable from a broken one:
+       * the POS came up shopless and only a refresh fixed it.
+       *
+       * Remaining in startup is safe here because it is bounded: the retry schedule is finishing,
+       * and the stall actions (retry / sign out) appear shortly after. Nothing is fabricated.
+       */
+      if (isShopContextUnresolved()) {
+        bootTrace("BOOT-012", "PosDataProvider.runBoot", "TIMEOUT", {
+          via: "boot_timeout_escape_deferred_shop_unresolved",
+          accountKey,
+        });
+        return;
+      }
       finishReady("boot_timeout_escape", userIdFromAccountKey(accountKey));
       bootTrace("BOOT-012", "PosDataProvider.runBoot", "TIMEOUT", { via: "boot_timeout_escape", accountKey });
       if (isCloudRecoveryLockActive()) {
@@ -354,6 +462,12 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
 
   const handleContinueOffline = useCallback(() => {
     if (isLocalShopDataEmpty()) return;
+    // Offline continuation is for operating against a shop context we already have (restored from
+    // disk or from the persisted last shop). With resolution still unresolved there is no context
+    // to scope to, so continuing would run the POS in the shopless partition — the exact state
+    // this batch exists to prevent. Legitimate offline use is unaffected: a shop resolved from
+    // local state is `ready`, not `initializing`.
+    if (isShopContextUnresolved()) return;
     setRecoveryOfflineBypass();
     resetCloudRecoverySessionForRetry();
     setRecoveryOverlay(null);
@@ -364,7 +478,8 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     void hideNativeSplashWhenReady();
   }, []);
 
-  const canContinueOffline = !isLocalShopDataEmpty() && usePosStore.getState()._hydrated;
+  const canContinueOffline =
+    !isLocalShopDataEmpty() && usePosStore.getState()._hydrated && !isShopContextUnresolved();
 
   const handleSignOut = useCallback(async () => {
     resetCloudRecoverySessionForRetry();

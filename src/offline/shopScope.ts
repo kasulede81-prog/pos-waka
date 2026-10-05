@@ -19,6 +19,53 @@ let activeShopId: string | null = null;
 
 const listeners = new Set<(next: string | null, prev: string | null) => void>();
 
+/**
+ * Where this account's shop context stands — the state `activeShopId` alone cannot express.
+ *
+ * `activeShopId === null` means four completely different things, and treating them alike is what
+ * let the POS become fully interactive with no shop: a boot that had merely not finished resolving
+ * looked exactly like an account that had none, so the app ran on in the shopless partition and
+ * only a refresh could recover it. The distinction is therefore load-bearing, not decorative.
+ *
+ *   initializing  the account is shop-capable but resolution has not concluded. Either it is in
+ *                 flight, or it failed/timed out and is retryable. `activeShopId` is NOT
+ *                 authoritative yet, and a shop-dependent POS must not run.
+ *   ready         a shop is active; `getActiveShopId()` is non-null.
+ *   no-shop       authenticated and confirmed to have no membership/shop — a legitimate state to
+ *                 continue from (onboarding), not a failure.
+ *   not-required  the account has no shop dimension at all (offline-only `local:` / demo, or no
+ *                 Supabase config). Deliberately distinct from `ready`, which asserts a shop.
+ *   signed-out    no account.
+ *
+ * STARTS "initializing" ON PURPOSE. The module is evaluated before anything is known, so the only
+ * honest value is the one that refuses to assume a shop is available. A caller that runs before the
+ * lifecycle has classified the account must fail closed.
+ */
+export type ActiveShopState = "initializing" | "ready" | "no-shop" | "not-required" | "signed-out";
+
+let activeShopState: ActiveShopState = "initializing";
+
+/**
+ * The lifecycle state. Owned by the initialization path (`initializeActiveShop.ts`) and by the boot
+ * provider that reports sign-out; everything else should only read it.
+ */
+export function getActiveShopState(): ActiveShopState {
+  return activeShopState;
+}
+
+export function setActiveShopState(next: ActiveShopState): void {
+  activeShopState = next;
+}
+
+/**
+ * True while a shop-capable account's context is not yet resolvable. This is the ONE condition that
+ * must stop a shop-dependent POS from becoming interactive — see the type for why the other states
+ * are legitimate places to continue from.
+ */
+export function isShopContextUnresolved(): boolean {
+  return activeShopState === "initializing";
+}
+
 export function isValidShopId(shopId: string | null | undefined): shopId is string {
   return typeof shopId === "string" && SHOP_UUID_RE.test(shopId.trim());
 }
@@ -133,5 +180,6 @@ export function shopScopedAccountKey(shopId: string | null | undefined): string 
 
 export function resetActiveShopForTests(): void {
   activeShopId = null;
+  activeShopState = "initializing";
   listeners.clear();
 }
