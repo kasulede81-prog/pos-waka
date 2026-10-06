@@ -30,6 +30,12 @@ import {
   subscriptionEngine,
   type AdminPlanCode,
 } from "../lib/subscriptionEngine";
+import { fetchPublicSubscriptionPricing } from "../lib/pricingCampaignsAdmin";
+import {
+  buildDefaultPublicPricing,
+  CANONICAL_PLAN_PRICES,
+  type PublicPricingSnapshot,
+} from "../lib/subscriptionPricing";
 import {
   adminSetShopActive,
   adminShopForceLogoutDevices,
@@ -75,12 +81,6 @@ type Props = {
   email: string | null | undefined;
 };
 
-const PLAN_AMOUNTS: Record<string, number> = {
-  starter: 25_000,
-  business: 56_000,
-  waka_plus: 110_000,
-};
-
 function TabFallback() {
   return (
     <p className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
@@ -115,6 +115,22 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
   );
   const [actionSheet, setActionSheet] = useState(false);
   const [planControlDays, setPlanControlDays] = useState(30);
+  // H2: the "Mark paid" label/amount must come from the same server-side
+  // price source customers are shown (canonical price book + active campaign),
+  // never from a client-side constant that can drift from it.
+  const [publicPricing, setPublicPricing] = useState<PublicPricingSnapshot>(() =>
+    buildDefaultPublicPricing(),
+  );
+
+  useEffect(() => {
+    let live = true;
+    void fetchPublicSubscriptionPricing().then((snapshot) => {
+      if (live) setPublicPricing(snapshot);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     const tab = shopConsoleTabFromLocation(location.search, location.hash, shopId);
@@ -133,8 +149,13 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
 
   const suggestedPaymentUgx = useMemo(() => {
     const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "business").toLowerCase();
-    return PLAN_AMOUNTS[code] ?? PLAN_AMOUNTS.business;
-  }, [detail?.plan_code, detail?.subscription?.plan_code]);
+    const serverPrice = publicPricing.plans.find((p) => p.planCode === code);
+    if (serverPrice) return serverPrice.finalMonthlyUgx;
+    // Offline / unknown plan: the canonical price book, then business.
+    const canonical = CANONICAL_PLAN_PRICES.find((p) => p.planCode === code);
+    if (canonical) return canonical.monthlyPriceUgx;
+    return CANONICAL_PLAN_PRICES.find((p) => p.planCode === "business")?.monthlyPriceUgx ?? 0;
+  }, [detail?.plan_code, detail?.subscription?.plan_code, publicPricing]);
 
   const shopIntel = useMemo(() => {
     if (!detail) return null;

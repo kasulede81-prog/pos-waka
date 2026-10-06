@@ -120,19 +120,153 @@ export const SUBSCRIPTION_ENGINE_EXTENSION_POINTS = {
   platformTrialSwitch: "get_platform_subscription_settings().automaticTrialEnabled",
 } as const;
 
-const PAYMENT_NOT_IMPLEMENTED =
-  "Payment webhook integration not implemented — implement provider adapter in Payment Integration Phase.";
+const PAYMENT_OFFLINE = "Offline";
 
-export async function onPaymentSuccess(_input: PaymentSuccessInput): Promise<SubscriptionEngineResult> {
-  return { ok: false, message: PAYMENT_NOT_IMPLEMENTED };
+/**
+ * M1 — payment settlement RPCs (provider adapters come in a later phase).
+ *
+ * Every value that matters (amount, shop, subscription, provider, reference,
+ * final status) is decided by the server: the create RPC prices the payment
+ * from the plan book and rejects a mismatched client amount, and the confirm
+ * RPC is the only thing that can advance the subscription period.
+ */
+type PaymentRpcOutcome = RpcOutcome & { payment_id?: string; status?: string; amount_ugx?: number };
+
+/** Payment RPCs return more than {ok, error} — keep payment_id/status/amount. */
+function asPaymentOutcome(data: unknown): PaymentRpcOutcome {
+  const j = (data ?? {}) as Record<string, unknown>;
+  if (j.ok !== true) {
+    return { ok: false, message: typeof j.error === "string" ? j.error : "Request failed." };
+  }
+  const amount = j.amount_ugx;
+  return {
+    ok: true,
+    payment_id: typeof j.payment_id === "string" ? j.payment_id : undefined,
+    status: typeof j.status === "string" ? j.status : undefined,
+    amount_ugx:
+      typeof amount === "number" && Number.isFinite(amount)
+        ? amount
+        : typeof amount === "string" && amount.trim() !== "" && Number.isFinite(Number(amount))
+          ? Number(amount)
+          : undefined,
+  };
 }
 
-export async function onPaymentFailure(_input: PaymentFailureInput): Promise<SubscriptionEngineResult> {
-  return { ok: false, message: PAYMENT_NOT_IMPLEMENTED };
+async function lookupPayment(
+  sb: NonNullable<typeof supabase>,
+  provider: PaymentSuccessInput["provider"],
+  reference: string,
+): Promise<PaymentRpcOutcome> {
+  const { data, error } = await sb.rpc("subscription_payment_lookup", {
+    p_provider: provider,
+    p_reference: reference,
+  });
+  if (error) return { ok: false, message: error.message };
+  return asPaymentOutcome(data);
 }
 
-export async function onRefund(_input: RefundWebhookInput): Promise<SubscriptionEngineResult> {
-  return { ok: false, message: PAYMENT_NOT_IMPLEMENTED };
+/** Settle a provider-verified payment: create (idempotent) then confirm. */
+export async function onPaymentSuccess(input: PaymentSuccessInput): Promise<SubscriptionEngineResult> {
+  if (!supabase) return { ok: false, message: PAYMENT_OFFLINE };
+  const sb = supabase;
+  return runMutation(
+    {
+      action: "subscription.payment_success",
+      shopId: input.shopId,
+      source: "payment",
+      reason: input.externalReference,
+      billingCycle: input.billingCycle ?? null,
+      durationDays: input.durationDays ?? null,
+    },
+    async () => {
+      const created = await sb.rpc("subscription_payment_create", {
+        p_shop_id: input.shopId,
+        p_provider: input.provider,
+        p_reference: input.externalReference,
+        p_amount_ugx: input.amountUgx,
+        p_note: null,
+        p_payment_id: null,
+        p_subscription_id: null,
+      });
+      if (created.error) return { ok: false, message: created.error.message };
+      const createResult = asPaymentOutcome(created.data);
+      if (!createResult.ok) return createResult;
+      if (createResult.status && createResult.status !== "pending") {
+        // Replay of a payment that already settled (or already failed).
+        return createResult;
+      }
+
+      const confirmed = await sb.rpc("subscription_payment_confirm", {
+        p_payment_id: createResult.payment_id,
+        p_reference: input.externalReference,
+        p_note: null,
+      });
+      if (confirmed.error) return { ok: false, message: confirmed.error.message };
+      return asPaymentOutcome(confirmed.data);
+    },
+  );
+}
+
+/**
+ * Settle a provider-reported failure. A reference with no ledger row is a
+ * no-op success — there is no payment to fail and nothing activated.
+ */
+export async function onPaymentFailure(input: PaymentFailureInput): Promise<SubscriptionEngineResult> {
+  if (!supabase) return { ok: false, message: PAYMENT_OFFLINE };
+  const sb = supabase;
+  return runMutation(
+    {
+      action: "subscription.payment_failure",
+      shopId: input.shopId,
+      source: "payment",
+      reason: input.reason ?? input.externalReference,
+    },
+    async () => {
+      const found = await lookupPayment(sb, input.provider, input.externalReference);
+      if (!found.ok) {
+        if (found.message === "payment_not_found") {
+          return { ok: true, message: "No payment recorded for that reference." };
+        }
+        return found;
+      }
+      const failed = await sb.rpc("subscription_payment_fail", {
+        p_payment_id: found.payment_id,
+        p_reason: input.reason ?? null,
+      });
+      if (failed.error) return { ok: false, message: failed.error.message };
+      return asPaymentOutcome(failed.data);
+    },
+  );
+}
+
+/**
+ * Refund a settled payment. M1 refunds the whole payment (no partial
+ * refunds): an amount that does not match the ledger row is refused.
+ */
+export async function onRefund(input: RefundWebhookInput): Promise<SubscriptionEngineResult> {
+  if (!supabase) return { ok: false, message: PAYMENT_OFFLINE };
+  const sb = supabase;
+  return runMutation(
+    {
+      action: "subscription.payment_refund",
+      shopId: input.shopId,
+      source: "payment",
+      reason: input.reason ?? input.externalReference,
+    },
+    async () => {
+      const found = await lookupPayment(sb, input.provider, input.externalReference);
+      if (!found.ok) return found;
+      if (typeof found.amount_ugx === "number" && found.amount_ugx !== input.amountUgx) {
+        return { ok: false, message: "refund_amount_mismatch" };
+      }
+      const refunded = await sb.rpc("subscription_payment_refund", {
+        p_payment_id: found.payment_id,
+        p_reason: input.reason ?? null,
+      });
+      if (refunded.error) return { ok: false, message: refunded.error.message };
+      return asPaymentOutcome(refunded.data);
+    },
+  );
 }
 
 async function fetchSubscriptionRowCandidates(organizationId?: string): Promise<SubscriptionRowCandidate[]> {

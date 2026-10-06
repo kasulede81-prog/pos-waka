@@ -555,3 +555,181 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS business_type text;
 ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS district text;
+
+-- ============================================================================
+-- M1 — PAYMENT FOUNDATION FIXTURES (production shapes; test-only)
+-- ============================================================================
+-- The M1 migration and its tests operate on the subscription/payment tables.
+-- Production already has all of these (006 plans/subscriptions, 018
+-- payment_status, 027 history, 028 payments + history writer, 019/008 RLS);
+-- they are modelled here with the same shapes rather than weakening the code.
+
+CREATE TABLE IF NOT EXISTS public.subscription_plans (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  description text,
+  monthly_price_ugx bigint NOT NULL CHECK (monthly_price_ugx >= 0),
+  annual_price_ugx bigint NOT NULL CHECK (annual_price_ugx >= 0),
+  annual_savings_note text,
+  annual_discount_percent numeric(6, 2),
+  trial_days int NOT NULL DEFAULT 14 CHECK (trial_days >= 0),
+  max_shops int,
+  max_pos_users int,
+  features jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Current repackaged catalog (066 / CANONICAL_PLAN_PRICES): free, starter, business, waka_plus.
+INSERT INTO public.subscription_plans (code, name, monthly_price_ugx, annual_price_ugx, annual_discount_percent, features, is_active)
+VALUES
+  ('free', 'Free', 0, 0, 0, '{"pos": true}'::jsonb, true),
+  ('starter', 'Starter', 18000, 216000, 20, '{"devices": 1}'::jsonb, true),
+  ('business', 'Business', 36000, 432000, 20, '{"devices": 4}'::jsonb, true),
+  ('waka_plus', 'Waka Plus', 82000, 984000, 20, '{"devices": 10}'::jsonb, true)
+ON CONFLICT (code) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES public.organizations (id) ON DELETE CASCADE,
+  plan_id uuid NOT NULL REFERENCES public.subscription_plans (id),
+  status text NOT NULL DEFAULT 'trialing'
+    CHECK (status IN ('trialing', 'active', 'past_due', 'canceled', 'paused')),
+  billing_interval text NOT NULL DEFAULT 'month'
+    CHECK (billing_interval IN ('month', 'year')),
+  trial_ends_at timestamptz,
+  current_period_start timestamptz,
+  current_period_end timestamptz,
+  cancel_at_period_end boolean NOT NULL DEFAULT false,
+  admin_discount_percent numeric(6, 2) NOT NULL DEFAULT 0
+    CHECK (admin_discount_percent >= 0 AND admin_discount_percent <= 100),
+  admin_discount_note text,
+  external_provider text DEFAULT 'manual',
+  external_subscription_id text,
+  payment_status text NOT NULL DEFAULT 'unknown'
+    CHECK (payment_status IN ('unknown', 'unpaid', 'pending', 'paid', 'waived', 'failed')),
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- 006: at most one live subscription row per org for trialing/active states.
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_one_active_per_org
+  ON public.subscriptions (organization_id)
+  WHERE status IN ('trialing', 'active', 'past_due');
+
+-- 017: shop anchor + wider lifecycle statuses. M1 resolves a payment's
+-- (shop, subscription) pair and reactivates an expired subscription on
+-- confirmation, so both have to exist here with the production shape.
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS shop_id uuid
+  REFERENCES public.shops (id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS subscriptions_shop_idx ON public.subscriptions (shop_id);
+
+ALTER TABLE public.subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check;
+ALTER TABLE public.subscriptions ADD CONSTRAINT subscriptions_status_check CHECK (
+  status IN ('trial', 'trialing', 'active', 'expired', 'past_due', 'cancelled', 'canceled', 'paused')
+);
+
+-- 013: audit_logs rows written by markPaid and the M1 payment RPCs.
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS actor_user_id uuid;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS role text;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action text;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS payload_summary text;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS payload jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+
+DROP TRIGGER IF EXISTS trg_subscriptions_updated ON public.subscriptions;
+CREATE TRIGGER trg_subscriptions_updated
+  BEFORE UPDATE ON public.subscriptions
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- 019: org members and internal staff may read the subscription.
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS subscriptions_select ON public.subscriptions;
+CREATE POLICY subscriptions_select
+  ON public.subscriptions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.organization_members om
+      WHERE om.organization_id = subscriptions.organization_id
+        AND om.user_id = auth.uid()
+        AND om.role IN ('owner', 'admin', 'billing', 'staff')
+    )
+    OR public.is_waka_internal_staff ()
+  );
+GRANT SELECT ON public.subscriptions TO authenticated;
+
+CREATE TABLE IF NOT EXISTS public.subscription_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  subscription_id uuid REFERENCES public.subscriptions (id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL REFERENCES public.organizations (id) ON DELETE CASCADE,
+  shop_id uuid REFERENCES public.shops (id) ON DELETE SET NULL,
+  actor_user_id uuid REFERENCES auth.users (id) ON DELETE SET NULL,
+  action text NOT NULL,
+  note text,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS subscription_history_org_created_idx ON public.subscription_history (organization_id, created_at desc);
+CREATE INDEX IF NOT EXISTS subscription_history_sub_idx ON public.subscription_history (subscription_id, created_at desc);
+GRANT SELECT ON public.subscription_history TO authenticated;
+
+-- 028: the SECURITY DEFINER history writer used by markPaid and the M1 payment RPCs.
+CREATE OR REPLACE FUNCTION public._internal_subscription_history_write (
+  p_subscription_id uuid,
+  p_action text,
+  p_note text,
+  p_payload jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_org uuid;
+  v_shop uuid;
+BEGIN
+  SELECT s.organization_id, s.shop_id
+  INTO v_org, v_shop
+  FROM public.subscriptions s
+  WHERE s.id = p_subscription_id;
+
+  IF v_org IS NULL THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO public.subscription_history (
+    subscription_id, organization_id, shop_id, actor_user_id, action, note, payload
+  ) VALUES (
+    p_subscription_id, v_org, v_shop, auth.uid(), p_action, p_note,
+    COALESCE(p_payload, '{}'::jsonb)
+  );
+END;
+$$;
+REVOKE ALL ON FUNCTION public._internal_subscription_history_write (uuid, text, text, jsonb) FROM public;
+
+CREATE TABLE IF NOT EXISTS public.subscription_payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  subscription_id uuid NOT NULL REFERENCES public.subscriptions (id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL REFERENCES public.organizations (id) ON DELETE CASCADE,
+  amount_ugx bigint NOT NULL DEFAULT 0 CHECK (amount_ugx >= 0),
+  currency text NOT NULL DEFAULT 'UGX',
+  provider text,
+  reference text,
+  status text NOT NULL DEFAULT 'recorded' CHECK (status IN ('recorded', 'confirmed', 'failed')),
+  recorded_by uuid REFERENCES auth.users (id) ON DELETE SET NULL,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS subscription_payments_sub_idx ON public.subscription_payments (subscription_id, created_at desc);
+CREATE INDEX IF NOT EXISTS subscription_payments_org_idx ON public.subscription_payments (organization_id, created_at desc);
+
+ALTER TABLE public.subscription_payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS subscription_payments_internal_select ON public.subscription_payments;
+CREATE POLICY subscription_payments_internal_select
+  ON public.subscription_payments FOR SELECT
+  USING (public.is_waka_internal_staff ());
+GRANT SELECT ON public.subscription_payments TO authenticated;
