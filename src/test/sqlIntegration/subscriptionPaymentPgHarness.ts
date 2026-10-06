@@ -20,13 +20,20 @@ export type { SqlExec };
 const BOOTSTRAP = join(process.cwd(), "src", "test", "sqlIntegration", "loyaltyBootstrap.sql");
 const MIGRATIONS_DIR = join(process.cwd(), "supabase", "migrations");
 
-/** Production chain, in production order (follow-up must land last). */
+/** Production chain, in production order (M2 lockdown lands last). */
 const MIGRATION_CHAIN = [
   join(MIGRATIONS_DIR, "039_subscription_approve_starter_plus_org_billing_offers.sql"),
   join(MIGRATIONS_DIR, "043_repair_admin_shop_plan_rpc.sql"),
+  join(MIGRATIONS_DIR, "044_free_onboarding_referral_agents.sql"),
+  join(MIGRATIONS_DIR, "057_marketing_agent_roles_and_referrals.sql"),
+  join(MIGRATIONS_DIR, "078_business_type_persistence.sql"),
+  join(MIGRATIONS_DIR, "097_growth_campaigns.sql"),
   join(MIGRATIONS_DIR, "113_pricing_campaigns.sql"),
+  join(MIGRATIONS_DIR, "20260930320000_merchant_registration_hardening.sql"),
+  join(MIGRATIONS_DIR, "20261005120000_shop_effective_subscription.sql"),
   join(MIGRATIONS_DIR, "20261006090000_subscription_payment_foundation.sql"),
   join(MIGRATIONS_DIR, "20261006140000_subscription_payment_followup.sql"),
+  join(MIGRATIONS_DIR, "20261006160000_subscriptions_client_dml_lockdown.sql"),
 ];
 
 function readSql(path: string): string {
@@ -58,6 +65,39 @@ const ENTITLEMENT_SHAPE = `
   ALTER TABLE public.organization_feature_entitlements
     ADD CONSTRAINT organization_feature_entitlements_feature_code_check
     CHECK (feature_code IN ('ai_stock_assistant', 'loyalty'));
+`;
+
+/**
+ * The pre-M2 production WRITE posture, recreated so the M2 migration has the
+ * real policies to remove and the tests can prove the before/after contract:
+ * `user_has_org_role` (007) plus 008's `subscriptions_write` / `subscriptions_update`.
+ * `subscriptions_select` already exists on the bootstrap fixture (same meaning
+ * as 019's) and is deliberately left untouched. DML grants come from
+ * PRODUCTION_GRANTS (the 010 shape), exactly as in the M2 forensic audit.
+ */
+const PRE_M2_POSTURE = `
+  CREATE OR REPLACE FUNCTION public.user_has_org_role (p_org uuid, p_roles text[])
+  RETURNS boolean
+  LANGUAGE sql
+  STABLE
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+    select exists (
+      select 1 from public.organization_members m
+      where m.organization_id = p_org
+        and m.user_id = auth.uid ()
+        and m.role = any (p_roles)
+    );
+  $$;
+
+  DROP POLICY IF EXISTS subscriptions_write ON public.subscriptions;
+  CREATE POLICY subscriptions_write ON public.subscriptions FOR INSERT
+    WITH CHECK (public.user_has_org_role (organization_id, ARRAY['owner','admin','billing']));
+
+  DROP POLICY IF EXISTS subscriptions_update ON public.subscriptions;
+  CREATE POLICY subscriptions_update ON public.subscriptions FOR UPDATE
+    USING (public.user_has_org_role (organization_id, ARRAY['owner','admin','billing']));
 `;
 
 /**
@@ -161,6 +201,176 @@ const PRE_DEPS = `
 
   REVOKE ALL ON FUNCTION public.admin_extend_subscription_trial (uuid, int) FROM PUBLIC;
   GRANT EXECUTE ON FUNCTION public.admin_extend_subscription_trial (uuid, int) TO authenticated;
+
+  -- Signup / onboarding fixtures (production shapes from 002 / 003 / 018) so
+  -- the REAL bootstrap_owner_workspace (20260930320000) and
+  -- save_owner_business_profile_bundle bodies can run in this harness after
+  -- the M2 revoke — proving definer INSERTs survive the client lockdown.
+  ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS default_currency text NOT NULL DEFAULT 'UGX';
+  ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES auth.users (id);
+  ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS business_type text;
+  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role text;
+  -- 095: profiles.primary_shop_id — written by the signup RPC.
+  ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS primary_shop_id uuid REFERENCES public.shops (id) ON DELETE SET NULL;
+  -- 014: organization_members.profile_id — written by both signup RPCs.
+  ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS profile_id uuid REFERENCES auth.users (id);
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS code text;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS address_line text;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS city text;
+  -- 037: shops.area — written by the save-bundle RPC.
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS area text;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS phone_e164 text;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS settings jsonb NOT NULL DEFAULT '{}'::jsonb;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS district_id uuid;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS latitude double precision;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS longitude double precision;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS gps_missing boolean;
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS owner_user_id uuid;
+
+  CREATE TABLE IF NOT EXISTS public.districts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid (),
+    code text NOT NULL UNIQUE,
+    name text NOT NULL,
+    region text,
+    sort_order int NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now ()
+  );
+  INSERT INTO public.districts (code, name) VALUES ('KLA', 'Kampala')
+  ON CONFLICT (code) DO NOTHING;
+
+  -- owner_onboarding_status() (049, verbatim) — called at the top of the
+  -- save-bundle RPC; the pre-M1 bootstrap has no such function.
+  CREATE OR REPLACE FUNCTION public.owner_onboarding_status ()
+  RETURNS jsonb
+  LANGUAGE plpgsql
+  STABLE
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  declare
+    v_uid uuid := auth.uid ();
+    v_shop record;
+    v_profile_email text;
+    v_complete boolean := false;
+    v_missing text[] := array[]::text[];
+  begin
+    if v_uid is null then
+      return jsonb_build_object ('complete', true, 'missing', '[]'::jsonb);
+    end if;
+
+    select lower (trim (coalesce (pr.email, '')))
+    into v_profile_email
+    from public.profiles pr
+    where pr.id = v_uid;
+
+    select sh.id, sh.name, sh.district_id, sh.phone_e164, sh.business_type, o.name as org_name, o.default_currency
+    into v_shop
+    from public.shop_members sm
+    join public.shops sh on sh.id = sm.shop_id
+    join public.organizations o on o.id = sh.organization_id
+    where sm.user_id = v_uid
+    order by sm.created_at asc
+    limit 1;
+
+    if not found then
+      return jsonb_build_object ('complete', false, 'missing', to_jsonb (array['shop']::text[]));
+    end if;
+
+    if coalesce (trim (v_shop.org_name), '') = '' then v_missing := array_append (v_missing, 'organization_name'); end if;
+    if coalesce (trim (v_shop.name), '') = '' then v_missing := array_append (v_missing, 'shop_name'); end if;
+    if v_shop.business_type is null or trim (v_shop.business_type) = '' then v_missing := array_append (v_missing, 'business_type'); end if;
+    if v_shop.district_id is null then v_missing := array_append (v_missing, 'district'); end if;
+    if v_shop.phone_e164 is null or trim (v_shop.phone_e164) !~ '^\\+256[0-9]{9}$' then
+      v_missing := array_append (v_missing, 'phone');
+    end if;
+    if v_profile_email is null or v_profile_email = '' or v_profile_email like '%@login.waka.ug' then
+      v_missing := array_append (v_missing, 'email');
+    end if;
+    if v_shop.default_currency is null or length (trim (v_shop.default_currency)) <> 3 then
+      v_missing := array_append (v_missing, 'currency');
+    end if;
+
+    v_complete := coalesce (array_length (v_missing, 1), 0) = 0;
+    return jsonb_build_object ('complete', v_complete, 'missing', to_jsonb (v_missing));
+  end;
+  $$;
+
+  -- admin_subscription_set_status (028, verbatim) — the engine's
+  -- cancel/pause/resume/expire/grace writer; 028 itself is not applied to
+  -- this harness, so the real body is provided here for the M2 regression.
+  CREATE OR REPLACE FUNCTION public.admin_subscription_set_status (
+    p_subscription_id uuid,
+    p_status text
+  )
+  RETURNS void
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  declare
+    v_st text := lower (trim (p_status));
+  begin
+    if not public.is_waka_internal_role (array['super_admin', 'subscriptions_admin']::text[]) then
+      raise exception 'Forbidden';
+    end if;
+
+    if v_st not in (
+      'trial',
+      'trialing',
+      'active',
+      'expired',
+      'past_due',
+      'cancelled',
+      'canceled',
+      'paused'
+    ) then
+      raise exception 'Invalid status';
+    end if;
+
+    update public.subscriptions s
+    set
+      status = case
+        when v_st = 'canceled' then 'cancelled'
+        else v_st
+      end,
+      updated_at = now (),
+      metadata = coalesce (s.metadata, '{}'::jsonb)
+        || jsonb_build_object ('status_set_by', auth.uid ()::text, 'status_set_at', timezone ('Africa/Kampala', now ())::text)
+    where s.id = p_subscription_id;
+
+    if not found then
+      raise exception 'Subscription not found';
+    end if;
+
+    perform public._internal_subscription_history_write (
+      p_subscription_id,
+      'set_status',
+      v_st,
+      jsonb_build_object ('status', v_st)
+    );
+
+    insert into public.audit_logs (
+      shop_id,
+      actor_user_id,
+      role,
+      action,
+      payload_summary,
+      payload
+    )
+    select
+      s.shop_id,
+      auth.uid (),
+      'internal',
+      'admin_subscription_set_status',
+      'Subscription status ' || v_st,
+      jsonb_build_object ('subscription_id', p_subscription_id, 'status', v_st)
+    from public.subscriptions s
+    where s.id = p_subscription_id;
+  end;
+  $$;
+
+  REVOKE ALL ON FUNCTION public.admin_subscription_set_status (uuid, text) FROM PUBLIC;
+  GRANT EXECUTE ON FUNCTION public.admin_subscription_set_status (uuid, text) TO authenticated;
 `;
 
 /** Bootstrap → fixtures → production grants → real migration chain. */
@@ -169,6 +379,7 @@ async function applyChain(exec: SqlExec): Promise<void> {
   await exec.exec(ENTITLEMENT_SHAPE);
   await exec.exec(PRE_DEPS);
   await exec.exec(PRODUCTION_GRANTS);
+  await exec.exec(PRE_M2_POSTURE);
   for (const migration of MIGRATION_CHAIN) {
     await exec.exec(readSql(migration));
   }
