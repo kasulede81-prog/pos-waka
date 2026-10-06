@@ -210,22 +210,63 @@ describe("Phase 1: the projection is scoped to the caller", () => {
     });
     expect(bView.accounts).toEqual([]);
     expect(JSON.stringify(bView)).not.toContain(f.shopAId);
+
+    // Strengthened (Phase B contract): A's own card credential is allowed ONLY in
+    // A's projection — B must never see a byte of it.
+    const tokenRows = await exec.query<{ qr_token: string }>(
+      `SELECT a.qr_token FROM public.loyalty_member_links l
+         JOIN public.loyalty_accounts a ON a.id = l.account_id
+        WHERE l.member_id = $1 AND l.status = 'active'
+        LIMIT 1`,
+      [memberAId],
+    );
+    const aToken = tokenRows.rows[0]?.qr_token;
+    expect(aToken, "A must hold a card token").toBeTruthy();
+    expect(JSON.stringify(aView)).toContain(aToken!);
+    expect(JSON.stringify(bView)).not.toContain(aToken!);
   });
 
-  it("never returns qr_token or public_card_token, only card presence", async () => {
+  it("returns the caller's own card identity and withholds every shared bearer", async () => {
     const r = await asMember(memberUserId, async () => {
       const { rows } = await exec.query(`SELECT public.loyalty_member_dashboard() AS result`);
       return rpcJson(rows[0]);
     });
     const json = JSON.stringify(r);
-    // Both are bearer credentials; public_card_token IS the public card URL.
-    expect(json).not.toContain("qr_token");
-    expect(json).not.toContain("public_card_token");
-    expect(json).not.toContain("WAKA-LOYALTY:");
-    expect(json).not.toContain("google_wallet");
     const first = (r.accounts as Array<Record<string, unknown>>)[0];
-    expect((first.card as Record<string, unknown>).has_public_card).toBe(true);
-    expect(Object.keys(first.card as Record<string, unknown>)).toEqual(["has_public_card"]);
+    expect(first, "member A has a linked account").toBeTruthy();
+    const card = first!.card as Record<string, unknown>;
+
+    // Phase B contract — the card face needs exactly these four fields, all resolved
+    // from the caller's OWN account (qr_token) or one-way derived from it:
+    expect(Object.keys(card).sort()).toEqual([
+      "has_public_card",
+      "member_cvc",
+      "member_number",
+      "qr_token",
+    ]);
+    expect(card.has_public_card).toBe(true);
+    expect(String(card.qr_token).length).toBeGreaterThan(0);
+    expect(card.member_number).toMatch(/^[0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4}$/);
+    expect(card.member_cvc).toMatch(/^\d{3}$/);
+
+    // The token really is THIS member's account token from the database.
+    const own = await exec.query<{ qr_token: string }>(
+      `SELECT a.qr_token FROM public.loyalty_member_links l
+         JOIN public.loyalty_accounts a ON a.id = l.account_id
+        WHERE l.member_id = $1 AND l.status = 'active'
+        LIMIT 1`,
+      [memberAId],
+    );
+    expect(card.qr_token).toBe(own.rows[0]!.qr_token);
+
+    // Still withheld — every shared or merchant credential:
+    expect(json).not.toContain("public_card_token"); // the shareable bearer URL
+    expect(json).not.toContain("customer_id"); // merchant-internal identifier
+    expect(json).not.toContain("google_wallet_object_id"); // embeds the account uuid
+    expect(json).not.toContain("WAKA-LOYALTY:"); // the encoded QR payload is built client-side
+    // Wallet STATE fields are allowed (Phase B honest labels); the object id is not.
+    expect(json).toContain("google_wallet_issued_at");
+    expect(json).toContain("google_wallet_sync_balance");
   });
 
   it("masks the member's own phone", async () => {

@@ -30,7 +30,8 @@ describe("public loyalty card route access + SEO", () => {
   it("is not marketing-indexable and uses loyalty noindex title", () => {
     for (const path of [`/c/${TOKEN}`, `/loyalty/${TOKEN}`]) {
       expect(isMarketingIndexablePath(path)).toBe(false);
-      expect(noIndexSeoTitle(path)).toBe("WAKA Loyalty");
+      // DKASU rebrand (Phase D cleanup): seoRoutes serves the DKASU title.
+      expect(noIndexSeoTitle(path)).toBe("DKASU Loyalty");
     }
   });
 
@@ -39,7 +40,7 @@ describe("public loyalty card route access + SEO", () => {
     expect(`/c/${TOKEN}`).toContain(TOKEN);
     expect("/c").not.toContain(TOKEN);
     const canonical = loyaltyCanonical("/c");
-    expect(canonical).toBe("https://loyalty.waka.ug/c");
+    expect(canonical).toBe("https://loyalty.dkasu.com/c");
     expect(canonical).not.toContain(TOKEN);
   });
 });

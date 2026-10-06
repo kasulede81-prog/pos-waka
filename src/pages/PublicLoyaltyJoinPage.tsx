@@ -216,7 +216,7 @@ export function PublicLoyaltyJoinPage() {
         )}
       </div>
       <p className="mt-4 text-center text-[10px] font-medium text-muted-foreground">
-        WAKA Loyalty
+        {t(lang, "memberTitle")}
       </p>
     </div>
   );

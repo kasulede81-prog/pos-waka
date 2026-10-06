@@ -319,9 +319,21 @@ describe("SECURITY: no member can reach another member's history", () => {
        FROM pg_proc WHERE proname = 'loyalty_member_activity'`,
     );
     const args = r.rows[0]!.args;
-    // Only a page size and a cursor — nothing that could be pointed at somebody else.
-    expect(args).toBe("p_limit integer, p_before timestamp with time zone, p_before_id uuid");
-    expect(args).not.toMatch(/member|account|shop|customer/i);
+    // Phase C: a page size, a cursor and optional filters (window, own-shop, kind).
+    expect(args).toBe(
+      "p_limit integer, p_before timestamp with time zone, p_before_id uuid, " +
+        "p_from timestamp with time zone, p_to timestamp with time zone, p_shop_id uuid, p_kind text",
+    );
+    // Nothing that could name the READER or another person. p_shop_id is a filter
+    // over rows already gated by the caller's own active-links join — naming an
+    // unlinked shop returns zero rows (proved by the isolation tests), and the
+    // dedicated Phase C filter suite exercises exactly that.
+    expect(args).not.toMatch(/member|account|customer/i);
+    // The superseded 3-argument overload must be gone (same name, old shape).
+    const all = await exec.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pg_proc WHERE proname = 'loyalty_member_activity'`,
+    );
+    expect(Number(all.rows[0]!.n)).toBe(1);
   });
 
   it("is not executable by anon at all — no grant, not merely no session", async () => {

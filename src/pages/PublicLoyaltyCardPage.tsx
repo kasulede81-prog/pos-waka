@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import type { Language } from "../types";
+import { t } from "../lib/i18n";
 import { PublicLoyaltyCardView } from "../components/loyalty/public/PublicLoyaltyCardView";
 import { SeoHead } from "../components/marketing/SeoHead";
 import { LOYALTY_QR_PREFIX } from "../lib/loyalty/loyaltyEnrollment";
@@ -27,7 +29,13 @@ type LoadState =
  * B1/B2 presentation. Public API, QR payload, Wallet issue, and security controls
  * are unchanged. B3: share URLs use loyalty.waka.ug/c/<token>.
  */
-export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: string }) {
+export function PublicLoyaltyCardPage({
+  publicCardToken,
+  lang,
+}: {
+  publicCardToken: string;
+  lang: Language;
+}) {
   const [state, setState] = useState<LoadState>({ phase: "loading" });
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
@@ -97,15 +105,15 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
     if (walletBusy || state.phase !== "ready") return;
     setWalletBusy(true);
     setWalletError(null);
-    setWalletMessage("Creating your loyalty card...");
+    setWalletMessage(t(lang, "loyaltyWalletMemberCreating"));
     const result = await issuePublicGoogleWallet(publicCardToken);
     setWalletBusy(false);
     if (!result.ok) {
       setWalletMessage(null);
       setWalletError(
         result.error === "account_inactive"
-          ? "This loyalty card is inactive."
-          : "Could not create your Wallet card. Try again.",
+          ? t(lang, "publicCardWalletInactive")
+          : t(lang, "publicCardWalletCreateFailed"),
       );
       return;
     }
@@ -113,7 +121,7 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
     // Never location.assign — that would send /loyalty/<token> as Referer.
     const nav = openWalletSaveUrlWithoutReferrer(result.saveUrl);
     if (nav === "failed") {
-      setWalletError("Could not open Google Wallet. Try again.");
+      setWalletError(t(lang, "publicCardWalletOpenFailed"));
     }
   };
 
@@ -123,7 +131,7 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
     if (result === "shared" || result === "cancelled") return;
     try {
       await navigator.clipboard?.writeText(url);
-      setWalletMessage("Card link copied.");
+      setWalletMessage(t(lang, "publicCardLinkCopied"));
     } catch {
       /* ignore */
     }
@@ -132,8 +140,8 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
   return (
     <div className="loyalty-public-shell min-h-dvh text-stone-900">
       <SeoHead
-        title="WAKA Loyalty"
-        description="Your WAKA loyalty card"
+        title={t(lang, "memberTitle")}
+        description={t(lang, "publicCardDescription")}
         path="/c"
         useLoyaltyCanonical
         noindex
@@ -151,7 +159,9 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
             <div className="h-56 rounded-[1.75rem] waka-skeleton-bar" />
             <div className="h-28 rounded-2xl waka-skeleton-bar" />
             <div className="mx-auto h-56 w-56 max-w-full rounded-2xl waka-skeleton-bar" />
-            <p className="text-center text-sm font-semibold text-stone-500">Loading your card…</p>
+            <p className="text-center text-sm font-semibold text-stone-500">
+              {t(lang, "publicCardLoading")}
+            </p>
           </div>
         ) : null}
 
@@ -159,11 +169,11 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
           <div className="mt-16 rounded-[1.75rem] border border-stone-200/90 bg-white/90 px-5 py-10 text-center shadow-sm">
             <p className="text-lg font-black text-stone-900">
               {state.kind === "invalid" || state.kind === "not_found"
-                ? "This loyalty card link is invalid or expired."
-                : "Loyalty card unavailable right now."}
+                ? t(lang, "publicCardErrorInvalid")
+                : t(lang, "publicCardErrorUnavailable")}
             </p>
             <p className="mt-2 text-sm font-medium text-stone-500">
-              Ask the shop to share your card link again.
+              {t(lang, "publicCardErrorAskShop")}
             </p>
           </div>
         ) : null}
@@ -178,11 +188,12 @@ export function PublicLoyaltyCardPage({ publicCardToken }: { publicCardToken: st
             walletError={walletError}
             onAddToWallet={() => void onAddToWallet()}
             onSharePage={() => void onSharePage()}
+            lang={lang}
           />
         ) : null}
 
         <footer className="mt-auto pt-10 text-center text-[11px] font-medium text-stone-400">
-          Powered by WAKA
+          {t(lang, "publicCardPoweredBy")}
         </footer>
       </div>
     </div>

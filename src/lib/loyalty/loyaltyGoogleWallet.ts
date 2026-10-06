@@ -36,7 +36,19 @@ export type GoogleWalletIssueResult =
         | string;
     };
 
-export async function fetchGoogleWalletConfigured(): Promise<GoogleWalletConfigStatus> {
+/**
+ * Phase A (P2) — one configuration probe per dashboard mount/session, not one per
+ * merchant card. Successes are shared for a minute; failures expire in seconds so a
+ * transient error never sticks. Concurrent callers (N cards mounting together) share a
+ * single in-flight request. This is a read-only performance cache of a HEAD-style
+ * probe: it does not touch issuance, the edge function, or any wallet field.
+ */
+const CONFIGURED_OK_TTL_MS = 60_000;
+const CONFIGURED_ERR_TTL_MS = 10_000;
+let configuredCache: { value: GoogleWalletConfigStatus; at: number } | null = null;
+let configuredInflight: Promise<GoogleWalletConfigStatus> | null = null;
+
+async function probeGoogleWalletConfigured(): Promise<GoogleWalletConfigStatus> {
   if (!hasSupabaseConfig || !supabase) return { ok: false, error: "cloud_unavailable" };
   try {
     const session = await supabase.auth.getSession();
@@ -63,6 +75,24 @@ export async function fetchGoogleWalletConfigured(): Promise<GoogleWalletConfigS
   } catch {
     return { ok: false, error: "network" };
   }
+}
+
+export async function fetchGoogleWalletConfigured(): Promise<GoogleWalletConfigStatus> {
+  const now = Date.now();
+  if (configuredCache) {
+    const ttl = configuredCache.value.ok ? CONFIGURED_OK_TTL_MS : CONFIGURED_ERR_TTL_MS;
+    if (now - configuredCache.at < ttl) return configuredCache.value;
+  }
+  if (configuredInflight) return configuredInflight;
+  configuredInflight = probeGoogleWalletConfigured()
+    .then((value) => {
+      configuredCache = { value, at: Date.now() };
+      return value;
+    })
+    .finally(() => {
+      configuredInflight = null;
+    });
+  return configuredInflight;
 }
 
 export async function issueGoogleWalletPass(

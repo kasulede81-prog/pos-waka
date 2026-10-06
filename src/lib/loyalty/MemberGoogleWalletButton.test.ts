@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemberGoogleWalletButton } from "../../components/loyalty/MemberGoogleWalletButton";
 import { memberWalletErrorKey } from "./loyaltyErrorMessages";
+import { memberWalletButtonLabel } from "./memberWalletLabel";
 import { t } from "../i18n";
 
 /**
@@ -23,16 +24,69 @@ describe("MemberGoogleWalletButton", () => {
     // Server-rendered: the probe has not resolved, so there is no button, no Save URL and — the
     // point — no "not configured" note either.
     const html = renderToStaticMarkup(
-      createElement(MemberGoogleWalletButton, { shopId: "shop-1", shopName: "Kampala Kiosk" }),
+      createElement(MemberGoogleWalletButton, {
+        shopId: "shop-1",
+        shopName: "Kampala Kiosk",
+        lang: "en",
+        balancePoints: 100,
+      }),
     );
     expect(html).toBe("");
   });
 
   it("renders nothing for a card with no shop", () => {
     const html = renderToStaticMarkup(
-      createElement(MemberGoogleWalletButton, { shopId: "  ", shopName: "Kampala Kiosk" }),
+      createElement(MemberGoogleWalletButton, {
+        shopId: "  ",
+        shopName: "Kampala Kiosk",
+        lang: "en",
+        balancePoints: 100,
+      }),
     );
     expect(html).toBe("");
+  });
+});
+
+describe("memberWalletButtonLabel — Phase B honest states", () => {
+  it("follows what the backend actually knows", () => {
+    const base = { lang: "en" as const };
+    expect(memberWalletButtonLabel({ ...base, busy: false, issued: false, stale: false })).toBe(
+      "Add to Google Wallet",
+    );
+    expect(memberWalletButtonLabel({ ...base, busy: false, issued: true, stale: false })).toBe(
+      "Open in Google Wallet",
+    );
+    expect(memberWalletButtonLabel({ ...base, busy: false, issued: true, stale: true })).toBe(
+      "Update wallet card",
+    );
+    expect(memberWalletButtonLabel({ ...base, busy: true, issued: false, stale: false })).toBe(
+      "Creating your card…",
+    );
+  });
+
+  it("unknown wallet state (older projection) behaves as Add, never as installed", () => {
+    const label = memberWalletButtonLabel({
+      lang: "en",
+      busy: false,
+      issued: false,
+      stale: false,
+    });
+    expect(label).toBe(t("en", "loyaltyWalletMemberAdd"));
+    // No state can claim on-device installation: that signal does not exist.
+    for (const lang of ["en", "lg", "sw"] as const) {
+      expect(t(lang, "memberWalletOpen")).not.toMatch(/install|saved/i);
+      expect(t(lang, "memberWalletUpdate")).not.toMatch(/install|saved/i);
+    }
+  });
+
+  it("resolves every label in en, lg and sw with no raw keys", () => {
+    const keys = ["loyaltyWalletMemberCreating", "memberWalletUpdate", "memberWalletOpen", "loyaltyWalletMemberAdd"];
+    for (const key of keys) {
+      for (const lang of ["en", "lg", "sw"] as const) {
+        expect(t(lang, key), `${lang}.${key}`).toBeTruthy();
+        expect(t(lang, key), `${lang}.${key}`).not.toBe(key);
+      }
+    }
   });
 });
 
@@ -71,7 +125,12 @@ describe("memberWalletErrorKey", () => {
 
   it("no message exposes the server's code, an account id or a credential", () => {
     const html = renderToStaticMarkup(
-      createElement(MemberGoogleWalletButton, { shopId: "shop-1", shopName: "Kampala Kiosk" }),
+      createElement(MemberGoogleWalletButton, {
+        shopId: "shop-1",
+        shopName: "Kampala Kiosk",
+        lang: "en",
+        balancePoints: 100,
+      }),
     );
     expect(html).not.toMatch(/account_id|qr_token|public_card_token|acct_/i);
   });

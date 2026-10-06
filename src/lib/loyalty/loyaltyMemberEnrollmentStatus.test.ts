@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { t } from "../i18n";
 
 /**
  * Phase 2D — the client half of enrollment status.
@@ -249,14 +250,23 @@ describe("the member page", () => {
   it("shows a pending state naming the merchant", () => {
     const src = PAGE();
     expect(src).toContain('data-testid="member-enrollment-pending"');
-    expect(src).toContain("Waiting for merchant approval");
+    // Phase A moved the copy into the i18n architecture — assert the key is wired
+    // and that it resolves to the original wording in every language.
+    expect(src).toContain('t(lang, "memberPendingTitle")');
+    expect(src).toContain('tTemplate(lang, "memberPendingSubmitted"');
+    expect(t("en", "memberPendingTitle")).toBe("Waiting for merchant approval");
+    expect(t("lg", "memberPendingTitle")).not.toBe(t("en", "memberPendingTitle"));
+    expect(t("sw", "memberPendingTitle")).not.toBe(t("en", "memberPendingTitle"));
     expect(src).toContain("enrollment.request.shopName");
   });
 
   it("shows a rejected state that offers the code step again", () => {
     const src = PAGE();
     expect(src).toContain('data-testid="member-enrollment-rejected"');
-    expect(src).toContain("Request not approved");
+    expect(src).toContain('t(lang, "memberRejectedTitle")');
+    expect(t("en", "memberRejectedTitle")).toBe("Request not approved");
+    expect(t("lg", "memberRejectedTitle")).not.toBe(t("en", "memberRejectedTitle"));
+    expect(t("sw", "memberRejectedTitle")).not.toBe(t("en", "memberRejectedTitle"));
     const rejected = src.indexOf('data-testid="member-enrollment-rejected"');
     expect(src.slice(rejected, rejected + 900)).toContain("LoyaltyCodeEntryForm");
   });

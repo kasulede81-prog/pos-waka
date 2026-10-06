@@ -367,6 +367,7 @@ export function LoyaltyCardDesignPanel({
               onAddToWallet={() => undefined}
               onSharePage={() => undefined}
               previewMode
+              lang={lang}
             />
           </div>
         </div>

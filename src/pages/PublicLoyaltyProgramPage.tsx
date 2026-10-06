@@ -345,7 +345,7 @@ export function PublicLoyaltyProgramPage({ isAuthenticated, onGoogleLogin }: Pro
                     className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-border bg-background px-3 text-sm font-semibold"
                   />
                   <span className="mt-1 block text-[11px] font-medium leading-relaxed text-muted-foreground">
-                    WAKA shops match your loyalty cards by phone number, so it is required to join.
+                    {t(lang, "programPhoneHint")}
                   </span>
                 </label>
                 {joinError ? (
@@ -478,7 +478,9 @@ export function PublicLoyaltyProgramPage({ isAuthenticated, onGoogleLogin }: Pro
           </div>
         )}
       </div>
-      <p className="mt-4 text-center text-[10px] font-medium text-muted-foreground">WAKA Loyalty</p>
+      <p className="mt-4 text-center text-[10px] font-medium text-muted-foreground">
+        {t(lang, "memberTitle")}
+      </p>
     </div>
   );
 }

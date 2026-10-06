@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { t } from "../i18n";
 
 /**
  * Phase 2C — the customer-facing WPL join surface.
@@ -110,7 +111,14 @@ describe("authenticated WPL page", () => {
 
   it("explains why a phone is required rather than fabricating one", () => {
     const src = PAGE();
-    expect(src).toMatch(/match your loyalty cards by phone number, so it is required to join/);
+    // Phase A moved the explanation into the i18n architecture — assert the key is
+    // wired and resolves to the DKASU wording in every language.
+    expect(src).toContain('t(lang, "programPhoneHint")');
+    expect(t("en", "programPhoneHint")).toBe(
+      "DKASU shops match your loyalty cards by phone number, so it is required to join.",
+    );
+    expect(t("lg", "programPhoneHint")).not.toBe(t("en", "programPhoneHint"));
+    expect(t("sw", "programPhoneHint")).not.toBe(t("en", "programPhoneHint"));
     expect(src).not.toMatch(/000000000|placeholderPhone|\+256000/);
   });
 });

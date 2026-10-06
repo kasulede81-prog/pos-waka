@@ -4,6 +4,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
+import { t } from "../i18n";
+import { AppThemeProvider } from "../../context/AppThemeProvider";
 import { MemberDashboardView, MemberHomePage } from "../../pages/member/MemberHomePage";
 import type {
   MemberActivityItem,
@@ -79,7 +81,7 @@ function dashboard(over: Partial<MemberDashboard> = {}): MemberDashboard {
 
 function render(d: MemberDashboard): string {
   return renderToStaticMarkup(
-    createElement(MemoryRouter, null, createElement(MemberDashboardView, { dashboard: d })),
+    createElement(MemoryRouter, null, createElement(MemberDashboardView, { lang: "en", dashboard: d })),
   );
 }
 
@@ -119,8 +121,9 @@ describe("one linked merchant", () => {
     expect(html).toContain("1,234");
     expect(html).toContain("2,000");
     expect(html).toContain("766");
-    // A single merchant is presented as the member's card.
-    expect(html).toContain("Your loyalty card");
+    // A single merchant is the membership block (Phase B renamed it; the premium
+    // card faces live in their own section when the projection provides them).
+    expect(html).toContain("Your membership");
     expect(html).toContain("Kiosk / Duka");
     expect(html).toContain("Kampala");
   });
@@ -129,8 +132,8 @@ describe("one linked merchant", () => {
     const html = render(dashboard());
     expect(html).toContain("ugualy");
     expect(html).toContain("+2567** *** 020");
-    // The status pill shows the status the server reported.
-    expect(html).toMatch(/>\s*active\s*</);
+    // The status pill shows the status the server reported (translated label).
+    expect(html).toMatch(/>\s*Active\s*</);
   });
 
   it("states the linked merchant count in the singular and the plural", () => {
@@ -198,8 +201,8 @@ describe("multiple linked merchants", () => {
     );
     const kiosk = cards.find((c) => c.includes("Kampala Kiosk"))!;
     const pharmacy = cards.find((c) => c.includes("Entebbe Pharmacy"))!;
-    expect(kiosk).toMatch(/>\s*active\s*</);
-    expect(pharmacy).toMatch(/>\s*suspended\s*</);
+    expect(kiosk).toMatch(/>\s*Active\s*</);
+    expect(pharmacy).toMatch(/>\s*Suspended\s*</);
   });
 });
 
@@ -341,7 +344,7 @@ describe("the activity section", () => {
   const withActivity = (items: MemberActivityItem[], over: Partial<MemberDashboard> = {}, more = false) =>
     renderToStaticMarkup(
       createElement(MemoryRouter, null, (() =>
-        createElement(MemberDashboardView, {
+        createElement(MemberDashboardView, { lang: "en",
           dashboard: dashboard(over),
           activity: items,
           activityState: "ready" as const,
@@ -402,7 +405,7 @@ describe("the activity section", () => {
   it("has a loading, an empty and an error state", () => {
     const shell = (props: Record<string, unknown>) =>
       renderToStaticMarkup(
-        createElement(MemoryRouter, null, createElement(MemberDashboardView, { dashboard: dashboard(), ...props })),
+        createElement(MemoryRouter, null, createElement(MemberDashboardView, { lang: "en", dashboard: dashboard(), ...props })),
       );
 
     const loading = shell({ activityState: "loading" });
@@ -471,7 +474,7 @@ describe("the rewards section", () => {
       createElement(
         MemoryRouter,
         null,
-        createElement(MemberDashboardView, {
+        createElement(MemberDashboardView, { lang: "en",
           dashboard: dashboard(over),
           rewards,
           rewardsState: state,
@@ -583,12 +586,12 @@ describe("the rewards section", () => {
 });
 
 describe("no linked merchants", () => {
-  it("offers the WAKA Loyalty code step instead of an empty dashboard", () => {
+  it("offers the DKASU Loyalty code step instead of an empty dashboard", () => {
     const html = render(
       dashboard({ accounts: [], counts: { linkedAccounts: 0, activeAccounts: 0, suspendedAccounts: 0 } }),
     );
     expect(html).toContain("No merchants yet");
-    expect(html).toContain("WAKA Loyalty code");
+    expect(html).toContain("DKASU Loyalty code");
     // The code-entry form is the same component every other not-yet-joined surface uses.
     expect(html).toContain('data-testid="loyalty-code-entry-input"');
     // And there is nothing to summarise.
@@ -619,8 +622,19 @@ describe("loading and error states", () => {
     // A static render does not run effects, so this is exactly the first paint: the read has not
     // resolved. It proves the loading branch itself is sound — a broken import or a bad reference
     // there would throw here rather than in production.
+    // AppThemeProvider is required because the header logo reads the theme context —
+    // without it this render throws (a pre-existing harness gap, fixed here so the
+    // loading branch is actually exercised).
     const html = renderToStaticMarkup(
-      createElement(MemoryRouter, null, createElement(MemberHomePage)),
+      createElement(
+        AppThemeProvider,
+        null,
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(MemberHomePage, { lang: "en", setLang: () => undefined }),
+        ),
+      ),
     );
     expect(html).toContain('data-testid="member-loading"');
     expect(html).toContain('aria-busy="true"');
@@ -631,7 +645,8 @@ describe("loading and error states", () => {
   it("error offers a retry, and never renders the raw error code", () => {
     const src = PAGE();
     expect(src).toContain('data-testid="member-error"');
-    expect(src).toContain("Try again");
+    expect(src).toContain('t(lang, "memberRetry")');
+    expect(t("en", "memberRetry")).toBe("Try again");
     expect(src).toContain("void load().then(setState)");
     // `state.error` is only ever COMPARED (to pick the not-a-member step). It is never
     // interpolated into the markup, so a backend code cannot reach the member.
@@ -696,7 +711,7 @@ describe("the promotions section", () => {
       createElement(
         MemoryRouter,
         null,
-        createElement(MemberDashboardView, { dashboard: dashboard(), promotions }),
+        createElement(MemberDashboardView, { lang: "en", dashboard: dashboard(), promotions }),
       ),
     );
 
@@ -707,7 +722,7 @@ describe("the promotions section", () => {
     expect(html).toContain("UGX 30,000 / UGX 50,000");
     expect(html).toContain("20,000 remaining");
     expect(html).toContain("60%");
-    expect(html).toContain("+100 pts");
+    expect(html).toContain("+100 Points");
     expect(html).toContain("Kampala Kiosk");
   });
 
@@ -727,7 +742,7 @@ describe("the promotions section", () => {
     const html = withPromotions([
       promotion({ kind: "earn_multiplier", bonusPoints: null, multiplier: 2, thresholdUgx: null, qualifyingSpendUgx: null, remainingUgx: null }),
     ]);
-    expect(html).toContain("2× pts");
+    expect(html).toContain("2× Points");
     // No spend progress row — the title is fixture text, so the assertion targets the
     // progress line itself ("UGX a / UGX b · n remaining").
     expect(html).not.toContain("remaining");

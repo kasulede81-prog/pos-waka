@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import type { Language } from "../../types";
+import { t } from "../../lib/i18n";
 import { WakaPosLogo } from "../../components/brand/WakaLogo";
 import { LoyaltyCodeEntryForm } from "../../components/loyalty/LoyaltyCodeEntryForm";
 import { fetchMemberDashboard } from "../../lib/memberDashboard";
@@ -19,8 +21,10 @@ import { posOrigin } from "../../lib/productHost";
  *
  * The code is not a password or a credential. It is a public merchant identifier, and naming it
  * grants nothing — the destination page re-resolves it server-side before anything happens.
+ *
+ * Phase A — copy runs through the shared i18n dictionaries (en/lg/sw); branding is DKASU.
  */
-export function MemberRegisterPage() {
+export function MemberRegisterPage({ lang }: { lang: Language }) {
   // Signed-in people who already belong to a programme go straight to their dashboard rather than
   // being asked for a code they do not need. A non-member, or a visitor with no session, sees the
   // code step. `not_a_member`/`not_authenticated` are the only failures that mean "not a member";
@@ -44,9 +48,11 @@ export function MemberRegisterPage() {
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-5 py-10">
       <header className="flex flex-col items-center gap-3 text-center">
         <WakaPosLogo size="md" className="h-14" />
-        <h1 className="text-2xl font-black tracking-tight text-foreground">Join WAKA Loyalty</h1>
+        <h1 className="text-2xl font-black tracking-tight text-foreground">
+          {t(lang, "memberJoinTitle")}
+        </h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Collect points at the shops you already visit and keep your loyalty cards in one place.
+          {t(lang, "welcomeLoyaltyBody")}
         </p>
       </header>
 
@@ -55,22 +61,22 @@ export function MemberRegisterPage() {
       </section>
 
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
-        This creates nothing on its own. You will see the shop, then choose how to sign in.
+        {t(lang, "memberRegisterFootnote")}
       </p>
 
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
-        Already have an account?{" "}
+        {t(lang, "memberHaveAccount")}{" "}
         <Link to="/login" className="waka-link">
-          Sign in
+          {t(lang, "signIn")}
         </Link>
       </p>
 
-      {/* Cross-surface link. Absolute on purpose: this page is only ever rendered on
-          loyalty.waka.ug, where a relative `/register` is not part of the customer app. */}
+      {/* Cross-surface link. Absolute on purpose: this page is only ever rendered on the
+          loyalty host, where a relative `/register` is not part of the customer app. */}
       <p className="text-center text-xs leading-relaxed text-muted-foreground">
-        Want to run a shop instead?{" "}
+        {t(lang, "memberWantShop")}{" "}
         <a href={`${posOrigin()}/register`} className="waka-link">
-          Set up a business
+          {t(lang, "welcomeBusinessTitle")}
         </a>
       </p>
     </div>

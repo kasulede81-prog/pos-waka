@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { useUiLanguage } from "../../hooks/useUiLanguage";
-import { t } from "../../lib/i18n";
+import type { Language } from "../../types";
+import { t, tTemplate } from "../../lib/i18n";
 import { memberWalletErrorKey } from "../../lib/loyalty/loyaltyErrorMessages";
+import { formatDay } from "../../lib/loyalty/memberDates";
+import { memberWalletButtonLabel } from "../../lib/loyalty/memberWalletLabel";
 import {
   fetchGoogleWalletConfigured,
   issueMemberGoogleWalletPass,
@@ -9,7 +11,7 @@ import {
 import { openWalletSaveUrlWithoutReferrer } from "../../lib/loyalty/loyaltyPublicWalletNavigate";
 
 /**
- * "Add to Google Wallet" on the MEMBER's own dashboard.
+ * Wallet affordance on the MEMBER's own dashboard.
  *
  * THE SAME CARD THE SHOP CAN SEND. This calls the existing `loyalty-wallet-pass` Edge Function
  * with a shop and no account id, so the server resolves the account from the member's own
@@ -26,15 +28,33 @@ import { openWalletSaveUrlWithoutReferrer } from "../../lib/loyalty/loyaltyPubli
  * WHEN WALLET IS NOT CONFIGURED, NOTHING IS RENDERED. An unconfigured issuer is the merchant's
  * infrastructure state, not the customer's, and the merchant-facing copy for it ("ask DKASU
  * support…") would be meaningless and alarming on a customer's phone.
+ *
+ * PHASE B — HONEST STATES FROM WHAT THE BACKEND ACTUALLY KNOWS (audit §24):
+ *   not issued            → "Add to Google Wallet"
+ *   issued                → "Open in Google Wallet" + "Added {date}"
+ *   issued + sync stale   → "Update wallet card" (sync balance ≠ current balance)
+ *   unknown (old server)  → behaves as "Add" — never invents state
+ * The backend has NO signal for "installed"/"saved on device", so the UI NEVER
+ * claims it. Re-clicking is idempotent by construction (deterministic object id).
+ *
+ * `lang` is a prop from the page (not a local hook instance) so the label follows
+ * the dashboard's language toggle immediately instead of going stale until reload.
  */
 export function MemberGoogleWalletButton({
   shopId,
   shopName,
+  lang,
+  walletIssuedAt,
+  walletSyncBalance,
+  balancePoints,
 }: {
   shopId: string;
   shopName: string;
+  lang: Language;
+  walletIssuedAt?: string | null;
+  walletSyncBalance?: number | null;
+  balancePoints: number;
 }) {
-  const { lang } = useUiLanguage();
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -55,11 +75,19 @@ export function MemberGoogleWalletButton({
   // Probing, or genuinely unavailable: no button, and no merchant-infrastructure message.
   if (configured !== true) return null;
 
+  const issued = Boolean(walletIssuedAt);
+  const stale = issued && walletSyncBalance != null && walletSyncBalance !== balancePoints;
+  const addedDate = walletIssuedAt ? formatDay(walletIssuedAt, lang) : null;
+
+  const buttonLabel = memberWalletButtonLabel({ lang, busy, issued, stale });
+
   const onAdd = async () => {
     if (busy) return;
     setBusy(true);
     setError(null);
     setMessage(null);
+    // Deterministic object id: issuing again for an issued card returns the same
+    // Google Wallet card's Save URL — "Open"/"Update" never creates a duplicate.
     const result = await issueMemberGoogleWalletPass(shopId);
     setBusy(false);
     if (!result.ok) {
@@ -82,14 +110,20 @@ export function MemberGoogleWalletButton({
         disabled={busy}
         onClick={() => void onAdd()}
         data-testid="member-wallet-add"
-        aria-label={`${t(lang, "loyaltyWalletMemberAdd")} — ${shopName}`}
+        data-wallet-state={issued ? (stale ? "stale" : "issued") : "not-issued"}
+        aria-label={`${buttonLabel} — ${shopName}`}
         className="min-h-[44px] w-full rounded-xl bg-[#1a73e8] px-4 text-sm font-black text-white disabled:opacity-50 active:scale-[0.99]"
       >
-        {busy ? t(lang, "loyaltyWalletMemberCreating") : t(lang, "loyaltyWalletMemberAdd")}
+        {buttonLabel}
       </button>
       <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-muted-foreground">
         {t(lang, "loyaltyWalletMemberHint")}
       </p>
+      {issued && addedDate && !stale ? (
+        <p className="mt-1.5 text-[11px] font-semibold text-muted-foreground" data-testid="member-wallet-added">
+          {tTemplate(lang, "memberWalletAdded", { date: addedDate })}
+        </p>
+      ) : null}
       {message ? (
         <p className="mt-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400" role="status">
           {message}

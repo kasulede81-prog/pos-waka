@@ -38,6 +38,24 @@ export type MemberLinkedAccount = {
   membershipExpiresAt: string | null;
   enrolledAt: string | null;
   hasPublicCard: boolean;
+  /**
+   * Phase B — wallet issued/sync state (projection v2). Optional so an older
+   * projection degrades to the Phase A "Add" affordance instead of lying.
+   * `undefined` = server did not report it; the UI must then behave as "unknown",
+   * never as "installed".
+   */
+  googleWalletIssuedAt?: string | null;
+  googleWalletSyncBalance?: number | null;
+  /**
+   * Phase B — the member's OWN premium card face (audit §22).
+   * `qrToken` is the member's own scan credential, returned only through this
+   * auth.uid()-scoped projection for the caller's own accounts. `memberNumber`/
+   * `memberCvc` are the one-way public-card derivation (CVC decorative only).
+   * Optional so tests/fixtures and older servers render without them.
+   */
+  qrToken?: string | null;
+  memberNumber?: string | null;
+  memberCvc?: string | null;
 };
 
 export type MemberDashboard = {
@@ -190,19 +208,45 @@ async function callRpc<T>(
 }
 
 /**
+ * Phase C — optional Activity Center filters. Time window, one of the caller's OWN
+ * shops and a ledger kind: parameters that narrow rows the projection already gates
+ * behind the member's own active links. There is still no parameter that names a
+ * member or an account — the server resolves the caller from `auth.uid()` alone
+ * (see the `loyalty_member_activity` Phase C migration).
+ */
+export type MemberActivityFilter = {
+  /** Inclusive ISO instant lower bound (created_at >= from). */
+  from?: string | null;
+  /** Exclusive ISO instant upper bound (created_at < to). */
+  to?: string | null;
+  /** One of the caller's own shops; a shop they are not linked to returns []. */
+  shopId?: string | null;
+  /** loyalty_transactions.kind — passed only when a kind filter is active. */
+  kind?: string | null;
+};
+
+/**
  * The member's own points activity, newest first.
  *
- * No member/account/shop parameter exists to pass — the server resolves the caller from
- * `auth.uid()` alone, so this can only ever return the signed-in member's own rows. The
- * only arguments are a page size and the previous page's cursor.
+ * The only arguments are a page size, the previous page's cursor and the optional
+ * Phase C filters — none of which can name another person.
  */
 export async function fetchMemberActivity(
   cursor?: { before: string | null; beforeId: string | null },
   limit = 20,
+  filter?: MemberActivityFilter,
 ): Promise<MemberResult<MemberActivityPage>> {
   return callRpc(
     "loyalty_member_activity",
-    { p_limit: limit, p_before: cursor?.before ?? null, p_before_id: cursor?.beforeId ?? null },
+    {
+      p_limit: limit,
+      p_before: cursor?.before ?? null,
+      p_before_id: cursor?.beforeId ?? null,
+      ...(filter?.from ? { p_from: filter.from } : {}),
+      ...(filter?.to ? { p_to: filter.to } : {}),
+      ...(filter?.shopId ? { p_shop_id: filter.shopId } : {}),
+      ...(filter?.kind ? { p_kind: filter.kind } : {}),
+    },
     (raw) => {
       const list = Array.isArray(raw.items) ? (raw.items as Record<string, unknown>[]) : [];
       const items: MemberActivityItem[] = list.map((entry) => {
@@ -323,6 +367,20 @@ export async function fetchMemberDashboard(): Promise<MemberResult<MemberDashboa
         membershipExpiresAt: str(account.membership_expires_at),
         enrolledAt: str(account.enrolled_at),
         hasPublicCard: card.has_public_card === true,
+        // Phase B — absent keys stay undefined (older projection), never false.
+        googleWalletIssuedAt:
+          account.google_wallet_issued_at === undefined
+            ? undefined
+            : str(account.google_wallet_issued_at),
+        googleWalletSyncBalance:
+          account.google_wallet_sync_balance === undefined
+            ? undefined
+            : account.google_wallet_sync_balance === null
+              ? null
+              : num(account.google_wallet_sync_balance),
+        qrToken: card.qr_token === undefined ? undefined : str(card.qr_token),
+        memberNumber: card.member_number === undefined ? undefined : str(card.member_number),
+        memberCvc: card.member_cvc === undefined ? undefined : str(card.member_cvc),
       };
     });
 

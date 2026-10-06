@@ -14,6 +14,7 @@ const theme = resolveLoyaltyPresentation(undefined);
 function render(overrides: Partial<Parameters<typeof WakaLoyaltyCard>[0]> = {}): string {
   return renderToStaticMarkup(
     createElement(WakaLoyaltyCard, {
+      lang: "en",
       shopName: "KASULE MART",
       memberName: "KASULE",
       memberNumber: "26D4 33F0 2BED 4ABE",
@@ -45,7 +46,7 @@ describe("formatValidThru", () => {
 describe("WakaLoyaltyCard", () => {
   it("renders every agreed field from the loyalty payload", () => {
     const html = render();
-    expect(html).toContain("WAKA Loyalty");
+    expect(html).toContain("DKASU Loyalty");
     expect(html).toContain("Shop · Earn · Redeem");
     expect(html).toContain("KASULE MART"); // ISSUED BY
     expect(html).toContain("26D4 33F0 2BED 4ABE"); // MEMBER ID

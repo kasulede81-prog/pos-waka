@@ -34,6 +34,7 @@ const BRAND_OR_CODE_KEYS = new Set([
   "loyaltyGoogleWalletSms",
   "loyaltyGoogleWalletWhatsApp",
   "loyaltyProgramPlaceholder", // example code "WPL2026001"
+  "memberTitle", // brand name "DKASU Loyalty" — identical in every language by design
 ]);
 
 /** Keys the Phase 2 batches introduced or explicitly required to be translated. */

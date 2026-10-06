@@ -78,7 +78,7 @@ describe("PublicLoyaltyCardView design presentation", () => {
 
   it("still renders B1 layout when design is undefined", () => {
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard}
         qrDataUrl={null}
         walletBusy={false}
@@ -109,7 +109,7 @@ describe("PublicLoyaltyCardView design presentation", () => {
       logo_url: null,
     });
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard}
         design={design}
         qrDataUrl={null}
@@ -135,7 +135,7 @@ describe("PublicLoyaltyCardView design presentation", () => {
       reward_layout: "cards",
     });
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard}
         design={design}
         qrDataUrl={null}

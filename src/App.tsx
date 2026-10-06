@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
+import type { Language } from "./types";
 import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { AppShell } from "./components/layout/AppShell";
@@ -272,9 +273,9 @@ function LazyWait() {
   );
 }
 
-function PublicLoyaltyCardRoute() {
+function PublicLoyaltyCardRoute({ lang }: { lang: Language }) {
   const { publicCardToken = "" } = useParams<{ publicCardToken: string }>();
-  return <PublicLoyaltyCardPage publicCardToken={publicCardToken} />;
+  return <PublicLoyaltyCardPage publicCardToken={publicCardToken} lang={lang} />;
 }
 
 function PublicLoyaltyJoinRoute() {
@@ -388,7 +389,7 @@ function AppRoutes() {
           path="/member/register"
           element={
             <RouteErrorBoundary scope="MemberRegistration">
-              <MemberRegisterPage />
+              <MemberRegisterPage lang={lang} />
             </RouteErrorBoundary>
           }
         />
@@ -453,11 +454,11 @@ function AppRoutes() {
 
         <Route
           path="/loyalty/:publicCardToken"
-          element={<PublicLoyaltyCardRoute />}
+          element={<PublicLoyaltyCardRoute lang={lang} />}
         />
         <Route
           path="/c/:publicCardToken"
-          element={<PublicLoyaltyCardRoute />}
+          element={<PublicLoyaltyCardRoute lang={lang} />}
         />
         <Route
           path="/join/:enrollmentToken"
@@ -499,10 +500,10 @@ function AppRoutes() {
               loyalty member — they all assume a shop, and a member has none. Verified:
               pathAllowedBeforeBusinessProfileComplete() returns false for /member, so nesting it
               below would bounce members to /settings?onboard=1. */}
-          <Route path="member" element={<MemberHomePage />} />
+          <Route path="member" element={<MemberHomePage lang={lang} setLang={setLang} />} />
           {/* Landing for an authenticated session that is neither a tenant, nor invite-pending,
               nor a merchant signup. Sibling of the gate below so it is never bounced back. */}
-          <Route path="welcome" element={<WelcomePage />} />
+          <Route path="welcome" element={<WelcomePage lang={lang} />} />
           {/* Phase 2C — explicit merchant intent. MUST stay OUTSIDE KnownIdentityGate: its whole
               purpose is to be reachable by a session the classifier still calls `unknown`, which a
               gate that admits only `merchant` can never allow. Declaring intent there writes

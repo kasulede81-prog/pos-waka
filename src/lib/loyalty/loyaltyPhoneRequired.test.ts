@@ -137,8 +137,17 @@ describe("7. a Google identity never satisfies the phone requirement", () => {
   });
 
   it("the phone input is required, and validation does not rely on that attribute alone", () => {
-    const phoneInput = PAGE.slice(PAGE.indexOf('data-testid="loyalty-program-profile-phone"'));
-    expect(phoneInput.slice(0, 400)).toContain("required");
+    // Assert the REAL input element's attributes. The previous check sliced forward
+    // from the testid and passed only because the adjacent hint sentence happened to
+    // contain the word "required" — it never proved the attribute existed.
+    const testidIdx = PAGE.indexOf('data-testid="loyalty-program-profile-phone"');
+    expect(testidIdx).toBeGreaterThan(0);
+    const inputStart = PAGE.lastIndexOf("<input", testidIdx);
+    const inputEnd = PAGE.indexOf("/>", testidIdx) + 2;
+    const phoneInputTag = PAGE.slice(inputStart, inputEnd);
+    expect(phoneInputTag).toContain('data-testid="loyalty-program-profile-phone"');
+    expect(phoneInputTag).toContain("required");
+    expect(phoneInputTag).toContain('inputMode="tel"');
 
     // The attribute is belt; the braces are the explicit normalizer check in the handler.
     const normalizeIdx = PROFILE_STEP.indexOf("normalizeUgPhoneE164(profilePhone)");

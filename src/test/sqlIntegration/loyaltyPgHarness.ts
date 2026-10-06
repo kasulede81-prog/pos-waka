@@ -95,6 +95,12 @@ export const MIGRATIONS = [
   // Merchant registration hardening: per-user advisory lock on the bootstrap RPCs, fail-closed
   // owner_onboarding_status(), and the anon EXECUTE revokes.
   join(process.cwd(), "supabase", "migrations", "20260930320000_merchant_registration_hardening.sql"),
+  // Customer Loyalty Phase B — member dashboard projection v2: wallet issued/staleness
+  // fields + the member's own card identity (qr_token / member number / decorative CVC).
+  join(process.cwd(), "supabase", "migrations", "20261005190000_loyalty_member_phase_b_projection.sql"),
+  // Customer Loyalty Phase C — activity-center filters: optional date window, own-shop
+  // and kind parameters on loyalty_member_activity (supersedes the 3-arg shape).
+  join(process.cwd(), "supabase", "migrations", "20261005210000_loyalty_member_activity_filters.sql"),
 ];
 
 function readSql(path: string): string {

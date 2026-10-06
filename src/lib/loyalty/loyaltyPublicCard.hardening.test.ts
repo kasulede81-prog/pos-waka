@@ -51,10 +51,11 @@ describe("public loyalty SEO (B3)", () => {
   it("keeps loyalty pages noindex and uses token-free loyalty canonical", () => {
     for (const path of [`/c/${TOKEN}`, `/loyalty/${TOKEN}`]) {
       expect(isMarketingIndexablePath(path)).toBe(false);
-      expect(noIndexSeoTitle(path)).toBe("WAKA Loyalty");
+      // DKASU rebrand (Phase D cleanup): seoRoutes serves the DKASU title.
+      expect(noIndexSeoTitle(path)).toBe("DKASU Loyalty");
     }
     const canonical = loyaltyCanonical("/c");
-    expect(canonical).toBe("https://loyalty.waka.ug/c");
+    expect(canonical).toBe("https://loyalty.dkasu.com/c");
     expect(canonical).not.toContain(TOKEN);
     expect(canonical).not.toMatch(/\/loyalty(\/|$)/);
   });

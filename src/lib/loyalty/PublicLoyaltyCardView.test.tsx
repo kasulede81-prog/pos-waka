@@ -27,7 +27,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
 
   it("renders customer name, points, shop, and program", () => {
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard()}
         qrDataUrl="data:image/png;base64,abc"
         walletBusy={false}
@@ -46,7 +46,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
 
   it("shows affordable progress and available/locked rewards", () => {
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard()}
         qrDataUrl={null}
         walletBusy={false}
@@ -66,7 +66,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
 
   it("shows points-away progress when balance is insufficient", () => {
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard({ balance_points: 405, rewards: [{ name: "Free soda", points_required: 500, description: null }] })}
         qrDataUrl={null}
         walletBusy={false}
@@ -81,7 +81,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
 
   it("hides progress and shows empty rewards copy when no rewards", () => {
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard({ rewards: [] })}
         qrDataUrl={null}
         walletBusy={false}
@@ -99,7 +99,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
 
   it("renders QR from provided data URL without changing payload semantics", () => {
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard()}
         qrDataUrl="data:image/png;base64,qr-img"
         walletBusy={false}
@@ -117,7 +117,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
 
   it("shows Wallet only when configured; Share always", () => {
     const withWallet = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard({ wallet_configured: true })}
         qrDataUrl={null}
         walletBusy={false}
@@ -131,7 +131,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
     expect(withWallet).toContain("Share my loyalty card");
 
     const withoutWallet = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard({ wallet_configured: false })}
         qrDataUrl={null}
         walletBusy={false}
@@ -147,7 +147,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
 
   it("hides Wallet when account is inactive even if configured", () => {
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard({ wallet_configured: true, account_active: false })}
         qrDataUrl={null}
         walletBusy={false}
@@ -164,7 +164,7 @@ describe("PublicLoyaltyCardView (B1)", () => {
 
   it("does not render a redeem action", () => {
     const html = renderToStaticMarkup(
-      <PublicLoyaltyCardView
+      <PublicLoyaltyCardView lang="en"
         card={baseCard()}
         qrDataUrl={null}
         walletBusy={false}

@@ -4867,12 +4867,27 @@ html[data-home-anim-paused] .inventory-date-chip {
   }
 }
 
-/* ——— Public loyalty card (WAKA blue + orange default theme) ——— */
+/* ——— Public loyalty card (DKASU blue + orange default theme) ——— */
 .loyalty-public-shell {
   background:
     radial-gradient(120% 80% at 50% -10%, rgba(11, 58, 130, 0.14), transparent 55%),
     radial-gradient(80% 50% at 100% 18%, rgba(249, 115, 22, 0.10), transparent 48%),
     linear-gradient(180deg, #f8fafc 0%, #f1f5f9 42%, #f8fafc 100%);
+}
+
+/*
+ * Phase D (U17) — under a dark preference the global remap layer inverts every
+ * raw utility inside the card page (bg-white, text-stone-900, …) while this
+ * shell's raw gradient stayed light — a dark-content island on a light gradient.
+ * The shell gets a dark counterpart so the surface and its contents agree; the
+ * light gradient above remains the appearance in light mode and for users
+ * without a dark preference.
+ */
+.dark .loyalty-public-shell {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(11, 58, 130, 0.45), transparent 55%),
+    radial-gradient(80% 50% at 100% 18%, rgba(249, 115, 22, 0.16), transparent 48%),
+    linear-gradient(180deg, #0f172a 0%, #0b1220 42%, #0f172a 100%);
 }
 
 @keyframes loyalty-public-enter {

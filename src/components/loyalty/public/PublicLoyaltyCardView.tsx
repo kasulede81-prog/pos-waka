@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import type { Language } from "../../../types";
+import { t, tTemplate } from "../../../lib/i18n";
 import type { PublicCardData, PublicCardReward } from "../../../lib/loyalty/loyaltyPublicCard";
 import {
   resolveLoyaltyPresentation,
@@ -21,6 +23,7 @@ type Props = {
   onSharePage: () => void;
   /** When true, CTAs are visual-only (merchant preview). */
   previewMode?: boolean;
+  lang: Language;
 };
 
 function RewardRow({
@@ -28,11 +31,13 @@ function RewardRow({
   balancePoints,
   index,
   layout,
+  lang,
 }: {
   reward: PublicCardReward;
   balancePoints: number;
   index: number;
   layout: "list" | "cards";
+  lang: Language;
 }) {
   const available = isRewardAffordable(balancePoints, reward.points_required);
   return (
@@ -45,7 +50,11 @@ function RewardRow({
           : "border-slate-200/90 bg-white"
       }`}
       style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
-      aria-label={`${reward.name}, ${reward.points_required} points, ${available ? "available" : "need more points"}`}
+      aria-label={tTemplate(
+        lang,
+        available ? "publicRewardAriaAvailable" : "publicRewardAriaNeed",
+        { name: reward.name, points: reward.points_required },
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -60,7 +69,9 @@ function RewardRow({
         </div>
         <div className="shrink-0 text-right">
           <p className="text-sm font-black tabular-nums text-slate-900">{reward.points_required}</p>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-orange-600">pts</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-orange-600">
+            {t(lang, "publicCardPoints")}
+          </p>
         </div>
       </div>
       <p
@@ -68,11 +79,11 @@ function RewardRow({
           available ? "bg-orange-500/15 text-orange-800" : "bg-slate-100 text-slate-500"
         }`}
       >
-        {available ? "Available" : "Need more points"}
+        {available ? t(lang, "publicRewardAvailable") : t(lang, "publicRewardNeedPoints")}
       </p>
       {available ? (
         <p className="mt-1.5 text-[11px] font-medium text-slate-500">
-          Ask the shop to redeem at checkout
+          {t(lang, "publicRewardAskShop")}
         </p>
       ) : null}
     </li>
@@ -101,12 +112,20 @@ export function PublicLoyaltyCardView({
   onAddToWallet,
   onSharePage,
   previewMode = false,
+  lang,
 }: Props) {
   const theme = resolveLoyaltyPresentation(design);
   const yourRewards = card.your_rewards ?? [];
   const shopRewards = card.rewards ?? [];
   const progressPool = yourRewards.length > 0 ? [...yourRewards, ...shopRewards] : shopRewards;
   const progress = buildRewardProgress(card.balance_points, progressPool);
+  /** Structured progress from the shared helper — translated here, never by the helper. */
+  const progressText =
+    progress == null
+      ? null
+      : progress.kind === "affordable"
+        ? tTemplate(lang, "publicProgressEnough", { reward: progress.rewardName })
+        : tTemplate(lang, "publicProgressAway", { points: progress.pointsAway });
   const showWallet =
     card.wallet_configured && card.account_active && card.membership_active !== false;
   const programName = theme.programDisplayName?.trim() || card.program_name;
@@ -133,7 +152,7 @@ export function PublicLoyaltyCardView({
           className="text-[11px] font-bold uppercase tracking-[0.22em]"
           style={{ color: theme.backgroundColor }}
         >
-          WAKA Loyalty
+          {t(lang, "memberTitle")}
         </p>
         {logoUrl ? (
           <div className="mt-3 flex justify-center">
@@ -173,13 +192,14 @@ export function PublicLoyaltyCardView({
             theme={theme}
             qrDataUrl={qrDataUrl}
             programName={programName}
+            lang={lang}
           />
           {/* Account state and reward progress sit OUTSIDE the card so the redesign loses no
               information — the reference card has no room for them. */}
           <div className="flex flex-wrap items-center justify-center gap-2">
             {!card.account_active ? (
               <p className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                Account inactive
+                {t(lang, "publicCardAccountInactive")}
               </p>
             ) : null}
             {card.account_active && card.membership_active === false ? (
@@ -187,22 +207,23 @@ export function PublicLoyaltyCardView({
                 className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800"
                 role="status"
               >
-                Membership expired
-                {card.membership_expires_on ? ` · ${card.membership_expires_on}` : ""}
+                {card.membership_expires_on
+                  ? tTemplate(lang, "memberExpiredDate", { date: card.membership_expires_on })
+                  : t(lang, "memberExpiredTitle")}
               </p>
             ) : null}
             {card.account_active && card.membership_active !== false ? (
               <p className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                Membership active
+                {t(lang, "publicCardMembershipActive")}
               </p>
             ) : null}
           </div>
-          {progress ? (
+          {progressText ? (
             <div
               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold leading-snug text-slate-700"
               role="status"
             >
-              {progress.message}
+              {progressText}
             </div>
           ) : null}
         </div>
@@ -227,7 +248,7 @@ export function PublicLoyaltyCardView({
           <p
             className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75"
           >
-            Member
+            {t(lang, "memberLabel")}
           </p>
           <h2
             id="loyalty-member-name"
@@ -243,7 +264,7 @@ export function PublicLoyaltyCardView({
                 color: theme.heroAccent,
               }}
             >
-              Account inactive
+              {t(lang, "publicCardAccountInactive")}
             </p>
           ) : null}
           {card.account_active && card.membership_active === false ? (
@@ -251,13 +272,14 @@ export function PublicLoyaltyCardView({
               className="mt-2 inline-flex rounded-full bg-amber-400/20 px-2.5 py-1 text-[11px] font-bold text-amber-100"
               role="status"
             >
-              Membership expired
-              {card.membership_expires_on ? ` · ${card.membership_expires_on}` : ""}
+              {card.membership_expires_on
+                ? tTemplate(lang, "memberExpiredDate", { date: card.membership_expires_on })
+                : t(lang, "memberExpiredTitle")}
             </p>
           ) : null}
           {card.account_active && card.membership_active !== false ? (
             <p className="mt-2 inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-bold opacity-90">
-              Membership active
+              {t(lang, "publicCardMembershipActive")}
             </p>
           ) : null}
 
@@ -266,7 +288,7 @@ export function PublicLoyaltyCardView({
               className="text-[10px] font-bold uppercase tracking-[0.2em]"
               style={{ color: theme.heroAccent }}
             >
-              Point balance
+              {t(lang, "publicCardPointBalance")}
             </p>
             <p
               className="mt-2 flex items-end justify-center gap-2"
@@ -284,11 +306,11 @@ export function PublicLoyaltyCardView({
               </span>
             </p>
             <p className="mt-2 text-sm font-bold uppercase tracking-[0.28em] opacity-70">
-              Points
+              {t(lang, "publicCardPoints")}
             </p>
           </div>
 
-          {progress ? (
+          {progress && progressText ? (
             <div
               className="mt-6 rounded-2xl px-4 py-3 text-center text-sm font-semibold leading-snug"
               style={
@@ -304,7 +326,7 @@ export function PublicLoyaltyCardView({
               }
               role="status"
             >
-              {progress.message}
+              {progressText}
             </div>
           ) : null}
         </div>
@@ -317,7 +339,7 @@ export function PublicLoyaltyCardView({
             id="loyalty-your-rewards-heading"
             className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500"
           >
-            Your rewards
+            {t(lang, "publicCardYourRewards")}
           </h2>
           <ul
             className={`mt-3 list-none p-0 ${
@@ -333,6 +355,7 @@ export function PublicLoyaltyCardView({
                 balancePoints={card.balance_points}
                 index={index}
                 layout={rewardLayout}
+                lang={lang}
               />
             ))}
           </ul>
@@ -344,13 +367,15 @@ export function PublicLoyaltyCardView({
           id="loyalty-rewards-heading"
           className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500"
         >
-          {yourRewards.length > 0 ? "Shop rewards" : "Your rewards"}
+          {yourRewards.length > 0
+            ? t(lang, "publicCardShopRewards")
+            : t(lang, "publicCardYourRewards")}
         </h2>
         {shopRewards.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-slate-300/90 bg-white px-4 py-6 text-center">
-            <p className="text-sm font-black text-slate-800">You&apos;re all set.</p>
+            <p className="text-sm font-black text-slate-800">{t(lang, "publicCardAllSet")}</p>
             <p className="mt-1 text-sm font-medium text-slate-500">
-              Keep shopping to unlock rewards.
+              {t(lang, "publicCardKeepShopping")}
             </p>
           </div>
         ) : (
@@ -368,6 +393,7 @@ export function PublicLoyaltyCardView({
                 balancePoints={card.balance_points}
                 index={index}
                 layout={rewardLayout}
+                lang={lang}
               />
             ))}
           </ul>
@@ -383,7 +409,7 @@ export function PublicLoyaltyCardView({
           id="loyalty-checkout-heading"
           className="text-center text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500"
         >
-          Show at checkout
+          {t(lang, "publicCardShowCheckout")}
         </h2>
         <div className="mx-auto mt-4 flex w-full max-w-[280px] flex-col items-center">
           {qrDataUrl ? (
@@ -391,7 +417,7 @@ export function PublicLoyaltyCardView({
               src={qrDataUrl}
               width={260}
               height={260}
-              alt="Loyalty membership QR code. Show this at checkout to collect your points."
+              alt={t(lang, "publicCardQrAlt")}
               className="aspect-square w-full max-w-[260px] rounded-2xl border border-slate-100 bg-white p-3"
             />
           ) : (
@@ -401,14 +427,14 @@ export function PublicLoyaltyCardView({
             />
           )}
           <p className="mt-4 max-w-[18rem] text-center text-sm font-medium leading-relaxed text-slate-600">
-            Show this QR at checkout to collect your points.
+            {t(lang, "publicCardQrHint")}
           </p>
         </div>
       </section>
       )}
 
       {!previewMode ? (
-        <section className="flex flex-col gap-2.5" aria-label="Card actions">
+        <section className="flex flex-col gap-2.5" aria-label={t(lang, "publicCardActions")}>
           {showWallet ? (
             <button
               type="button"
@@ -416,7 +442,9 @@ export function PublicLoyaltyCardView({
               onClick={onAddToWallet}
               className="min-h-12 w-full rounded-2xl bg-[#1a73e8] px-4 text-[15px] font-black text-white shadow-md shadow-blue-900/10 transition active:scale-[0.98] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1a73e8]"
             >
-              {walletBusy ? "Creating your loyalty card..." : "Add to Google Wallet"}
+              {walletBusy
+                ? t(lang, "loyaltyWalletMemberCreating")
+                : t(lang, "loyaltyWalletMemberAdd")}
             </button>
           ) : null}
 
@@ -425,7 +453,7 @@ export function PublicLoyaltyCardView({
             onClick={onSharePage}
             className="min-h-12 w-full rounded-2xl border border-slate-300/90 bg-white px-4 text-[15px] font-bold text-slate-800 shadow-sm transition active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
           >
-            Share my loyalty card
+            {t(lang, "publicCardShare")}
           </button>
 
           {walletMessage ? (

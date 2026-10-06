@@ -57,7 +57,7 @@ describe("WAKA loyalty default theme", () => {
       wallet_configured: true,
     };
     const html = renderToStaticMarkup(
-      createElement(PublicLoyaltyCardView, {
+      createElement(PublicLoyaltyCardView, { lang: "en",
         card,
         qrDataUrl: null,
         walletBusy: false,

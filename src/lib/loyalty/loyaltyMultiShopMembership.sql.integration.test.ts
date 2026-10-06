@@ -465,11 +465,20 @@ describe("Phase 2A: existing behaviour is untouched", () => {
     expect(r.already_requested).toBe(true);
   });
 
-  it("TEST 9 — the member projection still leaks no tokens", async () => {
+  it("TEST 9 — the member projection exposes only the caller's own card credential", async () => {
     const dash = await dashboard(memberUserId);
     const json = JSON.stringify(dash);
-    expect(json).not.toContain("qr_token");
-    expect(json).not.toContain("public_card_token");
+    // Phase B contract: the caller's own qr_token/card identity may be present
+    // (needed to render their own card face) — nothing shared ever is.
+    const first = (dash.accounts as Array<Record<string, unknown>>)[0];
+    const card = first?.card as Record<string, unknown> | undefined;
+    expect(typeof card?.qr_token).toBe("string");
+    expect(String(card?.member_number ?? "")).toMatch(
+      /^[0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4}$/,
+    );
+    expect(json).not.toContain("public_card_token"); // the shareable bearer URL
+    expect(json).not.toContain("customer_id");
+    expect(json).not.toContain("google_wallet_object_id");
     expect(json).not.toContain("WAKA-LOYALTY:");
   });
 

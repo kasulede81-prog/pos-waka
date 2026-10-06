@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import type { Language } from "../../types";
+import { t } from "../../lib/i18n";
 import { publicAssetUrl } from "../../lib/publicAssetUrl";
 import type { LoyaltyCardPresentation } from "../../lib/loyalty/loyaltyCardDesign";
 
@@ -19,8 +21,12 @@ import type { LoyaltyCardPresentation } from "../../lib/loyalty/loyaltyCardDesig
  * correctly from a 320px phone up to a desktop column, and would scale to print unchanged.
  */
 
-/** Transparent RGBA W mark (brand orange) — the same asset the app shell uses. */
-const WAKA_W_MARK = publicAssetUrl("brand/w-icon-128.png");
+/**
+ * DKASU brand mark for the card face — the same cream "D" symbol the app shell's
+ * `WakaSymbolIcon` uses (light mark, correct on the card's dark gradient). Replaces the
+ * legacy W mark on customer-facing cards (Phase A rebrand).
+ */
+const CARD_BRAND_MARK = publicAssetUrl("brand/d-icon-128-cream.png");
 
 type Props = {
   /** Merchant / issuer — `shops.name`. */
@@ -41,6 +47,7 @@ type Props = {
   qrDataUrl?: string | null;
   /** Optional merchant program name; shown small in the footer when present. */
   programName?: string | null;
+  lang: Language;
   className?: string;
 };
 
@@ -70,6 +77,7 @@ export function WakaLoyaltyCard({
   theme,
   qrDataUrl,
   programName,
+  lang,
   className = "",
 }: Props) {
   const fg = theme.heroForeground;
@@ -111,7 +119,7 @@ export function WakaLoyaltyCard({
       />
       {/* oversized W watermark, right edge — brand texture, never readable content */}
       <img
-        src={WAKA_W_MARK}
+        src={CARD_BRAND_MARK}
         alt=""
         aria-hidden
         className="pointer-events-none absolute -right-[7cqw] -top-[10cqw] h-[64cqw] w-auto opacity-[0.06]"
@@ -124,19 +132,19 @@ export function WakaLoyaltyCard({
       >
         {/* header — WAKA mark + wordmark */}
         <div className="flex items-center gap-[3.2cqw]">
-          <img src={WAKA_W_MARK} alt="" aria-hidden className="h-[9.4cqw] w-auto shrink-0" />
+          <img src={CARD_BRAND_MARK} alt="" aria-hidden className="h-[9.4cqw] w-auto shrink-0" />
           <div className="min-w-0">
             <p
               className="font-black uppercase leading-none tracking-[0.06em]"
               style={{ fontSize: "5.1cqw" }}
             >
-              WAKA Loyalty
+              {t(lang, "memberTitle")}
             </p>
             <p
               className="mt-[1.1cqw] font-bold uppercase leading-none tracking-[0.34em]"
               style={{ fontSize: "1.95cqw", color: `${fg}b3` }}
             >
-              Shop · Earn · Redeem
+              {t(lang, "cardTagline")}
             </p>
           </div>
         </div>
@@ -148,7 +156,7 @@ export function WakaLoyaltyCard({
               className="font-bold uppercase leading-none tracking-[0.22em]"
               style={{ fontSize: "2.1cqw", color: `${fg}a6` }}
             >
-              Issued by
+              {t(lang, "cardIssuedBy")}
             </p>
             <p
               className="mt-[1.4cqw] truncate font-black uppercase leading-none tracking-[0.01em]"
@@ -168,7 +176,7 @@ export function WakaLoyaltyCard({
               className="mt-[3.2cqw] font-bold uppercase leading-none tracking-[0.22em]"
               style={{ fontSize: "2.1cqw", color: `${fg}a6` }}
             >
-              Member ID
+              {t(lang, "cardMemberId")}
             </p>
             <p
               className="mt-[1.4cqw] truncate font-black leading-none tabular-nums"
@@ -187,7 +195,7 @@ export function WakaLoyaltyCard({
             {qrDataUrl ? (
               <img
                 src={qrDataUrl}
-                alt="Loyalty QR code — show this at the shop to earn and redeem points"
+                alt={t(lang, "cardQrAlt")}
                 className="block h-[24cqw] w-[24cqw]"
                 style={{ imageRendering: "pixelated" }}
               />
@@ -196,10 +204,10 @@ export function WakaLoyaltyCard({
                 className="flex items-center justify-center rounded-[1.4cqw] bg-slate-100 text-center"
                 style={{ height: "24cqw", width: "24cqw", fontSize: "2cqw" }}
                 role="img"
-                aria-label="Loyalty QR code unavailable"
+                aria-label={t(lang, "cardQrUnavailable")}
               >
                 <span className="px-[1cqw] font-bold uppercase tracking-wide text-slate-500">
-                  QR unavailable
+                  {t(lang, "cardQrUnavailable")}
                 </span>
               </div>
             )}
@@ -213,7 +221,7 @@ export function WakaLoyaltyCard({
               className="font-bold uppercase leading-none tracking-[0.22em]"
               style={{ fontSize: "2.1cqw", color: `${fg}a6` }}
             >
-              Member
+              {t(lang, "memberLabel")}
             </p>
             <p
               className="mt-[1.4cqw] truncate font-black uppercase leading-none"
@@ -228,7 +236,7 @@ export function WakaLoyaltyCard({
               className="font-bold uppercase leading-none tracking-[0.22em]"
               style={{ fontSize: "2.1cqw", color: `${fg}a6` }}
             >
-              Valid thru
+              {t(lang, "cardValidThru")}
             </p>
             <p
               className="mt-[1.4cqw] font-black leading-none tabular-nums"
@@ -262,12 +270,12 @@ export function WakaLoyaltyCard({
               className="font-bold uppercase leading-none tracking-[0.22em]"
               style={{ fontSize: "2.1cqw", color: `${fg}a6` }}
             >
-              Points
+              {t(lang, "publicCardPoints")}
             </p>
             <p
               className="mt-[1.2cqw] truncate font-black leading-none tabular-nums"
               style={{ fontSize: "6.4cqw", color: accent }}
-              aria-label={`${formatPoints(balancePoints)} points`}
+              aria-label={`${formatPoints(balancePoints)} ${t(lang, "publicCardPoints")}`}
             >
               {formatPoints(balancePoints)}
             </p>
@@ -281,7 +289,7 @@ export function WakaLoyaltyCard({
               {programName}
             </p>
           ) : (
-            <img src={WAKA_W_MARK} alt="" aria-hidden className="h-[7cqw] w-auto shrink-0" />
+            <img src={CARD_BRAND_MARK} alt="" aria-hidden className="h-[7cqw] w-auto shrink-0" />
           )}
         </div>
       </div>
