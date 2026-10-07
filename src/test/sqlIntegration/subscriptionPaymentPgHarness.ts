@@ -14,7 +14,8 @@ import type { SqlExec } from "./transferEnginePgHarness";
  * 039 (annual offers), 043 (admin plan set), 044/057/078/097 (signup bundle,
  * agent upgrades, growth/promo), 113 (pricing campaigns), the M1 payment
  * foundation, the M1 follow-up, M2's entitlement lockdown, M3-A's payment
- * intent, and M3-B's payment quote/get/history RPCs — so tests exercise the
+ * intent, M3-B's payment quote/get/history RPCs, and M3-C's provider-attach
+ * RPC — so tests exercise the
  * same function bodies production runs, in the same order, against the same
  * privileges.
  */
@@ -39,6 +40,7 @@ const MIGRATION_CHAIN = [
   join(MIGRATIONS_DIR, "20261006160000_subscriptions_client_dml_lockdown.sql"),
   join(MIGRATIONS_DIR, "20261007100000_subscription_payment_intent.sql"),
   join(MIGRATIONS_DIR, "20261007120000_subscription_payment_read_rpcs.sql"),
+  join(MIGRATIONS_DIR, "20261007150000_subscription_payment_provider_attach.sql"),
 ];
 
 function readSql(path: string): string {

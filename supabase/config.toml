@@ -91,3 +91,12 @@ verify_jwt = false
 enabled = true
 uri = "https://ljaedextsenbkxzzgxcg.supabase.co/functions/v1/auth-send-email"
 secrets = "env(SEND_EMAIL_HOOK_SECRET)"
+
+# M3-C payment foundation — provider-agnostic initiation + status recovery.
+# Both run authenticated (the caller's JWT authorizes the payment through the
+# M3-B read RPC); no provider callback endpoints exist yet (M3-E/F/G).
+[functions.payment-initiate]
+verify_jwt = true
+
+[functions.payment-status]
+verify_jwt = true
