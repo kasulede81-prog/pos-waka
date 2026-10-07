@@ -272,7 +272,7 @@ begin
     ) then
       perform cron.schedule (
         'm3g-payment-reconciliation',
-        '11/15 * * * *',
+        '11,26,41,56 * * * *',
         'select public.subscription_payment_reconcile_tick ();'
       );
     end if;
