@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getProviderAdapter } from "../_shared/payment/adapter.ts";
 import { lookupPaymentByReference, runCallbackSettlement } from "../_shared/payment/callbackSettle.ts";
-import { cancelPayment, confirmPayment, failPayment } from "../_shared/payment/ledger.ts";
+import { cancelPayment, confirmPayment, failPayment, flagPaymentReconciliation } from "../_shared/payment/ledger.ts";
 
 /**
  * payment-callback-mtnmomo — provider-agnostic settlement shell (M3-E).
@@ -56,6 +56,9 @@ Deno.serve(async (req) => {
     confirm: (paymentId) => confirmPayment(serviceClient, paymentId),
     fail: (paymentId, reason) => failPayment(serviceClient, paymentId, reason),
     cancel: (paymentId, reason) => cancelPayment(serviceClient, paymentId, reason),
+    // M3-G: stale_success → explicit auditable reconciliation marker.
+    flagReconciliation: (paymentId, reason) =>
+      flagPaymentReconciliation(serviceClient, paymentId, reason),
   });
 
   return json(result.body, result.httpStatus);

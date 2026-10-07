@@ -4,6 +4,7 @@ import { getProviderAdapter } from "../_shared/payment/adapter.ts";
 import {
   fetchPaymentRow,
   attachProviderMeta,
+  claimProviderInitiation,
   failPayment,
   runInitiateFlow,
 } from "../_shared/payment/ledger.ts";
@@ -48,6 +49,7 @@ function statusFor(result: FlowResult): number {
       return 400;
     case "payment_not_pending":
     case "reference_missing":
+    case "initiate_in_progress":
       return 409;
     case "provider_not_configured":
       return 503;
@@ -123,6 +125,9 @@ Deno.serve(async (req) => {
       }),
     fail: (reason) => failPayment(serviceClient, paymentId, reason),
     resolveAdapter: (provider) => getProviderAdapter(provider),
+    // M3-G: claim before the provider call — concurrent initiates cannot both
+    // start a provider transaction (the loser observes initiate_in_progress).
+    claim: () => claimProviderInitiation(serviceClient, paymentId),
     phone,
   });
 

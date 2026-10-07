@@ -6,6 +6,7 @@ import {
   confirmPayment,
   failPayment,
   fetchPaymentRow,
+  flagPaymentReconciliation,
   runStatusFlow,
 } from "../_shared/payment/ledger.ts";
 import type { FlowResult } from "../_shared/payment/types.ts";
@@ -113,6 +114,8 @@ Deno.serve(async (req) => {
     fail: (reason) => failPayment(serviceClient, paymentId, reason),
     cancel: (reason) => cancelPayment(serviceClient, paymentId, reason),
     resolveAdapter: (provider) => getProviderAdapter(provider),
+    // M3-G: provider SUCCESS against a terminal row → auditable marker.
+    flagReconciliation: (id, reason) => flagPaymentReconciliation(serviceClient, id, reason),
   });
 
   return json({ ...result }, statusFor(result));

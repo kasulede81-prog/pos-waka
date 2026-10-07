@@ -377,10 +377,7 @@ describe("M3-C — subscription_payment_provider_attach (real SQL)", () => {
     // callback core (stale_success) — covered there.
   });
 
-  it("reports whether real two-session PostgreSQL ran", () => {
-    if (!exec.isRealPostgres) {
-      console.info("Concurrent two-session PostgreSQL test not executed.");
-    }
-    expect(true).toBe(true);
-  });
+  // Two-session concurrency is NOT claimed here (PGlite/single session).
+  // The genuine suite is subscriptionPaymentConcurrency.sql.integration.test.ts,
+  // which FAILS LOUDLY without TEST_DATABASE_URL instead of passing as a no-op.
 });

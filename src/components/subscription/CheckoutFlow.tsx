@@ -399,7 +399,14 @@ export function CheckoutFlow({
             ) : state.quoteLoading || state.phase === "quoting" ? (
               <p className="mt-1 text-sm font-semibold text-muted-foreground">…</p>
             ) : (
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">—</p>
+              <>
+                <p className="mt-1 text-sm font-semibold text-muted-foreground">—</p>
+                {state.quoteErrorKey ? (
+                  <p role="alert" className="mt-1 text-sm font-semibold text-destructive">
+                    {t(lang, state.quoteErrorKey)}
+                  </p>
+                ) : null}
+              </>
             )}
             {renewalNote ? <p className="mt-2 text-xs text-muted-foreground">{t(lang, renewalNote)}</p> : null}
           </div>

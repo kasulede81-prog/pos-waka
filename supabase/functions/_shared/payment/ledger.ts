@@ -174,6 +174,38 @@ export function cancelPayment(
   });
 }
 
+/**
+ * M3-G — server-side initiation claim. Taken BEFORE the provider call so two
+ * concurrent payment-initiate requests can never both start a provider
+ * transaction: exactly one gets `claimed: true`; the other observes
+ * `in_progress` / `already_initiated` and must NOT call the provider.
+ */
+export function claimProviderInitiation(
+  client: RpcClientLike,
+  paymentId: string,
+  ttlSeconds?: number,
+): Promise<RpcResult> {
+  return callRpc(client, "subscription_payment_provider_claim", {
+    p_payment_id: paymentId,
+    p_claim_ttl_seconds: ttlSeconds ?? 300,
+  });
+}
+
+/**
+ * M3-G — record an explicit, auditable operator-review marker for a payment
+ * (no state change). Used for stale_success / settle_refused reconciliation.
+ */
+export function flagPaymentReconciliation(
+  client: RpcClientLike,
+  paymentId: string,
+  reason: string,
+): Promise<RpcResult> {
+  return callRpc(client, "subscription_payment_flag_reconciliation", {
+    p_payment_id: paymentId,
+    p_reason: reason,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Initiate flow (payment-initiate Edge Function core)
 // ---------------------------------------------------------------------------
@@ -189,6 +221,13 @@ export type InitiateFlowDeps = {
   }) => Promise<RpcResult>;
   fail: (reason: string) => Promise<RpcResult>;
   resolveAdapter: (provider: string) => ProviderAdapter | null;
+  /**
+   * M3-G initiation claim (payment-initiate wires this to
+   * subscription_payment_provider_claim). Optional only so pre-M3-G fixtures
+   * compile unchanged; when present, the provider is NEVER called unless this
+   * request holds the claim.
+   */
+  claim?: () => Promise<RpcResult>;
   phone: string;
   timeoutMs?: number;
 };
@@ -240,6 +279,45 @@ export async function runInitiateFlow(deps: InitiateFlowDeps): Promise<FlowResul
       payment_id: row.id,
       status: row.status,
     };
+  }
+
+  // 5b. M3-G — server-side claim BEFORE the provider call. Exactly one
+  // concurrent request may reach the provider; everyone else observes the
+  // claim instead of starting a second transaction.
+  if (deps.claim) {
+    const claim = await deps.claim();
+    if (!claim.ok) {
+      // Claim infrastructure failed → do NOT touch the provider (fail closed).
+      return {
+        ok: false,
+        error: claim.error || "initiate_claim_failed",
+        payment_id: row.id,
+        status: "pending",
+        retryable: true,
+      };
+    }
+    if (claim.claimed !== true) {
+      if (claim.already_initiated === true) {
+        // Attached between our row read and the claim: idempotent observation.
+        return {
+          ok: true,
+          idempotent: true,
+          already_initiated: true,
+          payment_id: row.id,
+          status: "pending",
+          provider_reference: providerReferenceOf(row.metadata),
+        };
+      }
+      // A concurrent initiate holds the claim right now: report in-progress,
+      // provider untouched. The client keeps the payment pending and polls.
+      return {
+        ok: false,
+        error: "initiate_in_progress",
+        payment_id: row.id,
+        status: "pending",
+        retryable: true,
+      };
+    }
   }
 
   const timeoutMs = deps.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
@@ -324,6 +402,8 @@ export type StatusFlowDeps = {
   fail: (reason: string) => Promise<RpcResult>;
   cancel: (reason: string) => Promise<RpcResult>;
   resolveAdapter: (provider: string) => ProviderAdapter | null;
+  /** M3-G — optional auditable marker for charged-but-terminal outcomes. */
+  flagReconciliation?: (paymentId: string, reason: string) => Promise<RpcResult>;
   timeoutMs?: number;
 };
 
@@ -397,6 +477,11 @@ export async function runStatusFlow(deps: StatusFlowDeps): Promise<FlowResult> {
   else settled = await deps.cancel(action.reason);
 
   if (!settled.ok) {
+    // M3-G: provider says SUCCESS but the ledger row is terminal (e.g. stale
+    // replaced) → explicit auditable reconciliation marker, never silence.
+    if (settled.error === "payment_not_confirmable" && deps.flagReconciliation) {
+      await deps.flagReconciliation(row.id, "stale_success");
+    }
     // Settlement refused (e.g. subscription_conflict, or a racing callback
     // settled it first) → report the truth from the ledger.
     const after = await deps.fetchRow();

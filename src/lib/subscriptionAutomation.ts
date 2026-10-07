@@ -65,6 +65,8 @@ function snapshotFromCandidate(row: SubscriptionRowCandidate): SubscriptionSnaps
 export function evaluateExpiryCandidates(
   rows: SubscriptionRowCandidate[],
   nowMs: number = Date.now(),
+  /** Grace window (days) after period end during which past_due is retained. */
+  graceDays: number = 0,
 ): ExpiryCandidate[] {
   const out: ExpiryCandidate[] = [];
   for (const row of rows) {
@@ -85,6 +87,22 @@ export function evaluateExpiryCandidates(
     }
 
     if (!isTrial && periodMs !== null && periodMs <= nowMs && st === "active") {
+      const snap = snapshotFromCandidate(row);
+      const effectiveBefore = resolveEffectiveSubscription(snap, nowMs);
+      if (effectiveBefore.isExpired) {
+        out.push({ ...row, reason: "period_ended", effectiveBefore });
+      }
+      continue;
+    }
+
+    // M3-G: past_due is NOT a dead-end — once its grace window has ended it
+    // expires exactly like an active row past its period (audit: past_due
+    // rows previously never expired anywhere).
+    if (
+      st === "past_due" &&
+      periodMs !== null &&
+      periodMs + Math.max(graceDays, 0) * MS_DAY <= nowMs
+    ) {
       const snap = snapshotFromCandidate(row);
       const effectiveBefore = resolveEffectiveSubscription(snap, nowMs);
       if (effectiveBefore.isExpired) {

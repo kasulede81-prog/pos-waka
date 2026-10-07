@@ -82,6 +82,8 @@ export type CallbackSettleDeps = {
   cancel: (paymentId: string, reason: string) => Promise<RpcResultLike>;
   /** Optional durable rate limit; absent ⇒ not wired (documented limitation). */
   rateLimit?: (key: string) => Promise<{ allowed: boolean; retryAfterSeconds?: number }>;
+  /** M3-G — optional auditable reconciliation marker (stale_success etc.). */
+  flagReconciliation?: (paymentId: string, reason: string) => Promise<RpcResultLike>;
   maxBodyBytes?: number;
 };
 
@@ -321,6 +323,11 @@ export async function runCallbackSettlement(deps: CallbackSettleDeps): Promise<C
       payment_id: paymentId,
       reference: verified.reference,
     });
+    // M3-G: also persist an explicit, auditable operator-review marker
+    // (history + audit) — reconciliation must never be log-line-only.
+    if (deps.flagReconciliation && paymentId) {
+      await deps.flagReconciliation(paymentId, "stale_success");
+    }
     return body({ ok: false, reason: "stale_success", payment_id: paymentId }, 200);
   }
 

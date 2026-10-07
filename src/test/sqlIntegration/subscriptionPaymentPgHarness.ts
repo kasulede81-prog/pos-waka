@@ -42,6 +42,13 @@ const MIGRATION_CHAIN = [
   join(MIGRATIONS_DIR, "20261007120000_subscription_payment_read_rpcs.sql"),
   join(MIGRATIONS_DIR, "20261007150000_subscription_payment_provider_attach.sql"),
   join(MIGRATIONS_DIR, "20261007180000_subscription_payment_stale_replace_guard.sql"),
+  // M3-G hardening (later bodies supersede M3-A/C/E above — applied last):
+  join(MIGRATIONS_DIR, "20261007200000_subscription_payment_lock_order.sql"),
+  join(MIGRATIONS_DIR, "20261007210000_subscription_pricing_fail_closed.sql"),
+  join(MIGRATIONS_DIR, "20261007220000_subscription_payment_provider_claim.sql"),
+  join(MIGRATIONS_DIR, "20261007230000_subscription_payment_reconciliation.sql"),
+  join(MIGRATIONS_DIR, "20261007240000_subscription_lifecycle.sql"),
+  join(MIGRATIONS_DIR, "20261007250000_admin_mark_payment_guard.sql"),
 ];
 
 function readSql(path: string): string {

@@ -257,6 +257,35 @@ function resolveBaseSubscription(
     };
   }
 
+  /**
+   * M3-G: cancelled / paused / past_due rows LAPSE at period end.
+   *
+   * They previously fell through with the stored plan and isExpired:false —
+   * an indefinite paid entitlement that no job ever corrected (audit HIGH).
+   * Paid time still inside the period is honoured (no early cut); once the
+   * period has ended the entitlement is the free tier. The server-side
+   * `subscription_lifecycle_tick` converges the DB row to 'expired'.
+   * `past_due` is read from the raw row because normalize maps it to "none".
+   */
+  const rawStoredStatus = (row.status ?? "").trim().toLowerCase();
+  if (
+    (rawStatus === "cancelled" || rawStatus === "paused" || rawStoredStatus === "past_due") &&
+    periodEndMs !== null &&
+    periodEndMs <= nowMs
+  ) {
+    return {
+      planCode: "free",
+      status: "expired",
+      isTrial: false,
+      isPaid: false,
+      isExpired: true,
+      trialEndsAt,
+      expiresAt: row.current_period_end ?? null,
+      startsAt,
+      billingCycle,
+    };
+  }
+
   const isPaid =
     rawStatus === "active" &&
     (storedPlan === "starter" || storedPlan === "business" || storedPlan === "waka_plus");

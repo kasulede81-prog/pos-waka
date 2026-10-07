@@ -329,8 +329,11 @@ async function markGracePeriod(
 
 /** Expire subscriptions whose trial or period has ended (callable by future cron). */
 export async function processExpiry(input: ProcessExpiryInput = {}): Promise<SubscriptionEngineResult & { summary?: AutomationRunSummary }> {
+  const { settings } = await fetchPlatformSubscriptionSettings();
   const rows = await fetchSubscriptionRowCandidates(input.organizationId);
-  const candidates = evaluateExpiryCandidates(rows);
+  // M3-G: past_due rows expire once their grace window ends — pass the
+  // configured window so the evaluator matches the server lifecycle tick.
+  const candidates = evaluateExpiryCandidates(rows, Date.now(), settings.gracePeriodDays);
   const summary: AutomationRunSummary = { expired: 0, graceMarked: 0, reminders: 0, errors: [] };
 
   for (const candidate of candidates) {
