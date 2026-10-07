@@ -5,15 +5,17 @@ import pg from "pg";
 import type { SqlExec } from "./transferEnginePgHarness";
 
 /**
- * M1 — Payment Foundation SQL harness.
+ * M1/M2/M3-A — Subscription payment + entitlement SQL harness.
  *
  * Runs the production-shaped subscription/payment fixtures from
  * `loyaltyBootstrap.sql` under the production grant posture (010_grants.sql +
- * Supabase table defaults hand DML to `authenticated`), then replays the real
- * migration chain those functions live in — 039 (annual offers), 043 (admin
- * plan set), 113 (pricing campaigns), the M1 payment foundation, and the M1
- * follow-up — so tests exercise the same function bodies production runs, in
- * the same order, against the same privileges.
+ * Supabase table defaults hand DML to `authenticated`) plus the pre-M2 write
+ * policies, then replays the real migration chain those functions live in —
+ * 039 (annual offers), 043 (admin plan set), 044/057/078/097 (signup bundle,
+ * agent upgrades, growth/promo), 113 (pricing campaigns), the M1 payment
+ * foundation, the M1 follow-up, M2's entitlement lockdown, and M3-A's payment
+ * intent — so tests exercise the same function bodies production runs, in the
+ * same order, against the same privileges.
  */
 export type { SqlExec };
 
@@ -34,6 +36,7 @@ const MIGRATION_CHAIN = [
   join(MIGRATIONS_DIR, "20261006090000_subscription_payment_foundation.sql"),
   join(MIGRATIONS_DIR, "20261006140000_subscription_payment_followup.sql"),
   join(MIGRATIONS_DIR, "20261006160000_subscriptions_client_dml_lockdown.sql"),
+  join(MIGRATIONS_DIR, "20261007100000_subscription_payment_intent.sql"),
 ];
 
 function readSql(path: string): string {
