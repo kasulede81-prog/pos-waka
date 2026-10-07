@@ -9,6 +9,7 @@ import {
   parseSubscriptionHistoryRows,
 } from "../../lib/subscriptionHistory";
 import { BillingTimeline } from "./BillingTimeline";
+import { createCheckoutBackend, paymentStatusKey, toDisplayPayments, type DisplayPayment } from "../../lib/paymentCheckout";
 import { SubscriptionHistoryPanel } from "./SubscriptionHistoryPanel";
 
 type Props = {
@@ -68,6 +69,44 @@ export function AccountSubscriptionCenter({ lang, shopId: shopIdProp, showHistor
 
   const historyRows = useMemo(() => parseSubscriptionHistoryRows(auditRows), [auditRows]);
   const timelineEvents = useMemo(() => buildBillingTimelineEvents(historyRows), [historyRows]);
+
+  // M3-D payment history — safe projection only (server + local whitelist).
+  // Rows are tagged with the shop they were fetched for, so a shop switch
+  // never shows another shop's payments (and no setState runs synchronously
+  // in the effect body).
+  const [paymentsFor, setPaymentsFor] = useState<{
+    shopId: string;
+    rows: DisplayPayment[];
+    errorKey: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!shopId || authMode !== "supabase") return;
+    let live = true;
+    void (async () => {
+      const list = await createCheckoutBackend().listPayments(shopId);
+      if (!live) return;
+      if (list.ok !== true) {
+        setPaymentsFor({
+          shopId,
+          rows: [],
+          errorKey: typeof list.error === "string" ? list.error : "unavailable",
+        });
+        return;
+      }
+      setPaymentsFor({ shopId, rows: toDisplayPayments(list), errorKey: null });
+    })();
+    return () => {
+      live = false;
+    };
+  }, [shopId, authMode]);
+
+  const currentPayments =
+    paymentsFor && shopId && authMode === "supabase" && paymentsFor.shopId === shopId
+      ? paymentsFor
+      : null;
+  const paymentRows = currentPayments?.rows ?? [];
+  const paymentsErrorKey = currentPayments?.errorKey ?? null;
 
   if (loading) {
     return (
@@ -156,6 +195,38 @@ export function AccountSubscriptionCenter({ lang, shopId: shopIdProp, showHistor
         <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "billingHistoryTitle")}</p>
           <SubscriptionHistoryPanel lang={lang} rows={historyRows.slice(0, 15)} compact />
+        </article>
+      ) : null}
+
+      {shopId && authMode === "supabase" ? (
+        <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t(lang, "checkoutHistoryTitle")}</p>
+          {paymentsErrorKey ? (
+            <p role="alert" className="mt-3 text-sm font-semibold text-destructive">
+              {t(lang, paymentsErrorKey.startsWith("checkout") ? paymentsErrorKey : "checkoutUnavailable")}
+            </p>
+          ) : paymentRows.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">{t(lang, "checkoutHistoryEmpty")}</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {paymentRows.map((p) => (
+                <li
+                  key={`${p.reference ?? "no-ref"}-${p.createdAt}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2"
+                >
+                  <span className="font-mono text-[10px] text-muted-foreground">{fmtDate(p.createdAt)}</span>
+                  <span className="text-sm font-bold">
+                    UGX {p.amountUgx.toLocaleString("en-UG")}
+                    {p.planCode ? ` · ${p.planCode.replace("_", " ")}` : ""}
+                    {p.billingInterval
+                      ? ` · ${p.billingInterval === "year" ? t(lang, "checkoutAnnual") : t(lang, "checkoutMonthly")}`
+                      : ""}
+                  </span>
+                  <span className="text-sm font-black">{t(lang, paymentStatusKey(p.status))}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </article>
       ) : null}
     </div>

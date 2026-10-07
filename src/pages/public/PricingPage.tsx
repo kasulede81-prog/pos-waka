@@ -4,6 +4,7 @@ import { MarketingLayout } from "../../components/marketing/MarketingLayout";
 import { SeoHead } from "../../components/marketing/SeoHead";
 import { usePublicPricing } from "../../hooks/usePublicPricing";
 import { PlanPriceDisplay } from "../../components/pricing/PlanPriceDisplay";
+import { t } from "../../lib/i18n";
 import type { PaidPlanCode } from "../../lib/subscriptionPricing";
 import { pricingForPlan } from "../../lib/subscriptionPricing";
 
@@ -252,10 +253,10 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
               Create free account
             </Link>
             <Link
-              to="/support"
+              to="/upgrade"
               className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-white/80 px-6 py-3 text-sm font-black text-white"
             >
-              Contact support
+              {t(lang, "checkoutViewPlans")}
             </Link>
           </div>
         </section>

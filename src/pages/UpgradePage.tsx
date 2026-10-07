@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { resolveEffectiveSubscription } from "../lib/effectiveSubscription";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSubscription } from "../context/SubscriptionContext";
@@ -19,6 +19,9 @@ import {
   type SubscriptionPlanCode,
 } from "../lib/subscriptionEntitlements";
 import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
+import { CheckoutFlow } from "../components/subscription/CheckoutFlow";
+import { WakaButton } from "../components/ui/wakaPrimitives";
+import type { CheckoutCycle } from "../lib/paymentCheckout";
 
 const PLAN_ORDER: SubscriptionPlanCode[] = ["free", "starter", "business", "waka_plus"];
 
@@ -68,6 +71,28 @@ export function UpgradePage({ lang }: { lang: Language }) {
   const trialDaysRemaining = effective.daysRemaining;
   const renewalCountdown = getPaidPlanRenewalCountdown(snapshot);
   const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
+  const [checkoutPlan, setCheckoutPlan] = useState<SubscriptionPlanCode | null>(null);
+  const [checkoutCycle, setCheckoutCycle] = useState<CheckoutCycle>("monthly");
+  const checkoutTriggerRef = useRef<HTMLElement | null>(null);
+  // Shop pinned at checkout start; the server keeps the payment bound to it.
+  const shopId = snapshot.kind === "remote" && snapshot.row.shop_id ? snapshot.row.shop_id : null;
+
+  const openCheckout = useCallback(
+    (nextPlan: SubscriptionPlanCode, cycle: CheckoutCycle, trigger?: HTMLElement | null) => {
+      if (!isPaidPlan(nextPlan)) return; // Free is never a payment option
+      checkoutTriggerRef.current = trigger ?? null;
+      setCheckoutCycle(cycle);
+      setCheckoutPlan(nextPlan);
+    },
+    [setCheckoutCycle, setCheckoutPlan],
+  );
+
+  const closeCheckout = useCallback(() => {
+    setCheckoutPlan(null);
+    const trigger = checkoutTriggerRef.current;
+    checkoutTriggerRef.current = null;
+    if (trigger && typeof trigger.focus === "function") trigger.focus();
+  }, [setCheckoutPlan]);
 
   useEffect(() => {
     if (authMode !== "supabase") return;
@@ -228,13 +253,15 @@ export function UpgradePage({ lang }: { lang: Language }) {
                     {tTemplate(lang, "upgradePlanUsersLimit", { users: String(usersHintForPlan(plan)) })}
                   </p>
                 </div>
-                {isPaid && !isCurrent ? (
-                  <Link
-                    to="/pilot-support"
-                    className="mt-4 flex min-h-[48px] items-center justify-center rounded-2xl bg-foreground px-4 py-3 text-sm font-black text-background"
+                {isPaid ? (
+                  <WakaButton
+                    type="button"
+                    id={`plan-select-${plan}`}
+                    onClick={(event) => openCheckout(plan, "monthly", event.currentTarget)}
+                    className="mt-4 w-full min-h-[48px]"
                   >
-                    {t(lang, planTextKey(plan, "cta"))}
-                  </Link>
+                    {t(lang, isCurrent ? "checkoutRenew" : "checkoutSelect")}
+                  </WakaButton>
                 ) : (
                   <div className="mt-4 min-h-[48px]" />
                 )}
@@ -243,6 +270,20 @@ export function UpgradePage({ lang }: { lang: Language }) {
           })}
         </ul>
       </section>
+
+      {checkoutPlan && isPaidPlan(checkoutPlan) ? (
+        <CheckoutFlow
+          lang={lang}
+          shopId={shopId}
+          plan={checkoutPlan}
+          setPlan={(nextPlan) => setCheckoutPlan(nextPlan)}
+          initialCycle={checkoutCycle}
+          currentPlanCode={current}
+          effectiveStatus={effective.status}
+          hasFuturePeriodEnd={Boolean(renewalCountdown)}
+          onClose={closeCheckout}
+        />
+      ) : null}
 
       <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/90 p-5 shadow-sm">
         <h2 className="text-lg font-black text-waka-950">{t(lang, "upgradeYearlyTitle")}</h2>
@@ -263,19 +304,18 @@ export function UpgradePage({ lang }: { lang: Language }) {
                   <p className="mt-1 text-xs font-bold text-emerald-800">{t(lang, PAID_ANNUAL.find((p) => p.plan === plan)!.saveKey)}</p>
                 </>
               )}
+              <WakaButton
+                type="button"
+                onClick={(event) => openCheckout(plan, "yearly", event.currentTarget)}
+                className="mt-3 w-full min-h-[48px]"
+              >
+                {t(lang, plan === current ? "checkoutRenew" : "checkoutSelect")}
+              </WakaButton>
             </li>
             );
           })}
         </ul>
-        <Link
-          to="/pilot-support"
-          className="mt-4 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-waka-600 px-5 py-3 text-sm font-black text-white"
-        >
-          {t(lang, "upgradePaySoon")} →
-        </Link>
       </section>
-
-      <p className="rounded-2xl bg-waka-50 px-4 py-3 text-sm font-semibold text-waka-950">{t(lang, "upgradePaymentPrep")}</p>
 
       <Link
         to="/pilot-support"
