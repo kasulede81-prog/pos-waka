@@ -715,8 +715,15 @@ describe("M3-C — configuration posture", () => {
     expect(status!.split("[functions")[0]).toContain("verify_jwt = true");
   });
 
-  it("no provider callback endpoints are configured yet", () => {
-    expect(config).not.toContain("[functions.payment-callback");
+  it("callback endpoints (added by M3-E) are configured verify_jwt = false", () => {
+    // Supersedes the M3-C-era assertion that no callback entries exist: M3-E
+    // (approved scope) added them, still with no provider adapters registered.
+    const mtn = config.split("[functions.payment-callback-mtnmomo]")[1];
+    const airtel = config.split("[functions.payment-callback-airtelmoney]")[1];
+    expect(mtn).toBeTruthy();
+    expect(airtel).toBeTruthy();
+    expect(mtn!.split("[functions")[0]).toContain("verify_jwt = false");
+    expect(airtel!.split("[functions")[0]).toContain("verify_jwt = false");
     expect(config).not.toContain("[functions.payment-webhook");
   });
 

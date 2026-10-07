@@ -331,37 +331,41 @@ describe("M3-C — subscription_payment_provider_attach (real SQL)", () => {
 
   // ---- §9 stale-replacement finding -------------------------------------
 
-  it("T10 stale replacement cancels an initiated payment and M1 refuses to settle it", async () => {
+  it("T10 (post M3-E Option C): an initiated payment survives stale replacement, and a cancelled payment can never be settled", async () => {
     await resetSubA();
 
-    // 1–3. Payment A exists and was handed to the provider.
+    // Payment A exists and was handed to the provider.
     const a = await createIntent(internal(), { reference: "M3C-T10-A" });
     expect(a.ok).toBe(true);
     const attached = await attach(internal(), a.payment_id as string, "prov-inflight");
     expect(attached.ok).toBe(true);
 
-    // 4–5. A newer intent supersedes A (M3-A stale-replace).
+    // M3-E Option C: a newer intent no longer stale-replaces an initiated
+    // payment — it stays pending until the provider/status flow resolves it.
     const b = await createIntent(internal(), { reference: "M3C-T10-B" });
     expect(b.ok).toBe(true);
-    const rowA = await exec.query<{ status: string; status_reason: string | null }>(
-      `SELECT status, status_reason FROM public.subscription_payments WHERE id = $1`,
+    const rowA = await exec.query<{ status: string; provider_reference: string | null }>(
+      `SELECT status, metadata ->> 'provider_reference' AS provider_reference
+       FROM public.subscription_payments WHERE id = $1`,
       [a.payment_id],
     );
-    expect(rowA.rows[0]!.status).toBe("cancelled");
-    expect(rowA.rows[0]!.status_reason).toBe("stale_replaced");
+    expect(rowA.rows[0]!.status).toBe("pending");
+    expect(rowA.rows[0]!.provider_reference).toBe("prov-inflight");
     const rowB = await exec.query<{ status: string }>(
       `SELECT status FROM public.subscription_payments WHERE id = $1`,
       [b.payment_id],
     );
     expect(rowB.rows[0]!.status).toBe("pending");
 
-    // 6. The provider later reports success for A — M1 correctly refuses.
+    // Terminal-state guarantee (M1, unchanged): once A IS cancelled — by any
+    // path — settlement is permanently refused.
+    const cancelled = await rpc(internal(), "subscription_payment_cancel", [a.payment_id, "operator_cancel"]);
+    expect(cancelled.ok).toBe(true);
     const confirmA = await rpc(internal(), "subscription_payment_confirm", [a.payment_id, null, null]);
     expect(confirmA.ok).toBe(false);
     expect(String(confirmA.error)).toBe("payment_not_confirmable");
     expect(confirmA.status).toBe("cancelled");
 
-    // Ledger stayed consistent: A cancelled, B pending, no entitlement applied.
     expect((await exec.query<{ status: string }>(
       `SELECT status FROM public.subscription_payments WHERE id = $1`, [a.payment_id],
     )).rows[0]!.status).toBe("cancelled");
@@ -369,8 +373,8 @@ describe("M3-C — subscription_payment_provider_attach (real SQL)", () => {
       `SELECT status FROM public.subscription_payments WHERE id = $1`, [b.payment_id],
     )).rows[0]!.status).toBe("pending");
     expect(await historyCount(fx.subscriptionAId, "payment_confirmed")).toBe(0);
-    // Finding recorded for M3-E: reconciliation for provider-success-on-cancel
-    // is deliberately NOT implemented here.
+    // Option A reconciliation for provider-success-on-cancel lives in the M3-E
+    // callback core (stale_success) — covered there.
   });
 
   it("reports whether real two-session PostgreSQL ran", () => {

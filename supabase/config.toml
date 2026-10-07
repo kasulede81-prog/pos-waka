@@ -100,3 +100,14 @@ verify_jwt = true
 
 [functions.payment-status]
 verify_jwt = true
+
+# M3-E provider callbacks — anonymous at the HTTP layer because providers send
+# no Supabase JWT; authority is provider signature verification over the raw
+# body inside the shared callback core (fail-closed: the adapter registry is
+# empty until M3-F/M3-G, so these endpoints currently return
+# provider_not_configured / 503 without touching the ledger).
+[functions.payment-callback-mtnmomo]
+verify_jwt = false
+
+[functions.payment-callback-airtelmoney]
+verify_jwt = false
