@@ -49,6 +49,8 @@ const MIGRATION_CHAIN = [
   join(MIGRATIONS_DIR, "20261007230000_subscription_payment_reconciliation.sql"),
   join(MIGRATIONS_DIR, "20261007240000_subscription_lifecycle.sql"),
   join(MIGRATIONS_DIR, "20261007250000_admin_mark_payment_guard.sql"),
+  // Customer cancellation authority (supersedes the lock-order cancel body).
+  join(MIGRATIONS_DIR, "20261008090000_subscription_payment_cancel_customer_authority.sql"),
 ];
 
 function readSql(path: string): string {
