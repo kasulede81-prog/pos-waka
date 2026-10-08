@@ -7797,6 +7797,12 @@ const en: Dict = {
   checkoutRetryPayment: "Retry payment",
   checkoutContinuePayment: "Continue payment",
   checkoutCheckStatus: "Check status",
+  // Asking the provider. The failure wording is deliberately about the CHECK —
+  // a status request that could not complete never means the payment failed.
+  checkoutCheckingStatus: "Checking…",
+  checkoutStatusNotStarted: "This payment has not been sent to your provider yet. Use Continue payment.",
+  checkoutStatusUnavailable:
+    "We couldn't check the payment status just now. It is still pending — please try again.",
   checkoutClose: "Back to plans",
   // Abandoning a pending payment. The payer must always have a way out; the
   // failure wording deliberately does not claim the payment was cancelled.

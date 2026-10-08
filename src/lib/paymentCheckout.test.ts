@@ -9,15 +9,37 @@
  * attempt, refresh recovery, terminal-state polling, and no internal-field
  * leakage.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+/**
+ * The REAL backend's provider call is exercised below, so `supabase` is mocked
+ * with just what `createCheckoutBackend().checkStatus` touches. Every other test
+ * in this file drives the injected fake backend and never reads this mock.
+ */
+const supabaseMock = vi.hoisted(() => ({
+  rpc: vi.fn(async () => ({ data: null, error: null })),
+  auth: {
+    getSession: vi.fn(async () => ({ data: { session: { access_token: "test-access-token" } } })),
+  },
+}));
+vi.mock("./supabase", () => ({ hasSupabaseConfig: true, supabase: supabaseMock }));
+
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   CHECKOUT_CANCEL_REASON,
   CHECKOUT_PLANS,
   CHECKOUT_PROVIDER_ID,
+  POLL_INITIAL_DELAY_MS,
   POLL_MAX_DELAY_MS,
+  POLL_PROVIDER_INITIAL_DELAY_MS,
+  POLL_PROVIDER_MAX_DELAY_MS,
   canPayForPlan,
   checkoutActionKey,
   checkoutReducer,
+  createCheckoutBackend,
   classifyCheckoutError,
   classifyInitiateResult,
   createCheckoutIntent,
@@ -63,12 +85,12 @@ function quoteResp(overrides: Record<string, unknown> = {}): RpcLike {
   };
 }
 
-type Queue = Partial<Record<"quote" | "create" | "initiate" | "get" | "list" | "cancel", RpcLike[]>>;
+type Queue = Partial<Record<"quote" | "create" | "initiate" | "get" | "list" | "cancel" | "checkStatus", RpcLike[]>>;
 
 function makeBackend(queue: Queue = {}): CheckoutBackend & {
   calls: Record<string, unknown[][]>;
 } {
-  const calls: Record<string, unknown[][]> = { quote: [], create: [], initiate: [], get: [], list: [], cancel: [] };
+  const calls: Record<string, unknown[][]> = { quote: [], create: [], initiate: [], get: [], list: [], cancel: [], checkStatus: [] };
   const next = (key: keyof Queue, fallback: RpcLike): RpcLike => {
     const list = queue[key];
     if (list && list.length > 0) return list.shift() as RpcLike;
@@ -103,6 +125,12 @@ function makeBackend(queue: Queue = {}): CheckoutBackend & {
     async listPayments(shopId) {
       calls.list.push([shopId]);
       return next("list", { ok: true, payments: [], next_cursor: null });
+    },
+    async checkStatus(paymentId) {
+      calls.checkStatus.push([paymentId]);
+      // The authoritative provider-status path (payment-status Edge Function).
+      // Default: the provider still says pending.
+      return next("checkStatus", { ok: true, payment_id: paymentId, status: "pending" });
     },
     async cancel(paymentId) {
       calls.cancel.push([paymentId]);
@@ -899,5 +927,210 @@ describe("G3 — cancel a pending payment", () => {
     // Same intent, same id — the cancel path has no intent-creation branch at all.
     expect(after.intent?.paymentId).toBe(s.intent?.paymentId);
     expect(after.intent?.reference).toBe(s.intent?.reference);
+  });
+});
+
+/**
+ * CUSTOMER-FACING PROVIDER STATUS — the connection that was missing.
+ *
+ * `payment-status` (→ runStatusFlow → MTN queryStatus → settle) was implemented
+ * and deployed but had ZERO callers, so a pending checkout could never learn the
+ * provider's outcome: every poll re-read the DKASU row, which nothing had moved.
+ * These pin the two things that now reach the provider, and pin that neither
+ * lets the browser decide anything.
+ */
+describe("provider status — Check status and polling reach MTN", () => {
+  it("A. Check status asks the provider, not just the ledger", async () => {
+    const backend = makeBackend({
+      checkStatus: [{ ok: true, payment_id: "pay-1", status: "pending" }],
+    });
+
+    const result = await backend.checkStatus("pay-1");
+
+    expect(backend.calls.checkStatus).toEqual([["pay-1"]]);
+    expect(result.status).toBe("pending");
+    // The ledger read is a DIFFERENT call and is not what the check uses.
+    expect(backend.calls.get).toEqual([]);
+  });
+
+  it("B. the provider call carries only the payment id — no credentials, no endpoints", async () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "paymentCheckout.ts"),
+      "utf8",
+    );
+    const impl = src.slice(src.indexOf("async checkStatus(paymentId)"));
+
+    // Only the payment id goes in the body.
+    expect(impl).toContain("JSON.stringify({ payment_id: paymentId })");
+    // The session JWT is attached, which is what authorizes the caller server-side.
+    expect(impl).toContain("Authorization: `Bearer ${token}`");
+    expect(impl).toContain("data.session?.access_token");
+    // No provider secret or provider host ever reaches the browser.
+    expect(impl).not.toContain("MTN_MOMO");
+    expect(impl).not.toContain("momodeveloper");
+    expect(impl).not.toContain("subscriptionKey");
+    expect(impl).not.toContain("apiUser");
+  });
+
+  it("C+D+E. a provider outcome is adopted through the existing state machine", () => {
+    const cases: Array<[string, string]> = [
+      ["confirmed", "confirmed"],
+      ["failed", "failed"],
+      ["pending", "pending_provider"],
+    ];
+    for (const [providerStatus, expectedPhase] of cases) {
+      const s = checkoutReducer(pendingState("pending_provider"), {
+        type: "POLL_RECEIVED",
+        status: providerStatus,
+        statusReason: null,
+      });
+      expect(s.phase, `provider said ${providerStatus}`).toBe(expectedPhase);
+    }
+  });
+
+  it("F. a status-check failure never fails the payment", () => {
+    // Provider unreachable / timed out / malformed → the row is untouched and the
+    // screen stays pending with a retry, never "failed".
+    const s = checkoutReducer(pendingState("pending_provider"), { type: "POLL_ERROR" });
+    expect(s.phase).toBe("pending_provider");
+    expect(s.paymentStatus).not.toBe("failed");
+  });
+
+  it("G. an inaccessible payment is not a status the UI will act on", async () => {
+    const backend = makeBackend({
+      checkStatus: [{ ok: false, error: "payment_not_found" }],
+    });
+
+    const result = await backend.checkStatus("pay-1");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("payment_not_found");
+  });
+
+  it("H+I. repeated checks are idempotent and ride the existing guards", async () => {
+    const backend = makeBackend({
+      checkStatus: [
+        { ok: true, payment_id: "pay-1", status: "pending" },
+        { ok: true, payment_id: "pay-1", status: "confirmed" },
+      ],
+    });
+
+    const first = await backend.checkStatus("pay-1");
+    const second = await backend.checkStatus("pay-1");
+
+    // The second answer supersedes the first — the server settles once and the
+    // client simply adopts whatever it is told, twice in a row if asked.
+    expect(first.status).toBe("pending");
+    expect(second.status).toBe("confirmed");
+    expect(backend.calls.checkStatus).toHaveLength(2);
+  });
+
+  it("J. the poller uses the authoritative path and is not a second state machine", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../components/subscription/CheckoutFlow.tsx"),
+      "utf8",
+    );
+    const effect = src.slice(
+      src.indexOf("const poller = createPaymentPoller({"),
+      src.indexOf("pollerRef.current = poller"),
+    );
+
+    // Polls the provider, not the ledger.
+    expect(effect).toContain("backend.checkStatus(id)");
+    expect(effect).not.toContain("backend.getPayment");
+    // The provider cadence, not the ledger one — one query per attempt, bounded.
+    expect(effect).toContain("initialDelayMs: POLL_PROVIDER_INITIAL_DELAY_MS");
+    expect(effect).toContain("maxDelayMs: POLL_PROVIDER_MAX_DELAY_MS");
+    // Still the ONE existing poller: no bespoke setInterval / second loop.
+    expect(src.match(/createPaymentPoller\(/g) ?? []).toHaveLength(1);
+    expect(src).not.toContain("setInterval");
+  });
+
+  it("J2. the provider cadence is gentler than the ledger cadence", () => {
+    expect(POLL_PROVIDER_INITIAL_DELAY_MS).toBeGreaterThan(POLL_INITIAL_DELAY_MS);
+    expect(POLL_PROVIDER_MAX_DELAY_MS).toBeGreaterThan(POLL_MAX_DELAY_MS);
+    // …but still bounded: never faster than every 30s once it settles.
+    expect(nextPollDelay(99, POLL_PROVIDER_INITIAL_DELAY_MS, POLL_PROVIDER_MAX_DELAY_MS)).toBe(
+      POLL_PROVIDER_MAX_DELAY_MS,
+    );
+  });
+
+  it("not_initiated is a pending answer, not an error to give up on", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../components/subscription/CheckoutFlow.tsx"),
+      "utf8",
+    );
+    const onPoll = src.slice(src.indexOf("onPoll: (r) => {"), src.indexOf("pollerRef.current = poller"));
+    // Resets the error streak instead of counting toward the give-up threshold.
+    expect(onPoll).toContain('r.error === "not_initiated"');
+    expect(onPoll).toContain('dispatch({ type: "POLL_ERRORS_RESET" })');
+  });
+
+  it("K. Check status cannot be fired twice concurrently", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../components/subscription/CheckoutFlow.tsx"),
+      "utf8",
+    );
+    const handler = src.slice(src.indexOf("const onCheckStatus"), src.indexOf("const onCancelPayment"));
+    // Guarded on the in-flight flag, and the button is disabled while it runs.
+    expect(handler).toContain("if (!paymentId || statusChecking) return;");
+    expect(src).toContain("disabled={statusChecking}");
+    expect(src).toContain("aria-busy={statusChecking}");
+  });
+});
+
+describe("provider status — the REAL backend reaches payment-status", () => {
+  const PAY = "11111111-1111-4111-8111-111111111111";
+
+  it("A2. POSTs /functions/v1/payment-status with the session JWT and ONLY the payment id", async () => {
+    vi.stubEnv("VITE_SUPABASE_URL", "https://proj.supabase.co");
+    vi.stubEnv("VITE_SUPABASE_ANON_KEY", "anon-key");
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true, payment_id: PAY, status: "confirmed" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    supabaseMock.rpc.mockClear();
+
+    try {
+      const backend = createCheckoutBackend();
+      const result = await backend.checkStatus(PAY);
+
+      expect(result).toMatchObject({ ok: true, status: "confirmed" });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe("https://proj.supabase.co/functions/v1/payment-status");
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(String(init.body))).toEqual({ payment_id: PAY });
+      // The caller's own JWT is what authorizes the query server-side.
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-access-token");
+
+      // …and it does NOT fall back to the ledger read that could never answer.
+      expect(supabaseMock.rpc).not.toHaveBeenCalledWith("subscription_payment_get", expect.anything());
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("A3. a status outage stays a status outage — never a payment failure", async () => {
+    vi.stubEnv("VITE_SUPABASE_URL", "https://proj.supabase.co");
+    vi.stubEnv("VITE_SUPABASE_ANON_KEY", "anon-key");
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("network down"))));
+
+    try {
+      const result = await createCheckoutBackend().checkStatus(PAY);
+      expect(result.ok).toBe(false);
+      expect(result.retryable).toBe(true);
+      // Nothing here can mark a payment failed — only the server's settlement
+      // RPCs can, and they were never reached.
+      expect(result.status).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -600,6 +600,14 @@ export type CheckoutBackend = {
     amountUgx: number;
   }): Promise<RpcLike>;
   initiate(i: { paymentId: string; phone: string }): Promise<RpcLike>;
+  /**
+   * ASK THE PROVIDER. This is `payment-status`, not the ledger read below: it
+   * authorizes the caller, queries MTN for the transaction, and settles through
+   * the existing confirm/fail/cancel RPCs. The browser never learns a provider
+   * credential or endpoint — only the payment id goes out.
+   */
+  checkStatus(paymentId: string): Promise<RpcLike>;
+  /** Ledger read only (`subscription_payment_get`). Never contacts the provider. */
   getPayment(paymentId: string): Promise<RpcLike>;
   listPayments(shopId: string): Promise<RpcLike>;
   /**
@@ -692,6 +700,46 @@ export function createCheckoutBackend(): CheckoutBackend {
         }
       } catch {
         return { ok: false, error: "initiate_timeout", retryable: true };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    async checkStatus(paymentId) {
+      if (!hasSupabaseConfig || !supabase) return { ok: false, error: "offline" };
+      const base = String(import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "");
+      const anon = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "");
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      // No session, no provider query: payment-status authorizes the caller with
+      // this JWT, so sending nothing would only earn a 401.
+      if (!base || !anon || !token) return { ok: false, error: "unauthorized" };
+
+      const controller = new AbortController();
+      // Above the server's own 12s provider budget, so a slow MTN leg surfaces
+      // as the server's `provider_query_timeout` rather than as our abort.
+      const timer = setTimeout(() => controller.abort(), 20_000);
+      try {
+        const res = await fetch(`${base}/functions/v1/payment-status`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: anon,
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ payment_id: paymentId }),
+          signal: controller.signal,
+        });
+        const text = await res.text();
+        if (!text) return { ok: false, error: "provider_query_timeout", retryable: true };
+        try {
+          return JSON.parse(text) as RpcLike;
+        } catch {
+          return { ok: false, error: "provider_query_failed", retryable: true };
+        }
+      } catch {
+        // Transport failure — NEVER a payment failure. The ledger is untouched
+        // and the row stays pending; the caller may simply try again.
+        return { ok: false, error: "provider_query_failed", retryable: true };
       } finally {
         clearTimeout(timer);
       }
@@ -916,6 +964,19 @@ export type PollerDeps = {
 export const POLL_INITIAL_DELAY_MS = 4_000;
 export const POLL_MAX_DELAY_MS = 15_000;
 export const POLL_MAX_CONSECUTIVE_ERRORS = 3;
+
+/**
+ * Cadence for polling that reaches the PROVIDER (`payment-status` → MTN), as
+ * opposed to a local ledger read.
+ *
+ * Same poller, same backoff shape — deliberately gentler numbers, because each
+ * attempt is now a real MTN transaction-status query rather than a database
+ * read. Slower to start (the push has just been accepted, so the first seconds
+ * are usually still pending) and it settles at 30s instead of 15s, which keeps
+ * a long-pending payment to a couple of queries a minute rather than four.
+ */
+export const POLL_PROVIDER_INITIAL_DELAY_MS = 6_000;
+export const POLL_PROVIDER_MAX_DELAY_MS = 30_000;
 
 export function nextPollDelay(attempt: number, initial = POLL_INITIAL_DELAY_MS, max = POLL_MAX_DELAY_MS): number {
   const n = Math.max(0, Math.floor(attempt));

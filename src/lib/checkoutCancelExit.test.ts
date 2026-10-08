@@ -28,6 +28,20 @@ const src = readFileSync(
 /** Comments stripped, so an assertion about CODE is neither satisfied nor defeated by prose. */
 const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
+/**
+ * The cancel handler's own body.
+ *
+ * Scoped deliberately: a sibling handler (the status check) also branches on
+ * `result.ok === true`, so an unscoped search would silently assert against the
+ * wrong callback.
+ */
+const cancelHandler = (() => {
+  const start = code.indexOf("const onCancelPayment");
+  if (start === -1) return "";
+  const end = code.indexOf("\n  const ", start + 1);
+  return code.slice(start, end === -1 ? undefined : end);
+})();
+
 /** The JSX branch that renders the pending screen — anchored on the JSX, not the `const pending =` helper. */
 const pendingBlock = (() => {
   const start = code.indexOf('{state.phase === "pending_provider" && state.intent');
@@ -78,20 +92,24 @@ describe("G3 — a pending checkout can always be exited", () => {
     // The success branch returns early; everything AFTER that return is the
     // failure path, and it must not close the checkout — otherwise a refusal
     // would look identical to "we left because it worked".
-    const successStart = code.indexOf("result.ok === true");
-    const successReturn = code.indexOf("return;", successStart);
+    expect(cancelHandler).not.toBe("");
+    const successStart = cancelHandler.indexOf("result.ok === true");
+    const successReturn = cancelHandler.indexOf("return;", successStart);
     expect(successReturn).toBeGreaterThan(successStart);
-    expect(code.slice(successStart, successReturn)).toContain("closeFlow()");
+    expect(cancelHandler.slice(successStart, successReturn)).toContain("closeFlow()");
 
-    const failureBranch = code.slice(successReturn, code.indexOf("} finally {", successReturn));
+    const failureBranch = cancelHandler.slice(
+      successReturn,
+      cancelHandler.indexOf("} finally {", successReturn),
+    );
     expect(failureBranch).toContain("CANCEL_FAILED");
     expect(failureBranch).not.toContain("closeFlow");
   });
 
   it("successful cancellation returns the payer to plans", () => {
-    const successBranch = code.slice(
-      code.indexOf("result.ok === true"),
-      code.indexOf("CANCEL_FAILED"),
+    const successBranch = cancelHandler.slice(
+      cancelHandler.indexOf("result.ok === true"),
+      cancelHandler.indexOf("CANCEL_FAILED"),
     );
     expect(successBranch).toContain("closeFlow()");
     // closeFlow resets local state and unmounts the flow, which stops the poller.

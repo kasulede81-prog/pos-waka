@@ -35,6 +35,8 @@ import {
   isDowngradePlan,
   needsInitiateAction,
   newAttemptReference,
+  POLL_PROVIDER_INITIAL_DELAY_MS,
+  POLL_PROVIDER_MAX_DELAY_MS,
   paymentStatusKey,
   quoteCheckout,
   recoverLatestPendingPayment,
@@ -72,10 +74,12 @@ export function CheckoutFlow({
   const [state, dispatch] = useReducer(checkoutReducer, initialCheckoutState(initialCycle));
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [pollNonce, setPollNonce] = useState(0);
   /** Cancellation confirmation + its in-flight state (UI-local; the ledger owns the outcome). */
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  /** An explicit provider-status check: in-flight, and why it last failed. */
+  const [statusChecking, setStatusChecking] = useState(false);
+  const [statusErrorKey, setStatusErrorKey] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const inFlightRef = useRef(false);
   const pollerRef = useRef<PaymentPoller | null>(null);
@@ -130,17 +134,34 @@ export function CheckoutFlow({
     };
   }, [backend, shopId]);
 
-  // Poll subscription_payment_get while pending; stop on terminal/unmount.
+  /**
+   * While pending, ask the PROVIDER (payment-status → MTN) on the poller's
+   * backoff. One authoritative call per attempt — deliberately not a ledger read
+   * plus a separate provider query, so the displayed state always comes from the
+   * same place the settlement did.
+   *
+   * The cadence is the provider's, not the ledger's: each attempt is a real MTN
+   * query (see POLL_PROVIDER_*), and the poller's own backoff, terminal stop and
+   * give-up-after-N-errors behaviour are unchanged.
+   */
   useEffect(() => {
     if (state.phase !== "pending_provider" || !state.intent?.paymentId) return;
     const poller = createPaymentPoller({
-      getPayment: (id) => backend.getPayment(id),
+      getPayment: (id) => backend.checkStatus(id),
+      initialDelayMs: POLL_PROVIDER_INITIAL_DELAY_MS,
+      maxDelayMs: POLL_PROVIDER_MAX_DELAY_MS,
       onPoll: (r) => {
         if (r.ok && typeof r.status === "string") {
           dispatch({ type: "POLL_RECEIVED", status: r.status, statusReason: r.statusReason ?? null });
-        } else {
-          dispatch({ type: "POLL_ERROR" });
+          return;
         }
+        // Not an error: nothing was ever pushed to the provider, so there is
+        // nothing to ask about yet. Stay pending and keep the schedule running.
+        if (r.error === "not_initiated") {
+          dispatch({ type: "POLL_ERRORS_RESET" });
+          return;
+        }
+        dispatch({ type: "POLL_ERROR" });
       },
     });
     pollerRef.current = poller;
@@ -149,7 +170,9 @@ export function CheckoutFlow({
       poller.stop();
       if (pollerRef.current === poller) pollerRef.current = null;
     };
-  }, [backend, state.phase, state.intent?.paymentId, pollNonce]);
+    // No "nonce": an explicit Check status calls the provider directly rather
+    // than re-arming this effect, so there is one path, not two.
+  }, [backend, state.phase, state.intent?.paymentId]);
 
   // A server-side sync is requested (payment_not_pending / conflict): adopt
   // the real ledger state instead of guessing.
@@ -277,6 +300,45 @@ export function CheckoutFlow({
     dispatch({ type: "RESET" });
     onClose();
   }, [onClose]);
+
+  /**
+   * Ask the provider where the payment actually stands.
+   *
+   * This is the ONLY thing that can move a pending checkout forward: the ledger
+   * read below can only report what DKASU already knows, and DKASU only learns
+   * the outcome from MTN — by callback, or by this query. `payment-status`
+   * authorizes this user, asks MTN, and settles through the existing
+   * confirm/fail/cancel RPCs, so the browser never decides anything.
+   */
+  const onCheckStatus = useCallback(async () => {
+    const paymentId = state.intent?.paymentId;
+    if (!paymentId || statusChecking) return; // one check at a time; no duplicate clicks
+    setStatusChecking(true);
+    setStatusErrorKey(null);
+    try {
+      const result = await backend.checkStatus(paymentId);
+      if (result.ok === true && typeof result.status === "string") {
+        dispatch({
+          type: "POLL_RECEIVED",
+          status: result.status,
+          statusReason: typeof result.status_reason === "string" ? result.status_reason : null,
+        });
+        return;
+      }
+      // `not_initiated` is a real answer, not a failure: the payment has never
+      // been pushed to MTN (an initiate that timed out). Still pending.
+      if (result.error === "not_initiated") {
+        setStatusErrorKey("checkoutStatusNotStarted");
+        return;
+      }
+      setStatusErrorKey("checkoutStatusUnavailable");
+    } catch {
+      // A failed CHECK is not a failed PAYMENT. The row stays pending.
+      setStatusErrorKey("checkoutStatusUnavailable");
+    } finally {
+      setStatusChecking(false);
+    }
+  }, [backend, state.intent?.paymentId, statusChecking]);
 
   /**
    * Abandon a pending payment at the payer's request.
@@ -539,10 +601,13 @@ export function CheckoutFlow({
             ) : null}
             <WakaButton
               type="button"
-              onClick={() => setPollNonce((n) => n + 1)}
+              onClick={() => void onCheckStatus()}
+              disabled={statusChecking}
+              loading={statusChecking}
+              aria-busy={statusChecking}
               className="min-h-[48px]"
             >
-              {t(lang, "checkoutCheckStatus")}
+              {statusChecking ? t(lang, "checkoutCheckingStatus") : t(lang, "checkoutCheckStatus")}
             </WakaButton>
           </div>
           {state.initiateErrorKey ? (
@@ -566,6 +631,12 @@ export function CheckoutFlow({
               {t(lang, "checkoutCancelPayment")}
             </WakaButton>
           </div>
+
+          {statusErrorKey ? (
+            <p role="status" className="text-sm font-semibold text-muted-foreground">
+              {t(lang, statusErrorKey)}
+            </p>
+          ) : null}
 
           {state.cancelErrorKey ? (
             <p role="alert" className="text-sm font-semibold text-destructive">
