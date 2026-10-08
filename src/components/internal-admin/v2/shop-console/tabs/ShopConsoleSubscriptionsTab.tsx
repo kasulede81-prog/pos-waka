@@ -24,7 +24,7 @@ function fmtUgx(n: number | null | undefined): string {
 }
 
 export function ShopConsoleSubscriptionsTab({ ctx }: Props) {
-  const { lang, detail, canSubs, previewMode, rescue, loadRescueData } = ctx;
+  const { lang, detail, canSubs, canSubsLifecycle, previewMode, rescue, loadRescueData } = ctx;
 
   useEffect(() => {
     void loadRescueData();
@@ -51,6 +51,7 @@ export function ShopConsoleSubscriptionsTab({ ctx }: Props) {
           lang={lang}
           detail={detail}
           canManage={canSubs}
+          canManageLifecycle={canSubsLifecycle}
           busy={ctx.busy}
           previewMode={previewMode}
           onActionComplete={() => void ctx.loadShop()}

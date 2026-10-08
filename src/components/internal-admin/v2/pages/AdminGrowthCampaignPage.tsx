@@ -20,6 +20,7 @@ import {
   type GrowthReferralCodeWithUsage,
 } from "../../../../lib/growthCampaignsAdmin";
 import { WakaSwitch } from "../../../enterprise/WakaSwitch";
+import { adminPermissions } from "../adminRoles";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -92,7 +93,16 @@ const inputCls =
   "w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground outline-none focus:border-waka-500";
 const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-muted-foreground";
 
-export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
+export function AdminGrowthCampaignPage({ adminRow, previewMode = false }: Props) {
+  /**
+   * SERVER-MIRRORING GATE. `_growth_require_admin` requires internal staff AND a
+   * role in ['super_admin','subscriptions_admin','finance_admin','operations_admin']
+   * (`097_growth_campaigns.sql:125-137`), but this page previously read no role
+   * at all — `adminRow` was in its props and never used — so every internal
+   * admin, including support_admin and field_agent, saw a fully editable page
+   * whose saves raised Forbidden.
+   */
+  const canManage = adminPermissions(adminRow).canManageGrowthCampaigns || previewMode;
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<GrowthCampaign[]>([]);
   const [codes, setCodes] = useState<GrowthReferralCodeWithUsage[]>([]);
@@ -418,7 +428,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
 
         <button
           type="button"
-          disabled={saving || previewMode}
+          disabled={saving || !canManage}
           onClick={() => void handleSaveCampaign()}
           className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-waka-600 px-4 text-sm font-black text-white hover:bg-waka-700 disabled:opacity-60"
         >
@@ -543,7 +553,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
           <div className="flex items-end gap-2">
             <button
               type="button"
-              disabled={savingCode || previewMode}
+              disabled={savingCode || !canManage}
               onClick={() => void handleSaveCode()}
               className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-waka-600 px-4 text-sm font-black text-white hover:bg-waka-700 disabled:opacity-60"
             >

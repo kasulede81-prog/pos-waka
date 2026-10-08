@@ -460,6 +460,12 @@ export function useShopConsoleState(
     perms,
     canSupport,
     canSubs,
+    /**
+     * Narrower than `canSubs`: lifecycle changes (extend trial / pause / resume
+     * / cancel) are refused by the server for finance_admin and
+     * operations_admin, so the UI must not offer them.
+     */
+    canSubsLifecycle: perms.canManageSubscriptionLifecycle,
     subId,
     loadShop,
     loadRescueData,

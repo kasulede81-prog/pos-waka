@@ -74,7 +74,7 @@ export function AdminPlatformSubscriptionSettingsPage({ adminRow, previewMode = 
     <div className="mx-auto max-w-2xl space-y-4 pb-8">
       <header>
         <p className="text-[10px] font-black uppercase tracking-widest text-waka-800">Platform Settings</p>
-        <h1 className="mt-1 text-xl font-black text-foreground">Subscription Settings</h1>
+        <h1 className="mt-1 text-xl font-black text-foreground">Subscription Policy</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Billing platform configuration — no payment provider integration in this phase.
         </p>

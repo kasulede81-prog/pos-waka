@@ -5,7 +5,7 @@ import type { ShopConsoleState } from "../useShopConsoleState";
 type Props = { ctx: ShopConsoleState };
 
 export function ShopConsoleVisionTab({ ctx }: Props) {
-  const { detail, canSubs, previewMode } = ctx;
+  const { detail, perms, previewMode } = ctx;
   if (!detail) return null;
 
   return (
@@ -15,7 +15,16 @@ export function ShopConsoleVisionTab({ ctx }: Props) {
         summary="Included with WAKA subscription — capacity overrides, installer, future add-ons"
         defaultOpen
       >
-        <ShopVisionSettingsPanel shopId={detail.shop.id} canManage={canSubs} previewMode={previewMode} />
+        {/*
+          `canManageShopVision`, NOT `canShopSubs`: the server accepts only
+          super_admin | operations_admin here, so shipping/subscriptions roles
+          were being shown an editable panel that always failed to save.
+        */}
+        <ShopVisionSettingsPanel
+          shopId={detail.shop.id}
+          canManage={perms.canManageShopVision}
+          previewMode={previewMode}
+        />
       </AdminCollapsible>
     </div>
   );

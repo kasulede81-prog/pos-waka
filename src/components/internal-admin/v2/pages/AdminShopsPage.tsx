@@ -15,6 +15,7 @@ import { computeShopHealth } from "../../../../lib/internalOpsIntelligence";
 import { adminPermissions } from "../adminRoles";
 import { MassActionBar, SupportTagsRow } from "../ops/OpsWidgets";
 import { EmptyState, ShopCard } from "../primitives";
+import { EnterpriseErrorState } from "../../../enterprise/EnterpriseErrorState";
 
 const SHOPS_PAGE_SIZE = 25;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -57,6 +58,12 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
   const [serverRows, setServerRows] = useState<RecentShopRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  /** Bumped to re-run the search effect after a failure. */
+  const [searchNonce, setSearchNonce] = useState(0);
+  // The raw RPC text is a diagnostic, not user-facing copy.
+  useEffect(() => {
+    if (searchError) console.error("[admin-shops] search failed", searchError);
+  }, [searchError]);
   const [listLoading, setListLoading] = useState(!previewMode);
   const [loadingMore, setLoadingMore] = useState(false);
   const requestSeq = useRef(0);
@@ -98,7 +105,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, previewMode]);
+  }, [debouncedSearch, previewMode, searchNonce]);
 
   const loadMore = async () => {
     if (previewMode || loadingMore || !hasMore || searchError) return;
@@ -189,11 +196,11 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
     setSearchError(result.error);
   };
 
-  const emptyMessage = searchError
-    ? `Shop search failed. ${searchError}`
-    : debouncedSearch.trim()
-      ? "No shops match this search."
-      : "No shops match filters.";
+  // A search failure is handled by its own error state above, so this is only
+  // ever reached with a successful, genuinely empty result.
+  const emptyMessage = debouncedSearch.trim()
+    ? "No shops match this search."
+    : "No shops match filters.";
 
   return (
     <div className="space-y-4 pb-20">
@@ -287,7 +294,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
       ) : null}
 
       {searchError && filtered.length ? (
-        <p className="text-sm font-semibold text-red-700">Shop search failed. {searchError}</p>
+        <p className="text-sm font-semibold text-red-700">Shop search failed. Some results may be missing.</p>
       ) : null}
 
       {listLoading && !filtered.length ? (
@@ -297,7 +304,17 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           ))}
         </div>
       ) : searchError && !filtered.length ? (
-        <EmptyState>{emptyMessage}</EmptyState>
+        /*
+          A failed search is an ERROR, not an absence of shops — rendered as
+          such, and the raw RPC text stays in the log rather than on an
+          operator's screen (Phase 4).
+        */
+        <EnterpriseErrorState
+          title="Shop search failed."
+          description="We couldn't load the shop list just now. Check your connection and try again."
+          retryLabel="Retry"
+          onRetry={() => setSearchNonce((n) => n + 1)}
+        />
       ) : filtered.length === 0 ? (
         <EmptyState>{emptyMessage}</EmptyState>
       ) : (

@@ -32,6 +32,11 @@ import {
 } from "../lib/subscriptionEngine";
 import { fetchPublicSubscriptionPricing } from "../lib/pricingCampaignsAdmin";
 import {
+  DEFAULT_PLATFORM_SUBSCRIPTION_SETTINGS,
+  fetchPlatformSubscriptionSettings,
+  type PlatformSubscriptionSettings,
+} from "../lib/platformSubscriptionSettings";
+import {
   buildDefaultPublicPricing,
   CANONICAL_PLAN_PRICES,
   type PublicPricingSnapshot,
@@ -105,6 +110,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     busy,
     canSupport,
     canSubs,
+    canSubsLifecycle,
     subId,
     executeAction,
     previewMode,
@@ -114,7 +120,18 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     shopConsoleTabFromLocation(location.search, location.hash, shopId),
   );
   const [actionSheet, setActionSheet] = useState(false);
-  const [planControlDays, setPlanControlDays] = useState(30);
+  /**
+   * Durations come from the SAME source the Subscriptions tab uses
+   * (`admin_update_platform_subscription_settings`), never a local constant.
+   *
+   * This control used to hold its own `useState(30)` whose only setter call sat
+   * behind a `!== 30` guard that could never be true — so "Apply plan" always
+   * granted exactly 30 days and silently ignored the platform's configured
+   * monthly/yearly durations. Two controls, one screen, two answers.
+   */
+  const [platformSettings, setPlatformSettings] = useState<PlatformSubscriptionSettings>(
+    DEFAULT_PLATFORM_SUBSCRIPTION_SETTINGS,
+  );
   // H2: the "Mark paid" label/amount must come from the same server-side
   // price source customers are shown (canonical price book + active campaign),
   // never from a client-side constant that can drift from it.
@@ -126,6 +143,10 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     let live = true;
     void fetchPublicSubscriptionPricing().then((snapshot) => {
       if (live) setPublicPricing(snapshot);
+    });
+    // Same authoritative duration source the Subscriptions tab reads.
+    void fetchPlatformSubscriptionSettings().then((r) => {
+      if (live) setPlatformSettings(r.settings);
     });
     return () => {
       live = false;
@@ -162,17 +183,29 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     return buildShopConsoleIntel(detail, ctx.auditRowsLight);
   }, [detail, ctx.auditRowsLight]);
 
+  /**
+   * Grant a plan to this shop — MONTHLY, with the platform's configured monthly
+   * duration.
+   *
+   * Deliberately identical to the Subscriptions tab's monthly grant
+   * (`EnterpriseSubscriptionCard`): same duration source, same explicit
+   * `billingCycle`. It previously hard-coded 30 days and omitted
+   * `billingCycle`, which `subscriptionEngine.grant` then INFERS from the day
+   * count (`>=330 yearly`, `>=20 monthly`, else `custom`) — so changing the
+   * platform monthly duration made the two controls on this screen disagree,
+   * and a short grant silently produced a `custom` cycle the other control can
+   * never produce.
+   */
   const setAdminPlan = async (planCode: AdminPlanCode) => {
     if (!detail) return;
-    const effectiveDays = planCode === "waka_plus" ? 30 : planControlDays;
-    if (planCode === "waka_plus" && planControlDays !== 30) setPlanControlDays(30);
     await executeAction(
       "admin_shop_set_subscription_plan",
       () =>
         subscriptionEngine.grant({
           shopId: detail.shop.id,
           planCode,
-          days: effectiveDays,
+          days: platformSettings.monthlyDurationDays,
+          billingCycle: "monthly",
         }),
       { permitted: canSubs },
     );
@@ -210,17 +243,28 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     }
 
     if (subId && canSubs) {
-      if (detail.subscription && ["trial", "trialing"].includes((detail.subscription.status ?? "").toLowerCase())) {
-        actions.push({ id: "extend_trial", label: t(lang, "internalShopProfileExtendTrial"), group: groupSub });
+      /**
+       * LIFECYCLE vs GRANT — two different server gates, so two different client
+       * gates. `admin_extend_subscription_trial` and
+       * `admin_subscription_set_status` accept only super_admin | subscriptions_admin,
+       * while `admin_subscription_mark_payment` was widened to include
+       * operations_admin. Gating this whole block on `canSubs` showed
+       * finance_admin/operations_admin four controls that always returned
+       * `Forbidden`.
+       */
+      if (canSubsLifecycle) {
+        if (detail.subscription && ["trial", "trialing"].includes((detail.subscription.status ?? "").toLowerCase())) {
+          actions.push({ id: "extend_trial", label: t(lang, "internalShopProfileExtendTrial"), group: groupSub });
+        }
+        actions.push({ id: "pause_sub", label: t(lang, "internalShopProfilePauseSub"), group: groupSub });
+        actions.push({ id: "active_sub", label: t(lang, "internalShopProfileReactivateSub"), group: groupSub });
+        actions.push({
+          id: "cancel_sub",
+          label: t(lang, "internalShopProfileCancelSub"),
+          group: groupSub,
+          confirm: t(lang, "internalShopActionConfirmCancelSub"),
+        });
       }
-      actions.push({ id: "pause_sub", label: t(lang, "internalShopProfilePauseSub"), group: groupSub });
-      actions.push({ id: "active_sub", label: t(lang, "internalShopProfileReactivateSub"), group: groupSub });
-      actions.push({
-        id: "cancel_sub",
-        label: t(lang, "internalShopProfileCancelSub"),
-        group: groupSub,
-        confirm: t(lang, "internalShopActionConfirmCancelSub"),
-      });
       actions.push({
         id: "mark_paid",
         label: `${t(lang, "internalShopProfileMarkPaid")} · UGX ${suggestedPaymentUgx.toLocaleString("en-UG")}`,
@@ -239,7 +283,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     }
 
     return actions;
-  }, [canSubs, canSupport, detail, lang, subId, suggestedPaymentUgx]);
+  }, [canSubs, canSubsLifecycle, canSupport, detail, lang, subId, suggestedPaymentUgx]);
 
   const runPasswordReset = async () => {
     if (!detail) return;

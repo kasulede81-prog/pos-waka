@@ -27,6 +27,12 @@ type Props = {
   lang: Language;
   detail: ShopOpsDetail;
   canManage: boolean;
+  /**
+   * Narrower than `canManage`. The server refuses lifecycle changes (extend /
+   * pause / resume / cancel) for roles the broader flag allows, so the buttons
+   * must not be offered to them — see `canManageSubscriptionLifecycle`.
+   */
+  canManageLifecycle: boolean;
   busy: boolean;
   previewMode?: boolean;
   onActionComplete?: () => void;
@@ -48,6 +54,7 @@ export function EnterpriseSubscriptionCard({
   lang,
   detail,
   canManage,
+  canManageLifecycle,
   busy,
   previewMode = false,
   onActionComplete,
@@ -114,6 +121,8 @@ export function EnterpriseSubscriptionCard({
   };
 
   const disabled = busy || actionBusy || !canManage || previewMode;
+  /** Lifecycle changes are refused by the server for the extra `canManage` roles. */
+  const lifecycleDisabled = busy || actionBusy || !canManageLifecycle || previewMode;
   const monthlyDays = settings?.monthlyDurationDays ?? 30;
   const yearlyDays = settings?.yearlyDurationDays ?? 365;
   const trialDays = settings?.defaultTrialDurationDays ?? 14;
@@ -242,7 +251,7 @@ export function EnterpriseSubscriptionCard({
           {subId ? (
             <button
               type="button"
-              disabled={disabled}
+              disabled={lifecycleDisabled}
               className={btn}
               onClick={() =>
                 void runEngine("extend", () =>
@@ -280,7 +289,7 @@ export function EnterpriseSubscriptionCard({
             <>
               <button
                 type="button"
-                disabled={disabled}
+                disabled={lifecycleDisabled}
                 className={btn}
                 onClick={() =>
                   void runEngine("pause", () =>
@@ -292,7 +301,7 @@ export function EnterpriseSubscriptionCard({
               </button>
               <button
                 type="button"
-                disabled={disabled}
+                disabled={lifecycleDisabled}
                 className={btn}
                 onClick={() =>
                   void runEngine("resume", () =>
@@ -304,7 +313,7 @@ export function EnterpriseSubscriptionCard({
               </button>
               <button
                 type="button"
-                disabled={disabled}
+                disabled={lifecycleDisabled}
                 className={clsx(btn, "border-rose-200 text-rose-800")}
                 onClick={() => {
                   if (!window.confirm(t(lang, "internalShopActionConfirmCancelSub"))) return;

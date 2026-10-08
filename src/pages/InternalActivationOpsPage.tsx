@@ -10,6 +10,7 @@ import {
 } from "../lib/businessActivation";
 import { AdminEmpty, AdminSection } from "../components/internal-admin/adminUi";
 import { PREVIEW_ACTIVATIONS } from "../lib/internalAdminPreview";
+import { EnterpriseErrorState } from "../components/enterprise/EnterpriseErrorState";
 
 type Props = {
   lang: Language;
@@ -25,6 +26,8 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
   const [maxDevices, setMaxDevices] = useState(3);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  /** Non-null when the list RPC failed — distinct from an empty queue. */
+  const [listError, setListError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     try {
       return JSON.parse(sessionStorage.getItem("waka-admin-activation-expanded") ?? "{}") as Record<string, boolean>;
@@ -37,11 +40,14 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
     setLoading(true);
     if (previewMode) {
       setRows(PREVIEW_ACTIVATIONS);
+      setListError(null);
       setLoading(false);
       return;
     }
-    const list = await opsListActivationRequests();
-    setRows(list);
+    const result = await opsListActivationRequests();
+    setRows(result.rows);
+    setListError(result.error);
+    if (result.error) console.error("[admin-activations] list failed", result.error);
     setLoading(false);
   }, [previewMode]);
 
@@ -193,6 +199,18 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
             <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
           ))}
         </div>
+      ) : listError ? (
+        /*
+          A failed load is NOT an empty queue. Previously a refused RPC or a
+          missing migration rendered the same "nothing here" message as a
+          genuinely empty list, so an operator could not tell the difference.
+        */
+        <EnterpriseErrorState
+          title="Couldn't load activation requests."
+          description="The list didn't load. Please try again."
+          retryLabel="Retry"
+          onRetry={() => void load()}
+        />
       ) : rows.length === 0 ? (
         lovableUi ? (
           <AdminEmpty>

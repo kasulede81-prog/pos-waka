@@ -129,7 +129,7 @@ export function useAdminGlobalSearchData(previewMode: boolean): AdminGlobalSearc
       adminRows,
       agentResult,
       releaseRows,
-      activationRows,
+      activationResult,
       pricingRows,
       growthRows,
     ] = await Promise.all([
@@ -155,7 +155,7 @@ export function useAdminGlobalSearchData(previewMode: boolean): AdminGlobalSearc
       })),
     );
     setReleases(releaseRows);
-    setActivations(activationRows);
+    setActivations(activationResult.rows);
     setPricingCampaigns(pricingRows);
     setGrowthCampaigns(growthRows);
     setLoading(false);

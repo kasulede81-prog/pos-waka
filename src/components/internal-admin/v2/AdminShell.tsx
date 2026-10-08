@@ -87,8 +87,8 @@ const NAV_GROUPS: NavGroup[] = [
     id: "revenue",
     label: "Revenue",
     tabs: [
-      { id: "billing", path: "/internal/waka/billing", label: "Billing" },
-      { id: "pricing_campaigns", path: "/internal/waka/billing/pricing-campaigns", label: "Pricing" },
+      { id: "billing", path: "/internal/waka/billing", label: "Billing & Plans" },
+      { id: "pricing_campaigns", path: "/internal/waka/billing/pricing-campaigns", label: "Pricing Campaigns" },
       { id: "analytics", path: "/internal/waka/analytics", label: "Growth" },
       { id: "growth_campaign", path: "/internal/waka/growth-campaign", label: "Campaigns" },
     ],
@@ -99,7 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
     tabs: [
       { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI", aiAdmin: true },
       { id: "loyalty", path: "/internal/waka/loyalty", label: "Loyalty", loyaltyAdmin: true },
-      { id: "subscription_settings", path: "/internal/waka/subscription-settings", label: "Subscriptions", superOnly: true },
+      { id: "subscription_settings", path: "/internal/waka/subscription-settings", label: "Subscription Policy", superOnly: true },
       { id: "releases", path: "/internal/waka/releases", label: "Releases", superOnly: true },
       { id: "business_types", path: "/internal/waka/business-types", label: "Business Types", superOnly: true },
       { id: "display_scale", path: "/internal/waka/display-scale", label: "Display" },

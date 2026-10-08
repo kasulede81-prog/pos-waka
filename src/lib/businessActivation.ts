@@ -53,11 +53,21 @@ export type OpsActivationRow = {
   shop_lifecycle: string;
 };
 
-export async function opsListActivationRequests(): Promise<OpsActivationRow[]> {
-  if (!supabase) return [];
+/**
+ * `rows` AND the failure that produced none.
+ *
+ * This used to return `[]` on error, which made a refused RPC, a missing
+ * migration and a failed connection all indistinguishable from "no activation
+ * requests" — an operator could not tell an empty queue from a broken one.
+ */
+export type OpsActivationList = { rows: OpsActivationRow[]; error: string | null };
+
+export async function opsListActivationRequests(): Promise<OpsActivationList> {
+  if (!supabase) return { rows: [], error: "offline" };
   const { data, error } = await supabase.rpc("waka_ops_list_activation_requests");
-  if (error || !Array.isArray(data)) return [];
-  return data as OpsActivationRow[];
+  if (error) return { rows: [], error: error.message };
+  if (!Array.isArray(data)) return { rows: [], error: "unexpected_response" };
+  return { rows: data as OpsActivationRow[], error: null };
 }
 
 export async function opsResolveActivationRequest(params: {

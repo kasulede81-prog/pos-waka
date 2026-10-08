@@ -37,7 +37,7 @@ export function AdminBillingPage({ lang, adminRow, previewMode }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-black text-foreground">Billing</h1>
+        <h1 className="text-xl font-black text-foreground">Billing &amp; Plans</h1>
         <p className="text-sm text-muted-foreground">Plans & annual requests</p>
       </div>
 

@@ -28,6 +28,7 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
     detail,
     adminRow,
     canSupport,
+    perms,
     busy,
     previewMode,
     supportSubject,
@@ -215,7 +216,14 @@ export function ShopConsoleSupportTab({ ctx }: Props) {
         </RescueSection>
       ) : null}
 
-      {canSupport ? (
+      {/*
+        `canResetOwnerPassword`, NOT `canSupport`. The `admin-set-owner-password`
+        Edge Function accepts only super_admin | support_admin, so finance_admin
+        and operations_admin were shown a panel whose every action failed.
+        `AdminSupportPage` gates its own copy of this same panel correctly — the
+        two mount sites disagreed, and the server agrees with that one.
+      */}
+      {perms.canResetOwnerPassword ? (
         <SupportPasswordResetPanel
           lang={lang}
           previewMode={previewMode}
