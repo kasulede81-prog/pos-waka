@@ -7798,6 +7798,15 @@ const en: Dict = {
   checkoutContinuePayment: "Continue payment",
   checkoutCheckStatus: "Check status",
   checkoutClose: "Back to plans",
+  // Abandoning a pending payment. The payer must always have a way out; the
+  // failure wording deliberately does not claim the payment was cancelled.
+  checkoutCancelPayment: "Cancel payment",
+  checkoutCancelKeep: "Keep payment",
+  checkoutCancelConfirmTitle: "Cancel payment?",
+  checkoutCancelConfirmBody:
+    "Are you sure you want to cancel this payment? Your subscription will not be upgraded.",
+  checkoutCancelFailed:
+    "We couldn't cancel this payment. You can leave this page and check the payment status later.",
   checkoutUnavailable: "Checkout is unavailable right now.",
   checkoutShopChanged: "Something changed with your shop selection. Please start again.",
   checkoutPriceUpdated: "The price was updated. Please review it and try again.",

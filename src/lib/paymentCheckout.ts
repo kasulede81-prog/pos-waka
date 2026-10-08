@@ -83,6 +83,13 @@ export type CheckoutState = {
   paymentStatus: string | null;
   statusReason: string | null;
   errorKey: string | null;
+  /**
+   * A failed user-initiated cancellation. Kept separate from `errorKey` so it
+   * surfaces on the pending screen WITHOUT changing the phase: a cancellation
+   * that did not happen must leave the payment looking exactly as pending as it
+   * still is, and must never be mistaken for one that succeeded.
+   */
+  cancelErrorKey: string | null;
   pollAttempts: number;
   consecutivePollErrors: number;
 };
@@ -120,6 +127,12 @@ export type CheckoutEvent =
   | { type: "POLL_RECEIVED"; status: string; statusReason: string | null }
   | { type: "POLL_ERROR" }
   | { type: "POLL_ERRORS_RESET" }
+  /**
+   * The payer answered the cancellation confirmation with "Cancel payment" and
+   * the server refused. Deliberately carries no status: nothing about the
+   * payment changed, so nothing about the pending screen may change either.
+   */
+  | { type: "CANCEL_FAILED"; errorKey: string }
   | { type: "SHOP_CHANGED" };
 
 export function initialCheckoutState(cycle: CheckoutCycle = "monthly"): CheckoutState {
@@ -138,6 +151,7 @@ export function initialCheckoutState(cycle: CheckoutCycle = "monthly"): Checkout
     paymentStatus: null,
     statusReason: null,
     errorKey: null,
+    cancelErrorKey: null,
     pollAttempts: 0,
     consecutivePollErrors: 0,
   };
@@ -533,24 +547,34 @@ export function checkoutReducer(state: CheckoutState, event: CheckoutEvent): Che
     case "POLL_RECEIVED": {
       if (state.phase !== "pending_provider") return state;
       const status = event.status;
+      // Any authoritative status from the server supersedes a stale local
+      // cancellation error — including another `pending`, which is the server
+      // saying the payment is still live and the "we couldn't cancel" note is
+      // no longer the latest word.
+      const live = { ...state, cancelErrorKey: null };
       if (status === "pending" || !isTerminalStatus(status)) {
-        return { ...state, paymentStatus: status, statusReason: event.statusReason, pollAttempts: state.pollAttempts + 1, consecutivePollErrors: 0 };
+        return { ...live, paymentStatus: status, statusReason: event.statusReason, pollAttempts: state.pollAttempts + 1, consecutivePollErrors: 0 };
       }
       if (status === "confirmed") {
-        return { ...state, phase: "confirmed", paymentStatus: "confirmed", statusReason: event.statusReason };
+        return { ...live, phase: "confirmed", paymentStatus: "confirmed", statusReason: event.statusReason };
       }
       if (status === "failed") {
-        return { ...state, phase: "failed", paymentStatus: "failed", statusReason: event.statusReason };
+        return { ...live, phase: "failed", paymentStatus: "failed", statusReason: event.statusReason };
       }
       if (status === "refunded") {
-        return { ...state, phase: "cancelled", paymentStatus: "refunded", statusReason: event.statusReason };
+        return { ...live, phase: "cancelled", paymentStatus: "refunded", statusReason: event.statusReason };
       }
       // cancelled
       if (isReconciliation(status, event.statusReason)) {
-        return { ...state, phase: "reconciliation_required", paymentStatus: status, statusReason: event.statusReason };
+        return { ...live, phase: "reconciliation_required", paymentStatus: status, statusReason: event.statusReason };
       }
-      return { ...state, phase: "cancelled", paymentStatus: "cancelled", statusReason: event.statusReason };
+      return { ...live, phase: "cancelled", paymentStatus: "cancelled", statusReason: event.statusReason };
     }
+    case "CANCEL_FAILED":
+      if (state.phase !== "pending_provider") return state;
+      // Stay pending. The payment is exactly as unresolved as it was — only the
+      // reason we could not end it is new.
+      return { ...state, cancelErrorKey: event.errorKey };
     case "POLL_ERROR":
       if (state.phase !== "pending_provider") return state;
       return { ...state, consecutivePollErrors: state.consecutivePollErrors + 1 };
@@ -578,7 +602,22 @@ export type CheckoutBackend = {
   initiate(i: { paymentId: string; phone: string }): Promise<RpcLike>;
   getPayment(paymentId: string): Promise<RpcLike>;
   listPayments(shopId: string): Promise<RpcLike>;
+  /**
+   * Server-authoritative cancellation of a pending payment. The RPC decides
+   * whether it is still cancellable (only `pending` is), so a payment the
+   * provider has already settled cannot be cancelled from here.
+   */
+  cancel(paymentId: string): Promise<RpcLike>;
 };
+
+/**
+ * Reason recorded on the ledger when the payer abandons a pending checkout.
+ *
+ * Deliberately NOT one of the reconciliation markers (`stale_replaced` /
+ * `stale_success`): this is the payer's own decision, not the server flagging a
+ * payment for review, and it must not send them to the "under review" screen.
+ */
+export const CHECKOUT_CANCEL_REASON = "customer_abandoned_checkout";
 
 function cycleToRpc(cycle: CheckoutCycle): string {
   return cycle === "yearly" ? "yearly" : "monthly";
@@ -608,6 +647,18 @@ export function createCheckoutBackend(): CheckoutBackend {
         p_subscription_id: null,
         p_plan_code: i.planCode,
         p_billing_cycle: cycleToRpc(i.cycle),
+      });
+      if (error) return { ok: false, error: "offline" };
+      return (data ?? {}) as RpcLike;
+    },
+    async cancel(paymentId) {
+      if (!supabase) return { ok: false, error: "offline" };
+      // No direct table write: the RPC owns the transition, its eligibility
+      // check and its audit/history rows. A refusal comes back as ok:false and
+      // is surfaced as a failure — never as a cancellation.
+      const { data, error } = await supabase.rpc("subscription_payment_cancel", {
+        p_payment_id: paymentId,
+        p_reason: CHECKOUT_CANCEL_REASON,
       });
       if (error) return { ok: false, error: "offline" };
       return (data ?? {}) as RpcLike;

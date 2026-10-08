@@ -20,6 +20,7 @@ import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { usePublicPricing } from "../../hooks/usePublicPricing";
 import { WakaButton } from "../ui/wakaPrimitives";
+import { ConfirmationDialog } from "../layout/ConfirmationDialog";
 import {
   CHECKOUT_PLANS,
   checkoutActionKey,
@@ -72,6 +73,9 @@ export function CheckoutFlow({
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [pollNonce, setPollNonce] = useState(0);
+  /** Cancellation confirmation + its in-flight state (UI-local; the ledger owns the outcome). */
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const inFlightRef = useRef(false);
   const pollerRef = useRef<PaymentPoller | null>(null);
@@ -273,6 +277,41 @@ export function CheckoutFlow({
     dispatch({ type: "RESET" });
     onClose();
   }, [onClose]);
+
+  /**
+   * Abandon a pending payment at the payer's request.
+   *
+   * The SERVER decides: `subscription_payment_cancel` only accepts a `pending`
+   * payment, so if the provider settled it first the call is refused and the
+   * payer is told the truth rather than shown a cancellation that never
+   * happened. Nothing is inferred from client timing — the status we adopt is
+   * the one the ledger returned.
+   *
+   * This ends OUR checkout; it does not claim the provider-side transaction was
+   * reversed (the RPC cannot reach the provider). A late provider success is
+   * caught by the existing settlement rules, which refuse to confirm anything
+   * that is no longer pending.
+   */
+  const onCancelPayment = useCallback(async () => {
+    const paymentId = state.intent?.paymentId;
+    if (!paymentId || cancelling) return;
+    setCancelling(true);
+    try {
+      const result = await backend.cancel(paymentId);
+      if (result.ok === true) {
+        // The ledger is authoritative and it said cancelled. Leave the checkout:
+        // closeFlow resets local state and unmounts the flow, which stops the
+        // poller with it. The payment record stays on the server for history
+        // and reconciliation — only this screen goes away.
+        closeFlow();
+        return;
+      }
+      dispatch({ type: "CANCEL_FAILED", errorKey: "checkoutCancelFailed" });
+    } finally {
+      setCancelling(false);
+      setCancelOpen(false);
+    }
+  }, [backend, closeFlow, state.intent?.paymentId, cancelling]);
 
   const statusKey = state.paymentStatus ? paymentStatusKey(state.paymentStatus) : null;
   const primaryActionKey = !state.quote
@@ -511,6 +550,42 @@ export function CheckoutFlow({
               {t(lang, state.initiateErrorKey)}
             </p>
           ) : null}
+
+          {/*
+            ALWAYS AVAILABLE. A pending payment is not a final state and the payer
+            must never be trapped on this screen waiting for a provider. This is
+            the explicit exit; "Back to plans" above stays the quick one.
+          */}
+          <div className="border-t border-border pt-3">
+            <WakaButton
+              type="button"
+              variant="secondary"
+              onClick={() => setCancelOpen(true)}
+              className="min-h-[48px] w-full"
+            >
+              {t(lang, "checkoutCancelPayment")}
+            </WakaButton>
+          </div>
+
+          {state.cancelErrorKey ? (
+            <p role="alert" className="text-sm font-semibold text-destructive">
+              {t(lang, state.cancelErrorKey)}
+            </p>
+          ) : null}
+
+          <ConfirmationDialog
+            lang={lang}
+            open={cancelOpen}
+            onClose={() => setCancelOpen(false)}
+            title={t(lang, "checkoutCancelConfirmTitle")}
+            confirmLabelKey="checkoutCancelPayment"
+            cancelLabelKey="checkoutCancelKeep"
+            confirmBusy={cancelling}
+            destructive
+            onConfirm={() => void onCancelPayment()}
+          >
+            {t(lang, "checkoutCancelConfirmBody")}
+          </ConfirmationDialog>
         </div>
       ) : null}
 

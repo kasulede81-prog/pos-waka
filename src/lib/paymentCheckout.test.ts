@@ -11,6 +11,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  CHECKOUT_CANCEL_REASON,
   CHECKOUT_PLANS,
   CHECKOUT_PROVIDER_ID,
   POLL_MAX_DELAY_MS,
@@ -62,12 +63,12 @@ function quoteResp(overrides: Record<string, unknown> = {}): RpcLike {
   };
 }
 
-type Queue = Partial<Record<"quote" | "create" | "initiate" | "get" | "list", RpcLike[]>>;
+type Queue = Partial<Record<"quote" | "create" | "initiate" | "get" | "list" | "cancel", RpcLike[]>>;
 
 function makeBackend(queue: Queue = {}): CheckoutBackend & {
   calls: Record<string, unknown[][]>;
 } {
-  const calls: Record<string, unknown[][]> = { quote: [], create: [], initiate: [], get: [], list: [] };
+  const calls: Record<string, unknown[][]> = { quote: [], create: [], initiate: [], get: [], list: [], cancel: [] };
   const next = (key: keyof Queue, fallback: RpcLike): RpcLike => {
     const list = queue[key];
     if (list && list.length > 0) return list.shift() as RpcLike;
@@ -102,6 +103,12 @@ function makeBackend(queue: Queue = {}): CheckoutBackend & {
     async listPayments(shopId) {
       calls.list.push([shopId]);
       return next("list", { ok: true, payments: [], next_cursor: null });
+    },
+    async cancel(paymentId) {
+      calls.cancel.push([paymentId]);
+      // Default: the ledger accepts the cancellation and reports the status it
+      // actually wrote. Tests that need a refusal queue `{ ok: false, ... }`.
+      return next("cancel", { ok: true, idempotent: false, payment_id: paymentId, status: "cancelled" });
     },
   };
 }
@@ -802,5 +809,95 @@ describe("M3-D payment polling", () => {
     expect(seen).toBe(0);
     // A late manual invocation of a cleared tick must also be inert.
     expect(scheduler.size).toBe(0);
+  });
+});
+
+/**
+ * G3 — abandoning a pending payment.
+ *
+ * The payer must never be trapped on "Payment pending". These pin the part of
+ * that guarantee the state machine owns: a cancel that the SERVER refused must
+ * leave the payment looking exactly as pending as it still is, and an
+ * abandoned payment must never be mistaken for a settled one.
+ */
+describe("G3 — cancel a pending payment", () => {
+  it("a refused cancellation stays pending and records why", () => {
+    const before = pendingState("pending_provider");
+    const after = checkoutReducer(before, { type: "CANCEL_FAILED", errorKey: "checkoutCancelFailed" });
+
+    // Nothing about the payment changed — only the reason we could not end it.
+    expect(after.phase).toBe("pending_provider");
+    expect(after.paymentStatus).toBe(before.paymentStatus);
+    expect(after.cancelErrorKey).toBe("checkoutCancelFailed");
+    // Specifically: no hint that it was cancelled.
+    expect(after.phase).not.toBe("cancelled");
+  });
+
+  it("a refused cancellation outside the pending phase is ignored", () => {
+    const idle = initialCheckoutState();
+    const after = checkoutReducer(idle, { type: "CANCEL_FAILED", errorKey: "checkoutCancelFailed" });
+    expect(after).toEqual(idle);
+  });
+
+  it("an authoritative status clears a stale cancellation error", () => {
+    let s = pendingState("pending_provider");
+    s = checkoutReducer(s, { type: "CANCEL_FAILED", errorKey: "checkoutCancelFailed" });
+    // The server says it is still live: that supersedes "we couldn't cancel".
+    s = checkoutReducer(s, { type: "POLL_RECEIVED", status: "pending", statusReason: null });
+    expect(s.cancelErrorKey).toBeNull();
+    expect(s.phase).toBe("pending_provider");
+  });
+
+  it("the payer's own abandonment is NOT a reconciliation marker", () => {
+    // A reconciliation marker would send them to the "under review" screen and
+    // imply the server is investigating — but this is their own decision.
+    expect(isReconciliation("cancelled", CHECKOUT_CANCEL_REASON)).toBe(false);
+  });
+
+  it("an abandoned payment settles as cancelled, and grants nothing", () => {
+    let s = pendingState("pending_provider");
+    s = checkoutReducer(s, {
+      type: "POLL_RECEIVED",
+      status: "cancelled",
+      statusReason: CHECKOUT_CANCEL_REASON,
+    });
+
+    expect(s.phase).toBe("cancelled");
+    expect(s.paymentStatus).toBe("cancelled");
+    // Never a confirmed/entitled state — the checkout has no path from cancelled
+    // to confirmed, so no subscription is granted by cancelling.
+    expect(s.phase).not.toBe("confirmed");
+  });
+
+  it("a server-flagged cancellation is sent to review, not silently buried", () => {
+    // While still pending, a cancellation carrying a reconciliation marker means
+    // the SERVER flagged this payment (stale replacement), not that the payer
+    // chose to leave — so it must surface as "under review".
+    let s = pendingState("pending_provider");
+    s = checkoutReducer(s, { type: "POLL_RECEIVED", status: "cancelled", statusReason: "stale_success" });
+    expect(s.phase).toBe("reconciliation_required");
+    expect(s.phase).not.toBe("confirmed");
+  });
+
+  it("a LATE provider success cannot resurrect an abandoned payment", () => {
+    let s = pendingState("pending_provider");
+    s = checkoutReducer(s, { type: "POLL_RECEIVED", status: "cancelled", statusReason: CHECKOUT_CANCEL_REASON });
+    expect(s.phase).toBe("cancelled");
+
+    // A late `confirmed` must not move an abandoned payment into an entitled
+    // state. Status transitions are only accepted while the checkout is pending;
+    // after that the server's stale-success refusal is the authority
+    // (paymentCallbackFoundation T19), never client-side timing.
+    s = checkoutReducer(s, { type: "POLL_RECEIVED", status: "confirmed", statusReason: null });
+    expect(s.phase).toBe("cancelled");
+    expect(s.phase).not.toBe("confirmed");
+  });
+
+  it("cancelling never reuses or re-creates a payment intent", () => {
+    const s = pendingState("pending_provider");
+    const after = checkoutReducer(s, { type: "CANCEL_FAILED", errorKey: "checkoutCancelFailed" });
+    // Same intent, same id — the cancel path has no intent-creation branch at all.
+    expect(after.intent?.paymentId).toBe(s.intent?.paymentId);
+    expect(after.intent?.reference).toBe(s.intent?.reference);
   });
 });
