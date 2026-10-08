@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getProviderAdapter,
   settlementActionFor,
@@ -178,7 +178,11 @@ describe("MTN MoMo adapter — sandbox contract", () => {
 
     const body = JSON.parse(String(pay.init.body)) as Record<string, unknown>;
     expect(body.amount).toBe("36000"); // official decimal STRING
-    expect(body.currency).toBe("UGX");
+    // SANDBOX takes EUR. The ledger handed us UGX (INIT_REQ.currency) and the
+    // number is carried across unchanged — this is a wire representation for the
+    // sandbox, not a price and not a conversion.
+    expect(INIT_REQ.currency).toBe("UGX");
+    expect(body.currency).toBe("EUR");
     expect(body.externalId).toBe(REF);
     expect(body.payer).toEqual({ partyIdType: "MSISDN", partyId: "256781234567" }); // no "+"
   });
@@ -809,5 +813,134 @@ describe("M3-G hardening — timeout budget + stage diagnostics", () => {
       expect(result.status).toBe("pending");
       expect(failCalled).toBe(0);
     }
+  });
+});
+
+/**
+ * Environment-aware currency + RequestToPay diagnostics.
+ *
+ * MTN's SANDBOX only accepts EUR while Uganda production accepts UGX, and the
+ * ledger's own currency is DKASU's (UGX) and must not move. So the environment
+ * decides what goes on the wire, and the AMOUNT is never converted — sandbox
+ * money is not real, and a rate would invent a value the ledger never recorded.
+ *
+ * The second half pins the diagnostic: a failed RequestToPay must record the
+ * provider's HTTP status and error CODE (never its message), and must never put
+ * a credential, token or MSISDN anywhere.
+ */
+describe("MTN MoMo adapter — environment currency and RequestToPay diagnostics", () => {
+  const envFor = (targetEnvironment: string): Record<string, string> => ({
+    ...ENV_OK,
+    MTN_MOMO_TARGET_ENVIRONMENT: targetEnvironment,
+  });
+
+  const payBody = (calls: FetchCall[]) =>
+    JSON.parse(
+      String(calls.find((c) => c.init.method === "POST" && c.url.endsWith("/requesttopay"))!.init.body),
+    ) as Record<string, unknown>;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sandbox RequestToPay sends EUR; production sends UGX; the amount is identical in both", async () => {
+    const sandbox = await (async () => {
+      const { calls, impl } = makeFetch(standardHandler({ payStatus: 202 }));
+      await createMtnMomoAdapter({ env: (n) => envFor("sandbox")[n], fetchImpl: impl }).initiate(INIT_REQ);
+      return payBody(calls);
+    })();
+    const production = await (async () => {
+      const { calls, impl } = makeFetch(standardHandler({ payStatus: 202 }));
+      await createMtnMomoAdapter({ env: (n) => envFor("mtnuganda")[n], fetchImpl: impl }).initiate(INIT_REQ);
+      return payBody(calls);
+    })();
+
+    expect(sandbox.currency).toBe("EUR");
+    expect(production.currency).toBe("UGX");
+
+    // Same number both times — no exchange rate was applied.
+    expect(sandbox.amount).toBe("36000");
+    expect(production.amount).toBe("36000");
+    expect(sandbox.amount).toBe(production.amount);
+  });
+
+  it("the ledger's currency is untouched by the adapter (UGX in, UGX out to production)", async () => {
+    const { impl } = makeFetch(standardHandler({ payStatus: 202 }));
+    const req = { ...INIT_REQ, currency: "UGX" };
+    await createMtnMomoAdapter({ env: (n) => envFor("mtnuganda")[n], fetchImpl: impl }).initiate(req);
+    // The adapter does not mutate its input — the ledger row is the source of truth.
+    expect(req.currency).toBe("UGX");
+  });
+
+  it("a failed RequestToPay records the HTTP status and the provider's error CODE", async () => {
+    const reported: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((line?: unknown) => {
+      reported.push(String(line));
+    });
+
+    const adapter = makeAdapter((call) =>
+      call.url.includes("/collection/token/")
+        ? json(200, { access_token: "tok-123", token_type: "Bearer", expires_in: 3600 })
+        : json(500, { code: "INVALID_CURRENCY", message: "Currency not supported on the requested account" }),
+    );
+
+    const outcome = await adapter.initiate(INIT_REQ);
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      error: "provider_unavailable",
+      retryable: true,
+      stage: "requesttopay",
+      providerStatus: 500,
+      providerCode: "INVALID_CURRENCY",
+    });
+
+    const line = reported.find((l) => l.includes("provider_leg_failed"));
+    expect(line).toBeTruthy();
+    expect(line).toContain('"http_status":500');
+    expect(line).toContain('"provider_code":"INVALID_CURRENCY"');
+  });
+
+  it("the diagnostic carries ONLY the status and code — never secrets, tokens, the MSISDN, or provider text", async () => {
+    const reported: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((line?: unknown) => {
+      reported.push(String(line));
+    });
+
+    const adapter = makeAdapter((call) =>
+      call.url.includes("/collection/token/")
+        ? json(200, { access_token: "tok-SECRET-ABC", token_type: "Bearer", expires_in: 3600 })
+        : json(400, { code: "INVALID_CURRENCY", message: "phone +256781234567 rejected for api-user-1" }),
+    );
+
+    await adapter.initiate(INIT_REQ);
+
+    const all = reported.join("\n");
+    expect(all).not.toContain("tok-SECRET-ABC"); // access token
+    expect(all).not.toContain("api-user-1"); // API user
+    expect(all).not.toContain("api-key-1"); // API key
+    expect(all).not.toContain("sub-key-1"); // subscription key
+    expect(all).not.toContain("256781234567"); // MSISDN
+    // The provider's MESSAGE is never read out — only its bounded code.
+    expect(all).not.toContain("rejected for");
+  });
+
+  it("an unbounded or hostile provider code is dropped rather than logged", async () => {
+    const reported: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((line?: unknown) => {
+      reported.push(String(line));
+    });
+
+    const adapter = makeAdapter((call) =>
+      call.url.includes("/collection/token/")
+        ? json(200, { access_token: "tok-123", token_type: "Bearer", expires_in: 3600 })
+        : json(500, { code: "not a code; DROP TABLE--" }),
+    );
+
+    const outcome = await adapter.initiate(INIT_REQ);
+
+    expect(outcome).toMatchObject({ ok: false, providerStatus: 500 });
+    expect((outcome as { providerCode?: string }).providerCode).toBeUndefined();
+    expect(reported.join("\n")).not.toContain("DROP TABLE");
   });
 });

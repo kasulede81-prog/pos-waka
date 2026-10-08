@@ -59,6 +59,18 @@ export type InitiateOutcome =
        * provider-agnostic fixtures compile unchanged.
        */
       stage?: "token" | "requesttopay" | "response";
+      /**
+       * Sanitized provider response diagnostic for the failed leg: the HTTP
+       * status and the provider's own error CODE (a bounded token, never the
+       * message — provider messages can echo request data).
+       *
+       * Deliberately NOT part of the reconciliation reason. Reasons are constant
+       * strings by contract (ledger.stageReason), which is what guarantees no
+       * provider text can reach a history payload; this rides alongside so the
+       * failure is diagnosable from the function log without weakening that.
+       */
+      providerStatus?: number;
+      providerCode?: string;
     };
 
 export type QueryStatusRequest = {

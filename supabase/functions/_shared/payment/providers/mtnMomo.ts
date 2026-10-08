@@ -111,6 +111,72 @@ function toMsisdn(phone: string): string {
   return phone.replace(/[^\d]/g, "");
 }
 
+/**
+ * Structured, secret-free diagnostic for a failed provider leg.
+ *
+ * Mirrors `callbackSettle.emit()`: one line, a stable taxonomy, and NEVER a raw
+ * body, header, token, MSISDN or SQL error. The reconciliation REASON stays a
+ * constant string (see `ledger.stageReason`) — that constancy is a tested safety
+ * property, so the provider's own status/code is surfaced HERE instead, where it
+ * is diagnosable from the function log and cannot reach a history payload.
+ */
+function emitProviderFailure(input: {
+  leg: "token" | "requesttopay" | "status";
+  httpStatus?: number;
+  providerCode?: string;
+}): void {
+  console.error(
+    "[mtn-momo] " +
+      JSON.stringify({
+        event: "provider_leg_failed",
+        leg: input.leg,
+        http_status: input.httpStatus ?? null,
+        provider_code: input.providerCode ?? null,
+        at: new Date().toISOString(),
+      }),
+  );
+}
+
+/** Provider error codes are bounded tokens. Anything else is dropped, never truncated into a log. */
+function safeProviderCode(raw: unknown): string | undefined {
+  return typeof raw === "string" && /^[A-Za-z0-9_]{1,64}$/.test(raw) ? raw : undefined;
+}
+
+/**
+ * Read the provider's error CODE without keeping the body.
+ *
+ * MTN answers a rejected request with `{"code":"INVALID_CURRENCY","message":"…"}`.
+ * The code is a bounded token we may keep; the message is never read out (it can
+ * echo request fields), and the body itself is discarded here. Failure bodies are
+ * small, so the read is capped rather than streamed.
+ */
+async function readProviderCode(response: Response): Promise<string | undefined> {
+  try {
+    const text = await response.text();
+    if (text.length > 4096) return undefined;
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    return safeProviderCode(parsed.code ?? parsed.errorCode ?? parsed.error);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The currency MTN expects for the configured target environment.
+ *
+ * The ledger's currency is DKASU's own and stays UGX everywhere — it is the money
+ * the subscription is priced in. MTN's SANDBOX, however, only accepts EUR, while
+ * Uganda production accepts UGX. So the environment decides what goes on the wire.
+ *
+ * THE AMOUNT IS DELIBERATELY NOT CONVERTED. Sandbox money is not real, and a rate
+ * would invent a value the ledger never recorded; the same number is sent either
+ * way (36000 UGX in production, 36000 EUR in sandbox). That is a test-only
+ * representation, not a price.
+ */
+function requestToPayCurrency(targetEnvironment: string, ledgerCurrency: string): string {
+  return targetEnvironment.trim().toLowerCase() === "sandbox" ? "EUR" : ledgerCurrency;
+}
+
 class MtnHttpError extends Error {
   readonly kind:
     | "http_status"
@@ -251,10 +317,14 @@ export class MtnMomoAdapter implements ProviderAdapter {
       throw new MtnHttpError("network", "mtn_token_network_error");
     }
 
-    if (response.status === 401 || response.status === 403) {
-      throw new MtnHttpError("auth", "mtn_token_auth_failed", response.status);
-    }
     if (!response.ok) {
+      // Same secret-free diagnostic as the RequestToPay leg: a token failure is
+      // a credentials question, and the status/code is what answers it.
+      const code = await readProviderCode(response);
+      emitProviderFailure({ leg: "token", httpStatus: response.status, providerCode: code });
+      if (response.status === 401 || response.status === 403) {
+        throw new MtnHttpError("auth", "mtn_token_auth_failed", response.status);
+      }
       throw new MtnHttpError("unavailable", `mtn_token_http_${response.status}`, response.status);
     }
 
@@ -409,9 +479,11 @@ export class MtnMomoAdapter implements ProviderAdapter {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            // Official schema: amount is a decimal STRING.
+            // Official schema: amount is a decimal STRING. Unchanged in both
+            // environments — see requestToPayCurrency on why it is not converted.
             amount: String(req.amountUgx),
-            currency: req.currency,
+            // Sandbox → EUR, production → the ledger currency (UGX).
+            currency: requestToPayCurrency(cfg.targetEnvironment, req.currency),
             externalId: req.reference,
             payer: {
               partyIdType: "MSISDN",
@@ -433,17 +505,51 @@ export class MtnMomoAdapter implements ProviderAdapter {
       if (response.status === 409) {
         return { ok: true, providerReference: req.reference };
       }
-      if (response.status === 401 || response.status === 403) {
-        return { ok: false, error: "provider_auth_failed", retryable: true, stage: "requesttopay" };
+      // Rejected for a reason MTN names. Read the code (never the message/body)
+      // and emit it, so the NEXT failure is diagnosable rather than inferred.
+      const status = response.status;
+      const code = await readProviderCode(response);
+      emitProviderFailure({ leg: "requesttopay", httpStatus: status, providerCode: code });
+
+      if (status === 401 || status === 403) {
+        return {
+          ok: false,
+          error: "provider_auth_failed",
+          retryable: true,
+          stage: "requesttopay",
+          providerStatus: status,
+          providerCode: code,
+        };
       }
-      if (response.status === 400 || response.status === 422) {
+      if (status === 400 || status === 422) {
         // Covers invalid currency/target-environment/phone/amount shapes.
-        return { ok: false, error: "provider_rejected", retryable: false, stage: "requesttopay" };
+        return {
+          ok: false,
+          error: "provider_rejected",
+          retryable: false,
+          stage: "requesttopay",
+          providerStatus: status,
+          providerCode: code,
+        };
       }
-      if (response.status === 429 || response.status >= 500) {
-        return { ok: false, error: "provider_unavailable", retryable: true, stage: "requesttopay" };
+      if (status === 429 || status >= 500) {
+        return {
+          ok: false,
+          error: "provider_unavailable",
+          retryable: true,
+          stage: "requesttopay",
+          providerStatus: status,
+          providerCode: code,
+        };
       }
-      return { ok: false, error: "provider_response_invalid", retryable: true, stage: "response" };
+      return {
+        ok: false,
+        error: "provider_response_invalid",
+        retryable: true,
+        stage: "response",
+        providerStatus: status,
+        providerCode: code,
+      };
     } catch (err) {
       return { ...this.toInitiateFailure(err), stage: "requesttopay" };
     }
