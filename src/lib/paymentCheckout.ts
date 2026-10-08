@@ -11,9 +11,9 @@
  * Nothing here computes an authoritative price; `amountUgx` in createIntent is
  * the SERVER-quoted value (a tamper/drift check, never a client calculation).
  *
- * No PesaPal / provider code: CHECKOUT_PROVIDER_ID is only a provider label
- * stored on the intent. The provider registry is empty until M3-F, so
- * payment-initiate honestly answers provider_not_configured.
+ * CHECKOUT_PROVIDER_ID is only a provider label stored on the intent.
+ * MTN MoMo (sandbox adapter) is the current checkout provider; payment-initiate
+ * resolves that label against the server-side provider registry.
  *
  * Testable by design: the reducer, classifiers, recovery selector, poller and
  * projection helpers are pure/injectable; the UI never talks to supabase
@@ -31,8 +31,8 @@ export type CheckoutCycle = "monthly" | "yearly";
 
 export const CHECKOUT_PLANS: CheckoutPlanCode[] = ["starter", "business", "waka_plus"];
 
-/** Intended provider label only — no adapter/API/credentials exist until M3-F. */
-export const CHECKOUT_PROVIDER_ID = "pesapal";
+/** Current checkout provider label — resolved server-side against the provider registry (MTN MoMo sandbox adapter). */
+export const CHECKOUT_PROVIDER_ID = "mtn_momo";
 
 export type RpcLike = { ok?: boolean; error?: string } & Record<string, unknown>;
 

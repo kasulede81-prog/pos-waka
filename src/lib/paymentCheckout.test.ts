@@ -416,7 +416,7 @@ describe("M3-D provider initiation (no provider configured yet)", () => {
     expect(s.phase).toBe("provider_not_configured");
     expect(s.phase).not.toBe("confirmed");
     expect(s.initiated).toBe(false);
-    expect(CHECKOUT_PROVIDER_ID).toBe("pesapal"); // label only — no adapter/API exists
+    expect(CHECKOUT_PROVIDER_ID).toBe("mtn_momo"); // current checkout provider (MTN MoMo sandbox adapter)
   });
 
   it("17. initiate timeout leaves pending with a retry action", () => {
