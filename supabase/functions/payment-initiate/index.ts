@@ -1,11 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getProviderAdapter } from "../_shared/payment/adapter.ts";
+// Registers the MTN MoMo adapter into the shared registry (module side effect).
+import "../_shared/payment/providers/mtnMomo.ts";
 import {
   fetchPaymentRow,
   attachProviderMeta,
   claimProviderInitiation,
   failPayment,
+  flagPaymentReconciliation,
   runInitiateFlow,
 } from "../_shared/payment/ledger.ts";
 import type { FlowResult } from "../_shared/payment/types.ts";
@@ -128,6 +131,9 @@ Deno.serve(async (req) => {
     // M3-G: claim before the provider call — concurrent initiates cannot both
     // start a provider transaction (the loser observes initiate_in_progress).
     claim: () => claimProviderInitiation(serviceClient, paymentId),
+    // Observability: stage-specific reconciliation reason on the payment row
+    // (history/audit only — constant strings, no secrets, no state change).
+    flagReconciliation: (id, reason) => flagPaymentReconciliation(serviceClient, id, reason),
     phone,
   });
 

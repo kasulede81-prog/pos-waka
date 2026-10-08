@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getProviderAdapter } from "../_shared/payment/adapter.ts";
+// Registers the MTN MoMo adapter into the shared registry (module side effect).
+import "../_shared/payment/providers/mtnMomo.ts";
 import {
   cancelPayment,
   confirmPayment,

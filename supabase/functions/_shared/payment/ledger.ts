@@ -228,6 +228,13 @@ export type InitiateFlowDeps = {
    * request holds the claim.
    */
   claim?: () => Promise<RpcResult>;
+  /**
+   * M3-G observability (optional): record a stage-specific reconciliation
+   * reason on the payment when initiation fails — e.g. mtn_token_failed.
+   * Constant strings only; never credentials/phones/payloads. History/audit
+   * only: it never changes the payment's financial or entitlement state.
+   */
+  flagReconciliation?: (paymentId: string, reason: string) => Promise<RpcResult>;
   phone: string;
   timeoutMs?: number;
 };
@@ -270,6 +277,26 @@ export async function runInitiateFlow(deps: InitiateFlowDeps): Promise<FlowResul
   if (!row.reference) {
     return { ok: false, error: "reference_missing", payment_id: row.id, status: row.status };
   }
+
+  // M3-G observability: stage-specific reconciliation reasons (constant
+  // strings only, best-effort, never affects financial/entitlement state).
+  const providerPrefix = row.provider === "mtn_momo" ? "mtn" : row.provider;
+  const flagStage = async (reason: string): Promise<void> => {
+    if (!deps.flagReconciliation) return;
+    try {
+      await deps.flagReconciliation(row.id, reason);
+    } catch {
+      // Diagnostics must never break the payment flow.
+    }
+  };
+  const stageReason = (o: { error?: string; stage?: string }): string => {
+    if (o.stage === "token") return `${providerPrefix}_token_failed`;
+    if (o.stage === "requesttopay") return `${providerPrefix}_requesttopay_failed`;
+    if (o.stage === "response" || o.error === "provider_response_invalid") {
+      return `${providerPrefix}_provider_response_invalid`;
+    }
+    return `${providerPrefix}_initiate_failed`;
+  };
 
   const adapter = deps.resolveAdapter(row.provider);
   if (!adapter || !adapter.isConfigured()) {
@@ -339,10 +366,14 @@ export async function runInitiateFlow(deps: InitiateFlowDeps): Promise<FlowResul
 
   // 6a. Timeout: NOT proof of rejection → pending, safe to retry / recover.
   if (outcome === TIMED_OUT) {
+    await flagStage(`${providerPrefix}_timeout`);
     return { ok: false, error: "initiate_timeout", payment_id: row.id, status: "pending", retryable: true };
   }
 
   if (!outcome.ok) {
+    // Record WHERE it failed (token / requesttopay / response) before any
+    // financial decision — history-only diagnostic.
+    await flagStage(stageReason(outcome));
     // 6b. Retryable provider error → pending (state unknown).
     if (outcome.retryable) {
       return {
@@ -376,6 +407,7 @@ export async function runInitiateFlow(deps: InitiateFlowDeps): Promise<FlowResul
   if (!attached.ok) {
     // Money may already be in flight: do NOT fail the payment. Recovery is
     // payment-status (query by our reference) or an operator.
+    await flagStage(`${providerPrefix}_attach_failed`);
     return { ok: false, error: "attach_failed", payment_id: row.id, status: "pending", retryable: false };
   }
 

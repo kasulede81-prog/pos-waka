@@ -48,7 +48,18 @@ export type InitiateRequest = {
 
 export type InitiateOutcome =
   | { ok: true; providerReference?: string | null }
-  | { ok: false; error: string; retryable: boolean };
+  | {
+      ok: false;
+      error: string;
+      retryable: boolean;
+      /**
+       * M3-G observability: which provider leg failed — "token" | "requesttopay"
+       * | "response". Diagnostic only (no secrets); used by ledger.ts to record
+       * a stage-specific reconciliation reason on the payment. Optional so
+       * provider-agnostic fixtures compile unchanged.
+       */
+      stage?: "token" | "requesttopay" | "response";
+    };
 
 export type QueryStatusRequest = {
   reference: string;

@@ -195,7 +195,11 @@ export async function runCallbackSettlement(deps: CallbackSettleDeps): Promise<C
     const malformed =
       verificationError === "empty_callback_body" ||
       verificationError === "callback_missing_reference" ||
-      verificationError === "callback_missing_status";
+      verificationError === "callback_missing_status" ||
+      // Structurally invalid callback payloads (MTN adapter) → 400, not 401.
+      verificationError === "callback_malformed_json" ||
+      verificationError === "callback_invalid_amount" ||
+      verificationError === "callback_invalid_currency";
     if (malformed) {
       emit(deps.provider, "rejected", "invalid_callback");
       return body({ ok: false, reason: "invalid_callback" }, 400);
