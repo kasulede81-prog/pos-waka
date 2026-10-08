@@ -361,6 +361,11 @@ export class MtnMomoAdapter implements ProviderAdapter {
           headers: {
             Authorization: `Bearer ${token}`,
             "Ocp-Apim-Subscription-Key": cfg.subscriptionKey,
+            // REQUIRED ON EVERY COLLECTION CALL, not just RequestToPay. Without
+            // it MTN rejects the status query (4xx), which surfaces as
+            // `status_not_found` and reads to the payer as "we couldn't check".
+            // This is the ONLY header requestToPay sends that this call lacked.
+            "X-Target-Environment": cfg.targetEnvironment,
           },
         },
         this.requestTimeoutMs,

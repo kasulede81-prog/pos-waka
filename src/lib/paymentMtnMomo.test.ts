@@ -254,6 +254,10 @@ describe("MTN MoMo adapter — sandbox contract", () => {
     const statusHeaders = getStatusCall.init.headers as Record<string, string>;
     expect(statusHeaders.Authorization).toBe("Bearer tok-123");
     expect(statusHeaders["Ocp-Apim-Subscription-Key"]).toBe("sub-key-1");
+    // X-Target-Environment is required on EVERY Collection call — omitting it
+    // here (while RequestToPay sent it) made every status query fail, so this
+    // assertion is the one whose absence let that ship.
+    expect(statusHeaders["X-Target-Environment"]).toBe("sandbox");
     status = "PENDING";
     expect((await adapter.queryStatus({ reference: REF, providerReference: null })).ok).toBe(true);
 
@@ -942,5 +946,132 @@ describe("MTN MoMo adapter — environment currency and RequestToPay diagnostics
     expect(outcome).toMatchObject({ ok: false, providerStatus: 500 });
     expect((outcome as { providerCode?: string }).providerCode).toBeUndefined();
     expect(reported.join("\n")).not.toContain("DROP TABLE");
+  });
+});
+
+/**
+ * The status query must carry the SAME environment header as RequestToPay.
+ *
+ * MTN requires `X-Target-Environment` on every Collection call. RequestToPay
+ * sent it; the status GET did not — so every check answered `status_not_found`
+ * and the payer was told "we couldn't check the payment status", with no way to
+ * tell that from a genuine outage. These pin the header on the status call for
+ * both environments, and pin that the initiation request is unchanged.
+ */
+describe("MTN MoMo adapter — status query carries the environment header", () => {
+  const statusCall = (calls: FetchCall[]) => calls.find((c) => c.init.method === "GET")!;
+
+  const routedFor = (targetEnvironment: string, getStatus: () => Response) =>
+    makeAdapter((call) => {
+      if (call.url.includes("/collection/token/")) {
+        return json(200, { access_token: "tok-123", token_type: "Bearer", expires_in: 3600 });
+      }
+      if (call.init.method === "POST") return new Response(null, { status: 202 });
+      return getStatus();
+    }, { MTN_MOMO_TARGET_ENVIRONMENT: targetEnvironment });
+
+  it("sandbox: the status GET sends Authorization, subscription key AND X-Target-Environment", async () => {
+    const calls: FetchCall[] = [];
+    const adapter = makeAdapter(
+      (call) => {
+        calls.push(call);
+        if (call.url.includes("/collection/token/")) {
+          return json(200, { access_token: "tok-123", token_type: "Bearer", expires_in: 3600 });
+        }
+        if (call.init.method === "POST") return new Response(null, { status: 202 });
+        return json(200, { status: "PENDING" });
+      },
+      { MTN_MOMO_TARGET_ENVIRONMENT: "sandbox" },
+    );
+    await adapter.initiate(INIT_REQ);
+
+    const result = await adapter.queryStatus({ reference: REF, providerReference: null });
+    expect(result.ok).toBe(true);
+
+    const call = statusCall(calls);
+    // Correct endpoint and reference.
+    expect(call.url).toBe(`${BASE}/collection/v1_0/requesttopay/${REF}`);
+    expect(call.init.method).toBe("GET");
+
+    const h = call.init.headers as Record<string, string>;
+    expect(h.Authorization).toBe("Bearer tok-123");
+    expect(h["Ocp-Apim-Subscription-Key"]).toBe("sub-key-1");
+    // THE REGRESSION: this header is why every status check was failing.
+    expect(h["X-Target-Environment"]).toBe("sandbox");
+  });
+
+  it("production: the status GET carries the configured environment, not a hardcoded one", async () => {
+    const calls: FetchCall[] = [];
+    const adapter = makeAdapter(
+      (call) => {
+        calls.push(call);
+        if (call.url.includes("/collection/token/")) {
+          return json(200, { access_token: "tok-123", token_type: "Bearer", expires_in: 3600 });
+        }
+        return json(200, { status: "PENDING" });
+      },
+      { MTN_MOMO_TARGET_ENVIRONMENT: "mtnuganda" },
+    );
+    await adapter.queryStatus({ reference: REF, providerReference: null });
+
+    const h = statusCall(calls).init.headers as Record<string, string>;
+    expect(h["X-Target-Environment"]).toBe("mtnuganda");
+  });
+
+  it("both legs agree: the status GET sends the SAME header set as RequestToPay", async () => {
+    const calls: FetchCall[] = [];
+    const adapter = makeAdapter((call) => {
+      calls.push(call);
+      if (call.url.includes("/collection/token/")) {
+        return json(200, { access_token: "tok-123", token_type: "Bearer", expires_in: 3600 });
+      }
+      if (call.init.method === "POST") return new Response(null, { status: 202 });
+      return json(200, { status: "PENDING" });
+    });
+
+    await adapter.initiate(INIT_REQ);
+    await adapter.queryStatus({ reference: REF, providerReference: null });
+
+    const pay = calls.find((c) => c.init.method === "POST" && c.url.endsWith("/requesttopay"))!;
+    const status = statusCall(calls);
+    const payH = pay.init.headers as Record<string, string>;
+    const statusH = status.init.headers as Record<string, string>;
+
+    // Every auth/environment header RequestToPay sends, the status call sends too.
+    for (const key of ["Authorization", "Ocp-Apim-Subscription-Key", "X-Target-Environment"]) {
+      expect(statusH[key], `status GET is missing ${key}`).toBe(payH[key]);
+    }
+  });
+
+  it("RequestToPay initiation is UNCHANGED by this fix", async () => {
+    const calls: FetchCall[] = [];
+    const adapter = makeAdapter((call) => {
+      calls.push(call);
+      if (call.url.includes("/collection/token/")) {
+        return json(200, { access_token: "tok-123", token_type: "Bearer", expires_in: 3600 });
+      }
+      if (call.init.method === "POST") return new Response(null, { status: 202 });
+      return json(200, { status: "PENDING" });
+    });
+
+    expect(await adapter.initiate(INIT_REQ)).toEqual({ ok: true, providerReference: REF });
+
+    const pay = calls.find((c) => c.init.method === "POST" && c.url.endsWith("/requesttopay"))!;
+    expect(pay.url).toBe(`${BASE}/collection/v1_0/requesttopay`);
+    const h = pay.init.headers as Record<string, string>;
+    expect(h["X-Target-Environment"]).toBe("sandbox");
+    expect(h["X-Reference-Id"]).toBe(REF);
+    const body = JSON.parse(String(pay.init.body)) as Record<string, unknown>;
+    expect(body.amount).toBe("36000");
+    expect(body.currency).toBe("EUR"); // sandbox currency rule, unchanged
+    expect(body.payer).toEqual({ partyIdType: "MSISDN", partyId: "256781234567" });
+  });
+
+  it("an MTN rejection of the status query is still classified, never settled", async () => {
+    const adapter = routedFor("sandbox", () => json(404, { code: "NOT_FOUND" }));
+    const outcome = await adapter.queryStatus({ reference: REF, providerReference: null });
+    // A status failure is a report, never a settlement trigger.
+    expect(outcome.ok).toBe(false);
+    expect(outcome).toMatchObject({ error: "status_not_found" });
   });
 });
