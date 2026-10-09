@@ -1,3 +1,14 @@
+/**
+ * Data access for the Pricing Campaigns window.
+ *
+ * Domain types, status derivation and validation live in `pricingCampaigns.ts`
+ * (pure, unit-tested); this module owns the RPC/table calls and re-exports the
+ * types so existing importers keep working.
+ *
+ * Reads return a discriminated result instead of collapsing every failure into
+ * an empty array — a denied or failed load used to render identically to
+ * “no campaigns yet”, which hid real outages from the operator.
+ */
 import { supabase } from "./supabase";
 import {
   buildDefaultPublicPricing,
@@ -6,57 +17,31 @@ import {
   type PaidPlanCode,
   type PublicPricingSnapshot,
 } from "./subscriptionPricing";
+import { mapPricingCampaignError } from "./pricingCampaigns";
+import type {
+  PricingCampaign,
+  PricingCampaignAuditEntry,
+  PricingCampaignMetrics,
+  PricingCampaignPlanDiscount,
+} from "./pricingCampaigns";
+
+export type {
+  PricingCampaign,
+  PricingCampaignAuditEntry,
+  PricingCampaignMetrics,
+  PricingCampaignPlanDiscount,
+} from "./pricingCampaigns";
+
+export type PricingFetchResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 type RpcResult = { ok: boolean; error?: string };
 
 function rpcResult(data: unknown, error: { message: string } | null): RpcResult {
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: mapPricingCampaignError(error.message) };
   const obj = (data ?? {}) as Record<string, unknown>;
-  if (obj.ok === false) return { ok: false, error: String(obj.error ?? "failed") };
+  if (obj.ok === false) return { ok: false, error: mapPricingCampaignError(String(obj.error ?? "")) };
   return { ok: true };
 }
-
-export type PricingCampaign = {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  startsAt: string | null;
-  endsAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type PricingCampaignPlanDiscount = {
-  id: string;
-  campaignId: string;
-  planCode: PaidPlanCode;
-  monthlyDiscountType: MonthlyDiscountType;
-  monthlyDiscountValue: number;
-  annualDiscountPercent: number | null;
-};
-
-export type PricingCampaignAuditEntry = {
-  id: string;
-  campaignId: string | null;
-  planCode: PaidPlanCode | null;
-  actorName: string;
-  previousDiscount: Record<string, unknown>;
-  newDiscount: Record<string, unknown>;
-  reason: string;
-  createdAt: string;
-};
-
-export type PricingCampaignMetrics = {
-  campaignId: string | null;
-  campaignName: string | null;
-  campaignActive: boolean;
-  newSubscribers: number;
-  newSubscribersByPlan: Record<string, number>;
-  revenueRecordedUgx: number;
-  conversionRatePercent: number;
-  totalSubscriptionsInWindow: number;
-};
 
 type CampaignRow = {
   id: string;
@@ -102,6 +87,7 @@ function mapDiscount(row: DiscountRow): PricingCampaignPlanDiscount {
   };
 }
 
+/** Public marketing/upgrade price book. Falls back to canonical prices. */
 export async function fetchPublicSubscriptionPricing(): Promise<PublicPricingSnapshot> {
   if (!supabase) return buildDefaultPublicPricing();
   const { data, error } = await supabase.rpc("public_subscription_pricing");
@@ -109,24 +95,28 @@ export async function fetchPublicSubscriptionPricing(): Promise<PublicPricingSna
   return mapPublicPricingRpc(data);
 }
 
-export async function fetchPricingCampaigns(): Promise<PricingCampaign[]> {
-  if (!supabase) return [];
+export async function fetchPricingCampaigns(): Promise<PricingFetchResult<PricingCampaign[]>> {
+  if (!supabase) return { ok: false, error: "Supabase is not configured for this build." };
   const { data, error } = await supabase
     .from("pricing_campaigns")
     .select("id, name, description, enabled, starts_at, ends_at, created_at, updated_at")
     .order("updated_at", { ascending: false });
-  if (error || !data) return [];
-  return (data as CampaignRow[]).map(mapCampaign);
+  if (error) return { ok: false, error: mapPricingCampaignError(error.message) };
+  return { ok: true, data: ((data ?? []) as CampaignRow[]).map(mapCampaign) };
 }
 
-export async function fetchPricingCampaignDiscounts(campaignId: string): Promise<PricingCampaignPlanDiscount[]> {
-  if (!supabase) return [];
+/** Batch read — the window lists every campaign's pricing rule in one query. */
+export async function fetchPricingCampaignDiscounts(
+  campaignIds: readonly string[],
+): Promise<PricingFetchResult<PricingCampaignPlanDiscount[]>> {
+  if (!supabase) return { ok: false, error: "Supabase is not configured for this build." };
+  if (campaignIds.length === 0) return { ok: true, data: [] };
   const { data, error } = await supabase
     .from("pricing_campaign_plan_discounts")
     .select("id, campaign_id, plan_code, monthly_discount_type, monthly_discount_value, annual_discount_percent")
-    .eq("campaign_id", campaignId);
-  if (error || !data) return [];
-  return (data as DiscountRow[]).map(mapDiscount);
+    .in("campaign_id", campaignIds);
+  if (error) return { ok: false, error: mapPricingCampaignError(error.message) };
+  return { ok: true, data: ((data ?? []) as DiscountRow[]).map(mapDiscount) };
 }
 
 export async function savePricingCampaign(campaign: {
@@ -137,7 +127,7 @@ export async function savePricingCampaign(campaign: {
   startsAt: string | null;
   endsAt: string | null;
 }): Promise<RpcResult & { campaignId?: string }> {
-  if (!supabase) return { ok: false, error: "no_supabase" };
+  if (!supabase) return { ok: false, error: "Supabase is not configured for this build." };
   const { data, error } = await supabase.rpc("admin_pricing_campaign_save", {
     p_id: campaign.id,
     p_name: campaign.name,
@@ -159,7 +149,7 @@ export async function savePricingCampaignPlanDiscount(input: {
   annualDiscountPercent: number | null;
   reason: string;
 }): Promise<RpcResult> {
-  if (!supabase) return { ok: false, error: "no_supabase" };
+  if (!supabase) return { ok: false, error: "Supabase is not configured for this build." };
   const { data, error } = await supabase.rpc("admin_pricing_campaign_plan_discount_save", {
     p_campaign_id: input.campaignId,
     p_plan_code: input.planCode,
@@ -171,65 +161,54 @@ export async function savePricingCampaignPlanDiscount(input: {
   return rpcResult(data, error);
 }
 
-export async function previewPricingCampaign(campaignId: string): Promise<PublicPricingSnapshot["plans"]> {
-  if (!supabase) return buildDefaultPublicPricing().plans;
-  const { data, error } = await supabase.rpc("admin_pricing_campaign_preview", { p_campaign_id: campaignId });
-  if (error || !data) return buildDefaultPublicPricing().plans;
-  const obj = data as Record<string, unknown>;
-  return mapPublicPricingRpc({ ...obj, campaign_active: false }).plans;
-}
-
-export async function fetchPricingCampaignMetrics(opts?: {
-  campaignId?: string | null;
-  from?: string | null;
-  to?: string | null;
-}): Promise<PricingCampaignMetrics | null> {
-  if (!supabase) return null;
+export async function fetchPricingCampaignMetrics(opts: {
+  campaignId: string;
+}): Promise<PricingFetchResult<PricingCampaignMetrics>> {
+  if (!supabase) return { ok: false, error: "Supabase is not configured for this build." };
   const { data, error } = await supabase.rpc("admin_pricing_campaign_metrics", {
-    p_campaign_id: opts?.campaignId ?? null,
-    p_from: opts?.from ?? null,
-    p_to: opts?.to ?? null,
+    p_campaign_id: opts.campaignId,
+    p_from: null,
+    p_to: null,
   });
-  if (error || !data) return null;
+  if (error) return { ok: false, error: mapPricingCampaignError(error.message) };
+  if (!data || typeof data !== "object") return { ok: false, error: "Campaign reporting returned no data." };
   const obj = data as Record<string, unknown>;
   return {
-    campaignId: typeof obj.campaign_id === "string" ? obj.campaign_id : null,
-    campaignName: typeof obj.campaign_name === "string" ? obj.campaign_name : null,
-    campaignActive: Boolean(obj.campaign_active),
-    newSubscribers: Number(obj.new_subscribers ?? 0),
-    newSubscribersByPlan: (obj.new_subscribers_by_plan as Record<string, number>) ?? {},
-    revenueRecordedUgx: Number(obj.revenue_recorded_ugx ?? 0),
-    conversionRatePercent: Number(obj.conversion_rate_percent ?? 0),
-    totalSubscriptionsInWindow: Number(obj.total_subscriptions_in_window ?? 0),
+    ok: true,
+    data: {
+      campaignId: typeof obj.campaign_id === "string" ? obj.campaign_id : null,
+      campaignName: typeof obj.campaign_name === "string" ? obj.campaign_name : null,
+      campaignActive: Boolean(obj.campaign_active),
+      newSubscribers: Number(obj.new_subscribers ?? 0),
+      newSubscribersByPlan: (obj.new_subscribers_by_plan as Record<string, number>) ?? {},
+      revenueRecordedUgx: Number(obj.revenue_recorded_ugx ?? 0),
+      conversionRatePercent: Number(obj.conversion_rate_percent ?? 0),
+      totalSubscriptionsInWindow: Number(obj.total_subscriptions_in_window ?? 0),
+    },
   };
 }
 
-export async function fetchPricingCampaignAuditFeed(limit = 50): Promise<PricingCampaignAuditEntry[]> {
-  if (!supabase) return [];
+export async function fetchPricingCampaignAuditFeed(
+  limit = 50,
+): Promise<PricingFetchResult<PricingCampaignAuditEntry[]>> {
+  if (!supabase) return { ok: false, error: "Supabase is not configured for this build." };
   const { data, error } = await supabase.rpc("admin_pricing_campaign_audit_feed", { p_limit: limit });
-  if (error || !data) return [];
-  return (data as Array<Record<string, unknown>>).map((row) => ({
-    id: String(row.id),
-    campaignId: typeof row.campaign_id === "string" ? row.campaign_id : null,
-    planCode: typeof row.plan_code === "string" ? (row.plan_code as PaidPlanCode) : null,
-    actorName: String(row.actor_name ?? ""),
-    previousDiscount: (row.previous_discount as Record<string, unknown>) ?? {},
-    newDiscount: (row.new_discount as Record<string, unknown>) ?? {},
-    reason: String(row.reason ?? ""),
-    createdAt: String(row.created_at ?? ""),
-  }));
-}
-
-export function isPricingCampaignActive(campaign: PricingCampaign, now = new Date()): boolean {
-  if (!campaign.enabled) return false;
-  const t = now.getTime();
-  if (campaign.startsAt) {
-    const start = new Date(campaign.startsAt).getTime();
-    if (Number.isFinite(start) && t < start) return false;
-  }
-  if (campaign.endsAt) {
-    const end = new Date(campaign.endsAt).getTime();
-    if (Number.isFinite(end) && t >= end) return false;
-  }
-  return true;
+  if (error) return { ok: false, error: mapPricingCampaignError(error.message) };
+  const rows = Array.isArray(data) ? data : [];
+  return {
+    ok: true,
+    data: rows.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        id: String(r.id),
+        campaignId: typeof r.campaign_id === "string" ? r.campaign_id : null,
+        planCode: typeof r.plan_code === "string" ? (r.plan_code as PaidPlanCode) : null,
+        actorName: String(r.actor_name ?? ""),
+        previousDiscount: (r.previous_discount as Record<string, unknown>) ?? {},
+        newDiscount: (r.new_discount as Record<string, unknown>) ?? {},
+        reason: String(r.reason ?? ""),
+        createdAt: String(r.created_at ?? ""),
+      };
+    }),
+  };
 }

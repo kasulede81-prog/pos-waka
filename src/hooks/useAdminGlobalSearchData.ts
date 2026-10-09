@@ -130,7 +130,7 @@ export function useAdminGlobalSearchData(previewMode: boolean): AdminGlobalSearc
       agentResult,
       releaseRows,
       activationResult,
-      pricingRows,
+      pricingResult,
       growthRows,
     ] = await Promise.all([
       fetchSupportTickets(80),
@@ -156,7 +156,9 @@ export function useAdminGlobalSearchData(previewMode: boolean): AdminGlobalSearc
     );
     setReleases(releaseRows);
     setActivations(activationResult.rows);
-    setPricingCampaigns(pricingRows);
+    // A search index that cannot load pricing campaigns must not break the rest
+    // of the palette — the campaigns page surfaces the real error.
+    setPricingCampaigns(pricingResult.ok ? pricingResult.data : []);
     setGrowthCampaigns(growthRows);
     setLoading(false);
   }, [previewMode]);

@@ -1,59 +1,58 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Loader2, Percent, RefreshCw, Tag } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Loader2, Plus, RefreshCw, X } from "lucide-react";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
   CANONICAL_PLAN_PRICES,
   computePlanDisplayPrice,
   formatUgx,
+  type ComputedPlanPrice,
   type MonthlyDiscountType,
   type PaidPlanCode,
 } from "../../../../lib/subscriptionPricing";
+import {
+  PLAN_LABELS,
+  PRICING_CAMPAIGN_STATUS_LABELS,
+  datetimeLocalFromIso,
+  describeCampaignSchedule,
+  describePlanDiscounts,
+  hasErrors,
+  pricingCampaignStatus,
+  resolveEffectiveCampaign,
+  shadowedLiveCampaigns,
+  validateCampaignDraft,
+  validatePlanDiscountDraft,
+  type CampaignDraft,
+  type CampaignDraftErrors,
+  type PlanDiscountDraft,
+  type PlanDiscountDraftErrors,
+  type PricingCampaign,
+  type PricingCampaignMetrics,
+  type PricingCampaignPlanDiscount,
+  type PricingCampaignStatus,
+} from "../../../../lib/pricingCampaigns";
 import {
   fetchPricingCampaignAuditFeed,
   fetchPricingCampaignDiscounts,
   fetchPricingCampaignMetrics,
   fetchPricingCampaigns,
-  isPricingCampaignActive,
-  previewPricingCampaign,
   savePricingCampaign,
   savePricingCampaignPlanDiscount,
-  type PricingCampaign,
   type PricingCampaignAuditEntry,
-  type PricingCampaignMetrics,
-  type PricingCampaignPlanDiscount,
 } from "../../../../lib/pricingCampaignsAdmin";
+import { notifyInternalOpsChanged } from "../../../../lib/internalAdminActionRunner";
+import { internalAdminPreviewHref } from "../../../../lib/internalAdminPreview";
+import { statusTokens, type StatusKind } from "../../../../lib/statusTokens";
 import { adminPermissions } from "../adminRoles";
 import { WakaSwitch } from "../../../enterprise/WakaSwitch";
+import { ModalSheet } from "../../../layout/ModalSheet";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
   previewMode?: boolean;
 };
 
-type CampaignDraft = {
-  id: string | null;
-  name: string;
-  description: string;
-  enabled: boolean;
-  startsAt: string;
-  endsAt: string;
-};
-
-type PlanDraft = {
-  monthlyDiscountType: MonthlyDiscountType;
-  monthlyDiscountValue: string;
-  annualDiscountPercent: string;
-  reason: string;
-};
-
 const PAID_PLANS: PaidPlanCode[] = ["starter", "business", "waka_plus"];
-
-const PLAN_LABELS: Record<PaidPlanCode, string> = {
-  starter: "Starter",
-  business: "Business",
-  waka_plus: "Enterprise (Waka Plus)",
-};
 
 const EMPTY_CAMPAIGN: CampaignDraft = {
   id: null,
@@ -64,521 +63,1101 @@ const EMPTY_CAMPAIGN: CampaignDraft = {
   endsAt: "",
 };
 
-function emptyPlanDraft(): PlanDraft {
+const EMPTY_PLAN_DRAFT: PlanDiscountDraft = {
+  monthlyDiscountType: "none",
+  monthlyDiscountValue: "0",
+  annualDiscountPercent: "",
+};
+
+function emptyPlanDrafts(): Record<PaidPlanCode, PlanDiscountDraft> {
   return {
-    monthlyDiscountType: "none",
-    monthlyDiscountValue: "0",
-    annualDiscountPercent: "20",
-    reason: "",
+    starter: { ...EMPTY_PLAN_DRAFT },
+    business: { ...EMPTY_PLAN_DRAFT },
+    waka_plus: { ...EMPTY_PLAN_DRAFT },
   };
 }
 
-function toDatetimeLocal(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function fromDatetimeLocal(value: string): string | null {
-  if (!value.trim()) return null;
-  const d = new Date(value);
-  return Number.isFinite(d.getTime()) ? d.toISOString() : null;
-}
+/** Status → semantic token family (no hand-rolled emerald/rose). */
+const STATUS_TOKEN: Record<PricingCampaignStatus, StatusKind> = {
+  live: "success",
+  scheduled: "info",
+  ended: "expired",
+  draft: "draft",
+};
 
 const inputCls =
-  "w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground outline-none focus:border-waka-500";
+  "w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground outline-none focus:border-waka-500 disabled:opacity-60";
 const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-muted-foreground";
+const primaryBtnCls =
+  "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-waka-600 px-4 text-sm font-black text-white hover:bg-waka-700 disabled:opacity-60";
+const secondaryBtnCls =
+  "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-muted px-3 text-sm font-black text-muted-foreground disabled:opacity-60";
+const dangerBtnCls =
+  "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger-muted px-4 text-sm font-black text-danger disabled:opacity-60";
+
+/**
+ * Preview-mode fixtures, mirroring the sample campaign `useAdminGlobalSearchData`
+ * already carries so this window can be reviewed without production access.
+ */
+const PREVIEW_CAMPAIGNS: PricingCampaign[] = [
+  {
+    id: "preview-live",
+    name: "Preview Launch Offer",
+    description: "Sample pricing campaign",
+    enabled: true,
+    startsAt: new Date(Date.now() - 86_400_000).toISOString(),
+    endsAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+    createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+    updatedAt: new Date(Date.now() - 3_600_000).toISOString(),
+  },
+  {
+    id: "preview-scheduled",
+    name: "Preview December Push",
+    description: "Starts next week",
+    enabled: true,
+    startsAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    endsAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date(Date.now() - 7_200_000).toISOString(),
+  },
+  {
+    id: "preview-draft",
+    name: "Preview Untitled Draft",
+    description: "",
+    enabled: false,
+    startsAt: null,
+    endsAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date(Date.now() - 10_800_000).toISOString(),
+  },
+];
+
+const PREVIEW_DISCOUNTS: PricingCampaignPlanDiscount[] = [
+  {
+    id: "preview-d1",
+    campaignId: "preview-live",
+    planCode: "starter",
+    monthlyDiscountType: "percentage",
+    monthlyDiscountValue: 10,
+    annualDiscountPercent: 20,
+  },
+  {
+    id: "preview-d2",
+    campaignId: "preview-live",
+    planCode: "business",
+    monthlyDiscountType: "fixed_amount",
+    monthlyDiscountValue: 6_000,
+    annualDiscountPercent: null,
+  },
+];
+
+type ConfirmRequest = {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  run: () => Promise<void>;
+};
 
 export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Props) {
   const perms = adminPermissions(adminRow);
-  const canEdit = perms.canManageBillingOffers;
+  // Narrower than the server on purpose: `_pricing_require_admin` admits any
+  // internal staff member, while this window keeps pricing edits to the roles
+  // that already own billing offers. Preview mode is never editable.
+  const canEdit = perms.canManageBillingOffers && !previewMode;
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<PricingCampaign[]>([]);
-  const [, setDiscounts] = useState<PricingCampaignPlanDiscount[]>([]);
+  const [discounts, setDiscounts] = useState<PricingCampaignPlanDiscount[]>([]);
+  const [audit, setAudit] = useState<PricingCampaignAuditEntry[]>([]);
+
+  const [formMode, setFormMode] = useState<"closed" | "create" | "edit">("closed");
   const [draft, setDraft] = useState<CampaignDraft>(EMPTY_CAMPAIGN);
-  const [planDrafts, setPlanDrafts] = useState<Record<PaidPlanCode, PlanDraft>>({
-    starter: emptyPlanDraft(),
-    business: emptyPlanDraft(),
-    waka_plus: emptyPlanDraft(),
+  const [draftErrors, setDraftErrors] = useState<CampaignDraftErrors>({});
+  // Untouched schedule fields are written back verbatim: `datetime-local` has
+  // minute precision, so echoing its rounded value would silently truncate an
+  // existing campaign's timestamps on every save.
+  const [originalSchedule, setOriginalSchedule] = useState<{ startsAt: string | null; endsAt: string | null }>({
+    startsAt: null,
+    endsAt: null,
   });
+  const [planDrafts, setPlanDrafts] = useState<Record<PaidPlanCode, PlanDiscountDraft>>(emptyPlanDrafts);
+  const [planErrors, setPlanErrors] = useState<Partial<Record<PaidPlanCode, PlanDiscountDraftErrors>>>({});
+  const [reason, setReason] = useState("");
+  const [reasonError, setReasonError] = useState<string | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [savingPlan, setSavingPlan] = useState<PaidPlanCode | null>(null);
+  const [quickBusyId, setQuickBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [audit, setAudit] = useState<PricingCampaignAuditEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [metrics, setMetrics] = useState<PricingCampaignMetrics | null>(null);
-  const [previewPlans, setPreviewPlans] = useState<ReturnType<typeof computePlanDisplayPrice>[]>([]);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [campaignRows, auditRows] = await Promise.all([
-      fetchPricingCampaigns(),
-      fetchPricingCampaignAuditFeed(40),
-    ]);
-    setCampaigns(campaignRows);
-    setAudit(auditRows);
-    setLoading(false);
-  }, []);
+  /**
+   * `silent` refetches after a mutation without blanking the page to a spinner.
+   * Returns what it loaded so callers re-sync drafts from fresh rows instead of
+   * a stale closure.
+   */
+  const load = useCallback(
+    async (opts?: { silent?: boolean }): Promise<{ campaigns: PricingCampaign[]; discounts: PricingCampaignPlanDiscount[] }> => {
+      if (previewMode) {
+        setCampaigns(PREVIEW_CAMPAIGNS);
+        setDiscounts(PREVIEW_DISCOUNTS);
+        setAudit([]);
+        setLoadError(null);
+        setLoading(false);
+        return { campaigns: PREVIEW_CAMPAIGNS, discounts: PREVIEW_DISCOUNTS };
+      }
+      if (!opts?.silent) setLoading(true);
+      const [campaignRes, auditRes] = await Promise.all([
+        fetchPricingCampaigns(),
+        fetchPricingCampaignAuditFeed(40),
+      ]);
+      if (!campaignRes.ok) {
+        setLoadError(campaignRes.error);
+        setCampaigns([]);
+        setDiscounts([]);
+        setAudit([]);
+        setLoading(false);
+        return { campaigns: [], discounts: [] };
+      }
+      setLoadError(null);
+      setCampaigns(campaignRes.data);
+      setAudit(auditRes.ok ? auditRes.data : []);
 
-  useEffect(() => {
-    if (previewMode) {
+      // One query for every campaign's discounts — the table shows each campaign's
+      // pricing rule, and a per-row fetch made that an N+1.
+      const discountRes = await fetchPricingCampaignDiscounts(campaignRes.data.map((c) => c.id));
+      const discountRows = discountRes.ok ? discountRes.data : [];
+      setDiscounts(discountRows);
+      if (!discountRes.ok) setLoadError(discountRes.error);
       setLoading(false);
-      return;
-    }
-    void load();
-  }, [load, previewMode]);
-
-  const selectCampaign = useCallback(async (c: PricingCampaign) => {
-    setDraft({
-      id: c.id,
-      name: c.name,
-      description: c.description,
-      enabled: c.enabled,
-      startsAt: toDatetimeLocal(c.startsAt),
-      endsAt: toDatetimeLocal(c.endsAt),
-    });
-    const rows = await fetchPricingCampaignDiscounts(c.id);
-    setDiscounts(rows);
-    const nextDrafts: Record<PaidPlanCode, PlanDraft> = {
-      starter: emptyPlanDraft(),
-      business: emptyPlanDraft(),
-      waka_plus: emptyPlanDraft(),
-    };
-    for (const plan of PAID_PLANS) {
-      const row = rows.find((r) => r.planCode === plan);
-      nextDrafts[plan] = {
-        monthlyDiscountType: row?.monthlyDiscountType ?? "none",
-        monthlyDiscountValue: String(row?.monthlyDiscountValue ?? 0),
-        annualDiscountPercent: String(row?.annualDiscountPercent ?? 20),
-        reason: "",
-      };
-    }
-    setPlanDrafts(nextDrafts);
-    const preview = await previewPricingCampaign(c.id);
-    setPreviewPlans(preview);
-    const m = await fetchPricingCampaignMetrics({ campaignId: c.id });
-    setMetrics(m);
-  }, []);
-
-  useEffect(() => {
-    if (previewMode || campaigns.length === 0 || draft.id) return;
-    void selectCampaign(campaigns[0]!);
-  }, [campaigns, draft.id, previewMode, selectCampaign]);
-
-  const activeCampaigns = useMemo(
-    () => campaigns.filter((c) => isPricingCampaignActive(c)),
-    [campaigns],
+      return { campaigns: campaignRes.data, discounts: discountRows };
+    },
+    [previewMode],
   );
 
-  const previewFromDrafts = useMemo(() => {
-    return PAID_PLANS.map((plan) => {
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Recomputed every render rather than memoised on a `new Date()`: the list is
+  // small, and a clock-dependent memo would need its own ticking.
+  const now = new Date();
+  const effective = resolveEffectiveCampaign(campaigns, now);
+  const shadowed = shadowedLiveCampaigns(campaigns, now);
+
+  const discountsFor = useCallback(
+    (campaignId: string | null): PricingCampaignPlanDiscount[] =>
+      campaignId ? discounts.filter((d) => d.campaignId === campaignId) : [],
+    [discounts],
+  );
+
+  const syncDraftFrom = useCallback((campaign: PricingCampaign) => {
+    setDraft({
+      id: campaign.id,
+      name: campaign.name,
+      description: campaign.description,
+      enabled: campaign.enabled,
+      startsAt: datetimeLocalFromIso(campaign.startsAt),
+      endsAt: datetimeLocalFromIso(campaign.endsAt),
+    });
+    setOriginalSchedule({ startsAt: campaign.startsAt, endsAt: campaign.endsAt });
+    setDraftErrors({});
+  }, []);
+
+  /**
+   * `rows` is passed explicitly after a save so this reads the freshly loaded
+   * discounts rather than the render-time closure's copy.
+   */
+  const syncPlanDraftsFrom = useCallback(
+    (campaignId: string, rows?: PricingCampaignPlanDiscount[]) => {
+      const source = rows ?? discountsFor(campaignId);
+      const next = emptyPlanDrafts();
+      for (const plan of PAID_PLANS) {
+        const row = source.find((r) => r.planCode === plan);
+        next[plan] = {
+          monthlyDiscountType: row?.monthlyDiscountType ?? "none",
+          monthlyDiscountValue: String(row?.monthlyDiscountValue ?? 0),
+          annualDiscountPercent:
+            row?.annualDiscountPercent === null || row?.annualDiscountPercent === undefined
+              ? ""
+              : String(row.annualDiscountPercent),
+        };
+      }
+      setPlanDrafts(next);
+      setPlanErrors({});
+    },
+    [discountsFor],
+  );
+
+  const refreshMetrics = useCallback(
+    async (campaignId: string) => {
+      if (previewMode) {
+        setMetrics(null);
+        setMetricsError(null);
+        return;
+      }
+      const res = await fetchPricingCampaignMetrics({ campaignId });
+      if (res.ok) {
+        setMetrics(res.data);
+        setMetricsError(null);
+      } else {
+        setMetrics(null);
+        setMetricsError(res.error);
+      }
+    },
+    [previewMode],
+  );
+
+  const openCreate = useCallback(() => {
+    setFormMode("create");
+    setDraft(EMPTY_CAMPAIGN);
+    setOriginalSchedule({ startsAt: null, endsAt: null });
+    setDraftErrors({});
+    setPlanDrafts(emptyPlanDrafts());
+    setPlanErrors({});
+    setReason("");
+    setReasonError(null);
+    setMetrics(null);
+    setMetricsError(null);
+    setNotice(null);
+    setError(null);
+  }, []);
+
+  const openEdit = useCallback(
+    (campaign: PricingCampaign) => {
+      setFormMode("edit");
+      syncDraftFrom(campaign);
+      syncPlanDraftsFrom(campaign.id);
+      setReason("");
+      setReasonError(null);
+      setNotice(null);
+      setError(null);
+      void refreshMetrics(campaign.id);
+    },
+    [refreshMetrics, syncDraftFrom, syncPlanDraftsFrom],
+  );
+
+  const closeForm = useCallback(() => {
+    setFormMode("closed");
+    setDraft(EMPTY_CAMPAIGN);
+    setDraftErrors({});
+    setPlanErrors({});
+    setReason("");
+    setReasonError(null);
+    setMetrics(null);
+    setMetricsError(null);
+  }, []);
+
+  const runAction = useCallback(
+    async (
+      fn: () => Promise<{ ok: boolean; error?: string }>,
+      successMessage: string,
+    ): Promise<{ ok: boolean; campaigns: PricingCampaign[]; discounts: PricingCampaignPlanDiscount[] }> => {
+      setNotice(null);
+      setError(null);
+      const res = await fn();
+      if (!res.ok) {
+        setError(res.error ?? "Something went wrong. Please try again.");
+        return { ok: false, campaigns: [], discounts: [] };
+      }
+      const fresh = await load({ silent: true });
+      notifyInternalOpsChanged();
+      setNotice(successMessage);
+      return { ok: true, ...fresh };
+    },
+    [load],
+  );
+
+  const hasSavedDiscount = useCallback(
+    (campaignId: string, plan: PaidPlanCode): boolean =>
+      discounts.some(
+        (d) => d.campaignId === campaignId && d.planCode === plan && d.monthlyDiscountType !== "none" && d.monthlyDiscountValue > 0,
+      ),
+    [discounts],
+  );
+
+  const submitCampaign = async () => {
+    if (!canEdit || saving) return;
+    const errors = validateCampaignDraft(draft);
+    setDraftErrors(errors);
+    if (hasErrors(errors)) {
+      setError("Fix the highlighted fields before saving.");
+      return;
+    }
+    setSaving(true);
+    const created = draft.id === null;
+    const res = await savePricingCampaign({
+      id: draft.id,
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      enabled: draft.enabled,
+      // Only re-send a schedule the operator actually changed.
+      startsAt:
+        draft.startsAt === datetimeLocalFromIso(originalSchedule.startsAt)
+          ? originalSchedule.startsAt
+          : isoOrNull(draft.startsAt),
+      endsAt:
+        draft.endsAt === datetimeLocalFromIso(originalSchedule.endsAt)
+          ? originalSchedule.endsAt
+          : isoOrNull(draft.endsAt),
+    });
+    if (!res.ok) {
+      setSaving(false);
+      setError(res.error ?? "Could not save the campaign.");
+      return;
+    }
+    const savedId = res.campaignId ?? draft.id;
+    const fresh = await load({ silent: true });
+    notifyInternalOpsChanged();
+    if (savedId) {
+      const updated = fresh.campaigns.find((c) => c.id === savedId);
+      if (updated) {
+        syncDraftFrom(updated);
+        syncPlanDraftsFrom(updated.id, fresh.discounts);
+        setFormMode("edit");
+        void refreshMetrics(updated.id);
+      }
+    }
+    setSaving(false);
+    setNotice(created ? "Campaign created. Add plan discounts below." : "Campaign saved.");
+  };
+
+  const submitPlanDiscount = async (plan: PaidPlanCode) => {
+    if (!canEdit || !draft.id || savingPlan) return;
+    const planDraft = planDrafts[plan];
+    const errors = validatePlanDiscountDraft(plan, planDraft, reason);
+    setPlanErrors((prev) => ({ ...prev, [plan]: errors }));
+    setReasonError(errors.reason ?? null);
+    if (hasErrors(errors)) {
+      setError("Fix the highlighted fields before saving.");
+      return;
+    }
+    const removing = planDraft.monthlyDiscountType === "none" && hasSavedDiscount(draft.id, plan);
+
+    const apply = async () => {
+      setSavingPlan(plan);
+      const res = await savePricingCampaignPlanDiscount({
+        campaignId: draft.id as string,
+        planCode: plan,
+        monthlyDiscountType: planDraft.monthlyDiscountType,
+        monthlyDiscountValue:
+          planDraft.monthlyDiscountType === "none" ? 0 : Number(planDraft.monthlyDiscountValue),
+        annualDiscountPercent: planDraft.annualDiscountPercent.trim()
+          ? Number(planDraft.annualDiscountPercent)
+          : null,
+        reason: reason.trim(),
+      });
+      setSavingPlan(null);
+      if (!res.ok) {
+        setError(res.error ?? "Could not save the discount.");
+        return;
+      }
+      setReason("");
+      setReasonError(null);
+      const fresh = await load({ silent: true });
+      notifyInternalOpsChanged();
+      syncPlanDraftsFrom(draft.id as string, fresh.discounts);
+      void refreshMetrics(draft.id as string);
+      setNotice(`${PLAN_LABELS[plan]} discount saved.`);
+    };
+
+    if (removing) {
+      setConfirmRequest({
+        title: `Remove the ${PLAN_LABELS[plan]} discount?`,
+        body: `${PLAN_LABELS[plan]} goes back to its canonical price of ${formatUgx(
+          canonicalMonthly(plan),
+        )} per month. The change is recorded in the audit history.`,
+        confirmLabel: "Remove discount",
+        run: apply,
+      });
+      return;
+    }
+    await apply();
+  };
+
+  /** One-click activate / pause from the list, without opening the form. */
+  const toggleCampaignEnabled = async (campaign: PricingCampaign, enabled: boolean) => {
+    if (!canEdit || quickBusyId) return;
+    const apply = async () => {
+      setQuickBusyId(campaign.id);
+      const result = await runAction(
+        () =>
+          savePricingCampaign({
+            id: campaign.id,
+            name: campaign.name,
+            description: campaign.description,
+            enabled,
+            startsAt: campaign.startsAt,
+            endsAt: campaign.endsAt,
+          }),
+        enabled ? `“${campaign.name}” activated.` : `“${campaign.name}” paused.`,
+      );
+      // Keep an open editor in step with a status changed from the list.
+      if (result.ok && draft.id === campaign.id && formMode === "edit") {
+        const updated = result.campaigns.find((c) => c.id === campaign.id);
+        if (updated) syncDraftFrom(updated);
+      }
+      setQuickBusyId(null);
+    };
+
+    const isLiveNow = pricingCampaignStatus(campaign, now) === "live";
+    if (!enabled && isLiveNow) {
+      setConfirmRequest({
+        title: `Pause “${campaign.name}”?`,
+        body: "This campaign is live. Pausing it returns every plan to its canonical price on the marketing and upgrade pages immediately.",
+        confirmLabel: "Pause campaign",
+        run: apply,
+      });
+      return;
+    }
+    await apply();
+  };
+
+  // -------------------------------------------------------------------------
+  // Derived preview
+  // -------------------------------------------------------------------------
+
+  const editingId = formMode === "edit" ? draft.id : null;
+  const editorOpen = formMode !== "closed";
+  const effectiveDiscounts = editorOpen ? [] : discountsFor(effective?.id ?? null);
+
+  /**
+   * One preview, two possible sources: the fields being edited, or — when no
+   * editor is open — whatever the effective campaign is serving right now. The
+   * previous screen showed both at once and they disagreed.
+   */
+  const previewPlans: ComputedPlanPrice[] = PAID_PLANS.map((plan) => {
+    if (editorOpen) {
       const pd = planDrafts[plan];
       return computePlanDisplayPrice(plan, {
         monthlyDiscountType: pd.monthlyDiscountType,
-        monthlyDiscountValue: Number(pd.monthlyDiscountValue) || 0,
-        annualDiscountPercent: pd.annualDiscountPercent.trim()
-          ? Number(pd.annualDiscountPercent)
-          : null,
+        monthlyDiscountValue: pd.monthlyDiscountType === "none" ? 0 : Number(pd.monthlyDiscountValue) || 0,
+        annualDiscountPercent: pd.annualDiscountPercent.trim() ? Number(pd.annualDiscountPercent) : null,
       });
+    }
+    const row = effectiveDiscounts.find((d) => d.planCode === plan);
+    return computePlanDisplayPrice(plan, {
+      monthlyDiscountType: row?.monthlyDiscountType ?? "none",
+      monthlyDiscountValue: row?.monthlyDiscountValue ?? 0,
+      annualDiscountPercent: row?.annualDiscountPercent ?? null,
     });
-  }, [planDrafts]);
+  });
 
-  const saveCampaign = async () => {
-    if (!canEdit) return;
-    setSaving(true);
-    setNotice(null);
-    const res = await savePricingCampaign({
-      id: draft.id,
-      name: draft.name,
-      description: draft.description,
-      enabled: draft.enabled,
-      startsAt: fromDatetimeLocal(draft.startsAt),
-      endsAt: fromDatetimeLocal(draft.endsAt),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      setNotice(res.error ?? "Save failed");
-      return;
-    }
-    setNotice("Campaign saved.");
-    await load();
-    if (res.campaignId) {
-      const updated = (await fetchPricingCampaigns()).find((c) => c.id === res.campaignId);
-      if (updated) void selectCampaign(updated);
-    }
-  };
-
-  const savePlanDiscount = async (plan: PaidPlanCode) => {
-    if (!canEdit || !draft.id) return;
-    const pd = planDrafts[plan];
-    if (!pd.reason.trim()) {
-      setNotice("Reason is required for discount changes.");
-      return;
-    }
-    setSavingPlan(plan);
-    setNotice(null);
-    const res = await savePricingCampaignPlanDiscount({
-      campaignId: draft.id,
-      planCode: plan,
-      monthlyDiscountType: pd.monthlyDiscountType,
-      monthlyDiscountValue: Number(pd.monthlyDiscountValue) || 0,
-      annualDiscountPercent: pd.annualDiscountPercent.trim() ? Number(pd.annualDiscountPercent) : null,
-      reason: pd.reason.trim(),
-    });
-    setSavingPlan(null);
-    if (!res.ok) {
-      setNotice(res.error ?? "Discount save failed");
-      return;
-    }
-    setNotice(`${PLAN_LABELS[plan]} discount saved.`);
-    setPlanDrafts((prev) => ({ ...prev, [plan]: { ...prev[plan], reason: "" } }));
-    const c = campaigns.find((x) => x.id === draft.id);
-    if (c) void selectCampaign(c);
-    const auditRows = await fetchPricingCampaignAuditFeed(40);
-    setAudit(auditRows);
-  };
+  const previewCaption =
+    formMode !== "closed"
+      ? "Draft values — customers see this once you save and the campaign is live."
+      : effective
+        ? `Live for customers now — “${effective.name}”.`
+        : "No campaign is live — marketing pages show the canonical list prices.";
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading pricing campaigns…
+      <div className="flex items-center justify-center py-16" data-testid="pricing-campaigns-loading">
+        <Loader2 className="h-6 w-6 animate-spin text-waka-600" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4" data-testid="pricing-campaigns-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <Link
-            to="/internal/waka/billing"
-            className="mb-2 inline-flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-waka-700"
+            to={previewMode ? internalAdminPreviewHref("/internal/waka/billing") : "/internal/waka/billing"}
+            className="mb-1 inline-flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-waka-700"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Billing
           </Link>
           <h1 className="text-xl font-black text-foreground">Pricing Campaigns</h1>
           <p className="text-sm text-muted-foreground">
-            Temporary discounts without changing canonical plan prices.
+            Temporary discounts on top of the canonical plan prices. Canonical prices are never changed.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-bold text-muted-foreground"
-        >
-          <RefreshCw className="h-4 w-4" /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void load()}
+            aria-label="Refresh campaigns"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-muted text-muted-foreground"
+            data-testid="pricing-campaigns-refresh"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={openCreate}
+              className={primaryBtnCls}
+              data-testid="pricing-campaign-new"
+            >
+              <Plus className="h-4 w-4" /> Create campaign
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {!canEdit ? (
-        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-          Read-only — billing permissions required to edit campaigns.
+        <p className={statusTokens.warning.banner} data-testid="pricing-campaigns-readonly">
+          {previewMode
+            ? "Preview mode — campaign changes are disabled."
+            : "Read-only — your admin role cannot change pricing campaigns."}
         </p>
       ) : null}
 
+      {loadError ? (
+        <div className={`${statusTokens.danger.banner} flex flex-wrap items-center gap-3`} role="alert" data-testid="pricing-campaigns-load-error">
+          <span className="min-w-0 flex-1">{loadError}</span>
+          <button type="button" onClick={() => void load()} className={secondaryBtnCls}>
+            Try again
+          </button>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className={statusTokens.danger.banner} role="alert" data-testid="pricing-campaigns-error">
+          {error}
+        </p>
+      ) : null}
       {notice ? (
-        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+        <p className={statusTokens.success.banner} role="status" data-testid="pricing-campaigns-notice">
           {notice}
         </p>
       ) : null}
 
+      {shadowed.length > 0 ? (
+        <p className={statusTokens.warning.banner} role="alert" data-testid="pricing-campaigns-overlap">
+          <AlertTriangle className="mr-1 inline h-4 w-4" />
+          {shadowed.length === 1 ? "Another campaign is also live" : `${shadowed.length} other campaigns are also live`} but
+          only one can apply: {shadowed.map((c) => `“${c.name}”`).join(", ")} {shadowed.length === 1 ? "is" : "are"} not in
+          use. Pause {shadowed.length === 1 ? "it" : "them"} or disable the winning campaign.
+        </p>
+      ) : null}
+
+      {/* Campaigns -------------------------------------------------------- */}
       <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Active campaigns</h2>
-        {activeCampaigns.length === 0 ? (
-          <p className="mt-2 text-sm font-semibold text-muted-foreground">No active campaigns — canonical prices shown on marketing pages.</p>
+        <h2 className="text-sm font-black text-foreground">Campaigns</h2>
+        {campaigns.length === 0 ? (
+          <p
+            className="mt-3 rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm font-semibold text-muted-foreground"
+            data-testid="pricing-campaigns-empty"
+          >
+            No campaigns yet. {canEdit ? "Create one to discount a plan without touching its canonical price." : ""}
+          </p>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {activeCampaigns.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-waka-50 px-3 py-2">
-                <span className="text-sm font-black text-waka-950">{c.name}</span>
-                <span className="text-xs font-bold text-emerald-700">Live</span>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                  <th className="px-2 py-1.5">Campaign</th>
+                  <th className="px-2 py-1.5">Discount</th>
+                  <th className="px-2 py-1.5">Schedule</th>
+                  <th className="px-2 py-1.5">Status</th>
+                  <th className="px-2 py-1.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.map((campaign) => {
+                  const status = pricingCampaignStatus(campaign, now);
+                  const rule = describePlanDiscounts(discountsFor(campaign.id));
+                  const isWinner = effective?.id === campaign.id;
+                  return (
+                    <tr
+                      key={campaign.id}
+                      className="border-t border-border font-semibold text-foreground"
+                      data-testid={`pricing-campaign-row-${campaign.id}`}
+                    >
+                      <td className="px-2 py-2 align-top">
+                        <span className="font-black">{campaign.name}</span>
+                        {campaign.description ? (
+                          <span className="mt-0.5 block max-w-[28ch] text-xs font-medium text-muted-foreground">
+                            {campaign.description}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-2 py-2 align-top text-xs">
+                        {rule || <span className="text-muted-foreground">No discounts</span>}
+                      </td>
+                      <td className="px-2 py-2 align-top text-xs text-muted-foreground">
+                        {describeCampaignSchedule(campaign, (iso) =>
+                          new Date(iso).toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          }),
+                        )}
+                      </td>
+                      <td className="px-2 py-2 align-top">
+                        <span className={statusTokens[STATUS_TOKEN[status]].badge} data-testid={`pricing-campaign-status-${campaign.id}`}>
+                          {PRICING_CAMPAIGN_STATUS_LABELS[status]}
+                        </span>
+                        {isWinner && shadowed.length > 0 ? (
+                          <span className="mt-1 block text-[10px] font-black uppercase text-warning">In use</span>
+                        ) : null}
+                      </td>
+                      <td className="px-2 py-2 align-top">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {canEdit ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void toggleCampaignEnabled(campaign, !campaign.enabled)}
+                                disabled={quickBusyId === campaign.id}
+                                className={secondaryBtnCls}
+                                data-testid={`pricing-campaign-toggle-${campaign.id}`}
+                              >
+                                {quickBusyId === campaign.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : campaign.enabled ? (
+                                  "Pause"
+                                ) : (
+                                  "Activate"
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openEdit(campaign)}
+                                className={secondaryBtnCls}
+                                data-testid={`pricing-campaign-edit-${campaign.id}`}
+                              >
+                                Edit
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Create / edit ---------------------------------------------------- */}
+      {formMode !== "closed" ? (
+        <section className="rounded-2xl border border-border bg-card p-4" data-testid="pricing-campaign-form">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-sm font-black text-foreground">
+              {formMode === "create" ? "New campaign" : `Edit “${draft.name || "campaign"}”`}
+            </h2>
+            <button type="button" onClick={closeForm} className={secondaryBtnCls} aria-label="Close form">
+              <X className="h-4 w-4" /> Cancel
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wide text-waka-700">Details</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={labelCls} htmlFor="campaign-name">
+                    Campaign name
+                  </label>
+                  <input
+                    id="campaign-name"
+                    className={inputCls}
+                    value={draft.name}
+                    onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                    disabled={!canEdit}
+                    aria-invalid={draftErrors.name ? true : undefined}
+                    data-testid="pricing-campaign-name"
+                  />
+                  {draftErrors.name ? (
+                    <p className="mt-1 text-xs font-bold text-danger" role="alert">
+                      {draftErrors.name}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls} htmlFor="campaign-description">
+                    Description <span className="font-bold normal-case">(optional)</span>
+                  </label>
+                  <textarea
+                    id="campaign-description"
+                    className={inputCls}
+                    rows={2}
+                    value={draft.description}
+                    onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                    disabled={!canEdit}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wide text-waka-700">Schedule &amp; status</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className={labelCls} htmlFor="campaign-start">
+                    Starts (optional)
+                  </label>
+                  <input
+                    id="campaign-start"
+                    type="datetime-local"
+                    className={inputCls}
+                    value={draft.startsAt}
+                    onChange={(e) => setDraft((d) => ({ ...d, startsAt: e.target.value }))}
+                    disabled={!canEdit}
+                    aria-invalid={draftErrors.startsAt ? true : undefined}
+                  />
+                  {draftErrors.startsAt ? (
+                    <p className="mt-1 text-xs font-bold text-danger" role="alert">
+                      {draftErrors.startsAt}
+                    </p>
+                  ) : null}
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="campaign-end">
+                    Ends (optional)
+                  </label>
+                  <input
+                    id="campaign-end"
+                    type="datetime-local"
+                    className={inputCls}
+                    value={draft.endsAt}
+                    onChange={(e) => setDraft((d) => ({ ...d, endsAt: e.target.value }))}
+                    disabled={!canEdit}
+                    aria-invalid={draftErrors.endsAt ? true : undefined}
+                  />
+                  {draftErrors.endsAt ? (
+                    <p className="mt-1 text-xs font-bold text-danger" role="alert">
+                      {draftErrors.endsAt}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="sm:col-span-2">
+                  <WakaSwitch
+                    checked={draft.enabled}
+                    disabled={!canEdit}
+                    onCheckedChange={(checked) => setDraft((d) => ({ ...d, enabled: checked }))}
+                    label="Campaign enabled"
+                    description="Only an enabled campaign inside its schedule reaches customers."
+                    className="text-sm font-black text-foreground"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {canEdit ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void submitCampaign()}
+                disabled={saving}
+                className={primaryBtnCls}
+                data-testid="pricing-campaign-save"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {saving ? "Saving…" : formMode === "create" ? "Create campaign" : "Save campaign"}
+              </button>
+            </div>
+          ) : null}
+
+          {/* Plan discounts — only once the campaign exists (discounts FK it). */}
+          <div className="mt-6 border-t border-border pt-4">
+            <h3 className="text-sm font-black text-foreground">Plan discounts</h3>
+            {editingId ? (
+              <>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  Each plan saves on its own and is recorded in the audit history with the reason below.
+                </p>
+                <div className="mt-3">
+                  <label className={labelCls} htmlFor="campaign-reason">
+                    Reason for this change
+                  </label>
+                  <input
+                    id="campaign-reason"
+                    className={inputCls}
+                    value={reason}
+                    onChange={(e) => {
+                      setReason(e.target.value);
+                      if (reasonError) setReasonError(null);
+                    }}
+                    disabled={!canEdit}
+                    placeholder="e.g. Q2 launch promotion"
+                    aria-invalid={reasonError ? true : undefined}
+                    data-testid="pricing-campaign-reason"
+                  />
+                  {reasonError ? (
+                    <p className="mt-1 text-xs font-bold text-danger" role="alert">
+                      {reasonError}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-left text-sm">
+                    <thead>
+                      <tr className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                        <th className="px-2 py-1.5">Plan</th>
+                        <th className="px-2 py-1.5">Discount</th>
+                        <th className="px-2 py-1.5">Amount</th>
+                        <th className="px-2 py-1.5">Annual %</th>
+                        <th className="px-2 py-1.5">Price after</th>
+                        <th className="px-2 py-1.5 text-right">Save</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {PAID_PLANS.map((plan) => {
+                        const pd = planDrafts[plan];
+                        const rowErrors = planErrors[plan] ?? {};
+                        const computed = previewPlans.find((p) => p.planCode === plan);
+                        return (
+                          <tr key={plan} className="border-t border-border" data-testid={`pricing-plan-row-${plan}`}>
+                            <td className="px-2 py-2 align-top text-sm font-black text-foreground">
+                              {PLAN_LABELS[plan]}
+                              <span className="mt-0.5 block text-xs font-semibold text-muted-foreground">
+                                {formatUgx(canonicalMonthly(plan))} / month
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 align-top">
+                              <select
+                                aria-label={`${PLAN_LABELS[plan]} discount type`}
+                                className={inputCls}
+                                value={pd.monthlyDiscountType}
+                                onChange={(e) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan]: { ...prev[plan], monthlyDiscountType: e.target.value as MonthlyDiscountType },
+                                  }))
+                                }
+                                disabled={!canEdit}
+                              >
+                                <option value="none">None</option>
+                                <option value="fixed_amount">Fixed amount off</option>
+                                <option value="percentage">Percent off</option>
+                              </select>
+                            </td>
+                            <td className="px-2 py-2 align-top">
+                              <input
+                                aria-label={`${PLAN_LABELS[plan]} discount value`}
+                                className={inputCls}
+                                type="number"
+                                min={0}
+                                value={pd.monthlyDiscountValue}
+                                onChange={(e) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan]: { ...prev[plan], monthlyDiscountValue: e.target.value },
+                                  }))
+                                }
+                                disabled={!canEdit || pd.monthlyDiscountType === "none"}
+                                aria-invalid={rowErrors.monthlyDiscountValue ? true : undefined}
+                              />
+                              {rowErrors.monthlyDiscountValue ? (
+                                <p className="mt-1 max-w-[22ch] text-xs font-bold text-danger" role="alert">
+                                  {rowErrors.monthlyDiscountValue}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="px-2 py-2 align-top">
+                              <input
+                                aria-label={`${PLAN_LABELS[plan]} annual discount percent`}
+                                className={inputCls}
+                                type="number"
+                                min={0}
+                                max={90}
+                                value={pd.annualDiscountPercent}
+                                placeholder="20"
+                                onChange={(e) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan]: { ...prev[plan], annualDiscountPercent: e.target.value },
+                                  }))
+                                }
+                                disabled={!canEdit}
+                                aria-invalid={rowErrors.annualDiscountPercent ? true : undefined}
+                              />
+                              {rowErrors.annualDiscountPercent ? (
+                                <p className="mt-1 max-w-[22ch] text-xs font-bold text-danger" role="alert">
+                                  {rowErrors.annualDiscountPercent}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="px-2 py-2 align-top">
+                              <span className="text-sm font-black text-foreground">
+                                {formatUgx(computed?.finalMonthlyUgx ?? canonicalMonthly(plan))}
+                              </span>
+                              <span className="mt-0.5 block text-xs font-semibold text-muted-foreground">
+                                {computed?.hasMonthlyDiscount
+                                  ? `saves ${formatUgx(computed.monthlyDiscountUgx)} / month`
+                                  : "no monthly discount"}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 align-top text-right">
+                              {canEdit ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void submitPlanDiscount(plan)}
+                                  disabled={savingPlan === plan}
+                                  className={secondaryBtnCls}
+                                  data-testid={`pricing-plan-save-${plan}`}
+                                >
+                                  {savingPlan === plan ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                                </button>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                  Leave Annual % blank to use the plan's standard annual discount (20%).
+                </p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                Save the campaign first, then add plan discounts.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {/* Pricing preview --------------------------------------------------- */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-sm font-black text-foreground">Pricing preview</h2>
+        <p className="mt-1 text-xs font-semibold text-muted-foreground" data-testid="pricing-preview-caption">
+          {previewCaption}
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          {previewPlans.map((p) => (
+            <div key={p.planCode} className="rounded-xl bg-muted p-3">
+              <p className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">
+                {PLAN_LABELS[p.planCode]}
+              </p>
+              {p.hasMonthlyDiscount ? (
+                <p className="mt-1 text-xs font-bold text-muted-foreground line-through">
+                  {formatUgx(p.originalMonthlyUgx)}
+                </p>
+              ) : null}
+              <p className="text-lg font-black text-foreground">{formatUgx(p.finalMonthlyUgx)} / month</p>
+              <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                {formatUgx(p.finalAnnualUgx)} / year · {p.annualDiscountPercent}% annual saving
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Reporting --------------------------------------------------------- */}
+      {editingId ? (
+        <section className="rounded-2xl border border-border bg-card p-4">
+          <h2 className="text-sm font-black text-foreground">Campaign reporting</h2>
+          {metricsError ? (
+            <p className="mt-2 text-sm font-semibold text-danger" role="alert">
+              {metricsError}
+            </p>
+          ) : metrics ? (
+            <>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <MetricTile label="New subscribers" value={String(metrics.newSubscribers)} />
+                <MetricTile label="Revenue recorded" value={formatUgx(metrics.revenueRecordedUgx)} />
+                <MetricTile label="Conversion" value={`${metrics.conversionRatePercent}%`} />
+                <MetricTile label="Subscriptions in window" value={String(metrics.totalSubscriptionsInWindow)} />
+              </div>
+              <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                {Object.entries(metrics.newSubscribersByPlan)
+                  .map(([plan, count]) => `${PLAN_LABELS[plan as PaidPlanCode] ?? plan}: ${count}`)
+                  .join(" · ") || "No new subscribers in this campaign's window yet."}
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading reporting…
+            </p>
+          )}
+        </section>
+      ) : null}
+
+      {/* Audit ------------------------------------------------------------- */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-sm font-black text-foreground">Audit history</h2>
+        {audit.length === 0 ? (
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">
+            {previewMode ? "Audit history is hidden in preview mode." : "No discount changes recorded yet."}
+          </p>
+        ) : (
+          <ul className="mt-2 max-h-80 space-y-1.5 overflow-y-auto">
+            {audit.map((row) => (
+              <li key={row.id} className="rounded-xl bg-muted px-3 py-2 text-sm">
+                <p className="font-black text-foreground">
+                  {row.actorName || "Admin"} · {row.planCode ? PLAN_LABELS[row.planCode] : "campaign"}
+                </p>
+                <p className="text-xs font-semibold text-muted-foreground">
+                  {row.createdAt ? new Date(row.createdAt).toLocaleString() : ""}
+                </p>
+                <p className="mt-0.5 font-semibold text-muted-foreground">{row.reason}</p>
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        <aside className="space-y-2">
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(EMPTY_CAMPAIGN);
-              setDiscounts([]);
-              setPreviewPlans(CANONICAL_PLAN_PRICES.map((p) =>
-                computePlanDisplayPrice(p.planCode, { monthlyDiscountType: "none", monthlyDiscountValue: 0 }),
-              ));
-            }}
-            className="flex w-full min-h-[40px] items-center justify-center gap-2 rounded-xl border border-dashed border-border text-sm font-black text-muted-foreground"
-          >
-            <Tag className="h-4 w-4" /> New campaign
-          </button>
-          {campaigns.map((c) => (
+      <ModalSheet
+        open={confirmRequest !== null}
+        onClose={() => (confirmBusy ? undefined : setConfirmRequest(null))}
+        align="center"
+        title={confirmRequest?.title ?? ""}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
             <button
-              key={c.id}
               type="button"
-              onClick={() => void selectCampaign(c)}
-              className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm font-bold ${
-                draft.id === c.id
-                  ? "border-waka-400 bg-waka-50 text-waka-950"
-                  : "border-border bg-card text-foreground"
-              }`}
+              onClick={() => setConfirmRequest(null)}
+              disabled={confirmBusy}
+              className={secondaryBtnCls}
             >
-              {c.name}
-              {isPricingCampaignActive(c) ? (
-                <span className="ml-2 text-[10px] font-black uppercase text-emerald-700">Active</span>
-              ) : null}
+              Cancel
             </button>
-          ))}
-        </aside>
-
-        <div className="space-y-5">
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Campaign settings</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className={labelCls}>Name</label>
-                <input
-                  className={inputCls}
-                  value={draft.name}
-                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                  disabled={!canEdit}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelCls}>Description</label>
-                <textarea
-                  className={inputCls}
-                  rows={2}
-                  value={draft.description}
-                  onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-                  disabled={!canEdit}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Start</label>
-                <input
-                  type="datetime-local"
-                  className={inputCls}
-                  value={draft.startsAt}
-                  onChange={(e) => setDraft((d) => ({ ...d, startsAt: e.target.value }))}
-                  disabled={!canEdit}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>End</label>
-                <input
-                  type="datetime-local"
-                  className={inputCls}
-                  value={draft.endsAt}
-                  onChange={(e) => setDraft((d) => ({ ...d, endsAt: e.target.value }))}
-                  disabled={!canEdit}
-                />
-              </div>
-              <WakaSwitch
-                checked={draft.enabled}
-                disabled={!canEdit}
-                onCheckedChange={(checked) => setDraft((d) => ({ ...d, enabled: checked }))}
-                label="Enable campaign"
-                className="text-sm font-bold text-foreground"
-              />
-            </div>
-            {canEdit ? (
-              <button
-                type="button"
-                onClick={() => void saveCampaign()}
-                disabled={saving}
-                className="mt-4 min-h-[44px] rounded-xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-60"
-              >
-                {saving ? "Saving…" : draft.id ? "Save campaign" : "Create campaign"}
-              </button>
-            ) : null}
-          </section>
-
-          {draft.id ? (
-            <section className="space-y-4">
-              <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Plan discounts</h2>
-              {PAID_PLANS.map((plan) => {
-                const pd = planDrafts[plan];
-                const canonical = CANONICAL_PLAN_PRICES.find((p) => p.planCode === plan)!;
-                const computed = previewFromDrafts.find((p) => p.planCode === plan)!;
-                return (
-                  <div key={plan} className="rounded-2xl border border-border bg-muted p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <h3 className="text-base font-black text-foreground">{PLAN_LABELS[plan]}</h3>
-                      <div className="text-right text-sm">
-                        <p className="font-semibold text-muted-foreground">
-                          Original: <span className="font-black text-foreground">{formatUgx(canonical.monthlyPriceUgx)}</span>
-                        </p>
-                        <p className="font-semibold text-muted-foreground">
-                          Discount:{" "}
-                          <span className="font-black text-waka-700">{formatUgx(computed.monthlyDiscountUgx)}</span>
-                        </p>
-                        <p className="font-semibold text-muted-foreground">
-                          Final: <span className="font-black text-emerald-700">{formatUgx(computed.finalMonthlyUgx)}</span>
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <div>
-                        <label className={labelCls}>Monthly discount type</label>
-                        <select
-                          className={inputCls}
-                          value={pd.monthlyDiscountType}
-                          onChange={(e) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan]: { ...prev[plan], monthlyDiscountType: e.target.value as MonthlyDiscountType },
-                            }))
-                          }
-                          disabled={!canEdit}
-                        >
-                          <option value="none">None</option>
-                          <option value="fixed_amount">Fixed amount (UGX off)</option>
-                          <option value="percentage">Percentage off</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls}>Discount value</label>
-                        <input
-                          className={inputCls}
-                          type="number"
-                          min={0}
-                          value={pd.monthlyDiscountValue}
-                          onChange={(e) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan]: { ...prev[plan], monthlyDiscountValue: e.target.value },
-                            }))
-                          }
-                          disabled={!canEdit || pd.monthlyDiscountType === "none"}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>
-                          <Percent className="mr-1 inline h-3 w-3" />
-                          Annual discount %
-                        </label>
-                        <input
-                          className={inputCls}
-                          type="number"
-                          min={0}
-                          max={90}
-                          value={pd.annualDiscountPercent}
-                          onChange={(e) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan]: { ...prev[plan], annualDiscountPercent: e.target.value },
-                            }))
-                          }
-                          disabled={!canEdit}
-                        />
-                      </div>
-                      <div className="sm:col-span-3">
-                        <label className={labelCls}>Reason (required for audit)</label>
-                        <input
-                          className={inputCls}
-                          value={pd.reason}
-                          onChange={(e) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan]: { ...prev[plan], reason: e.target.value },
-                            }))
-                          }
-                          disabled={!canEdit}
-                          placeholder="e.g. Q2 launch promotion"
-                        />
-                      </div>
-                    </div>
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        onClick={() => void savePlanDiscount(plan)}
-                        disabled={savingPlan === plan}
-                        className="mt-3 min-h-[40px] rounded-xl border border-waka-300 bg-card px-4 text-sm font-black text-waka-800 disabled:opacity-60"
-                      >
-                        {savingPlan === plan ? "Saving…" : `Save ${PLAN_LABELS[plan]} discount`}
-                      </button>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </section>
-          ) : null}
-
-          <section className="rounded-2xl border border-waka-200 bg-waka-50/60 p-5">
-            <h2 className="text-sm font-black uppercase tracking-wide text-waka-800">Marketing preview</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              {(draft.id ? previewPlans : previewFromDrafts).map((p) => (
-                <div key={p.planCode} className="rounded-xl bg-card p-4 shadow-sm">
-                  <p className="text-xs font-black uppercase text-muted-foreground">{PLAN_LABELS[p.planCode]}</p>
-                  {p.hasMonthlyDiscount ? (
-                    <p className="mt-1 text-sm font-bold text-muted-foreground line-through">{formatUgx(p.originalMonthlyUgx)}</p>
-                  ) : null}
-                  <p className="text-xl font-black text-waka-700">{formatUgx(p.finalMonthlyUgx)} / month</p>
-                  {p.hasMonthlyDiscount ? (
-                    <p className="text-xs font-black text-emerald-700">Save {formatUgx(p.monthlyDiscountUgx)}</p>
-                  ) : null}
-                  <p className="mt-2 text-sm font-bold text-muted-foreground line-through">{formatUgx(p.originalAnnualFullUgx)}</p>
-                  <p className="text-sm font-black text-foreground">{formatUgx(p.finalAnnualUgx)} / year</p>
-                  <p className="text-xs font-black text-emerald-700">Save {p.annualDiscountPercent}%</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {metrics ? (
-            <section className="rounded-2xl border border-border bg-card p-5">
-              <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Campaign reporting</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl bg-muted p-3">
-                  <p className="text-xs font-bold text-muted-foreground">New subscribers</p>
-                  <p className="text-2xl font-black text-foreground">{metrics.newSubscribers}</p>
-                </div>
-                <div className="rounded-xl bg-muted p-3">
-                  <p className="text-xs font-bold text-muted-foreground">Revenue recorded</p>
-                  <p className="text-2xl font-black text-foreground">{formatUgx(metrics.revenueRecordedUgx)}</p>
-                </div>
-                <div className="rounded-xl bg-muted p-3">
-                  <p className="text-xs font-bold text-muted-foreground">Conversion rate</p>
-                  <p className="text-2xl font-black text-foreground">{metrics.conversionRatePercent}%</p>
-                </div>
-                <div className="rounded-xl bg-muted p-3">
-                  <p className="text-xs font-bold text-muted-foreground">By plan</p>
-                  <p className="text-sm font-bold text-muted-foreground">
-                    {Object.entries(metrics.newSubscribersByPlan)
-                      .map(([k, v]) => `${k}: ${v}`)
-                      .join(" · ") || "—"}
-                  </p>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="text-sm font-black uppercase tracking-wide text-muted-foreground">Audit history</h2>
-            {audit.length === 0 ? (
-              <p className="mt-2 text-sm font-semibold text-muted-foreground">No discount changes recorded yet.</p>
-            ) : (
-              <ul className="mt-3 max-h-80 space-y-2 overflow-y-auto">
-                {audit.map((row) => (
-                  <li key={row.id} className="rounded-xl border border-border bg-muted px-3 py-2 text-sm">
-                    <p className="font-black text-foreground">
-                      {row.actorName || "Admin"} · {row.planCode ?? "campaign"}
-                    </p>
-                    <p className="text-xs font-semibold text-muted-foreground">
-                      {new Date(row.createdAt).toLocaleString()}
-                    </p>
-                    <p className="mt-1 font-semibold text-muted-foreground">{row.reason}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-      </div>
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={async () => {
+                const req = confirmRequest;
+                if (!req) return;
+                setConfirmBusy(true);
+                await req.run();
+                setConfirmBusy(false);
+                setConfirmRequest(null);
+              }}
+              className={dangerBtnCls}
+              data-testid="pricing-campaign-confirm"
+            >
+              {confirmBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {confirmRequest?.confirmLabel ?? "Confirm"}
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm font-semibold text-foreground">{confirmRequest?.body}</p>
+      </ModalSheet>
     </div>
   );
+}
+
+function MetricTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-muted p-3">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-lg font-black text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function canonicalMonthly(plan: PaidPlanCode): number {
+  return CANONICAL_PLAN_PRICES.find((p) => p.planCode === plan)?.monthlyPriceUgx ?? 0;
+}
+
+function isoOrNull(value: string): string | null {
+  if (!value.trim()) return null;
+  const d = new Date(value);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
