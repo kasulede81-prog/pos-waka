@@ -140,6 +140,30 @@ export function SubscriptionProvider({
     });
   }, [reload]);
 
+  /**
+   * AN ADMIN CHANGES THE PLAN FROM ANOTHER DEVICE, AND NOTHING PUSHES IT HERE.
+   *
+   * There is no realtime channel for `subscriptions`, and `waka:subscription-updated`
+   * is a same-tab event — so a terminal that was already running kept showing the old
+   * plan (and the old price) until someone reloaded the app. That is the whole of the
+   * "admin changed the plan but the shop still sees the old one" report: the database
+   * was right the entire time.
+   *
+   * Re-read on visibility, silently, so the tier never flashes a loader mid-shift.
+   * Same convention as the other live surfaces (useMemberEnrollmentStatus,
+   * useShopHomeKpiOverlay, useRemoteSupportRequestListener). `reload` is the
+   * sequence-guarded path, so an overlapping shop switch cannot be overwritten.
+   */
+  useEffect(() => {
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void reload({ silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [reload]);
+
   const value = useMemo(
     () => ({
       authMode,
