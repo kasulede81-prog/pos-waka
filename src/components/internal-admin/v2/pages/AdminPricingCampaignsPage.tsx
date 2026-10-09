@@ -170,6 +170,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
   const [campaigns, setCampaigns] = useState<PricingCampaign[]>([]);
   const [discounts, setDiscounts] = useState<PricingCampaignPlanDiscount[]>([]);
   const [audit, setAudit] = useState<PricingCampaignAuditEntry[]>([]);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   const [formMode, setFormMode] = useState<"closed" | "create" | "edit">("closed");
   const [draft, setDraft] = useState<CampaignDraft>(EMPTY_CAMPAIGN);
@@ -198,18 +199,29 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
 
   /**
    * `silent` refetches after a mutation without blanking the page to a spinner.
-   * Returns what it loaded so callers re-sync drafts from fresh rows instead of
-   * a stale closure.
+   *
+   * Returns what it actually loaded, and `discountsOk`, so callers re-sync drafts
+   * from fresh rows rather than a stale closure — and know when they must NOT
+   * re-sync at all. A failed query keeps whatever is already on screen: erasing
+   * the list (and the plan editor) because a refresh failed would be worse than
+   * showing stale rows next to an error banner.
    */
   const load = useCallback(
-    async (opts?: { silent?: boolean }): Promise<{ campaigns: PricingCampaign[]; discounts: PricingCampaignPlanDiscount[] }> => {
+    async (opts?: {
+      silent?: boolean;
+    }): Promise<{
+      campaigns: PricingCampaign[];
+      discounts: PricingCampaignPlanDiscount[];
+      discountsOk: boolean;
+    }> => {
       if (previewMode) {
         setCampaigns(PREVIEW_CAMPAIGNS);
         setDiscounts(PREVIEW_DISCOUNTS);
         setAudit([]);
         setLoadError(null);
+        setAuditError(null);
         setLoading(false);
-        return { campaigns: PREVIEW_CAMPAIGNS, discounts: PREVIEW_DISCOUNTS };
+        return { campaigns: PREVIEW_CAMPAIGNS, discounts: PREVIEW_DISCOUNTS, discountsOk: true };
       }
       if (!opts?.silent) setLoading(true);
       const [campaignRes, auditRes] = await Promise.all([
@@ -218,24 +230,30 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
       ]);
       if (!campaignRes.ok) {
         setLoadError(campaignRes.error);
-        setCampaigns([]);
-        setDiscounts([]);
-        setAudit([]);
         setLoading(false);
-        return { campaigns: [], discounts: [] };
+        return { campaigns: [], discounts: [], discountsOk: false };
       }
       setLoadError(null);
       setCampaigns(campaignRes.data);
-      setAudit(auditRes.ok ? auditRes.data : []);
+      if (auditRes.ok) {
+        setAudit(auditRes.data);
+        setAuditError(null);
+      } else {
+        // Never let a failed read render as “No discount changes recorded yet.”
+        setAuditError(auditRes.error);
+      }
 
       // One query for every campaign's discounts — the table shows each campaign's
       // pricing rule, and a per-row fetch made that an N+1.
       const discountRes = await fetchPricingCampaignDiscounts(campaignRes.data.map((c) => c.id));
-      const discountRows = discountRes.ok ? discountRes.data : [];
-      setDiscounts(discountRows);
-      if (!discountRes.ok) setLoadError(discountRes.error);
+      if (discountRes.ok) setDiscounts(discountRes.data);
+      else setLoadError(discountRes.error);
       setLoading(false);
-      return { campaigns: campaignRes.data, discounts: discountRows };
+      return {
+        campaigns: campaignRes.data,
+        discounts: discountRes.ok ? discountRes.data : [],
+        discountsOk: discountRes.ok,
+      };
     },
     [previewMode],
   );
@@ -296,11 +314,11 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
 
   const refreshMetrics = useCallback(
     async (campaignId: string) => {
-      if (previewMode) {
-        setMetrics(null);
-        setMetricsError(null);
-        return;
-      }
+      // Clear first: never let one campaign's reporting sit under another's name
+      // while the fetch is in flight.
+      setMetrics(null);
+      setMetricsError(null);
+      if (previewMode) return;
       const res = await fetchPricingCampaignMetrics({ campaignId });
       if (res.ok) {
         setMetrics(res.data);
@@ -418,7 +436,10 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
       const updated = fresh.campaigns.find((c) => c.id === savedId);
       if (updated) {
         syncDraftFrom(updated);
-        syncPlanDraftsFrom(updated.id, fresh.discounts);
+        // Only re-seed the plan editor from rows that really loaded — an empty
+        // `fresh.discounts` from a failed query would silently reset every plan
+        // to "no discount".
+        if (fresh.discountsOk) syncPlanDraftsFrom(updated.id, fresh.discounts);
         setFormMode("edit");
         void refreshMetrics(updated.id);
       }
@@ -461,7 +482,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
       setReasonError(null);
       const fresh = await load({ silent: true });
       notifyInternalOpsChanged();
-      syncPlanDraftsFrom(draft.id as string, fresh.discounts);
+      if (fresh.discountsOk) syncPlanDraftsFrom(draft.id as string, fresh.discounts);
       void refreshMetrics(draft.id as string);
       setNotice(`${PLAN_LABELS[plan]} discount saved.`);
     };
@@ -1081,7 +1102,11 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
       {/* Audit ------------------------------------------------------------- */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="text-sm font-black text-foreground">Audit history</h2>
-        {audit.length === 0 ? (
+        {auditError ? (
+          <p className="mt-1 text-sm font-semibold text-danger" role="alert" data-testid="pricing-campaigns-audit-error">
+            {auditError}
+          </p>
+        ) : audit.length === 0 ? (
           <p className="mt-1 text-sm font-semibold text-muted-foreground">
             {previewMode ? "Audit history is hidden in preview mode." : "No discount changes recorded yet."}
           </p>

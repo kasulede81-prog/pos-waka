@@ -111,6 +111,7 @@ function makeBackend() {
     ],
     saves: [],
     discountSaves: [],
+    failDiscounts: false,
     nextId: 1,
   };
 }
@@ -233,6 +234,14 @@ async function stubBackend(page, backend) {
     const json = (body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     if (url.includes("/pricing_campaigns")) return json(backend.campaigns);
     if (url.includes("/pricing_campaign_plan_discounts")) {
+      // Lets a test fail only the REFRESH that follows a save.
+      if (backend.failDiscounts) {
+        return route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "simulated discount read failure" }),
+        });
+      }
       const match = /campaign_id=in\.\(([^)]*)\)/.exec(decodeURIComponent(url));
       if (!match) return json(backend.discounts);
       const ids = match[1].split(",").map((s) => s.replace(/^"|"$/g, ""));
@@ -374,6 +383,22 @@ async function main() {
       "no success banner",
     );
 
+    // The plan editor must be re-seeded from the RELOADED rows. Re-syncing from
+    // the render-time closure would snap the field back to the pre-save 10%.
+    const afterSave = await page.evaluate(() => {
+      const row = document.querySelector('[data-testid="pricing-plan-row-starter"]');
+      return {
+        type: row?.querySelector("select")?.value ?? null,
+        value: row?.querySelector('input[type="number"]')?.value ?? null,
+        text: row?.textContent?.replace(/\s+/g, " ") ?? "",
+      };
+    });
+    check(
+      "after saving, the plan row shows the SAVED discount, not the pre-save one",
+      afterSave.type === "percentage" && afterSave.value === "25" && /UGX 13,500/.test(afterSave.text),
+      JSON.stringify(afterSave),
+    );
+
     // --- 5. REGRESSION: Create campaign must open and stay empty ---------
     await page.click('[data-testid="pricing-campaign-new"]');
     await page.waitForTimeout(900); // the old effect re-selected asynchronously
@@ -421,7 +446,47 @@ async function main() {
     }
     await ctx.close();
 
-    // --- 8. mobile layout -------------------------------------------------
+    // --- 8. a failed refresh must not silently reset the editor -----------
+    // The refresh that follows a save is a separate read; if it fails, the plan
+    // editor must keep what was just saved rather than re-seed from an empty
+    // result and claim every plan now has "no discount".
+    const failBackend = makeBackend();
+    const failed = await openWindow(browser, url, { width: 1280, height: 900 }, failBackend);
+    await failed.page.click(`[data-testid="pricing-campaign-edit-${CAMPAIGN_LIVE}"]`);
+    await failed.page.waitForSelector('[data-testid="pricing-campaign-form"]');
+    await failed.page.fill('[data-testid="pricing-campaign-reason"]', "refresh failure probe");
+    await failed.page.fill('[data-testid="pricing-plan-row-starter"] input[type="number"]', "30");
+    failBackend.failDiscounts = true; // only the read-after-save fails
+    await failed.page.click('[data-testid="pricing-plan-save-starter"]');
+    await failed.page.waitForTimeout(1000);
+    const afterFailedRefresh = await failed.page.evaluate(() => {
+      const row = document.querySelector('[data-testid="pricing-plan-row-starter"]');
+      return {
+        posted: null,
+        type: row?.querySelector("select")?.value ?? null,
+        value: row?.querySelector('input[type="number"]')?.value ?? null,
+        loadErrorShown: Boolean(document.querySelector('[data-testid="pricing-campaigns-load-error"]')),
+      };
+    });
+    check(
+      "the save still reached the server when the refresh failed",
+      failBackend.discountSaves.length === 1 &&
+        Number(failBackend.discountSaves[0].p_monthly_discount_value) === 30,
+      JSON.stringify(failBackend.discountSaves),
+    );
+    check(
+      "a failed refresh does NOT reset the plan editor to 'no discount'",
+      afterFailedRefresh.type === "percentage" && afterFailedRefresh.value === "30",
+      JSON.stringify(afterFailedRefresh),
+    );
+    check(
+      "a failed refresh is disclosed instead of silently ignored",
+      afterFailedRefresh.loadErrorShown === true,
+      JSON.stringify(afterFailedRefresh),
+    );
+    await failed.ctx.close();
+
+    // --- 9. mobile layout -------------------------------------------------
     const mobileBackend = makeBackend();
     const mobile = await openWindow(browser, url, { width: 390, height: 844 }, mobileBackend);
     const overflow = await mobile.page.evaluate(() => ({
