@@ -402,6 +402,14 @@ export function checkoutReducer(state: CheckoutState, event: CheckoutEvent): Che
         return { ...state, errorKey: "checkoutSelectPlanFirst" };
       }
       if (!canPayForPlan(state.planCode)) return state; // Free never pays
+      // A 100% admin discount prices the plan at zero. There is no payment to
+      // make, and this must be caught HERE: the server accepts a 0 amount, so
+      // pressing on creates a pending payment row, sends it to the provider,
+      // and the provider rejects it — consuming the intent and marking it
+      // failed without ever activating the subscription.
+      if (state.quote.amountUgx <= 0) {
+        return { ...state, errorKey: "checkoutFullyDiscounted" };
+      }
       if (isDowngradePlan(state.quote.currentPlanCode, state.planCode) && !state.downgradeConfirmed) {
         return { ...state, errorKey: "checkoutDowngradeConfirm" };
       }
@@ -818,6 +826,13 @@ export async function createCheckoutIntent(
   | { ok: true; paymentId: string; amountUgx: number; idempotent: boolean }
   | { ok: false; errorKey: string; requote: boolean; retrySameReference: boolean }
 > {
+  // Defence in depth for any caller: a fully-discounted plan has no provider
+  // payment to create. `subscription_payment_create` would happily write a
+  // pending row with amount_ugx = 0, which the provider then rejects — so
+  // never ask for one.
+  if (!Number.isFinite(i.amountUgx) || i.amountUgx <= 0) {
+    return { ok: false, errorKey: "checkoutFullyDiscounted", requote: false, retrySameReference: false };
+  }
   try {
     const rpc = await backend.createIntent(i);
     if (rpc.ok === true && typeof rpc.payment_id === "string") {

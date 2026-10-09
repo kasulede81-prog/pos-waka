@@ -7820,6 +7820,8 @@ const en: Dict = {
   checkoutNetworkError: "We could not reach the payment service. Please try again.",
   checkoutSyncRequired: "Your payment status was updated elsewhere. Refreshing…",
   checkoutSelectPlanFirst: "Choose a plan first.",
+  checkoutFullyDiscounted:
+    "There is nothing to pay — this plan is fully discounted. Ask Waka support to activate it for you.",
   checkoutStatusPending: "Pending",
   checkoutStatusConfirmed: "Confirmed",
   checkoutStatusFailed: "Failed",
@@ -15261,6 +15263,8 @@ const lgBase: Dict = {
   checkoutNetworkError: "Tetugamanye na bulamu. Gerageza nate.",
   checkoutSyncRequired: "Emirembe gya famba nga gwakyuka. Tumanyi...",
   checkoutSelectPlanFirst: "Londa ensimbi zo okusooka.",
+  checkoutFullyDiscounted:
+    "Tewali ky'okusasula — enteekateeka eno eweddwawo ddala. Saba Waka support okugikakasa.",
   checkoutStatusPending: "Kisikiridde",
   checkoutStatusConfirmed: "Kikakasiddwa",
   checkoutStatusFailed: "Kyalese",

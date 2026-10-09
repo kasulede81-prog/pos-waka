@@ -1134,3 +1134,80 @@ describe("provider status — the REAL backend reaches payment-status", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Fully-discounted (zero-amount) subscriptions
+// ---------------------------------------------------------------------------
+
+/**
+ * A 100% admin discount (`subscriptions.admin_discount_percent = 100`) prices a
+ * plan at UGX 0. The server accepts that: `subscription_payment_plan_amount`
+ * floors at 0 rather than refusing, `subscription_payments.amount_ugx >= 0`, and
+ * `_subscription_payment_can_initiate` has no amount predicate — so without a
+ * client guard the flow creates a pending payment, sends it to the provider,
+ * and the provider rejects it (`provider_rejected`, retryable: false). The
+ * intent is consumed and marked failed and the subscription is never activated.
+ */
+describe("M3-D fully-discounted subscriptions (zero amount)", () => {
+  function quoted(amountUgx: number): CheckoutState {
+    let s = initialCheckoutState();
+    s = checkoutReducer(s, { type: "SELECT_PLAN", plan: "business" });
+    s = checkoutReducer(s, { type: "QUOTE_STARTED" });
+    return checkoutReducer(s, { type: "QUOTE_OK", quote: quote({ amountUgx }) });
+  }
+
+  it("a 100% discount does not start a payment", () => {
+    const s = checkoutReducer(quoted(0), { type: "PAY_REQUESTED", reference: "ref-zero", phone: PHONE });
+    expect(s.phase).toBe("selecting");
+    expect(s.errorKey).toBe("checkoutFullyDiscounted");
+    expect(s.intent).toBeNull();
+  });
+
+  it("a negative quote is treated the same way, never as a payable amount", () => {
+    const s = checkoutReducer(quoted(-1), { type: "PAY_REQUESTED", reference: "ref-neg", phone: PHONE });
+    expect(s.phase).toBe("selecting");
+    expect(s.errorKey).toBe("checkoutFullyDiscounted");
+  });
+
+  it("createCheckoutIntent refuses a zero amount without touching the backend", async () => {
+    const backend = makeBackend();
+    const r = await createCheckoutIntent(backend, {
+      shopId: SHOP,
+      reference: "ref-zero",
+      planCode: "business",
+      cycle: "monthly",
+      amountUgx: 0,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errorKey).toBe("checkoutFullyDiscounted");
+    // The crux: no payment row is created for the provider to reject.
+    expect(backend.calls.create).toEqual([]);
+  });
+
+  it("still creates a normal payment — the guard is not over-broad", async () => {
+    const backend = makeBackend();
+    const r = await createCheckoutIntent(backend, {
+      shopId: SHOP,
+      reference: "ref-normal",
+      planCode: "business",
+      cycle: "monthly",
+      amountUgx: 36_000,
+    });
+    expect(r.ok).toBe(true);
+    expect(backend.calls.create.length).toBe(1);
+  });
+
+  it("a discounted-but-nonzero plan still checks out", () => {
+    // 99% off business = 360, a real (if small) payment.
+    const s = checkoutReducer(quoted(360), { type: "PAY_REQUESTED", reference: "ref-99", phone: PHONE });
+    expect(s.phase).toBe("creating_payment");
+    expect(s.intent?.amountUgx).toBe(360);
+  });
+
+  it("has a localized message in every locale", () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "i18n.ts"), "utf8");
+    const hits = src.split("\n").filter((l) => l.trim().startsWith("checkoutFullyDiscounted:"));
+    // en + lg
+    expect(hits.length).toBe(2);
+  });
+});
