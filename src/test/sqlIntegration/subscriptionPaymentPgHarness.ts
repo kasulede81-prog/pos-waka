@@ -58,6 +58,8 @@ const MIGRATION_CHAIN = [
   // per-account column. Supersedes `subscription_payment_plan_amount` (M3-G
   // above) to resolve the effective admin discount, so it must come after it.
   join(MIGRATIONS_DIR, "20261010120000_admin_subscription_discounts.sql"),
+  // Preview/overview base fix — supersedes both read RPCs from the file above.
+  join(MIGRATIONS_DIR, "20261011090000_admin_discount_preview_base_fix.sql"),
 ];
 
 function readSql(path: string): string {

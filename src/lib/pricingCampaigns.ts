@@ -279,11 +279,17 @@ export function validatePlanDiscountDraft(
     if (!raw || !Number.isFinite(value) || value < 0) {
       errors.monthlyDiscountValue = "Enter a discount amount of 0 or more.";
     } else if (draft.monthlyDiscountType === "percentage" && value > MAX_PERCENTAGE_DISCOUNT) {
-      errors.monthlyDiscountValue = `Percentage discounts are capped at ${MAX_PERCENTAGE_DISCOUNT}%.`;
+      // Both bounds are CAMPAIGN bounds. Stated together, because hitting either
+      // one is the moment an admin needs to know the admin discount system exists.
+      errors.monthlyDiscountValue =
+        `Campaign discounts are capped at ${MAX_PERCENTAGE_DISCOUNT}% and cannot price a plan ` +
+        `below ${formatUgx(MIN_FINAL_MONTHLY_UGX)}. For up to 99% on one plan or account, ` +
+        "use Subscription Discounts.";
     } else if (draft.monthlyDiscountType === "fixed_amount" && value > maxFixedDiscountUgx(planCode)) {
-      errors.monthlyDiscountValue = `${PLAN_LABELS[planCode]} can be discounted by at most ${formatUgx(
-        maxFixedDiscountUgx(planCode),
-      )} (floor ${formatUgx(MIN_FINAL_MONTHLY_UGX)}).`;
+      errors.monthlyDiscountValue =
+        `${PLAN_LABELS[planCode]} can be discounted by at most ${formatUgx(maxFixedDiscountUgx(planCode))} ` +
+        `in a campaign (floor ${formatUgx(MIN_FINAL_MONTHLY_UGX)}). For a larger discount on one plan ` +
+        "or account, use Subscription Discounts.";
     }
   }
 
@@ -344,7 +350,17 @@ export function mapPricingCampaignError(raw: string | null | undefined): string 
     case "campaign_not_found":
       return "That campaign no longer exists. Refresh the page and try again.";
     case "discount_below_minimum":
-      return `The discounted price cannot go below ${formatUgx(MIN_FINAL_MONTHLY_UGX)} per month.`;
+      /**
+       * A CAMPAIGN rule, and one that is easy to mistake for a broken discount.
+       * The pointer matters: the admin who hits this floor is usually trying to
+       * give one plan or one account a deeper discount, which is a different
+       * mechanism on a different screen, and the campaign floor deliberately
+       * does not apply to it.
+       */
+      return (
+        `Campaign prices cannot go below ${formatUgx(MIN_FINAL_MONTHLY_UGX)} per month. ` +
+        "For a deeper discount on a single plan or account, use Subscription Discounts instead."
+      );
     case "forbidden":
     case "Forbidden":
       return "You do not have permission to change pricing campaigns.";

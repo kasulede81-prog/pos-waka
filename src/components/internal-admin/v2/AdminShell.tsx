@@ -90,7 +90,10 @@ const NAV_GROUPS: NavGroup[] = [
     tabs: [
       { id: "billing", path: "/internal/waka/billing", label: "Billing & Plans" },
       { id: "pricing_campaigns", path: "/internal/waka/billing/pricing-campaigns", label: "Pricing Campaigns" },
-      { id: "subscription_discounts", path: "/internal/waka/billing/discounts", label: "Discounts" },
+      // Named in full so it cannot be confused with "Pricing Campaigns" directly
+      // above it: campaigns are bounded (90% / UGX 5,000 floor), this is the
+      // admin discount system and reaches 99%.
+      { id: "subscription_discounts", path: "/internal/waka/billing/discounts", label: "Subscription Discounts" },
       { id: "analytics", path: "/internal/waka/analytics", label: "Growth" },
       { id: "growth_campaign", path: "/internal/waka/growth-campaign", label: "Campaigns" },
     ],

@@ -671,6 +671,220 @@ describe("admin subscription discounts — SQL contract", () => {
   });
 
   // ========================================================================
+  // M — the boundary with the campaign mechanism
+  // ========================================================================
+  //
+  // WHY THIS EXISTS. "I cannot discount below UGX 5,000" is what the CAMPAIGN
+  // mechanism is FOR — it clamps percentages at 90% and floors every plan at
+  // UGX 5,000 inside `_pricing_compute_plan_row`. An operator who reaches for
+  // Pricing Campaigns therefore gets exactly that floor, however high a
+  // percentage they type, because the floor is applied to the campaign price
+  // BEFORE the admin discount is ever consulted.
+  //
+  // These tests pin the two mechanisms apart so the difference cannot be
+  // mistaken for a bug in either. They are the evidence that the admin discount
+  // path is NOT floored.
+
+  /** What the campaign price book produces, with no admin discount involved. */
+  async function campaignMonthly(plan: string, percent: number): Promise<number> {
+    const { rows } = await exec.query<{ v: string }>(
+      `SELECT (public._pricing_compute_plan_row($1, 'percentage', $2, 20) ->> 'final_monthly_ugx') AS v`,
+      [plan, percent],
+    );
+    return Number(rows[0]!.v);
+  }
+
+  it("a campaign discount is clamped at 90% and floored at UGX 5,000 — by design, unchanged", async () => {
+    // 36,000 − 90% = 3,600, which is under the floor → floored to 5,000.
+    expect(await campaignMonthly("business", 90)).toBe(5_000);
+    // Asking for 99% changes nothing: the clamp binds first.
+    expect(await campaignMonthly("business", 99)).toBe(5_000);
+    expect(await campaignMonthly("starter", 99)).toBe(5_000);
+    // waka_plus 82,000 − 90% = 8,200, above the floor → the clamp is what binds.
+    expect(await campaignMonthly("waka_plus", 99)).toBe(8_200);
+  });
+
+  it("an ADMIN discount at 99% is NOT floored — it reaches UGX 360", async () => {
+    // The whole point: same plan, same percentage, different mechanism.
+    expect(await price("business", "month", 99)).toBe(360);
+    expect(await price("starter", "month", 99)).toBe(180);
+    expect(await price("waka_plus", "month", 99)).toBe(820);
+  });
+
+  it("with a live campaign, the admin discount still applies AFTER the floored campaign price", async () => {
+    const { rows } = await exec.query<{ id: string }>(
+      `INSERT INTO public.pricing_campaigns (name, enabled, starts_at)
+       VALUES ('floor-trace', true, now() - interval '1 day') RETURNING id`,
+    );
+    await exec.exec(
+      `INSERT INTO public.pricing_campaign_plan_discounts
+         (campaign_id, plan_code, monthly_discount_type, monthly_discount_value, annual_discount_percent)
+       VALUES ('${rows[0]!.id}', 'business', 'percentage', 99, 20)`,
+    );
+
+    // The campaign price is floored at 5,000...
+    expect(await price("business", "month", 0)).toBe(5_000);
+    // ...and the admin discount is then applied to THAT, not to 36,000.
+    // 5,000 × (100 − 99) / 100 = 50 — comfortably below the floor.
+    expect(await price("business", "month", 99)).toBe(50);
+  });
+
+  it("a saved global admin discount reprices a plan that also has a campaign", async () => {
+    const { rows } = await exec.query<{ id: string }>(
+      `INSERT INTO public.pricing_campaigns (name, enabled, starts_at)
+       VALUES ('floor-trace-2', true, now() - interval '1 day') RETURNING id`,
+    );
+    await exec.exec(
+      `INSERT INTO public.pricing_campaign_plan_discounts
+         (campaign_id, plan_code, monthly_discount_type, monthly_discount_value, annual_discount_percent)
+       VALUES ('${rows[0]!.id}', 'business', 'percentage', 50, 20)`,
+    );
+
+    // 36,000 − 50% = 18,000 (above the floor, so the campaign price stands).
+    expect(await price("business", "month", 0)).toBe(18_000);
+
+    const saved = await adminSaveGlobal("business", 99);
+    expect(saved.ok).toBe(true);
+
+
+    // 18,000 × 0.01 = 180. The floor does not bind on the admin path even when
+    // a campaign is live.
+    expect(await price("business", "month", 0)).toBe(180);
+
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+    expect(Number(preview.monthly_ugx)).toBe(180);
+  });
+
+  // ========================================================================
+  // N — the preview must agree with the amount actually charged
+  // ========================================================================
+  //
+  // THE BUG THESE PIN. Both read RPCs used to ask for their "undiscounted base"
+  // with `subscription_payment_plan_amount (plan, cycle, 0)`. Once a global rule
+  // exists, 0 means "no INDIVIDUAL discount" and resolves to that global rule —
+  // so the "base" came back already discounted and was then discounted again.
+  // Measured before the fix, with a 50% campaign and a global 99% rule on
+  // business: the amount was 180 and the preview said 2.
+
+  /** The campaign-layer price, with no admin discount of any kind. */
+  async function campaignBase(plan: string, cycle: string): Promise<number> {
+    const { rows } = await exec.query<{ v: string }>(
+      `SELECT public._admin_discount_campaign_amount($1, $2) AS v`,
+      [plan, cycle],
+    );
+    return Number(rows[0]!.v);
+  }
+
+  it("the preview agrees with what the checkout would actually charge", async () => {
+    await adminSaveGlobal("business", 99);
+
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+    const charged = await price("business", "month", 0);
+
+    expect(Number(preview.monthly_ugx)).toBe(charged);
+    // And it is the real number, not a doubly-discounted one.
+    expect(Number(preview.monthly_ugx)).toBe(360);
+    expect(Number(preview.base_monthly_ugx)).toBe(BUSINESS);
+  });
+
+  it("the preview stays correct with a campaign AND a global rule live", async () => {
+    const { rows } = await exec.query<{ id: string }>(
+      `INSERT INTO public.pricing_campaigns (name, enabled, starts_at)
+       VALUES ('preview-base', true, now() - interval '1 day') RETURNING id`,
+    );
+    await exec.exec(
+      `INSERT INTO public.pricing_campaign_plan_discounts
+         (campaign_id, plan_code, monthly_discount_type, monthly_discount_value, annual_discount_percent)
+       VALUES ('${rows[0]!.id}', 'business', 'percentage', 50, 20)`,
+    );
+
+    await adminSaveGlobal("business", 99);
+
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+    const charged = await price("business", "month", 0);
+
+    // Base is the CAMPAIGN price (18,000), not the already-discounted one.
+    expect(Number(preview.base_monthly_ugx)).toBe(18_000);
+    expect(Number(preview.monthly_ugx)).toBe(180);
+    expect(Number(preview.monthly_ugx)).toBe(charged);
+  });
+
+  it("the preview is unchanged from the raw percentage when no rule is saved yet", async () => {
+    // The first thing an admin does: type a percentage before saving anything.
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+
+    expect(Number(preview.base_monthly_ugx)).toBe(BUSINESS);
+    expect(Number(preview.monthly_ugx)).toBe(360);
+  });
+
+  it("the individual preview also agrees with the charged amount", async () => {
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, true]);
+
+    expect(Number(preview.monthly_ugx)).toBe(await price("business", "month", 99));
+    expect(Number(preview.monthly_ugx)).toBe(360);
+  });
+
+  it("the campaign base helper cannot drift from the pricing primitive", async () => {
+    // With no global rule configured, `_admin_discount_campaign_amount` and
+    // `subscription_payment_plan_amount (plan, cycle, 0)` must be the same number
+    // — that equality is what keeps the two definitions from diverging silently.
+    for (const plan of ["starter", "business", "waka_plus"]) {
+      expect(await campaignBase(plan, "monthly")).toBe(await price(plan, "month", 0));
+      expect(await campaignBase(plan, "yearly")).toBe(await price(plan, "year", 0));
+    }
+  });
+
+  it("the ANNUAL preview agrees with the amount the annual checkout would charge", async () => {
+    await adminSaveGlobal("business", 99);
+
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+
+    // Both cycles, against the authoritative calculation.
+    expect(Number(preview.monthly_ugx)).toBe(await price("business", "month", 0));
+    expect(Number(preview.annual_ugx)).toBe(await price("business", "year", 0));
+    // And both are real numbers: 36,000 → 360 and 345,600 → 3,456.
+    expect(Number(preview.base_annual_ugx)).toBe(BUSINESS_ANNUAL);
+    expect(Number(preview.annual_ugx)).toBe(3_456);
+  });
+
+  it("the ANNUAL preview stays correct for an individual discount too", async () => {
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 25, true]);
+
+    expect(Number(preview.annual_ugx)).toBe(await price("business", "year", 25));
+    expect(Number(preview.monthly_ugx)).toBe(await price("business", "month", 25));
+  });
+
+  it("the ANNUAL preview tracks a live campaign as well as the admin discount", async () => {
+    const { rows } = await exec.query<{ id: string }>(
+      `INSERT INTO public.pricing_campaigns (name, enabled, starts_at)
+       VALUES ('annual-base', true, now() - interval '1 day') RETURNING id`,
+    );
+    await exec.exec(
+      `INSERT INTO public.pricing_campaign_plan_discounts
+         (campaign_id, plan_code, monthly_discount_type, monthly_discount_value, annual_discount_percent)
+       VALUES ('${rows[0]!.id}', 'business', 'percentage', 50, 20)`,
+    );
+    await adminSaveGlobal("business", 99);
+
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+
+    // Campaign annual for business: 18,000 × 12 × (1 − 20%) = 172,800.
+    expect(Number(preview.base_annual_ugx)).toBe(172_800);
+    expect(Number(preview.annual_ugx)).toBe(await price("business", "year", 0));
+  });
+
+  it("the overview reports the true base and the true discounted price", async () => {
+    await adminSaveGlobal("business", 25);
+
+    const overview = await rpc(fx.internalAdminId, "admin_discount_overview", []);
+    const row = (overview.global as Record<string, unknown>[])[0]!;
+
+    expect(Number(row.base_monthly_ugx)).toBe(BUSINESS);
+    expect(Number(row.final_monthly_ugx)).toBe(27_000);
+    expect(Number(row.final_monthly_ugx)).toBe(await price("business", "month", 0));
+  });
+
+  // ========================================================================
   // K — audit
   // ========================================================================
 
