@@ -43,6 +43,7 @@ export type AdminSectionId =
   | "support"
   | "billing"
   | "pricing_campaigns"
+  | "subscription_discounts"
   | "analytics"
   | "activations"
   | "admins"
@@ -89,6 +90,7 @@ const NAV_GROUPS: NavGroup[] = [
     tabs: [
       { id: "billing", path: "/internal/waka/billing", label: "Billing & Plans" },
       { id: "pricing_campaigns", path: "/internal/waka/billing/pricing-campaigns", label: "Pricing Campaigns" },
+      { id: "subscription_discounts", path: "/internal/waka/billing/discounts", label: "Discounts" },
       { id: "analytics", path: "/internal/waka/analytics", label: "Growth" },
       { id: "growth_campaign", path: "/internal/waka/growth-campaign", label: "Campaigns" },
     ],

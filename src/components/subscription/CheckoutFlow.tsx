@@ -19,6 +19,7 @@ import { Link } from "react-router-dom";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { usePublicPricing } from "../../hooks/usePublicPricing";
+import { useForegroundRefresh } from "../../hooks/useForegroundRefresh";
 import { WakaButton } from "../ui/wakaPrimitives";
 import { ConfirmationDialog } from "../layout/ConfirmationDialog";
 import {
@@ -156,6 +157,37 @@ export function CheckoutFlow({
     if (previous === null || previous === pricingSignature) return;
     dispatch({ type: "PRICING_CHANGED" });
   }, [pricingLoading, pricingSignature]);
+
+  /**
+   * AN ADMIN DISCOUNT MOVES NO PRICE THE BOOK KNOWS ABOUT.
+   *
+   * `pricingSignature` above tracks the public price book and the campaign
+   * discount — the things `public_subscription_pricing` publishes. A global or
+   * account admin discount is applied per subscription and is invisible to that
+   * endpoint, so the signature above cannot see it change. Without this, a
+   * checkout opened before an admin granted a discount would keep quoting the
+   * old amount until the payer re-selected a plan.
+   *
+   * The re-quote is SILENT — it dispatches `QUOTE_OK`, not `PRICING_CHANGED` —
+   * so a terminal that never backgrounds converges without the price flashing to
+   * "…" once a minute. An unchanged amount produces an identical quote and no
+   * visible difference; only a real change shows.
+   *
+   * It refuses while a payment exists: from `creating_payment` onward the server
+   * holds an intent for a specific amount, and quietly swapping the displayed
+   * number under a live payment would be worse than a stale one.
+   */
+  useForegroundRefresh(
+    useCallback(async () => {
+      if (!shopId || !state.planCode || !state.quote || !canPayForPlan(state.planCode)) return;
+      if (state.intent || state.initiated) return;
+      const seq = ++quoteSeqRef.current;
+      const r = await quoteCheckout(backend, { shopId, planCode: state.planCode, cycle: state.cycle });
+      if (seq !== quoteSeqRef.current) return; // superseded — drop it
+      if (r.ok) dispatch({ type: "QUOTE_OK", quote: r.quote });
+    }, [backend, shopId, state.planCode, state.cycle, state.quote, state.intent, state.initiated]),
+    { enabled: Boolean(shopId) },
+  );
 
   // Server-backed recovery: newest pending intent in this shop's history.
   useEffect(() => {

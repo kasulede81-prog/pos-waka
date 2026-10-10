@@ -552,6 +552,10 @@ function AppRoutes() {
                     path="internal/waka/billing/pricing-campaigns"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
+                  <Route
+                    path="internal/waka/billing/discounts"
+                    element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
+                  />
                   <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/agents" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/activations" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />

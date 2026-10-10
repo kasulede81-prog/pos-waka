@@ -54,6 +54,10 @@ const MIGRATION_CHAIN = [
   // Pricing-campaign discount audit actor (supersedes 113's broken
   // `profiles.user_id` lookup).
   join(MIGRATIONS_DIR, "20261009140000_fix_pricing_campaign_discount_audit_actor.sql"),
+  // Admin subscription discounts — global per-plan rules plus the setter for the
+  // per-account column. Supersedes `subscription_payment_plan_amount` (M3-G
+  // above) to resolve the effective admin discount, so it must come after it.
+  join(MIGRATIONS_DIR, "20261010120000_admin_subscription_discounts.sql"),
 ];
 
 function readSql(path: string): string {
