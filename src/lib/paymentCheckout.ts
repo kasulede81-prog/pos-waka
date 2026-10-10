@@ -101,6 +101,12 @@ export type CheckoutEvent =
   | { type: "QUOTE_STARTED" }
   | { type: "QUOTE_OK"; quote: CheckoutQuote }
   | { type: "QUOTE_FAILED"; errorKey: string }
+  /**
+   * Something the held quote depends on moved — the public price book, the
+   * campaign discount, or the subscription's own plan. Carries no payload: the
+   * quote is dropped and re-read from the server, never adjusted locally.
+   */
+  | { type: "PRICING_CHANGED" }
   | { type: "DOWNGRADE_CONFIRMED" }
   | { type: "PAY_REQUESTED"; reference: string; phone: string }
   | { type: "INTENT_CREATED"; paymentId: string; amountUgx: number }
@@ -229,6 +235,43 @@ export function displayPricingFor(
   const finalUgx = quote.amountUgx;
   const originalUgx = typeof original === "number" && original >= finalUgx ? original : finalUgx;
   return { finalUgx, originalUgx, discountUgx: originalUgx - finalUgx };
+}
+
+/**
+ * Everything a held quote depends on, as one comparable string.
+ *
+ * `QUOTE_OK` already discards a quote whose plan or cycle no longer matches the
+ * selection. What it cannot see is a PRICE moving under a plan that stayed the
+ * same — which is precisely what an admin editing a campaign discount does. This
+ * projects the remaining inputs so a change in any of them can drop the quote.
+ *
+ * Only the SELECTED plan's row is included: repricing a plan nobody has selected
+ * cannot affect the quote on screen, and folding in the whole book would discard
+ * the quote on every unrelated price edit.
+ */
+export function quotePricingSignature(input: {
+  planCode: string | null;
+  cycle: CheckoutCycle;
+  /** The subscription's plan as the snapshot knows it; drives `is_current` and the downgrade label. */
+  currentPlanCode: string | null | undefined;
+  /** The selected plan's row from the public price book, once it is known. */
+  planPricing:
+    | { originalMonthlyUgx: number; finalMonthlyUgx: number; finalAnnualUgx: number }
+    | null
+    | undefined;
+  campaignId: string | null | undefined;
+}): string {
+  const row = input.planPricing;
+  const price = row
+    ? `${row.originalMonthlyUgx}:${row.finalMonthlyUgx}:${row.finalAnnualUgx}`
+    : "unknown";
+  return [
+    input.planCode ?? "",
+    input.cycle,
+    input.currentPlanCode ?? "",
+    input.campaignId ?? "",
+    price,
+  ].join("|");
 }
 
 /** Renewal/trial anchoring copy (backend semantics are unchanged). */
@@ -394,6 +437,34 @@ export function checkoutReducer(state: CheckoutState, event: CheckoutEvent): Che
       };
     case "QUOTE_FAILED":
       return { ...state, phase: "selecting", quoteLoading: false, quoteErrorKey: event.errorKey };
+    case "PRICING_CHANGED": {
+      /**
+       * A quote states a price for a plan, a cycle and a discount at one instant.
+       * When any of those inputs moves, the quote is a claim about a price that no
+       * longer exists — so it is dropped and the quote effect re-reads.
+       *
+       * NEVER ONCE A PAYMENT EXISTS. From `creating_payment` onward the server
+       * holds an intent for a specific amount; clearing the quote there would not
+       * change that intent, it would only re-open plan selection over a live
+       * payment and invite a second one. The phase guard is the load-bearing part
+       * of this case, not the clearing.
+       */
+      if (state.intent || state.initiated) return state;
+      if (state.phase !== "idle" && state.phase !== "selecting" && state.phase !== "quoting") {
+        return state;
+      }
+      if (!state.quote) return state;
+      return {
+        ...state,
+        phase: "selecting",
+        quote: null,
+        // Route straight to the "refreshing" indication. Clearing the quote alone
+        // would flash an empty price row for one render, which reads as "no
+        // price" rather than "price being re-checked".
+        quoteLoading: true,
+        quoteErrorKey: null,
+      };
+    }
     case "DOWNGRADE_CONFIRMED":
       return { ...state, downgradeConfirmed: true };
     case "PAY_REQUESTED": {

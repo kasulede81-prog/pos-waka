@@ -95,6 +95,35 @@ export async function fetchPublicSubscriptionPricing(): Promise<PublicPricingSna
   return mapPublicPricingRpc(data);
 }
 
+export type PublicPricingResult =
+  | { ok: true; snapshot: PublicPricingSnapshot }
+  | { ok: false; error: string };
+
+/**
+ * Failure-aware twin of `fetchPublicSubscriptionPricing`.
+ *
+ * The original collapses every failure — no client configured, a refused RPC, a
+ * dropped connection — into the hardcoded default price book. That is a
+ * defensible answer for the public marketing page, which has nothing better to
+ * show. It is NOT defensible for a surface that already holds real prices: a
+ * refresh ticking over a transient network blip would repaint a paying shop's
+ * checkout with catalogue defaults, which is a worse lie than a stale number.
+ *
+ * Callers that hold live pricing must use this one and keep what they have on
+ * `ok: false`.
+ */
+export async function fetchPublicSubscriptionPricingResult(): Promise<PublicPricingResult> {
+  if (!supabase) return { ok: false, error: "supabase_not_configured" };
+  try {
+    const { data, error } = await supabase.rpc("public_subscription_pricing");
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "empty_pricing_response" };
+    return { ok: true, snapshot: mapPublicPricingRpc(data) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "pricing_request_failed" };
+  }
+}
+
 export async function fetchPricingCampaigns(): Promise<PricingFetchResult<PricingCampaign[]>> {
   if (!supabase) return { ok: false, error: "Supabase is not configured for this build." };
   const { data, error } = await supabase

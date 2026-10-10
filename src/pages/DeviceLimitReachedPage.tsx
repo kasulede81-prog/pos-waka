@@ -10,6 +10,7 @@ import {
   tryActivateCurrentDevice,
   type DeviceLimitContext,
 } from "../lib/deviceActivation";
+import { useForegroundRefresh } from "../hooks/useForegroundRefresh";
 import { currentDeviceFingerprint, disconnectOwnerShopDevice } from "../lib/shopDevices";
 import {
   formatDeviceDisplayName,
@@ -59,19 +60,44 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
   const currentFp = useMemo(() => currentDeviceFingerprint(), []);
   const atLimit = ctx?.at_limit ?? block?.kind === "limit";
 
-  const loadContext = useCallback(async () => {
-    if (!sid) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const next = await fetchShopDeviceLimitContext(sid);
-      setCtx(next);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t(lang, "deviceLimitLoadError"));
-    } finally {
-      setLoading(false);
-    }
-  }, [sid, lang]);
+  /**
+   * `silent` exists because this page now re-reads in the background. A silent
+   * pass must not blank the plan name and the usage line it is already showing,
+   * and must not surface an error the operator cannot act on — the visible load
+   * still owns both.
+   */
+  const contextSeqRef = useRef(0);
+  const loadContext = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const seq = ++contextSeqRef.current;
+      if (!sid) return;
+      if (!opts?.silent) setLoading(true);
+      try {
+        const next = await fetchShopDeviceLimitContext(sid);
+        // `sid` can move while this is out — the block carries its own shop, and
+        // the periodic read runs alongside the effect that follows it. Writing an
+        // older shop's plan name here would put one shop's package on another's
+        // device gate.
+        if (seq !== contextSeqRef.current) return;
+        setCtx(next);
+        if (!opts?.silent) setError(null);
+      } catch (e) {
+        if (opts?.silent || seq !== contextSeqRef.current) return; // keep the last good context
+        setError(e instanceof Error ? e.message : t(lang, "deviceLimitLoadError"));
+      } finally {
+        if (!opts?.silent && seq === contextSeqRef.current) setLoading(false);
+      }
+    },
+    [sid, lang],
+  );
+
+  /**
+   * The plan name below is fetched once at mount and was then frozen for the life
+   * of the page — so a device that sat on this gate across an admin's plan change
+   * kept naming the old package. Same shared foreground/periodic signal as the
+   * subscription snapshot and the price book.
+   */
+  useForegroundRefresh(() => loadContext({ silent: true }), { enabled: Boolean(sid) });
 
   const finishActivation = useCallback(async () => {
     await retry();

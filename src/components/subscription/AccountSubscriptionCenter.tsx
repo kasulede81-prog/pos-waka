@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSubscription } from "../../context/SubscriptionContext";
@@ -46,14 +46,27 @@ export function AccountSubscriptionCenter({ lang, shopId: shopIdProp, showHistor
     return resolveEffectiveSubscription(snapshot);
   }, [authMode, snapshot]);
 
+  /**
+   * Tagged with the shop the rows were fetched for, and gated on still being the
+   * newest request — the same rule the payment list below already follows. A shop
+   * switch re-runs this, and without the ticket a slow response for the previous
+   * shop could land last and show one shop's subscription history under another's
+   * name.
+   */
+  const historySeqRef = useRef(0);
   const loadHistory = useCallback(async () => {
-    if (!shopId || authMode !== "supabase") return;
+    const seq = ++historySeqRef.current;
+    if (!shopId || authMode !== "supabase") {
+      setAuditRows([]);
+      return;
+    }
     setHistoryLoading(true);
     try {
       const rows = await fetchShopAuditTimeline(shopId, 40);
+      if (seq !== historySeqRef.current) return; // superseded — drop it
       setAuditRows(rows);
     } finally {
-      setHistoryLoading(false);
+      if (seq === historySeqRef.current) setHistoryLoading(false);
     }
   }, [shopId, authMode]);
 

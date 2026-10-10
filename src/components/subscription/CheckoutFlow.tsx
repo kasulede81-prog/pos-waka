@@ -39,6 +39,7 @@ import {
   POLL_PROVIDER_MAX_DELAY_MS,
   paymentStatusKey,
   quoteCheckout,
+  quotePricingSignature,
   recoverLatestPendingPayment,
   renewalNoteKey,
   canPayForPlan,
@@ -84,7 +85,7 @@ export function CheckoutFlow({
   const inFlightRef = useRef(false);
   const pollerRef = useRef<PaymentPoller | null>(null);
   const backend = useMemo(() => createCheckoutBackend(), []);
-  const { pricing } = usePublicPricing();
+  const { pricing, loading: pricingLoading } = usePublicPricing();
 
   // Keep the reducer's plan in sync with the (parent-owned) selection — but
   // never while a payment flow is in flight (RESUMED/intent states own it).
@@ -97,13 +98,25 @@ export function CheckoutFlow({
     }
   }, [plan, state.planCode, state.phase]);
 
+  /**
+   * WHICH QUOTE IS THE NEWEST? This effect can be re-entered while an earlier
+   * quote request is still in flight — re-selecting a plan, switching shop, or a
+   * price change all clear `state.quote`, which re-runs it. `QUOTE_OK` only
+   * rejects a quote for the wrong plan or cycle, so a slow response for the SAME
+   * plan at an OLDER price would otherwise land on top of a fresh one and become
+   * the number the payer sees. The sequence makes the newest request the only one
+   * allowed to write.
+   */
+  const quoteSeqRef = useRef(0);
+
   // Quote whenever the selection changes and no quote is held.
   useEffect(() => {
     if (!shopId || !state.planCode || !canPayForPlan(state.planCode) || state.quote) return;
+    const seq = ++quoteSeqRef.current;
     let live = true;
     dispatch({ type: "QUOTE_STARTED" });
     void quoteCheckout(backend, { shopId, planCode: state.planCode, cycle: state.cycle }).then((r) => {
-      if (!live) return;
+      if (!live || seq !== quoteSeqRef.current) return; // superseded — drop it
       if (r.ok) dispatch({ type: "QUOTE_OK", quote: r.quote });
       else dispatch({ type: "QUOTE_FAILED", errorKey: r.errorKey });
     });
@@ -111,6 +124,38 @@ export function CheckoutFlow({
       live = false;
     };
   }, [backend, shopId, state.planCode, state.cycle, state.quote]);
+
+  /**
+   * A HELD QUOTE IS A STATEMENT ABOUT A PRICE AT ONE INSTANT. When the price book
+   * or the subscription's own plan moves underneath it, that statement is no
+   * longer true — and the screen would go on offering "Pay UGX 36,000" for a plan
+   * that now costs something else. Drop it, and the effect above re-reads.
+   *
+   * The server still has the last word: `subscription_payment_create` recomputes
+   * the amount and refuses a mismatch, so this exists to stop us SHOWING a stale
+   * number, not to make a fresh one trustworthy.
+   */
+  const pricingSignature = useMemo(
+    () =>
+      quotePricingSignature({
+        planCode: state.planCode,
+        cycle: state.cycle,
+        currentPlanCode,
+        planPricing: pricing.plans.find((p) => p.planCode === state.planCode),
+        campaignId: pricing.campaignId,
+      }),
+    [state.planCode, state.cycle, currentPlanCode, pricing],
+  );
+  const lastPricingSignatureRef = useRef<string | null>(null);
+  useEffect(() => {
+    // Until the book has been read there is nothing to compare against. Arming on
+    // the first real value would discard a perfectly good quote at every mount.
+    if (pricingLoading) return;
+    const previous = lastPricingSignatureRef.current;
+    lastPricingSignatureRef.current = pricingSignature;
+    if (previous === null || previous === pricingSignature) return;
+    dispatch({ type: "PRICING_CHANGED" });
+  }, [pricingLoading, pricingSignature]);
 
   // Server-backed recovery: newest pending intent in this shop's history.
   useEffect(() => {
