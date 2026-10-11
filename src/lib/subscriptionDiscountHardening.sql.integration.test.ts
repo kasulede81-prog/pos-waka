@@ -423,6 +423,28 @@ describe("discount hardening — SQL contract", () => {
       expect(rows[0]!.status).toBe("claimed_paid");
     });
 
+    it("a manual payment at the offer amount closes the fulfilment path too", async () => {
+      // The staff queue only offers "Fulfil" while an offer is claimed_paid, so
+      // a manual payment that left the offer live used to leave a SECOND way to
+      // grant the year: fulfil would record another payment and another period.
+      const offerId = await seedOffer();
+      await callVoid(fx.internalAdminId, "admin_subscription_mark_payment", [fx.subscriptionAId, 490_000, "manual"]);
+      const servedEnd = await periodEnd(fx.subscriptionAId);
+      const payments = await paymentCount(fx.subscriptionAId);
+
+      const result = await rpc(fx.internalAdminId, "internal_ops_org_billing_offer_fulfill", [
+        offerId,
+        "second fulfilment",
+      ]);
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("invalid_status");
+
+      // No second payment, and the period the queue's fulfil would have
+      // overwritten with a year is untouched.
+      expect(await paymentCount(fx.subscriptionAId)).toBe(payments);
+      expect(await periodEnd(fx.subscriptionAId)).toBe(servedEnd);
+    });
+
     it("the annual-offer fulfilment flow is unchanged end to end (F2 preservation)", async () => {
       const offerId = await seedOffer();
 
