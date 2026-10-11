@@ -8,13 +8,16 @@ type Props = {
 };
 
 export function PlanPriceDisplay({ price, interval = "month", size = "lg" }: Props) {
-  const showStrike =
-    interval === "month"
-      ? price.hasMonthlyDiscount
-      : price.finalAnnualUgx < price.originalAnnualFullUgx;
-
+  /**
+   * Struck-through original + "Save …" whenever the price is genuinely below
+   * list — read from the two prices, not from a mechanism flag. A discount can
+   * arrive from a campaign OR from a live global administrative discount, and
+   * only the campaign sets `hasMonthlyDiscount`; keying the strikethrough on
+   * that flag hid the global one. The annual branch already worked this way.
+   */
   const original = interval === "month" ? price.originalMonthlyUgx : price.originalAnnualFullUgx;
   const final = interval === "month" ? price.finalMonthlyUgx : price.finalAnnualUgx;
+  const showStrike = final < original;
   const savings =
     interval === "month"
       ? price.monthlyDiscountUgx

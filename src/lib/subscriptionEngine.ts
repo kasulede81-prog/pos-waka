@@ -723,6 +723,33 @@ async function setSubscriptionStatus(input: {
   );
 }
 
+/**
+ * The mark-paid RPC refuses with a discriminated message rather than writing a
+ * wrong amount; each one tells the admin what to do instead. `details` carries
+ * `expected_amount_ugx` where the server knows it, so the message can name the
+ * number rather than just reject.
+ */
+export function explainMarkPaidRefusal(message: string, details?: string | null): string {
+  const raw = message ?? "";
+  const expected = /expected_amount_ugx=(\d+)/.exec(details ?? "")?.[1];
+
+  if (raw.includes("amount_mismatch")) {
+    return expected
+      ? `That is not the amount owed. The server price for this account is UGX ${Number(expected).toLocaleString("en-UG")} — record that instead.`
+      : "That is not the amount owed. Reload the account to see the server price.";
+  }
+  if (raw.includes("fully_discounted")) {
+    return "This account is fully discounted, so there is nothing to pay. Grant the free period instead.";
+  }
+  if (raw.includes("nothing_to_pay")) {
+    return "This account has nothing to pay, so there is no payment to record.";
+  }
+  if (raw.includes("invalid_amount")) {
+    return "Enter the amount that was received. Zero and negative amounts cannot be recorded.";
+  }
+  return raw;
+}
+
 export async function markPaid(input: {
   subscriptionId: string;
   shopId: string;
@@ -746,7 +773,10 @@ export async function markPaid(input: {
         p_amount_ugx: amount,
         p_note: input.note ?? null,
       });
-      if (error) return { ok: false, message: error.message };
+      // The server owns the amount (migration 20261011130000). These four
+      // refusals mean the figure the console offered is not the figure that is
+      // owed, so they must read as instructions rather than as raw SQL errors.
+      if (error) return { ok: false, message: explainMarkPaidRefusal(error.message, error.details) };
       return { ok: true };
     },
   );

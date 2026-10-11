@@ -317,6 +317,13 @@ export function classifyCheckoutError(error: string | undefined | null): Classif
       return { errorKey: "checkoutPreparingTitle", kind: "preparing" };
     case "amount_mismatch":
       return { errorKey: "checkoutPriceUpdated", kind: "requote" };
+    // The server refuses to write a zero-value payment at all (migration
+    // 20261011170000). The reducer catches this before the call, but a direct
+    // RPC, a stale client bundle or a price change between the two must land on
+    // the same explanation rather than on "checkout unavailable".
+    case "fully_discounted":
+    case "zero_amount":
+      return { errorKey: "checkoutFullyDiscounted", kind: "fatal" };
     case "shop_subscription_mismatch":
     case "shop_not_found":
       return { errorKey: "checkoutShopChanged", kind: "requote" };

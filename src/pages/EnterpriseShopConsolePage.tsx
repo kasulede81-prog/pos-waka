@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AdminShell } from "../components/internal-admin/v2/AdminShell";
+import { adminPermissions } from "../components/internal-admin/v2/adminRoles";
 import { BottomSheet } from "../components/internal-admin/v2/primitives";
 import type { AdminActionOption } from "../components/internal-admin/adminUi";
 import {
@@ -41,6 +42,11 @@ import {
   CANONICAL_PLAN_PRICES,
   type PublicPricingSnapshot,
 } from "../lib/subscriptionPricing";
+import {
+  activateAdminFreePeriod,
+  fetchAdminExpectedAmount,
+  type AdminExpectedAmount,
+} from "../lib/adminSubscriptionDiscounts";
 import {
   adminSetShopActive,
   adminShopForceLogoutDevices,
@@ -138,6 +144,16 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
   const [publicPricing, setPublicPricing] = useState<PublicPricingSnapshot>(() =>
     buildDefaultPublicPricing(),
   );
+  /**
+   * THE AUTHORITATIVE AMOUNT FOR THIS SUBSCRIPTION (migration 20261011130000).
+   *
+   * The public book above deliberately excludes an account's own discount, so
+   * using it here offered the FULL list price to a discounted shop — and the
+   * server used to accept it. The server now refuses a mismatch, so the console
+   * asks the server what is owed. `null` means "not answered yet", and the
+   * public book is only a placeholder until it lands.
+   */
+  const [expectedAmount, setExpectedAmount] = useState<AdminExpectedAmount | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -152,6 +168,19 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
       live = false;
     };
   }, []);
+
+  // The amount this subscription actually owes, resolved server-side with the
+  // campaign price, the account discount and the global rule all applied.
+  useEffect(() => {
+    if (!subId) return;
+    let live = true;
+    void fetchAdminExpectedAmount(subId).then((res) => {
+      if (live) setExpectedAmount(res.ok ? res.data : null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [subId]);
 
   useEffect(() => {
     const tab = shopConsoleTabFromLocation(location.search, location.hash, shopId);
@@ -169,6 +198,10 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
   );
 
   const suggestedPaymentUgx = useMemo(() => {
+    // The server's answer wins whenever it has one: it is the only figure that
+    // includes this account's discount.
+    if (expectedAmount && expectedAmount.expected_amount_ugx > 0) return expectedAmount.expected_amount_ugx;
+
     const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "business").toLowerCase();
     const serverPrice = publicPricing.plans.find((p) => p.planCode === code);
     if (serverPrice) return serverPrice.finalMonthlyUgx;
@@ -176,7 +209,7 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     const canonical = CANONICAL_PLAN_PRICES.find((p) => p.planCode === code);
     if (canonical) return canonical.monthlyPriceUgx;
     return CANONICAL_PLAN_PRICES.find((p) => p.planCode === "business")?.monthlyPriceUgx ?? 0;
-  }, [detail?.plan_code, detail?.subscription?.plan_code, publicPricing]);
+  }, [detail?.plan_code, detail?.subscription?.plan_code, publicPricing, expectedAmount]);
 
   const shopIntel = useMemo(() => {
     if (!detail) return null;
@@ -265,11 +298,28 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
           confirm: t(lang, "internalShopActionConfirmCancelSub"),
         });
       }
-      actions.push({
-        id: "mark_paid",
-        label: `${t(lang, "internalShopProfileMarkPaid")} · UGX ${suggestedPaymentUgx.toLocaleString("en-UG")}`,
-        group: groupSub,
-      });
+      if (expectedAmount?.fully_discounted) {
+        /**
+         * A 100% account owes nothing. There is no payment to record — the
+         * server refuses one — so the console offers the audited free-period
+         * grant instead (decision C), kept to the billing roles the server
+         * accepts for it. Any other role gets NO payment action at all: there is
+         * nothing to pay, and the grant is not theirs to make.
+         */
+        if (adminPermissions(adminRow).canManageBillingOffers) {
+          actions.push({
+            id: "grant_free_period",
+            label: "Grant free period (100% discount)",
+            group: groupSub,
+          });
+        }
+      } else {
+        actions.push({
+          id: "mark_paid",
+          label: `${t(lang, "internalShopProfileMarkPaid")} · UGX ${suggestedPaymentUgx.toLocaleString("en-UG")}`,
+          group: groupSub,
+        });
+      }
     }
 
     if (canSubs) {
@@ -283,7 +333,17 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
     }
 
     return actions;
-  }, [canSubs, canSubsLifecycle, canSupport, detail, lang, subId, suggestedPaymentUgx]);
+  }, [
+    canSubs,
+    canSubsLifecycle,
+    canSupport,
+    detail,
+    lang,
+    subId,
+    suggestedPaymentUgx,
+    expectedAmount?.fully_discounted,
+    adminRow,
+  ]);
 
   const runPasswordReset = async () => {
     if (!detail) return;
@@ -402,6 +462,21 @@ export function EnterpriseShopConsolePage({ lang }: Props) {
                 amountUgx: suggestedPaymentUgx,
                 note: `Recorded ${suggestedPaymentUgx} UGX`,
               }),
+            { permitted: canSubs },
+          );
+        }
+        break;
+      case "grant_free_period":
+        if (subId) {
+          void executeAction(
+            "admin_subscription_activate_free",
+            async () => {
+              const res = await activateAdminFreePeriod({
+                subscriptionId: subId,
+                reason: "100% account discount",
+              });
+              return res.ok ? { ok: true } : { ok: false, message: res.error };
+            },
             { permitted: canSubs },
           );
         }

@@ -7,6 +7,7 @@ import {
   ADMIN_DISCOUNT_PLANS,
   ADMIN_DISCOUNT_PLAN_LABELS,
   MAX_ADMIN_DISCOUNT_PERCENT,
+  activateAdminFreePeriod,
   deleteAdminPlanDiscount,
   fetchAdminDiscountOverview,
   hasDiscountErrors,
@@ -57,10 +58,10 @@ function Window({ startsAt, expiresAt }: { startsAt: string | null; expiresAt: s
 
 export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }: Props) {
   const perms = adminPermissions(adminRow);
-  // Narrower than the server on purpose: `_pricing_require_admin` admits any
-  // internal staff member, while this window keeps pricing edits to the roles
-  // that already own billing offers — the same split the Pricing Campaigns
-  // window makes. Preview mode is never editable.
+  // Preview mode is never editable.
+  // The SERVER gate is now the same four roles (`_pricing_require_billing_admin`,
+  // migration 20261011120000), so this refusals-in-the-UI copy is no longer
+  // hiding a wider server: support_admin and field_agent are refused by both.
   const canEdit = perms.canManageBillingOffers && !previewMode;
 
   const [overview, setOverview] = useState<AdminDiscountOverview | null>(null);
@@ -97,6 +98,14 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
   const [preview, setPreview] = useState<AdminDiscountPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const previewSeqRef = useRef(0);
+
+  // The account preview: the SAME server function with `p_individual: true`, so
+  // the admin sees what this account would be charged instead of granting a
+  // percentage blind. (The server supports it; nothing used to call it.)
+  const [accountPreview, setAccountPreview] = useState<AdminDiscountPreview | null>(null);
+  const [accountPreviewError, setAccountPreviewError] = useState<string | null>(null);
+  const accountPreviewSeqRef = useRef(0);
+  const [freeActivating, setFreeActivating] = useState<string | null>(null);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -175,6 +184,39 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
     }, 250);
     return () => window.clearTimeout(timer);
   }, [canEdit, globalPlan, globalPercentValue]);
+
+  /**
+   * The account preview, debounced like the global one. `individual: true` is
+   * what makes it answer "what would THIS account pay", with its own discount
+   * replacing any global rule — the case the global preview deliberately does
+   * not describe.
+   */
+  const selectedPlanCode = selectedShop?.plan_code ?? null;
+  const parsedIndividual = parseDiscountPercent(individualPercent);
+  const individualPercentValue = parsedIndividual.ok ? parsedIndividual.value : null;
+
+  useEffect(() => {
+    // Nothing is cleared here on purpose: the render below gates on the same
+    // conditions, so a preview from a previous selection is never shown.
+    if (!canEdit || !selectedPlanCode || individualPercentValue === null) return;
+    const seq = ++accountPreviewSeqRef.current;
+    const timer = window.setTimeout(() => {
+      void previewAdminDiscount({
+        planCode: selectedPlanCode,
+        discountPercent: individualPercentValue,
+        individual: true,
+      }).then((res) => {
+        if (seq !== accountPreviewSeqRef.current) return;
+        if (res.ok) {
+          setAccountPreview(res.data);
+          setAccountPreviewError(null);
+        } else {
+          setAccountPreviewError(res.error);
+        }
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [canEdit, selectedPlanCode, individualPercentValue]);
 
   const onSaveGlobal = async () => {
     if (!canEdit || globalSaving) return;
@@ -286,6 +328,41 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
       notifyInternalOpsChanged();
   };
 
+  /**
+   * Grants one period to a 100% account without taking a payment. The server
+   * re-checks everything (the discount really being 100%, the zero price, the
+   * window) and is idempotent, so a double click returns the activation it
+   * already made rather than granting a second period.
+   */
+  const onActivateFree = async (subscriptionId: string, label: string) => {
+    if (!canEdit || freeActivating) return;
+    if (
+      !window.confirm(
+        `Grant one free period to ${label}? No payment is recorded; the account's 100% discount covers it.`,
+      )
+    ) {
+      return;
+    }
+    setFreeActivating(subscriptionId);
+    setError(null);
+    try {
+      const res = await activateAdminFreePeriod({ subscriptionId, reason: "100% discount" });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setNotice(
+        res.data.idempotent
+          ? `${label} already had this period activated — nothing was granted twice.`
+          : `Free period granted to ${label} until ${new Date(res.data.period_end ?? "").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}.`,
+      );
+      await load({ silent: true });
+      notifyInternalOpsChanged();
+    } finally {
+      setFreeActivating(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16" data-testid="admin-discounts-loading">
@@ -303,8 +380,9 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
         <div>
           <h1 className="text-xl font-black text-foreground">Subscription Discounts</h1>
           <p className="mt-1 text-sm font-semibold text-muted-foreground">
-            Discounts of up to {MAX_ADMIN_DISCOUNT_PERCENT}% against the canonical plan price. An account's own
-            discount always replaces a global one — they never add up.
+            Discounts of up to {MAX_ADMIN_DISCOUNT_PERCENT}% against the canonical plan price. An account&apos;s own
+            discount always replaces a global one — they never add up. A global rule is published on the public
+            pricing and upgrade pages; an account&apos;s discount is private to that account.
           </p>
         </div>
         <button type="button" className={secondaryBtnCls} onClick={() => void load()} disabled={loading}>
@@ -512,9 +590,22 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                       <Value>{row.discount_percent}%</Value>
                     </td>
                     <td className="py-3">
+                      {/*
+                        The LIVE-aware price: what a shop with no discount of its
+                        own pays right now. A rule that is inactive, scheduled or
+                        expired shows no discount here, with what it WOULD be worth
+                        on the line beneath — previously this cell applied the
+                        percentage regardless of the rule's own window.
+                      */}
                       <Value>
-                        {formatUgx(row.base_monthly_ugx)} → {formatUgx(row.final_monthly_with_discount_ugx)}
+                        {formatUgx(row.base_monthly_ugx)} →{" "}
+                        {formatUgx(row.effective_monthly_ugx ?? row.final_monthly_with_discount_ugx)}
                       </Value>
+                      {!row.is_active_now && row.configured_monthly_ugx ? (
+                        <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">
+                          if active: {formatUgx(row.configured_monthly_ugx)}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="py-3">
                       <Window startsAt={row.starts_at} expiresAt={row.expires_at} />
@@ -546,7 +637,8 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
       <section className={cardCls} data-testid="admin-discounts-individual">
         <h2 className="text-lg font-black text-foreground">Individual account discounts</h2>
         <p className="mt-1 text-sm font-semibold text-muted-foreground">
-          Applies to one account only. It replaces any global discount on the same plan.
+          Applies to one ACCOUNT — every shop on that account&apos;s subscription, and nothing outside it. It replaces
+          any global discount on the same plan rather than adding to it.
         </p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -676,6 +768,34 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
           </div>
         </div>
 
+        {/*
+          The account price, from the SAME server function checkout uses, with
+          `p_individual: true`. Previously this side of the form showed no price
+          at all, so a percentage was granted blind.
+        */}
+        <div className="mt-4 rounded-xl bg-muted p-3" data-testid="admin-discounts-account-preview">
+          <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Account price</p>
+          <p className="mt-1 text-sm font-bold text-foreground">
+            {!selectedShop
+              ? "Choose a shop to preview its price."
+              : accountPreview && individualPercentValue !== null
+                ? `${formatUgx(accountPreview.base_monthly_ugx)} → ${formatUgx(accountPreview.monthly_ugx)}/month (saves ${formatUgx(accountPreview.monthly_discount_ugx)})`
+                : "Enter a percentage to preview the price."}
+          </p>
+          {accountPreview && selectedShop && individualPercentValue !== null ? (
+            <p className="mt-1 text-xs font-semibold text-muted-foreground">
+              {ADMIN_DISCOUNT_PLAN_LABELS[accountPreview.plan_code as PlanCode] ?? accountPreview.plan_code} · annual{" "}
+              {formatUgx(accountPreview.base_annual_ugx)} → {formatUgx(accountPreview.annual_ugx)}. This replaces any
+              global discount on the plan.
+            </p>
+          ) : null}
+          {accountPreviewError ? (
+            <p className="mt-1 text-xs font-bold text-destructive" role="alert">
+              {accountPreviewError}
+            </p>
+          ) : null}
+        </div>
+
         <button
           type="button"
           className={`${primaryBtnCls} mt-4`}
@@ -686,7 +806,8 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
           Save account discount
         </button>
         <p className="mt-2 text-xs font-semibold text-muted-foreground">
-          Setting 0 clears the discount and its note.
+          Setting 0 clears the discount and its note. An account discount covers the whole account — every shop on the
+          same subscription is priced from it.
         </p>
 
         <div className="mt-5 overflow-x-auto">
@@ -720,6 +841,13 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                     </td>
                     <td className="py-3">
                       <Value>{row.discount_percent}%</Value>
+                      {/* The scope is the whole ACCOUNT, not the one shop that was picked
+                          in the search box. */}
+                      {typeof row.shop_count === "number" ? (
+                        <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">
+                          whole account · {row.shop_count} {row.shop_count === 1 ? "shop" : "shops"}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="py-3">
                       <Window startsAt={row.starts_at} expiresAt={row.expires_at} />
@@ -742,14 +870,36 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                       <Value>{row.final_monthly_ugx === null ? null : `${formatUgx(row.final_monthly_ugx)}/mo`}</Value>
                     </td>
                     <td className="py-3 text-right">
-                      <button
-                        type="button"
-                        className={dangerBtnCls}
-                        disabled={!canEdit || !row.shop_id}
-                        onClick={() => void onClearIndividual(row.shop_id, row.account_name || "this account")}
-                      >
-                        <Trash2 className="h-4 w-4" /> Clear
-                      </button>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {/*
+                          A 100% account has nothing to pay, so its period is
+                          granted instead of charged. The setters cap at 99%, so
+                          this only appears on a legacy or hand-set row — which is
+                          exactly the case the server re-checks before granting.
+                        */}
+                        {row.effective_percent >= 100 ? (
+                          <button
+                            type="button"
+                            className={primaryBtnCls}
+                            disabled={!canEdit || freeActivating === row.subscription_id}
+                            onClick={() => void onActivateFree(row.subscription_id, row.account_name || "this account")}
+                            data-testid="admin-discounts-free-activate"
+                          >
+                            {freeActivating === row.subscription_id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : null}
+                            Grant free period
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className={dangerBtnCls}
+                          disabled={!canEdit || !row.shop_id}
+                          onClick={() => void onClearIndividual(row.shop_id, row.account_name || "this account")}
+                        >
+                          <Trash2 className="h-4 w-4" /> Clear
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

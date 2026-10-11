@@ -288,6 +288,13 @@ export function UpgradePage({ lang }: { lang: Language }) {
       <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/90 p-5 shadow-sm">
         <h2 className="text-lg font-black text-waka-950">{t(lang, "upgradeYearlyTitle")}</h2>
         <p className="mt-2 text-sm font-semibold text-waka-900">{t(lang, "upgradeYearlySub")}</p>
+        {/* Plan-wide discount: the prices below already include it. An account's
+            own discount is separate and private, so it is not described here. */}
+        {pricing.globalDiscountActive ? (
+          <p className="mt-2 text-sm font-bold text-waka-950">
+            A discount is currently applied to these plan prices.
+          </p>
+        ) : null}
         <ul className="mt-4 grid gap-3 sm:grid-cols-3">
           {PAID_ANNUAL.map(({ plan }) => {
             const price = isPaidPlan(plan) ? pricingForPlan(pricing, plan) : null;

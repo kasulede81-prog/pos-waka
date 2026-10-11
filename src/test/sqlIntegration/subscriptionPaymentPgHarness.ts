@@ -60,6 +60,18 @@ const MIGRATION_CHAIN = [
   join(MIGRATIONS_DIR, "20261010120000_admin_subscription_discounts.sql"),
   // Preview/overview base fix — supersedes both read RPCs from the file above.
   join(MIGRATIONS_DIR, "20261011090000_admin_discount_preview_base_fix.sql"),
+  // Discount hardening (2026-10-11), in dependency order: the billing-role gate
+  // and helper hygiene come first because every later file calls them; the
+  // scope/resolution rewrite supersedes the discount setter and the overview;
+  // the annual bound supersedes the campaign RPC and the pricing primitive; the
+  // public-pricing rewrite supersedes `public_subscription_pricing`,
+  // `subscription_payment_create` and the payment state guard.
+  join(MIGRATIONS_DIR, "20261011120000_discount_authorization_and_helper_hygiene.sql"),
+  join(MIGRATIONS_DIR, "20261011130000_admin_manual_payment_amount_guard.sql"),
+  join(MIGRATIONS_DIR, "20261011140000_subscription_free_activation.sql"),
+  join(MIGRATIONS_DIR, "20261011150000_discount_scope_and_subscription_resolution.sql"),
+  join(MIGRATIONS_DIR, "20261011160000_campaign_annual_discount_bounds.sql"),
+  join(MIGRATIONS_DIR, "20261011170000_public_pricing_with_global_discounts.sql"),
 ];
 
 function readSql(path: string): string {

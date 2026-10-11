@@ -27,10 +27,15 @@ export type PlanCode = "starter" | "business" | "waka_plus";
 
 export const ADMIN_DISCOUNT_PLANS: readonly PlanCode[] = ["starter", "business", "waka_plus"];
 
+/**
+ * The same three labels the Pricing Campaigns window uses (`PLAN_LABELS` in
+ * `pricingCampaigns.ts`). Two adjacent admin screens naming one plan two
+ * different ways is how an operator ends up discounting the wrong plan.
+ */
 export const ADMIN_DISCOUNT_PLAN_LABELS: Record<PlanCode, string> = {
   starter: "Starter",
   business: "Business",
-  waka_plus: "DKASU Plus",
+  waka_plus: "Enterprise (Waka Plus)",
 };
 
 export type RpcResult = { ok: true; computed?: Record<string, unknown> } | { ok: false; error: string };
@@ -139,10 +144,24 @@ export type AdminPlanDiscount = {
   starts_at: string | null;
   expires_at: string | null;
   reason: string | null;
+  /** True only while the rule is enabled, non-zero and inside its window. */
   is_active_now: boolean;
+  /** The same fact under the name the table column uses. */
+  applies_now?: boolean;
   created_at: string | null;
   updated_at: string | null;
+  /** The campaign-layer price: the plan with NO admin discount at all. */
   base_monthly_ugx: number;
+  /**
+   * What a shop with no account discount pays RIGHT NOW. With the rule not in
+   * force this is the campaign price — it is what checkout would charge, so the
+   * screen shows THIS as the effective price.
+   */
+  effective_monthly_ugx?: number;
+  effective_annual_ugx?: number;
+  /** What the rule would be worth IF it were in force. Never the current price. */
+  configured_monthly_ugx?: number;
+  /** Historical names, kept: the server now returns the live-aware price in them. */
   final_monthly_ugx: number;
   final_monthly_with_discount_ugx: number;
 };
@@ -151,6 +170,10 @@ export type AdminIndividualDiscount = {
   subscription_id: string;
   organization_id: string | null;
   shop_id: string | null;
+  /** Always "organization" — a discount is stored on the account's subscription. */
+  scope?: string;
+  /** How many shops share that subscription, i.e. how many the discount covers. */
+  shop_count?: number;
   account_name: string;
   plan_code: string | null;
   /** The rate as configured. May not be in force — see `effective_percent`. */
@@ -203,6 +226,25 @@ export function mapDiscountError(message: string): string {
   }
   if (lower.includes("pgrst202") || lower.includes("could not find the function")) {
     return "Discount management is not available on this deployment yet.";
+  }
+  if (lower.includes("not_fully_discounted")) {
+    return "This account is not fully discounted, so there is nothing to activate for free.";
+  }
+  // The free-period grant refuses while a payment is with the provider, because
+  // settling it would grant a second period (review finding F1).
+  if (lower.includes("payment_reconciliation_required")) {
+    return "This account has a payment already sent to the provider. Wait for it to settle or cancel it before granting a free period.";
+  }
+  // Unreachable server-side by construction, so reaching it means something is
+  // genuinely wrong; say that plainly rather than reporting a success.
+  if (lower.includes("free_activation_conflict")) {
+    return "A free period already covers this window. Nothing was granted — check the account's history before retrying.";
+  }
+  if (lower.includes("annual_discount_out_of_range")) {
+    return "An annual discount must be between 0% and 90%.";
+  }
+  if (lower.includes("discount_below_minimum")) {
+    return "Campaign prices cannot go below UGX 5,000 per month.";
   }
   if (!raw) return "The request failed.";
   return raw;
@@ -315,4 +357,80 @@ export async function saveAdminSubscriptionDiscount(input: {
   return envelope.ok === true
     ? { ok: true, computed: envelope as Record<string, unknown> }
     : { ok: false, error: envelope.error ?? "The account discount could not be saved." };
+}
+
+// ---------------------------------------------------------------------------
+// The authoritative amount — and the free activation that replaces a payment
+// ---------------------------------------------------------------------------
+
+export type AdminExpectedAmount = {
+  subscription_id: string;
+  organization_id: string | null;
+  plan_code: string;
+  billing_interval: string;
+  effective_discount_percent: number;
+  individual_discount_percent: number;
+  monthly_ugx: number;
+  annual_ugx: number;
+  /** What the money path charges for this subscription's own billing cycle. */
+  expected_amount_ugx: number;
+  fully_discounted: boolean;
+};
+
+/**
+ * What the server says this subscription costs right now. The console shows
+ * THIS number, never a price derived from the public book — the public book
+ * excludes the account's discount by design, which is how a discounted shop came
+ * to be offered the full list price.
+ */
+export async function fetchAdminExpectedAmount(
+  subscriptionId: string,
+): Promise<AdminDiscountFetchResult<AdminExpectedAmount>> {
+  if (!supabase) return { ok: false, error: "Not configured for this build." };
+
+  const { data, error } = await supabase.rpc("admin_subscription_expected_amount", {
+    p_subscription_id: subscriptionId,
+  });
+  const envelope = unwrap(data, error);
+  if (envelope.ok !== true) {
+    return { ok: false, error: envelope.error ?? "The amount could not be calculated." };
+  }
+  return { ok: true, data: envelope as unknown as AdminExpectedAmount };
+}
+
+export type AdminFreeActivation = {
+  idempotent: boolean;
+  activation_id: string;
+  subscription_id: string;
+  plan_code: string;
+  billing_interval: string;
+  discount_percent: number;
+  period_start: string;
+  period_end: string | null;
+  payment_required: number;
+};
+
+/**
+ * Grants one period to a fully discounted account WITHOUT a payment.
+ *
+ * Only usable where the discount really resolves to 100% — the server re-checks
+ * that, the window and the price, and refuses otherwise. A retry returns the
+ * activation it already made (`idempotent: true`) rather than granting a second
+ * period, so a double click is safe.
+ */
+export async function activateAdminFreePeriod(input: {
+  subscriptionId: string;
+  reason?: string | null;
+}): Promise<AdminDiscountFetchResult<AdminFreeActivation>> {
+  if (!supabase) return { ok: false, error: "Not configured for this build." };
+
+  const { data, error } = await supabase.rpc("admin_subscription_activate_free", {
+    p_subscription_id: input.subscriptionId,
+    p_reason: input.reason?.trim() ? input.reason.trim() : null,
+  });
+  const envelope = unwrap(data, error);
+  if (envelope.ok !== true) {
+    return { ok: false, error: envelope.error ?? "The free period could not be activated." };
+  }
+  return { ok: true, data: envelope as unknown as AdminFreeActivation };
 }

@@ -166,6 +166,18 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
           </p>
         ) : null}
 
+        {/*
+          A GLOBAL administrative discount is plan-wide, so it belongs on the
+          public book beside the campaign price — the prices below already carry
+          it. An ACCOUNT discount is private and never reaches this page
+          (migration 20261011170000).
+        */}
+        {pricing.globalDiscountActive ? (
+          <p className="rounded-2xl border border-border bg-muted px-4 py-3 text-sm font-bold text-foreground">
+            A discount is currently applied to these plan prices.
+          </p>
+        ) : null}
+
         <div className="space-y-6">
           {PLANS.map((plan) => {
             const paidPrice =
