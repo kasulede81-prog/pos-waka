@@ -7759,6 +7759,18 @@ const en: Dict = {
   planStarterAnnualSave: "Save 20%",
   planBusinessAnnualSave: "Save 20%",
   planWakaPlusAnnualSave: "Save 20%",
+  /**
+   * Explains that the monthly and annual prices above are priced on separate
+   * discount legs, so a monthly promotion lowering the monthly figure does not
+   * lower the yearly one. Deliberately NOT conditional on a discount being live:
+   * it describes how annual pricing works, not that something is on offer.
+   *
+   * NOTE: no Luganda entry yet, so `t("lg", …)` falls back to this English text.
+   * The surrounding upgrade-yearly strings ARE translated — this one needs a
+   * native reviewer before it is.
+   */
+  annualIntervalNote:
+    "Annual pricing is separate from monthly promotions. Monthly discounts do not apply to annual subscriptions.",
   upgradeCurrentBadge: "Current",
   upgradePaySoon: "Contact Support to Activate",
   upgradePaymentPrep: "Contact DKASU support on WhatsApp to activate your paid plan.",

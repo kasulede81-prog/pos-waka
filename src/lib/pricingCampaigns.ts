@@ -293,9 +293,10 @@ export function validatePlanDiscountDraft(
     }
   }
 
-  // `pricing_campaign_plan_discounts.annual_discount_percent` carries no CHECK
-  // constraint, and `_pricing_compute_plan_row` does not clamp it — a value
-  // above 100 would render a NEGATIVE annual price. Guard it here.
+  // The annual leg IS bounded server-side — a 0–90 CHECK on
+  // `pricing_campaign_plan_discounts.annual_discount_percent` plus a clamp in
+  // `_pricing_compute_plan_row`, both added by 20261011160000. This guard stays
+  // so the operator sees which field is wrong instead of a raw constraint error.
   const annualRaw = draft.annualDiscountPercent.trim();
   if (annualRaw) {
     const annual = Number(annualRaw);
@@ -349,6 +350,13 @@ export function mapPricingCampaignError(raw: string | null | undefined): string 
       return "That discount type is not supported.";
     case "campaign_not_found":
       return "That campaign no longer exists. Refresh the page and try again.";
+    case "annual_discount_out_of_range":
+      /**
+       * The CAMPAIGN's annual bound, 0-90. The Subscription Discounts screen
+       * accepts up to 99 on the same error code, which is why this message names
+       * the number rather than saying "out of range".
+       */
+      return `Enter an annual campaign discount between 0 and ${MAX_PERCENTAGE_DISCOUNT}%.`;
     case "discount_below_minimum":
       /**
        * A CAMPAIGN rule, and one that is easy to mistake for a broken discount.

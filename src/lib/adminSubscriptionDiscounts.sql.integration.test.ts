@@ -99,16 +99,28 @@ describe("admin subscription discounts — SQL contract", () => {
   async function adminSaveGlobal(
     plan: string,
     percent: number,
-    extra: { active?: boolean; startsAt?: string | null; expiresAt?: string | null; reason?: string | null } = {},
+    extra: {
+      active?: boolean;
+      startsAt?: string | null;
+      expiresAt?: string | null;
+      reason?: string | null;
+      /**
+       * The ANNUAL leg. Left undefined it is not sent, which asks the server to
+       * leave any existing annual leg alone — see the setter's contract.
+       */
+      annual?: number;
+    } = {},
   ): Promise<Record<string, unknown>> {
-    return rpc(fx.internalAdminId, "admin_plan_discount_save", [
+    const args: unknown[] = [
       plan,
       percent,
       extra.active ?? true,
       extra.startsAt ?? null,
       extra.expiresAt ?? null,
       extra.reason ?? "test",
-    ]);
+    ];
+    if (extra.annual !== undefined) args.push(extra.annual);
+    return rpc(fx.internalAdminId, "admin_plan_discount_save", args);
   }
 
   async function adminSaveIndividual(
@@ -123,10 +135,10 @@ describe("admin subscription discounts — SQL contract", () => {
    * What the SERVER resolves this subscription's individual discount to be right
    * now — the value every money path feeds into the pricing primitive.
    */
-  async function effectiveFor(subscriptionId: string): Promise<number> {
+  async function effectiveFor(subscriptionId: string, interval = "month"): Promise<number> {
     const { rows } = await exec.query<{ v: string }>(
-      `SELECT public._admin_discount_for_row (s) AS v FROM public.subscriptions s WHERE s.id = $1`,
-      [subscriptionId],
+      `SELECT public._admin_discount_for_row (s, $2) AS v FROM public.subscriptions s WHERE s.id = $1`,
+      [subscriptionId, interval],
     );
     return Number(rows[0]!.v);
   }
@@ -346,12 +358,42 @@ describe("admin subscription discounts — SQL contract", () => {
     expect(await individualStored(fx.subscriptionAId)).toBe(0);
   });
 
-  it("returns the real final price computed by the checkout function", async () => {
+  it("returns the real final price computed by the checkout function, per cycle", async () => {
     const res = await adminSaveIndividual(fx.shopAId, 25);
 
     expect(res.ok).toBe(true);
-    expect(Number(res.monthly_ugx)).toBe(27_000);
-    expect(Number(res.annual_ugx)).toBe(259_200); // 345,600 × 0.75
+    expect(Number(res.monthly_ugx)).toBe(27_000); // 36,000 × 0.75
+    // THE INTERVAL CONTRACT. A monthly 25% no longer moves the year: the annual
+    // leg was not set by this call, so the year prices at the campaign layer
+    // (345,600 = 36,000 × 12 × 0.8). It used to return 259,200 — 345,600 × 0.75
+    // — which is the coupling this suite now pins shut.
+    expect(Number(res.annual_discount_percent)).toBe(0);
+    expect(Number(res.annual_ugx)).toBe(345_600);
+  });
+
+  it("prices each cycle from its own leg, and neither leg reaches the other", async () => {
+    // Both legs set explicitly, as the screen now sends them.
+    const saved = await rpc(fx.internalAdminId, "admin_subscription_discount_save", [
+      fx.shopAId,
+      25,
+      "test",
+      null,
+      null,
+      40,
+    ]);
+    expect(saved.ok).toBe(true);
+    expect(Number(saved.monthly_ugx)).toBe(27_000); // 36,000 × 0.75
+    expect(Number(saved.annual_ugx)).toBe(207_360); // 345,600 × 0.60 — 40%, not 25%
+
+    // Moving the monthly leg alone leaves the annual price byte-identical.
+    const annualBefore = await price("business", "year", 0);
+    await rpc(fx.internalAdminId, "admin_subscription_discount_save", [fx.shopAId, 5, "test", null, null, 40]);
+    expect(await price("business", "year", 0)).toBe(annualBefore);
+
+    // ...and moving the annual leg alone leaves the monthly price byte-identical.
+    const monthlyBefore = await price("business", "month", 0);
+    await rpc(fx.internalAdminId, "admin_subscription_discount_save", [fx.shopAId, 5, "test", null, null, 10]);
+    expect(await price("business", "month", 0)).toBe(monthlyBefore);
   });
 
   // ========================================================================
@@ -835,9 +877,10 @@ describe("admin subscription discounts — SQL contract", () => {
   });
 
   it("the ANNUAL preview agrees with the amount the annual checkout would charge", async () => {
-    await adminSaveGlobal("business", 99);
+    // Both legs saved, as the screen sends them: 99% monthly AND 99% annual.
+    await adminSaveGlobal("business", 99, { annual: 99 });
 
-    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false, 99]);
 
     // Both cycles, against the authoritative calculation.
     expect(Number(preview.monthly_ugx)).toBe(await price("business", "month", 0));
@@ -847,14 +890,25 @@ describe("admin subscription discounts — SQL contract", () => {
     expect(Number(preview.annual_ugx)).toBe(3_456);
   });
 
+  it("previews the two legs independently — the annual one is NOT the monthly one", async () => {
+    // The preview is a calculator: each leg is whatever it is handed. 99%
+    // monthly with no annual leg prices the year at the campaign layer, not at
+    // 1% of it.
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+
+    expect(Number(preview.monthly_ugx)).toBe(360);
+    expect(Number(preview.annual_discount_percent)).toBe(0);
+    expect(Number(preview.annual_ugx)).toBe(BUSINESS_ANNUAL);
+  });
+
   it("the ANNUAL preview stays correct for an individual discount too", async () => {
-    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 25, true]);
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 25, true, 25]);
 
     expect(Number(preview.annual_ugx)).toBe(await price("business", "year", 25));
     expect(Number(preview.monthly_ugx)).toBe(await price("business", "month", 25));
   });
 
-  it("the ANNUAL preview tracks a live campaign as well as the admin discount", async () => {
+  it("a MONTHLY campaign discount leaves the annual base at the annual list price", async () => {
     const { rows } = await exec.query<{ id: string }>(
       `INSERT INTO public.pricing_campaigns (name, enabled, starts_at)
        VALUES ('annual-base', true, now() - interval '1 day') RETURNING id`,
@@ -864,12 +918,16 @@ describe("admin subscription discounts — SQL contract", () => {
          (campaign_id, plan_code, monthly_discount_type, monthly_discount_value, annual_discount_percent)
        VALUES ('${rows[0]!.id}', 'business', 'percentage', 50, 20)`,
     );
-    await adminSaveGlobal("business", 99);
+    await adminSaveGlobal("business", 99, { annual: 0 });
 
-    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false]);
+    const preview = await rpc(fx.internalAdminId, "admin_discount_preview", ["business", 99, false, 0]);
 
-    // Campaign annual for business: 18,000 × 12 × (1 − 20%) = 172,800.
-    expect(Number(preview.base_annual_ugx)).toBe(172_800);
+    // THE CAMPAIGN INTERVAL CONTRACT. The annual base is 36,000 × 12 × (1 − 20%)
+    // = 345,600 — the 50% MONTHLY campaign discount must not touch it. Building
+    // the year on the discounted month gave 172,800, and that is what this
+    // assertion replaced.
+    expect(Number(preview.base_annual_ugx)).toBe(BUSINESS_ANNUAL);
+    expect(Number(preview.base_monthly_ugx)).toBe(18_000);
     expect(Number(preview.annual_ugx)).toBe(await price("business", "year", 0));
   });
 

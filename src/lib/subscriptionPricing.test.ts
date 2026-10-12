@@ -34,14 +34,34 @@ describe("subscriptionPricing", () => {
     expect(result.finalMonthlyUgx).toBe(16_200);
   });
 
-  it("applies annual discount to final monthly base", () => {
+  it("applies the annual discount to the annual LIST base, never the discounted month", () => {
+    // This is the interval-isolation contract. Business list is 36,000/month and
+    // 432,000/year; a 6,000 monthly campaign discount must move the monthly card
+    // ONLY. Deriving the year from `finalMonthly` — 30,000 × 12 × 0.8 = 288,000 —
+    // was the coupling this pins shut.
     const result = computePlanDisplayPrice("business", {
       monthlyDiscountType: "fixed_amount",
       monthlyDiscountValue: 6_000,
       annualDiscountPercent: 20,
     });
     expect(result.originalAnnualFullUgx).toBe(432_000);
-    expect(result.finalAnnualUgx).toBe(288_000);
+    expect(result.finalAnnualUgx).toBe(345_600);
+    // ...and the monthly leg is untouched by the annual percentage.
+    expect(result.finalMonthlyUgx).toBe(30_000);
+  });
+
+  it("keeps each interval's price identical whichever leg changes", () => {
+    const base = { monthlyDiscountType: "none" as const, monthlyDiscountValue: 0, annualDiscountPercent: 20 };
+    const withMonthlyOnly = computePlanDisplayPrice("waka_plus", {
+      ...base,
+      monthlyDiscountType: "percentage",
+      monthlyDiscountValue: 50,
+    });
+    const untouched = computePlanDisplayPrice("waka_plus", base);
+    expect(withMonthlyOnly.finalAnnualUgx).toBe(untouched.finalAnnualUgx);
+
+    const withAnnualOnly = computePlanDisplayPrice("waka_plus", { ...base, annualDiscountPercent: 50 });
+    expect(withAnnualOnly.finalMonthlyUgx).toBe(untouched.finalMonthlyUgx);
   });
 
   it("enforces minimum final monthly price", () => {

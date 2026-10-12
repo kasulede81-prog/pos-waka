@@ -201,7 +201,19 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
                     <div className="mt-2">
                       <PlanPriceDisplay price={paidPrice} interval="month" />
                       <div className="mt-2">
-                        <PlanPriceDisplay price={paidPrice} interval="year" size="sm" />
+                        {/*
+                          The annual figure is priced on its own discount leg, so
+                          it can sit above a promotional month. The note travels
+                          with the annual price, not the card, so it cannot be
+                          left behind if the two move apart.
+                        */}
+                        <PlanPriceDisplay
+                          price={paidPrice}
+                          interval="year"
+                          size="sm"
+                          showIntervalNote
+                          noteClassName="text-muted-foreground"
+                        />
                       </div>
                     </div>
                   ) : (

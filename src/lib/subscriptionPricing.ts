@@ -83,12 +83,17 @@ export function computePlanDisplayPrice(
   // can make the real discount smaller than the one asked for (90% of 18,000 is
   // 16,200, but the price only falls to 5,000). The server derives the same
   // figure the same way in `_pricing_compute_plan_row` (migration
-  // 20261011160000), and a pinned test asserts this mirror equals it for every
+  // 20261012100000), and a pinned test asserts this mirror equals it for every
   // plan and discount shape.
   const monthlyDiscount = originalMonthly - finalMonthly;
 
+  // THE ANNUAL LEG IS INDEPENDENT. It is a percentage of the ANNUAL LIST price,
+  // never of `finalMonthly`: a monthly campaign discount must not move a yearly
+  // price, and building the year on the discounted month is exactly how it used
+  // to. `originalAnnualFull` is the base, so the "full" and "final" annual
+  // figures finally describe the same thing.
   const originalAnnualFull = originalMonthly * 12;
-  const finalAnnual = Math.round(finalMonthly * 12 * (1 - annualPct / 100));
+  const finalAnnual = Math.round(originalAnnualFull * (1 - annualPct / 100));
 
   return {
     planCode,

@@ -73,6 +73,10 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
   // ---- global form -------------------------------------------------------
   const [globalPlan, setGlobalPlan] = useState<PlanCode>("business");
   const [globalPercent, setGlobalPercent] = useState("0");
+  // The two legs are edited and previewed separately. They are not the same
+  // number: a monthly rule must not move a yearly price, and the server refuses
+  // to mirror one onto the other (migration 20261012100000).
+  const [globalAnnualPercent, setGlobalAnnualPercent] = useState("0");
   const [globalStartsAt, setGlobalStartsAt] = useState("");
   const [globalExpiresAt, setGlobalExpiresAt] = useState("");
   const [globalActive, setGlobalActive] = useState(true);
@@ -87,6 +91,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
   const [shopSearchError, setShopSearchError] = useState<string | null>(null);
   const [selectedShop, setSelectedShop] = useState<RecentShopRow | null>(null);
   const [individualPercent, setIndividualPercent] = useState("0");
+  const [individualAnnualPercent, setIndividualAnnualPercent] = useState("0");
   const [individualReason, setIndividualReason] = useState("");
   const [individualStartsAt, setIndividualStartsAt] = useState("");
   const [individualExpiresAt, setIndividualExpiresAt] = useState("");
@@ -155,14 +160,25 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
     return plan?.monthly_ugx ?? 0;
   }, [overview, globalPlan]);
 
+  /** The annual list price, the base the annual leg is a percentage OF. */
+  const globalAnnualBase = useMemo(() => {
+    const plan = overview?.plans.find((p) => p.plan_code === globalPlan);
+    return plan?.annual_full_ugx ?? 0;
+  }, [overview, globalPlan]);
+
   const parsedGlobal = parseDiscountPercent(globalPercent);
   /** A primitive, so the preview effect below has a stable dependency. */
   const globalPercentValue = parsedGlobal.ok ? parsedGlobal.value : null;
   const localPreview = globalPercentValue === null ? null : localDiscountPreview(globalBase, globalPercentValue);
 
+  const parsedGlobalAnnual = parseDiscountPercent(globalAnnualPercent);
+  const globalAnnualPercentValue = parsedGlobalAnnual.ok ? parsedGlobalAnnual.value : null;
+  const localAnnualPreview =
+    globalAnnualPercentValue === null ? null : localDiscountPreview(globalAnnualBase, globalAnnualPercentValue);
+
   /** Server preview, debounced. A failure leaves the last good preview alone. */
   useEffect(() => {
-    if (!canEdit || globalPercentValue === null) {
+    if (!canEdit || globalPercentValue === null || globalAnnualPercentValue === null) {
       setPreview(null);
       return;
     }
@@ -172,6 +188,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
         planCode: globalPlan,
         discountPercent: globalPercentValue,
         individual: false,
+        annualDiscountPercent: globalAnnualPercentValue,
       }).then((res) => {
         if (seq !== previewSeqRef.current) return;
         if (res.ok) {
@@ -183,7 +200,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
       });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [canEdit, globalPlan, globalPercentValue]);
+  }, [canEdit, globalPlan, globalPercentValue, globalAnnualPercentValue]);
 
   /**
    * The account preview, debounced like the global one. `individual: true` is
@@ -194,17 +211,20 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
   const selectedPlanCode = selectedShop?.plan_code ?? null;
   const parsedIndividual = parseDiscountPercent(individualPercent);
   const individualPercentValue = parsedIndividual.ok ? parsedIndividual.value : null;
+  const parsedIndividualAnnual = parseDiscountPercent(individualAnnualPercent);
+  const individualAnnualPercentValue = parsedIndividualAnnual.ok ? parsedIndividualAnnual.value : null;
 
   useEffect(() => {
     // Nothing is cleared here on purpose: the render below gates on the same
     // conditions, so a preview from a previous selection is never shown.
-    if (!canEdit || !selectedPlanCode || individualPercentValue === null) return;
+    if (!canEdit || !selectedPlanCode || individualPercentValue === null || individualAnnualPercentValue === null) return;
     const seq = ++accountPreviewSeqRef.current;
     const timer = window.setTimeout(() => {
       void previewAdminDiscount({
         planCode: selectedPlanCode,
         discountPercent: individualPercentValue,
         individual: true,
+        annualDiscountPercent: individualAnnualPercentValue,
       }).then((res) => {
         if (seq !== accountPreviewSeqRef.current) return;
         if (res.ok) {
@@ -216,12 +236,13 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
       });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [canEdit, selectedPlanCode, individualPercentValue]);
+  }, [canEdit, selectedPlanCode, individualPercentValue, individualAnnualPercentValue]);
 
   const onSaveGlobal = async () => {
     if (!canEdit || globalSaving) return;
     const errors = validateDiscountDraft({
       percentRaw: globalPercent,
+      annualPercentRaw: globalAnnualPercent,
       startsAt: globalStartsAt || null,
       expiresAt: globalExpiresAt || null,
     });
@@ -232,6 +253,8 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
     }
     const percent = parseDiscountPercent(globalPercent);
     if (!percent.ok) return;
+    const annual = parseDiscountPercent(globalAnnualPercent);
+    if (!annual.ok) return;
 
     setGlobalSaving(true);
     setError(null);
@@ -239,6 +262,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
       const res = await saveAdminPlanDiscount({
         planCode: globalPlan,
         discountPercent: percent.value,
+        annualDiscountPercent: annual.value,
         active: globalActive,
         startsAt: globalStartsAt ? new Date(globalStartsAt).toISOString() : null,
         expiresAt: globalExpiresAt ? new Date(globalExpiresAt).toISOString() : null,
@@ -248,9 +272,11 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
         setError(res.error);
         return;
       }
+      // Both legs are named, so the confirmation cannot imply that one
+      // percentage now governs both cycles.
       setNotice(
-        percent.value > 0
-          ? `${ADMIN_DISCOUNT_PLAN_LABELS[globalPlan]} now has a global ${percent.value}% discount.`
+        percent.value > 0 || annual.value > 0
+          ? `${ADMIN_DISCOUNT_PLAN_LABELS[globalPlan]} now has a global discount of ${percent.value}% monthly and ${annual.value}% annual.`
           : `The global discount on ${ADMIN_DISCOUNT_PLAN_LABELS[globalPlan]} is now inactive.`,
       );
       await load({ silent: true });
@@ -277,6 +303,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
     if (!canEdit || individualSaving || !selectedShop) return;
     const errors = validateDiscountDraft({
       percentRaw: individualPercent,
+      annualPercentRaw: individualAnnualPercent,
       startsAt: individualStartsAt || null,
       expiresAt: individualExpiresAt || null,
     });
@@ -287,6 +314,8 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
     }
     const percent = parseDiscountPercent(individualPercent);
     if (!percent.ok) return;
+    const annual = parseDiscountPercent(individualAnnualPercent);
+    if (!annual.ok) return;
 
     setIndividualSaving(true);
     setError(null);
@@ -294,6 +323,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
       const res = await saveAdminSubscriptionDiscount({
         shopId: selectedShop.id,
         discountPercent: percent.value,
+        annualDiscountPercent: annual.value,
         reason: individualReason,
         startsAt: individualStartsAt ? new Date(individualStartsAt).toISOString() : null,
         expiresAt: individualExpiresAt ? new Date(individualExpiresAt).toISOString() : null,
@@ -303,8 +333,8 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
         return;
       }
       setNotice(
-        percent.value > 0
-          ? `${selectedShop.name} now has a ${percent.value}% discount.`
+        percent.value > 0 || annual.value > 0
+          ? `${selectedShop.name} now has a ${percent.value}% monthly and ${annual.value}% annual discount.`
           : `${selectedShop.name}'s discount was cleared.`,
       );
       await load({ silent: true });
@@ -318,7 +348,14 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
       if (!canEdit || !shopId) return;
       if (!window.confirm(`Clear the discount for ${label}?`)) return;
       setError(null);
-      const res = await saveAdminSubscriptionDiscount({ shopId, discountPercent: 0, reason: null });
+      // BOTH legs. A monthly 0 alone would leave an annual rule in place — the
+      // two stopped being the same thing when the intervals were separated.
+      const res = await saveAdminSubscriptionDiscount({
+        shopId,
+        discountPercent: 0,
+        annualDiscountPercent: 0,
+        reason: null,
+      });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -439,6 +476,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                 setGlobalPlan(next);
                 const existing = overview?.global.find((g) => g.plan_code === next);
                 setGlobalPercent(existing ? String(existing.discount_percent) : "0");
+                setGlobalAnnualPercent(existing ? String(existing.annual_discount_percent ?? 0) : "0");
                 setGlobalStartsAt(existing?.starts_at ? existing.starts_at.slice(0, 10) : "");
                 setGlobalExpiresAt(existing?.expires_at ? existing.expires_at.slice(0, 10) : "");
                 setGlobalActive(existing?.active ?? true);
@@ -456,7 +494,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
 
           <div>
             <label className={labelCls} htmlFor="global-percent">
-              Discount % (0–{MAX_ADMIN_DISCOUNT_PERCENT})
+              Monthly discount % (0–{MAX_ADMIN_DISCOUNT_PERCENT})
             </label>
             <input
               id="global-percent"
@@ -470,6 +508,26 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
             {globalErrors.percent ? (
               <p className="mt-1 text-xs font-bold text-destructive" role="alert">
                 {globalErrors.percent}
+              </p>
+            ) : null}
+          </div>
+
+          <div>
+            <label className={labelCls} htmlFor="global-annual-percent">
+              Annual discount % (0–{MAX_ADMIN_DISCOUNT_PERCENT})
+            </label>
+            <input
+              id="global-annual-percent"
+              className={inputCls}
+              inputMode="decimal"
+              value={globalAnnualPercent}
+              disabled={!canEdit}
+              aria-invalid={Boolean(globalErrors.annualPercent)}
+              onChange={(e) => setGlobalAnnualPercent(e.target.value)}
+            />
+            {globalErrors.annualPercent ? (
+              <p className="mt-1 text-xs font-bold text-destructive" role="alert">
+                {globalErrors.annualPercent}
               </p>
             ) : null}
           </div>
@@ -539,16 +597,20 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
           <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Price preview</p>
           <p className="mt-1 text-sm font-bold text-foreground">
             {preview
-              ? `${formatUgx(preview.base_monthly_ugx)} → ${formatUgx(preview.monthly_ugx)}/month (saves ${formatUgx(preview.monthly_discount_ugx)})`
+              ? `Monthly ${formatUgx(preview.base_monthly_ugx)} → ${formatUgx(preview.monthly_ugx)} (saves ${formatUgx(preview.monthly_discount_ugx)})`
               : localPreview
-                ? `${formatUgx(globalBase)} → ${formatUgx(localPreview.finalUgx)}/month (saves ${formatUgx(localPreview.discountUgx)}) — verifying…`
+                ? `Monthly ${formatUgx(globalBase)} → ${formatUgx(localPreview.finalUgx)} (saves ${formatUgx(localPreview.discountUgx)}) — verifying…`
                 : "Enter a percentage to preview the price."}
           </p>
-          {preview ? (
-            <p className="mt-1 text-xs font-semibold text-muted-foreground">
-              Annual: {formatUgx(preview.base_annual_ugx)} → {formatUgx(preview.annual_ugx)}
-            </p>
-          ) : null}
+          {/* The annual line is its own figure, from its own field. It is not a
+              restatement of the monthly one. */}
+          <p className="mt-1 text-sm font-bold text-foreground" data-testid="admin-discounts-preview-annual">
+            {preview
+              ? `Annual ${formatUgx(preview.base_annual_ugx)} → ${formatUgx(preview.annual_ugx)} (saves ${formatUgx(preview.annual_discount_ugx)})`
+              : localAnnualPreview
+                ? `Annual ${formatUgx(globalAnnualBase)} → ${formatUgx(localAnnualPreview.finalUgx)} (saves ${formatUgx(localAnnualPreview.discountUgx)}) — verifying…`
+                : "Enter an annual percentage to preview the yearly price."}
+          </p>
           {previewError ? (
             <p className="mt-1 text-xs font-bold text-destructive" role="alert">
               {previewError} — the last confirmed price is still shown above.
@@ -566,7 +628,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
             <thead>
               <tr className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">
                 <th className="py-2">Plan</th>
-                <th className="py-2">Discount</th>
+                <th className="py-2">Monthly / annual</th>
                 <th className="py-2">Effective price</th>
                 <th className="py-2">Window</th>
                 <th className="py-2">Status</th>
@@ -587,7 +649,8 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                       <Value>{ADMIN_DISCOUNT_PLAN_LABELS[row.plan_code as PlanCode] ?? row.plan_code}</Value>
                     </td>
                     <td className="py-3">
-                      <Value>{row.discount_percent}%</Value>
+                      {/* Two legs, never one number standing for both. */}
+                      <Value>{row.discount_percent}% / {row.annual_discount_percent ?? 0}%</Value>
                     </td>
                     <td className="py-3">
                       {/*
@@ -692,7 +755,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
 
           <div>
             <label className={labelCls} htmlFor="individual-percent">
-              Discount % (0–{MAX_ADMIN_DISCOUNT_PERCENT})
+              Monthly discount % (0–{MAX_ADMIN_DISCOUNT_PERCENT})
             </label>
             <input
               id="individual-percent"
@@ -706,6 +769,26 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
             {individualErrors.percent ? (
               <p className="mt-1 text-xs font-bold text-destructive" role="alert">
                 {individualErrors.percent}
+              </p>
+            ) : null}
+          </div>
+
+          <div>
+            <label className={labelCls} htmlFor="individual-annual-percent">
+              Annual discount % (0–{MAX_ADMIN_DISCOUNT_PERCENT})
+            </label>
+            <input
+              id="individual-annual-percent"
+              className={inputCls}
+              inputMode="decimal"
+              value={individualAnnualPercent}
+              disabled={!canEdit || !selectedShop}
+              aria-invalid={Boolean(individualErrors.annualPercent)}
+              onChange={(e) => setIndividualAnnualPercent(e.target.value)}
+            />
+            {individualErrors.annualPercent ? (
+              <p className="mt-1 text-xs font-bold text-destructive" role="alert">
+                {individualErrors.annualPercent}
               </p>
             ) : null}
           </div>
@@ -779,14 +862,19 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
             {!selectedShop
               ? "Choose a shop to preview its price."
               : accountPreview && individualPercentValue !== null
-                ? `${formatUgx(accountPreview.base_monthly_ugx)} → ${formatUgx(accountPreview.monthly_ugx)}/month (saves ${formatUgx(accountPreview.monthly_discount_ugx)})`
+                ? `Monthly ${formatUgx(accountPreview.base_monthly_ugx)} → ${formatUgx(accountPreview.monthly_ugx)} (saves ${formatUgx(accountPreview.monthly_discount_ugx)})`
                 : "Enter a percentage to preview the price."}
           </p>
-          {accountPreview && selectedShop && individualPercentValue !== null ? (
+          {accountPreview && selectedShop && individualAnnualPercentValue !== null ? (
+            <p className="mt-1 text-sm font-bold text-foreground">
+              Annual {formatUgx(accountPreview.base_annual_ugx)} → {formatUgx(accountPreview.annual_ugx)} (saves{" "}
+              {formatUgx(accountPreview.annual_discount_ugx)})
+            </p>
+          ) : null}
+          {accountPreview && selectedShop ? (
             <p className="mt-1 text-xs font-semibold text-muted-foreground">
-              {ADMIN_DISCOUNT_PLAN_LABELS[accountPreview.plan_code as PlanCode] ?? accountPreview.plan_code} · annual{" "}
-              {formatUgx(accountPreview.base_annual_ugx)} → {formatUgx(accountPreview.annual_ugx)}. This replaces any
-              global discount on the plan.
+              {ADMIN_DISCOUNT_PLAN_LABELS[accountPreview.plan_code as PlanCode] ?? accountPreview.plan_code} · each leg
+              replaces the global discount for its own billing cycle, and neither reaches the other cycle.
             </p>
           ) : null}
           {accountPreviewError ? (
@@ -806,8 +894,9 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
           Save account discount
         </button>
         <p className="mt-2 text-xs font-semibold text-muted-foreground">
-          Setting 0 clears the discount and its note. An account discount covers the whole account — every shop on the
-          same subscription is priced from it.
+          Both legs set to 0 clears the discount and its note; a 0 on one leg leaves the other in place. A monthly rule
+          never changes a yearly price and an annual rule never changes a monthly one. An account discount covers the
+          whole account — every shop on the same subscription is priced from it.
         </p>
 
         <div className="mt-5 overflow-x-auto">
@@ -816,7 +905,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
               <tr className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">
                 <th className="py-2">Account</th>
                 <th className="py-2">Plan</th>
-                <th className="py-2">Discount</th>
+                <th className="py-2">Monthly / annual</th>
                 <th className="py-2">Window</th>
                 <th className="py-2">Status</th>
                 <th className="py-2">Price</th>
@@ -840,7 +929,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                       <Value>{row.plan_code ? (ADMIN_DISCOUNT_PLAN_LABELS[row.plan_code as PlanCode] ?? row.plan_code) : null}</Value>
                     </td>
                     <td className="py-3">
-                      <Value>{row.discount_percent}%</Value>
+                      <Value>{row.discount_percent}% / {row.annual_discount_percent ?? 0}%</Value>
                       {/* The scope is the whole ACCOUNT, not the one shop that was picked
                           in the search box. */}
                       {typeof row.shop_count === "number" ? (
@@ -856,7 +945,7 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                       <span className={row.is_active_now ? statusTokens.success.badge : statusTokens.draft.badge}>
                         {row.is_active_now
                           ? "Live"
-                          : row.discount_percent > 0
+                          : row.discount_percent > 0 || (row.annual_discount_percent ?? 0) > 0
                             ? "Scheduled / lapsed"
                             : "Inactive"}
                       </span>
@@ -865,9 +954,13 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                       ) : null}
                     </td>
                     <td className="py-3">
-                      {/* The price the shop actually pays now — a lapsed rule shows
-                          the fallback, not the rate it used to have. */}
+                      {/* The prices the shop actually pays now, one per cycle — a
+                          lapsed rule shows the fallback, not the rate it used to
+                          have, and the two legs are separate figures. */}
                       <Value>{row.final_monthly_ugx === null ? null : `${formatUgx(row.final_monthly_ugx)}/mo`}</Value>
+                      <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">
+                        {row.final_annual_ugx === null ? "" : `${formatUgx(row.final_annual_ugx)}/yr`}
+                      </span>
                     </td>
                     <td className="py-3 text-right">
                       <div className="flex flex-wrap justify-end gap-2">
@@ -876,8 +969,15 @@ export function AdminSubscriptionDiscountsPage({ adminRow, previewMode = false }
                           granted instead of charged. The setters cap at 99%, so
                           this only appears on a legacy or hand-set row — which is
                           exactly the case the server re-checks before granting.
+
+                          Gated on the leg for the account's OWN cycle: a 100%
+                          monthly rule does not make an annual period free, and
+                          the server refuses that case, so the button must not
+                          offer it.
                         */}
-                        {row.effective_percent >= 100 ? (
+                        {(row.billing_interval === "year"
+                          ? (row.effective_annual_percent ?? 0)
+                          : row.effective_percent) >= 100 ? (
                           <button
                             type="button"
                             className={primaryBtnCls}

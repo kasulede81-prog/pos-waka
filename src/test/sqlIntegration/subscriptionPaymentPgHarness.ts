@@ -72,6 +72,12 @@ const MIGRATION_CHAIN = [
   join(MIGRATIONS_DIR, "20261011150000_discount_scope_and_subscription_resolution.sql"),
   join(MIGRATIONS_DIR, "20261011160000_campaign_annual_discount_bounds.sql"),
   join(MIGRATIONS_DIR, "20261011170000_public_pricing_with_global_discounts.sql"),
+  // Interval isolation (2026-10-12): monthly and annual discounts become
+  // independent. Adds the annual leg to both admin mechanisms, makes the
+  // resolver interval-aware, and stops the annual campaign price being built on
+  // the monthly-discounted one. Supersedes the pricing primitive, all three
+  // money paths, both admin reads and both setters, so it lands last.
+  join(MIGRATIONS_DIR, "20261012100000_discount_interval_isolation.sql"),
 ];
 
 function readSql(path: string): string {

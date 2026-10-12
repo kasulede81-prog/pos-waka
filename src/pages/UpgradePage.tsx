@@ -7,6 +7,7 @@ import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSubscription } from "../context/SubscriptionContext";
 import { usePublicPricing } from "../hooks/usePublicPricing";
+import { AnnualIntervalNote } from "../components/pricing/AnnualIntervalNote";
 import { PlanPriceDisplay } from "../components/pricing/PlanPriceDisplay";
 import { pricingForPlan, type PaidPlanCode } from "../lib/subscriptionPricing";
 import {
@@ -322,6 +323,14 @@ export function UpgradePage({ lang }: { lang: Language }) {
             );
           })}
         </ul>
+        {/*
+          Once for the card, not once per plan: the three yearly prices above are
+          one offer described by one rule, and repeating the sentence under each
+          figure would read as three separate caveats. It is not conditional on a
+          discount being live — it states how the annual price is priced, so it
+          has to be true and legible whether or not a promotion is running.
+        */}
+        <AnnualIntervalNote lang={lang} className="text-waka-900" />
       </section>
 
       <Link

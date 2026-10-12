@@ -19,6 +19,9 @@
  * campaign first (90% clamp, UGX 5,000 floor), then the individual discount if
  * it is in force, otherwise the global rule, never stacked.
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { asUser, type SqlExec } from "../test/sqlIntegration/loyaltyPgHarness";
 import {
@@ -30,6 +33,12 @@ import {
 
 const BUSINESS = 36_000;
 const STARTER = 18_000;
+/**
+ * The annual LIST price for business: 36,000 × 12 × (1 − 20% canonical default)
+ * = 345,600. It is the base the annual leg is a percentage OF — deliberately not
+ * a multiple of whatever the monthly discount left behind.
+ */
+const BUSINESS_ANNUAL = 345_600;
 
 describe("discount hardening — SQL contract", () => {
   let exec: SqlExec & { isRealPostgres: boolean };
@@ -95,7 +104,8 @@ describe("discount hardening — SQL contract", () => {
        WHERE organization_id = '${fx.orgAId}' AND id <> '${fx.subscriptionAId}';
 
       UPDATE public.subscriptions
-         SET admin_discount_percent = 0, admin_discount_note = NULL,
+         SET admin_discount_percent = 0, admin_discount_percent_annual = 0,
+             admin_discount_note = NULL,
              admin_discount_starts_at = NULL, admin_discount_expires_at = NULL,
              status = 'trialing', payment_status = 'unknown',
              billing_interval = 'month', trial_ends_at = NULL,
@@ -164,24 +174,36 @@ describe("discount hardening — SQL contract", () => {
       [subId, action],
     );
 
-  const saveIndividual = (shopId: string, pct: number, extra: Record<string, unknown> = {}) =>
-    rpc(fx.internalAdminId, "admin_subscription_discount_save", [
+  /**
+   * `annual` is the ANNUAL leg. Omitting it does not clear the annual leg — the
+   * server reads an absent annual percentage as "leave it alone", which is what
+   * keeps a client bundle that predates the interval split from wiping a rule.
+   * Pass `annual: 0` to clear it deliberately.
+   */
+  const saveIndividual = (shopId: string, pct: number, extra: Record<string, unknown> = {}) => {
+    const args: unknown[] = [
       shopId,
       pct,
       extra.reason ?? "hardening",
       extra.startsAt ?? null,
       extra.expiresAt ?? null,
-    ]);
+    ];
+    if (extra.annual !== undefined) args.push(extra.annual);
+    return rpc(fx.internalAdminId, "admin_subscription_discount_save", args);
+  };
 
-  const saveGlobal = (plan: string, pct: number, extra: Record<string, unknown> = {}) =>
-    rpc(fx.internalAdminId, "admin_plan_discount_save", [
+  const saveGlobal = (plan: string, pct: number, extra: Record<string, unknown> = {}) => {
+    const args: unknown[] = [
       plan,
       pct,
       extra.active ?? true,
       extra.startsAt ?? null,
       extra.expiresAt ?? null,
       extra.reason ?? "hardening",
-    ]);
+    ];
+    if (extra.annual !== undefined) args.push(extra.annual);
+    return rpc(fx.internalAdminId, "admin_plan_discount_save", args);
+  };
 
   const quote = (shopId: string, plan: string, cycle: string, userId: string) =>
     rpc(userId, "subscription_payment_quote", [shopId, plan, cycle]);
@@ -201,9 +223,22 @@ describe("discount hardening — SQL contract", () => {
     return plans.find((p) => p.plan_code === plan)!;
   }
 
-  /** Give a subscription the 100% rate the setters deliberately cannot write. */
-  async function forceFullDiscount(subId: string) {
-    await exec.exec(`UPDATE public.subscriptions SET admin_discount_percent = 100 WHERE id = '${subId}'`);
+  /**
+   * Give a subscription the 100% rate the setters deliberately cannot write.
+   *
+   * BOTH legs: "fully discounted" is a statement about each interval now, so a
+   * helper that set only the monthly leg would leave an annual subscription at
+   * list price and every free-grant assertion below would be measuring the wrong
+   * thing. The interval-specific cases are asserted separately, by name.
+   */
+  async function forceFullDiscount(subId: string, legs: "both" | "month" | "year" = "both") {
+    const monthly = legs === "year" ? 0 : 100;
+    const annual = legs === "month" ? 0 : 100;
+    await exec.exec(
+      `UPDATE public.subscriptions
+          SET admin_discount_percent = ${monthly}, admin_discount_percent_annual = ${annual}
+        WHERE id = '${subId}'`,
+    );
   }
 
   // ======================================================================
@@ -259,7 +294,7 @@ describe("discount hardening — SQL contract", () => {
         ["_pricing_compute_plan_row", ["business", "none", 0, null]],
         ["_pricing_min_final_monthly_ugx", []],
         ["_pricing_active_campaign_id", []],
-        ["_admin_discount_effective", [0, "business"]],
+        ["_admin_discount_effective", [0, "business", "month"]],
         ["_subscription_latest_for_org", [null]],
       ] as Array<[string, unknown[]]>) {
         const message = await refusal(fx.ownerAId, fn, args);
@@ -626,6 +661,31 @@ describe("discount hardening — SQL contract", () => {
       expect(near).toBe(true);
 
       await exec.exec(`UPDATE public.subscriptions SET billing_interval = 'month' WHERE id = '${fx.subscriptionAId}'`);
+    });
+
+    it("a 100% MONTHLY rule does not make an annual period free", async () => {
+      // The eligibility check reads the leg for the subscription's OWN cycle. A
+      // monthly rate that reaches 100 says nothing about the year, so the grant
+      // must refuse rather than hand out twelve months for nothing.
+      await forceFullDiscount(fx.subscriptionAId, "month");
+      await exec.exec(`UPDATE public.subscriptions SET billing_interval = 'year' WHERE id = '${fx.subscriptionAId}'`);
+
+      const res = await rpc(fx.internalAdminId, "admin_subscription_activate_free", [fx.subscriptionAId, "nope"]);
+      expect(res.ok).toBe(false);
+      expect(res.error).toBe("not_fully_discounted");
+      expect(Number(res.effective_discount_percent)).toBe(0);
+      expect(await paymentCount(fx.subscriptionAId)).toBe(0);
+
+      await exec.exec(`UPDATE public.subscriptions SET billing_interval = 'month' WHERE id = '${fx.subscriptionAId}'`);
+    });
+
+    it("a 100% ANNUAL rule does not make a monthly period free", async () => {
+      await forceFullDiscount(fx.subscriptionAId, "year");
+
+      const res = await rpc(fx.internalAdminId, "admin_subscription_activate_free", [fx.subscriptionAId, "nope"]);
+      expect(res.ok).toBe(false);
+      expect(res.error).toBe("not_fully_discounted");
+      expect(Number(res.effective_discount_percent)).toBe(0);
     });
 
     it("reactivates a lapsed subscription", async () => {
@@ -1026,6 +1086,294 @@ describe("discount hardening — SQL contract", () => {
       // Not 16,200 (90% of 18,000) — the price only falls by 13,000.
       expect(Number(computed.rows[0]!.d)).toBe(13_000);
       expect(Number(computed.rows[0]!.d)).toBe(STARTER - 5_000);
+    });
+  });
+
+  // ======================================================================
+  // G — the two billing intervals are independent
+  // ======================================================================
+  //
+  // WHAT THESE PIN. Before migration 20261012100000 one percentage governed both
+  // cycles: `admin_plan_discounts` was keyed by plan alone, `subscriptions` had a
+  // single `admin_discount_percent`, and `_pricing_compute_plan_row` built the
+  // ANNUAL price from the already-monthly-discounted month. Every test here
+  // changes ONE interval and asserts the OTHER price did not move — which is the
+  // negative the old code could not satisfy at any percentage.
+  //
+  // The prices are read through `subscription_payment_plan_amount`, the same
+  // function checkout, the manual-payment guard and the free grant all call, so
+  // a passing assertion is a statement about money and not about a report.
+
+  describe("G — a change to one interval never moves the other", () => {
+    /** The two prices every other assertion in this block is measured against. */
+    async function bothPrices() {
+      return {
+        monthly: await price("business", "month", 0),
+        annual: await price("business", "year", 0),
+      };
+    }
+
+    /**
+     * Shop A's prices, cycle by cycle, from the checkout quote.
+     *
+     * Deliberately not `price()`: that helper hands the primitive a percentage
+     * directly, and a 0 there means "this account has no individual discount", so
+     * it can only ever measure the GLOBAL rules. An INDIVIDUAL leg has to be read
+     * from the subscription's own row, which is what the quote does — and it is
+     * also the number a shop would actually be charged.
+     */
+    async function shopPrices() {
+      const monthly = await quote(fx.shopAId, "business", "monthly", fx.ownerAId);
+      const annual = await quote(fx.shopAId, "business", "yearly", fx.ownerAId);
+      return { monthly: Number(monthly.amount_ugx), annual: Number(annual.amount_ugx) };
+    }
+
+    it("a GLOBAL monthly rule leaves the annual price untouched, and back again", async () => {
+      const before = await bothPrices();
+
+      await saveGlobal("business", 40, { annual: 0 });
+      const afterMonthly = await bothPrices();
+      expect(afterMonthly.monthly).toBe(21_600); // 36,000 × 0.60
+      expect(afterMonthly.annual).toBe(before.annual); // 345,600 — untouched
+
+      // Now move the ANNUAL leg only. The monthly price must not follow.
+      await saveGlobal("business", 40, { annual: 50 });
+      const afterAnnual = await bothPrices();
+      expect(afterAnnual.monthly).toBe(afterMonthly.monthly);
+      expect(afterAnnual.annual).toBe(172_800); // 345,600 × 0.50
+    });
+
+    it("an ANNUAL-only global rule never moves the monthly price", async () => {
+      const before = await bothPrices();
+
+      await saveGlobal("business", 0, { annual: 30 });
+      const after = await bothPrices();
+      expect(after.monthly).toBe(before.monthly); // 36,000
+      expect(after.annual).toBe(241_920); // 345,600 × 0.70
+    });
+
+    it("an INDIVIDUAL monthly rule leaves the annual price untouched, and back again", async () => {
+      const before = await shopPrices();
+
+      await saveIndividual(fx.shopAId, 50, { annual: 0 });
+      const afterMonthly = await shopPrices();
+      expect(afterMonthly.monthly).toBe(18_000);
+      expect(afterMonthly.annual).toBe(before.annual);
+
+      await saveIndividual(fx.shopAId, 50, { annual: 10 });
+      const afterAnnual = await shopPrices();
+      expect(afterAnnual.monthly).toBe(afterMonthly.monthly);
+      expect(afterAnnual.annual).toBe(311_040); // 345,600 × 0.90
+    });
+
+    it("an absent annual percentage leaves the annual leg alone rather than clearing it", async () => {
+      // The compatibility contract. An older client bundle sends only the monthly
+      // percent; if that cleared the annual leg, the first such save would throw
+      // away a rule the admin never touched.
+      await saveIndividual(fx.shopAId, 20, { annual: 60 });
+      expect((await shopPrices()).annual).toBe(138_240); // 345,600 × 0.40
+
+      await saveIndividual(fx.shopAId, 20); // no annual argument
+      expect((await shopPrices()).annual).toBe(138_240); // unchanged
+    });
+
+    it("each interval resolves its own precedence — individual leg, else global leg", async () => {
+      await saveGlobal("business", 10, { annual: 60 });
+      await saveIndividual(fx.shopAId, 50, { annual: 0 });
+
+      const prices = await shopPrices();
+      // Monthly: the individual leg wins outright. 50%, never 60% and never 55%.
+      expect(prices.monthly).toBe(18_000);
+      // Annual: this account has NO individual annual leg, so the GLOBAL annual
+      // leg applies. Before the split, holding an individual rule suppressed the
+      // global one for both cycles and this would have been the annual list price.
+      expect(prices.annual).toBe(138_240); // 345,600 × 0.40
+    });
+
+    it("the two legs never stack", async () => {
+      await saveGlobal("business", 10, { annual: 10 });
+      await saveIndividual(fx.shopAId, 50, { annual: 50 });
+
+      const prices = await shopPrices();
+      // 50% on both cycles, not 60% and not 55%.
+      expect(prices.monthly).toBe(18_000);
+      expect(prices.annual).toBe(172_800);
+    });
+
+    it("quotes each cycle from its own leg, so checkout cannot disagree", async () => {
+      await saveGlobal("business", 40, { annual: 50 });
+
+      const monthly = await quote(fx.shopAId, "business", "monthly", fx.ownerAId);
+      const annual = await quote(fx.shopAId, "business", "yearly", fx.ownerAId);
+
+      expect(Number(monthly.amount_ugx)).toBe(await price("business", "month", 0));
+      expect(Number(annual.amount_ugx)).toBe(await price("business", "year", 0));
+      // And they are genuinely different discounts: 40% off the month, 50% off
+      // the annual LIST price (not 50% off the 40%-discounted year).
+      expect(Number(monthly.amount_ugx)).toBe(21_600);
+      expect(Number(annual.amount_ugx)).toBe(172_800);
+    });
+
+    it("a monthly campaign discount leaves the annual price at the campaign's annual leg", async () => {
+      const campaignId = crypto.randomUUID();
+      await exec.exec(
+        `INSERT INTO public.pricing_campaigns (id, name, enabled, starts_at)
+         VALUES ('${campaignId}', 'monthly-only-sale', true, now() - interval '1 day')`,
+      );
+      await exec.exec(
+        `INSERT INTO public.pricing_campaign_plan_discounts
+           (campaign_id, plan_code, monthly_discount_type, monthly_discount_value, annual_discount_percent)
+         VALUES ('${campaignId}', 'business', 'percentage', 50, 20)`,
+      );
+
+      // Monthly: 36,000 − 50% = 18,000.
+      expect(await price("business", "month", 0)).toBe(18_000);
+      // Annual: 36,000 × 12 × (1 − 20%) = 345,600 — the LIST month drives the
+      // year, so the monthly promotion contributes nothing to it. Built on the
+      // discounted month this was 18,000 × 12 × 0.8 = 172,800.
+      expect(await price("business", "year", 0)).toBe(BUSINESS_ANNUAL);
+      // The public book agrees, so no screen advertises a different story.
+      const book = await publicPlan("business");
+      expect(Number(book.final_monthly_ugx)).toBe(18_000);
+      expect(Number(book.final_annual_ugx)).toBe(BUSINESS_ANNUAL);
+    });
+
+    it("an extreme MONTHLY campaign discount cannot discount the year", async () => {
+      // The measured worst case before the fix: a legal 13,000 fixed-amount
+      // monthly discount on starter priced a year at 60,000 against a 216,000
+      // list, with the annual percentage left at 0 — a 72% annual discount from a
+      // monthly-only input, and no annual floor to catch it.
+      const campaignId = crypto.randomUUID();
+      await exec.exec(
+        `INSERT INTO public.pricing_campaigns (id, name, enabled, starts_at)
+         VALUES ('${campaignId}', 'extreme', true, now() - interval '1 day')`,
+      );
+      await exec.exec(
+        `INSERT INTO public.pricing_campaign_plan_discounts
+           (campaign_id, plan_code, monthly_discount_type, monthly_discount_value, annual_discount_percent)
+         VALUES ('${campaignId}', 'starter', 'fixed_amount', 13000, 0)`,
+      );
+
+      expect(await price("starter", "month", 0)).toBe(5_000); // the floor binds
+      expect(await price("starter", "year", 0)).toBe(216_000); // 18,000 × 12
+    });
+
+    it("bounds both legs, on both mechanisms", async () => {
+      // Global: 0-99 on either leg, refused through the table CHECK and the RPC.
+      const tooHighGlobal = await saveGlobal("business", 10, { annual: 100 });
+      expect(tooHighGlobal.ok).toBe(false);
+      expect(tooHighGlobal.error).toBe("annual_discount_out_of_range");
+      expect(Number(tooHighGlobal.max_percent)).toBe(99);
+
+      const negativeGlobal = await saveGlobal("business", 10, { annual: -1 });
+      expect(negativeGlobal.ok).toBe(false);
+      expect(negativeGlobal.error).toBe("annual_discount_out_of_range");
+
+      // Individual: the same bound. 100 is not settable through the RPC — the
+      // reachable 100 is only the hand-set row the free grant re-checks.
+      const tooHighIndividual = await saveIndividual(fx.shopAId, 10, { annual: 100 });
+      expect(tooHighIndividual.ok).toBe(false);
+      expect(tooHighIndividual.error).toBe("annual_discount_out_of_range");
+
+      // ...and the monthly leg still refuses 100, exactly as before.
+      const monthlyTooHigh = await saveIndividual(fx.shopAId, 100, { annual: 0 });
+      expect(monthlyTooHigh.ok).toBe(false);
+      expect(monthlyTooHigh.error).toBe("discount_out_of_range");
+
+      await expect(
+        exec.exec(
+          `INSERT INTO public.admin_plan_discounts (plan_code, discount_percent, annual_discount_percent)
+           VALUES ('business', 10, 100)`,
+        ),
+      ).rejects.toThrow(/admin_plan_discounts_annual_percent_check|check constraint/i);
+    });
+
+    it("a rule is cleared by BOTH legs reaching zero, and by nothing less", async () => {
+      await saveIndividual(fx.shopAId, 30, { annual: 30, reason: "both" });
+
+      // Zeroing the monthly leg leaves the annual rule standing.
+      await saveIndividual(fx.shopAId, 0, { annual: 30 });
+      const partial = await shopPrices();
+      expect(partial.monthly).toBe(36_000);
+      expect(partial.annual).toBe(241_920); // 345,600 × 0.70
+
+      // Zeroing the annual leg too is what clears the rule — and its window.
+      await saveIndividual(fx.shopAId, 0, { annual: 0 });
+      const { rows } = await exec.query<{ m: string; a: string; s: string | null; e: string | null }>(
+        `SELECT admin_discount_percent::text AS m, admin_discount_percent_annual::text AS a,
+                admin_discount_starts_at::text AS s, admin_discount_expires_at::text AS e
+           FROM public.subscriptions WHERE id = $1`,
+        [fx.subscriptionAId],
+      );
+      expect(Number(rows[0]!.m)).toBe(0);
+      expect(Number(rows[0]!.a)).toBe(0);
+      expect(rows[0]!.s).toBeNull();
+      expect(rows[0]!.e).toBeNull();
+      expect(await price("business", "year", 0)).toBe(BUSINESS_ANNUAL);
+    });
+
+    it("a rule that predates the split still prices both cycles at its own percentage", async () => {
+      // EXISTING DISCOUNTS REMAIN VALID. Every rule that existed before
+      // 20261012100000 carried ONE percent, and the migration copies it into the
+      // new annual leg because that is what the row meant. So a rule with the
+      // same percent on both legs has to price exactly as it did before the
+      // split: 25% off the month AND 25% off the year.
+      //
+      // 259,200 is not a new number invented here — it is what the coupled code
+      // charged for an annual business subscription at 25% (345,600 × 0.75), and
+      // it is still asserted for the primitive in
+      // `subscriptionAdminDiscount.sql.integration.test.ts`. This test is the
+      // statement that the same rule still produces it after the split.
+      await saveGlobal("business", 25, { annual: 25 });
+      const global = await bothPrices();
+      expect(global.monthly).toBe(27_000); // 36,000 × 0.75
+      expect(global.annual).toBe(259_200); // 345,600 × 0.75 — the pre-split figure
+
+      await saveIndividual(fx.shopAId, 25, { annual: 25 });
+      const account = await shopPrices();
+      expect(account.monthly).toBe(27_000);
+      expect(account.annual).toBe(259_200);
+    });
+
+    it("the migration back-fills both mechanisms, and defaults the new leg to none", () => {
+      // The behavioural test above pins the SHAPE a back-filled rule has. This
+      // one guards the mechanism that produces it: without these statements an
+      // existing discount would silently lose its annual half, and the test
+      // above would still pass because it sets both legs by hand.
+      const migration = readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations/20261012100000_discount_interval_isolation.sql"),
+        "utf8",
+      );
+
+      // Global: the annual leg := the percent the rule already carried.
+      expect(migration).toMatch(/set\s+annual_discount_percent\s*=\s*discount_percent/);
+      // Individual: the same, and only where a rule exists at all.
+      expect(migration).toMatch(/set\s+admin_discount_percent_annual\s*=\s*admin_discount_percent/);
+      expect(migration).toMatch(/where coalesce \(admin_discount_percent, 0\) > 0/);
+
+      // Both columns arrive NOT NULL DEFAULT 0, so a row the back-fill skips
+      // reads as "no annual discount" rather than as NULL — which the resolver
+      // would have to treat separately.
+      expect(migration).toMatch(/annual_discount_percent numeric\(5, 2\) not null default 0/);
+      expect(migration).toMatch(/admin_discount_percent_annual numeric\(6, 2\) not null default 0/);
+    });
+
+    it("an expired window lapses BOTH legs together", async () => {
+      const past = new Date(Date.now() - 60_000).toISOString();
+      const future = new Date(Date.now() + 60 * 60_000).toISOString();
+      await saveIndividual(fx.shopAId, 50, { annual: 50, startsAt: past, expiresAt: future });
+      const live = await shopPrices();
+      expect(live.monthly).toBe(18_000);
+      expect(live.annual).toBe(172_800);
+
+      // The window is one per rule, so both legs lapse at the same instant.
+      await exec.exec(
+        `UPDATE public.subscriptions SET admin_discount_expires_at = now() - interval '1 second'
+          WHERE id = '${fx.subscriptionAId}'`,
+      );
+      const lapsed = await shopPrices();
+      expect(lapsed.monthly).toBe(36_000);
+      expect(lapsed.annual).toBe(BUSINESS_ANNUAL);
     });
   });
 

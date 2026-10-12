@@ -9,6 +9,17 @@
  *   INDIVIDUAL one rule per account (`subscriptions.admin_discount_percent`).
  *             WINS OUTRIGHT over a global rule. It is never added to one.
  *
+ * EACH KIND HAS TWO LEGS, ONE PER BILLING INTERVAL (migration 20261012100000).
+ * `discount_percent` / `admin_discount_percent` is the MONTHLY leg and
+ * `annual_discount_percent` / `admin_discount_percent_annual` is the ANNUAL one.
+ * The two are independent by construction: a monthly rule never moves a yearly
+ * price and an annual rule never moves a monthly one, so the screen edits them
+ * separately and previews them separately. The window is shared by both legs.
+ *
+ * Where a leg is left unset the resolver falls back PER INTERVAL: a zero on the
+ * monthly leg means "no individual monthly rule", so the plan's global MONTHLY
+ * rule applies, and the annual leg answers for itself.
+ *
  * Neither is a pricing-campaign discount: campaigns live in the Pricing Campaigns
  * window, are bounded at 90% with a UGX 5,000 floor, and are a different
  * mechanism. Nothing here changes them.
@@ -48,6 +59,8 @@ export type AdminDiscountFetchResult<T> = { ok: true; data: T } | { ok: false; e
 
 export type DiscountDraftErrors = {
   percent?: string;
+  /** The annual leg. Omitted entirely when the screen has no annual field. */
+  annualPercent?: string;
   window?: string;
   start?: string;
   expiry?: string;
@@ -77,6 +90,8 @@ export function parseDiscountPercent(raw: string): { ok: true; value: number } |
  */
 export function validateDiscountDraft(input: {
   percentRaw: string;
+  /** The annual leg. Absent means this screen does not edit one. */
+  annualPercentRaw?: string;
   startsAt?: string | null;
   expiresAt?: string | null;
 }): DiscountDraftErrors {
@@ -84,6 +99,13 @@ export function validateDiscountDraft(input: {
 
   const percent = parseDiscountPercent(input.percentRaw);
   if (!percent.ok) errors.percent = percent.error;
+
+  // The same bound as the monthly leg, and the same function, so the two fields
+  // cannot be validated differently by accident.
+  if (input.annualPercentRaw !== undefined) {
+    const annual = parseDiscountPercent(input.annualPercentRaw);
+    if (!annual.ok) errors.annualPercent = annual.error;
+  }
 
   const start = input.startsAt ? Date.parse(input.startsAt) : null;
   const expiry = input.expiresAt ? Date.parse(input.expiresAt) : null;
@@ -139,7 +161,10 @@ export type AdminDiscountPlan = {
 
 export type AdminPlanDiscount = {
   plan_code: string;
+  /** The MONTHLY leg, 0–99. Independent of the annual leg. */
   discount_percent: number;
+  /** The ANNUAL leg, 0–99. Independent of the monthly leg. */
+  annual_discount_percent: number;
   active: boolean;
   starts_at: string | null;
   expires_at: string | null;
@@ -150,20 +175,23 @@ export type AdminPlanDiscount = {
   applies_now?: boolean;
   created_at: string | null;
   updated_at: string | null;
-  /** The campaign-layer price: the plan with NO admin discount at all. */
+  /** The campaign-layer prices: the plan with NO admin discount at all. */
   base_monthly_ugx: number;
+  base_annual_ugx?: number;
   /**
-   * What a shop with no account discount pays RIGHT NOW. With the rule not in
-   * force this is the campaign price — it is what checkout would charge, so the
-   * screen shows THIS as the effective price.
+   * What a shop with no account discount pays RIGHT NOW, per interval. With the
+   * leg not in force this is the campaign price — it is what checkout would
+   * charge, so the screen shows THIS as the effective price.
    */
   effective_monthly_ugx?: number;
   effective_annual_ugx?: number;
-  /** What the rule would be worth IF it were in force. Never the current price. */
+  /** What each leg would be worth IF it were in force. Never the current price. */
   configured_monthly_ugx?: number;
+  configured_annual_ugx?: number;
   /** Historical names, kept: the server now returns the live-aware price in them. */
   final_monthly_ugx: number;
   final_monthly_with_discount_ugx: number;
+  final_annual_ugx?: number;
 };
 
 export type AdminIndividualDiscount = {
@@ -176,14 +204,23 @@ export type AdminIndividualDiscount = {
   shop_count?: number;
   account_name: string;
   plan_code: string | null;
-  /** The rate as configured. May not be in force — see `effective_percent`. */
+  /** The MONTHLY leg as configured. May not be in force — see `effective_percent`. */
   discount_percent: number;
+  /** The ANNUAL leg as configured. Independent of the monthly one. */
+  annual_discount_percent?: number;
+  /**
+   * The cycle this account is actually on. The leg for THIS interval is the one
+   * that decides whether a free period can be granted, because that is the leg
+   * the server re-checks.
+   */
+  billing_interval?: string;
   note: string | null;
   updated_at: string | null;
   starts_at: string | null;
   expires_at: string | null;
-  /** What the server resolves the discount to be RIGHT NOW (0 once lapsed). */
+  /** What the server resolves each leg to RIGHT NOW (0 once lapsed). */
   effective_percent: number;
+  effective_annual_percent?: number;
   is_active_now: boolean;
   final_monthly_ugx: number | null;
   final_annual_ugx: number | null;
@@ -197,7 +234,14 @@ export type AdminDiscountOverview = {
 
 export type AdminDiscountPreview = {
   plan_code: string;
+  /** The MONTHLY leg that was previewed. */
   discount_percent: number;
+  /**
+   * The ANNUAL leg that was previewed. Absent means it was not supplied and the
+   * server assumed 0 — it does NOT mirror the monthly percent, because that
+   * mirroring is exactly the coupling the two legs were separated to remove.
+   */
+  annual_discount_percent?: number;
   base_monthly_ugx: number;
   base_annual_ugx: number;
   monthly_ugx: number;
@@ -240,8 +284,11 @@ export function mapDiscountError(message: string): string {
   if (lower.includes("free_activation_conflict")) {
     return "A free period already covers this window. Nothing was granted — check the account's history before retrying.";
   }
+  // The ADMIN bound, 0-99. The campaign screen has its own 0-90 message for the
+  // same code — the two mechanisms are bounded differently on purpose, and each
+  // screen only ever sees its own RPC's refusals.
   if (lower.includes("annual_discount_out_of_range")) {
-    return "An annual discount must be between 0% and 90%.";
+    return `An annual discount must be between 0% and ${MAX_ADMIN_DISCOUNT_PERCENT}%.`;
   }
   if (lower.includes("discount_below_minimum")) {
     return "Campaign prices cannot go below UGX 5,000 per month.";
@@ -279,6 +326,11 @@ export async function previewAdminDiscount(input: {
   planCode: string;
   discountPercent: number;
   individual: boolean;
+  /**
+   * The annual leg. Omitted means the server previews it at 0 — the two legs are
+   * previewed independently, never mirrored.
+   */
+  annualDiscountPercent?: number;
 }): Promise<AdminDiscountFetchResult<AdminDiscountPreview>> {
   if (!supabase) return { ok: false, error: "Not configured for this build." };
 
@@ -286,6 +338,10 @@ export async function previewAdminDiscount(input: {
     p_plan_code: input.planCode,
     p_discount_percent: normalizeDiscountPercent(input.discountPercent),
     p_individual: input.individual,
+    p_annual_discount_percent:
+      input.annualDiscountPercent === undefined
+        ? null
+        : normalizeDiscountPercent(input.annualDiscountPercent),
   });
   const envelope = unwrap(data, error);
   if (envelope.ok !== true) {
@@ -297,6 +353,12 @@ export async function previewAdminDiscount(input: {
 export async function saveAdminPlanDiscount(input: {
   planCode: string;
   discountPercent: number;
+  /**
+   * The annual leg. MUST be sent by this screen — omitting it leaves the plan's
+   * existing annual leg untouched rather than clearing it, which is a safety
+   * default for older clients, not a useful behaviour for the editor.
+   */
+  annualDiscountPercent: number;
   active: boolean;
   startsAt?: string | null;
   expiresAt?: string | null;
@@ -311,6 +373,7 @@ export async function saveAdminPlanDiscount(input: {
     p_starts_at: input.startsAt ?? null,
     p_expires_at: input.expiresAt ?? null,
     p_reason: input.reason?.trim() ? input.reason.trim() : null,
+    p_annual_discount_percent: normalizeDiscountPercent(input.annualDiscountPercent),
   });
   const envelope = unwrap(data, error);
   return envelope.ok === true
@@ -339,8 +402,15 @@ export async function deleteAdminPlanDiscount(planCode: string): Promise<RpcResu
 export async function saveAdminSubscriptionDiscount(input: {
   shopId: string;
   discountPercent: number;
+  /**
+   * The annual leg. Same rule as the global setter: omitting it leaves the
+   * account's existing annual leg untouched. Clearing an account's discount
+   * means sending 0 on BOTH legs — a monthly 0 alone leaves an annual rule in
+   * place, because the two are no longer the same thing.
+   */
+  annualDiscountPercent: number;
   reason?: string | null;
-  /** Optional window. Enforced by the server on every money path, not here. */
+  /** Optional window, shared by both legs. Enforced server-side, not here. */
   startsAt?: string | null;
   expiresAt?: string | null;
 }): Promise<RpcResult> {
@@ -352,6 +422,7 @@ export async function saveAdminSubscriptionDiscount(input: {
     p_reason: input.reason?.trim() ? input.reason.trim() : null,
     p_starts_at: input.startsAt ?? null,
     p_expires_at: input.expiresAt ?? null,
+    p_annual_discount_percent: normalizeDiscountPercent(input.annualDiscountPercent),
   });
   const envelope = unwrap(data, error);
   return envelope.ok === true
@@ -368,8 +439,19 @@ export type AdminExpectedAmount = {
   organization_id: string | null;
   plan_code: string;
   billing_interval: string;
+  /**
+   * The effective percentage for THIS subscription's own cycle. `fully_discounted`
+   * and the free-period grant both key on it — a 100% monthly rule does not make
+   * a yearly period free, and the reverse holds too.
+   */
   effective_discount_percent: number;
+  effective_monthly_discount_percent?: number;
+  effective_annual_discount_percent?: number;
+  /** The MONTHLY leg as configured. */
   individual_discount_percent: number;
+  /** The ANNUAL leg as configured. */
+  individual_annual_discount_percent?: number;
+  /** Each cycle priced with its OWN leg. */
   monthly_ugx: number;
   annual_ugx: number;
   /** What the money path charges for this subscription's own billing cycle. */
