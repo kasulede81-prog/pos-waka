@@ -170,3 +170,69 @@ describe("the UI never bypasses the backend", () => {
     expect(fulfilmentPanel).toContain('a.status === "reserved" ? (');
   });
 });
+
+/**
+ * The CUSTOMER surface, which is a different trust boundary from the console.
+ *
+ * Same approach as above: no DOM test project, so the wiring is pinned by
+ * reading the source. What matters here is that the merchant's screen talks to
+ * the customer-authorized RPCs and to nothing else — an admin RPC reached from
+ * the customer app would either fail or, worse, succeed.
+ */
+describe("the merchant's printer panel stays on the customer side", () => {
+  const panel = read("src/components/subscription/PrinterPromotionPanel.tsx");
+  const centre = read("src/components/subscription/AccountSubscriptionCenter.tsx");
+  const lib = read("src/lib/printerFulfilment.ts");
+
+  it("reads and writes only through the customer-authorized RPCs", () => {
+    // The customer RPCs are the ONLY ones it names…
+    expect(lib).toContain('rpc("my_org_printer_status"');
+    expect(lib).toContain('rpc("my_org_printer_request_collection"');
+    // …and the panel goes through the lib rather than calling out itself.
+    expect(panel).toContain("fetchMyOrgPrinterStatus");
+    expect(panel).toContain("requestPrinterCollection");
+    expect(panel).not.toMatch(/\.rpc\(/);
+    expect(panel).not.toMatch(/createClient\(/);
+    expect(panel).not.toMatch(/service_role/);
+    // No admin RPC may appear anywhere in the customer panel.
+    expect(panel).not.toMatch(/internal_ops_printer/);
+  });
+
+  it("is mounted with the account's own shop", () => {
+    expect(centre).toContain("<PrinterPromotionPanel");
+    expect(centre).toMatch(/<PrinterPromotionPanel lang=\{lang\} shopId=\{shopId\}/);
+    // …and never rendered without one.
+    expect(centre).toMatch(/shopId && authMode === "supabase" \? <PrinterPromotionPanel/);
+  });
+
+  it("treats a failed read as an error, not as ineligibility", () => {
+    // The distinction the whole panel rests on: "we could not check" must never
+    // render as "you do not qualify".
+    expect(panel).toMatch(/role="alert"/);
+    expect(panel).toContain("printerStatusUnavailable");
+    // The not-eligible copy lives in a different branch, behind a real status.
+    expect(panel).toMatch(/status && !status\.eligible/);
+  });
+
+  it("offers the request only when the SERVER says it may", () => {
+    expect(panel).toContain("status?.can_request");
+    // No local re-derivation of eligibility from plan/interval on the client.
+    expect(panel).not.toMatch(/billing_interval === "year"/);
+    expect(panel).not.toMatch(/_printer_promotion_eligible/);
+  });
+
+  it("never invents a serial, a stock figure or a completed handover", () => {
+    expect(panel).not.toMatch(/WP58-\d{4}-\d{3}/); // no hard-coded serial
+    expect(panel).not.toMatch(/Math\.random|randomUUID\(\)/);
+    // Every status it prints comes from the server payload.
+    expect(panel).toContain("claim.serial_number");
+    expect(panel).toContain("ASSIGNMENT_STATUS_LABELS[claim.status]");
+  });
+
+  it("says out loud that a request is not a reservation", () => {
+    expect(panel).toContain("printerRequestNotReservation");
+    expect(read("src/lib/i18n.ts")).toMatch(
+      /printerRequestNotReservation:\s*\n?\s*"Asking does not reserve a printer/,
+    );
+  });
+});

@@ -36,8 +36,10 @@ import {
   cancelPrinterAssignment,
   daysUntil,
   fetchHandoverHistory,
+  fetchMyOrgPrinterStatus,
   fetchPrinterEligibility,
   fetchPrinterInventory,
+  requestPrinterCollection,
   mapPrinterError,
   markAssignmentReady,
   recordHandover,
@@ -413,5 +415,75 @@ describe("read-only additions (20261013110000)", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error).toMatch(/could not be found/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CUSTOMER side (20261013140000)
+// ---------------------------------------------------------------------------
+describe("customer printer reads and requests", () => {
+  it("reads the customer status RPC with its exact parameter name", async () => {
+    h.response = { data: { ok: true, eligible: true, can_request: true, requests: [] }, error: null };
+
+    const res = await fetchMyOrgPrinterStatus({ shopId: "shop-1" });
+
+    expect(lastCall().fn).toBe("my_org_printer_status");
+    expect(lastCall().keys).toEqual(["p_shop_id"]);
+    expect(lastCall().args.p_shop_id).toBe("shop-1");
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.eligible).toBe(true);
+  });
+
+  it("asks to collect with all four parameters named exactly", async () => {
+    h.response = { data: { ok: true, request_id: "req-1", status: "requested" }, error: null };
+
+    const res = await requestPrinterCollection({ shopId: "shop-1", channel: "branch" });
+
+    expect(lastCall().fn).toBe("my_org_printer_request_collection");
+    expect(lastCall().keys).toEqual(["p_channel", "p_contact_phone", "p_note", "p_shop_id"]);
+    expect(lastCall().args.p_channel).toBe("branch");
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.requestId).toBe("req-1");
+  });
+
+  it("sends blank optional fields as null, never as empty strings", async () => {
+    h.response = { data: { ok: true, request_id: "req-1" }, error: null };
+
+    await requestPrinterCollection({ shopId: "shop-1", channel: "whatsapp", contactPhone: "   ", note: "" });
+
+    expect(lastCall().args.p_contact_phone).toBeNull();
+    expect(lastCall().args.p_note).toBeNull();
+  });
+
+  it("reports a second ask as already open rather than a new request", async () => {
+    h.response = { data: { ok: true, request_id: "req-1", already_open: true }, error: null };
+
+    const res = await requestPrinterCollection({ shopId: "shop-1", channel: "branch" });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.alreadyOpen).toBe(true);
+      expect(res.data.requestId).toBe("req-1");
+    }
+  });
+
+  it("surfaces a server refusal as a readable sentence", async () => {
+    h.response = { data: { ok: false, error: "already_assigned" }, error: null };
+
+    const res = await requestPrinterCollection({ shopId: "shop-1", channel: "branch" });
+
+    expect(res.ok).toBe(false);
+    // The merchant reads a sentence, never the raw code.
+    if (!res.ok) expect(res.error).toBe("This account already has a printer for this promotion.");
+  });
+
+  it("turns the customer-only refusal codes into sentences", () => {
+    expect(mapPrinterError("shop_required")).toMatch(/choose which shop/i);
+    expect(mapPrinterError("invalid_channel")).toMatch(/how you would like to collect/i);
+    expect(mapPrinterError("unauthenticated")).toMatch(/sign in again/i);
+    // ...and none of them leak the raw code through.
+    for (const code of ["shop_required", "invalid_channel", "unauthenticated"]) {
+      expect(mapPrinterError(code)).not.toBe(code);
+    }
   });
 });

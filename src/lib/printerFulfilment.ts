@@ -141,6 +141,16 @@ export function mapPrinterError(code: string | null | undefined): string {
     case "invalid_state":
       return "This claim is not in a state that allows that action. Refresh to see its current status.";
 
+    // ---- customer-facing collection requests ----
+    // These reach the merchant, not the desk, so they say what the merchant can
+    // do next rather than naming an internal state.
+    case "shop_required":
+      return "Choose which shop this is for.";
+    case "invalid_channel":
+      return "Choose how you would like to collect the printer.";
+    case "unauthenticated":
+      return "Please sign in again to continue.";
+
     default:
       return raw;
   }
@@ -573,6 +583,98 @@ export async function fetchPrinterEligibility(input: {
     return { ok: false, error: String(envelope.error ?? "Eligibility could not be checked.") };
   }
   return { ok: true, data: envelope as unknown as EligibilityPreview };
+}
+
+// ---------------------------------------------------------------------------
+// CUSTOMER side (20261013140000)
+// ---------------------------------------------------------------------------
+/**
+ * What the MERCHANT may see about their own account.
+ *
+ * Deliberately not the admin preview. `internal_ops_printer_eligibility` is
+ * gated on the fulfilment roles and carries desk-only fields; this is the
+ * customer read, gated on `user_can_access_shop()`, and its `eligible` verdict
+ * is delegated to the same `_printer_promotion_eligible()` predicate the
+ * reservation calls — so the screen cannot promise what the desk would refuse.
+ */
+export type CustomerPrinterClaim = {
+  status: string;
+  serial_number: string | null;
+  model: string | null;
+  reserved_until: string | null;
+  handed_over_at: string | null;
+};
+
+export type CustomerPrinterRequest = {
+  id: string;
+  channel: string;
+  status: string;
+  created_at: string;
+  acknowledged_at: string | null;
+  fulfilled_at: string | null;
+};
+
+export type CustomerPrinterStatus = {
+  shop_id: string;
+  organization_id: string;
+  plan_code: string | null;
+  subscription_status: string | null;
+  billing_interval: string | null;
+  current_period_end: string | null;
+  eligible: boolean;
+  reason: string | null;
+  open_claim: CustomerPrinterClaim | null;
+  can_request: boolean;
+  requests: CustomerPrinterRequest[];
+  reservation_days: number;
+};
+
+export async function fetchMyOrgPrinterStatus(input: {
+  shopId: string;
+}): Promise<RpcOutcome<CustomerPrinterStatus>> {
+  if (!supabase) return { ok: false, error: "Not configured for this build." };
+
+  const { data, error } = await supabase.rpc("my_org_printer_status", { p_shop_id: input.shopId });
+  const envelope = unwrap(data, error);
+  if (envelope.ok !== true) {
+    return { ok: false, error: String(envelope.error ?? "Your printer status could not be loaded.") };
+  }
+  return { ok: true, data: envelope as unknown as CustomerPrinterStatus };
+}
+
+/**
+ * Ask to collect the promotional printer.
+ *
+ * A REQUEST, not a reservation: the server records the ask and the fulfilment
+ * desk allocates a real unit. Eligibility is re-checked server-side, so this
+ * cannot be used to talk past the promotion's rule.
+ */
+export async function requestPrinterCollection(input: {
+  shopId: string;
+  channel: "branch" | "whatsapp";
+  contactPhone?: string | null;
+  note?: string | null;
+}): Promise<RpcOutcome<{ requestId: string; alreadyOpen: boolean; status: string }>> {
+  if (!supabase) return { ok: false, error: "Not configured for this build." };
+
+  const { data, error } = await supabase.rpc("my_org_printer_request_collection", {
+    p_shop_id: input.shopId,
+    p_channel: input.channel,
+    p_contact_phone: input.contactPhone?.trim() ? input.contactPhone.trim() : null,
+    p_note: input.note?.trim() ? input.note.trim() : null,
+  });
+  const envelope = unwrap(data, error);
+  if (envelope.ok !== true) {
+    return { ok: false, error: String(envelope.error ?? "Your request could not be recorded.") };
+  }
+  return {
+    ok: true,
+    data: {
+      requestId: String(envelope.request_id ?? ""),
+      alreadyOpen: envelope.already_open === true,
+      status: String(envelope.status ?? "requested"),
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

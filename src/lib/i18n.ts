@@ -7699,6 +7699,39 @@ const en: Dict = {
   internalShopActionConfirmSuspend: "Suspend this shop? They will lose access until reactivated.",
   internalShopActionConfirmLogout: "Sign out all devices on this shop?",
   internalShopActionConfirmCancelSub: "Cancel this subscription?",
+  internalPlanOverlayNotice:
+    "The effective plan is higher than the stored plan: this account is being served at the effective tier, not the stored one. Resetting to Free revokes the organization's active promotional grants, which ends the overlay.",
+  // --- Customer-facing printer promotion (Business annual + free WP-58) ---
+  // English only for now: `t()` falls back to English for a missing key, which
+  // is the honest choice over machine-guessing 22 strings that tell a merchant
+  // whether they qualify and when to collect. Needs a translator before release.
+  printerPanelTitle: "Free WP-58 printer",
+  printerPanelSub: "Included with Business billed yearly.",
+  printerChecking: "Checking your printer status…",
+  printerStatusUnavailable: "We could not check your printer status.",
+  printerStatusStale: "Showing the last status we could load.",
+  printerRetry: "Try again",
+  printerSerial: "Serial number",
+  printerHandedOverOn: "Handed over on",
+  printerHoldUntil: "Held for you until",
+  printerEligible: "You qualify for the free printer.",
+  printerRequestExplainer:
+    "Tell us you would like it and we will prepare a unit. This does not reserve a printer — we allocate one to your account and confirm before you collect.",
+  printerAskBranch: "Ask to collect at the branch",
+  printerAskWhatsApp: "Ask on WhatsApp",
+  printerNotEligible: "This account does not qualify for the free printer yet.",
+  printerSeeBusinessAnnual: "See Business billed yearly →",
+  printerYourRequests: "Your requests",
+  printerChannelBranch: "Branch collection",
+  printerChannelWhatsApp: "WhatsApp",
+  printerRequestNotReservation:
+    "Asking does not reserve a printer. We allocate a real unit and record its serial number against your account at handover.",
+  printerRequestRecorded: "Request recorded. We will confirm your printer shortly.",
+  printerRequestAlreadyOpen: "You already have an open request — we will be in touch.",
+  printerRequest_requested: "Requested",
+  printerRequest_acknowledged: "Being arranged",
+  printerRequest_fulfilled: "Completed",
+  printerRequest_cancelled: "Cancelled",
   internalStatsPartialWarning:
     "Shop totals are incomplete: the dashboard metrics service did not respond, so these were counted directly and are limited to the shops you are allowed to see. The real totals may be higher.",
   internalShopActionConfirmResetFree:
@@ -15177,6 +15210,8 @@ const lgBase: Dict = {
   internalShopActionConfirmSuspend: "Situla dduuka lino? Tebalifuna mukisa okutuusa lwe balizzawo.",
   internalShopActionConfirmLogout: "Ggya abakozesa bonna ku dduuka lino?",
   internalShopActionConfirmCancelSub: "Sazaamu okwewandiisa kuno?",
+  internalPlanOverlayNotice:
+    "Pulani ekola kukola (effective) isinga eyo eyawandiisibwa (stored): akawunti eno ekola ku pulani ekola, so si eyo eyawandiisibwa. Okusazaamu ku Free kiggyawo ebirabo bya pulani (promotional grants) ebikolebwa, era ekyo kiggyawo okusukka okwo.",
   internalStatsPartialWarning:
     "Omuwendo gw'amatuka tegujjudde: obuweereza bwa dashboard tebwaddamu, kati bibaliddwa butereevu era buli ku matuka go gw'okkirizibwa okulaba. Omuwendo ogwa ddaawe guyinza okuba nga gusinga.",
   internalShopActionConfirmResetFree:

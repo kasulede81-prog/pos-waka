@@ -11,6 +11,7 @@ import {
 import { BillingTimeline } from "./BillingTimeline";
 import { createCheckoutBackend, paymentStatusKey, toDisplayPayments, type DisplayPayment } from "../../lib/paymentCheckout";
 import { SubscriptionHistoryPanel } from "./SubscriptionHistoryPanel";
+import { PrinterPromotionPanel } from "./PrinterPromotionPanel";
 
 type Props = {
   lang: Language;
@@ -203,6 +204,14 @@ export function AccountSubscriptionCenter({ lang, shopId: shopIdProp, showHistor
           )}
         </div>
       </article>
+
+      {/*
+        The printer promotion, tied to THIS account's real eligibility and
+        fulfilment state. It reads its own server state and renders nothing at
+        all when there is no shop to ask about, so it cannot show a merchant a
+        status that is not theirs.
+      */}
+      {shopId && authMode === "supabase" ? <PrinterPromotionPanel lang={lang} shopId={shopId} /> : null}
 
       {showHistoryTable && historyRows.length > 0 ? (
         <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
