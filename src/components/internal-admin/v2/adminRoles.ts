@@ -164,6 +164,28 @@ export function canCorrectFinancials(role: string): boolean {
   return role === "super_admin" || role === "finance_admin";
 }
 
+/**
+ * Printer inventory and fulfilment (Phase 2).
+ *
+ * MIRRORS `_printer_require_fulfilment_admin()` in
+ * `20261013100000_printer_inventory_and_fulfilment.sql` EXACTLY. It is
+ * deliberately NOT `canManageBillingOffers`, which is the same flag plus
+ * `finance_admin` — reusing it would show this console to a role the server
+ * refuses, which is the drift the migration's own comment warns about.
+ *
+ * Stock actions (register / correct / retire) are narrower still on the server:
+ * `super_admin | operations_admin` only. The page hides those controls from a
+ * subscriptions_admin rather than letting them fail.
+ */
+export function canManagePrinterFulfilment(role: string): boolean {
+  return role === "super_admin" || role === "subscriptions_admin" || role === "operations_admin";
+}
+
+/** Stock actions mirror `_printer_require_stock_admin()` — `is_waka_internal_admin()`. */
+export function canManagePrinterStock(role: string): boolean {
+  return role === "super_admin" || role === "operations_admin";
+}
+
 export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
   const role = normalizeAdminRole(adminRow?.role);
   return {
@@ -190,6 +212,8 @@ export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
     canResetShopBusinessData: canResetShopBusinessData(role),
     canRemoteSupport: canRemoteSupport(role),
     canCorrectFinancials: canCorrectFinancials(role),
+    canManagePrinterFulfilment: canManagePrinterFulfilment(role),
+    canManagePrinterStock: canManagePrinterStock(role),
     districtCount: adminRow?.assigned_district_ids?.length ?? 0,
   };
 }
