@@ -1,0 +1,631 @@
+<title>Monthly and Annual Discount Isolation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+/* ==========================================================================
+   Layout: single measured column, ledger rules between findings, wide
+   elements (tables, code) break out into their own scroll container.
+   Color : cool green-grey paper, jade accent, three semantic severities.
+   Type  : Plex Serif for headings, Plex Sans for prose, Plex Mono for refs.
+   ========================================================================== */
+:root {
+  --bg:        #F6F8F7;
+  --surface:   #FFFFFF;
+  --sunken:    #EDF1EF;
+  --fg:        #16211E;
+  --muted:     #5B6B66;
+  --rule:      #DCE3E0;
+  --rule-hard: #C3CEC9;
+  --accent:    #0F6E5C;
+  --accent-soft: #E0EFEA;
+  --critical:  #A3341F;
+  --critical-soft: #F7E4DF;
+  --warn:      #8A5A00;
+  --warn-soft: #F6EBD6;
+  --ok:        #17643F;
+  --ok-soft:   #DFEFE6;
+  --shadow:    0 1px 2px rgba(22, 33, 30, .06), 0 8px 24px -16px rgba(22, 33, 30, .25);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:        #101614;
+    --surface:   #17201D;
+    --sunken:    #1D2724;
+    --fg:        #E5EDEA;
+    --muted:     #98A7A2;
+    --rule:      #29352F;
+    --rule-hard: #3A4842;
+    --accent:    #4FBF9F;
+    --accent-soft: #16302A;
+    --critical:  #E58C74;
+    --critical-soft: #33201B;
+    --warn:      #D9AB4E;
+    --warn-soft: #302717;
+    --ok:        #63C48F;
+    --ok-soft:   #14291F;
+    --shadow:    0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:        #101614;
+  --surface:   #17201D;
+  --sunken:    #1D2724;
+  --fg:        #E5EDEA;
+  --muted:     #98A7A2;
+  --rule:      #29352F;
+  --rule-hard: #3A4842;
+  --accent:    #4FBF9F;
+  --accent-soft: #16302A;
+  --critical:  #E58C74;
+  --critical-soft: #33201B;
+  --warn:      #D9AB4E;
+  --warn-soft: #302717;
+  --ok:        #63C48F;
+  --ok-soft:   #14291F;
+  --shadow:    0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  padding-inline: 20px;
+  padding-block: 40px 96px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 78ch; margin-inline: auto; }
+.wide { max-width: 106ch; }
+
+h1, h2, h3 { font-family: "IBM Plex Serif", ui-serif, Georgia, serif; text-wrap: balance; line-height: 1.22; }
+
+h1 { font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.5rem); font-weight: 600; margin: 0 0 .5rem; letter-spacing: -.015em; }
+h2 { font-size: 1.3rem; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+h3 { font-size: 1.02rem; font-weight: 600; margin: 0 0 .35rem; }
+
+p { margin: 0 0 1rem; }
+p:last-child { margin-bottom: 0; }
+
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+code, .ref, .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.ref {
+  font-size: .82em;
+  color: var(--muted);
+  background: var(--sunken);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: .08em .4em;
+  white-space: nowrap;
+}
+
+/* ---------- masthead ---------- */
+.masthead { border-bottom: 2px solid var(--fg); padding-bottom: 1.25rem; margin-bottom: 2.25rem; }
+.eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: .72rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 .75rem;
+}
+.standfirst { font-size: 1.05rem; color: var(--muted); max-width: 66ch; margin: 0; }
+.meta {
+  display: flex; flex-wrap: wrap; gap: .4rem 1.5rem;
+  margin-top: 1.25rem;
+  font-family: "IBM Plex Mono", monospace; font-size: .78rem; color: var(--muted);
+}
+.meta b { color: var(--fg); font-weight: 500; }
+
+/* ---------- verdict block ---------- */
+.verdict {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  padding: 1.25rem 1.4rem;
+  box-shadow: var(--shadow);
+  margin-bottom: 2.5rem;
+}
+.verdict ol { margin: 0; padding-left: 1.3rem; display: grid; gap: .7rem; }
+.verdict li::marker { font-family: "IBM Plex Mono", monospace; color: var(--accent); font-weight: 600; }
+
+/* ---------- sections ---------- */
+section { margin-bottom: 3rem; }
+.section-head {
+  display: flex; align-items: baseline; gap: .85rem;
+  border-bottom: 1px solid var(--rule-hard);
+  padding-bottom: .5rem; margin-bottom: 1.4rem;
+}
+.section-head .num {
+  font-family: "IBM Plex Mono", monospace; font-size: .78rem;
+  color: var(--accent); font-weight: 600; letter-spacing: .06em;
+}
+.section-note { color: var(--muted); font-size: .93rem; margin: -.6rem 0 1.4rem; max-width: 66ch; }
+
+/* ---------- findings ledger ---------- */
+.findings { display: grid; gap: 1.1rem; }
+.finding {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1.1rem 1.25rem;
+  display: grid;
+  gap: .6rem;
+}
+.finding > * { min-width: 0; }
+.finding-top { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.fid {
+  font-family: "IBM Plex Mono", monospace; font-size: .8rem; font-weight: 600;
+  color: var(--fg); background: var(--sunken); border: 1px solid var(--rule-hard);
+  border-radius: 3px; padding: .1rem .42rem;
+}
+.finding h3 { margin: 0; flex: 1 1 12rem; }
+.chip {
+  font-family: "IBM Plex Mono", monospace; font-size: .68rem; font-weight: 600;
+  letter-spacing: .09em; text-transform: uppercase;
+  border-radius: 999px; padding: .2rem .6rem; white-space: nowrap;
+}
+.chip.critical { color: var(--critical); background: var(--critical-soft); }
+.chip.high     { color: var(--warn);     background: var(--warn-soft); }
+.chip.medium   { color: var(--warn);     background: var(--warn-soft); }
+.chip.low      { color: var(--muted);    background: var(--sunken); }
+.chip.ok       { color: var(--ok);       background: var(--ok-soft); }
+
+.where { font-size: .88rem; color: var(--muted); display: grid; gap: .3rem; }
+.where div { display: flex; flex-wrap: wrap; gap: .45rem; align-items: baseline; }
+.where dt { font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); flex: 0 0 5.6rem; }
+
+/* ---------- code ---------- */
+pre {
+  margin: 0; padding: .85rem 1rem; overflow-x: auto;
+  background: var(--sunken); border: 1px solid var(--rule); border-radius: 3px;
+  font-family: "IBM Plex Mono", monospace; font-size: .82rem; line-height: 1.55;
+  color: var(--fg); tab-size: 2;
+}
+pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+.diff-del { color: var(--critical); }
+.diff-add { color: var(--ok); }
+
+/* ---------- tables ---------- */
+.table-scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th, td { text-align: left; padding: .6rem .8rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+thead th {
+  font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted); font-weight: 600;
+  background: var(--sunken); border-bottom: 1px solid var(--rule-hard); white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: 0; }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td code { font-size: .82em; }
+
+/* ---------- decision list ---------- */
+.decisions { display: grid; gap: 1rem; }
+.decision {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 1.05rem 1.2rem; display: grid; gap: .55rem;
+}
+.decision-top { display: flex; flex-wrap: wrap; gap: .6rem; align-items: baseline; }
+.did { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: .8rem; color: var(--accent); }
+.rec {
+  font-size: .9rem; color: var(--fg);
+  background: var(--accent-soft); border-radius: 3px; padding: .5rem .7rem;
+  border-left: 2px solid var(--accent);
+}
+.rec b { font-weight: 600; }
+.options { display: grid; gap: .5rem; font-size: .89rem; }
+.opt { display: grid; grid-template-columns: auto 1fr; gap: .55rem; }
+.opt .k { font-family: "IBM Plex Mono", monospace; font-size: .74rem; color: var(--muted); padding-top: .12rem; letter-spacing: .05em; }
+
+ul.tight { margin: 0; padding-left: 1.15rem; display: grid; gap: .35rem; }
+ul.tight li::marker { color: var(--muted); }
+
+.callout {
+  border: 1px dashed var(--rule-hard); border-radius: 3px;
+  padding: .9rem 1.05rem; font-size: .92rem; color: var(--muted); background: var(--surface);
+}
+.callout b { color: var(--fg); font-weight: 600; }
+
+footer {
+  border-top: 1px solid var(--rule-hard); margin-top: 3rem; padding-top: 1rem;
+  font-size: .82rem; color: var(--muted);
+}
+
+@media (max-width: 460px) {
+  .where dt { flex-basis: 100%; }
+  th, td { padding: .5rem .6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">WAKA POS · Subscription billing audit</p>
+    <h1>Monthly and Annual Discount Isolation</h1>
+    <p class="standfirst">Every place the two billing intervals are currently joined together, why the join is structural rather than accidental, and the smallest change that separates them.</p>
+    <div class="meta">
+      <span><b>Date</b> 12 Oct 2026</span>
+      <span><b>Scope</b> Database, RPCs, admin UI, checkout, tests</span>
+      <span><b>Status</b> Implemented locally — not applied, not committed</span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <ol>
+      <li><b>Monthly and annual pricing are coupled in three places, and only one of them is a campaign.</b> The annual campaign leg is genuinely independent already. What is not: the global admin discount, the individual admin discount, and — the largest leak — the annual price being built <em>from</em> the monthly campaign price.</li>
+      <li><b>The existing schema cannot express "this discount is for monthly".</b> <code class="ref">admin_plan_discounts</code> is keyed by plan code alone, and <code class="ref">subscriptions.admin_discount_percent</code> is a single column. Both are consumed by one resolver that has no interval parameter, which is why one percentage reaches both cycles.</li>
+      <li><b>The fix does not need a second discount system.</b> The campaign table already models exactly the shape required — a monthly leg and an annual leg on the same row. Giving the two admin mechanisms that same pair of columns is additive, keeps every existing bound, and can be back-filled so that no price changes on the day it ships.</li>
+    </ol>
+  </div>
+
+  <section>
+    <div class="section-head"><span class="num">00</span><h2>What was built</h2></div>
+    <p class="section-note">The four decisions below were answered as recommended, and the change is implemented and green locally. Nothing has been applied to production, deployed, or committed.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Piece</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>supabase/migrations/20261012100000_discount_interval_isolation.sql</code></td><td>Adds the annual leg to both admin mechanisms, back-fills both from the existing percent, makes the resolver interval-aware, decouples the campaign annual base, and reproduces every function that reads a discount. Drops the old RPC signatures before recreating them, so no overload survives.</td></tr>
+          <tr><td><code>src/lib/subscriptionPricing.ts</code></td><td>The client mirror of the campaign maths, changed on the same line as the server</td></tr>
+          <tr><td><code>src/lib/adminSubscriptionDiscounts.ts</code></td><td>Two-leg types, validation and the three RPC wrappers</td></tr>
+          <tr><td><code>AdminSubscriptionDiscountsPage.tsx</code></td><td>A separate annual field and annual preview line for each form; both legs shown in the saved tables; the free-period button gated on the account's own cycle</td></tr>
+          <tr><td><code>src/lib/pricingCampaigns.ts</code></td><td>A stale comment corrected, and the campaign annual bound given its own error message</td></tr>
+          <tr><td>Tests</td><td>A new 13-case independence block, plus the three coupling assertions inverted</td></tr>
+          <tr><td><code>src/components/pricing/AnnualIntervalNote.tsx</code></td><td>The line the annual card needs: <i>“Annual pricing is separate from monthly promotions. Monthly discounts do not apply to annual subscriptions.”</i> Shown on the public pricing page under each annual price and once inside the upgrade page's yearly card. Unconditional — it describes how annual pricing works, not that an offer is running</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="section-note" style="margin-top:1rem"><b>Measured:</b> 14 SQL integration suites green — <b>323 tests</b> — plus 360 client tests across the subscription, pricing and checkout suites, including the 58-case discount hardening contract and its new 13-case independence block. <code>tsc -b</code> clean. Lint on the changed files reports only the three pre-existing <code>set-state-in-effect</code> sites in the admin page, at the same call sites as <code>HEAD</code>.</p>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">01</span><h2>Where the intervals are joined</h2></div>
+    <p class="section-note">Ordered by blast radius. Each row names the exact line, so the finding can be checked without re-deriving it.</p>
+
+    <div class="findings">
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="fid">C1</span>
+          <h3>A monthly campaign discount changes the annual price</h3>
+          <span class="chip critical">Critical</span>
+        </div>
+        <p>The annual price is computed from the <em>already discounted</em> monthly price, then given an annual percentage on top. The reverse never happens — the annual percentage never reaches the monthly price — so the leak is one-way and invisible in the data: <code class="ref">annual_discount_percent</code> can read <code class="ref">0</code> while the annual price carries a large discount.</p>
+        <pre><code>-- 20261011160000_campaign_annual_discount_bounds.sql:124-125
+v_original_annual_full := v_original_monthly * 12;
+v_final_annual := round (v_final_monthly * 12 * (1 - v_annual_pct / 100.0))::bigint;
+                            ^^^^^^^^^^^^^^ carries the MONTHLY campaign discount</code></pre>
+        <p>Measured worst case on Starter (list 18,000 / month, 216,000 / year): a monthly <code class="ref">fixed_amount</code> discount of 13,000 is legal — the UGX 5,000 floor allows it — which sets the monthly price to 5,000. With the annual percentage explicitly at 0, the annual price becomes <b>60,000 instead of 216,000</b>: a 72% annual discount produced by a monthly-only input. There is no UGX floor on the annual leg, so nothing else catches it.</p>
+        <div class="where">
+          <div><dt>Server</dt><span class="ref">supabase/migrations/20261011160000_campaign_annual_discount_bounds.sql:124-125</span></div>
+          <div><dt>Client</dt><span class="ref">src/lib/subscriptionPricing.ts:90-91</span> — the same arithmetic, mirrored and pinned equal by test</div>
+          <div><dt>Reaches</dt><span class="ref">public_subscription_pricing</span> <span class="ref">subscription_payment_quote</span> <span class="ref">subscription_payment_create</span> <span class="ref">admin_pricing_campaign_metrics</span> <span class="ref">PricingPage</span> <span class="ref">UpgradePage</span></div>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="fid">C2</span>
+          <h3>A global discount cannot say which interval it is for</h3>
+          <span class="chip high">High</span>
+        </div>
+        <p>Global rules live one-per-plan with no interval column, so a plan structurally cannot hold two rules. The primary key is what makes plan isolation real; the same key is what makes interval isolation impossible.</p>
+        <pre><code>-- 20261010120000_admin_subscription_discounts.sql:76-92
+create table if not exists public.admin_plan_discounts (
+  plan_code text primary key,          -- ← no billing interval
+  discount_percent numeric(5,2) not null default 0
+    check (discount_percent >= 0 and discount_percent <= 99),
+  active boolean not null default true,
+  starts_at timestamptz, expires_at timestamptz, reason text, ...
+);</code></pre>
+        <p>Consequently a "global monthly discount" is not expressible. Setting one necessarily moves the annual price by the same percentage — the exact behaviour the brief rules out.</p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="fid">C3</span>
+          <h3>An individual discount cannot say which interval it is for</h3>
+          <span class="chip high">High</span>
+        </div>
+        <p>The per-account discount is one numeric column on the subscription, read through a resolver that returns a single number. Every money path passes that number to the pricing function with whichever cycle was requested, so one configured percentage prices a monthly purchase and a yearly purchase alike.</p>
+        <pre><code>-- 20261010120000:178-191  — one number, no interval in or out
+create or replace function public._admin_discount_for_row (s public.subscriptions)
+returns numeric ... select case
+    when coalesce (s.admin_discount_percent, 0) &lt;= 0 then 0
+    when s.admin_discount_starts_at is not null and now () &lt; s.admin_discount_starts_at then 0
+    when s.admin_discount_expires_at is not null and now () >= s.admin_discount_expires_at then 0
+    else least (greatest (s.admin_discount_percent, 0), 100) end</code></pre>
+        <div class="where">
+          <div><dt>Column</dt><span class="ref">supabase/migrations/006_receipts_expenses_subscriptions.sql:73</span></div>
+          <div><dt>Only writer</dt><span class="ref">admin_subscription_discount_save</span> — <span class="ref">20261011150000:228-237</span>; takes one percent, no interval</div>
+          <div><dt>Read by</dt><span class="ref">subscription_payment_create</span> <span class="ref">subscription_payment_quote</span> <span class="ref">subscription_payment_expected_amount</span> <span class="ref">admin_subscription_expected_amount</span> <span class="ref">admin_subscription_mark_payment</span> <span class="ref">admin_subscription_activate_free</span> <span class="ref">admin_discount_overview</span></div>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="fid">C4</span>
+          <h3>One resolver collapses both intervals into one number</h3>
+          <span class="chip high">High</span>
+        </div>
+        <p>This is the shared root of C2 and C3. The precedence rule — individual wins outright, otherwise the global rule, never stacked — is decided in a function that receives the plan code but not the billing interval, so it has nothing to distinguish intervals <em>by</em>.</p>
+        <pre><code>-- 20261010120000:198-245  (called from :296 inside the pricing primitive)
+create or replace function public._admin_discount_effective (
+  p_individual_percent numeric,
+  p_plan_code text                       -- ← no billing interval
+) returns numeric ...
+  if coalesce (p_individual_percent, 0) > 0 then return least (greatest (p_individual_percent, 0), 100); end if;
+  select d.discount_percent into v_global from public.admin_plan_discounts d
+   where d.plan_code = v_plan and public.admin_plan_discount_is_active (d);</code></pre>
+        <p>The consuming line is the single place where money is discounted, and it applies one value to whichever cycle was selected two lines above:</p>
+        <pre><code>-- 20261010120000:347-348  subscription_payment_plan_amount
+v_amount := case when v_cycle = 'year' then v_annual else v_monthly end;
+v_amount := greatest (coalesce (round (v_amount * (100 - v_discount) / 100)::bigint, 0), 0);
+                                          ^^^^^^^^^^ same discount for both cycles</code></pre>
+      </article>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="fid">C5</span>
+          <h3>Every read surface reports both cycles from one percentage</h3>
+          <span class="chip medium">Medium</span>
+        </div>
+        <p>These are display and reporting paths, not money paths, but they are where the coupling becomes visible — and where an admin would look to confirm what a rule does. All of them compute a monthly and an annual figure from a single percent, so none of them can show the intervals diverging.</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Surface</th><th>Location</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td>Public price book</td><td><code>20261011170000:105-117</code></td><td><code>global_discount_percent</code> published once; <code>final_monthly_ugx</code> and <code>final_annual_ugx</code> both priced from it</td></tr>
+              <tr><td>Discount preview</td><td><code>20261011090000:165-183</code></td><td>Base × (100 − pct) for monthly <em>and</em> annual</td></tr>
+              <tr><td>Discount overview</td><td><code>20261011150000:383-395, 438-443</code></td><td>Global and individual rows both emit monthly + annual from one effective percent</td></tr>
+              <tr><td>Expected amount</td><td><code>20261011130000:94-116</code></td><td>One effective percent; both cycles priced with it</td></tr>
+              <tr><td>Save response</td><td><code>20261011150000:311-312</code></td><td>Returns both cycle prices from the one percent being written</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="fid">C6</span>
+          <h3>The admin screen offers no way to choose an interval</h3>
+          <span class="chip medium">Medium</span>
+        </div>
+        <p><span class="ref">src/components/internal-admin/v2/pages/AdminSubscriptionDiscountsPage.tsx</span> is the only page that writes subscription discounts, and it has no monthly/annual control anywhere. One percentage input feeds both the global and the individual form, and the preview beneath each shows a monthly line and an annual line derived from it. The saved-individual table does not render an annual price at all.</p>
+        <p>The one pricing screen that <em>does</em> have an interval field is <span class="ref">AdminPricingCampaignsPage.tsx:919-1003</span>, whose grid carries a separate <b>Annual %</b> column capped at 90. That contrast is useful: the campaign mechanism already solved this problem, and it is the shape the admin mechanisms should copy.</p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="fid">C7</span>
+          <h3>Negotiated offers are interval-blind in two directions</h3>
+          <span class="chip medium">Medium</span>
+        </div>
+        <p><span class="ref">org_billing_offers</span> stores a flat amount with no interval column. Two consequences, both real but neither a percentage coupling:</p>
+        <ul class="tight">
+          <li><b>Settlement.</b> The mark-paid amount guard accepts any amount matching a live offer for that organization, so an offer negotiated for one period length can settle a period of the other interval. The period granted still follows the subscription's own interval, so the exposure is a mis-scoped period, not a mispriced amount.</li>
+          <li><b>Fulfilment.</b> <span class="ref">039:257, 291-298</span> hard-codes <code class="ref">+ interval '365 days'</code> and leaves <code class="ref">billing_interval</code> untouched, so a monthly shop whose offer is fulfilled silently receives a year. A monthly negotiated deal cannot be expressed through this mechanism at all.</li>
+        </ul>
+        <p class="section-note" style="margin:0">Fulfilment also resolves the subscription with the older <code class="ref">order by created_at desc limit 1</code> rule rather than the shared <span class="ref">_subscription_latest_for_org</span> resolver that every other path was moved onto.</p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-top">
+          <span class="fid">C8</span>
+          <h3>Display artefacts that will read oddly once the intervals diverge</h3>
+          <span class="chip low">Cosmetic</span>
+        </div>
+        <ul class="tight">
+          <li>The annual pricing card prints <b>Save {annualDiscountPercent}%</b> taken from the campaign layer while the struck-through and final figures beside it carry the global admin discount — so a 50% global rule currently shows a 50%-reduced price next to "Save 20%".</li>
+          <li>The checkout shows a savings line for monthly quotes only; an annual quote deliberately shows none (<span class="ref">src/lib/paymentCheckout.ts:230-238</span>). Correct today, and it will need a decision once annual discounts become real and independent.</li>
+          <li>Hard-coded annual fallbacks in <span class="ref">src/lib/i18n.ts:7756-7761, 15214-15219</span> quote UGX 172,800 / 345,600 / 787,200 and "Save 20%" when the price book fails to load.</li>
+          <li>The shop console's placeholder amount falls back to the book's monthly figure regardless of the subscription's interval (<span class="ref">EnterpriseShopConsolePage.tsx:207</span>); the authoritative server amount replaces it.</li>
+        </ul>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">02</span><h2>What is already correct</h2></div>
+    <p class="section-note">Establishing the negative space matters as much as the findings: these are the assumptions the fix can rely on.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Area</th><th>Finding</th></tr></thead>
+        <tbody>
+          <tr><td>Edge Functions</td><td><b>No pricing logic at all.</b> <code>payment-initiate</code>, <code>payment-status</code> and both callbacks contain no amount, price, discount or interval arithmetic; they orchestrate the ledger and compare the provider's reported amount against the stored row. Nothing to change here.</td></tr>
+          <tr><td>Campaign annual leg</td><td>Genuinely independent: <code>annual_discount_percent</code> is its own column, CHECKed 0–90, validated by the RPC, and clamped in the primitive. Only its <em>base</em> is wrong (C1).</td></tr>
+          <tr><td>Cycle handling</td><td>Both RPCs normalise <code>monthly|month → month</code> and <code>yearly|annual|annually|year → year</code> and reject anything else; the quote returns <code>is_current</code> comparing plan <em>and</em> cycle; changing cycle clears the quote client-side.</td></tr>
+          <tr><td>Money-path guards</td><td>Server-authoritative amount, amount-mismatch refusal before any mutation, provider/idempotency replays, stale-replace and cross-channel guards, no zero-value ledger rows, atomic + idempotent free activation. All interval-correct already, because each reads the subscription's own <code>billing_interval</code>.</td></tr>
+          <tr><td>Bounds</td><td>Admin 0–99, campaign monthly 90% clamp with the UGX 5,000 floor, campaign annual 0–90 (CHECK + RPC + clamp), fully-discounted activation gated on a real 100%.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">03</span><h2>Proposed data model</h2></div>
+    <p class="section-note">The campaign table is the precedent: one row carries a monthly leg and an annual leg. Reusing that shape means no new concept, no new table, and no second discount system.</p>
+
+    <h3>Global rules — mirror the campaign row</h3>
+    <pre><code>alter table public.admin_plan_discounts
+  add column if not exists annual_discount_percent numeric(5,2) not null default 0
+    check (annual_discount_percent >= 0 and annual_discount_percent &lt;= 99);
+
+-- Backfill: today's single percent governs both cycles, so copy it into the
+-- annual leg. Every price is therefore identical on the day this ships.
+update public.admin_plan_discounts
+   set annual_discount_percent = discount_percent
+ where discount_percent &lt;&gt; annual_discount_percent;</code></pre>
+
+    <h3>Individual rules — same pair, on the subscription</h3>
+    <pre><code>alter table public.subscriptions
+  add column if not exists admin_discount_percent_annual numeric(6,2) not null default 0
+    check (admin_discount_percent_annual >= 0 and admin_discount_percent_annual &lt;= 100);
+
+update public.subscriptions
+   set admin_discount_percent_annual = admin_discount_percent
+ where coalesce (admin_discount_percent, 0) &gt; 0;</code></pre>
+
+    <h3>Resolution becomes interval-aware</h3>
+    <pre><code>_admin_discount_for_row (s subscriptions, p_interval text)          -- returns the individual leg for that cycle
+_admin_discount_effective (p_individual_percent, p_plan_code, p_interval text)
+
+-- Inside subscription_payment_plan_amount the cycle is already resolved at :286,
+-- so the call site simply passes it through:
+v_discount := public._admin_discount_effective (p_admin_discount_percent, v_plan, v_cycle);</code></pre>
+    <p>Both helpers are internal: they carry no EXECUTE grant for <code class="ref">public</code>, <code class="ref">anon</code> or <code class="ref">authenticated</code>, so widening their signature is contained. <span class="ref">subscription_payment_plan_amount</span> keeps its exact signature and therefore its ACLs — quote, create, expected-amount, mark-paid and free activation need no re-grant.</p>
+
+    <h3>The campaign fix is one line, in two places</h3>
+    <pre><code>-- server: a new migration overriding _pricing_compute_plan_row
+<span class="diff-del">- v_final_annual := round (v_final_monthly      * 12 * (1 - v_annual_pct / 100.0))::bigint;</span>
+<span class="diff-add">+ v_final_annual := round (v_original_monthly    * 12 * (1 - v_annual_pct / 100.0))::bigint;</span>
+
+// client mirror: src/lib/subscriptionPricing.ts:91
+<span class="diff-del">- const finalAnnual = Math.round(finalMonthly    * 12 * (1 - annualPct / 100));</span>
+<span class="diff-add">+ const finalAnnual = Math.round(originalMonthly * 12 * (1 - annualPct / 100));</span></code></pre>
+    <div class="callout">
+      <b>This is a no-op whenever no monthly campaign discount is running.</b> Business list is 36,000 / month with a 20% annual default, so the annual price is 345,600 either way — <code>30,000 × 12 × 0.8</code> and <code>36,000 × 12 × 0.8</code> only differ because the first carries a 6,000 monthly discount. The change is visible only during a monthly campaign, and there it raises the annual price to the list-based figure. That consequence is unavoidable if monthly campaigns are to leave annual pricing alone; it is decision D2 below.
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">04</span><h2>Files to change</h2></div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>File</th><th>Change</th><th>Kind</th></tr></thead>
+        <tbody>
+          <tr><td><code>supabase/migrations/&lt;new&gt;_discount_interval_isolation.sql</code></td><td>The two columns, the back-fills, the interval-aware resolvers, the one-line campaign fix, and the amended <code>admin_plan_discount_save</code> / <code>admin_subscription_discount_save</code> / <code>admin_discount_preview</code> / <code>admin_discount_overview</code> / <code>admin_subscription_expected_amount</code></td><td>New</td></tr>
+          <tr><td><code>src/test/sqlIntegration/subscriptionPaymentPgHarness.ts</code></td><td>Append the migration to the explicit 32-file chain</td><td>Edit</td></tr>
+          <tr><td><code>src/lib/subscriptionPricing.ts</code></td><td>Line 91 — annual from the list monthly price</td><td>Edit</td></tr>
+          <tr><td><code>src/lib/adminSubscriptionDiscounts.ts</code></td><td>Two-percent types, both RPC wrappers, and the annual leg on <code>localDiscountPreview</code></td><td>Edit</td></tr>
+          <tr><td><code>AdminSubscriptionDiscountsPage.tsx</code></td><td>An annual field beside each percent input; preview shows both legs</td><td>Edit</td></tr>
+          <tr><td><code>src/lib/pricingCampaigns.ts:296-298</code></td><td>Stale comment claiming the annual percent has no CHECK and no clamp — both were added in <code>20261011160000</code></td><td>Edit</td></tr>
+          <tr><td><code>subscriptionPricing.test.ts</code> · <code>adminSubscriptionDiscounts.sql.integration.test.ts</code> · <code>subscriptionAdminDiscount.sql.integration.test.ts</code></td><td>The three tests that pin today's coupling (see §05)</td><td>Edit</td></tr>
+          <tr><td><code>subscriptionDiscountHardening.sql.integration.test.ts</code></td><td>New independence suite (see §05)</td><td>Edit</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="section-note" style="margin-top:1rem">Explicitly <b>not</b> touched: every Edge Function, the ledger and its state guard, the payment state machine and idempotency handling, RLS policies, role gates, and the campaign tables' constraints.</p>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">05</span><h2>Tests</h2></div>
+
+    <h3 style="margin-bottom:.6rem">Tests that pin the coupling and must be inverted</h3>
+    <div class="table-scroll" style="margin-bottom:2rem">
+      <table>
+        <thead><tr><th>Test</th><th>Today it asserts</th><th>Becomes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>subscriptionPricing.test.ts:37</code><br><span class="ref">"applies annual discount to final monthly base"</span></td>
+            <td class="num">30,000 × 12 × 0.8 = <b>288,000</b></td>
+            <td class="num">36,000 × 12 × 0.8 = <b>345,600</b></td>
+          </tr>
+          <tr>
+            <td><code>subscriptionAdminDiscount.sql.integration.test.ts:124</code><br><span class="ref">"applies the discount to the yearly amount"</span></td>
+            <td class="num">year 0 → 345,600 · 25% → <b>259,200</b> · 100% → 0</td>
+            <td>25% moves to the annual leg; the monthly leg no longer moves the annual figure</td>
+          </tr>
+          <tr>
+            <td><code>adminSubscriptionDiscounts.sql.integration.test.ts:160</code><br><span class="ref">"applies the same percentage to the annual cycle"</span></td>
+            <td class="num">year 99% → <b>3,456</b></td>
+            <td>Rewritten as the independence assertion it was standing in for</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-bottom:.6rem">The independence suite to add</h3>
+    <p class="section-note">The point of these is the negative: change one interval, prove the other price did not move. Every case runs against the real migration chain in the pglite harness.</p>
+    <ul class="tight">
+      <li><b>Global.</b> Save a monthly global rule; assert the annual price is byte-identical before and after. Repeat in the other direction. Assert an annual-only rule leaves the monthly price untouched.</li>
+      <li><b>Individual.</b> Set a monthly percentage on a subscription; assert its annual quote does not move. Set an annual percentage; assert the monthly quote does not move.</li>
+      <li><b>Campaign.</b> With a monthly campaign discount live, assert the annual price equals the same campaign's annual leg applied to the <em>list</em> monthly price — i.e. the monthly discount contributes nothing. The reverse — an annual campaign change moving the monthly price — should already fail to reproduce.</li>
+      <li><b>No stacking.</b> An individual monthly rule and a global monthly rule together must price as the individual one alone, exactly as today. Same for annual. And the cross case: an individual <em>monthly</em> rule must not suppress the global <em>annual</em> rule.</li>
+      <li><b>Bounds preserved.</b> Global and individual 0–99 including the two new columns; campaign monthly 90% clamp and the UGX 5,000 floor; campaign annual 0–90 through the CHECK, the RPC and the clamp.</li>
+      <li><b>Money paths agree.</b> For a subscription on each interval, quote, create, expected-amount and mark-paid must all return the same figure the pricing primitive returns — the existing parity assertions, re-run against the interval-aware resolver.</li>
+      <li><b>Free activation.</b> 100% on the monthly leg must not permit a free <em>annual</em> period, and vice versa — the eligibility check reads the subscription's own interval.</li>
+      <li><b>Client/server parity.</b> The existing <code>pricingCampaignsAdmin.sql.integration.test.ts:260</code> matrix already crosses every monthly branch with an annual percent and compares client to server; it should keep passing unchanged, and is the guard that the mirror was edited in lockstep.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">06</span><h2>Decisions needed before implementation</h2></div>
+
+    <div class="decisions">
+
+      <article class="decision">
+        <div class="decision-top"><span class="did">D1</span><h3>What happens to discounts that already exist?</h3></div>
+        <p>Existing global and individual rules were configured when one percent meant both intervals. The back-fill decides whether separating the intervals changes any live price.</p>
+        <div class="options">
+          <div class="opt"><span class="k">A</span><span><b>Copy the existing percent into both legs.</b> Every price is identical on the day it ships, and independence begins from that point. Nothing to explain to a customer.</span></div>
+          <div class="opt"><span class="k">B</span><span><b>Treat the existing percent as monthly only.</b> Cleaner semantics going forward, but every organization currently buying annually sees its price rise to the campaign or list figure the moment this deploys.</span></div>
+        </div>
+        <p class="rec"><b>Decided: A.</b> Both legs are back-filled from the percent each row already carried, so the migration is price-neutral on the day it ships.</p>
+      </article>
+
+      <article class="decision">
+        <div class="decision-top"><span class="did">D2</span><h3>The annual price rises during a monthly campaign — confirm that is wanted</h3></div>
+        <p>Separating the intervals means the annual price stops inheriting the monthly campaign discount. During a monthly promotion the annual card therefore shows the list-based annual figure, which is <em>higher</em> than what it shows today. There is no way to satisfy "monthly campaigns must never affect annual pricing" and keep the current annual figure at the same time.</p>
+        <div class="options">
+          <div class="opt"><span class="k">A</span><span><b>Accept it, and compensate with the annual leg.</b> During a monthly promotion, set the campaign's annual percentage explicitly if the annual price should also fall. The campaign form already has that field.</span></div>
+          <div class="opt"><span class="k">B</span><span><b>Leave the campaign base as it is</b> and isolate only the two admin mechanisms. This contradicts the brief's "monthly campaigns must never affect annual pricing", so it is listed only for completeness.</span></div>
+        </div>
+        <p class="rec"><b>Decided: A.</b> The annual leg is a percentage of the annual list price, and the campaign form's <b>Annual %</b> field is how a promotion reaches the year. The pricing-card copy that this consequence needs is now in place — see below.</p>
+      </article>
+
+      <article class="decision">
+        <div class="decision-top"><span class="did">D3</span><h3>Two columns on one row, or a row per interval?</h3></div>
+        <p>Two columns mirror <code>pricing_campaign_plan_discounts</code> exactly and keep one shared window, one active flag and one reason per rule. A row per interval (<code>primary key (plan_code, billing_interval)</code>) would additionally allow <em>separate windows</em> per interval, at the cost of a composite key, a duplicated window per rule, and two rows per plan on the admin screen.</p>
+        <p class="rec"><b>Decided: two columns, shared window.</b> One window, one active flag, one reason per rule; two rates inside it. Separate per-interval windows would be a different and larger change.</p>
+      </article>
+
+      <article class="decision">
+        <div class="decision-top"><span class="did">D4</span><h3>Does an individual monthly discount still suppress the global annual one?</h3></div>
+        <p>Today, any individual discount beats the global rule for both cycles. Once the legs are separate, the resolver has to decide what a zero on one leg means. Either it falls back per interval — monthly zero falls back to the global <em>monthly</em> rule, annual zero to the global <em>annual</em> rule — or an individual rule on either leg continues to suppress both global legs.</p>
+        <p class="rec"><b>Decided: fall back per interval.</b> An individual monthly leg beats the global monthly leg; the annual leg is resolved on its own, so an account with an individual monthly discount still receives the global annual one. Zero keeps meaning "no rule of my own" on each leg.</p>
+      </article>
+
+      <article class="decision">
+        <div class="decision-top"><span class="did">D5</span><h3>Are the 11 October discount migrations live in production?</h3></div>
+        <p>Migrations <code>20261011120000</code> through <code>20261011170000</code> — the billing-role gate, the mark-paid amount guard, the annual bounds, the public price book — are committed and green locally. Whether they have been applied to the production project cannot be determined from this working copy, and the new migration overrides functions several of them define.</p>
+        <p class="rec"><b>Still open, and it gates the deploy rather than the code.</b> The new migration is written on top of them either way. But if they are not yet applied, the deploy must carry the whole set in order — and the web bundle must ship in the same step, because the admin screen's RPC signatures change here: <code>admin_plan_discount_save</code>, <code>admin_subscription_discount_save</code> and <code>admin_discount_preview</code> each gain an annual parameter, and the old signatures are dropped so no overload can linger.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">07</span><h2>Adjacent issues found, not part of this change</h2></div>
+    <p class="section-note">Recorded so they are not lost, and deliberately excluded from the proposed fix.</p>
+    <ul class="tight">
+      <li><b>Offer fulfilment always grants a year</b> (<span class="ref">039:257, 291-298</span>) and still uses the superseded subscription-resolution rule. A monthly negotiated deal cannot be expressed at all.</li>
+      <li><b>No UGX floor on the annual leg.</b> The 5,000 floor is monthly-only; the annual figure is bounded solely by the 90% cap. Probably intended, but the floor guarantee does not hold for annual prices.</li>
+      <li><b><code>final_monthly_with_discount_ugx</code> in the overview is now the same expression as <code>final_monthly_ugx</code></b> (<span class="ref">20261011150000:394-395</span>), so the name no longer describes the value.</li>
+      <li><b>The save RPC quotes the configured percent, not the effective one</b> (<span class="ref">20261011150000:311-312</span>), so a future caller reading those prices would see a figure the shop may not be charged.</li>
+      <li><b><code>admin_discount_preview</code> re-derives the discount arithmetically</b> rather than calling the pricing function, so its agreement with checkout is coincidence rather than construction. Worth folding into the new migration while the function is open.</li>
+    </ul>
+  </section>
+
+  <footer>
+    No migration has been run, no function deployed, no production data touched, nothing committed. Every price quoted here is either read from the source or measured in the pglite harness at <code>src/test/sqlIntegration</code>, which replays the real migration chain in production order. Two things remain outside this change: the deploy-order question in D5, and the adjacent findings in section 07.
+  </footer>
+
+</div>

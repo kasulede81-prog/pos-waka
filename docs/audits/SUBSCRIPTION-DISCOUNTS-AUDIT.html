@@ -1,0 +1,641 @@
+<title>Subscription Discounts Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  /* Design plan
+     Color  : graphite/blue-grey neutrals, ink on near-white (light) and slate (dark);
+              one teal accent for the mechanism under audit; amber/red/green reserved
+              for severity so they never read as the accent.
+     Type   : IBM Plex Sans for prose and headings, IBM Plex Mono for money, ids and RPCs.
+     Layout : single 1080px column; numbered bands only where the content is a real
+              sequence (the pipeline, the plan), everything else plain sections. */
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-2: #eef1f5;
+    --ink: #131a21;
+    --ink-2: #3d4a56;
+    --muted: #6a7787;
+    --rule: #d5dce4;
+    --rule-soft: #e6ebf1;
+    --accent: #0b6b63;
+    --accent-soft: #e0f0ee;
+    --danger: #ab2318;
+    --danger-soft: #fbe6e3;
+    --warn: #8a5300;
+    --warn-soft: #fdf0d8;
+    --ok: #1d6b3a;
+    --ok-soft: #e2f2e8;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --max: 1080px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1216;
+      --surface: #141b21;
+      --surface-2: #1b242c;
+      --ink: #e8eef4;
+      --ink-2: #bcc8d4;
+      --muted: #8d9cac;
+      --rule: #2b3742;
+      --rule-soft: #222c35;
+      --accent: #5fd3c6;
+      --accent-soft: #10312f;
+      --danger: #ff9b8f;
+      --danger-soft: #3a1c18;
+      --warn: #f0bd6a;
+      --warn-soft: #33270f;
+      --ok: #7dd79c;
+      --ok-soft: #16301f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1216;
+    --surface: #141b21;
+    --surface-2: #1b242c;
+    --ink: #e8eef4;
+    --ink-2: #bcc8d4;
+    --muted: #8d9cac;
+    --rule: #2b3742;
+    --rule-soft: #222c35;
+    --accent: #5fd3c6;
+    --accent-soft: #10312f;
+    --danger: #ff9b8f;
+    --danger-soft: #3a1c18;
+    --warn: #f0bd6a;
+    --warn-soft: #33270f;
+    --ok: #7dd79c;
+    --ok-soft: #16301f;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    padding-inline: 20px;
+    padding-block: 32px 72px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--max); margin-inline: auto; display: flex; flex-direction: column; gap: 40px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.2; }
+  h1 { font-size: clamp(28px, 4.4vw, 40px); font-weight: 600; letter-spacing: -0.015em; }
+  h2 { font-size: clamp(20px, 2.6vw, 25px); font-weight: 600; letter-spacing: -0.01em; }
+  h3 { font-size: 16px; font-weight: 600; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+  header.head { display: flex; flex-direction: column; gap: 14px; }
+  .sub { color: var(--ink-2); max-width: 68ch; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px 10px;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+  }
+  .meta span { border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; background: var(--surface); }
+
+  section { display: flex; flex-direction: column; gap: 18px; }
+  .sec-head { display: flex; flex-direction: column; gap: 6px; border-top: 2px solid var(--ink); padding-top: 14px; }
+  .sec-head .eyebrow { color: var(--accent); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .card.accent { border-left: 3px solid var(--accent); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  .grid2 > *, .grid3 > * { min-width: 0; }
+
+  .verdict { display: flex; flex-direction: column; gap: 14px; }
+  .verdict .line { display: flex; gap: 12px; align-items: flex-start; }
+  .verdict .n {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent);
+    background: var(--accent-soft); border-radius: 6px; padding: 2px 8px; flex: none; margin-top: 2px;
+  }
+
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 13.5px; }
+  caption { caption-side: top; text-align: left; padding: 14px 16px 0; font-size: 13px; color: var(--muted); }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  thead th {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); border-bottom: 1px solid var(--rule); white-space: nowrap;
+    position: sticky; top: 0; background: var(--surface);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.mono { font-family: var(--mono); font-size: 12.5px; }
+  .stage { font-weight: 600; }
+
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip.high { background: var(--danger-soft); color: var(--danger); }
+  .chip.med { background: var(--warn-soft); color: var(--warn); }
+  .chip.low { background: var(--surface-2); color: var(--ink-2); }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.part { background: var(--warn-soft); color: var(--warn); }
+  .chip.no { background: var(--danger-soft); color: var(--danger); }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  figcaption { font-size: 13px; color: var(--muted); max-width: 78ch; }
+  .fig-scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); padding: 16px; }
+  svg.flow { display: block; width: 100%; min-width: 720px; height: auto; color: var(--ink); }
+  .bx { fill: var(--surface-2); stroke: var(--rule); stroke-width: 1.3; }
+  .bx-accent { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+  .bx-mute { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .t { font-family: var(--mono); font-size: 12px; fill: var(--ink); }
+  .t-b { font-family: var(--sans); font-size: 12.5px; font-weight: 600; fill: var(--ink); }
+  .t-s { font-family: var(--mono); font-size: 10.5px; fill: var(--muted); }
+  .al { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-2); }
+  .ln { stroke: currentColor; stroke-width: 1.3; fill: none; }
+  .ln-accent { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+  .ln-dash { stroke: var(--muted); stroke-width: 1.2; fill: none; stroke-dasharray: 5 4; }
+
+  ul.tight { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+  ul.tight li::marker { color: var(--muted); }
+
+  .decision { border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .decision .q { font-weight: 600; }
+  .decision .rec { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--ink-2); }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opt { border: 1px solid var(--rule); border-radius: 8px; padding: 6px 10px; font-size: 13px; background: var(--surface-2); }
+
+  ol.plan { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 14px; }
+  ol.plan > li { padding-left: 4px; }
+  ol.plan .step { font-weight: 600; }
+  .rollback { background: var(--surface-2); border-radius: 10px; padding: 14px 16px; font-size: 14px; }
+
+  .kv { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 6px 16px; font-size: 14px; }
+  .kv dt { color: var(--muted); font-family: var(--mono); font-size: 12px; padding-top: 2px; }
+  .kv dd { margin: 0; min-width: 0; }
+  footer { border-top: 1px solid var(--rule); padding-top: 18px; color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="wrap">
+
+<header class="head">
+  <p class="eyebrow">WAKA POS · audit · 11 October 2026</p>
+  <h1>Subscription Discounts Audit</h1>
+  <p class="sub">Full trace of the pricing-campaign, global and per-account discount systems — what each one does today, where the money path actually is, why a saved global discount looks inert, and the decisions required before any fix.</p>
+  <div class="meta">
+    <span>repo HEAD ad66f47f</span>
+    <span>prod deploy ad66f47f</span>
+    <span>remote ledger: both migrations applied</span>
+    <span>21 scenarios run on an isolated database</span>
+    <span>71 pinned tests green</span>
+    <span>no production writes</span>
+  </div>
+</header>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Bottom line</p>
+    <h2>Three answers, up front</h2>
+  </div>
+  <div class="card accent verdict">
+    <div class="line"><span class="n">1</span><p><strong>The system is live and it does discount.</strong> Both discount migrations are in the production migration ledger, the deployed frontend is this commit, and an isolated run of the real SQL chain shows a global rule, an account rule and a campaign all reaching the amount that checkout charges — including the 99% case at UGX 360 and a 100% case at UGX 0.</p></div>
+    <div class="line"><span class="n">2</span><p><strong>The global discount only ever appears inside a checkout quote.</strong> It never edits an existing subscription, and every other screen — the public pricing page, the in-app upgrade page, and the admin console's own “Mark paid” amount — reads a price book that does not contain it. The one path where it genuinely never applies is the manual/offline payment. That is the whole of the “it doesn't activate” experience.</p></div>
+    <div class="line"><span class="n">3</span><p><strong>The UGX 5,000 floor belongs to campaigns, not to discounts.</strong> It is enforced server-side in one function (<code>_pricing_min_final_monthly_ugx</code>) that only campaign pricing passes through, mirrored in the admin form. The admin discount is applied <em>after</em> it and is deliberately not floored. Removing the floor would change campaign pricing only; it would not unlock anything the Subscription Discounts screen cannot already do.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">1 · Evidence</p>
+    <h2>What was actually checked</h2>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Checked, directly</h3>
+      <ul class="tight">
+        <li>Every migration defining <code>subscription_payment_plan_amount</code>, the campaign pricing functions, the discount RPCs, the quote/create/expected-amount path, settlement and the lifecycle ticks — read from the repo, latest definition per function identified.</li>
+        <li>Both admin screens, their libs, and the client checkout reducer, read at HEAD.</li>
+        <li>Remote migration ledger via <code>supabase migration list --linked</code>: <code>20261010120000</code> and <code>20261011090000</code> are present with a filled REMOTE column.</li>
+        <li>Read-only PostgREST probes against the live project: <code>admin_plan_discounts</code> exists (HTTP 401 <code>42501</code> with a GRANT hint — present, privileges revoked by design), control table absent → 404.</li>
+        <li>Deployed bundle: <code>pos.dkasu.com</code> serves <code>internal-admin-DvDOJBxf.js</code> containing <code>admin_discount_overview</code>, <code>admin_plan_discount_save</code>, <code>admin_subscription_discount_save</code>, <code>admin_discount_preview</code> and <code>discount-shop-search</code>; the production deployment is commit <code>ad66f47f</code>.</li>
+        <li>21 pricing scenarios executed against the real migration chain in an isolated Postgres (pglite): no production data, campaign or subscription was touched. The temporary test file was removed afterwards.</li>
+        <li>The two pinned suites (<code>adminSubscriptionDiscounts.sql.integration.test.ts</code>, <code>subscriptionAdminDiscount.sql.integration.test.ts</code>) run green: 71 tests.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Not checked — do not treat as verified</h3>
+      <ul class="tight">
+        <li><strong>What discounts are actually saved in production.</strong> Reading <code>admin_plan_discounts</code> or <code>subscriptions.admin_discount_percent</code> needs an internal-admin session; the read-only probes available here cannot see RLS-protected rows. Nothing in this report claims a specific production discount is or is not configured.</li>
+        <li><strong>No live payment was run</strong>, in sandbox or otherwise.</li>
+        <li>No Edge Function was executed; the provider path is described from its code, not observed.</li>
+        <li>Working tree preserved: no file was modified, stashed or deleted. This report is the only file added.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">2 · Lifecycle</p>
+    <h2>Where a price is decided, and where it is frozen</h2>
+  </div>
+  <figure>
+    <div class="fig-scroll">
+      <svg class="flow" viewBox="0 0 980 620" role="img" aria-label="The subscription price passes through the canonical price book, the campaign layer, then the admin discount layer, into quote/create/expected-amount, where the amount is frozen into a payment row that the provider is called with, and later confirmed without any re-pricing. A separate branch from the campaign layer feeds public_subscription_pricing, which powers the public pricing page, the upgrade page and the shop console's Mark paid amount — none of which include the admin discount.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="ahm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)"></path>
+          </marker>
+        </defs>
+
+        <rect class="bx" x="8" y="20" width="330" height="58" rx="10"></rect>
+        <text class="t-b" x="24" y="44">Canonical price book</text>
+        <text class="t-s" x="24" y="63">starter 18,000 · business 36,000 · waka_plus 82,000</text>
+
+        <rect class="bx" x="8" y="118" width="330" height="72" rx="10"></rect>
+        <text class="t-b" x="24" y="142">Campaign layer</text>
+        <text class="t-s" x="24" y="160">pricing_campaigns · newest active campaign wins</text>
+        <text class="t-s" x="24" y="176">monthly: 90% clamp, UGX 5,000 floor</text>
+
+        <rect class="bx-accent" x="8" y="230" width="330" height="72" rx="10"></rect>
+        <text class="t-b" x="24" y="254">Admin layer</text>
+        <text class="t-s" x="24" y="272">admin_plan_discounts → global rule</text>
+        <text class="t-s" x="24" y="288">subscriptions.admin_discount_percent → account rule</text>
+
+        <rect class="bx" x="8" y="342" width="330" height="58" rx="10"></rect>
+        <text class="t-b" x="24" y="366">Quote · create · expected amount</text>
+        <text class="t-s" x="24" y="385">round(base × (100 − d) / 100), never below 0</text>
+
+        <rect class="bx" x="8" y="440" width="330" height="58" rx="10"></rect>
+        <text class="t-b" x="24" y="464">Payment row — amount frozen</text>
+        <text class="t-s" x="24" y="483">amount_ugx · the provider is called with this</text>
+
+        <rect class="bx" x="8" y="538" width="330" height="58" rx="10"></rect>
+        <text class="t-b" x="24" y="562">Confirm → period advanced</text>
+        <text class="t-s" x="24" y="581">no re-price; renews at whatever rule is live</text>
+
+        <line class="ln" x1="173" y1="78" x2="173" y2="112" marker-end="url(#ah)"></line>
+        <text class="al" x="185" y="100">active campaign applied</text>
+
+        <line class="ln-accent" x1="173" y1="190" x2="173" y2="224" marker-end="url(#ah)"></line>
+        <text class="al" x="185" y="212">after the floor</text>
+
+        <line class="ln" x1="173" y1="302" x2="173" y2="336" marker-end="url(#ah)"></line>
+        <text class="al" x="185" y="324">the discount first bites here</text>
+
+        <line class="ln" x1="173" y1="400" x2="173" y2="434" marker-end="url(#ah)"></line>
+        <text class="al" x="185" y="422">client amount compared, mismatch rejected</text>
+
+        <line class="ln" x1="173" y1="498" x2="173" y2="532" marker-end="url(#ah)"></line>
+        <text class="al" x="185" y="520">a discount saved after this line changes nothing</text>
+
+        <rect class="bx-mute" x="560" y="118" width="404" height="58" rx="10"></rect>
+        <text class="t-b" x="576" y="142">public_subscription_pricing()</text>
+        <text class="t-s" x="576" y="161">the campaign layer, and nothing after it</text>
+
+        <rect class="bx-mute" x="560" y="216" width="404" height="86" rx="10"></rect>
+        <text class="t-b" x="576" y="240">Public pricing page · Upgrade page</text>
+        <text class="t-s" x="576" y="258">Shop console “Mark paid” suggested amount</text>
+        <text class="t-s" x="576" y="276">shows list or campaign price — never the discount</text>
+
+        <line class="ln-dash" x1="338" y1="152" x2="554" y2="147" marker-end="url(#ahm)"></line>
+        <text class="al" x="352" y="140">no admin step on this path</text>
+
+        <line class="ln-dash" x1="762" y1="176" x2="762" y2="210" marker-end="url(#ahm)"></line>
+        <text class="al" x="774" y="198">still list price</text>
+      </svg>
+    </div>
+    <figcaption>The checkout path (left column) carries all three discount layers and ends in a frozen amount. The public book (right) branches off after the campaign layer, so every screen fed by it — including the amount the admin console offers for a manual payment — is missing the admin discount entirely. That single missing edge is the mechanism behind “the global discount does not activate”.</figcaption>
+  </figure>
+
+  <div class="scroll">
+    <table>
+      <caption>Each surface, the functions behind it, and which stage of the payment it touches.</caption>
+      <thead>
+        <tr><th>Surface</th><th>Function / table</th><th>Stage</th><th>Admin discount?</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="stage">Pricing Campaigns page</td><td class="mono">admin_pricing_campaign_save<br>admin_pricing_campaign_plan_discount_save<br>admin_pricing_campaign_metrics / _audit_feed<br>SELECT pricing_campaigns, pricing_campaign_plan_discounts</td><td>Writes the campaign layer</td><td><span class="chip low">n/a — by design</span></td></tr>
+        <tr><td class="stage">Subscription Discounts page</td><td class="mono">admin_plan_discount_save / _delete<br>admin_subscription_discount_save<br>admin_discount_overview, admin_discount_preview<br>internal_ops_search_shops (picker)</td><td>Writes the global and account rules</td><td><span class="chip ok">yes — owns it</span></td></tr>
+        <tr><td class="stage">Public pricing page, Upgrade page</td><td class="mono">public_subscription_pricing()</td><td>Display only</td><td><span class="chip no">no</span></td></tr>
+        <tr><td class="stage">Shop checkout (CheckoutFlow)</td><td class="mono">subscription_payment_quote()</td><td>Quoting</td><td><span class="chip ok">yes</span></td></tr>
+        <tr><td class="stage">Payment intent creation</td><td class="mono">subscription_payment_create()</td><td>Server price, mismatch rejection, snapshot into metadata.checkout</td><td><span class="chip ok">yes</span></td></tr>
+        <tr><td class="stage">Expected amount validation</td><td class="mono">subscription_payment_expected_amount()</td><td>Recompute for comparison</td><td><span class="chip ok">yes</span></td></tr>
+        <tr><td class="stage">Provider initiation</td><td class="mono">payment-initiate Edge Function<br>subscription_payment_provider_claim / _attach</td><td>Uses the frozen ledger amount</td><td><span class="chip low">inherited, frozen</span></td></tr>
+        <tr><td class="stage">Settlement callback</td><td class="mono">subscription_payment_confirm()</td><td>Validates the snapshot equals its own amount, advances the period</td><td><span class="chip no">never re-priced</span></td></tr>
+        <tr><td class="stage">Manual / offline payment</td><td class="mono">admin_subscription_mark_payment()</td><td>Writes an admin-typed amount, advances the period if &gt; 0</td><td><span class="chip no">no — and never validated</span></td></tr>
+        <tr><td class="stage">Lifecycle</td><td class="mono">subscription_lifecycle_tick (hourly :23)<br>subscription_payment_reconcile_tick (:11,:26,:41,:56)</td><td>Expiry, grace, stale pending cleanup</td><td><span class="chip low">unrelated to pricing</span></td></tr>
+        <tr><td class="stage">Account page (shop)</td><td class="mono">subscription_payment_get / my_subscription_payments</td><td>Shows settled ledger amounts</td><td><span class="chip ok">yes — as charged</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">3 · Precedence</p>
+    <h2>Three mechanisms, one arithmetic order</h2>
+  </div>
+  <p class="sub">Everything is decided in one place: <code>subscription_payment_plan_amount</code> calls <code>_admin_discount_effective</code> once, which is the only code that ranks the rules. Quote, create and expected-amount all route through it, so they cannot disagree with each other.</p>
+  <div class="scroll">
+    <table>
+      <caption>Precedence as implemented today. “Stacks” means the two percentages add or apply one after the other.</caption>
+      <thead>
+        <tr><th>Order</th><th>Layer</th><th>Source of truth</th><th>How it combines</th><th>Bound</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">1</td><td class="stage">Campaign discount</td><td class="mono">pricing_campaigns + pricing_campaign_plan_discounts</td><td>Applies to the canonical price. Nothing stacks underneath it.</td><td>90% clamp, UGX 5,000 monthly floor</td></tr>
+        <tr><td class="num">2</td><td class="stage">Account discount</td><td class="mono">subscriptions.admin_discount_percent (+ window columns)</td><td><strong>Replaces</strong> the global rule outright — never added to it, and it wins even when it is the smaller number.</td><td>0–99 written; 100 readable</td></tr>
+        <tr><td class="num">3</td><td class="stage">Global plan discount</td><td class="mono">admin_plan_discounts</td><td>Used only where the account has no in-window discount of its own. A lapsed account discount falls back here, not to list.</td><td>0–99</td></tr>
+        <tr><td class="num">4</td><td class="stage">No discount</td><td class="mono">—</td><td>Effective percent 0.</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="grid3">
+    <div class="card"><h3>A zero is not a rule</h3><p class="sub"><code>admin_discount_percent = 0</code> means “no account rule”, so the global rule takes over. There is currently no way for an account to opt <em>out</em> of a global discount.</p></div>
+    <div class="card"><h3>Windows are server-enforced</h3><p class="sub">Expiry is resolved from the subscription row on every money path, so a lapsed discount cannot be applied by quote, create or the expected amount — and it cannot be talked back into force by a client.</p></div>
+    <div class="card"><h3>The campaign is always underneath</h3><p class="sub">A 50% campaign with a 99% discount prices at 1% of the campaign price (18,000 → 180), not 1% of list. The floor is applied before the discount, so a discount can go far below UGX 5,000.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">4 · Scenarios</p>
+    <h2>All seventeen cases, measured</h2>
+  </div>
+  <p class="sub">Run against the real migration chain on an isolated database with the fixture price book (business 36,000/month, 345,600/year at the standard 20% annual discount). “Quoted” is <code>subscription_payment_quote</code>, which is the same number <code>subscription_payment_create</code> writes and the provider is called with.</p>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Scenario</th><th class="num">List</th><th class="num">Campaign</th><th class="num">Global</th><th class="num">Account</th><th class="num">Quoted / month</th><th class="num">Quoted / year</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">1</td><td>No discount</td><td class="num">36,000</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">36,000</td><td class="num">345,600</td></tr>
+        <tr><td class="num">2</td><td>Campaign 50%</td><td class="num">36,000</td><td class="num">50%</td><td class="num">—</td><td class="num">—</td><td class="num">18,000</td><td class="num">172,800</td></tr>
+        <tr><td class="num">2b</td><td>Campaign 99% — the floor binds</td><td class="num">36,000</td><td class="num">99%</td><td class="num">—</td><td class="num">—</td><td class="num">5,000</td><td class="num">48,000</td></tr>
+        <tr><td class="num">2c</td><td>Campaign annual 100% (no clamp on the annual leg)</td><td class="num">36,000</td><td class="num">0%</td><td class="num">—</td><td class="num">—</td><td class="num">36,000</td><td class="num">0</td></tr>
+        <tr><td class="num">2d</td><td>Campaign annual 120% — computed negative, clamped to zero</td><td class="num">36,000</td><td class="num">0%</td><td class="num">—</td><td class="num">—</td><td class="num">36,000</td><td class="num">0</td></tr>
+        <tr><td class="num">3</td><td>Global discount only</td><td class="num">36,000</td><td class="num">—</td><td class="num">25%</td><td class="num">—</td><td class="num">27,000</td><td class="num">259,200</td></tr>
+        <tr><td class="num">4</td><td>Account discount only</td><td class="num">36,000</td><td class="num">—</td><td class="num">—</td><td class="num">50%</td><td class="num">18,000</td><td class="num">172,800</td></tr>
+        <tr><td class="num">5</td><td>Campaign + global</td><td class="num">36,000</td><td class="num">50%</td><td class="num">99%</td><td class="num">—</td><td class="num">180</td><td class="num">1,728</td></tr>
+        <tr><td class="num">6</td><td>Campaign + account</td><td class="num">36,000</td><td class="num">50%</td><td class="num">—</td><td class="num">50%</td><td class="num">9,000</td><td class="num">86,400</td></tr>
+        <tr><td class="num">7</td><td>Global + account — account wins even though it is lower</td><td class="num">36,000</td><td class="num">—</td><td class="num">40%</td><td class="num">5%</td><td class="num">34,200</td><td class="num">328,320</td></tr>
+        <tr><td class="num">8</td><td>All three configured</td><td class="num">36,000</td><td class="num">50%</td><td class="num">40%</td><td class="num">25%</td><td class="num">13,500</td><td class="num">129,600</td></tr>
+        <tr><td class="num">9</td><td>Global with a future start, then expired</td><td class="num">36,000</td><td class="num">—</td><td class="num">40%</td><td class="num">—</td><td class="num">36,000</td><td class="num">345,600</td></tr>
+        <tr><td class="num">10</td><td>Account future-dated, then expired (global 10% live)</td><td class="num">36,000</td><td class="num">—</td><td class="num">10%</td><td class="num">40%</td><td class="num">32,400</td><td class="num">311,040</td></tr>
+        <tr><td class="num">11</td><td>Existing subscription / newly created subscription</td><td class="num">36,000</td><td class="num">—</td><td class="num">25%</td><td class="num">—</td><td class="num">27,000 / 27,000</td><td class="num">—</td></tr>
+        <tr><td class="num">12</td><td>Monthly vs annual, same global rule</td><td class="num">36,000</td><td class="num">—</td><td class="num">25%</td><td class="num">—</td><td class="num">27,000</td><td class="num">259,200</td></tr>
+        <tr><td class="num">13</td><td>Renewal after the account discount expires</td><td class="num">36,000</td><td class="num">—</td><td class="num">—</td><td class="num">50% lapsed</td><td class="num">36,000</td><td class="num">345,600</td></tr>
+        <tr><td class="num">14</td><td>Two shops in one organization</td><td class="num">36,000</td><td class="num">—</td><td class="num">—</td><td class="num">50%</td><td class="num">18,000 both shops</td><td class="num">—</td></tr>
+        <tr><td class="num">15</td><td>99% administrative discount — below the campaign floor</td><td class="num">36,000</td><td class="num">—</td><td class="num">99%</td><td class="num">—</td><td class="num">360</td><td class="num">3,456</td></tr>
+        <tr><td class="num">16</td><td>100% — zero-value result</td><td class="num">36,000</td><td class="num">—</td><td class="num">—</td><td class="num">100%</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td class="num">17</td><td>Saved-discount preview vs the checkout quote</td><td class="num">36,000</td><td class="num">50%</td><td class="num">99%</td><td class="num">—</td><td class="num">180 = 180</td><td class="num">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="grid3">
+    <div class="card"><h3>14 — a “shop” discount is an account discount</h3><p class="sub">Saving on shop A2 discounted shop A in the same organization. Shop B, a different organization, stayed at list — so tenants are isolated, but sibling shops are not. The schema allows one live subscription per organization, so this is structural, not a coding slip.</p></div>
+    <div class="card"><h3>11 — nothing is repriced</h3><p class="sub">The existing subscription's plan, status, period end and discount column were all unchanged by the global save. A new subscription quoted at exactly the same discounted price, because both are priced at their next payment, not at save time.</p></div>
+    <div class="card"><h3>9 — the screen and the server disagree</h3><p class="sub">With an expired rule, the checkout quoted 36,000 — correct. The overview simultaneously reported <code>is_active_now: false</code> and an “effective price” of 21,600 for the same rule.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">5 · The complaint</p>
+    <h2>Why the global discount looks like it never activates</h2>
+  </div>
+  <p class="sub">In order of how much each one explains. The first two are the answer; the rest are the smaller traps that produce the same impression.</p>
+
+  <div class="card accent">
+    <h3>1. There is nothing to activate — the price is computed per payment, never stored</h3>
+    <p class="sub">A subscription row holds a plan, a billing interval and a period, not a price. Saving a global rule writes one row to <code>admin_plan_discounts</code> and touches no subscription at all — proven in scenario 11, where the subscription's plan, status, period end and discount column were byte-identical before and after, and pinned by an existing test (“does not rewrite an existing subscription's plan or period when a discount changes”). So a shop that is already paid up sees no change whatsoever until its next renewal, and there is no job, trigger or email that “applies” anything. If you were expecting a shop's plan to visibly flip to a discounted price, that event does not exist in this design.</p>
+  </div>
+
+  <div class="card accent">
+    <h3>2. Every screen except the checkout reads a price book that has no admin discount in it</h3>
+    <p class="sub"><code>public_subscription_pricing()</code> — the anon-readable function behind the public pricing page, the in-app upgrade page and the shop console's “Mark paid” amount — reads the canonical book and the campaign layer only. Measured: with a live 50% global rule, that function returned <strong>36,000</strong> while the checkout quoted <strong>18,000</strong>. So the discount is real at the moment money is taken and invisible everywhere else. The sharpest consequence is the third surface: the admin console's “Mark paid · UGX 36,000” button suggests the full list price for a discounted shop, and <code>admin_subscription_mark_payment</code> writes whatever amount it is handed without ever comparing it to the price the discount implies.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>3. A payment already in flight keeps its amount</h3>
+      <p class="sub">Once an intent exists, the amount is frozen in the payment row. The settlement callback validates the checkout snapshot against its own ledger amount and never re-prices, and the checkout UI deliberately stops re-quoting from that point. Granting a discount after the shop pressed Pay does not change what that payment will cost.</p>
+    </div>
+    <div class="card">
+      <h3>4. The admin screen shows a price for rules that are not live</h3>
+      <p class="sub">The global table's “Effective price” column is a formula on the stored percentage: it ignores <code>active</code> and both window columns. An inactive 50% rule still renders “36,000 → 18,000” beside a Status chip reading “Inactive”. The per-account table does this correctly, which makes the two halves of the same page disagree about what “effective” means.</p>
+    </div>
+    <div class="card">
+      <h3>5. An account rule hides the global one — including while it is merely configured</h3>
+      <p class="sub">The account rule replaces the global one outright and wins even when it is the smaller number (40% global vs 5% account quoted at 34,200). If a shop was given an account discount at any point, a later global change is invisible for that shop by design — and while a future-dated account rule is pending, the shop is on the global rule, not on list.</p>
+    </div>
+    <div class="card">
+      <h3>6. Global rules are keyed by plan code, not by plan</h3>
+      <p class="sub">A rule is stored per plan code and only the three catalog codes can be given one. A subscription sitting on any other plan code — a legacy or bespoke code — will never match the rule, however it is named.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">6 · The floor</p>
+    <h2>Exactly where UGX 5,000 lives</h2>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Layer</th><th>Location</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="stage">Server (authority)</td><td class="mono">113_pricing_campaigns.sql:144 — _pricing_min_final_monthly_ugx()</td><td>Returns 5,000. The single definition of the floor.</td></tr>
+        <tr><td class="stage">Server (enforcement)</td><td class="mono">113_pricing_campaigns.sql:184 (fixed amount capped at monthly − 5,000)<br>113:194 (percentage result raised to the floor)</td><td>Inside <code>_pricing_compute_plan_row</code>, which only the campaign layer calls. Monthly leg only — the annual leg inherits it via the floored monthly, and has no clamp of its own.</td></tr>
+        <tr><td class="stage">Server (save gate)</td><td class="mono">113:453 → error discount_below_minimum<br>20261009140000:78</td><td><code>admin_pricing_campaign_plan_discount_save</code> refuses a campaign discount that would breach the floor.</td></tr>
+        <tr><td class="stage">Frontend (mirror)</td><td class="mono">src/lib/subscriptionPricing.ts:24, 66–74<br>src/lib/pricingCampaigns.ts:257–261, 281–293</td><td>The campaign form clamps to 90% and floors at 5,000 for the live preview, and blocks a save that would breach it.</td></tr>
+        <tr><td class="stage">Not applied</td><td class="mono">20261010120000:348</td><td><code>subscription_payment_plan_amount</code> applies the admin discount after the floored campaign price with its own floor of zero. This is deliberate and pinned by tests.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">Dependencies: the constant is one function, but it is load-bearing in four places — the campaign save RPC, the admin form's validator, the admin form's live preview, and the public price book. Changing it changes what a campaign may price at, and nothing about the Subscription Discounts screen, which already reaches 360 (99%) and 0 (100%). Recommendation: leave it alone; if the real goal is “discount this shop deeply”, the Subscription Discounts screen is the mechanism built for it.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">7 · Defects</p>
+    <h2>Confirmed, with evidence</h2>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>#</th><th>Severity</th><th>Defect</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="num">D1</td><td><span class="chip high">high</span></td>
+          <td>The manual/offline payment path ignores admin discounts. The console suggests the public-book amount and the RPC records any amount it is given, so a discounted shop can be charged list price — and nothing in the server compares the two.</td>
+          <td class="mono">EnterpriseShopConsolePage.tsx:171–179, 268–272, 396–406<br>subscriptionEngine.ts:744<br>20261007250000:26–49</td>
+        </tr>
+        <tr>
+          <td class="num">D2</td><td><span class="chip high">high</span></td>
+          <td>The discount setters authorize <em>any</em> active internal admin — the gate is <code>is_waka_internal_staff()</code>, which includes roles the screen deliberately hides (support_admin, field_agent). A 99% discount on any plan or account is one RPC call away for staff the UI would never show the button to.</td>
+          <td class="mono">113:108–118 (_pricing_require_admin)<br>019_internal_ops_rls_and_rpc.sql:5–18<br>adminRoles.ts:16–26<br>20261010120000:868, 1006, 1144, 1259</td>
+        </tr>
+        <tr>
+          <td class="num">D3</td><td><span class="chip med">medium</span></td>
+          <td>A campaign's annual percentage has no server-side clamp and no CHECK on the column. 100% prices the year at UGX 0; above 100 computes a negative price that the money path silently turns into 0. The admin form validates 0–90, so only a direct RPC or SQL call reaches this.</td>
+          <td class="mono">113:57 (column, no CHECK), 113:201 (annual leg unclamped)<br>scenarios 2c / 2d</td>
+        </tr>
+        <tr>
+          <td class="num">D4</td><td><span class="chip med">medium</span></td>
+          <td>The global table's “Effective price” column ignores <code>active</code> and the window, so a rule that is not in force still advertises a discounted price.</td>
+          <td class="mono">20261011090000:253–266<br>AdminSubscriptionDiscountsPage.tsx:516<br>scenario 9</td>
+        </tr>
+        <tr>
+          <td class="num">D5</td><td><span class="chip med">medium</span></td>
+          <td>No server-side guard against a zero-amount payment. A 100% discount prices at 0, <code>subscription_payment_create</code> writes a pending 0-amount row, and only the client refuses to press on (the provider would reject it). Measured directly on the isolated database.</td>
+          <td class="mono">20261010120000:669–675 (no zero guard)<br>paymentCheckout.ts:476–483, 900–906<br>mtnMomo.ts:457–459<br>scenario 16</td>
+        </tr>
+        <tr>
+          <td class="num">D6</td><td><span class="chip med">medium</span></td>
+          <td>Targeting is by shop but resolves to the organization's newest subscription row with no status filter, and the client drops <code>organization_id</code>, so the UI cannot show or warn about the true blast radius. A newer non-live row becomes the target in preference to the live one.</td>
+          <td class="mono">20261010120000:1028–1034<br>wakaInternalAdmin.ts:972–995<br>scenarios 14a / 14d</td>
+        </tr>
+        <tr>
+          <td class="num">D7</td><td><span class="chip med">medium</span></td>
+          <td>The account-discount form shows no price at all, though the server supports an account preview (<code>p_individual = true</code>); the global preview hard-codes “an account with no discount of its own”. A 99% account discount is therefore granted blind.</td>
+          <td class="mono">AdminSubscriptionDiscountsPage.tsx:155–177<br>20261011090000:168–183</td>
+        </tr>
+        <tr>
+          <td class="num">D8</td><td><span class="chip low">low–med</span></td>
+          <td>“Saves UGX X / month” is computed before the floor is applied, so it overstates the saving whenever the floor binds (90% on starter shows 16,200 saved against a real 13,000). Identical arithmetic on both sides, so the preview and the server agree — both are wrong together.</td>
+          <td class="mono">113:178–194<br>subscriptionPricing.ts:70–73</td>
+        </tr>
+        <tr>
+          <td class="num">D9</td><td><span class="chip low">low</span></td>
+          <td>Internal pricing helpers keep PostgreSQL's default PUBLIC EXECUTE — no revoke anywhere in the migration history. <code>_pricing_audit</code> is SECURITY DEFINER and writes the internal audit table with no internal-staff check inside its body, so an anonymous caller can insert audit rows.</td>
+          <td class="mono">113:119–132 <br>no GRANT/REVOKE for it in any migration (20261003040000 covers others only)</td>
+        </tr>
+        <tr>
+          <td class="num">D10</td><td><span class="chip low">low</span></td>
+          <td>Presentation drift between the two adjacent screens: the same plan is “DKASU Plus” on one and “Enterprise (Waka Plus)” on the other; only the campaigns page has a back-link; the discounts page has no deep link from search and the two are not cross-referenced anywhere.</td>
+          <td class="mono">adminSubscriptionDiscounts.ts:33 vs pricingCampaigns.ts:174<br>App.tsx:551–558, AdminShell.tsx:92/96</td>
+        </tr>
+        <tr>
+          <td class="num">D11</td><td><span class="chip low">low</span></td>
+          <td>The overview caps the account list at 200 rows with no pagination, and returns an annual figure the page never renders.</td>
+          <td class="mono">20261011090000:285–305<br>adminSubscriptionDiscounts.ts:166</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Not defects — deliberate design, pinned by tests</h3>
+    <p class="sub">The 90% clamp and UGX 5,000 floor on campaigns; the account rule replacing rather than stacking with the global rule; the admin path reaching zero at 100%; and not rewriting an existing subscription when a discount changes. Each is asserted in the SQL suites, so changing any of them is a contract change, not a bug fix.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">8 · Integrity</p>
+    <h2>Security and financial controls</h2>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Control</th><th>Verdict</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td class="stage">Server-side amount validation</td><td><span class="chip ok">passes</span></td><td>Quote, create and expected-amount all compute the amount from the plan, the campaign and the resolved discount. The client only ever states what it believes the price is.</td></tr>
+        <tr><td class="stage">Mismatch rejection</td><td><span class="chip ok">passes</span></td><td><code>subscription_payment_create</code> returns <code>amount_mismatch</code> with the expected figure when a supplied amount differs, and writes nothing. Note the parameter is optional: an omitted amount simply means the server writes its own.</td></tr>
+        <tr><td class="stage">Zero-value protection</td><td><span class="chip part">client only</span></td><td>The client refuses to create a fully-discounted checkout; the server will happily write a pending 0-amount payment (D5). No free entitlement is granted for it — the manual path skips the period advance at 0 — but a junk intent is created and must time out.</td></tr>
+        <tr><td class="stage">Authorization of admin RPCs</td><td><span class="chip part">too broad</span></td><td>Every pricing RPC authorizes “any active internal admin” while the UI restricts the screens to four billing roles (D2). No discount can be granted by a shop user: owners, cashiers and unrelated users are refused, verified in the pinned suite.</td></tr>
+        <tr><td class="stage">RLS and tenant isolation</td><td><span class="chip ok">passes</span></td><td><code>admin_plan_discounts</code> has RLS on with no policies and all privileges revoked — no client role can read or write it directly, verified against production and in the suite. Subscription rows are SELECT-only for clients since the client-DML lockdown. One organization's discount does not reach another organization.</td></tr>
+        <tr><td class="stage">Client cannot set a price</td><td><span class="chip ok">passes</span></td><td>No discount percentage is ever accepted from a shop client. The account discount is read from the subscription row server-side; the amount written to the ledger is the server's own.</td></tr>
+        <tr><td class="stage">History and existing terms preserved</td><td><span class="chip ok">passes</span></td><td>Changing a discount rewrites no subscription, no period and no settled payment. The ledger amount is immutable once written (state-guard trigger), and settlement never re-prices.</td></tr>
+        <tr><td class="stage">No duplicate or stacked discounts</td><td><span class="chip ok">passes</span></td><td>One row per plan by primary key, so a re-save edits rather than accumulates; the account and global rules are selected by a single ternary, so they can never both apply.</td></tr>
+        <tr><td class="stage">Audit trail</td><td><span class="chip ok">passes</span></td><td>Each discount change writes the platform audit table, the subscription's own history and a shop-scoped audit row with the before/after percentage.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">No control needs to be weakened for any discount to work. Every item in the plan below is additive or a tightening.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">9 · Decisions</p>
+    <h2>What I need from you before building anything</h2>
+  </div>
+  <div class="grid2">
+    <div class="decision">
+      <p class="q">A · Should a manual “Mark paid” honour the discount?</p>
+      <div class="opts"><span class="opt">1 · Server computes the amount</span><span class="opt">2 · Keep it manual, show the discounted figure</span><span class="opt">3 · Leave as is</span></div>
+      <p class="rec">Recommend 1 with 2's display: the console should show the discounted price and the RPC should reject an amount that differs from it. This is the only defect where money is wrong today, and it is the most likely thing you actually saw.</p>
+    </div>
+    <div class="decision">
+      <p class="q">B · Is an “individual” discount for a shop or for an account?</p>
+      <div class="opts"><span class="opt">Account-wide (today)</span><span class="opt">Per shop</span></div>
+      <p class="rec">Recommend keeping account-wide — the schema allows one live subscription per organization, so per-shop pricing would need a new column and a precedence rule of its own. Relabel the screen to say “account”, and show how many shops it covers.</p>
+    </div>
+    <div class="decision">
+      <p class="q">C · Should a global plan discount ever reach zero?</p>
+      <div class="opts"><span class="opt">Cap at 99% everywhere</span><span class="opt">Allow 100% and settle it without a provider</span></div>
+      <p class="rec">Recommend 99% for anything that creates a payment, plus an explicit “grant a free period” action if you want it. Today a 100% account discount can be written by SQL only; the setters refuse it.</p>
+    </div>
+    <div class="decision">
+      <p class="q">D · Should the public price page reflect a global plan discount?</p>
+      <div class="opts"><span class="opt">Yes — show it wherever the plan is shown</span><span class="opt">No — checkout only</span></div>
+      <p class="rec">This is the real fork. A “global” discount that nobody can see outside checkout is what makes the feature feel broken; folding it into the public book makes it behave like a campaign. Note the reverse risk: a purely internal goodwill rate would then be advertised.</p>
+    </div>
+    <div class="decision">
+      <p class="q">E · Which roles may grant subscription discounts?</p>
+      <div class="opts"><span class="opt">The four billing roles the UI shows</span><span class="opt">Any internal admin (today)</span></div>
+      <p class="rec">Recommend the four, matching <code>canManageBillingOffers</code>. The server is currently broader than the screen, which is the wrong direction for a control that can give away 99% of revenue.</p>
+    </div>
+    <div class="decision">
+      <p class="q">F · Renewal and expiry semantics</p>
+      <div class="opts"><span class="opt">As today: rule in force at payment time wins</span><span class="opt">Different</span></div>
+      <p class="rec">Recommend keeping it and documenting it: a discount expiring mid-period is not prorated or credited, and a payment already in flight keeps its amount. If you want “honour the discount for one more renewal”, that is a new rule, not a fix.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">10 · Plan</p>
+    <h2>Minimal ordered implementation, after your approval</h2>
+  </div>
+  <ol class="plan">
+    <li><span class="step">Decide A–F.</span> Every step below depends on at least one of them; none of this should be built before the answers exist.</li>
+    <li><span class="step">Migration: the manual payment path (D1, decision A).</span> Add an internal-gated RPC returning the amount the discount implies for a subscription, and have <code>admin_subscription_mark_payment</code> refuse a mismatched amount the way <code>subscription_payment_create</code> already does. Then point the shop console's suggested amount at that RPC instead of the public book. Tests: extend the admin-discount SQL suite with mark-paid cases, including a discounted shop and a 0 amount.</li>
+    <li><span class="step">Migration: authorization (D2, decision E).</span> Tighten the gate on the two discount setters to the billing roles, leaving campaign RPCs untouched unless you want them aligned too. This is a behaviour change for support_admin and field_agent — confirm before applying, since it can break a workflow you rely on. Test: each role's expected outcome, mirroring <code>adminRoles.ts</code>.</li>
+    <li><span class="step">Migration: campaign annual bound (D3).</span> Clamp the annual percentage in the campaign pricing function and add a CHECK on the column, with the same “discount_below_minimum”-style refusal at save time. This one changes a contract the campaign tests pin, so the existing tests are updated deliberately, not silently.</li>
+    <li><span class="step">Migration: pricing-helper hygiene (D9).</span> Revoke PUBLIC EXECUTE on the internal <code>_pricing_*</code> helpers and add the internal-staff check to the audit helper. No caller outside the definer functions needs them.</li>
+    <li><span class="step">Frontend: the Subscription Discounts screen (D4, D6, D7, D10).</span> Show the account-discount preview through <code>p_individual = true</code>; make the global “effective price” respect active and the window; state plainly that the discount covers the whole account and how many shops that is; unify the plan label and add the missing cross-links.</li>
+    <li><span class="step">Frontend: the numbers people read (D8, D11, decision D).</span> Recompute the displayed saving after the floor; render or drop the annual figure; if decision D is “yes”, feed the global rule into the public book so the pricing and upgrade pages agree with checkout.</li>
+    <li><span class="step">Zero-value policy (D5, decision C).</span> Whichever way C goes, put the guard on the server, not only in the client: either refuse to create a zero-amount intent or settle it without a provider. Keep the existing client guard — it is defence in depth, not the fix.</li>
+    <li><span class="step">Verification before deploy.</span> Both pinned SQL suites plus the new cases, on a disposable Postgres rather than the shared one; a browser pass over both admin screens and a shop checkout with a live rule; confirm no unrelated dirty files are staged with it.</li>
+    <li><span class="step">Deploy.</span> Frontend: pushing to main auto-deploys; verify by grepping the served chunk, not by waiting. Database: the migrations must be applied by you — the Supabase CLI cannot run in this environment and <code>db push</code> is on the deny list. Apply the migrations before the frontend that depends on them.</li>
+  </ol>
+  <div class="rollback">
+    <strong>Rollback.</strong> Every server change above is <code>create or replace</code> on an existing function or an additive CHECK, so reverting means re-applying the previous body — each migration in this repo already carries its predecessor's definition in its header for exactly that. No table is dropped, no row is migrated, and no historical payment is rewritten. The two pinned SQL suites are the revert gate: if they go red, the change is wrong, not the test.
+  </div>
+</section>
+
+<footer>
+  <p>Audit run 11 October 2026 against repo HEAD <span class="mono">ad66f47f</span>, production deployment <span class="mono">ad66f47f</span>, remote ledger through <span class="mono">20261011090000</span>. No production data, migration, commit or deploy was touched. Awaiting decisions A–F before implementation.</p>
+</footer>
+
+</div>
