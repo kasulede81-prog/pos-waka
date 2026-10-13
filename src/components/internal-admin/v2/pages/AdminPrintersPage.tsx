@@ -3,6 +3,7 @@ import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import { PrinterInventoryPanel } from "../printer/PrinterInventoryPanel";
 import { PrinterFulfilmentPanel } from "../printer/PrinterFulfilmentPanel";
 import { PrinterHistoryPanel } from "../printer/PrinterHistoryPanel";
+import { PrinterRequestsPanel } from "../printer/PrinterRequestsPanel";
 
 /**
  * Printers — the WAKA-owned stock register and the fulfilment desk.
@@ -24,7 +25,7 @@ type Props = {
 };
 
 export function AdminPrintersPage({ adminRow, previewMode = false }: Props) {
-  const [tab, setTab] = useState<"inventory" | "fulfilment" | "history">("inventory");
+  const [tab, setTab] = useState<"inventory" | "fulfilment" | "requests" | "history">("inventory");
 
   const tabCls = (active: boolean) =>
     `inline-flex min-h-[44px] items-center rounded-xl px-4 text-sm font-black transition ${
@@ -65,6 +66,15 @@ export function AdminPrintersPage({ adminRow, previewMode = false }: Props) {
         <button
           type="button"
           role="tab"
+          aria-selected={tab === "requests"}
+          className={tabCls(tab === "requests")}
+          onClick={() => setTab("requests")}
+        >
+          Requests
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === "history"}
           className={tabCls(tab === "history")}
           onClick={() => setTab("history")}
@@ -77,6 +87,8 @@ export function AdminPrintersPage({ adminRow, previewMode = false }: Props) {
         <PrinterInventoryPanel adminRow={adminRow} previewMode={previewMode} />
       ) : tab === "fulfilment" ? (
         <PrinterFulfilmentPanel adminRow={adminRow} previewMode={previewMode} />
+      ) : tab === "requests" ? (
+        <PrinterRequestsPanel adminRow={adminRow} previewMode={previewMode} />
       ) : (
         <PrinterHistoryPanel adminRow={adminRow} previewMode={previewMode} />
       )}

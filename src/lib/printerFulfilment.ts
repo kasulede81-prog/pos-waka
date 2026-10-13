@@ -678,6 +678,92 @@ export async function requestPrinterCollection(input: {
 }
 
 // ---------------------------------------------------------------------------
+// FULFILMENT DESK — the collection-request queue
+// ---------------------------------------------------------------------------
+/**
+ * Requests merchants have made, for the desk to work.
+ *
+ * WHY THIS EXISTS. The customer half shipped first: a merchant could ask for
+ * their printer and the request landed in `printer_collection_requests` — with
+ * NOTHING able to read it. A request nobody can see is worse than no request at
+ * all, so the queue the RPCs already support is surfaced here.
+ *
+ * These are the ADMIN RPCs (`internal_ops_printer_requests`,
+ * `internal_ops_printer_request_set_status`), both gated server-side on
+ * `_printer_require_fulfilment_admin()`. Nothing here is reachable from a
+ * customer surface.
+ */
+export type PrinterCollectionRequest = {
+  request_id: string;
+  organization_id: string;
+  organization_name: string | null;
+  shop_id: string | null;
+  shop_name: string | null;
+  shop_number: string | null;
+  channel: string;
+  status: string;
+  contact_phone: string | null;
+  note: string | null;
+  created_at: string;
+  acknowledged_at: string | null;
+  fulfilled_at: string | null;
+  /** Set once the account holds a printer, so a stale request is visible as one. */
+  open_assignment_id: string | null;
+};
+
+export async function fetchPrinterRequests(input?: {
+  status?: PrinterRequestStatus | null;
+  limit?: number;
+}): Promise<RpcOutcome<{ requests: PrinterCollectionRequest[] }>> {
+  if (!supabase) return { ok: false, error: "Not configured for this build." };
+
+  const { data, error } = await supabase.rpc("internal_ops_printer_requests", {
+    p_status: input?.status ?? null,
+    p_limit: Math.min(Math.max(input?.limit ?? 100, 1), 500),
+  });
+  const envelope = unwrap(data, error);
+  if (envelope.ok !== true) {
+    return { ok: false, error: String(envelope.error ?? "The request queue could not be loaded.") };
+  }
+  const rows = Array.isArray(envelope.requests) ? (envelope.requests as PrinterCollectionRequest[]) : [];
+  return { ok: true, data: { requests: rows } };
+}
+
+export const PRINTER_REQUEST_STATUSES = ["requested", "acknowledged", "fulfilled", "cancelled"] as const;
+export type PrinterRequestStatus = (typeof PRINTER_REQUEST_STATUSES)[number];
+
+export const PRINTER_REQUEST_STATUS_LABELS: Record<string, string> = {
+  requested: "Requested",
+  acknowledged: "Being arranged",
+  fulfilled: "Completed",
+  cancelled: "Cancelled",
+};
+
+/**
+ * Move a request along.
+ *
+ * Marks the REQUEST only. Allocating a unit — the step that actually gives the
+ * merchant a printer — remains `internal_ops_printer_assign`, so this cannot
+ * become a second path to stock.
+ */
+export async function setPrinterRequestStatus(input: {
+  requestId: string;
+  status: PrinterRequestStatus;
+}): Promise<RpcOutcome<{ status: string }>> {
+  if (!supabase) return { ok: false, error: "Not configured for this build." };
+
+  const { data, error } = await supabase.rpc("internal_ops_printer_request_set_status", {
+    p_request_id: input.requestId,
+    p_status: input.status,
+  });
+  const envelope = unwrap(data, error);
+  if (envelope.ok !== true) {
+    return { ok: false, error: String(envelope.error ?? "The request could not be updated.") };
+  }
+  return { ok: true, data: { status: String(envelope.status ?? input.status) } };
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 

@@ -236,3 +236,45 @@ describe("the merchant's printer panel stays on the customer side", () => {
     );
   });
 });
+
+/**
+ * The request queue closes the loop: the customer half shipped first, so requests
+ * could be created with nothing able to read them. This pins the desk end.
+ */
+describe("the collection-request queue is wired to the desk", () => {
+  const requestsPanel = read("src/components/internal-admin/v2/printer/PrinterRequestsPanel.tsx");
+  const printersPage = read("src/components/internal-admin/v2/pages/AdminPrintersPage.tsx");
+  const lib = read("src/lib/printerFulfilment.ts");
+
+  it("uses the two admin RPCs, through the lib", () => {
+    expect(lib).toContain('rpc("internal_ops_printer_requests"');
+    expect(lib).toContain('rpc("internal_ops_printer_request_set_status"');
+    expect(requestsPanel).toContain("fetchPrinterRequests");
+    expect(requestsPanel).toContain("setPrinterRequestStatus");
+    // No direct table access and no bespoke client.
+    expect(code(requestsPanel)).not.toMatch(/\.from\(["']/);
+    expect(requestsPanel).not.toMatch(/createClient\(/);
+    expect(requestsPanel).not.toMatch(/service_role/);
+  });
+
+  it("is reachable from the Printers console", () => {
+    expect(printersPage).toContain('"inventory" | "fulfilment" | "requests" | "history"');
+    expect(printersPage).toContain("<PrinterRequestsPanel");
+    expect(printersPage).toContain('setTab("requests")');
+  });
+
+  it("does NOT allocate a printer — that stays in the Fulfilment tab", () => {
+    // One path to stock, one place a serial is recorded.
+    expect(requestsPanel).not.toMatch(/internal_ops_printer_assign|assignPrinter|registerPrinterUnit/);
+    expect(requestsPanel).toMatch(/not a reservation/i);
+  });
+
+  it("gates its actions on the fulfilment permission, and not in preview mode", () => {
+    expect(requestsPanel).toContain("perms.canManagePrinterFulfilment && !previewMode");
+  });
+
+  it("surfaces a failed read instead of an empty queue", () => {
+    expect(requestsPanel).toMatch(/role="alert"/);
+    expect(requestsPanel).toMatch(/may be incomplete/);
+  });
+});

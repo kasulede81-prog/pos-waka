@@ -39,7 +39,10 @@ import {
   fetchMyOrgPrinterStatus,
   fetchPrinterEligibility,
   fetchPrinterInventory,
+  fetchPrinterRequests,
+  PRINTER_REQUEST_STATUS_LABELS,
   requestPrinterCollection,
+  setPrinterRequestStatus,
   mapPrinterError,
   markAssignmentReady,
   recordHandover,
@@ -484,6 +487,70 @@ describe("customer printer reads and requests", () => {
     // ...and none of them leak the raw code through.
     for (const code of ["shop_required", "invalid_channel", "unauthenticated"]) {
       expect(mapPrinterError(code)).not.toBe(code);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FULFILMENT DESK — the request queue
+// ---------------------------------------------------------------------------
+describe("the desk's collection-request queue", () => {
+  it("lists requests with its exact parameter names", async () => {
+    h.response = { data: { ok: true, requests: [{ request_id: "r1", status: "requested" }] }, error: null };
+
+    const res = await fetchPrinterRequests({ status: "requested", limit: 50 });
+
+    expect(lastCall().fn).toBe("internal_ops_printer_requests");
+    expect(lastCall().keys).toEqual(["p_limit", "p_status"]);
+    expect(lastCall().args.p_status).toBe("requested");
+    expect(lastCall().args.p_limit).toBe(50);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.requests).toHaveLength(1);
+  });
+
+  it("sends no status filter as null, and clamps the limit", async () => {
+    h.response = { data: { ok: true, requests: [] }, error: null };
+
+    await fetchPrinterRequests();
+    expect(lastCall().args.p_status).toBeNull();
+    expect(lastCall().args.p_limit).toBe(100);
+
+    await fetchPrinterRequests({ limit: 5000 });
+    expect(lastCall().args.p_limit).toBe(500);
+  });
+
+  it("treats a missing array as an empty queue rather than crashing", async () => {
+    h.response = { data: { ok: true }, error: null };
+
+    const res = await fetchPrinterRequests();
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.requests).toEqual([]);
+  });
+
+  it("moves a request with its exact parameter names", async () => {
+    h.response = { data: { ok: true, status: "acknowledged" }, error: null };
+
+    const res = await setPrinterRequestStatus({ requestId: "r1", status: "acknowledged" });
+
+    expect(lastCall().fn).toBe("internal_ops_printer_request_set_status");
+    expect(lastCall().keys).toEqual(["p_request_id", "p_status"]);
+    expect(lastCall().args.p_request_id).toBe("r1");
+    if (res.ok) expect(res.data.status).toBe("acknowledged");
+  });
+
+  it("surfaces a refusal rather than pretending the move happened", async () => {
+    h.response = { data: { ok: false, error: "forbidden" }, error: null };
+
+    const res = await setPrinterRequestStatus({ requestId: "r1", status: "fulfilled" });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/permission/i);
+  });
+
+  it("labels every status the server can return", () => {
+    for (const s of ["requested", "acknowledged", "fulfilled", "cancelled"]) {
+      expect(PRINTER_REQUEST_STATUS_LABELS[s], s).toBeTruthy();
     }
   });
 });
